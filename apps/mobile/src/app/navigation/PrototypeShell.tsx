@@ -5,7 +5,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NotificationsPreview, NotificationSettingsPreview } from "../../features/notifications/public.ts";
 import { SettingsPreview, ThemeCatalogPreview } from "../../features/settings/public.ts";
 import { ClientRosterSettingsScreen } from "../../features/clients/public.ts";
-import { AppointmentOutcomeDialog } from "../../features/calendar/public.ts";
+import { AppointmentOutcomeDialog, CalendarUndoProvider } from "../../features/calendar/public.ts";
 import { ClientAccountingScreen } from "../../features/accounting/public.ts";
 import { useAppointmentOutcomeQueue } from "../bootstrap/useAppointmentOutcomeQueue.ts";
 import { PrototypeThemeProvider, usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -138,8 +138,10 @@ export function PrototypeShell({ services, workspaceId }: Readonly<{
   return (
     <SafeAreaProvider>
       <PrototypeThemeProvider>
-        <ShellNavigator services={services} clientLists={clientLists} />
-        <OutcomeQueueHost services={services} />
+        <CalendarUndoProvider repository={services.calendar}>
+          <ShellNavigator services={services} clientLists={clientLists} />
+          <OutcomeQueueHost services={services} />
+        </CalendarUndoProvider>
       </PrototypeThemeProvider>
     </SafeAreaProvider>
   );

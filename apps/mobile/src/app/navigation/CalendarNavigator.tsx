@@ -38,7 +38,9 @@ export function CalendarNavigator({ repository, participants, credit }: Readonly
           onOpenAppointment={(params) => navigation.navigate("CalendarAppointment", params)}
           onOpenInterval={(localDate) => navigation.navigate("CalendarInterval", { localDate })} />}
       </Stack.Screen>
-      <Stack.Screen name="CalendarSettings" component={CalendarSettingsPreview} options={{ title: "Настройки календаря" }} />
+      <Stack.Screen name="CalendarSettings" options={{ title: "Настройки календаря" }}>
+        {() => <CalendarSettingsPreview repository={repository} />}
+      </Stack.Screen>
       <Stack.Screen name="CalendarAppointment"
         options={({ route }) => ({ title: route.params.appointmentId ? "Запись" : "Новая запись" })}>
         {({ navigation, route }) => <AppointmentEditorScreen repository={repository}

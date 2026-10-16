@@ -13,6 +13,7 @@ import type { CalendarParticipant, CalendarParticipantDirectoryPort } from
 import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
 import { addDays, appointmentEnded, appointmentStarted, formatMinute, overlaps } from "../domain/CalendarRules.ts";
 import { calendarErrorMessage, dayTitle, outcomeTag } from "./calendarPresentation.ts";
+import { useOfferCancelUndo } from "./CancelUndo.tsx";
 
 interface Loaded {
   readonly settings: CalendarSettings;
@@ -65,6 +66,7 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
   const [creditInfo, setCreditInfo] = useState<CalendarBookingCredit | null>(null);
   const [existingCredit, setExistingCredit] = useState<CalendarAppointmentCredit>("NONE");
   const [settling, setSettling] = useState(false);
+  const offerUndo = useOfferCancelUndo();
   const [correcting, setCorrecting] = useState(false);
   const [correctionId, setCorrectionId] = useState<string | null>(null);
 
@@ -197,8 +199,12 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
       setBusy(false);
     }
   };
-  const resolve = (outcome: AppointmentOutcome) =>
-    act((row) => repository.resolveOutcome(row.id, row.revision, outcome));
+  const resolve = (outcome: AppointmentOutcome) => act(async (row) => {
+    const after = await repository.resolveOutcome(row.id, row.revision, outcome);
+    if (outcome !== "CANCELLED") return;
+    const who = selectedPerson?.displayName ?? row.guestName ?? "Запись";
+    offerUndo(row, after, `${who} · ${formatMinute(row.startMinute)} — отменено`);
+  });
   const creditText = creditLine(guestMode ? null : creditInfo, existingCredit);
   const tag = existing === null ? null : outcomeTag(existing, now);
 

@@ -43,7 +43,15 @@ export interface CalendarRepositoryPort {
    * transaction; fails with CALENDAR_CORRECTION_INVALID or ACCOUNTING_INSUFFICIENT_CREDIT.
    */
   correctClient(id: string, expectedRevision: number, clientId: string, now?: Date): Promise<Appointment>;
-  /** Ended client appointments without an outcome, oldest first (§48.40). */
+  /**
+   * Undo of «Отменена» (§48.38.6): back to the outcome it had before (null = no outcome). A started
+   * record gets at most one effective USED again, a future one its reservation; fails with
+   * CALENDAR_RESTORE_INVALID, CALENDAR_TIME_OVERLAP/BLOCKED_TIME or ACCOUNTING_INSUFFICIENT_CREDIT.
+   */
+  restoreCancelled(id: string, expectedRevision: number, previousOutcome: "COMPLETED" | "MISSED" | null,
+    now?: Date): Promise<Appointment>;
+  setUndoCancelPrompt(enabled: boolean): Promise<void>;
+  /** Ended appointments (clients and guests) without an outcome, oldest first (§48.40). */
   listPendingOutcomes(now: Date): Promise<readonly Appointment[]>;
   createInterval(input: IntervalInput): Promise<CalendarInterval>;
   removeInterval(id: string): Promise<void>;

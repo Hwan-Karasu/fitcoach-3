@@ -45,7 +45,7 @@ test("K01 calendar arithmetic is wall-clock, Monday-first and half-open", () => 
   assert.equal(overlaps(600, 690, 660, 720), true);
   const settings = { dayStartMinute: 420, dayEndMinute: 1380, visibleWeekdays: Array(7).fill(true),
     defaultSessionTypeId: null, copyPolicy: { appointments: true, duty: true, blocked: true },
-    clearPolicy: { appointments: true, duty: true, blocked: true } };
+    clearPolicy: { appointments: true, duty: true, blocked: true }, undoCancelPrompt: true };
   assert.equal(validateAppointment(slot({ sessionTypeId: "t", startMinute: 1320 }), settings, true)
     .startMinute, 1320);
   assert.throws(() => validateAppointment(slot({ sessionTypeId: "t", startMinute: 1350 }), settings, true),

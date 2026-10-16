@@ -260,16 +260,16 @@ test("L02 outcome after time settlement: one USED, switching outcomes keeps it, 
     await accounting.setClientMode(fit.id, "FITCOACH");
     await accounting.createPack(fit.id, pack(3));
     const booked = await calendar.createAppointment(slot(fit.id, personal.id));
-    await calendar.createAppointment(slot(null, personal.id, { startMinute: 480 }));
-    assert.equal((await calendar.listPendingOutcomes(at(10, 59))).length, 0);
-    assert.deepEqual((await calendar.listPendingOutcomes(at(11))).map((row) => row.id), [booked.id]);
+    const guest = await calendar.createAppointment(slot(null, personal.id, { startMinute: 480 }));
+    assert.equal((await calendar.listPendingOutcomes(at(8, 59))).length, 0);
+    assert.deepEqual((await calendar.listPendingOutcomes(at(11))).map((row) => row.id), [guest.id, booked.id]);
     await accounting.reconcileDue(at(11));
     assert.equal(await usedCount(accounting, fit.id), 1);
     assert.equal((await calendar.getAppointment(booked.id))?.outcome, null);
     const missed = await calendar.resolveOutcome(booked.id, booked.revision, "MISSED", at(11));
     assert.equal(missed.lifecycle, "COMPLETED");
     assert.equal(missed.outcome, "MISSED");
-    assert.equal((await calendar.listPendingOutcomes(at(12))).length, 0);
+    assert.deepEqual((await calendar.listPendingOutcomes(at(12))).map((row) => row.id), [guest.id]);
     await assert.rejects(calendar.resolveOutcome(booked.id, booked.revision, "COMPLETED", at(11)),
       { message: "CALENDAR_STALE_APPOINTMENT" });
     const done = await calendar.resolveOutcome(booked.id, missed.revision, "COMPLETED", at(11));
@@ -279,7 +279,7 @@ test("L02 outcome after time settlement: one USED, switching outcomes keeps it, 
     assert.equal(undone.lifecycle, "SCHEDULED");
     assert.equal(undone.outcome, null);
     assert.equal(await usedCount(accounting, fit.id), 1);
-    assert.deepEqual((await calendar.listPendingOutcomes(at(12))).map((row) => row.id), [booked.id]);
+    assert.deepEqual((await calendar.listPendingOutcomes(at(12))).map((row) => row.id), [guest.id, booked.id]);
     const cancelled = await calendar.resolveOutcome(undone.id, undone.revision, "CANCELLED", at(12));
     assert.equal(cancelled.lifecycle, "CANCELLED");
     assert.equal(cancelled.outcome, "CANCELLED");
@@ -393,5 +393,59 @@ test("L02 clear week leaves started rows alone: their outcome and USED stay, onl
     assert.equal(await usedCount(accounting, client.id, "RETURNED"), 0);
     const intervals = (await calendar.listRange(FUTURE, "2099-03-08")).intervals;
     assert.deepEqual(intervals.map((row) => row.localDate), [FUTURE]);
+  } finally { await close(); }
+});
+
+test("L02 «Вернуть» after Отменена restores the outcome with one effective USED or the reservation", async () => {
+  const { db, clients, calendar, accounting, personal, close } = await stores();
+  try {
+    const fit = await clients.create({ displayName: "Undo" });
+    await accounting.setClientMode(fit.id, "FITCOACH");
+    await accounting.createPack(fit.id, pack(6));
+    const effective = (id: string) => (db.prepare("SELECT COALESCE(sum(delta), 0) AS n FROM dev_credit_ledger WHERE appointment_id = ?")
+      .get(id) as { n: number }).n;
+    const done = await calendar.createAppointment(slot(fit.id, personal.id));
+    await accounting.reconcileDue(at(11));
+    const closed = await calendar.resolveOutcome(done.id, done.revision, "COMPLETED", at(11));
+    let cancelled = await calendar.resolveOutcome(done.id, closed.revision, "CANCELLED", at(11));
+    assert.equal(effective(done.id), 0);
+    const back = await calendar.restoreCancelled(done.id, cancelled.revision, "COMPLETED", at(11));
+    assert.equal(back.lifecycle, "COMPLETED");
+    assert.equal(back.outcome, "COMPLETED");
+    assert.equal(effective(done.id), -1);
+    assert.equal(await accounting.appointmentCredit(done.id), "USED");
+    await assert.rejects(calendar.restoreCancelled(done.id, back.revision, null, at(11)),
+      { message: "CALENDAR_RESTORE_INVALID" });
+
+    const pending = await calendar.createAppointment(slot(fit.id, personal.id, { startMinute: 660 }));
+    cancelled = await calendar.resolveOutcome(pending.id, pending.revision, "CANCELLED", at(13));
+    const again = await calendar.restoreCancelled(pending.id, cancelled.revision, null, at(13));
+    assert.equal(again.lifecycle, "SCHEDULED");
+    assert.equal(effective(pending.id), -1);
+    assert.deepEqual((await calendar.listPendingOutcomes(at(13))).map((row) => row.id), [pending.id]);
+
+    const future = await calendar.createAppointment(slot(fit.id, personal.id, { startMinute: 900 }));
+    cancelled = await calendar.resolveOutcome(future.id, future.revision, "CANCELLED", at(9));
+    assert.equal(await accounting.appointmentCredit(future.id), "NONE");
+    await assert.rejects(calendar.restoreCancelled(future.id, cancelled.revision, "COMPLETED", at(9)),
+      { message: "CALENDAR_RESTORE_INVALID" });
+    await calendar.restoreCancelled(future.id, cancelled.revision, null, at(9));
+    assert.equal(await accounting.appointmentCredit(future.id), "RESERVED");
+    assert.equal(effective(future.id), 0);
+
+    const taken = await calendar.createAppointment(slot(fit.id, personal.id, { startMinute: 1020 }));
+    cancelled = await calendar.resolveOutcome(taken.id, taken.revision, "CANCELLED", at(9));
+    await calendar.createAppointment(slot(null, personal.id, { startMinute: 1020 }));
+    await assert.rejects(calendar.restoreCancelled(taken.id, cancelled.revision, null, at(9)),
+      { message: "CALENDAR_TIME_OVERLAP" });
+
+    const deleted = await calendar.createAppointment(slot(fit.id, personal.id, { startMinute: 1140 }));
+    await calendar.cancelAppointment(deleted.id, deleted.revision, "RETURN");
+    await assert.rejects(calendar.restoreCancelled(deleted.id, deleted.revision + 1, null, at(9)),
+      { message: "CALENDAR_RESTORE_INVALID" });
+
+    assert.equal((await calendar.getSettings()).undoCancelPrompt, true);
+    await calendar.setUndoCancelPrompt(false);
+    assert.equal((await calendar.getSettings()).undoCancelPrompt, false);
   } finally { await close(); }
 });

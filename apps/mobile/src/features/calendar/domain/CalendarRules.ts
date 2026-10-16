@@ -128,9 +128,12 @@ export function appointmentEnded(row: Timed, now: Date): boolean {
   return reached(row.localDate, row.startMinute + row.durationMinutes, now);
 }
 
-/** «Ожидает решения» (§48.35): a client appointment whose time ended without a chosen outcome. */
+/**
+ * «Ожидает решения» (§48.35): an ended appointment without a chosen outcome, for a client or a guest
+ * without a card; records of a permanently deleted client are not asked about.
+ */
 export function isPendingOutcome(row: Appointment, now: Date): boolean {
-  return row.lifecycle === "SCHEDULED" && row.clientId !== null && appointmentEnded(row, now);
+  return row.lifecycle === "SCHEDULED" && !row.participantDeleted && appointmentEnded(row, now);
 }
 
 export function isOccupying(appointment: Appointment): boolean {

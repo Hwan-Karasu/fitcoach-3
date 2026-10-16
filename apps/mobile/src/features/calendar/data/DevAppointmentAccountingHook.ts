@@ -34,4 +34,7 @@ export interface DevAppointmentAccountingHook {
    */
   correct(tx: SqliteStatementPort, workspaceId: string, appointmentId: string,
     booking: DevBooking, now: string): Promise<void>;
+  /** Undo of «Отменена»: charge a started record again (one new USED) or reserve a future one. */
+  restore(tx: SqliteStatementPort, workspaceId: string, appointmentId: string,
+    booking: DevBooking, charge: boolean, now: string): Promise<void>;
 }

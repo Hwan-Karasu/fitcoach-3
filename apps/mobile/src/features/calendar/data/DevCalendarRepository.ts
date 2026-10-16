@@ -7,7 +7,7 @@ import type { Appointment, AppointmentInput, AppointmentOutcome, CalendarInterva
   DaySummary, IntervalInput, LocalDate, PasteResult, SessionType, SessionTypeCategory,
   WeekTemplate } from "../domain/CalendarModel.ts";
 import type { CalendarCommittedChange, CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
-import { addDays, appointmentStarted, buildWeekTemplate, isLocalDate, localDateOf, minuteOfDay, validateAppointment,
+import { addDays, appointmentEnded, appointmentStarted, buildWeekTemplate, isLocalDate, localDateOf, minuteOfDay, validateAppointment,
   validateInterval, validateSettings, weekDates } from "../domain/CalendarRules.ts";
 import type { DevAppointmentAccountingHook, DevBooking } from "./DevAppointmentAccountingHook.ts";
 import { DEV_CALENDAR_LEDGER, devCalendarCatalog } from "./DevCalendarCatalog.ts";
@@ -28,7 +28,7 @@ interface SettingsRow {
   day_start_minute: number; day_end_minute: number; visible_weekdays: string;
   default_session_type_id: string | null;
   copy_appointments: number; copy_duty: number; copy_blocked: number;
-  clear_appointments: number; clear_duty: number; clear_blocked: number;
+  clear_appointments: number; clear_duty: number; clear_blocked: number; undo_cancel_prompt: number;
 }
 
 const appointmentColumns = `id, local_date AS localDate, start_minute AS startMinute,
@@ -81,6 +81,7 @@ function toSettings(row: SettingsRow): CalendarSettings {
       blocked: row.copy_blocked === 1 },
     clearPolicy: { appointments: row.clear_appointments === 1, duty: row.clear_duty === 1,
       blocked: row.clear_blocked === 1 },
+    undoCancelPrompt: row.undo_cancel_prompt === 1,
   };
 }
 
@@ -502,11 +503,51 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
     return corrected;
   }
 
+  async restoreCancelled(id: string, expectedRevision: number, previousOutcome: "COMPLETED" | "MISSED" | null,
+    now: Date = new Date()): Promise<Appointment> {
+    const restored = await this.ready().writer.write(async (tx) => {
+      const current = await this.appointmentById(tx, id);
+      if (current.revision !== expectedRevision) throw new Error("CALENDAR_STALE_APPOINTMENT");
+      // Only «Отменена» chosen as an outcome is undone; a deleted future booking stays deleted.
+      if (current.lifecycle !== "CANCELLED" || current.outcome !== "CANCELLED" || current.participantDeleted
+        || (previousOutcome !== null && previousOutcome !== "COMPLETED" && previousOutcome !== "MISSED")
+        || (previousOutcome !== null && !appointmentStarted(current, now))) {
+        throw new Error("CALENDAR_RESTORE_INVALID");
+      }
+      const conflict = await appointmentConflict(tx, this.workspaceId, current.localDate, current.startMinute,
+        current.startMinute + current.durationMinutes, id);
+      if (conflict !== null) throw new Error(conflict);
+      const stamp = now.toISOString();
+      const result = await tx.run(`UPDATE dev_calendar_appointments SET lifecycle = ?, outcome = ?,
+        outcome_at = ?, cancelled_at = NULL, revision = revision + 1, updated_at = ?
+        WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'CANCELLED'`,
+      [previousOutcome === null ? "SCHEDULED" : "COMPLETED", previousOutcome,
+        previousOutcome === null ? null : stamp, stamp, this.workspaceId, id, expectedRevision]);
+      if (result.changes !== 1) throw new Error("CALENDAR_STALE_APPOINTMENT");
+      const requires = (await tx.first<{ r: number }>(`SELECT session_type_requires_credit AS r
+        FROM dev_calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]))?.r === 1;
+      await this.accounting?.restore(tx, this.workspaceId, id, { clientId: current.clientId,
+        sessionTypeId: current.sessionTypeId, requiresCredit: requires, bypass: current.creditBypass,
+        localDate: current.localDate, endMinute: current.startMinute + current.durationMinutes },
+      previousOutcome !== null || appointmentEnded(current, now), stamp);
+      return this.appointmentById(tx, id);
+    });
+    this.publish({ dates: [restored.localDate] });
+    return restored;
+  }
+
+  async setUndoCancelPrompt(enabled: boolean): Promise<void> {
+    await this.ready().writer.write(async (tx) => {
+      await tx.run("UPDATE dev_calendar_settings SET undo_cancel_prompt = ? WHERE workspace_id = ?",
+        [enabled ? 1 : 0, this.workspaceId]);
+    });
+  }
+
   async listPendingOutcomes(now: Date): Promise<readonly Appointment[]> {
     const today = localDateOf(now);
     const rows = await this.ready().connection.all<AppointmentRow>(`SELECT ${appointmentColumns}
       FROM dev_calendar_appointments WHERE workspace_id = ? AND lifecycle = 'SCHEDULED'
-        AND client_id IS NOT NULL
+        AND participant_deleted = 0
         AND (local_date < ? OR (local_date = ? AND start_minute + duration_minutes <= ?))
       ORDER BY local_date, start_minute, id`, [this.workspaceId, today, today, minuteOfDay(now)]);
     return rows.map(toAppointment);

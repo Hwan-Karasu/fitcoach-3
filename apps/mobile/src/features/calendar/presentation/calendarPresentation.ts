@@ -35,6 +35,7 @@ export function calendarErrorMessage(error: unknown): string {
     case "CALENDAR_TIME_INVALID": return "Проверьте время: шаг — 30 минут, запись не переходит через полночь.";
     case "ACCOUNTING_INSUFFICIENT_CREDIT":
       return "У клиента нет доступных тренировок. Добавьте пакет или включите «Записать без списания».";
+    case "CALENDAR_RESTORE_INVALID": return "Эту запись уже нельзя вернуть.";
     case "CALENDAR_OUTCOME_TOO_EARLY": return "Занятие ещё не началось. Исход можно отметить после начала.";
     case "CALENDAR_CORRECTION_INVALID": return "Выберите другого клиента: исправление доступно только для начавшейся записи.";
     case "ACCOUNTING_ALREADY_SETTLED":

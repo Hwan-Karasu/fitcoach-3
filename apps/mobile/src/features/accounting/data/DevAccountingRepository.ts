@@ -155,6 +155,14 @@ export const devAccountingCalendarHook = {
       await insertUsed(tx, workspaceId, booking.clientId, packId, appointmentId, now);
     }
   },
+  async restore(tx: SqliteStatementPort, workspaceId: string, appointmentId: string, booking: Booking,
+    charge: boolean, now: string): Promise<void> {
+    const packId = await devAccountingCalendarHook.plan(tx, workspaceId, booking);
+    if (packId === null || booking.clientId === null) return;
+    // The cancel left a linked RETURNED, so a new USED brings the effective charge back to one.
+    if (charge) await insertUsed(tx, workspaceId, booking.clientId, packId, appointmentId, now);
+    else await devAccountingCalendarHook.reserve(tx, workspaceId, appointmentId, booking, packId);
+  },
 };
 
 const ownedTables = ["dev_credit_reservations", "dev_payment_records", "dev_credit_ledger",

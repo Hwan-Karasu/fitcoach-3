@@ -8,6 +8,7 @@ import type { CalendarParticipantDirectoryPort } from "../domain/CalendarPartici
 import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
 import { appointmentLabel, formatMinute } from "../domain/CalendarRules.ts";
 import { calendarErrorMessage, dayTitle, useParticipants } from "./calendarPresentation.ts";
+import { CancelUndoHost, useOfferCancelUndo } from "./CancelUndo.tsx";
 
 /** «Тренировка списана» only after a real USED; untracked and bypass rows get no finance text (§48.40.6). */
 function creditText(row: Appointment, state: CalendarAppointmentCredit | null): string | null {
@@ -32,6 +33,7 @@ export function AppointmentOutcomeDialog({ items, visible, repository, participa
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const people = useParticipants(participants);
+  const offerUndo = useOfferCancelUndo();
   const [index, setIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +60,8 @@ export function AppointmentOutcomeDialog({ items, visible, repository, participa
     setBusy(true);
     setError(null);
     try {
-      await repository.resolveOutcome(row.id, row.revision, outcome);
+      const after = await repository.resolveOutcome(row.id, row.revision, outcome);
+      if (outcome === "CANCELLED") offerUndo(row, after, `${name} · ${formatMinute(row.startMinute)} — отменено`);
     } catch (failure) {
       setError(calendarErrorMessage(failure));
     } finally {
@@ -78,7 +81,9 @@ export function AppointmentOutcomeDialog({ items, visible, repository, participa
             <Text style={[styles.detail, { color: colors.textSecondary }]}>
               {dayTitle(row.localDate)} · {formatMinute(row.startMinute)}–{formatMinute(row.startMinute + row.durationMinutes)}
             </Text>
-            <Text style={[styles.detail, { color: colors.textSecondary }]}>{row.sessionTypeName}</Text>
+            <Text style={[styles.detail, { color: colors.textSecondary }]}>
+              {row.sessionTypeName}{row.guestName !== null ? " · гость без карточки" : ""}
+            </Text>
             {finance !== null ? <Text style={[styles.detail, { color: colors.textPrimary }]}>{finance}</Text> : null}
             <Text style={[styles.detail, { color: colors.textSecondary }]}>
               Отметьте, как прошло занятие. «Отменена» уберёт запись из календаря
@@ -104,6 +109,7 @@ export function AppointmentOutcomeDialog({ items, visible, repository, participa
           </View>
           <AppButton variant="ghost" label="Позже" disabled={busy} onPress={onLater} />
         </View>
+        <CancelUndoHost />
       </View>
     </Modal>
   );

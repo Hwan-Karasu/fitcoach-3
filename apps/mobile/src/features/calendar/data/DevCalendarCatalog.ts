@@ -119,4 +119,11 @@ export const devCalendarCatalog: readonly MigrationStep[] = [{
       WHEN NOT ${outcomeMatchesLifecycle}
       BEGIN SELECT RAISE(ABORT, 'CALENDAR_OUTCOME_LIFECYCLE_MISMATCH'); END`,
   ],
+}, {
+  version: 4,
+  checksum: "l02-dev-calendar-v4-undo-cancel-prompt-20261016",
+  statements: [
+    `ALTER TABLE dev_calendar_settings ADD COLUMN undo_cancel_prompt INTEGER NOT NULL DEFAULT 1
+      CHECK (undo_cancel_prompt IN (0,1))`,
+  ],
 }];

@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { AppButton, ConfirmDialog, InlineNotice, StatusTag } from "../../../shared/ui/components/public.ts";
+import { AppButton, ConfirmDialog, InlineNotice, SelectionChip, StatusTag } from "../../../shared/ui/components/public.ts";
 import { EmptyPanel, PrototypeNotice, PrototypeScreen, SectionHeading } from
   "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -210,11 +210,12 @@ export function CalendarScreen({ repository, participants, onOpenSettings, onOpe
               {item.row.creditBypass ? " · без списания" : ""}
             </Text>
             {item.row.note ? <Text style={[styles.detail, { color: colors.textSecondary }]}>{item.row.note}</Text> : null}
+            {/* Below the name, so a long name or tag never squeezes the other on a narrow screen. */}
+            {(() => {
+              const tag = outcomeTag(item.row, new Date());
+              return tag === null ? null : <View style={styles.tag}><StatusTag kind={tag.kind} label={tag.label} /></View>;
+            })()}
           </View>
-          {(() => {
-            const tag = outcomeTag(item.row, new Date());
-            return tag === null ? null : <StatusTag kind={tag.kind} label={tag.label} />;
-          })()}
         </Pressable>
       ))}
       <AppButton label="Записать" onPress={() => onOpenAppointment({ localDate: selected })} />
@@ -236,9 +237,28 @@ export function CalendarScreen({ repository, participants, onOpenSettings, onOpe
   );
 }
 
-export function CalendarSettingsPreview() {
+/** Only the undo prompt is editable so far; the other parameters stay at defaults (§13, §18.7). */
+export function CalendarSettingsPreview({ repository }: Readonly<{ repository: CalendarRepositoryPort }>) {
+  const [prompt, setPrompt] = useState<boolean | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void repository.getSettings().then((settings) => { if (active) setPrompt(settings.undoCancelPrompt); },
+      () => { if (active) setFailed(true); });
+    return () => { active = false; };
+  }, [repository]);
+  const toggle = (next: boolean) => {
+    setPrompt(next);
+    void repository.setUndoCancelPrompt(next).catch(() => { setPrompt(!next); setFailed(true); });
+  };
   return (
     <PrototypeScreen description="Локальные параметры отображения и работы календаря">
+      <SectionHeading>После отмены записи</SectionHeading>
+      {prompt !== null ? (
+        <SelectionChip group="После отмены записи" label="Предлагать «Вернуть» 3 секунды" selected={prompt}
+          onPress={() => toggle(!prompt)} />
+      ) : null}
+      {failed ? <InlineNotice kind="error">Не удалось прочитать или сохранить настройку.</InlineNotice> : null}
       <PrototypeNotice>
         Рабочее окно 07:00–23:00, все дни недели и копирование/очистка всех категорий пока заданы значениями по умолчанию. Управление типами занятий и этими параметрами появится отдельной задачей.
       </PrototypeNotice>
@@ -264,8 +284,9 @@ const styles = StyleSheet.create({
   interval: { borderWidth: 1, borderRadius: 10, padding: 10, gap: 4, borderStyle: "dashed" },
   intervalText: { fontSize: 14, lineHeight: 20, fontWeight: "700" },
   appointment: { borderWidth: 1, borderRadius: 12, padding: 12, flexDirection: "row", gap: 12, alignItems: "flex-start" },
-  time: { width: 92, fontSize: 14, lineHeight: 20, fontWeight: "700" },
+  time: { width: 104, fontSize: 14, lineHeight: 20, fontWeight: "700" },
   appointmentText: { flex: 1, gap: 2 },
+  tag: { flexDirection: "row", marginTop: 4 },
   name: { fontSize: 16, lineHeight: 22, fontWeight: "700" },
   detail: { fontSize: 12, lineHeight: 18 },
 });

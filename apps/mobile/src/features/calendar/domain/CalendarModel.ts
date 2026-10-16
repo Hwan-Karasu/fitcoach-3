@@ -66,6 +66,8 @@ export interface CalendarSettings {
   readonly defaultSessionTypeId: string | null;
   readonly copyPolicy: CategoryPolicy;
   readonly clearPolicy: CategoryPolicy;
+  /** Offer «Вернуть» for 3 seconds after «Отменена»; «Больше не спрашивать» turns it off. */
+  readonly undoCancelPrompt: boolean;
 }
 
 export interface AppointmentInput {
