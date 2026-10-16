@@ -51,7 +51,8 @@ export interface CalendarRepositoryPort {
   /** Existing entities always win; skipped rows are counted, never merged (§13.13). */
   pasteWeek(monday: LocalDate, template: WeekTemplate,
     eligibleClientIds: ReadonlySet<string>): Promise<PasteResult>;
-  previewClearWeek(monday: LocalDate): Promise<ClearWeekSummary>;
-  clearWeek(monday: LocalDate): Promise<ClearWeekSummary>;
+  /** Clear Week touches only rows that have not started; the past keeps its outcomes and credits. */
+  previewClearWeek(monday: LocalDate, now?: Date): Promise<ClearWeekSummary>;
+  clearWeek(monday: LocalDate, now?: Date): Promise<ClearWeekSummary>;
   subscribeCommittedChanges(listener: (change: CalendarCommittedChange) => void): () => void;
 }

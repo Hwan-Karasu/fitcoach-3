@@ -364,3 +364,34 @@ test("ACC-05 Исправить клиента: RETURNED for A and USED for B in
     assert.equal(effective.n, -1);
   } finally { await close(); }
 });
+
+test("L02 clear week leaves started rows alone: their outcome and USED stay, only the future is released", async () => {
+  const { clients, calendar, accounting, personal, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "Past week" });
+    await accounting.setClientMode(client.id, "FITCOACH");
+    await accounting.createPack(client.id, pack(3));
+    const done = await calendar.createAppointment(slot(client.id, personal.id));
+    const pending = await calendar.createAppointment(slot(client.id, personal.id, { startMinute: 660 }));
+    const running = await calendar.createAppointment(slot(null, personal.id, { startMinute: 750 }));
+    const future = await calendar.createAppointment(slot(client.id, personal.id, { localDate: "2099-03-04" }));
+    await calendar.createInterval({ kind: "DUTY", localDate: FUTURE, startMinute: 480, endMinute: 540 });
+    await calendar.createInterval({ kind: "DUTY", localDate: "2099-03-04", startMinute: 480, endMinute: 540 });
+    const now = at(13);
+    await accounting.reconcileDue(now);
+    await calendar.resolveOutcome(done.id, done.revision, "COMPLETED", now);
+    const preview = await calendar.previewClearWeek(FUTURE, now);
+    assert.deepEqual({ ...preview }, { scheduledAppointments: 1, pastKept: 3, duty: 1, blocked: 0 });
+    assert.deepEqual({ ...(await calendar.clearWeek(FUTURE, now)) }, { ...preview });
+    assert.equal((await calendar.getAppointment(done.id))?.outcome, "COMPLETED");
+    assert.equal((await calendar.getAppointment(pending.id))?.lifecycle, "SCHEDULED");
+    assert.equal((await calendar.getAppointment(running.id))?.lifecycle, "SCHEDULED");
+    assert.equal((await calendar.getAppointment(future.id))?.lifecycle, "CANCELLED");
+    assert.equal(await accounting.appointmentCredit(pending.id), "USED");
+    assert.equal(await accounting.appointmentCredit(future.id), "NONE");
+    assert.equal(await usedCount(accounting, client.id), 2);
+    assert.equal(await usedCount(accounting, client.id, "RETURNED"), 0);
+    const intervals = (await calendar.listRange(FUTURE, "2099-03-08")).intervals;
+    assert.deepEqual(intervals.map((row) => row.localDate), [FUTURE]);
+  } finally { await close(); }
+});

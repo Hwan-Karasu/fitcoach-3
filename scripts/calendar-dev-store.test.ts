@@ -166,7 +166,7 @@ test("K01 paste week: existing wins, completed source becomes new SCHEDULED, no 
   } finally { await close(); }
 });
 
-test("K01 clear week cancels SCHEDULED only, keeps COMPLETED, removes intervals atomically", async () => {
+test("K01 clear week cancels future SCHEDULED only, keeps COMPLETED, removes intervals atomically", async () => {
   const { db, calendar, personal, close } = await stores();
   try {
     const done = await calendar.createAppointment(slot({ sessionTypeId: personal.id, guestName: "Done" }));
@@ -178,10 +178,11 @@ test("K01 clear week cancels SCHEDULED only, keeps COMPLETED, removes intervals 
     await calendar.createInterval({ kind: "DUTY", localDate: MONDAY, startMinute: 480, endMinute: 540 });
     await calendar.createInterval({ kind: "BLOCKED", localDate: addDays(MONDAY, 6),
       startMinute: 480, endMinute: 540 });
-    const preview = await calendar.previewClearWeek(MONDAY);
-    assert.deepEqual({ ...preview }, { scheduledAppointments: 1, completedKept: 1, duty: 1, blocked: 1 });
+    const before = new Date(2026, 9, 18, 12, 0);
+    const preview = await calendar.previewClearWeek(MONDAY, before);
+    assert.deepEqual({ ...preview }, { scheduledAppointments: 1, pastKept: 1, duty: 1, blocked: 1 });
     assert.equal((await calendar.listRange(MONDAY, addDays(MONDAY, 6))).appointments.length, 2);
-    assert.deepEqual({ ...(await calendar.clearWeek(MONDAY)) }, { ...preview });
+    assert.deepEqual({ ...(await calendar.clearWeek(MONDAY, before)) }, { ...preview });
     const left = await calendar.listRange(MONDAY, addDays(MONDAY, 6));
     assert.deepEqual(left.appointments.map((row) => row.id), [done.id]);
     assert.equal(left.intervals.length, 0);

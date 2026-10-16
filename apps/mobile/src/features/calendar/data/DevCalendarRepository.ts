@@ -150,20 +150,29 @@ async function insertInterval(tx: SqliteStatementPort, workspaceId: string,
   return id;
 }
 
+/** Rows that have not started yet; Clear Week never rewrites the past (its outcomes and credits). */
+const NOT_STARTED_SQL = "(local_date > ? OR (local_date = ? AND start_minute > ?))";
+
+function notStartedParams(now: Date): readonly [string, string, number] {
+  const today = localDateOf(now);
+  return [today, today, minuteOfDay(now)];
+}
+
 async function countClearWeek(tx: SqliteStatementPort, workspaceId: string, monday: LocalDate,
-  settings: CalendarSettings): Promise<ClearWeekSummary> {
+  settings: CalendarSettings, now: Date): Promise<ClearWeekSummary> {
   const sunday = addDays(monday, 6);
-  const appointments = await tx.all<{ lifecycle: string; n: number }>(`SELECT lifecycle, count(*) AS n
+  const appointments = await tx.first<{ future: number | null; total: number }>(`SELECT
+      sum(lifecycle = 'SCHEDULED' AND ${NOT_STARTED_SQL}) AS future, count(*) AS total
     FROM dev_calendar_appointments WHERE workspace_id = ? AND local_date BETWEEN ? AND ?
-    GROUP BY lifecycle`, [workspaceId, monday, sunday]);
+      AND lifecycle <> 'CANCELLED'`, [...notStartedParams(now), workspaceId, monday, sunday]);
   const intervals = await tx.all<{ kind: string; n: number }>(`SELECT kind, count(*) AS n
     FROM dev_calendar_intervals WHERE workspace_id = ? AND local_date BETWEEN ? AND ?
-    GROUP BY kind`, [workspaceId, monday, sunday]);
+      AND ${NOT_STARTED_SQL} GROUP BY kind`, [workspaceId, monday, sunday, ...notStartedParams(now)]);
   const policy = settings.clearPolicy;
+  const cleared = policy.appointments ? appointments?.future ?? 0 : 0;
   return {
-    scheduledAppointments: policy.appointments
-      ? appointments.find((row) => row.lifecycle === "SCHEDULED")?.n ?? 0 : 0,
-    completedKept: appointments.find((row) => row.lifecycle === "COMPLETED")?.n ?? 0,
+    scheduledAppointments: cleared,
+    pastKept: (appointments?.total ?? 0) - cleared,
     duty: policy.duty ? intervals.find((row) => row.kind === "DUTY")?.n ?? 0 : 0,
     blocked: policy.blocked ? intervals.find((row) => row.kind === "BLOCKED")?.n ?? 0 : 0,
   };
@@ -592,36 +601,38 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
     return result;
   }
 
-  previewClearWeek(monday: LocalDate): Promise<ClearWeekSummary> {
+  previewClearWeek(monday: LocalDate, now: Date = new Date()): Promise<ClearWeekSummary> {
     const { connection } = this.ready();
     return this.settings(connection).then((settings) =>
-      countClearWeek(connection, this.workspaceId, monday, settings));
+      countClearWeek(connection, this.workspaceId, monday, settings, now));
   }
 
-  async clearWeek(monday: LocalDate): Promise<ClearWeekSummary> {
+  async clearWeek(monday: LocalDate, now: Date = new Date()): Promise<ClearWeekSummary> {
     if (!isLocalDate(monday)) throw new Error("CALENDAR_DATE_INVALID");
     const sunday = addDays(monday, 6);
     const summary = await this.ready().writer.write(async (tx) => {
       const settings = await this.settings(tx);
-      const counted = await countClearWeek(tx, this.workspaceId, monday, settings);
-      const now = new Date().toISOString();
+      const counted = await countClearWeek(tx, this.workspaceId, monday, settings, now);
+      const stamp = now.toISOString();
       if (settings.clearPolicy.appointments) {
-        // Bulk clear only releases reservations; it never charges a session (§13.14).
+        // Only rows that have not started: bulk clear releases their reservations and never
+        // charges; past and running rows keep their outcome and USED (§13.14, §48.35).
         const cleared = await tx.all<{ id: string }>(`SELECT id FROM dev_calendar_appointments
-          WHERE workspace_id = ? AND local_date BETWEEN ? AND ? AND lifecycle = 'SCHEDULED'`,
-        [this.workspaceId, monday, sunday]);
-        for (const row of cleared) await this.accounting?.cancel(tx, this.workspaceId, row.id, "RETURN", now);
-        await tx.run(`UPDATE dev_calendar_appointments SET lifecycle = 'CANCELLED', cancelled_at = ?,
-          revision = revision + 1, updated_at = ?
-          WHERE workspace_id = ? AND local_date BETWEEN ? AND ? AND lifecycle = 'SCHEDULED'`,
-        [now, now, this.workspaceId, monday, sunday]);
+          WHERE workspace_id = ? AND local_date BETWEEN ? AND ? AND lifecycle = 'SCHEDULED'
+            AND ${NOT_STARTED_SQL}`, [this.workspaceId, monday, sunday, ...notStartedParams(now)]);
+        for (const row of cleared) {
+          await this.accounting?.cancel(tx, this.workspaceId, row.id, "RETURN", stamp);
+          await tx.run(`UPDATE dev_calendar_appointments SET lifecycle = 'CANCELLED', cancelled_at = ?,
+            revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND id = ?`,
+          [stamp, stamp, this.workspaceId, row.id]);
+        }
       }
       const kinds = [settings.clearPolicy.duty ? "DUTY" : null,
         settings.clearPolicy.blocked ? "BLOCKED" : null].filter((kind) => kind !== null);
       for (const kind of kinds) {
         await tx.run(`DELETE FROM dev_calendar_intervals
-          WHERE workspace_id = ? AND local_date BETWEEN ? AND ? AND kind = ?`,
-        [this.workspaceId, monday, sunday, kind]);
+          WHERE workspace_id = ? AND local_date BETWEEN ? AND ? AND kind = ? AND ${NOT_STARTED_SQL}`,
+        [this.workspaceId, monday, sunday, kind, ...notStartedParams(now)]);
       }
       return counted;
     });

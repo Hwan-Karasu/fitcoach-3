@@ -225,9 +225,9 @@ export function CalendarScreen({ repository, participants, onOpenSettings, onOpe
       <ConfirmDialog visible={clearPreview !== null} destructive confirmBusy={busy}
         title="Очистить неделю?"
         description={clearPreview === null ? "" : [
-          `Будущих и незакрытых записей будет отменено: ${clearPreview.scheduledAppointments}.`,
-          `Дежурств будет удалено: ${clearPreview.duty}. Блокировок: ${clearPreview.blocked}.`,
-          `Проведённые записи останутся без изменений: ${clearPreview.completedKept}.`,
+          `Будущих записей будет отменено: ${clearPreview.scheduledAppointments}.`,
+          `Будущих дежурств будет удалено: ${clearPreview.duty}. Блокировок: ${clearPreview.blocked}.`,
+          `Прошедшие и идущие записи останутся без изменений: ${clearPreview.pastKept}.`,
           "Карточки клиентов не удаляются.",
         ].join("\n")}
         confirmLabel="Очистить неделю"

@@ -108,7 +108,8 @@ export interface PasteResult {
 
 export interface ClearWeekSummary {
   readonly scheduledAppointments: number;
-  readonly completedKept: number;
+  /** Started, ended or closed appointments that Clear Week leaves untouched. */
+  readonly pastKept: number;
   readonly duty: number;
   readonly blocked: number;
 }
