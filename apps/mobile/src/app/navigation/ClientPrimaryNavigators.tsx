@@ -12,8 +12,8 @@ const HomeStack = createNativeStackNavigator<HomeRoutes>();
 const NutritionStack = createNativeStackNavigator<NutritionRoutes>();
 const TrainingStack = createNativeStackNavigator<TrainingRoutes>();
 
-export function HomeNavigator({ client, onOpenEdit, onOpenAccounting, onArchive }: Readonly<{
-  client: ClientRecord; onOpenEdit: () => void; onOpenAccounting: () => void;
+export function HomeNavigator({ client, onOpenEdit, onOpenAccounting, onOpenMeasurements, onArchive }: Readonly<{
+  client: ClientRecord; onOpenEdit: () => void; onOpenAccounting: () => void; onOpenMeasurements: () => void;
   onArchive: () => Promise<void>;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -21,7 +21,7 @@ export function HomeNavigator({ client, onOpenEdit, onOpenAccounting, onArchive 
     <HomeStack.Navigator screenOptions={{ contentStyle: { backgroundColor: palette.tokens.canvas } }}>
       <HomeStack.Screen name="HomeIndex" options={{ headerShown: false }}>
         {() => <ClientHomePreview client={client} onEdit={onOpenEdit}
-          onOpenAccounting={onOpenAccounting} onArchive={onArchive} />}
+          onOpenAccounting={onOpenAccounting} onOpenMeasurements={onOpenMeasurements} onArchive={onArchive} />}
       </HomeStack.Screen>
     </HomeStack.Navigator>
   );

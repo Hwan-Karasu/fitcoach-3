@@ -7,6 +7,7 @@ import { SettingsPreview, ThemeCatalogPreview } from "../../features/settings/pu
 import { ClientRosterSettingsScreen } from "../../features/clients/public.ts";
 import { AppointmentOutcomeDialog, CalendarUndoProvider, type GuestLinkRequest } from "../../features/calendar/public.ts";
 import { ClientAccountingScreen } from "../../features/accounting/public.ts";
+import { ClientMeasurementsScreen } from "../../features/measurements/public.ts";
 import { useAppointmentOutcomeQueue } from "../bootstrap/useAppointmentOutcomeQueue.ts";
 import { PrototypeThemeProvider, usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { WorkspaceRoutePreview } from "../../shared/ui/prototype/WorkspaceRoutePreview.tsx";
@@ -27,6 +28,7 @@ type RootStackRoutes = {
   WorkspaceDev: undefined;
   ClientWorkspace: { clientId: string };
   ClientAccounting: { clientId: string };
+  ClientMeasurements: { clientId: string };
   ClientEditorDev: { clientId?: string; guestLink?: GuestLinkRequest } | undefined;
   SqliteDev: undefined;
 };
@@ -96,11 +98,15 @@ function ShellNavigator({ services, clientLists }: Readonly<{
             clientId={route.params.clientId} repository={services.clients}
             onOpenEdit={(clientId) => navigation.navigate("ClientEditorDev", { clientId })}
             onOpenAccounting={(clientId) => navigation.navigate("ClientAccounting", { clientId })}
+            onOpenMeasurements={(clientId) => navigation.navigate("ClientMeasurements", { clientId })}
             onClose={() => navigation.goBack()} />}
         </Stack.Screen>
         <Stack.Screen name="ClientAccounting" options={{ title: "Абонемент и оплата" }}>
           {({ route }) => <ClientAccountingScreen clientId={route.params.clientId}
             repository={services.accounting} listCreditSessionTypes={services.listCreditSessionTypes} />}
+        </Stack.Screen>
+        <Stack.Screen name="ClientMeasurements" options={{ title: "Замеры" }}>
+          {({ route }) => <ClientMeasurementsScreen clientId={route.params.clientId} repository={services.measurements} />}
         </Stack.Screen>
         <Stack.Screen name="ClientEditorDev" options={{ headerShown: false, gestureEnabled: false }}>
           {({ navigation, route }) => <ClientEditorRoute

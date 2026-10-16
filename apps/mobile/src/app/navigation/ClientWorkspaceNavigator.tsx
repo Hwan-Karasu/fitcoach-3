@@ -58,12 +58,13 @@ function MoreNavigator() {
   );
 }
 
-export function ClientWorkspaceNavigator({ clientId, repository, onOpenEdit, onOpenAccounting,
+export function ClientWorkspaceNavigator({ clientId, repository, onOpenEdit, onOpenAccounting, onOpenMeasurements,
   onClose }: Readonly<{
   clientId: string;
   repository: ClientRepositoryPort & ClientRosterPort;
   onOpenEdit: (clientId: string) => void;
   onOpenAccounting: (clientId: string) => void;
+  onOpenMeasurements: (clientId: string) => void;
   onClose: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -135,6 +136,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, onOpenEdit, onO
       <Tabs.Screen name="Home" options={{ tabBarLabel: workspaceTabs.Home, tabBarAccessibilityLabel: workspaceTabs.Home, tabBarIcon: ({ color }) => <TabGlyph kind="home" color={color} /> }}>
         {() => <HomeNavigator client={client} onOpenEdit={() => onOpenEdit(client.id)}
           onOpenAccounting={() => onOpenAccounting(client.id)}
+          onOpenMeasurements={() => onOpenMeasurements(client.id)}
           onArchive={async () => {
             try { await repository.setArchived(client.id, client.revision, true); }
             catch (error) { setRetryKey((current) => current + 1); throw error; }
