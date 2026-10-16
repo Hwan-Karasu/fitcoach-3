@@ -1,6 +1,8 @@
 import { runMigrations } from "../../../shared/db/MigrationRunner.ts";
+import { SharedSqliteDatabase } from "../../../shared/db/SharedSqliteDatabase.ts";
+import { UUID_V4_SQL } from "../../../shared/db/SqlIds.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
-import { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
+import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
 import type { ClientRecord, CreateClientInput, ClientRepositoryPort } from
   "../domain/ClientRepositoryPort.ts";
 import type { ArchiveSortMode, ClientArchivePort, ClientDeletionManifest,
@@ -57,12 +59,6 @@ const columns = `id, display_name AS displayName, contact_phone AS contactPhone,
   height_cm_x10 AS heightCmX10, emoji, lifecycle, revision, created_at AS createdAt,
   updated_at AS updatedAt, archived_at AS archivedAt`;
 
-const uuidSql = `SELECT lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) ||
-  '-4' || substr(lower(hex(randomblob(2))), 2) || '-' ||
-  substr('89ab', 1 + abs(random() % 4), 1) ||
-  substr(lower(hex(randomblob(2))), 2) || '-' ||
-  lower(hex(randomblob(6))) AS id`;
-
 function optional(value: string | undefined, maxLength: number): string | null {
   const normalized = value?.trim() ?? "";
   if (normalized.length > maxLength) throw new Error("CLIENT_FIELD_TOO_LONG");
@@ -105,8 +101,19 @@ const clientOwnedTables = [
   { owner: "clients.birthdayDismissals", table: "dev_birthday_dismissals" },
 ] as const;
 
-async function deletionManifest(tx: SqliteStatementPort, workspaceId: string,
-  clientId: string): Promise<ClientDeletionManifest> {
+/**
+ * Another owner's rows that reference a client. Wired only by the composition root; the owner
+ * decides whether its rows are deleted, cancelled or anonymized (§15.7–15.8).
+ */
+export interface DevClientDeletionParticipant {
+  readonly owner: string;
+  readonly tables: readonly string[];
+  count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number>;
+  detach(tx: SqliteStatementPort, workspaceId: string, clientId: string, now: string): Promise<void>;
+}
+
+async function deletionManifest(tx: SqliteStatementPort, workspaceId: string, clientId: string,
+  participants: readonly DevClientDeletionParticipant[]): Promise<ClientDeletionManifest> {
   const client = await clientById(tx, workspaceId, clientId);
   if (client.lifecycle !== "ARCHIVED") throw new Error("CLIENT_NOT_ARCHIVED");
   const owners = [{ owner: "clients.profile", rows: 1 }];
@@ -116,16 +123,21 @@ async function deletionManifest(tx: SqliteStatementPort, workspaceId: string,
       [workspaceId, clientId]);
     owners.push({ owner, rows: row?.n ?? 0 });
   }
+  for (const participant of participants) {
+    owners.push({ owner: participant.owner, rows: await participant.count(tx, workspaceId, clientId) });
+  }
   return { clientId, displayName: client.displayName, revision: client.revision, owners };
 }
 
 /** Fails closed when the schema gained a client reference that the manifest does not know. */
-async function assertManifestCoversSchema(tx: SqliteStatementPort): Promise<void> {
+async function assertManifestCoversSchema(tx: SqliteStatementPort,
+  participants: readonly DevClientDeletionParticipant[]): Promise<void> {
   const referencing = await tx.all<{ name: string }>(`SELECT DISTINCT m.name FROM sqlite_master AS m
     WHERE m.type = 'table' AND m.name NOT IN ('dev_clients', 'sqlite_sequence') AND (
       EXISTS (SELECT 1 FROM pragma_foreign_key_list(m.name) AS f WHERE f."table" = 'dev_clients')
       OR EXISTS (SELECT 1 FROM pragma_table_info(m.name) AS c WHERE c.name = 'client_id'))`);
-  const known = new Set<string>(clientOwnedTables.map((entry) => entry.table));
+  const known = new Set<string>([...clientOwnedTables.map((entry) => entry.table),
+    ...participants.flatMap((participant) => participant.tables)]);
   if (referencing.some((row) => !known.has(row.name))) throw new Error("CLIENT_DELETION_BLOCKED");
 }
 
@@ -159,15 +171,18 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
   private connection: SqliteConnectionPort | null = null;
   private writer: WriterCoordinator | null = null;
   private opening: Promise<void> | null = null;
-  private readonly openConnection: () => Promise<SqliteConnectionPort>;
+  private readonly database: SharedSqliteDatabase;
   private readonly workspaceId: string;
+  private readonly participants: readonly DevClientDeletionParticipant[];
   private readonly changeListeners = new Set<(change: ClientCommittedChange) => void>();
 
   constructor(
-    openConnection: () => Promise<SqliteConnectionPort>, workspaceId: string,
+    database: SharedSqliteDatabase | (() => Promise<SqliteConnectionPort>), workspaceId: string,
+    deletionParticipants: readonly DevClientDeletionParticipant[] = [],
   ) {
-    this.openConnection = openConnection;
+    this.database = database instanceof SharedSqliteDatabase ? database : new SharedSqliteDatabase(database);
     this.workspaceId = workspaceId;
+    this.participants = deletionParticipants;
   }
 
   initialize(): Promise<void> {
@@ -182,9 +197,8 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
 
   private async openAndMigrate(): Promise<void> {
     if (!this.workspaceId.trim()) throw new Error("CLIENT_WORKSPACE_REQUIRED");
-    const connection = await this.openConnection();
+    const { connection, writer } = await this.database.acquire();
     try {
-      const writer = new WriterCoordinator(connection);
       await runMigrations(writer, devClientCatalog);
       await writer.write(async (tx) => {
         await tx.run(`INSERT OR IGNORE INTO dev_workspaces (id, display_name, created_at)
@@ -198,7 +212,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
       this.connection = connection;
       this.writer = writer;
     } catch (error) {
-      await connection.close();
+      await this.database.release();
       throw error;
     }
   }
@@ -342,7 +356,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
     const { name, phone, email, birthDate, heightCmX10, emoji } = validatedInput(input);
     const { writer } = this.ready();
     const created = await writer.write(async (tx) => {
-      const id = (await tx.first<{ id: string }>(uuidSql))?.id;
+      const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
       if (!id) throw new Error("CLIENT_ID_UNAVAILABLE");
       const now = new Date().toISOString();
       await tx.run(`INSERT INTO dev_clients
@@ -418,7 +432,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
         : [this.workspaceId, input.clientId];
       const existing = await tx.first<{ id: string }>(`SELECT id FROM dev_client_recovery_drafts
         WHERE workspace_id = ? AND ${where}`, lookupBindings);
-      const id = existing?.id ?? (await tx.first<{ id: string }>(uuidSql))?.id;
+      const id = existing?.id ?? (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
       if (!id) throw new Error("CLIENT_DRAFT_ID_UNAVAILABLE");
       const now = new Date().toISOString();
       if (existing) {
@@ -512,7 +526,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
   async previewPermanentDelete(clientId: string): Promise<ClientDeletionManifest> {
     if (!clientId.trim()) throw new Error("CLIENT_COMMAND_INVALID");
     const { connection } = this.ready();
-    return deletionManifest(connection, this.workspaceId, clientId);
+    return deletionManifest(connection, this.workspaceId, clientId, this.participants);
   }
 
   async deleteArchivedPermanently(clientId: string, expectedRevision: number): Promise<void> {
@@ -521,9 +535,16 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
     }
     const { writer } = this.ready();
     await writer.write(async (tx) => {
-      const manifest = await deletionManifest(tx, this.workspaceId, clientId);
+      const manifest = await deletionManifest(tx, this.workspaceId, clientId, this.participants);
       if (manifest.revision !== expectedRevision) throw new Error("CLIENT_STALE_OR_WRONG_SCOPE");
-      await assertManifestCoversSchema(tx);
+      await assertManifestCoversSchema(tx, this.participants);
+      const now = new Date().toISOString();
+      for (const participant of this.participants) {
+        await participant.detach(tx, this.workspaceId, clientId, now);
+        if (await participant.count(tx, this.workspaceId, clientId) !== 0) {
+          throw new Error("CLIENT_DELETION_BLOCKED");
+        }
+      }
       for (const { table } of clientOwnedTables) {
         await tx.run(`DELETE FROM ${table} WHERE workspace_id = ? AND client_id = ?`,
           [this.workspaceId, clientId]);
@@ -539,11 +560,10 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
   }
 
   async close(): Promise<void> {
-    if (this.opening !== null) await this.opening;
-    if (this.writer !== null) await this.writer.drain();
-    const connection = this.connection;
+    if (this.opening !== null) await this.opening.catch(() => undefined);
+    if (this.connection === null) return;
     this.connection = null;
     this.writer = null;
-    await connection?.close();
+    await this.database.release();
   }
 }

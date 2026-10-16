@@ -1,0 +1,231 @@
+import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
+import test from "node:test";
+import { DevCalendarRepository, devCalendarClientDeletionParticipant } from
+  "../apps/mobile/src/features/calendar/data/DevCalendarRepository.ts";
+import type { AppointmentInput } from "../apps/mobile/src/features/calendar/domain/CalendarModel.ts";
+import { addDays, buildWeekTemplate, mondayOf, monthRange, overlaps, validateAppointment,
+  weekdayIndex } from "../apps/mobile/src/features/calendar/domain/CalendarRules.ts";
+import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
+import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
+import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
+
+const WS = "synthetic-workspace-a";
+const MONDAY = "2026-10-19";
+
+async function stores(participants = true) {
+  const db = new DatabaseSync(":memory:");
+  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const clients = new DevClientRepository(shared, WS,
+    participants ? [devCalendarClientDeletionParticipant] : []);
+  await clients.initialize();
+  const calendar = new DevCalendarRepository(shared, WS);
+  await calendar.initialize();
+  const types = await calendar.listSessionTypes();
+  const personal = types.find((type) => type.name === "Персональная тренировка")!;
+  const close = async () => { await calendar.close(); await clients.close(); };
+  return { db, clients, calendar, personal, close };
+}
+
+function slot(overrides: Partial<AppointmentInput> & Pick<AppointmentInput, "sessionTypeId">): AppointmentInput {
+  return { localDate: MONDAY, startMinute: 600, durationMinutes: 60, clientId: null,
+    guestName: "Guest", note: null, ...overrides };
+}
+
+test("K01 calendar arithmetic is wall-clock, Monday-first and half-open", () => {
+  assert.equal(addDays("2026-03-28", 2), "2026-03-30");
+  assert.equal(addDays("2024-02-28", 1), "2024-02-29");
+  assert.equal(weekdayIndex("2026-10-19"), 0);
+  assert.equal(weekdayIndex("2026-10-25"), 6);
+  assert.equal(mondayOf("2026-10-25"), "2026-10-19");
+  assert.deepEqual({ ...monthRange("2026-02-11") }, { first: "2026-02-01", last: "2026-02-28" });
+  assert.deepEqual({ ...monthRange("2026-12-31") }, { first: "2026-12-01", last: "2026-12-31" });
+  assert.equal(overlaps(600, 660, 660, 720), false);
+  assert.equal(overlaps(600, 690, 660, 720), true);
+  const settings = { dayStartMinute: 420, dayEndMinute: 1380, visibleWeekdays: Array(7).fill(true),
+    defaultSessionTypeId: null, copyPolicy: { appointments: true, duty: true, blocked: true },
+    clearPolicy: { appointments: true, duty: true, blocked: true } };
+  assert.equal(validateAppointment(slot({ sessionTypeId: "t", startMinute: 1320 }), settings, true)
+    .startMinute, 1320);
+  assert.throws(() => validateAppointment(slot({ sessionTypeId: "t", startMinute: 1350 }), settings, true),
+    { message: "CALENDAR_OUTSIDE_DAY_RANGE" });
+  assert.throws(() => validateAppointment(slot({ sessionTypeId: "t", startMinute: 615 }), settings, true),
+    { message: "CALENDAR_TIME_INVALID" });
+  assert.throws(() => validateAppointment(slot({ sessionTypeId: "t", guestName: "  ", note: "only note" }),
+    settings, true), { message: "CALENDAR_PARTICIPANT_REQUIRED" });
+});
+
+test("K01 seeds session types and enforces overlap, Blocked and Duty layers", async () => {
+  const { calendar, personal, clients, close } = await stores();
+  try {
+    assert.deepEqual((await calendar.listSessionTypes()).map((type) => type.name),
+      ["Персональная тренировка", "Первичный инструктаж", "Консультация", "Гостевой визит"]);
+    const settings = await calendar.getSettings();
+    assert.equal(settings.defaultSessionTypeId, personal.id);
+    assert.equal(settings.dayStartMinute, 420);
+    assert.equal(settings.dayEndMinute, 1380);
+    const client = await clients.create({ displayName: "Alpha" });
+    const first = await calendar.createAppointment(slot({ sessionTypeId: personal.id,
+      clientId: client.id, guestName: "ignored for client" }));
+    assert.equal(first.lifecycle, "SCHEDULED");
+    assert.equal(first.guestName, null);
+    assert.equal(first.sessionTypeName, "Персональная тренировка");
+    await assert.rejects(calendar.createAppointment(slot({ sessionTypeId: personal.id, startMinute: 630 })),
+      { message: "CALENDAR_TIME_OVERLAP" });
+    await calendar.createAppointment(slot({ sessionTypeId: personal.id, startMinute: 660 }));
+    await assert.rejects(calendar.createAppointment(slot({ sessionTypeId: personal.id,
+      clientId: "missing-client", startMinute: 900 })), /FOREIGN KEY/u);
+    await calendar.createInterval({ kind: "DUTY", localDate: MONDAY, startMinute: 540, endMinute: 900 });
+    await assert.rejects(calendar.createInterval({ kind: "BLOCKED", localDate: MONDAY,
+      startMinute: 600, endMinute: 630 }), { message: "CALENDAR_BLOCKED_OVER_APPOINTMENT" });
+    await calendar.createInterval({ kind: "BLOCKED", localDate: MONDAY, startMinute: 780, endMinute: 840 });
+    await assert.rejects(calendar.createAppointment(slot({ sessionTypeId: personal.id, startMinute: 810 })),
+      { message: "CALENDAR_BLOCKED_TIME" });
+    await assert.rejects(calendar.createInterval({ kind: "DUTY", localDate: MONDAY,
+      startMinute: 600, endMinute: 660 }), { message: "CALENDAR_TIME_OVERLAP" });
+    const range = await calendar.listRange(MONDAY, MONDAY);
+    assert.equal(range.appointments.length, 2);
+    assert.equal(range.intervals.length, 2);
+  } finally { await close(); }
+});
+
+test("K01 reschedule keeps the stable ID, refuses stale revisions and leaves neighbours alone", async () => {
+  const { calendar, personal, close } = await stores();
+  try {
+    const a = await calendar.createAppointment(slot({ sessionTypeId: personal.id, guestName: "A" }));
+    const b = await calendar.createAppointment(slot({ sessionTypeId: personal.id, guestName: "B",
+      startMinute: 720 }));
+    const moved = await calendar.updateAppointment(a.id, a.revision, slot({ sessionTypeId: personal.id,
+      guestName: "A", localDate: addDays(MONDAY, 1), startMinute: 540, durationMinutes: 90 }));
+    assert.equal(moved.id, a.id);
+    assert.equal(moved.revision, 2);
+    assert.equal(moved.localDate, addDays(MONDAY, 1));
+    await assert.rejects(calendar.updateAppointment(a.id, a.revision, slot({ sessionTypeId: personal.id })),
+      { message: "CALENDAR_STALE_APPOINTMENT" });
+    assert.deepEqual({ ...(await calendar.getAppointment(b.id)) }, { ...b });
+    await assert.rejects(calendar.updateAppointment(b.id, b.revision, slot({ sessionTypeId: personal.id,
+      guestName: "B", localDate: addDays(MONDAY, 1), startMinute: 570 })),
+    { message: "CALENDAR_TIME_OVERLAP" });
+    await calendar.cancelAppointment(moved.id, moved.revision);
+    assert.equal((await calendar.getAppointment(a.id))?.lifecycle, "CANCELLED");
+    await assert.rejects(calendar.cancelAppointment(moved.id, moved.revision + 1),
+      { message: "CALENDAR_STALE_APPOINTMENT" });
+    await calendar.createAppointment(slot({ sessionTypeId: personal.id, guestName: "C",
+      localDate: addDays(MONDAY, 1), startMinute: 540 }));
+    assert.deepEqual((await calendar.summarize(MONDAY, addDays(MONDAY, 6))).map((row) => ({ ...row })), [
+      { localDate: MONDAY, appointments: 1 }, { localDate: addDays(MONDAY, 1), appointments: 1 },
+    ]);
+  } finally { await close(); }
+});
+
+test("K01 paste week: existing wins, completed source becomes new SCHEDULED, no settlements copied", async () => {
+  const { db, calendar, clients, personal, close } = await stores();
+  try {
+    const active = await clients.create({ displayName: "Active" });
+    const archived = await clients.create({ displayName: "Archived" });
+    const target = addDays(MONDAY, 7);
+    const thursday = addDays(MONDAY, 3);
+    const source = await calendar.createAppointment(slot({ sessionTypeId: personal.id,
+      clientId: active.id, localDate: thursday, startMinute: 660, note: "keep note" }));
+    db.prepare("UPDATE dev_calendar_appointments SET lifecycle = 'COMPLETED' WHERE id = ?").run(source.id);
+    const cancelled = await calendar.createAppointment(slot({ sessionTypeId: personal.id, guestName: "X" }));
+    await calendar.cancelAppointment(cancelled.id, cancelled.revision);
+    await calendar.createAppointment(slot({ sessionTypeId: personal.id, clientId: archived.id,
+      localDate: addDays(MONDAY, 1) }));
+    await calendar.createInterval({ kind: "DUTY", localDate: MONDAY, startMinute: 480, endMinute: 720 });
+    await calendar.createInterval({ kind: "BLOCKED", localDate: addDays(MONDAY, 4),
+      startMinute: 720, endMinute: 780 });
+    const existing = await calendar.createAppointment(slot({ sessionTypeId: personal.id,
+      guestName: "Already there", localDate: addDays(target, 3), startMinute: 660 }));
+    await calendar.createAppointment(slot({ sessionTypeId: personal.id, guestName: "Blocks blocked",
+      localDate: addDays(target, 4), startMinute: 720 }));
+    await clients.setArchived(archived.id, archived.revision, true);
+    const template = await calendar.copyWeek(MONDAY);
+    assert.equal(template.appointments.length, 2);
+    assert.equal(JSON.stringify(template).includes(source.id), false);
+    const eligible = new Set([active.id]);
+    const first = await calendar.pasteWeek(target, template, eligible);
+    assert.deepEqual({ ...first }, { inserted: 1, skippedBusy: 2, skippedUnavailable: 1 });
+    const pasted = await calendar.listRange(target, addDays(target, 6));
+    assert.ok(pasted.appointments.some((row) => row.id === existing.id && row.guestName === "Already there"));
+    assert.equal(pasted.appointments.filter((row) => row.localDate === addDays(target, 3)).length, 1);
+    assert.equal(pasted.intervals.filter((row) => row.kind === "BLOCKED").length, 0);
+    assert.equal(pasted.intervals.filter((row) => row.kind === "DUTY").length, 1);
+    const next = addDays(target, 7);
+    const second = await calendar.pasteWeek(next, template, eligible);
+    assert.deepEqual({ ...second }, { inserted: 3, skippedBusy: 0, skippedUnavailable: 1 });
+    const reused = (await calendar.listRange(addDays(next, 3), addDays(next, 3))).appointments[0]!;
+    assert.notEqual(reused.id, source.id);
+    assert.equal(reused.lifecycle, "SCHEDULED");
+    assert.equal(reused.clientId, active.id);
+    assert.equal(reused.note, "keep note");
+    assert.equal(reused.revision, 1);
+    const built = buildWeekTemplate(MONDAY, [], [], { appointments: true, duty: false, blocked: false });
+    assert.equal(built.intervals.length, 0);
+  } finally { await close(); }
+});
+
+test("K01 clear week cancels SCHEDULED only, keeps COMPLETED, removes intervals atomically", async () => {
+  const { db, calendar, personal, close } = await stores();
+  try {
+    const done = await calendar.createAppointment(slot({ sessionTypeId: personal.id, guestName: "Done" }));
+    db.prepare("UPDATE dev_calendar_appointments SET lifecycle = 'COMPLETED' WHERE id = ?").run(done.id);
+    await calendar.createAppointment(slot({ sessionTypeId: personal.id, guestName: "Next",
+      localDate: addDays(MONDAY, 2) }));
+    await calendar.createAppointment(slot({ sessionTypeId: personal.id, guestName: "Other week",
+      localDate: addDays(MONDAY, 7) }));
+    await calendar.createInterval({ kind: "DUTY", localDate: MONDAY, startMinute: 480, endMinute: 540 });
+    await calendar.createInterval({ kind: "BLOCKED", localDate: addDays(MONDAY, 6),
+      startMinute: 480, endMinute: 540 });
+    const preview = await calendar.previewClearWeek(MONDAY);
+    assert.deepEqual({ ...preview }, { scheduledAppointments: 1, completedKept: 1, duty: 1, blocked: 1 });
+    assert.equal((await calendar.listRange(MONDAY, addDays(MONDAY, 6))).appointments.length, 2);
+    assert.deepEqual({ ...(await calendar.clearWeek(MONDAY)) }, { ...preview });
+    const left = await calendar.listRange(MONDAY, addDays(MONDAY, 6));
+    assert.deepEqual(left.appointments.map((row) => row.id), [done.id]);
+    assert.equal(left.intervals.length, 0);
+    assert.equal((await calendar.listRange(addDays(MONDAY, 7), addDays(MONDAY, 7))).appointments.length, 1);
+  } finally { await close(); }
+});
+
+test("§15.8 permanent client delete cancels future and anonymizes past appointments only for that client", async () => {
+  const { db, calendar, clients, personal, close } = await stores();
+  try {
+    const gone = await clients.create({ displayName: "Gone" });
+    const stays = await clients.create({ displayName: "Stays" });
+    const past = await calendar.createAppointment(slot({ sessionTypeId: personal.id, clientId: gone.id,
+      localDate: "2020-01-06", note: "private" }));
+    db.prepare("UPDATE dev_calendar_appointments SET lifecycle = 'COMPLETED' WHERE id = ?").run(past.id);
+    const future = await calendar.createAppointment(slot({ sessionTypeId: personal.id, clientId: gone.id,
+      localDate: "2099-01-05", note: "private" }));
+    const other = await calendar.createAppointment(slot({ sessionTypeId: personal.id, clientId: stays.id,
+      localDate: "2099-01-05", startMinute: 720 }));
+    const archived = await clients.setArchived(gone.id, gone.revision, true);
+    const manifest = await clients.previewPermanentDelete(gone.id);
+    assert.equal(manifest.owners.find((entry) => entry.owner === "calendar.appointments")?.rows, 2);
+    await clients.deleteArchivedPermanently(gone.id, archived.revision);
+    const pastRow = await calendar.getAppointment(past.id);
+    assert.equal(pastRow?.lifecycle, "COMPLETED");
+    assert.equal(pastRow?.clientId, null);
+    assert.equal(pastRow?.participantDeleted, true);
+    assert.equal(pastRow?.note, null);
+    assert.equal(pastRow?.sessionTypeName, "Персональная тренировка");
+    const futureRow = await calendar.getAppointment(future.id);
+    assert.equal(futureRow?.lifecycle, "CANCELLED");
+    assert.equal(futureRow?.participantDeleted, true);
+    assert.deepEqual({ ...(await calendar.getAppointment(other.id)) }, { ...other });
+    assert.equal(await clients.get(gone.id), null);
+  } finally { await close(); }
+});
+
+test("§15.7 without the calendar participant the client delete fails closed", async () => {
+  const { calendar, clients, personal, close } = await stores(false);
+  try {
+    const client = await clients.create({ displayName: "Guarded" });
+    await calendar.createAppointment(slot({ sessionTypeId: personal.id, clientId: client.id }));
+    const archived = await clients.setArchived(client.id, client.revision, true);
+    await assert.rejects(clients.deleteArchivedPermanently(client.id, archived.revision),
+      { message: "CLIENT_DELETION_BLOCKED" });
+    assert.equal((await clients.get(client.id))?.lifecycle, "ARCHIVED");
+  } finally { await close(); }
+});

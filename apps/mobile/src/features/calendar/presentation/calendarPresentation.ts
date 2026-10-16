@@ -1,0 +1,98 @@
+import { useEffect, useRef, useState } from "react";
+import type { Appointment, CalendarInterval, CalendarSettings, LocalDate } from "../domain/CalendarModel.ts";
+import type { CalendarParticipant, CalendarParticipantDirectoryPort } from
+  "../domain/CalendarParticipantDirectoryPort.ts";
+import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
+import { addDays, monthRange, weekdayIndex } from "../domain/CalendarRules.ts";
+
+export const weekdayShort = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"] as const;
+const weekdayLong = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота",
+  "воскресенье"] as const;
+const monthGenitive = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа",
+  "сентября", "октября", "ноября", "декабря"] as const;
+const monthNominative = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август",
+  "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"] as const;
+
+export function dayTitle(date: LocalDate): string {
+  return `${weekdayLong[weekdayIndex(date)]}, ${Number(date.slice(8, 10))} ${monthGenitive[Number(date.slice(5, 7)) - 1]}`;
+}
+
+export function monthTitle(date: LocalDate): string {
+  return `${monthNominative[Number(date.slice(5, 7)) - 1]} ${date.slice(0, 4)}`;
+}
+
+export function calendarErrorMessage(error: unknown): string {
+  const code = error instanceof Error ? error.message : "";
+  switch (code) {
+    case "CALENDAR_TIME_OVERLAP": return "Это время уже занято другой записью или интервалом того же типа.";
+    case "CALENDAR_BLOCKED_TIME": return "Время заблокировано. Сначала снимите блокировку или выберите другое время.";
+    case "CALENDAR_BLOCKED_OVER_APPOINTMENT": return "Нельзя заблокировать время поверх записи. Запись не изменена.";
+    case "CALENDAR_OUTSIDE_DAY_RANGE": return "Запись должна помещаться в рабочее окно календаря.";
+    case "CALENDAR_PARTICIPANT_REQUIRED": return "Выберите клиента или укажите имя гостя.";
+    case "CALENDAR_SESSION_TYPE_REQUIRED":
+    case "CALENDAR_SESSION_TYPE_UNAVAILABLE": return "Выберите доступный тип занятия.";
+    case "CALENDAR_STALE_APPOINTMENT": return "Запись уже изменилась. Откройте её заново.";
+    case "CALENDAR_TIME_INVALID": return "Проверьте время: шаг — 30 минут, запись не переходит через полночь.";
+    default: return "Не удалось сохранить. Данные календаря не изменены.";
+  }
+}
+
+export interface CalendarWeekData {
+  readonly settings: CalendarSettings;
+  readonly appointments: readonly Appointment[];
+  readonly intervals: readonly CalendarInterval[];
+  readonly monthCount: number;
+}
+
+/**
+ * Scoped week + month counter snapshot: keeps the last valid data during refresh and reloads only
+ * when a committed change touches the visible week or month (§13.21).
+ */
+export function useCalendarWeek(repository: CalendarRepositoryPort, monday: LocalDate,
+  anchor: LocalDate): Readonly<{ data: CalendarWeekData | null; failed: boolean; retry: () => void }> {
+  const [data, setData] = useState<CalendarWeekData | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [tick, setTick] = useState(0);
+  const month = monthRange(anchor);
+  const sunday = addDays(monday, 6);
+  const generation = useRef(0);
+
+  useEffect(() => {
+    const request = ++generation.current;
+    void Promise.all([
+      repository.getSettings(), repository.listRange(monday, sunday),
+      repository.summarize(month.first, month.last),
+    ]).then(([settings, range, summary]) => {
+      if (request !== generation.current) return;
+      setData({ settings, appointments: range.appointments, intervals: range.intervals,
+        monthCount: summary.reduce((sum, day) => sum + day.appointments, 0) });
+      setFailed(false);
+    }, () => { if (request === generation.current) setFailed(true); });
+  }, [repository, monday, sunday, month.first, month.last, tick]);
+
+  useEffect(() => repository.subscribeCommittedChanges((change) => {
+    if (change.dates === "ALL" || change.dates.some((date) =>
+      (date >= monday && date <= sunday) || (date >= month.first && date <= month.last))) {
+      setTick((value) => value + 1);
+    }
+  }), [repository, monday, sunday, month.first, month.last]);
+
+  return { data, failed, retry: () => setTick((value) => value + 1) };
+}
+
+export function useParticipants(directory: CalendarParticipantDirectoryPort):
+  ReadonlyMap<string, CalendarParticipant> {
+  const [map, setMap] = useState<ReadonlyMap<string, CalendarParticipant>>(new Map());
+  useEffect(() => {
+    let active = true;
+    const load = () => {
+      void directory.listParticipants().then((rows) => {
+        if (active) setMap(new Map(rows.map((row) => [row.id, row])));
+      }, () => undefined);
+    };
+    load();
+    const unsubscribe = directory.subscribe(load);
+    return () => { active = false; unsubscribe(); };
+  }, [directory]);
+  return map;
+}

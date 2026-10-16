@@ -39,12 +39,16 @@ const deletionOwnerLabels: Readonly<Record<string, string>> = {
 
 /** Consequence text built from the actual manifest, not a generic «Вы уверены?». */
 export function permanentDeleteDescription(manifest: ClientDeletionManifest): string {
-  const extra = manifest.owners.filter((entry) => entry.owner !== "clients.profile" && entry.rows > 0)
+  const extra = manifest.owners.filter((entry) => entry.owner !== "clients.profile"
+    && entry.owner !== "calendar.appointments" && entry.rows > 0)
     .map((entry) => `${deletionOwnerLabels[entry.owner] ?? entry.owner}: ${entry.rows}`);
+  const appointments = manifest.owners.find((entry) => entry.owner === "calendar.appointments")?.rows ?? 0;
   return [
     "Действие необратимо. Карточку и данные клиента нельзя будет вернуть из Архива.",
     `Будет удалено: карточка клиента${extra.length > 0 ? `; ${extra.join("; ")}` : ""}.`,
-    "Календарь, абонементы, тренировки и питание ещё не подключены, поэтому их данных у клиента нет.",
+    ...appointments > 0 ? [`Записи календаря: ${appointments}. Будущие записи будут отменены, `
+      + "прошлые останутся в истории календаря без данных клиента (как «Удалённый клиент»)."] : [],
+    "Абонементы, тренировки и питание ещё не подключены, поэтому их данных у клиента нет.",
   ].join("\n\n");
 }
 

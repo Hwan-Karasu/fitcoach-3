@@ -58,6 +58,8 @@ function ShellNavigator({ services, clientLists }: Readonly<{
               onOpenSqliteDev={() => navigation.navigate("SqliteDev")}
               clients={services.clients}
               clientLists={clientLists}
+              calendar={services.calendar}
+              calendarParticipants={services.calendarParticipants}
             />
           )}
         </Stack.Screen>
@@ -105,8 +107,14 @@ function ShellNavigator({ services, clientLists }: Readonly<{
 export function PrototypeShell({ services, workspaceId }: Readonly<{
   services: DevServices; workspaceId: string;
 }>) {
-  const [clientLists] = useState(() => new ClientListController(services.clients, workspaceId));
-  useEffect(() => () => clientLists.dispose(), [clientLists]);
+  // Created and disposed by the same effect, so Fast Refresh/StrictMode re-runs get a live instance.
+  const [clientLists, setClientLists] = useState<ClientListController | null>(null);
+  useEffect(() => {
+    const controller = new ClientListController(services.clients, workspaceId);
+    setClientLists(controller);
+    return () => controller.dispose();
+  }, [services.clients, workspaceId]);
+  if (clientLists === null) return null;
   return (
     <SafeAreaProvider>
       <PrototypeThemeProvider>

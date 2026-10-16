@@ -20,8 +20,9 @@ lead days и badge отдельно. Today/Calendar и production read model е�
 `domain/ClientArchivePort.ts` — C04: сортировка Архива, счётчики
 Active/Archived и окончательное удаление только ARCHIVED-клиента по явному
 manifest владельцев. Новая таблица со ссылкой на клиента без записи в
-manifest блокирует удаление (fail closed); Calendar-последствия §15.8
-подключаются вместе с Calendar.
+manifest блокирует удаление (fail closed). Другие владельцы участвуют через
+`DevClientDeletionParticipant`, который подключает composition root; так
+Calendar выполняет §15.8 в той же транзакции.
 
 `domain/ClientRepositoryPort.ts` — UI-facing контракт без SQL handle.
 Это не D01 production DDL и не совместимо автоматически с legacy backup;

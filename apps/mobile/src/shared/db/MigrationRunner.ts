@@ -27,18 +27,24 @@ function validateApplied(rows: readonly AppliedMigration[], catalog: readonly Mi
   });
 }
 
-/** Runs only supplied, forward-only migrations; D01 supplies the production catalog later. */
-export async function runMigrations(writer: WriterCoordinator, catalog: readonly MigrationStep[]): Promise<readonly number[]> {
+/**
+ * Runs only supplied, forward-only migrations; D01 supplies the production catalog later.
+ * Each owner sharing one database file keeps its own ledger table.
+ */
+export async function runMigrations(
+  writer: WriterCoordinator, catalog: readonly MigrationStep[], ledger = "schema_migrations",
+): Promise<readonly number[]> {
+  if (!/^[a-z][a-z0-9_]*$/u.test(ledger)) throw new Error("MIGRATION_LEDGER_INVALID");
   validateCatalog(catalog);
   return writer.write(async (tx: SqliteStatementPort) => {
-    await tx.run("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY NOT NULL, checksum TEXT NOT NULL)");
-    const applied = await tx.all<AppliedMigration>("SELECT version, checksum FROM schema_migrations ORDER BY version");
+    await tx.run(`CREATE TABLE IF NOT EXISTS ${ledger} (version INTEGER PRIMARY KEY NOT NULL, checksum TEXT NOT NULL)`);
+    const applied = await tx.all<AppliedMigration>(`SELECT version, checksum FROM ${ledger} ORDER BY version`);
     validateApplied(applied, catalog);
 
     const newVersions: number[] = [];
     for (const step of catalog.slice(applied.length)) {
       for (const statement of step.statements) await tx.run(statement);
-      await tx.run("INSERT INTO schema_migrations (version, checksum) VALUES (?, ?)", [step.version, step.checksum]);
+      await tx.run(`INSERT INTO ${ledger} (version, checksum) VALUES (?, ?)`, [step.version, step.checksum]);
       newVersions.push(step.version);
     }
 
