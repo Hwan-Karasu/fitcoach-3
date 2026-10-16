@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatKopeks, pricePerSessionKopeks } from "../apps/mobile/src/features/accounting/domain/AccountingRules.ts";
-import type { ClientAccountingSnapshot, PackBalance } from "../apps/mobile/src/features/accounting/domain/AccountingModel.ts";
-import { ageOn, formatYears } from "../apps/mobile/src/features/clients/domain/ClientRosterPresentation.ts";
-import type { Measurement } from "../apps/mobile/src/features/measurements/domain/MeasurementModel.ts";
-import { formatValue, latestPoint } from "../apps/mobile/src/features/measurements/domain/MeasurementRules.ts";
-import { buildClientHomeSummary } from "../apps/mobile/src/read-models/clientHomeSummary.ts";
+import { formatKopeks, pricePerSessionKopeks } from "../src/features/accounting/domain/AccountingRules.ts";
+import type { ClientAccountingSnapshot, PackBalance } from "../src/features/accounting/domain/AccountingModel.ts";
+import { ageOn, formatYears } from "../src/features/clients/domain/ClientRosterPresentation.ts";
+import type { Measurement } from "../src/features/measurements/domain/MeasurementModel.ts";
+import { formatValue, latestPoint } from "../src/features/measurements/domain/MeasurementRules.ts";
+import { buildClientHomeSummary } from "../src/read-models/clientHomeSummary.ts";
 
 const rules = { latestPoint, formatValue, formatKopeks, pricePerSessionKopeks };
 const TODAY = "2026-10-16";
