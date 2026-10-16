@@ -15,8 +15,8 @@ const ink = { paper: "#FFFFFF", text: "#13262B", muted: "#5B6B70", line: "#D5DEE
 
 /**
  * §13.18 Share Week poster: the selected week, visible day columns and day window. Shows only
- * time, client emoji and name; Blocked is «недоступно»; Duty is shown as a background band by the
- * owner's decision of 2026-10-16. Never notes, types, credits, payments, cancelled rows or IDs.
+ * time, client emoji and name; Blocked is «недоступно»; Duty is an unlabelled background band by
+ * the owner's decision of 2026-10-16. Never notes, types, credits, payments, cancelled rows or IDs.
  */
 export function ShareWeekPoster({ posterRef, title, dates, window, appointments, intervals, people }: Readonly<{
   posterRef: RefObject<View | null>;
@@ -61,7 +61,7 @@ export function ShareWeekPoster({ posterRef, title, dates, window, appointments,
             return (
               <View key={row.id} style={[duty ? styles.duty : styles.blocked, { left: at * columnWidth, width: columnWidth,
                 top: top(clip.start), height: top(clip.end) - top(clip.start) }]}>
-                <Text style={duty ? styles.dutyText : styles.blockedText}>{duty ? "дежурство" : "недоступно"}</Text>
+                {duty ? null : <Text style={styles.blockedText}>недоступно</Text>}
               </View>
             );
           })}
@@ -97,8 +97,7 @@ const styles = StyleSheet.create({
   line: { position: "absolute", left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: ink.line },
   blocked: { position: "absolute", backgroundColor: ink.blocked, alignItems: "center", justifyContent: "center" },
   blockedText: { fontSize: 8, color: ink.text },
-  duty: { position: "absolute", backgroundColor: ink.duty, alignItems: "center", paddingTop: 1 },
-  dutyText: { fontSize: 8, color: ink.muted },
+  duty: { position: "absolute", backgroundColor: ink.duty },
   block: { position: "absolute", borderRadius: 4, backgroundColor: ink.block, paddingHorizontal: 2, overflow: "hidden" },
   blockText: { fontSize: 9, lineHeight: 11, fontWeight: "700", color: "#FFFFFF" },
 });
