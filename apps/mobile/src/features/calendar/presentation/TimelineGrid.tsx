@@ -47,12 +47,14 @@ export interface TimelineHandlers {
  * move, or resize when grabbed at its bottom edge. The preview geometry runs on the UI thread; JS
  * only learns a new slot (label and drop verdict) when the snapped value actually changes.
  */
-export function TimelineGrid({ dates, window, appointments, intervals, people, now, height, handlers }: Readonly<{
+export function TimelineGrid({ dates, window, appointments, intervals, people, typeColors, now, height, handlers }: Readonly<{
   dates: readonly LocalDate[];
   window: TimeWindow;
   appointments: readonly Appointment[];
   intervals: readonly CalendarInterval[];
   people: ReadonlyMap<string, CalendarParticipant>;
+  /** Session type colour (§13.16); the label stays the primary identification. */
+  typeColors: ReadonlyMap<string, string>;
   now: Date;
   height: number;
   handlers: TimelineHandlers;
@@ -281,12 +283,14 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, n
               return (
                 <View key={row.id} pointerEvents="none" style={[styles.block, {
                   left: at * columnWidth + 1, width: columnWidth - 2, top: top(clip.start) + 1, height: blockHeight - 2,
-                  backgroundColor: closed ? colors.surfaceRaised : colors.accentFill,
-                  borderColor: row.lifecycle === "SCHEDULED" && closed ? colors.warning : colors.accentFill,
+                  backgroundColor: closed ? colors.surfaceRaised : typeColors.get(row.sessionTypeId) ?? colors.accentFill,
+                  borderColor: row.lifecycle === "SCHEDULED" && closed ? colors.warning
+                    : typeColors.get(row.sessionTypeId) ?? colors.accentFill,
                   opacity: active ? 0.35 : 1,
                 }]}>
                   <Text numberOfLines={Math.max(1, Math.floor(blockHeight / 13))}
-                    style={[dense ? styles.blockTextDense : styles.blockText, { color: closed ? colors.textPrimary : colors.onAccentFill }]}>
+                    style={[dense ? styles.blockTextDense : styles.blockText, { color: closed ? colors.textPrimary
+                      : typeColors.has(row.sessionTypeId) ? "#FFFFFF" : colors.onAccentFill }]}>
                     {dense ? label : `${formatMinute(row.startMinute)} ${label} · ${row.sessionTypeName}`}
                   </Text>
                   {!closed ? <View style={[styles.handle, { backgroundColor: colors.onAccentFill }]} /> : null}

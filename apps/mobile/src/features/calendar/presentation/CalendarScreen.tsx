@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 import { AppButton, ConfirmDialog, InlineNotice, SelectionChip, StatusTag } from "../../../shared/ui/components/public.ts";
-import { EmptyPanel, PrototypeNotice, PrototypeScreen, SectionHeading } from
+import { EmptyPanel, SectionHeading } from
   "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { SLOT_MINUTES, type Appointment, type ClearWeekSummary, type LocalDate,
@@ -13,7 +13,7 @@ import { monthGridWeeks } from "../domain/CalendarGeometry.ts";
 import { addDays, appointmentLabel, formatMinute, localDateOf, mondayOf, templateSize,
   weekDates } from "../domain/CalendarRules.ts";
 import { calendarErrorMessage, dayTitle, monthTitle, outcomeTag, useCalendarWeek, useMonthCounts,
-  useParticipants, weekdayShort } from "./calendarPresentation.ts";
+  useParticipants, useSessionTypeColors, weekdayShort } from "./calendarPresentation.ts";
 import { MonthGrid } from "./MonthGrid.tsx";
 import { TimelineGrid, type TimelineHandlers } from "./TimelineGrid.tsx";
 
@@ -68,6 +68,7 @@ export function CalendarScreen({ repository, participants, onOpenSettings, onOpe
   const days = weekDates(monday);
   const { data, failed, retry } = useCalendarWeek(repository, monday, selected);
   const people = useParticipants(participants);
+  const typeColors = useSessionTypeColors(repository);
   const gridWeeks = useMemo(() => monthGridWeeks(viewMonth), [viewMonth]);
   const gridFirst = gridWeeks[0]?.[0] ?? viewMonth;
   const gridLast = gridWeeks[gridWeeks.length - 1]?.[6] ?? viewMonth;
@@ -270,7 +271,7 @@ export function CalendarScreen({ repository, participants, onOpenSettings, onOpe
       </InlineNotice> : null}
       {data !== null ? (
         <TimelineGrid dates={columns} window={dayWindow} appointments={data.appointments} intervals={data.intervals}
-          people={people} now={now} height={timelineHeight} handlers={handlers} />
+          people={people} typeColors={typeColors} now={now} height={timelineHeight} handlers={handlers} />
       ) : null}
       <Text style={[styles.hint, { color: colors.textMuted }]}>
         Касание — запись на это время. Долгое нажатие и протягивание — интервал. Долгое нажатие на будущей записи — перенос, у нижнего края — длительность.
@@ -367,35 +368,6 @@ export function CalendarScreen({ repository, participants, onOpenSettings, onOpe
         confirmLabel="Очистить неделю"
         onCancel={() => setClearPreview(null)} onConfirm={() => { void confirmClear(); }} />
     </ScrollView>
-  );
-}
-
-/** Only the undo prompt is editable so far; the other parameters stay at defaults (§13, §18.7). */
-export function CalendarSettingsPreview({ repository }: Readonly<{ repository: CalendarRepositoryPort }>) {
-  const [prompt, setPrompt] = useState<boolean | null>(null);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    let active = true;
-    void repository.getSettings().then((settings) => { if (active) setPrompt(settings.undoCancelPrompt); },
-      () => { if (active) setFailed(true); });
-    return () => { active = false; };
-  }, [repository]);
-  const toggle = (next: boolean) => {
-    setPrompt(next);
-    void repository.setUndoCancelPrompt(next).catch(() => { setPrompt(!next); setFailed(true); });
-  };
-  return (
-    <PrototypeScreen description="Локальные параметры отображения и работы календаря">
-      <SectionHeading>После отмены записи</SectionHeading>
-      {prompt !== null ? (
-        <SelectionChip group="После отмены записи" label="Предлагать «Вернуть» 3 секунды" selected={prompt}
-          onPress={() => toggle(!prompt)} />
-      ) : null}
-      {failed ? <InlineNotice kind="error">Не удалось прочитать или сохранить настройку.</InlineNotice> : null}
-      <PrototypeNotice>
-        Отображаемые дни и рабочее окно настраиваются прямо в календаре. Копирование/очистка всех категорий и типы занятий пока заданы значениями по умолчанию.
-      </PrototypeNotice>
-    </PrototypeScreen>
   );
 }
 

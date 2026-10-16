@@ -3,11 +3,11 @@ import { SharedSqliteDatabase } from "../../../shared/db/SharedSqliteDatabase.ts
 import { UUID_V4_SQL } from "../../../shared/db/SqlIds.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
-import type { Appointment, AppointmentInput, AppointmentOutcome, CalendarInterval, CalendarSettings, CancelSettlement, ClearWeekSummary,
+import type { Appointment, AppointmentInput, AppointmentOutcome, CalendarInterval, CategoryPolicy, SessionTypeInput, CalendarSettings, CancelSettlement, ClearWeekSummary,
   DaySummary, IntervalInput, LocalDate, PasteResult, SessionType, SessionTypeCategory,
   WeekTemplate } from "../domain/CalendarModel.ts";
 import type { CalendarCommittedChange, CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
-import { addDays, appointmentEnded, appointmentStarted, buildWeekTemplate, sameGuestName, isLocalDate, localDateOf, minuteOfDay, validateAppointment,
+import { addDays, appointmentEnded, appointmentStarted, buildWeekTemplate, sameGuestName, validateSessionType, isLocalDate, localDateOf, minuteOfDay, validateAppointment,
   validateInterval, validateSettings, weekDates } from "../domain/CalendarRules.ts";
 import type { DevAppointmentAccountingHook, DevBooking } from "./DevAppointmentAccountingHook.ts";
 import { DEV_CALENDAR_LEDGER, devCalendarCatalog } from "./DevCalendarCatalog.ts";
@@ -21,7 +21,7 @@ interface AppointmentRow {
 
 interface SessionTypeRow {
   id: string; name: string; category: SessionTypeCategory; defaultDurationMinutes: number;
-  requiresCredit: number; archivedAt: string | null;
+  requiresCredit: number; archivedAt: string | null; color: SessionType["color"]; inUse: number;
 }
 
 interface SettingsRow {
@@ -41,7 +41,8 @@ const intervalColumns = `id, kind, local_date AS localDate, start_minute AS star
   end_minute AS endMinute`;
 
 const sessionTypeColumns = `id, name, category, default_duration_minutes AS defaultDurationMinutes,
-  requires_credit AS requiresCredit, archived_at AS archivedAt`;
+  requires_credit AS requiresCredit, archived_at AS archivedAt, color,
+  EXISTS (SELECT 1 FROM dev_calendar_appointments AS used WHERE used.session_type_id = dev_session_types.id) AS inUse`;
 
 /** Seed templates of §13.8; trainers may later rename or archive them. */
 const seedSessionTypes = [
@@ -68,7 +69,7 @@ function booking(input: AppointmentInput, requiresCredit: boolean): DevBooking {
 function toSessionType(row: SessionTypeRow): SessionType {
   return { id: row.id, name: row.name, category: row.category,
     defaultDurationMinutes: row.defaultDurationMinutes, requiresCredit: row.requiresCredit === 1,
-    archived: row.archivedAt !== null };
+    archived: row.archivedAt !== null, color: row.color, inUse: row.inUse === 1 };
 }
 
 function toSettings(row: SettingsRow): CalendarSettings {
@@ -534,6 +535,96 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
     });
     this.publish({ dates: [restored.localDate] });
     return restored;
+  }
+
+  private async sessionTypeById(tx: SqliteStatementPort, id: string): Promise<SessionType> {
+    const row = await tx.first<SessionTypeRow>(`SELECT ${sessionTypeColumns} FROM dev_session_types
+      WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]);
+    if (row === null) throw new Error("CALENDAR_SESSION_TYPE_UNAVAILABLE");
+    return toSessionType(row);
+  }
+
+  async createSessionType(input: SessionTypeInput): Promise<SessionType> {
+    const valid = validateSessionType(input);
+    const created = await this.ready().writer.write(async (tx) => {
+      const id = await newId(tx);
+      await tx.run(`INSERT INTO dev_session_types (id, workspace_id, seed_key, name, category,
+          default_duration_minutes, requires_credit, archived_at, created_at, color)
+        VALUES (?, ?, NULL, ?, ?, ?, ?, NULL, ?, ?)`,
+      [id, this.workspaceId, valid.name, valid.category, valid.defaultDurationMinutes,
+        valid.requiresCredit ? 1 : 0, new Date().toISOString(), valid.color]);
+      return this.sessionTypeById(tx, id);
+    });
+    this.publish({ dates: "ALL" });
+    return created;
+  }
+
+  async updateSessionType(id: string, input: SessionTypeInput): Promise<SessionType> {
+    const valid = validateSessionType(input);
+    const updated = await this.ready().writer.write(async (tx) => {
+      const current = await this.sessionTypeById(tx, id);
+      // A used type keeps its credit semantics; a new type is the way to change them (§13.8).
+      if (current.inUse && current.requiresCredit !== valid.requiresCredit) {
+        throw new Error("CALENDAR_SESSION_TYPE_CREDIT_LOCKED");
+      }
+      await tx.run(`UPDATE dev_session_types SET name = ?, category = ?, default_duration_minutes = ?,
+          requires_credit = ?, color = ? WHERE workspace_id = ? AND id = ?`,
+      [valid.name, valid.category, valid.defaultDurationMinutes, valid.requiresCredit ? 1 : 0, valid.color,
+        this.workspaceId, id]);
+      return this.sessionTypeById(tx, id);
+    });
+    this.publish({ dates: "ALL" });
+    return updated;
+  }
+
+  async setSessionTypeArchived(id: string, archived: boolean): Promise<void> {
+    await this.ready().writer.write(async (tx) => {
+      await this.sessionTypeById(tx, id);
+      if (archived && (await this.settings(tx)).defaultSessionTypeId === id) {
+        throw new Error("CALENDAR_DEFAULT_TYPE_ARCHIVE");
+      }
+      await tx.run(`UPDATE dev_session_types SET archived_at = ? WHERE workspace_id = ? AND id = ?`,
+        [archived ? new Date().toISOString() : null, this.workspaceId, id]);
+    });
+    this.publish({ dates: "ALL" });
+  }
+
+  async setDefaultSessionType(id: string): Promise<void> {
+    await this.ready().writer.write(async (tx) => {
+      if (await activeSessionType(tx, this.workspaceId, id) === null) throw new Error("CALENDAR_SESSION_TYPE_UNAVAILABLE");
+      await tx.run("UPDATE dev_calendar_settings SET default_session_type_id = ? WHERE workspace_id = ?",
+        [id, this.workspaceId]);
+    });
+    this.publish({ dates: "ALL" });
+  }
+
+  async updatePolicies(input: Readonly<{ copyPolicy: CategoryPolicy; clearPolicy: CategoryPolicy }>): Promise<CalendarSettings> {
+    const flag = (value: boolean) => (value ? 1 : 0);
+    const updated = await this.ready().writer.write(async (tx) => {
+      await tx.run(`UPDATE dev_calendar_settings SET copy_appointments = ?, copy_duty = ?, copy_blocked = ?,
+          clear_appointments = ?, clear_duty = ?, clear_blocked = ? WHERE workspace_id = ?`,
+      [flag(input.copyPolicy.appointments), flag(input.copyPolicy.duty), flag(input.copyPolicy.blocked),
+        flag(input.clearPolicy.appointments), flag(input.clearPolicy.duty), flag(input.clearPolicy.blocked),
+        this.workspaceId]);
+      return this.settings(tx);
+    });
+    this.publish({ dates: "ALL" });
+    return updated;
+  }
+
+  async resetSettings(): Promise<CalendarSettings> {
+    const reset = await this.ready().writer.write(async (tx) => {
+      // The seed «Персональная тренировка» is the safe default; if archived, the first active type.
+      const fallback = await tx.first<{ id: string }>(`SELECT id FROM dev_session_types
+        WHERE workspace_id = ? AND archived_at IS NULL ORDER BY (seed_key = 'personal') DESC, created_at, rowid LIMIT 1`,
+      [this.workspaceId]);
+      await tx.run(`UPDATE dev_calendar_settings SET copy_appointments = 1, copy_duty = 1, copy_blocked = 1,
+          clear_appointments = 1, clear_duty = 1, clear_blocked = 1, undo_cancel_prompt = 1,
+          default_session_type_id = ? WHERE workspace_id = ?`, [fallback?.id ?? null, this.workspaceId]);
+      return this.settings(tx);
+    });
+    this.publish({ dates: "ALL" });
+    return reset;
   }
 
   async updateDisplaySettings(input: Readonly<{ visibleWeekdays: readonly boolean[]; dayStartMinute: number;

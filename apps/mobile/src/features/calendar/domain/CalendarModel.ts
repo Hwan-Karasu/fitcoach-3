@@ -15,6 +15,10 @@ export type AppointmentOutcome = "COMPLETED" | "MISSED" | "CANCELLED";
 export type IntervalKind = "DUTY" | "BLOCKED";
 export type SessionTypeCategory = "TRAINING" | "INSTRUCTION" | "CONSULTATION" | "OTHER";
 
+/** Presentation-only palette keys (§13.16); null follows the theme accent. Never business logic. */
+export const SESSION_TYPE_COLORS = ["teal", "blue", "violet", "amber", "rose", "slate"] as const;
+export type SessionTypeColor = typeof SESSION_TYPE_COLORS[number];
+
 export interface SessionType {
   readonly id: string;
   readonly name: string;
@@ -22,6 +26,17 @@ export interface SessionType {
   readonly defaultDurationMinutes: number;
   readonly requiresCredit: boolean;
   readonly archived: boolean;
+  readonly color: SessionTypeColor | null;
+  /** Used by at least one appointment: its credit semantics are locked (§13.8 Mutability). */
+  readonly inUse: boolean;
+}
+
+export interface SessionTypeInput {
+  readonly name: string;
+  readonly category: SessionTypeCategory;
+  readonly defaultDurationMinutes: number;
+  readonly requiresCredit: boolean;
+  readonly color: SessionTypeColor | null;
 }
 
 export interface Appointment {

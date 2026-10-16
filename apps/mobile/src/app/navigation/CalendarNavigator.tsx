@@ -1,5 +1,5 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { AppointmentEditorScreen, CalendarScreen, CalendarSettingsPreview, IntervalEditorScreen,
+import { AppointmentEditorScreen, CalendarScreen, CalendarSettingsScreen, IntervalEditorScreen,
   type CalendarCreditPort, type CalendarParticipantDirectoryPort,
   type CalendarRepositoryPort, type GuestLinkRequest } from "../../features/calendar/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -40,7 +40,7 @@ export function CalendarNavigator({ repository, participants, credit, onCreateCl
           onOpenInterval={(localDate) => navigation.navigate("CalendarInterval", { localDate })} />}
       </Stack.Screen>
       <Stack.Screen name="CalendarSettings" options={{ title: "Настройки календаря" }}>
-        {() => <CalendarSettingsPreview repository={repository} />}
+        {() => <CalendarSettingsScreen repository={repository} />}
       </Stack.Screen>
       <Stack.Screen name="CalendarAppointment"
         options={({ route }) => ({ title: route.params.appointmentId ? "Запись" : "Новая запись" })}>

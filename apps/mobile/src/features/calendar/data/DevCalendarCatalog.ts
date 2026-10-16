@@ -126,4 +126,11 @@ export const devCalendarCatalog: readonly MigrationStep[] = [{
     `ALTER TABLE dev_calendar_settings ADD COLUMN undo_cancel_prompt INTEGER NOT NULL DEFAULT 1
       CHECK (undo_cancel_prompt IN (0,1))`,
   ],
+}, {
+  version: 5,
+  checksum: "k02-dev-calendar-v5-session-type-color-20261016",
+  statements: [
+    `ALTER TABLE dev_session_types ADD COLUMN color TEXT
+      CHECK (color IS NULL OR color IN ('teal','blue','violet','amber','rose','slate'))`,
+  ],
 }];

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Appointment, CalendarInterval, CalendarSettings, LocalDate } from "../domain/CalendarModel.ts";
+import type { Appointment, CalendarInterval, CalendarSettings, LocalDate, SessionTypeColor } from "../domain/CalendarModel.ts";
 import type { CalendarParticipant, CalendarParticipantDirectoryPort } from
   "../domain/CalendarParticipantDirectoryPort.ts";
 import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
@@ -21,6 +21,30 @@ export function monthTitle(date: LocalDate): string {
   return `${monthNominative[Number(date.slice(5, 7)) - 1]} ${date.slice(0, 4)}`;
 }
 
+/** Dark enough for white text in light and dark themes; colour is never the only marker (§13.16). */
+export const sessionTypeColorHex: Readonly<Record<SessionTypeColor, string>> = {
+  teal: "#0E6E73", blue: "#2456A6", violet: "#6A3FA0", amber: "#8A5A00", rose: "#A3324F", slate: "#4A5563",
+};
+
+/** Session type id → block colour for the timeline; types without a colour follow the theme accent. */
+export function useSessionTypeColors(repository: CalendarRepositoryPort): ReadonlyMap<string, string> {
+  const [map, setMap] = useState<ReadonlyMap<string, string>>(new Map());
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    let active = true;
+    void repository.listSessionTypes().then((types) => {
+      if (active) {
+        setMap(new Map(types.flatMap((type) => (type.color === null ? [] : [[type.id, sessionTypeColorHex[type.color]] as const]))));
+      }
+    }, () => undefined);
+    return () => { active = false; };
+  }, [repository, tick]);
+  useEffect(() => repository.subscribeCommittedChanges((change) => {
+    if (change.dates === "ALL") setTick((value) => value + 1);
+  }), [repository]);
+  return map;
+}
+
 export function calendarErrorMessage(error: unknown): string {
   const code = error instanceof Error ? error.message : "";
   switch (code) {
@@ -35,6 +59,9 @@ export function calendarErrorMessage(error: unknown): string {
     case "CALENDAR_TIME_INVALID": return "Проверьте время: шаг — 30 минут, запись не переходит через полночь.";
     case "ACCOUNTING_INSUFFICIENT_CREDIT":
       return "У клиента нет доступных тренировок. Добавьте пакет или включите «Записать без списания».";
+    case "CALENDAR_SESSION_TYPE_INVALID": return "Проверьте тип: название до 60 символов, длительность от 30 до 240 минут с шагом 30.";
+    case "CALENDAR_SESSION_TYPE_CREDIT_LOCKED": return "Тип уже используется в записях: списание не меняется задним числом. Создайте новый тип.";
+    case "CALENDAR_DEFAULT_TYPE_ARCHIVE": return "Сначала выберите другой тип по умолчанию, затем убирайте этот в архив.";
     case "CALENDAR_GUEST_LINK_INVALID": return "Запись уже не гостевая или отменена.";
     case "CALENDAR_RESTORE_INVALID": return "Эту запись уже нельзя вернуть.";
     case "CALENDAR_OUTCOME_TOO_EARLY": return "Занятие ещё не началось. Исход можно отметить после начала.";

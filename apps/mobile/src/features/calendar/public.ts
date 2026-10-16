@@ -1,4 +1,5 @@
-export { CalendarScreen, CalendarSettingsPreview } from "./presentation/CalendarScreen.tsx";
+export { CalendarScreen } from "./presentation/CalendarScreen.tsx";
+export { CalendarSettingsScreen } from "./presentation/CalendarSettingsScreen.tsx";
 export { AppointmentEditorScreen } from "./presentation/AppointmentEditorScreen.tsx";
 export { AppointmentOutcomeDialog } from "./presentation/AppointmentOutcomeDialog.tsx";
 export { CalendarUndoProvider } from "./presentation/CancelUndo.tsx";

@@ -318,3 +318,63 @@ test("K02 display settings persist and are validated; they never touch appointme
     assert.equal((await calendar.getSettings()).dayStartMinute, 480);
   } finally { await close(); }
 });
+
+test("§13.8 session types: create, edit keeps snapshots, credit locked once used, archive and default rules", async () => {
+  const { calendar, personal, close } = await stores();
+  try {
+    const stretch = await calendar.createSessionType({ name: "  Растяжка   вдвоём ", category: "TRAINING",
+      defaultDurationMinutes: 90, requiresCredit: false, color: "violet" });
+    assert.equal(stretch.name, "Растяжка вдвоём");
+    assert.equal(stretch.inUse, false);
+    await assert.rejects(calendar.createSessionType({ name: " ", category: "TRAINING", defaultDurationMinutes: 60,
+      requiresCredit: false, color: null }), { message: "CALENDAR_SESSION_TYPE_INVALID" });
+    await assert.rejects(calendar.createSessionType({ name: "X", category: "TRAINING", defaultDurationMinutes: 45,
+      requiresCredit: false, color: null }), { message: "CALENDAR_SESSION_TYPE_INVALID" });
+    const edited = await calendar.updateSessionType(stretch.id, { name: "Растяжка", category: "OTHER",
+      defaultDurationMinutes: 60, requiresCredit: true, color: null });
+    assert.deepEqual([edited.requiresCredit, edited.color, edited.category], [true, null, "OTHER"]);
+    const booked = await calendar.createAppointment(slot({ sessionTypeId: stretch.id, guestName: "Гость" }));
+    await assert.rejects(calendar.updateSessionType(stretch.id, { name: "Растяжка", category: "OTHER",
+      defaultDurationMinutes: 60, requiresCredit: false, color: null }), { message: "CALENDAR_SESSION_TYPE_CREDIT_LOCKED" });
+    await calendar.updateSessionType(stretch.id, { name: "Стретчинг", category: "OTHER", defaultDurationMinutes: 30,
+      requiresCredit: true, color: "teal" });
+    assert.equal((await calendar.getAppointment(booked.id))?.sessionTypeName, "Растяжка");
+    await assert.rejects(calendar.setSessionTypeArchived(personal.id, true), { message: "CALENDAR_DEFAULT_TYPE_ARCHIVE" });
+    await calendar.setSessionTypeArchived(stretch.id, true);
+    await assert.rejects(calendar.createAppointment(slot({ sessionTypeId: stretch.id, guestName: "Гость", startMinute: 900 })),
+      { message: "CALENDAR_SESSION_TYPE_UNAVAILABLE" });
+    await assert.rejects(calendar.setDefaultSessionType(stretch.id), { message: "CALENDAR_SESSION_TYPE_UNAVAILABLE" });
+    await calendar.setSessionTypeArchived(stretch.id, false);
+    await calendar.setDefaultSessionType(stretch.id);
+    assert.equal((await calendar.getSettings()).defaultSessionTypeId, stretch.id);
+    assert.equal((await calendar.listSessionTypes()).find((type) => type.id === stretch.id)?.inUse, true);
+  } finally { await close(); }
+});
+
+test("§13.12/§13.17 copy/clear policies drive the week commands; reset restores safe defaults only", async () => {
+  const { calendar, personal, close } = await stores();
+  try {
+    await calendar.createAppointment(slot({ sessionTypeId: personal.id, guestName: "Гость" }));
+    await calendar.createInterval({ kind: "DUTY", localDate: MONDAY, startMinute: 480, endMinute: 540 });
+    await calendar.updatePolicies({ copyPolicy: { appointments: false, duty: true, blocked: true },
+      clearPolicy: { appointments: false, duty: true, blocked: false } });
+    const template = await calendar.copyWeek(MONDAY);
+    assert.deepEqual([template.appointments.length, template.intervals.length], [0, 1]);
+    const before = new Date(2026, 9, 18, 12, 0);
+    assert.deepEqual({ ...(await calendar.previewClearWeek(MONDAY, before)) },
+      { scheduledAppointments: 0, pastKept: 1, duty: 1, blocked: 0 });
+    await calendar.setUndoCancelPrompt(false);
+    const other = await calendar.createSessionType({ name: "Другой", category: "OTHER", defaultDurationMinutes: 60,
+      requiresCredit: false, color: null });
+    await calendar.setDefaultSessionType(other.id);
+    await calendar.updateDisplaySettings({ visibleWeekdays: [true, true, true, true, true, false, false],
+      dayStartMinute: 480, dayEndMinute: 1200 });
+    const reset = await calendar.resetSettings();
+    assert.deepEqual({ ...reset.copyPolicy }, { appointments: true, duty: true, blocked: true });
+    assert.deepEqual({ ...reset.clearPolicy }, { appointments: true, duty: true, blocked: true });
+    assert.equal(reset.undoCancelPrompt, true);
+    assert.equal(reset.defaultSessionTypeId, personal.id);
+    assert.equal(reset.dayStartMinute, 480);
+    assert.equal((await calendar.listRange(MONDAY, MONDAY)).appointments.length, 1);
+  } finally { await close(); }
+});

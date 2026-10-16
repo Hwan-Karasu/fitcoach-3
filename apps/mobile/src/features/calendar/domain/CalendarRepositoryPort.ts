@@ -1,4 +1,4 @@
-import type { Appointment, AppointmentInput, AppointmentOutcome, CalendarInterval, CancelSettlement, CalendarSettings, ClearWeekSummary,
+import type { Appointment, AppointmentInput, AppointmentOutcome, CalendarInterval, CategoryPolicy, SessionTypeInput, CancelSettlement, CalendarSettings, ClearWeekSummary,
   DaySummary, IntervalInput, LocalDate, PasteResult, SessionType, WeekTemplate } from "./CalendarModel.ts";
 
 /** UI invalidation hint emitted only after commit; SQLite rows stay authoritative. */
@@ -55,6 +55,20 @@ export interface CalendarRepositoryPort {
    * §13.5–13.6: display days and the visible day window live in the Calendar header. They are
    * presentation only and never move or delete appointments outside them.
    */
+  /** §13.8 management. Fails with CALENDAR_SESSION_TYPE_INVALID or CALENDAR_SESSION_TYPE_CREDIT_LOCKED. */
+  createSessionType(input: SessionTypeInput): Promise<SessionType>;
+  /** Snapshots of existing appointments stay; requiresCredit is locked once the type is used. */
+  updateSessionType(id: string, input: SessionTypeInput): Promise<SessionType>;
+  /** Archive hides the type from new bookings; the default type cannot be archived. */
+  setSessionTypeArchived(id: string, archived: boolean): Promise<void>;
+  setDefaultSessionType(id: string): Promise<void>;
+  /** §13.12 which categories Copy/Paste Week and Clear Week touch. */
+  updatePolicies(input: Readonly<{ copyPolicy: CategoryPolicy; clearPolicy: CategoryPolicy }>): Promise<CalendarSettings>;
+  /**
+   * §13.17 safe defaults: copy/clear policies, default type and the undo prompt. Appointments,
+   * intervals, credits, display days and the day window are not touched.
+   */
+  resetSettings(): Promise<CalendarSettings>;
   updateDisplaySettings(input: Readonly<{ visibleWeekdays: readonly boolean[]; dayStartMinute: number;
     dayEndMinute: number }>): Promise<CalendarSettings>;
   /** Other not cancelled records of the same guest (name match ignores case and spaces). */

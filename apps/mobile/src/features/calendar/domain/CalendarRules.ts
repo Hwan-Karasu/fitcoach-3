@@ -1,5 +1,5 @@
-import { APPOINTMENT_DURATIONS, DAY_MINUTES, SLOT_MINUTES, type Appointment, type AppointmentInput,
-  type CalendarInterval, type CalendarSettings, type IntervalInput, type LocalDate,
+import { APPOINTMENT_DURATIONS, DAY_MINUTES, SESSION_TYPE_COLORS, SLOT_MINUTES, type Appointment, type AppointmentInput,
+  type CalendarInterval, type CalendarSettings, type IntervalInput, type LocalDate, type SessionTypeInput,
   type WeekTemplate } from "./CalendarModel.ts";
 
 export type CalendarRuleError =
@@ -8,7 +8,8 @@ export type CalendarRuleError =
   | "CALENDAR_OUTSIDE_DAY_RANGE"
   | "CALENDAR_PARTICIPANT_REQUIRED"
   | "CALENDAR_SESSION_TYPE_REQUIRED"
-  | "CALENDAR_SETTINGS_INVALID";
+  | "CALENDAR_SETTINGS_INVALID"
+  | "CALENDAR_SESSION_TYPE_INVALID";
 
 function fail(code: CalendarRuleError): never { throw new Error(code); }
 
@@ -102,6 +103,18 @@ export function validateAppointment(input: AppointmentInput, settings: CalendarS
   const note = input.note?.trim() || null;
   if (note !== null && note.length > 1000) fail("CALENDAR_TIME_INVALID");
   return { ...input, clientId, guestName, note };
+}
+
+/** §13.8: a named reusable template; duration is a default on the 30-minute grid. */
+export function validateSessionType(input: SessionTypeInput): SessionTypeInput {
+  const name = input.name.trim().replace(/\s+/gu, " ");
+  if (!name || name.length > 60 || !["TRAINING", "INSTRUCTION", "CONSULTATION", "OTHER"].includes(input.category)
+    || !onSlot(input.defaultDurationMinutes) || input.defaultDurationMinutes < SLOT_MINUTES
+    || input.defaultDurationMinutes > 240
+    || (input.color !== null && !(SESSION_TYPE_COLORS as readonly string[]).includes(input.color))) {
+    fail("CALENDAR_SESSION_TYPE_INVALID");
+  }
+  return { ...input, name };
 }
 
 export function validateInterval(input: IntervalInput): IntervalInput {
