@@ -24,6 +24,22 @@ const genitiveMonths = ["января", "февраля", "марта", "апр�
   "августа", "сентября", "октября", "ноября", "декабря"] as const;
 
 /** Local calendar date of archivedAt; no Intl dependency on Hermes. */
+/** Full years on a local date; «29 февраля» counts from 1 March in non-leap years. */
+export function ageOn(birthDate: string, today: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(birthDate) || !/^\d{4}-\d{2}-\d{2}$/u.test(today) || birthDate >= today) {
+    return null;
+  }
+  const years = Number(today.slice(0, 4)) - Number(birthDate.slice(0, 4));
+  return today.slice(5) >= birthDate.slice(5) ? years : years - 1;
+}
+
+export function formatYears(years: number): string {
+  const tail = years % 100;
+  if (tail >= 11 && tail <= 14) return `${years} лет`;
+  if (years % 10 === 1) return `${years} год`;
+  return years % 10 >= 2 && years % 10 <= 4 ? `${years} года` : `${years} лет`;
+}
+
 export function formatArchivedSince(archivedAt: string | null): string {
   const at = archivedAt === null ? Number.NaN : Date.parse(archivedAt);
   if (Number.isNaN(at)) return "В архиве";

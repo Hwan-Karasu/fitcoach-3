@@ -3,7 +3,9 @@ import { useFocusEffect } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StyleSheet, Text, View } from "react-native";
+import type { AccountingRepositoryPort } from "../../features/accounting/public.ts";
 import type { ClientRecord, ClientRepositoryPort, ClientRosterPort } from "../../features/clients/public.ts";
+import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { QuestionnairePreview } from "../../features/questionnaire/public.ts";
 import { TrainingArchivePreview, TrainingStatisticsPreview } from "../../features/training/public.ts";
 import { AppButton, LoadingState } from "../../shared/ui/components/public.ts";
@@ -58,10 +60,12 @@ function MoreNavigator() {
   );
 }
 
-export function ClientWorkspaceNavigator({ clientId, repository, onOpenEdit, onOpenAccounting, onOpenMeasurements,
-  onClose }: Readonly<{
+export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, onOpenEdit, onOpenAccounting,
+  onOpenMeasurements, onClose }: Readonly<{
   clientId: string;
   repository: ClientRepositoryPort & ClientRosterPort;
+  accounting: AccountingRepositoryPort;
+  measurements: MeasurementRepositoryPort;
   onOpenEdit: (clientId: string) => void;
   onOpenAccounting: (clientId: string) => void;
   onOpenMeasurements: (clientId: string) => void;
@@ -134,7 +138,8 @@ export function ClientWorkspaceNavigator({ clientId, repository, onOpenEdit, onO
       }}
     >
       <Tabs.Screen name="Home" options={{ tabBarLabel: workspaceTabs.Home, tabBarAccessibilityLabel: workspaceTabs.Home, tabBarIcon: ({ color }) => <TabGlyph kind="home" color={color} /> }}>
-        {() => <HomeNavigator client={client} onOpenEdit={() => onOpenEdit(client.id)}
+        {() => <HomeNavigator client={client} accounting={accounting} measurements={measurements}
+          onOpenEdit={() => onOpenEdit(client.id)}
           onOpenAccounting={() => onOpenAccounting(client.id)}
           onOpenMeasurements={() => onOpenMeasurements(client.id)}
           onArchive={async () => {
