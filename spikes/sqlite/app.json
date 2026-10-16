@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "FitCoach SQLite R07 Spike",
+    "slug": "fitcoach-r07-sqlite-spike",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "android": {
+      "package": "com.fitcoach.r07sqlite"
+    },
+    "plugins": ["expo-sqlite"],
+    "platforms": ["android"]
+  }
+}

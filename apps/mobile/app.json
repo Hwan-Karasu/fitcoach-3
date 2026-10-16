@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "FitCoach 3 Development",
+    "slug": "fitcoach-3-development",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "android": {
+      "package": "com.fitcoach.v3dev"
+    },
+    "plugins": [
+      "expo-sqlite"
+    ],
+    "platforms": [
+      "android"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "698a26af-08d4-44f4-9507-747143ad4f02"
+      }
+    },
+    "owner": "hwankarasu"
+  }
+}

@@ -1,0 +1,766 @@
+# FitCoach 3.0 — статус
+
+## 2026-10-16 — C04 архив, возврат и окончательное удаление клиента (dev)
+
+- Входы: Product §§15.1–15.13, Feature 04, Atlas 03/43; зависимости
+  `C03,D06` закрыты не полностью. Архивация перенесена с карточки roster
+  в Client Workspace (Главная → «Переместить в архив») с текстом
+  подтверждения §15.5; после commit карточка закрывается и тренер
+  возвращается к списку. Возврат из Архива — «Вернуть в клиенты» без
+  generic-подтверждения, с тем же ID.
+- Архивная карточка только идентифицирует клиента («В архиве с <дата>»)
+  и не открывает Workspace. Сортировка Архива (`archivedAt DESC` по
+  умолчанию / имя) хранится в dev-схеме v6 и переживает холодный старт;
+  badge вкладки «Архив» строится из дешёвого `COUNT` и скрыт при 0.
+- «Удалить окончательно» доступно только для ARCHIVED: read-only preview
+  manifest владельцев, явное destructive-подтверждение, одна транзакция с
+  CAS по revision. Строки удаляются явно по manifest (профиль, recovery
+  drafts, activity, birthday dismissals); любая неизвестная таблица со
+  ссылкой на клиента блокирует операцию (`CLIENT_DELETION_BLOCKED`) без
+  частичного удаления. Отмена ничего не меняет.
+- `clients:store:test` 9/9, `clients:roster:test` 6/6, foundation 165/165,
+  typecheck, lint, arch/source/secrets checks прошли. На подключённом
+  Android в Expo Go пройден сценарий создание → архив из карточки →
+  badge 1 → смена сортировки → возврат → повторный архив → отмена
+  удаления → удаление; после force-stop сортировка сохранилась.
+  Найденное залипание сообщения о результате между визитами исправлено.
+- `C04=PARTIAL / NOT DONE`: Calendar-последствия §15.8 (отмена будущих и
+  анонимизация прошлых записей), ledger/training/nutrition/questionnaire
+  владельцы, operationId-идемпотентность, production D01/D06, custom APK,
+  TalkBack/крупный шрифт и утверждение UI открыты.
+
+## 2026-10-15 — C01 active roster vertical slice (dev)
+
+- Входы: Product §§7,20.3, Feature 02 и UI Atlas 01; зависимости
+  `F06,D04,F09` ещё не закрыты полностью. Рабочий new-install список читает
+  реальные Active/Archived Client из локальной SQLite, ищет только по имени
+  и контактам и сохраняет выбранную сортировку. `lastOpenedAt` записывается
+  при фактическом входе в Client Workspace отдельно от `Client.updatedAt`.
+- Birthday pin/badge рассчитываются по локальному календарному дню, включая
+  явное правило 29 февраля → 28 февраля в невисокосном году. Порядок без
+  поиска: Birthday → Recent → Regular, без дублирования. Поиск даёт плоский
+  список, сохраняя короткий badge. Icon-only открепление сохраняется для
+  конкретного ежегодного occurrence и не меняет дату рождения или badge.
+  Предпочтения и dismissal изолированы по workspace и переживают повторное
+  открытие базы. В Настройках доступно управление pin, lead days (1–60) и
+  badge по отдельности. Midnight/resume обновляют локальную дату presentation.
+- Схема `fitcoach_f04_clients_dev.db` продвинута до v5 только как dev migration
+  без production D01. Синтетические SQLite/roster тесты, TypeScript, lint,
+  module boundaries и Android bundle прошли. `C01=PARTIAL / NOT DONE`:
+  Today-фильтр ждёт Calendar facts; нужны scoped read-model/performance проверки,
+  визуальное утверждение настроек и Android interaction smoke, а также
+  production gates. Legacy backup/import остаётся отложенным.
+
+## 2026-10-15 — C03 basic profile + Recovery Draft (dev)
+
+- В `Основное` добавлены optional дата рождения, рост и выбор emoji/инициалов.
+  Дата проверяется как существующая календарная дата в прошлом без
+  искусственного возрастного диапазона; рост `172,5`/`172.5` точно
+  нормализуется в десятые сантиметра. Вес не помещён в Client. Dev-схема
+  переведена вперёд v1→v2→v3, сохранённые v1 строки остаются читаемыми.
+- Отдельная таблица Recovery Draft хранит raw form data и метаданные,
+  не создавая бизнес-факт. Debounce и background flush вызывают
+  автосохранение; при create предлагается продолжить/начать заново, при
+  edit черновик восстанавливается только с той же client revision.
+  Несовпадение revision не накладывает старые значения на карточку:
+  доступно безопасное возвращение или явное удаление старого черновика.
+  Успешные create/update удаляют связанный draft в своей транзакции,
+  отказ оставляет его. При открытии базы черновики старше 30 дней
+  удаляются, а чтение тоже исключает просроченные.
+- `C03=PARTIAL / NOT DONE`: revision-aware field merge, Questionnaire
+  revisions/answers, отдельная Safety-часть, полный профиль (включая пол),
+  проверка background/process-death на Android и утверждение UI открыты.
+  Recovery Draft не является бэкапом бизнес-данных. Production D01/D04/F08
+  и release gates не закрыты.
+
+## 2026-10-15 — C03 edit в локальном dev-хранилище
+
+- Активную карточку теперь можно открыть из roster для редактирования имени,
+  телефона и e-mail. Редактор загружает текущую строку, сохраняет по
+  `expectedRevision` в одной транзакции и сохраняет ввод при ошибке. Повтор
+  со старой revision отклонён; ID клиента остаётся тем же. Локальный поиск
+  учитывает имя и контакты. Синтетический SQLite-тест проверил edit, invalid
+  email и stale отказ без потери предыдущего значения.
+- `C03=PARTIAL / NOT DONE`: остальные typed profile поля, Questionnaire,
+  Recovery Draft и full cross-owner form ещё отсутствуют. `C01/C02` также
+  частичны: нет Today/calendar фильтра, recentlyOpened и измеренных
+  performance/read-model проверок. Production D01/D04/F08 gates открыты;
+  это dev-only new-install функциональность, не миграция или релиз.
+
+## 2026-10-15 — F04/C01 new-install dev-хранилище клиентов
+
+- По приоритету рабочего приложения, а не legacy backup, добавлена отдельная
+  `fitcoach_f04_clients_dev.db` с версионной dev-схемой workspace/client,
+  FK/CHECK/index, типизированным репозиторием и транзакционными командами
+  создания, архивации и восстановления с revision CAS. Boot не показывает
+  приложение готовым, пока это хранилище не открылось. Форма теперь сохраняет
+  имя и контакты; активный список, поиск и архив читают реальные локальные
+  строки и обновляются при возврате на экран. Пользователь видит предупреждение:
+  dev-данные пока не имеют бэкапа.
+- Node SQLite fixture подтвердила создание, повторное открытие файла,
+  archive/restore, отказ устаревшего revision и изоляцию workspace. Это
+  **new-install dev vertical slice**, не production DDL D01, не миграция 2.0,
+  не готовый релиз. Остальные поля карточки и доменные владельцы,
+  Android smoke и recovery ещё открыты. Legacy backup отложен за задачами
+  создания рабочего приложения; R04/D03/D05 gates не закрыты.
+
+## 2026-10-15 — R04 client staging draft
+
+- Добавлена in-memory all-or-nothing TypeScript-проекция legacy Client в
+  кандидат целевой строки по явной workspace/client ID map. Сохранены
+  lifecycle и archive provenance; пропуск или коллизия ID, deleted/invalid
+  source блокируют результат целиком. Синтетический тест проверяет карту,
+  архив, блокировку и отсутствие записей. Это не production DDL, не
+  фактический импорт и не backup FitCoach 3.0: рабочая база 3.0 пока не
+  развернута. [Открытые gates](spikes/R04_CLIENT_IDENTITY_MAPPING_CANDIDATE.md).
+
+## 2026-10-15 — R04 source workout origin
+
+- Read-only triangulation `training_sessions.source_workout_id` ↔
+  `training_workouts` выполнена в том же снимке: у 802 сессий поле наблюдается;
+  778 тренировок того же клиента, 2 другого, 22 отсутствуют. Среди 778
+  same-client строк program keys совпадают в 777 и расходятся в 1.
+  Ни одна из 12 проблемных прямых program-ссылок не получила same-client
+  workout clue. Автоматического исправления или импорта нет; все 12 остаются
+  в карантине. [Семантические границы](spikes/R04_PROGRAM_BOOK_MAPPING_CANDIDATE.md).
+  Target-mapped sessions = 0, target writes = 0; `R04=PARTIAL / NOT DONE`.
+
+## 2026-10-15 — R04 program/book identity
+
+- Для всех 802 сессий создан внутренний provenance/reason-code ledger,
+  который сверяется с независимым агрегатом. Даже точное same-client
+  совпадение не утверждает выполнение. У 127 таких сессий исходная программа
+  имеет deletion marker; 2 чужие ссылки и 10 неразрешённых ключей остаются
+  в карантине. Наружный отчёт без ID/PII, target-mapped = 0, writes = 0.
+  `r04:test` 75/75, foundation 146/146, typecheck, lint,
+  arch/source/secrets checks прошли; SHA-256 бэкапа не изменился.
+- Сверка program ID с сессиями и плановыми тренировками обнаружила в
+  802 legacy-сессиях 790 same-client прямых ссылок, 2 ссылки на программу
+  другого клиента и 10 неразрешённых ключей. Все 6 501 плановых тренировок
+  прямо указывают на программу своего клиента. У 20 marked-deleted программ
+  остаются сессии с 2 179 физическими строками подходов, у 41 — плановые
+  тренировки. Это review-required, не подтверждённые выполненные факты и
+  не команда удаления. `r04:test` 74/74, foundation 145/145,
+  typecheck, lint, arch/source/secrets checks прошли; SHA-256 бэкапа не изменился.
+  Target writes = 0.
+- В read-only аудит добавлена проверка каждой `training_programs`-строки как
+  отдельного назначения клиента. В бэкапе: 118 строк, 36 book-групп,
+  0 cross-client book-групп, 21 группа с несколькими программными строками
+  одного клиента; 14 строк без book ID. 98 `book_id` совпадают с library ID
+  того же клиента, 6 не найдены. 42 строки с deletion marker нельзя молча
+  отбросить. Синтетический cross-client shared book не сливает факты.
+  [Границы и открытые решения](spikes/R04_PROGRAM_BOOK_MAPPING_CANDIDATE.md).
+  Target-mapped programs = 0, target writes = 0; R04 всё ещё `PARTIAL`.
+  `r04:test` 72/72, foundation 143/143, typecheck, lint,
+  arch/source/secrets checks прошли; SHA-256 бэкапа не изменился.
+
+## 2026-10-15 — R04 source identity клиентов
+
+- Общий read-only аудит прямых `client_id`-ссылок теперь покрывает 22 таблицы:
+  34 113 физических строк, 34 074 с существующим владельцем, 39 без ключа
+  (38 гостей Calendar и 1 неназначенная запись), 0 orphan. 1 407 строк
+  принадлежат архивным клиентам и должны пережить перенос. Это не число
+  уникальных фактов; JSON и косвенные связи проверяются отдельно. Target
+  mapping и writes остаются 0. `r04:test` 70/70, foundation 141/141,
+  typecheck, lint, arch/source/secrets checks прошли; SHA-256 бэкапа не изменился.
+- В общий read-only аудит включён кандидат `(account scope, clients.id)` с
+  сохранением source workspace и отдельными `ACTIVE`/`ARCHIVED`/deleted/
+  unresolved состояниями. На предоставленном бэкапе: 27 клиентов, один
+  исходный workspace, 25 active и 2 archived; нет пустых имён, отсутствующего
+  owner, deleted-маркеров или неверных временных полей. Target Client IDs = 0,
+  target writes = 0. [Границы и mapping](spikes/R04_CLIENT_IDENTITY_MAPPING_CANDIDATE.md).
+  R04 остаётся `PARTIAL / NOT DONE`; `r04:test` 68/68, foundation 139/139,
+  typecheck, lint, arch/source/secrets checks прошли; SHA-256 бэкапа не изменился.
+
+## 2026-10-15 — R04 кандидаты legacy-замеров
+
+- Дневной вес теперь сохраняется как отдельный date-only кандидат; изменяемый
+  `clients.weight` используется только для сравнения, не как target-факт.
+  На read-only бэкапе: 20 дневных значений, 20 положительных снимков профиля,
+  12 клиентов с обоими источниками, у 9 есть совпадение значения, у 3 нет.
+  Ни совпадение, ни расхождение не создаёт/удаляет замер. `r04:test` 67/67,
+  foundation 138/138, typecheck, lint, arch/source/secrets checks прошли;
+  SHA-256 бэкапа не изменился. Target-mapped = 0, target writes = 0.
+- Из `client_measurements` теперь формируются отдельные in-memory кандидаты
+  для каждого из восьми полей с сохранением provenance и точной десятичной
+  строки. В read-only проходе предоставленного бэкапа: 22 непустых значения,
+  22 точных кандидата, 0 target-mapped, 0 target writes. Все единицы требуют
+  подтверждения; время не выдумывается, вес из `client_day_facts` не сливается
+  с окружностями. [Матрица и открытые решения](spikes/R04_MEASUREMENT_FIELD_MAPPING_CANDIDATE.md).
+  R04 остаётся `PARTIAL / NOT DONE`; первоначальный цикл был проверен
+  `r04:test` 66/66 и foundation 137/137. SHA-256 бэкапа тогда не изменился.
+
+## 2026-10-15 — D01 проверка справочной схемы (кандидат)
+
+- Отдельный in-memory overlay ограничений проверен на 15 негативных и 6
+  позитивных синтетических сценариях: обнаруженные нарушения owner-связей
+  отклонены, корректные операции проходят. Проверены INSERT, UPDATE дочерних
+  связей и смена workspace у четырёх связанных родительских сущностей.
+  Overlay не установлен в приложении и не является production migration;
+  владельцы других связей и restore gates ещё открыты. `D01=PARTIAL`.
+  `d01:reference:test` 2/2, foundation 136/136, typecheck, lint,
+  arch/source/secrets checks прошли; SHA-256 исходного бэкапа не изменился.
+- На Stage 3 reference SQL (не production DDL) запущена TypeScript/SQLite
+  проба с двумя синтетическими workspaces. Из 8 owner-сценариев 3 чужие
+  связи отклонены, но 5 приняты: чужой session type у Appointment,
+  чужой Product у FoodDiaryEntry, чужая Cohort у TrainingProgram, а также
+  смена владельца Program после создания Session и смена владельца
+  Measurement после выбора daily primary.
+  [Воспроизводимый отчёт и требования](adr/D01_REFERENCE_OWNER_AUDIT.md).
+  Production schema, версия миграции и перенос бэкапа не создавались;
+  первоначальный `d01:reference:test` 1/1 прошёл локально; `D01=PARTIAL / NOT DONE`
+  до F04/R04 и закрытия перечисленных guards. Общий suite 136/136,
+  typecheck, lint, arch/source/secrets checks прошли; личный backup не изменён.
+
+## Зафиксированный вход для будущего X01
+
+- Владелец выбрал бесплатный RepDB и самостоятельную русскую локализацию.
+  Набор ещё не скачан: до интеграции нужны фиксация версии, проверка лицензии,
+  видимая атрибуция, стабильные ID и редакторская проверка перевода.
+  [Условия и границы](inputs/X01_REPDB_OWNER_INPUT.md).
+
+## 2026-10-15 — R04 identity preflight (кандидат)
+
+- На синтетическом R03-срезе добавлены read-only SQLite reader и TypeScript
+  классификация строк `training_session_sets`. `LEFT JOIN` и сверка физического
+  количества не дают молча пропустить orphan; неполное происхождение блокирует
+  проход. Чтение выполняется в одном снимке, без записи в источник.
+- Каждый физический ряд сохраняется отдельно и остаётся неподтверждённым.
+  Повтор `sourceFactId` между сессиями/программами, конфликт метрик и пересечение
+  клиентов помечаются для разбора; равные метрики не служат основанием для
+  дедупликации, `null` не заменяется нулём. Агрегатный read-only CLI на личном
+  backup вернул 20 973 физические строки как неподтверждённые, 94 строки с
+  повторным ID и 2 с конфликтом метрик; SHA-256 файла до/после совпал.
+  Следующий цикл добавил отдельную классификацию 25 354 строк истории: 14 525
+  без пары, 47 с несколькими парами, 10 782 с одной неподтверждённой ссылкой.
+  Подходы и история читаются из одного SQLite-снимка; чужой клиент не
+  подставляется, новых подходов не создаётся. Повторный read-only проход
+  подтвердил агрегаты и неизменность файла.
+- Отдельный реестр покрытия зафиксировал 43 таблицы только наблюдённого
+  build120 backup: 8 затронуты source-gate проверками, 35 ждут mapping,
+  0 сопоставлены с target. Read-only сверка вернула `requires-mapping`, не
+  разрешение на импорт; исходный файл сохранил SHA-256. Неизвестные и
+  отсутствующие таблицы блокируются. Дополнительно закреплён отпечаток формы
+  колонок наблюдённого backup: он совпал; синтетический дрейф колонки при тех же
+  именах таблиц блокируется. Отдельный отпечаток DDL теперь блокирует дрейф
+  индексов/определений при той же форме колонок. Оба отпечатка совпали только
+  на предоставленном backup; это не семантический mapping. `r04:test` 25/25 PASS;
+  общий suite 94/94, typecheck, lint,
+  arch/source/secrets checks прошли.
+- Следующий read-only цикл посчитал физические строки всех 43 таблиц в одном
+  снимке: 33 непустые, суммарно 382 402 строки. Реестр количества защищён
+  стабильным digest без вывода записей и ID. Сумма не означает 382 402
+  доменных факта или готовый source→target parity. `r04:test` 26/26 PASS;
+  общий suite 95/95, typecheck и lint прошли.
+- Следующий R04-цикл проверил пригодность явных primary keys для source-row
+  provenance: 43 таблицы с PK, 8 составных, 0 строк с неполным ключом.
+  Автоматический `rowid` не используется как замена. Синтетические отсутствие
+  PK и `NULL` в составном PK блокируются. Это лишь ключи в одном source-файле,
+  не target identity и не разрешение на слияние account DB. `r04:test` 28/28;
+  общий suite 97/97, typecheck и lint прошли.
+- Сверка метрик больше не считает `NULL` и пустую строку одинаковыми.
+  Синтетический случай добавлен; повторный read-only аудит личного backup
+  сохранил агрегаты и `targetWrites=0`. `r04:test` 29/29, общий suite 98/98.
+- Кандидаты source PK теперь перечисляются полностью в одном снимке и
+  сводятся в типизированный digest без вывода значений. На предоставленном
+  backup перечислено 382 402 из 382 402 строк с полным PK. Тест ловит замену
+  PK при неизменном count. Это не target mapping. `r04:test` 30/30;
+  общий suite 99/99, typecheck и lint прошли.
+- После проверки больших INTEGER и namespace аккаунта digest не схлопывает
+  соседние ID за пределом JS safe integer и различает разные account scopes.
+  Binding проверяется до чтения; scope не выводится. Разные файлы одного
+  аккаунта всё ещё требуют отдельной sourceDatabase identity. `r04:test` 31/31;
+  общий suite 100/100, typecheck, lint, arch/source/secrets checks прошли.
+- Lifecycle preflight сохранил маркеры удаления подхода/сессии/упражнения и
+  маркеры времени. На личном backup 132/4/101 строк соответственно, объединение
+  — 132 строки; это пересекающиеся сигналы, не подтверждённая семантика
+  удаления. Все исходные строки остаются review-required, target writes = 0.
+  `r04:test` 33/33, общий suite 102/102, typecheck и lint прошли.
+- История упражнений отдельно помечает legacy deletion marker: 10 720 строк;
+  среди них 9 853 без пары подхода того же клиента, 867 с одной ссылкой,
+  0 с несколькими. Это разбор источника, не операция удаления/создания фактов.
+  `r04:test` 36/36, общий suite 105/105, typecheck и lint прошли.
+- Единый `r04:full` теперь проводит R02 gate, полный реестр таблиц/PK и
+  классификацию подходов/истории в одном read-only SQLite-снимке. На личном
+  backup статус `requires-semantic-review`, таблицы `requires-mapping`,
+  0 target writes. Просмотр конкретного commit legacy build120 подтвердил:
+  маркер удаления истории может возникать и при неполном подходе, поэтому не
+  является самостоятельной командой переноса. Новую папку/копию 2.0 не
+  создавали — исходники прочитаны через GitHub как read-only reference.
+  `r04:test` 38/38, общий suite 107/107, typecheck, lint,
+  arch/source/secrets checks прошли.
+- Cross-tab для 10 782 строк истории с одной same-client ссылкой разделил
+  отметки удаления: 9 880 без отметок, 832 только история, 35 только сторона
+  подхода/сессии/упражнения, 35 обе стороны, 0 неизвестных lifecycle-форм.
+  Это расхождение проекций, не решение о судьбе подходов. `r04:test` 40/40;
+  общий suite 109/109, typecheck, lint, arch/source/secrets checks прошли;
+  SHA-256 личного backup до/после совпал.
+- Третья legacy-проекция `training_set_logs` включена в тот же read-only
+  снимок: 137 152 физических строк, 30 371 с маркером завершения, 107 920
+  с маркером удаления на строке/упражнении/тренировке. У 122 437 строк нет
+  same-client пары в сессионной проекции, у 14 620 одна неподтверждённая
+  ссылка, у 95 несколько. Это не число выполненных или потерянных подходов.
+  Реестр покрытия теперь 11 source-inspected / 32 mapping-pending / 0
+  target-mapped таблиц. `r04:test` 44/44, общий suite 113/113, typecheck,
+  lint, arch/source/secrets checks прошли; SHA-256 backup не изменился.
+- Матрица link × lifecycle для всех 137 152 current-set строк отделяет
+  `completed_at` от маркеров удаления. В частности, 355 строк имеют
+  `completed_at` без маркера удаления, но не имеют пары с сессионной строкой;
+  это приоритет ручной сверки, не доказательство потери фактов. Матрица
+  сохраняет физическую сумму и не делает target writes. `r04:test` 45/45,
+  общий suite 114/114, typecheck, lint, arch/source/secrets checks прошли;
+  SHA-256 backup не изменился.
+- Трёхсторонняя сверка 355 приоритетных current-set строк в том же снимке
+  нашла 354 без same-client истории и 1 с единственной строкой истории без
+  deletion marker. Это не доказывает ни выполнение, ни потерю подхода;
+  автоматическое решение запрещено. `r04:test` 46/46, общий suite 115/115,
+  typecheck, lint, arch/source/secrets checks прошли; SHA-256 backup не изменился.
+- Контекст `training_workout_logs` для 354 строк без истории: 285 не имеют
+  same-client snapshot тренировки, 69 имеют один snapshot с валидным JSON,
+  но без массива `exercises`. Это не доказательство отсутствия выполнений.
+  Покрытие источника 12 inspected / 31 mapping-pending / 0 target-mapped;
+  `r04:test` 48/48, общий suite 117/117, typecheck, lint,
+  arch/source/secrets checks прошли; SHA-256 backup не изменился.
+- Архивные снимки добавлены в тот же read-only проход: 6 физических записей,
+  3 deletion markers, 3 ссылки на программу того же клиента, 1 на программу
+  другого клиента, 2 без program ID. В трёх JSON-массивах суммарно 42
+  вложенные workout-строки; это не выполненные подходы. Покрытие источника
+  13 inspected / 30 mapping-pending / 0 target-mapped. `r04:test` 50/50,
+  общий suite 119/119, typecheck, lint, arch/source/secrets checks прошли;
+  SHA-256 backup не изменился.
+- Межклиентская архивная ссылка не имеет контекста общей книги: у клиента
+  архива нет собственной программы с тем же непустым `book_id`. Это
+  unresolved owner mismatch, а не основание приписать чужие факты;
+  `r04:test` 51/51, общий suite 120/120, typecheck, lint,
+  arch/source/secrets checks прошли; SHA-256 backup не изменился.
+- `nutrition_days` включены в тот же read-only снимок: 17 физических дней,
+  3 с пищевыми записями (5 записей), 14 без еды. Повреждённых meal-JSON,
+  неоднозначных записей, расхождений legacy-флага с наличием еды и неизвестных
+  макронутриентов в этом файле нет. По Product §49.22 только еда делает день
+  кандидатом статистики; пустой день не равен нулю. Покрытие источника
+  14 inspected / 29 mapping-pending / 0 target-mapped, перенос не выполнялся.
+  Orphan-клиент в синтетическом тесте помещается в карантин. `r04:test` 54/54,
+  общий suite 123/123, typecheck, lint, arch/source/secrets checks прошли;
+  SHA-256 исходного backup остался прежним.
+- Для `client_measurements` добавлена отдельная сверка: 5 физических строк,
+  22 заполненных числовых значения, включая 2 с десятичной запятой; нет
+  неверных дат, отсутствующих владельцев и повторов дня клиента. Единица
+  измерения и primary-выбор в legacy-строке не зафиксированы, поэтому все
+  22 значения остаются неподтверждёнными. Покрытие 15 inspected / 28
+  mapping-pending / 0 target-mapped, `targetWrites=0`; импорт не реализован.
+  `r04:test` 56/56, общий suite 125/125, typecheck, lint,
+  arch/source/secrets checks прошли; SHA-256 backup не изменился.
+- Календарный source-домен проверен отдельно от Workout/Credit Ledger:
+  392 строки, 353 с клиентом, 38 гостевых, 1 без клиента/гостя, 179 с
+  deletion marker. Все даты/время и типы имеют ожидаемую форму, но
+  неназначенная запись остаётся review-required. Создано 0 тренировочных
+  фактов и 0 credit settlements. Покрытие 16 inspected / 27
+  mapping-pending / 0 target-mapped; перенос не выполнялся. `r04:test` 58/58,
+  общий suite 127/127, typecheck, lint, arch/source/secrets checks прошли;
+  SHA-256 личного backup не изменился.
+- `client_day_facts` сохранён как самостоятельный legacy-источник: 76
+  строк, 20 значений веса (7 с запятой), 4 значения шагов; 20 текстовых
+  «Да» и 51 «Нет» для тренировки, 5 пропусков. Неверных дат/владельцев
+  и некорректных значений нет. Никакие тренировочные факты или измерения
+  автоматически не созданы. Покрытие 17 inspected / 26 mapping-pending /
+  0 target-mapped; R04 остаётся `PARTIAL / NOT DONE`. `r04:test` 60/60,
+  общий suite 129/129, typecheck, lint, arch/source/secrets checks прошли;
+  SHA-256 backup не изменился.
+- В R04 добавлена сверка вложенных пищевых записей с каталогом и сохранённым
+  продуктовым снимком: 5 записей имеют уникальные ID и существующий продукт,
+  у всех совпадает ID снимка и положительна порция. У 4 снимков КБЖУ
+  числовые, у 1 — числовые строки без утверждённого правила конверсии.
+  Коллизии ID на синтетических данных исключают все вхождения, а не только
+  повторное. `shapeCompleteButUnverified=4`, `targetMappedEntries=0`;
+  перенос не выполнялся, R04 остаётся `PARTIAL / NOT DONE`. `r04:test` 63/63,
+  общий suite 132/132, typecheck, lint, arch/source/secrets checks прошли;
+  SHA-256 личного backup не изменился.
+- Для R04 зафиксирована [полевая матрица пищевого импорта](spikes/R04_NUTRITION_FIELD_MAPPING_CANDIDATE.md):
+  порции и итоги 5/5 записей представимы ровно в ×100, 5/5 имеют явное
+  время создания, но отдельное время правки отсутствует у всех 5.
+  `nutrition_days.updated_at` не подставляется вместо неизвестного времени
+  записи; это решение D01. Добавлен тест без округления/подмены missing на 0.
+  `targetMappedEntries=0`, production schema и импорт по-прежнему закрыты.
+  `r04:test` 65/65, общий suite 134/134, typecheck, lint,
+  arch/source/secrets checks прошли; SHA-256 исходного backup не изменился.
+- R04 — `PARTIAL / NOT DONE`: это не source→target migration, не real backup
+  dry-run и не принятие 20 973 строк как истинных подходов. Требуются полный
+  R03 inventory, D01-модель и INT-03–12.
+  [Подробности R04](spikes/R04_SOURCE_FACT_PREFLIGHT.md).
+
+## 2026-10-15 — F10 локальная диагностика (кандидат)
+
+- Добавлен ограниченный in-memory журнал только с разрешёнными metadata
+  транзакции: исход commit/rollback/reject, длительность и фиксированный код.
+  SQL, параметры, ID и текст исключений в событие не попадают.
+- `WriterCoordinator` сообщает исход после транзакции, а сбой diagnostic sink
+  не меняет результат записи. Dev-only F04-экран показывает лишь агрегатные
+  счётчики на отдельной синтетической базе. Четыре F10-теста проходят.
+- F10 — `PARTIAL / NOT DONE`: реальные feature-команды, политика lifecycle,
+  Android QA и security review ещё открыты. Общий suite 64/64, typecheck,
+  lint, arch/source/secrets checks и Android JS bundle прошли.
+  [Подробности F10](adr/F10_LOCAL_DIAGNOSTICS_CANDIDATE.md).
+
+## 2026-10-15 — R03 синтетические migration fixtures (кандидат)
+
+- Синтетический `nutrition_days` приведён к наблюдаемой форме с `meals_json`:
+  4 дня, 3 пищевые записи, один день только с водой; отдельные кейсы
+  продукта, рецепта с неизвестным белком, строкового КБЖУ в снимке и
+  расхождения `meals_recorded` с фактической едой. Golden SHA-256 обновлён
+  только для синтетической таблицы. Файловый read-only тест подтверждает
+  агрегаты и неизменность SQLite; `r03:test` 27/27, общий suite 136/136,
+  typecheck, lint, arch/source/secrets checks прошли. Личный backup не
+  изменился. R03 остаётся `PARTIAL`.
+- После read-only проверки структуры личного backup создан отдельный
+  синтетический SQLite-набор: shared book 3 мезоцикла × 2 клиента, изолированные
+  факты, архив, Calendar/Ledger correction expectation, питание, рецепт,
+  повторные замеры, 10 ревизий и повреждённый manifest.
+- Counts и SHA-256 синтетических строк зафиксированы; `r03:test` 9/9 прошёл.
+  Личные записи и ID не копировались в репозиторий; временная копия удалена.
+- Следующий read-only аудит личного backup обнаружил 47 групп повторяющихся
+  `source_fact_id` между разными sessions/programs одного клиента, в одной
+  группе расходятся reps/weight. Фикстура и её hashes исправлены под реальное
+  legacy-ограничение `(session_exercise_id, source_fact_id)`; R04 не вправе
+  схлопывать факты по одному ID. Актуальный `r03:test` — 13/13.
+- Вторая серия R03 добавила 14 повторяемых relation-проверок. На личном
+  backup все выбранные связи целы, но это не доказывает, что строки версии 2.0
+  являются истинными выполненными подходами. CLI показывает
+  `requires-semantic-review`; синтетические тесты проверяют и ошибочную
+  принадлежность клиента, и неполное покрытие схемы.
+- Третья серия R03 добавила агрегатный semantic screen: 277 упражнений без
+  строк подходов, 25 354 строки истории, 14 525 строк истории без пары по
+  `(client_id, source_fact_id)` и 47 неоднозначных сопоставлений. Это сигналы
+  для разбора, а не «недостающие» или подтверждённые подходы. CLI всегда
+  требует semantic review; `r03:test` теперь 16/16.
+- Четвёртая серия R03 закрепила программный запрет «чистый аудит = подтверждённые
+  подходы»: reason code `SOURCE_FACTS_UNVERIFIED` остаётся даже без выбранных
+  аномалий; разрыв связей и неполная схема показываются независимо. `r03:test`
+  теперь 19/19.
+- Пятая серия R03 добавила файловые синтетические случаи: корректный `.atbackup`
+  остаётся байт-в-байт неизменным после read-only аудита; повреждённый SQLite,
+  сломанный manifest, отсутствующий и множественный вход блокируются. Личные
+  данные не копировались; `r03:test` теперь 23/23.
+- Шестая серия R03 добавила две отдельные синтетические account DB с разными
+  bindings: таблицы в каждом файле сверяются с golden count/SHA-256,
+  неоднозначный выбор и неизвестный marker блокируются без объединения строк.
+  Это не заменяет инвентаризацию реальных app-private DB; `r03:test` — 25/25.
+- R03 — `PARTIAL / NOT DONE`: реальная обезличенная fixture, все account DB,
+  source→target mapping и Android restore/kill gates остаются открытыми.
+  [Подробности R03](spikes/R03_SYNTHETIC_MIGRATION_FIXTURES.md).
+
+## 2026-10-15 — R02 личный `.atbackup` (частичная инвентаризация)
+
+- На временной копии read-only проверены SQLite integrity/FK, manifest,
+  43 таблицы, 25 записей миграций и безопасные агрегаты без вывода PII.
+- Добавлены TypeScript-инспектор и политика выбора источника с fail-closed
+  сценариями. Синтетические R02-тесты 5/5; повторный smoke на личном backup
+  вернул только агрегаты и `candidate`, не импортировал данные.
+- Один binding совпадает со scope manifest, но это не исключает других БД
+  установленного приложения. Пара `sourceSchemaVersion=28` / compatible
+  `schemaVersion=25` объяснена Product §46.5. Временная копия удалена.
+- На подключённом телефоне read-only ADB подтвердил `com.fitcoach.app`
+  `versionCode=128`, но приватный каталог закрыт (`run-as`: not debuggable;
+  прямой `ls`: Permission denied; `ALLOW_BACKUP` отсутствует). Количество
+  app-private account DB не установлено; защиту Android не обходили.
+- R02 — `PARTIAL / NOT DONE`: device DB-path inventory, точная legacy schema
+  identity и redacted fixture ещё нужны.
+  [Подробности R02](spikes/R02_LEGACY_BACKUP_INVENTORY.md).
+
+## 2026-10-15 — F06 read-model subscriptions (кандидат)
+
+- Добавлены scoped QueryRegistry, manifest зависимостей, post-commit bridge и
+  React-подписка. Batch обновляет только затронутые запросы; старые async
+  ответы не публикуются, а валидный snapshot остаётся при refresh.
+- Локально прошли readmodels:test, foundation 30/30, typecheck, lint,
+  arch:check, Android JS bundle, source:verify и secrets:check.
+- F06 — `PARTIAL / NOT DONE`: production loaders и привязка экранов ждут
+  D01/D04/C01; Android performance/restore gate ещё открыт.
+  [Подробности F06](adr/F06_READ_MODELS_CANDIDATE.md).
+
+## 2026-10-15 — F02 единый контур проверок (кандидат)
+
+- Workflow теперь включает единый `test:foundation` (29/29 локально, включая
+  real SQLite `:memory:` integration), архитектурный граф, `theme:check`,
+  Expo Doctor, typecheck/lint/secret guard и Android JS bundle. Два теста
+  защищают состав и read-only permissions workflow; `.atbackup` явно запрещён
+  guard-правилом. Локально Expo Doctor 21/21 прошёл с разрешённым spawn.
+- После правок прошли suite 29/29, typecheck, lint, arch:check, bundle и
+  source:verify. F02 остаётся `PARTIAL / NOT DONE`: удалённый CI run,
+  обязательные PR checks, native APK smoke и полный security scan открыты.
+  [Подробности F02](adr/F02_CHECKS_CANDIDATE.md).
+
+## 2026-10-15 — F05 границы модулей и DI (кандидат)
+
+- Усилены import-правила между AppShell/workflows/read-models и feature public
+  APIs, а также между feature application/data/presentation. Публичные barrels
+  не могут экспортировать DB internals. F04 dev-диагностика получает SQL
+  connection через явный composition root, экран видит только функцию запуска.
+- `arch:test` 10/10, `arch:check` (68 TS source files), typecheck, lint,
+  Android JS bundle и source verify прошли. После DI-рефакторинга на Android
+  Expo Go повторно получено 5/5 в изолированной F04-диагностике.
+- F05 — `PARTIAL / NOT DONE`: реальные command/query API, production bindings
+  и owner-scoped repositories зависят от схемы/feature tasks; статические
+  проверки не заменяют runtime authorization и integration tests.
+  [Подробности F05](adr/F05_MODULE_BOUNDARIES_CANDIDATE.md).
+
+## 2026-10-15 — F04 SQLite core (кандидат)
+
+- Добавлены внутренний TypeScript SQL-порт, сериализованный writer coordinator,
+  Expo SQLite adapter с проверкой `foreign_keys`/WAL при открытии и generic
+  forward-only migration runner. UI не получает SQL handle; миграции выполняются
+  через exclusive transaction, проверяют историю версий/checksum, FK и integrity.
+- Синтетические проверки 6/6 покрывают повтор без применения, откат при сбое,
+  несовпадение checksum, FK-отказ, некорректный каталог и очередь записей.
+  `typecheck`, `lint`, `arch:check`, Android JS bundle и `source:verify` прошли.
+- Следующий пакет F04 добавил quiescence для будущего restore/cutover и пять
+  тестов на настоящем SQLite `:memory:` через локальный Node 24: forward-only
+  повтор, rollback DDL+ledger, fail-closed checksum/future version, deferred FK
+  и сериализация записи. Все 5/5 прошли; typecheck, lint, arch:check, Android
+  JS bundle и source:verify повторно прошли. Это проверка движка SQLite на хосте,
+  **не** доказательство работы нового Expo adapter в Android runtime.
+- В dev-only меню добавлена F04-диагностика через app-level сервис, без прямого
+  импорта SQLite из UI. На подключённом Android 16 в Expo Go показано 5/5:
+  открытие отдельной `fitcoach_f04_probe.db` с FK/WAL, миграция+повтор,
+  запись/чтение, rollback и очередь/quiescence. Тестовый файл содержит только
+  синтетические строки и остаётся в sandbox Expo Go; рабочую БД не открывали.
+  После этого typecheck, lint, arch:check, Android JS bundle и source:verify
+  прошли. Custom APK/process-death и production boot всё ещё не проверены.
+- F04 остаётся `PARTIAL / NOT DONE`: адаптер не включён в boot приложения,
+  production DDL и реальные repositories не созданы. Reference schema из Stage 3
+  не превращена в production. Следующие gates: F03 integration, D01,
+  custom-APK/fixture tests и подтверждение F01/R07.
+
+## 2026-10-15 — F09 навигационный каркас (кандидат)
+
+- Пять изменений: типизированный реестр трёх root-вкладок, четырёх client-controls
+  и шести смысловых разделов; собственные контурные иконки обеих нижних панелей;
+  отдельные native stacks для Клиентов/Архива и трёх основных разделов клиента;
+  отдельный экран меню «Ещё». Calendar и More уже имели собственные stacks.
+- Root tabs сохраняют `backBehavior="none"` по Product §2.8: Back не перебирает
+  посещённые вкладки. Settings и Notification Center остаются отдельными
+  маршрутами; меню закрывается Back. Клиентские маршруты в «Ещё» не превращены
+  в седьмой смысловой раздел.
+- `typecheck`, `lint`, `arch:check`, Android JS bundle и `source:verify` прошли.
+  Device Back/TalkBack/font-scale и custom APK в этом пакете не проверялись.
+- F09 остаётся `PARTIAL / NOT DONE`: текущая карточка клиента — явно dev-demo без
+  реального `clientId`; подключение к roster/Calendar и безопасное восстановление
+  owner-scoped route требуют F03/F08, production-хранилища и завершения R08 gate.
+  Точный вид навигации остаётся UI-кандидатом до visual approval.
+
+## 2026-10-15 — F08 общие UI-компоненты (кандидат)
+
+- В TypeScript добавлены общие компоненты F08: кнопки и поля, выбор и вкладки,
+  уведомление и подтверждение, footer редактора, числовое поле, метрика,
+  статус, состояния загрузки/пустоты и карточка клиента. Список и форма клиента
+  используют часть этих примитивов; остальные подготовлены к подключению
+  реальных read models без фиктивных карточек.
+- `ui:numeric:test` 3/3, typecheck, lint, `arch:check`, Android JS bundle и
+  `source:verify` проходят. Числовой draft различает пустой ввод, недописанное
+  значение и валидный ноль; `82,5` и `82.5` дают одно числовое значение.
+- Следующий проход F08 уточнил disabled/busy/focus у кнопок и полей, ввод по
+  клавиатуре в форме, фокус модального подтверждения и правого Settings drawer.
+  На подключённом Android в Expo Go проверены видимость footer над клавиатурой,
+  сохранение dev-draft после Cancel и закрытие drawer по Back; выявленное
+  растягивание drawer на всю ширину исправлено. После правки повторно прошли
+  typecheck, lint, `arch:check`, Android JS bundle и `source:verify`.
+- Ещё один пакет F08 стабилизировал ширину поиска при появлении Clear,
+  добавил видимый focus у chips и автопрокрутку выбранного SectionTab,
+  компактный диалог с прокруткой длинного текста и переносимые строки drawer.
+  На Android Expo Go проверены Clear с сохранением фокуса ввода, выбор раздела,
+  компактность подтверждения и закрытие drawer по Back. Первый вариант
+  прокручиваемого диалога растягивался по высоте; исправлен после screenshot
+  smoke. Typecheck, lint, архитектурный scan, Android JS bundle и source verify
+  повторно проходят после исправления.
+- Компоненты выбора темы и акцента разделены; галерея теперь показывает реальные
+  общие TextField/Button/StatusTag, а не нарисованные копии. На Android Expo Go
+  тестовая строка сохранилась при смене акцента и темы; это smoke текущей сессии,
+  не доказательство сохранения после перезапуска. `theme:check` подтвердил 9×3,
+  `theme:test` 3/3; typecheck, lint, архитектурный scan, bundle и source verify
+  прошли. Галерея и C30/C31 всё ещё кандидаты до UI/TalkBack QA.
+- Аудит 48dp выявил узкие зоны отдельных дней в семидневной строке Calendar
+  на 320dp. Лента теперь прокручивается горизонтально, каждый день имеет
+  минимум 48dp, выбранный день дополнительно подчёркнут, а смена недели
+  возвращает ленту к понедельнику. У календарных контролов, ссылок прототипа
+  и кнопки «Назад» в каталоге тем добавлены видимые focus/pressed состояния;
+  ссылка передаёт вспомогательный текст как accessibility hint. После всех
+  правок прошли foundation suite 69/69, typecheck, lint, arch/source/secrets
+  checks и Android JS bundle;
+  screenshot/TalkBack QA на 320dp ещё не выполнены.
+- F08 остаётся `PARTIAL / NOT DONE`: полный focus/TalkBack, крупный шрифт, keyboard и
+  safe-area на Android, компонентные goldens и явное утверждение UI не пройдены.
+
+## 2026-10-15 — F01 EAS dev APK (после Expo Go smoke)
+
+- Изолированный EAS-проект `@hwankarasu/fitcoach-3-development` собрал
+  internal APK для `com.fitcoach.v3dev`; архив проверен до загрузки:
+  только 37 файлов мобильного приложения, без `.git`, соседних документов,
+  реальных БД и секретов.
+- APK 83 924 199 байт, SHA-256
+  `708dea27012de160627fc712373030a38b82b4e6668c77e904d9d2b6bdd9c0c3`;
+  `aapt` и `apksigner` подтвердили package/version/signature.
+- Первую ADB-установку остановила штатная защита Realme/Oppo; затем
+  пользователь установил APK. ADB подтвердил два отдельных пакета:
+  dev 0.0.1 и прежний 2.0.0. У dev-пакета прошли warm/cold launch и проверка
+  диагностического экрана. F01 всё ещё `NOT DONE`: Debug APK, продуктовый
+  UI/SQLite и остальные gates открыты. [Детали F01](adr/F01_STACK_CANDIDATE.md).
+
+## 2026-10-15 — F03 кандидат boot gate
+
+- Добавлена чистая TypeScript state machine критического запуска с typed
+  `BOOT_PENDING/DB_READY/APP_READY/BOOT_FAILED`, Retry без delete и
+  независимым запуском фоновых сервисов. `boot:test` 3/3 PASS.
+- Dev-прототип теперь проходит gate на отдельной синтетической SQLite:
+  тестовая миграция, FK/integrity, fallback темы, безопасный экран ошибки и
+  Retry. Презентация не импортирует БД; 5 dev boot тестов проходят, включая
+  повторное открытие файловой SQLite и отказ при пропавшей таблице-маркере.
+  Это не production schema или данные клиентов. После предыдущего изменения
+  общий suite 69/69, typecheck, lint, arch/source/secrets checks и Android
+  JS bundle прошли. На подключённом Android Expo Go после force-stop и
+  повторного открытия dev-ссылки снова показал вкладки прототипа; первый
+  intent не удержал приложение на переднем плане. Это только ограниченный
+  cold-start smoke в Expo Go.
+- Реальные workspace/Settings adapters, production schema и Android
+  native Debug/Release, warm/process-death smoke ещё отсутствуют; F03 —
+  `PARTIAL / NOT DONE`.
+  [Подробности F03](adr/F03_BOOT_CANDIDATE.md).
+
+## 2026-10-15 — F07 кандидат каталога тем
+
+- Сгенерирован runtime-снимок из исходного `theme-catalog.v1.json`: девять тем,
+  27 разрешённых акцентов, SHA-256 источника в файле. Добавлен чистый
+  TypeScript resolver с безопасным fallback и тесты 27/27 сочетаний.
+- `theme:check`, `theme:test`, lint, typecheck и архитектурный scan проходят.
+  Сохранение preference, полные semantic roles и Android/UI QA не реализованы;
+  F07 — `PARTIAL / NOT DONE`. [Подробности F07](adr/F07_THEME_CANDIDATE.md).
+
+## 2026-10-15 — F02 частичная автоматизация
+
+- Добавлены TypeScript AST-проверка границ модулей и шесть контрактных тестов:
+  `npm run arch:check`, `npm run arch:test` и общий typecheck проходят локально.
+- Подготовлен PR workflow для locked install, TypeScript, архитектурных правил,
+  ESLint, ограниченного high-confidence сканера ключей и Android JS bundle;
+  удалённый GitHub run ещё не проверен.
+- F02 остаётся `PARTIAL / NOT DONE`: нет CI SQLite integration и native
+  build smoke, полного security scan и обязательного branch protection.
+  [Подробности F02](adr/F02_CHECKS_CANDIDATE.md).
+
+## 2026-10-15 — F01 кандидат основного мобильного проекта
+
+- В `apps/mobile` создан отдельный Expo/TypeScript проект по архитектурным
+  папкам. Он показывает диагностический F01 экран, а не утверждённый UI.
+- Установлен exact lockfile; повторный `npm ci`, TypeScript strict,
+  Expo Doctor 21/21 и Android JS
+  bundle проходят. На подключённом Android 16 в Expo Go подтверждён экран
+  «Основной проект запущен» через ADB UI tree.
+- `npm run mobile` теперь открывает **основной проект**; R07 сохранён как
+  `npm run mobile:sqlite`. После исправления peer-версии React Navigation
+  повторные проверки проходят. Native Debug/Release APK заблокирован локальным
+  Gradle resolver для foojay plugin (`SocketException: Permission denied` у
+  JVM при обращении к Maven); dependency-security triage
+  и формальное закрытие S02/R07 открыты. [Детали F01](adr/F01_STACK_CANDIDATE.md).
+
+## 2026-10-15 — R01 установленный Android APK
+
+- На подключённом телефоне read-only проверено `com.fitcoach.app` 2.0.0,
+  `versionCode=128`; это не эталонный build120. `apksigner` подтвердил v2
+  подпись и зафиксировал SHA-256 сертификата в
+  [R01 evidence](spikes/R01_ANDROID_IDENTITY.md).
+- Кандидатного APK/сертификата нет: `can/cannot overlay` пока не определено,
+  установку/миграцию не запускали. Для этой установки нужен код **выше 128**,
+  даже если backlog указывает общий минимум `>120`.
+
+## 2026-10-15 — S02 физическая структура модулей (исторический снимок до F01)
+
+- Создан документационный каркас `apps/mobile/src` по Architecture Design §4/§10:
+  AppShell, feature owners, cross-module workflows, read models и shared
+  technical layer. Границы и запрет прямых импортов зафиксированы в
+  [описании структуры](../apps/mobile/src/README.md).
+- Это ещё не Expo runtime: dependency lock, production DDL и UI approval gates
+  открыты. `npm run mobile` по-прежнему запускает только SQLite spike.
+- При следующей сверке Architecture Design устранены остаточные нормы о
+  четырёх root-пунктах и замороженном build120-визуале Главной в MD/HTML;
+  действуют Product §§53–56. Новый manifest SHA-256:
+  `b1d3a6e0cef468ef40919287e12f7dffc869f9a6d2961e6274f7acb26c09045f`.
+  Ревизия S02 остаётся `READY_FOR_REVIEW`.
+
+## 2026-10-15 — S02 коррекция источника
+
+- С разрешения владельца исправлены 12 известных устаревших фрагментов Stage 3/4,
+  включая TypeScript `SafeRoute`, и ошибочная ссылка `TECH T08` в `R08`.
+  Product Contract не менялся. История до/после записана в
+  `00-S02_REVISION_LOG.md` пакета и [S02 audit](STAGE_SYNC_AUDIT.md).
+- Второй тематический проход по 20 feature-spec выявил и исправил старый
+  визуал Главной в Feature 14/15 и тип стартового раздела в Feature 16;
+  [матрица результатов](S02_FEATURE_REVIEW.md) отделяет эту проверку от полной приёмки.
+- Тогда был обновлён `MANIFEST_SHA256.json`: 73 файла, SHA-256
+  `12cf46ad3b4ae5047da14eb04e1799768a814586827f8ba6f9a66b239f20d357`.
+  `source:verify`, `source:stage-audit` и TypeScript typecheck проходят.
+- `S02` остаётся `READY_FOR_REVIEW`, не `DONE`: автоматическая проверка не
+  заменяет ручную семантическую ревизию всех 20 feature-спецификаций.
+
+## 2026-10-15 — R08 navigation spike на телефоне
+
+- Создан отдельный TypeScript/Expo React Navigation spike с тремя trainer tabs,
+  четырьмя client controls, Settings и Bell как самостоятельными маршрутами.
+- TypeScript, 5/5 тестов SafeRoute, Expo Doctor 21/21 и Android bundle проходят.
+  На Android 16 в Expo Go проверены cold/warm resume, Back, сохранение
+  `client-a/Statistics`, fallback для удалённого ID и отсутствие remount от
+  `dataRevision`. Подробности: [R08 status](spikes/R08_NAVIGATION_STATUS.md).
+- Это `READY_FOR_REVIEW`, не production UI и не custom APK proof; видео и
+  точные Android Debug/Release gates остаются открытыми.
+
+## 2026-10-15 — TypeScript и R07 spike (исторический снимок до F01)
+
+- Все собственные проектные скрипты переведены с `.mjs` на TypeScript strict;
+  `npm run typecheck`, `source:verify` и `source:ui-matrix` проходят.
+- Создан изолированный TypeScript `expo-sqlite` sample для `R07` с проверками
+  транзакций, rollback, ревизий и точечной read-model invalidation.
+- Spike: TypeScript typecheck PASS, Expo Doctor 21/21 PASS, Android Metro bundle
+  PASS под временным Node 24.3.0, Android prebuild PASS.
+- `R07` на подключённом Android 16 в Expo Go 57.0.9: SQLite 3.50.3,
+  `allPassed=true`, 14/14 проверок. Отчёт получен через ADB; статус
+  `DEVICE PASS / READY_FOR_REVIEW`.
+- Custom APK **не собран**: Gradle distribution недоступен по сети. Expo Go
+  не заменяет Debug/Release smoke для `F01`.
+- На этом этапе `npm run mobile` в корне открывал только R07 spike
+  через USB reverse/localhost; основной интерфейс ещё не реализован.
+- Подробности и воспроизводимые команды: [R07 status](spikes/R07_SQLITE_STATUS.md).
+
+## 2026-10-15 — UI gate и внешний legacy reference
+
+- `S03`: добавлен воспроизводимый реестр 43 экранов Atlas v0.7. Ни один экран
+  не объявлен утверждённым; для каждого зафиксированы owner, Product refs,
+  действия/состояния и отсутствующие dark/light goldens.
+- Пять дополнительных элементов `screen-registry.json`, отсутствующих в таблице
+  Atlas v0.7, отделены как supplemental и не повышены до screen approval.
+- `S04`: branch/tag/commit build120 повторно проверены через remote refs без
+  клонирования в новый проект. Старый remote не добавлен в Git-конфигурацию.
+- Реальные backup/SQLite fixtures не предоставлены; их отсутствие и правила
+  redaction зафиксированы. `R01/R02` по этой причине ещё не выполнены.
+
+## 2026-10-14 — чистый старт
+
+- Создан новый независимый Git-репозиторий `E:\ProjectFitCoach\FitCoach_3`.
+- Локальные клоны и worktree устаревшего FitCoach 2.0 удалены по указанию владельца.
+- Код 2.0 не переносился.
+- `S00`: источник истины, hashes и статусы зафиксированы; автоматическая проверка
+  manifest добавлена.
+- `S01`: первичная карта конфликтов build120 → 3.0 зафиксирована.
+- Runtime-код приложения, зависимости и production schema ещё не создавались.
+
+## Следующий безопасный шаг
+
+Получить безопасные inputs для `R01/R02`; завершить ручную ревизию `S02` и закрыть
+native build gate для `F01/R08`. До приёмки `F01` не объявлять закреплённые
+версии Expo/RN/TypeScript утверждённым стеком;
+до `D01` не объявлять reference SQL production-схемой.
+
+## Не пройдено
+
+- Android signing/overlay.
+- Реальная миграция и восстановление.
+- Custom Android Debug/Release build, device smoke и profiling; Expo Go spikes
+  R07/R08 не заменяют эту проверку.
+- Визуальное утверждение экранов.
+- Production release.
+

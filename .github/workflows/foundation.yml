@@ -1,0 +1,44 @@
+name: Foundation checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  static-and-bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.3.0
+      - name: Install locked dependencies
+        run: |
+          npm ci
+          npm ci --prefix apps/mobile
+          npm ci --prefix spikes/sqlite
+          npm ci --prefix spikes/navigation
+      - name: TypeScript strict
+        run: |
+          npm run typecheck
+          npm --prefix spikes/sqlite run typecheck
+          npm --prefix spikes/navigation run typecheck
+      - name: ESLint
+        run: npm run lint
+      - name: Foundation contracts, including real SQLite integration
+        run: npm run test:foundation
+      - name: Architecture graph and generated theme catalog
+        run: |
+          npm run arch:check
+          npm run theme:check
+      - name: High-confidence credential and file guard
+        run: npm run secrets:check
+      - name: Expo dependency health
+        run: npm --prefix apps/mobile run doctor
+      - name: Android JavaScript bundle
+        run: npm --prefix apps/mobile run android:bundle

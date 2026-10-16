@@ -1,0 +1,1825 @@
+{
+  "schemaVersion": "1.0",
+  "generated": "2026-10-15",
+  "task": "S03",
+  "source": {
+    "atlas": "05-UI-UX/SCREEN_ATLAS_SPECIFICATIONS_SYNCED.md",
+    "registry": "05-UI-UX/screen-registry.json"
+  },
+  "status": "MAP_COMPLETE_SCREEN_APPROVALS_PENDING",
+  "summary": {
+    "atlasEntries": 43,
+    "approvedScreens": 0,
+    "proposedScreens": 43,
+    "missingDarkGoldens": 43,
+    "missingLightGoldens": 43,
+    "supplementalRegistryEntries": 5
+  },
+  "screens": [
+    {
+      "order": 1,
+      "id": "roster",
+      "group": "01 · Главная оболочка",
+      "name": "Клиенты",
+      "productRefs": "§§7,20,53.1",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Открыть клиента, поиск, сортировка, Today-фильтр, новая карточка, emoji",
+        "states": "Пустой список; Пустой поиск; Нет занятий сегодня; Ошибка локального запроса",
+        "notes": "Поиск не включает анкеты, диагнозы и тренерские заметки; LastOpened ≠ updatedAt. При поиске Birthday/Recent секции не приоритизируются."
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 2,
+      "id": "calendar",
+      "group": "01 · Главная оболочка",
+      "name": "Календарь",
+      "productRefs": "§§13,22.1.4,48.39,53.1",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Смена недели, открытие Appointment, создание записи, календарные локальные настройки",
+        "states": "Нет записей; Пересечения; Копирование недели; Запрет изменения завершённой записи",
+        "notes": "Сохранённые записи следующей недели нельзя терять при копировании. Calendar не является источником Workout facts."
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 3,
+      "id": "archive-clients",
+      "group": "01 · Главная оболочка",
+      "name": "Архив клиентов",
+      "productRefs": "§15,53.1",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Поиск, просмотр архива, восстановление, удаление с подтверждением",
+        "states": "Пустой архив; Нет результата поиска; Ошибка восстановления",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 4,
+      "id": "settings-drawer",
+      "group": "01 · Главная оболочка",
+      "name": "Боковое меню",
+      "productRefs": "§§18,53.1,56",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Навигация в разделы настроек, закрытие Back/нажатием вне меню",
+        "states": "Разрешения Android; Большой шрифт; Клавиатура; Возврат фокуса",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 5,
+      "id": "notifications",
+      "group": "01 · Главная оболочка",
+      "name": "Центр уведомлений",
+      "productRefs": "§§53.2,54",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Открытие записи отмечает её прочитанной; swipe-dismiss, всё прочитано, настройки",
+        "states": "Пусто; Нет Android-разрешения; Ошибка записи прочтения; Длительная история",
+        "notes": "В браузерном прототипе доступна кнопка × как эквивалент свайпа для демонстрации. Badge только непрочитанные, не непрочитанные + нерешённые."
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 6,
+      "id": "notification-settings",
+      "group": "01 · Главная оболочка",
+      "name": "Настройки уведомлений",
+      "productRefs": "§§41–45,54",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Настройка напоминаний, тихих часов, срока хранения",
+        "states": "Permission denied; Device exact alarm unavailable; Ошибка сохранения",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 7,
+      "id": "themes",
+      "group": "01 · Главная оболочка",
+      "name": "Каталог оформления",
+      "productRefs": "§§55–56",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Выбрать тему, выбрать совместимый акцент, мгновенный preview",
+        "states": "Несовместимый акцент; Сохранение настройки; TalkBack и font scale",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 8,
+      "id": "client-new",
+      "group": "02 · Клиент",
+      "name": "Создать карточку",
+      "productRefs": "§§10,22",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Проверка имени, ошибки полей, Recovery Draft, отмена, создание",
+        "states": "Пустое имя; Введённая ошибка; Незавершённая анкета; Несохранённый черновик",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 9,
+      "id": "client-edit",
+      "group": "02 · Клиент",
+      "name": "Редактировать клиента",
+      "productRefs": "§§10,22",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Сохранение, отмена, конфликт, восстановление черновика",
+        "states": "Валидность; Дублирование действия; Конфликт ревизии",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 10,
+      "id": "home",
+      "group": "02 · Клиент",
+      "name": "Главная клиента",
+      "productRefs": "§§10,22,49,51,53.4",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Переход к питанию, рабочим сведениям, учёту занятий и редактированию",
+        "states": "Нет данных по КБЖУ; Нет замеров; Ошибка ledger; Смена клиента",
+        "notes": "Значения демонстрационные. Показатели и порядок блоков — визуальный кандидат; отдельное визуальное утверждение обязательно."
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 11,
+      "id": "client-more",
+      "group": "02 · Клиент",
+      "name": "Меню «Ещё»",
+      "productRefs": "§§48.86.39,50,53.3",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Навигация на три собственных маршрута, возвращение в More",
+        "states": "Открытие Back; Восстановление маршрута",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 12,
+      "id": "questionnaire",
+      "group": "02 · Клиент",
+      "name": "Анкета клиента",
+      "productRefs": "§§23–27,53.3",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Изменить ответы, показать required и conditional, история схемы",
+        "states": "Не все required; Старая опубликованная версия; Ошибка сохранения",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 13,
+      "id": "client-archive",
+      "group": "02 · Клиент",
+      "name": "Архив тренировок",
+      "productRefs": "§50.1–50.3",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "История занятий, архив программ, восстановление, два вида удаления",
+        "states": "Нет архива; История без исходного плана; Конфликт владения",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 14,
+      "id": "archive-program",
+      "group": "02 · Клиент",
+      "name": "Архивная программа",
+      "productRefs": "§§50.2–50.3",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Restore, Delete plan only, Delete plan + facts, cancel",
+        "states": "Нет связанной программы; Частично восстановленные данные запрещены",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 15,
+      "id": "credits",
+      "group": "02 · Клиент",
+      "name": "Абонемент и занятия",
+      "productRefs": "§§22.1.4,48.35–48.39",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Пакет, баланс, коррекция проведённой записи, отказ от автоматического списания",
+        "states": "Недостаточно credits; External/Untracked; Ошибка ledger transaction",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 16,
+      "id": "appointment",
+      "group": "03 · Календарь",
+      "name": "Запись в календаре",
+      "productRefs": "§§13,22.1.4",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Создать/редактировать, отменить, обозначить завершение и финансовый исход",
+        "states": "Конфликт времени; Уже занятый слот; Нет credits; Клиент архивирован",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 17,
+      "id": "appointment-outcome",
+      "group": "03 · Календарь",
+      "name": "Исход занятия",
+      "productRefs": "§§22.1.4,48.40",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Зафиксировать фактический исход, транзакционный ledger, исправление клиента отдельной командой",
+        "states": "Отказ от решения; Ошибка commit; Повторный запуск",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 18,
+      "id": "calendar-settings",
+      "group": "03 · Календарь",
+      "name": "Настройки календаря",
+      "productRefs": "§§13,18.7",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Интервал сетки, отображение дней, настройки расписания",
+        "states": "Невалидный интервал; График вне диапазона",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 19,
+      "id": "training-library",
+      "group": "04 · Тренировки",
+      "name": "Программы клиента",
+      "productRefs": "§§48.1–48.3,53.3",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Выбрать, создать, копировать, архивировать программу",
+        "states": "Нет программ; Шаблон; Совместная программа; Ошибка чтения",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 20,
+      "id": "training-choice",
+      "group": "04 · Тренировки",
+      "name": "Выбрать конструктор",
+      "productRefs": "§48.2",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Выбор Simple/Advanced, Back без черновика",
+        "states": "Отмена, возврат к библиотеке",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 21,
+      "id": "training-simple",
+      "group": "04 · Тренировки",
+      "name": "Простой конструктор",
+      "productRefs": "§§48.2,48.5.7",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Добавить, удалить, переместить упражнения; редактор недели; conflict preview; atomic save",
+        "states": "Есть выполненные факты; Индивидуальное исключение; Отмена; SQLite rollback",
+        "notes": "Структурная правка не удаляет выполненные set facts, не создаёт новую global version без реальной операции All workouts."
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 22,
+      "id": "training-advanced",
+      "group": "04 · Тренировки",
+      "name": "Расширенный конструктор",
+      "productRefs": "§§48.2–48.4,48.6",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Переключение циклов/недель, reorder, participants, copy, save/cancel",
+        "states": "Большая программа; Конфликт общей структуры; Сброс скролла запрещён",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 23,
+      "id": "workout",
+      "group": "04 · Тренировки",
+      "name": "Дневник тренировки",
+      "productRefs": "§§48.51–48.84",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Кг/повторы, тип подхода, предыдущий результат, таймер, заметки, сохранение фактов",
+        "states": "Keyboard; Ошибка SQLite; History correction; Режим auto confirm",
+        "notes": "Отдельную обязательную колонку подтверждения подхода по умолчанию не показываем; типы и инвентарь полей — по Product §48."
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 24,
+      "id": "training-matrix",
+      "group": "04 · Тренировки",
+      "name": "Матрица недель",
+      "productRefs": "§§48.3–48.5.7",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Выбор периода/версии, скролл двух осей, drill-down, правка исторического факта",
+        "states": "Большая матрица; Пустая неделя; Разные версии; Некорректный viewport",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 25,
+      "id": "training-history",
+      "group": "04 · Тренировки",
+      "name": "История занятий",
+      "productRefs": "§§48.85,50",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Фильтр, открытие занятия, исправление единичного факта",
+        "states": "История без плана; Полное удаление конкретных результатов",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 26,
+      "id": "client-stats",
+      "group": "04 · Тренировки",
+      "name": "Статистика клиента",
+      "productRefs": "§48.86.39",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Фильтр программ/мезоциклов, графики, drill-down",
+        "states": "Нет выполнений; Нет данных в фильтре; Нет чужих клиентов",
+        "notes": "В Product утверждены четыре числовые карточки; показатели в примере иллюстративные, сверять точные имена метрик с §48.86."
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 27,
+      "id": "exercise-catalog",
+      "group": "05 · Справочники",
+      "name": "Каталог упражнений",
+      "productRefs": "§§29–39",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Поиск, фильтрация, детальный просмотр, создание своего",
+        "states": "Нет совпадений; Категория обязательна при создании",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 28,
+      "id": "exercise-detail",
+      "group": "05 · Справочники",
+      "name": "Детали упражнения",
+      "productRefs": "§§31–39,48.86.19",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Информация, история, прогресс, тип показателей",
+        "states": "Нет истории; Изменена категория своего упражнения",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 29,
+      "id": "exercise-new",
+      "group": "05 · Справочники",
+      "name": "Новое упражнение",
+      "productRefs": "§§29–39",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Валидация категории, создание, отмена",
+        "states": "Не заполнена категория; Уже есть упражнение",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 30,
+      "id": "nutrition-diary",
+      "group": "06 · Питание",
+      "name": "Дневник питания",
+      "productRefs": "§§49.1–49.7,49.22",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Добавить продукт/рецепт, поправить порцию, вода, дата",
+        "states": "Нет пищевых записей; Только вода; Исторические значения продукта",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 31,
+      "id": "nutrition-goals",
+      "group": "06 · Питание",
+      "name": "Расчёт и цели КБЖУ",
+      "productRefs": "§§49.8–49.12",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Ввод независимых min/max, effective date, дни недели, override",
+        "states": "Min больше max; Цели не согласованы по энергии; Ошибка сохранения",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 32,
+      "id": "nutrition-products",
+      "group": "06 · Питание",
+      "name": "Каталог продуктов",
+      "productRefs": "§§49.1–49.7",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Поиск, порция, снимок нутриентов, добавление в конкретный приём пищи",
+        "states": "Нет продукта; Неполные сведения; Повторное добавление",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 33,
+      "id": "nutrition-recipes",
+      "group": "06 · Питание",
+      "name": "Рецепты",
+      "productRefs": "§49.4–49.7",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Создание/редактирование, добавление блюда, снимок состава",
+        "states": "Пустой рецепт; Рецепт изменён после записи",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 34,
+      "id": "nutrition-stats",
+      "group": "06 · Питание",
+      "name": "Статистика питания",
+      "productRefs": "§§49.19–49.24",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Выбор периода, записи пищи, коридоры на дату, drill-down",
+        "states": "Нет пищевых записей; Есть только вода; Неполный день",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 35,
+      "id": "measurements",
+      "group": "06 · Питание",
+      "name": "Замеры",
+      "productRefs": "§§10.13.1,49.17–49.18",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Добавить замер, изменить, удалить, primary для дня",
+        "states": "Несколько замеров за день; Исправление истории; Нет замеров",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 36,
+      "id": "questionnaire-builder",
+      "group": "07 · Системные разделы",
+      "name": "Конструктор анкеты",
+      "productRefs": "§§23,25,27",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Редактировать черновик, Drag/reorder, публикация версии, совместимость старых ответов",
+        "states": "Старая схема; Незаполненный обязательный ответ; Отмена изменений",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 37,
+      "id": "preferences",
+      "group": "07 · Системные разделы",
+      "name": "Настройки интерфейса",
+      "productRefs": "§§18,20.8,56",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Изменение presentation prefs без remount, reset с подтверждением",
+        "states": "Отмена reset; Меню из шести разделов",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 38,
+      "id": "backup",
+      "group": "07 · Системные разделы",
+      "name": "Резервное копирование",
+      "productRefs": "§46",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Ручной экспорт, сохранение места, автокопии, ошибки каталога",
+        "states": "Нет разрешения на папку; Сбой места хранения; Нарушена целостность",
+        "notes": ".atbackup самодостаточный SQLite; не выдавать файл за зашифрованный, если это не так."
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 39,
+      "id": "restore",
+      "group": "07 · Системные разделы",
+      "name": "Восстановление базы",
+      "productRefs": "§§46.5–46.17",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Выбор файла, валидация, staging, подтверждение, rollback",
+        "states": "Сбой integrity; Недоступный файл; Версия несовместима; Прерывание",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 40,
+      "id": "import",
+      "group": "07 · Системные разделы",
+      "name": "Импорт данных",
+      "productRefs": "§46 и границы §48",
+      "atlasSourceStatus": "ТРЕБУЕТ ПРОДУКТОВОЙ СВЕРКИ",
+      "registrySourceStatus": "ТРЕБУЕТ ПРОДУКТОВОЙ СВЕРКИ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Импорт и preview только для утверждённых сценариев",
+        "states": "Неразобранный формат; Ошибка привязки результатов",
+        "notes": "Из отдельного Stage4 §19 нельзя автоматически выводить подтверждение полноценного Smart Import текст/Excel в V1."
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "REQUIRED"
+    },
+    {
+      "order": 41,
+      "id": "boot-error",
+      "group": "08 · Системные состояния",
+      "name": "Ошибка запуска",
+      "productRefs": "§2.2",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Повторить безопасную инициализацию, не открывать полурабочую оболочку",
+        "states": "SQLite corrupt; Недоступный файл; Ошибка миграции",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 42,
+      "id": "empty-state",
+      "group": "08 · Системные состояния",
+      "name": "Пустые и ошибочные состояния",
+      "productRefs": "§§2,7,10",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Состояния загрузки, пустоты, фильтра, background error",
+        "states": "Принудительный remount запрещён",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    },
+    {
+      "order": 43,
+      "id": "archived-client",
+      "group": "02 · Клиент",
+      "name": "Архивная карточка",
+      "productRefs": "§15",
+      "atlasSourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "PROPOSED",
+      "approvalOwner": "PRODUCT_OWNER",
+      "approvalEvidence": "MISSING",
+      "goldens": {
+        "darkAndroid": "MISSING",
+        "lightAndroid": "MISSING",
+        "accentMatrix9x3": "MISSING"
+      },
+      "reviewInputs": {
+        "actions": "Восстановить, отменить или удалить с подтверждением",
+        "states": "Данные не найдены; Ошибка восстановления; Подтверждение навсегда",
+        "notes": ""
+      },
+      "requiredChecks": {
+        "widthsDp": [
+          320,
+          360,
+          390,
+          412
+        ],
+        "fontScale": [
+          1,
+          1.3,
+          1.6
+        ],
+        "longRussianText": "REQUIRED",
+        "localizedDecimalComma": "REQUIRED",
+        "loadingEmptyErrorDirty": "REQUIRED_WHERE_APPLICABLE",
+        "keyboardFocusBackSafeAreaTalkBack": "REQUIRED",
+        "touchTargetMinDp": 48
+      },
+      "productScopeReview": "NOT_FLAGGED_BY_ATLAS"
+    }
+  ],
+  "supplementalRegistryEntries": [
+    {
+      "id": "calendar-copy-week",
+      "group": "03 · Календарь",
+      "name": "Копирование недели",
+      "productRefs": "§13.1–13.23",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "REGISTRY_ONLY_NOT_ATLAS_V0_7"
+    },
+    {
+      "id": "training-conflicts",
+      "group": "04 · Тренировки",
+      "name": "Конфликты изменений",
+      "productRefs": "§48.5.7",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "REGISTRY_ONLY_NOT_ATLAS_V0_7"
+    },
+    {
+      "id": "nutrition-serving",
+      "group": "06 · Питание",
+      "name": "Порция продукта",
+      "productRefs": "§49.2–49.5",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "REGISTRY_ONLY_NOT_ATLAS_V0_7"
+    },
+    {
+      "id": "nutrition-product-new",
+      "group": "06 · Питание",
+      "name": "Новый продукт",
+      "productRefs": "§49.1–49.5",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "REGISTRY_ONLY_NOT_ATLAS_V0_7"
+    },
+    {
+      "id": "nutrition-recipe-editor",
+      "group": "06 · Питание",
+      "name": "Редактор рецепта",
+      "productRefs": "§49.3–49.7",
+      "registrySourceStatus": "ДИЗАЙН-КАНДИДАТ",
+      "screenStatus": "REGISTRY_ONLY_NOT_ATLAS_V0_7"
+    }
+  ]
+}

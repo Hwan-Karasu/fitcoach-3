@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "FitCoach Navigation R08 Spike",
+    "slug": "fitcoach-r08-navigation-spike",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "android": {
+      "package": "com.fitcoach.r08navigation"
+    },
+    "plugins": ["expo-sqlite"],
+    "platforms": ["android"]
+  }
+}

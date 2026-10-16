@@ -1,0 +1,17 @@
+{
+  "clients": { "count": 2, "sha256": "b211631dae8cfa4c191e33f91107dba29b5cff732655f9e8a3774abe8d7e5bca" },
+  "training_programs": { "count": 7, "sha256": "ab462574ec5ecd1baac275e01bf8924dd29fc855363370fecda731165e83b112" },
+  "training_weeks": { "count": 6, "sha256": "d8cab14eabbcc81cf45dbf5e0cd572d59d31e1442602667e75fa6cf2ed691a83" },
+  "training_workouts": { "count": 2, "sha256": "837e0aeefefa5af63903da8eac5e788e4631c10f83c13d9fb3fb182fa2b12722" },
+  "training_exercises": { "count": 2, "sha256": "c99ea64785cfc8eae66a31b5dce984f5cdc968079c03a524c578774376dc3086" },
+  "training_sessions": { "count": 4, "sha256": "3ff26057c6a8bcc84c4bd6a9635e675e8af162dcd6b430091e3c5014f4825a11" },
+  "training_session_exercises": { "count": 4, "sha256": "a6f9eeab48cd336cc4c92041d7a383f280f14215e207cf798541c138c7efe445" },
+  "training_session_sets": { "count": 6, "sha256": "aa799df460164ad73f8b2512e56cae53f2ed6471c7901bfa75ecf72fce0fdc7b" },
+  "training_exercise_history": { "count": 1, "sha256": "e7c31d7530d4b6d91fd12d70297c2845b38f995fb28a9317c8636d0e48512437" },
+  "training_archive_entries": { "count": 1, "sha256": "b15d2bab17c7b8c483357579e94d0729ee78a5b47e6fdcedbb8e58dd2ccea22f" },
+  "calendar_appointments": { "count": 1, "sha256": "72d77324e492f8d27a4ef50a0765271a0b1bd327ed200462534e2c314d3fcae0" },
+  "food_products": { "count": 1, "sha256": "f59aad5afbbc1a242594692e2aa5bd71affbf9bfb6ebe2115453f4847bdfac29" },
+  "nutrition_recipes": { "count": 1, "sha256": "094c0a309abf5a57f8df169b6e7338c96e014400329311205eb6ab26ea9e2cae" },
+  "nutrition_days": { "count": 4, "sha256": "7fb67aad9197d3329c22c6eabf417f32fa8b22239adec50c46f89c1cc17d7de5" },
+  "client_measurements": { "count": 2, "sha256": "4683bc81eaf9f4f97f23fefabc568d5ba2165226056045939dabf83c64c07f1f" }
+}

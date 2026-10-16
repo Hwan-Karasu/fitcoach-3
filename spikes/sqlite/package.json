@@ -1,0 +1,27 @@
+{
+  "name": "@fitcoach/r07-sqlite-spike",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "doctor": "expo-doctor",
+    "mobile": "node --experimental-strip-types ./scripts/mobile.ts",
+    "android": "expo run:android"
+  },
+  "dependencies": {
+    "expo": "~57.0.27",
+    "expo-sqlite": "~57.0.4",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.3.0",
+    "@types/react": "~19.2.2",
+    "babel-preset-expo": "~57.0.12",
+    "expo-doctor": "1.20.4",
+    "node": "24.3.0",
+    "typescript": "6.0.3"
+  }
+}
