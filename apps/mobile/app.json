@@ -8,7 +8,8 @@
       "package": "com.fitcoach.v3dev"
     },
     "plugins": [
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-sharing"
     ],
     "platforms": [
       "android"

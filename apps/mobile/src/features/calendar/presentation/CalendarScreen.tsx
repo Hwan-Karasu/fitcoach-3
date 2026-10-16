@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import * as Sharing from "expo-sharing";
 import { ScrollView } from "react-native-gesture-handler";
+import { captureRef } from "react-native-view-shot";
 import { AppButton, ConfirmDialog, InlineNotice, SelectionChip, StatusTag } from "../../../shared/ui/components/public.ts";
 import { EmptyPanel, SectionHeading } from
   "../../../shared/ui/prototype/ScreenPieces.tsx";
@@ -15,6 +17,7 @@ import { addDays, appointmentLabel, formatMinute, localDateOf, mondayOf, templat
 import { calendarErrorMessage, dayTitle, monthTitle, outcomeTag, useCalendarWeek, useMonthCounts,
   useParticipants, useSessionTypeColors, weekdayShort } from "./calendarPresentation.ts";
 import { MonthGrid } from "./MonthGrid.tsx";
+import { ShareWeekPoster } from "./ShareWeekPoster.tsx";
 import { TimelineGrid, type TimelineHandlers } from "./TimelineGrid.tsx";
 
 export interface OpenAppointmentParams {
@@ -64,6 +67,8 @@ export function CalendarScreen({ repository, participants, onOpenSettings, onOpe
   const [error, setError] = useState<string | null>(null);
   const [clearPreview, setClearPreview] = useState<ClearWeekSummary | null>(null);
   const [busy, setBusy] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const posterRef = useRef<View>(null);
   const monday = mondayOf(selected);
   const days = weekDates(monday);
   const { data, failed, retry } = useCalendarWeek(repository, monday, selected);
@@ -82,6 +87,27 @@ export function CalendarScreen({ repository, participants, onOpenSettings, onOpe
   const timelineHeight = Math.round(Math.min(Math.max(screenHeight - 300, 380), 760));
 
   useEffect(() => { setRange(null); }, [selected, mode]);
+
+  // §13.18: the poster renders off-screen for one frame, is captured and handed to the system share
+  // sheet. Sharing never changes Calendar state.
+  useEffect(() => {
+    if (!sharing) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          if (!(await Sharing.isAvailableAsync())) throw new Error("SHARE_UNAVAILABLE");
+          const uri = await captureRef(posterRef, { format: "png", quality: 1, result: "tmpfile", width: 1080 });
+          await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: "Расписание недели" });
+        } catch {
+          if (!cancelled) setError("Не удалось подготовить картинку недели. Календарь не изменён.");
+        } finally {
+          if (!cancelled) setSharing(false);
+        }
+      })();
+    }, 150);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [sharing]);
 
   const perDay = useMemo(() => {
     const counts = new Map<LocalDate, number>();
@@ -306,6 +332,8 @@ export function CalendarScreen({ repository, participants, onOpenSettings, onOpe
             disabledReason="Сначала скопируйте неделю"
             label={clipboard === null ? "Вставить неделю" : `Вставить неделю (${templateSize(clipboard.template)})`}
             onPress={() => { void paste(); }} />
+          <AppButton variant="secondary" label="Поделиться неделей" busy={sharing} disabled={busy || data === null}
+            onPress={() => { setError(null); setSharing(true); }} />
           <AppButton variant="destructive" label="Очистить неделю" disabled={busy} onPress={() => { void askClear(); }} />
         </View>
       ) : null}
@@ -367,12 +395,19 @@ export function CalendarScreen({ repository, participants, onOpenSettings, onOpe
         ].join("\n")}
         confirmLabel="Очистить неделю"
         onCancel={() => setClearPreview(null)} onConfirm={() => { void confirmClear(); }} />
+      {sharing && data !== null ? (
+        <View pointerEvents="none" style={styles.offscreen}>
+          <ShareWeekPoster posterRef={posterRef} title={`Расписание: ${weekTitle(monday)}`} dates={visibleDays}
+            window={dayWindow} appointments={data.appointments} intervals={data.intervals} people={people} />
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   content: { padding: 16, gap: 12, paddingBottom: 32 },
+  offscreen: { position: "absolute", left: -10000, top: 0 },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   counters: { flex: 1, gap: 2 },
   counter: { fontSize: 14, lineHeight: 20, fontWeight: "700" },
