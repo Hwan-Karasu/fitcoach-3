@@ -31,6 +31,8 @@ export interface Appointment {
   /** Snapshot taken when the type was chosen; later template edits do not rewrite it. */
   readonly sessionTypeName: string;
   readonly note: string | null;
+  /** «Записать без списания» (§22.1.4): never reserves or uses a credit. */
+  readonly creditBypass: boolean;
   readonly lifecycle: AppointmentLifecycle;
   readonly revision: number;
 }
@@ -67,7 +69,11 @@ export interface AppointmentInput {
   readonly guestName: string | null;
   readonly sessionTypeId: string;
   readonly note: string | null;
+  readonly creditBypass?: boolean;
 }
+
+/** What to do with credits when a client appointment leaves the active schedule (§22.1.4). */
+export type CancelSettlement = "RETURN" | "CHARGE";
 
 export interface IntervalInput {
   readonly kind: IntervalKind;

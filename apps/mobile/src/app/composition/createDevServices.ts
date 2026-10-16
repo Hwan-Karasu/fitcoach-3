@@ -1,6 +1,9 @@
 import { runF04Probe, type F04ProbeReport } from "../diagnostics/runF04Probe.ts";
 import { openExpoSqliteConnection } from "../../shared/db/ExpoSqliteConnection.ts";
 import { SharedSqliteDatabase } from "../../shared/db/SharedSqliteDatabase.ts";
+import { DevAccountingRepository, devAccountingCalendarHook, devAccountingClientDeletionParticipant } from
+  "../../features/accounting/data/DevAccountingRepository.ts";
+import type { AccountingRepositoryPort } from "../../features/accounting/public.ts";
 import { DevCalendarRepository, devCalendarClientDeletionParticipant } from
   "../../features/calendar/data/DevCalendarRepository.ts";
 import type { CalendarParticipantDirectoryPort, CalendarRepositoryPort } from
@@ -20,6 +23,9 @@ export interface DevServices {
   readonly clients: DevClientServices;
   readonly calendar: CalendarRepositoryPort;
   readonly calendarParticipants: CalendarParticipantDirectoryPort;
+  readonly accounting: AccountingRepositoryPort;
+  /** Active session types that can consume a credit, for SESSION_TYPE packs. */
+  readonly listCreditSessionTypes: () => Promise<readonly Readonly<{ id: string; name: string }>[]>;
 }
 
 /** Clients serve only identity/display fields to Calendar, through their public ports. */
@@ -36,13 +42,17 @@ function participantDirectory(clients: ClientRosterPort & ClientChangePort): Cal
   };
 }
 
-export function createDevServices(clients: DevClientServices,
-  calendar: CalendarRepositoryPort): DevServices {
+export function createDevServices(clients: DevClientServices, calendar: CalendarRepositoryPort,
+  accounting: AccountingRepositoryPort): DevServices {
   return {
     runSqliteProbe: () => runF04Probe(() => openExpoSqliteConnection("fitcoach_f04_probe.db")),
     clients,
     calendar,
     calendarParticipants: participantDirectory(clients),
+    accounting,
+    listCreditSessionTypes: async () => (await calendar.listSessionTypes())
+      .filter((type) => type.requiresCredit && !type.archived)
+      .map((type) => ({ id: type.id, name: type.name })),
   };
 }
 
@@ -52,16 +62,20 @@ export interface DevRuntime {
 }
 
 export function createDevRuntime(): DevRuntime {
-  // Clients and Calendar share one dev file so a client delete commits with its §15.8 effects.
+  // Clients, Calendar and Accounting share one dev file: a client delete, a booking and its
+  // reservation each commit as one transaction across owners.
   const database = new SharedSqliteDatabase(() => openExpoSqliteConnection("fitcoach_f04_clients_dev.db"));
   const clients = new DevClientRepository(database, DEV_WORKSPACE_ID,
-    [devCalendarClientDeletionParticipant]);
-  const calendar = new DevCalendarRepository(database, DEV_WORKSPACE_ID);
+    [devAccountingClientDeletionParticipant, devCalendarClientDeletionParticipant]);
+  const calendar = new DevCalendarRepository(database, DEV_WORKSPACE_ID, devAccountingCalendarHook);
+  const accounting = new DevAccountingRepository(database, DEV_WORKSPACE_ID);
+  // Calendar commands move reservations inside their own transactions.
+  calendar.subscribeCommittedChanges(() => accounting.notifyExternalChange());
   return {
     boot: new BootCoordinator(createDevBootDependencies(
       () => openExpoSqliteConnection("fitcoach_f03_dev_gate.db"),
-      async () => { await clients.initialize(); await calendar.initialize(); },
+      async () => { await clients.initialize(); await calendar.initialize(); await accounting.initialize(); },
     )),
-    services: createDevServices(clients, calendar),
+    services: createDevServices(clients, calendar, accounting),
   };
 }

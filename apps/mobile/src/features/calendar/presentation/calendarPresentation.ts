@@ -33,6 +33,10 @@ export function calendarErrorMessage(error: unknown): string {
     case "CALENDAR_SESSION_TYPE_UNAVAILABLE": return "Выберите доступный тип занятия.";
     case "CALENDAR_STALE_APPOINTMENT": return "Запись уже изменилась. Откройте её заново.";
     case "CALENDAR_TIME_INVALID": return "Проверьте время: шаг — 30 минут, запись не переходит через полночь.";
+    case "ACCOUNTING_INSUFFICIENT_CREDIT":
+      return "У клиента нет доступных тренировок. Добавьте пакет или включите «Записать без списания».";
+    case "ACCOUNTING_ALREADY_SETTLED":
+      return "Тренировка по записи уже списана: клиента, тип и учёт здесь изменить нельзя.";
     default: return "Не удалось сохранить. Данные календаря не изменены.";
   }
 }

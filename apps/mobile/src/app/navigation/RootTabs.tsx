@@ -3,7 +3,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { StatusBar, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SettingsDrawerPreview } from "../../features/settings/public.ts";
-import type { CalendarParticipantDirectoryPort,
+import type { CalendarCreditPort, CalendarParticipantDirectoryPort,
   CalendarRepositoryPort } from "../../features/calendar/public.ts";
 import type { ClientArchivePort, ClientRepositoryPort,
   ClientRosterPort } from "../../features/clients/public.ts";
@@ -35,6 +35,7 @@ interface RootTabsProps {
   readonly clientLists: ClientListController;
   readonly calendar: CalendarRepositoryPort;
   readonly calendarParticipants: CalendarParticipantDirectoryPort;
+  readonly calendarCredit: CalendarCreditPort;
 }
 
 const Tabs = createBottomTabNavigator<RootTabRoutes>();
@@ -59,6 +60,7 @@ export function RootTabs({
   clientLists,
   calendar,
   calendarParticipants,
+  calendarCredit,
 }: Readonly<RootTabsProps>) {
   const [menuVisible, setMenuVisible] = useState(false);
   const menuButtonRef = useRef<View>(null);
@@ -88,7 +90,8 @@ export function RootTabs({
             readModel={clientLists.active} />}
         </Tabs.Screen>
         <Tabs.Screen name="Calendar" options={{ tabBarLabel: rootTabs.Calendar, tabBarAccessibilityLabel: rootTabs.Calendar, tabBarIcon: ({ color }) => <TabGlyph kind="calendar" color={color} /> }}>
-          {() => <CalendarNavigator repository={calendar} participants={calendarParticipants} />}
+          {() => <CalendarNavigator repository={calendar} participants={calendarParticipants}
+            credit={calendarCredit} />}
         </Tabs.Screen>
         <Tabs.Screen name="Archive" options={{ tabBarLabel: rootTabs.Archive,
           tabBarAccessibilityLabel: archivedCount ? `${rootTabs.Archive}, клиентов в архиве: ${archivedCount}` : rootTabs.Archive,

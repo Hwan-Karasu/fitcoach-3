@@ -207,6 +207,7 @@ export function CalendarScreen({ repository, participants, onOpenSettings, onOpe
             </Text>
             <Text style={[styles.detail, { color: colors.textSecondary }]}>
               {item.row.sessionTypeName}{item.row.guestName ? " · гость" : ""}
+              {item.row.creditBypass ? " · без списания" : ""}
             </Text>
             {item.row.note ? <Text style={[styles.detail, { color: colors.textSecondary }]}>{item.row.note}</Text> : null}
           </View>

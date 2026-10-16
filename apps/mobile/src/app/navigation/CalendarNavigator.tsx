@@ -1,6 +1,7 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { AppointmentEditorScreen, CalendarScreen, CalendarSettingsPreview, IntervalEditorScreen,
-  type CalendarParticipantDirectoryPort, type CalendarRepositoryPort } from "../../features/calendar/public.ts";
+  type CalendarCreditPort, type CalendarParticipantDirectoryPort,
+  type CalendarRepositoryPort } from "../../features/calendar/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 
 type CalendarStackRoutes = {
@@ -12,9 +13,10 @@ type CalendarStackRoutes = {
 
 const Stack = createNativeStackNavigator<CalendarStackRoutes>();
 
-export function CalendarNavigator({ repository, participants }: Readonly<{
+export function CalendarNavigator({ repository, participants, credit }: Readonly<{
   repository: CalendarRepositoryPort;
   participants: CalendarParticipantDirectoryPort;
+  credit: CalendarCreditPort;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -40,7 +42,7 @@ export function CalendarNavigator({ repository, participants }: Readonly<{
       <Stack.Screen name="CalendarAppointment"
         options={({ route }) => ({ title: route.params.appointmentId ? "Запись" : "Новая запись" })}>
         {({ navigation, route }) => <AppointmentEditorScreen repository={repository}
-          participants={participants} appointmentId={route.params.appointmentId}
+          participants={participants} credit={credit} appointmentId={route.params.appointmentId}
           localDate={route.params.localDate} startMinute={route.params.startMinute}
           onClose={() => navigation.goBack()} />}
       </Stack.Screen>

@@ -89,4 +89,10 @@ export const devCalendarCatalog: readonly MigrationStep[] = [{
     )`,
     "CREATE INDEX dev_intervals_day ON dev_calendar_intervals(workspace_id, local_date, start_minute)",
   ],
+}, {
+  version: 2,
+  checksum: "l01-dev-calendar-v2-credit-bypass-20261016",
+  statements: [
+    "ALTER TABLE dev_calendar_appointments ADD COLUMN credit_bypass INTEGER NOT NULL DEFAULT 0 CHECK (credit_bypass IN (0,1))",
+  ],
 }];

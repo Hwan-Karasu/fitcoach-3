@@ -6,9 +6,10 @@ import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvid
 import type { ClientRecord } from "../domain/ClientRepositoryPort.ts";
 import { formatHeightCmX10 } from "../domain/ClientProfileValidation.ts";
 
-export function ClientHomePreview({ client, onEdit, onArchive }: Readonly<{
+export function ClientHomePreview({ client, onEdit, onOpenAccounting, onArchive }: Readonly<{
   client: ClientRecord;
   onEdit: () => void;
+  onOpenAccounting: () => void;
   /** Resolves only after the lifecycle commit; the caller leaves the workspace. */
   onArchive: () => Promise<void>;
 }>) {
@@ -47,8 +48,9 @@ export function ClientHomePreview({ client, onEdit, onArchive }: Readonly<{
       </Text> : null}
       <AppButton variant="secondary" label="Редактировать карточку" onPress={onEdit} />
     </View>
+    <AppButton variant="secondary" label="Абонемент и оплата" onPress={onOpenAccounting} />
     <InlineNotice kind="info">
-      Данные клиента сохранены локально. Питание, тренировки и учёт занятий подключаются отдельными модулями; пустые показатели здесь не заменены нулями.
+      Данные клиента сохранены локально. Питание и тренировки подключаются отдельными модулями; пустые показатели здесь не заменены нулями.
     </InlineNotice>
     {archiveError ? <InlineNotice kind="error">
       Не удалось переместить клиента в архив: карточка изменилась или операция не удалась. Данные не изменены.

@@ -1,4 +1,4 @@
-import type { Appointment, AppointmentInput, CalendarInterval, CalendarSettings, ClearWeekSummary,
+import type { Appointment, AppointmentInput, CalendarInterval, CancelSettlement, CalendarSettings, ClearWeekSummary,
   DaySummary, IntervalInput, LocalDate, PasteResult, SessionType, WeekTemplate } from "./CalendarModel.ts";
 
 /** UI invalidation hint emitted only after commit; SQLite rows stay authoritative. */
@@ -23,8 +23,11 @@ export interface CalendarRepositoryPort {
   createAppointment(input: AppointmentInput): Promise<Appointment>;
   /** Reschedule/edit of a SCHEDULED appointment keeps its stable ID. */
   updateAppointment(id: string, expectedRevision: number, input: AppointmentInput): Promise<Appointment>;
-  /** Removes a SCHEDULED appointment from the active schedule (no credit accounting yet). */
-  cancelAppointment(id: string, expectedRevision: number): Promise<void>;
+  /**
+   * Removes a SCHEDULED appointment from the active schedule; the settlement returns the credit
+   * to the client or charges it. Ignored when no credit is involved.
+   */
+  cancelAppointment(id: string, expectedRevision: number, settlement?: CancelSettlement): Promise<void>;
   createInterval(input: IntervalInput): Promise<CalendarInterval>;
   removeInterval(id: string): Promise<void>;
   copyWeek(monday: LocalDate): Promise<WeekTemplate>;

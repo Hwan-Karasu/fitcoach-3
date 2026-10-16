@@ -3,19 +3,20 @@ import { SharedSqliteDatabase } from "../../../shared/db/SharedSqliteDatabase.ts
 import { UUID_V4_SQL } from "../../../shared/db/SqlIds.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
-import type { Appointment, AppointmentInput, CalendarInterval, CalendarSettings, ClearWeekSummary,
+import type { Appointment, AppointmentInput, CalendarInterval, CalendarSettings, CancelSettlement, ClearWeekSummary,
   DaySummary, IntervalInput, LocalDate, PasteResult, SessionType, SessionTypeCategory,
   WeekTemplate } from "../domain/CalendarModel.ts";
 import type { CalendarCommittedChange, CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
 import { addDays, buildWeekTemplate, isLocalDate, localDateOf, minuteOfDay, validateAppointment,
   validateInterval, validateSettings, weekDates } from "../domain/CalendarRules.ts";
+import type { DevAppointmentAccountingHook, DevBooking } from "./DevAppointmentAccountingHook.ts";
 import { DEV_CALENDAR_LEDGER, devCalendarCatalog } from "./DevCalendarCatalog.ts";
 
 interface AppointmentRow {
   id: string; localDate: string; startMinute: number; durationMinutes: number;
   clientId: string | null; guestName: string | null; participantDeleted: number;
-  sessionTypeId: string; sessionTypeName: string; note: string | null;
-  lifecycle: Appointment["lifecycle"]; revision: number;
+  sessionTypeId: string; sessionTypeName: string; note: string | null; creditBypass: number;
+  requiresCredit: number; lifecycle: Appointment["lifecycle"]; revision: number;
 }
 
 interface SessionTypeRow {
@@ -33,7 +34,8 @@ interface SettingsRow {
 const appointmentColumns = `id, local_date AS localDate, start_minute AS startMinute,
   duration_minutes AS durationMinutes, client_id AS clientId, guest_name AS guestName,
   participant_deleted AS participantDeleted, session_type_id AS sessionTypeId,
-  session_type_name AS sessionTypeName, note, lifecycle, revision`;
+  session_type_name AS sessionTypeName, note, credit_bypass AS creditBypass,
+  session_type_requires_credit AS requiresCredit, lifecycle, revision`;
 
 const intervalColumns = `id, kind, local_date AS localDate, start_minute AS startMinute,
   end_minute AS endMinute`;
@@ -50,7 +52,17 @@ const seedSessionTypes = [
 ] as const;
 
 function toAppointment(row: AppointmentRow): Appointment {
-  return { ...row, participantDeleted: row.participantDeleted === 1 };
+  return { id: row.id, localDate: row.localDate, startMinute: row.startMinute,
+    durationMinutes: row.durationMinutes, clientId: row.clientId, guestName: row.guestName,
+    participantDeleted: row.participantDeleted === 1, sessionTypeId: row.sessionTypeId,
+    sessionTypeName: row.sessionTypeName, note: row.note, creditBypass: row.creditBypass === 1,
+    lifecycle: row.lifecycle, revision: row.revision };
+}
+
+function booking(input: AppointmentInput, requiresCredit: boolean): DevBooking {
+  return { clientId: input.clientId, sessionTypeId: input.sessionTypeId, requiresCredit,
+    bypass: input.creditBypass === true, localDate: input.localDate,
+    endMinute: input.startMinute + input.durationMinutes };
 }
 
 function toSessionType(row: SessionTypeRow): SessionType {
@@ -118,10 +130,12 @@ async function insertAppointment(tx: SqliteStatementPort, workspaceId: string,
   await tx.run(`INSERT INTO dev_calendar_appointments
     (id, workspace_id, local_date, start_minute, duration_minutes, client_id, guest_name,
      participant_deleted, session_type_id, session_type_name, session_type_category,
-     session_type_requires_credit, note, lifecycle, revision, created_at, updated_at, cancelled_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 'SCHEDULED', 1, ?, ?, NULL)`,
+     session_type_requires_credit, note, credit_bypass, lifecycle, revision, created_at, updated_at,
+     cancelled_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, 'SCHEDULED', 1, ?, ?, NULL)`,
   [id, workspaceId, input.localDate, input.startMinute, input.durationMinutes, input.clientId,
-    input.guestName, type.id, type.name, type.category, type.requiresCredit, input.note, now, now]);
+    input.guestName, type.id, type.name, type.category, type.requiresCredit, input.note,
+    input.creditBypass === true ? 1 : 0, now, now]);
   return id;
 }
 
@@ -189,10 +203,13 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
   private readonly database: SharedSqliteDatabase;
   private readonly workspaceId: string;
   private readonly listeners = new Set<(change: CalendarCommittedChange) => void>();
+  private readonly accounting: DevAppointmentAccountingHook | null;
 
-  constructor(database: SharedSqliteDatabase | (() => Promise<SqliteConnectionPort>), workspaceId: string) {
+  constructor(database: SharedSqliteDatabase | (() => Promise<SqliteConnectionPort>), workspaceId: string,
+    accounting: DevAppointmentAccountingHook | null = null) {
     this.database = database instanceof SharedSqliteDatabase ? database : new SharedSqliteDatabase(database);
     this.workspaceId = workspaceId;
+    this.accounting = accounting;
   }
 
   /** The workspace row is created by the clients store, which must initialize first. */
@@ -316,7 +333,11 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       const conflict = await appointmentConflict(tx, this.workspaceId, valid.localDate,
         valid.startMinute, valid.startMinute + valid.durationMinutes, null);
       if (conflict !== null) throw new Error(conflict);
-      return this.appointmentById(tx, await insertAppointment(tx, this.workspaceId, valid, type));
+      const credit = booking(valid, type.requiresCredit === 1);
+      const packId = await this.accounting?.plan(tx, this.workspaceId, credit) ?? null;
+      const id = await insertAppointment(tx, this.workspaceId, valid, type);
+      if (packId !== null) await this.accounting?.reserve(tx, this.workspaceId, id, credit, packId);
+      return this.appointmentById(tx, id);
     });
     this.publish({ dates: [created.localDate] });
     return created;
@@ -346,25 +367,39 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
         valid.startMinute, valid.startMinute + valid.durationMinutes, id);
       if (conflict !== null) throw new Error(conflict);
       const keepSnapshot = type.id === current.sessionTypeId;
+      const currentRequires = (await tx.first<{ r: number }>(`SELECT session_type_requires_credit AS r
+        FROM dev_calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]))?.r === 1;
+      const next = booking(valid, keepSnapshot ? currentRequires : type.requiresCredit === 1);
+      const creditChanged = current.clientId !== valid.clientId || current.sessionTypeId !== valid.sessionTypeId
+        || current.creditBypass !== (valid.creditBypass === true);
+      let packId: string | null = null;
+      if (this.accounting !== null && creditChanged) {
+        await this.accounting.release(tx, this.workspaceId, id);
+        packId = await this.accounting.plan(tx, this.workspaceId, next);
+      } else if (this.accounting !== null && moved) {
+        await this.accounting.move(tx, this.workspaceId, id, next);
+      }
       const result = await tx.run(`UPDATE dev_calendar_appointments SET local_date = ?,
         start_minute = ?, duration_minutes = ?, client_id = ?, guest_name = ?, session_type_id = ?,
         session_type_name = CASE WHEN ? THEN session_type_name ELSE ? END,
         session_type_category = CASE WHEN ? THEN session_type_category ELSE ? END,
         session_type_requires_credit = CASE WHEN ? THEN session_type_requires_credit ELSE ? END,
-        note = ?, revision = revision + 1, updated_at = ?
+        note = ?, credit_bypass = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'SCHEDULED'`,
       [valid.localDate, valid.startMinute, valid.durationMinutes, valid.clientId, valid.guestName,
         type.id, keepSnapshot ? 1 : 0, type.name, keepSnapshot ? 1 : 0, type.category,
-        keepSnapshot ? 1 : 0, type.requiresCredit, valid.note, new Date().toISOString(),
-        this.workspaceId, id, expectedRevision]);
+        keepSnapshot ? 1 : 0, type.requiresCredit, valid.note, valid.creditBypass === true ? 1 : 0,
+        new Date().toISOString(), this.workspaceId, id, expectedRevision]);
       if (result.changes !== 1) throw new Error("CALENDAR_STALE_APPOINTMENT");
+      if (packId !== null) await this.accounting?.reserve(tx, this.workspaceId, id, next, packId);
       return this.appointmentById(tx, id);
     });
     this.publish({ dates: [...new Set([previousDate, updated.localDate])] });
     return updated;
   }
 
-  async cancelAppointment(id: string, expectedRevision: number): Promise<void> {
+  async cancelAppointment(id: string, expectedRevision: number,
+    settlement: CancelSettlement = "RETURN"): Promise<void> {
     let date = "";
     await this.ready().writer.write(async (tx) => {
       const current = await this.appointmentById(tx, id);
@@ -375,6 +410,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
         WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'SCHEDULED'`,
       [now, now, this.workspaceId, id, expectedRevision]);
       if (result.changes !== 1) throw new Error("CALENDAR_STALE_APPOINTMENT");
+      await this.accounting?.cancel(tx, this.workspaceId, id, settlement, now);
     });
     this.publish({ dates: [date] });
   }
@@ -436,7 +472,19 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
           skippedBusy += 1;
           continue;
         }
-        await insertAppointment(tx, this.workspaceId, valid, type);
+        // Credits are recalculated for the new week; a prior bypass is never inherited (§13.15).
+        const credit = booking(valid, type.requiresCredit === 1);
+        let packId: string | null;
+        try { packId = await this.accounting?.plan(tx, this.workspaceId, credit) ?? null; }
+        catch (error) {
+          if (error instanceof Error && error.message === "ACCOUNTING_INSUFFICIENT_CREDIT") {
+            skippedUnavailable += 1;
+            continue;
+          }
+          throw error;
+        }
+        const id = await insertAppointment(tx, this.workspaceId, valid, type);
+        if (packId !== null) await this.accounting?.reserve(tx, this.workspaceId, id, credit, packId);
         inserted += 1;
       }
       for (const entry of template.intervals) {
@@ -470,6 +518,11 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       const counted = await countClearWeek(tx, this.workspaceId, monday, settings);
       const now = new Date().toISOString();
       if (settings.clearPolicy.appointments) {
+        // Bulk clear only releases reservations; it never charges a session (§13.14).
+        const cleared = await tx.all<{ id: string }>(`SELECT id FROM dev_calendar_appointments
+          WHERE workspace_id = ? AND local_date BETWEEN ? AND ? AND lifecycle = 'SCHEDULED'`,
+        [this.workspaceId, monday, sunday]);
+        for (const row of cleared) await this.accounting?.cancel(tx, this.workspaceId, row.id, "RETURN", now);
         await tx.run(`UPDATE dev_calendar_appointments SET lifecycle = 'CANCELLED', cancelled_at = ?,
           revision = revision + 1, updated_at = ?
           WHERE workspace_id = ? AND local_date BETWEEN ? AND ? AND lifecycle = 'SCHEDULED'`,

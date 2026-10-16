@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NotificationsPreview, NotificationSettingsPreview } from "../../features/notifications/public.ts";
 import { SettingsPreview, ThemeCatalogPreview } from "../../features/settings/public.ts";
 import { ClientRosterSettingsScreen } from "../../features/clients/public.ts";
+import { ClientAccountingScreen } from "../../features/accounting/public.ts";
+import { useAccountingReconciler } from "../bootstrap/useAccountingReconciler.ts";
 import { PrototypeThemeProvider, usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { WorkspaceRoutePreview } from "../../shared/ui/prototype/WorkspaceRoutePreview.tsx";
 import { ClientWorkspaceNavigator } from "./ClientWorkspaceNavigator.tsx";
@@ -23,6 +25,7 @@ type RootStackRoutes = {
   Appearance: undefined;
   WorkspaceDev: undefined;
   ClientWorkspace: { clientId: string };
+  ClientAccounting: { clientId: string };
   ClientEditorDev: { clientId: string } | undefined;
   SqliteDev: undefined;
 };
@@ -60,6 +63,7 @@ function ShellNavigator({ services, clientLists }: Readonly<{
               clientLists={clientLists}
               calendar={services.calendar}
               calendarParticipants={services.calendarParticipants}
+              calendarCredit={services.accounting}
             />
           )}
         </Stack.Screen>
@@ -89,7 +93,12 @@ function ShellNavigator({ services, clientLists }: Readonly<{
           {({ navigation, route }) => <ClientWorkspaceNavigator
             clientId={route.params.clientId} repository={services.clients}
             onOpenEdit={(clientId) => navigation.navigate("ClientEditorDev", { clientId })}
+            onOpenAccounting={(clientId) => navigation.navigate("ClientAccounting", { clientId })}
             onClose={() => navigation.goBack()} />}
+        </Stack.Screen>
+        <Stack.Screen name="ClientAccounting" options={{ title: "Абонемент и оплата" }}>
+          {({ route }) => <ClientAccountingScreen clientId={route.params.clientId}
+            repository={services.accounting} listCreditSessionTypes={services.listCreditSessionTypes} />}
         </Stack.Screen>
         <Stack.Screen name="ClientEditorDev" options={{ headerShown: false, gestureEnabled: false }}>
           {({ navigation, route }) => <ClientEditorRoute
@@ -107,14 +116,18 @@ function ShellNavigator({ services, clientLists }: Readonly<{
 export function PrototypeShell({ services, workspaceId }: Readonly<{
   services: DevServices; workspaceId: string;
 }>) {
-  // Created and disposed by the same effect, so Fast Refresh/StrictMode re-runs get a live instance.
-  const [clientLists, setClientLists] = useState<ClientListController | null>(null);
+  const [clientLists] = useState(() => new ClientListController(services.clients, workspaceId));
+  const users = useRef(0);
+  useAccountingReconciler(services.accounting);
   useEffect(() => {
-    const controller = new ClientListController(services.clients, workspaceId);
-    setClientLists(controller);
-    return () => controller.dispose();
-  }, [services.clients, workspaceId]);
-  if (clientLists === null) return null;
+    users.current += 1;
+    // Fast Refresh/StrictMode run cleanup and setup back to back on the same instance; dispose only
+    // when no setup follows, so children never subscribe to a disposed query.
+    return () => {
+      users.current -= 1;
+      setTimeout(() => { if (users.current === 0) clientLists.dispose(); }, 0);
+    };
+  }, [clientLists]);
   return (
     <SafeAreaProvider>
       <PrototypeThemeProvider>

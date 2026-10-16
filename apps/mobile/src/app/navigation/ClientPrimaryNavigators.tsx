@@ -12,14 +12,16 @@ const HomeStack = createNativeStackNavigator<HomeRoutes>();
 const NutritionStack = createNativeStackNavigator<NutritionRoutes>();
 const TrainingStack = createNativeStackNavigator<TrainingRoutes>();
 
-export function HomeNavigator({ client, onOpenEdit, onArchive }: Readonly<{
-  client: ClientRecord; onOpenEdit: () => void; onArchive: () => Promise<void>;
+export function HomeNavigator({ client, onOpenEdit, onOpenAccounting, onArchive }: Readonly<{
+  client: ClientRecord; onOpenEdit: () => void; onOpenAccounting: () => void;
+  onArchive: () => Promise<void>;
 }>) {
   const { palette } = usePrototypeTheme();
   return (
     <HomeStack.Navigator screenOptions={{ contentStyle: { backgroundColor: palette.tokens.canvas } }}>
       <HomeStack.Screen name="HomeIndex" options={{ headerShown: false }}>
-        {() => <ClientHomePreview client={client} onEdit={onOpenEdit} onArchive={onArchive} />}
+        {() => <ClientHomePreview client={client} onEdit={onOpenEdit}
+          onOpenAccounting={onOpenAccounting} onArchive={onArchive} />}
       </HomeStack.Screen>
     </HomeStack.Navigator>
   );
