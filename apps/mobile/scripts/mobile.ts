@@ -39,7 +39,8 @@ async function main(): Promise<void> {
   console.info("Запускается FitCoach 3: TypeScript dev-приложение с локальной базой клиентов.");
   const child = spawn(
     pinnedNode,
-    [resolve(projectDir, "node_modules/expo/bin/cli"), "start", "--localhost", "--port", String(port)],
+    // Extra arguments go to Expo, e.g. `npm run mobile -- --clear` after a Babel/dependency change.
+    [resolve(projectDir, "node_modules/expo/bin/cli"), "start", "--localhost", "--port", String(port), ...process.argv.slice(2)],
     {
       cwd: projectDir,
       stdio: "inherit",

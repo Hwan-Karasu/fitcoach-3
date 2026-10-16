@@ -12,6 +12,7 @@ export interface TimeWindow {
  * contains it (12:00–12:29 → 12:00, 12:30 → 12:30), clamped so a slot never starts at the end.
  */
 export function slotAtY(y: number, height: number, window: TimeWindow): number {
+  "worklet";
   const span = window.endMinute - window.startMinute;
   if (height <= 0 || span < SLOT_MINUTES) return window.startMinute;
   const minute = window.startMinute + (Math.min(Math.max(y, 0), height) / height) * span;
@@ -21,23 +22,29 @@ export function slotAtY(y: number, height: number, window: TimeWindow): number {
 
 /** Exact (unsnapped) minute under a point, for hit-testing existing blocks. */
 export function minuteAtY(y: number, height: number, window: TimeWindow): number {
+  "worklet";
   const span = window.endMinute - window.startMinute;
   return window.startMinute + (Math.min(Math.max(y, 0), height) / Math.max(height, 1)) * span;
 }
 
 export function yOfMinute(minute: number, height: number, window: TimeWindow): number {
+  "worklet";
   return ((minute - window.startMinute) / (window.endMinute - window.startMinute)) * height;
 }
 
 export function columnAtX(x: number, width: number, columns: number): number | null {
+  "worklet";
   if (columns <= 0 || width <= 0 || x < 0 || x >= width) return null;
   return Math.min(columns - 1, Math.floor((x / width) * columns));
 }
 
 /** Long-press drag between two slots selects both, in either direction (08:30 ↔ 11:00 → 08:30–11:30). */
 export function dragRange(anchorSlot: number, currentSlot: number): Readonly<{ start: number; end: number }> {
+  "worklet";
   return { start: Math.min(anchorSlot, currentSlot), end: Math.max(anchorSlot, currentSlot) + SLOT_MINUTES };
 }
+
+/* Functions marked "worklet" also run on the UI thread during gestures; they stay pure. */
 
 /** Visible part of a block inside the window; null when it lies fully outside. */
 export function clipToWindow(start: number, end: number, window: TimeWindow): Readonly<{ start: number; end: number }> | null {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ScrollView } from "react-native-gesture-handler";
 import { AppButton, ConfirmDialog, InlineNotice, SelectionChip, StatusTag } from "../../../shared/ui/components/public.ts";
 import { EmptyPanel, PrototypeNotice, PrototypeScreen, SectionHeading } from
   "../../../shared/ui/prototype/ScreenPieces.tsx";
@@ -138,6 +139,14 @@ export function CalendarScreen({ repository, participants, onOpenSettings, onOpe
         setNotice(`Запись перенесена: ${dayTitle(date)}, ${formatMinute(start)}.`);
       });
     },
+    onResize: (row: Appointment, durationMinutes) => {
+      void run(async () => {
+        await repository.updateAppointment(row.id, row.revision, { localDate: row.localDate, startMinute: row.startMinute,
+          durationMinutes, clientId: row.clientId, guestName: row.guestName, sessionTypeId: row.sessionTypeId,
+          note: row.note, creditBypass: row.creditBypass });
+        setNotice(`Длительность изменена: ${formatMinute(row.startMinute)}–${formatMinute(row.startMinute + durationMinutes)}.`);
+      });
+    },
     onSwipe: (direction) => select(addDays(selected, direction * (mode === "WEEK" ? 7 : 1))),
     onLockScroll: setScrollLocked,
   };
@@ -264,7 +273,7 @@ export function CalendarScreen({ repository, participants, onOpenSettings, onOpe
           people={people} now={now} height={timelineHeight} handlers={handlers} />
       ) : null}
       <Text style={[styles.hint, { color: colors.textMuted }]}>
-        Касание — запись на это время. Долгое нажатие и протягивание — интервал. Долгое нажатие на будущей записи — перенос.
+        Касание — запись на это время. Долгое нажатие и протягивание — интервал. Долгое нажатие на будущей записи — перенос, у нижнего края — длительность.
       </Text>
 
       {range !== null ? (
