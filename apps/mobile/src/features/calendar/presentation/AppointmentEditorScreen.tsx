@@ -5,7 +5,7 @@ import { AppButton, ConfirmDialog, InlineNotice, LoadingState, SearchField, Sele
 import { PrototypeScreen, SectionHeading } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { APPOINTMENT_DURATIONS, SLOT_MINUTES, type Appointment, type AppointmentOutcome, type CalendarSettings,
-  type CancelSettlement, type LocalDate, type SessionType } from "../domain/CalendarModel.ts";
+  type CancelSettlement, type GuestLinkRequest, type LocalDate, type SessionType } from "../domain/CalendarModel.ts";
 import type { CalendarAppointmentCredit, CalendarBookingCredit, CalendarCreditPort } from
   "../domain/CalendarCreditPort.ts";
 import type { CalendarParticipant, CalendarParticipantDirectoryPort } from
@@ -38,7 +38,7 @@ function creditLine(info: CalendarBookingCredit | null, existing: CalendarAppoin
  * credit-linked appointment asks only for the settlement (return or charge).
  */
 export function AppointmentEditorScreen({ repository, participants, credit, appointmentId, localDate,
-  startMinute, onClose }: Readonly<{
+  startMinute, onClose, onCreateClientFromGuest }: Readonly<{
   repository: CalendarRepositoryPort;
   participants: CalendarParticipantDirectoryPort;
   credit: CalendarCreditPort;
@@ -46,6 +46,8 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
   localDate: LocalDate;
   startMinute?: number;
   onClose: () => void;
+  /** Opens the client form prefilled with the guest name; the shell links the records after save. */
+  onCreateClientFromGuest?: (request: GuestLinkRequest) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -69,6 +71,20 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
   const offerUndo = useOfferCancelUndo();
   const [correcting, setCorrecting] = useState(false);
   const [correctionId, setCorrectionId] = useState<string | null>(null);
+  const [sameGuest, setSameGuest] = useState(0);
+  const [includeSameGuest, setIncludeSameGuest] = useState(true);
+  const [linking, setLinking] = useState(false);
+  const [linkId, setLinkId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!appointmentId) return;
+    let active = true;
+    void Promise.resolve().then(() => repository.countSameGuest(appointmentId)).then((count) => {
+      if (active) setSameGuest(count);
+    },
+      () => undefined);
+    return () => { active = false; };
+  }, [appointmentId, repository]);
 
   useEffect(() => {
     if (!appointmentId) return;
@@ -136,6 +152,8 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
   const editable = existing === null || (existing.lifecycle === "SCHEDULED" && !appointmentEnded(existing, now));
   const outcomeOpen = existing !== null && existing.lifecycle !== "CANCELLED" && appointmentStarted(existing, now);
   const canCorrect = outcomeOpen && !editable && existing.clientId !== null;
+  const guestRecord = existing !== null && existing.guestName !== null && existing.lifecycle !== "CANCELLED"
+    ? existing : null;
   const matches = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase("ru");
     return (loaded?.people ?? []).filter((person) => person.active
@@ -344,6 +362,47 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
           }} />
         <AppButton variant="ghost" label="Не исправлять" disabled={busy}
           onPress={() => { setCorrecting(false); setCorrectionId(null); }} />
+      </> : null}
+      {guestRecord !== null && guestRecord.guestName !== null ? <>
+        <SectionHeading>Гость без карточки</SectionHeading>
+        <Text style={[styles.hint, { color: colors.textSecondary }]}>
+          Создайте карточку клиента или привяжите запись к существующей. Прошлые гостевые визиты не списываются.
+        </Text>
+        {sameGuest > 0 ? (
+          <View style={styles.chips}>
+            <SelectionChip group="Гость" selected={includeSameGuest}
+              label={`Также другие записи «${guestRecord.guestName}»: ${sameGuest}`}
+              onPress={() => setIncludeSameGuest(!includeSameGuest)} />
+          </View>
+        ) : null}
+        {onCreateClientFromGuest !== undefined && !linking ? (
+          <AppButton label="Создать карточку клиента" disabled={busy} onPress={() => {
+            const request = { appointmentId: guestRecord.id, guestName: guestRecord.guestName ?? "",
+              includeSameName: includeSameGuest && sameGuest > 0 };
+            onClose();
+            onCreateClientFromGuest(request);
+          }} />
+        ) : null}
+        {!linking ? (
+          <AppButton variant="secondary" label="Привязать к клиенту" disabled={busy} onPress={() => setLinking(true)} />
+        ) : <>
+          <SearchField accessibilityLabel="Поиск клиента для привязки" query={query} onChangeQuery={setQuery} />
+          <View style={styles.chips}>
+            {matches.map((person) => (
+              <SelectionChip key={person.id} group="Клиент для привязки"
+                label={`${person.emoji ? `${person.emoji} ` : ""}${person.displayName}`}
+                selected={linkId === person.id} onPress={() => setLinkId(person.id)} />
+            ))}
+          </View>
+          <AppButton label="Привязать" busy={busy} disabled={linkId === null} onPress={() => {
+            if (linkId !== null) {
+              void act((row) => repository.linkGuestToClient(row.id, row.revision, linkId,
+                includeSameGuest && sameGuest > 0));
+            }
+          }} />
+          <AppButton variant="ghost" label="Не привязывать" disabled={busy}
+            onPress={() => { setLinking(false); setLinkId(null); }} />
+        </>}
       </> : null}
       {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       {editable ? <AppButton label={existing === null ? "Записать" : "Сохранить изменения"} busy={busy}

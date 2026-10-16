@@ -7,7 +7,7 @@ import type { Appointment, AppointmentInput, AppointmentOutcome, CalendarInterva
   DaySummary, IntervalInput, LocalDate, PasteResult, SessionType, SessionTypeCategory,
   WeekTemplate } from "../domain/CalendarModel.ts";
 import type { CalendarCommittedChange, CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
-import { addDays, appointmentEnded, appointmentStarted, buildWeekTemplate, isLocalDate, localDateOf, minuteOfDay, validateAppointment,
+import { addDays, appointmentEnded, appointmentStarted, buildWeekTemplate, sameGuestName, isLocalDate, localDateOf, minuteOfDay, validateAppointment,
   validateInterval, validateSettings, weekDates } from "../domain/CalendarRules.ts";
 import type { DevAppointmentAccountingHook, DevBooking } from "./DevAppointmentAccountingHook.ts";
 import { DEV_CALENDAR_LEDGER, devCalendarCatalog } from "./DevCalendarCatalog.ts";
@@ -541,6 +541,67 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       await tx.run("UPDATE dev_calendar_settings SET undo_cancel_prompt = ? WHERE workspace_id = ?",
         [enabled ? 1 : 0, this.workspaceId]);
     });
+  }
+
+  private async sameGuest(tx: SqliteStatementPort, row: Appointment): Promise<readonly Appointment[]> {
+    const name = row.guestName;
+    if (name === null) return [];
+    const rows = await tx.all<AppointmentRow>(`SELECT ${appointmentColumns} FROM dev_calendar_appointments
+      WHERE workspace_id = ? AND guest_name IS NOT NULL AND lifecycle <> 'CANCELLED' AND id <> ?
+      ORDER BY local_date, start_minute, id`, [this.workspaceId, row.id]);
+    // SQLite lower() is ASCII-only, so Cyrillic names are compared here.
+    return rows.map(toAppointment).filter((other) => other.guestName !== null && sameGuestName(other.guestName, name));
+  }
+
+  async countSameGuest(appointmentId: string): Promise<number> {
+    const { connection } = this.ready();
+    const row = await connection.first<AppointmentRow>(`SELECT ${appointmentColumns}
+      FROM dev_calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, appointmentId]);
+    return row === null ? 0 : (await this.sameGuest(connection, toAppointment(row))).length;
+  }
+
+  async linkGuestToClient(appointmentId: string, expectedRevision: number | null, clientId: string,
+    includeSameName: boolean, now: Date = new Date()): Promise<number> {
+    const target = clientId.trim();
+    const dates = new Set<string>();
+    const linked = await this.ready().writer.write(async (tx) => {
+      const current = await this.appointmentById(tx, appointmentId);
+      if (expectedRevision !== null && current.revision !== expectedRevision) {
+        throw new Error("CALENDAR_STALE_APPOINTMENT");
+      }
+      if (current.guestName === null || current.lifecycle === "CANCELLED" || !target) {
+        throw new Error("CALENDAR_GUEST_LINK_INVALID");
+      }
+      const rows = [current, ...(includeSameName ? await this.sameGuest(tx, current) : [])];
+      const stamp = now.toISOString();
+      for (const row of rows) {
+        const result = await tx.run(`UPDATE dev_calendar_appointments SET client_id = ?, guest_name = NULL,
+          revision = revision + 1, updated_at = ?
+          WHERE workspace_id = ? AND id = ? AND guest_name IS NOT NULL AND lifecycle <> 'CANCELLED'`,
+        [target, stamp, this.workspaceId, row.id]);
+        if (result.changes !== 1) throw new Error("CALENDAR_STALE_APPOINTMENT");
+        dates.add(row.localDate);
+        // A guest visit was never accounted, so only records that have not started book a credit.
+        if (this.accounting === null || appointmentStarted(row, now)) continue;
+        const requires = (await tx.first<{ r: number }>(`SELECT session_type_requires_credit AS r
+          FROM dev_calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, row.id]))?.r === 1;
+        const booking = { clientId: target, sessionTypeId: row.sessionTypeId, requiresCredit: requires,
+          bypass: row.creditBypass, localDate: row.localDate, endMinute: row.startMinute + row.durationMinutes };
+        let packId: string | null = null;
+        try {
+          packId = await this.accounting.plan(tx, this.workspaceId, booking);
+        } catch (error) {
+          if (!(error instanceof Error) || error.message !== "ACCOUNTING_INSUFFICIENT_CREDIT") throw error;
+          // No credits yet must not block the link: the record is kept «без списания» explicitly.
+          await tx.run("UPDATE dev_calendar_appointments SET credit_bypass = 1 WHERE workspace_id = ? AND id = ?",
+            [this.workspaceId, row.id]);
+        }
+        if (packId !== null) await this.accounting.reserve(tx, this.workspaceId, row.id, booking, packId);
+      }
+      return rows.length;
+    });
+    this.publish({ dates: [...dates] });
+    return linked;
   }
 
   async listPendingOutcomes(now: Date): Promise<readonly Appointment[]> {

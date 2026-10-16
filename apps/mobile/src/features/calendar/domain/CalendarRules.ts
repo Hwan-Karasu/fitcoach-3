@@ -136,6 +136,12 @@ export function isPendingOutcome(row: Appointment, now: Date): boolean {
   return row.lifecycle === "SCHEDULED" && !row.participantDeleted && appointmentEnded(row, now);
 }
 
+/** Guest names match case- and space-insensitively: «Анна  К» and «анна к» are one guest. */
+export function sameGuestName(a: string, b: string): boolean {
+  const normalize = (value: string) => value.trim().replace(/\s+/gu, " ").toLocaleLowerCase("ru");
+  return normalize(a) === normalize(b);
+}
+
 export function isOccupying(appointment: Appointment): boolean {
   return appointment.lifecycle !== "CANCELLED";
 }

@@ -81,6 +81,13 @@ export interface AppointmentInput {
   readonly creditBypass?: boolean;
 }
 
+/** «Создать карточку клиента» from a guest record: which records follow the new client. */
+export interface GuestLinkRequest {
+  readonly appointmentId: string;
+  readonly guestName: string;
+  readonly includeSameName: boolean;
+}
+
 /** What to do with credits when a client appointment leaves the active schedule (§22.1.4). */
 export type CancelSettlement = "RETURN" | "CHARGE";
 

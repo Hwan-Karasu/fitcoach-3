@@ -51,6 +51,16 @@ export interface CalendarRepositoryPort {
   restoreCancelled(id: string, expectedRevision: number, previousOutcome: "COMPLETED" | "MISSED" | null,
     now?: Date): Promise<Appointment>;
   setUndoCancelPrompt(enabled: boolean): Promise<void>;
+  /** Other not cancelled records of the same guest (name match ignores case and spaces). */
+  countSameGuest(appointmentId: string): Promise<number>;
+  /**
+   * A guest without a card becomes a client (§13.7.3 guest/free-name): the record, and optionally every
+   * other not cancelled record of that guest, moves to the client. Past visits stay uncharged; a
+   * future record of a FITCOACH client gets a reservation or, without credits, «без списания».
+   * A null revision links only if the record is still that guest. Returns the number of records.
+   */
+  linkGuestToClient(appointmentId: string, expectedRevision: number | null, clientId: string,
+    includeSameName: boolean, now?: Date): Promise<number>;
   /** Ended appointments (clients and guests) without an outcome, oldest first (§48.40). */
   listPendingOutcomes(now: Date): Promise<readonly Appointment[]>;
   createInterval(input: IntervalInput): Promise<CalendarInterval>;

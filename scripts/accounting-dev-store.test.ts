@@ -449,3 +449,43 @@ test("L02 «Вернуть» after Отменена restores the outcome with on
     assert.equal((await calendar.getSettings()).undoCancelPrompt, false);
   } finally { await close(); }
 });
+
+test("L02 guest becomes a client: same-name records move, past visits stay free, future ones book or bypass", async () => {
+  const { clients, calendar, accounting, personal, close } = await stores();
+  try {
+    const guest = (name: string, overrides: Partial<AppointmentInput> = {}) =>
+      calendar.createAppointment({ ...slot(null, personal.id, overrides), guestName: name });
+    const past = await guest("Анна К", { startMinute: 480 });
+    const future = await guest("  анна   к ", { localDate: "2099-03-03" });
+    const other = await guest("Борис", { startMinute: 720 });
+    const gone = await guest("Анна К", { startMinute: 900 });
+    const goneCancelled = await calendar.resolveOutcome(gone.id, gone.revision, "CANCELLED", at(9));
+    assert.equal(await calendar.countSameGuest(past.id), 1);
+    const anna = await clients.create({ displayName: "Анна К" });
+    await accounting.setClientMode(anna.id, "FITCOACH");
+    await accounting.createPack(anna.id, pack(1));
+    await assert.rejects(calendar.linkGuestToClient(past.id, past.revision + 1, anna.id, true, at(12)),
+      { message: "CALENDAR_STALE_APPOINTMENT" });
+    assert.equal(await calendar.linkGuestToClient(past.id, past.revision, anna.id, true, at(12)), 2);
+    const linkedPast = await calendar.getAppointment(past.id);
+    assert.equal(linkedPast?.clientId, anna.id);
+    assert.equal(linkedPast?.guestName, null);
+    assert.equal(await accounting.appointmentCredit(past.id), "NONE");
+    assert.equal((await calendar.getAppointment(future.id))?.clientId, anna.id);
+    assert.equal(await accounting.appointmentCredit(future.id), "RESERVED");
+    assert.equal((await calendar.getAppointment(other.id))?.guestName, "Борис");
+    assert.equal((await calendar.getAppointment(goneCancelled.id))?.guestName, "Анна К");
+    assert.equal((await accounting.getClientSnapshot(anna.id)).ledger.filter((row) => row.entryType === "USED").length, 0);
+    await assert.rejects(calendar.linkGuestToClient(past.id, null, anna.id, false, at(12)),
+      { message: "CALENDAR_GUEST_LINK_INVALID" });
+
+    const vera = await clients.create({ displayName: "Вера" });
+    await accounting.setClientMode(vera.id, "FITCOACH");
+    const booked = await guest("Вера", { localDate: "2099-03-04" });
+    assert.equal(await calendar.linkGuestToClient(booked.id, null, vera.id, false, at(12)), 1);
+    const veraRow = await calendar.getAppointment(booked.id);
+    assert.equal(veraRow?.clientId, vera.id);
+    assert.equal(veraRow?.creditBypass, true);
+    assert.equal(await accounting.appointmentCredit(booked.id), "NONE");
+  } finally { await close(); }
+});

@@ -1,7 +1,7 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { AppointmentEditorScreen, CalendarScreen, CalendarSettingsPreview, IntervalEditorScreen,
   type CalendarCreditPort, type CalendarParticipantDirectoryPort,
-  type CalendarRepositoryPort } from "../../features/calendar/public.ts";
+  type CalendarRepositoryPort, type GuestLinkRequest } from "../../features/calendar/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 
 type CalendarStackRoutes = {
@@ -13,10 +13,11 @@ type CalendarStackRoutes = {
 
 const Stack = createNativeStackNavigator<CalendarStackRoutes>();
 
-export function CalendarNavigator({ repository, participants, credit }: Readonly<{
+export function CalendarNavigator({ repository, participants, credit, onCreateClientFromGuest }: Readonly<{
   repository: CalendarRepositoryPort;
   participants: CalendarParticipantDirectoryPort;
   credit: CalendarCreditPort;
+  onCreateClientFromGuest: (request: GuestLinkRequest) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -46,7 +47,7 @@ export function CalendarNavigator({ repository, participants, credit }: Readonly
         {({ navigation, route }) => <AppointmentEditorScreen repository={repository}
           participants={participants} credit={credit} appointmentId={route.params.appointmentId}
           localDate={route.params.localDate} startMinute={route.params.startMinute}
-          onClose={() => navigation.goBack()} />}
+          onClose={() => navigation.goBack()} onCreateClientFromGuest={onCreateClientFromGuest} />}
       </Stack.Screen>
       <Stack.Screen name="CalendarInterval" options={{ title: "Дежурство или блокировка" }}>
         {({ navigation, route }) => <IntervalEditorScreen repository={repository}

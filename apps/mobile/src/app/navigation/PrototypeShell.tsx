@@ -5,7 +5,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NotificationsPreview, NotificationSettingsPreview } from "../../features/notifications/public.ts";
 import { SettingsPreview, ThemeCatalogPreview } from "../../features/settings/public.ts";
 import { ClientRosterSettingsScreen } from "../../features/clients/public.ts";
-import { AppointmentOutcomeDialog, CalendarUndoProvider } from "../../features/calendar/public.ts";
+import { AppointmentOutcomeDialog, CalendarUndoProvider, type GuestLinkRequest } from "../../features/calendar/public.ts";
 import { ClientAccountingScreen } from "../../features/accounting/public.ts";
 import { useAppointmentOutcomeQueue } from "../bootstrap/useAppointmentOutcomeQueue.ts";
 import { PrototypeThemeProvider, usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -27,7 +27,7 @@ type RootStackRoutes = {
   WorkspaceDev: undefined;
   ClientWorkspace: { clientId: string };
   ClientAccounting: { clientId: string };
-  ClientEditorDev: { clientId: string } | undefined;
+  ClientEditorDev: { clientId?: string; guestLink?: GuestLinkRequest } | undefined;
   SqliteDev: undefined;
 };
 
@@ -65,6 +65,7 @@ function ShellNavigator({ services, clientLists }: Readonly<{
               calendar={services.calendar}
               calendarParticipants={services.calendarParticipants}
               calendarCredit={services.accounting}
+              onCreateClientFromGuest={(guestLink) => navigation.navigate("ClientEditorDev", { guestLink })}
             />
           )}
         </Stack.Screen>
@@ -104,6 +105,15 @@ function ShellNavigator({ services, clientLists }: Readonly<{
         <Stack.Screen name="ClientEditorDev" options={{ headerShown: false, gestureEnabled: false }}>
           {({ navigation, route }) => <ClientEditorRoute
             clientId={route.params?.clientId} repository={services.clients}
+            prefillName={route.params?.guestLink?.guestName}
+            onCreated={async (client) => {
+              const link = route.params?.guestLink;
+              if (link === undefined) return;
+              // The card is already saved; if the record changed meanwhile it stays a guest and can
+              // be linked from the record with «Привязать к клиенту».
+              await services.calendar.linkGuestToClient(link.appointmentId, null, client.id, link.includeSameName)
+                .catch(() => undefined);
+            }}
             onClose={() => navigation.goBack()} />}
         </Stack.Screen>
         <Stack.Screen name="SqliteDev" options={{ title: "SQLite · диагностика" }}>

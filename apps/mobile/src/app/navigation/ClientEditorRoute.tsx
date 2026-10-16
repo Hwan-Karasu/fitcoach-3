@@ -8,8 +8,12 @@ import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.
 
 type Loaded = Readonly<{ client: ClientRecord | null; draft: ClientRecoveryDraft | null }>;
 
-export function ClientEditorRoute({ clientId, repository, onClose }: Readonly<{
+export function ClientEditorRoute({ clientId, repository, onClose, prefillName, onCreated }: Readonly<{
   clientId?: string;
+  /** A guest name from Calendar; an existing recovery draft still asks first. */
+  prefillName?: string;
+  /** Runs after a new card is saved; must not throw, the card already exists. */
+  onCreated?: (client: ClientRecord) => Promise<void>;
   repository: ClientRepositoryPort & ClientRecoveryDraftPort;
   onClose: () => void;
 }>) {
@@ -93,7 +97,8 @@ export function ClientEditorRoute({ clientId, repository, onClose }: Readonly<{
   const recovered = draft !== null && (clientId !== undefined || choice === "use");
   return <ClientEditorPreview key={`${clientId ?? "new"}:${recovered ? draft?.id : "fresh"}`}
     initial={client ?? undefined}
-    initialDraft={recovered ? draft?.formData : undefined}
+    initialDraft={recovered ? draft?.formData : prefillName === undefined ? undefined
+      : { displayName: prefillName, contactPhone: "", contactEmail: "", birthDate: "", heightDraft: "", emoji: null }}
     recoveredDraft={recovered}
     onClose={onClose}
     onSaveDraft={async (formData) => {
@@ -102,7 +107,7 @@ export function ClientEditorRoute({ clientId, repository, onClose }: Readonly<{
     }}
     onDiscardDraft={() => repository.discardDraft(clientId ?? null)}
     onSave={async (input) => {
-      if (clientId === undefined) await repository.create(input);
+      if (clientId === undefined) await onCreated?.(await repository.create(input));
       else if (client !== null) await repository.update(clientId, client.revision, input);
       else throw new Error("CLIENT_NOT_FOUND");
     }} />;
