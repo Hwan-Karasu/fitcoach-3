@@ -112,6 +112,27 @@ export function validateInterval(input: IntervalInput): IntervalInput {
   return input;
 }
 
+type Timed = Pick<Appointment, "localDate" | "startMinute" | "durationMinutes">;
+
+/** Wall-clock comparison: the local date and minute of `now` against the appointment slot. */
+function reached(localDate: LocalDate, minute: number, now: Date): boolean {
+  const today = localDateOf(now);
+  return localDate < today || (localDate === today && minute <= minuteOfDay(now));
+}
+
+export function appointmentStarted(row: Timed, now: Date): boolean {
+  return reached(row.localDate, row.startMinute, now);
+}
+
+export function appointmentEnded(row: Timed, now: Date): boolean {
+  return reached(row.localDate, row.startMinute + row.durationMinutes, now);
+}
+
+/** «Ожидает решения» (§48.35): a client appointment whose time ended without a chosen outcome. */
+export function isPendingOutcome(row: Appointment, now: Date): boolean {
+  return row.lifecycle === "SCHEDULED" && row.clientId !== null && appointmentEnded(row, now);
+}
+
 export function isOccupying(appointment: Appointment): boolean {
   return appointment.lifecycle !== "CANCELLED";
 }

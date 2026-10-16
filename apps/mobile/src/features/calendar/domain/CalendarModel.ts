@@ -5,7 +5,13 @@ export const SLOT_MINUTES = 30;
 export const DAY_MINUTES = 24 * 60;
 export const APPOINTMENT_DURATIONS = [30, 60, 90, 120] as const;
 
+/** COMPLETED is a closed record with a chosen outcome (Завершена or Пропущена), never inferred from USED. */
 export type AppointmentLifecycle = "SCHEDULED" | "COMPLETED" | "CANCELLED";
+/**
+ * Factual outcome chosen by the trainer (§48.35). Null on a SCHEDULED row: after its end time that
+ * is «Ожидает решения»; elapsed time and credit settlement never set it.
+ */
+export type AppointmentOutcome = "COMPLETED" | "MISSED" | "CANCELLED";
 export type IntervalKind = "DUTY" | "BLOCKED";
 export type SessionTypeCategory = "TRAINING" | "INSTRUCTION" | "CONSULTATION" | "OTHER";
 
@@ -34,6 +40,7 @@ export interface Appointment {
   /** «Записать без списания» (§22.1.4): never reserves or uses a credit. */
   readonly creditBypass: boolean;
   readonly lifecycle: AppointmentLifecycle;
+  readonly outcome: AppointmentOutcome | null;
   readonly revision: number;
 }
 

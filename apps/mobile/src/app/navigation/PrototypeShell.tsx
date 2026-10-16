@@ -5,8 +5,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NotificationsPreview, NotificationSettingsPreview } from "../../features/notifications/public.ts";
 import { SettingsPreview, ThemeCatalogPreview } from "../../features/settings/public.ts";
 import { ClientRosterSettingsScreen } from "../../features/clients/public.ts";
+import { AppointmentOutcomeDialog } from "../../features/calendar/public.ts";
 import { ClientAccountingScreen } from "../../features/accounting/public.ts";
-import { useAccountingReconciler } from "../bootstrap/useAccountingReconciler.ts";
+import { useAppointmentOutcomeQueue } from "../bootstrap/useAppointmentOutcomeQueue.ts";
 import { PrototypeThemeProvider, usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { WorkspaceRoutePreview } from "../../shared/ui/prototype/WorkspaceRoutePreview.tsx";
 import { ClientWorkspaceNavigator } from "./ClientWorkspaceNavigator.tsx";
@@ -113,12 +114,18 @@ function ShellNavigator({ services, clientLists }: Readonly<{
   );
 }
 
+/** Ended appointments without an outcome pop up over any screen (§48.35.3). */
+function OutcomeQueueHost({ services }: Readonly<{ services: DevServices }>) {
+  const queue = useAppointmentOutcomeQueue(services.calendar, services.accounting);
+  return <AppointmentOutcomeDialog items={queue.items} visible={queue.visible} onLater={queue.later}
+    repository={services.calendar} participants={services.calendarParticipants} credit={services.accounting} />;
+}
+
 export function PrototypeShell({ services, workspaceId }: Readonly<{
   services: DevServices; workspaceId: string;
 }>) {
   const [clientLists] = useState(() => new ClientListController(services.clients, workspaceId));
   const users = useRef(0);
-  useAccountingReconciler(services.accounting);
   useEffect(() => {
     users.current += 1;
     // Fast Refresh/StrictMode run cleanup and setup back to back on the same instance; dispose only
@@ -132,6 +139,7 @@ export function PrototypeShell({ services, workspaceId }: Readonly<{
     <SafeAreaProvider>
       <PrototypeThemeProvider>
         <ShellNavigator services={services} clientLists={clientLists} />
+        <OutcomeQueueHost services={services} />
       </PrototypeThemeProvider>
     </SafeAreaProvider>
   );

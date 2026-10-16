@@ -9,7 +9,7 @@ import type { CalendarParticipantDirectoryPort } from "../domain/CalendarPartici
 import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
 import { addDays, appointmentLabel, formatMinute, localDateOf, mondayOf, templateSize,
   weekDates } from "../domain/CalendarRules.ts";
-import { dayTitle, monthTitle, useCalendarWeek, useParticipants, weekdayShort } from
+import { dayTitle, monthTitle, outcomeTag, useCalendarWeek, useParticipants, weekdayShort } from
   "./calendarPresentation.ts";
 
 export interface OpenAppointmentParams {
@@ -211,7 +211,10 @@ export function CalendarScreen({ repository, participants, onOpenSettings, onOpe
             </Text>
             {item.row.note ? <Text style={[styles.detail, { color: colors.textSecondary }]}>{item.row.note}</Text> : null}
           </View>
-          {item.row.lifecycle === "COMPLETED" ? <StatusTag kind="success" label="Проведена" /> : null}
+          {(() => {
+            const tag = outcomeTag(item.row, new Date());
+            return tag === null ? null : <StatusTag kind={tag.kind} label={tag.label} />;
+          })()}
         </Pressable>
       ))}
       <AppButton label="Записать" onPress={() => onOpenAppointment({ localDate: selected })} />

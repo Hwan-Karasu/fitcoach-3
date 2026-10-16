@@ -2,6 +2,12 @@ import type { MigrationStep } from "../../../shared/db/MigrationRunner.ts";
 
 export const DEV_CALENDAR_LEDGER = "calendar_schema_migrations";
 
+/** Never NULL, so `WHEN NOT …` cannot silently pass a missing outcome. */
+const outcomeMatchesLifecycle = `(CASE NEW.lifecycle
+  WHEN 'SCHEDULED' THEN NEW.outcome IS NULL
+  WHEN 'COMPLETED' THEN COALESCE(NEW.outcome IN ('COMPLETED','MISSED'), 0)
+  ELSE NEW.outcome IS NULL OR NEW.outcome IS 'CANCELLED' END)`;
+
 /**
  * New-install development schema in the shared dev file; requires the clients catalog first.
  * Not D01 production DDL and not a legacy Calendar import.
@@ -94,5 +100,23 @@ export const devCalendarCatalog: readonly MigrationStep[] = [{
   checksum: "l01-dev-calendar-v2-credit-bypass-20261016",
   statements: [
     "ALTER TABLE dev_calendar_appointments ADD COLUMN credit_bypass INTEGER NOT NULL DEFAULT 0 CHECK (credit_bypass IN (0,1))",
+  ],
+}, {
+  version: 3,
+  checksum: "l02-dev-calendar-v3-appointment-outcome-20261016",
+  statements: [
+    // The factual outcome is separate from time and credit settlement (§48.35): SCHEDULED has none,
+    // COMPLETED holds Завершена/Пропущена, CANCELLED may record «Отменена» chosen as an outcome.
+    `ALTER TABLE dev_calendar_appointments ADD COLUMN outcome TEXT
+      CHECK (outcome IS NULL OR outcome IN ('COMPLETED','MISSED','CANCELLED'))`,
+    "ALTER TABLE dev_calendar_appointments ADD COLUMN outcome_at TEXT",
+    // Added columns cannot carry a table CHECK, so NULL-safe triggers tie outcome to lifecycle.
+    `CREATE TRIGGER dev_appointments_outcome_insert BEFORE INSERT ON dev_calendar_appointments
+      WHEN NOT ${outcomeMatchesLifecycle}
+      BEGIN SELECT RAISE(ABORT, 'CALENDAR_OUTCOME_LIFECYCLE_MISMATCH'); END`,
+    `CREATE TRIGGER dev_appointments_outcome_update
+      BEFORE UPDATE OF lifecycle, outcome ON dev_calendar_appointments
+      WHEN NOT ${outcomeMatchesLifecycle}
+      BEGIN SELECT RAISE(ABORT, 'CALENDAR_OUTCOME_LIFECYCLE_MISMATCH'); END`,
   ],
 }];

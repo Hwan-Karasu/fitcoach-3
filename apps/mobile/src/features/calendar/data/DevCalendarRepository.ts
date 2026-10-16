@@ -3,11 +3,11 @@ import { SharedSqliteDatabase } from "../../../shared/db/SharedSqliteDatabase.ts
 import { UUID_V4_SQL } from "../../../shared/db/SqlIds.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
-import type { Appointment, AppointmentInput, CalendarInterval, CalendarSettings, CancelSettlement, ClearWeekSummary,
+import type { Appointment, AppointmentInput, AppointmentOutcome, CalendarInterval, CalendarSettings, CancelSettlement, ClearWeekSummary,
   DaySummary, IntervalInput, LocalDate, PasteResult, SessionType, SessionTypeCategory,
   WeekTemplate } from "../domain/CalendarModel.ts";
 import type { CalendarCommittedChange, CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
-import { addDays, buildWeekTemplate, isLocalDate, localDateOf, minuteOfDay, validateAppointment,
+import { addDays, appointmentStarted, buildWeekTemplate, isLocalDate, localDateOf, minuteOfDay, validateAppointment,
   validateInterval, validateSettings, weekDates } from "../domain/CalendarRules.ts";
 import type { DevAppointmentAccountingHook, DevBooking } from "./DevAppointmentAccountingHook.ts";
 import { DEV_CALENDAR_LEDGER, devCalendarCatalog } from "./DevCalendarCatalog.ts";
@@ -16,7 +16,7 @@ interface AppointmentRow {
   id: string; localDate: string; startMinute: number; durationMinutes: number;
   clientId: string | null; guestName: string | null; participantDeleted: number;
   sessionTypeId: string; sessionTypeName: string; note: string | null; creditBypass: number;
-  requiresCredit: number; lifecycle: Appointment["lifecycle"]; revision: number;
+  requiresCredit: number; lifecycle: Appointment["lifecycle"]; outcome: Appointment["outcome"]; revision: number;
 }
 
 interface SessionTypeRow {
@@ -35,7 +35,7 @@ const appointmentColumns = `id, local_date AS localDate, start_minute AS startMi
   duration_minutes AS durationMinutes, client_id AS clientId, guest_name AS guestName,
   participant_deleted AS participantDeleted, session_type_id AS sessionTypeId,
   session_type_name AS sessionTypeName, note, credit_bypass AS creditBypass,
-  session_type_requires_credit AS requiresCredit, lifecycle, revision`;
+  session_type_requires_credit AS requiresCredit, lifecycle, outcome, revision`;
 
 const intervalColumns = `id, kind, local_date AS localDate, start_minute AS startMinute,
   end_minute AS endMinute`;
@@ -56,7 +56,7 @@ function toAppointment(row: AppointmentRow): Appointment {
     durationMinutes: row.durationMinutes, clientId: row.clientId, guestName: row.guestName,
     participantDeleted: row.participantDeleted === 1, sessionTypeId: row.sessionTypeId,
     sessionTypeName: row.sessionTypeName, note: row.note, creditBypass: row.creditBypass === 1,
-    lifecycle: row.lifecycle, revision: row.revision };
+    lifecycle: row.lifecycle, outcome: row.outcome, revision: row.revision };
 }
 
 function booking(input: AppointmentInput, requiresCredit: boolean): DevBooking {
@@ -413,6 +413,94 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       await this.accounting?.cancel(tx, this.workspaceId, id, settlement, now);
     });
     this.publish({ dates: [date] });
+  }
+
+  async resolveOutcome(id: string, expectedRevision: number, outcome: AppointmentOutcome,
+    now: Date = new Date()): Promise<Appointment> {
+    if (outcome !== "COMPLETED" && outcome !== "MISSED" && outcome !== "CANCELLED") {
+      throw new Error("CALENDAR_OUTCOME_INVALID");
+    }
+    let changed = false;
+    const resolved = await this.ready().writer.write(async (tx) => {
+      const current = await this.appointmentById(tx, id);
+      if (current.revision !== expectedRevision || current.lifecycle === "CANCELLED") {
+        throw new Error("CALENDAR_STALE_APPOINTMENT");
+      }
+      if (current.outcome === outcome) return current;
+      const stamp = now.toISOString();
+      if (outcome === "CANCELLED") {
+        const result = await tx.run(`UPDATE dev_calendar_appointments SET lifecycle = 'CANCELLED',
+          outcome = 'CANCELLED', outcome_at = ?, cancelled_at = ?, revision = revision + 1, updated_at = ?
+          WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle <> 'CANCELLED'`,
+        [stamp, stamp, stamp, this.workspaceId, id, expectedRevision]);
+        if (result.changes !== 1) throw new Error("CALENDAR_STALE_APPOINTMENT");
+        // A charged session gets one linked RETURNED; a reservation is only released (§48.35.6).
+        await this.accounting?.cancel(tx, this.workspaceId, id, "RETURN", stamp);
+      } else {
+        if (!appointmentStarted(current, now)) throw new Error("CALENDAR_OUTCOME_TOO_EARLY");
+        const result = await tx.run(`UPDATE dev_calendar_appointments SET lifecycle = 'COMPLETED',
+          outcome = ?, outcome_at = ?, revision = revision + 1, updated_at = ?
+          WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle <> 'CANCELLED'`,
+        [outcome, stamp, stamp, this.workspaceId, id, expectedRevision]);
+        if (result.changes !== 1) throw new Error("CALENDAR_STALE_APPOINTMENT");
+        // Завершена and Пропущена both keep exactly one USED; the timer will find no reservation.
+        await this.accounting?.settle(tx, this.workspaceId, id, stamp);
+      }
+      changed = true;
+      return this.appointmentById(tx, id);
+    });
+    if (changed) this.publish({ dates: [resolved.localDate] });
+    return resolved;
+  }
+
+  async clearOutcome(id: string, expectedRevision: number): Promise<Appointment> {
+    const cleared = await this.ready().writer.write(async (tx) => {
+      const result = await tx.run(`UPDATE dev_calendar_appointments SET lifecycle = 'SCHEDULED',
+        outcome = NULL, outcome_at = NULL, revision = revision + 1, updated_at = ?
+        WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'COMPLETED'`,
+      [new Date().toISOString(), this.workspaceId, id, expectedRevision]);
+      if (result.changes !== 1) throw new Error("CALENDAR_STALE_APPOINTMENT");
+      return this.appointmentById(tx, id);
+    });
+    this.publish({ dates: [cleared.localDate] });
+    return cleared;
+  }
+
+  async correctClient(id: string, expectedRevision: number, clientId: string,
+    now: Date = new Date()): Promise<Appointment> {
+    const target = clientId.trim();
+    const corrected = await this.ready().writer.write(async (tx) => {
+      const current = await this.appointmentById(tx, id);
+      if (current.revision !== expectedRevision) throw new Error("CALENDAR_STALE_APPOINTMENT");
+      if (current.lifecycle === "CANCELLED" || current.clientId === null || !target
+        || target === current.clientId || !appointmentStarted(current, now)) {
+        throw new Error("CALENDAR_CORRECTION_INVALID");
+      }
+      const requires = (await tx.first<{ r: number }>(`SELECT session_type_requires_credit AS r
+        FROM dev_calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]))?.r === 1;
+      const stamp = now.toISOString();
+      const result = await tx.run(`UPDATE dev_calendar_appointments SET client_id = ?,
+        revision = revision + 1, updated_at = ?
+        WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle <> 'CANCELLED'`,
+      [target, stamp, this.workspaceId, id, expectedRevision]);
+      if (result.changes !== 1) throw new Error("CALENDAR_STALE_APPOINTMENT");
+      await this.accounting?.correct(tx, this.workspaceId, id, { clientId: target,
+        sessionTypeId: current.sessionTypeId, requiresCredit: requires, bypass: current.creditBypass,
+        localDate: current.localDate, endMinute: current.startMinute + current.durationMinutes }, stamp);
+      return this.appointmentById(tx, id);
+    });
+    this.publish({ dates: [corrected.localDate] });
+    return corrected;
+  }
+
+  async listPendingOutcomes(now: Date): Promise<readonly Appointment[]> {
+    const today = localDateOf(now);
+    const rows = await this.ready().connection.all<AppointmentRow>(`SELECT ${appointmentColumns}
+      FROM dev_calendar_appointments WHERE workspace_id = ? AND lifecycle = 'SCHEDULED'
+        AND client_id IS NOT NULL
+        AND (local_date < ? OR (local_date = ? AND start_minute + duration_minutes <= ?))
+      ORDER BY local_date, start_minute, id`, [this.workspaceId, today, today, minuteOfDay(now)]);
+    return rows.map(toAppointment);
   }
 
   async createInterval(input: IntervalInput): Promise<CalendarInterval> {

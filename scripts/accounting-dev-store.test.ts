@@ -248,3 +248,119 @@ test("§15.7 permanent client delete purges packs, ledger, reservations and paym
     assert.equal(kept.payments.length, 1);
   } finally { await close(); }
 });
+
+const at = (hour: number, minute = 0) => new Date(2099, 2, 2, hour, minute);
+const usedCount = async (accounting: DevAccountingRepository, clientId: string, type = "USED") =>
+  (await accounting.getClientSnapshot(clientId)).ledger.filter((row) => row.entryType === type).length;
+
+test("L02 outcome after time settlement: one USED, switching outcomes keeps it, Отменена returns once", async () => {
+  const { clients, calendar, accounting, personal, close } = await stores();
+  try {
+    const fit = await clients.create({ displayName: "Fit" });
+    await accounting.setClientMode(fit.id, "FITCOACH");
+    await accounting.createPack(fit.id, pack(3));
+    const booked = await calendar.createAppointment(slot(fit.id, personal.id));
+    await calendar.createAppointment(slot(null, personal.id, { startMinute: 480 }));
+    assert.equal((await calendar.listPendingOutcomes(at(10, 59))).length, 0);
+    assert.deepEqual((await calendar.listPendingOutcomes(at(11))).map((row) => row.id), [booked.id]);
+    await accounting.reconcileDue(at(11));
+    assert.equal(await usedCount(accounting, fit.id), 1);
+    assert.equal((await calendar.getAppointment(booked.id))?.outcome, null);
+    const missed = await calendar.resolveOutcome(booked.id, booked.revision, "MISSED", at(11));
+    assert.equal(missed.lifecycle, "COMPLETED");
+    assert.equal(missed.outcome, "MISSED");
+    assert.equal((await calendar.listPendingOutcomes(at(12))).length, 0);
+    await assert.rejects(calendar.resolveOutcome(booked.id, booked.revision, "COMPLETED", at(11)),
+      { message: "CALENDAR_STALE_APPOINTMENT" });
+    const done = await calendar.resolveOutcome(booked.id, missed.revision, "COMPLETED", at(11));
+    assert.equal(done.outcome, "COMPLETED");
+    assert.equal(await usedCount(accounting, fit.id), 1);
+    const undone = await calendar.clearOutcome(done.id, done.revision);
+    assert.equal(undone.lifecycle, "SCHEDULED");
+    assert.equal(undone.outcome, null);
+    assert.equal(await usedCount(accounting, fit.id), 1);
+    assert.deepEqual((await calendar.listPendingOutcomes(at(12))).map((row) => row.id), [booked.id]);
+    const cancelled = await calendar.resolveOutcome(undone.id, undone.revision, "CANCELLED", at(12));
+    assert.equal(cancelled.lifecycle, "CANCELLED");
+    assert.equal(cancelled.outcome, "CANCELLED");
+    assert.equal((await calendar.listRange(FUTURE, FUTURE)).appointments.some((row) => row.id === booked.id), false);
+    assert.equal(await usedCount(accounting, fit.id, "RETURNED"), 1);
+    assert.equal(await accounting.appointmentCredit(booked.id), "RETURNED");
+    assert.equal((await accounting.getClientSnapshot(fit.id)).available, 3);
+    await assert.rejects(calendar.resolveOutcome(booked.id, cancelled.revision, "CANCELLED", at(12)),
+      { message: "CALENDAR_STALE_APPOINTMENT" });
+    assert.deepEqual({ ...(await accounting.reconcileDue(at(23))) }, { settled: 0 });
+    assert.equal(await usedCount(accounting, fit.id), 1);
+  } finally { await close(); }
+});
+
+test("L02 early outcome uses the reservation once; early Отменена releases; untracked gets no ledger", async () => {
+  const { clients, calendar, accounting, personal, close } = await stores();
+  try {
+    const fit = await clients.create({ displayName: "Fit" });
+    const ext = await clients.create({ displayName: "External" });
+    await accounting.setClientMode(fit.id, "FITCOACH");
+    await accounting.setClientMode(ext.id, "EXTERNAL");
+    await accounting.createPack(fit.id, pack(2));
+    const first = await calendar.createAppointment(slot(fit.id, personal.id));
+    await assert.rejects(calendar.resolveOutcome(first.id, first.revision, "COMPLETED", at(9, 59)),
+      { message: "CALENDAR_OUTCOME_TOO_EARLY" });
+    await calendar.resolveOutcome(first.id, first.revision, "COMPLETED", at(10, 30));
+    assert.equal(await accounting.appointmentCredit(first.id), "USED");
+    assert.equal((await accounting.getClientSnapshot(fit.id)).reserved, 0);
+    const second = await calendar.createAppointment(slot(fit.id, personal.id, { startMinute: 720 }));
+    await calendar.resolveOutcome(second.id, second.revision, "CANCELLED", at(9));
+    assert.equal(await accounting.appointmentCredit(second.id), "NONE");
+    assert.deepEqual({ ...(await accounting.reconcileDue(at(23))) }, { settled: 0 });
+    assert.equal(await usedCount(accounting, fit.id), 1);
+    assert.equal((await accounting.getClientSnapshot(fit.id)).available, 1);
+    const external = await calendar.createAppointment(slot(ext.id, personal.id, { startMinute: 840 }));
+    await calendar.resolveOutcome(external.id, external.revision, "MISSED", at(15));
+    assert.equal((await accounting.getClientSnapshot(ext.id)).ledger.length, 0);
+  } finally { await close(); }
+});
+
+test("ACC-05 Исправить клиента: RETURNED for A and USED for B in one tx; untracked side untouched", async () => {
+  const { db, clients, calendar, accounting, personal, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "A" });
+    const b = await clients.create({ displayName: "B" });
+    const untracked = await clients.create({ displayName: "Untracked" });
+    const empty = await clients.create({ displayName: "No pack" });
+    for (const client of [a, b, empty]) await accounting.setClientMode(client.id, "FITCOACH");
+    await accounting.createPack(a.id, pack(2));
+    await accounting.createPack(b.id, pack(1));
+    const booked = await calendar.createAppointment(slot(a.id, personal.id));
+    const future = await calendar.createAppointment(slot(a.id, personal.id, { startMinute: 900 }));
+    await accounting.reconcileDue(at(11));
+    let row = await calendar.resolveOutcome(booked.id, booked.revision, "COMPLETED", at(11));
+    await assert.rejects(calendar.correctClient(future.id, future.revision, b.id, at(11)),
+      { message: "CALENDAR_CORRECTION_INVALID" });
+    await assert.rejects(calendar.correctClient(row.id, row.revision, a.id, at(11)),
+      { message: "CALENDAR_CORRECTION_INVALID" });
+    await assert.rejects(calendar.correctClient(row.id, row.revision, empty.id, at(11)),
+      { message: "ACCOUNTING_INSUFFICIENT_CREDIT" });
+    assert.equal((await calendar.getAppointment(row.id))?.clientId, a.id);
+    assert.equal(await usedCount(accounting, a.id, "RETURNED"), 0);
+    row = await calendar.correctClient(row.id, row.revision, b.id, at(12));
+    assert.equal(row.clientId, b.id);
+    assert.equal(row.outcome, "COMPLETED");
+    const aLedger = (await accounting.getClientSnapshot(a.id)).ledger;
+    const returned = aLedger.find((entry) => entry.entryType === "RETURNED");
+    assert.equal(aLedger.find((entry) => entry.id === returned?.sourceEntryId)?.entryType, "USED");
+    assert.equal((await accounting.getClientSnapshot(a.id)).available, 1);
+    assert.equal(await usedCount(accounting, b.id), 1);
+    assert.equal((await accounting.getClientSnapshot(b.id)).available, 0);
+    assert.equal(await accounting.appointmentCredit(row.id), "USED");
+    row = await calendar.correctClient(row.id, row.revision, untracked.id, at(12));
+    assert.equal(await usedCount(accounting, b.id, "RETURNED"), 1);
+    assert.equal((await accounting.getClientSnapshot(untracked.id)).ledger.length, 0);
+    assert.equal(await accounting.appointmentCredit(row.id), "RETURNED");
+    row = await calendar.correctClient(row.id, row.revision, a.id, at(12));
+    assert.equal(await usedCount(accounting, a.id), 2);
+    assert.equal((await accounting.getClientSnapshot(a.id)).available, 0);
+    const effective = db.prepare("SELECT sum(delta) AS n FROM dev_credit_ledger WHERE appointment_id = ?")
+      .get(row.id) as { n: number };
+    assert.equal(effective.n, -1);
+  } finally { await close(); }
+});

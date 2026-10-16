@@ -3,7 +3,7 @@ import type { Appointment, CalendarInterval, CalendarSettings, LocalDate } from 
 import type { CalendarParticipant, CalendarParticipantDirectoryPort } from
   "../domain/CalendarParticipantDirectoryPort.ts";
 import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
-import { addDays, monthRange, weekdayIndex } from "../domain/CalendarRules.ts";
+import { addDays, isPendingOutcome, monthRange, weekdayIndex } from "../domain/CalendarRules.ts";
 
 export const weekdayShort = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"] as const;
 const weekdayLong = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота",
@@ -35,10 +35,19 @@ export function calendarErrorMessage(error: unknown): string {
     case "CALENDAR_TIME_INVALID": return "Проверьте время: шаг — 30 минут, запись не переходит через полночь.";
     case "ACCOUNTING_INSUFFICIENT_CREDIT":
       return "У клиента нет доступных тренировок. Добавьте пакет или включите «Записать без списания».";
+    case "CALENDAR_OUTCOME_TOO_EARLY": return "Занятие ещё не началось. Исход можно отметить после начала.";
+    case "CALENDAR_CORRECTION_INVALID": return "Выберите другого клиента: исправление доступно только для начавшейся записи.";
     case "ACCOUNTING_ALREADY_SETTLED":
       return "Тренировка по записи уже списана: клиента, тип и учёт здесь изменить нельзя.";
     default: return "Не удалось сохранить. Данные календаря не изменены.";
   }
+}
+
+/** Calendar-side outcome label; never derived from a USED credit (§48.35). */
+export function outcomeTag(row: Appointment, now: Date): Readonly<{ kind: "success" | "warning" | "action_required"; label: string }> | null {
+  if (row.outcome === "COMPLETED") return { kind: "success", label: "Проведена" };
+  if (row.outcome === "MISSED") return { kind: "warning", label: "Пропущена" };
+  return isPendingOutcome(row, now) ? { kind: "action_required", label: "Ожидает решения" } : null;
 }
 
 export interface CalendarWeekData {

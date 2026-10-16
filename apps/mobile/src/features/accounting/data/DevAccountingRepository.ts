@@ -140,6 +140,21 @@ export const devAccountingCalendarHook = {
     // An already charged session keeps its single USED on CHARGE; RETURN compensates it.
     if (used !== null && settlement === "RETURN") await insertReturned(tx, workspaceId, used, appointmentId, now);
   },
+  async settle(tx: SqliteStatementPort, workspaceId: string, appointmentId: string, now: string): Promise<void> {
+    await devAccountingCalendarHook.cancel(tx, workspaceId, appointmentId, "CHARGE", now);
+  },
+  async correct(tx: SqliteStatementPort, workspaceId: string, appointmentId: string, booking: Booking,
+    now: string): Promise<void> {
+    await tx.run("DELETE FROM dev_credit_reservations WHERE workspace_id = ? AND appointment_id = ?",
+      [workspaceId, appointmentId]);
+    // The original USED is never edited; a linked RETURNED compensates it (§22.1.4).
+    const used = await unreturnedUsed(tx, appointmentId);
+    if (used !== null) await insertReturned(tx, workspaceId, used, appointmentId, now);
+    const packId = await devAccountingCalendarHook.plan(tx, workspaceId, booking);
+    if (packId !== null && booking.clientId !== null) {
+      await insertUsed(tx, workspaceId, booking.clientId, packId, appointmentId, now);
+    }
+  },
 };
 
 const ownedTables = ["dev_credit_reservations", "dev_payment_records", "dev_credit_ledger",

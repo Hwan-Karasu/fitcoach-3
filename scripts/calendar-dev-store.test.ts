@@ -4,7 +4,8 @@ import test from "node:test";
 import { DevCalendarRepository, devCalendarClientDeletionParticipant } from
   "../apps/mobile/src/features/calendar/data/DevCalendarRepository.ts";
 import type { AppointmentInput } from "../apps/mobile/src/features/calendar/domain/CalendarModel.ts";
-import { addDays, buildWeekTemplate, mondayOf, monthRange, overlaps, validateAppointment,
+import { addDays, appointmentEnded, appointmentStarted, buildWeekTemplate, isPendingOutcome, mondayOf, monthRange,
+  overlaps, validateAppointment,
   weekdayIndex } from "../apps/mobile/src/features/calendar/domain/CalendarRules.ts";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
@@ -127,7 +128,7 @@ test("K01 paste week: existing wins, completed source becomes new SCHEDULED, no 
     const thursday = addDays(MONDAY, 3);
     const source = await calendar.createAppointment(slot({ sessionTypeId: personal.id,
       clientId: active.id, localDate: thursday, startMinute: 660, note: "keep note" }));
-    db.prepare("UPDATE dev_calendar_appointments SET lifecycle = 'COMPLETED' WHERE id = ?").run(source.id);
+    db.prepare("UPDATE dev_calendar_appointments SET lifecycle = 'COMPLETED', outcome = 'COMPLETED' WHERE id = ?").run(source.id);
     const cancelled = await calendar.createAppointment(slot({ sessionTypeId: personal.id, guestName: "X" }));
     await calendar.cancelAppointment(cancelled.id, cancelled.revision);
     await calendar.createAppointment(slot({ sessionTypeId: personal.id, clientId: archived.id,
@@ -169,7 +170,7 @@ test("K01 clear week cancels SCHEDULED only, keeps COMPLETED, removes intervals 
   const { db, calendar, personal, close } = await stores();
   try {
     const done = await calendar.createAppointment(slot({ sessionTypeId: personal.id, guestName: "Done" }));
-    db.prepare("UPDATE dev_calendar_appointments SET lifecycle = 'COMPLETED' WHERE id = ?").run(done.id);
+    db.prepare("UPDATE dev_calendar_appointments SET lifecycle = 'COMPLETED', outcome = 'COMPLETED' WHERE id = ?").run(done.id);
     await calendar.createAppointment(slot({ sessionTypeId: personal.id, guestName: "Next",
       localDate: addDays(MONDAY, 2) }));
     await calendar.createAppointment(slot({ sessionTypeId: personal.id, guestName: "Other week",
@@ -195,7 +196,7 @@ test("§15.8 permanent client delete cancels future and anonymizes past appointm
     const stays = await clients.create({ displayName: "Stays" });
     const past = await calendar.createAppointment(slot({ sessionTypeId: personal.id, clientId: gone.id,
       localDate: "2020-01-06", note: "private" }));
-    db.prepare("UPDATE dev_calendar_appointments SET lifecycle = 'COMPLETED' WHERE id = ?").run(past.id);
+    db.prepare("UPDATE dev_calendar_appointments SET lifecycle = 'COMPLETED', outcome = 'COMPLETED' WHERE id = ?").run(past.id);
     const future = await calendar.createAppointment(slot({ sessionTypeId: personal.id, clientId: gone.id,
       localDate: "2099-01-05", note: "private" }));
     const other = await calendar.createAppointment(slot({ sessionTypeId: personal.id, clientId: stays.id,
@@ -227,5 +228,28 @@ test("§15.7 without the calendar participant the client delete fails closed", a
     await assert.rejects(clients.deleteArchivedPermanently(client.id, archived.revision),
       { message: "CLIENT_DELETION_BLOCKED" });
     assert.equal((await clients.get(client.id))?.lifecycle, "ARCHIVED");
+  } finally { await close(); }
+});
+
+test("L02 pending outcome is wall-clock; schema refuses an outcome that contradicts the lifecycle", async () => {
+  const row = { localDate: MONDAY, startMinute: 600, durationMinutes: 60 };
+  assert.equal(appointmentStarted(row, new Date(2026, 9, 19, 9, 59)), false);
+  assert.equal(appointmentStarted(row, new Date(2026, 9, 19, 10, 0)), true);
+  assert.equal(appointmentEnded(row, new Date(2026, 9, 19, 10, 59)), false);
+  assert.equal(appointmentEnded(row, new Date(2026, 9, 19, 11, 0)), true);
+  assert.equal(appointmentEnded(row, new Date(2026, 9, 20, 0, 0)), true);
+  const { db, calendar, clients, personal, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "Outcome" });
+    const booked = await calendar.createAppointment(slot({ sessionTypeId: personal.id, clientId: client.id }));
+    assert.equal(isPendingOutcome(booked, new Date(2026, 9, 19, 11, 0)), true);
+    assert.throws(() => db.prepare("UPDATE dev_calendar_appointments SET lifecycle = 'COMPLETED' WHERE id = ?")
+      .run(booked.id), /CALENDAR_OUTCOME_LIFECYCLE_MISMATCH/u);
+    assert.throws(() => db.prepare("UPDATE dev_calendar_appointments SET outcome = 'MISSED' WHERE id = ?")
+      .run(booked.id), /CALENDAR_OUTCOME_LIFECYCLE_MISMATCH/u);
+    const done = await calendar.resolveOutcome(booked.id, booked.revision, "COMPLETED", new Date(2026, 9, 19, 11, 0));
+    assert.equal(isPendingOutcome(done, new Date(2026, 9, 19, 12, 0)), false);
+    assert.deepEqual((await calendar.listRange(MONDAY, MONDAY)).appointments.map((item) => item.outcome), ["COMPLETED"]);
+    await assert.rejects(calendar.clearOutcome(done.id, booked.revision), { message: "CALENDAR_STALE_APPOINTMENT" });
   } finally { await close(); }
 });

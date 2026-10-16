@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { AppButton, ConfirmDialog, InlineNotice, LoadingState, SearchField, SelectionChip,
+import { AppButton, ConfirmDialog, InlineNotice, LoadingState, SearchField, SelectionChip, StatusTag,
   TextField } from "../../../shared/ui/components/public.ts";
 import { PrototypeScreen, SectionHeading } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
-import { APPOINTMENT_DURATIONS, SLOT_MINUTES, type Appointment, type CalendarSettings,
+import { APPOINTMENT_DURATIONS, SLOT_MINUTES, type Appointment, type AppointmentOutcome, type CalendarSettings,
   type CancelSettlement, type LocalDate, type SessionType } from "../domain/CalendarModel.ts";
 import type { CalendarAppointmentCredit, CalendarBookingCredit, CalendarCreditPort } from
   "../domain/CalendarCreditPort.ts";
 import type { CalendarParticipant, CalendarParticipantDirectoryPort } from
   "../domain/CalendarParticipantDirectoryPort.ts";
 import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
-import { addDays, formatMinute, overlaps } from "../domain/CalendarRules.ts";
-import { calendarErrorMessage, dayTitle } from "./calendarPresentation.ts";
+import { addDays, appointmentEnded, appointmentStarted, formatMinute, overlaps } from "../domain/CalendarRules.ts";
+import { calendarErrorMessage, dayTitle, outcomeTag } from "./calendarPresentation.ts";
 
 interface Loaded {
   readonly settings: CalendarSettings;
@@ -25,6 +25,7 @@ interface Loaded {
 function creditLine(info: CalendarBookingCredit | null, existing: CalendarAppointmentCredit): string | null {
   if (existing === "RESERVED") return "Тренировка зарезервирована из пакета клиента.";
   if (existing === "USED") return "Тренировка уже списана.";
+  if (existing === "RETURNED") return "Списание по записи компенсировано возвратом.";
   if (info === null || info.kind === "NOT_REQUIRED") return null;
   if (info.kind === "NOT_TRACKED") return "Учёт занятий для клиента ведётся вне FitCoach или не ведётся.";
   if (info.kind === "AVAILABLE") return `Доступно тренировок: ${info.available} · будет зарезервирована 1.`;
@@ -64,6 +65,8 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
   const [creditInfo, setCreditInfo] = useState<CalendarBookingCredit | null>(null);
   const [existingCredit, setExistingCredit] = useState<CalendarAppointmentCredit>("NONE");
   const [settling, setSettling] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
+  const [correctionId, setCorrectionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!appointmentId) return;
@@ -126,7 +129,11 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
   }, [appointmentId, localDate, participants, repository]);
 
   const existing = loaded?.existing ?? null;
-  const editable = existing === null || existing.lifecycle === "SCHEDULED";
+  const now = new Date();
+  // An ended record is history: outcome and «Исправить клиента» replace ordinary editing (§22.1.4).
+  const editable = existing === null || (existing.lifecycle === "SCHEDULED" && !appointmentEnded(existing, now));
+  const outcomeOpen = existing !== null && existing.lifecycle !== "CANCELLED" && appointmentStarted(existing, now);
+  const canCorrect = outcomeOpen && !editable && existing.clientId !== null;
   const matches = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase("ru");
     return (loaded?.people ?? []).filter((person) => person.active
@@ -178,12 +185,28 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
       setBusy(false);
     }
   };
+  const act = async (work: (row: Appointment) => Promise<unknown>) => {
+    if (busy || existing === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await work(existing);
+      onClose();
+    } catch (failure) {
+      setError(calendarErrorMessage(failure));
+      setBusy(false);
+    }
+  };
+  const resolve = (outcome: AppointmentOutcome) =>
+    act((row) => repository.resolveOutcome(row.id, row.revision, outcome));
   const creditText = creditLine(guestMode ? null : creditInfo, existingCredit);
+  const tag = existing === null ? null : outcomeTag(existing, now);
 
   return (
     <PrototypeScreen>
       {!editable ? <InlineNotice kind="info">
-        Проведённая запись не редактируется как будущая. Исправление клиента появится вместе с учётом занятий.
+        {canCorrect ? "Прошедшая запись: время и тип не меняются. Отметьте исход или исправьте клиента."
+          : "Прошедшая запись: время, тип и участник не меняются."}
       </InlineNotice> : null}
       <View style={styles.stepper}>
         <AppButton variant="ghost" label="‹" accessibilityLabel="Предыдущий день" disabled={!editable}
@@ -268,6 +291,54 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
       </View>
       <TextField label="Заметка" value={note} onChangeText={setNote} disabled={!editable}
         placeholder="Необязательно" />
+      {outcomeOpen ? <>
+        <SectionHeading>Исход занятия</SectionHeading>
+        <View style={styles.chips}>
+          {tag !== null ? <StatusTag kind={tag.kind} label={tag.label} /> : (
+            <Text style={[styles.hint, { color: colors.textSecondary }]}>Занятие идёт — исход можно отметить сейчас.</Text>
+          )}
+        </View>
+        {existing.outcome === null ? <>
+          <AppButton label="Завершить тренировку" disabled={busy} onPress={() => { void resolve("COMPLETED"); }} />
+          <AppButton variant="secondary" label="Пропущена" disabled={busy} onPress={() => { void resolve("MISSED"); }} />
+        </> : <>
+          <AppButton variant="secondary" disabled={busy}
+            label={existing.outcome === "COMPLETED" ? "Отменить завершение" : "Отменить пропуск"}
+            onPress={() => { void act((row) => repository.clearOutcome(row.id, row.revision)); }} />
+          <AppButton variant="secondary" disabled={busy}
+            label={existing.outcome === "COMPLETED" ? "Отметить пропущенной" : "Отметить проведённой"}
+            onPress={() => { void resolve(existing.outcome === "COMPLETED" ? "MISSED" : "COMPLETED"); }} />
+        </>}
+        <AppButton variant="secondary" label="Отменена" disabled={busy} onPress={() => { void resolve("CANCELLED"); }} />
+        <Text style={[styles.hint, { color: colors.textSecondary }]}>
+          Списание по времени не подтверждает проведение. «Отменена» уберёт запись из календаря
+          {existingCredit === "USED" || existingCredit === "RESERVED" ? " и вернёт тренировку клиенту" : ""}.
+        </Text>
+      </> : null}
+      {canCorrect && !correcting ? (
+        <AppButton variant="secondary" label="Исправить клиента" disabled={busy} onPress={() => setCorrecting(true)} />
+      ) : null}
+      {canCorrect && correcting ? <>
+        <SectionHeading>Исправить клиента</SectionHeading>
+        <Text style={[styles.hint, { color: colors.textSecondary }]}>
+          Тренировка вернётся прежнему клиенту и спишется у выбранного, если их учёт ведётся в FitCoach.
+          История списаний не переписывается.
+        </Text>
+        <SearchField accessibilityLabel="Поиск клиента для исправления" query={query} onChangeQuery={setQuery} />
+        <View style={styles.chips}>
+          {matches.filter((person) => person.id !== existing.clientId).map((person) => (
+            <SelectionChip key={person.id} group="Новый клиент"
+              label={`${person.emoji ? `${person.emoji} ` : ""}${person.displayName}`}
+              selected={correctionId === person.id} onPress={() => setCorrectionId(person.id)} />
+          ))}
+        </View>
+        <AppButton label="Исправить клиента" busy={busy} disabled={correctionId === null}
+          onPress={() => {
+            if (correctionId !== null) void act((row) => repository.correctClient(row.id, row.revision, correctionId));
+          }} />
+        <AppButton variant="ghost" label="Не исправлять" disabled={busy}
+          onPress={() => { setCorrecting(false); setCorrectionId(null); }} />
+      </> : null}
       {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       {editable ? <AppButton label={existing === null ? "Записать" : "Сохранить изменения"} busy={busy}
         onPress={() => { void save(); }} /> : null}
