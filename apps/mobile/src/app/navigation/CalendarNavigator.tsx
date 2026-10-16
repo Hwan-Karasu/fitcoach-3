@@ -7,7 +7,7 @@ import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.
 type CalendarStackRoutes = {
   CalendarHome: undefined;
   CalendarSettings: undefined;
-  CalendarAppointment: { appointmentId?: string; localDate: string; startMinute?: number };
+  CalendarAppointment: { appointmentId?: string; localDate: string; startMinute?: number; durationMinutes?: number };
   CalendarInterval: { localDate: string };
 };
 
@@ -47,6 +47,7 @@ export function CalendarNavigator({ repository, participants, credit, onCreateCl
         {({ navigation, route }) => <AppointmentEditorScreen repository={repository}
           participants={participants} credit={credit} appointmentId={route.params.appointmentId}
           localDate={route.params.localDate} startMinute={route.params.startMinute}
+          durationMinutes={route.params.durationMinutes}
           onClose={() => navigation.goBack()} onCreateClientFromGuest={onCreateClientFromGuest} />}
       </Stack.Screen>
       <Stack.Screen name="CalendarInterval" options={{ title: "Дежурство или блокировка" }}>

@@ -37,7 +37,7 @@ function creditLine(info: CalendarBookingCredit | null, existing: CalendarAppoin
  * §13.7 + §22.1.4: one editor for create and edit. Delete has no generic confirmation; a
  * credit-linked appointment asks only for the settlement (return or charge).
  */
-export function AppointmentEditorScreen({ repository, participants, credit, appointmentId, localDate,
+export function AppointmentEditorScreen({ repository, participants, credit, appointmentId, localDate, durationMinutes,
   startMinute, onClose, onCreateClientFromGuest }: Readonly<{
   repository: CalendarRepositoryPort;
   participants: CalendarParticipantDirectoryPort;
@@ -45,6 +45,8 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
   appointmentId?: string;
   localDate: LocalDate;
   startMinute?: number;
+  /** A long-press range from the timeline; otherwise the session type default. */
+  durationMinutes?: number;
   onClose: () => void;
   /** Opens the client form prefilled with the guest name; the shell links the records after save. */
   onCreateClientFromGuest?: (request: GuestLinkRequest) => void;
@@ -139,7 +141,7 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
         setBypass(existing.creditBypass);
       } else {
         setStart((current) => current ?? Math.min(firstFree, settings.dayEndMinute - minutes));
-        setDuration(minutes);
+        setDuration(durationMinutes ?? minutes);
         setTypeId(defaultType?.id ?? null);
       }
     }, () => { if (active) setLoadFailed(true); });

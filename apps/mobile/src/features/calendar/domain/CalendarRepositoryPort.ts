@@ -51,6 +51,12 @@ export interface CalendarRepositoryPort {
   restoreCancelled(id: string, expectedRevision: number, previousOutcome: "COMPLETED" | "MISSED" | null,
     now?: Date): Promise<Appointment>;
   setUndoCancelPrompt(enabled: boolean): Promise<void>;
+  /**
+   * §13.5–13.6: display days and the visible day window live in the Calendar header. They are
+   * presentation only and never move or delete appointments outside them.
+   */
+  updateDisplaySettings(input: Readonly<{ visibleWeekdays: readonly boolean[]; dayStartMinute: number;
+    dayEndMinute: number }>): Promise<CalendarSettings>;
   /** Other not cancelled records of the same guest (name match ignores case and spaces). */
   countSameGuest(appointmentId: string): Promise<number>;
   /**

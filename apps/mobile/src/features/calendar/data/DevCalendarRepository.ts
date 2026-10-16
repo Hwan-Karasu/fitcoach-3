@@ -536,6 +536,19 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
     return restored;
   }
 
+  async updateDisplaySettings(input: Readonly<{ visibleWeekdays: readonly boolean[]; dayStartMinute: number;
+    dayEndMinute: number }>): Promise<CalendarSettings> {
+    const updated = await this.ready().writer.write(async (tx) => {
+      validateSettings({ ...(await this.settings(tx)), ...input });
+      await tx.run(`UPDATE dev_calendar_settings SET visible_weekdays = ?, day_start_minute = ?, day_end_minute = ?
+        WHERE workspace_id = ?`, [input.visibleWeekdays.map((flag) => (flag ? "1" : "0")).join(""),
+        input.dayStartMinute, input.dayEndMinute, this.workspaceId]);
+      return this.settings(tx);
+    });
+    this.publish({ dates: "ALL" });
+    return updated;
+  }
+
   async setUndoCancelPrompt(enabled: boolean): Promise<void> {
     await this.ready().writer.write(async (tx) => {
       await tx.run("UPDATE dev_calendar_settings SET undo_cancel_prompt = ? WHERE workspace_id = ?",

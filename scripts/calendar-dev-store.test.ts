@@ -4,6 +4,8 @@ import test from "node:test";
 import { DevCalendarRepository, devCalendarClientDeletionParticipant } from
   "../apps/mobile/src/features/calendar/data/DevCalendarRepository.ts";
 import type { AppointmentInput } from "../apps/mobile/src/features/calendar/domain/CalendarModel.ts";
+import { addMonths, clipToWindow, columnAtX, dragRange, minuteAtY, monthGridWeeks, moveVerdict, slotAtY,
+  yOfMinute } from "../apps/mobile/src/features/calendar/domain/CalendarGeometry.ts";
 import { addDays, appointmentEnded, appointmentStarted, buildWeekTemplate, isPendingOutcome, mondayOf, monthRange,
   overlaps, validateAppointment,
   weekdayIndex } from "../apps/mobile/src/features/calendar/domain/CalendarRules.ts";
@@ -252,5 +254,67 @@ test("L02 pending outcome is wall-clock; schema refuses an outcome that contradi
     assert.equal(isPendingOutcome(done, new Date(2026, 9, 19, 12, 0)), false);
     assert.deepEqual((await calendar.listRange(MONDAY, MONDAY)).appointments.map((item) => item.outcome), ["COMPLETED"]);
     await assert.rejects(calendar.clearOutcome(done.id, booked.revision), { message: "CALENDAR_STALE_APPOINTMENT" });
+  } finally { await close(); }
+});
+
+test("K02 §13.23: Y → 30-minute slots; 12:00 vs 12:30, 17:00 vs 17:30, 14:30 stays 14:30", () => {
+  const window = { startMinute: 420, endMinute: 1380 };
+  const height = 640;
+  const yAt = (minute: number) => yOfMinute(minute, height, window);
+  assert.equal(slotAtY(yAt(720) + 1, height, window), 720);
+  assert.equal(slotAtY(yAt(750) + 1, height, window), 750);
+  assert.equal(slotAtY(yAt(750) - 1, height, window), 720);
+  assert.equal(slotAtY(yAt(1020) + 2, height, window), 1020);
+  assert.equal(slotAtY(yAt(1050) + 2, height, window), 1050);
+  assert.equal(slotAtY(yAt(870) + 3, height, window), 870);
+  assert.equal(slotAtY(-20, height, window), 420);
+  assert.equal(slotAtY(height + 50, height, window), 1350);
+  assert.deepEqual({ ...dragRange(slotAtY(yAt(510) + 1, height, window), slotAtY(yAt(660) + 1, height, window)) },
+    { start: 510, end: 690 });
+  assert.deepEqual({ ...dragRange(660, 510) }, { start: 510, end: 690 });
+  assert.equal(columnAtX(0, 280, 7), 0);
+  assert.equal(columnAtX(279.9, 280, 7), 6);
+  assert.equal(columnAtX(280, 280, 7), null);
+  assert.deepEqual({ ...clipToWindow(360, 480, window)! }, { start: 420, end: 480 });
+  assert.equal(clipToWindow(1380, 1440, window), null);
+  assert.equal(Math.round(minuteAtY(yAt(735), height, window)), 735);
+});
+
+test("K02 month grid has 4–6 Monday-first rows; drop preview mirrors overlap and Blocked rules", () => {
+  assert.equal(monthGridWeeks("2021-02-10").length, 4);
+  assert.equal(monthGridWeeks("2026-02-10").length, 5);
+  assert.equal(monthGridWeeks("2026-10-16").length, 5);
+  assert.equal(monthGridWeeks("2026-08-01").length, 6);
+  assert.equal(monthGridWeeks("2026-10-16")[0]?.[0], "2026-09-28");
+  assert.equal(addMonths("2026-12-16", 1), "2027-01-01");
+  assert.equal(addMonths("2026-01-31", -1), "2025-12-01");
+  const base = { id: "a", localDate: MONDAY, startMinute: 600, durationMinutes: 60, clientId: null, guestName: "A",
+    participantDeleted: false, sessionTypeId: "t", sessionTypeName: "T", note: null, creditBypass: false,
+    lifecycle: "SCHEDULED" as const, outcome: null, revision: 1 };
+  const other = { ...base, id: "b", startMinute: 720 };
+  const window = { startMinute: 420, endMinute: 1380 };
+  const blocked = [{ id: "x", kind: "BLOCKED" as const, localDate: MONDAY, startMinute: 900, endMinute: 960 },
+    { id: "y", kind: "DUTY" as const, localDate: MONDAY, startMinute: 480, endMinute: 1200 }];
+  assert.equal(moveVerdict(base, MONDAY, 660, window, [base, other], blocked), "OK");
+  assert.equal(moveVerdict(base, MONDAY, 690, window, [base, other], blocked), "OVERLAP");
+  assert.equal(moveVerdict(base, MONDAY, 870, window, [base, other], blocked), "BLOCKED");
+  assert.equal(moveVerdict(base, MONDAY, 1350, window, [base, other], blocked), "OUTSIDE_WINDOW");
+  assert.equal(moveVerdict(base, addDays(MONDAY, 1), 720, window, [base, other], blocked), "OK");
+});
+
+test("K02 display settings persist and are validated; they never touch appointments", async () => {
+  const { calendar, personal, close } = await stores();
+  try {
+    const row = await calendar.createAppointment(slot({ sessionTypeId: personal.id, startMinute: 420 }));
+    const saved = await calendar.updateDisplaySettings({ visibleWeekdays: [true, true, true, true, true, false, false],
+      dayStartMinute: 480, dayEndMinute: 1200 });
+    assert.deepEqual({ start: saved.dayStartMinute, end: saved.dayEndMinute }, { start: 480, end: 1200 });
+    assert.deepEqual((await calendar.getSettings()).visibleWeekdays, [true, true, true, true, true, false, false]);
+    assert.equal((await calendar.getAppointment(row.id))?.startMinute, 420);
+    await assert.rejects(calendar.updateDisplaySettings({ visibleWeekdays: Array(7).fill(false),
+      dayStartMinute: 480, dayEndMinute: 1200 }), { message: "CALENDAR_SETTINGS_INVALID" });
+    await assert.rejects(calendar.updateDisplaySettings({ visibleWeekdays: Array(7).fill(true),
+      dayStartMinute: 600, dayEndMinute: 600 }), { message: "CALENDAR_SETTINGS_INVALID" });
+    assert.equal((await calendar.getSettings()).dayStartMinute, 480);
   } finally { await close(); }
 });

@@ -95,6 +95,26 @@ export function useCalendarWeek(repository: CalendarRepositoryPort, monday: Loca
   return { data, failed, retry: () => setTick((value) => value + 1) };
 }
 
+/** Appointment counts per date of the visible month grid (§13.2 indicator); keeps old counts on refresh. */
+export function useMonthCounts(repository: CalendarRepositoryPort, first: LocalDate,
+  last: LocalDate): ReadonlyMap<LocalDate, number> {
+  const [counts, setCounts] = useState<ReadonlyMap<LocalDate, number>>(new Map());
+  const [tick, setTick] = useState(0);
+  const generation = useRef(0);
+  useEffect(() => {
+    const request = ++generation.current;
+    void repository.summarize(first, last).then((rows) => {
+      if (request === generation.current) setCounts(new Map(rows.map((row) => [row.localDate, row.appointments])));
+    }, () => undefined);
+  }, [repository, first, last, tick]);
+  useEffect(() => repository.subscribeCommittedChanges((change) => {
+    if (change.dates === "ALL" || change.dates.some((date) => date >= first && date <= last)) {
+      setTick((value) => value + 1);
+    }
+  }), [repository, first, last]);
+  return counts;
+}
+
 export function useParticipants(directory: CalendarParticipantDirectoryPort):
   ReadonlyMap<string, CalendarParticipant> {
   const [map, setMap] = useState<ReadonlyMap<string, CalendarParticipant>>(new Map());
