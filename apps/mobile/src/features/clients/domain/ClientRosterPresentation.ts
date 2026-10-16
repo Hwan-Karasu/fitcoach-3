@@ -53,6 +53,7 @@ const deletionOwnerLabels: Readonly<Record<string, string>> = {
   "clients.birthdayDismissals": "скрытые закрепления дня рождения",
   "accounting.client": "записи абонемента, списаний и оплат",
   "measurements.body": "замеры",
+  "questionnaire.answers": "ответы анкеты",
 };
 
 /** Consequence text built from the actual manifest, not a generic «Вы уверены?». */

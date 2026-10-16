@@ -12,6 +12,9 @@ import { DevClientRepository } from "../../features/clients/data/DevClientReposi
 import { DevMeasurementRepository, devMeasurementClientDeletionParticipant } from
   "../../features/measurements/data/DevMeasurementRepository.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
+import { DevQuestionnaireRepository, devQuestionnaireClientDeletionParticipant } from
+  "../../features/questionnaire/data/DevQuestionnaireRepository.ts";
+import type { QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
 import type { ClientArchivePort, ClientChangePort, ClientRecoveryDraftPort, ClientRepositoryPort,
   ClientRosterPort } from "../../features/clients/public.ts";
 import { BootCoordinator } from "../bootstrap/BootCoordinator.ts";
@@ -28,6 +31,7 @@ export interface DevServices {
   readonly calendarParticipants: CalendarParticipantDirectoryPort;
   readonly accounting: AccountingRepositoryPort;
   readonly measurements: MeasurementRepositoryPort;
+  readonly questionnaire: QuestionnaireRepositoryPort;
   /** Active session types that can consume a credit, for SESSION_TYPE packs. */
   readonly listCreditSessionTypes: () => Promise<readonly Readonly<{ id: string; name: string }>[]>;
 }
@@ -47,7 +51,8 @@ function participantDirectory(clients: ClientRosterPort & ClientChangePort): Cal
 }
 
 export function createDevServices(clients: DevClientServices, calendar: CalendarRepositoryPort,
-  accounting: AccountingRepositoryPort, measurements: MeasurementRepositoryPort): DevServices {
+  accounting: AccountingRepositoryPort, measurements: MeasurementRepositoryPort,
+  questionnaire: QuestionnaireRepositoryPort): DevServices {
   return {
     runSqliteProbe: () => runF04Probe(() => openExpoSqliteConnection("fitcoach_f04_probe.db")),
     clients,
@@ -55,6 +60,7 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
     calendarParticipants: participantDirectory(clients),
     accounting,
     measurements,
+    questionnaire,
     listCreditSessionTypes: async () => (await calendar.listSessionTypes())
       .filter((type) => type.requiresCredit && !type.archived)
       .map((type) => ({ id: type.id, name: type.name })),
@@ -72,10 +78,11 @@ export function createDevRuntime(): DevRuntime {
   const database = new SharedSqliteDatabase(() => openExpoSqliteConnection("fitcoach_f04_clients_dev.db"));
   const clients = new DevClientRepository(database, DEV_WORKSPACE_ID,
     [devAccountingClientDeletionParticipant, devCalendarClientDeletionParticipant,
-      devMeasurementClientDeletionParticipant]);
+      devMeasurementClientDeletionParticipant, devQuestionnaireClientDeletionParticipant]);
   const calendar = new DevCalendarRepository(database, DEV_WORKSPACE_ID, devAccountingCalendarHook);
   const accounting = new DevAccountingRepository(database, DEV_WORKSPACE_ID);
   const measurements = new DevMeasurementRepository(database, DEV_WORKSPACE_ID);
+  const questionnaire = new DevQuestionnaireRepository(database, DEV_WORKSPACE_ID);
   // Calendar commands move reservations inside their own transactions.
   calendar.subscribeCommittedChanges(() => accounting.notifyExternalChange());
   return {
@@ -86,8 +93,9 @@ export function createDevRuntime(): DevRuntime {
         await calendar.initialize();
         await accounting.initialize();
         await measurements.initialize();
+        await questionnaire.initialize();
       },
     )),
-    services: createDevServices(clients, calendar, accounting, measurements),
+    services: createDevServices(clients, calendar, accounting, measurements, questionnaire),
   };
 }

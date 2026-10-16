@@ -96,7 +96,7 @@ function ShellNavigator({ services, clientLists }: Readonly<{
         <Stack.Screen name="ClientWorkspace" options={{ title: "Карточка клиента" }}>
           {({ navigation, route }) => <ClientWorkspaceNavigator
             clientId={route.params.clientId} repository={services.clients}
-            accounting={services.accounting} measurements={services.measurements}
+            accounting={services.accounting} measurements={services.measurements} questionnaire={services.questionnaire}
             onOpenEdit={(clientId) => navigation.navigate("ClientEditorDev", { clientId })}
             onOpenAccounting={(clientId) => navigation.navigate("ClientAccounting", { clientId })}
             onOpenMeasurements={(clientId) => navigation.navigate("ClientMeasurements", { clientId })}

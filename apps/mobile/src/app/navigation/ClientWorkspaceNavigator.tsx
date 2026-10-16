@@ -6,7 +6,7 @@ import { StyleSheet, Text, View } from "react-native";
 import type { AccountingRepositoryPort } from "../../features/accounting/public.ts";
 import type { ClientRecord, ClientRepositoryPort, ClientRosterPort } from "../../features/clients/public.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
-import { QuestionnairePreview } from "../../features/questionnaire/public.ts";
+import { ClientQuestionnaireScreen, type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
 import { TrainingArchivePreview, TrainingStatisticsPreview } from "../../features/training/public.ts";
 import { AppButton, LoadingState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -32,7 +32,7 @@ type MoreRoutes = {
 const Tabs = createBottomTabNavigator<WorkspaceTabs>();
 const MoreStack = createNativeStackNavigator<MoreRoutes>();
 
-function MoreNavigator() {
+function MoreNavigator({ clientId, questionnaire }: Readonly<{ clientId: string; questionnaire: QuestionnaireRepositoryPort }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
@@ -53,19 +53,22 @@ function MoreNavigator() {
           />
         )}
       </MoreStack.Screen>
-      <MoreStack.Screen name="Questionnaire" component={QuestionnairePreview} options={{ title: moreDestinations.Questionnaire }} />
+      <MoreStack.Screen name="Questionnaire" options={{ title: moreDestinations.Questionnaire }}>
+        {() => <ClientQuestionnaireScreen clientId={clientId} repository={questionnaire} />}
+      </MoreStack.Screen>
       <MoreStack.Screen name="TrainingArchive" component={TrainingArchivePreview} options={{ title: "Архив клиента" }} />
       <MoreStack.Screen name="Statistics" component={TrainingStatisticsPreview} options={{ title: moreDestinations.Statistics }} />
     </MoreStack.Navigator>
   );
 }
 
-export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, onOpenEdit, onOpenAccounting,
+export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, questionnaire, onOpenEdit, onOpenAccounting,
   onOpenMeasurements, onClose }: Readonly<{
   clientId: string;
   repository: ClientRepositoryPort & ClientRosterPort;
   accounting: AccountingRepositoryPort;
   measurements: MeasurementRepositoryPort;
+  questionnaire: QuestionnaireRepositoryPort;
   onOpenEdit: (clientId: string) => void;
   onOpenAccounting: (clientId: string) => void;
   onOpenMeasurements: (clientId: string) => void;
@@ -150,7 +153,9 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       </Tabs.Screen>
       <Tabs.Screen name="Nutrition" component={NutritionNavigator} options={{ tabBarLabel: workspaceTabs.Nutrition, tabBarAccessibilityLabel: workspaceTabs.Nutrition, tabBarIcon: ({ color }) => <TabGlyph kind="nutrition" color={color} /> }} />
       <Tabs.Screen name="Training" component={TrainingNavigator} options={{ tabBarLabel: workspaceTabs.Training, tabBarAccessibilityLabel: workspaceTabs.Training, tabBarIcon: ({ color }) => <TabGlyph kind="training" color={color} /> }} />
-      <Tabs.Screen name="More" component={MoreNavigator} options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More, tabBarIcon: ({ color }) => <TabGlyph kind="more" color={color} /> }} />
+      <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More, tabBarIcon: ({ color }) => <TabGlyph kind="more" color={color} /> }}>
+        {() => <MoreNavigator clientId={client.id} questionnaire={questionnaire} />}
+      </Tabs.Screen>
     </Tabs.Navigator>
     </View>
   );
