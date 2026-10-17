@@ -26,6 +26,13 @@ npm run source:ui-matrix
   `nutrition-recipe-editor`. Они вынесены в `supplementalRegistryEntries` и не
   считаются автоматически частью 43 экранов Atlas.
 
+## Стилистика и проработка экранов
+
+- `docs/ui/UI_STYLE_DECISIONS.md` — решения владельца `UI-OWN-xxx` по
+  геометрии, шрифту, иконкам и шапкам, с явными пересмотрами утверждённых
+  пунктов; очередь экранов Клиенты → Архив → Календарь.
+- `docs/ui/screens/CLIENTS.md` — спецификация эталонного экрана «Клиенты».
+
 Наличие матрицы закрывает только документальную карту `S03`; оно не закрывает
 ни одного per-screen UI gate и не разрешает production UI coding экрана без
 golden/approval.
