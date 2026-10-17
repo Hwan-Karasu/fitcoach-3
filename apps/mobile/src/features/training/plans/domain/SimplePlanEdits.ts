@@ -1,5 +1,6 @@
 import { produce, type Draft } from "immer";
-import { DEFAULT_WEEKS, type PlannedSet, type SimpleProgramDraft } from "./SimplePlanModel.ts";
+import { DEFAULT_WEEKS, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, type PlannedSet,
+  type SimpleProgramDraft } from "./SimplePlanModel.ts";
 import type { SetField } from "./SimplePlanRules.ts";
 
 /**
@@ -58,8 +59,22 @@ export const moveWorkout = (draft: SimpleProgramDraft, workoutId: string, direct
 /** Новое упражнение в конец тренировки с подходами по умолчанию (пустые плановые значения). */
 export const addExercise = (draft: SimpleProgramDraft, workoutId: string, plannedId: string, exerciseId: string,
   setId: (index: number) => string) => produce(draft, (d) => {
-  workoutOf(d, workoutId)?.exercises.push({ id: plannedId, exerciseId,
+  workoutOf(d, workoutId)?.exercises.push({ id: plannedId, exerciseId, restSec: REST_DEFAULT_SEC,
     sets: Array.from({ length: DEFAULT_SETS }, (_, index) => emptySet(setId(index))) });
+});
+
+/** §48.56: отдых упражнения в границах 15 с – 15 мин; `null` выключает таймер. */
+export const setRest = (draft: SimpleProgramDraft, plannedId: string, restSec: number | null) => produce(draft, (d) => {
+  const exercise = exerciseOf(d, plannedId);
+  if (exercise === undefined) return;
+  exercise.restSec = restSec === null ? null : Math.min(REST_MAX_SEC, Math.max(REST_MIN_SEC, Math.round(restSec)));
+});
+
+/** Черновик, сохранённый до появления отдыха, получает отдых по умолчанию. */
+export const withRestDefaults = (draft: SimpleProgramDraft): SimpleProgramDraft => produce(draft, (d) => {
+  for (const workout of d.plan.workouts) {
+    for (const exercise of workout.exercises) if (exercise.restSec === undefined) exercise.restSec = REST_DEFAULT_SEC;
+  }
 });
 
 export const removeExercise = (draft: SimpleProgramDraft, plannedId: string) => produce(draft, (d) => {

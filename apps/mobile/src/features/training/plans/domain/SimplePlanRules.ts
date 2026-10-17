@@ -1,5 +1,5 @@
 import { normalizeTitle } from "./ProgramRules.ts";
-import { WEEKS_MAX, WEEKS_MIN, type PlannedExercise, type PlannedSet, type SimpleProgramDraft } from "./SimplePlanModel.ts";
+import { REST_MAX_SEC, REST_MIN_SEC, WEEKS_MAX, WEEKS_MIN, type PlannedExercise, type PlannedSet, type SimpleProgramDraft } from "./SimplePlanModel.ts";
 
 /** §33.2 Величины подхода (тот же контракт, что у каталога упражнений; профиль упражнения даёт каталог). */
 export type TrackingMetric = "reps" | "load" | "addedLoad" | "assistance" | "duration" | "distance";
@@ -52,6 +52,10 @@ export function validateDraft(draft: SimpleProgramDraft,
         continue;
       }
       if (exercise.sets.length === 0) issues.push({ workoutId: workout.id, exerciseId: exercise.id, message: "Нужен хотя бы один подход." });
+      if (exercise.restSec !== null && (!Number.isInteger(exercise.restSec) || exercise.restSec < REST_MIN_SEC
+        || exercise.restSec > REST_MAX_SEC)) {
+        issues.push({ workoutId: workout.id, exerciseId: exercise.id, message: "Отдых — от 15 секунд до 15 минут." });
+      }
       const allowed = new Set(setFieldsOf(metrics));
       for (const set of exercise.sets) {
         unique(set.id);

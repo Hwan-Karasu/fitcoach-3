@@ -8,6 +8,7 @@ import { compareCards, normalizeTitle, validateCreate } from "../domain/ProgramR
 import type { TrainingPlansCommittedChange, TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import { DEFAULT_WEEKS, type SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
 import { validateDraft } from "../domain/SimplePlanRules.ts";
+import { withRestDefaults } from "../domain/SimplePlanEdits.ts";
 import { DEV_TRAINING_PLANS_LEDGER, devTrainingPlansCatalog } from "./DevTrainingPlansCatalog.ts";
 import { deleteStructure, readStructure, writeStructure } from "./SimplePlanStore.ts";
 
@@ -231,7 +232,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     if (row === null) return null;
     // Черновик удалённой программы не воскрешает её (§48.29 п. 7).
     if (key !== NEW_SIMPLE_DRAFT_KEY && (await this.getProgram(clientId, key)) === null) return null;
-    return { baseRevision: row.baseRevision, draft: JSON.parse(row.draftJson) as SimpleProgramDraft };
+    return { baseRevision: row.baseRevision, draft: withRestDefaults(JSON.parse(row.draftJson) as SimpleProgramDraft) };
   }
 
   async saveBuilderDraft(clientId: string, key: string, baseRevision: number | null, draft: SimpleProgramDraft): Promise<void> {

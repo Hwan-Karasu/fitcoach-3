@@ -117,4 +117,12 @@ export const devTrainingPlansCatalog: readonly MigrationStep[] = [{
       PRIMARY KEY (workspace_id, client_id, draft_key)
     )`,
   ],
+}, {
+  version: 3,
+  checksum: "t03-dev-training-plans-v3-exercise-rest-20261017",
+  statements: [
+    // §48.56: отдых у каждого упражнения плана; NULL — таймер выключен. Прежние упражнения получают 90 с.
+    `ALTER TABLE dev_training_planned_exercises ADD COLUMN rest_sec INTEGER DEFAULT 90
+      CHECK (rest_sec IS NULL OR rest_sec BETWEEN 15 AND 900)`,
+  ],
 }];

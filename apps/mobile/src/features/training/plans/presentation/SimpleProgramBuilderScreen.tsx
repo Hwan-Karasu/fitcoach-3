@@ -9,10 +9,10 @@ import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, LoadingState, St
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
-import { addExercise, addSet, addWorkout, fillSets, newDraft, removeExercise, removeSet, removeWorkout, renameWorkout,
+import { addExercise, addSet, addWorkout, fillSets, newDraft, removeExercise, removeSet, removeWorkout, renameWorkout, setRest,
   reorderExercises, setTitle, setWeeks, updateSet } from "../domain/SimplePlanEdits.ts";
 import { WEEKS_MAX, WEEKS_MIN, type PlannedExercise, type SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
-import { setFieldsOf, setsSummary, validateDraft } from "../domain/SimplePlanRules.ts";
+import { formatDuration, setFieldsOf, setsSummary, validateDraft } from "../domain/SimplePlanRules.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import { SetsEditorSheet } from "./SetsEditorSheet.tsx";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
@@ -151,7 +151,9 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
             <Text numberOfLines={2} style={[styles.exerciseName, { color: broken ? colors.danger : colors.textPrimary }]}>
               {info?.name ?? "Упражнение не найдено в каталоге"}
             </Text>
-            <Text style={[styles.meta, { color: colors.textSecondary }]}>{setsSummary(item)}</Text>
+            <Text style={[styles.meta, { color: colors.textSecondary }]}>
+              {`${setsSummary(item)} · ${item.restSec === null ? "без таймера" : `отдых ${formatDuration(item.restSec)}`}`}
+            </Text>
           </View>
           <ChevronRight size={18} color={colors.textMuted} strokeWidth={1.8} />
         </Pressable>
@@ -227,6 +229,7 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
           change(next);
           sheet.current?.dismiss();
         }}
+        onChangeRest={(restSec) => { if (editing !== null) change(setRest(draft, editing, restSec)); }}
         onRemoveExercise={() => { if (editing !== null) { change(removeExercise(draft, editing)); sheet.current?.dismiss(); } }} />
       <ConfirmDialog visible={removing !== null} destructive title="Удалить тренировку?"
         description="Тренировка и её упражнения уйдут из плана. Сохранение — кнопкой внизу; до него можно выйти без изменений."

@@ -2,12 +2,12 @@ import { forwardRef, useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput,
   type BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
-import { Copy, Plus, Trash2, X } from "lucide-react-native";
+import { Copy, Minus, Plus, Timer, Trash2, X } from "lucide-react-native";
 import { AppButton, AppIconButton } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseInfo } from "../domain/ExerciseLookupPort.ts";
-import type { PlannedExercise, PlannedSet } from "../domain/SimplePlanModel.ts";
+import { REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, type PlannedExercise, type PlannedSet } from "../domain/SimplePlanModel.ts";
 import { formatDuration, parseDuration, parseLoad, setFieldsOf, type SetField } from "../domain/SimplePlanRules.ts";
 
 const columnLabels: Readonly<Record<SetField, string>> = { loadGrams: "Вес, кг", reps: "Повторы", durationSec: "Время", distanceM: "Метры" };
@@ -56,9 +56,12 @@ export const SetsEditorSheet = forwardRef<BottomSheetModal, Readonly<{
   onAddSet: () => void;
   onRemoveSet: (setId: string) => void;
   onFillAll: () => void;
+  /** §48.56: отдых этого упражнения; `null` — таймер выключен. */
+  onChangeRest: (restSec: number | null) => void;
   onRemoveExercise: () => void;
   onDismiss: () => void;
-}>>(function SetsEditorSheet({ exercise, info, onChangeSet, onAddSet, onRemoveSet, onFillAll, onRemoveExercise, onDismiss }, ref) {
+}>>(function SetsEditorSheet({ exercise, info, onChangeSet, onAddSet, onRemoveSet, onFillAll, onChangeRest, onRemoveExercise,
+  onDismiss }, ref) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const fields = info === null ? [] : setFieldsOf(info.metrics);
@@ -106,6 +109,27 @@ export const SetsEditorSheet = forwardRef<BottomSheetModal, Readonly<{
             </Pressable>
           </View>
           <Text style={[styles.note, { color: colors.textMuted }]}>Пустое значение можно заполнить позже. Время — «1:30» или секунды.</Text>
+          <View style={[styles.rest, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+            <Timer size={18} color={colors.textSecondary} strokeWidth={1.8} />
+            <Text style={[styles.restLabel, { color: colors.textPrimary }]}>Отдых</Text>
+            {exercise.restSec === null ? (
+              <Pressable accessibilityRole="button" accessibilityLabel="Включить таймер отдыха" hitSlop={6}
+                onPress={() => onChangeRest(REST_DEFAULT_SEC)} style={styles.restToggle}>
+                <Text style={[styles.addText, { color: colors.accentInk }]}>Выключен — включить</Text>
+              </Pressable>
+            ) : <>
+              <AppIconButton compact label="Отдых меньше на 15 секунд" disabled={exercise.restSec <= REST_MIN_SEC}
+                icon={<Minus size={18} color={colors.textPrimary} strokeWidth={2} />} onPress={() => onChangeRest((exercise.restSec ?? 0) - 15)} />
+              <Text accessibilityLabel={`Отдых ${formatDuration(exercise.restSec)}`}
+                style={[styles.restValue, { color: colors.textPrimary }]}>{formatDuration(exercise.restSec)}</Text>
+              <AppIconButton compact label="Отдых больше на 15 секунд" disabled={exercise.restSec >= REST_MAX_SEC}
+                icon={<Plus size={18} color={colors.textPrimary} strokeWidth={2} />} onPress={() => onChangeRest((exercise.restSec ?? 0) + 15)} />
+              <Pressable accessibilityRole="button" accessibilityLabel="Выключить таймер отдыха" hitSlop={6}
+                onPress={() => onChangeRest(null)} style={styles.restToggle}>
+                <Text style={[styles.addText, { color: colors.textSecondary }]}>Выкл.</Text>
+              </Pressable>
+            </>}
+          </View>
           <AppButton variant="secondary" label="Убрать упражнение из тренировки" onPress={onRemoveExercise} />
         </BottomSheetScrollView>
       ) : null}
@@ -128,4 +152,8 @@ const styles = StyleSheet.create({
   add: { flex: 1, minHeight: 44, borderWidth: 1, borderRadius: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   addText: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 19 },
   note: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  rest: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 52, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12 },
+  restLabel: { flex: 1, fontFamily: fonts.medium, fontSize: 15 },
+  restValue: { minWidth: 48, textAlign: "center", fontFamily: fonts.semibold, fontSize: 16 },
+  restToggle: { minHeight: 44, justifyContent: "center", paddingHorizontal: 4 },
 });

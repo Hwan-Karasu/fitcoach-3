@@ -5,7 +5,7 @@ import { DevClientRepository } from "../apps/mobile/src/features/clients/data/De
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant, NEW_SIMPLE_DRAFT_KEY } from
   "../apps/mobile/src/features/training/plans/data/DevTrainingPlansRepository.ts";
 import { addExercise, addSet, addWorkout, fillSets, newDraft, removeExercise, removeSet, reorderExercises, setTitle,
-  updateSet } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
+  setRest, updateSet } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
 import type { SimpleProgramDraft } from "../apps/mobile/src/features/training/plans/domain/SimplePlanModel.ts";
 import { parseDuration, parseLoad, setsSummary, validateDraft, type TrackingMetric } from
   "../apps/mobile/src/features/training/plans/domain/SimplePlanRules.ts";
@@ -116,6 +116,31 @@ test("T02 окончательное удаление клиента: струк
     await clients.deleteArchivedPermanently(gone.id, archived.revision);
     assert.equal(await plans.getSimplePlan(gone.id, program.id), null);
     assert.equal(await plans.getBuilderDraft(gone.id, program.id), null);
+  } finally {
+    await close();
+  }
+});
+
+test("T03 отдых упражнения (§48.56): 90 с по умолчанию, границы 15 с – 15 мин, выключение, хранение", async () => {
+  const draft = sampleDraft();
+  const bench = draft.plan.workouts[0]!.exercises[0]!;
+  assert.equal(bench.restSec, 90);
+  assert.equal(setRest(draft, "e1", 5).plan.workouts[0]!.exercises[0]!.restSec, 15, "не меньше 15 с");
+  assert.equal(setRest(draft, "e1", 5000).plan.workouts[0]!.exercises[0]!.restSec, 900, "не больше 15 мин");
+  const tuned = setRest(setRest(draft, "e1", 180), "e2", null);
+  assert.equal(tuned.plan.workouts[1]!.exercises[0]!.restSec, null, "таймер упражнения выключен");
+  assert.equal(tuned.plan.workouts[0]!.exercises[0]!.restSec, 180, "отдых жима не трогает планку");
+  const { clients, plans, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const program = await plans.createSimpleProgram(a.id, tuned);
+    const loaded = (await plans.getSimplePlan(a.id, program.id))!.draft;
+    assert.deepEqual(loaded.plan.workouts.map((workout) => workout.exercises[0]!.restSec), [180, null]);
+    const legacy = JSON.parse(JSON.stringify(draft)) as { plan: { workouts: { exercises: { restSec?: number }[] }[] } };
+    delete legacy.plan.workouts[0]!.exercises[0]!.restSec;
+    await plans.saveBuilderDraft(a.id, program.id, program.revision, legacy as unknown as SimpleProgramDraft);
+    const restored = await plans.getBuilderDraft(a.id, program.id);
+    assert.equal(restored?.draft.plan.workouts[0]!.exercises[0]!.restSec, 90, "старый черновик получает отдых по умолчанию");
   } finally {
     await close();
   }

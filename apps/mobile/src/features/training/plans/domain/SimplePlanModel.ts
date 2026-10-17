@@ -17,6 +17,8 @@ export interface PlannedExercise {
   readonly id: string;
   /** Стабильный ID упражнения каталога (`sys:repdb:…` или `usr:…`). */
   readonly exerciseId: string;
+  /** §48.56: свой отдых упражнения в секундах; `null` — таймер у упражнения выключен. */
+  readonly restSec: number | null;
   readonly sets: readonly PlannedSet[];
 }
 
@@ -40,3 +42,8 @@ export interface SimpleProgramDraft {
 export const WEEKS_MIN = 1;
 export const WEEKS_MAX = 52;
 export const DEFAULT_WEEKS = 4;
+
+/** Отдых нового упражнения и допустимые границы (шаг кнопок — 15 с). */
+export const REST_DEFAULT_SEC = 90;
+export const REST_MIN_SEC = 15;
+export const REST_MAX_SEC = 900;
