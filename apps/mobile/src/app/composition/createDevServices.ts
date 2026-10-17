@@ -21,7 +21,7 @@ import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParti
   "../../features/training/execution/data/DevTrainingExecutionRepository.ts";
 import type { RestTimersPort, TrainingExecutionPort, TrainingPlansRepositoryPort } from "../../features/training/public.ts";
 import { RestTimerService } from "../../features/training/public.ts";
-import { expoRestSignal } from "./expoRestSignal.ts";
+import { expoRestSignal, preloadRestSignal } from "./expoRestSignal.ts";
 import { DevExerciseCatalogRepository } from "../../features/exercises/data/DevExerciseCatalogRepository.ts";
 import systemCatalogJson from "../../features/exercises/data/system-catalog.generated.json";
 import { displayNameOf, thumbnailOf, TRACKING_PROFILES, type ExerciseCatalogPort, type SystemCatalog } from
@@ -141,6 +141,7 @@ export function createDevRuntime(): DevRuntime {
         await trainingExecution.initialize();
         // Таймеры отдыха — не данные: сбой восстановления не мешает запуску (§44.7).
         await restTimers.recover().catch(() => undefined);
+        preloadRestSignal();
         await exercises.initialize();
       },
     )),

@@ -4,13 +4,15 @@ import { adjustTimer, runningTimers, startTimer, type RestTimer, type RestTimerS
 const defaultId = () => `rt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 /**
- * Единственный владелец побочных эффектов таймеров отдыха. Команды выполняются строго по очереди:
- * поздно запланированный сигнал не переживёт более новую команду «Пропустить» или перезапуск.
- * Сначала сигнал и запись, потом изменение видимого списка — ошибка не показывает ложный таймер.
+ * Единственный владелец побочных эффектов таймеров отдыха. Отсчёт показывается и сохраняется сразу;
+ * системный сигнал ставится следом и не задерживает экран (загрузка модуля, вопрос о разрешении).
+ * Опоздавший сигнал проверяется по актуальному `endAt`: если таймер успели пропустить, перезапустить
+ * или сдвинуть, сигнал отменяется — старый сигнал не сработает не вовремя (§44.9).
  */
 export class RestTimerService implements RestTimersPort {
   private timers: readonly RestTimer[] = [];
   private tail: Promise<unknown> = Promise.resolve();
+  private readonly signalling = new Set<Promise<void>>();
   private readonly listeners = new Set<() => void>();
   private readonly store: RestTimerStorePort;
   private readonly signal: RestSignalPort;
@@ -37,13 +39,27 @@ export class RestTimerService implements RestTimersPort {
     }
   }
 
-  private async cancelSignal(timer: RestTimer | null | undefined): Promise<void> {
-    if (timer?.signalId) await this.signal.cancel(timer.signalId).catch(() => undefined);
+  private cancelSignal(signalId: string | null | undefined): Promise<void> {
+    return signalId ? this.signal.cancel(signalId).catch(() => undefined) : Promise.resolve();
   }
 
-  private async scheduleSignal(timer: RestTimer): Promise<string | null> {
-    return this.signal.schedule({ endAt: timer.endAt, title: "Отдых окончен",
-      body: `${timer.clientName} · ${timer.exerciseName}` }).catch(() => null);
+  /** Поставить сигнал на окончание этого таймера и прежний снять — в фоне, без задержки отсчёта. */
+  private attachSignal(timer: RestTimer, previousSignal: string | null): void {
+    const task = (async () => {
+      await this.cancelSignal(previousSignal);
+      const signalId = await this.signal.schedule({ endAt: timer.endAt, title: "Отдых окончен",
+        body: `${timer.clientName} · ${timer.exerciseName}` }).catch(() => null);
+      if (signalId === null) return;
+      await this.enqueue(async () => {
+        const current = this.timers.find((item) => item.id === timer.id);
+        if (current === undefined || current.endAt !== timer.endAt) { await this.cancelSignal(signalId); return; }
+        const signalled = { ...current, signalId };
+        await this.store.putTimer(signalled, null);
+        this.publish(this.timers.map((item) => item.id === timer.id ? signalled : item));
+      });
+    })().catch(() => undefined);
+    this.signalling.add(task);
+    void task.finally(() => this.signalling.delete(task));
   }
 
   list(): readonly RestTimer[] {
@@ -53,6 +69,12 @@ export class RestTimerService implements RestTimersPort {
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => { this.listeners.delete(listener); };
+  }
+
+  /** Дождаться очереди команд и фоновых сигналов (тесты, завершение работы). */
+  async idle(): Promise<void> {
+    while (this.signalling.size > 0) await Promise.all([...this.signalling]);
+    await this.tail;
   }
 
   /** §44.7: идущие таймеры возвращаются с прежним `endAt`, закончившиеся убираются без нового запуска. */
@@ -67,16 +89,16 @@ export class RestTimerService implements RestTimersPort {
 
   start(input: RestTimerStart): Promise<void> {
     return this.enqueue(async () => {
-      const { timers, timer, replaced } = startTimer(this.timers, input, this.newId(), this.now());
-      await this.cancelSignal(replaced);
-      const scheduled = { ...timer, signalId: await this.scheduleSignal(timer) };
+      const before = this.timers;
+      const { timers, timer, replaced } = startTimer(before, input, this.newId(), this.now());
+      this.publish(timers);
       try {
-        await this.store.putTimer(scheduled, replaced?.id ?? null);
+        await this.store.putTimer(timer, replaced?.id ?? null);
       } catch (error) {
-        await this.cancelSignal(scheduled);
+        this.publish(before);
         throw error;
       }
-      this.publish(timers.map((item) => item.id === scheduled.id ? scheduled : item));
+      this.attachSignal(timer, replaced?.signalId ?? null);
     });
   }
 
@@ -84,12 +106,10 @@ export class RestTimerService implements RestTimersPort {
     return this.enqueue(async () => {
       const current = this.timers.find((timer) => timer.id === id);
       if (current === undefined) return;
-      // §44.9: старый сигнал не должен сработать раньше или позже нового окончания.
-      await this.cancelSignal(current);
-      const moved = adjustTimer(current, deltaSec, this.now());
-      const scheduled = { ...moved, signalId: await this.scheduleSignal(moved) };
-      await this.store.putTimer(scheduled, null);
-      this.publish(this.timers.map((timer) => timer.id === id ? scheduled : timer));
+      const moved = { ...adjustTimer(current, deltaSec, this.now()), signalId: null };
+      this.publish(this.timers.map((timer) => timer.id === id ? moved : timer));
+      await this.store.putTimer(moved, null);
+      this.attachSignal(moved, current.signalId);
     });
   }
 
@@ -105,9 +125,9 @@ export class RestTimerService implements RestTimersPort {
     return this.enqueue(async () => {
       const current = this.timers.find((timer) => timer.id === id);
       if (current === undefined) return;
-      await this.cancelSignal(current);
-      await this.store.removeTimer(id);
       this.publish(this.timers.filter((timer) => timer.id !== id));
+      await this.store.removeTimer(id);
+      await this.cancelSignal(current.signalId);
     });
   }
 }

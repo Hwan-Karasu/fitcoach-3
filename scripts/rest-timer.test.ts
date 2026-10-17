@@ -66,10 +66,12 @@ test("T03 сервис таймеров: сигнал на endAt, ±15 пере�
     const service = new RestTimerService(execution, signal.port, () => now);
     await service.start(bench);
     await service.start({ ...bench, clientId: "b", clientName: "SyntheticB", exerciseKey: "pe-row", durationSec: 90 });
+    await service.idle();
     const [a, b] = [service.list().find((timer) => timer.clientId === "a")!, service.list().find((timer) => timer.clientId === "b")!];
     assert.deepEqual([...signal.scheduled.values()].sort(), [T0 + 90_000, T0 + 180_000], "сигнал сразу при старте");
     now = T0 + 10_000;
     await service.adjust(a.id, 15);
+    await service.idle();
     const moved = service.list().find((timer) => timer.id === a.id)!;
     assert.equal(moved.endAt, T0 + 195_000);
     assert.ok(signal.cancelled.includes(a.signalId!), "старый сигнал отменён");
@@ -89,6 +91,7 @@ test("T03 таймер без системного сигнала работае
     const before = new RestTimerService(execution, fakeSignal(false).port, () => T0);
     await before.start(bench);
     await before.start({ ...bench, exerciseKey: "pe-short", durationSec: 30 });
+    await before.idle();
     assert.equal(before.list().length, 2);
     assert.equal(before.list()[0]!.signalId, null, "нет разрешения на уведомления — таймер всё равно идёт");
     const after = new RestTimerService(execution, fakeSignal().port, () => T0 + 60_000);
@@ -108,5 +111,26 @@ test("T03 таймеры клиента удаляются вместе с ни�
     const archived = await clients.setArchived(gone.id, gone.revision, true);
     await clients.deleteArchivedPermanently(gone.id, archived.revision);
     assert.equal((await execution.listTimers()).length, 0);
+  } finally { await close(); }
+});
+
+test("T03 таймер виден сразу, не дожидаясь сигнала; опоздавший сигнал после «Пропустить» отменяется (§44.9)", async () => {
+  const { execution, close } = await stores();
+  try {
+    let release: (id: string) => void = () => undefined;
+    const cancelled: string[] = [];
+    const slow: RestSignalPort = {
+      schedule: () => new Promise<string>((resolve) => { release = resolve; }),
+      cancel: async (id) => { cancelled.push(id); },
+    };
+    const service = new RestTimerService(execution, slow, () => T0);
+    await service.start(bench);
+    assert.equal(service.list().length, 1, "отсчёт на экране, пока сигнал ещё ставится");
+    assert.equal((await execution.listTimers()).length, 1, "и уже сохранён для восстановления");
+    await service.skip(service.list()[0]!.id);
+    release("late");
+    await service.idle();
+    assert.deepEqual(service.list(), []);
+    assert.deepEqual(cancelled, ["late"], "сигнал, пришедший после «Пропустить», снят");
   } finally { await close(); }
 });

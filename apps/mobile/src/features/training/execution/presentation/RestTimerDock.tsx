@@ -38,7 +38,7 @@ function TimerSegment({ timer, now, compact, timers }: Readonly<{ timer: RestTim
       <View style={[styles.line, compact && styles.lineCompact]}>
         {!compact ? button(`−${ADJUST_STEP_SEC}`, `Отдых меньше на ${ADJUST_STEP_SEC} секунд`, () => { void timers.adjust(timer.id, -ADJUST_STEP_SEC); }) : null}
         <Text accessibilityLabel={finished ? "Отдых окончен" : `Осталось ${clock(left)}`}
-          style={[styles.time, compact && styles.timeCompact, { color: finished ? colors.success : colors.textPrimary }]}>
+          numberOfLines={1} style={[styles.time, compact && styles.timeCompact, { color: finished ? colors.success : colors.textPrimary }]}>
           {finished ? "Готово" : clock(left)}
         </Text>
         {!compact ? button(`+${ADJUST_STEP_SEC}`, `Отдых больше на ${ADJUST_STEP_SEC} секунд`, () => { void timers.adjust(timer.id, ADJUST_STEP_SEC); }) : null}
@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
   owner: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   line: { flexDirection: "row", alignItems: "center", gap: 6 },
   lineCompact: { justifyContent: "center" },
-  time: { flex: 1, textAlign: "center", fontFamily: fonts.bold, fontSize: 24, lineHeight: 30 },
+  time: { minWidth: 76, textAlign: "center", fontFamily: fonts.bold, fontSize: 24, lineHeight: 30 },
   timeCompact: { fontSize: 22, lineHeight: 28 },
   button: { flex: 1, minWidth: 44, minHeight: 44, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   buttonText: { fontFamily: fonts.semibold, fontSize: 14 },

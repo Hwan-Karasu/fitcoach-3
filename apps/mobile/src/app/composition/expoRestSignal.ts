@@ -65,3 +65,8 @@ export const expoRestSignal: RestSignalPort = {
     await notifications.dismiss.dismissNotificationAsync(signalId).catch(() => undefined);
   },
 };
+
+/** Загрузить части уведомлений заранее, при старте, не дожидаясь: первый таймер не ждёт модуль. */
+export function preloadRestSignal(): void {
+  void available();
+}
