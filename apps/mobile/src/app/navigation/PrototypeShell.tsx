@@ -9,6 +9,7 @@ import { AppointmentOutcomeDialog, CalendarUndoProvider, type GuestLinkRequest }
 import { ClientAccountingScreen } from "../../features/accounting/public.ts";
 import { ClientMeasurementsScreen } from "../../features/measurements/public.ts";
 import { QuestionnaireBuilderScreen } from "../../features/questionnaire/public.ts";
+import { CustomExerciseEditorScreen, ExerciseDetailScreen, ExerciseLibraryScreen } from "../../features/exercises/public.ts";
 import { useAppointmentOutcomeQueue } from "../bootstrap/useAppointmentOutcomeQueue.ts";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 import { PrototypeThemeProvider, usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -30,6 +31,9 @@ type RootStackRoutes = {
   Settings: undefined;
   ClientRosterSettings: undefined;
   QuestionnaireBuilder: undefined;
+  ExerciseCatalog: undefined;
+  ExerciseDetail: { exerciseId: string };
+  ExerciseEditor: { exerciseId?: string; name?: string } | undefined;
   Appearance: undefined;
   WorkspaceDev: undefined;
   ClientWorkspace: { clientId: string };
@@ -88,6 +92,7 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
               onOpenNotificationSettings={() => navigation.navigate("NotificationSettings")}
               onOpenClientRosterSettings={() => navigation.navigate("ClientRosterSettings")}
               onOpenQuestionnaireBuilder={() => navigation.navigate("QuestionnaireBuilder")}
+              onOpenExerciseCatalog={() => navigation.navigate("ExerciseCatalog")}
             />
           )}
         </Stack.Screen>
@@ -96,6 +101,22 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
         </Stack.Screen>
         <Stack.Screen name="QuestionnaireBuilder" options={{ title: "Конструктор анкеты" }}>
           {() => <QuestionnaireBuilderScreen repository={services.questionnaire} />}
+        </Stack.Screen>
+        <Stack.Screen name="ExerciseCatalog" options={{ title: "Каталог упражнений" }}>
+          {({ navigation }) => <ExerciseLibraryScreen repository={services.exercises}
+            onOpen={(exerciseId) => navigation.navigate("ExerciseDetail", { exerciseId })}
+            onCreate={(name) => navigation.navigate("ExerciseEditor", { name })} />}
+        </Stack.Screen>
+        <Stack.Screen name="ExerciseDetail" options={{ title: "Упражнение" }}>
+          {({ navigation, route }) => <ExerciseDetailScreen exerciseId={route.params.exerciseId} repository={services.exercises}
+            onEdit={(exerciseId) => navigation.navigate("ExerciseEditor", { exerciseId })}
+            onArchived={() => navigation.goBack()} />}
+        </Stack.Screen>
+        <Stack.Screen name="ExerciseEditor" options={{ title: "Своё упражнение" }}>
+          {({ navigation, route }) => <CustomExerciseEditorScreen exerciseId={route.params?.exerciseId}
+            initialName={route.params?.name} repository={services.exercises}
+            onSaved={(exerciseId) => route.params?.exerciseId !== undefined ? navigation.goBack()
+              : navigation.replace("ExerciseDetail", { exerciseId })} />}
         </Stack.Screen>
         <Stack.Screen name="Appearance" options={{ headerShown: false }}>
           {({ navigation }) => <ThemeCatalogPreview onClose={() => navigation.goBack()} />}

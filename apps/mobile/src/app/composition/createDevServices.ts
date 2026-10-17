@@ -18,6 +18,9 @@ import type { QuestionnaireRepositoryPort } from "../../features/questionnaire/p
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant } from
   "../../features/training/plans/data/DevTrainingPlansRepository.ts";
 import type { TrainingPlansRepositoryPort } from "../../features/training/public.ts";
+import { DevExerciseCatalogRepository } from "../../features/exercises/data/DevExerciseCatalogRepository.ts";
+import systemCatalogJson from "../../features/exercises/data/system-catalog.generated.json";
+import type { ExerciseCatalogPort, SystemCatalog } from "../../features/exercises/public.ts";
 import type { ClientArchivePort, ClientChangePort, ClientRecoveryDraftPort, ClientRepositoryPort,
   ClientRosterPort } from "../../features/clients/public.ts";
 import { BootCoordinator } from "../bootstrap/BootCoordinator.ts";
@@ -36,6 +39,7 @@ export interface DevServices {
   readonly measurements: MeasurementRepositoryPort;
   readonly questionnaire: QuestionnaireRepositoryPort;
   readonly trainingPlans: TrainingPlansRepositoryPort;
+  readonly exercises: ExerciseCatalogPort;
   /** Active session types that can consume a credit, for SESSION_TYPE packs. */
   readonly listCreditSessionTypes: () => Promise<readonly Readonly<{ id: string; name: string }>[]>;
 }
@@ -56,7 +60,8 @@ function participantDirectory(clients: ClientRosterPort & ClientChangePort): Cal
 
 export function createDevServices(clients: DevClientServices, calendar: CalendarRepositoryPort,
   accounting: AccountingRepositoryPort, measurements: MeasurementRepositoryPort,
-  questionnaire: QuestionnaireRepositoryPort, trainingPlans: TrainingPlansRepositoryPort): DevServices {
+  questionnaire: QuestionnaireRepositoryPort, trainingPlans: TrainingPlansRepositoryPort,
+  exercises: ExerciseCatalogPort): DevServices {
   return {
     runSqliteProbe: () => runF04Probe(() => openExpoSqliteConnection("fitcoach_f04_probe.db")),
     clients,
@@ -66,6 +71,7 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
     measurements,
     questionnaire,
     trainingPlans,
+    exercises,
     listCreditSessionTypes: async () => (await calendar.listSessionTypes())
       .filter((type) => type.requiresCredit && !type.archived)
       .map((type) => ({ id: type.id, name: type.name })),
@@ -90,6 +96,8 @@ export function createDevRuntime(): DevRuntime {
   const measurements = new DevMeasurementRepository(database, DEV_WORKSPACE_ID);
   const questionnaire = new DevQuestionnaireRepository(database, DEV_WORKSPACE_ID);
   const trainingPlans = new DevTrainingPlansRepository(database, DEV_WORKSPACE_ID);
+  // Системный каталог — снимок RepDB Free, собранный `npm run catalog:build` (§29, §39.12).
+  const exercises = new DevExerciseCatalogRepository(database, DEV_WORKSPACE_ID, systemCatalogJson as SystemCatalog);
   // Calendar commands move reservations inside their own transactions.
   calendar.subscribeCommittedChanges(() => accounting.notifyExternalChange());
   return {
@@ -102,8 +110,9 @@ export function createDevRuntime(): DevRuntime {
         await measurements.initialize();
         await questionnaire.initialize();
         await trainingPlans.initialize();
+        await exercises.initialize();
       },
     )),
-    services: createDevServices(clients, calendar, accounting, measurements, questionnaire, trainingPlans),
+    services: createDevServices(clients, calendar, accounting, measurements, questionnaire, trainingPlans, exercises),
   };
 }

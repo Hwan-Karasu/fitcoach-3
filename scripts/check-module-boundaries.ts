@@ -24,7 +24,7 @@ for (const file of files) {
   const targets: string[] = [];
   for (const specifier of importSpecifiers(syntax)) {
     // Картинки — листья графа без правил границ; достаточно, что файл существует.
-    if (/\.(png|jpe?g|webp)$/u.test(specifier) && specifier.startsWith(".")) {
+    if (/\.(png|jpe?g|webp|json)$/u.test(specifier) && specifier.startsWith(".")) {
       if (!existsSync(path.resolve(path.dirname(file), specifier))) {
         errors.push(`${relative(file)} → ${specifier}: UNRESOLVED_LOCAL_IMPORT`);
       }

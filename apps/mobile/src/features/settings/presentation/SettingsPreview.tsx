@@ -5,8 +5,9 @@ export function SettingsPreview({
   onOpenNotificationSettings,
   onOpenClientRosterSettings,
   onOpenQuestionnaireBuilder,
+  onOpenExerciseCatalog,
 }: Readonly<{ onOpenAppearance: () => void; onOpenNotificationSettings: () => void;
-  onOpenClientRosterSettings: () => void; onOpenQuestionnaireBuilder: () => void }>) {
+  onOpenClientRosterSettings: () => void; onOpenQuestionnaireBuilder: () => void; onOpenExerciseCatalog: () => void }>) {
   return (
     <PrototypeScreen description="Локальные настройки тренера">
       <PrototypeNotice>
@@ -23,6 +24,8 @@ export function SettingsPreview({
         onPress={onOpenClientRosterSettings} />
       <PrototypeLink title="Конструктор анкеты" detail="Разделы, вопросы, предпросмотр и публикация версий"
         onPress={onOpenQuestionnaireBuilder} />
+      <PrototypeLink title="Каталог упражнений" detail="Поиск, фильтры, избранное и свои упражнения"
+        onPress={onOpenExerciseCatalog} />
       <PrototypeLink
         title="Уведомления"
         detail="Напоминания, тихие часы и история"

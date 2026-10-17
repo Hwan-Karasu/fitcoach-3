@@ -1,4 +1,6 @@
 node_modules/
+# RepDB Free: исходный набор не публикуется (лицензия, п. 3); собирается npm run catalog:fetch
+vendor/
 .npm-cache/
 .expo/
 .cache/
