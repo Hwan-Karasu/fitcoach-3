@@ -128,9 +128,7 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
   const showPreview = (kind: number, index: number, at: number, from: number, to: number) => {
     if (kind === MODE_RANGE) armHold();
     // Время столбиком: в узкой колонке «13:00–16:30» не рвётся посередине.
-    setPreview({ mode: kind, index, label: `${formatMinute(from)}
-–
-${formatMinute(to)}`,
+    setPreview({ mode: kind, index, label: `${formatMinute(from)}\n–\n${formatMinute(to)}`,
       invalid: verdictFor(kind, index, at, from, to) !== "OK" });
   };
 
