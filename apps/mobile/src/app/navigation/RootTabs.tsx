@@ -71,8 +71,9 @@ export function RootTabs({
   const [scrolled, setScrolled] = useState<Readonly<Record<keyof RootTabRoutes, boolean>>>(
     { Clients: false, Calendar: true, Archive: false });
   const reporters = useMemo(() => ({
-    Clients: (value: boolean) => setScrolled((current) => ({ ...current, Clients: value })),
-    Archive: (value: boolean) => setScrolled((current) => ({ ...current, Archive: value })),
+    // Одинаковое значение не меняет состояние — шапка не перерисовывается на каждом событии прокрутки.
+    Clients: (value: boolean) => setScrolled((current) => current.Clients === value ? current : { ...current, Clients: value }),
+    Archive: (value: boolean) => setScrolled((current) => current.Archive === value ? current : { ...current, Archive: value }),
   }), []);
   // Поиск «Клиентов» и «Архива» живёт в шапке (UI-OWN-019): лупа раскрывает поле, «назад» закрывает и сбрасывает.
   type SearchTab = "Clients" | "Archive";

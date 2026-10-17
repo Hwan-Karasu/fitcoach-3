@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 
 const HeaderScrollContext = createContext<((scrolled: boolean) => void) | null>(null);
@@ -6,15 +6,17 @@ const HeaderScrollContext = createContext<((scrolled: boolean) => void) | null>(
 /** Корневая вкладка подписывается, прокручен ли её экран: шапка меняет бренд на название раздела. */
 export const HeaderScrollReporter = HeaderScrollContext.Provider;
 
-/** Обработчик `onScroll` для экрана корневой вкладки; сообщает только смену состояния. */
+/**
+ * Обработчик `onScroll` для экрана корневой вкладки. Сообщает положение при каждом событии — повторы
+ * отсекает вкладка; своей памяти у экрана нет, поэтому после перерисовки шапка не залипает.
+ * Новый экран стоит в начале списка и сразу сообщает об этом. Подключать также к `onScrollEndDrag` и
+ * `onMomentumScrollEnd`: при быстром свайпе последнее событие `onScroll` у верха может не прийти.
+ */
 export function useHeaderScrollHandler(threshold = 24) {
   const report = useContext(HeaderScrollContext);
-  const scrolled = useRef(false);
+  useEffect(() => { report?.(false); }, [report]);
   return useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const next = event.nativeEvent.contentOffset.y > threshold;
-    if (next === scrolled.current) return;
-    scrolled.current = next;
-    report?.(next);
+    report?.(event.nativeEvent.contentOffset.y > threshold);
   }, [report, threshold]);
 }
 

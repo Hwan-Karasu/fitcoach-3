@@ -228,7 +228,8 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
         </View>
       </View>
       <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: toolbarHeight }]}
-        keyboardShouldPersistTaps="handled" onScroll={onScroll} scrollEventThrottle={32}>
+        keyboardShouldPersistTaps="handled" onScroll={onScroll} scrollEventThrottle={16}
+        onScrollEndDrag={onScroll} onMomentumScrollEnd={onScroll}>
         <ListLoadState snapshot={snapshot} error={error}
           onRetry={() => { setError(null); readModel.refresh(); }} />
         {snapshot.status === "loading" ? <SkeletonList label="Загружаем клиентов" /> : null}
