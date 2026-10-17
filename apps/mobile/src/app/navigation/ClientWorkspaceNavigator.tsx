@@ -7,7 +7,7 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import type { ClientRecord, ClientRepositoryPort, ClientRosterPort } from "../../features/clients/public.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { ClientQuestionnaireScreen, type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
-import { TrainingArchivePreview, TrainingStatisticsPreview } from "../../features/training/public.ts";
+import { TrainingArchivePreview, TrainingStatisticsPreview, type TrainingPlansRepositoryPort } from "../../features/training/public.ts";
 import { AppButton, LoadingState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { HomeNavigator, NutritionNavigator, TrainingNavigator } from "./ClientPrimaryNavigators.tsx";
@@ -63,13 +63,14 @@ function MoreNavigator({ clientId, questionnaire }: Readonly<{ clientId: string;
   );
 }
 
-export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, questionnaire, onOpenEdit, onOpenAccounting,
+export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, questionnaire, trainingPlans, onOpenEdit, onOpenAccounting,
   onOpenMeasurements, onClose }: Readonly<{
   clientId: string;
   repository: ClientRepositoryPort & ClientRosterPort;
   accounting: AccountingRepositoryPort;
   measurements: MeasurementRepositoryPort;
   questionnaire: QuestionnaireRepositoryPort;
+  trainingPlans: TrainingPlansRepositoryPort;
   onOpenEdit: (clientId: string) => void;
   onOpenAccounting: (clientId: string) => void;
   onOpenMeasurements: (clientId: string) => void;
@@ -84,6 +85,9 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   const [loadErrorFor, setLoadErrorFor] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const client = selection?.clientId === clientId ? selection.result : undefined;
+  // Участники программ — только поля отображения активных клиентов (владелец Clients).
+  const listCandidates = useCallback(async () => (await repository.listRoster("ACTIVE"))
+    .map((row) => ({ id: row.id, displayName: row.displayName })), [repository]);
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -147,7 +151,9 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
           }} />}
       </Tabs.Screen>
       <Tabs.Screen name="Nutrition" component={NutritionNavigator} options={{ tabBarLabel: workspaceTabs.Nutrition, tabBarAccessibilityLabel: workspaceTabs.Nutrition}} />
-      <Tabs.Screen name="Training" component={TrainingNavigator} options={{ tabBarLabel: workspaceTabs.Training, tabBarAccessibilityLabel: workspaceTabs.Training}} />
+      <Tabs.Screen name="Training" options={{ tabBarLabel: workspaceTabs.Training, tabBarAccessibilityLabel: workspaceTabs.Training}}>
+        {() => <TrainingNavigator clientId={client.id} repository={trainingPlans} listCandidates={listCandidates} />}
+      </Tabs.Screen>
       <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More}}>
         {() => <MoreNavigator clientId={client.id} questionnaire={questionnaire} />}
       </Tabs.Screen>
