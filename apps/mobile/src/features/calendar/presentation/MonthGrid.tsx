@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Undo2 } from "lucide-react-native";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { LocalDate } from "../domain/CalendarModel.ts";
 import { addMonths, monthGridWeeks } from "../domain/CalendarGeometry.ts";
@@ -23,6 +24,8 @@ type Props = Readonly<{
   counts: ReadonlyMap<LocalDate, number>;
   onBrowse: (firstOfMonth: LocalDate) => void;
   onSelect: (date: LocalDate) => void;
+  /** Вернуться к текущему месяцу и сегодняшнему дню. */
+  onToday: () => void;
 }>;
 
 /** Одна страница-месяц: заголовок, дни недели и сетка дат в рамках «число + записей». */
@@ -96,7 +99,7 @@ const MonthPage = memo(function MonthPage({ month, width, selected, today, count
  * горизонтальный FlatList с постраничной прокруткой: соседние месяцы отрисованы заранее, рамка
  * остаётся на месте. Тап выбирает дату; Today, Selected Date и Selected Week — отдельные состояния.
  */
-export function MonthGrid({ viewMonth, selected, today, counts, onBrowse, onSelect }: Props) {
+export function MonthGrid({ viewMonth, selected, today, counts, onBrowse, onSelect, onToday }: Props) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const [width, setWidth] = useState(0);
@@ -105,6 +108,7 @@ export function MonthGrid({ viewMonth, selected, today, counts, onBrowse, onSele
   const shown = useRef(monthIndex(base, viewMonth));
   const data = useMemo(() => Array.from({ length: SPAN * 2 + 1 }, (_, at) => at), []);
   const target = monthIndex(base, viewMonth);
+  const atToday = selected === today && viewMonth.slice(0, 7) === today.slice(0, 7);
 
   // Месяц сменился не свайпом (тап по соседней дате, «Сегодня») — прокручиваем ленту к нему.
   useEffect(() => {
@@ -114,8 +118,9 @@ export function MonthGrid({ viewMonth, selected, today, counts, onBrowse, onSele
   }, [target, width]);
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
-      onLayout={(event) => setWidth(event.nativeEvent.layout.width - 2 * CARD_PADDING - 2)}>
+    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      {/* Ширина страницы = точная ширина области ленты: иначе доли пикселя копятся по страницам и месяц съезжает. */}
+      <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
       {width > 0 ? (
         <FlatList ref={list} data={data} horizontal pagingEnabled showsHorizontalScrollIndicator={false}
           keyExtractor={(item) => String(item)} initialScrollIndex={target} windowSize={3}
@@ -132,13 +137,25 @@ export function MonthGrid({ viewMonth, selected, today, counts, onBrowse, onSele
               counts={counts} onSelect={onSelect} onBrowse={onBrowse} />
           )} />
       ) : null}
+      </View>
+      {/* «Сегодня» стоит на месте в строке заголовка, а название месяца листается со страницей. */}
+      <Pressable accessibilityRole="button" accessibilityLabel="Вернуться к текущему месяцу и сегодняшнему дню"
+        disabled={atToday} onPress={onToday} hitSlop={6}
+        style={({ pressed }) => [styles.today, { borderColor: colors.border,
+          backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: atToday ? 0.45 : 1 }]}>
+        <Undo2 size={14} color={colors.textPrimary} strokeWidth={2} />
+        <Text style={[styles.todayText, { color: colors.textPrimary }]}>Сегодня</Text>
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 12, padding: CARD_PADDING, overflow: "hidden" },
-  title: { fontSize: 15, lineHeight: 22, fontFamily: fonts.bold, textAlign: "center", paddingBottom: 4 },
+  title: { height: 30, fontSize: 15, lineHeight: 30, fontFamily: fonts.bold, paddingLeft: 6, paddingRight: 110 },
+  today: { position: "absolute", top: CARD_PADDING, right: CARD_PADDING + 2, height: 30, borderWidth: 1, borderRadius: 6,
+    paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 5 },
+  todayText: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18 },
   row: { flexDirection: "row" },
   week: { borderRadius: 8 },
   weekday: { flex: 1, textAlign: "center", fontFamily: fonts.regular, fontSize: 11, lineHeight: 16 },

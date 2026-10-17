@@ -4,22 +4,20 @@ import * as Sharing from "expo-sharing";
 import { ScrollView } from "react-native-gesture-handler";
 import { captureRef } from "react-native-view-shot";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronDown, ClipboardPaste, Copy, Share2, Trash2, Undo2, X } from "lucide-react-native";
-import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, StatusTag,
+import { ChevronDown, CircleHelp, ClipboardPaste, Copy, Share2, Trash2, Undo2, X } from "lucide-react-native";
+import { AppButton, AppIconButton, ConfirmDialog, InlineNotice,
   TimeWheelPicker } from "../../../shared/ui/components/public.ts";
-import { EmptyPanel, SectionHeading } from
-  "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
-import type { Appointment, ClearWeekSummary, GuestLinkRequest, LocalDate,
+import type { Appointment, CalendarInterval, ClearWeekSummary, GuestLinkRequest, LocalDate,
   WeekTemplate } from "../domain/CalendarModel.ts";
 import type { CalendarCreditPort } from "../domain/CalendarCreditPort.ts";
 import type { CalendarParticipantDirectoryPort } from "../domain/CalendarParticipantDirectoryPort.ts";
 import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
 import { addMonths, monthGridWeeks } from "../domain/CalendarGeometry.ts";
-import { addDays, appointmentLabel, formatMinute, localDateOf, mondayOf, templateSize,
+import { addDays, formatMinute, localDateOf, mondayOf, templateSize,
   weekDates } from "../domain/CalendarRules.ts";
 import { AppointmentEditorScreen } from "./AppointmentEditorScreen.tsx";
-import { calendarErrorMessage, dayTitle, outcomeTag, useCalendarWeek, useMonthCounts,
+import { calendarErrorMessage, dayTitle, useCalendarWeek, useMonthCounts,
   useParticipants, useSessionTypeColors, weekdayShort } from "./calendarPresentation.ts";
 import { MonthGrid } from "./MonthGrid.tsx";
 import { ShareWeekPoster } from "./ShareWeekPoster.tsx";
@@ -84,11 +82,10 @@ function ToolButton({ label, icon, onPress, disabled = false, busy = false, dang
  * §13 Calendar: счётчики, рабочие дни и окно дня, месяц и плотная неделя/день на одном экране.
  * Месяц и неделя листаются только свайпом; запись открывается окном поверх календаря.
  */
-export function CalendarScreen({ repository, participants, credit, onOpenInterval, onCreateClientFromGuest }: Readonly<{
+export function CalendarScreen({ repository, participants, credit, onCreateClientFromGuest }: Readonly<{
   repository: CalendarRepositoryPort;
   participants: CalendarParticipantDirectoryPort;
   credit: CalendarCreditPort;
-  onOpenInterval: (localDate: LocalDate) => void;
   onCreateClientFromGuest?: (request: GuestLinkRequest) => void;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -109,6 +106,8 @@ export function CalendarScreen({ repository, participants, credit, onOpenInterva
   const [sharing, setSharing] = useState(false);
   const [timePicker, setTimePicker] = useState<"start" | "end" | null>(null);
   const [editor, setEditor] = useState<OpenAppointmentParams | null>(null);
+  const [showHint, setShowHint] = useState(false);
+  const [removing, setRemoving] = useState<CalendarInterval | null>(null);
   const posterRef = useRef<View>(null);
   const monday = mondayOf(selected);
   const days = weekDates(monday);
@@ -159,12 +158,6 @@ export function CalendarScreen({ repository, participants, credit, onOpenInterva
     !(settings?.visibleWeekdays[index] ?? true) && (perDay.get(date) ?? 0) > 0);
   const outsideWindow = (data?.appointments ?? []).filter((row) => columns.includes(row.localDate)
     && (row.startMinute < dayWindow.startMinute || row.startMinute + row.durationMinutes > dayWindow.endMinute)).length;
-  const agenda = useMemo(() => [
-    ...(data?.intervals ?? []).filter((row) => row.localDate === selected)
-      .map((row) => ({ kind: "interval" as const, start: row.startMinute, row })),
-    ...(data?.appointments ?? []).filter((row) => row.localDate === selected)
-      .map((row) => ({ kind: "appointment" as const, start: row.startMinute, row })),
-  ].sort((a, b) => a.start - b.start || (a.kind === "interval" ? -1 : 1)), [data, selected]);
 
   const run = async (task: () => Promise<void>) => {
     if (busy) return;
@@ -194,17 +187,14 @@ export function CalendarScreen({ repository, participants, credit, onOpenInterva
     void run(async () => {
       await repository.createInterval({ kind, localDate: date, startMinute: start, endMinute: end });
       setNotice(`${kind === "DUTY" ? "Дежурство" : "Блокировка"} ${formatMinute(start)}–${formatMinute(end)} добавлено. `
-        + "Убрать можно в списке дня ниже.");
+        + "Убрать — долгим нажатием на него в сетке.");
     });
   };
 
   const handlers: TimelineHandlers = {
     onTapSlot: (date, startMinute) => setEditor({ localDate: date, startMinute }),
-    onTapBlocked: (interval) => {
-      setError(null);
-      setNotice(`Время заблокировано: ${formatMinute(interval.startMinute)}–${formatMinute(interval.endMinute)}. `
-        + "Снять блок можно в списке дня ниже.");
-    },
+    onTapBlocked: setRemoving,
+    onLongPressInterval: setRemoving,
     onOpenAppointment: (row) => setEditor({ appointmentId: row.id, localDate: row.localDate }),
     onRangeSelected: (date, start, end, kind) => { setSelected(date); createInterval(kind, date, start, end); },
     onMove: (row: Appointment, date, start) => {
@@ -303,7 +293,7 @@ export function CalendarScreen({ repository, participants, credit, onOpenInterva
         </> : null}
 
         <MonthGrid viewMonth={viewMonth} selected={selected} today={today} counts={monthCounts}
-          onBrowse={setViewMonth} onSelect={select} />
+          onBrowse={setViewMonth} onSelect={select} onToday={() => select(today)} />
 
         {/* Рамка второго календаря: шапка (как в 2.0) — «Сегодня» и режим, затем действия с неделей. */}
         <View style={[styles.frame, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -319,7 +309,20 @@ export function CalendarScreen({ repository, participants, credit, onOpenInterva
             {segment("WEEK", "Неделя")}
             {segment("DAY", "День")}
           </View>
+          <Pressable accessibilityRole="button" accessibilityLabel={showHint ? "Скрыть подсказку по жестам" : "Подсказка по жестам"}
+            accessibilityState={{ expanded: showHint }} onPress={() => setShowHint((value) => !value)}
+            style={({ pressed }) => [styles.helpButton, { borderColor: showHint ? colors.accentInk : colors.border,
+              backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
+            <CircleHelp size={18} color={showHint ? colors.accentInk : colors.textSecondary} strokeWidth={1.8} />
+          </Pressable>
         </View>
+        {showHint ? (
+          <Text style={[styles.hint, { color: colors.textSecondary }]}>
+            Касание — запись. Зажать и протянуть — дежурство, протянуть и подержать — блокировка. Долгое нажатие на
+            записи — перенос, у нижнего края — длительность; на дежурстве или блокировке — удалить. Свайп влево-вправо —
+            другая неделя.
+          </Text>
+        ) : null}
         <View style={styles.toolbarRow}>
           <ToolButton label="Поделиться" busy={sharing} disabled={busy || data === null}
             icon={(color) => <Share2 size={14} color={color} strokeWidth={1.8} />}
@@ -343,65 +346,24 @@ export function CalendarScreen({ repository, participants, credit, onOpenInterva
           {`Есть записи в скрытых днях: ${hiddenWithAppointments.map((date) => `${weekdayShort[days.indexOf(date)]} (${perDay.get(date) ?? 0})`).join(", ")}.`}
         </InlineNotice> : null}
         {outsideWindow > 0 ? <InlineNotice kind="info">
-          {`Записей вне окна ${formatMinute(dayWindow.startMinute)}–${formatMinute(dayWindow.endMinute)}: ${outsideWindow}. Они видны в списке дня.`}
+          {`Записей вне окна ${formatMinute(dayWindow.startMinute)}–${formatMinute(dayWindow.endMinute)}: ${outsideWindow}. Расширьте начало или конец дня, чтобы их увидеть.`}
         </InlineNotice> : null}
-        <Text style={[styles.hint, { color: colors.textMuted }]}>
-          Касание — запись. Зажать и протянуть — дежурство, протянуть и подержать — блокировка. Свайп — другая неделя.
-        </Text>
-
         {notice !== null ? <InlineNotice kind="success">{notice}</InlineNotice> : null}
         {error !== null || failed ? <InlineNotice kind="error">
           {error ?? "Не удалось обновить календарь. Показаны последние загруженные данные."}
         </InlineNotice> : null}
         {failed ? <AppButton variant="secondary" label="Повторить" onPress={retry} /> : null}
 
-        <SectionHeading>{dayTitle(selected)}</SectionHeading>
-        {data !== null && agenda.length === 0 ? (
-          <EmptyPanel title="Свободный день" body="Записей, дежурств и блокировок нет." />
-        ) : null}
-        {agenda.map((item) => item.kind === "interval" ? (
-          <View key={item.row.id} style={[styles.interval, {
-            borderColor: item.row.kind === "BLOCKED" ? colors.danger : colors.border,
-            backgroundColor: colors.surfaceRaised,
-          }]}>
-            <Text style={[styles.intervalText, { color: colors.textPrimary }]}>
-              {item.row.kind === "BLOCKED" ? "Заблокировано" : "Дежурство"} · {formatMinute(item.row.startMinute)}–{formatMinute(item.row.endMinute)}
-            </Text>
-            <AppButton variant="ghost" label={item.row.kind === "BLOCKED" ? "Снять блок" : "Удалить"}
-              disabled={busy}
-              onPress={() => { void run(async () => { await repository.removeInterval(item.row.id); }); }} />
-          </View>
-        ) : (
-          <Pressable key={item.row.id} accessibilityRole="button"
-            accessibilityLabel={`Запись ${formatMinute(item.row.startMinute)}, ${appointmentLabel(item.row,
-              item.row.clientId ? people.get(item.row.clientId)?.displayName ?? null : null)}`}
-            onPress={() => setEditor({ appointmentId: item.row.id, localDate: item.row.localDate })}
-            style={({ pressed }) => [styles.appointment, {
-              backgroundColor: pressed ? colors.surfaceRaised : colors.surface, borderColor: colors.border,
-            }]}>
-            <Text style={[styles.time, { color: colors.accentInk }]}>
-              {formatMinute(item.row.startMinute)}–{formatMinute(item.row.startMinute + item.row.durationMinutes)}
-            </Text>
-            <View style={styles.appointmentText}>
-              <Text style={[styles.name, { color: colors.textPrimary }]}>
-                {item.row.clientId && people.get(item.row.clientId)?.emoji
-                  ? `${people.get(item.row.clientId)?.emoji} ` : ""}
-                {appointmentLabel(item.row, item.row.clientId ? people.get(item.row.clientId)?.displayName ?? null : null)}
-              </Text>
-              <Text style={[styles.detail, { color: colors.textSecondary }]}>
-                {item.row.sessionTypeName}{item.row.guestName ? " · гость" : ""}
-                {item.row.creditBypass ? " · без списания" : ""}
-              </Text>
-              {item.row.note ? <Text style={[styles.detail, { color: colors.textSecondary }]}>{item.row.note}</Text> : null}
-              {(() => {
-                const tag = outcomeTag(item.row, now);
-                return tag === null ? null : <View style={styles.tag}><StatusTag kind={tag.kind} label={tag.label} /></View>;
-              })()}
-            </View>
-          </Pressable>
-        ))}
-        <AppButton label="Записать" onPress={() => setEditor({ localDate: selected })} />
-        <AppButton variant="secondary" label="Дежурство или блокировка" onPress={() => onOpenInterval(selected)} />
+        <ConfirmDialog visible={removing !== null} destructive confirmBusy={busy}
+          title={removing?.kind === "BLOCKED" ? "Снять блокировку?" : "Удалить дежурство?"}
+          description={removing === null ? "" : `${dayTitle(removing.localDate)}, ${formatMinute(removing.startMinute)}–${formatMinute(removing.endMinute)}.`}
+          confirmLabel={removing?.kind === "BLOCKED" ? "Снять блокировку" : "Удалить"}
+          onCancel={() => setRemoving(null)}
+          onConfirm={() => {
+            const chosen = removing;
+            if (chosen === null) return;
+            void run(async () => { await repository.removeInterval(chosen.id); setRemoving(null); });
+          }} />
         <ConfirmDialog visible={clearPreview !== null} destructive confirmBusy={busy}
           title="Очистить неделю?"
           description={clearPreview === null ? "" : [
@@ -485,15 +447,8 @@ const styles = StyleSheet.create({
   tool: { flex: 1, minHeight: 42, borderWidth: 1, borderRadius: 6, alignItems: "center", justifyContent: "center",
     gap: 2, paddingHorizontal: 2 },
   toolLabel: { fontFamily: fonts.medium, fontSize: 10, lineHeight: 13 },
-  hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
-  interval: { borderWidth: 1, borderRadius: 10, padding: 10, gap: 4, borderStyle: "dashed" },
-  intervalText: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
-  appointment: { borderWidth: 1, borderRadius: 12, padding: 12, flexDirection: "row", gap: 12, alignItems: "flex-start" },
-  time: { width: 104, fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
-  appointmentText: { flex: 1, gap: 2 },
-  tag: { flexDirection: "row", marginTop: 4 },
-  name: { fontSize: 16, lineHeight: 22, fontFamily: fonts.bold },
-  detail: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18 },
+  hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, paddingHorizontal: 8 },
+  helpButton: { width: 34, minHeight: 34, borderWidth: 1, borderRadius: 6, alignItems: "center", justifyContent: "center" },
   sheetScrim: { backgroundColor: "rgba(0,0,0,0.45)" },
   sheet: { flex: 1, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderWidth: 1, overflow: "hidden" },
   sheetHeader: { minHeight: 52, paddingLeft: 16, paddingRight: 4, flexDirection: "row", alignItems: "center",

@@ -3,7 +3,6 @@ export { CalendarSettingsScreen } from "./presentation/CalendarSettingsScreen.ts
 export { AppointmentEditorScreen } from "./presentation/AppointmentEditorScreen.tsx";
 export { AppointmentOutcomeDialog } from "./presentation/AppointmentOutcomeDialog.tsx";
 export { CalendarUndoProvider } from "./presentation/CancelUndo.tsx";
-export { IntervalEditorScreen } from "./presentation/IntervalEditorScreen.tsx";
 export type { Appointment, AppointmentInput, AppointmentOutcome, CalendarInterval, GuestLinkRequest, CalendarSettings, LocalDate,
   SessionType, WeekTemplate } from "./domain/CalendarModel.ts";
 export type { CalendarCommittedChange, CalendarRepositoryPort } from "./domain/CalendarRepositoryPort.ts";

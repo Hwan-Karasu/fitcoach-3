@@ -38,6 +38,8 @@ interface Block {
 export interface TimelineHandlers {
   readonly onTapSlot: (date: LocalDate, startMinute: number) => void;
   readonly onTapBlocked: (interval: CalendarInterval) => void;
+  /** Долгое нажатие на дежурство или блокировку — предложить удалить. */
+  readonly onLongPressInterval: (interval: CalendarInterval) => void;
   readonly onOpenAppointment: (appointment: Appointment) => void;
   readonly onRangeSelected: (date: LocalDate, start: number, end: number, kind: "DUTY" | "BLOCKED") => void;
   readonly onMove: (appointment: Appointment, date: LocalDate, start: number) => void;
@@ -93,6 +95,17 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
   const column = useSharedValue(0);
   const start = useSharedValue(0);
   const end = useSharedValue(0);
+
+  const bands = useMemo<readonly Block[]>(() => intervals.flatMap((row, index) => {
+    const at = dates.indexOf(row.localDate);
+    return at < 0 ? [] : [{ index, column: at, start: row.startMinute, end: row.endMinute, movable: false }];
+  }), [dates, intervals]);
+  const pressInterval = (index: number) => {
+    const row = intervals[index];
+    if (row === undefined) return;
+    Vibration.vibrate(12);
+    handlers.onLongPressInterval(row);
+  };
 
   const blocks = useMemo<readonly Block[]>(() => appointments.flatMap((row, index) => {
     const at = dates.indexOf(row.localDate);
@@ -172,6 +185,15 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
         if (block.column === at && minute >= block.start && minute < block.end) hit = block;
       }
       if (hit !== null && !hit.movable) { mode.value = MODE_NONE; return; }
+      if (hit === null) {
+        for (const band of bands) {
+          if (band.column === at && minute >= band.start && minute < band.end) {
+            mode.value = MODE_NONE;
+            scheduleOnRN(pressInterval, band.index);
+            return;
+          }
+        }
+      }
       column.value = at;
       anchor.value = slot;
       if (hit === null) {
@@ -332,7 +354,7 @@ export function TimelineHours({ window, height }: Readonly<{ window: TimeWindow;
   const hours = [];
   for (let minute = Math.ceil(window.startMinute / 60) * 60; minute <= window.endMinute; minute += 60) hours.push(minute);
   return (
-    <View style={{ width: TIMELINE_GUTTER, paddingTop: TIMELINE_HEADER }}>
+    <View style={{ width: TIMELINE_GUTTER, paddingTop: TIMELINE_HEADER, paddingBottom: 10 }}>
       <View style={{ height }}>
         {hours.map((minute) => (
           <Text key={minute} style={[styles.hour, { top: Math.max(yOfMinute(minute, height, window) - 7, 0), color: colors.textMuted }]}>
