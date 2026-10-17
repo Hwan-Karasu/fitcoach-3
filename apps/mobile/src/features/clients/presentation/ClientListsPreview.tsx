@@ -195,8 +195,8 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
   const sortLabel = sortOptions.find((option) => option.value === activeSort)?.label ?? "Имя А–Я";
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled" onScroll={onScroll} scrollEventThrottle={32}>
+      {/* Поиск и фильтры всегда на виду: прокручивается только список. */}
+      <View style={styles.toolbar}>
         <SearchField accessibilityLabel="Поиск по клиентам" query={query} onChangeQuery={setQuery} />
         <View style={styles.pills}>
           <FilterPill weight={1} label="Сегодня" selected={todayOnly}
@@ -209,6 +209,9 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
             accessibilityLabel={todayOnly ? "Сортировка: по времени записи" : `Сортировка: ${sortLabel}`}
             onPress={() => setMenu("sort")} />
         </View>
+      </View>
+      <ScrollView style={styles.screen} contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled" onScroll={onScroll} scrollEventThrottle={32}>
         <ListLoadState snapshot={snapshot} error={error}
           onRetry={() => { setError(null); readModel.refresh(); }} />
         {snapshot.status === "loading" ? <SkeletonList label="Загружаем клиентов" /> : null}
@@ -385,7 +388,8 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   // Нижний отступ — чтобы последняя карточка не уходила под плавающую кнопку.
-  content: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 88, gap: 8 },
+  toolbar: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8, gap: 8 },
+  content: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 88, gap: 8 },
   pills: { flexDirection: "row", alignItems: "center", gap: 8 },
   filters: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   message: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
