@@ -8,6 +8,7 @@ import { ClientRosterSettingsScreen } from "../../features/clients/public.ts";
 import { AppointmentOutcomeDialog, CalendarUndoProvider, type GuestLinkRequest } from "../../features/calendar/public.ts";
 import { ClientAccountingScreen } from "../../features/accounting/public.ts";
 import { ClientMeasurementsScreen } from "../../features/measurements/public.ts";
+import { QuestionnaireBuilderScreen } from "../../features/questionnaire/public.ts";
 import { useAppointmentOutcomeQueue } from "../bootstrap/useAppointmentOutcomeQueue.ts";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 import { PrototypeThemeProvider, usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -28,6 +29,7 @@ type RootStackRoutes = {
   NotificationSettings: undefined;
   Settings: undefined;
   ClientRosterSettings: undefined;
+  QuestionnaireBuilder: undefined;
   Appearance: undefined;
   WorkspaceDev: undefined;
   ClientWorkspace: { clientId: string };
@@ -85,11 +87,15 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
               onOpenAppearance={() => navigation.navigate("Appearance")}
               onOpenNotificationSettings={() => navigation.navigate("NotificationSettings")}
               onOpenClientRosterSettings={() => navigation.navigate("ClientRosterSettings")}
+              onOpenQuestionnaireBuilder={() => navigation.navigate("QuestionnaireBuilder")}
             />
           )}
         </Stack.Screen>
         <Stack.Screen name="ClientRosterSettings" options={{ title: "Список клиентов" }}>
           {() => <ClientRosterSettingsScreen repository={services.clients} />}
+        </Stack.Screen>
+        <Stack.Screen name="QuestionnaireBuilder" options={{ title: "Конструктор анкеты" }}>
+          {() => <QuestionnaireBuilderScreen repository={services.questionnaire} />}
         </Stack.Screen>
         <Stack.Screen name="Appearance" options={{ headerShown: false }}>
           {({ navigation }) => <ThemeCatalogPreview onClose={() => navigation.goBack()} />}
