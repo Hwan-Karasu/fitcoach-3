@@ -1,13 +1,18 @@
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Archive, CalendarDays, Users, type LucideIcon } from "lucide-react-native";
+import { Archive, CalendarDays, Dumbbell, Ellipsis, House, Users, Utensils, type LucideIcon } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 
-const tabIcons: Readonly<Record<string, LucideIcon>> = { Clients: Users, Calendar: CalendarDays, Archive };
+/** Значки всех наборов вкладок: корень (Клиенты/Календарь/Архив) и карточка клиента (Главная/Питание/…). */
+const tabIcons: Readonly<Record<string, LucideIcon>> = { Clients: Users, Calendar: CalendarDays, Archive,
+  Home: House, Nutrition: Utensils, Training: Dumbbell, More: Ellipsis };
 
-/** Плавающая нижняя панель (UI-OWN-018): отступы от краёв, радиус 18; иконка + подпись, бейдж, черта под активной. */
+/**
+ * Единая плавающая нижняя панель (UI-OWN-018) для всех наборов вкладок: вид один и тот же, меняются только
+ * кнопки. Отступы от краёв, радиус 18; иконка + подпись, бейдж, черта под активной.
+ */
 export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTabBarProps>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;

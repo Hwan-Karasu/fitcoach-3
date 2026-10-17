@@ -7,7 +7,7 @@ import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvid
 import { SLOT_MINUTES, type Appointment, type CalendarInterval, type LocalDate } from "../domain/CalendarModel.ts";
 import { clipToWindow, columnAtX, dragRange, minuteAtY, moveVerdict, slotAtY, yOfMinute,
   type TimeWindow } from "../domain/CalendarGeometry.ts";
-import { appointmentEnded, appointmentLabel, formatMinute, weekdayIndex } from "../domain/CalendarRules.ts";
+import { appointmentEnded, appointmentLabel, formatMinute, localDateOf, weekdayIndex } from "../domain/CalendarRules.ts";
 import type { CalendarParticipant } from "../domain/CalendarParticipantDirectoryPort.ts";
 import { weekdayShort } from "./calendarPresentation.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
@@ -15,7 +15,7 @@ import { fonts } from "../../../shared/ui/theme/typography.ts";
 const LONG_PRESS_MS = 350;
 const EDGE_PX = 14;
 /** Ширина неподвижной колонки часов слева от ленты дней. */
-export const TIMELINE_GUTTER = 26;
+export const TIMELINE_GUTTER = 40;
 /** Высота строки заголовков дней — на неё же отступает колонка часов. */
 export const TIMELINE_HEADER = 36;
 /** Протянул и подержал столько — интервал становится блокировкой; быстро отпустил — дежурство. */
@@ -289,6 +289,8 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
   const halfHours = [];
   for (let minute = window.startMinute; minute < window.endMinute; minute += 30) if (minute % 60 !== 0) halfHours.push(minute);
   const dense = columns > 3;
+  const todayDate = localDateOf(now);
+  const todayColumn = dates.indexOf(todayDate);
   const rangeKind = preview?.mode === MODE_RANGE ? (holdBlocked ? "Блокировка" : "Дежурство") : null;
   const previewColor = preview?.invalid || holdBlocked ? colors.danger : colors.accentInk;
 
@@ -296,9 +298,13 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
     <View>
       <View style={styles.headerRow}>
         {dates.map((date) => (
-          <View key={date} style={[styles.headerCell, { borderColor: colors.border, borderLeftWidth: dates.indexOf(date) === 0 ? 0 : StyleSheet.hairlineWidth }]}>
-            <Text style={[styles.headerDay, { color: colors.textSecondary }]}>{weekdayShort[weekdayIndex(date)]}</Text>
-            <Text style={[styles.headerDate, { color: colors.textPrimary }]}>{Number(date.slice(8, 10))}</Text>
+          <View key={date} style={[styles.headerCell, { borderColor: colors.border,
+            borderLeftWidth: dates.indexOf(date) === 0 ? 0 : StyleSheet.hairlineWidth,
+            backgroundColor: date === todayDate ? colors.surfaceRaised : "transparent" }]}>
+            <Text style={[styles.headerDay, { color: date === todayDate ? colors.accentInk : colors.textSecondary }]}>
+              {weekdayShort[weekdayIndex(date)]}</Text>
+            <Text style={[styles.headerDate, { color: date === todayDate ? colors.accentInk : colors.textPrimary }]}>
+              {Number(date.slice(8, 10))}</Text>
           </View>
         ))}
       </View>
@@ -307,6 +313,10 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
           <View style={[styles.surface, { height, borderColor: colors.border, backgroundColor: colors.surface }]}
             onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
             accessibilityHint="Касание — запись на это время; долгое нажатие и протягивание — выбрать интервал">
+            {todayColumn >= 0 && width > 0 ? (
+              <View pointerEvents="none" style={[styles.todayColumn, { left: todayColumn * columnWidth, width: columnWidth,
+                height, backgroundColor: colors.accentFill }]} />
+            ) : null}
             {hours.map((minute) => (
               <View key={`h${minute}`} pointerEvents="none" style={[styles.line, { top: top(minute), backgroundColor: colors.border }]} />
             ))}
@@ -397,7 +407,7 @@ export function TimelineHours({ window, height }: Readonly<{ window: TimeWindow;
         ))}
         {hours.filter((minute) => minute < window.endMinute).map((minute) => (
           <Text key={minute} style={[styles.hour, { top: yOfMinute(minute, height, window) + 2, color: colors.textMuted }]}>
-            {formatMinute(minute).slice(0, 2)}
+            {formatMinute(minute)}
           </Text>
         ))}
       </View>
@@ -411,10 +421,11 @@ const styles = StyleSheet.create({
   headerDay: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14 },
   headerDate: { fontSize: 14, lineHeight: 18, fontFamily: fonts.bold },
   body: { flexDirection: "row" },
-  hour: { position: "absolute", right: 4, fontFamily: fonts.regular, fontSize: 10, lineHeight: 14 },
+  hour: { position: "absolute", right: 4, left: 0, textAlign: "right", fontFamily: fonts.regular, fontSize: 10, lineHeight: 14 },
   surface: { flex: 1, borderTopWidth: 1, borderLeftWidth: 1, overflow: "hidden" },
   line: { position: "absolute", left: 0, right: 0, height: StyleSheet.hairlineWidth },
   halfLine: { opacity: 0.45 },
+  todayColumn: { position: "absolute", top: 0, opacity: 0.06 },
   columnLine: { position: "absolute", top: 0, width: StyleSheet.hairlineWidth },
   band: { position: "absolute", justifyContent: "center", alignItems: "center" },
   bandText: { fontSize: 11, fontFamily: fonts.bold },

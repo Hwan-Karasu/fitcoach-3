@@ -13,7 +13,7 @@ import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.
 import { HomeNavigator, NutritionNavigator, TrainingNavigator } from "./ClientPrimaryNavigators.tsx";
 import { MoreMenuScreen } from "./MoreMenuScreen.tsx";
 import { moreDestinations, workspaceTabs } from "./routeCatalog.ts";
-import { TabGlyph } from "./TabGlyph.tsx";
+import { RootTabBar } from "./RootTabBar.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 
 type WorkspaceTabs = {
@@ -132,16 +132,10 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       </Text> : null}
     <Tabs.Navigator
       backBehavior="history"
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.accentInk,
-        tabBarInactiveTintColor: colors.textSecondary,
-        tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
-        tabBarLabelStyle: { fontSize: 12, fontFamily: fonts.bold },
-        tabBarItemStyle: { minHeight: 48 },
-      }}
+      tabBar={(props) => <RootTabBar {...props} />}
+      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.canvas } }}
     >
-      <Tabs.Screen name="Home" options={{ tabBarLabel: workspaceTabs.Home, tabBarAccessibilityLabel: workspaceTabs.Home, tabBarIcon: ({ color }) => <TabGlyph kind="home" color={color} /> }}>
+      <Tabs.Screen name="Home" options={{ tabBarLabel: workspaceTabs.Home, tabBarAccessibilityLabel: workspaceTabs.Home}}>
         {() => <HomeNavigator client={client} accounting={accounting} measurements={measurements}
           onOpenEdit={() => onOpenEdit(client.id)}
           onOpenAccounting={() => onOpenAccounting(client.id)}
@@ -152,9 +146,9 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
             onClose();
           }} />}
       </Tabs.Screen>
-      <Tabs.Screen name="Nutrition" component={NutritionNavigator} options={{ tabBarLabel: workspaceTabs.Nutrition, tabBarAccessibilityLabel: workspaceTabs.Nutrition, tabBarIcon: ({ color }) => <TabGlyph kind="nutrition" color={color} /> }} />
-      <Tabs.Screen name="Training" component={TrainingNavigator} options={{ tabBarLabel: workspaceTabs.Training, tabBarAccessibilityLabel: workspaceTabs.Training, tabBarIcon: ({ color }) => <TabGlyph kind="training" color={color} /> }} />
-      <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More, tabBarIcon: ({ color }) => <TabGlyph kind="more" color={color} /> }}>
+      <Tabs.Screen name="Nutrition" component={NutritionNavigator} options={{ tabBarLabel: workspaceTabs.Nutrition, tabBarAccessibilityLabel: workspaceTabs.Nutrition}} />
+      <Tabs.Screen name="Training" component={TrainingNavigator} options={{ tabBarLabel: workspaceTabs.Training, tabBarAccessibilityLabel: workspaceTabs.Training}} />
+      <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More}}>
         {() => <MoreNavigator clientId={client.id} questionnaire={questionnaire} />}
       </Tabs.Screen>
     </Tabs.Navigator>

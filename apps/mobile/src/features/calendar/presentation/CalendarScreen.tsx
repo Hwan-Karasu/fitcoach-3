@@ -128,13 +128,14 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
   const monthCounts = useMonthCounts(repository, gridFirst, gridLast);
   const monthTotal = [...monthCounts.entries()].filter(([date]) => date.slice(0, 7) === viewMonth.slice(0, 7))
     .reduce((sum, [, count]) => sum + count, 0);
+  // Сетка целиком помещается на экране: всё, кроме шапки приложения, шапки недели и нижней панели.
+  const gridMaxHeight = Math.max(320, screenHeight - insets.top - 300);
   const settings = data?.settings ?? null;
   const dayStart = settings?.dayStartMinute ?? 420;
   const dayEnd = settings?.dayEndMinute ?? 1380;
   const dayWindow = useMemo(() => ({ startMinute: dayStart, endMinute: dayEnd }), [dayStart, dayEnd]);
   const visibleDays = days.filter((_, index) => settings?.visibleWeekdays[index] ?? true);
   const columns = mode === "WEEK" ? visibleDays : [selected];
-  const timelineHeight = Math.round(Math.min(Math.max(screenHeight - 300, 380), 760));
 
   // §13.18: the poster renders off-screen for one frame, is captured and handed to the system share
   // sheet. Sharing never changes Calendar state.
@@ -390,7 +391,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
         {data !== null ? (
           <WeekPager repository={repository} mode={mode} selected={selected} today={today} scrollLocked={scrollLocked}
             onSelect={select} visibleWeekdays={settings?.visibleWeekdays ?? ALL_DAYS} window={dayWindow} people={people}
-            typeColors={typeColors} now={now} height={timelineHeight} handlers={handlers} />
+            typeColors={typeColors} now={now} handlers={handlers} maxHeight={gridMaxHeight} />
         ) : null}
         </View>
 

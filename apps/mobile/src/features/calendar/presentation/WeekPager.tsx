@@ -65,17 +65,25 @@ const TimelinePage = memo(function TimelinePage({ start, week, width, shared }: 
  * месте. Горизонтальный FlatList с постраничной прокруткой — соседние страницы отрисованы заранее.
  */
 export function WeekPager({ mode, selected, today, scrollLocked, onSelect, repository, visibleWeekdays, window, people,
-  typeColors, now, height, handlers }: PageShared & Readonly<{
+  typeColors, now, handlers, maxHeight }: Omit<PageShared, "height"> & Readonly<{
+  /** Высота, в которую должен поместиться весь день от начала до конца. */
+  maxHeight: number;
   mode: "WEEK" | "DAY";
   selected: LocalDate;
   today: LocalDate;
   scrollLocked: boolean;
   onSelect: (date: LocalDate) => void;
 }>) {
+  const [width, setWidth] = useState(0);
+  // Высота часа — меньшее из «≈85% ширины столбца недели» (пропорции рабочей версии 2.0) и «весь день
+  // помещается на экране»; в режиме «День» тот же шаг часов, чтобы сетка не прыгала при переключении.
+  const visibleCount = Math.max(1, visibleWeekdays.filter(Boolean).length);
+  const hours = Math.max(1, (window.endMinute - window.startMinute) / 60);
+  const hourHeight = Math.max(28, Math.min(Math.round((width / visibleCount) * 0.85), Math.floor(maxHeight / hours)));
+  const height = Math.round(hourHeight * hours);
   // Общие параметры страниц — один объект, пока они не меняются: открытие меню не перерисовывает сетку.
   const shared = useMemo<PageShared>(() => ({ repository, visibleWeekdays, window, people, typeColors, now, height, handlers }),
     [repository, visibleWeekdays, window, people, typeColors, now, height, handlers]);
-  const [width, setWidth] = useState(0);
   const [baseMonday] = useState(() => mondayOf(today));
   const [baseDay] = useState(today);
   const week = mode === "WEEK";
