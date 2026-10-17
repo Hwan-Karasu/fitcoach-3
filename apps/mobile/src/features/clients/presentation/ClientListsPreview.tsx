@@ -54,7 +54,7 @@ function ListLoadState({ snapshot, error, onRetry }: Readonly<{
 
 const sortOptions: readonly DropdownOption<RosterSortMode>[] = [
   { value: "NAME", label: "Имя А–Я" },
-  { value: "RECENT", label: "Недавно открытые" },
+  { value: "RECENT", label: "Недавние" },
 ];
 
 const metricLook: Readonly<Record<RosterMetricId, Readonly<{ label: string; icon: (color: string) => ReactNode }>>> = {
@@ -220,9 +220,9 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
             accessibilityLabel={todayOnly ? "Сегодня по расписанию, включён" : "Сегодня по расписанию"}
             icon={(color) => <CalendarDays size={16} color={color} strokeWidth={1.8} />}
             onPress={() => setTodayOnly((value) => !value)} />
-          <FilterPill weight={1.4} menu expanded={menu === "group"} anchorRef={groupAnchor} label="Все клиенты" accessibilityLabel="Группа клиентов: все клиенты"
+          <FilterPill weight={1.3} menu expanded={menu === "group"} anchorRef={groupAnchor} label="Все клиенты" accessibilityLabel="Группа клиентов: все клиенты"
             onPress={() => setMenu("group")} />
-          <FilterPill weight={1} menu expanded={menu === "sort"} anchorRef={sortAnchor} label={todayOnly ? "Время" : sortLabel}
+          <FilterPill weight={1.15} menu expanded={menu === "sort"} anchorRef={sortAnchor} label={todayOnly ? "Время" : sortLabel}
             accessibilityLabel={todayOnly ? "Сортировка: по времени записи" : `Сортировка: ${sortLabel}`}
             onPress={() => setMenu("sort")} />
         </View>
