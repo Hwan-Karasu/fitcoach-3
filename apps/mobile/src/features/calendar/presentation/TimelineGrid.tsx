@@ -127,7 +127,10 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
 
   const showPreview = (kind: number, index: number, at: number, from: number, to: number) => {
     if (kind === MODE_RANGE) armHold();
-    setPreview({ mode: kind, index, label: `${formatMinute(from)}–${formatMinute(to)}`,
+    // Время столбиком: в узкой колонке «13:00–16:30» не рвётся посередине.
+    setPreview({ mode: kind, index, label: `${formatMinute(from)}
+–
+${formatMinute(to)}`,
       invalid: verdictFor(kind, index, at, from, to) !== "OK" });
   };
 
@@ -295,7 +298,7 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
     <View>
       <View style={styles.headerRow}>
         {dates.map((date) => (
-          <View key={date} style={styles.headerCell}>
+          <View key={date} style={[styles.headerCell, { borderColor: colors.border, borderLeftWidth: dates.indexOf(date) === 0 ? 0 : StyleSheet.hairlineWidth }]}>
             <Text style={[styles.headerDay, { color: colors.textSecondary }]}>{weekdayShort[weekdayIndex(date)]}</Text>
             <Text style={[styles.headerDate, { color: colors.textPrimary }]}>{Number(date.slice(8, 10))}</Text>
           </View>
@@ -381,11 +384,21 @@ export function TimelineHours({ window, height }: Readonly<{ window: TimeWindow;
   const colors = palette.tokens;
   const hours = [];
   for (let minute = Math.ceil(window.startMinute / 60) * 60; minute <= window.endMinute; minute += 60) hours.push(minute);
+  const halfHours = [];
+  for (let minute = window.startMinute; minute < window.endMinute; minute += 30) if (minute % 60 !== 0) halfHours.push(minute);
+  // Колонка часов — продолжение сетки: те же линии, подпись часа внутри своей клетки у верхнего края.
   return (
-    <View style={{ width: TIMELINE_GUTTER, paddingTop: TIMELINE_HEADER, paddingBottom: 10 }}>
+    <View style={{ width: TIMELINE_GUTTER }}>
+      <View style={{ height: TIMELINE_HEADER, borderBottomWidth: 1, borderColor: colors.border }} />
       <View style={{ height }}>
         {hours.map((minute) => (
-          <Text key={minute} style={[styles.hour, { top: Math.max(yOfMinute(minute, height, window) - 7, 0), color: colors.textMuted }]}>
+          <View key={`h${minute}`} style={[styles.line, { top: yOfMinute(minute, height, window), backgroundColor: colors.border }]} />
+        ))}
+        {halfHours.map((minute) => (
+          <View key={`m${minute}`} style={[styles.line, styles.halfLine, { top: yOfMinute(minute, height, window), backgroundColor: colors.border }]} />
+        ))}
+        {hours.filter((minute) => minute < window.endMinute).map((minute) => (
+          <Text key={minute} style={[styles.hour, { top: yOfMinute(minute, height, window) + 2, color: colors.textMuted }]}>
             {formatMinute(minute).slice(0, 2)}
           </Text>
         ))}
@@ -395,12 +408,12 @@ export function TimelineHours({ window, height }: Readonly<{ window: TimeWindow;
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: "row", height: TIMELINE_HEADER, alignItems: "center" },
-  headerCell: { flex: 1, alignItems: "center" },
+  headerRow: { flexDirection: "row", height: TIMELINE_HEADER },
+  headerCell: { flex: 1, alignItems: "center", justifyContent: "center" },
   headerDay: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14 },
   headerDate: { fontSize: 14, lineHeight: 18, fontFamily: fonts.bold },
   body: { flexDirection: "row" },
-  hour: { position: "absolute", right: 3, fontFamily: fonts.regular, fontSize: 10, lineHeight: 14 },
+  hour: { position: "absolute", right: 4, fontFamily: fonts.regular, fontSize: 10, lineHeight: 14 },
   surface: { flex: 1, borderTopWidth: 1, borderLeftWidth: 1, overflow: "hidden" },
   line: { position: "absolute", left: 0, right: 0, height: StyleSheet.hairlineWidth },
   halfLine: { opacity: 0.45 },

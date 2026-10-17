@@ -315,6 +315,8 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
     <>
       <ScrollView scrollEnabled={!scrollLocked} style={{ backgroundColor: colors.canvas }}
         contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {/* Настройки всего календаря — одна рамка: счётчики, рабочие дни, начало и конец дня. */}
+        <View style={[styles.settingsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.stats}>
           <StatTile label="На неделе" value={data ? String(data.appointments.length) : "…"} />
           <StatTile label={`В ${monthPrepositional[viewMonthIndex] ?? "месяце"}`} value={String(monthTotal)} />
@@ -340,6 +342,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
             {timeButton("end", "Конец", settings.dayEndMinute)}
           </View>
         </> : null}
+        </View>
 
         <MonthGrid viewMonth={viewMonth} selected={selected} today={today} counts={monthCounts}
           onBrowse={setViewMonth} onSelect={select} onToday={goToday} />
@@ -461,6 +464,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
 const styles = StyleSheet.create({
   content: { padding: 16, gap: 12, paddingBottom: 32 },
   offscreen: { position: "absolute", left: -10000, top: 0 },
+  settingsCard: { borderWidth: 1, borderRadius: 12, padding: 8, gap: 8 },
   stats: { flexDirection: "row", gap: 8 },
   stat: { flex: 1, minHeight: 40, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, flexDirection: "row",
     alignItems: "center", justifyContent: "space-between", gap: 6 },

@@ -52,7 +52,7 @@ const TimelinePage = memo(function TimelinePage({ start, week, width, shared }: 
     ? weekDates(start).filter((_, index) => shared.visibleWeekdays[index] ?? true) : [start], [shared.visibleWeekdays, start, week]);
   const range = usePageRange(shared.repository, start, week ? addDays(start, 6) : start);
   return (
-    <View style={[styles.page, { width }]}>
+    <View style={{ width }}>
       <TimelineGrid dates={dates} window={shared.window} appointments={range?.appointments ?? []}
         intervals={range?.intervals ?? []} people={shared.people} typeColors={shared.typeColors} now={shared.now}
         height={shared.height} handlers={shared.handlers} />
@@ -124,6 +124,4 @@ export function WeekPager({ mode, selected, today, scrollLocked, onSelect, repos
 const styles = StyleSheet.create({
   row: { flexDirection: "row" },
   pages: { flex: 1 },
-  // Отступ снизу: подпись последнего часа («23») не обрезается краем рамки.
-  page: { paddingBottom: 10 },
 });
