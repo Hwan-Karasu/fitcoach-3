@@ -1,23 +1,35 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { ClientEditorPreview, type ClientRecord, type ClientRecoveryDraft,
+import { ClientEditorPreview, type ClientEditorAppendix, type ClientRecord, type ClientRecoveryDraft,
   type ClientRecoveryDraftPort, type ClientRepositoryPort } from
   "../../features/clients/public.ts";
+import { QuestionnaireForm, useAnswersForm, type AnswerValue,
+  type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
 import { AppButton, ConfirmDialog, LoadingState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 
 type Loaded = Readonly<{ client: ClientRecord | null; draft: ClientRecoveryDraft | null }>;
 
-export function ClientEditorRoute({ clientId, repository, onClose, prefillName, onCreated }: Readonly<{
+/**
+ * Единая карточка клиента: основное (владелец Clients) и анкета (владелец Questionnaire) в одной форме
+ * с одним сохранением — сначала карточка, затем ответы по её ID. Если ответы не сохранились, повторное
+ * сохранение не создаёт второго клиента, а дописывает ответы к уже сохранённой карточке.
+ */
+export function ClientEditorRoute({ clientId, repository, questionnaire, onClose, prefillName, onCreated }: Readonly<{
   clientId?: string;
   /** A guest name from Calendar; an existing recovery draft still asks first. */
   prefillName?: string;
   /** Runs after a new card is saved; must not throw, the card already exists. */
   onCreated?: (client: ClientRecord) => Promise<void>;
   repository: ClientRepositoryPort & ClientRecoveryDraftPort;
+  questionnaire: QuestionnaireRepositoryPort;
   onClose: () => void;
 }>) {
+  const answers = useAnswersForm(questionnaire, clientId ?? null);
+  const patch = useRef<Readonly<Record<string, AnswerValue | null>>>({});
+  /** Карточка, уже сохранённая в этой форме: повтор после сбоя ответов её обновляет, а не создаёт новую. */
+  const savedClient = useRef<ClientRecord | null>(null);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [choice, setChoice] = useState<"ask" | "use" | "fresh">("ask");
@@ -96,11 +108,26 @@ export function ClientEditorRoute({ clientId, repository, onClose, prefillName, 
   }
 
   const recovered = draft !== null && (clientId !== undefined || choice === "use");
+  const published = answers.published;
+  const appendix: ClientEditorAppendix | undefined = published === null ? undefined : {
+    sections: published.schema.sections.filter((section) => !section.hidden)
+      .map((section) => ({ id: section.id, title: section.title })),
+    dirty: answers.dirtyIds.length > 0,
+    validate: () => {
+      const prepared = answers.prepare();
+      if (prepared === null) return false;
+      patch.current = prepared;
+      return true;
+    },
+    render: (onSectionLayout) => <QuestionnaireForm schema={published.schema} inputs={answers.inputs}
+      errors={answers.errors} onChange={answers.onChange} onSectionLayout={onSectionLayout} />,
+  };
   return <ClientEditorPreview key={`${clientId ?? "new"}:${recovered ? draft?.id : "fresh"}`}
     initial={client ?? undefined}
     initialDraft={recovered ? draft?.formData : prefillName === undefined ? undefined
       : { displayName: prefillName, contactPhone: "", contactEmail: "", birthDate: "", heightDraft: "", emoji: null }}
     recoveredDraft={recovered}
+    appendix={appendix}
     onClose={onClose}
     onSaveDraft={async (formData) => {
       await repository.saveDraft({ clientId: clientId ?? null,
@@ -108,9 +135,15 @@ export function ClientEditorRoute({ clientId, repository, onClose, prefillName, 
     }}
     onDiscardDraft={() => repository.discardDraft(clientId ?? null)}
     onSave={async (input) => {
-      if (clientId === undefined) await onCreated?.(await repository.create(input));
-      else if (client !== null) await repository.update(clientId, client.revision, input);
-      else throw new Error("CLIENT_NOT_FOUND");
+      const known = savedClient.current ?? client;
+      if (known !== null) savedClient.current = await repository.update(known.id, known.revision, input);
+      else {
+        savedClient.current = await repository.create(input);
+        await onCreated?.(savedClient.current);
+      }
+      try { await answers.commit(savedClient.current.id, patch.current); }
+      catch { throw new Error("QUESTIONNAIRE_SAVE_FAILED"); }
+      patch.current = {};
     }} />;
 }
 

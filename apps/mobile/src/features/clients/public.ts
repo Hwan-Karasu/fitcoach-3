@@ -1,6 +1,6 @@
 export { ClientsArchivePreview, ClientsRosterPreview } from "./presentation/ClientListsPreview.tsx";
 export { ClientHomePreview } from "./presentation/ClientHomePreview.tsx";
-export { ClientEditorPreview } from "./presentation/ClientEditorPreview.tsx";
+export { ClientEditorPreview, type ClientEditorAppendix } from "./presentation/ClientEditorPreview.tsx";
 export { ClientRosterSettingsScreen } from "./presentation/ClientRosterSettingsScreen.tsx";
 export type { ClientRecord, ClientRepositoryPort, CreateClientInput } from "./domain/ClientRepositoryPort.ts";
 export type { ClientFormDraft, ClientRecoveryDraft, ClientRecoveryDraftPort } from "./domain/ClientRecoveryDraftPort.ts";

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AppState, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ConfirmDialog, InlineNotice, SectionTabs, SelectionChip, StickyEditorFooter, TextField } from "../../../shared/ui/components/public.ts";
@@ -11,20 +11,24 @@ import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 const emojiChoices = ["🏋️", "🏃", "🚴", "🧘", "💪", "🔥"] as const;
 
-const sections = [
-  { id: "basic", title: "Основное", description: "Имя и контакты" },
-  { id: "goals", title: "Цель", description: "Вопросы будут загружаться из опубликованной схемы анкеты." },
-  { id: "health", title: "Здоровье", description: "Ответы анкеты не подменяют актуальные ограничения клиента." },
-  { id: "lifestyle", title: "Образ жизни", description: "Раздел появится после подключения схемы анкеты." },
-  { id: "nutrition", title: "Питание", description: "Вес будет отдельным измерением, а не полем профиля." },
-  { id: "motivation", title: "Мотивация", description: "Раздел появится после подключения схемы анкеты." },
-  { id: "additional", title: "Дополнительно", description: "Опубликованные дополнительные вопросы появятся здесь." },
-] as const;
+/**
+ * Анкета внутри карточки клиента (единая форма): разделы для вкладок, содержимое и проверка.
+ * Собирается снаружи (композиция владельцев), сама форма клиента анкету не хранит.
+ */
+export interface ClientEditorAppendix {
+  readonly sections: readonly Readonly<{ id: string; title: string }>[];
+  /** Содержимое; `onSectionLayout` сообщает положение раздела внутри содержимого для вкладок. */
+  readonly render: (onSectionLayout: (sectionId: string, y: number) => void) => ReactNode;
+  /** Есть несохранённые ответы — выход спросит подтверждение. */
+  readonly dirty: boolean;
+  /** Проверить ответы перед сохранением; false — ошибки показаны у самих вопросов. */
+  readonly validate: () => boolean;
+}
 
-type SectionId = typeof sections[number]["id"];
+const BASIC = "basic";
 
 export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDraft,
-  initial, initialDraft, recoveredDraft = false }: Readonly<{
+  initial, initialDraft, recoveredDraft = false, appendix }: Readonly<{
   onClose: () => void;
   onSave: (input: CreateClientInput) => Promise<void>;
   onSaveDraft: (form: ClientFormDraft) => Promise<void>;
@@ -32,6 +36,8 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
   initial?: ClientRecord;
   initialDraft?: ClientFormDraft;
   recoveredDraft?: boolean;
+  /** Анкета клиента ниже основного: одна форма и одно сохранение. */
+  appendix?: ClientEditorAppendix;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -42,7 +48,9 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
   const emailRef = useRef<TextInput>(null);
   const birthDateRef = useRef<TextInput>(null);
   const heightRef = useRef<TextInput>(null);
-  const sectionOffsets = useRef<Partial<Record<SectionId, number>>>({});
+  const basicOffset = useRef(0);
+  const appendixOffset = useRef(0);
+  const appendixSections = useRef<Record<string, number>>({});
   const [displayName, setDisplayName] = useState(initialDraft?.displayName ?? initial?.displayName ?? "");
   const [phone, setPhone] = useState(initialDraft?.contactPhone ?? initial?.contactPhone ?? "");
   const [email, setEmail] = useState(initialDraft?.contactEmail ?? initial?.contactEmail ?? "");
@@ -54,7 +62,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
   const [birthDateError, setBirthDateError] = useState(false);
   const [heightError, setHeightError] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<SectionId>("basic");
+  const [activeSection, setActiveSection] = useState<string>(BASIC);
   const [confirmExitVisible, setConfirmExitVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exitBusy, setExitBusy] = useState(false);
@@ -62,12 +70,13 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
   const [draftSaved, setDraftSaved] = useState(false);
   const savingRef = useRef(false);
   const pendingDraftWrite = useRef<Promise<void> | null>(null);
-  const dirty = initial === undefined
+  const profileDirty = initial === undefined
     ? Boolean(displayName.trim() || phone.trim() || email.trim()
       || birthDate.trim() || heightDraft.trim() || emoji)
     : displayName !== initial.displayName || phone !== (initial.contactPhone ?? "")
       || email !== (initial.contactEmail ?? "") || birthDate !== (initial.birthDate ?? "")
       || heightDraft !== formatHeightCmX10(initial.heightCmX10) || emoji !== initial.emoji;
+  const dirty = profileDirty || (appendix?.dirty ?? false);
   const formRef = useRef<ClientFormDraft>({ displayName, contactPhone: phone,
     contactEmail: email, birthDate, heightDraft, emoji });
   formRef.current = { displayName, contactPhone: phone, contactEmail: email,
@@ -87,22 +96,22 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
   }, [onSaveDraft]);
 
   useEffect(() => {
-    if (!dirty || savingRef.current) return;
+    if (!profileDirty || savingRef.current) return;
     setDraftSaved(false);
     const timer = setTimeout(() => {
       if (!savingRef.current) void persistDraft(formRef.current).catch(() => undefined);
     }, 600);
     return () => clearTimeout(timer);
-  }, [displayName, phone, email, birthDate, heightDraft, emoji, dirty, persistDraft]);
+  }, [displayName, phone, email, birthDate, heightDraft, emoji, profileDirty, persistDraft]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "background" && dirty && !savingRef.current) {
+      if (state === "background" && profileDirty && !savingRef.current) {
         void persistDraft(formRef.current).catch(() => undefined);
       }
     });
     return () => subscription.remove();
-  }, [dirty, persistDraft]);
+  }, [profileDirty, persistDraft]);
 
   const close = useCallback(() => {
     if (savingRef.current) return;
@@ -121,16 +130,20 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
     return () => subscription.remove();
   }, [close]);
 
-  const scrollToSection = (id: SectionId) => {
+  const tabs = [{ id: BASIC, label: "Основное" }, ...(appendix?.sections ?? []).map((section) => ({ id: section.id, label: section.title }))];
+  const offsetOf = (id: string) => id === BASIC ? basicOffset.current
+    : appendixOffset.current + (appendixSections.current[id] ?? 0);
+
+  const scrollToSection = (id: string) => {
     setActiveSection(id);
-    scrollRef.current?.scrollTo({ y: sectionOffsets.current[id] ?? 0, animated: true });
+    scrollRef.current?.scrollTo({ y: offsetOf(id), animated: true });
   };
 
   const syncSectionWithScroll = (scrollY: number) => {
-    let visibleSection: SectionId = "basic";
-    for (const section of sections) {
-      if ((sectionOffsets.current[section.id] ?? Number.POSITIVE_INFINITY) <= scrollY + 40) {
-        visibleSection = section.id;
+    let visibleSection = BASIC;
+    for (const tab of tabs) {
+      if (tab.id === BASIC || appendixSections.current[tab.id] !== undefined) {
+        if (offsetOf(tab.id) <= scrollY + 40) visibleSection = tab.id;
       }
     }
     setActiveSection((current) => current === visibleSection ? current : visibleSection);
@@ -141,7 +154,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
     if (!displayName.trim()) {
       setNameError(true);
       setMessage("Имя клиента обязательно.");
-      scrollToSection("basic");
+      scrollToSection(BASIC);
       nameRef.current?.focus();
       return;
     }
@@ -149,7 +162,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
     if (!validPastBirthDate(normalizedBirthDate)) {
       setBirthDateError(true);
       setMessage("Введите действительную дату рождения в прошлом в формате ГГГГ-ММ-ДД.");
-      scrollToSection("basic");
+      scrollToSection(BASIC);
       birthDateRef.current?.focus();
       return;
     }
@@ -157,13 +170,17 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
     if (heightCmX10 === "invalid") {
       setHeightError(true);
       setMessage("Введите положительный рост в сантиметрах, максимум один знак после запятой.");
-      scrollToSection("basic");
+      scrollToSection(BASIC);
       heightRef.current?.focus();
       return;
     }
     setNameError(false);
     setBirthDateError(false);
     setHeightError(false);
+    if (appendix !== undefined && !appendix.validate()) {
+      setMessage("Проверьте ответы анкеты: ошибки отмечены у вопросов.");
+      return;
+    }
     savingRef.current = true;
     setSaving(true);
     setMessage(null);
@@ -180,6 +197,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
         : code === "CLIENT_FIELD_TOO_LONG" ? "Слишком длинное значение одного из полей."
           : code === "CLIENT_STALE_OR_WRONG_SCOPE" ? "Карточка изменилась. Закройте форму и откройте её снова."
             : code === "CLIENT_DRAFT_SAVE_FAILED" ? "Не удалось защитить ввод черновиком. Повторите сохранение."
+              : code === "QUESTIONNAIRE_SAVE_FAILED" ? "Карточка сохранена, а ответы анкеты — нет. Нажмите сохранить ещё раз."
           : "Не удалось сохранить карточку. Введённые данные остались в форме; попробуйте ещё раз.");
     } finally {
       savingRef.current = false;
@@ -229,7 +247,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
         </Text>
       </View>
       <SectionTabs
-        tabs={sections.map((section) => ({ id: section.id, label: section.title }))}
+        tabs={tabs}
         selectedId={activeSection}
         onSelect={scrollToSection}
       />
@@ -245,7 +263,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
         </InlineNotice>
         {recoveredDraft ? <InlineNotice kind="info">Несохранённый черновик восстановлен из этого устройства.</InlineNotice> : null}
         <View
-          onLayout={(event) => { sectionOffsets.current.basic = event.nativeEvent.layout.y; }}
+          onLayout={(event) => { basicOffset.current = event.nativeEvent.layout.y; }}
           style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Основное</Text>
@@ -310,16 +328,11 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
           </View>
           <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>Пол добавится после фиксации набора значений. Вес будет отдельным измерением.</Text>
         </View>
-        {sections.slice(1).map((section) => (
-          <View
-            key={section.id}
-            onLayout={(event) => { sectionOffsets.current[section.id] = event.nativeEvent.layout.y; }}
-            style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          >
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{section.title}</Text>
-            <Text style={[styles.sectionDescription, { color: colors.textSecondary }]}>{section.description}</Text>
+        {appendix !== undefined ? (
+          <View onLayout={(event) => { appendixOffset.current = event.nativeEvent.layout.y; }}>
+            {appendix.render((sectionId, y) => { appendixSections.current[sectionId] = y; })}
           </View>
-        ))}
+        ) : null}
       </ScrollView>
       <StickyEditorFooter
         actionLabel={initial === undefined ? "Создать карточку" : "Сохранить изменения"}

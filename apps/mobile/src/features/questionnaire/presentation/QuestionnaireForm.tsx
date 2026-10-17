@@ -49,12 +49,14 @@ const requiredNote = "* Обязательно для завершения ан�
  * The canonical Questionnaire renderer (§23.1): the client form and the builder Preview use the
  * same component. Only applicable questions are shown; hidden answers stay in `inputs`.
  */
-export function QuestionnaireForm({ schema, inputs, errors, onChange, disabled = false }: Readonly<{
+export function QuestionnaireForm({ schema, inputs, errors, onChange, disabled = false, onSectionLayout }: Readonly<{
   schema: QuestionnaireSchema;
   inputs: FormInputs;
   errors: Readonly<Record<string, string>>;
   onChange: (fieldId: string, value: InputValue) => void;
   disabled?: boolean;
+  /** Положение раздела внутри формы — для перехода к нему вкладками единой карточки клиента. */
+  onSectionLayout?: (sectionId: string, y: number) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -127,7 +129,8 @@ export function QuestionnaireForm({ schema, inputs, errors, onChange, disabled =
         const visible = item.fields.filter((entry) => isFieldVisible(schema, entry.id, answers));
         if (visible.length === 0) return null;
         return (
-          <View key={item.id} style={[styles.section, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+          <View key={item.id} style={[styles.section, { borderColor: colors.border, backgroundColor: colors.surface }]}
+            onLayout={onSectionLayout === undefined ? undefined : (event) => onSectionLayout(item.id, event.nativeEvent.layout.y)}>
             <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.textPrimary }]}>{item.title}</Text>
             {item.help !== null ? <Text style={[styles.help, { color: colors.textSecondary }]}>{item.help}</Text> : null}
             {visible.map(renderField)}

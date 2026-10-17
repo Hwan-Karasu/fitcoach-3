@@ -115,7 +115,7 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
         </Stack.Screen>
         <Stack.Screen name="ClientEditorDev" options={{ headerShown: false, gestureEnabled: false }}>
           {({ navigation, route }) => <ClientEditorRoute
-            clientId={route.params?.clientId} repository={services.clients}
+            clientId={route.params?.clientId} repository={services.clients} questionnaire={services.questionnaire}
             prefillName={route.params?.guestLink?.guestName}
             onCreated={async (client) => {
               const link = route.params?.guestLink;
