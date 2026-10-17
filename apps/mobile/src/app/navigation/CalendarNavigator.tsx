@@ -2,6 +2,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { AppointmentEditorScreen, CalendarScreen, CalendarSettingsScreen, IntervalEditorScreen,
   type CalendarCreditPort, type CalendarParticipantDirectoryPort,
   type CalendarRepositoryPort, type GuestLinkRequest } from "../../features/calendar/public.ts";
+import { fonts } from "../../shared/ui/theme/typography.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 
 type CalendarStackRoutes = {
@@ -29,7 +30,7 @@ export function CalendarNavigator({ repository, participants, credit, onCreateCl
         unstable_headerInsets: { top: false },
         headerStyle: { backgroundColor: colors.surface },
         headerTintColor: colors.textPrimary,
-        headerTitleStyle: { fontWeight: "700" },
+        headerTitleStyle: { fontFamily: fonts.bold },
         contentStyle: { backgroundColor: colors.canvas },
       }}
     >

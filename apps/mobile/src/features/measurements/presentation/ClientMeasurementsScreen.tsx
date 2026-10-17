@@ -9,6 +9,7 @@ import { MEASUREMENT_TYPES, type ClientMeasurements, type Measurement, type Meas
 import type { MeasurementRepositoryPort } from "../domain/MeasurementRepositoryPort.ts";
 import { addDays, dailyPoints, formatDate, formatTime, formatValue, latestPoint, localDateOf,
   measurementTypeInfo, parseTime, parseValueX10 } from "../domain/MeasurementRules.ts";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 function entries(count: number): string {
   const tail = count % 100;
@@ -217,17 +218,17 @@ export function ClientMeasurementsScreen({ clientId, repository }: Readonly<{
 const styles = StyleSheet.create({
   summary: { gap: 6 },
   summaryRow: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
-  summaryLabel: { fontSize: 14, lineHeight: 20 },
-  summaryValue: { flexShrink: 1, textAlign: "right", fontSize: 14, lineHeight: 20, fontWeight: "700" },
+  summaryLabel: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
+  summaryValue: { flexShrink: 1, textAlign: "right", fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
   form: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 10 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  stepperValue: { flex: 1, textAlign: "center", fontSize: 16, lineHeight: 22, fontWeight: "700" },
+  stepperValue: { flex: 1, textAlign: "center", fontSize: 16, lineHeight: 22, fontFamily: fonts.bold },
   day: { gap: 8 },
-  dayTitle: { fontSize: 16, lineHeight: 22, fontWeight: "700" },
+  dayTitle: { fontSize: 16, lineHeight: 22, fontFamily: fonts.bold },
   entry: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 4 },
   entryHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  entryText: { flex: 1, fontSize: 15, lineHeight: 21, fontWeight: "700" },
+  entryText: { flex: 1, fontSize: 15, lineHeight: 21, fontFamily: fonts.bold },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
-  hint: { fontSize: 13, lineHeight: 18 },
+  hint: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
 });

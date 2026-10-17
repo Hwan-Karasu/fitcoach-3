@@ -8,6 +8,7 @@ import type { ClientHomeSummary, HomePackSummary } from "../domain/ClientHomeSum
 import type { ClientRecord } from "../domain/ClientRepositoryPort.ts";
 import { formatHeightCmX10 } from "../domain/ClientProfileValidation.ts";
 import { ageOn, formatYears, localCalendarDate } from "../domain/ClientRosterPresentation.ts";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 const toneLabel = { active: "Активен", warning: "Подходит к концу", empty: "Закончился" } as const;
 const toneKind = { active: "success", warning: "warning", empty: "action_required" } as const;
@@ -156,17 +157,17 @@ export function ClientHomePreview({ client, summary, onEdit, onOpenAccounting, o
 const styles = StyleSheet.create({
   hero: { borderWidth: 1, borderRadius: 16, padding: 16, flexDirection: "row", gap: 14, alignItems: "center" },
   avatar: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 24, lineHeight: 30, fontWeight: "700" },
+  avatarText: { fontSize: 24, lineHeight: 30, fontFamily: fonts.bold },
   heroText: { flex: 1, gap: 2 },
-  name: { fontSize: 22, lineHeight: 28, fontWeight: "700" },
-  detail: { fontSize: 14, lineHeight: 20 },
+  name: { fontSize: 22, lineHeight: 28, fontFamily: fonts.bold },
+  detail: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   tiles: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tile: { flexGrow: 1, flexBasis: 100 },
   card: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 8 },
   cardHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  cardTitle: { fontSize: 17, lineHeight: 24, fontWeight: "700" },
+  cardTitle: { fontSize: 17, lineHeight: 24, fontFamily: fonts.bold },
   weightRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   weightField: { flex: 1 },
   packLine: { flexDirection: "row", alignItems: "baseline", gap: 8, flexWrap: "wrap" },
-  packNumber: { fontSize: 32, lineHeight: 38, fontWeight: "700" },
+  packNumber: { fontSize: 32, lineHeight: 38, fontFamily: fonts.bold },
 });

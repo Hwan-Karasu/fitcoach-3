@@ -8,6 +8,7 @@ import { APPOINTMENT_DURATIONS, SESSION_TYPE_COLORS, type CalendarSettings, type
   type SessionTypeCategory, type SessionTypeColor } from "../domain/CalendarModel.ts";
 import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
 import { calendarErrorMessage, sessionTypeColorHex } from "./calendarPresentation.ts";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 const categoryLabel: Readonly<Record<SessionTypeCategory, string>> = {
   TRAINING: "Тренировка", INSTRUCTION: "Инструктаж", CONSULTATION: "Консультация", OTHER: "Другое",
@@ -222,11 +223,11 @@ export function CalendarSettingsScreen({ repository }: Readonly<{ repository: Ca
 const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 4 },
   cardHead: { flexDirection: "row", alignItems: "center", gap: 8 },
-  name: { flex: 1, fontSize: 16, lineHeight: 22, fontWeight: "700" },
-  detail: { fontSize: 13, lineHeight: 18 },
+  name: { flex: 1, fontSize: 16, lineHeight: 22, fontFamily: fonts.bold },
+  detail: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
   archivedRow: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingLeft: 12 },
-  archivedName: { flex: 1, fontSize: 14, lineHeight: 20 },
+  archivedName: { flex: 1, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   form: { borderWidth: 2, borderRadius: 12, padding: 12, gap: 10 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   swatch: { width: 18, height: 18, borderRadius: 9 },

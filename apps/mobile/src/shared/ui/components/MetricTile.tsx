@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
+import { fonts } from "../theme/typography.ts";
 
 export interface MetricTileData {
   readonly label: string;
@@ -31,9 +32,9 @@ export function MetricTile({ label, value, unit, status }: Readonly<MetricTileDa
 
 const styles = StyleSheet.create({
   tile: { minWidth: 100, minHeight: 88, flexGrow: 1, borderWidth: 1, borderRadius: 10, padding: 12, gap: 4 },
-  label: { fontSize: 12, lineHeight: 17 },
+  label: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
   valueLine: { flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", gap: 4 },
-  value: { fontSize: 20, lineHeight: 26, fontWeight: "700" },
-  unit: { fontSize: 12, lineHeight: 18 },
-  status: { fontSize: 11, lineHeight: 16 },
+  value: { fontSize: 20, lineHeight: 26, fontFamily: fonts.bold },
+  unit: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18 },
+  status: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 16 },
 });

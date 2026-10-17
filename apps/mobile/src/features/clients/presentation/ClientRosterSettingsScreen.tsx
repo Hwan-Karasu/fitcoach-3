@@ -5,6 +5,7 @@ import { AppButton, NumericField, SelectionChip } from "../../../shared/ui/compo
 import { PrototypeScreen, SectionHeading } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { ClientRosterPort, RosterBirthdaySettings } from "../domain/ClientRosterPort.ts";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 export function ClientRosterSettingsScreen({ repository }: Readonly<{
   repository: ClientRosterPort;
@@ -99,6 +100,6 @@ export function ClientRosterSettingsScreen({ repository }: Readonly<{
 
 const styles = StyleSheet.create({
   choices: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  label: { fontSize: 14, lineHeight: 20, fontWeight: "700" },
-  message: { fontSize: 13, lineHeight: 19 },
+  label: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
+  message: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19 },
 });

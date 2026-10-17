@@ -3,6 +3,7 @@ import { AccessibilityInfo, Modal, Pressable, ScrollView, StyleSheet, Text, View
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppIconButton } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 interface SettingsDrawerPreviewProps {
   readonly visible: boolean;
@@ -131,11 +132,11 @@ const styles = StyleSheet.create({
   drawer: { height: "100%" },
   drawerContent: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 32 },
   drawerHeader: { minHeight: 48, flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  title: { fontSize: 22, lineHeight: 28, fontWeight: "700", flexShrink: 1 },
-  closeGlyph: { fontSize: 26, lineHeight: 30 },
-  groupLabel: { fontSize: 11, lineHeight: 16, fontWeight: "700", letterSpacing: 0.8, marginTop: 18, marginBottom: 6 },
+  title: { fontSize: 22, lineHeight: 28, fontFamily: fonts.bold, flexShrink: 1 },
+  closeGlyph: { fontFamily: fonts.regular, fontSize: 26, lineHeight: 30 },
+  groupLabel: { fontSize: 11, lineHeight: 16, fontFamily: fonts.bold, letterSpacing: 0.8, marginTop: 18, marginBottom: 6 },
   link: { minHeight: 56, borderBottomWidth: 2, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 },
-  linkText: { flex: 1, flexShrink: 1, fontSize: 16, lineHeight: 22, fontWeight: "700" },
-  linkArrow: { minWidth: 20, fontSize: 26, lineHeight: 30, textAlign: "right" },
-  footnote: { fontSize: 12, lineHeight: 18, marginTop: 24 },
+  linkText: { flex: 1, flexShrink: 1, fontSize: 16, lineHeight: 22, fontFamily: fonts.bold },
+  linkArrow: { minWidth: 20, fontFamily: fonts.regular, fontSize: 26, lineHeight: 30, textAlign: "right" },
+  footnote: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18, marginTop: 24 },
 });

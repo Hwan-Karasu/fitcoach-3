@@ -4,6 +4,7 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import type { DevRuntime } from "../composition/createDevServices.ts";
 import { PrototypeShell } from "../navigation/PrototypeShell.tsx";
 import type { BootErrorCode } from "./BootCoordinator.ts";
+import { fonts } from "../../shared/ui/theme/typography.ts";
 
 const errorLabels: Record<BootErrorCode, string> = {
   WORKSPACE_UNAVAILABLE: "Тестовое рабочее пространство недоступно.",
@@ -53,11 +54,11 @@ export function DevBootGate({ boot, services }: Readonly<DevRuntime>) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#f4f7fa" },
   content: { flex: 1, justifyContent: "center", paddingHorizontal: 28, gap: 18 },
-  label: { color: "#40688b", fontSize: 12, fontWeight: "700", letterSpacing: 1.4 },
-  title: { color: "#162b3c", fontSize: 29, fontWeight: "700" },
-  body: { color: "#345067", fontSize: 16, lineHeight: 24 },
-  note: { color: "#718397", fontSize: 13, lineHeight: 20 },
+  label: { color: "#40688b", fontSize: 12, fontFamily: fonts.bold, letterSpacing: 1.4 },
+  title: { color: "#162b3c", fontSize: 29, fontFamily: fonts.bold },
+  body: { color: "#345067", fontFamily: fonts.regular, fontSize: 16, lineHeight: 24 },
+  note: { color: "#718397", fontFamily: fonts.regular, fontSize: 13, lineHeight: 20 },
   button: { minHeight: 48, alignSelf: "flex-start", justifyContent: "center", paddingHorizontal: 20,
     borderRadius: 12, backgroundColor: "#166d83" },
-  buttonLabel: { color: "#ffffff", fontSize: 16, fontWeight: "700" },
+  buttonLabel: { color: "#ffffff", fontSize: 16, fontFamily: fonts.bold },
 });

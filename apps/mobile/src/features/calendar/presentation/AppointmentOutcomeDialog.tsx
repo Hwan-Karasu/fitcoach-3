@@ -9,6 +9,7 @@ import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts
 import { appointmentLabel, formatMinute } from "../domain/CalendarRules.ts";
 import { calendarErrorMessage, dayTitle, useParticipants } from "./calendarPresentation.ts";
 import { CancelUndoHost, useOfferCancelUndo } from "./CancelUndo.tsx";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 /** «Тренировка списана» only after a real USED; untracked and bypass rows get no finance text (§48.40.6). */
 function creditText(row: Appointment, state: CalendarAppointmentCredit | null): string | null {
@@ -121,10 +122,10 @@ const styles = StyleSheet.create({
   card: { maxHeight: "90%", width: "100%", borderWidth: 1, borderRadius: 16, padding: 20, gap: 8 },
   copyScroll: { flexGrow: 0, flexShrink: 1 },
   copy: { gap: 6 },
-  title: { fontSize: 20, lineHeight: 26, fontWeight: "700" },
-  name: { fontSize: 17, lineHeight: 24, fontWeight: "700" },
-  detail: { fontSize: 14, lineHeight: 20 },
+  title: { fontSize: 20, lineHeight: 26, fontFamily: fonts.bold },
+  name: { fontSize: 17, lineHeight: 24, fontFamily: fonts.bold },
+  detail: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   actions: { gap: 8, marginTop: 8 },
   pager: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  counter: { flex: 1, textAlign: "center", fontSize: 14, lineHeight: 20 },
+  counter: { flex: 1, textAlign: "center", fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
 });

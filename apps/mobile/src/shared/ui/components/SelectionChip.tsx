@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text } from "react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
+import { fonts } from "../theme/typography.ts";
 
 interface SelectionChipProps {
   readonly group: string;
@@ -43,5 +44,5 @@ export function SelectionChip({ group, label, selected, onPress, disabled = fals
 
 const styles = StyleSheet.create({
   chip: { minHeight: 48, borderRadius: 24, borderWidth: 2, paddingHorizontal: 16, paddingVertical: 8, justifyContent: "center" },
-  label: { fontSize: 14, lineHeight: 20, fontWeight: "700", textAlign: "center" },
+  label: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold, textAlign: "center" },
 });

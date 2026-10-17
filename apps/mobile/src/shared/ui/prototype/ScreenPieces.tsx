@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { EmptyState, InlineNotice } from "../components/public.ts";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
+import { fonts } from "../theme/typography.ts";
 
 export function PrototypeScreen({
   title,
@@ -68,12 +69,12 @@ export function PrototypeLink({
 
 const styles = StyleSheet.create({
   screenContent: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 36, gap: 12 },
-  pageTitle: { fontSize: 22, lineHeight: 28, fontWeight: "700" },
-  description: { fontSize: 14, lineHeight: 20 },
-  sectionHeading: { fontSize: 16, lineHeight: 22, fontWeight: "700", marginTop: 8 },
+  pageTitle: { fontSize: 22, lineHeight: 28, fontFamily: fonts.bold },
+  description: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
+  sectionHeading: { fontSize: 16, lineHeight: 22, fontFamily: fonts.bold, marginTop: 8 },
   link: { minHeight: 64, borderWidth: 2, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 12 },
   linkText: { flex: 1, gap: 3 },
-  linkTitle: { fontSize: 14, lineHeight: 20, fontWeight: "700" },
-  linkDetail: { fontSize: 12, lineHeight: 16 },
-  chevron: { fontSize: 26, lineHeight: 28 },
+  linkTitle: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
+  linkDetail: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  chevron: { fontFamily: fonts.regular, fontSize: 26, lineHeight: 28 },
 });

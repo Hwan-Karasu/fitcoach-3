@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
+import { fonts } from "../theme/typography.ts";
 
 export type StatusKind = "neutral" | "info" | "warning" | "action_required" | "success" | "error";
 
@@ -40,6 +41,6 @@ export function StatusTag({ kind, label }: Readonly<{ kind: StatusKind; label: s
 
 const styles = StyleSheet.create({
   tag: { minHeight: 28, borderWidth: 1, borderRadius: 14, paddingHorizontal: 8, paddingVertical: 3, flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 5 },
-  marker: { fontSize: 13, lineHeight: 18, fontWeight: "700" },
-  label: { fontSize: 11, lineHeight: 16, fontWeight: "700", flexShrink: 1 },
+  marker: { fontSize: 13, lineHeight: 18, fontFamily: fonts.bold },
+  label: { fontSize: 11, lineHeight: 16, fontFamily: fonts.bold, flexShrink: 1 },
 });

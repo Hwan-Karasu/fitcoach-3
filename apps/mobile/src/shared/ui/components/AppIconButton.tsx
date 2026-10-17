@@ -1,6 +1,7 @@
 import { useState, type ReactNode, type Ref } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
+import { fonts } from "../theme/typography.ts";
 
 interface AppIconButtonProps {
   readonly icon: ReactNode;
@@ -45,5 +46,5 @@ export function AppIconButton({ icon, label, onPress, disabled = false, disabled
 const styles = StyleSheet.create({
   button: { width: 48, height: 48, borderWidth: 2, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   badge: { position: "absolute", top: 1, right: 0, minWidth: 17, height: 17, paddingHorizontal: 3, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  badgeText: { fontSize: 10, lineHeight: 12, fontWeight: "700" },
+  badgeText: { fontSize: 10, lineHeight: 12, fontFamily: fonts.bold },
 });

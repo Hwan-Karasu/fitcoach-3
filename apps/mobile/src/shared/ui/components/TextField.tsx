@@ -1,6 +1,7 @@
 import { useState, type Ref } from "react";
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
+import { fonts } from "../theme/typography.ts";
 
 interface TextFieldProps {
   readonly label: string;
@@ -76,7 +77,7 @@ export function TextField({
 
 const styles = StyleSheet.create({
   field: { gap: 6 },
-  label: { fontSize: 14, lineHeight: 20, fontWeight: "700" },
-  input: { minHeight: 48, borderWidth: 2, borderRadius: 8, paddingHorizontal: 12, fontSize: 16, lineHeight: 22 },
-  helper: { fontSize: 12, lineHeight: 18 },
+  label: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
+  input: { minHeight: 48, borderWidth: 2, borderRadius: 8, paddingHorizontal: 12, fontFamily: fonts.regular, fontSize: 16, lineHeight: 22 },
+  helper: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18 },
 });

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,6 +23,13 @@ for (const file of files) {
     file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const targets: string[] = [];
   for (const specifier of importSpecifiers(syntax)) {
+    // Картинки — листья графа без правил границ; достаточно, что файл существует.
+    if (/\.(png|jpe?g|webp)$/u.test(specifier) && specifier.startsWith(".")) {
+      if (!existsSync(path.resolve(path.dirname(file), specifier))) {
+        errors.push(`${relative(file)} → ${specifier}: UNRESOLVED_LOCAL_IMPORT`);
+      }
+      continue;
+    }
     const target = specifier.startsWith(".") ? resolveImport(file, specifier, fileSet) : null;
     if (specifier.startsWith(".") && target === null) {
       errors.push(`${relative(file)} → ${specifier}: UNRESOLVED_LOCAL_IMPORT`);

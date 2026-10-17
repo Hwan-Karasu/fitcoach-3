@@ -9,6 +9,7 @@ import { AppointmentOutcomeDialog, CalendarUndoProvider, type GuestLinkRequest }
 import { ClientAccountingScreen } from "../../features/accounting/public.ts";
 import { ClientMeasurementsScreen } from "../../features/measurements/public.ts";
 import { useAppointmentOutcomeQueue } from "../bootstrap/useAppointmentOutcomeQueue.ts";
+import { fonts } from "../../shared/ui/theme/typography.ts";
 import { PrototypeThemeProvider, usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { WorkspaceRoutePreview } from "../../shared/ui/prototype/WorkspaceRoutePreview.tsx";
 import { ClientWorkspaceNavigator } from "./ClientWorkspaceNavigator.tsx";
@@ -46,7 +47,7 @@ function ShellNavigator({ services, clientLists }: Readonly<{
         screenOptions={{
           headerStyle: { backgroundColor: colors.surface },
           headerTintColor: colors.textPrimary,
-          headerTitleStyle: { fontWeight: "700" },
+          headerTitleStyle: { fontFamily: fonts.bold },
           contentStyle: { backgroundColor: colors.canvas },
         }}
       >
@@ -59,7 +60,6 @@ function ShellNavigator({ services, clientLists }: Readonly<{
               onOpenNotifications={() => navigation.navigate("Notifications")}
               onOpenWorkspaceDev={() => navigation.navigate("WorkspaceDev")}
               onOpenCreate={() => navigation.navigate("ClientEditorDev")}
-              onOpenEdit={(clientId) => navigation.navigate("ClientEditorDev", { clientId })}
               onOpenClient={(clientId) => navigation.navigate("ClientWorkspace", { clientId })}
               onOpenSqliteDev={() => navigation.navigate("SqliteDev")}
               clients={services.clients}

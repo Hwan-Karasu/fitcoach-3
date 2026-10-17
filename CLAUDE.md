@@ -44,6 +44,8 @@ expo-sqlite, RNGH + Reanimated 4 + worklets. Новые библиотеки —
 - Факты не уничтожаются: отмена/исправление — новой записью или статусом.
 
 **UI**
+- Шрифт Inter: начертание только через `fontFamily: fonts.*`
+  (`shared/ui/theme/typography.ts`), не `fontWeight`. Иконки — `lucide-react-native`.
 - Цвета только из токенов темы (`usePrototypeTheme()`), никаких hex в экранах.
 - Сначала искать компонент в `shared/ui/components/public.ts`; новый общий
   элемент — туда же, а не копию в экран.

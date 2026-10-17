@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useFocusEffect } from "@react-navigation/native";
-import { AppState, Pressable, StyleSheet, Text, View } from "react-native";
-import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, SearchField, SelectionChip,
-  StatusTag } from "../../../shared/ui/components/public.ts";
+import { AppState, ScrollView, StyleSheet, Text, View } from "react-native";
+import { PinOff, Plus } from "lucide-react-native";
+import { AppButton, AppIconButton, ClientRosterCard, ConfirmDialog, EmptyState, FilterPill, InlineNotice,
+  ListSectionHeader, OptionSheet, SearchField, SelectionChip, SkeletonList, useHeaderScrollHandler,
+  type SheetOption } from "../../../shared/ui/components/public.ts";
 import { EmptyPanel, PrototypeScreen } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { ArchiveSortMode, ClientArchivePort, ClientDeletionManifest } from
@@ -10,8 +12,9 @@ import type { ArchiveSortMode, ClientArchivePort, ClientDeletionManifest } from
 import type { ClientRecord, ClientRepositoryPort } from "../domain/ClientRepositoryPort.ts";
 import type { ClientRosterPort, ClientRosterRow, RosterSortMode } from "../domain/ClientRosterPort.ts";
 import type { ClientListQueryPort } from "../domain/ClientRosterReadModel.ts";
-import { formatArchivedSince, localCalendarDate, permanentDeleteDescription, presentArchivedClients,
+import { ageOn, formatArchivedSince, formatYears, localCalendarDate, permanentDeleteDescription, presentArchivedClients,
   presentClientRoster } from "../domain/ClientRosterPresentation.ts";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 function clientMark(row: ClientRecord): string {
   if (row.emoji) return row.emoji;
@@ -44,10 +47,14 @@ function ListLoadState({ snapshot, error, onRetry }: Readonly<{
   </>;
 }
 
-export function ClientsRosterPreview({ onOpenCreate, onOpenEdit, onOpenClient, repository,
-  readModel }: Readonly<{
+const sortOptions: readonly SheetOption<RosterSortMode>[] = [
+  { value: "NAME", label: "Имя А–Я" },
+  { value: "RECENT", label: "Недавно открытые" },
+];
+
+/** Экран «Клиенты» — эталон UI (docs/ui/screens/CLIENTS.md). */
+export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, readModel }: Readonly<{
   onOpenCreate: () => void;
-  onOpenEdit: (clientId: string) => void;
   onOpenClient: (clientId: string) => void;
   repository: ClientRosterPort;
   readModel: ClientListQueryPort;
@@ -55,6 +62,8 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenEdit, onOpenClient, r
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
+  const [sortSheet, setSortSheet] = useState(false);
+  const onScroll = useHeaderScrollHandler();
   const [today, setToday] = useState(() => localCalendarDate(new Date()));
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -112,59 +121,53 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenEdit, onOpenClient, r
   };
 
   const renderRow = (row: ClientRosterRow, birthdayBadge: string | null = null,
-    birthdayOccurrence: string | null = null) => (
-    <View key={row.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={styles.identityRow}>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Открыть карточку клиента ${row.displayName}`}
-          onPress={() => onOpenClient(row.id)} style={styles.identityMain}>
-          <Text accessibilityElementsHidden style={[styles.avatar,
-            { color: colors.textPrimary, backgroundColor: colors.surfaceRaised }]}>{clientMark(row)}</Text>
-          <View style={styles.cardText}>
-            <Text style={[styles.name, { color: colors.textPrimary }]}>{row.displayName}</Text>
-            <Text style={[styles.detail, { color: colors.textSecondary }]}>Открыть карточку ›</Text>
-          </View>
-        </Pressable>
-        {birthdayOccurrence !== null ? (
-          <AppIconButton label="Убрать из закреплённых" disabled={dismissingId !== null}
-            icon={<View style={styles.unpinIcon}>
-              <Text style={styles.pinGlyph}>📌</Text>
-              <View style={[styles.pinSlash, { backgroundColor: colors.accentInk }]} />
-            </View>}
+    birthdayOccurrence: string | null = null) => {
+    const age = row.birthDate === null ? null : ageOn(row.birthDate, today);
+    return (
+      <ClientRosterCard key={row.id} clientId={row.id} displayName={row.displayName} mark={clientMark(row)}
+        subtitle={age === null ? null : formatYears(age)} highlight={birthdayBadge} onOpen={onOpenClient}
+        action={birthdayOccurrence === null ? undefined : (
+          <AppIconButton label={`Убрать ${row.displayName} из закреплённых`} disabled={dismissingId !== null}
+            icon={<PinOff size={20} color={colors.textSecondary} strokeWidth={1.8} />}
             onPress={() => { void dismissBirthday(row.id, birthdayOccurrence); }} />
-        ) : null}
-      </View>
-      {birthdayBadge !== null ? <StatusTag kind="warning" label={birthdayBadge} /> : null}
-      <AppButton variant="secondary" label="Изменить" onPress={() => onOpenEdit(row.id)} />
-    </View>
-  );
+        )} />
+    );
+  };
 
+  const sortLabel = sortOptions.find((option) => option.value === activeSort)?.label ?? "Имя А–Я";
   return (
-    <PrototypeScreen>
+    <ScrollView style={[styles.screen, { backgroundColor: colors.canvas }]} contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled" onScroll={onScroll} scrollEventThrottle={32}>
       <SearchField accessibilityLabel="Поиск по клиентам" query={query} onChangeQuery={setQuery} />
-      <View style={styles.filters}>
-        <SelectionChip group="Сортировка" label="Имя А–Я" selected={activeSort === "NAME"}
-          onPress={() => { void chooseActiveSort("NAME"); }} />
-        <SelectionChip group="Сортировка" label="Недавно открытые" selected={activeSort === "RECENT"}
-          onPress={() => { void chooseActiveSort("RECENT"); }} />
+      <View style={styles.pills}>
+        <View style={styles.pillsSpacer} />
+        <FilterPill label={sortLabel} menu accessibilityLabel={`Сортировка: ${sortLabel}`}
+          onPress={() => setSortSheet(true)} />
       </View>
-      <AppButton label="Создать карточку" onPress={onOpenCreate} />
+      <AppButton label="Создать карточку клиента" onPress={onOpenCreate}
+        icon={(color) => <Plus size={20} color={color} strokeWidth={2.2} />} />
       <ListLoadState snapshot={snapshot} error={error}
         onRetry={() => { setError(null); readModel.refresh(); }} />
+      {snapshot.status === "loading" ? <SkeletonList label="Загружаем клиентов" /> : null}
       {roster !== null && visibleCount === 0 ? (
-        <EmptyPanel
-          title={query.trim() ? "Ничего не найдено" : "Пока нет клиентов"}
-          body={query.trim() ? "Попробуйте другое имя или очистите поиск." : "Создайте первую карточку клиента."}
-        />
+        query.trim()
+          ? <EmptyState reason="no-match" title="Ничего не найдено" body="Попробуйте другое имя или очистите поиск."
+            action={{ label: "Очистить поиск", onPress: () => setQuery("") }} />
+          : <EmptyState reason="no-data" title="Клиентов пока нет" body="Создайте первую карточку клиента."
+            action={{ label: "Создать карточку клиента", onPress: onOpenCreate }} />
       ) : null}
-      {roster && roster.birthday.length > 0 ? (
-        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Дни рождения</Text>
-      ) : null}
+      {roster?.searching && visibleCount > 0 ? <ListSectionHeader title="Найдено" count={visibleCount} /> : null}
+      {roster && roster.birthday.length > 0 ? <ListSectionHeader title="Дни рождения" count={roster.birthday.length} /> : null}
       {roster?.birthday.map((entry) => renderRow(entry.client, entry.birthdayBadge,
         entry.birthdayOccurrence))}
-      {roster?.recent ? <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Недавно открытый</Text> : null}
+      {roster?.recent ? <ListSectionHeader title="Недавно открывали" count={1} /> : null}
       {roster?.recent ? renderRow(roster.recent.client, roster.recent.birthdayBadge) : null}
+      {roster && !roster.searching && roster.regular.length > 0
+        ? <ListSectionHeader title="Все клиенты" count={roster.regular.length} /> : null}
       {roster?.regular.map((entry) => renderRow(entry.client, entry.birthdayBadge))}
-    </PrototypeScreen>
+      <OptionSheet visible={sortSheet} title="Сортировка" options={sortOptions} selected={activeSort}
+        onSelect={(mode) => { void chooseActiveSort(mode); }} onClose={() => setSortSheet(false)} />
+    </ScrollView>
   );
 }
 
@@ -306,18 +309,22 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  content: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 32, gap: 8 },
+  pills: { flexDirection: "row", alignItems: "center", gap: 8 },
+  pillsSpacer: { flex: 1 },
   filters: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  message: { fontSize: 14, lineHeight: 20 },
+  message: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   card: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 12 },
   identityRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   identityMain: { flex: 1, minHeight: 52, flexDirection: "row", alignItems: "center", gap: 12 },
   avatar: { minWidth: 52, minHeight: 52, borderRadius: 26, overflow: "hidden",
-    textAlign: "center", textAlignVertical: "center", fontSize: 21, lineHeight: 52 },
+    textAlign: "center", textAlignVertical: "center", fontFamily: fonts.regular, fontSize: 21, lineHeight: 52 },
   cardText: { flexShrink: 1, gap: 2 },
-  name: { fontSize: 17, lineHeight: 23, fontWeight: "700" },
-  detail: { fontSize: 12, lineHeight: 18 },
-  sectionLabel: { fontSize: 12, lineHeight: 17, fontWeight: "700" },
+  name: { fontSize: 17, lineHeight: 23, fontFamily: fonts.bold },
+  detail: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18 },
+  sectionLabel: { fontSize: 12, lineHeight: 17, fontFamily: fonts.bold },
   unpinIcon: { width: 26, height: 28, alignItems: "center", justifyContent: "center" },
-  pinGlyph: { fontSize: 20, lineHeight: 26 },
+  pinGlyph: { fontFamily: fonts.regular, fontSize: 20, lineHeight: 26 },
   pinSlash: { position: "absolute", width: 28, height: 2, transform: [{ rotate: "-45deg" }] },
 });

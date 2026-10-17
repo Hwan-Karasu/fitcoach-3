@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
+import { fonts } from "../theme/typography.ts";
 
 export type AppButtonVariant = "primary" | "secondary" | "ghost" | "destructive";
 
@@ -8,6 +9,8 @@ interface AppButtonProps {
   readonly label: string;
   readonly onPress: () => void;
   readonly variant?: AppButtonVariant;
+  /** Иконка слева от подписи; получает цвет текста кнопки (UI-OWN-010). */
+  readonly icon?: (color: string) => ReactNode;
   readonly disabled?: boolean;
   readonly disabledReason?: string;
   readonly busy?: boolean;
@@ -16,10 +19,12 @@ interface AppButtonProps {
   readonly testID?: string;
 }
 
+/** Главная — залитая акцентом; второстепенные — тонкая рамка без заливки (UI-OWN-008/010). */
 export function AppButton({
   label,
   onPress,
   variant = "primary",
+  icon,
   disabled = false,
   disabledReason,
   busy = false,
@@ -31,15 +36,15 @@ export function AppButton({
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const unavailable = disabled || busy;
-  const backgroundColor = variant === "primary" ? colors.accentFill : variant === "ghost" ? "transparent" : colors.surface;
+  const backgroundColor = variant === "primary" ? colors.accentFill : "transparent";
   const foregroundColor = variant === "primary" ? colors.onAccentFill : variant === "destructive" ? colors.danger : colors.accentInk;
   const borderColor = focused
     ? colors.focusRing
     : variant === "destructive"
       ? colors.danger
       : variant === "secondary"
-        ? colors.accentInk
-        : "transparent";
+        ? colors.border
+        : backgroundColor;
 
   return (
     <Pressable
@@ -57,12 +62,13 @@ export function AppButton({
         {
           backgroundColor: pressed && variant !== "primary" ? colors.surfaceRaised : backgroundColor,
           borderColor,
-          opacity: unavailable ? 0.5 : pressed ? 0.82 : 1,
+          borderWidth: focused ? 2 : 1,
+          opacity: unavailable ? 0.5 : pressed ? 0.85 : 1,
         },
       ]}
     >
       <View style={styles.content}>
-        {busy ? <ActivityIndicator size="small" color={foregroundColor} /> : null}
+        {busy ? <ActivityIndicator size="small" color={foregroundColor} /> : icon?.(foregroundColor) ?? null}
         <Text style={[styles.label, { color: foregroundColor }]}>{busy ? busyLabel : label}</Text>
       </View>
     </Pressable>
@@ -70,7 +76,7 @@ export function AppButton({
 }
 
 const styles = StyleSheet.create({
-  button: { minHeight: 48, borderWidth: 2, borderRadius: 8, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
+  button: { minHeight: 48, borderRadius: 10, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
   content: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  label: { fontSize: 16, lineHeight: 22, fontWeight: "700", textAlign: "center" },
+  label: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, textAlign: "center" },
 });

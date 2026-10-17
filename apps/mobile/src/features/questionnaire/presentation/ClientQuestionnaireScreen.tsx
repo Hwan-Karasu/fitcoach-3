@@ -8,6 +8,7 @@ import type { QuestionnaireRepositoryPort } from "../domain/QuestionnaireReposit
 import { allFields, answerProblem, completionStatus } from "../domain/QuestionnaireRules.ts";
 import { answerFromInput, answersFromInputs, inputFromAnswer, QuestionnaireForm, type FormInputs,
   type InputValue } from "./QuestionnaireForm.tsx";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 const statusTag: Readonly<Record<CompletionStatus, Readonly<{ kind: "neutral" | "warning" | "success"; label: string }>>> = {
   NOT_STARTED: { kind: "neutral", label: "Анкета не начата" },
@@ -161,5 +162,5 @@ export function ClientQuestionnaireScreen({ clientId, repository }: Readonly<{
 
 const styles = StyleSheet.create({
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" },
-  version: { fontSize: 12, lineHeight: 16 },
+  version: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
 });

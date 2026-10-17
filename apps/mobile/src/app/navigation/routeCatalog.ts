@@ -1,3 +1,6 @@
+/** Название приложения в шапке корневых вкладок (UI-OWN-016). */
+export const appBrandName = "Дневник атлета";
+
 export const rootTabs = {
   Clients: "Клиенты",
   Calendar: "Календарь",

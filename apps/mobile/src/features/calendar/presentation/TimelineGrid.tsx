@@ -10,6 +10,7 @@ import { clipToWindow, columnAtX, dragRange, minuteAtY, moveVerdict, slotAtY, yO
 import { appointmentEnded, appointmentLabel, formatMinute, weekdayIndex } from "../domain/CalendarRules.ts";
 import type { CalendarParticipant } from "../domain/CalendarParticipantDirectoryPort.ts";
 import { weekdayShort } from "./calendarPresentation.ts";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 const LONG_PRESS_MS = 350;
 const SWIPE_DISTANCE = 60;
@@ -313,20 +314,20 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
 const styles = StyleSheet.create({
   headerRow: { flexDirection: "row", paddingBottom: 4 },
   headerCell: { flex: 1, alignItems: "center" },
-  headerDay: { fontSize: 11, lineHeight: 14 },
-  headerDate: { fontSize: 14, lineHeight: 18, fontWeight: "700" },
+  headerDay: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14 },
+  headerDate: { fontSize: 14, lineHeight: 18, fontFamily: fonts.bold },
   body: { flexDirection: "row" },
-  hour: { position: "absolute", right: 4, fontSize: 10, lineHeight: 14 },
+  hour: { position: "absolute", right: 4, fontFamily: fonts.regular, fontSize: 10, lineHeight: 14 },
   surface: { flex: 1, borderWidth: 1, borderRadius: 8, overflow: "hidden" },
   line: { position: "absolute", left: 0, right: 0, height: StyleSheet.hairlineWidth },
   halfLine: { opacity: 0.45 },
   columnLine: { position: "absolute", top: 0, width: StyleSheet.hairlineWidth },
   band: { position: "absolute", justifyContent: "center", alignItems: "center" },
-  bandText: { fontSize: 11, fontWeight: "700" },
+  bandText: { fontSize: 11, fontFamily: fonts.bold },
   block: { position: "absolute", borderRadius: 5, borderWidth: 1, paddingHorizontal: 2, paddingVertical: 1, overflow: "hidden" },
-  blockText: { fontSize: 12, lineHeight: 15, fontWeight: "700" },
-  blockTextDense: { fontSize: 10, lineHeight: 12, fontWeight: "700" },
+  blockText: { fontSize: 12, lineHeight: 15, fontFamily: fonts.bold },
+  blockTextDense: { fontSize: 10, lineHeight: 12, fontFamily: fonts.bold },
   handle: { position: "absolute", bottom: 2, alignSelf: "center", width: 14, height: 2, borderRadius: 1, opacity: 0.6 },
   preview: { position: "absolute", borderWidth: 2, borderRadius: 6, alignItems: "center", justifyContent: "center" },
-  previewText: { fontSize: 10, fontWeight: "700" },
+  previewText: { fontSize: 10, fontFamily: fonts.bold },
 });

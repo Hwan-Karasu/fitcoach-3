@@ -1,4 +1,4 @@
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { StatusBar, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,12 +8,13 @@ import type { CalendarCreditPort, CalendarParticipantDirectoryPort,
 import type { ClientArchivePort, ClientRepositoryPort,
   ClientRosterPort } from "../../features/clients/public.ts";
 import type { ClientListController } from "../../read-models/ClientListController.ts";
+import { HeaderScrollReporter } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { CalendarNavigator } from "./CalendarNavigator.tsx";
 import { RootHeader } from "./RootHeader.tsx";
 import { ArchiveNavigator, ClientsNavigator } from "./RootSectionNavigators.tsx";
 import { rootTabs } from "./routeCatalog.ts";
-import { TabGlyph } from "./TabGlyph.tsx";
+import { RootTabBar } from "./RootTabBar.tsx";
 
 type RootTabRoutes = {
   Clients: undefined;
@@ -28,7 +29,6 @@ interface RootTabsProps {
   readonly onOpenNotifications: () => void;
   readonly onOpenWorkspaceDev: () => void;
   readonly onOpenCreate: () => void;
-  readonly onOpenEdit: (clientId: string) => void;
   readonly onOpenClient: (clientId: string) => void;
   readonly onOpenSqliteDev: () => void;
   readonly clients: ClientRepositoryPort & ClientRosterPort & ClientArchivePort;
@@ -54,7 +54,6 @@ export function RootTabs({
   onOpenNotifications,
   onOpenWorkspaceDev,
   onOpenCreate,
-  onOpenEdit,
   onOpenClient,
   onOpenSqliteDev,
   clients,
@@ -66,6 +65,13 @@ export function RootTabs({
 }: Readonly<RootTabsProps>) {
   const [menuVisible, setMenuVisible] = useState(false);
   const menuButtonRef = useRef<View>(null);
+  // Календарь не прокручивается целиком, поэтому сразу показывает название раздела.
+  const [scrolled, setScrolled] = useState<Readonly<Record<keyof RootTabRoutes, boolean>>>(
+    { Clients: false, Calendar: true, Archive: false });
+  const reporters = useMemo(() => ({
+    Clients: (value: boolean) => setScrolled((current) => ({ ...current, Clients: value })),
+    Archive: (value: boolean) => setScrolled((current) => ({ ...current, Archive: value })),
+  }), []);
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const counts = useSyncExternalStore(clientLists.counts.subscribe, clientLists.counts.getSnapshot,
@@ -73,34 +79,34 @@ export function RootTabs({
   const archivedCount = counts.status === "ready" ? counts.data.archived : null;
   return (
     <SafeAreaView edges={["top"]} style={[styles.root, { backgroundColor: colors.canvas }]}>
-      <StatusBar barStyle={palette.tone === "dark" ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
-      <RootHeader onOpenNotifications={onOpenNotifications} onOpenMenu={() => setMenuVisible(true)} menuButtonRef={menuButtonRef} />
+      <StatusBar barStyle={palette.tone === "dark" ? "light-content" : "dark-content"} backgroundColor={colors.canvas} />
       <Tabs.Navigator
         backBehavior="none"
+        tabBar={(props) => <RootTabBar {...props} />}
         screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: colors.accentInk,
-          tabBarInactiveTintColor: colors.textSecondary,
-          tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
-          tabBarLabelStyle: { fontSize: 12, fontWeight: "700" },
-          tabBarItemStyle: { minHeight: 48 },
+          sceneStyle: { backgroundColor: colors.canvas },
+          // Заголовок корневой вкладки — в одной строке с колокольчиком и меню (UI-OWN-002).
+          header: ({ route, options }) => <RootHeader title={options.title ?? ""}
+            collapsed={scrolled[route.name as keyof RootTabRoutes]} onOpenNotifications={onOpenNotifications}
+            onOpenMenu={() => setMenuVisible(true)} menuButtonRef={menuButtonRef} />,
         }}
       >
-        <Tabs.Screen name="Clients" options={{ tabBarLabel: rootTabs.Clients, tabBarAccessibilityLabel: rootTabs.Clients, tabBarIcon: ({ color }) => <TabGlyph kind="clients" color={color} /> }}>
-          {() => <ClientsNavigator onOpenCreate={onOpenCreate}
-            onOpenEdit={onOpenEdit} onOpenClient={onOpenClient} repository={clients}
-            readModel={clientLists.active} />}
+        <Tabs.Screen name="Clients" options={{ title: rootTabs.Clients, tabBarLabel: rootTabs.Clients, tabBarAccessibilityLabel: rootTabs.Clients }}>
+          {() => <HeaderScrollReporter value={reporters.Clients}>
+            <ClientsNavigator onOpenCreate={onOpenCreate} onOpenClient={onOpenClient} repository={clients}
+              readModel={clientLists.active} />
+          </HeaderScrollReporter>}
         </Tabs.Screen>
-        <Tabs.Screen name="Calendar" options={{ tabBarLabel: rootTabs.Calendar, tabBarAccessibilityLabel: rootTabs.Calendar, tabBarIcon: ({ color }) => <TabGlyph kind="calendar" color={color} /> }}>
+        <Tabs.Screen name="Calendar" options={{ title: rootTabs.Calendar, tabBarLabel: rootTabs.Calendar, tabBarAccessibilityLabel: rootTabs.Calendar }}>
           {() => <CalendarNavigator repository={calendar} participants={calendarParticipants}
             credit={calendarCredit} onCreateClientFromGuest={onCreateClientFromGuest} />}
         </Tabs.Screen>
-        <Tabs.Screen name="Archive" options={{ tabBarLabel: rootTabs.Archive,
+        <Tabs.Screen name="Archive" options={{ title: rootTabs.Archive, tabBarLabel: rootTabs.Archive,
           tabBarAccessibilityLabel: archivedCount ? `${rootTabs.Archive}, клиентов в архиве: ${archivedCount}` : rootTabs.Archive,
-          tabBarBadge: archiveBadge(archivedCount),
-          tabBarBadgeStyle: { backgroundColor: colors.accentFill, color: colors.onAccentFill },
-          tabBarIcon: ({ color }) => <TabGlyph kind="archive" color={color} /> }}>
-          {() => <ArchiveNavigator repository={clients} readModel={clientLists.archived} />}
+          tabBarBadge: archiveBadge(archivedCount) }}>
+          {() => <HeaderScrollReporter value={reporters.Archive}>
+            <ArchiveNavigator repository={clients} readModel={clientLists.archived} />
+          </HeaderScrollReporter>}
         </Tabs.Screen>
       </Tabs.Navigator>
       <SettingsDrawerPreview

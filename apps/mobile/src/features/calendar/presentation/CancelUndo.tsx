@@ -6,6 +6,7 @@ import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvid
 import type { Appointment } from "../domain/CalendarModel.ts";
 import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
 import { calendarErrorMessage } from "./calendarPresentation.ts";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 const UNDO_MS = 3000;
 const STROKE = 3;
@@ -195,10 +196,10 @@ const styles = StyleSheet.create({
     elevation: 8, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
   edge: { position: "absolute" },
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  title: { flex: 1, fontSize: 15, lineHeight: 21, fontWeight: "700" },
-  error: { fontSize: 13, lineHeight: 18 },
+  title: { flex: 1, fontSize: 15, lineHeight: 21, fontFamily: fonts.bold },
+  error: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   check: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44 },
   box: { width: 22, height: 22, borderWidth: 2, borderRadius: 5, alignItems: "center", justifyContent: "center" },
-  tick: { fontSize: 14, lineHeight: 16, fontWeight: "700" },
-  checkLabel: { fontSize: 14, lineHeight: 20 },
+  tick: { fontSize: 14, lineHeight: 16, fontFamily: fonts.bold },
+  checkLabel: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
 });

@@ -14,6 +14,7 @@ import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts
 import { addDays, appointmentEnded, appointmentStarted, formatMinute, overlaps } from "../domain/CalendarRules.ts";
 import { calendarErrorMessage, dayTitle, outcomeTag } from "./calendarPresentation.ts";
 import { useOfferCancelUndo } from "./CancelUndo.tsx";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 interface Loaded {
   readonly settings: CalendarSettings;
@@ -430,8 +431,8 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
 
 const styles = StyleSheet.create({
   stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  stepperValue: { flex: 1, textAlign: "center", fontSize: 17, lineHeight: 24, fontWeight: "700" },
+  stepperValue: { flex: 1, textAlign: "center", fontSize: 17, lineHeight: 24, fontFamily: fonts.bold },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  selected: { fontSize: 16, lineHeight: 22, fontWeight: "700" },
-  hint: { fontSize: 12, lineHeight: 18 },
+  selected: { fontSize: 16, lineHeight: 22, fontFamily: fonts.bold },
+  hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18 },
 });

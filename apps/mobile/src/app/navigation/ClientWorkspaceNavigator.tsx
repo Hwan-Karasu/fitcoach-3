@@ -14,6 +14,7 @@ import { HomeNavigator, NutritionNavigator, TrainingNavigator } from "./ClientPr
 import { MoreMenuScreen } from "./MoreMenuScreen.tsx";
 import { moreDestinations, workspaceTabs } from "./routeCatalog.ts";
 import { TabGlyph } from "./TabGlyph.tsx";
+import { fonts } from "../../shared/ui/theme/typography.ts";
 
 type WorkspaceTabs = {
   Home: undefined;
@@ -40,7 +41,7 @@ function MoreNavigator({ clientId, questionnaire }: Readonly<{ clientId: string;
       screenOptions={{
         headerStyle: { backgroundColor: colors.surface },
         headerTintColor: colors.textPrimary,
-        headerTitleStyle: { fontWeight: "700" },
+        headerTitleStyle: { fontFamily: fonts.bold },
         contentStyle: { backgroundColor: colors.canvas },
       }}
     >
@@ -136,7 +137,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
         tabBarActiveTintColor: colors.accentInk,
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: "700" },
+        tabBarLabelStyle: { fontSize: 12, fontFamily: fonts.bold },
         tabBarItemStyle: { minHeight: 48 },
       }}
     >
@@ -164,5 +165,5 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
 const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, justifyContent: "center", padding: 24, gap: 16 },
-  warning: { paddingHorizontal: 16, paddingVertical: 6, fontSize: 12, lineHeight: 18 },
+  warning: { paddingHorizontal: 16, paddingVertical: 6, fontFamily: fonts.regular, fontSize: 12, lineHeight: 18 },
 });

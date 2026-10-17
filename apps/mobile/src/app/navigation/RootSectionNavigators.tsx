@@ -10,9 +10,9 @@ type ArchiveRoutes = { ArchiveList: undefined };
 const ClientsStack = createNativeStackNavigator<ClientsRoutes>();
 const ArchiveStack = createNativeStackNavigator<ArchiveRoutes>();
 
-export function ClientsNavigator({ onOpenCreate, onOpenEdit, onOpenClient, repository,
+export function ClientsNavigator({ onOpenCreate, onOpenClient, repository,
   readModel }: Readonly<{
-  onOpenCreate: () => void; onOpenEdit: (clientId: string) => void;
+  onOpenCreate: () => void;
   onOpenClient: (clientId: string) => void;
   repository: ClientRosterPort;
   readModel: ClientListQueryPort;
@@ -22,7 +22,7 @@ export function ClientsNavigator({ onOpenCreate, onOpenEdit, onOpenClient, repos
     <ClientsStack.Navigator screenOptions={{ contentStyle: { backgroundColor: palette.tokens.canvas } }}>
       <ClientsStack.Screen name="Roster" options={{ headerShown: false }}>
         {() => <ClientsRosterPreview onOpenCreate={onOpenCreate}
-          onOpenEdit={onOpenEdit} onOpenClient={onOpenClient} repository={repository}
+          onOpenClient={onOpenClient} repository={repository}
           readModel={readModel} />}
       </ClientsStack.Screen>
     </ClientsStack.Navigator>

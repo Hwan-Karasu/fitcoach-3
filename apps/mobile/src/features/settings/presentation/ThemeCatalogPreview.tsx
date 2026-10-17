@@ -6,6 +6,7 @@ import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvid
 import { AccentSwatch } from "../../../shared/ui/theme/AccentSwatch.tsx";
 import { ThemeCard } from "../../../shared/ui/theme/ThemeCard.tsx";
 import { ThemePreviewPanel } from "../../../shared/ui/theme/ThemePreviewPanel.tsx";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 export function ThemeCatalogPreview({ onClose }: Readonly<{ onClose: () => void }>) {
   const [backFocused, setBackFocused] = useState(false);
@@ -94,12 +95,12 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40, gap: 12 },
   backButton: { minWidth: 48, minHeight: 48, borderWidth: 2, borderRadius: 8, paddingHorizontal: 8, alignSelf: "flex-start", justifyContent: "center" },
-  backText: { fontSize: 14, lineHeight: 20, fontWeight: "700" },
-  eyebrow: { fontSize: 11, lineHeight: 15, fontWeight: "700", letterSpacing: 1.2 },
-  title: { fontSize: 22, lineHeight: 28, fontWeight: "700" },
-  description: { fontSize: 14, lineHeight: 20 },
-  sectionTitle: { fontSize: 16, lineHeight: 22, fontWeight: "700", marginTop: 8 },
+  backText: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
+  eyebrow: { fontSize: 11, lineHeight: 15, fontFamily: fonts.bold, letterSpacing: 1.2 },
+  title: { fontSize: 22, lineHeight: 28, fontFamily: fonts.bold },
+  description: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
+  sectionTitle: { fontSize: 16, lineHeight: 22, fontFamily: fonts.bold, marginTop: 8 },
   accentList: { gap: 8 },
   themeList: { gap: 10 },
-  footer: { fontSize: 12, lineHeight: 18, marginTop: 8 },
+  footer: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18, marginTop: 8 },
 });

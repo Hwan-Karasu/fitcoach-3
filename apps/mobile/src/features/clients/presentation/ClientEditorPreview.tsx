@@ -7,6 +7,7 @@ import type { ClientRecord, CreateClientInput } from "../domain/ClientRepository
 import type { ClientFormDraft } from "../domain/ClientRecoveryDraftPort.ts";
 import { formatHeightCmX10, parseHeightCmX10, validPastBirthDate } from
   "../domain/ClientProfileValidation.ts";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 const emojiChoices = ["🏋️", "🏃", "🚴", "🧘", "💪", "🔥"] as const;
 
@@ -352,11 +353,11 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   header: { minHeight: 56, borderBottomWidth: 1, flexDirection: "row", alignItems: "center", paddingRight: 16 },
   closeButton: { width: 56, minHeight: 56, alignItems: "center", justifyContent: "center" },
-  closeGlyph: { fontSize: 28, lineHeight: 32 },
-  pageTitle: { fontSize: 20, lineHeight: 26, fontWeight: "700" },
+  closeGlyph: { fontFamily: fonts.regular, fontSize: 28, lineHeight: 32 },
+  pageTitle: { fontSize: 20, lineHeight: 26, fontFamily: fonts.bold },
   formContent: { padding: 16, paddingBottom: 32, gap: 12 },
   sectionCard: { borderWidth: 1, borderRadius: 12, padding: 16, gap: 10 },
-  sectionTitle: { fontSize: 16, lineHeight: 22, fontWeight: "700" },
-  sectionDescription: { fontSize: 13, lineHeight: 19 },
+  sectionTitle: { fontSize: 16, lineHeight: 22, fontFamily: fonts.bold },
+  sectionDescription: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19 },
   emojiChoices: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 });

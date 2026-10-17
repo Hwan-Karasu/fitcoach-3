@@ -2,6 +2,7 @@ import { useEffect, useRef, type RefObject } from "react";
 import { AccessibilityInfo, Modal, Pressable, ScrollView, StyleSheet, Text, View, findNodeHandle } from "react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { AppButton } from "./AppButton.tsx";
+import { fonts } from "../theme/typography.ts";
 
 interface ConfirmDialogProps {
   readonly visible: boolean;
@@ -103,7 +104,7 @@ const styles = StyleSheet.create({
   card: { maxHeight: "90%", width: "100%", borderWidth: 1, borderRadius: 16, padding: 20, gap: 12 },
   copyScroll: { flexGrow: 0, flexShrink: 1 },
   copyContent: { gap: 12 },
-  title: { fontSize: 20, lineHeight: 26, fontWeight: "700" },
-  description: { fontSize: 14, lineHeight: 20 },
+  title: { fontSize: 20, lineHeight: 26, fontFamily: fonts.bold },
+  description: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   actions: { gap: 8, marginTop: 8 },
 });

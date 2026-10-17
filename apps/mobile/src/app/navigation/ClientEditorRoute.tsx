@@ -5,6 +5,7 @@ import { ClientEditorPreview, type ClientRecord, type ClientRecoveryDraft,
   "../../features/clients/public.ts";
 import { AppButton, ConfirmDialog, LoadingState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
+import { fonts } from "../../shared/ui/theme/typography.ts";
 
 type Loaded = Readonly<{ client: ClientRecord | null; draft: ClientRecoveryDraft | null }>;
 
@@ -115,5 +116,5 @@ export function ClientEditorRoute({ clientId, repository, onClose, prefillName, 
 
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: "center", padding: 24, gap: 16 },
-  title: { fontSize: 20, lineHeight: 26, fontWeight: "700" },
+  title: { fontSize: 20, lineHeight: 26, fontFamily: fonts.bold },
 });

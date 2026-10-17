@@ -7,6 +7,7 @@ import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvid
 import type { AccountingMode, ClientAccountingSnapshot, PaymentMethod } from "../domain/AccountingModel.ts";
 import type { AccountingRepositoryPort } from "../domain/AccountingRepositoryPort.ts";
 import { formatKopeks, parseRublesToKopeks, pricePerSessionKopeks } from "../domain/AccountingRules.ts";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 const modeLabels: Readonly<Record<AccountingMode, string>> = {
   FITCOACH: "В FitCoach", EXTERNAL: "Внешний учёт", UNTRACKED: "Не ведётся",
@@ -244,11 +245,11 @@ export function ClientAccountingScreen({ clientId, repository, listCreditSession
 
 const styles = StyleSheet.create({
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  hint: { fontSize: 12, lineHeight: 18 },
+  hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18 },
   summary: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 4 },
-  big: { fontSize: 20, lineHeight: 26, fontWeight: "700" },
+  big: { fontSize: 20, lineHeight: 26, fontFamily: fonts.bold },
   card: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 8 },
-  name: { fontSize: 16, lineHeight: 22, fontWeight: "700" },
-  label: { fontSize: 14, lineHeight: 20, fontWeight: "700" },
-  detail: { fontSize: 13, lineHeight: 19 },
+  name: { fontSize: 16, lineHeight: 22, fontFamily: fonts.bold },
+  label: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
+  detail: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19 },
 });

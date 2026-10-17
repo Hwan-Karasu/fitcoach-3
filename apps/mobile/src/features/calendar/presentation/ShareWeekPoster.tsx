@@ -5,6 +5,7 @@ import { clipToWindow, yOfMinute, type TimeWindow } from "../domain/CalendarGeom
 import { appointmentLabel, formatMinute, weekdayIndex } from "../domain/CalendarRules.ts";
 import type { CalendarParticipant } from "../domain/CalendarParticipantDirectoryPort.ts";
 import { weekdayShort } from "./calendarPresentation.ts";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 const WIDTH = 380;
 const GRID_HEIGHT = 560;
@@ -88,16 +89,16 @@ export function ShareWeekPoster({ posterRef, title, dates, window, appointments,
 
 const styles = StyleSheet.create({
   poster: { width: WIDTH, padding: 12, backgroundColor: ink.paper, gap: 8 },
-  title: { fontSize: 17, lineHeight: 22, fontWeight: "700", color: ink.text, textAlign: "center" },
+  title: { fontSize: 17, lineHeight: 22, fontFamily: fonts.bold, color: ink.text, textAlign: "center" },
   headerRow: { flexDirection: "row" },
-  headerCell: { textAlign: "center", fontSize: 10, lineHeight: 14, fontWeight: "700", color: ink.text },
+  headerCell: { textAlign: "center", fontSize: 10, lineHeight: 14, fontFamily: fonts.bold, color: ink.text },
   body: { flexDirection: "row" },
-  hour: { position: "absolute", right: 3, fontSize: 9, lineHeight: 12, color: ink.muted },
+  hour: { position: "absolute", right: 3, fontFamily: fonts.regular, fontSize: 9, lineHeight: 12, color: ink.muted },
   grid: { height: GRID_HEIGHT, borderWidth: 1, borderColor: ink.line, overflow: "hidden" },
   line: { position: "absolute", left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: ink.line },
   blocked: { position: "absolute", backgroundColor: ink.blocked, alignItems: "center", justifyContent: "center" },
-  blockedText: { fontSize: 8, color: ink.text },
+  blockedText: { fontFamily: fonts.regular, fontSize: 8, color: ink.text },
   duty: { position: "absolute", backgroundColor: ink.duty },
   block: { position: "absolute", borderRadius: 4, backgroundColor: ink.block, paddingHorizontal: 2, overflow: "hidden" },
-  blockText: { fontSize: 9, lineHeight: 11, fontWeight: "700", color: "#FFFFFF" },
+  blockText: { fontSize: 9, lineHeight: 11, fontFamily: fonts.bold, color: "#FFFFFF" },
 });

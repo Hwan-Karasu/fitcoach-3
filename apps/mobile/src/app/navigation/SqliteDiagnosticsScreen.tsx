@@ -4,6 +4,7 @@ import type { F04ProbeReport } from "../diagnostics/runF04Probe.ts";
 import { AppButton } from "../../shared/ui/components/public.ts";
 import { PrototypeNotice, PrototypeScreen } from "../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
+import { fonts } from "../../shared/ui/theme/typography.ts";
 
 export function SqliteDiagnosticsScreen({ runProbe }: Readonly<{ runProbe: () => Promise<F04ProbeReport> }>) {
   const [running, setRunning] = useState(false);
@@ -47,6 +48,6 @@ export function SqliteDiagnosticsScreen({ runProbe }: Readonly<{ runProbe: () =>
 
 const styles = StyleSheet.create({
   results: { gap: 8, marginTop: 12 },
-  summary: { fontSize: 18, lineHeight: 24, fontWeight: "700" },
-  row: { fontSize: 14, lineHeight: 22 },
+  summary: { fontSize: 18, lineHeight: 24, fontFamily: fonts.bold },
+  row: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 22 },
 });

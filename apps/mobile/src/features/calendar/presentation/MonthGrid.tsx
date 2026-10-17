@@ -5,6 +5,7 @@ import type { LocalDate } from "../domain/CalendarModel.ts";
 import { addMonths, monthGridWeeks } from "../domain/CalendarGeometry.ts";
 import { mondayOf } from "../domain/CalendarRules.ts";
 import { dayTitle, monthTitle, weekdayShort } from "./calendarPresentation.ts";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 /**
  * §13.2 Month Grid: a compact date navigator. Swipe or arrows only browse months; a tap selects a
@@ -74,7 +75,7 @@ export function MonthGrid({ viewMonth, selected, today, counts, onBrowse, onSele
                     }]}>
                       <Text style={[styles.date, {
                         color: isSelected ? colors.onAccentFill : inMonth ? colors.textPrimary : colors.textMuted,
-                        fontWeight: date === today || isSelected ? "700" : "500",
+                        fontFamily: date === today || isSelected ? fonts.bold : fonts.medium,
                       }]}>{Number(date.slice(8, 10))}</Text>
                     </View>
                     <Text style={[styles.count, { color: inMonth ? colors.accentInk : colors.textMuted }]}>
@@ -95,13 +96,13 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 6, paddingVertical: 8 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   arrowButton: { width: 44, height: 40, alignItems: "center", justifyContent: "center" },
-  arrow: { fontSize: 26, lineHeight: 30 },
-  title: { fontSize: 16, lineHeight: 22, fontWeight: "700" },
+  arrow: { fontFamily: fonts.regular, fontSize: 26, lineHeight: 30 },
+  title: { fontSize: 16, lineHeight: 22, fontFamily: fonts.bold },
   row: { flexDirection: "row" },
   week: { borderRadius: 10 },
-  weekday: { flex: 1, textAlign: "center", fontSize: 11, lineHeight: 16 },
+  weekday: { flex: 1, textAlign: "center", fontFamily: fonts.regular, fontSize: 11, lineHeight: 16 },
   cell: { flex: 1, alignItems: "center", paddingVertical: 2, minHeight: 44 },
   dateBubble: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, alignItems: "center", justifyContent: "center" },
-  date: { fontSize: 14, lineHeight: 18 },
-  count: { fontSize: 10, lineHeight: 12, fontWeight: "700" },
+  date: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 18 },
+  count: { fontSize: 10, lineHeight: 12, fontFamily: fonts.bold },
 });

@@ -7,6 +7,7 @@ import { SLOT_MINUTES, type CalendarSettings, type IntervalKind, type LocalDate 
 import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
 import { formatMinute } from "../domain/CalendarRules.ts";
 import { calendarErrorMessage, dayTitle } from "./calendarPresentation.ts";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 /** §13.7.11 compact Duty/Blocked editor; the gesture path is part of K02. */
 export function IntervalEditorScreen({ repository, localDate, onClose }: Readonly<{
@@ -90,7 +91,7 @@ export function IntervalEditorScreen({ repository, localDate, onClose }: Readonl
 
 const styles = StyleSheet.create({
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  hint: { fontSize: 12, lineHeight: 18 },
+  hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18 },
   stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  value: { flex: 1, textAlign: "center", fontSize: 17, lineHeight: 24, fontWeight: "700" },
+  value: { flex: 1, textAlign: "center", fontSize: 17, lineHeight: 24, fontFamily: fonts.bold },
 });

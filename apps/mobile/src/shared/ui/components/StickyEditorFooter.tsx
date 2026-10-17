@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { AppButton } from "./AppButton.tsx";
 import { InlineNotice, type NoticeKind } from "./InlineNotice.tsx";
+import { fonts } from "../theme/typography.ts";
 
 interface StickyEditorFooterProps {
   readonly actionLabel: string;
@@ -52,5 +53,5 @@ export function StickyEditorFooter({
 
 const styles = StyleSheet.create({
   footer: { borderTopWidth: 1, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 8 },
-  note: { fontSize: 11, lineHeight: 15, textAlign: "center" },
+  note: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15, textAlign: "center" },
 });

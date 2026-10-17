@@ -3,6 +3,7 @@ import { SelectionChip, TextField } from "../../../shared/ui/components/public.t
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { AnswerValue, Answers, QuestionField, QuestionnaireSchema } from "../domain/QuestionnaireModel.ts";
 import { formatDateInput, isFieldVisible, parseDateInput, parseNumberInput } from "../domain/QuestionnaireRules.ts";
+import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 /** What the trainer is typing: numbers and dates stay text until they are checked. */
 export type InputValue = string | boolean | readonly string[] | undefined;
@@ -140,10 +141,10 @@ export function QuestionnaireForm({ schema, inputs, errors, onChange, disabled =
 const styles = StyleSheet.create({
   form: { gap: 12 },
   section: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 14 },
-  sectionTitle: { fontSize: 18, lineHeight: 24, fontWeight: "700" },
+  sectionTitle: { fontSize: 18, lineHeight: 24, fontFamily: fonts.bold },
   field: { gap: 6 },
-  label: { fontSize: 15, lineHeight: 21, fontWeight: "600" },
-  help: { fontSize: 13, lineHeight: 18 },
-  error: { fontSize: 13, lineHeight: 18, fontWeight: "600" },
+  label: { fontSize: 15, lineHeight: 21, fontFamily: fonts.semibold },
+  help: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
+  error: { fontSize: 13, lineHeight: 18, fontFamily: fonts.semibold },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 });
