@@ -33,3 +33,5 @@ keystore.properties
 *.apk
 *.aab
 
+# Картинки RepDB Free: собираются npm run catalog:build, не публикуются (лицензия, п. 3)
+apps/mobile/assets/exercises/

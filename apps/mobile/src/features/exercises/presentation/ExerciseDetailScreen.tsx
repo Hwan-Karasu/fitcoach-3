@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppButton, ConfirmDialog, InlineNotice, LoadingState, StatusTag, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import type { ExerciseCatalogPort } from "../domain/ExerciseCatalogPort.ts";
 import { bodyPartLabels, equipmentLabel, muscleLabel, trackingProfileLabels } from "../domain/ExerciseLabels.ts";
 import { displayNameOf, type CatalogEntry } from "../domain/ExerciseRules.ts";
+import { posesOf } from "./exerciseImage.ts";
 
 const difficultyLabels = { beginner: "Начальный", intermediate: "Средний", advanced: "Продвинутый" } as const;
 const mechanicLabels = { compound: "Многосуставное", isolation: "Изолирующее" } as const;
@@ -70,6 +71,20 @@ export function ExerciseDetailScreen({ exerciseId, repository, onEdit, onArchive
         {overlay.favorite ? <StatusTag kind="success" label="В избранном" /> : null}
         {overlay.hidden ? <StatusTag kind="warning" label="Скрыто" /> : null}
       </View>
+      {posesOf(definition.media).length > 0 ? (
+        <View style={styles.poses}>
+          {posesOf(definition.media).map((pose) => (
+            <View key={pose.label} style={[styles.pose, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              {/* Квадрат задаёт контейнер: у Image из ассета высота иначе берётся из размеров файла. */}
+              <View style={styles.poseFrame}>
+                <Image source={pose.source} style={styles.poseImage} resizeMode="contain"
+                  accessibilityLabel={`${pose.label}: ${displayNameOf(entry)}`} />
+              </View>
+              <Text style={[styles.poseLabel, { color: colors.textSecondary }]}>{pose.label}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
       {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       <View style={styles.row}>
         <View style={styles.grow}><AppButton variant="secondary" label={overlay.favorite ? "Убрать из избранного" : "В избранное"}
@@ -145,6 +160,11 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", gap: 10 },
   grow: { flex: 1 },
   card: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 6 },
+  poses: { flexDirection: "row", gap: 10 },
+  pose: { flex: 1, borderWidth: 1, borderRadius: 12, overflow: "hidden", alignItems: "center", paddingBottom: 6 },
+  poseFrame: { width: "100%", aspectRatio: 1 },
+  poseImage: { width: "100%", height: "100%" },
+  poseLabel: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   fact: { paddingVertical: 8, gap: 2 },
   factLabel: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   factValue: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 20 },

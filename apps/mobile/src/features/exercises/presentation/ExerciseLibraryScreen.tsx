@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { FlatList, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { FlatList, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronRight, Dumbbell, Plus, SlidersHorizontal, Star, X } from "lucide-react-native";
 import { AppButton, FilterPill, FloatingActionButton, InlineNotice, LoadingState, SearchField,
@@ -11,6 +11,7 @@ import { bodyPartLabels, equipmentLabel, trackingProfileLabels } from "../domain
 import { BODY_PARTS, TRACKING_PROFILE_IDS } from "../domain/ExerciseModel.ts";
 import { activeFilterCount, displayNameOf, filterCatalog, NO_FILTERS, type CatalogEntry, type CatalogFilters,
   type CatalogMode } from "../domain/ExerciseRules.ts";
+import { thumbnailOf } from "./exerciseImage.ts";
 import { useExerciseCatalog } from "./useExerciseCatalog.ts";
 
 const modes: readonly Readonly<{ id: CatalogMode; label: string }>[] = [
@@ -37,12 +38,14 @@ function ExerciseRow({ entry, onPress }: Readonly<{ entry: CatalogEntry; onPress
   const meta = [bodyPartLabels[definition.bodyPart], equipmentLabel(definition.equipment),
     trackingProfileLabels[definition.trackingProfile]].join(" · ");
   const name = displayNameOf(entry);
+  const thumbnail = thumbnailOf(definition.media);
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`${name}. ${meta}${overlay.favorite ? ". В избранном" : ""}`}
       onPress={onPress} style={({ pressed }) => [styles.row, { borderBottomColor: colors.border,
         backgroundColor: pressed ? colors.surfaceRaised : "transparent", opacity: overlay.hidden ? 0.55 : 1 }]}>
       <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>
-        <Dumbbell size={18} color={colors.accentInk} strokeWidth={1.8} />
+        {thumbnail !== null ? <Image source={thumbnail} style={styles.thumbImage} accessibilityIgnoresInvertColors />
+          : <Dumbbell size={18} color={colors.accentInk} strokeWidth={1.8} />}
       </View>
       <View style={styles.grow}>
         <Text numberOfLines={2} style={[styles.name, { color: colors.textPrimary }]}>{name}</Text>
@@ -199,7 +202,8 @@ const styles = StyleSheet.create({
   counter: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 },
   row: { flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: 16, paddingRight: 12, paddingVertical: 10,
     minHeight: 60, borderBottomWidth: StyleSheet.hairlineWidth },
-  thumb: { width: 40, height: 40, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  thumb: { width: 48, height: 48, borderRadius: 8, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  thumbImage: { width: 48, height: 48 },
   grow: { flex: 1, minWidth: 0 },
   name: { fontFamily: fonts.medium, fontSize: 15, lineHeight: 20 },
   meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },

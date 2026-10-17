@@ -28,6 +28,7 @@ export interface RepdbRecord {
 
 /** Явные решения по профилю там, где поля источника не дают однозначного ответа (§33.4). */
 const PROFILE_OVERRIDES: Readonly<Record<string, TrackingProfileId>> = {
+  "inverted-row": "REPS",
   "weighted-pull-up": "ADDED_LOAD_REPS",
   "weighted-dips": "ADDED_LOAD_REPS",
   "assisted-pull-ups": "ASSISTANCE_REPS",
