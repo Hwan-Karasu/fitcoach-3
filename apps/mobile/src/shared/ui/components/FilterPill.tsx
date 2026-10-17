@@ -39,7 +39,7 @@ export function FilterPill({ label, accessibilityLabel, onPress, selected = fals
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       style={({ pressed }) => [styles.pill, weight === undefined ? null : { flex: weight, flexBasis: 0 }, {
-        backgroundColor: selected ? colors.accentFill : pressed ? colors.surfaceRaised : "transparent",
+        backgroundColor: selected ? colors.accentFill : pressed ? colors.surfaceRaised : colors.surface,
         borderColor: focused ? colors.focusRing : selected ? colors.accentFill : colors.border,
         borderWidth: focused ? 2 : 1,
       }]}

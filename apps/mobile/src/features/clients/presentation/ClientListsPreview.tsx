@@ -106,6 +106,7 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
   const { query, setQuery } = useHeaderSearch();
   const [error, setError] = useState<string | null>(null);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
+  const [toolbarHeight, setToolbarHeight] = useState(52);
   const [menu, setMenu] = useState<"sort" | "group" | null>(null);
   const groupAnchor = useRef<View>(null);
   const sortAnchor = useRef<View>(null);
@@ -211,8 +212,9 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
   const sortLabel = sortOptions.find((option) => option.value === activeSort)?.label ?? "Имя А–Я";
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
-      {/* Фильтры всегда на виду: прокручивается только список; поиск — в шапке. */}
-      <View style={styles.toolbar}>
+      {/* Фильтры висят поверх списка без собственного фона: карточки проходят под ними (UI-OWN-020). */}
+      <View style={styles.toolbar} pointerEvents="box-none"
+        onLayout={(event) => setToolbarHeight(event.nativeEvent.layout.height)}>
         <View style={styles.pills}>
           <FilterPill weight={1} label="Сегодня" selected={todayOnly}
             accessibilityLabel={todayOnly ? "Сегодня по расписанию, включён" : "Сегодня по расписанию"}
@@ -225,7 +227,7 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
             onPress={() => setMenu("sort")} />
         </View>
       </View>
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}
+      <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: toolbarHeight }]}
         keyboardShouldPersistTaps="handled" onScroll={onScroll} scrollEventThrottle={32}>
         <ListLoadState snapshot={snapshot} error={error}
           onRetry={() => { setError(null); readModel.refresh(); }} />
@@ -402,7 +404,8 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   // Нижний отступ — чтобы последняя карточка не уходила под плавающую кнопку.
-  toolbar: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8, gap: 8 },
+  toolbar: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, paddingHorizontal: 16, paddingTop: 4,
+    paddingBottom: 8, gap: 8 },
   content: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 88, gap: 8 },
   pills: { flexDirection: "row", alignItems: "center", gap: 8 },
   filters: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
