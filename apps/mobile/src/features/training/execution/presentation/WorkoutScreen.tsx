@@ -245,9 +245,9 @@ export function WorkoutScreen({ slot, plans, execution, exercises }: Readonly<{
               <View style={styles.row}>
                 <Text style={[styles.head, styles.markerHead, { color: colors.textMuted }]}>Сет</Text>
                 <Text style={[styles.head, styles.plan, { color: colors.textMuted }]}>План</Text>
-                <Text style={[styles.head, styles.previous, { color: colors.textMuted }]}>Пред.</Text>
+                <Text style={[styles.head, styles.grow, { color: colors.textMuted }]}>Пред.</Text>
                 {fields.map((field) => <Text key={field} style={[styles.head, styles.inputHead, { color: colors.textMuted }]}>{fieldHeaders[field]}</Text>)}
-                <Text style={[styles.head, styles.rpe, { color: colors.textMuted }]}>RPE</Text>
+                <Text style={[styles.head, styles.markerHead, { color: colors.textMuted }]}>RPE</Text>
                 {mode === "MANUAL" ? <View style={styles.checkHead} /> : null}
               </View>
               {exercise.sets.map((set, position) => {
@@ -313,6 +313,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44 },
   head: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14, textAlign: "center" },
   markerHead: { width: 34 },
+  grow: { flex: 1 },
   marker: { width: 34, height: 34, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   markerText: { fontFamily: fonts.semibold, fontSize: 14 },
   plan: { flex: 1, fontFamily: fonts.regular, fontSize: 12, textAlign: "center" },

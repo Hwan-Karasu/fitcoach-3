@@ -55,6 +55,22 @@ test("T01 библиотеки клиентов A и B изолированы; �
   }
 });
 
+test("T01 повторный выбор уже выбранной программы ничего не меняет и не публикует изменение", async () => {
+  const { clients, plans, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const program = await plans.createProgram({ kind: "SIMPLE", title: "База", clientIds: [a.id] }, DAY1);
+    const published: string[][] = [];
+    const unsubscribe = plans.subscribeCommittedChanges((change) => published.push([...change.clientIds]));
+    await plans.selectProgram(a.id, program.id);
+    await plans.selectProgram(a.id, program.id);
+    unsubscribe();
+    assert.deepEqual(published, [[a.id]], "открытие экрана программы не должно порождать цикл обновлений");
+  } finally {
+    await close();
+  }
+});
+
 test("T01 выбранная программа: стабильна при создании новой, архив снимает, возврат не выбирает", async () => {
   const { clients, plans, close } = await stores();
   try {

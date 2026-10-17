@@ -267,14 +267,17 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   }
 
   async selectProgram(clientId: string, programId: string): Promise<void> {
-    await this.ready().writer.write(async (tx) => {
+    const changed = await this.ready().writer.write(async (tx) => {
       const current = await membership(tx, this.workspaceId, clientId, programId);
       if (current.archivedAt !== null) throw new Error("PROGRAM_ARCHIVED");
-      await tx.run(`INSERT INTO dev_training_client_selection (workspace_id, client_id, program_id) VALUES (?, ?, ?)
-        ON CONFLICT(workspace_id, client_id) DO UPDATE SET program_id = excluded.program_id`,
+      const result = await tx.run(`INSERT INTO dev_training_client_selection (workspace_id, client_id, program_id) VALUES (?, ?, ?)
+        ON CONFLICT(workspace_id, client_id) DO UPDATE SET program_id = excluded.program_id
+          WHERE program_id IS NOT excluded.program_id`,
       [this.workspaceId, clientId, programId]);
+      return result.changes > 0;
     });
-    this.publish({ clientIds: [clientId] });
+    // Повторное открытие той же программы — не изменение: иначе экран программы перезагружает сам себя.
+    if (changed) this.publish({ clientIds: [clientId] });
   }
 
   async archiveForClient(clientId: string, programId: string, now: Date = new Date()): Promise<void> {
