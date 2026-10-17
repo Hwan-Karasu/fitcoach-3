@@ -4,8 +4,8 @@ import { AppState, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Cake, CalendarClock, CalendarDays, Dumbbell, PinOff, Plus, Ticket } from "lucide-react-native";
 import { AppButton, AppIconButton, ClientRosterCard, ConfirmDialog, EmptyState, FilterPill, FloatingActionButton,
   InlineNotice,
-  ListSectionHeader, OptionSheet, SearchField, SelectionChip, SkeletonList, useHeaderScrollHandler,
-  type SheetOption } from "../../../shared/ui/components/public.ts";
+  ListSectionHeader, DropdownMenu, SearchField, SelectionChip, SkeletonList, useHeaderScrollHandler,
+  type DropdownOption } from "../../../shared/ui/components/public.ts";
 import { EmptyPanel, PrototypeScreen } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { ArchiveSortMode, ClientArchivePort, ClientDeletionManifest } from
@@ -49,7 +49,7 @@ function ListLoadState({ snapshot, error, onRetry }: Readonly<{
   </>;
 }
 
-const sortOptions: readonly SheetOption<RosterSortMode>[] = [
+const sortOptions: readonly DropdownOption<RosterSortMode>[] = [
   { value: "NAME", label: "Имя А–Я" },
   { value: "RECENT", label: "Недавно открытые" },
 ];
@@ -90,7 +90,7 @@ function useRosterOverview(port: RosterOverviewPort, clientIds: readonly string[
   return overview;
 }
 
-const groupOptions: readonly SheetOption<"ALL">[] = [{ value: "ALL", label: "Все клиенты" }];
+const groupOptions: readonly DropdownOption<"ALL">[] = [{ value: "ALL", label: "Все клиенты" }];
 
 /** Экран «Клиенты» — эталон UI (docs/ui/screens/CLIENTS.md). */
 export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, readModel, overviewSource }: Readonly<{
@@ -103,7 +103,9 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<"sort" | "group" | null>(null);
+  const [menu, setMenu] = useState<"sort" | "group" | null>(null);
+  const groupAnchor = useRef<View>(null);
+  const sortAnchor = useRef<View>(null);
   const [todayOnly, setTodayOnly] = useState(false);
   const onScroll = useHeaderScrollHandler();
   const [today, setToday] = useState(() => localCalendarDate(new Date()));
@@ -201,11 +203,11 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
             accessibilityLabel={todayOnly ? "Сегодня по расписанию, включён" : "Сегодня по расписанию"}
             icon={(color) => <CalendarDays size={16} color={color} strokeWidth={1.8} />}
             onPress={() => setTodayOnly((value) => !value)} />
-          <FilterPill weight={1.4} menu label="Все клиенты" accessibilityLabel="Группа клиентов: все клиенты"
-            onPress={() => setSheet("group")} />
-          <FilterPill weight={1} menu label={todayOnly ? "Время" : sortLabel}
+          <FilterPill weight={1.4} menu expanded={menu === "group"} anchorRef={groupAnchor} label="Все клиенты" accessibilityLabel="Группа клиентов: все клиенты"
+            onPress={() => setMenu("group")} />
+          <FilterPill weight={1} menu expanded={menu === "sort"} anchorRef={sortAnchor} label={todayOnly ? "Время" : sortLabel}
             accessibilityLabel={todayOnly ? "Сортировка: по времени записи" : `Сортировка: ${sortLabel}`}
-            onPress={() => setSheet("sort")} />
+            onPress={() => setMenu("sort")} />
         </View>
         <ListLoadState snapshot={snapshot} error={error}
           onRetry={() => { setError(null); readModel.refresh(); }} />
@@ -233,12 +235,12 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
       </ScrollView>
       <FloatingActionButton label="Создать карточку клиента" onPress={onOpenCreate}
         icon={(color) => <Plus size={26} color={color} strokeWidth={2.2} />} />
-      <OptionSheet visible={sheet === "sort"} title="Сортировка" options={sortOptions} selected={activeSort}
-        note={todayOnly ? "Пока включён «Сегодня», клиенты идут по времени записи; выбранная сортировка вернётся после выключения." : undefined}
-        onSelect={(mode) => { void chooseActiveSort(mode); }} onClose={() => setSheet(null)} />
-      <OptionSheet visible={sheet === "group"} title="Клиенты" options={groupOptions} selected="ALL"
+      <DropdownMenu visible={menu === "sort"} anchor={sortAnchor} title="Сортировка" options={sortOptions} selected={activeSort}
+        note={todayOnly ? "Пока включён «Сегодня», список идёт по времени записи." : undefined}
+        onSelect={(mode) => { void chooseActiveSort(mode); }} onClose={() => setMenu(null)} />
+      <DropdownMenu visible={menu === "group"} anchor={groupAnchor} title="Клиенты" options={groupOptions} selected="ALL"
         note="Фильтры по полу и меткам появятся, когда эти поля будут в карточке клиента."
-        onSelect={() => undefined} onClose={() => setSheet(null)} />
+        onSelect={() => undefined} onClose={() => setMenu(null)} />
     </View>
   );
 }

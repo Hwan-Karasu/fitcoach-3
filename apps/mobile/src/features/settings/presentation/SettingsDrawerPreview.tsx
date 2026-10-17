@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { AccessibilityInfo, Modal, Pressable, ScrollView, StyleSheet, Text, View, findNodeHandle, useWindowDimensions } from "react-native";
+import { AccessibilityInfo, Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, View, findNodeHandle,
+  useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppIconButton } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -57,6 +58,19 @@ export function SettingsDrawerPreview({
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const { width } = useWindowDimensions();
+  const drawerWidth = Math.min(width * 0.84, 360);
+  // Окно меню живёт, пока идёт анимация закрытия; выезд справа — со стороны кнопки меню.
+  const [mounted, setMounted] = useState(visible);
+  const progress = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      Animated.timing(progress, { toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+      return;
+    }
+    Animated.timing(progress, { toValue: 0, duration: 200, easing: Easing.in(Easing.cubic), useNativeDriver: true })
+      .start(({ finished }) => { if (finished) setMounted(false); });
+  }, [progress, visible]);
   const dismiss = () => {
     if (openedRoute.current) return;
     openedRoute.current = false;
@@ -89,9 +103,10 @@ export function SettingsDrawerPreview({
 
   return (
     <Modal
-      visible={visible}
+      visible={mounted}
       transparent
-      animationType="fade"
+      animationType="none"
+      statusBarTranslucent
       onRequestClose={dismiss}
       onShow={() => {
         const handle = findNodeHandle(titleRef.current);
@@ -99,11 +114,15 @@ export function SettingsDrawerPreview({
       }}
     >
       <View style={styles.modalRoot}>
-        <Pressable accessible={false} importantForAccessibility="no" onPress={dismiss} style={styles.scrim} />
+        <Animated.View style={[styles.scrim, { opacity: progress }]}>
+          <Pressable accessible={false} importantForAccessibility="no" onPress={dismiss} style={StyleSheet.absoluteFill} />
+        </Animated.View>
+        <Animated.View style={{ width: drawerWidth, transform: [{ translateX: progress.interpolate({
+          inputRange: [0, 1], outputRange: [drawerWidth, 0] }) }] }}>
         <SafeAreaView
           accessibilityViewIsModal
           edges={["top", "bottom"]}
-          style={[styles.drawer, { width: Math.min(width * 0.84, 360), backgroundColor: colors.surface }]}
+          style={[styles.drawer, { backgroundColor: colors.surface }]}
         >
           <ScrollView contentContainerStyle={styles.drawerContent}>
             <View style={styles.drawerHeader}>
@@ -121,6 +140,7 @@ export function SettingsDrawerPreview({
             <Text style={[styles.footnote, { color: colors.textMuted }]}>Аккаунты и облачная синхронизация не входят в offline V1.</Text>
           </ScrollView>
         </SafeAreaView>
+        </Animated.View>
       </View>
     </Modal>
   );

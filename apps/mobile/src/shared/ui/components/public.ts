@@ -16,7 +16,7 @@ export { ClientRosterCard, type ClientRosterCardData, type RosterMetric } from "
 export { FilterPill } from "./FilterPill.tsx";
 export { ListSectionHeader } from "./ListSectionHeader.tsx";
 export { SkeletonList } from "./SkeletonList.tsx";
-export { OptionSheet, type SheetOption } from "./OptionSheet.tsx";
+export { DropdownMenu, type DropdownOption } from "./DropdownMenu.tsx";
 export { HeaderScrollReporter, useHeaderScrollHandler } from "./HeaderScroll.tsx";
 export { BrandMark } from "./BrandMark.tsx";
 export { FloatingActionButton } from "./FloatingActionButton.tsx";
