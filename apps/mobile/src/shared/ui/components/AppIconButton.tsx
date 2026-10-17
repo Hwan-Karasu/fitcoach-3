@@ -12,9 +12,11 @@ interface AppIconButtonProps {
   readonly badgeCount?: number;
   readonly buttonRef?: Ref<View>;
   readonly testID?: string;
+  /** Узкая кнопка для плотных рядов: ширина 40, зона нажатия добирается до 48 через hitSlop. */
+  readonly compact?: boolean;
 }
 
-export function AppIconButton({ icon, label, onPress, disabled = false, disabledReason, badgeCount, buttonRef, testID }: Readonly<AppIconButtonProps>) {
+export function AppIconButton({ icon, label, onPress, disabled = false, disabledReason, badgeCount, buttonRef, testID, compact = false }: Readonly<AppIconButtonProps>) {
   const [focused, setFocused] = useState(false);
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -31,7 +33,8 @@ export function AppIconButton({ icon, label, onPress, disabled = false, disabled
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       testID={testID}
-      style={({ pressed }) => [styles.button, { borderColor: focused ? colors.focusRing : "transparent", opacity: disabled ? 0.5 : pressed ? 0.75 : 1 }]}
+      hitSlop={compact ? { left: 4, right: 4 } : undefined}
+      style={({ pressed }) => [styles.button, compact ? styles.compact : null, { borderColor: focused ? colors.focusRing : "transparent", opacity: disabled ? 0.5 : pressed ? 0.75 : 1 }]}
     >
       {icon}
       {unreadCount > 0 ? (
@@ -44,6 +47,7 @@ export function AppIconButton({ icon, label, onPress, disabled = false, disabled
 }
 
 const styles = StyleSheet.create({
+  compact: { width: 40 },
   button: { width: 48, height: 48, borderWidth: 2, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   badge: { position: "absolute", top: 1, right: 0, minWidth: 17, height: 17, paddingHorizontal: 3, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   badgeText: { fontSize: 10, lineHeight: 12, fontFamily: fonts.bold },

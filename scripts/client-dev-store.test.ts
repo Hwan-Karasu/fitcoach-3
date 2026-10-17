@@ -184,6 +184,14 @@ test("C01 recent is a scoped activity fact, not Client.updatedAt, and sort persi
     const rows = await store.listRoster("ACTIVE");
     assert.equal(rows.find((row) => row.id === a.id)?.lastOpenedAt, "2026-10-15T11:00:00.000Z");
     assert.equal(rows.find((row) => row.id === b.id)?.lastOpenedAt, "2026-10-15T10:00:00.000Z");
+    // CL-05: быстрая смена эмодзи меняет только эмодзи, с CAS; null возвращает инициалы.
+    const withEmoji = await store.changeEmoji(b.id, b.revision, "💪");
+    assert.equal(withEmoji.emoji, "💪");
+    assert.equal(withEmoji.revision, b.revision + 1);
+    assert.equal(withEmoji.displayName, "Beta");
+    await assert.rejects(store.changeEmoji(b.id, b.revision, "🔥"), { message: "CLIENT_STALE_OR_WRONG_SCOPE" });
+    await assert.rejects(store.changeEmoji(b.id, withEmoji.revision, "123456789"), { message: "CLIENT_EMOJI_INVALID" });
+    assert.equal((await store.changeEmoji(b.id, withEmoji.revision, null)).emoji, null);
     await store.setArchived(a.id, a.revision, true);
     assert.equal((await store.listRoster("ARCHIVED"))[0]?.lastOpenedAt, null);
     await assert.rejects(store.recordRealOpen(a.id), { message: "CLIENT_OPEN_WRONG_SCOPE_OR_ARCHIVED" });

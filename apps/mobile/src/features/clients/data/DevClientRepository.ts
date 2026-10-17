@@ -82,9 +82,15 @@ function validatedInput(input: CreateClientInput): Readonly<{
   if (heightCmX10 !== null && (!Number.isSafeInteger(heightCmX10) || heightCmX10 <= 0)) {
     throw new Error("CLIENT_HEIGHT_INVALID");
   }
-  const emoji = input.emoji?.trim() || null;
-  if (emoji !== null && Array.from(emoji).length > 8) throw new Error("CLIENT_EMOJI_INVALID");
+  const emoji = normalizedEmoji(input.emoji);
   return { name, phone, email, birthDate, heightCmX10, emoji };
+}
+
+/** Пустое — инициалы; эмодзи не длиннее 8 графем. */
+function normalizedEmoji(value: string | null | undefined): string | null {
+  const emoji = value?.trim() || null;
+  if (emoji !== null && Array.from(emoji).length > 8) throw new Error("CLIENT_EMOJI_INVALID");
+  return emoji;
 }
 
 async function clientById(tx: SqliteStatementPort, workspaceId: string, id: string): Promise<ClientRecord> {
@@ -326,6 +332,23 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
       [this.workspaceId, clientId, occurrenceDate]);
     });
     this.publishCommitted({ clientId, affectedRosters: ["ACTIVE"] });
+  }
+
+  async changeEmoji(clientId: string, expectedRevision: number, emoji: string | null): Promise<ClientRecord> {
+    if (!clientId.trim() || !Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
+      throw new Error("CLIENT_COMMAND_INVALID");
+    }
+    const value = normalizedEmoji(emoji);
+    const { writer } = this.ready();
+    const updated = await writer.write(async (tx) => {
+      const result = await tx.run(`UPDATE dev_clients SET emoji = ?, updated_at = ?, revision = revision + 1
+        WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'ACTIVE'`,
+      [value, new Date().toISOString(), this.workspaceId, clientId, expectedRevision]);
+      if (result.changes !== 1) throw new Error("CLIENT_STALE_OR_WRONG_SCOPE");
+      return clientById(tx, this.workspaceId, clientId);
+    });
+    this.publishCommitted({ clientId, affectedRosters: ["ACTIVE"] });
+    return updated;
   }
 
   async recordRealOpen(clientId: string, at = new Date().toISOString()): Promise<void> {

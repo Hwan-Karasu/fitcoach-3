@@ -28,6 +28,7 @@ export interface ClientRosterCardData {
   /** Дополнительная кнопка справа, например «убрать из закреплённых». */
   readonly action?: ReactNode;
   readonly onOpen: (clientId: string) => void;
+  /** Быстрая смена эмодзи прямо из списка (§7.8). */
   readonly onEditEmoji?: (clientId: string) => void;
 }
 
@@ -56,7 +57,7 @@ export function ClientRosterCard({ clientId, displayName, mark, subtitle, restri
         <Pressable accessibilityRole="button" accessibilityLabel={`Открыть карточку клиента: ${spoken}`}
           onPress={() => onOpen(clientId)} style={styles.main}>
           <View style={styles.text}>
-            <Text numberOfLines={1} style={[styles.name, { color: colors.textPrimary }]}>{displayName}</Text>
+            <Text numberOfLines={2} style={[styles.name, { color: colors.textPrimary }]}>{displayName}</Text>
             {subtitle || restricted ? (
               <View style={styles.subtitleRow}>
                 {subtitle ? <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text> : null}

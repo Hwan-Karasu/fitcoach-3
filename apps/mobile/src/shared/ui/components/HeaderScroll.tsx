@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useRef } from "react";
+import { createContext, useCallback, useContext, useRef, useState } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 
 const HeaderScrollContext = createContext<((scrolled: boolean) => void) | null>(null);
@@ -16,4 +16,21 @@ export function useHeaderScrollHandler(threshold = 24) {
     scrolled.current = next;
     report?.(next);
   }, [report, threshold]);
+}
+
+export interface HeaderSearchState {
+  readonly query: string;
+  readonly setQuery: (value: string) => void;
+}
+
+const HeaderSearchContext = createContext<HeaderSearchState | null>(null);
+
+/** Поиск корневой вкладки живёт в шапке (UI-OWN-019); экран только читает и сбрасывает текст. */
+export const HeaderSearchProvider = HeaderSearchContext.Provider;
+
+/** Текст поиска из шапки; вне корневой вкладки — локальное состояние экрана. */
+export function useHeaderSearch(): HeaderSearchState {
+  const shared = useContext(HeaderSearchContext);
+  const [query, setQuery] = useState("");
+  return shared ?? { query, setQuery };
 }

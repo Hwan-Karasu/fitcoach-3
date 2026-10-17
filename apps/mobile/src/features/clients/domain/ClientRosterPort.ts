@@ -25,6 +25,11 @@ export interface ClientRosterPort {
   setBirthdaySettings(settings: RosterBirthdaySettings): Promise<void>;
   listBirthdayDismissals(): Promise<readonly BirthdayDismissal[]>;
   dismissBirthday(clientId: string, occurrenceDate: string): Promise<void>;
+  /**
+   * Быстрая смена эмодзи из списка (§7.8, ChangeClientEmoji): меняет только эмодзи, с CAS по revision;
+   * null — вернуть инициалы. Ошибки: CLIENT_STALE_OR_WRONG_SCOPE, CLIENT_EMOJI_INVALID.
+   */
+  changeEmoji(clientId: string, expectedRevision: number, emoji: string | null): Promise<ClientRecord>;
   /** Called only when the client's workspace is the focused user context. */
   recordRealOpen(clientId: string, at?: string): Promise<void>;
 }

@@ -4,7 +4,7 @@ import { AppState, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Cake, CalendarClock, CalendarDays, Dumbbell, PinOff, Plus, Ticket } from "lucide-react-native";
 import { AppButton, AppIconButton, ClientRosterCard, ConfirmDialog, EmptyState, FilterPill, FloatingActionButton,
   InlineNotice,
-  ListSectionHeader, DropdownMenu, SearchField, SelectionChip, SkeletonList, useHeaderScrollHandler,
+  ListSectionHeader, DropdownMenu, EmojiPicker, SelectionChip, SkeletonList, useHeaderScrollHandler, useHeaderSearch,
   type DropdownOption } from "../../../shared/ui/components/public.ts";
 import { EmptyPanel, PrototypeScreen } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -18,10 +18,13 @@ import { ageOn, formatArchivedSince, formatYears, localCalendarDate, permanentDe
   presentClientRoster } from "../domain/ClientRosterPresentation.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 
-function clientMark(row: ClientRecord): string {
-  if (row.emoji) return row.emoji;
-  return row.displayName.trim().split(/\s+/u).slice(0, 2)
+function initialsOf(displayName: string): string {
+  return displayName.trim().split(/\s+/u).slice(0, 2)
     .map((part) => Array.from(part)[0]?.toLocaleUpperCase("ru") ?? "").join("") || "?";
+}
+
+function clientMark(row: ClientRecord): string {
+  return row.emoji ?? initialsOf(row.displayName);
 }
 
 const defaultBirthday = { birthdayPinEnabled: true, birthdayPinLeadDays: 14,
@@ -100,12 +103,13 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
   readModel: ClientListQueryPort;
   overviewSource: RosterOverviewPort;
 }>) {
-  const [query, setQuery] = useState("");
+  const { query, setQuery } = useHeaderSearch();
   const [error, setError] = useState<string | null>(null);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [menu, setMenu] = useState<"sort" | "group" | null>(null);
   const groupAnchor = useRef<View>(null);
   const sortAnchor = useRef<View>(null);
+  const [emojiFor, setEmojiFor] = useState<ClientRosterRow | null>(null);
   const [todayOnly, setTodayOnly] = useState(false);
   const onScroll = useHeaderScrollHandler();
   const [today, setToday] = useState(() => localCalendarDate(new Date()));
@@ -173,6 +177,18 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
     finally { setDismissingId(null); }
   };
 
+  const changeEmoji = async (client: ClientRosterRow, emoji: string | null) => {
+    if (emoji === client.emoji) return;
+    try {
+      await repository.changeEmoji(client.id, client.revision, emoji);
+      setError(null);
+    } catch (failure) {
+      setError(failure instanceof Error && failure.message === "CLIENT_STALE_OR_WRONG_SCOPE"
+        ? "Карточка изменилась. Список обновлён — выберите эмодзи ещё раз." : "Не удалось сменить эмодзи.");
+      readModel.refresh();
+    }
+  };
+
   const renderRow = (row: ClientRosterRow, birthdayBadge: string | null = null,
     birthdayOccurrence: string | null = null) => {
     const age = row.birthDate === null ? null : ageOn(row.birthDate, today);
@@ -183,7 +199,7 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
         highlight={birthdayBadge} highlightIcon={(color) => <Cake size={14} color={color} strokeWidth={2} />}
         metrics={facts?.metrics.map((metric) => ({ label: metricLook[metric.id].label, value: metric.value,
           icon: metricLook[metric.id].icon })) ?? []}
-        onOpen={onOpenClient}
+        onOpen={onOpenClient} onEditEmoji={() => setEmojiFor(row)}
         action={birthdayOccurrence === null ? undefined : (
           <AppIconButton label={`Убрать ${row.displayName} из закреплённых`} disabled={dismissingId !== null}
             icon={<PinOff size={20} color={colors.textSecondary} strokeWidth={1.8} />}
@@ -195,9 +211,8 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
   const sortLabel = sortOptions.find((option) => option.value === activeSort)?.label ?? "Имя А–Я";
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
-      {/* Поиск и фильтры всегда на виду: прокручивается только список. */}
+      {/* Фильтры всегда на виду: прокручивается только список; поиск — в шапке. */}
       <View style={styles.toolbar}>
-        <SearchField accessibilityLabel="Поиск по клиентам" query={query} onChangeQuery={setQuery} />
         <View style={styles.pills}>
           <FilterPill weight={1} label="Сегодня" selected={todayOnly}
             accessibilityLabel={todayOnly ? "Сегодня по расписанию, включён" : "Сегодня по расписанию"}
@@ -241,6 +256,10 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
       <DropdownMenu visible={menu === "sort"} anchor={sortAnchor} title="Сортировка" options={sortOptions} selected={activeSort}
         note={todayOnly ? "Пока включён «Сегодня», список идёт по времени записи." : undefined}
         onSelect={(mode) => { void chooseActiveSort(mode); }} onClose={() => setMenu(null)} />
+      <EmojiPicker visible={emojiFor !== null}
+        initials={emojiFor === null ? "" : initialsOf(emojiFor.displayName)} selected={emojiFor?.emoji ?? null}
+        onSelect={(emoji) => { if (emojiFor !== null) void changeEmoji(emojiFor, emoji); }}
+        onClose={() => setEmojiFor(null)} />
       <DropdownMenu visible={menu === "group"} anchor={groupAnchor} title="Клиенты" options={groupOptions} selected="ALL"
         note="Фильтры по полу и меткам появятся, когда эти поля будут в карточке клиента."
         onSelect={() => undefined} onClose={() => setMenu(null)} />
@@ -265,7 +284,7 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
   repository: ClientRepositoryPort & ClientArchivePort;
   readModel: ClientListQueryPort;
 }>) {
-  const [query, setQuery] = useState("");
+  const { query } = useHeaderSearch();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -336,7 +355,6 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
 
   return (
     <PrototypeScreen>
-      <SearchField accessibilityLabel="Поиск по архиву клиентов" query={query} onChangeQuery={setQuery} />
       <View style={styles.filters}>
         <SelectionChip group="Сортировка" label="Сначала недавно архивированные"
           selected={sort === "ARCHIVED_AT"} onPress={() => { void chooseSort("ARCHIVED_AT"); }} />

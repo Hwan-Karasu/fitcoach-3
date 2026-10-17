@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { StatusBar, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,10 +8,10 @@ import type { CalendarCreditPort, CalendarParticipantDirectoryPort,
 import type { ClientArchivePort, ClientRepositoryPort,
   ClientRosterPort, RosterOverviewPort } from "../../features/clients/public.ts";
 import type { ClientListController } from "../../read-models/ClientListController.ts";
-import { HeaderScrollReporter } from "../../shared/ui/components/public.ts";
+import { HeaderScrollReporter, HeaderSearchProvider, type HeaderSearchState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { CalendarNavigator } from "./CalendarNavigator.tsx";
-import { RootHeader } from "./RootHeader.tsx";
+import { RootHeader, type RootHeaderSearch } from "./RootHeader.tsx";
 import { ArchiveNavigator, ClientsNavigator } from "./RootSectionNavigators.tsx";
 import { rootTabs } from "./routeCatalog.ts";
 import { RootTabBar } from "./RootTabBar.tsx";
@@ -74,6 +74,23 @@ export function RootTabs({
     Clients: (value: boolean) => setScrolled((current) => ({ ...current, Clients: value })),
     Archive: (value: boolean) => setScrolled((current) => ({ ...current, Archive: value })),
   }), []);
+  // Поиск «Клиентов» и «Архива» живёт в шапке (UI-OWN-019): лупа раскрывает поле, «назад» закрывает и сбрасывает.
+  type SearchTab = "Clients" | "Archive";
+  const [search, setSearch] = useState<Readonly<Record<SearchTab, Readonly<{ open: boolean; query: string }>>>>(
+    { Clients: { open: false, query: "" }, Archive: { open: false, query: "" } });
+  const patchSearch = useCallback((tab: SearchTab, next: Partial<{ open: boolean; query: string }>) =>
+    setSearch((current) => ({ ...current, [tab]: { ...current[tab], ...next } })), []);
+  const searchContexts = useMemo((): Readonly<Record<SearchTab, HeaderSearchState>> => ({
+    Clients: { query: search.Clients.query, setQuery: (query) => patchSearch("Clients", { query }) },
+    Archive: { query: search.Archive.query, setQuery: (query) => patchSearch("Archive", { query }) },
+  }), [patchSearch, search]);
+  const headerSearch = (tab: keyof RootTabRoutes): RootHeaderSearch | undefined => tab === "Calendar" ? undefined : {
+    open: search[tab].open, query: search[tab].query,
+    placeholder: tab === "Clients" ? "Поиск по клиентам" : "Поиск по архиву",
+    onOpen: () => patchSearch(tab, { open: true }),
+    onChangeQuery: (query) => patchSearch(tab, { query }),
+    onClose: () => patchSearch(tab, { open: false, query: "" }),
+  };
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const counts = useSyncExternalStore(clientLists.counts.subscribe, clientLists.counts.getSnapshot,
@@ -90,7 +107,8 @@ export function RootTabs({
           sceneStyle: { backgroundColor: colors.canvas },
           // Заголовок корневой вкладки — в одной строке с колокольчиком и меню (UI-OWN-002).
           header: ({ route, options }) => <RootHeader title={options.title ?? ""}
-            collapsed={scrolled[route.name as keyof RootTabRoutes]} onOpenNotifications={onOpenNotifications}
+            collapsed={scrolled[route.name as keyof RootTabRoutes]} search={headerSearch(route.name as keyof RootTabRoutes)}
+            onOpenNotifications={onOpenNotifications}
             onOpenMenu={() => setMenuVisible(true)} menuButtonRef={menuButtonRef} />,
         }}
       >
@@ -98,8 +116,10 @@ export function RootTabs({
           tabBarAccessibilityLabel: activeCount ? `${rootTabs.Clients}, активных: ${activeCount}` : rootTabs.Clients,
           tabBarBadge: countBadge(activeCount) }}>
           {() => <HeaderScrollReporter value={reporters.Clients}>
-            <ClientsNavigator onOpenCreate={onOpenCreate} onOpenClient={onOpenClient} repository={clients}
-              readModel={clientLists.active} overviewSource={rosterOverview} />
+            <HeaderSearchProvider value={searchContexts.Clients}>
+              <ClientsNavigator onOpenCreate={onOpenCreate} onOpenClient={onOpenClient} repository={clients}
+                readModel={clientLists.active} overviewSource={rosterOverview} />
+            </HeaderSearchProvider>
           </HeaderScrollReporter>}
         </Tabs.Screen>
         <Tabs.Screen name="Calendar" options={{ title: rootTabs.Calendar, tabBarLabel: rootTabs.Calendar, tabBarAccessibilityLabel: rootTabs.Calendar }}>
@@ -110,7 +130,9 @@ export function RootTabs({
           tabBarAccessibilityLabel: archivedCount ? `${rootTabs.Archive}, клиентов в архиве: ${archivedCount}` : rootTabs.Archive,
           tabBarBadge: countBadge(archivedCount) }}>
           {() => <HeaderScrollReporter value={reporters.Archive}>
-            <ArchiveNavigator repository={clients} readModel={clientLists.archived} />
+            <HeaderSearchProvider value={searchContexts.Archive}>
+              <ArchiveNavigator repository={clients} readModel={clientLists.archived} />
+            </HeaderSearchProvider>
           </HeaderScrollReporter>}
         </Tabs.Screen>
       </Tabs.Navigator>
