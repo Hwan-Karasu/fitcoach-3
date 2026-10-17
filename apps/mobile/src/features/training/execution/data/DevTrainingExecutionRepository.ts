@@ -10,6 +10,8 @@ import { assertDropStructure, confirmationAfterSave, isLocalDate, localDateOf, m
   validateContent, workoutStatus, type ConfirmationChange, type SetContent } from "../domain/ExecutionRules.ts";
 import type { SaveSetInput, SetIdentity, SetSaveResult, TrainingExecutionCommittedChange,
   TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
+import type { RestTimerStorePort } from "../domain/RestTimerPorts.ts";
+import type { RestTimer } from "../domain/RestTimerRules.ts";
 import { DEV_TRAINING_EXECUTION_LEDGER, devTrainingExecutionCatalog } from "./DevTrainingExecutionCatalog.ts";
 
 const OUTCOMES: readonly WorkoutOutcome[] = ["COMPLETED", "MISSED", "CANCELLED"];
@@ -68,7 +70,8 @@ function assertIdentity(identity: SetIdentity): void {
 /** Сторона дневника в PermanentlyDeleteArchivedClient (§15.7): выполнения и факты подходов клиента. */
 export const devTrainingExecutionClientDeletionParticipant = {
   owner: "training.execution",
-  tables: ["dev_training_performed_drops", "dev_training_performed_sets", "dev_training_sessions"] as const,
+  tables: ["dev_training_performed_drops", "dev_training_performed_sets", "dev_training_sessions",
+    "dev_training_rest_timers"] as const,
   async count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number> {
     const row = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM dev_training_sessions
       WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
@@ -81,11 +84,12 @@ export const devTrainingExecutionClientDeletionParticipant = {
     await tx.run(`DELETE FROM dev_training_performed_sets WHERE workspace_id = ? AND session_id IN
       (SELECT id FROM dev_training_sessions WHERE workspace_id = ? AND client_id = ?)`, [workspaceId, workspaceId, clientId]);
     await tx.run("DELETE FROM dev_training_sessions WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run("DELETE FROM dev_training_rest_timers WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
   },
 };
 
 /** Явно dev-хранилище новой установки в общем dev-файле клиентов. */
-export class DevTrainingExecutionRepository implements TrainingExecutionPort {
+export class DevTrainingExecutionRepository implements TrainingExecutionPort, RestTimerStorePort {
   private connection: SqliteConnectionPort | null = null;
   private writer: WriterCoordinator | null = null;
   private opening: Promise<void> | null = null;
@@ -205,17 +209,18 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort {
    * §37.8: последнее выполнение этой программы клиента не позже даты текущего, сначала с тем же слотом
    * упражнения, затем то же упражнение в других днях. Подходы источника — только подтверждённые.
    */
-  private async previousSource(port: SqliteStatementPort, slot: WorkoutSlot, date: string,
+  private async previousSource(port: SqliteStatementPort, slot: WorkoutSlot, date: string, startedBefore: string,
     column: "planned_exercise_id" | "exercise_id", value: string):
     Promise<Readonly<{ date: string; sets: readonly Readonly<{ setType: SetType; value: PreviousSet }>[] }> | null> {
     const session = await port.first<{ id: string; date: string }>(`SELECT s.id, s.actual_date AS date
       FROM dev_training_sessions s
-      WHERE s.workspace_id = ? AND s.client_id = ? AND s.program_id = ? AND s.actual_date <= ?
+      WHERE s.workspace_id = ? AND s.client_id = ? AND s.program_id = ?
+        AND (s.actual_date < ? OR (s.actual_date = ? AND s.created_at < ?))
         AND NOT (s.week_index = ? AND s.planned_workout_id = ?)
         AND EXISTS (SELECT 1 FROM dev_training_performed_sets f WHERE f.workspace_id = s.workspace_id
           AND f.session_id = s.id AND f.confirmed_at IS NOT NULL AND f.${column} = ?)
       ORDER BY s.actual_date DESC, s.week_index DESC, s.created_at DESC LIMIT 1`,
-    [this.workspaceId, slot.clientId, slot.programId, date, slot.weekIndex, slot.plannedWorkoutId, value]);
+    [this.workspaceId, slot.clientId, slot.programId, date, date, startedBefore, slot.weekIndex, slot.plannedWorkoutId, value]);
     if (session === null) return null;
     const rows = await port.all<FactRow>(`SELECT ${FACT_COLUMNS} FROM dev_training_performed_sets
       WHERE workspace_id = ? AND session_id = ? AND confirmed_at IS NOT NULL AND ${column} = ? ORDER BY rowid`,
@@ -235,10 +240,14 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort {
     const { connection } = this.ready();
     const current = await this.getWorkout(slot);
     const date = current.session?.actualDate ?? localDateOf(now);
+    // В тот же день «прошлое» — только начатое раньше текущего выполнения (ещё не начатое начнётся сейчас).
+    const startedBefore = current.session === null ? now.toISOString()
+      : (await connection.first<{ createdAt: string }>(`SELECT created_at AS createdAt FROM dev_training_sessions
+        WHERE workspace_id = ? AND id = ?`, [this.workspaceId, current.session.id]))?.createdAt ?? now.toISOString();
     const result = new Map<string, PreviousSet>();
     for (const query of queries) {
-      const source = await this.previousSource(connection, slot, date, "planned_exercise_id", query.plannedExerciseId)
-        ?? await this.previousSource(connection, slot, date, "exercise_id", query.exerciseId);
+      const source = await this.previousSource(connection, slot, date, startedBefore, "planned_exercise_id", query.plannedExerciseId)
+        ?? await this.previousSource(connection, slot, date, startedBefore, "exercise_id", query.exerciseId);
       if (source === null) continue;
       const matched = matchPrevious(query.plannedSetIds.map((plannedSetId) => ({ plannedSetId,
         setType: current.facts.get(plannedSetId)?.setType ?? "NORMAL" })), source.sets);
@@ -348,6 +357,29 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort {
     });
     this.publish(slot);
     return saved;
+  }
+
+  listTimers(): Promise<readonly RestTimer[]> {
+    return this.ready().connection.all<RestTimer>(`SELECT id, client_id AS clientId, client_name AS clientName,
+      exercise_key AS exerciseKey, exercise_name AS exerciseName, started_at AS startedAt, end_at AS endAt,
+      signal_id AS signalId FROM dev_training_rest_timers WHERE workspace_id = ? ORDER BY end_at`, [this.workspaceId]);
+  }
+
+  async putTimer(timer: RestTimer, replacedId: string | null): Promise<void> {
+    await this.ready().writer.write(async (tx) => {
+      if (replacedId !== null) await tx.run("DELETE FROM dev_training_rest_timers WHERE workspace_id = ? AND id = ?",
+        [this.workspaceId, replacedId]);
+      await tx.run(`INSERT INTO dev_training_rest_timers (id, workspace_id, client_id, client_name, exercise_key, exercise_name,
+        started_at, end_at, signal_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (id) DO UPDATE SET end_at = excluded.end_at, signal_id = excluded.signal_id`,
+      [timer.id, this.workspaceId, timer.clientId, timer.clientName, timer.exerciseKey, timer.exerciseName, timer.startedAt,
+        timer.endAt, timer.signalId]);
+    });
+  }
+
+  async removeTimer(id: string): Promise<void> {
+    await this.ready().writer.write((tx) => tx.run("DELETE FROM dev_training_rest_timers WHERE workspace_id = ? AND id = ?",
+      [this.workspaceId, id]));
   }
 
   async close(): Promise<void> {

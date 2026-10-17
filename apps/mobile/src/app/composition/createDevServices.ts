@@ -19,7 +19,9 @@ import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant }
   "../../features/training/plans/data/DevTrainingPlansRepository.ts";
 import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParticipant } from
   "../../features/training/execution/data/DevTrainingExecutionRepository.ts";
-import type { TrainingExecutionPort, TrainingPlansRepositoryPort } from "../../features/training/public.ts";
+import type { RestTimersPort, TrainingExecutionPort, TrainingPlansRepositoryPort } from "../../features/training/public.ts";
+import { RestTimerService } from "../../features/training/public.ts";
+import { expoRestSignal } from "./expoRestSignal.ts";
 import { DevExerciseCatalogRepository } from "../../features/exercises/data/DevExerciseCatalogRepository.ts";
 import systemCatalogJson from "../../features/exercises/data/system-catalog.generated.json";
 import { displayNameOf, thumbnailOf, TRACKING_PROFILES, type ExerciseCatalogPort, type SystemCatalog } from
@@ -44,6 +46,8 @@ export interface DevServices {
   readonly questionnaire: QuestionnaireRepositoryPort;
   readonly trainingPlans: TrainingPlansRepositoryPort;
   readonly trainingExecution: TrainingExecutionPort;
+  /** Таймеры отдыха всех клиентов (§48.62): глобальная панель и запуск из дневника. */
+  readonly restTimers: RestTimersPort;
   readonly exercises: ExerciseCatalogPort;
   /** Каталог глазами планов тренировок: название, величины подхода, миниатюра. */
   readonly exerciseLookup: ExerciseLookupPort;
@@ -80,7 +84,7 @@ function exerciseLookup(exercises: ExerciseCatalogPort): ExerciseLookupPort {
 export function createDevServices(clients: DevClientServices, calendar: CalendarRepositoryPort,
   accounting: AccountingRepositoryPort, measurements: MeasurementRepositoryPort,
   questionnaire: QuestionnaireRepositoryPort, trainingPlans: TrainingPlansRepositoryPort,
-  trainingExecution: TrainingExecutionPort, exercises: ExerciseCatalogPort): DevServices {
+  trainingExecution: TrainingExecutionPort, restTimers: RestTimersPort, exercises: ExerciseCatalogPort): DevServices {
   return {
     runSqliteProbe: () => runF04Probe(() => openExpoSqliteConnection("fitcoach_f04_probe.db")),
     clients,
@@ -91,6 +95,7 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
     questionnaire,
     trainingPlans,
     trainingExecution,
+    restTimers,
     exercises,
     exerciseLookup: exerciseLookup(exercises),
     listCreditSessionTypes: async () => (await calendar.listSessionTypes())
@@ -118,6 +123,7 @@ export function createDevRuntime(): DevRuntime {
   const questionnaire = new DevQuestionnaireRepository(database, DEV_WORKSPACE_ID);
   const trainingPlans = new DevTrainingPlansRepository(database, DEV_WORKSPACE_ID);
   const trainingExecution = new DevTrainingExecutionRepository(database, DEV_WORKSPACE_ID);
+  const restTimers = new RestTimerService(trainingExecution, expoRestSignal);
   // Системный каталог — снимок RepDB Free, собранный `npm run catalog:build` (§29, §39.12).
   const exercises = new DevExerciseCatalogRepository(database, DEV_WORKSPACE_ID, systemCatalogJson as SystemCatalog);
   // Calendar commands move reservations inside their own transactions.
@@ -133,9 +139,11 @@ export function createDevRuntime(): DevRuntime {
         await questionnaire.initialize();
         await trainingPlans.initialize();
         await trainingExecution.initialize();
+        // Таймеры отдыха — не данные: сбой восстановления не мешает запуску (§44.7).
+        await restTimers.recover().catch(() => undefined);
         await exercises.initialize();
       },
     )),
-    services: createDevServices(clients, calendar, accounting, measurements, questionnaire, trainingPlans, trainingExecution, exercises),
+    services: createDevServices(clients, calendar, accounting, measurements, questionnaire, trainingPlans, trainingExecution, restTimers, exercises),
   };
 }

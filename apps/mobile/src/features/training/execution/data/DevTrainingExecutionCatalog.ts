@@ -127,4 +127,22 @@ export const devTrainingExecutionCatalog: readonly MigrationStep[] = [{
       WHEN COALESCE((SELECT set_type FROM dev_training_performed_sets WHERE id = NEW.set_id), '') <> 'DROP'
       BEGIN SELECT RAISE(ABORT, 'INVALID_METRIC'); END`,
   ],
+}, {
+  version: 3,
+  checksum: "t03-dev-training-execution-v3-rest-timers-20261017",
+  statements: [
+    // §44.7: минимальное состояние таймеров отдыха для восстановления; это не тренировочный факт (§44.8).
+    `CREATE TABLE dev_training_rest_timers (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      client_name TEXT NOT NULL,
+      exercise_key TEXT NOT NULL,
+      exercise_name TEXT NOT NULL,
+      started_at INTEGER NOT NULL,
+      end_at INTEGER NOT NULL CHECK (end_at >= started_at),
+      signal_id TEXT,
+      UNIQUE (workspace_id, client_id, exercise_key)
+    )`,
+  ],
 }];

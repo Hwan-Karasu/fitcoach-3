@@ -80,7 +80,8 @@
   без FK. Подтверждение подхода — чистые функции `ExecutionRules` (авто/ручной). Библиотеки (согласие
   владельца «используй всё что необходимо»): `react-native-keyboard-controller` (KeyboardProvider в
   PrototypeShell, KeyboardAwareScrollView), `expo-haptics`, `expo-keep-awake`, `expo-notifications`
-  (для таймера отдыха, ещё не используется). Ячейка пишет значение через 0,7 с или при уходе фокуса,
+  (таймер отдыха: в Expo Go корневой модуль падает на `ExpoTopicSubscriptionModule` — грузить только части
+  `expo-notifications/build/*` лениво, см. `app/composition/expoRestSignal.ts`). Ячейка пишет значение через 0,7 с или при уходе фокуса,
   смена исхода сначала дописывает отложенные значения.
 - Альтернативы: FK на плановые подходы (правка плана стирала бы факты), запись на каждое нажатие
   (подтверждение и таймер срабатывали бы на первой цифре), свой KeyboardAvoidingView (хуже на Android).

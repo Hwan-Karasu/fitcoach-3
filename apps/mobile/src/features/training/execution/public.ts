@@ -3,5 +3,9 @@ export type { ConfirmationMode, PreviousQuery, PreviousSet, SessionStatus, SetFa
 export { hasEnteredData, isComplete, nextOutcome, weekStatus, workoutStatus } from "./domain/ExecutionRules.ts";
 export { WorkoutScreen } from "./presentation/WorkoutScreen.tsx";
 export { ProgramWeeksPanel } from "./presentation/ProgramWeeksPanel.tsx";
+export { RestTimerDock } from "./presentation/RestTimerDock.tsx";
+export { RestTimerService } from "./application/RestTimerService.ts";
+export type { RestSignalPort, RestTimerStorePort, RestTimersPort } from "./domain/RestTimerPorts.ts";
+export type { RestTimer, RestTimerStart } from "./domain/RestTimerRules.ts";
 export type { SaveSetInput, SetIdentity, SetSaveResult, TrainingExecutionCommittedChange,
   TrainingExecutionPort } from "./domain/TrainingExecutionPort.ts";

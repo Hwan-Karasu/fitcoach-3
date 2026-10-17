@@ -272,3 +272,20 @@ test("T03 миграция v2 сохраняет факты v1 и разреша
     await clients.close();
   }
 });
+
+test("T03 «Пред.» в тот же день: только выполнение, начатое раньше текущего", async () => {
+  const { clients, execution, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const week = (weekIndex: number): WorkoutSlot => ({ clientId: a.id, programId: "program-a", weekIndex, plannedWorkoutId: "w1" });
+    const query = [{ plannedExerciseId: "pe-bench", exerciseId: BENCH, plannedSetIds: ["s1"] }];
+    const morning = new Date(2026, 9, 17, 9, 0);
+    const evening = new Date(2026, 9, 17, 19, 0);
+    await execution.saveSet(bench(week(1), "s1", 0, values(100_000, 8), null), morning);
+    await execution.saveSet(bench(week(2), "s1", 0, values(110_000, 6), null), evening);
+    assert.equal((await execution.getPrevious(week(2), query, evening)).get("s1")?.values.loadGrams, 100_000,
+      "вечером «Пред.» — утреннее выполнение");
+    assert.equal((await execution.getPrevious(week(1), query, evening)).size, 0,
+      "у утреннего выполнения вечернее не становится «прошлым»");
+  } finally { await close(); }
+});

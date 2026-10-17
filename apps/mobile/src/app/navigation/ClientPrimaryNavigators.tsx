@@ -6,7 +6,7 @@ import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts"
 import { NutritionWorkspacePreview } from "../../features/nutrition/public.ts";
 import { CreateProgramScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, SimpleProgramBuilderScreen,
   type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
-  type TrainingPlansRepositoryPort, ProgramWeeksPanel, WorkoutScreen, type TrainingExecutionPort } from "../../features/training/public.ts";
+  type TrainingPlansRepositoryPort, ProgramWeeksPanel, WorkoutScreen, type RestTimersPort, type TrainingExecutionPort } from "../../features/training/public.ts";
 import { ExerciseLibraryScreen, type ExerciseCatalogPort } from "../../features/exercises/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 
@@ -78,10 +78,13 @@ export function NutritionNavigator() {
  * Стек не сбрасывается при смене вкладок; после создания в стеке «список → программа».
  * Шапка — общая строка карточки клиента (UI-OWN-001), назад — системной кнопкой.
  */
-export function TrainingNavigator({ clientId, repository, execution, listCandidates, exercises, exerciseLookup }: Readonly<{
+export function TrainingNavigator({ clientId, clientName, repository, execution, restTimers, listCandidates, exercises,
+  exerciseLookup }: Readonly<{
   clientId: string;
+  clientName: string;
   repository: TrainingPlansRepositoryPort;
   execution: TrainingExecutionPort;
+  restTimers: RestTimersPort;
   listCandidates: () => Promise<readonly TrainingParticipantCandidate[]>;
   exercises: ExerciseCatalogPort;
   exerciseLookup: ExerciseLookupPort;
@@ -131,7 +134,8 @@ export function TrainingNavigator({ clientId, repository, execution, listCandida
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingWorkout">
         {({ route }) => <WorkoutScreen slot={{ clientId, programId: route.params.programId, weekIndex: route.params.weekIndex,
-          plannedWorkoutId: route.params.workoutId }} plans={repository} execution={execution} exercises={exerciseLookup} />}
+          plannedWorkoutId: route.params.workoutId }} clientName={clientName} plans={repository} execution={execution}
+          restTimers={restTimers} exercises={exerciseLookup} />}
       </TrainingStack.Screen>
     </TrainingStack.Navigator>
   );

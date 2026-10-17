@@ -32,7 +32,9 @@ const errorText = (error: unknown) => {
  * Записи идут строго по очереди: каждая берёт ревизию из ответа предыдущей, двойное нажатие не дублирует.
  */
 export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositoryPort, execution: TrainingExecutionPort,
-  metricsOf: (exerciseId: string) => readonly TrackingMetric[] | null) {
+  metricsOf: (exerciseId: string) => readonly TrackingMetric[] | null,
+  /** Новый переход «не выполнен → выполнен» при вводе в открытом дневнике — запуск таймера отдыха (§48.55). */
+  onConfirmedNow: (exercise: PlannedExercise) => void) {
   const { clientId, programId, weekIndex, plannedWorkoutId } = slot;
   const stableSlot = useMemo<WorkoutSlot>(() => ({ clientId, programId, weekIndex, plannedWorkoutId }),
     [clientId, programId, weekIndex, plannedWorkoutId]);
@@ -43,6 +45,8 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   const [message, setMessage] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
   const stateRef = useRef<WorkoutExecution | null>(null);
+  const confirmedRef = useRef(onConfirmedNow);
+  confirmedRef.current = onConfirmedNow;
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   stateRef.current = state;
 
@@ -117,7 +121,10 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
         rpe: patch.rpe !== undefined ? patch.rpe : fact?.rpe ?? null, setType };
       const result = await execution.saveSet(input);
       applyFact(result.fact, result.session);
-      if (result.confirmedNow) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+      if (result.confirmedNow) {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+        confirmedRef.current(exercise);
+      }
       return result;
     }), [applyFact, enqueue, execution, identityOf]);
 
@@ -126,7 +133,10 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
       const { identity } = identityOf(exercise, set, position);
       const result = await execution.toggleSetConfirmation(identity);
       applyFact(result.fact, result.session);
-      if (result.confirmedNow) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+      if (result.confirmedNow) {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+        confirmedRef.current(exercise);
+      }
       return result;
     }), [applyFact, enqueue, execution, identityOf]);
 

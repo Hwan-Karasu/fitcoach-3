@@ -15,6 +15,7 @@ import { DROPS_MAX, EMPTY_VALUES, type ConfirmationMode, type PreviousSet, type 
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
 import { displayOrder, nextOutcome, type SetField } from "../domain/ExecutionRules.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
+import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
 import { RpeSheet, SetTypeSheet } from "./SetPickers.tsx";
 import { compactValues, compactWithDrops, diaryFields, fieldHeaders, fieldNames, parseField, rawOf, rpeTone, setTypeLabels,
   setTypeTone, shortDate, workoutStatusLabels } from "./setFormat.ts";
@@ -200,10 +201,13 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
  * упражнением (§48.31). После завершения экран остаётся тем же (§48.68). Выход из начатой тренировки без
  * исхода спрашивает «Завершить тренировку?» (§48.36).
  */
-export function WorkoutScreen({ slot, plans, execution, exercises }: Readonly<{
+export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, exercises }: Readonly<{
   slot: WorkoutSlot;
+  /** Подпись таймера отдыха — таймеры разных клиентов различимы (§48.62). */
+  clientName: string;
   plans: TrainingPlansRepositoryPort;
   execution: TrainingExecutionPort;
+  restTimers: RestTimersPort;
   exercises: ExerciseLookupPort;
 }>) {
   useKeepAwake();
@@ -212,7 +216,13 @@ export function WorkoutScreen({ slot, plans, execution, exercises }: Readonly<{
   const navigation = useNavigation();
   const lookup = useExerciseLookup(exercises);
   const metricsOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.metrics ?? null, [lookup]);
-  const diary = useWorkoutDiary(slot, plans, execution, metricsOf);
+  // §48.56: таймер упражнения со своей длительностью; выключенный в плане — не запускается.
+  const startRest = useCallback((exercise: PlannedExercise) => {
+    if (exercise.restSec === null) return;
+    void restTimers.start({ clientId: slot.clientId, clientName, exerciseKey: exercise.id,
+      exerciseName: lookup?.get(exercise.exerciseId)?.name ?? "Упражнение", durationSec: exercise.restSec }).catch(() => undefined);
+  }, [clientName, lookup, restTimers, slot.clientId]);
+  const diary = useWorkoutDiary(slot, plans, execution, metricsOf, startRest);
   const pending = useRef<PendingRegistry>(new Map()).current;
   const typeSheet = useRef<BottomSheetModal>(null);
   const rpeSheet = useRef<BottomSheetModal>(null);
@@ -372,7 +382,8 @@ export function WorkoutScreen({ slot, plans, execution, exercises }: Readonly<{
 
 const styles = StyleSheet.create({
   center: { flex: 1, padding: 16, gap: 12, justifyContent: "center" },
-  content: { padding: 16, gap: 12, paddingBottom: 32 },
+  // Снизу место под панель таймеров отдыха, чтобы она не закрывала кнопки исходов.
+  content: { padding: 16, gap: 12, paddingBottom: 200 },
   heading: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 26 },
   metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   meta: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
