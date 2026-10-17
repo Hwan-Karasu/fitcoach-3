@@ -51,7 +51,7 @@ type OverlayRow = Readonly<{ exerciseId: string; favorite: number; hidden: numbe
 function customDefinition(row: CustomRow): ExerciseDefinition {
   return { id: row.id, origin: "CUSTOM", name: row.name, nameEn: null, bodyPart: row.bodyPart, primaryMuscles: [],
     secondaryMuscles: [], equipment: row.equipment, trackingProfile: row.trackingProfile, mechanic: null, difficulty: null,
-    unilateral: false, variationGroup: null, instructions: [], tips: [], media: null, source: null };
+    unilateral: false, variationGroup: null, instructions: [], tips: [], textLanguage: "ru", media: null, source: null };
 }
 
 function overlayOf(row: OverlayRow | undefined): ExerciseOverlay {

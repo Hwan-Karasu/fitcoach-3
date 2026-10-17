@@ -3,7 +3,8 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { SystemCatalog } from "../../apps/mobile/src/features/exercises/domain/ExerciseModel.ts";
 import { REPDB_CHECKOUT, VENDOR_DIR } from "./fetch-repdb.ts";
-import { normalizeRecord, validateCatalog, type RepdbRecord } from "./normalize-repdb.ts";
+import { readdir } from "node:fs/promises";
+import { normalizeRecord, textsMatch, validateCatalog, type RepdbRecord, type RuTexts } from "./normalize-repdb.ts";
 
 /**
  * Сборка системного каталога: `vendor/repdb/exercises.json` + русские названия → реестр FitCoach
@@ -12,6 +13,17 @@ import { normalizeRecord, validateCatalog, type RepdbRecord } from "./normalize-
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const OUTPUT = join(ROOT, "apps", "mobile", "src", "features", "exercises", "data", "system-catalog.generated.json");
 const RU_NAMES = join(dirname(fileURLToPath(import.meta.url)), "repdb-names-ru.json");
+const RU_TEXTS = join(dirname(fileURLToPath(import.meta.url)), "texts-ru");
+
+/** Переводы техники и советов по частям (texts-ru/batch-NN.json). */
+async function readRuTexts(): Promise<ReadonlyMap<string, RuTexts>> {
+  const texts = new Map<string, RuTexts>();
+  for (const name of (await readdir(RU_TEXTS)).filter((file) => file.endsWith(".json")).sort()) {
+    const part = JSON.parse(await readFile(join(RU_TEXTS, name), "utf8")) as Readonly<Record<string, RuTexts>>;
+    for (const [id, value] of Object.entries(part)) texts.set(id, value);
+  }
+  return texts;
+}
 
 interface RepdbFile {
   readonly name: string;
@@ -51,7 +63,13 @@ async function main(): Promise<void> {
   const file = JSON.parse(await readFile(join(VENDOR_DIR, "exercises.json"), "utf8")) as RepdbFile;
   if (file.schema_version !== 3) throw new Error(`RepDB: неизвестная схема ${file.schema_version}, нужна проверка адаптера`);
   const ru = JSON.parse(await readFile(RU_NAMES, "utf8")) as Readonly<Record<string, string>>;
-  const exercises = file.exercises.map((record) => normalizeRecord(record, ru[record.id]));
+  const ruTexts = await readRuTexts();
+  const mismatched = file.exercises.filter((record) => ruTexts.has(record.id) && !textsMatch(record, ruTexts.get(record.id)))
+    .map((record) => record.id);
+  if (mismatched.length > 0) throw new Error(`Перевод техники не совпадает по числу строк: ${mismatched.join(", ")}`);
+  const unknown = [...ruTexts.keys()].filter((id) => !file.exercises.some((record) => record.id === id));
+  if (unknown.length > 0) throw new Error(`Перевод для неизвестных упражнений: ${unknown.join(", ")}`);
+  const exercises = file.exercises.map((record) => normalizeRecord(record, ru[record.id], ruTexts.get(record.id)));
   const problems = validateCatalog(exercises);
   if (problems.length > 0) throw new Error(`Каталог не прошёл проверку:\n${problems.join("\n")}`);
   const missingRuNames = file.exercises.filter((record) => !ru[record.id]).length;
@@ -75,7 +93,7 @@ async function main(): Promise<void> {
     : [exercise.media.start, exercise.media.peak, exercise.media.main].filter((path): path is string => path !== null)));
   const profiles = new Map<string, number>();
   for (const exercise of exercises) profiles.set(exercise.trackingProfile, (profiles.get(exercise.trackingProfile) ?? 0) + 1);
-  console.log(`Каталог: ${exercises.length} упражнений, без русского названия: ${missingRuNames}`);
+  console.log(`Каталог: ${exercises.length} упражнений, без русского названия: ${missingRuNames}, техника по-русски: ${exercises.filter((exercise) => exercise.textLanguage === "ru").length}`);
   console.log(`Профили: ${[...profiles.entries()].map(([id, n]) => `${id} ${n}`).join(", ")}`);
 }
 

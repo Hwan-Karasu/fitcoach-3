@@ -13,7 +13,7 @@ const WS = "synthetic-workspace-a";
 function system(id: string, name: string, nameEn: string, extra: Partial<ExerciseDefinition> = {}): ExerciseDefinition {
   return { id, origin: "SYSTEM", name, nameEn, bodyPart: "chest", primaryMuscles: [], secondaryMuscles: [],
     equipment: "barbell", trackingProfile: "LOAD_REPS", mechanic: "compound", difficulty: null, unilateral: false,
-    variationGroup: null, instructions: [], tips: [], media: null, source: { provider: "REPDB", sourceId: id.slice(10) },
+    variationGroup: null, instructions: [], tips: [], textLanguage: "ru", media: null, source: { provider: "REPDB", sourceId: id.slice(10) },
     ...extra };
 }
 

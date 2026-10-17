@@ -104,7 +104,9 @@ export function ExerciseDetailScreen({ exerciseId, repository, onEdit, onArchive
 
       {definition.instructions.length > 0 ? <>
         <Text style={[styles.group, { color: colors.textPrimary }]}>Техника</Text>
-        <Text style={[styles.note, { color: colors.textMuted }]}>Пока на английском — перевод техники появится отдельным этапом.</Text>
+        {definition.textLanguage === "en" ? (
+          <Text style={[styles.note, { color: colors.textMuted }]}>Пока на английском — перевод этого упражнения ещё в работе.</Text>
+        ) : null}
         {definition.instructions.map((step, index) => (
           <Text key={step} style={[styles.body, { color: colors.textPrimary }]}>{`${index + 1}. ${step}`}</Text>
         ))}

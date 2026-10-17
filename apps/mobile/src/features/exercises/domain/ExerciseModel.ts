@@ -63,6 +63,8 @@ export interface ExerciseDefinition {
   readonly variationGroup: string | null;
   readonly instructions: readonly string[];
   readonly tips: readonly string[];
+  /** Язык техники и советов: русский перевод либо английский оригинал источника. */
+  readonly textLanguage: "ru" | "en";
   readonly media: ExerciseMedia | null;
   readonly source: ExerciseSourceRef | null;
 }

@@ -78,10 +78,22 @@ export function systemExerciseId(sourceId: string): string {
   return `sys:repdb:${sourceId}`;
 }
 
-export function normalizeRecord(record: RepdbRecord, ruName: string | undefined): ExerciseDefinition {
+/** Русская техника и советы: строк столько же, сколько в оригинале (иначе перевод не применяется). */
+export interface RuTexts {
+  readonly i: readonly string[];
+  readonly t: readonly string[];
+}
+
+export function textsMatch(record: RepdbRecord, ru: RuTexts | undefined): ru is RuTexts {
+  return ru !== undefined && ru.i.length === (record.instructions_en ?? []).length && ru.t.length === (record.tips_en ?? []).length
+    && [...ru.i, ...ru.t].every((line) => line.trim().length > 0);
+}
+
+export function normalizeRecord(record: RepdbRecord, ruName: string | undefined, ruTexts?: RuTexts): ExerciseDefinition {
   const bodyPart = oneOf<BodyPart>(record.body_part, BODY_PARTS);
   if (bodyPart === null) throw new Error(`REPDB_BODY_PART_UNKNOWN:${record.id}:${record.body_part}`);
   const nameEn = record.name_en.trim();
+  const ru = textsMatch(record, ruTexts) ? ruTexts : null;
   return {
     id: systemExerciseId(record.id),
     origin: "SYSTEM",
@@ -96,8 +108,9 @@ export function normalizeRecord(record: RepdbRecord, ruName: string | undefined)
     difficulty: oneOf(record.difficulty, ["beginner", "intermediate", "advanced"] as const),
     unilateral: record.is_unilateral === true,
     variationGroup: record.variation_group ?? null,
-    instructions: [...(record.instructions_en ?? [])],
-    tips: [...(record.tips_en ?? [])],
+    instructions: ru !== null ? [...ru.i] : [...(record.instructions_en ?? [])],
+    tips: ru !== null ? [...ru.t] : [...(record.tips_en ?? [])],
+    textLanguage: ru !== null ? "ru" : "en",
     media: mediaOf(record),
     source: { provider: "REPDB", sourceId: record.id },
   };
