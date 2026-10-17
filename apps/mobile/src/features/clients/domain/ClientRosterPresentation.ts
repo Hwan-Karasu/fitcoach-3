@@ -7,6 +7,8 @@ export interface PresentedClient {
   readonly birthdayBadge: string | null;
   readonly birthdayOccurrence: string | null;
   readonly daysUntilBirthday: number | null;
+  /** Когда ближайший день рождения: «25 окт., через 8 дн.», «Завтра, 18 окт.». */
+  readonly birthdayText: string | null;
 }
 
 export interface PresentedRoster {
@@ -20,6 +22,17 @@ export interface PresentedRoster {
 
 export function localCalendarDate(now: Date): string {
   return `${String(now.getFullYear()).padStart(4, "0")}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+const shortMonths = ["янв.", "февр.", "мар.", "апр.", "мая", "июн.", "июл.", "авг.", "сент.", "окт.",
+  "нояб.", "дек."] as const;
+
+/** Дата ближайшего дня рождения и сколько до него осталось — для закреплённой карточки. */
+export function birthdayLabel(occurrence: string, daysUntil: number): string {
+  const date = `${Number(occurrence.slice(8, 10))} ${shortMonths[Number(occurrence.slice(5, 7)) - 1] ?? ""}`;
+  if (daysUntil === 0) return `Сегодня, ${date}`;
+  if (daysUntil === 1) return `Завтра, ${date}`;
+  return `${date}, через ${daysUntil} дн.`;
 }
 
 const genitiveMonths = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля",
@@ -167,7 +180,8 @@ export function presentClientRoster(input: Readonly<{
       const birthdayBadge = !input.birthday.showBirthdayBadge || days === null || days > 7
         ? null : days === 0 ? "ДР сегодня" : days === 1 ? "ДР завтра" : `ДР через ${days} д.`;
       return { client, birthdayBadge, birthdayOccurrence: birthday?.occurrence ?? null,
-        daysUntilBirthday: days };
+        daysUntilBirthday: days,
+        birthdayText: birthday === null ? null : birthdayLabel(birthday.occurrence, birthday.daysUntil) };
     });
   if (todayStarts !== null) return {
     birthday: [], recent: null, searching, todayOnly: true,

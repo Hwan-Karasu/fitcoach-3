@@ -189,14 +189,14 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
     }
   };
 
-  const renderRow = (row: ClientRosterRow, birthdayBadge: string | null = null,
+  const renderRow = (row: ClientRosterRow, birthdayText: string | null = null,
     birthdayOccurrence: string | null = null) => {
     const age = row.birthDate === null ? null : ageOn(row.birthDate, today);
     const facts = overview?.get(row.id);
     return (
       <ClientRosterCard key={row.id} clientId={row.id} displayName={row.displayName} mark={clientMark(row)}
         subtitle={age === null ? null : formatYears(age)} restricted={facts?.restricted ?? false}
-        highlight={birthdayBadge} highlightIcon={(color) => <Cake size={14} color={color} strokeWidth={2} />}
+        highlight={birthdayText} highlightIcon={(color) => <Cake size={14} color={color} strokeWidth={2} />}
         metrics={facts?.metrics.map((metric) => ({ label: metricLook[metric.id].label, value: metric.value,
           icon: metricLook[metric.id].icon })) ?? []}
         onOpen={onOpenClient} emoji={row.emoji}
@@ -245,13 +245,14 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
         {roster?.todayOnly && visibleCount > 0 ? <ListSectionHeader title="Сегодня по расписанию" count={visibleCount} /> : null}
         {roster?.searching && !roster.todayOnly && visibleCount > 0 ? <ListSectionHeader title="Найдено" count={visibleCount} /> : null}
         {roster && roster.birthday.length > 0 ? <ListSectionHeader accent title="Дни рождения" count={roster.birthday.length} /> : null}
-        {roster?.birthday.map((entry) => renderRow(entry.client, entry.birthdayBadge,
+        {roster?.birthday.map((entry) => renderRow(entry.client, entry.birthdayText,
           entry.birthdayOccurrence))}
         {roster?.recent ? <ListSectionHeader title="Недавно открывали" count={1} /> : null}
-        {roster?.recent ? renderRow(roster.recent.client, roster.recent.birthdayBadge) : null}
+        {roster?.recent ? renderRow(roster.recent.client, roster.recent.birthdayBadge === null ? null
+          : roster.recent.birthdayText) : null}
         {roster && !roster.searching && !roster.todayOnly && roster.regular.length > 0
           ? <ListSectionHeader title="Все клиенты" count={roster.regular.length} /> : null}
-        {roster?.regular.map((entry) => renderRow(entry.client, entry.birthdayBadge))}
+        {roster?.regular.map((entry) => renderRow(entry.client, entry.birthdayBadge === null ? null : entry.birthdayText))}
       </ScrollView>
       <FloatingActionButton label="Создать карточку клиента" onPress={onOpenCreate}
         icon={(color) => <Plus size={26} color={color} strokeWidth={2.2} />} />

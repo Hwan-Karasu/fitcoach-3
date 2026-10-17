@@ -55,9 +55,15 @@ export function ClientRosterCard({ clientId, displayName, mark, emoji = null, su
           onPress={() => onOpen(clientId)} style={styles.main}>
           <View style={styles.text}>
             <Text numberOfLines={2} style={[styles.name, { color: colors.textPrimary }]}>{displayName}</Text>
-            {subtitle || restricted ? (
+            {subtitle || restricted || highlight ? (
               <View style={styles.subtitleRow}>
                 {subtitle ? <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text> : null}
+                {highlight ? (
+                  <View style={[styles.highlight, { backgroundColor: colors.surfaceRaised }]}>
+                    {highlightIcon?.(colors.warning) ?? null}
+                    <Text style={[styles.highlightText, { color: colors.warning }]}>{highlight}</Text>
+                  </View>
+                ) : null}
                 {restricted ? (
                   <View style={[styles.badge, { borderColor: colors.warning }]}>
                     <Text style={[styles.badgeText, { color: colors.warning }]}>Есть ограничения</Text>
@@ -66,15 +72,10 @@ export function ClientRosterCard({ clientId, displayName, mark, emoji = null, su
               </View>
             ) : null}
           </View>
-          {highlight ? (
-            <View style={[styles.highlight, { backgroundColor: colors.surfaceRaised }]}>
-              {highlightIcon?.(colors.warning) ?? null}
-              <Text style={[styles.highlightText, { color: colors.warning }]}>{highlight}</Text>
-            </View>
-          ) : null}
+          {/* Дополнительное действие («открепить») — перед стрелкой, стрелка всегда у края. */}
+          {action}
           <ChevronRight size={20} color={colors.textMuted} strokeWidth={2} />
         </Pressable>
-        {action}
       </View>
       {metrics.length > 0 ? (
         <View style={styles.metrics}>

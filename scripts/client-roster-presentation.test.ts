@@ -140,3 +140,14 @@ test("CL-02 «Сегодня по расписанию»: только клие�
   assert.equal(empty.todayOnly, true);
   assert.equal(empty.regular.length, 0);
 });
+
+test("Дата ближайшего дня рождения на закреплённой карточке", () => {
+  const result = presentClientRoster({
+    rows: [row("soon", "Алина", "2000-10-25"), row("tomorrow", "Борис", "1990-10-18"), row("today", "Вера", "1995-10-17")],
+    search: "", sort: "NAME", today: "2026-10-17", birthday: settings, dismissals: [],
+  });
+  const text = new Map(result.birthday.map((entry) => [entry.client.id, entry.birthdayText]));
+  assert.equal(text.get("today"), "Сегодня, 17 окт.");
+  assert.equal(text.get("tomorrow"), "Завтра, 18 окт.");
+  assert.equal(text.get("soon"), "25 окт., через 8 дн.");
+});
