@@ -216,13 +216,13 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
       <View style={styles.toolbar} pointerEvents="box-none"
         onLayout={(event) => setToolbarHeight(event.nativeEvent.layout.height)}>
         <View style={styles.pills}>
-          <FilterPill weight={1} label="Сегодня" selected={todayOnly}
+          <FilterPill grow label="Сегодня" selected={todayOnly}
             accessibilityLabel={todayOnly ? "Сегодня по расписанию, включён" : "Сегодня по расписанию"}
             icon={(color) => <CalendarDays size={16} color={color} strokeWidth={1.8} />}
             onPress={() => setTodayOnly((value) => !value)} />
-          <FilterPill weight={1.3} menu expanded={menu === "group"} anchorRef={groupAnchor} label="Все клиенты" accessibilityLabel="Группа клиентов: все клиенты"
+          <FilterPill grow menu expanded={menu === "group"} anchorRef={groupAnchor} label="Все клиенты" accessibilityLabel="Группа клиентов: все клиенты"
             onPress={() => setMenu("group")} />
-          <FilterPill weight={1.15} menu expanded={menu === "sort"} anchorRef={sortAnchor} label={todayOnly ? "Время" : sortLabel}
+          <FilterPill grow menu expanded={menu === "sort"} anchorRef={sortAnchor} label={todayOnly ? "Время" : sortLabel}
             accessibilityLabel={todayOnly ? "Сортировка: по времени записи" : `Сортировка: ${sortLabel}`}
             onPress={() => setMenu("sort")} />
         </View>
