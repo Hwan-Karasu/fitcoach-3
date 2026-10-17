@@ -1,4 +1,5 @@
 import type { ClientProgramLibrary, CreateProgramInput, TrainingProgram } from "./ProgramModel.ts";
+import type { SimpleProgramDraft } from "./SimplePlanModel.ts";
 
 export interface TrainingPlansCommittedChange {
   /** Клиенты, чья библиотека изменилась. */
@@ -22,5 +23,19 @@ export interface TrainingPlansRepositoryPort {
   archiveForClient(clientId: string, programId: string, now?: Date): Promise<void>;
   /** Возврат из архива не делает программу выбранной. */
   restoreForClient(clientId: string, programId: string): Promise<void>;
+  /** Простая программа со структурой (только если клиент — её участник). */
+  getSimplePlan(clientId: string, programId: string): Promise<Readonly<{ program: TrainingProgram; draft: SimpleProgramDraft }> | null>;
+  /** Новая Простая программа клиенту вместе со структурой — одной транзакцией; черновик «новой» очищается. */
+  createSimpleProgram(clientId: string, draft: SimpleProgramDraft, now?: Date): Promise<TrainingProgram>;
+  /**
+   * Сохранение конструктора: название и структура по ревизии (CAS). ID существующих строк сохраняются,
+   * убранные удаляются, новые добавляются; черновик этой программы очищается в той же транзакции.
+   */
+  saveSimplePlan(clientId: string, programId: string, expectedRevision: number, draft: SimpleProgramDraft,
+    now?: Date): Promise<TrainingProgram>;
+  /** §48.29 Recovery Draft: ключ — `new:SIMPLE` или ID программы. Не публикует изменения в план. */
+  getBuilderDraft(clientId: string, key: string): Promise<Readonly<{ baseRevision: number | null; draft: SimpleProgramDraft }> | null>;
+  saveBuilderDraft(clientId: string, key: string, baseRevision: number | null, draft: SimpleProgramDraft): Promise<void>;
+  clearBuilderDraft(clientId: string, key: string): Promise<void>;
   subscribeCommittedChanges(listener: (change: TrainingPlansCommittedChange) => void): () => void;
 }

@@ -6,7 +6,21 @@ import type { WriterCoordinator } from "../../../../shared/db/WriterCoordinator.
 import type { ClientProgramLibrary, CreateProgramInput, ProgramCard, TrainingProgram } from "../domain/ProgramModel.ts";
 import { compareCards, normalizeTitle, validateCreate } from "../domain/ProgramRules.ts";
 import type { TrainingPlansCommittedChange, TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
+import { DEFAULT_WEEKS, type SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
+import { validateDraft } from "../domain/SimplePlanRules.ts";
 import { DEV_TRAINING_PLANS_LEDGER, devTrainingPlansCatalog } from "./DevTrainingPlansCatalog.ts";
+import { deleteStructure, readStructure, writeStructure } from "./SimplePlanStore.ts";
+
+/** Ключ черновика ещё не созданной Простой программы (§48.29 п. 4: черновик привязан к объекту правки). */
+export const NEW_SIMPLE_DRAFT_KEY = "new:SIMPLE";
+
+/**
+ * Структурная проверка в хранилище. Соответствие полей подхода профилю упражнения проверяет конструктор:
+ * профиль знает каталог упражнений (другой владелец).
+ */
+function assertStructure(draft: SimpleProgramDraft): void {
+  if (validateDraft(draft, () => ["reps", "load", "duration", "distance"]).length > 0) throw new Error("DRAFT_INVALID");
+}
 
 type ProgramRow = Readonly<{ id: string; kind: TrainingProgram["kind"]; title: string; revision: number; createdAt: string }>;
 
@@ -34,7 +48,8 @@ async function membership(tx: SqliteStatementPort, workspaceId: string, clientId
  */
 export const devTrainingPlansClientDeletionParticipant = {
   owner: "training.plans",
-  tables: ["dev_training_client_selection", "dev_training_program_members", "dev_training_programs"] as const,
+  tables: ["dev_training_client_selection", "dev_training_program_members", "dev_training_programs",
+    "dev_training_workouts", "dev_training_planned_exercises", "dev_training_planned_sets", "dev_training_builder_drafts"] as const,
   async count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number> {
     const row = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM dev_training_program_members
       WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
@@ -47,7 +62,9 @@ export const devTrainingPlansClientDeletionParticipant = {
     [workspaceId, clientId]);
     await tx.run("DELETE FROM dev_training_client_selection WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
     await tx.run("DELETE FROM dev_training_program_members WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run("DELETE FROM dev_training_builder_drafts WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
     for (const program of owned) {
+      await deleteStructure(tx, workspaceId, program.id);
       await tx.run("DELETE FROM dev_training_programs WHERE workspace_id = ? AND id = ?", [workspaceId, program.id]);
     }
   },
@@ -135,7 +152,14 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   async createProgram(input: CreateProgramInput, now: Date = new Date()): Promise<TrainingProgram> {
     const valid = validateCreate(input);
-    const created = await this.ready().writer.write(async (tx) => {
+    const created = await this.ready().writer.write((tx) => this.insertProgram(tx, valid, now, null));
+    this.publish({ clientIds: created.memberClientIds });
+    return created;
+  }
+
+  private async insertProgram(tx: SqliteStatementPort, valid: CreateProgramInput, now: Date,
+    weeks: number | null): Promise<TrainingProgram> {
+    {
       // Назначить можно только действующему клиенту этого рабочего пространства.
       for (const clientId of valid.clientIds) {
         const client = await tx.first<{ lifecycle: string }>(`SELECT lifecycle FROM dev_clients
@@ -145,16 +169,85 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
       if (!id) throw new Error("PROGRAM_ID_UNAVAILABLE");
       const stamp = now.toISOString();
-      await tx.run(`INSERT INTO dev_training_programs (id, workspace_id, kind, title, revision, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 1, ?, ?)`, [id, this.workspaceId, valid.kind, valid.title, stamp, stamp]);
+      await tx.run(`INSERT INTO dev_training_programs (id, workspace_id, kind, title, revision, created_at, updated_at, weeks)
+        VALUES (?, ?, ?, ?, 1, ?, ?, ?)`, [id, this.workspaceId, valid.kind, valid.title, stamp, stamp, weeks]);
       for (const clientId of valid.clientIds) {
         await tx.run(`INSERT INTO dev_training_program_members (workspace_id, program_id, client_id, joined_at)
           VALUES (?, ?, ?, ?)`, [this.workspaceId, id, clientId, stamp]);
       }
       return programById(tx, this.workspaceId, id);
+    }
+  }
+
+  async getSimplePlan(clientId: string, programId: string) {
+    const { connection } = this.ready();
+    const program = await this.getProgram(clientId, programId);
+    if (program === null || program.kind !== "SIMPLE") return null;
+    const row = await connection.first<{ weeks: number | null }>("SELECT weeks FROM dev_training_programs WHERE workspace_id = ? AND id = ?",
+      [this.workspaceId, programId]);
+    const plan = await readStructure(connection, this.workspaceId, programId, row?.weeks ?? DEFAULT_WEEKS);
+    return { program, draft: { title: program.title, plan } };
+  }
+
+  async createSimpleProgram(clientId: string, draft: SimpleProgramDraft, now: Date = new Date()): Promise<TrainingProgram> {
+    const valid = validateCreate({ kind: "SIMPLE", title: draft.title, clientIds: [clientId] });
+    assertStructure(draft);
+    const created = await this.ready().writer.write(async (tx) => {
+      const program = await this.insertProgram(tx, valid, now, draft.plan.weeks);
+      await writeStructure(tx, this.workspaceId, program.id, draft.plan);
+      await tx.run("DELETE FROM dev_training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND draft_key = ?",
+        [this.workspaceId, clientId, NEW_SIMPLE_DRAFT_KEY]);
+      return program;
     });
     this.publish({ clientIds: created.memberClientIds });
     return created;
+  }
+
+  async saveSimplePlan(clientId: string, programId: string, expectedRevision: number, draft: SimpleProgramDraft,
+    now: Date = new Date()): Promise<TrainingProgram> {
+    const title = normalizeTitle(draft.title);
+    assertStructure(draft);
+    const saved = await this.ready().writer.write(async (tx) => {
+      await membership(tx, this.workspaceId, clientId, programId);
+      const current = await programById(tx, this.workspaceId, programId);
+      if (current.kind !== "SIMPLE") throw new Error("DRAFT_INVALID");
+      const result = await tx.run(`UPDATE dev_training_programs SET title = ?, weeks = ?, revision = revision + 1, updated_at = ?
+        WHERE workspace_id = ? AND id = ? AND revision = ?`,
+      [title, draft.plan.weeks, now.toISOString(), this.workspaceId, programId, expectedRevision]);
+      if (result.changes !== 1) throw new Error("PROGRAM_REVISION_CONFLICT");
+      await writeStructure(tx, this.workspaceId, programId, draft.plan);
+      await tx.run("DELETE FROM dev_training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND draft_key = ?",
+        [this.workspaceId, clientId, programId]);
+      return programById(tx, this.workspaceId, programId);
+    });
+    this.publish({ clientIds: saved.memberClientIds });
+    return saved;
+  }
+
+  async getBuilderDraft(clientId: string, key: string) {
+    const row = await this.ready().connection.first<{ baseRevision: number | null; draftJson: string }>(`SELECT
+      base_revision AS baseRevision, draft_json AS draftJson FROM dev_training_builder_drafts
+      WHERE workspace_id = ? AND client_id = ? AND draft_key = ?`, [this.workspaceId, clientId, key]);
+    if (row === null) return null;
+    // Черновик удалённой программы не воскрешает её (§48.29 п. 7).
+    if (key !== NEW_SIMPLE_DRAFT_KEY && (await this.getProgram(clientId, key)) === null) return null;
+    return { baseRevision: row.baseRevision, draft: JSON.parse(row.draftJson) as SimpleProgramDraft };
+  }
+
+  async saveBuilderDraft(clientId: string, key: string, baseRevision: number | null, draft: SimpleProgramDraft): Promise<void> {
+    await this.ready().writer.write(async (tx) => {
+      await tx.run(`INSERT INTO dev_training_builder_drafts (workspace_id, client_id, draft_key, base_revision, draft_json, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(workspace_id, client_id, draft_key) DO UPDATE SET
+        base_revision = excluded.base_revision, draft_json = excluded.draft_json, updated_at = excluded.updated_at`,
+      [this.workspaceId, clientId, key, baseRevision, JSON.stringify(draft), new Date().toISOString()]);
+    });
+  }
+
+  async clearBuilderDraft(clientId: string, key: string): Promise<void> {
+    await this.ready().writer.write(async (tx) => {
+      await tx.run("DELETE FROM dev_training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND draft_key = ?",
+        [this.workspaceId, clientId, key]);
+    });
   }
 
   async renameProgram(programId: string, expectedRevision: number, title: string, now: Date = new Date()): Promise<TrainingProgram> {

@@ -66,4 +66,55 @@ export const devTrainingPlansCatalog: readonly MigrationStep[] = [{
         WHERE workspace_id = NEW.workspace_id AND client_id = NEW.client_id AND program_id = NEW.program_id)
       BEGIN SELECT RAISE(ABORT, 'PROGRAM_SELECTED'); END`,
   ],
+}, {
+  version: 2,
+  checksum: "t02-dev-training-plans-v2-simple-structure-drafts-20261017",
+  statements: [
+    // Число недель Простой программы; у Расширенной недели живут в мезоциклах (T04).
+    `ALTER TABLE dev_training_programs ADD COLUMN weeks INTEGER
+      CHECK (weeks IS NULL OR weeks BETWEEN 1 AND 52)`,
+    `CREATE TABLE dev_training_workouts (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      program_id TEXT NOT NULL,
+      position INTEGER NOT NULL CHECK (position >= 0),
+      title TEXT NOT NULL CHECK (length(trim(title)) BETWEEN 1 AND 80),
+      UNIQUE (id, workspace_id),
+      FOREIGN KEY (program_id, workspace_id) REFERENCES dev_training_programs(id, workspace_id) ON DELETE RESTRICT
+    )`,
+    `CREATE INDEX dev_training_workouts_program ON dev_training_workouts(workspace_id, program_id, position)`,
+    // Упражнение ссылается на стабильный ID каталога; системные упражнения живут в снимке, не в таблице.
+    `CREATE TABLE dev_training_planned_exercises (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      workout_id TEXT NOT NULL,
+      position INTEGER NOT NULL CHECK (position >= 0),
+      exercise_id TEXT NOT NULL CHECK (exercise_id LIKE 'sys:%' OR exercise_id LIKE 'usr:%'),
+      UNIQUE (id, workspace_id),
+      FOREIGN KEY (workout_id, workspace_id) REFERENCES dev_training_workouts(id, workspace_id) ON DELETE RESTRICT
+    )`,
+    `CREATE INDEX dev_training_planned_exercises_workout ON dev_training_planned_exercises(workspace_id, workout_id, position)`,
+    `CREATE TABLE dev_training_planned_sets (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      planned_exercise_id TEXT NOT NULL,
+      position INTEGER NOT NULL CHECK (position >= 0),
+      reps INTEGER CHECK (reps IS NULL OR reps BETWEEN 1 AND 999),
+      load_grams INTEGER CHECK (load_grams IS NULL OR load_grams BETWEEN 0 AND 1000000),
+      duration_sec INTEGER CHECK (duration_sec IS NULL OR duration_sec BETWEEN 1 AND 86400),
+      distance_m INTEGER CHECK (distance_m IS NULL OR distance_m BETWEEN 1 AND 1000000),
+      FOREIGN KEY (planned_exercise_id, workspace_id) REFERENCES dev_training_planned_exercises(id, workspace_id) ON DELETE RESTRICT
+    )`,
+    `CREATE INDEX dev_training_planned_sets_exercise ON dev_training_planned_sets(workspace_id, planned_exercise_id, position)`,
+    // §48.29 Recovery Draft конструктора: отдельно от действующего плана, по клиенту и объекту правки.
+    `CREATE TABLE dev_training_builder_drafts (
+      workspace_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      draft_key TEXT NOT NULL,
+      base_revision INTEGER,
+      draft_json TEXT NOT NULL CHECK (json_valid(draft_json)),
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (workspace_id, client_id, draft_key)
+    )`,
+  ],
 }];
