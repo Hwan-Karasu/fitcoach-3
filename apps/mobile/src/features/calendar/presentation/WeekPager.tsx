@@ -79,7 +79,7 @@ export function WeekPager({ mode, selected, today, scrollLocked, onSelect, repos
   // помещается на экране»; в режиме «День» тот же шаг часов, чтобы сетка не прыгала при переключении.
   const visibleCount = Math.max(1, visibleWeekdays.filter(Boolean).length);
   const hours = Math.max(1, (window.endMinute - window.startMinute) / 60);
-  const hourHeight = Math.max(28, Math.min(Math.round((width / visibleCount) * 0.85), Math.floor(maxHeight / hours)));
+  const hourHeight = Math.max(18, Math.min(Math.round((width / visibleCount) * 0.85), Math.floor(maxHeight / hours)));
   const height = Math.round(hourHeight * hours);
   // Общие параметры страниц — один объект, пока они не меняются: открытие меню не перерисовывает сетку.
   const shared = useMemo<PageShared>(() => ({ repository, visibleWeekdays, window, people, typeColors, now, height, handlers }),

@@ -21,7 +21,7 @@ import { calendarErrorMessage, dayTitle, useCalendarWeek, useMonthCounts,
   useParticipants, useSessionTypeColors, weekdayShort } from "./calendarPresentation.ts";
 import { MonthGrid } from "./MonthGrid.tsx";
 import { ShareWeekPoster } from "./ShareWeekPoster.tsx";
-import type { TimelineHandlers } from "./TimelineGrid.tsx";
+import { TIMELINE_HEADER, type TimelineHandlers } from "./TimelineGrid.tsx";
 import { WeekPager } from "./WeekPager.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 
@@ -129,7 +129,9 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
   const monthTotal = [...monthCounts.entries()].filter(([date]) => date.slice(0, 7) === viewMonth.slice(0, 7))
     .reduce((sum, [, count]) => sum + count, 0);
   // Сетка целиком помещается на экране: всё, кроме шапки приложения, шапки недели и нижней панели.
-  const gridMaxHeight = Math.max(320, screenHeight - insets.top - 300);
+  // Вся сетка (строка дней + часы) помещается в видимую область, когда её верх прокручен к верху экрана.
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const gridMaxHeight = Math.max(200, (viewportHeight > 0 ? viewportHeight : screenHeight - insets.top - 200) - TIMELINE_HEADER - 8);
   const settings = data?.settings ?? null;
   const dayStart = settings?.dayStartMinute ?? 420;
   const dayEnd = settings?.dayEndMinute ?? 1380;
@@ -315,6 +317,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
   return (
     <>
       <ScrollView scrollEnabled={!scrollLocked} style={{ backgroundColor: colors.canvas }}
+        onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}
         contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {/* Настройки всего календаря — одна рамка: счётчики, рабочие дни, начало и конец дня. */}
         <View style={[styles.settingsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
