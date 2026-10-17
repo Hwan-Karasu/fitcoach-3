@@ -104,10 +104,12 @@ function FiltersSheet({ visible, filters, onChange, onClose }: Readonly<{
  * Каталог упражнений (§31): поиск сразу, быстрые режимы, фильтры в нижнем окне и снимаемые метки
  * активных фильтров, плотный список. Нет совпадений — «Создать «запрос»».
  */
-export function ExerciseLibraryScreen({ repository, onOpen, onCreate }: Readonly<{
+export function ExerciseLibraryScreen({ repository, onOpen, onCreate, picking = false }: Readonly<{
   repository: ExerciseCatalogPort;
+  /** Каталог: открыть карточку; выбор: вернуть упражнение (§31.9 один каталог, разные режимы). */
   onOpen: (exerciseId: string) => void;
   onCreate: (name: string) => void;
+  picking?: boolean;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -167,7 +169,8 @@ export function ExerciseLibraryScreen({ repository, onOpen, onCreate }: Readonly
       <FlatList data={shown} keyExtractor={(entry) => entry.definition.id} keyboardShouldPersistTaps="handled"
         initialNumToRender={16} windowSize={9} contentContainerStyle={styles.listContent}
         renderItem={({ item }) => <ExerciseRow entry={item} onPress={() => onOpen(item.definition.id)} />}
-        ListHeaderComponent={<Text style={[styles.counter, { color: colors.textMuted }]}>{`Найдено: ${shown.length}`}</Text>}
+        ListHeaderComponent={<Text style={[styles.counter, { color: colors.textMuted }]}>
+          {picking ? `Выберите упражнение · найдено: ${shown.length}` : `Найдено: ${shown.length}`}</Text>}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={[styles.meta, { color: colors.textSecondary }]}>
@@ -183,8 +186,8 @@ export function ExerciseLibraryScreen({ repository, onOpen, onCreate }: Readonly
             <Text style={[styles.attribution, { color: colors.textMuted }]}>{meta.attribution}</Text>
           </Pressable>
         } />
-      <FloatingActionButton label="Создать своё упражнение" icon={(color) => <Plus size={26} color={color} strokeWidth={2} />}
-        onPress={() => onCreate(query.trim())} />
+      {picking ? null : <FloatingActionButton label="Создать своё упражнение" icon={(color) => <Plus size={26} color={color} strokeWidth={2} />}
+        onPress={() => onCreate(query.trim())} />}
       <FiltersSheet visible={filtersOpen} filters={filters} onChange={setFilters} onClose={() => setFiltersOpen(false)} />
     </View>
   );

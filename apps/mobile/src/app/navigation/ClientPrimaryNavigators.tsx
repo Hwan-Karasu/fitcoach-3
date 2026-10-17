@@ -4,8 +4,10 @@ import { ClientHomePreview, type ClientRecord } from "../../features/clients/pub
 import { localDateOf, parseValueX10, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
 import { NutritionWorkspacePreview } from "../../features/nutrition/public.ts";
-import { CreateProgramScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, type ProgramKind,
-  type TrainingParticipantCandidate, type TrainingPlansRepositoryPort } from "../../features/training/public.ts";
+import { CreateProgramScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, SimpleProgramBuilderScreen,
+  type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
+  type TrainingPlansRepositoryPort } from "../../features/training/public.ts";
+import { ExerciseLibraryScreen, type ExerciseCatalogPort } from "../../features/exercises/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 
 type HomeRoutes = { HomeIndex: undefined };
@@ -15,6 +17,8 @@ type TrainingRoutes = {
   TrainingChooser: undefined;
   TrainingCreate: { kind: ProgramKind };
   TrainingProgram: { programId: string };
+  TrainingBuilder: { programId?: string; picked?: { token: string; workoutId: string; exerciseId: string } } | undefined;
+  TrainingPickExercise: { workoutId: string; programId?: string };
 };
 
 const HomeStack = createNativeStackNavigator<HomeRoutes>();
@@ -73,22 +77,27 @@ export function NutritionNavigator() {
  * Стек не сбрасывается при смене вкладок; после создания в стеке «список → программа».
  * Шапка — общая строка карточки клиента (UI-OWN-001), назад — системной кнопкой.
  */
-export function TrainingNavigator({ clientId, repository, listCandidates }: Readonly<{
+export function TrainingNavigator({ clientId, repository, listCandidates, exercises, exerciseLookup }: Readonly<{
   clientId: string;
   repository: TrainingPlansRepositoryPort;
   listCandidates: () => Promise<readonly TrainingParticipantCandidate[]>;
+  exercises: ExerciseCatalogPort;
+  exerciseLookup: ExerciseLookupPort;
 }>) {
   const { palette } = usePrototypeTheme();
+  // Простая программа создаётся сразу в конструкторе; расширенная — пока через название и участников.
+  const createRoute = (kind: ProgramKind) => kind === "SIMPLE" ? { name: "TrainingBuilder" as const, params: {} }
+    : { name: "TrainingCreate" as const, params: { kind } };
   return (
     <TrainingStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.tokens.canvas } }}>
       <TrainingStack.Screen name="TrainingIndex">
         {({ navigation }) => <ProgramLibraryScreen clientId={clientId} repository={repository}
-          onChoose={(kind) => navigation.navigate("TrainingCreate", { kind })}
+          onChoose={(kind) => { const route = createRoute(kind); navigation.navigate(route.name, route.params as never); }}
           onCreate={() => navigation.navigate("TrainingChooser")}
           onOpenProgram={(programId) => navigation.navigate("TrainingProgram", { programId })} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingChooser">
-        {({ navigation }) => <ProgramModeChooserScreen onChoose={(kind) => navigation.navigate("TrainingCreate", { kind })} />}
+        {({ navigation }) => <ProgramModeChooserScreen onChoose={(kind) => { const route = createRoute(kind); navigation.navigate(route.name, route.params as never); }} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingCreate">
         {({ navigation, route }) => <CreateProgramScreen clientId={clientId} kind={route.params.kind} repository={repository}
@@ -98,7 +107,22 @@ export function TrainingNavigator({ clientId, repository, listCandidates }: Read
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingProgram">
         {({ navigation, route }) => <ProgramScreen clientId={clientId} programId={route.params.programId}
-          repository={repository} listCandidates={listCandidates} onArchived={() => navigation.popTo("TrainingIndex")} />}
+          repository={repository} listCandidates={listCandidates} exercises={exerciseLookup}
+          onEditStructure={() => navigation.navigate("TrainingBuilder", { programId: route.params.programId })}
+          onArchived={() => navigation.popTo("TrainingIndex")} />}
+      </TrainingStack.Screen>
+      <TrainingStack.Screen name="TrainingBuilder">
+        {({ navigation, route }) => <SimpleProgramBuilderScreen clientId={clientId} programId={route.params?.programId ?? null}
+          repository={repository} exercises={exerciseLookup} picked={route.params?.picked ?? null}
+          onPickExercise={(workoutId) => navigation.navigate("TrainingPickExercise", { workoutId, programId: route.params?.programId })}
+          onSaved={(programId) => navigation.reset({ index: 1,
+            routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId } }] })} />}
+      </TrainingStack.Screen>
+      <TrainingStack.Screen name="TrainingPickExercise">
+        {({ navigation, route }) => <ExerciseLibraryScreen repository={exercises} picking
+          onCreate={() => undefined}
+          onOpen={(exerciseId) => navigation.popTo("TrainingBuilder", { programId: route.params.programId,
+            picked: { token: `${Date.now()}`, workoutId: route.params.workoutId, exerciseId } }, { merge: true })} />}
       </TrainingStack.Screen>
     </TrainingStack.Navigator>
   );

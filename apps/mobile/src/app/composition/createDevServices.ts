@@ -20,7 +20,9 @@ import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant }
 import type { TrainingPlansRepositoryPort } from "../../features/training/public.ts";
 import { DevExerciseCatalogRepository } from "../../features/exercises/data/DevExerciseCatalogRepository.ts";
 import systemCatalogJson from "../../features/exercises/data/system-catalog.generated.json";
-import type { ExerciseCatalogPort, SystemCatalog } from "../../features/exercises/public.ts";
+import { displayNameOf, thumbnailOf, TRACKING_PROFILES, type ExerciseCatalogPort, type SystemCatalog } from
+  "../../features/exercises/public.ts";
+import type { ExerciseLookupPort } from "../../features/training/public.ts";
 import type { ClientArchivePort, ClientChangePort, ClientRecoveryDraftPort, ClientRepositoryPort,
   ClientRosterPort } from "../../features/clients/public.ts";
 import { BootCoordinator } from "../bootstrap/BootCoordinator.ts";
@@ -40,6 +42,8 @@ export interface DevServices {
   readonly questionnaire: QuestionnaireRepositoryPort;
   readonly trainingPlans: TrainingPlansRepositoryPort;
   readonly exercises: ExerciseCatalogPort;
+  /** Каталог глазами планов тренировок: название, величины подхода, миниатюра. */
+  readonly exerciseLookup: ExerciseLookupPort;
   /** Active session types that can consume a credit, for SESSION_TYPE packs. */
   readonly listCreditSessionTypes: () => Promise<readonly Readonly<{ id: string; name: string }>[]>;
 }
@@ -58,6 +62,18 @@ function participantDirectory(clients: ClientRosterPort & ClientChangePort): Cal
   };
 }
 
+/** Планы получают только поля отображения и профиль учёта, через публичный порт каталога. */
+function exerciseLookup(exercises: ExerciseCatalogPort): ExerciseLookupPort {
+  return {
+    lookup: async () => new Map((await exercises.list()).map((entry) => [entry.definition.id, {
+      name: displayNameOf(entry),
+      metrics: TRACKING_PROFILES[entry.definition.trackingProfile],
+      thumbnail: thumbnailOf(entry.definition.media),
+    }])),
+    subscribe: (listener) => exercises.subscribeCommittedChanges(listener),
+  };
+}
+
 export function createDevServices(clients: DevClientServices, calendar: CalendarRepositoryPort,
   accounting: AccountingRepositoryPort, measurements: MeasurementRepositoryPort,
   questionnaire: QuestionnaireRepositoryPort, trainingPlans: TrainingPlansRepositoryPort,
@@ -72,6 +88,7 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
     questionnaire,
     trainingPlans,
     exercises,
+    exerciseLookup: exerciseLookup(exercises),
     listCreditSessionTypes: async () => (await calendar.listSessionTypes())
       .filter((type) => type.requiresCredit && !type.archived)
       .map((type) => ({ id: type.id, name: type.name })),

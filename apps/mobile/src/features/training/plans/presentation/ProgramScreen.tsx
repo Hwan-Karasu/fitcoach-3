@@ -6,17 +6,24 @@ import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { TrainingProgram } from "../domain/ProgramModel.ts";
 import { membersWord, PROGRAM_TITLE_MAX, programKindLabels } from "../domain/ProgramRules.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
+import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
+import type { SimplePlan } from "../domain/SimplePlanModel.ts";
+import { setsSummary } from "../domain/SimplePlanRules.ts";
 import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
+import { useExerciseLookup } from "./useExerciseLookup.ts";
 
 /**
  * Открытая программа клиента (T01): открытие делает её выбранной у этого клиента. Структура (тренировки,
  * упражнения, подходы) появится с конструкторами T02/T04; здесь — название, участники и архив.
  */
-export function ProgramScreen({ clientId, programId, repository, listCandidates, onArchived }: Readonly<{
+export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, onEditStructure, onArchived }: Readonly<{
   clientId: string;
   programId: string;
   repository: TrainingPlansRepositoryPort;
   listCandidates: () => Promise<readonly TrainingParticipantCandidate[]>;
+  exercises: ExerciseLookupPort;
+  /** Открыть конструктор структуры (Простая — T02). */
+  onEditStructure: () => void;
   onArchived: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -28,6 +35,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
+  const [plan, setPlan] = useState<SimplePlan | null>(null);
+  const lookup = useExerciseLookup(exercises);
 
   useEffect(() => {
     let active = true;
@@ -35,6 +44,9 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       if (!active) return;
       setProgram(next);
       if (next !== null) void repository.selectProgram(clientId, programId).catch(() => undefined);
+      if (next?.kind === "SIMPLE") {
+        void repository.getSimplePlan(clientId, programId).then((loaded) => { if (active) setPlan(loaded?.draft.plan ?? null); });
+      }
     }).catch(() => { if (active) setProgram(null); });
     return () => { active = false; };
   }, [clientId, programId, repository, version]);
@@ -106,11 +118,26 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           {`Также у: ${others.map((id) => names.get(id) ?? "клиент в архиве").join(", ")}`}
         </Text>
       ) : null}
-      <InlineNotice kind="info">
-        {program.kind === "SIMPLE"
-          ? "Тренировки недели появятся в простом конструкторе (следующий этап)."
-          : "Мезоциклы, недели и тренировки появятся в расширенном конструкторе (следующий этап)."}
-      </InlineNotice>
+      {program.kind === "SIMPLE" ? <>
+        {plan !== null ? (
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Недель: ${plan.weeks} · план недели повторяется`}</Text>
+        ) : null}
+        {plan?.workouts.map((workout) => (
+          <View key={workout.id} style={[styles.workout, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.workoutTitle, { color: colors.textPrimary }]}>{workout.title}</Text>
+            {workout.exercises.length === 0 ? (
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Упражнений нет</Text>
+            ) : workout.exercises.map((exercise, index) => (
+              <Text key={exercise.id} style={[styles.body, { color: colors.textPrimary }]}>
+                {`${index + 1}. ${lookup?.get(exercise.exerciseId)?.name ?? "…"} — ${setsSummary(exercise)}`}
+              </Text>
+            ))}
+          </View>
+        ))}
+        <AppButton label="Изменить программу" onPress={onEditStructure} />
+      </> : (
+        <InlineNotice kind="info">Мезоциклы, недели и тренировки появятся в расширенном конструкторе (следующий этап).</InlineNotice>
+      )}
       {renaming !== null ? (
         <View style={styles.rename}>
           <TextField label="Название" required value={renaming} onChangeText={setRenaming} />
@@ -141,6 +168,8 @@ const styles = StyleSheet.create({
   meta: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   body: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   rename: { gap: 10 },
+  workout: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 4 },
+  workoutTitle: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, marginBottom: 2 },
   row: { flexDirection: "row", gap: 10 },
   grow: { flex: 1 },
 });

@@ -7,7 +7,9 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import type { ClientRecord, ClientRepositoryPort, ClientRosterPort } from "../../features/clients/public.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { ClientQuestionnaireScreen, type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
-import { TrainingArchivePreview, TrainingStatisticsPreview, type TrainingPlansRepositoryPort } from "../../features/training/public.ts";
+import { TrainingArchivePreview, TrainingStatisticsPreview, type ExerciseLookupPort,
+  type TrainingPlansRepositoryPort } from "../../features/training/public.ts";
+import type { ExerciseCatalogPort } from "../../features/exercises/public.ts";
 import { AppButton, LoadingState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { HomeNavigator, NutritionNavigator, TrainingNavigator } from "./ClientPrimaryNavigators.tsx";
@@ -63,7 +65,7 @@ function MoreNavigator({ clientId, questionnaire }: Readonly<{ clientId: string;
   );
 }
 
-export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, questionnaire, trainingPlans, onOpenEdit, onOpenAccounting,
+export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, questionnaire, trainingPlans, exercises, exerciseLookup, onOpenEdit, onOpenAccounting,
   onOpenMeasurements, onClose }: Readonly<{
   clientId: string;
   repository: ClientRepositoryPort & ClientRosterPort;
@@ -71,6 +73,8 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   measurements: MeasurementRepositoryPort;
   questionnaire: QuestionnaireRepositoryPort;
   trainingPlans: TrainingPlansRepositoryPort;
+  exercises: ExerciseCatalogPort;
+  exerciseLookup: ExerciseLookupPort;
   onOpenEdit: (clientId: string) => void;
   onOpenAccounting: (clientId: string) => void;
   onOpenMeasurements: (clientId: string) => void;
@@ -152,7 +156,8 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       </Tabs.Screen>
       <Tabs.Screen name="Nutrition" component={NutritionNavigator} options={{ tabBarLabel: workspaceTabs.Nutrition, tabBarAccessibilityLabel: workspaceTabs.Nutrition}} />
       <Tabs.Screen name="Training" options={{ tabBarLabel: workspaceTabs.Training, tabBarAccessibilityLabel: workspaceTabs.Training}}>
-        {() => <TrainingNavigator clientId={client.id} repository={trainingPlans} listCandidates={listCandidates} />}
+        {() => <TrainingNavigator clientId={client.id} repository={trainingPlans} listCandidates={listCandidates}
+          exercises={exercises} exerciseLookup={exerciseLookup} />}
       </Tabs.Screen>
       <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More}}>
         {() => <MoreNavigator clientId={client.id} questionnaire={questionnaire} />}
