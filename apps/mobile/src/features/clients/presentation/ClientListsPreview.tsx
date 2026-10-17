@@ -4,7 +4,7 @@ import { AppState, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Cake, CalendarClock, CalendarDays, Dumbbell, PinOff, Plus, Ticket } from "lucide-react-native";
 import { AppButton, AppIconButton, ClientRosterCard, ConfirmDialog, EmptyState, FilterPill, FloatingActionButton,
   InlineNotice,
-  ListSectionHeader, DropdownMenu, EmojiPicker, SelectionChip, SkeletonList, useHeaderScrollHandler, useHeaderSearch,
+  ListSectionHeader, DropdownMenu, SelectionChip, SkeletonList, useHeaderScrollHandler, useHeaderSearch,
   type DropdownOption } from "../../../shared/ui/components/public.ts";
 import { EmptyPanel, PrototypeScreen } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -109,7 +109,6 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
   const [menu, setMenu] = useState<"sort" | "group" | null>(null);
   const groupAnchor = useRef<View>(null);
   const sortAnchor = useRef<View>(null);
-  const [emojiFor, setEmojiFor] = useState<ClientRosterRow | null>(null);
   const [todayOnly, setTodayOnly] = useState(false);
   const onScroll = useHeaderScrollHandler();
   const [today, setToday] = useState(() => localCalendarDate(new Date()));
@@ -199,7 +198,8 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
         highlight={birthdayBadge} highlightIcon={(color) => <Cake size={14} color={color} strokeWidth={2} />}
         metrics={facts?.metrics.map((metric) => ({ label: metricLook[metric.id].label, value: metric.value,
           icon: metricLook[metric.id].icon })) ?? []}
-        onOpen={onOpenClient} onEditEmoji={() => setEmojiFor(row)}
+        onOpen={onOpenClient} emoji={row.emoji}
+        onChangeEmoji={(_, emoji) => { void changeEmoji(row, emoji); }}
         action={birthdayOccurrence === null ? undefined : (
           <AppIconButton label={`Убрать ${row.displayName} из закреплённых`} disabled={dismissingId !== null}
             icon={<PinOff size={20} color={colors.textSecondary} strokeWidth={1.8} />}
@@ -256,10 +256,6 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
       <DropdownMenu visible={menu === "sort"} anchor={sortAnchor} title="Сортировка" options={sortOptions} selected={activeSort}
         note={todayOnly ? "Пока включён «Сегодня», список идёт по времени записи." : undefined}
         onSelect={(mode) => { void chooseActiveSort(mode); }} onClose={() => setMenu(null)} />
-      <EmojiPicker visible={emojiFor !== null}
-        initials={emojiFor === null ? "" : initialsOf(emojiFor.displayName)} selected={emojiFor?.emoji ?? null}
-        onSelect={(emoji) => { if (emojiFor !== null) void changeEmoji(emojiFor, emoji); }}
-        onClose={() => setEmojiFor(null)} />
       <DropdownMenu visible={menu === "group"} anchor={groupAnchor} title="Клиенты" options={groupOptions} selected="ALL"
         note="Фильтры по полу и меткам появятся, когда эти поля будут в карточке клиента."
         onSelect={() => undefined} onClose={() => setMenu(null)} />

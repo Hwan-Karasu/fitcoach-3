@@ -1,8 +1,9 @@
-import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useState, type ReactNode } from "react";
+import { Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../theme/typography.ts";
+import { emojiFromInput } from "./emojiInput.ts";
 
 /** Метрика карточки: значок и значение; `label` читает TalkBack. `value: null` — «нет данных» (§51.2.3). */
 export interface RosterMetric {
@@ -16,6 +17,8 @@ export interface ClientRosterCardData {
   readonly displayName: string;
   /** Эмодзи или инициалы для аватара. */
   readonly mark: string;
+  /** Текущий эмодзи клиента; null — показываются инициалы. */
+  readonly emoji?: string | null;
   /** Строка под именем, например «34 года». */
   readonly subtitle?: string | null;
   /** Нейтральный индикатор ограничений без раскрытия диагнозов (§7). */
@@ -28,13 +31,16 @@ export interface ClientRosterCardData {
   /** Дополнительная кнопка справа, например «убрать из закреплённых». */
   readonly action?: ReactNode;
   readonly onOpen: (clientId: string) => void;
-  /** Быстрая смена эмодзи прямо из списка (§7.8). */
-  readonly onEditEmoji?: (clientId: string) => void;
+  /**
+   * Быстрая смена эмодзи прямо из списка (§7.8): нажатие на аватар открывает системную клавиатуру,
+   * смайл сохраняется сразу, стёртое поле возвращает инициалы (null).
+   */
+  readonly onChangeEmoji?: (clientId: string, emoji: string | null) => void;
 }
 
 /** Карточка клиента (CLIENTS.md): рамка 1px без тени, аватар-квадрат 44 (радиус 8), «›», без кнопки «Изменить». */
-export function ClientRosterCard({ clientId, displayName, mark, subtitle, restricted = false, highlight,
-  highlightIcon, metrics = [], action, onOpen, onEditEmoji }: Readonly<ClientRosterCardData>) {
+export function ClientRosterCard({ clientId, displayName, mark, emoji = null, subtitle, restricted = false, highlight,
+  highlightIcon, metrics = [], action, onOpen, onChangeEmoji }: Readonly<ClientRosterCardData>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const spoken = [displayName, subtitle, restricted ? "есть ограничения" : null, highlight]
@@ -43,17 +49,8 @@ export function ClientRosterCard({ clientId, displayName, mark, subtitle, restri
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       {highlight ? <View style={[styles.stripe, { backgroundColor: colors.accentFill }]} /> : null}
       <View style={styles.row}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Сменить эмодзи клиента ${displayName}`}
-          accessibilityHint="Не открывает карточку клиента"
-          disabled={onEditEmoji === undefined}
-          onPress={() => onEditEmoji?.(clientId)}
-          hitSlop={2}
-          style={[styles.avatar, { backgroundColor: colors.surfaceRaised }]}
-        >
-          <Text style={[styles.mark, { color: colors.textPrimary }]}>{mark}</Text>
-        </Pressable>
+        <EmojiAvatar displayName={displayName} mark={mark} emoji={emoji}
+          onChange={onChangeEmoji === undefined ? undefined : (value) => onChangeEmoji(clientId, value)} />
         <Pressable accessibilityRole="button" accessibilityLabel={`Открыть карточку клиента: ${spoken}`}
           onPress={() => onOpen(clientId)} style={styles.main}>
           <View style={styles.text}>
@@ -99,12 +96,57 @@ export function ClientRosterCard({ clientId, displayName, mark, subtitle, restri
 /** Доли ширины показателей: следующее занятие длиннее («Сегодня 18:00»), тренировка — короткая дата. */
 const metricWeights = [1.5, 0.8, 1.2];
 
+/** Аватар; в режиме правки — то же поле ввода, куда системная клавиатура вставляет смайл. */
+function EmojiAvatar({ displayName, mark, emoji, onChange }: Readonly<{
+  displayName: string; mark: string; emoji: string | null; onChange?: (emoji: string | null) => void;
+}>) {
+  const { palette } = usePrototypeTheme();
+  const colors = palette.tokens;
+  const [editing, setEditing] = useState(false);
+  const finish = (value: string | null | undefined) => {
+    setEditing(false);
+    Keyboard.dismiss();
+    if (value !== undefined && value !== emoji) onChange?.(value);
+  };
+  if (editing) {
+    return (
+      <TextInput autoFocus caretHidden selectTextOnFocus defaultValue={emoji ?? ""} placeholder={mark}
+        placeholderTextColor={colors.textMuted} selectionColor="transparent"
+        accessibilityLabel={`Эмодзи клиента ${displayName}`} accessibilityHint="Выберите смайл на клавиатуре; стереть — вернуть инициалы"
+        onBlur={() => setEditing(false)}
+        onChangeText={(text) => {
+          if (text.trim() === "") { finish(null); return; }
+          // Новый смайл мог встать рядом со старым, если выделение не сработало.
+          const added = emoji !== null && text.startsWith(emoji) ? text.slice(emoji.length) : text;
+          const value = emojiFromInput(added) ?? emojiFromInput(text);
+          if (value !== null) finish(value);
+        }}
+        style={[styles.avatar, styles.avatarInput, { backgroundColor: colors.surfaceRaised, borderColor: colors.focusRing,
+          color: colors.textPrimary }]} />
+    );
+  }
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Сменить эмодзи клиента ${displayName}`}
+      accessibilityHint="Открывает клавиатуру, не открывает карточку клиента"
+      disabled={onChange === undefined}
+      onPress={() => setEditing(true)}
+      hitSlop={2}
+      style={[styles.avatar, { backgroundColor: colors.surfaceRaised }]}
+    >
+      <Text style={[styles.mark, { color: colors.textPrimary }]}>{mark}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 12, overflow: "hidden" },
   stripe: { position: "absolute", left: 0, top: 0, bottom: 0, width: 3 },
   row: { flexDirection: "row", alignItems: "center", paddingLeft: 12, paddingRight: 8, paddingVertical: 10, gap: 12 },
   avatar: { width: 44, height: 44, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   mark: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 24 },
+  avatarInput: { borderWidth: 2, padding: 0, textAlign: "center", fontSize: 22 },
   main: { flex: 1, minHeight: 48, flexDirection: "row", alignItems: "center", gap: 8 },
   text: { flex: 1, gap: 4 },
   name: { fontFamily: fonts.semibold, fontSize: 16, lineHeight: 21 },

@@ -17,7 +17,6 @@ export { FilterPill } from "./FilterPill.tsx";
 export { ListSectionHeader } from "./ListSectionHeader.tsx";
 export { SkeletonList } from "./SkeletonList.tsx";
 export { DropdownMenu, type DropdownOption } from "./DropdownMenu.tsx";
-export { EmojiPicker } from "./EmojiPicker.tsx";
 export { emojiFromInput } from "./emojiInput.ts";
 export { HeaderScrollReporter, HeaderSearchProvider, useHeaderScrollHandler, useHeaderSearch,
   type HeaderSearchState } from "./HeaderScroll.tsx";
