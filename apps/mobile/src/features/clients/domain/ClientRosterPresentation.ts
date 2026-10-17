@@ -14,6 +14,8 @@ export interface PresentedRoster {
   readonly recent: PresentedClient | null;
   readonly regular: readonly PresentedClient[];
   readonly searching: boolean;
+  /** Включён «Сегодня по расписанию»: плоский список по времени записи (§7). */
+  readonly todayOnly: boolean;
 }
 
 export function localCalendarDate(now: Date): string {
@@ -23,7 +25,6 @@ export function localCalendarDate(now: Date): string {
 const genitiveMonths = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля",
   "августа", "сентября", "октября", "ноября", "декабря"] as const;
 
-/** Local calendar date of archivedAt; no Intl dependency on Hermes. */
 /** Full years on a local date; «29 февраля» counts from 1 March in non-leap years. */
 export function ageOn(birthDate: string, today: string): number | null {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(birthDate) || !/^\d{4}-\d{2}-\d{2}$/u.test(today) || birthDate >= today) {
@@ -40,6 +41,7 @@ export function formatYears(years: number): string {
   return years % 10 >= 2 && years % 10 <= 4 ? `${years} года` : `${years} лет`;
 }
 
+/** Local calendar date of archivedAt; no Intl dependency on Hermes. */
 export function formatArchivedSince(archivedAt: string | null): string {
   const at = archivedAt === null ? Number.NaN : Date.parse(archivedAt);
   if (Number.isNaN(at)) return "В архиве";
@@ -147,12 +149,16 @@ export function presentClientRoster(input: Readonly<{
   today: string;
   birthday: RosterBirthdaySettings;
   dismissals: readonly BirthdayDismissal[];
+  /** Начало ближайшей сегодняшней записи по клиенту; задано — фильтр «Сегодня» включён. */
+  todayStarts?: ReadonlyMap<string, number> | null;
 }>): PresentedRoster {
   if (dateEpoch(input.today) === null) throw new Error("ROSTER_TODAY_INVALID");
   const needle = input.search.trim().toLocaleLowerCase("ru");
   const searching = needle.length > 0;
   const dismissed = new Set(input.dismissals.map((row) => JSON.stringify([row.clientId, row.occurrenceDate])));
+  const todayStarts = input.todayStarts ?? null;
   const presented = input.rows.filter((row) => row.lifecycle === "ACTIVE"
+    && (todayStarts === null || todayStarts.has(row.id))
     && [row.displayName, row.contactPhone, row.contactEmail]
       .some((value) => value?.toLocaleLowerCase("ru").includes(needle)))
     .map((client): PresentedClient => {
@@ -163,8 +169,13 @@ export function presentClientRoster(input: Readonly<{
       return { client, birthdayBadge, birthdayOccurrence: birthday?.occurrence ?? null,
         daysUntilBirthday: days };
     });
+  if (todayStarts !== null) return {
+    birthday: [], recent: null, searching, todayOnly: true,
+    regular: [...presented].sort((a, b) => (todayStarts.get(a.client.id) ?? 0) - (todayStarts.get(b.client.id) ?? 0)
+      || byName(a, b)),
+  };
   if (searching) return {
-    birthday: [], recent: null, regular: [...presented].sort(bySelectedSort(input.sort)), searching,
+    birthday: [], recent: null, regular: [...presented].sort(bySelectedSort(input.sort)), searching, todayOnly: false,
   };
   const birthday = input.birthday.birthdayPinEnabled
     ? presented.filter((row) => row.daysUntilBirthday !== null
@@ -180,6 +191,6 @@ export function presentClientRoster(input: Readonly<{
   return {
     birthday, recent,
     regular: remaining.filter((row) => row.client.id !== recent?.client.id).sort(bySelectedSort(input.sort)),
-    searching,
+    searching, todayOnly: false,
   };
 }

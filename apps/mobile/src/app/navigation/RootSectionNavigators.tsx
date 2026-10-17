@@ -1,5 +1,5 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { ClientsArchivePreview, ClientsRosterPreview, type ClientArchivePort,
+import { ClientsArchivePreview, ClientsRosterPreview, type ClientArchivePort, type RosterOverviewPort,
   type ClientListQueryPort, type ClientRepositoryPort,
   type ClientRosterPort } from "../../features/clients/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -11,11 +11,12 @@ const ClientsStack = createNativeStackNavigator<ClientsRoutes>();
 const ArchiveStack = createNativeStackNavigator<ArchiveRoutes>();
 
 export function ClientsNavigator({ onOpenCreate, onOpenClient, repository,
-  readModel }: Readonly<{
+  readModel, overviewSource }: Readonly<{
   onOpenCreate: () => void;
   onOpenClient: (clientId: string) => void;
   repository: ClientRosterPort;
   readModel: ClientListQueryPort;
+  overviewSource: RosterOverviewPort;
 }>) {
   const { palette } = usePrototypeTheme();
   return (
@@ -23,7 +24,7 @@ export function ClientsNavigator({ onOpenCreate, onOpenClient, repository,
       <ClientsStack.Screen name="Roster" options={{ headerShown: false }}>
         {() => <ClientsRosterPreview onOpenCreate={onOpenCreate}
           onOpenClient={onOpenClient} repository={repository}
-          readModel={readModel} />}
+          readModel={readModel} overviewSource={overviewSource} />}
       </ClientsStack.Screen>
     </ClientsStack.Navigator>
   );

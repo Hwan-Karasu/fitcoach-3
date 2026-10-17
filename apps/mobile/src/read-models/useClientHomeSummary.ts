@@ -5,7 +5,8 @@ import { formatValue, latestPoint, localDateOf, type MeasurementRepositoryPort }
   "../features/measurements/public.ts";
 import { buildClientHomeSummary, type HomeSummaryRules } from "./clientHomeSummary.ts";
 
-const rules: HomeSummaryRules = { latestPoint, formatValue, formatKopeks, pricePerSessionKopeks };
+/** Чистые правила владельцев для проекций Главной и списка клиентов. */
+export const homeSummaryRules: HomeSummaryRules = { latestPoint, formatValue, formatKopeks, pricePerSessionKopeks };
 
 /**
  * Home reads owners' public ports and refreshes only on their committed changes for this client;
@@ -24,7 +25,7 @@ export function useClientHomeSummary(clientId: string, accounting: AccountingRep
       safe(() => accounting.getClientSnapshot(clientId)),
       safe(() => measurements.listForClient(clientId)),
     ]).then(([ledger, journal]) => {
-      if (request === generation.current) setSummary(buildClientHomeSummary(rules, ledger, journal, localDateOf(new Date())));
+      if (request === generation.current) setSummary(buildClientHomeSummary(homeSummaryRules, ledger, journal, localDateOf(new Date())));
     });
   }, [accounting, clientId, measurements, tick]);
 

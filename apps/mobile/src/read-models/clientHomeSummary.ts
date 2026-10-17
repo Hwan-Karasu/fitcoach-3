@@ -29,7 +29,7 @@ function metric(rules: HomeSummaryRules, label: string, data: ClientMeasurements
 }
 
 /** Only packs usable today count; the ledger owner already derived each balance. */
-function pack(rules: HomeSummaryRules, snapshot: ClientAccountingSnapshot | null, today: string): HomePackSummary {
+export function packSummary(rules: HomeSummaryRules, snapshot: ClientAccountingSnapshot | null, today: string): HomePackSummary {
   if (snapshot === null) return { kind: "UNAVAILABLE" };
   if (snapshot.mode === "UNTRACKED") return { kind: "NOT_TRACKED", label: "Учёт тренировок не ведётся" };
   if (snapshot.mode === "EXTERNAL") return { kind: "NOT_TRACKED", label: "Учёт ведётся вне FitCoach" };
@@ -60,6 +60,6 @@ export function buildClientHomeSummary(rules: HomeSummaryRules, accounting: Clie
       // Workouts per week need the Training diary (T03); until then the tile honestly stays empty.
       { label: "Трен./нед.", value: null, status: "нет дневника" },
     ],
-    pack: pack(rules, accounting, today),
+    pack: packSummary(rules, accounting, today),
   };
 }

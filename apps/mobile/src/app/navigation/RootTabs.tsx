@@ -6,7 +6,7 @@ import { SettingsDrawerPreview } from "../../features/settings/public.ts";
 import type { CalendarCreditPort, CalendarParticipantDirectoryPort,
   CalendarRepositoryPort, GuestLinkRequest } from "../../features/calendar/public.ts";
 import type { ClientArchivePort, ClientRepositoryPort,
-  ClientRosterPort } from "../../features/clients/public.ts";
+  ClientRosterPort, RosterOverviewPort } from "../../features/clients/public.ts";
 import type { ClientListController } from "../../read-models/ClientListController.ts";
 import { HeaderScrollReporter } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -33,6 +33,7 @@ interface RootTabsProps {
   readonly onOpenSqliteDev: () => void;
   readonly clients: ClientRepositoryPort & ClientRosterPort & ClientArchivePort;
   readonly clientLists: ClientListController;
+  readonly rosterOverview: RosterOverviewPort;
   readonly calendar: CalendarRepositoryPort;
   readonly calendarParticipants: CalendarParticipantDirectoryPort;
   readonly calendarCredit: CalendarCreditPort;
@@ -41,8 +42,8 @@ interface RootTabsProps {
 
 const Tabs = createBottomTabNavigator<RootTabRoutes>();
 
-/** §15.12: absolute archived count, hidden at 0; never a usage/limit fraction. */
-function archiveBadge(count: number | null): string | undefined {
+/** §15.12: абсолютное число клиентов, скрыто при 0; никогда не «использовано из лимита». */
+function countBadge(count: number | null): string | undefined {
   if (count === null || count <= 0) return undefined;
   return count > 99 ? "99+" : String(count);
 }
@@ -58,6 +59,7 @@ export function RootTabs({
   onOpenSqliteDev,
   clients,
   clientLists,
+  rosterOverview,
   calendar,
   calendarParticipants,
   calendarCredit,
@@ -77,6 +79,7 @@ export function RootTabs({
   const counts = useSyncExternalStore(clientLists.counts.subscribe, clientLists.counts.getSnapshot,
     clientLists.counts.getSnapshot);
   const archivedCount = counts.status === "ready" ? counts.data.archived : null;
+  const activeCount = counts.status === "ready" ? counts.data.active : null;
   return (
     <SafeAreaView edges={["top"]} style={[styles.root, { backgroundColor: colors.canvas }]}>
       <StatusBar barStyle={palette.tone === "dark" ? "light-content" : "dark-content"} backgroundColor={colors.canvas} />
@@ -91,10 +94,12 @@ export function RootTabs({
             onOpenMenu={() => setMenuVisible(true)} menuButtonRef={menuButtonRef} />,
         }}
       >
-        <Tabs.Screen name="Clients" options={{ title: rootTabs.Clients, tabBarLabel: rootTabs.Clients, tabBarAccessibilityLabel: rootTabs.Clients }}>
+        <Tabs.Screen name="Clients" options={{ title: rootTabs.Clients, tabBarLabel: rootTabs.Clients,
+          tabBarAccessibilityLabel: activeCount ? `${rootTabs.Clients}, активных: ${activeCount}` : rootTabs.Clients,
+          tabBarBadge: countBadge(activeCount) }}>
           {() => <HeaderScrollReporter value={reporters.Clients}>
             <ClientsNavigator onOpenCreate={onOpenCreate} onOpenClient={onOpenClient} repository={clients}
-              readModel={clientLists.active} />
+              readModel={clientLists.active} overviewSource={rosterOverview} />
           </HeaderScrollReporter>}
         </Tabs.Screen>
         <Tabs.Screen name="Calendar" options={{ title: rootTabs.Calendar, tabBarLabel: rootTabs.Calendar, tabBarAccessibilityLabel: rootTabs.Calendar }}>
@@ -103,7 +108,7 @@ export function RootTabs({
         </Tabs.Screen>
         <Tabs.Screen name="Archive" options={{ title: rootTabs.Archive, tabBarLabel: rootTabs.Archive,
           tabBarAccessibilityLabel: archivedCount ? `${rootTabs.Archive}, клиентов в архиве: ${archivedCount}` : rootTabs.Archive,
-          tabBarBadge: archiveBadge(archivedCount) }}>
+          tabBarBadge: countBadge(archivedCount) }}>
           {() => <HeaderScrollReporter value={reporters.Archive}>
             <ArchiveNavigator repository={clients} readModel={clientLists.archived} />
           </HeaderScrollReporter>}

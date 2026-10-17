@@ -76,7 +76,7 @@ export function AppButton({
 }
 
 const styles = StyleSheet.create({
-  button: { minHeight: 48, borderRadius: 10, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
+  button: { minHeight: 48, borderRadius: 8, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
   content: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   label: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, textAlign: "center" },
 });

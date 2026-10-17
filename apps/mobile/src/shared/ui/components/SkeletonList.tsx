@@ -34,7 +34,7 @@ export function SkeletonList({ count = 3, label = "Загрузка" }: Readonly
 const styles = StyleSheet.create({
   list: { gap: 8 },
   card: { borderWidth: 1, borderRadius: 12, padding: 12, flexDirection: "row", alignItems: "center", gap: 12 },
-  avatar: { width: 44, height: 44, borderRadius: 12 },
+  avatar: { width: 44, height: 44, borderRadius: 8 },
   lines: { flex: 1, gap: 8 },
   lineWide: { width: "60%", height: 14, borderRadius: 7 },
   lineShort: { width: "35%", height: 12, borderRadius: 6 },

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { AppState, ScrollView, StyleSheet, Text, View } from "react-native";
-import { PinOff, Plus } from "lucide-react-native";
-import { AppButton, AppIconButton, ClientRosterCard, ConfirmDialog, EmptyState, FilterPill, InlineNotice,
+import { Cake, CalendarClock, CalendarDays, Dumbbell, PinOff, Plus, Ticket } from "lucide-react-native";
+import { AppButton, AppIconButton, ClientRosterCard, ConfirmDialog, EmptyState, FilterPill, FloatingActionButton,
+  InlineNotice,
   ListSectionHeader, OptionSheet, SearchField, SelectionChip, SkeletonList, useHeaderScrollHandler,
   type SheetOption } from "../../../shared/ui/components/public.ts";
 import { EmptyPanel, PrototypeScreen } from "../../../shared/ui/prototype/ScreenPieces.tsx";
@@ -12,6 +13,7 @@ import type { ArchiveSortMode, ClientArchivePort, ClientDeletionManifest } from
 import type { ClientRecord, ClientRepositoryPort } from "../domain/ClientRepositoryPort.ts";
 import type { ClientRosterPort, ClientRosterRow, RosterSortMode } from "../domain/ClientRosterPort.ts";
 import type { ClientListQueryPort } from "../domain/ClientRosterReadModel.ts";
+import type { RosterMetricId, RosterOverview, RosterOverviewPort } from "../domain/ClientRosterOverview.ts";
 import { ageOn, formatArchivedSince, formatYears, localCalendarDate, permanentDeleteDescription, presentArchivedClients,
   presentClientRoster } from "../domain/ClientRosterPresentation.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
@@ -52,17 +54,57 @@ const sortOptions: readonly SheetOption<RosterSortMode>[] = [
   { value: "RECENT", label: "Недавно открытые" },
 ];
 
+const metricLook: Readonly<Record<RosterMetricId, Readonly<{ label: string; icon: (color: string) => ReactNode }>>> = {
+  nextAppointment: { label: "Следующее занятие", icon: (color) => <CalendarClock size={16} color={color} strokeWidth={1.8} /> },
+  lastTraining: { label: "Последняя тренировка", icon: (color) => <Dumbbell size={16} color={color} strokeWidth={1.8} /> },
+  credits: { label: "Абонемент", icon: (color) => <Ticket size={16} color={color} strokeWidth={1.8} /> },
+};
+
+/**
+ * Сводка других владельцев для видимых карточек: перечитывается при их изменениях и в момент,
+ * когда закончится ближайшая сегодняшняя запись (GetNextEligibilityTransitionAt без частого опроса).
+ */
+function useRosterOverview(port: RosterOverviewPort, clientIds: readonly string[], today: string): RosterOverview | null {
+  const [overview, setOverview] = useState<RosterOverview | null>(null);
+  const [tick, setTick] = useState(0);
+  const generation = useRef(0);
+  const key = clientIds.join("|");
+  useEffect(() => {
+    const request = ++generation.current;
+    port.load(key === "" ? [] : key.split("|"), new Date()).then((value) => {
+      if (request === generation.current) setOverview(value);
+    }, () => undefined);
+  }, [port, key, today, tick]);
+  useEffect(() => port.subscribe(() => setTick((value) => value + 1)), [port]);
+  useEffect(() => {
+    if (overview === null) return undefined;
+    const now = new Date();
+    const nowMinute = now.getHours() * 60 + now.getMinutes();
+    const moments = [...overview.values()].flatMap((row) => [row.todayStartMinute, row.todayEndMinute])
+      .filter((minute): minute is number => minute !== null && minute > nowMinute);
+    if (moments.length === 0) return undefined;
+    const wait = (Math.min(...moments) - nowMinute) * 60_000 - now.getSeconds() * 1000 + 500;
+    const timer = setTimeout(() => setTick((value) => value + 1), Math.max(wait, 1000));
+    return () => clearTimeout(timer);
+  }, [overview]);
+  return overview;
+}
+
+const groupOptions: readonly SheetOption<"ALL">[] = [{ value: "ALL", label: "Все клиенты" }];
+
 /** Экран «Клиенты» — эталон UI (docs/ui/screens/CLIENTS.md). */
-export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, readModel }: Readonly<{
+export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, readModel, overviewSource }: Readonly<{
   onOpenCreate: () => void;
   onOpenClient: (clientId: string) => void;
   repository: ClientRosterPort;
   readModel: ClientListQueryPort;
+  overviewSource: RosterOverviewPort;
 }>) {
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
-  const [sortSheet, setSortSheet] = useState(false);
+  const [sheet, setSheet] = useState<"sort" | "group" | null>(null);
+  const [todayOnly, setTodayOnly] = useState(false);
   const onScroll = useHeaderScrollHandler();
   const [today, setToday] = useState(() => localCalendarDate(new Date()));
   const { palette } = usePrototypeTheme();
@@ -72,6 +114,9 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
   const data = snapshot.status === "ready" ? snapshot.data : null;
   const activeSort = data?.sort ?? "NAME";
   const birthdaySettings = data?.birthday ?? defaultBirthday;
+  const activeIds = useMemo(() => data?.rows.filter((row) => row.lifecycle === "ACTIVE").map((row) => row.id) ?? [],
+    [data]);
+  const overview = useRosterOverview(overviewSource, activeIds, today);
 
   useEffect(() => {
     let midnightTimer: ReturnType<typeof setTimeout>;
@@ -98,10 +143,16 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
     setToday(localCalendarDate(new Date()));
   }, []));
 
+  const todayStarts = useMemo(() => {
+    if (!todayOnly) return null;
+    const starts = new Map<string, number>();
+    for (const [id, row] of overview ?? []) if (row.todayStartMinute !== null) starts.set(id, row.todayStartMinute);
+    return starts;
+  }, [overview, todayOnly]);
   const roster = useMemo(() => data === null ? null : presentClientRoster({
     rows: data.rows, search: query, sort: activeSort, today,
-    birthday: birthdaySettings, dismissals: data.dismissals,
-  }), [activeSort, birthdaySettings, data, query, today]);
+    birthday: birthdaySettings, dismissals: data.dismissals, todayStarts,
+  }), [activeSort, birthdaySettings, data, query, today, todayStarts]);
   const visibleCount = (roster?.birthday.length ?? 0) + (roster?.recent ? 1 : 0)
     + (roster?.regular.length ?? 0);
 
@@ -123,9 +174,14 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
   const renderRow = (row: ClientRosterRow, birthdayBadge: string | null = null,
     birthdayOccurrence: string | null = null) => {
     const age = row.birthDate === null ? null : ageOn(row.birthDate, today);
+    const facts = overview?.get(row.id);
     return (
       <ClientRosterCard key={row.id} clientId={row.id} displayName={row.displayName} mark={clientMark(row)}
-        subtitle={age === null ? null : formatYears(age)} highlight={birthdayBadge} onOpen={onOpenClient}
+        subtitle={age === null ? null : formatYears(age)} restricted={facts?.restricted ?? false}
+        highlight={birthdayBadge} highlightIcon={(color) => <Cake size={14} color={color} strokeWidth={2} />}
+        metrics={facts?.metrics.map((metric) => ({ label: metricLook[metric.id].label, value: metric.value,
+          icon: metricLook[metric.id].icon })) ?? []}
+        onOpen={onOpenClient}
         action={birthdayOccurrence === null ? undefined : (
           <AppIconButton label={`Убрать ${row.displayName} из закреплённых`} disabled={dismissingId !== null}
             icon={<PinOff size={20} color={colors.textSecondary} strokeWidth={1.8} />}
@@ -136,38 +192,54 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
 
   const sortLabel = sortOptions.find((option) => option.value === activeSort)?.label ?? "Имя А–Я";
   return (
-    <ScrollView style={[styles.screen, { backgroundColor: colors.canvas }]} contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled" onScroll={onScroll} scrollEventThrottle={32}>
-      <SearchField accessibilityLabel="Поиск по клиентам" query={query} onChangeQuery={setQuery} />
-      <View style={styles.pills}>
-        <View style={styles.pillsSpacer} />
-        <FilterPill label={sortLabel} menu accessibilityLabel={`Сортировка: ${sortLabel}`}
-          onPress={() => setSortSheet(true)} />
-      </View>
-      <AppButton label="Создать карточку клиента" onPress={onOpenCreate}
-        icon={(color) => <Plus size={20} color={color} strokeWidth={2.2} />} />
-      <ListLoadState snapshot={snapshot} error={error}
-        onRetry={() => { setError(null); readModel.refresh(); }} />
-      {snapshot.status === "loading" ? <SkeletonList label="Загружаем клиентов" /> : null}
-      {roster !== null && visibleCount === 0 ? (
-        query.trim()
-          ? <EmptyState reason="no-match" title="Ничего не найдено" body="Попробуйте другое имя или очистите поиск."
-            action={{ label: "Очистить поиск", onPress: () => setQuery("") }} />
-          : <EmptyState reason="no-data" title="Клиентов пока нет" body="Создайте первую карточку клиента."
-            action={{ label: "Создать карточку клиента", onPress: onOpenCreate }} />
-      ) : null}
-      {roster?.searching && visibleCount > 0 ? <ListSectionHeader title="Найдено" count={visibleCount} /> : null}
-      {roster && roster.birthday.length > 0 ? <ListSectionHeader title="Дни рождения" count={roster.birthday.length} /> : null}
-      {roster?.birthday.map((entry) => renderRow(entry.client, entry.birthdayBadge,
-        entry.birthdayOccurrence))}
-      {roster?.recent ? <ListSectionHeader title="Недавно открывали" count={1} /> : null}
-      {roster?.recent ? renderRow(roster.recent.client, roster.recent.birthdayBadge) : null}
-      {roster && !roster.searching && roster.regular.length > 0
-        ? <ListSectionHeader title="Все клиенты" count={roster.regular.length} /> : null}
-      {roster?.regular.map((entry) => renderRow(entry.client, entry.birthdayBadge))}
-      <OptionSheet visible={sortSheet} title="Сортировка" options={sortOptions} selected={activeSort}
-        onSelect={(mode) => { void chooseActiveSort(mode); }} onClose={() => setSortSheet(false)} />
-    </ScrollView>
+    <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
+      <ScrollView style={styles.screen} contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled" onScroll={onScroll} scrollEventThrottle={32}>
+        <SearchField accessibilityLabel="Поиск по клиентам" query={query} onChangeQuery={setQuery} />
+        <View style={styles.pills}>
+          <FilterPill weight={1} label="Сегодня" selected={todayOnly}
+            accessibilityLabel={todayOnly ? "Сегодня по расписанию, включён" : "Сегодня по расписанию"}
+            icon={(color) => <CalendarDays size={16} color={color} strokeWidth={1.8} />}
+            onPress={() => setTodayOnly((value) => !value)} />
+          <FilterPill weight={1.4} menu label="Все клиенты" accessibilityLabel="Группа клиентов: все клиенты"
+            onPress={() => setSheet("group")} />
+          <FilterPill weight={1} menu label={todayOnly ? "Время" : sortLabel}
+            accessibilityLabel={todayOnly ? "Сортировка: по времени записи" : `Сортировка: ${sortLabel}`}
+            onPress={() => setSheet("sort")} />
+        </View>
+        <ListLoadState snapshot={snapshot} error={error}
+          onRetry={() => { setError(null); readModel.refresh(); }} />
+        {snapshot.status === "loading" ? <SkeletonList label="Загружаем клиентов" /> : null}
+        {roster !== null && visibleCount === 0 ? (
+          roster.todayOnly
+            ? <EmptyState reason="no-match" title="Сегодня по расписанию никого"
+              body="Нет записей, которые ещё не закончились." action={{ label: "Все клиенты", onPress: () => setTodayOnly(false) }} />
+            : query.trim()
+              ? <EmptyState reason="no-match" title="Ничего не найдено" body="Попробуйте другое имя или очистите поиск."
+                action={{ label: "Очистить поиск", onPress: () => setQuery("") }} />
+              : <EmptyState reason="no-data" title="Клиентов пока нет" body="Создайте первую карточку клиента."
+                action={{ label: "Создать карточку клиента", onPress: onOpenCreate }} />
+        ) : null}
+        {roster?.todayOnly && visibleCount > 0 ? <ListSectionHeader title="Сегодня по расписанию" count={visibleCount} /> : null}
+        {roster?.searching && !roster.todayOnly && visibleCount > 0 ? <ListSectionHeader title="Найдено" count={visibleCount} /> : null}
+        {roster && roster.birthday.length > 0 ? <ListSectionHeader accent title="Дни рождения" count={roster.birthday.length} /> : null}
+        {roster?.birthday.map((entry) => renderRow(entry.client, entry.birthdayBadge,
+          entry.birthdayOccurrence))}
+        {roster?.recent ? <ListSectionHeader title="Недавно открывали" count={1} /> : null}
+        {roster?.recent ? renderRow(roster.recent.client, roster.recent.birthdayBadge) : null}
+        {roster && !roster.searching && !roster.todayOnly && roster.regular.length > 0
+          ? <ListSectionHeader title="Все клиенты" count={roster.regular.length} /> : null}
+        {roster?.regular.map((entry) => renderRow(entry.client, entry.birthdayBadge))}
+      </ScrollView>
+      <FloatingActionButton label="Создать карточку клиента" onPress={onOpenCreate}
+        icon={(color) => <Plus size={26} color={color} strokeWidth={2.2} />} />
+      <OptionSheet visible={sheet === "sort"} title="Сортировка" options={sortOptions} selected={activeSort}
+        note={todayOnly ? "Пока включён «Сегодня», клиенты идут по времени записи; выбранная сортировка вернётся после выключения." : undefined}
+        onSelect={(mode) => { void chooseActiveSort(mode); }} onClose={() => setSheet(null)} />
+      <OptionSheet visible={sheet === "group"} title="Клиенты" options={groupOptions} selected="ALL"
+        note="Фильтры по полу и меткам появятся, когда эти поля будут в карточке клиента."
+        onSelect={() => undefined} onClose={() => setSheet(null)} />
+    </View>
   );
 }
 
@@ -310,9 +382,9 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 32, gap: 8 },
+  // Нижний отступ — чтобы последняя карточка не уходила под плавающую кнопку.
+  content: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 88, gap: 8 },
   pills: { flexDirection: "row", alignItems: "center", gap: 8 },
-  pillsSpacer: { flex: 1 },
   filters: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   message: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   card: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 12 },

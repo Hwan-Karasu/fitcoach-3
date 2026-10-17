@@ -16,6 +16,9 @@ import { ClientWorkspaceNavigator } from "./ClientWorkspaceNavigator.tsx";
 import { ClientEditorRoute } from "./ClientEditorRoute.tsx";
 import type { DevServices } from "../composition/createDevServices.ts";
 import { ClientListController } from "../../read-models/ClientListController.ts";
+import { createRosterOverviewSource } from "../../read-models/rosterOverview.ts";
+import { homeSummaryRules } from "../../read-models/useClientHomeSummary.ts";
+import type { RosterOverviewPort } from "../../features/clients/public.ts";
 import { RootTabs } from "./RootTabs.tsx";
 import { SqliteDiagnosticsScreen } from "./SqliteDiagnosticsScreen.tsx";
 
@@ -36,8 +39,8 @@ type RootStackRoutes = {
 
 const Stack = createNativeStackNavigator<RootStackRoutes>();
 
-function ShellNavigator({ services, clientLists }: Readonly<{
-  services: DevServices; clientLists: ClientListController;
+function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
+  services: DevServices; clientLists: ClientListController; rosterOverview: RosterOverviewPort;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -64,6 +67,7 @@ function ShellNavigator({ services, clientLists }: Readonly<{
               onOpenSqliteDev={() => navigation.navigate("SqliteDev")}
               clients={services.clients}
               clientLists={clientLists}
+              rosterOverview={rosterOverview}
               calendar={services.calendar}
               calendarParticipants={services.calendarParticipants}
               calendarCredit={services.accounting}
@@ -142,6 +146,8 @@ export function PrototypeShell({ services, workspaceId }: Readonly<{
   services: DevServices; workspaceId: string;
 }>) {
   const [clientLists] = useState(() => new ClientListController(services.clients, workspaceId));
+  const [rosterOverview] = useState(() => createRosterOverviewSource({ rules: homeSummaryRules,
+    calendar: services.calendar, accounting: services.accounting, questionnaire: services.questionnaire }));
   const users = useRef(0);
   useEffect(() => {
     users.current += 1;
@@ -156,7 +162,7 @@ export function PrototypeShell({ services, workspaceId }: Readonly<{
     <SafeAreaProvider>
       <PrototypeThemeProvider>
         <CalendarUndoProvider repository={services.calendar}>
-          <ShellNavigator services={services} clientLists={clientLists} />
+          <ShellNavigator services={services} clientLists={clientLists} rosterOverview={rosterOverview} />
           <OutcomeQueueHost services={services} />
         </CalendarUndoProvider>
       </PrototypeThemeProvider>

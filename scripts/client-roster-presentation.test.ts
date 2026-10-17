@@ -115,3 +115,28 @@ test("C04 delete confirmation states irreversibility and the real manifest", () 
   assert.match(text, /карточка клиента; черновики формы: 1\./u);
   assert.doesNotMatch(text, /Недавно открытые/u);
 });
+
+test("CL-02 «Сегодня по расписанию»: только клиенты из фильтра, плоский список по времени записи", () => {
+  const rows = [
+    row("birthday", "Борис", "2000-10-18", "2026-10-17T09:00:00Z"),
+    row("late", "Алина", null),
+    row("early", "Вера", null),
+    row("none", "Глеб", null),
+  ];
+  const starts = new Map([["late", 18 * 60], ["early", 9 * 60], ["birthday", 12 * 60]]);
+  const result = presentClientRoster({ rows, search: "", sort: "NAME", today: "2026-10-17",
+    birthday: settings, dismissals: [], todayStarts: starts });
+  assert.equal(result.todayOnly, true);
+  assert.deepEqual(result.birthday, []);
+  assert.equal(result.recent, null);
+  assert.deepEqual(result.regular.map((entry) => entry.client.id), ["early", "birthday", "late"]);
+  // Поиск ищет только внутри сегодняшнего набора.
+  const searched = presentClientRoster({ rows, search: "ве", sort: "NAME", today: "2026-10-17",
+    birthday: settings, dismissals: [], todayStarts: starts });
+  assert.deepEqual(searched.regular.map((entry) => entry.client.id), ["early"]);
+  // Пустой набор — фильтр включён, но никого нет.
+  const empty = presentClientRoster({ rows, search: "", sort: "NAME", today: "2026-10-17",
+    birthday: settings, dismissals: [], todayStarts: new Map() });
+  assert.equal(empty.todayOnly, true);
+  assert.equal(empty.regular.length, 0);
+});

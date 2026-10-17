@@ -10,9 +10,11 @@ export interface SheetOption<T extends string> {
 }
 
 /** Нижний лист с одним выбором: сортировка и другие списки вариантов у пилюль. */
-export function OptionSheet<T extends string>({ visible, title, options, selected, onSelect, onClose }: Readonly<{
+export function OptionSheet<T extends string>({ visible, title, note, options, selected, onSelect, onClose }: Readonly<{
   visible: boolean;
   title: string;
+  /** Пояснение под вариантами, например почему вариантов пока мало. */
+  note?: string;
   options: readonly SheetOption<T>[];
   selected: T;
   onSelect: (value: T) => void;
@@ -38,6 +40,7 @@ export function OptionSheet<T extends string>({ visible, title, options, selecte
             </Pressable>
           );
         })}
+        {note ? <Text style={[styles.note, { color: colors.textSecondary }]}>{note}</Text> : null}
       </View>
     </Modal>
   );
@@ -48,5 +51,6 @@ const styles = StyleSheet.create({
   sheet: { borderTopWidth: 1, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingTop: 12, paddingHorizontal: 8 },
   title: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, paddingHorizontal: 12, paddingBottom: 4 },
   option: { minHeight: 48, borderRadius: 10, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  note: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, paddingHorizontal: 12, paddingTop: 8 },
   optionLabel: { fontFamily: fonts.medium, fontSize: 15, lineHeight: 20 },
 });
