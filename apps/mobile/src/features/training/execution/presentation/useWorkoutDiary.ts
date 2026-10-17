@@ -4,20 +4,26 @@ import type { PlannedExercise, PlannedSet, PlannedWorkout, TrainingPlansReposito
 import type { ConfirmationMode, PreviousSet, SetFact, SetType, SetValues, TrackingMetric, WorkoutExecution,
   WorkoutOutcome, WorkoutSlot } from "../domain/ExecutionModel.ts";
 import { EMPTY_VALUES } from "../domain/ExecutionModel.ts";
-import { hasEnteredData, workoutStatus } from "../domain/ExecutionRules.ts";
+import { dropsForType, hasEnteredData, workoutStatus } from "../domain/ExecutionRules.ts";
 import type { SaveSetInput, TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 
 /** Правка подхода; поля накладываются на последние сохранённые значения в момент записи. */
 export interface SetPatch {
   readonly fields?: Partial<SetValues>;
   readonly rpe?: number | null;
+  /** Смена типа; мини-сеты дроп-сета появляются или убираются вместе с ней. */
   readonly setType?: SetType;
+  /** Состав мини-сетов целиком: добавить, убрать, перенести из «Пред.». */
+  readonly drops?: readonly SetValues[];
+  /** Поле одного мини-сета. */
+  readonly drop?: Readonly<{ index: number; fields: Partial<SetValues> }>;
 }
 
 const errorText = (error: unknown) => {
   const code = error instanceof Error ? error.message : "";
   return code === "INVALID_METRIC" ? "Значение вне допустимого диапазона — подход не сохранён."
     : code === "STALE_SESSION" ? "Тренировка изменилась — показаны сохранённые значения, повторите ввод."
+      : code === "DROP_STRUCTURE_LOCKED" ? "Дроп-сет уже выполнен: чтобы изменить мини-сеты или тип, сначала снимите выполнение — очистите вес или повторы либо снимите галочку."
       : "Не удалось сохранить. Последнее сохранённое значение на месте — повторите ввод.";
 };
 
@@ -102,8 +108,13 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   const saveSet = useCallback((exercise: PlannedExercise, set: PlannedSet, position: number, patch: SetPatch) =>
     enqueue(async () => {
       const { fact, identity } = identityOf(exercise, set, position);
-      const input: SaveSetInput = { ...identity, values: { ...(fact?.values ?? EMPTY_VALUES), ...patch.fields },
-        rpe: patch.rpe !== undefined ? patch.rpe : fact?.rpe ?? null, setType: patch.setType ?? fact?.setType ?? "NORMAL" };
+      const setType = patch.setType ?? fact?.setType ?? "NORMAL";
+      let drops = setType === (fact?.setType ?? "NORMAL") ? fact?.drops ?? [] : dropsForType(setType, fact?.drops ?? []);
+      if (patch.drops !== undefined) drops = patch.drops;
+      const { drop } = patch;
+      if (drop !== undefined) drops = drops.map((item, index) => index === drop.index ? { ...item, ...drop.fields } : item);
+      const input: SaveSetInput = { ...identity, values: { ...(fact?.values ?? EMPTY_VALUES), ...patch.fields }, drops,
+        rpe: patch.rpe !== undefined ? patch.rpe : fact?.rpe ?? null, setType };
       const result = await execution.saveSet(input);
       applyFact(result.fact, result.session);
       if (result.confirmedNow) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);

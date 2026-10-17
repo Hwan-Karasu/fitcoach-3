@@ -15,6 +15,8 @@ export interface SetIdentity {
 
 export interface SaveSetInput extends SetIdentity {
   readonly values: SetValues;
+  /** Мини-сеты дроп-сета целиком (§48.60); у других типов — пусто. */
+  readonly drops: readonly SetValues[];
   readonly rpe: number | null;
   readonly setType: SetType;
 }
@@ -32,7 +34,8 @@ export interface TrainingExecutionCommittedChange {
 }
 
 /**
- * Владелец фактов тренировок (Feature 10). Ошибки: INVALID_METRIC, STALE_SESSION, FACT_NOT_FOUND.
+ * Владелец фактов тренировок (Feature 10). Ошибки: INVALID_METRIC, STALE_SESSION, FACT_NOT_FOUND,
+ * DROP_STRUCTURE_LOCKED (§48.61).
  * Выполнение создаётся первым вводом (§48.34): просмотр дневника ничего не записывает.
  * Calendar и Credit Ledger отсюда не меняются (§48.39).
  */

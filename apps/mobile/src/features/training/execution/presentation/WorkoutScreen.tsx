@@ -4,19 +4,20 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useKeepAwake } from "expo-keep-awake";
 import { usePreventRemove, useNavigation } from "@react-navigation/native";
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { Check } from "lucide-react-native";
+import { Check, Plus, X } from "lucide-react-native";
 import { ConfirmDialog, InlineNotice, LoadingState, StatusTag, type StatusKind } from "../../../../shared/ui/components/public.ts";
+import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { useExerciseLookup, type ExerciseLookupPort, type PlannedExercise, type PlannedSet,
   type TrainingPlansRepositoryPort } from "../../plans/public.ts";
-import type { ConfirmationMode, PreviousSet, SetFact, SetValues, WorkoutOutcome, WorkoutSlot,
-  WorkoutStatus } from "../domain/ExecutionModel.ts";
-import { nextOutcome, type SetField } from "../domain/ExecutionRules.ts";
+import { DROPS_MAX, EMPTY_VALUES, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues,
+  type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
+import { displayOrder, nextOutcome, type SetField } from "../domain/ExecutionRules.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
-import { SetOptionsSheet } from "./SetOptionsSheet.tsx";
-import { compactValues, diaryFields, fieldHeaders, fieldNames, parseField, rawOf, setMarker, shortDate,
-  workoutStatusLabels } from "./setFormat.ts";
+import { RpeSheet, SetTypeSheet } from "./SetPickers.tsx";
+import { compactValues, compactWithDrops, diaryFields, fieldHeaders, fieldNames, parseField, rawOf, rpeTone, setTypeLabels,
+  setTypeTone, shortDate, workoutStatusLabels } from "./setFormat.ts";
 import { useWorkoutDiary, type SetPatch } from "./useWorkoutDiary.ts";
 
 /** Пауза после последнего нажатия, после которой значение ячейки записывается. */
@@ -33,6 +34,9 @@ const outcomeLabels: Readonly<Record<WorkoutOutcome, readonly [string, string]>>
 };
 
 type PendingRegistry = Map<string, () => void>;
+type SetTarget = Readonly<{ exercise: PlannedExercise; set: PlannedSet; position: number }>;
+
+const hasValues = (values: SetValues) => Object.values(values).some((value) => value !== null);
 
 /**
  * Ячейка фактического значения: свой текст ввода; запись — через паузу после ввода или при уходе фокуса.
@@ -44,7 +48,7 @@ function ValueCell({ cellKey, field, value, pending, onCommit }: Readonly<{
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const raw = rawOf({ reps: null, loadGrams: null, durationSec: null, distanceM: null, [field]: value }, field);
+  const raw = rawOf({ ...EMPTY_VALUES, [field]: value }, field);
   const [text, setText] = useState(raw);
   const [invalid, setInvalid] = useState(false);
   const focused = useRef(false);
@@ -94,53 +98,99 @@ function ValueCell({ cellKey, field, value, pending, onCommit }: Readonly<{
   );
 }
 
-const SetRow = memo(function SetRow({ exercise, set, position, ordinal, fact, previous, fields, mode, pending,
-  onSave, onToggle, onOptions }: Readonly<{
-  exercise: PlannedExercise; set: PlannedSet; position: number; ordinal: number; fact: SetFact | undefined;
-  previous: PreviousSet | undefined; fields: readonly SetField[]; mode: ConfirmationMode; pending: PendingRegistry;
-  onSave: (exercise: PlannedExercise, set: PlannedSet, position: number, patch: SetPatch) => void;
-  onToggle: (exercise: PlannedExercise, set: PlannedSet, position: number) => void;
-  onOptions: (exercise: PlannedExercise, set: PlannedSet, position: number) => void;
+/**
+ * Строка подхода. Тип красит строку (разминка — жёлтым, отказ — красным, дроп — синим), номер у рабочих
+ * подходов не меняется; под дроп-сетом — строки мини-сетов (§48.60), их состав заморожен, пока подход выполнен.
+ */
+const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mode, pending,
+  onSave, onToggle, onPickType, onPickRpe }: Readonly<{
+  target: SetTarget; number: number | null; fact: SetFact | undefined; previous: PreviousSet | undefined;
+  fields: readonly SetField[]; mode: ConfirmationMode; pending: PendingRegistry;
+  onSave: (target: SetTarget, patch: SetPatch) => void;
+  onToggle: (target: SetTarget) => void;
+  onPickType: (target: SetTarget) => void;
+  onPickRpe: (target: SetTarget) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
+  const { set } = target;
   const confirmed = fact?.confirmed === true;
-  const type = fact?.setType ?? "NORMAL";
-  const values: SetValues | undefined = fact?.values;
+  const type: SetType = fact?.setType ?? "NORMAL";
+  const tone = setTypeTone(type, colors);
+  const drops = fact?.drops ?? [];
+  const marker = number === null ? "Р" : String(number);
+  const background = tone !== null ? withAlpha(tone, confirmed ? 0.3 : 0.14)
+    : confirmed ? withAlpha(colors.success, 0.14) : "transparent";
+  const manualSpacer = mode === "MANUAL" ? <View style={styles.side} /> : null;
   return (
-    <View style={styles.row}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Подход ${position + 1}: тип и RPE${confirmed ? ", выполнен" : ""}`}
-        hitSlop={6} onPress={() => onOptions(exercise, set, position)}
-        style={[styles.marker, { borderColor: confirmed ? colors.success : colors.border,
-          backgroundColor: confirmed ? colors.success : colors.surface }]}>
-        <Text style={[styles.markerText, { color: confirmed ? colors.canvas : colors.textPrimary }]}>{setMarker(type, ordinal)}</Text>
-      </Pressable>
-      <Text style={[styles.plan, { color: colors.textSecondary }]} numberOfLines={1}>{compactValues(set, fields)}</Text>
-      <Pressable accessibilityRole="button" disabled={previous === undefined}
-        accessibilityLabel={previous === undefined ? "Прошлого результата нет" : `Перенести прошлый результат ${compactValues(previous.values, fields)}`}
-        hitSlop={6} onPress={() => { if (previous !== undefined) onSave(exercise, set, position, { fields: previous.values }); }}
-        style={styles.previous}>
-        <Text style={[styles.previousText, { color: previous === undefined ? colors.textMuted : colors.accentInk }]} numberOfLines={1}>
-          {previous === undefined ? "—" : compactValues(previous.values, fields)}
-        </Text>
-      </Pressable>
-      {fields.map((field) => (
-        <ValueCell key={field} cellKey={`${set.id}:${field}`} field={field} value={values?.[field] ?? null} pending={pending}
-          onCommit={(value) => onSave(exercise, set, position, { fields: { [field]: value } })} />
-      ))}
-      <Pressable accessibilityRole="button" accessibilityLabel={fact?.rpe ? `RPE ${fact.rpe}` : "RPE не указан"} hitSlop={6}
-        onPress={() => onOptions(exercise, set, position)} style={styles.rpe}>
-        <Text style={[styles.rpeText, { color: fact?.rpe ? colors.textPrimary : colors.textMuted }]}>{fact?.rpe ?? "—"}</Text>
-      </Pressable>
-      {mode === "MANUAL" ? (
-        <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: confirmed }}
-          accessibilityLabel={confirmed ? "Снять отметку выполнения" : "Отметить подход выполненным"} hitSlop={6}
-          onPress={() => onToggle(exercise, set, position)}
-          style={[styles.check, { borderColor: confirmed ? colors.success : colors.border,
+    <View style={[styles.block, { backgroundColor: background }]}>
+      <View style={styles.row}>
+        <Pressable accessibilityRole="button" hitSlop={6} onPress={() => onPickType(target)}
+          accessibilityLabel={`Подход ${marker}, ${setTypeLabels[type].toLowerCase()}${confirmed ? ", выполнен" : ""}. Сменить тип`}
+          style={[styles.marker, { borderColor: confirmed ? colors.success : tone ?? colors.border,
             backgroundColor: confirmed ? colors.success : colors.surface }]}>
-          {confirmed ? <Check size={18} color={colors.canvas} strokeWidth={2.4} /> : null}
+          <Text style={[styles.markerText, { color: confirmed ? colors.canvas : tone ?? colors.textPrimary }]}>{marker}</Text>
         </Pressable>
-      ) : null}
+        <Text style={[styles.plan, { color: colors.textSecondary }]} numberOfLines={1}>{compactValues(set, fields)}</Text>
+        <Pressable accessibilityRole="button" disabled={previous === undefined} hitSlop={6} style={styles.previous}
+          accessibilityLabel={previous === undefined ? "Прошлого результата нет"
+            : `Перенести прошлый результат ${compactWithDrops(previous.values, previous.drops, fields)}`}
+          onPress={() => {
+            if (previous === undefined) return;
+            onSave(target, type === "DROP" ? { fields: previous.values, drops: previous.drops } : { fields: previous.values });
+          }}>
+          <Text style={[styles.previousText, { color: previous === undefined ? colors.textMuted : colors.accentInk }]} numberOfLines={2}>
+            {previous === undefined ? "—" : compactWithDrops(previous.values, previous.drops, fields)}
+          </Text>
+        </Pressable>
+        {fields.map((field) => (
+          <ValueCell key={field} cellKey={`${set.id}:${field}`} field={field} value={fact?.values[field] ?? null} pending={pending}
+            onCommit={(value) => onSave(target, { fields: { [field]: value } })} />
+        ))}
+        <Pressable accessibilityRole="button" accessibilityLabel={fact?.rpe ? `RPE ${fact.rpe}. Изменить` : "Указать RPE"} hitSlop={6}
+          onPress={() => onPickRpe(target)} style={styles.side}>
+          <Text style={[styles.rpeText, { color: fact?.rpe ? rpeTone(fact.rpe, colors) : colors.textMuted }]}>{fact?.rpe ?? "—"}</Text>
+        </Pressable>
+        {mode === "MANUAL" ? (
+          <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: confirmed }}
+            accessibilityLabel={confirmed ? "Снять отметку выполнения" : "Отметить подход выполненным"} hitSlop={6}
+            onPress={() => onToggle(target)}
+            style={[styles.check, { borderColor: confirmed ? colors.success : colors.border,
+              backgroundColor: confirmed ? colors.success : colors.surface }]}>
+            {confirmed ? <Check size={18} color={colors.canvas} strokeWidth={2.4} /> : null}
+          </Pressable>
+        ) : null}
+      </View>
+      {type === "DROP" ? <>
+        {drops.map((drop, index) => (
+          <View key={`drop-${index}`} style={styles.row}>
+            <View style={styles.markerSpace} />
+            <View style={styles.plan} />
+            <Text style={[styles.dropLabel, { color: colors.textSecondary }]}>{`↳ ${index + 2}`}</Text>
+            {fields.map((field) => (
+              <ValueCell key={field} cellKey={`${set.id}:d${index}:${field}`} field={field} value={drop[field]} pending={pending}
+                onCommit={(value) => onSave(target, { drop: { index, fields: { [field]: value } } })} />
+            ))}
+            <Pressable accessibilityRole="button" accessibilityLabel={`Убрать мини-сет ${index + 2}`} hitSlop={6}
+              disabled={confirmed || drops.length <= 1} style={[styles.side, (confirmed || drops.length <= 1) && styles.dim]}
+              onPress={() => onSave(target, { drops: drops.filter((_, item) => item !== index) })}>
+              <X size={18} color={colors.danger} strokeWidth={2} />
+            </Pressable>
+            {manualSpacer}
+          </View>
+        ))}
+        <View style={styles.row}>
+          <View style={styles.markerSpace} />
+          <Pressable accessibilityRole="button" disabled={confirmed || drops.length >= DROPS_MAX}
+            accessibilityLabel="Добавить мини-сет"
+            accessibilityHint={confirmed ? "Подход выполнен — сначала снимите выполнение" : undefined}
+            onPress={() => onSave(target, { drops: [...drops, EMPTY_VALUES] })}
+            style={[styles.addDrop, { borderColor: tone ?? colors.border }, (confirmed || drops.length >= DROPS_MAX) && styles.dim]}>
+            <Plus size={16} color={colors.accentInk} strokeWidth={2.2} />
+            <Text style={[styles.addDropText, { color: colors.accentInk }]}>Мини-сет</Text>
+          </Pressable>
+        </View>
+      </> : null}
     </View>
   );
 });
@@ -164,8 +214,10 @@ export function WorkoutScreen({ slot, plans, execution, exercises }: Readonly<{
   const metricsOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.metrics ?? null, [lookup]);
   const diary = useWorkoutDiary(slot, plans, execution, metricsOf);
   const pending = useRef<PendingRegistry>(new Map()).current;
-  const sheet = useRef<BottomSheetModal>(null);
-  const [options, setOptions] = useState<Readonly<{ exercise: PlannedExercise; set: PlannedSet; position: number }> | null>(null);
+  const typeSheet = useRef<BottomSheetModal>(null);
+  const rpeSheet = useRef<BottomSheetModal>(null);
+  const [target, setTarget] = useState<SetTarget | null>(null);
+  const [removeDrops, setRemoveDrops] = useState<Readonly<{ target: SetTarget; setType: SetType }> | null>(null);
   const [confirmIncomplete, setConfirmIncomplete] = useState(false);
   const [exitAction, setExitAction] = useState<Parameters<typeof navigation.dispatch>[0] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -175,17 +227,22 @@ export function WorkoutScreen({ slot, plans, execution, exercises }: Readonly<{
     for (const flush of [...pending.values()]) flush();
   }, [pending]);
 
-  const onSave = useCallback((exercise: PlannedExercise, set: PlannedSet, position: number, patch: SetPatch) => {
-    void saveSet(exercise, set, position, patch);
+  const onSave = useCallback((item: SetTarget, patch: SetPatch) => {
+    void saveSet(item.exercise, item.set, item.position, patch);
   }, [saveSet]);
-  const onToggle = useCallback((exercise: PlannedExercise, set: PlannedSet, position: number) => {
+  const onToggle = useCallback((item: SetTarget) => {
     flushPending();
-    void toggleSet(exercise, set, position);
+    void toggleSet(item.exercise, item.set, item.position);
   }, [flushPending, toggleSet]);
-  const onOptions = useCallback((exercise: PlannedExercise, set: PlannedSet, position: number) => {
+  const onPickType = useCallback((item: SetTarget) => {
     Keyboard.dismiss();
-    setOptions({ exercise, set, position });
-    sheet.current?.present();
+    setTarget(item);
+    typeSheet.current?.present();
+  }, []);
+  const onPickRpe = useCallback((item: SetTarget) => {
+    Keyboard.dismiss();
+    setTarget(item);
+    rpeSheet.current?.present();
   }, []);
 
   const outcome = diary.state?.session?.outcome ?? null;
@@ -217,7 +274,17 @@ export function WorkoutScreen({ slot, plans, execution, exercises }: Readonly<{
     );
   }
   const { workout, state, previous, mode } = diary;
-  const optionsFact = options === null ? undefined : state.facts.get(options.set.id);
+  const targetFact = target === null ? undefined : state.facts.get(target.set.id);
+
+  const chooseType = (setType: SetType) => {
+    typeSheet.current?.dismiss();
+    if (target === null || setType === (targetFact?.setType ?? "NORMAL")) return;
+    flushPending();
+    // Заполненные мини-сеты не убираются молча: сначала вопрос.
+    if (targetFact?.setType === "DROP" && targetFact.drops.some(hasValues)) { setRemoveDrops({ target, setType }); return; }
+    onSave(target, { setType });
+  };
+
   return (
     <>
       <KeyboardAwareScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content}
@@ -234,7 +301,8 @@ export function WorkoutScreen({ slot, plans, execution, exercises }: Readonly<{
           const info = lookup.get(exercise.exerciseId);
           const fields = diaryFields(info?.metrics ?? []);
           const done = exercise.sets.filter((set) => state.facts.get(set.id)?.confirmed === true).length;
-          let normal = 0;
+          const rows = displayOrder(exercise.sets.map((set, position) => ({ set, position,
+            setType: state.facts.get(set.id)?.setType ?? "NORMAL" })));
           return (
             <View key={exercise.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.cardHead}>
@@ -242,21 +310,19 @@ export function WorkoutScreen({ slot, plans, execution, exercises }: Readonly<{
                 <Text style={[styles.exercise, { color: colors.textPrimary }]} numberOfLines={2}>{info?.name ?? "Упражнение"}</Text>
                 <Text style={[styles.meta, { color: colors.textSecondary }]}>{`${done}/${exercise.sets.length}`}</Text>
               </View>
-              <View style={styles.row}>
-                <Text style={[styles.head, styles.markerHead, { color: colors.textMuted }]}>Сет</Text>
+              <View style={[styles.row, styles.headRow]}>
+                <Text style={[styles.head, styles.markerSpace, { color: colors.textMuted }]}>Сет</Text>
                 <Text style={[styles.head, styles.plan, { color: colors.textMuted }]}>План</Text>
                 <Text style={[styles.head, styles.grow, { color: colors.textMuted }]}>Пред.</Text>
                 {fields.map((field) => <Text key={field} style={[styles.head, styles.inputHead, { color: colors.textMuted }]}>{fieldHeaders[field]}</Text>)}
-                <Text style={[styles.head, styles.markerHead, { color: colors.textMuted }]}>RPE</Text>
-                {mode === "MANUAL" ? <View style={styles.checkHead} /> : null}
+                <Text style={[styles.head, styles.side, { color: colors.textMuted }]}>RPE</Text>
+                {mode === "MANUAL" ? <View style={styles.side} /> : null}
               </View>
-              {exercise.sets.map((set, position) => {
-                const fact = state.facts.get(set.id);
-                if ((fact?.setType ?? "NORMAL") === "NORMAL") normal += 1;
-                return <SetRow key={set.id} exercise={exercise} set={set} position={position} ordinal={normal} fact={fact}
-                  previous={previous.get(set.id)} fields={fields} mode={mode} pending={pending}
-                  onSave={onSave} onToggle={onToggle} onOptions={onOptions} />;
-              })}
+              {rows.map(({ item, number }) => (
+                <SetRow key={item.set.id} target={{ exercise, set: item.set, position: item.position }} number={number}
+                  fact={state.facts.get(item.set.id)} previous={previous.get(item.set.id)} fields={fields} mode={mode}
+                  pending={pending} onSave={onSave} onToggle={onToggle} onPickType={onPickType} onPickRpe={onPickRpe} />
+              ))}
             </View>
           );
         })}
@@ -275,10 +341,14 @@ export function WorkoutScreen({ slot, plans, execution, exercises }: Readonly<{
           })}
         </View>
       </KeyboardAwareScrollView>
-      <SetOptionsSheet ref={sheet} title={options === null ? "Подход" : `Подход ${options.position + 1}`}
-        setType={optionsFact?.setType ?? "NORMAL"} rpe={optionsFact?.rpe ?? null}
-        onSetType={(setType) => { if (options !== null) onSave(options.exercise, options.set, options.position, { setType }); }}
-        onRpe={(rpe) => { if (options !== null) onSave(options.exercise, options.set, options.position, { rpe }); }} />
+      <SetTypeSheet ref={typeSheet} setType={targetFact?.setType ?? "NORMAL"} onSelect={chooseType} />
+      <RpeSheet ref={rpeSheet} rpe={targetFact?.rpe ?? null}
+        onSelect={(rpe) => { rpeSheet.current?.dismiss(); if (target !== null) onSave(target, { rpe }); }} />
+      <ConfirmDialog visible={removeDrops !== null} title="Убрать мини-сеты?"
+        description="Подход перестанет быть дроп-сетом, заполненные мини-сеты будут убраны. Основной сет останется."
+        confirmLabel="Убрать" cancelLabel="Оставить" destructive
+        onCancel={() => setRemoveDrops(null)}
+        onConfirm={() => { if (removeDrops !== null) onSave(removeDrops.target, { setType: removeDrops.setType }); setRemoveDrops(null); }} />
       <ConfirmDialog visible={confirmIncomplete} title="Не все подходы выполнены"
         description="Тренировку можно завершить и так: незаполненные подходы останутся пустыми, введённые результаты сохранятся."
         confirmLabel="Завершить" cancelLabel="Вернуться" confirmBusy={busy}
@@ -306,26 +376,32 @@ const styles = StyleSheet.create({
   heading: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 26 },
   metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   meta: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
-  card: { borderWidth: 1, borderRadius: 12, padding: 10, gap: 6 },
-  cardHead: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 2 },
+  card: { borderWidth: 1, borderRadius: 12, padding: 8, gap: 4 },
+  cardHead: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 2, paddingHorizontal: 2 },
   thumb: { width: 40, height: 40, borderRadius: 8 },
   exercise: { flex: 1, fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
+  block: { borderRadius: 10, paddingVertical: 2, paddingHorizontal: 2, gap: 4 },
   row: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44 },
+  headRow: { minHeight: 20, paddingHorizontal: 2 },
   head: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14, textAlign: "center" },
-  markerHead: { width: 34 },
   grow: { flex: 1 },
+  markerSpace: { width: 34 },
   marker: { width: 34, height: 34, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   markerText: { fontFamily: fonts.semibold, fontSize: 14 },
   plan: { flex: 1, fontFamily: fonts.regular, fontSize: 12, textAlign: "center" },
   previous: { flex: 1, minHeight: 40, justifyContent: "center" },
   previousText: { fontFamily: fonts.medium, fontSize: 12, textAlign: "center" },
+  dropLabel: { flex: 1, fontFamily: fonts.medium, fontSize: 12, textAlign: "right", paddingRight: 4 },
   inputHead: { width: 54 },
   input: { width: 54, height: 40, borderWidth: 1, borderRadius: 8, textAlign: "center", fontFamily: fonts.medium,
     fontSize: 15, paddingHorizontal: 2, paddingVertical: 0 },
-  rpe: { width: 34, minHeight: 40, justifyContent: "center" },
-  rpeText: { fontFamily: fonts.medium, fontSize: 13, textAlign: "center" },
+  side: { width: 34, minHeight: 40, alignItems: "center", justifyContent: "center" },
+  rpeText: { fontFamily: fonts.semibold, fontSize: 14, textAlign: "center" },
   check: { width: 34, height: 34, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  checkHead: { width: 34 },
+  addDrop: { flex: 1, minHeight: 40, borderRadius: 8, borderWidth: 1, borderStyle: "dashed", flexDirection: "row",
+    alignItems: "center", justifyContent: "center", gap: 6 },
+  addDropText: { fontFamily: fonts.medium, fontSize: 13 },
+  dim: { opacity: 0.4 },
   outcomes: { flexDirection: "row", gap: 8, marginTop: 4 },
   outcome: { flex: 1, minHeight: 56, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center",
     paddingHorizontal: 6 },

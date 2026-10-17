@@ -5,9 +5,13 @@ import { DevClientRepository } from "../apps/mobile/src/features/clients/data/De
 import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParticipant } from
   "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 import type { SetValues, TrackingMetric, WorkoutSlot } from "../apps/mobile/src/features/training/execution/domain/ExecutionModel.ts";
-import { confirmationAfterSave, matchPrevious, nextOutcome, toggleConfirmation, weekStatus } from
+import { assertDropStructure, confirmationAfterSave, displayOrder, dropsForType, isSetComplete, matchPrevious, nextOutcome,
+  toggleConfirmation, weekStatus, type SetContent } from
   "../apps/mobile/src/features/training/execution/domain/ExecutionRules.ts";
 import type { SaveSetInput } from "../apps/mobile/src/features/training/execution/domain/TrainingExecutionPort.ts";
+import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
+import { devTrainingExecutionCatalog, DEV_TRAINING_EXECUTION_LEDGER } from
+  "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionCatalog.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
 
@@ -17,6 +21,7 @@ const LOAD_REPS: readonly TrackingMetric[] = ["load", "reps"];
 const DAY1 = new Date(2026, 9, 17, 9, 0);
 const DAY2 = new Date(2026, 9, 20, 9, 0);
 const values = (loadGrams: number | null, reps: number | null): SetValues => ({ reps, loadGrams, durationSec: null, distanceM: null });
+const plain = (set: SetValues): SetContent => ({ setType: "NORMAL", values: set, drops: [] });
 const message = (code: string) => (error: unknown) => error instanceof Error && error.message.includes(code);
 
 async function stores() {
@@ -33,21 +38,21 @@ async function stores() {
 function bench(slot: WorkoutSlot, setId: string, position: number, set: SetValues,
   expectedRevision: number | null): SaveSetInput {
   return { slot, plannedExerciseId: "pe-bench", exerciseId: BENCH, plannedSetId: setId, position, metrics: LOAD_REPS,
-    values: set, rpe: null, setType: "NORMAL", expectedRevision };
+    values: set, drops: [], rpe: null, setType: "NORMAL", expectedRevision };
 }
 
 test("T03 правила подтверждения: авто по полным обязательным полям, ручная галочка обратима", () => {
-  assert.deepEqual(confirmationAfterSave("AUTO", false, values(100_000, 8), LOAD_REPS), { confirmed: true, confirmedNow: true });
-  assert.deepEqual(confirmationAfterSave("AUTO", true, values(105_000, 8), LOAD_REPS), { confirmed: true, confirmedNow: false },
+  assert.deepEqual(confirmationAfterSave("AUTO", false, plain(values(100_000, 8)), LOAD_REPS), { confirmed: true, confirmedNow: true });
+  assert.deepEqual(confirmationAfterSave("AUTO", true, plain(values(105_000, 8)), LOAD_REPS), { confirmed: true, confirmedNow: false },
     "правка без опустошения поля — без нового запуска таймера");
-  assert.deepEqual(confirmationAfterSave("AUTO", true, values(null, 8), LOAD_REPS), { confirmed: false, confirmedNow: false });
-  assert.deepEqual(confirmationAfterSave("AUTO", false, values(0, 15), LOAD_REPS), { confirmed: true, confirmedNow: true },
+  assert.deepEqual(confirmationAfterSave("AUTO", true, plain(values(null, 8)), LOAD_REPS), { confirmed: false, confirmedNow: false });
+  assert.deepEqual(confirmationAfterSave("AUTO", false, plain(values(0, 15)), LOAD_REPS), { confirmed: true, confirmedNow: true },
     "0 кг — заполненное значение");
-  assert.deepEqual(confirmationAfterSave("MANUAL", false, values(100_000, 8), LOAD_REPS), { confirmed: false, confirmedNow: false });
-  assert.deepEqual(confirmationAfterSave("MANUAL", true, values(100_000, null), LOAD_REPS), { confirmed: false, confirmedNow: false });
-  assert.deepEqual(toggleConfirmation(false, values(100_000, 8), LOAD_REPS), { confirmed: true, confirmedNow: true });
-  assert.deepEqual(toggleConfirmation(true, values(100_000, 8), LOAD_REPS), { confirmed: false, confirmedNow: false });
-  assert.throws(() => toggleConfirmation(false, values(100_000, null), LOAD_REPS), message("INVALID_METRIC"));
+  assert.deepEqual(confirmationAfterSave("MANUAL", false, plain(values(100_000, 8)), LOAD_REPS), { confirmed: false, confirmedNow: false });
+  assert.deepEqual(confirmationAfterSave("MANUAL", true, plain(values(100_000, null)), LOAD_REPS), { confirmed: false, confirmedNow: false });
+  assert.deepEqual(toggleConfirmation(false, plain(values(100_000, 8)), LOAD_REPS), { confirmed: true, confirmedNow: true });
+  assert.deepEqual(toggleConfirmation(true, plain(values(100_000, 8)), LOAD_REPS), { confirmed: false, confirmedNow: false });
+  assert.throws(() => toggleConfirmation(false, plain(values(100_000, null)), LOAD_REPS), message("INVALID_METRIC"));
   assert.equal(nextOutcome("COMPLETED", "COMPLETED"), null, "повторное нажатие снимает исход");
   assert.equal(nextOutcome("MISSED", "COMPLETED"), "COMPLETED");
 });
@@ -190,4 +195,80 @@ test("T03 схема и удаление клиента: подтвержден�
     assert.equal((await execution.getWorkout(slot(gone.id))).session, null);
     assert.equal((await execution.getWorkout(slot(kept.id))).facts.size, 1, "факты другого клиента на месте");
   } finally { await close(); }
+});
+
+test("T03 дроп-сет: полон с мини-сетами, состав выполненного заморожен, разминка — первой (§48.57–48.61)", () => {
+  const drop: SetContent = { setType: "DROP", values: values(100_000, 8), drops: [values(80_000, 6), values(60_000, null)] };
+  assert.equal(isSetComplete(drop, LOAD_REPS), false, "незаполненный мини-сет — подход не выполнен");
+  assert.equal(isSetComplete({ ...drop, drops: [values(80_000, 6)] }, LOAD_REPS), true);
+  assert.equal(isSetComplete({ ...drop, drops: [] }, LOAD_REPS), false, "дроп без мини-сетов — не дроп");
+  const was = { confirmed: true, setType: "DROP" as const, dropCount: 1 };
+  assert.throws(() => assertDropStructure(was, { ...drop, drops: [values(80_000, 6), values(60_000, 4)] }),
+    message("DROP_STRUCTURE_LOCKED"), "добавить мини-сет в выполненный дроп нельзя");
+  assert.throws(() => assertDropStructure(was, plain(values(100_000, 8))), message("DROP_STRUCTURE_LOCKED"));
+  assert.doesNotThrow(() => assertDropStructure(was, { ...drop, drops: [values(75_000, 6)] }), "числа исправлять можно");
+  assert.doesNotThrow(() => assertDropStructure({ ...was, confirmed: false }, plain(values(100_000, 8))));
+  assert.deepEqual(dropsForType("DROP", []).length, 1, "новый дроп получает пустой мини-сет");
+  assert.deepEqual(dropsForType("FAILURE", [values(1, 1)]), []);
+  const order = displayOrder([{ id: "a", setType: "NORMAL" }, { id: "b", setType: "FAILURE" }, { id: "c", setType: "WARMUP" },
+    { id: "d", setType: "DROP" }] as const);
+  assert.deepEqual(order.map(({ item, number }) => [item.id, number]), [["c", null], ["a", 1], ["b", 2], ["d", 3]],
+    "разминка наверху без номера, отказной и дроп сохраняют номер");
+});
+
+test("T03 дроп-сет в хранилище: подтверждение после всех мини-сетов, запрет смены состава, «Пред.» с мини-сетами", async () => {
+  const { clients, execution, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticA" });
+    const w1: WorkoutSlot = { clientId: client.id, programId: "program-a", weekIndex: 1, plannedWorkoutId: "w1" };
+    const dropInput = (slot: WorkoutSlot, drops: readonly SetValues[], expectedRevision: number | null): SaveSetInput =>
+      ({ ...bench(slot, "s1", 0, values(100_000, 8), expectedRevision), setType: "DROP", drops });
+    const partial = await execution.saveSet(dropInput(w1, [values(80_000, null)], null), DAY1);
+    assert.equal(partial.fact.confirmed, false, "мини-сет не заполнен — подход не выполнен");
+    const full = await execution.saveSet(dropInput(w1, [values(80_000, 6)], partial.fact.revision), DAY1);
+    assert.equal(full.confirmedNow, true, "один переход на весь дроп-сет");
+    assert.deepEqual(full.fact.drops, [values(80_000, 6)]);
+    await assert.rejects(execution.saveSet(dropInput(w1, [values(80_000, 6), values(60_000, 4)], full.fact.revision), DAY1),
+      message("DROP_STRUCTURE_LOCKED"));
+    await assert.rejects(execution.saveSet({ ...bench(w1, "s1", 0, values(100_000, 8), full.fact.revision) }, DAY1),
+      message("DROP_STRUCTURE_LOCKED"), "сменить тип выполненного дропа нельзя");
+    const fixed = await execution.saveSet(dropInput(w1, [values(75_000, 6)], full.fact.revision), DAY1);
+    assert.equal(fixed.fact.id, full.fact.id);
+    assert.equal(fixed.confirmedNow, false, "исправление числа — без нового перехода");
+    assert.deepEqual((await execution.getWorkout(w1)).facts.get("s1")?.drops, [values(75_000, 6)]);
+    await assert.rejects(execution.saveSet({ ...bench(w1, "s2", 1, values(100_000, 8), null), drops: [values(1, 1)] }, DAY1),
+      message("INVALID_METRIC"), "мини-сеты только у дроп-сета");
+    const w2: WorkoutSlot = { ...w1, weekIndex: 2 };
+    const drafted = await execution.saveSet(dropInput(w2, [values(null, null)], null), DAY2);
+    assert.equal(drafted.fact.confirmed, false);
+    const previous = await execution.getPrevious(w2, [{ plannedExerciseId: "pe-bench", exerciseId: BENCH,
+      plannedSetIds: ["s1"] }], DAY2);
+    assert.deepEqual(previous.get("s1")?.drops, [values(75_000, 6)], "дроп сопоставляется с дропом вместе с мини-сетами");
+  } finally { await close(); }
+});
+
+test("T03 миграция v2 сохраняет факты v1 и разрешает тип DROP", async () => {
+  const db = new DatabaseSync(":memory:");
+  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const clients = new DevClientRepository(shared, WS, [devTrainingExecutionClientDeletionParticipant]);
+  await clients.initialize();
+  const { writer } = await shared.acquire();
+  try {
+    const client = await clients.create({ displayName: "SyntheticA" });
+    await runMigrations(writer, devTrainingExecutionCatalog.slice(0, 1), DEV_TRAINING_EXECUTION_LEDGER);
+    db.prepare(`INSERT INTO dev_training_sessions (id, workspace_id, client_id, program_id, week_index, planned_workout_id,
+      actual_date, revision, created_at, updated_at) VALUES ('ses', ?, ?, 'p', 1, 'w', '2026-10-17', 1, 'x', 'x')`).run(WS, client.id);
+    db.prepare(`INSERT INTO dev_training_performed_sets (id, workspace_id, session_id, planned_set_id, planned_exercise_id,
+      exercise_id, position, set_type, reps, load_grams, confirmed_at, origin, revision, updated_at)
+      VALUES ('f1', ?, 'ses', 's1', 'pe', ?, 0, 'NORMAL', 8, 100000, 'x', 'INPUT', 1, 'x')`).run(WS, BENCH);
+    await runMigrations(writer, devTrainingExecutionCatalog, DEV_TRAINING_EXECUTION_LEDGER);
+    const row = db.prepare("SELECT reps, load_grams AS load, confirmed_at AS at FROM dev_training_performed_sets WHERE id = 'f1'").get();
+    assert.deepEqual({ ...row }, { reps: 8, load: 100000, at: "x" });
+    db.prepare("UPDATE dev_training_performed_sets SET set_type = 'DROP' WHERE id = 'f1'").run();
+    assert.throws(() => db.prepare("UPDATE dev_training_performed_sets SET planned_set_id = 'z' WHERE id = 'f1'").run(),
+      /FACT_IDENTITY_FIXED/, "триггер неизменности восстановлен");
+  } finally {
+    await shared.release();
+    await clients.close();
+  }
 });

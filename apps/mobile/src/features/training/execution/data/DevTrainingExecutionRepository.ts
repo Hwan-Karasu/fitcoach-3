@@ -6,8 +6,8 @@ import type { WriterCoordinator } from "../../../../shared/db/WriterCoordinator.
 import { DEFAULT_CONFIRMATION_MODE, SET_TYPES, type ConfirmationMode, type PreviousQuery, type PreviousSet,
   type SessionStatus, type SetFact, type SetType, type SetValues, type WorkoutExecution, type WorkoutOutcome,
   type WorkoutSession, type WorkoutSlot } from "../domain/ExecutionModel.ts";
-import { confirmationAfterSave, isLocalDate, localDateOf, matchPrevious, toggleConfirmation, validateValues,
-  workoutStatus, type ConfirmationChange } from "../domain/ExecutionRules.ts";
+import { assertDropStructure, confirmationAfterSave, isLocalDate, localDateOf, matchPrevious, toggleConfirmation,
+  validateContent, workoutStatus, type ConfirmationChange, type SetContent } from "../domain/ExecutionRules.ts";
 import type { SaveSetInput, SetIdentity, SetSaveResult, TrainingExecutionCommittedChange,
   TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import { DEV_TRAINING_EXECUTION_LEDGER, devTrainingExecutionCatalog } from "./DevTrainingExecutionCatalog.ts";
@@ -31,10 +31,26 @@ function valuesOf(row: SetValues): SetValues {
   return { reps: row.reps, loadGrams: row.loadGrams, durationSec: row.durationSec, distanceM: row.distanceM };
 }
 
-function toFact(row: FactRow): SetFact {
+function toFact(row: FactRow, drops: readonly SetValues[]): SetFact {
   return { id: row.id, plannedSetId: row.plannedSetId, plannedExerciseId: row.plannedExerciseId, exerciseId: row.exerciseId,
-    position: row.position, setType: row.setType, values: valuesOf(row), rpe: row.rpe, confirmed: row.confirmedAt !== null,
-    revision: row.revision };
+    position: row.position, setType: row.setType, values: valuesOf(row), drops, rpe: row.rpe,
+    confirmed: row.confirmedAt !== null, revision: row.revision };
+}
+
+type DropRow = Readonly<{ setId: string; reps: number | null; loadGrams: number | null; durationSec: number | null;
+  distanceM: number | null }>;
+
+/** Мини-сеты подходов по порядку; ключ — ID факта. */
+async function dropsOf(port: SqliteStatementPort, workspaceId: string, setIds: readonly string[]):
+  Promise<ReadonlyMap<string, readonly SetValues[]>> {
+  const result = new Map<string, SetValues[]>();
+  if (setIds.length === 0) return result;
+  const rows = await port.all<DropRow>(`SELECT set_id AS setId, reps, load_grams AS loadGrams, duration_sec AS durationSec,
+    distance_m AS distanceM FROM dev_training_performed_drops
+    WHERE workspace_id = ? AND set_id IN (${setIds.map(() => "?").join(", ")}) ORDER BY set_id, position`,
+  [workspaceId, ...setIds]);
+  for (const row of rows) result.set(row.setId, [...(result.get(row.setId) ?? []), valuesOf(row)]);
+  return result;
 }
 
 function assertSlot(slot: WorkoutSlot): void {
@@ -52,13 +68,16 @@ function assertIdentity(identity: SetIdentity): void {
 /** Сторона дневника в PermanentlyDeleteArchivedClient (§15.7): выполнения и факты подходов клиента. */
 export const devTrainingExecutionClientDeletionParticipant = {
   owner: "training.execution",
-  tables: ["dev_training_performed_sets", "dev_training_sessions"] as const,
+  tables: ["dev_training_performed_drops", "dev_training_performed_sets", "dev_training_sessions"] as const,
   async count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number> {
     const row = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM dev_training_sessions
       WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
     return row?.n ?? 0;
   },
   async detach(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<void> {
+    await tx.run(`DELETE FROM dev_training_performed_drops WHERE workspace_id = ? AND set_id IN
+      (SELECT f.id FROM dev_training_performed_sets f JOIN dev_training_sessions s ON s.id = f.session_id
+        WHERE s.workspace_id = ? AND s.client_id = ?)`, [workspaceId, workspaceId, clientId]);
     await tx.run(`DELETE FROM dev_training_performed_sets WHERE workspace_id = ? AND session_id IN
       (SELECT id FROM dev_training_sessions WHERE workspace_id = ? AND client_id = ?)`, [workspaceId, workspaceId, clientId]);
     await tx.run("DELETE FROM dev_training_sessions WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
@@ -166,7 +185,8 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort {
     if (session === null) return { session: null, facts: new Map() };
     const rows = await connection.all<FactRow>(`SELECT ${FACT_COLUMNS} FROM dev_training_performed_sets
       WHERE workspace_id = ? AND session_id = ?`, [this.workspaceId, session.id]);
-    return { session, facts: new Map(rows.map((row) => [row.plannedSetId, toFact(row)])) };
+    const drops = await dropsOf(connection, this.workspaceId, rows.filter((row) => row.setType === "DROP").map((row) => row.id));
+    return { session, facts: new Map(rows.map((row) => [row.plannedSetId, toFact(row, drops.get(row.id) ?? [])])) };
   }
 
   async getProgramStatuses(clientId: string, programId: string): Promise<readonly SessionStatus[]> {
@@ -187,7 +207,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort {
    */
   private async previousSource(port: SqliteStatementPort, slot: WorkoutSlot, date: string,
     column: "planned_exercise_id" | "exercise_id", value: string):
-    Promise<Readonly<{ date: string; sets: readonly Readonly<{ setType: SetType; value: SetValues }>[] }> | null> {
+    Promise<Readonly<{ date: string; sets: readonly Readonly<{ setType: SetType; value: PreviousSet }>[] }> | null> {
     const session = await port.first<{ id: string; date: string }>(`SELECT s.id, s.actual_date AS date
       FROM dev_training_sessions s
       WHERE s.workspace_id = ? AND s.client_id = ? AND s.program_id = ? AND s.actual_date <= ?
@@ -202,8 +222,10 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort {
     [this.workspaceId, session.id, value]);
     // Упражнение могло встречаться в тренировке дважды: берём одно его появление, а не смесь.
     const slotId = rows[0]?.plannedExerciseId;
-    const sets = rows.filter((row) => row.plannedExerciseId === slotId).sort((a, b) => a.position - b.position)
-      .map((row) => ({ setType: row.setType, value: valuesOf(row) }));
+    const chosen = rows.filter((row) => row.plannedExerciseId === slotId).sort((a, b) => a.position - b.position);
+    const drops = await dropsOf(port, this.workspaceId, chosen.filter((row) => row.setType === "DROP").map((row) => row.id));
+    const sets = chosen.map((row) => ({ setType: row.setType,
+      value: { values: valuesOf(row), drops: drops.get(row.id) ?? [], date: session.date } }));
     return { date: session.date, sets };
   }
 
@@ -220,21 +242,27 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort {
       if (source === null) continue;
       const matched = matchPrevious(query.plannedSetIds.map((plannedSetId) => ({ plannedSetId,
         setType: current.facts.get(plannedSetId)?.setType ?? "NORMAL" })), source.sets);
-      for (const [plannedSetId, values] of matched) result.set(plannedSetId, { values, date: source.date });
+      for (const [plannedSetId, set] of matched) result.set(plannedSetId, set);
     }
     return result;
   }
 
   /** Записать факт по выбранному переходу подтверждения; ревизия проверяется в той же транзакции. */
   private async writeFact(tx: SqliteStatementPort, identity: SetIdentity, now: Date,
-    next: (existing: FactRow | null, mode: ConfirmationMode) => Readonly<{ values: SetValues; rpe: number | null;
-      setType: SetType; change: ConfirmationChange }>): Promise<SetSaveResult> {
+    next: (existing: FactRow | null, existingDrops: readonly SetValues[], mode: ConfirmationMode) =>
+      Readonly<{ content: SetContent; rpe: number | null; change: ConfirmationChange }>): Promise<SetSaveResult> {
     const mode = await this.modeOf(tx);
     const session = await this.ensureSession(tx, identity.slot, now);
     const existing = await this.factOf(tx, session.id, identity.plannedSetId);
     if ((existing?.revision ?? null) !== identity.expectedRevision) throw new Error("STALE_SESSION");
     if (existing !== null && existing.exerciseId !== identity.exerciseId) throw new Error("WRONG_CLIENT_SCOPE");
-    const { values, rpe, setType, change } = next(existing, mode);
+    const existingDrops = existing === null ? [] : (await dropsOf(tx, this.workspaceId, [existing.id])).get(existing.id) ?? [];
+    const { content, rpe, change } = next(existing, existingDrops, mode);
+    if (existing !== null) {
+      assertDropStructure({ confirmed: existing.confirmedAt !== null, setType: existing.setType, dropCount: existingDrops.length },
+        content);
+    }
+    const { values, setType } = content;
     const stamp = now.toISOString();
     const confirmedAt = !change.confirmed ? null : change.confirmedNow ? stamp : existing?.confirmedAt ?? stamp;
     const params = [identity.plannedExerciseId, identity.position, setType, values.reps, values.loadGrams, values.durationSec,
@@ -253,16 +281,23 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort {
     }
     const saved = await this.factOf(tx, session.id, identity.plannedSetId);
     if (saved === null) throw new Error("FACT_NOT_FOUND");
-    return { fact: toFact(saved), session, confirmedNow: change.confirmedNow };
+    // Мини-сеты — часть того же факта: переписываются целиком после строки подхода (триггер проверяет тип).
+    await tx.run("DELETE FROM dev_training_performed_drops WHERE workspace_id = ? AND set_id = ?", [this.workspaceId, saved.id]);
+    for (const [index, drop] of content.drops.entries()) {
+      await tx.run(`INSERT INTO dev_training_performed_drops (workspace_id, set_id, position, reps, load_grams, duration_sec,
+        distance_m) VALUES (?, ?, ?, ?, ?, ?, ?)`, [this.workspaceId, saved.id, index + 2, drop.reps, drop.loadGrams,
+        drop.durationSec, drop.distanceM]);
+    }
+    return { fact: toFact(saved, content.drops), session, confirmedNow: change.confirmedNow };
   }
 
   async saveSet(input: SaveSetInput, now: Date = new Date()): Promise<SetSaveResult> {
     assertIdentity(input);
-    validateValues(input.values, input.rpe, input.metrics);
     if (!SET_TYPES.includes(input.setType)) throw new Error("INVALID_METRIC");
-    const result = await this.ready().writer.write((tx) => this.writeFact(tx, input, now, (existing, mode) => ({
-      values: input.values, rpe: input.rpe, setType: input.setType,
-      change: confirmationAfterSave(mode, existing?.confirmedAt != null, input.values, input.metrics),
+    const content: SetContent = { setType: input.setType, values: input.values, drops: input.drops };
+    validateContent(content, input.rpe, input.metrics);
+    const result = await this.ready().writer.write((tx) => this.writeFact(tx, input, now, (existing, _drops, mode) => ({
+      content, rpe: input.rpe, change: confirmationAfterSave(mode, existing?.confirmedAt != null, content, input.metrics),
     })));
     this.publish(input.slot);
     return result;
@@ -273,10 +308,10 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort {
     const result = await this.ready().writer.write(async (tx) => {
       const session = await this.sessionOf(tx, identity.slot);
       if (session === null || await this.factOf(tx, session.id, identity.plannedSetId) === null) throw new Error("FACT_NOT_FOUND");
-      return this.writeFact(tx, identity, now, (existing) => {
+      return this.writeFact(tx, identity, now, (existing, drops) => {
         const row = existing as FactRow;
-        return { values: valuesOf(row), rpe: row.rpe, setType: row.setType,
-          change: toggleConfirmation(row.confirmedAt !== null, valuesOf(row), identity.metrics) };
+        const content: SetContent = { setType: row.setType, values: valuesOf(row), drops };
+        return { content, rpe: row.rpe, change: toggleConfirmation(row.confirmedAt !== null, content, identity.metrics) };
       });
     });
     this.publish(identity.slot);

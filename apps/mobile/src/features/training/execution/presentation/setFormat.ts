@@ -1,3 +1,4 @@
+import type { PaletteTokens } from "../../../../shared/ui/theme/resolver.ts";
 import { formatDuration, parseDuration, parseLoad } from "../../plans/public.ts";
 import type { SetType, SetValues, TrackingMetric, WeekStatus, WorkoutStatus } from "../domain/ExecutionModel.ts";
 import { fieldsOf, type SetField } from "../domain/ExecutionRules.ts";
@@ -36,11 +37,31 @@ export function compactValues(values: SetValues, fields: readonly SetField[]): s
   return parts.length === 0 ? "—" : parts.join(" × ");
 }
 
-export const setTypeLabels: Readonly<Record<SetType, string>> = { NORMAL: "Обычный", WARMUP: "Разминочный", FAILURE: "Отказной" };
+/** Мини-сеты дроп-сета через « / », как в FitCoach 2.0: `8 × 100 / 6 × 80`. */
+export function compactWithDrops(values: SetValues, drops: readonly SetValues[], fields: readonly SetField[]): string {
+  return [values, ...drops].map((item) => compactValues(item, fields)).join(" / ");
+}
 
-/** Короткая метка подхода: номер рабочего, «Р» — разминка, «О» — отказ. */
-export function setMarker(type: SetType, ordinal: number): string {
-  return type === "WARMUP" ? "Р" : type === "FAILURE" ? "О" : String(ordinal);
+export const setTypeLabels: Readonly<Record<SetType, string>> = {
+  NORMAL: "Обычный", WARMUP: "Разминочный", FAILURE: "Отказной", DROP: "Дроп-сет",
+};
+
+/** Пояснение в окне выбора типа (§48.57–48.60). */
+export const setTypeHints: Readonly<Record<SetType, string>> = {
+  NORMAL: "Рабочий подход.",
+  WARMUP: "Подготовка к рабочему весу. Поднимается наверх, не входит в рабочий объём и рекорды.",
+  FAILURE: "Рабочий подход до отказа. Записывайте последнее полностью выполненное повторение.",
+  DROP: "После отказа — продолжение с меньшим весом. Один подход: под ним строки мини-сетов.",
+};
+
+/** Цвет типа подхода из токенов темы; у обычного — без цвета. */
+export function setTypeTone(type: SetType, colors: PaletteTokens): string | null {
+  return type === "WARMUP" ? colors.warning : type === "FAILURE" ? colors.danger : type === "DROP" ? colors.charts[1] : null;
+}
+
+/** Цвет RPE: лёгкий — зелёный, средний — жёлтый, тяжёлый — красный. */
+export function rpeTone(rpe: number, colors: PaletteTokens): string {
+  return rpe <= 4 ? colors.success : rpe <= 7 ? colors.warning : colors.danger;
 }
 
 export const workoutStatusLabels: Readonly<Record<WorkoutStatus, string>> = {

@@ -1,5 +1,5 @@
-import type { ConfirmationMode, SetType, SetValues, TrackingMetric, WeekStatus, WorkoutOutcome,
-  WorkoutStatus } from "./ExecutionModel.ts";
+import { DROPS_MAX, EMPTY_VALUES, type ConfirmationMode, type SetType, type SetValues, type TrackingMetric,
+  type WeekStatus, type WorkoutOutcome, type WorkoutStatus } from "./ExecutionModel.ts";
 
 /** Поле факта подхода, которое заполняет величина профиля (§33.2). */
 export type SetField = keyof SetValues;
@@ -18,9 +18,14 @@ export const VALUE_LIMITS: Readonly<Record<SetField, Readonly<{ min: number; max
 
 const ALL_FIELDS = Object.keys(VALUE_LIMITS) as readonly SetField[];
 
-/** Значения по профилю: лишних полей нет, числа целые и в пределах; RPE — 1–10 или пусто (§48.65 п. 6). */
-export function validateValues(values: SetValues, rpe: number | null, metrics: readonly TrackingMetric[]): void {
-  const allowed = new Set(fieldsOf(metrics));
+/** Содержимое подхода, от которого зависит подтверждение: тип, основной сет и мини-сеты дроп-сета. */
+export interface SetContent {
+  readonly setType: SetType;
+  readonly values: SetValues;
+  readonly drops: readonly SetValues[];
+}
+
+function validateOne(values: SetValues, allowed: ReadonlySet<SetField>): void {
   for (const field of ALL_FIELDS) {
     const value = values[field];
     if (value === null) continue;
@@ -29,12 +34,31 @@ export function validateValues(values: SetValues, rpe: number | null, metrics: r
       throw new Error("INVALID_METRIC");
     }
   }
+}
+
+/**
+ * Значения по профилю: лишних полей нет, числа целые и в пределах; RPE — 1–10 или пусто (§48.65 п. 6).
+ * Мини-сеты есть только у дроп-сета, их от 1 до DROPS_MAX.
+ */
+export function validateContent(content: SetContent, rpe: number | null, metrics: readonly TrackingMetric[]): void {
+  const allowed = new Set(fieldsOf(metrics));
+  validateOne(content.values, allowed);
+  if (content.setType === "DROP" ? content.drops.length < 1 || content.drops.length > DROPS_MAX : content.drops.length > 0) {
+    throw new Error("INVALID_METRIC");
+  }
+  for (const drop of content.drops) validateOne(drop, allowed);
   if (rpe !== null && (!Number.isInteger(rpe) || rpe < 1 || rpe > 10)) throw new Error("INVALID_METRIC");
 }
 
 /** §48.52: все обязательные величины профиля заполнены; `0 кг` — заполнено, RPE не обязателен. */
 export function isComplete(values: SetValues, metrics: readonly TrackingMetric[]): boolean {
   return metrics.length > 0 && fieldsOf(metrics).every((field) => values[field] !== null);
+}
+
+/** §48.60 п. 2: дроп-сет полон, когда заполнены основной сет и все его мини-сеты. */
+export function isSetComplete(content: SetContent, metrics: readonly TrackingMetric[]): boolean {
+  return isComplete(content.values, metrics) && (content.setType !== "DROP"
+    || (content.drops.length > 0 && content.drops.every((drop) => isComplete(drop, metrics))));
 }
 
 export interface ConfirmationChange {
@@ -48,19 +72,35 @@ export interface ConfirmationChange {
  * Автоматический режим: полный подход выполнен; очистка обязательного поля снимает подтверждение.
  * Ручной: значения не подтверждают, но неполный подход подтверждённым не остаётся.
  */
-export function confirmationAfterSave(mode: ConfirmationMode, wasConfirmed: boolean, values: SetValues,
+export function confirmationAfterSave(mode: ConfirmationMode, wasConfirmed: boolean, content: SetContent,
   metrics: readonly TrackingMetric[]): ConfirmationChange {
-  if (!isComplete(values, metrics)) return { confirmed: false, confirmedNow: false };
+  if (!isSetComplete(content, metrics)) return { confirmed: false, confirmedNow: false };
   if (mode === "AUTO") return { confirmed: true, confirmedNow: !wasConfirmed };
   return { confirmed: wasConfirmed, confirmedNow: false };
 }
 
 /** Галочка ручного режима — обратимая (§48.55 п. 2); подтвердить неполный подход нельзя (§48.52 п. 4). */
-export function toggleConfirmation(wasConfirmed: boolean, values: SetValues,
+export function toggleConfirmation(wasConfirmed: boolean, content: SetContent,
   metrics: readonly TrackingMetric[]): ConfirmationChange {
   if (wasConfirmed) return { confirmed: false, confirmedNow: false };
-  if (!isComplete(values, metrics)) throw new Error("INVALID_METRIC");
+  if (!isSetComplete(content, metrics)) throw new Error("INVALID_METRIC");
   return { confirmed: true, confirmedNow: true };
+}
+
+/**
+ * §48.61: у выполненного дроп-сета нельзя добавить, убрать или сменить на другой тип мини-сеты —
+ * сначала снять выполнение. Числа в существующих мини-сетах исправлять можно.
+ */
+export function assertDropStructure(was: Readonly<{ confirmed: boolean; setType: SetType; dropCount: number }>,
+  next: SetContent): void {
+  if (!was.confirmed || was.setType !== "DROP") return;
+  if (next.setType !== "DROP" || next.drops.length !== was.dropCount) throw new Error("DROP_STRUCTURE_LOCKED");
+}
+
+/** Мини-сеты при смене типа: дроп получает хотя бы один пустой мини-сет, остальные типы — ни одного. */
+export function dropsForType(setType: SetType, current: readonly SetValues[]): readonly SetValues[] {
+  if (setType !== "DROP") return [];
+  return current.length > 0 ? current : [EMPTY_VALUES];
 }
 
 /** Начата ли тренировка (§48.34): есть внесённое значение или подтверждённый подход; просмотр — не начало. */
@@ -86,6 +126,17 @@ export function weekStatus(statuses: readonly WorkoutStatus[]): WeekStatus {
   if (statuses.every((status) => status === "COMPLETED")) return "COMPLETED";
   if (statuses.every((status) => status !== "NOT_STARTED" && status !== "IN_PROGRESS")) return "CLOSED_WITH_DEVIATIONS";
   return statuses.some((status) => status !== "NOT_STARTED") ? "IN_PROGRESS" : "NOT_STARTED";
+}
+
+/**
+ * Порядок строк в дневнике: разминочные подходы — первыми, остальные в плановом порядке. Номер — у
+ * каждого неразминочного подхода (обычный, отказной, дроп) по порядку; у разминки номера нет.
+ */
+export function displayOrder<T extends Readonly<{ setType: SetType }>>(sets: readonly T[]):
+  readonly Readonly<{ item: T; number: number | null }>[] {
+  const warmups = sets.filter((set) => set.setType === "WARMUP");
+  const working = sets.filter((set) => set.setType !== "WARMUP");
+  return [...warmups.map((item) => ({ item, number: null })), ...working.map((item, index) => ({ item, number: index + 1 }))];
 }
 
 /**

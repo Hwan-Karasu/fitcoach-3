@@ -11,10 +11,13 @@ export type ConfirmationMode = "AUTO" | "MANUAL";
 
 export const DEFAULT_CONFIRMATION_MODE: ConfirmationMode = "AUTO";
 
-/** §48.57: тип относится к подходу. Дроп-сет с мини-сетами — отдельный срез. */
-export type SetType = "NORMAL" | "WARMUP" | "FAILURE";
+/** §48.57: тип относится к подходу. Дроп-сет — один подход из нескольких мини-сетов (§48.60). */
+export type SetType = "NORMAL" | "WARMUP" | "FAILURE" | "DROP";
 
-export const SET_TYPES: readonly SetType[] = ["NORMAL", "WARMUP", "FAILURE"];
+export const SET_TYPES: readonly SetType[] = ["NORMAL", "WARMUP", "FAILURE", "DROP"];
+
+/** Мини-сетов после основного у дроп-сета: от 1 до 9. */
+export const DROPS_MAX = 9;
 
 /** §48.31: три взаимоисключающих итоговых исхода тренировки дневника. */
 export type WorkoutOutcome = "COMPLETED" | "MISSED" | "CANCELLED";
@@ -60,6 +63,8 @@ export interface SetFact {
   readonly position: number;
   readonly setType: SetType;
   readonly values: SetValues;
+  /** Мини-сеты дроп-сета после основного (основной — `values`); у других типов пусто. */
+  readonly drops: readonly SetValues[];
   readonly rpe: number | null;
   readonly confirmed: boolean;
   readonly revision: number;
@@ -74,6 +79,7 @@ export interface WorkoutExecution {
 /** §37.9: прошлый подход и его дата. */
 export interface PreviousSet {
   readonly values: SetValues;
+  readonly drops: readonly SetValues[];
   readonly date: string;
 }
 
