@@ -3,6 +3,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { NotificationsPreview, NotificationSettingsPreview } from "../../features/notifications/public.ts";
 import { SettingsPreview, ThemeCatalogPreview } from "../../features/settings/public.ts";
 import { ClientRosterSettingsScreen } from "../../features/clients/public.ts";
@@ -129,7 +130,7 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
           {({ navigation, route }) => <ClientWorkspaceNavigator
             clientId={route.params.clientId} repository={services.clients}
             accounting={services.accounting} measurements={services.measurements} questionnaire={services.questionnaire}
-            trainingPlans={services.trainingPlans} exercises={services.exercises} exerciseLookup={services.exerciseLookup}
+            trainingPlans={services.trainingPlans} trainingExecution={services.trainingExecution} exercises={services.exercises} exerciseLookup={services.exerciseLookup}
             onOpenEdit={(clientId) => navigation.navigate("ClientEditorDev", { clientId })}
             onOpenAccounting={(clientId) => navigation.navigate("ClientAccounting", { clientId })}
             onOpenMeasurements={(clientId) => navigation.navigate("ClientMeasurements", { clientId })}
@@ -189,6 +190,7 @@ export function PrototypeShell({ services, workspaceId }: Readonly<{
   }, [clientLists]);
   return (
     <SafeAreaProvider>
+      <KeyboardProvider>
       <PrototypeThemeProvider>
         <BottomSheetModalProvider>
         <CalendarUndoProvider repository={services.calendar}>
@@ -197,6 +199,7 @@ export function PrototypeShell({ services, workspaceId }: Readonly<{
         </CalendarUndoProvider>
         </BottomSheetModalProvider>
       </PrototypeThemeProvider>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }

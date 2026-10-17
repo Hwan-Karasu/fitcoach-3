@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppButton, ConfirmDialog, InlineNotice, LoadingState, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -16,12 +16,14 @@ import { useExerciseLookup } from "./useExerciseLookup.ts";
  * Открытая программа клиента (T01): открытие делает её выбранной у этого клиента. Структура (тренировки,
  * упражнения, подходы) появится с конструкторами T02/T04; здесь — название, участники и архив.
  */
-export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, onEditStructure, onArchived }: Readonly<{
+export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, onEditStructure, onArchived }: Readonly<{
   clientId: string;
   programId: string;
   repository: TrainingPlansRepositoryPort;
   listCandidates: () => Promise<readonly TrainingParticipantCandidate[]>;
   exercises: ExerciseLookupPort;
+  /** Недели и тренировки со статусами выполнения (дневник — другой модуль, подставляет навигатор). */
+  renderWeeks?: (plan: SimplePlan) => ReactNode;
   /** Открыть конструктор структуры (Простая — T02). */
   onEditStructure: () => void;
   onArchived: () => void;
@@ -122,7 +124,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
         {plan !== null ? (
           <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Недель: ${plan.weeks} · план недели повторяется`}</Text>
         ) : null}
-        {plan?.workouts.map((workout) => (
+        {plan !== null && renderWeeks !== undefined ? renderWeeks(plan) : plan?.workouts.map((workout) => (
           <View key={workout.id} style={[styles.workout, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.workoutTitle, { color: colors.textPrimary }]}>{workout.title}</Text>
             {workout.exercises.length === 0 ? (

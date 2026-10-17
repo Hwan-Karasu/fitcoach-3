@@ -6,7 +6,7 @@ import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts"
 import { NutritionWorkspacePreview } from "../../features/nutrition/public.ts";
 import { CreateProgramScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, SimpleProgramBuilderScreen,
   type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
-  type TrainingPlansRepositoryPort } from "../../features/training/public.ts";
+  type TrainingPlansRepositoryPort, ProgramWeeksPanel, WorkoutScreen, type TrainingExecutionPort } from "../../features/training/public.ts";
 import { ExerciseLibraryScreen, type ExerciseCatalogPort } from "../../features/exercises/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 
@@ -19,6 +19,7 @@ type TrainingRoutes = {
   TrainingProgram: { programId: string };
   TrainingBuilder: { programId?: string; picked?: { token: string; workoutId: string; exerciseId: string } } | undefined;
   TrainingPickExercise: { workoutId: string; programId?: string };
+  TrainingWorkout: { programId: string; weekIndex: number; workoutId: string };
 };
 
 const HomeStack = createNativeStackNavigator<HomeRoutes>();
@@ -77,9 +78,10 @@ export function NutritionNavigator() {
  * Стек не сбрасывается при смене вкладок; после создания в стеке «список → программа».
  * Шапка — общая строка карточки клиента (UI-OWN-001), назад — системной кнопкой.
  */
-export function TrainingNavigator({ clientId, repository, listCandidates, exercises, exerciseLookup }: Readonly<{
+export function TrainingNavigator({ clientId, repository, execution, listCandidates, exercises, exerciseLookup }: Readonly<{
   clientId: string;
   repository: TrainingPlansRepositoryPort;
+  execution: TrainingExecutionPort;
   listCandidates: () => Promise<readonly TrainingParticipantCandidate[]>;
   exercises: ExerciseCatalogPort;
   exerciseLookup: ExerciseLookupPort;
@@ -108,6 +110,9 @@ export function TrainingNavigator({ clientId, repository, listCandidates, exerci
       <TrainingStack.Screen name="TrainingProgram">
         {({ navigation, route }) => <ProgramScreen clientId={clientId} programId={route.params.programId}
           repository={repository} listCandidates={listCandidates} exercises={exerciseLookup}
+          renderWeeks={(plan) => <ProgramWeeksPanel clientId={clientId} programId={route.params.programId} weeks={plan.weeks}
+            workouts={plan.workouts} execution={execution}
+            onOpenWorkout={(weekIndex, workoutId) => navigation.navigate("TrainingWorkout", { programId: route.params.programId, weekIndex, workoutId })} />}
           onEditStructure={() => navigation.navigate("TrainingBuilder", { programId: route.params.programId })}
           onArchived={() => navigation.popTo("TrainingIndex")} />}
       </TrainingStack.Screen>
@@ -123,6 +128,10 @@ export function TrainingNavigator({ clientId, repository, listCandidates, exerci
           onCreate={() => undefined}
           onOpen={(exerciseId) => navigation.popTo("TrainingBuilder", { programId: route.params.programId,
             picked: { token: `${Date.now()}`, workoutId: route.params.workoutId, exerciseId } }, { merge: true })} />}
+      </TrainingStack.Screen>
+      <TrainingStack.Screen name="TrainingWorkout">
+        {({ route }) => <WorkoutScreen slot={{ clientId, programId: route.params.programId, weekIndex: route.params.weekIndex,
+          plannedWorkoutId: route.params.workoutId }} plans={repository} execution={execution} exercises={exerciseLookup} />}
       </TrainingStack.Screen>
     </TrainingStack.Navigator>
   );
