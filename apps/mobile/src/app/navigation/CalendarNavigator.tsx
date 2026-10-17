@@ -1,14 +1,14 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { AppointmentEditorScreen, CalendarScreen, CalendarSettingsScreen, IntervalEditorScreen,
+import { CalendarScreen, CalendarSettingsScreen, IntervalEditorScreen,
   type CalendarCreditPort, type CalendarParticipantDirectoryPort,
   type CalendarRepositoryPort, type GuestLinkRequest } from "../../features/calendar/public.ts";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 
-type CalendarStackRoutes = {
+/** Маршруты вкладки «Календарь»; настройки открываются шестерёнкой в шапке вкладки. */
+export type CalendarStackRoutes = {
   CalendarHome: undefined;
   CalendarSettings: undefined;
-  CalendarAppointment: { appointmentId?: string; localDate: string; startMinute?: number; durationMinutes?: number };
   CalendarInterval: { localDate: string };
 };
 
@@ -35,21 +35,12 @@ export function CalendarNavigator({ repository, participants, credit, onCreateCl
       }}
     >
       <Stack.Screen name="CalendarHome" options={{ headerShown: false }}>
-        {({ navigation }) => <CalendarScreen repository={repository} participants={participants}
-          onOpenSettings={() => navigation.navigate("CalendarSettings")}
-          onOpenAppointment={(params) => navigation.navigate("CalendarAppointment", params)}
+        {({ navigation }) => <CalendarScreen repository={repository} participants={participants} credit={credit}
+          onCreateClientFromGuest={onCreateClientFromGuest}
           onOpenInterval={(localDate) => navigation.navigate("CalendarInterval", { localDate })} />}
       </Stack.Screen>
       <Stack.Screen name="CalendarSettings" options={{ title: "Настройки календаря" }}>
         {() => <CalendarSettingsScreen repository={repository} />}
-      </Stack.Screen>
-      <Stack.Screen name="CalendarAppointment"
-        options={({ route }) => ({ title: route.params.appointmentId ? "Запись" : "Новая запись" })}>
-        {({ navigation, route }) => <AppointmentEditorScreen repository={repository}
-          participants={participants} credit={credit} appointmentId={route.params.appointmentId}
-          localDate={route.params.localDate} startMinute={route.params.startMinute}
-          durationMinutes={route.params.durationMinutes}
-          onClose={() => navigation.goBack()} onCreateClientFromGuest={onCreateClientFromGuest} />}
       </Stack.Screen>
       <Stack.Screen name="CalendarInterval" options={{ title: "Дежурство или блокировка" }}>
         {({ navigation, route }) => <IntervalEditorScreen repository={repository}

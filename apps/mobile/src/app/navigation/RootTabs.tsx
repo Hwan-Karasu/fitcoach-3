@@ -10,7 +10,8 @@ import type { ClientArchivePort, ClientRepositoryPort,
 import type { ClientListController } from "../../read-models/ClientListController.ts";
 import { HeaderScrollReporter, HeaderSearchProvider, type HeaderSearchState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
-import { CalendarNavigator } from "./CalendarNavigator.tsx";
+import { CalendarNavigator, type CalendarStackRoutes } from "./CalendarNavigator.tsx";
+import type { NavigatorScreenParams } from "@react-navigation/native";
 import { RootHeader, type RootHeaderSearch } from "./RootHeader.tsx";
 import { ArchiveNavigator, ClientsNavigator } from "./RootSectionNavigators.tsx";
 import { rootTabs } from "./routeCatalog.ts";
@@ -18,7 +19,7 @@ import { RootTabBar } from "./RootTabBar.tsx";
 
 type RootTabRoutes = {
   Clients: undefined;
-  Calendar: undefined;
+  Calendar: NavigatorScreenParams<CalendarStackRoutes> | undefined;
   Archive: undefined;
 };
 
@@ -107,7 +108,9 @@ export function RootTabs({
         screenOptions={{
           sceneStyle: { backgroundColor: colors.canvas },
           // Заголовок корневой вкладки — в одной строке с колокольчиком и меню (UI-OWN-002).
-          header: ({ route, options }) => <RootHeader title={options.title ?? ""}
+          header: ({ route, options, navigation }) => <RootHeader title={options.title ?? ""}
+            onOpenSettings={route.name === "Calendar"
+              ? () => navigation.navigate("Calendar", { screen: "CalendarSettings" }) : undefined}
             collapsed={scrolled[route.name as keyof RootTabRoutes]} search={headerSearch(route.name as keyof RootTabRoutes)}
             onOpenNotifications={onOpenNotifications}
             onOpenMenu={() => setMenuVisible(true)} menuButtonRef={menuButtonRef} />,

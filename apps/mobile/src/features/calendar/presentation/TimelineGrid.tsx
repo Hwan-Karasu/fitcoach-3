@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, Vibration, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
@@ -13,9 +13,13 @@ import { weekdayShort } from "./calendarPresentation.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 const LONG_PRESS_MS = 350;
-const SWIPE_DISTANCE = 60;
 const EDGE_PX = 14;
-const GUTTER = 34;
+/** Ширина неподвижной колонки часов слева от ленты дней. */
+export const TIMELINE_GUTTER = 26;
+/** Высота строки заголовков дней — на неё же отступает колонка часов. */
+export const TIMELINE_HEADER = 36;
+/** Протянул и подержал столько — интервал становится блокировкой; быстро отпустил — дежурство. */
+const HOLD_MS = 600;
 
 const MODE_NONE = 0;
 const MODE_RANGE = 1;
@@ -35,16 +39,16 @@ export interface TimelineHandlers {
   readonly onTapSlot: (date: LocalDate, startMinute: number) => void;
   readonly onTapBlocked: (interval: CalendarInterval) => void;
   readonly onOpenAppointment: (appointment: Appointment) => void;
-  readonly onRangeSelected: (date: LocalDate, start: number, end: number) => void;
+  readonly onRangeSelected: (date: LocalDate, start: number, end: number, kind: "DUTY" | "BLOCKED") => void;
   readonly onMove: (appointment: Appointment, date: LocalDate, start: number) => void;
   readonly onResize: (appointment: Appointment, durationMinutes: number) => void;
-  readonly onSwipe: (direction: 1 | -1) => void;
   readonly onLockScroll: (locked: boolean) => void;
 }
 
 /**
  * §13.4–13.6 / §13.23 on RNGH + Reanimated: one continuous surface per day column. Tap = create at
- * the 30-minute slot or open a block; long press + drag = range; long press on a future block =
+ * the 30-minute slot or open a block; long press + drag = interval (quick release — Duty, holding
+ * still for HOLD_MS before release — Blocked; owner decision); long press on a future block =
  * move, or resize when grabbed at its bottom edge. The preview geometry runs on the UI thread; JS
  * only learns a new slot (label and drop verdict) when the snapped value actually changes.
  */
@@ -64,6 +68,22 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
   const colors = palette.tokens;
   const [width, setWidth] = useState(0);
   const [preview, setPreview] = useState<Readonly<{ mode: number; index: number; label: string; invalid: boolean }> | null>(null);
+  const [holdBlocked, setHoldBlocked] = useState(false);
+  const held = useRef(false);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (holdTimer.current !== null) clearTimeout(holdTimer.current); }, []);
+
+  // Каждое новое положение выделения заново запускает отсчёт «подержал — блокировка».
+  const armHold = () => {
+    if (holdTimer.current !== null) clearTimeout(holdTimer.current);
+    held.current = false;
+    setHoldBlocked(false);
+    holdTimer.current = setTimeout(() => {
+      held.current = true;
+      setHoldBlocked(true);
+      Vibration.vibrate(30);
+    }, HOLD_MS);
+  };
   const columns = Math.max(dates.length, 1);
   const columnWidth = width / columns;
 
@@ -88,6 +108,7 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
   };
 
   const showPreview = (kind: number, index: number, at: number, from: number, to: number) => {
+    if (kind === MODE_RANGE) armHold();
     setPreview({ mode: kind, index, label: `${formatMinute(from)}–${formatMinute(to)}`,
       invalid: verdictFor(kind, index, at, from, to) !== "OK" });
   };
@@ -104,7 +125,7 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
     if (date === undefined) return;
     if (kind === MODE_RANGE) {
       Vibration.vibrate(8);
-      handlers.onRangeSelected(date, from, to);
+      handlers.onRangeSelected(date, from, to, held.current ? "BLOCKED" : "DUTY");
       return;
     }
     if (row === undefined || verdictFor(kind, index, at, from, to) !== "OK") return;
@@ -118,6 +139,10 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
   };
 
   const finish = () => {
+    if (holdTimer.current !== null) clearTimeout(holdTimer.current);
+    holdTimer.current = null;
+    held.current = false;
+    setHoldBlocked(false);
     handlers.onLockScroll(false);
     setPreview(null);
   };
@@ -135,8 +160,6 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
     else if (blocked !== undefined) handlers.onTapBlocked(blocked);
     else handlers.onTapSlot(date, slotAtY(y, height, window));
   };
-
-  const swipe = (direction: 1 | -1) => handlers.onSwipe(direction);
 
   const drag = Gesture.Pan().activateAfterLongPress(LONG_PRESS_MS)
     .onStart((event) => {
@@ -201,13 +224,9 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
       if (mode.value !== MODE_NONE) scheduleOnRN(finish);
       mode.value = MODE_NONE;
     });
-  const page = Gesture.Pan().activeOffsetX([-24, 24]).failOffsetY([-14, 14])
-    .onEnd((event) => {
-      if (Math.abs(event.translationX) > SWIPE_DISTANCE) scheduleOnRN(swipe, event.translationX < 0 ? 1 : -1);
-    });
   const press = Gesture.Tap().maxDuration(LONG_PRESS_MS - 50)
     .onEnd((event, success) => { if (success) scheduleOnRN(tap, event.x, event.y); });
-  const gesture = Gesture.Race(page, Gesture.Exclusive(drag, press));
+  const gesture = Gesture.Exclusive(drag, press);
 
   const previewStyle = useAnimatedStyle(() => {
     const top = yOfMinute(Math.max(start.value, window.startMinute), height, window);
@@ -222,11 +241,12 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
   const halfHours = [];
   for (let minute = window.startMinute; minute < window.endMinute; minute += 30) if (minute % 60 !== 0) halfHours.push(minute);
   const dense = columns > 3;
+  const rangeKind = preview?.mode === MODE_RANGE ? (holdBlocked ? "Блокировка" : "Дежурство") : null;
+  const previewColor = preview?.invalid || holdBlocked ? colors.danger : colors.accentInk;
 
   return (
     <View>
       <View style={styles.headerRow}>
-        <View style={{ width: GUTTER }} />
         {dates.map((date) => (
           <View key={date} style={styles.headerCell}>
             <Text style={[styles.headerDay, { color: colors.textSecondary }]}>{weekdayShort[weekdayIndex(date)]}</Text>
@@ -235,13 +255,6 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
         ))}
       </View>
       <View style={[styles.body, { height }]}>
-        <View style={{ width: GUTTER, height }}>
-          {hours.map((minute) => (
-            <Text key={minute} style={[styles.hour, { top: Math.max(top(minute) - 7, 0), color: colors.textMuted }]}>
-              {formatMinute(minute).slice(0, 2)}
-            </Text>
-          ))}
-        </View>
         <GestureDetector gesture={gesture}>
           <View style={[styles.surface, { height, borderColor: colors.border, backgroundColor: colors.surface }]}
             onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
@@ -299,10 +312,11 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
               );
             })}
             <Animated.View pointerEvents="none" style={[styles.preview, previewStyle, {
-              borderColor: preview?.invalid ? colors.danger : colors.accentInk,
-              backgroundColor: preview?.invalid ? colors.danger : colors.accentInk,
+              borderColor: previewColor, backgroundColor: previewColor,
             }]}>
-              <Text style={[styles.previewText, { color: colors.onAccentFill }]}>{preview?.label ?? ""}</Text>
+              <Text style={[styles.previewText, { color: colors.onAccentFill }]}>
+                {rangeKind === null ? preview?.label ?? "" : `${preview?.label ?? ""}\n${rangeKind}`}
+              </Text>
             </Animated.View>
           </View>
         </GestureDetector>
@@ -311,14 +325,33 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
   );
 }
 
+/** Неподвижная колонка часов слева от ленты дней (часы одинаковы для всех недель). */
+export function TimelineHours({ window, height }: Readonly<{ window: TimeWindow; height: number }>) {
+  const { palette } = usePrototypeTheme();
+  const colors = palette.tokens;
+  const hours = [];
+  for (let minute = Math.ceil(window.startMinute / 60) * 60; minute <= window.endMinute; minute += 60) hours.push(minute);
+  return (
+    <View style={{ width: TIMELINE_GUTTER, paddingTop: TIMELINE_HEADER }}>
+      <View style={{ height }}>
+        {hours.map((minute) => (
+          <Text key={minute} style={[styles.hour, { top: Math.max(yOfMinute(minute, height, window) - 7, 0), color: colors.textMuted }]}>
+            {formatMinute(minute).slice(0, 2)}
+          </Text>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: "row", paddingBottom: 4 },
+  headerRow: { flexDirection: "row", height: TIMELINE_HEADER, alignItems: "center" },
   headerCell: { flex: 1, alignItems: "center" },
   headerDay: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14 },
   headerDate: { fontSize: 14, lineHeight: 18, fontFamily: fonts.bold },
   body: { flexDirection: "row" },
-  hour: { position: "absolute", right: 4, fontFamily: fonts.regular, fontSize: 10, lineHeight: 14 },
-  surface: { flex: 1, borderWidth: 1, borderRadius: 8, overflow: "hidden" },
+  hour: { position: "absolute", right: 3, fontFamily: fonts.regular, fontSize: 10, lineHeight: 14 },
+  surface: { flex: 1, borderTopWidth: 1, borderLeftWidth: 1, overflow: "hidden" },
   line: { position: "absolute", left: 0, right: 0, height: StyleSheet.hairlineWidth },
   halfLine: { opacity: 0.45 },
   columnLine: { position: "absolute", top: 0, width: StyleSheet.hairlineWidth },
@@ -329,5 +362,5 @@ const styles = StyleSheet.create({
   blockTextDense: { fontSize: 10, lineHeight: 12, fontFamily: fonts.bold },
   handle: { position: "absolute", bottom: 2, alignSelf: "center", width: 14, height: 2, borderRadius: 1, opacity: 0.6 },
   preview: { position: "absolute", borderWidth: 2, borderRadius: 6, alignItems: "center", justifyContent: "center" },
-  previewText: { fontSize: 10, fontFamily: fonts.bold },
+  previewText: { fontSize: 10, lineHeight: 13, fontFamily: fonts.bold, textAlign: "center" },
 });

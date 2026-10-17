@@ -17,6 +17,8 @@ interface AppButtonProps {
   readonly busyLabel?: string;
   readonly accessibilityLabel?: string;
   readonly testID?: string;
+  /** Компактная кнопка для плотных окон: высота 40, текст 14. */
+  readonly compact?: boolean;
 }
 
 /** Главная — залитая акцентом; второстепенные — тонкая рамка без заливки (UI-OWN-008/010). */
@@ -31,6 +33,7 @@ export function AppButton({
   busyLabel = "Выполняется…",
   accessibilityLabel,
   testID,
+  compact = false,
 }: Readonly<AppButtonProps>) {
   const [focused, setFocused] = useState(false);
   const { palette } = usePrototypeTheme();
@@ -59,6 +62,7 @@ export function AppButton({
       testID={testID}
       style={({ pressed }) => [
         styles.button,
+        compact ? styles.compact : null,
         {
           backgroundColor: pressed && variant !== "primary" ? colors.surfaceRaised : backgroundColor,
           borderColor,
@@ -69,7 +73,7 @@ export function AppButton({
     >
       <View style={styles.content}>
         {busy ? <ActivityIndicator size="small" color={foregroundColor} /> : icon?.(foregroundColor) ?? null}
-        <Text style={[styles.label, { color: foregroundColor }]}>{busy ? busyLabel : label}</Text>
+        <Text style={[styles.label, compact ? styles.compactLabel : null, { color: foregroundColor }]}>{busy ? busyLabel : label}</Text>
       </View>
     </Pressable>
   );
@@ -77,6 +81,8 @@ export function AppButton({
 
 const styles = StyleSheet.create({
   button: { minHeight: 48, borderRadius: 8, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
+  compact: { minHeight: 40, paddingHorizontal: 12 },
+  compactLabel: { fontSize: 14, lineHeight: 19 },
   content: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   label: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, textAlign: "center" },
 });

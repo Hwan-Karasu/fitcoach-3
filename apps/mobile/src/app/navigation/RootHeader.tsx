@@ -1,6 +1,6 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { Animated, BackHandler, Pressable, StyleSheet, TextInput, View } from "react-native";
-import { ArrowLeft, Bell, Menu, Search, X } from "lucide-react-native";
+import { ArrowLeft, Bell, Menu, Search, Settings, X } from "lucide-react-native";
 import { AppIconButton, BrandMark } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
@@ -28,8 +28,11 @@ export function RootHeader({
   onOpenNotifications,
   onOpenMenu,
   menuButtonRef,
+  onOpenSettings,
 }: Readonly<{ title: string; collapsed: boolean; search?: RootHeaderSearch; onOpenNotifications: () => void;
-  onOpenMenu: () => void; menuButtonRef: RefObject<View | null> }>) {
+  onOpenMenu: () => void; menuButtonRef: RefObject<View | null>;
+  /** Настройки раздела (шестерёнка календаря) — в одном ряду с колокольчиком и меню. */
+  onOpenSettings?: () => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const progress = useRef(new Animated.Value(collapsed ? 1 : 0)).current;
@@ -85,6 +88,10 @@ export function RootHeader({
           <Animated.Text numberOfLines={1} style={[styles.title, { color: colors.textPrimary }]}>{title}</Animated.Text>
         </Animated.View>
       </View>
+      {onOpenSettings ? (
+        <AppIconButton compact label={`Настройки: ${title.toLowerCase()}`}
+          icon={<Settings size={22} color={colors.textPrimary} strokeWidth={1.8} />} onPress={onOpenSettings} />
+      ) : null}
       {search ? (
         <AppIconButton compact label={search.placeholder} icon={<Search size={22} color={colors.textPrimary} strokeWidth={1.8} />}
           onPress={search.onOpen} />
