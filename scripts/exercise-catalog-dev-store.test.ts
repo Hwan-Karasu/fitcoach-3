@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { DevExerciseCatalogRepository } from "../apps/mobile/src/features/exercises/data/DevExerciseCatalogRepository.ts";
 import type { ExerciseDefinition, SystemCatalog } from "../apps/mobile/src/features/exercises/domain/ExerciseModel.ts";
-import { filterCatalog, matchesQuery, NO_FILTERS, normalizeAliases, validateCustom } from
+import { EMPTY_OVERLAY, filterCatalog, matchesQuery, NO_FILTERS, normalizeAliases, sortCatalog, validateCustom } from
   "../apps/mobile/src/features/exercises/domain/ExerciseRules.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
@@ -51,6 +51,18 @@ test("X01 поиск: русское и английское название, �
       .map((entry) => entry.definition.name), ["Планка"]);
     assert.deepEqual(filterCatalog(entries, "", "ALL", { ...NO_FILTERS, equipment: new Set(["none"]) })
       .map((entry) => entry.definition.name), ["Планка"], "без оборудования — отдельное значение фильтра");
+  } finally {
+    await repository.close();
+  }
+});
+
+test("X01 сортировка: по-русски, кавычки не влияют, «ё» на своём месте", async () => {
+  const { repository } = await store();
+  try {
+    const names = ["«Мёртвый жук»", "Ёлочка", "Жим", "Армейский жим"];
+    const entries = names.map((name, index) => ({ definition: system(`sys:repdb:s${index}`, name, name), overlay: EMPTY_OVERLAY }));
+    assert.deepEqual(sortCatalog(entries).map((entry) => entry.definition.name), ["Армейский жим", "Ёлочка", "Жим", "«Мёртвый жук»"]);
+    assert.equal(sortCatalog(await repository.list()).length, 2);
   } finally {
     await repository.close();
   }

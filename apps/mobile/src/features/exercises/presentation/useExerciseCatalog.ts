@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ExerciseCatalogPort } from "../domain/ExerciseCatalogPort.ts";
-import { compareEntries, type CatalogEntry } from "../domain/ExerciseRules.ts";
+import { sortCatalog, type CatalogEntry } from "../domain/ExerciseRules.ts";
 
 /** Весь каталог с личным слоем; перечитывается после любого коммита каталога. */
 export function useExerciseCatalog(repository: ExerciseCatalogPort) {
@@ -13,7 +13,8 @@ export function useExerciseCatalog(repository: ExerciseCatalogPort) {
     let active = true;
     repository.list().then((next) => {
       if (!active) return;
-      setEntries([...next].sort(compareEntries));
+      const sorted = sortCatalog(next);
+      setEntries(sorted);
       setFailed(false);
     }).catch(() => { if (active) setFailed(true); });
     return () => { active = false; };

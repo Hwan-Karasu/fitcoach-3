@@ -131,27 +131,36 @@ function nextBirthday(birthDate: string | null, today: string): Readonly<{
   return { occurrence, daysUntil: Math.round((occurrenceEpoch - todayEpoch) / 86_400_000) };
 }
 
+/**
+ * Один коллатор на модуль: `localeCompare(…, "ru")` на каждое сравнение в Hermes очень дорог
+ * (каталог упражнений: 2,6 с на 643 записи). Даты и ID — ISO/ASCII, их хватает обычного сравнения.
+ */
+const ruCollator = new Intl.Collator("ru");
+
+function compareAscii(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 function byName(a: PresentedClient, b: PresentedClient): number {
-  return a.client.displayName.localeCompare(b.client.displayName, "ru")
-    || a.client.id.localeCompare(b.client.id);
+  return ruCollator.compare(a.client.displayName, b.client.displayName) || compareAscii(a.client.id, b.client.id);
 }
 
 function bySelectedSort(mode: RosterSortMode): (a: PresentedClient, b: PresentedClient) => number {
   return mode === "NAME" ? byName : (a, b) =>
-    (b.client.lastOpenedAt ?? "").localeCompare(a.client.lastOpenedAt ?? "") || byName(a, b);
+    compareAscii(b.client.lastOpenedAt ?? "", a.client.lastOpenedAt ?? "") || byName(a, b);
 }
 
 /** Search only by identity/contact fields; default is archivedAt DESC (§15.10). */
 export function presentArchivedClients(rows: readonly ClientRosterRow[], search: string,
   sort: ArchiveSortMode): readonly ClientRosterRow[] {
-  const needle = search.trim().toLocaleLowerCase("ru");
+  const needle = search.trim().toLowerCase();
   const byName = (a: ClientRosterRow, b: ClientRosterRow) =>
-    a.displayName.localeCompare(b.displayName, "ru") || a.id.localeCompare(b.id);
+    ruCollator.compare(a.displayName, b.displayName) || compareAscii(a.id, b.id);
   return rows.filter((row) => row.lifecycle === "ARCHIVED"
     && [row.displayName, row.contactPhone, row.contactEmail]
-      .some((value) => value?.toLocaleLowerCase("ru").includes(needle)))
+      .some((value) => value?.toLowerCase().includes(needle)))
     .sort(sort === "NAME" ? byName
-      : (a, b) => (b.archivedAt ?? "").localeCompare(a.archivedAt ?? "") || byName(a, b));
+      : (a, b) => compareAscii(b.archivedAt ?? "", a.archivedAt ?? "") || byName(a, b));
 }
 
 /** No birthday/recent duplicate; search flattens priorities but keeps short badges. */
@@ -166,14 +175,14 @@ export function presentClientRoster(input: Readonly<{
   todayStarts?: ReadonlyMap<string, number> | null;
 }>): PresentedRoster {
   if (dateEpoch(input.today) === null) throw new Error("ROSTER_TODAY_INVALID");
-  const needle = input.search.trim().toLocaleLowerCase("ru");
+  const needle = input.search.trim().toLowerCase();
   const searching = needle.length > 0;
   const dismissed = new Set(input.dismissals.map((row) => JSON.stringify([row.clientId, row.occurrenceDate])));
   const todayStarts = input.todayStarts ?? null;
   const presented = input.rows.filter((row) => row.lifecycle === "ACTIVE"
     && (todayStarts === null || todayStarts.has(row.id))
     && [row.displayName, row.contactPhone, row.contactEmail]
-      .some((value) => value?.toLocaleLowerCase("ru").includes(needle)))
+      .some((value) => value?.toLowerCase().includes(needle)))
     .map((client): PresentedClient => {
       const birthday = nextBirthday(client.birthDate, input.today);
       const days = birthday?.daysUntil ?? null;
@@ -201,7 +210,7 @@ export function presentClientRoster(input: Readonly<{
   const pinned = new Set(birthday.map((row) => row.client.id));
   const remaining = presented.filter((row) => !pinned.has(row.client.id));
   const recent = [...remaining].filter((row) => row.client.lastOpenedAt !== null)
-    .sort((a, b) => (b.client.lastOpenedAt ?? "").localeCompare(a.client.lastOpenedAt ?? "") || byName(a, b))[0] ?? null;
+    .sort((a, b) => compareAscii(b.client.lastOpenedAt ?? "", a.client.lastOpenedAt ?? "") || byName(a, b))[0] ?? null;
   return {
     birthday, recent,
     regular: remaining.filter((row) => row.client.id !== recent?.client.id).sort(bySelectedSort(input.sort)),

@@ -33,18 +33,40 @@ export function displayNameOf(entry: CatalogEntry): string {
   return entry.overlay.displayName?.trim() || entry.definition.name;
 }
 
-/** Для поиска: регистр, «ё», кавычки и дефисы не важны. */
+/**
+ * Для поиска: регистр, «ё», кавычки и дефисы не важны. Обычный `toLowerCase`: для кириллицы он верен,
+ * а `toLocaleLowerCase("ru")` в Hermes на порядок дороже.
+ */
 export function searchKey(text: string): string {
-  return text.toLocaleLowerCase("ru").replace(/ё/g, "е").replace(/[«»"'’().,:;!?-]/g, " ").replace(/\s+/g, " ").trim();
+  return text.toLowerCase().replace(/ё/g, "е").replace(/[«»"'’().,:;!?-]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function queryWords(query: string): readonly string[] {
+  return searchKey(query).split(" ").filter((word) => word.length > 0);
+}
+
+/** Строка поиска упражнения считается один раз (запись каталога неизменяема). */
+const haystacks = new WeakMap<CatalogEntry, string>();
+
+function haystackOf(entry: CatalogEntry): string {
+  let value = haystacks.get(entry);
+  if (value === undefined) {
+    value = searchKey([entry.definition.name, entry.definition.nameEn ?? "", entry.overlay.displayName ?? "",
+      ...entry.overlay.aliases].join(" "));
+    haystacks.set(entry, value);
+  }
+  return value;
+}
+
+function matchesWords(entry: CatalogEntry, words: readonly string[]): boolean {
+  if (words.length === 0) return true;
+  const haystack = haystackOf(entry);
+  return words.every((word) => haystack.includes(word));
 }
 
 /** §31.4 Поиск по русскому и английскому названию, личному названию и синонимам: все слова запроса. */
 export function matchesQuery(entry: CatalogEntry, query: string): boolean {
-  const words = searchKey(query).split(" ").filter((word) => word.length > 0);
-  if (words.length === 0) return true;
-  const haystack = searchKey([entry.definition.name, entry.definition.nameEn ?? "", entry.overlay.displayName ?? "",
-    ...entry.overlay.aliases].join(" "));
-  return words.every((word) => haystack.includes(word));
+  return matchesWords(entry, queryWords(query));
 }
 
 export function activeFilterCount(filters: CatalogFilters): number {
@@ -53,6 +75,7 @@ export function activeFilterCount(filters: CatalogFilters): number {
 
 export function filterCatalog(entries: readonly CatalogEntry[], query: string, mode: CatalogMode,
   filters: CatalogFilters): readonly CatalogEntry[] {
+  const words = queryWords(query);
   return entries.filter((entry) => {
     const { definition, overlay } = entry;
     if (overlay.hidden && !filters.showHidden) return false;
@@ -61,14 +84,19 @@ export function filterCatalog(entries: readonly CatalogEntry[], query: string, m
     if (filters.bodyParts.size > 0 && !filters.bodyParts.has(definition.bodyPart)) return false;
     if (filters.equipment.size > 0 && !filters.equipment.has(definition.equipment ?? "none")) return false;
     if (filters.profiles.size > 0 && !filters.profiles.has(definition.trackingProfile)) return false;
-    return matchesQuery(entry, query);
+    return matchesWords(entry, words);
   });
 }
 
-/** По алфавиту без учёта кавычек: «Мёртвый жук» стоит на «М», а не в начале списка. */
-export function compareEntries(a: CatalogEntry, b: CatalogEntry): number {
-  const key = (entry: CatalogEntry) => displayNameOf(entry).replace(/[«»"]/g, "");
-  return key(a).localeCompare(key(b), "ru");
+/**
+ * По алфавиту без учёта кавычек: «Мёртвый жук» стоит на «М», а не в начале списка. Один `Intl.Collator`
+ * и заранее посчитанные ключи: `localeCompare` на каждое сравнение в Hermes стоил 2,6 с на 643 упражнения.
+ */
+export function sortCatalog(entries: readonly CatalogEntry[]): readonly CatalogEntry[] {
+  const collator = new Intl.Collator("ru");
+  return entries.map((entry) => ({ entry, key: displayNameOf(entry).replace(/[«»"]/g, "") }))
+    .sort((a, b) => collator.compare(a.key, b.key))
+    .map((item) => item.entry);
 }
 
 export interface CustomExerciseInput {
