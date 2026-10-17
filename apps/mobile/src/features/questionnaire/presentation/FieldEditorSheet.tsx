@@ -1,4 +1,5 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowDown, ArrowUp, Plus, RotateCcw, X } from "lucide-react-native";
 import { AppIconButton, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
@@ -30,10 +31,12 @@ function numberOrUndefined(text: string): number | undefined {
 function constraintsOf(field: QuestionField): FieldConstraints { return field.constraints ?? {}; }
 
 /** §27.4 Редактор вопроса в нижнем окне: текст, подсказка, обязательность, тип, варианты, условие, ограничения. */
-export function FieldEditorSheet({ schema, published, fieldId, apply, newId, onClose }: Readonly<{
+export function FieldEditorSheet({ schema, published, fieldId, showIssues, apply, newId, onClose }: Readonly<{
   schema: QuestionnaireSchema;
   published: QuestionnaireSchema;
   fieldId: string | null;
+  /** Ошибки показываются после попытки публикации, а не сразу у нового вопроса. */
+  showIssues: boolean;
   /** Правка схемы черновика (попадает в отмену/повтор и автосохранение). */
   apply: (change: (schema: QuestionnaireSchema) => QuestionnaireSchema) => void;
   newId: () => string;
@@ -45,7 +48,15 @@ export function FieldEditorSheet({ schema, published, fieldId, apply, newId, onC
   const found = fieldId === null ? null : locateField(schema, fieldId);
   const field = found?.field ?? null;
   const patch = (value: Parameters<typeof updateField>[2]) => { if (field !== null) apply((current) => updateField(current, field.id, value)); };
-  const issues = field === null ? [] : validateSchema(schema).filter((issue) => issue.fieldId === field.id);
+  const labelRef = useRef<TextInput>(null);
+  // Новый вопрос без текста: сразу ставим курсор в поле текста.
+  const emptyLabel = field !== null && field.label === "";
+  useEffect(() => {
+    if (!emptyLabel) return undefined;
+    const timer = setTimeout(() => labelRef.current?.focus(), 350);
+    return () => clearTimeout(timer);
+  }, [fieldId, emptyLabel]);
+  const issues = field === null || !showIssues ? [] : validateSchema(schema).filter((issue) => issue.fieldId === field.id);
   const sources = field === null ? [] : allFields(schema).map((item) => item.field)
     .filter((entry) => entry.id !== field.id && !entry.retired);
   const rule = field?.visibleIf ?? null;
@@ -70,7 +81,7 @@ export function FieldEditorSheet({ schema, published, fieldId, apply, newId, onC
                 {issues.map((issue) => `• ${issue.message}`).join("\n")}
               </Text>
             ) : null}
-            <TextField label="Текст вопроса" required value={field.label} onChangeText={(label) => patch({ label })} />
+            <TextField label="Текст вопроса" required value={field.label} inputRef={labelRef} onChangeText={(label) => patch({ label })} />
             <TextField label="Подсказка · необязательно" value={field.help ?? ""}
               onChangeText={(help) => patch({ help: help.trim() === "" ? null : help })} />
 

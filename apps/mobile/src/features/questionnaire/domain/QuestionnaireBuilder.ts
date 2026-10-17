@@ -104,7 +104,25 @@ export function moveFieldToSection(schema: QuestionnaireSchema, fieldId: string,
   }) };
 }
 
-export type RemoveResult = Readonly<{ schema: QuestionnaireSchema; outcome: "DELETED" | "RETIRED" | "FORBIDDEN" }>;
+/**
+ * §27.8 Перетаскивание: поле встаёт в раздел `sectionId` на место `index` (номер среди полей раздела
+ * без самого поля). ID не меняется; то же место — схема не меняется.
+ */
+export function moveFieldTo(schema: QuestionnaireSchema, fieldId: string, sectionId: string, index: number): QuestionnaireSchema {
+  const found = locateField(schema, fieldId);
+  const target = schema.sections.find((section) => section.id === sectionId);
+  if (found === null || target === undefined) return schema;
+  const rest = target.fields.filter((field) => field.id !== fieldId);
+  const at = Math.max(0, Math.min(Math.round(index), rest.length));
+  if (found.section.id === sectionId && found.index === at) return schema;
+  return { ...schema, sections: schema.sections.map((section) => {
+    if (section.id === sectionId) return { ...section, fields: [...rest.slice(0, at), found.field, ...rest.slice(at)] };
+    if (section.id === found.section.id) return { ...section, fields: section.fields.filter((field) => field.id !== fieldId) };
+    return section;
+  }) };
+}
+
+export type RemoveResult =Readonly<{ schema: QuestionnaireSchema; outcome: "DELETED" | "RETIRED" | "FORBIDDEN" }>;
 
 /**
  * §25.9: своё поле, которого не было в опубликованной версии, удаляется; уже опубликованное —

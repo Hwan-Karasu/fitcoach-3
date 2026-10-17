@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { addField, addOption, addSection, canChangeType, duplicateField, locateField, moveField, moveFieldToSection,
+import { addField, addOption, addSection, canChangeType, duplicateField, locateField, moveField, moveFieldTo, moveFieldToSection,
   moveOption, moveSection, removeField, removeOption, removeSection, restoreField, updateField } from
   "../apps/mobile/src/features/questionnaire/domain/QuestionnaireBuilder.ts";
 import { defaultQuestionnaireSchema, validateSchema } from "../apps/mobile/src/features/questionnaire/domain/QuestionnaireRules.ts";
+import { builderRows, dropTarget } from "../apps/mobile/src/features/questionnaire/presentation/builderRows.ts";
 
 const published = defaultQuestionnaireSchema();
 const firstSection = published.sections[0]!;
@@ -55,6 +56,37 @@ test("Q02 порядок: выше/ниже в разделе, перенос в
   const withSection = addSection(published, "c:sec", "Сон");
   assert.equal(removeSection(withSection, "c:sec").outcome, "DELETED");
   assert.equal(removeSection(published, firstSection.id).outcome, "FORBIDDEN");
+});
+
+test("Q02 перетаскивание: место внутри раздела, в другой раздел, на то же место — без изменений", () => {
+  const second = published.sections[1]!;
+  const ids = firstSection.fields.map((field) => field.id);
+  // Первое поле — на третье место (номер среди остальных полей раздела = 2).
+  const down = moveFieldTo(published, ids[0]!, firstSection.id, 2);
+  assert.deepEqual(down.sections[0]!.fields.map((field) => field.id), [ids[1], ids[2], ids[0], ...ids.slice(3)]);
+  const across = moveFieldTo(published, ids[1]!, second.id, 0);
+  assert.equal(across.sections[1]!.fields[0]!.id, ids[1]);
+  assert.equal(locateField(across, ids[1]!)?.section.id, second.id);
+  assert.equal(moveFieldTo(published, ids[1]!, firstSection.id, 1), published, "то же место");
+  assert.equal(moveFieldTo(published, ids[0]!, second.id, 99).sections[1]!.fields.at(-1)?.id, ids[0], "номер за краем — в конец");
+});
+
+test("Q02 список конструктора: вопрос попадает в раздел ближайшего заголовка выше", () => {
+  const [s1, s2] = published.sections;
+  const rows = builderRows({ ...published, sections: [s1!, s2!] }, new Set([s2!.id]));
+  const keys = rows.map((row) => row.key);
+  assert.equal(keys[0], `s:${s1!.id}`);
+  assert.equal(keys.at(-1), `s:${s2!.id}`, "свёрнутый раздел — только заголовок");
+  const moved = s1!.fields[0]!.id;
+  const without = rows.filter((row) => row.key !== `f:${moved}`);
+  const put = (index: number) => [...without.slice(0, index), rows[1]!, ...without.slice(index)];
+  // Сразу под заголовком первого раздела — место 0; после второго вопроса — место 1.
+  assert.deepEqual(dropTarget(put(1), moved), { sectionId: s1!.id, index: 0 });
+  assert.deepEqual(dropTarget(put(2), moved), { sectionId: s1!.id, index: 1 });
+  // Под свёрнутым заголовком второго раздела — в конец второго раздела.
+  assert.deepEqual(dropTarget(put(without.length), moved), { sectionId: s2!.id, index: Number.MAX_SAFE_INTEGER });
+  // Выше первого заголовка — в начало первого раздела.
+  assert.deepEqual(dropTarget(put(0), moved), { sectionId: s1!.id, index: 0 });
 });
 
 test("Q02 варианты: новый удаляется, опубликованный выводится; порядок меняется", () => {

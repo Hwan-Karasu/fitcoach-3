@@ -1,16 +1,19 @@
-import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { ChevronDown, ChevronRight, CircleAlert, EllipsisVertical, Eye, Lock, PencilLine, Plus, Redo2,
+import { useCallback, useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, Vibration, View } from "react-native";
+import Animated, { useAnimatedRef } from "react-native-reanimated";
+import Sortable from "react-native-sortables";
+import { ChevronDown, ChevronRight, CircleAlert, EllipsisVertical, Eye, GripVertical, Lock, PencilLine, Plus, Redo2,
   Undo2 } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, LoadingState, StickyEditorFooter, TextField,
   type NoticeKind } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
-import { addField, addSection, duplicateField, locateField, moveField, moveFieldToSection, moveSection, publishedHasField,
+import { addField, addSection, duplicateField, locateField, moveField, moveFieldTo, moveFieldToSection, moveSection, publishedHasField,
   removeField, removeSection, restoreField, setFieldHidden, updateSection } from "../domain/QuestionnaireBuilder.ts";
 import { QUESTION_TYPES, type PublishSummary, type QuestionField, type QuestionSection } from "../domain/QuestionnaireModel.ts";
 import { sameSchema, validateSchema } from "../domain/QuestionnaireRules.ts";
 import { ActionSheet, type SheetAction } from "./ActionSheet.tsx";
+import { builderRows, dropTarget, type BuilderRow } from "./builderRows.ts";
 import { FieldEditorSheet, typeLabels } from "./FieldEditorSheet.tsx";
 import { QuestionnaireForm, type FormInputs } from "./QuestionnaireForm.tsx";
 import { errorCode, newBuilderId, useQuestionnaireBuilder } from "./useQuestionnaireBuilder.ts";
@@ -86,6 +89,27 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
   const [showIssues, setShowIssues] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<Readonly<{ kind: NoticeKind; text: string }> | null>(null);
+  const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  // Перестроить список заново, если вопрос отпустили на прежнем месте (порядок у библиотеки сбивается).
+  const [gridVersion, setGridVersion] = useState(0);
+  const rows = useMemo((): BuilderRow[] => builder.schema === null ? [] : [...builderRows(builder.schema, collapsed)],
+    [builder.schema, collapsed]);
+  const { apply } = builder;
+  const onDragEnd = useCallback(({ key, data, fromIndex, toIndex }: Readonly<{ key: string; data: readonly BuilderRow[];
+    fromIndex: number; toIndex: number }>) => {
+    if (fromIndex === toIndex) return;
+    const row = data.find((item) => item.key === key);
+    const target = row?.kind === "FIELD" ? dropTarget(data, row.field.id) : null;
+    if (row?.kind !== "FIELD" || target === null) { setGridVersion((value) => value + 1); return; }
+    let moved = false;
+    apply((current) => {
+      const next = moveFieldTo(current, row.field.id, target.sectionId, target.index);
+      moved = next !== current;
+      return next;
+    });
+    if (!moved) setGridVersion((value) => value + 1);
+  }, [apply]);
+  const onDragStart = useCallback(() => { Vibration.vibrate(12); }, []);
 
   const { schema, published } = builder;
   if (schema === null || published === null) {
@@ -264,38 +288,50 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
   };
 
   const saveLabel = builder.saveState === "pending" ? "Сохраняется…" : builder.saveState === "failed" ? "Черновик не сохранился"
-    : changed ? "Черновик сохранён · не опубликован" : "Совпадает с опубликованной";
+    : changed ? "Черновик сохранён · не опубликован" : "Без изменений";
   const sheet = menuContent();
 
-  const fieldRow = (field: QuestionField) => {
-    const markers = [typeLabels[field.type], field.origin === "SYSTEM" ? "Системный" : null,
+  const markersOf = (field: QuestionField) => [typeLabels[field.type],
       field.required ? "Обязательное" : null, field.visibleIf !== null ? "Условие" : null,
       field.retired ? "Убран из анкеты" : field.hidden ? "Скрыто" : null].filter((item) => item !== null).join(" · ");
+
+  const brokenSections = new Set(schema.sections.filter((section) =>
+    section.fields.some((field) => issueFields.has(field.id)) || (showIssues && !section.title.trim())).map((section) => section.id));
+
+  const fieldRow = (field: QuestionField, frame: object) => {
+    const markers = markersOf(field);
     const broken = issueFields.has(field.id);
     const label = field.label.trim() || "Вопрос без текста";
+    const faded = field.retired || field.hidden;
     return (
-      <Pressable key={field.id} accessibilityRole="button" accessibilityLabel={`${label}. ${markers}${broken ? ". Есть ошибка" : ""}`}
-        onPress={() => setEditing(field.id)}
-        style={({ pressed }) => [styles.fieldRow, { borderTopColor: colors.border,
-          backgroundColor: pressed ? colors.surfaceRaised : "transparent", opacity: field.retired || field.hidden ? 0.6 : 1 }]}>
-        <View style={styles.grow}>
-          <Text numberOfLines={2} style={[styles.fieldLabel, { color: field.label.trim() ? colors.textPrimary : colors.textMuted }]}>{label}</Text>
-          <Text numberOfLines={1} style={[styles.meta, { color: colors.textSecondary }]}>{markers}</Text>
-        </View>
-        {broken ? <CircleAlert size={18} color={colors.danger} strokeWidth={2} /> : null}
-        <AppIconButton compact label={`Действия: ${label}`} icon={<EllipsisVertical size={18} color={colors.textSecondary} strokeWidth={1.8} />}
-          onPress={() => setMenu({ kind: "FIELD", id: field.id })} />
-      </Pressable>
+      <View style={[styles.fieldRow, frame, { borderTopColor: colors.border }]}>
+        <Sortable.Handle>
+          <View accessible accessibilityLabel={`Перетащить: ${label}`} accessibilityHint="Ведите пальцем вверх или вниз"
+            style={styles.handle}>
+            <GripVertical size={18} color={colors.textMuted} strokeWidth={1.8} />
+          </View>
+        </Sortable.Handle>
+        <Pressable accessibilityRole="button" accessibilityLabel={`${label}. ${markers}${broken ? ". Есть ошибка" : ""}`}
+          onPress={() => setEditing(field.id)}
+          style={({ pressed }) => [styles.fieldPress, { opacity: faded ? 0.6 : 1,
+            backgroundColor: pressed ? colors.surfaceRaised : "transparent" }]}>
+          <View style={styles.grow}>
+            <Text numberOfLines={2} style={[styles.fieldLabel, { color: field.label.trim() ? colors.textPrimary : colors.textMuted }]}>{label}</Text>
+            <Text numberOfLines={1} style={[styles.meta, { color: colors.textSecondary }]}>{markers}</Text>
+          </View>
+          {broken ? <CircleAlert size={18} color={colors.danger} strokeWidth={2} /> : null}
+          <AppIconButton compact label={`Действия: ${label}`} icon={<EllipsisVertical size={18} color={colors.textSecondary} strokeWidth={1.8} />}
+            onPress={() => setMenu({ kind: "FIELD", id: field.id })} />
+        </Pressable>
+      </View>
     );
   };
 
-  const sectionCard = (section: QuestionSection) => {
-    const open = !collapsed.has(section.id);
+  const sectionHead = (section: QuestionSection, open: boolean, frame: object) => {
     const count = section.fields.filter((field) => !field.retired).length;
-    const broken = section.fields.some((field) => issueFields.has(field.id)) || (showIssues && !section.title.trim());
     const title = section.title.trim() || "Раздел без названия";
     return (
-      <View key={section.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: broken ? colors.danger : colors.border }]}>
+      <View style={frame}>
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={`Раздел ${title}, ${questionsWord(count)}`}
           onPress={() => toggle(section.id)} style={styles.sectionHead}>
           {open ? <ChevronDown size={18} color={colors.textSecondary} strokeWidth={2} />
@@ -306,32 +342,48 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
               {[questionsWord(count), section.hidden ? "Скрыт" : null].filter((item) => item !== null).join(" · ")}
             </Text>
           </View>
-          {broken ? <CircleAlert size={18} color={colors.danger} strokeWidth={2} /> : null}
+          {brokenSections.has(section.id) ? <CircleAlert size={18} color={colors.danger} strokeWidth={2} /> : null}
           <AppIconButton compact label={`Действия с разделом ${title}`}
             icon={<EllipsisVertical size={18} color={colors.textSecondary} strokeWidth={1.8} />}
             onPress={() => setMenu({ kind: "SECTION", id: section.id })} />
         </Pressable>
-        {open ? <>
-          {renaming === section.id ? (
-            <View style={[styles.rename, { borderTopColor: colors.border }]}>
-              <TextField label="Название раздела" required value={section.title}
-                onChangeText={(value) => builder.apply((current) => updateSection(current, section.id, { title: value }), `section:${section.id}`)} />
-              <AppButton compact variant="secondary" label="Готово" onPress={() => setRenaming(null)} />
-            </View>
-          ) : null}
-          {section.fields.map(fieldRow)}
-          {section.fields.length === 0 ? (
-            <Text style={[styles.empty, { color: colors.textMuted, borderTopColor: colors.border }]}>В разделе нет вопросов.</Text>
-          ) : null}
-          <Pressable accessibilityRole="button" accessibilityLabel={`Добавить вопрос в раздел ${title}`}
-            onPress={() => setMenu({ kind: "ADD", sectionId: section.id })}
-            style={({ pressed }) => [styles.addRow, { borderTopColor: colors.border, backgroundColor: pressed ? colors.surfaceRaised : "transparent" }]}>
-            <Plus size={16} color={colors.accentInk} strokeWidth={2} />
-            <Text style={[styles.addText, { color: colors.accentInk }]}>Добавить вопрос</Text>
-          </Pressable>
-        </> : null}
+        {open && renaming === section.id ? (
+          <View style={[styles.rename, { borderTopColor: colors.border }]}>
+            <TextField label="Название раздела" required value={section.title}
+              onChangeText={(value) => builder.apply((current) => updateSection(current, section.id, { title: value }), `section:${section.id}`)} />
+            <AppButton compact variant="secondary" label="Готово" onPress={() => setRenaming(null)} />
+          </View>
+        ) : null}
       </View>
     );
+  };
+
+  const sectionEnd = (section: QuestionSection, frame: object) => {
+    const title = section.title.trim() || "Раздел без названия";
+    return (
+      <View style={frame}>
+        {section.fields.length === 0 ? (
+          <Text style={[styles.empty, { color: colors.textMuted, borderTopColor: colors.border }]}>В разделе нет вопросов.</Text>
+        ) : null}
+        <Pressable accessibilityRole="button" accessibilityLabel={`Добавить вопрос в раздел ${title}`}
+          onPress={() => setMenu({ kind: "ADD", sectionId: section.id })}
+          style={({ pressed }) => [styles.addRow, { borderTopColor: colors.border, backgroundColor: pressed ? colors.surfaceRaised : "transparent" }]}>
+          <Plus size={16} color={colors.accentInk} strokeWidth={2} />
+          <Text style={[styles.addText, { color: colors.accentInk }]}>Добавить вопрос</Text>
+        </Pressable>
+      </View>
+    );
+  };
+
+  // Каждая строка рисует свой кусок рамки раздела: верх у заголовка, бока у вопросов, низ у «Добавить вопрос».
+  const renderRow = ({ item }: Readonly<{ item: BuilderRow }>) => {
+    const edge = { backgroundColor: colors.surface, borderColor: brokenSections.has(item.section.id) ? colors.danger : colors.border };
+    if (item.kind === "SECTION") {
+      return sectionHead(item.section, item.open, [styles.frameTop, item.first ? null : styles.gapTop,
+        item.open ? null : styles.frameBottom, edge]);
+    }
+    if (item.kind === "FIELD") return fieldRow(item.field, [styles.frameSides, edge]);
+    return sectionEnd(item.section, [styles.frameSides, styles.frameBottom, edge]);
   };
 
   return (
@@ -358,7 +410,7 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
           onPress={() => setMenu({ kind: "BUILDER" })} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <Animated.ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {builder.reloaded ? <InlineNotice kind="info">Черновик изменился в другом месте — показан сохранённый вариант.</InlineNotice> : null}
         {builder.baseVersion !== published.version ? <InlineNotice kind="info">
           {`Черновик начат с версии ${builder.baseVersion}, а опубликована ${published.version}. Перед публикацией сбросьте черновик в меню «⋮».`}
@@ -378,7 +430,9 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
               </Text>
             </View>
           </View>
-          {schema.sections.map(sectionCard)}
+          <Sortable.Grid key={gridVersion} data={rows} renderItem={renderRow} keyExtractor={(row) => row.key} columns={1}
+            rowGap={0} customHandle scrollableRef={scrollRef} activeItemScale={1.03} inactiveItemOpacity={0.85}
+            dragActivationDelay={0} onDragStart={onDragStart} onDragEnd={onDragEnd} />
           <AppButton variant="secondary" label="Добавить раздел" icon={(color) => <Plus size={18} color={color} strokeWidth={2} />}
             onPress={() => {
               const id = newBuilderId();
@@ -386,14 +440,14 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
               setRenaming(id);
             }} />
         </>}
-      </ScrollView>
+      </Animated.ScrollView>
 
       <StickyEditorFooter actionLabel={changed ? "Опубликовать" : "Нет изменений для публикации"} busy={busy}
         disabled={!changed || builder.saveState === "failed"} onAction={() => { void startPublish(); }}
         note="Опубликованная версия не меняется: правки идут в новую версию" />
 
       <ActionSheet visible={menu !== null} title={sheet.title} actions={sheet.actions} onClose={() => setMenu(null)} />
-      <FieldEditorSheet schema={schema} published={published.schema} fieldId={editing}
+      <FieldEditorSheet schema={schema} published={published.schema} fieldId={editing} showIssues={showIssues}
         apply={(change) => builder.apply(change, `field:${editing ?? ""}`)} newId={newBuilderId}
         onClose={() => setEditing(null)} />
       <ConfirmDialog visible={confirm !== null} confirmBusy={busy}
@@ -419,8 +473,14 @@ const styles = StyleSheet.create({
   sectionHead: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 12, paddingRight: 4, minHeight: 56 },
   sectionTitle: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
   meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  fieldRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingLeft: 12, paddingRight: 4, paddingVertical: 6,
-    minHeight: 52, borderTopWidth: StyleSheet.hairlineWidth },
+  fieldRow: { flexDirection: "row", alignItems: "stretch", minHeight: 52, borderTopWidth: StyleSheet.hairlineWidth },
+  handle: { width: 40, flex: 1, alignItems: "center", justifyContent: "center" },
+  frameTop: { borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1, borderTopLeftRadius: 12, borderTopRightRadius: 12,
+    overflow: "hidden" },
+  frameSides: { borderLeftWidth: 1, borderRightWidth: 1 },
+  frameBottom: { borderBottomWidth: 1, borderBottomLeftRadius: 12, borderBottomRightRadius: 12, overflow: "hidden" },
+  gapTop: { marginTop: 12 },
+  fieldPress: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6, paddingRight: 4, paddingVertical: 6 },
   fieldLabel: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 19 },
   rename: { padding: 12, gap: 8, borderTopWidth: StyleSheet.hairlineWidth },
   empty: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, padding: 12, borderTopWidth: StyleSheet.hairlineWidth },
