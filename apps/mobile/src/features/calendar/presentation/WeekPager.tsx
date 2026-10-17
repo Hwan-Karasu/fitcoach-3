@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 import type { Appointment, CalendarInterval, LocalDate } from "../domain/CalendarModel.ts";
 import type { TimeWindow } from "../domain/CalendarGeometry.ts";
@@ -64,13 +64,17 @@ const TimelinePage = memo(function TimelinePage({ start, week, width, shared }: 
  * Лента недель или дней: листается свайпом внутри неподвижной рамки, колонка часов слева стоит на
  * месте. Горизонтальный FlatList с постраничной прокруткой — соседние страницы отрисованы заранее.
  */
-export function WeekPager({ mode, selected, today, scrollLocked, onSelect, ...shared }: PageShared & Readonly<{
+export function WeekPager({ mode, selected, today, scrollLocked, onSelect, repository, visibleWeekdays, window, people,
+  typeColors, now, height, handlers }: PageShared & Readonly<{
   mode: "WEEK" | "DAY";
   selected: LocalDate;
   today: LocalDate;
   scrollLocked: boolean;
   onSelect: (date: LocalDate) => void;
 }>) {
+  // Общие параметры страниц — один объект, пока они не меняются: открытие меню не перерисовывает сетку.
+  const shared = useMemo<PageShared>(() => ({ repository, visibleWeekdays, window, people, typeColors, now, height, handlers }),
+    [repository, visibleWeekdays, window, people, typeColors, now, height, handlers]);
   const [width, setWidth] = useState(0);
   const [baseMonday] = useState(() => mondayOf(today));
   const [baseDay] = useState(today);
@@ -81,7 +85,10 @@ export function WeekPager({ mode, selected, today, scrollLocked, onSelect, ...sh
   const shown = useRef(target);
   const shownMode = useRef(mode);
   const data = useMemo(() => Array.from({ length: span * 2 + 1 }, (_, at) => at), [span]);
-  const startOf = (index: number) => week ? addDays(baseMonday, (index - span) * 7) : addDays(baseDay, index - span);
+  const renderPage = useCallback(({ item }: Readonly<{ item: number }>) => (
+    <TimelinePage start={week ? addDays(baseMonday, (item - span) * 7) : addDays(baseDay, item - span)} week={week}
+      width={width} shared={shared} />
+  ), [baseDay, baseMonday, shared, span, week, width]);
 
   // Смена режима строит новую ленту; дата сменилась не свайпом (месяц, «Сегодня») — прокрутка к ней.
   useEffect(() => {
@@ -107,7 +114,7 @@ export function WeekPager({ mode, selected, today, scrollLocked, onSelect, ...sh
               shown.current = index;
               onSelect(addDays(selected, delta * (week ? 7 : 1)));
             }}
-            renderItem={({ item }) => <TimelinePage start={startOf(item)} week={week} width={width} shared={shared} />} />
+            renderItem={renderPage} />
         ) : null}
       </View>
     </View>

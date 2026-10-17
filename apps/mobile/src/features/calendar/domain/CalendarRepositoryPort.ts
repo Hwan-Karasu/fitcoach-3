@@ -85,6 +85,11 @@ export interface CalendarRepositoryPort {
   listPendingOutcomes(now: Date): Promise<readonly Appointment[]>;
   createInterval(input: IntervalInput): Promise<CalendarInterval>;
   removeInterval(id: string): Promise<void>;
+  /**
+   * Атомарно убрать интервалы и создать новые: ползунок длительности, вырезание куска дежурства.
+   * Любая ошибка (CALENDAR_TIME_OVERLAP, CALENDAR_BLOCKED_OVER_APPOINTMENT…) ничего не меняет.
+   */
+  reshapeIntervals(removeIds: readonly string[], create: readonly IntervalInput[]): Promise<void>;
   copyWeek(monday: LocalDate): Promise<WeekTemplate>;
   /** Existing entities always win; skipped rows are counted, never merged (§13.13). */
   pasteWeek(monday: LocalDate, template: WeekTemplate,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import * as Sharing from "expo-sharing";
 import { ScrollView } from "react-native-gesture-handler";
@@ -8,7 +8,7 @@ import { ChevronDown, CircleHelp, ClipboardPaste, Copy, Share2, Trash2, Undo2, X
 import { AppButton, AppIconButton, ConfirmDialog, InlineNotice,
   TimeWheelPicker } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
-import type { Appointment, CalendarInterval, ClearWeekSummary, GuestLinkRequest, LocalDate,
+import type { Appointment, ClearWeekSummary, GuestLinkRequest, LocalDate,
   WeekTemplate } from "../domain/CalendarModel.ts";
 import type { CalendarCreditPort } from "../domain/CalendarCreditPort.ts";
 import type { CalendarParticipantDirectoryPort } from "../domain/CalendarParticipantDirectoryPort.ts";
@@ -33,6 +33,9 @@ export interface OpenAppointmentParams {
 }
 
 type Mode = "WEEK" | "DAY";
+
+/** Пока настройки не загружены, видны все дни; постоянный массив не перерисовывает страницы. */
+const ALL_DAYS: readonly boolean[] = [true, true, true, true, true, true, true];
 
 const monthGenitive = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа",
   "сентября", "октября", "ноября", "декабря"] as const;
@@ -92,7 +95,11 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
   const colors = palette.tokens;
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
-  const now = new Date();
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
   const today = localDateOf(now);
   const [selected, setSelected] = useState(today);
   const [viewMonth, setViewMonth] = useState(`${today.slice(0, 7)}-01`);
@@ -107,7 +114,6 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
   const [timePicker, setTimePicker] = useState<"start" | "end" | null>(null);
   const [editor, setEditor] = useState<OpenAppointmentParams | null>(null);
   const [showHint, setShowHint] = useState(false);
-  const [removing, setRemoving] = useState<CalendarInterval | null>(null);
   const posterRef = useRef<View>(null);
   const monday = mondayOf(selected);
   const days = weekDates(monday);
@@ -123,7 +129,9 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
   const monthTotal = [...monthCounts.entries()].filter(([date]) => date.slice(0, 7) === viewMonth.slice(0, 7))
     .reduce((sum, [, count]) => sum + count, 0);
   const settings = data?.settings ?? null;
-  const dayWindow = { startMinute: settings?.dayStartMinute ?? 420, endMinute: settings?.dayEndMinute ?? 1380 };
+  const dayStart = settings?.dayStartMinute ?? 420;
+  const dayEnd = settings?.dayEndMinute ?? 1380;
+  const dayWindow = useMemo(() => ({ startMinute: dayStart, endMinute: dayEnd }), [dayStart, dayEnd]);
   const visibleDays = days.filter((_, index) => settings?.visibleWeekdays[index] ?? true);
   const columns = mode === "WEEK" ? visibleDays : [selected];
   const timelineHeight = Math.round(Math.min(Math.max(screenHeight - 300, 380), 760));
@@ -169,10 +177,11 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
     finally { setBusy(false); }
   };
 
-  const select = (date: LocalDate) => {
+  const select = useCallback((date: LocalDate) => {
     setSelected(date);
     setViewMonth(`${date.slice(0, 7)}-01`);
-  };
+  }, []);
+  const goToday = useCallback(() => select(today), [select, today]);
 
   const saveDisplay = (patch: Partial<Readonly<{ visibleWeekdays: readonly boolean[]; dayStartMinute: number;
     dayEndMinute: number }>>) => {
@@ -183,20 +192,47 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
     });
   };
 
-  const createInterval = (kind: "DUTY" | "BLOCKED", date: LocalDate, start: number, end: number) => {
+  // Протягивание по дежурству вырезает выделенный кусок (целиком — удаляет); по свободному времени — создаёт.
+  const applyRange = (kind: "DUTY" | "BLOCKED", date: LocalDate, start: number, end: number) => {
     void run(async () => {
-      await repository.createInterval({ kind, localDate: date, startMinute: start, endMinute: end });
-      setNotice(`${kind === "DUTY" ? "Дежурство" : "Блокировка"} ${formatMinute(start)}–${formatMinute(end)} добавлено. `
-        + "Убрать — долгим нажатием на него в сетке.");
+      const span = `${formatMinute(start)}–${formatMinute(end)}`;
+      const duties = kind === "DUTY" ? (await repository.listRange(date, date)).intervals.filter((row) =>
+        row.kind === "DUTY" && row.startMinute < end && row.endMinute > start) : [];
+      if (duties.length === 0) {
+        await repository.createInterval({ kind, localDate: date, startMinute: start, endMinute: end });
+        setNotice(`${kind === "DUTY" ? "Дежурство" : "Блокировка"} ${span} добавлено.`);
+        return;
+      }
+      const rest = duties.flatMap((row) => [
+        ...row.startMinute < start ? [{ kind: "DUTY" as const, localDate: date, startMinute: row.startMinute, endMinute: start }] : [],
+        ...row.endMinute > end ? [{ kind: "DUTY" as const, localDate: date, startMinute: end, endMinute: row.endMinute }] : [],
+      ]);
+      await repository.reshapeIntervals(duties.map((row) => row.id), rest);
+      setNotice(`Дежурство снято: ${span}.`);
     });
   };
 
-  const handlers: TimelineHandlers = {
+  const latest: TimelineHandlers = {
     onTapSlot: (date, startMinute) => setEditor({ localDate: date, startMinute }),
-    onTapBlocked: setRemoving,
-    onLongPressInterval: setRemoving,
+    onTapBlocked: (interval) => {
+      setError(null);
+      setNotice(`Заблокировано ${formatMinute(interval.startMinute)}–${formatMinute(interval.endMinute)}. Удержите, чтобы снять.`);
+    },
+    onLongPressBlocked: (interval) => {
+      void run(async () => {
+        await repository.removeInterval(interval.id);
+        setNotice(`Блокировка снята: ${formatMinute(interval.startMinute)}–${formatMinute(interval.endMinute)}.`);
+      });
+    },
+    onResizeInterval: (interval, endMinute) => {
+      void run(async () => {
+        await repository.reshapeIntervals([interval.id], [{ kind: interval.kind, localDate: interval.localDate,
+          startMinute: interval.startMinute, endMinute }]);
+        setNotice(`${interval.kind === "DUTY" ? "Дежурство" : "Блокировка"}: ${formatMinute(interval.startMinute)}–${formatMinute(endMinute)}.`);
+      });
+    },
     onOpenAppointment: (row) => setEditor({ appointmentId: row.id, localDate: row.localDate }),
-    onRangeSelected: (date, start, end, kind) => { setSelected(date); createInterval(kind, date, start, end); },
+    onRangeSelected: (date, start, end, kind) => { setSelected(date); applyRange(kind, date, start, end); },
     onMove: (row: Appointment, date, start) => {
       void run(async () => {
         await repository.updateAppointment(row.id, row.revision, { localDate: date, startMinute: start,
@@ -215,6 +251,19 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
     },
     onLockScroll: setScrollLocked,
   };
+  const latestRef = useRef(latest);
+  latestRef.current = latest;
+  const handlers = useMemo<TimelineHandlers>(() => ({
+    onTapSlot: (...args) => latestRef.current.onTapSlot(...args),
+    onTapBlocked: (...args) => latestRef.current.onTapBlocked(...args),
+    onLongPressBlocked: (...args) => latestRef.current.onLongPressBlocked(...args),
+    onResizeInterval: (...args) => latestRef.current.onResizeInterval(...args),
+    onOpenAppointment: (...args) => latestRef.current.onOpenAppointment(...args),
+    onRangeSelected: (...args) => latestRef.current.onRangeSelected(...args),
+    onMove: (...args) => latestRef.current.onMove(...args),
+    onResize: (...args) => latestRef.current.onResize(...args),
+    onLockScroll: (...args) => latestRef.current.onLockScroll(...args),
+  }), []);
 
   const copy = () => run(async () => {
     const template = await repository.copyWeek(monday);
@@ -293,7 +342,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
         </> : null}
 
         <MonthGrid viewMonth={viewMonth} selected={selected} today={today} counts={monthCounts}
-          onBrowse={setViewMonth} onSelect={select} onToday={() => select(today)} />
+          onBrowse={setViewMonth} onSelect={select} onToday={goToday} />
 
         {/* Рамка второго календаря: шапка (как в 2.0) — «Сегодня» и режим, затем действия с неделей. */}
         <View style={[styles.frame, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -319,8 +368,8 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
         {showHint ? (
           <Text style={[styles.hint, { color: colors.textSecondary }]}>
             Касание — запись. Зажать и протянуть — дежурство, протянуть и подержать — блокировка. Долгое нажатие на
-            записи — перенос, у нижнего края — длительность; на дежурстве или блокировке — удалить. Свайп влево-вправо —
-            другая неделя.
+            записи — перенос; полоска у нижнего края записи, дежурства или блокировки — длительность. Протянуть по дежурству —
+            снять его; удержать блокировку — снять её. Свайп влево-вправо — другая неделя.
           </Text>
         ) : null}
         <View style={styles.toolbarRow}>
@@ -337,7 +386,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
         </View>
         {data !== null ? (
           <WeekPager repository={repository} mode={mode} selected={selected} today={today} scrollLocked={scrollLocked}
-            onSelect={select} visibleWeekdays={settings?.visibleWeekdays ?? []} window={dayWindow} people={people}
+            onSelect={select} visibleWeekdays={settings?.visibleWeekdays ?? ALL_DAYS} window={dayWindow} people={people}
             typeColors={typeColors} now={now} height={timelineHeight} handlers={handlers} />
         ) : null}
         </View>
@@ -354,16 +403,6 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
         </InlineNotice> : null}
         {failed ? <AppButton variant="secondary" label="Повторить" onPress={retry} /> : null}
 
-        <ConfirmDialog visible={removing !== null} destructive confirmBusy={busy}
-          title={removing?.kind === "BLOCKED" ? "Снять блокировку?" : "Удалить дежурство?"}
-          description={removing === null ? "" : `${dayTitle(removing.localDate)}, ${formatMinute(removing.startMinute)}–${formatMinute(removing.endMinute)}.`}
-          confirmLabel={removing?.kind === "BLOCKED" ? "Снять блокировку" : "Удалить"}
-          onCancel={() => setRemoving(null)}
-          onConfirm={() => {
-            const chosen = removing;
-            if (chosen === null) return;
-            void run(async () => { await repository.removeInterval(chosen.id); setRemoving(null); });
-          }} />
         <ConfirmDialog visible={clearPreview !== null} destructive confirmBusy={busy}
           title="Очистить неделю?"
           description={clearPreview === null ? "" : [

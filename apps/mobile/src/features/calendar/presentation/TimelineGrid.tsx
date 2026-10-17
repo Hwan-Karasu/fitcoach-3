@@ -25,6 +25,8 @@ const MODE_NONE = 0;
 const MODE_RANGE = 1;
 const MODE_MOVE = 2;
 const MODE_RESIZE = 3;
+/** Ползунок у нижнего края дежурства или блокировки. */
+const MODE_RESIZE_BAND = 4;
 
 /** Plain numbers only, so the UI-thread worklets can hit-test without touching JS objects. */
 interface Block {
@@ -38,8 +40,10 @@ interface Block {
 export interface TimelineHandlers {
   readonly onTapSlot: (date: LocalDate, startMinute: number) => void;
   readonly onTapBlocked: (interval: CalendarInterval) => void;
-  /** Долгое нажатие на дежурство или блокировку — предложить удалить. */
-  readonly onLongPressInterval: (interval: CalendarInterval) => void;
+  /** Удержание на блокировке — снять её сразу. */
+  readonly onLongPressBlocked: (interval: CalendarInterval) => void;
+  /** Ползунок у нижнего края интервала: новая граница конца. */
+  readonly onResizeInterval: (interval: CalendarInterval, endMinute: number) => void;
   readonly onOpenAppointment: (appointment: Appointment) => void;
   readonly onRangeSelected: (date: LocalDate, start: number, end: number, kind: "DUTY" | "BLOCKED") => void;
   readonly onMove: (appointment: Appointment, date: LocalDate, start: number) => void;
@@ -96,15 +100,16 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
   const start = useSharedValue(0);
   const end = useSharedValue(0);
 
+  // movable = блокировка (удержание снимает её); дежурство протягивается как обычное выделение.
   const bands = useMemo<readonly Block[]>(() => intervals.flatMap((row, index) => {
     const at = dates.indexOf(row.localDate);
-    return at < 0 ? [] : [{ index, column: at, start: row.startMinute, end: row.endMinute, movable: false }];
+    return at < 0 ? [] : [{ index, column: at, start: row.startMinute, end: row.endMinute, movable: row.kind === "BLOCKED" }];
   }), [dates, intervals]);
-  const pressInterval = (index: number) => {
+  const releaseBlocked = (index: number) => {
     const row = intervals[index];
     if (row === undefined) return;
-    Vibration.vibrate(12);
-    handlers.onLongPressInterval(row);
+    Vibration.vibrate(20);
+    handlers.onLongPressBlocked(row);
   };
 
   const blocks = useMemo<readonly Block[]>(() => appointments.flatMap((row, index) => {
@@ -116,7 +121,7 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
   const verdictFor = (kind: number, index: number, at: number, from: number, to: number) => {
     const row = appointments[index];
     const date = dates[at];
-    if (kind === MODE_RANGE || row === undefined || date === undefined) return "OK";
+    if (kind === MODE_RANGE || kind === MODE_RESIZE_BAND || row === undefined || date === undefined) return "OK";
     return moveVerdict({ ...row, durationMinutes: to - from }, date, from, window, appointments, intervals);
   };
 
@@ -139,6 +144,14 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
     if (kind === MODE_RANGE) {
       Vibration.vibrate(8);
       handlers.onRangeSelected(date, from, to, held.current ? "BLOCKED" : "DUTY");
+      return;
+    }
+    if (kind === MODE_RESIZE_BAND) {
+      const band = intervals[index];
+      if (band !== undefined && to !== band.endMinute) {
+        Vibration.vibrate(8);
+        handlers.onResizeInterval(band, to);
+      }
       return;
     }
     if (row === undefined || verdictFor(kind, index, at, from, to) !== "OK") return;
@@ -187,9 +200,20 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
       if (hit !== null && !hit.movable) { mode.value = MODE_NONE; return; }
       if (hit === null) {
         for (const band of bands) {
-          if (band.column === at && minute >= band.start && minute < band.end) {
+          if (band.column !== at || minute < band.start || minute >= band.end) continue;
+          if (event.y >= yOfMinute(band.end, height, window) - EDGE_PX) {
+            mode.value = MODE_RESIZE_BAND;
+            column.value = at;
+            anchor.value = slot;
+            blockIndex.value = band.index;
+            start.value = band.start;
+            end.value = band.end;
+            scheduleOnRN(begin, mode.value, blockIndex.value, column.value, start.value, end.value);
+            return;
+          }
+          if (band.movable) {
             mode.value = MODE_NONE;
-            scheduleOnRN(pressInterval, band.index);
+            scheduleOnRN(releaseBlocked, band.index);
             return;
           }
         }
@@ -231,6 +255,7 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
         from = original + (slot - anchor.value);
         to = from + duration;
       } else {
+        // MODE_RESIZE и MODE_RESIZE_BAND: тянем нижнюю границу, минимум один слот.
         to = Math.max(slot + SLOT_MINUTES, start.value + SLOT_MINUTES);
       }
       if (from === start.value && to === end.value && nextColumn === column.value) return;
@@ -300,10 +325,13 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
               return (
                 <View key={row.id} pointerEvents="none" style={[styles.band, {
                   left: at * columnWidth, width: columnWidth, top: top(clip.start), height: top(clip.end) - top(clip.start),
-                  backgroundColor: blocked ? colors.danger : colors.charts[1], opacity: blocked ? 0.22 : 0.14,
                 }]}>
+                  {/* Прозрачна только подложка: подпись и ползунок остаются чёткими. */}
+                  <View style={[StyleSheet.absoluteFill, {
+                    backgroundColor: blocked ? colors.danger : colors.charts[1], opacity: blocked ? 0.22 : 0.14 }]} />
                   {!dense ? <Text style={[styles.bandText, { color: blocked ? colors.danger : colors.textPrimary }]}>
                     {blocked ? "Заблокировано" : "Дежурство"}</Text> : null}
+                  <View style={[styles.handle, { backgroundColor: blocked ? colors.danger : colors.textSecondary, opacity: 0.8 }]} />
                 </View>
               );
             })}

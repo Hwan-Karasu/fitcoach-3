@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { Undo2 } from "lucide-react-native";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -109,6 +109,10 @@ export function MonthGrid({ viewMonth, selected, today, counts, onBrowse, onSele
   const data = useMemo(() => Array.from({ length: SPAN * 2 + 1 }, (_, at) => at), []);
   const target = monthIndex(base, viewMonth);
   const atToday = selected === today && viewMonth.slice(0, 7) === today.slice(0, 7);
+  const renderMonth = useCallback(({ item }: Readonly<{ item: number }>) => (
+    <MonthPage month={addMonths(base, item - SPAN)} width={width} selected={selected} today={today}
+      counts={counts} onSelect={onSelect} onBrowse={onBrowse} />
+  ), [base, counts, onBrowse, onSelect, selected, today, width]);
 
   // Месяц сменился не свайпом (тап по соседней дате, «Сегодня») — прокручиваем ленту к нему.
   useEffect(() => {
@@ -132,10 +136,7 @@ export function MonthGrid({ viewMonth, selected, today, counts, onBrowse, onSele
             shown.current = index;
             onBrowse(addMonths(base, index - SPAN));
           }}
-          renderItem={({ item }) => (
-            <MonthPage month={addMonths(base, item - SPAN)} width={width} selected={selected} today={today}
-              counts={counts} onSelect={onSelect} onBrowse={onBrowse} />
-          )} />
+          renderItem={renderMonth} />
       ) : null}
       </View>
       {/* «Сегодня» стоит на месте в строке заголовка, а название месяца листается со страницей. */}

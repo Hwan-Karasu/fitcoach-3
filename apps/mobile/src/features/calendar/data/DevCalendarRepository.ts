@@ -733,6 +733,28 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
     return created;
   }
 
+  async reshapeIntervals(removeIds: readonly string[], create: readonly IntervalInput[]): Promise<void> {
+    const valid = create.map(validateInterval);
+    const dates = new Set<string>();
+    await this.ready().writer.write(async (tx) => {
+      for (const id of removeIds) {
+        const row = await tx.first<{ localDate: string }>(`SELECT local_date AS localDate
+          FROM dev_calendar_intervals WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]);
+        if (row === null) throw new Error("CALENDAR_INTERVAL_NOT_FOUND");
+        dates.add(row.localDate);
+        await tx.run("DELETE FROM dev_calendar_intervals WHERE workspace_id = ? AND id = ?", [this.workspaceId, id]);
+      }
+      // Проверка пересечений видит уже удалённые интервалы как свободное время; любой конфликт откатывает всё.
+      for (const input of valid) {
+        const conflict = await intervalConflict(tx, this.workspaceId, input);
+        if (conflict !== null) throw new Error(conflict);
+        await insertInterval(tx, this.workspaceId, input);
+        dates.add(input.localDate);
+      }
+    });
+    if (dates.size > 0) this.publish({ dates: [...dates] });
+  }
+
   async removeInterval(id: string): Promise<void> {
     let date = "";
     await this.ready().writer.write(async (tx) => {

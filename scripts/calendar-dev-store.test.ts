@@ -89,6 +89,23 @@ test("K01 seeds session types and enforces overlap, Blocked and Duty layers", as
     const range = await calendar.listRange(MONDAY, MONDAY);
     assert.equal(range.appointments.length, 2);
     assert.equal(range.intervals.length, 2);
+    // Вырезать середину дежурства 09:00–15:00: остаются 09:00–10:00 и 12:00–15:00, атомарно.
+    const duty = range.intervals.find((row) => row.kind === "DUTY");
+    assert.ok(duty);
+    await calendar.reshapeIntervals([duty.id], [
+      { kind: "DUTY", localDate: MONDAY, startMinute: 540, endMinute: 600 },
+      { kind: "DUTY", localDate: MONDAY, startMinute: 720, endMinute: 900 },
+    ]);
+    const cut = (await calendar.listRange(MONDAY, MONDAY)).intervals.filter((row) => row.kind === "DUTY")
+      .map((row) => [row.startMinute, row.endMinute]).sort((a, b) => (a[0] ?? 0) - (b[0] ?? 0));
+    assert.deepEqual(cut, [[540, 600], [720, 900]]);
+    // Конфликт в середине — ничего не меняется: удаление тоже откатывается.
+    const blocked = (await calendar.listRange(MONDAY, MONDAY)).intervals.find((row) => row.kind === "BLOCKED");
+    assert.ok(blocked);
+    await assert.rejects(calendar.reshapeIntervals([blocked.id], [
+      { kind: "BLOCKED", localDate: MONDAY, startMinute: 600, endMinute: 840 },
+    ]), { message: "CALENDAR_BLOCKED_OVER_APPOINTMENT" });
+    assert.equal((await calendar.listRange(MONDAY, MONDAY)).intervals.filter((row) => row.kind === "BLOCKED").length, 1);
   } finally { await close(); }
 });
 
