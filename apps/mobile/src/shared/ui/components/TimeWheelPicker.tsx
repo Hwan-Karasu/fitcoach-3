@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View, type NativeScrollEvent,
   type NativeSyntheticEvent } from "react-native";
+import * as Haptics from "expo-haptics";
+import { TimerPicker } from "react-native-timer-picker";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../theme/typography.ts";
 import { AppButton } from "./AppButton.tsx";
@@ -99,11 +101,10 @@ export function TimeWheelPicker({ visible, title, value, min, max, onConfirm, on
   );
 }
 
-const SECOND_STEP = 5;
-
 /**
- * Барабан длительности «минуты : секунды» (секунды с шагом 5) во всплывающем окне; значение — секунды,
- * `min`/`max` включительно. `clearLabel` добавляет действие «выключить» (например, таймер без отдыха).
+ * Барабан длительности «минуты : секунды» во всплывающем окне — кольцевой, листается в обе стороны
+ * (react-native-timer-picker, ADR-004): за 59 идёт 00 и наоборот. Значение — секунды, `min`/`max` включительно
+ * (выбор вне границ подтягивается к ним, итог показан строкой «Будет»). `clearLabel` — действие «выключить».
  */
 export function DurationWheelPicker({ visible, title, value, min, max, clearLabel, onConfirm, onClear, onClose }: Readonly<{
   visible: boolean;
@@ -117,16 +118,13 @@ export function DurationWheelPicker({ visible, title, value, min, max, clearLabe
   onClose: () => void;
 }>) {
   const [minute, setMinute] = useState(Math.floor(value / 60));
-  const [second, setSecond] = useState(Math.round((value % 60) / SECOND_STEP));
+  const [second, setSecond] = useState(value % 60);
   useEffect(() => {
     if (!visible) return;
     setMinute(Math.floor(value / 60));
-    setSecond(Math.round((value % 60) / SECOND_STEP));
+    setSecond(value % 60);
   }, [value, visible]);
-  const minutes: number[] = [];
-  for (let at = Math.floor(min / 60); at <= Math.floor(max / 60); at += 1) minutes.push(at);
-  const seconds = Array.from({ length: 60 / SECOND_STEP }, (_, at) => pad(at * SECOND_STEP));
-  const chosen = Math.max(min, Math.min(max, minute * 60 + second * SECOND_STEP));
+  const chosen = Math.max(min, Math.min(max, minute * 60 + second));
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
@@ -135,12 +133,19 @@ export function DurationWheelPicker({ visible, title, value, min, max, clearLabe
       <View style={styles.center} pointerEvents="box-none">
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-          <View style={styles.wheels}>
-            <Wheel label="Минуты" values={minutes.map(pad)} index={Math.max(0, minutes.indexOf(minute))}
-              onChange={(at) => setMinute(minutes[at] ?? minute)} />
-            <Text style={[styles.colon, { color: colors.textPrimary }]}>:</Text>
-            <Wheel label="Секунды" values={seconds} index={second} onChange={setSecond} />
-          </View>
+          <TimerPicker hideDays hideHours padMinutesWithZero padSecondsWithZero padWithNItems={2}
+            maximumMinutes={Math.floor(max / 60)} maximumSeconds={59} minuteLabel="мин" secondLabel="с"
+            initialValue={{ minutes: Math.floor(value / 60), seconds: value % 60 }}
+            onDurationChange={(duration) => { setMinute(duration.minutes); setSecond(duration.seconds); }}
+            pickerFeedback={() => Haptics.selectionAsync().catch(() => undefined)}
+            styles={{
+              backgroundColor: colors.surface,
+              pickerItem: { fontFamily: fonts.medium, fontSize: 22, color: colors.textMuted },
+              selectedPickerItem: { fontFamily: fonts.semibold, color: colors.textPrimary },
+              pickerLabel: { fontFamily: fonts.medium, fontSize: 14, color: colors.textSecondary },
+              pickerItemContainer: { height: 44 },
+              pickerContainer: { backgroundColor: colors.surface },
+            }} />
           <Text style={[styles.hint, { color: colors.textSecondary }]}>{`Будет: ${Math.floor(chosen / 60)}:${pad(chosen % 60)}`}</Text>
           <View style={styles.actions}>
             <View style={styles.action}><AppButton compact variant="secondary" label="Отмена" onPress={onClose} /></View>
@@ -159,7 +164,7 @@ const styles = StyleSheet.create({
   hint: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, textAlign: "center" },
   scrim: { backgroundColor: "rgba(0,0,0,0.45)" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  card: { width: 236, borderWidth: 1, borderRadius: 12, padding: 12, gap: 8 },
+  card: { minWidth: 260, borderWidth: 1, borderRadius: 12, padding: 12, gap: 8, alignItems: "stretch" },
   title: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, textAlign: "center" },
   wheels: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   wheel: { width: 64, height: ITEM * VISIBLE },

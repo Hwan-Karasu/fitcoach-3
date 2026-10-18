@@ -9,6 +9,9 @@ import { addExercise, addSet, addWorkout, fillSets, newDraft, removeExercise, re
 import type { SimpleProgramDraft } from "../apps/mobile/src/features/training/plans/domain/SimplePlanModel.ts";
 import { parseDuration, parseLoad, setsSummary, validateDraft, type TrackingMetric } from
   "../apps/mobile/src/features/training/plans/domain/SimplePlanRules.ts";
+import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
+import { DEV_TRAINING_PLANS_LEDGER, devTrainingPlansCatalog } from
+  "../apps/mobile/src/features/training/plans/data/DevTrainingPlansCatalog.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
 
@@ -121,12 +124,12 @@ test("T02 окончательное удаление клиента: струк
   }
 });
 
-test("T03 отдых упражнения (§48.56): 90 с по умолчанию, границы 15 с – 15 мин, выключение, хранение", async () => {
+test("T03 отдых упражнения (§48.56): 90 с по умолчанию, границы 1 с – 60 мин, выключение, хранение", async () => {
   const draft = sampleDraft();
   const bench = draft.plan.workouts[0]!.exercises[0]!;
   assert.equal(bench.restSec, 90);
-  assert.equal(setRest(draft, "e1", 5).plan.workouts[0]!.exercises[0]!.restSec, 15, "не меньше 15 с");
-  assert.equal(setRest(draft, "e1", 5000).plan.workouts[0]!.exercises[0]!.restSec, 900, "не больше 15 мин");
+  assert.equal(setRest(draft, "e1", 0).plan.workouts[0]!.exercises[0]!.restSec, 1, "не меньше 1 с");
+  assert.equal(setRest(draft, "e1", 5000).plan.workouts[0]!.exercises[0]!.restSec, 3600, "не больше 60 мин");
   const tuned = setRest(setRest(draft, "e1", 180), "e2", null);
   assert.equal(tuned.plan.workouts[1]!.exercises[0]!.restSec, null, "таймер упражнения выключен");
   assert.equal(tuned.plan.workouts[0]!.exercises[0]!.restSec, 180, "отдых жима не трогает планку");
@@ -159,12 +162,47 @@ test("T03 отдых упражнения из дневника: меняетс�
     assert.deepEqual(loaded.workouts.map((workout) => workout.exercises[0]!.restSec), [135, 90]);
     await plans.setExerciseRest(a.id, program.id, "e2", null);
     assert.equal((await plans.getSimplePlan(a.id, program.id))!.draft.plan.workouts[1]!.exercises[0]!.restSec, null);
-    await assert.rejects(plans.setExerciseRest(a.id, program.id, "e1", 10), message("DRAFT_INVALID"), "меньше 15 с нельзя");
+    await assert.rejects(plans.setExerciseRest(a.id, program.id, "e1", 0), message("DRAFT_INVALID"), "0 с нельзя");
+    await assert.rejects(plans.setExerciseRest(a.id, program.id, "e1", 3601), message("DRAFT_INVALID"), "больше 60 мин нельзя");
+    assert.equal((await plans.setExerciseRest(a.id, program.id, "e1", 3600)).revision > 0, true, "ровно 60:00 можно");
     await assert.rejects(plans.setExerciseRest(a.id, other.id, "e1", 60), message("TARGET_NOT_FOUND"),
       "чужая программа — не своя");
     await assert.rejects(plans.setExerciseRest(b.id, program.id, "e1", 60), message("TARGET_NOT_FOUND"),
       "клиент не участник программы");
   } finally {
     await close();
+  }
+});
+
+test("T03 миграция v4 планов: отдых до 60 мин в схеме, данные и связи упражнений с подходами сохранены", async () => {
+  const db = new DatabaseSync(":memory:");
+  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const clients = new DevClientRepository(shared, WS, [devTrainingPlansClientDeletionParticipant]);
+  await clients.initialize();
+  const { writer } = await shared.acquire();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    await runMigrations(writer, devTrainingPlansCatalog.slice(0, 3), DEV_TRAINING_PLANS_LEDGER);
+    db.prepare(`INSERT INTO dev_training_programs (id, workspace_id, kind, title, revision, created_at, updated_at, weeks)
+      VALUES ('p', ?, 'SIMPLE', 'База', 1, 'x', 'x', 4)`).run(WS);
+    db.prepare("INSERT INTO dev_training_program_members (workspace_id, program_id, client_id, joined_at) VALUES (?, 'p', ?, 'x')").run(WS, a.id);
+    db.prepare("INSERT INTO dev_training_workouts (id, workspace_id, program_id, position, title) VALUES ('w', ?, 'p', 0, 'Т1')").run(WS);
+    db.prepare(`INSERT INTO dev_training_planned_exercises (id, workspace_id, workout_id, position, exercise_id, rest_sec)
+      VALUES ('e', ?, 'w', 0, ?, 120)`).run(WS, BENCH);
+    db.prepare(`INSERT INTO dev_training_planned_sets (id, workspace_id, planned_exercise_id, position, reps)
+      VALUES ('s', ?, 'e', 0, 8)`).run(WS);
+    assert.throws(() => db.prepare("UPDATE dev_training_planned_exercises SET rest_sec = 3600 WHERE id = 'e'").run(), /CHECK/);
+    await runMigrations(writer, devTrainingPlansCatalog, DEV_TRAINING_PLANS_LEDGER);
+    assert.deepEqual({ ...db.prepare("SELECT rest_sec AS rest FROM dev_training_planned_exercises WHERE id = 'e'").get() }, { rest: 120 });
+    assert.deepEqual({ ...db.prepare("SELECT reps FROM dev_training_planned_sets WHERE id = 's'").get() }, { reps: 8 });
+    db.prepare("UPDATE dev_training_planned_exercises SET rest_sec = 3600 WHERE id = 'e'").run();
+    assert.throws(() => db.prepare("UPDATE dev_training_planned_exercises SET rest_sec = 3601 WHERE id = 'e'").run(), /CHECK/);
+    assert.throws(() => db.prepare(`INSERT INTO dev_training_planned_sets (id, workspace_id, planned_exercise_id, position)
+      VALUES ('s2', ?, 'missing', 1)`).run(WS), /FOREIGN KEY/, "подход без упражнения — по-прежнему ошибка связи");
+    assert.throws(() => db.prepare("DELETE FROM dev_training_planned_exercises WHERE id = 'e'").run(), /FOREIGN KEY/,
+      "упражнение с подходами не удаляется молча");
+  } finally {
+    await shared.release();
+    await clients.close();
   }
 });

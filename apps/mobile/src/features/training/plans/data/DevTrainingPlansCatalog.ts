@@ -125,4 +125,43 @@ export const devTrainingPlansCatalog: readonly MigrationStep[] = [{
     `ALTER TABLE dev_training_planned_exercises ADD COLUMN rest_sec INTEGER DEFAULT 90
       CHECK (rest_sec IS NULL OR rest_sec BETWEEN 15 AND 900)`,
   ],
+}, {
+  version: 4,
+  checksum: "t03-dev-training-plans-v4-rest-up-to-60-min-20261018",
+  statements: [
+    // Отдых 1 с – 60 мин. CHECK в SQLite не меняется на месте: упражнения и их подходы пересобираются
+    // с теми же данными; подходы ссылаются на новую таблицу, после переименования связи сохраняются.
+    `CREATE TABLE dev_training_planned_exercises_v4 (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      workout_id TEXT NOT NULL,
+      position INTEGER NOT NULL CHECK (position >= 0),
+      exercise_id TEXT NOT NULL CHECK (exercise_id LIKE 'sys:%' OR exercise_id LIKE 'usr:%'),
+      rest_sec INTEGER DEFAULT 90 CHECK (rest_sec IS NULL OR rest_sec BETWEEN 1 AND 3600),
+      UNIQUE (id, workspace_id),
+      FOREIGN KEY (workout_id, workspace_id) REFERENCES dev_training_workouts(id, workspace_id) ON DELETE RESTRICT
+    )`,
+    `INSERT INTO dev_training_planned_exercises_v4 (id, workspace_id, workout_id, position, exercise_id, rest_sec)
+      SELECT id, workspace_id, workout_id, position, exercise_id, rest_sec FROM dev_training_planned_exercises`,
+    `CREATE TABLE dev_training_planned_sets_v4 (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      planned_exercise_id TEXT NOT NULL,
+      position INTEGER NOT NULL CHECK (position >= 0),
+      reps INTEGER CHECK (reps IS NULL OR reps BETWEEN 1 AND 999),
+      load_grams INTEGER CHECK (load_grams IS NULL OR load_grams BETWEEN 0 AND 1000000),
+      duration_sec INTEGER CHECK (duration_sec IS NULL OR duration_sec BETWEEN 1 AND 86400),
+      distance_m INTEGER CHECK (distance_m IS NULL OR distance_m BETWEEN 1 AND 1000000),
+      FOREIGN KEY (planned_exercise_id, workspace_id) REFERENCES dev_training_planned_exercises_v4(id, workspace_id) ON DELETE RESTRICT
+    )`,
+    `INSERT INTO dev_training_planned_sets_v4 (id, workspace_id, planned_exercise_id, position, reps, load_grams, duration_sec,
+      distance_m) SELECT id, workspace_id, planned_exercise_id, position, reps, load_grams, duration_sec, distance_m
+      FROM dev_training_planned_sets`,
+    `DROP TABLE dev_training_planned_sets`,
+    `DROP TABLE dev_training_planned_exercises`,
+    `ALTER TABLE dev_training_planned_exercises_v4 RENAME TO dev_training_planned_exercises`,
+    `ALTER TABLE dev_training_planned_sets_v4 RENAME TO dev_training_planned_sets`,
+    `CREATE INDEX dev_training_planned_exercises_workout ON dev_training_planned_exercises(workspace_id, workout_id, position)`,
+    `CREATE INDEX dev_training_planned_sets_exercise ON dev_training_planned_sets(workspace_id, planned_exercise_id, position)`,
+  ],
 }];

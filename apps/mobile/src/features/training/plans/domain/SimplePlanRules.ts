@@ -54,7 +54,7 @@ export function validateDraft(draft: SimpleProgramDraft,
       if (exercise.sets.length === 0) issues.push({ workoutId: workout.id, exerciseId: exercise.id, message: "Нужен хотя бы один подход." });
       if (exercise.restSec !== null && (!Number.isInteger(exercise.restSec) || exercise.restSec < REST_MIN_SEC
         || exercise.restSec > REST_MAX_SEC)) {
-        issues.push({ workoutId: workout.id, exerciseId: exercise.id, message: "Отдых — от 15 секунд до 15 минут." });
+        issues.push({ workoutId: workout.id, exerciseId: exercise.id, message: "Отдых — от 1 секунды до 60 минут." });
       }
       const allowed = new Set(setFieldsOf(metrics));
       for (const set of exercise.sets) {

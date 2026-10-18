@@ -43,7 +43,7 @@ export const WEEKS_MIN = 1;
 export const WEEKS_MAX = 52;
 export const DEFAULT_WEEKS = 4;
 
-/** Отдых нового упражнения и допустимые границы (шаг кнопок — 15 с). */
+/** Отдых нового упражнения и допустимые границы: барабан 0–60 мин и 0–59 с (решение владельца 2026-10-18). */
 export const REST_DEFAULT_SEC = 90;
-export const REST_MIN_SEC = 15;
-export const REST_MAX_SEC = 900;
+export const REST_MIN_SEC = 1;
+export const REST_MAX_SEC = 3600;

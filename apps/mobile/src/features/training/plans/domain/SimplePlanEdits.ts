@@ -63,7 +63,7 @@ export const addExercise = (draft: SimpleProgramDraft, workoutId: string, planne
     sets: Array.from({ length: DEFAULT_SETS }, (_, index) => emptySet(setId(index))) });
 });
 
-/** §48.56: отдых упражнения в границах 15 с – 15 мин; `null` выключает таймер. */
+/** §48.56: отдых упражнения в границах 1 с – 60 мин; `null` выключает таймер. */
 export const setRest = (draft: SimpleProgramDraft, plannedId: string, restSec: number | null) => produce(draft, (d) => {
   const exercise = exerciseOf(d, plannedId);
   if (exercise === undefined) return;
