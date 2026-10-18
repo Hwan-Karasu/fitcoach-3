@@ -9,7 +9,7 @@ import { CreateProgramScreen, MesocycleCreatorScreen, ProgramLibraryScreen, Prog
   type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
   type TrainingPlansRepositoryPort, ProgramWeeksPanel, WorkoutScreen, type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort,
   type WorkoutSlot } from "../../features/training/public.ts";
-import { ExerciseLibraryScreen, type ExerciseCatalogPort } from "../../features/exercises/public.ts";
+import { CustomExerciseEditorScreen, ExerciseLibraryScreen, type ExerciseCatalogPort } from "../../features/exercises/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { TrainingHeader } from "./TrainingHeader.tsx";
 
@@ -25,6 +25,7 @@ type TrainingRoutes = {
   TrainingWeek: { programId: string; mesocycleId: string; weekIndex: number; picked?: PickedExercise };
   /** Каталог для выбора упражнения; результат возвращается на экран `returnTo` с теми же параметрами. */
   TrainingPickExercise: { workoutId: string; replace?: string; returnTo: PickReturn };
+  TrainingCreateExercise: { initialName: string; pick: TrainingRoutes["TrainingPickExercise"] };
   TrainingWorkout: { programId: string; weekIndex: number; workoutId: string; mesocycleId?: string };
 };
 
@@ -37,6 +38,7 @@ const trainingTitles: Readonly<Record<keyof TrainingRoutes, string>> = {
   TrainingIndex: "Программы", TrainingChooser: "Новая программа", TrainingCreate: "Создание программы",
   TrainingProgram: "Программа", TrainingBuilder: "Простой конструктор", TrainingMesocycle: "Новый мезоцикл",
   TrainingWeek: "Редактирование недели", TrainingPickExercise: "Выбор упражнения", TrainingWorkout: "Дневник тренировки",
+  TrainingCreateExercise: "Своё упражнение",
 };
 
 const HomeStack = createNativeStackNavigator<HomeRoutes>();
@@ -167,11 +169,23 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingPickExercise">
         {({ navigation, route }) => <ExerciseLibraryScreen repository={exercises} picking
-          onCreate={() => undefined}
+          onCreate={(initialName) => navigation.navigate("TrainingCreateExercise", { initialName, pick: route.params })}
           onOpen={(exerciseId) => {
             const picked: PickedExercise = { token: `${Date.now()}`, workoutId: route.params.workoutId, exerciseId,
               ...(route.params.replace === undefined ? {} : { replace: route.params.replace }) };
             const back = route.params.returnTo;
+            if (back.name === "TrainingBuilder") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
+            else if (back.name === "TrainingMesocycle") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
+            else navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
+          }} />}
+      </TrainingStack.Screen>
+      <TrainingStack.Screen name="TrainingCreateExercise">
+        {({ navigation, route }) => <CustomExerciseEditorScreen repository={exercises} initialName={route.params.initialName}
+          onCancel={() => navigation.goBack()} onSaved={(exerciseId) => {
+            const source = route.params.pick;
+            const picked: PickedExercise = { token: `${Date.now()}`, workoutId: source.workoutId, exerciseId,
+              ...(source.replace === undefined ? {} : { replace: source.replace }) };
+            const back = source.returnTo;
             if (back.name === "TrainingBuilder") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
             else if (back.name === "TrainingMesocycle") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
             else navigation.popTo(back.name, { ...back.params, picked }, { merge: true });

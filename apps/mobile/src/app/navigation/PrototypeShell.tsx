@@ -125,6 +125,7 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
         </Stack.Screen>
         <Stack.Screen name="ExerciseEditor" options={{ title: "Своё упражнение" }}>
           {({ navigation, route }) => <CustomExerciseEditorScreen exerciseId={route.params?.exerciseId}
+            onCancel={() => navigation.goBack()}
             initialName={route.params?.name} repository={services.exercises}
             onSaved={(exerciseId) => route.params?.exerciseId !== undefined ? navigation.goBack()
               : navigation.replace("ExerciseDetail", { exerciseId })} />}

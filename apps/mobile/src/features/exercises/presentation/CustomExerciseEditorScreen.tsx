@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { AppButton, InlineNotice, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
+import { StickyEditorFooter, TrainingEditorLayout, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import type { ExerciseCatalogPort } from "../domain/ExerciseCatalogPort.ts";
@@ -17,11 +17,12 @@ const errors: Readonly<Record<string, string>> = {
 };
 
 /** §31.11 Своё упражнение: название, группа мышц (обязательно), оборудование, способ записи подхода. */
-export function CustomExerciseEditorScreen({ exerciseId, initialName, repository, onSaved }: Readonly<{
+export function CustomExerciseEditorScreen({ exerciseId, initialName, repository, onSaved, onCancel }: Readonly<{
   exerciseId?: string;
   initialName?: string;
   repository: ExerciseCatalogPort;
   onSaved: (exerciseId: string) => void;
+  onCancel: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -44,7 +45,7 @@ export function CustomExerciseEditorScreen({ exerciseId, initialName, repository
       setEquipment(entry.definition.equipment ?? "none");
       setProfile(entry.definition.trackingProfile);
       setRevision(current);
-    });
+    }).catch(() => { if (active) setError("Не удалось загрузить упражнение."); });
     return () => { active = false; };
   }, [exerciseId, repository]);
 
@@ -67,6 +68,7 @@ export function CustomExerciseEditorScreen({ exerciseId, initialName, repository
   };
 
   return (
+    <TrainingEditorLayout>
     <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>
         {exerciseId === undefined ? "Новое упражнение" : "Изменить упражнение"}
@@ -87,10 +89,11 @@ export function CustomExerciseEditorScreen({ exerciseId, initialName, repository
         {COMMON_EQUIPMENT.map((item) => <SelectionChip key={item} group="Оборудование" label={equipmentFilterLabel(item)}
           selected={equipment === item} onPress={() => setEquipment(item)} />)}
       </View>
-      {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
-      <AppButton label={exerciseId === undefined ? "Создать упражнение" : "Сохранить"} busy={busy}
-        disabled={name.trim().length === 0} onPress={() => { void save(); }} />
     </ScrollView>
+    <StickyEditorFooter actionLabel={exerciseId === undefined ? "Создать упражнение" : "Сохранить"} busy={busy}
+      disabled={name.trim().length === 0 || (exerciseId !== undefined && revision === null)}
+      onAction={() => { void save(); }} onCancel={onCancel} message={error} messageKind="error" />
+    </TrainingEditorLayout>
   );
 }
 

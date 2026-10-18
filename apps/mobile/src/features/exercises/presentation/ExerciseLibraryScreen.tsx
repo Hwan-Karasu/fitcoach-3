@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
-import { FlatList, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BackHandler, FlatList, Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView, type BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronRight, Dumbbell, Plus, SlidersHorizontal, Star, X } from "lucide-react-native";
 import { AppButton, FilterPill, FloatingActionButton, InlineNotice, LoadingState, SearchField,
@@ -41,8 +42,8 @@ function ExerciseRow({ entry, onPress }: Readonly<{ entry: CatalogEntry; onPress
   const thumbnail = thumbnailOf(definition.media);
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`${name}. ${meta}${overlay.favorite ? ". В избранном" : ""}`}
-      onPress={onPress} style={({ pressed }) => [styles.row, { borderBottomColor: colors.border,
-        backgroundColor: pressed ? colors.surfaceRaised : "transparent", opacity: overlay.hidden ? 0.55 : 1 }]}>
+      onPress={onPress} style={({ pressed }) => [styles.row, { borderColor: colors.border,
+        backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: overlay.hidden ? 0.55 : 1 }]}>
       <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>
         {thumbnail !== null ? <Image source={thumbnail} style={styles.thumbImage} accessibilityIgnoresInvertColors />
           : <Dumbbell size={18} color={colors.accentInk} strokeWidth={1.8} />}
@@ -65,12 +66,22 @@ function FiltersSheet({ visible, filters, onChange, onClose }: Readonly<{
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const insets = useSafeAreaInsets();
+  const sheet = useRef<BottomSheetModal>(null);
+  const backdrop = useCallback((props: BottomSheetBackdropProps) => <BottomSheetBackdrop {...props}
+    appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior="close" />, []);
+  useEffect(() => {
+    if (!visible) { sheet.current?.dismiss(); return undefined; }
+    sheet.current?.present();
+    const back = BackHandler.addEventListener("hardwareBackPress", () => { onClose(); return true; });
+    return () => back.remove();
+  }, [visible, onClose]);
   return (
-    <Modal visible={visible} transparent animationType="slide" statusBarTranslucent onRequestClose={onClose}>
-      <Pressable accessibilityLabel="Закрыть фильтры" style={[StyleSheet.absoluteFill, styles.scrim]} onPress={onClose} />
-      <View style={[styles.sheet, { paddingBottom: 12 + insets.bottom, backgroundColor: colors.canvas, borderColor: colors.border }]}>
+    <BottomSheetModal ref={sheet} snapPoints={["85%"]} enableDynamicSizing={false} onDismiss={onClose}
+      backdropComponent={backdrop} backgroundStyle={{ backgroundColor: colors.canvas, borderRadius: 12 }}
+      handleIndicatorStyle={{ backgroundColor: colors.border }}>
+      <View style={[styles.sheet, { paddingBottom: 12 + insets.bottom }]}>
         <Text accessibilityRole="header" style={[styles.sheetTitle, { color: colors.textPrimary }]}>Фильтры</Text>
-        <ScrollView contentContainerStyle={styles.sheetBody}>
+        <BottomSheetScrollView contentContainerStyle={styles.sheetBody}>
           <Text style={[styles.group, { color: colors.textPrimary }]}>Группа мышц</Text>
           <View style={styles.chips}>
             {BODY_PARTS.map((part) => <SelectionChip key={part} group="Группа мышц" label={bodyPartLabels[part]}
@@ -90,13 +101,13 @@ function FiltersSheet({ visible, filters, onChange, onClose }: Readonly<{
             <SelectionChip group="Скрытые" label="Показывать скрытые" selected={filters.showHidden}
               onPress={() => onChange({ ...filters, showHidden: !filters.showHidden })} />
           </View>
-        </ScrollView>
+        </BottomSheetScrollView>
         <View style={styles.sheetActions}>
           <View style={styles.grow}><AppButton variant="secondary" label="Сбросить" onPress={() => onChange(NO_FILTERS)} /></View>
           <View style={styles.grow}><AppButton label="Готово" onPress={onClose} /></View>
         </View>
       </View>
-    </Modal>
+    </BottomSheetModal>
   );
 }
 
@@ -199,12 +210,12 @@ const styles = StyleSheet.create({
   top: { paddingHorizontal: 16, paddingTop: 12, gap: 10 },
   pills: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  activeChip: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, minHeight: 30 },
+  activeChip: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, minHeight: 48 },
   activeChipText: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18 },
-  listContent: { paddingBottom: 96 },
+  listContent: { paddingBottom: 96, paddingHorizontal: 16, gap: 8 },
   counter: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 },
   row: { flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: 16, paddingRight: 12, paddingVertical: 10,
-    minHeight: 60, borderBottomWidth: StyleSheet.hairlineWidth },
+    minHeight: 64, borderWidth: 1, borderRadius: 12 },
   thumb: { width: 48, height: 48, borderRadius: 8, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   thumbImage: { width: 48, height: 48 },
   grow: { flex: 1, minWidth: 0 },
@@ -213,9 +224,7 @@ const styles = StyleSheet.create({
   badge: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14, borderWidth: 1, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
   empty: { padding: 16, gap: 12 },
   attribution: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, textAlign: "center", padding: 16 },
-  scrim: { backgroundColor: "rgba(0,0,0,0.45)" },
-  sheet: { position: "absolute", left: 0, right: 0, bottom: 0, maxHeight: "85%", borderTopLeftRadius: 16,
-    borderTopRightRadius: 16, borderWidth: 1, paddingTop: 14 },
+  sheet: { flex: 1, paddingTop: 8, gap: 8 },
   sheetTitle: { fontFamily: fonts.semibold, fontSize: 17, lineHeight: 22, paddingHorizontal: 16 },
   sheetBody: { padding: 16, gap: 10 },
   group: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19, marginTop: 4 },
