@@ -71,7 +71,7 @@ function MoreNavigator({ client, questionnaire, onClose, onOpenClients }: Readon
 }
 
 export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, questionnaire, trainingPlans, trainingExecution, restTimers, activeWorkouts, onOpenWorkout, exercises, exerciseLookup, weekCopy, weekSwap, onOpenEdit, onOpenAccounting,
-  onOpenMeasurements, onClose, onOpenClients }: Readonly<{
+  onOpenMeasurements, onClose, onOpenClients, onOpenExercise }: Readonly<{
   clientId: string;
   repository: ClientRepositoryPort & ClientRosterPort;
   accounting: AccountingRepositoryPort;
@@ -91,6 +91,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   onOpenMeasurements: (clientId: string) => void;
   onClose: () => void;
   onOpenClients: () => void;
+  onOpenExercise?: (exerciseId: string) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -174,7 +175,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
         {() => <TrainingNavigator clientId={client.id} clientName={client.displayName} clientEmoji={client.emoji} repository={trainingPlans}
           execution={trainingExecution} restTimers={restTimers} activeWorkouts={activeWorkouts} onOpenWorkout={onOpenWorkout}
           listCandidates={listCandidates} onExitClient={onClose} onOpenClients={onOpenClients}
-          exercises={exercises} exerciseLookup={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap} />}
+          exercises={exercises} exerciseLookup={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap} onOpenExercise={onOpenExercise} />}
       </Tabs.Screen>
       <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More}}>
         {() => <MoreNavigator client={client} questionnaire={questionnaire} onClose={onClose} onOpenClients={onOpenClients} />}

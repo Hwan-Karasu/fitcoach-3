@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView, type BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
-import { Check } from "lucide-react-native";
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Link2, PencilLine, RefreshCw, Unlink, X } from "lucide-react-native";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
@@ -136,6 +136,8 @@ export const RpeSheet = forwardRef<BottomSheetModal, Readonly<{
 
 const styles = StyleSheet.create({
   body: { padding: 16, paddingBottom: 32, gap: 10 },
+  menuRow: { flexDirection: "row", alignItems: "center", gap: 14, minHeight: 52, borderRadius: 12, paddingHorizontal: 14 },
+  menuText: { flex: 1, fontFamily: fonts.medium, fontSize: 15, lineHeight: 20 },
   title: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, marginBottom: 2 },
   option: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 56, borderWidth: 1, borderRadius: 12,
     paddingHorizontal: 12, paddingVertical: 8 },
@@ -148,4 +150,61 @@ const styles = StyleSheet.create({
   rpeText: { fontFamily: fonts.semibold, fontSize: 14 },
   clear: { minHeight: 48, justifyContent: "center", alignSelf: "flex-start" },
   clearText: { fontFamily: fonts.medium, fontSize: 13 },
+});
+
+export type ExerciseMenuAction = "order" | "replace" | "superset" | "leaveSuperset" | "plan" | "remove";
+
+/**
+ * Меню «⋮» упражнения в дневнике (UI-OWN-037, как в 2.0): правка плана сразу на месте, затем выбор области.
+ * «Изменить план тренировки» — полный редактор (повторы, RIR, указания).
+ */
+export const ExerciseMenuSheet = forwardRef<BottomSheetModal, Readonly<{
+  title: string;
+  inSuperset: boolean;
+  canSuperset: boolean;
+  canReorder: boolean;
+  onSelect: (action: ExerciseMenuAction) => void;
+}>>(function ExerciseMenuSheet({ title, inSuperset, canSuperset, canReorder, onSelect }, ref) {
+  const { palette } = usePrototypeTheme();
+  const colors = palette.tokens;
+  const items: readonly Readonly<{ action: ExerciseMenuAction; label: string; icon: ReactNode; danger?: boolean }>[] = [
+    ...(canReorder ? [{ action: "order" as const, label: "Изменить порядок", icon: <ArrowUpDown size={18} color={colors.textPrimary} strokeWidth={1.9} /> }] : []),
+    { action: "replace", label: "Заменить упражнение", icon: <RefreshCw size={18} color={colors.textPrimary} strokeWidth={1.9} /> },
+    ...(inSuperset ? [{ action: "leaveSuperset" as const, label: "Убрать из суперсета", icon: <Unlink size={18} color={colors.textPrimary} strokeWidth={1.9} /> }]
+      : canSuperset ? [{ action: "superset" as const, label: "Добавить в суперсет", icon: <Link2 size={18} color={colors.textPrimary} strokeWidth={1.9} /> }] : []),
+    { action: "plan", label: "Изменить план тренировки", icon: <PencilLine size={18} color={colors.textPrimary} strokeWidth={1.9} /> },
+    { action: "remove", label: "Удалить упражнение", icon: <X size={18} color={colors.danger} strokeWidth={2} />, danger: true },
+  ];
+  return (
+    <PickerSheet ref={ref} title={title}>
+      {items.map((item) => (
+        <Pressable key={item.action} accessibilityRole="button" accessibilityLabel={item.label} onPress={() => onSelect(item.action)}
+          style={({ pressed }) => [styles.menuRow, { backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
+          {item.icon}
+          <Text style={[styles.menuText, { color: item.danger === true ? colors.danger : colors.textPrimary }]}>{item.label}</Text>
+        </Pressable>
+      ))}
+    </PickerSheet>
+  );
+});
+
+/** Суперсет с соседним упражнением: выше или ниже. */
+export const SupersetPickSheet = forwardRef<BottomSheetModal, Readonly<{
+  above: string | null; below: string | null; onSelect: (side: "above" | "below") => void;
+}>>(function SupersetPickSheet({ above, below, onSelect }, ref) {
+  const { palette } = usePrototypeTheme();
+  const colors = palette.tokens;
+  return (
+    <PickerSheet ref={ref} title="Суперсет с упражнением">
+      {([["above", above], ["below", below]] as const).map(([side, name]) => name === null ? null : (
+        <Pressable key={side} accessibilityRole="button" accessibilityLabel={`Суперсет с «${name}» ${side === "above" ? "выше" : "ниже"}`}
+          onPress={() => onSelect(side)}
+          style={({ pressed }) => [styles.menuRow, { backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
+          {side === "above" ? <ArrowUp size={18} color={colors.textPrimary} strokeWidth={1.9} />
+            : <ArrowDown size={18} color={colors.textPrimary} strokeWidth={1.9} />}
+          <Text numberOfLines={2} style={[styles.menuText, { color: colors.textPrimary }]}>{name}</Text>
+        </Pressable>
+      ))}
+    </PickerSheet>
+  );
 });

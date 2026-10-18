@@ -31,7 +31,7 @@ type TrainingRoutes = {
   TrainingPickExercise: { workoutId: string; replace?: string; returnTo: PickReturn };
   /** `selected` — уже отмеченные в каталоге упражнения: созданное встаёт после них (UI-OWN-029). */
   TrainingCreateExercise: { initialName: string; pick: TrainingRoutes["TrainingPickExercise"]; selected?: readonly string[] };
-  TrainingWorkout: { programId: string; weekIndex: number; workoutId: string; mesocycleId?: string };
+  TrainingWorkout: { programId: string; weekIndex: number; workoutId: string; mesocycleId?: string; picked?: PickedExercise };
 };
 
 type PickReturn =
@@ -39,7 +39,8 @@ type PickReturn =
   | Readonly<{ name: "TrainingMesocycle"; params: { programId: string } }>
   | Readonly<{ name: "TrainingWeek"; params: { programId: string; mesocycleId: string; weekIndex: number } }>
   | Readonly<{ name: "TrainingSimpleWorkout"; params: { programId: string; weekIndex: number; workoutId: string } }>
-  | Readonly<{ name: "TrainingTemplateEdit"; params: { templateId: string } }>;
+  | Readonly<{ name: "TrainingTemplateEdit"; params: { templateId: string } }>
+  | Readonly<{ name: "TrainingWorkout"; params: { programId: string; weekIndex: number; workoutId: string; mesocycleId?: string } }>;
 
 const trainingTitles: Readonly<Record<keyof TrainingRoutes, string>> = {
   TrainingIndex: "Программы", TrainingChooser: "Создать программу", TrainingCreate: "Создание программы",
@@ -108,7 +109,7 @@ export function NutritionNavigator() {
  * Стек не сбрасывается при смене вкладок; после создания в стеке «список → программа».
  * Шапка — общая строка карточки клиента (UI-OWN-001), назад — системной кнопкой.
  */
-export function TrainingNavigator({ clientId, clientName, clientEmoji, repository, execution, restTimers, activeWorkouts, onOpenWorkout,
+export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExercise, repository, execution, restTimers, activeWorkouts, onOpenWorkout,
   listCandidates, exercises, exerciseLookup, weekCopy, weekSwap, onExitClient, onOpenClients }: Readonly<{
   clientId: string;
   clientName: string;
@@ -125,6 +126,8 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, repositor
   weekSwap: WeekSwapPort;
   onExitClient: () => void;
   onOpenClients: () => void;
+  /** Карточка упражнения из дневника (корневой стек). */
+  onOpenExercise?: (exerciseId: string) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   // Простая программа создаётся сразу в конструкторе; расширенная — пока через название и участников.
@@ -224,6 +227,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, repositor
             if (back.name === "TrainingBuilder") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
             else if (back.name === "TrainingMesocycle") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
             else if (back.name === "TrainingWeek") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
+            else if (back.name === "TrainingWorkout") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
             else navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
           }} />}
       </TrainingStack.Screen>
@@ -238,6 +242,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, repositor
             if (back.name === "TrainingBuilder") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
             else if (back.name === "TrainingMesocycle") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
             else if (back.name === "TrainingWeek") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
+            else if (back.name === "TrainingWorkout") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
             else navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
           }} />}
       </TrainingStack.Screen>
@@ -274,6 +279,12 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, repositor
         {({ route, navigation }) => <WorkoutScreen slot={{ clientId, programId: route.params.programId, weekIndex: route.params.weekIndex,
           plannedWorkoutId: route.params.workoutId }} clientName={clientName} plans={repository} execution={execution}
           restTimers={restTimers} activeWorkouts={activeWorkouts} onOpenWorkout={onOpenWorkout} exercises={exerciseLookup}
+          picked={route.params.picked ?? null} onOpenExercise={onOpenExercise}
+          onOpenMatrix={() => navigation.navigate("TrainingMatrix", { programId: route.params.programId })}
+          onPickExercises={(replace) => navigation.navigate("TrainingPickExercise", { workoutId: route.params.workoutId,
+            ...(replace === undefined ? {} : { replace }),
+            returnTo: { name: "TrainingWorkout", params: { programId: route.params.programId, weekIndex: route.params.weekIndex,
+              workoutId: route.params.workoutId, ...(route.params.mesocycleId === undefined ? {} : { mesocycleId: route.params.mesocycleId }) } } })}
           onEditWeek={(mesocycleId) => {
             if (mesocycleId === null) navigation.navigate("TrainingSimpleWorkout", { programId: route.params.programId,
               workoutId: route.params.workoutId, weekIndex: route.params.weekIndex });

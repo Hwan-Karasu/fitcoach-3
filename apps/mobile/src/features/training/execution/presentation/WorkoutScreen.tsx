@@ -5,20 +5,29 @@ import { useKeepAwake } from "expo-keep-awake";
 import * as Haptics from "expo-haptics";
 import { usePreventRemove, useNavigation } from "@react-navigation/native";
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { CalendarDays, Check, Gauge, NotebookPen, PencilLine, Plus, Timer, Trash2, Users, X } from "lucide-react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { scheduleOnRN } from "react-native-worklets";
+import { captureRef } from "react-native-view-shot";
+import * as Sharing from "expo-sharing";
+import Sortable from "react-native-sortables";
+import { CalendarDays, Check, ChevronRight, EllipsisVertical, Gauge, GripVertical, LayoutGrid, NotebookPen, Plus, Share2, Timer, Trash2,
+  Users, X } from "lucide-react-native";
 import { AppButton, ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, StatusTag, WeekCards, useWeekNavigation,
   type StatusKind } from "../../../../shared/ui/components/public.ts";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
-import { formatDuration, formatRange, supersetNumber, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookup, type ExerciseLookupPort,
-  type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort, type WorkoutWeekNavigation } from "../../plans/public.ts";
+import { DiaryEditDialog, formatDuration, formatRange, supersetNumber, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookup,
+  type DiaryEdit, type ExerciseLookupPort, type PickedExercise, type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort,
+  type WorkoutWeekNavigation } from "../../plans/public.ts";
 import { DROPS_MAX, EMPTY_VALUES, NOTE_MAX, type ActiveWorkoutCard, type ActiveWorkoutsPort, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type Side,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
 import { displayOrder, localDateOf, nextOutcome, type SetField } from "../domain/ExecutionRules.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
-import { ActiveWorkoutsSheet, RpeSheet, SetTypeSheet } from "./SetPickers.tsx";
+import { ActiveWorkoutsSheet, ExerciseMenuSheet, RpeSheet, SetTypeSheet, SupersetPickSheet, type ExerciseMenuAction } from "./SetPickers.tsx";
+import { factVolume } from "./programMatrix.ts";
+import { WorkoutSharePoster } from "./WorkoutSharePoster.tsx";
 import { compactValues, compactWithDrops, diaryFields, fieldHeaders, fieldNames, parseField, planText, rawOf, rpeTone, sanitizeField,
   setTypeLabels, setTypeTone, shortDate, workoutStatusLabels } from "./setFormat.ts";
 import { extraWarmups, useWorkoutDiary, type SetPatch } from "./useWorkoutDiary.ts";
@@ -245,14 +254,18 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
           <Text style={[styles.markerText, { color: full ? colors.canvas : tone ?? colors.textPrimary }]}>{marker}</Text>
         </Pressable>
         <Text style={[styles.plan, { color: colors.textSecondary }]} numberOfLines={1}>{number === null ? "—" : planText(set, fields)}</Text>
-        <Pressable accessibilityRole="button" disabled={previous === undefined} hitSlop={6} style={styles.previous}
+        {/* «Пред.» — кнопка-плашка (UI-OWN-037): нажатие переносит прошлый результат в подход. */}
+        <Pressable accessibilityRole="button" disabled={previous === undefined} hitSlop={6}
+          style={({ pressed }) => [styles.previous, previous === undefined ? null : [styles.previousChip, {
+            borderColor: withAlpha(colors.accentInk, 0.45), backgroundColor: withAlpha(colors.accentInk, pressed ? 0.22 : 0.1) }]]}
           accessibilityLabel={previous === undefined ? "Прошлого результата нет" : `Перенести прошлый результат ${previousText}`}
           onPress={() => {
             if (previous === undefined) return;
             if (previous.sides !== null) { onSave(target, { sidesFrom: previous.sides }); return; }
             onSave(target, type === "DROP" ? { fields: previous.values, drops: previous.drops } : { fields: previous.values });
           }}>
-          <Text style={[styles.previousText, { color: previous === undefined ? colors.textMuted : colors.accentInk }]} numberOfLines={2}>
+          <Text style={[styles.previousText, { color: previous === undefined ? colors.textMuted : colors.accentInk }]} numberOfLines={1}
+            adjustsFontSizeToFit minimumFontScale={0.75}>
             {previousText}
           </Text>
         </Pressable>
@@ -322,7 +335,7 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
  * исхода спрашивает «Завершить тренировку?» (§48.36).
  */
 export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, activeWorkouts, onOpenWorkout,
-  exercises, onChangeWeek, onEditWeek }: Readonly<{
+  exercises, onChangeWeek, onEditWeek, onOpenMatrix, onPickExercises, picked, onOpenExercise }: Readonly<{
   slot: WorkoutSlot;
   /** Подпись таймера отдыха — таймеры разных клиентов различимы (§48.62). */
   clientName: string;
@@ -335,6 +348,13 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   exercises: ExerciseLookupPort;
   onChangeWeek: (weekIndex: number, workoutId: string | null, mesocycleId: string | null) => void;
   onEditWeek: (mesocycleId: string | null) => void;
+  /** «Обзор программы» и щипок — матрица недель (UI-OWN-037). */
+  onOpenMatrix: () => void;
+  /** Каталог: добавить упражнения или (`replace`) заменить это. Результат приходит в `picked`. */
+  onPickExercises: (replace?: string) => void;
+  picked: PickedExercise | null;
+  /** «›» у названия — карточка упражнения. */
+  onOpenExercise?: (exerciseId: string) => void;
 }>) {
   useKeepAwake();
   const { palette } = usePrototypeTheme();
@@ -368,6 +388,26 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const [weekNavigation, setWeekNavigation] = useState<WorkoutWeekNavigation | null>(null);
   const [navigationError, setNavigationError] = useState<string | null>(null);
   const navigationAuthorized = useRef(false);
+  // UI-OWN-037: правка плана из дневника — действие на месте, затем выбор области в окне.
+  const menuSheet = useRef<BottomSheetModal>(null);
+  const supersetSheet = useRef<BottomSheetModal>(null);
+  const [menuFor, setMenuFor] = useState<PlannedExercise | null>(null);
+  const [edit, setEdit] = useState<DiaryEdit | null>(null);
+  const [ordering, setOrdering] = useState<readonly string[] | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
+  // Запас снизу под панель таймеров отдыха — только пока она видна (иначе внизу пустое место).
+  const [timers, setTimers] = useState(() => restTimers.list().length);
+  useEffect(() => restTimers.subscribe(() => setTimers(restTimers.list().length)), [restTimers]);
+  const posterRef = useRef<View>(null);
+  const appliedPick = useRef<string | null>(null);
+  useEffect(() => {
+    if (picked === null || appliedPick.current === picked.token) return;
+    appliedPick.current = picked.token;
+    const [first] = picked.exerciseIds;
+    if (picked.replace !== undefined && first !== undefined) setEdit({ kind: "replace", exerciseId: picked.replace, newExerciseId: first });
+    else if (picked.exerciseIds.length > 0) setEdit({ kind: "addExercises", exerciseIds: picked.exerciseIds });
+  }, [picked]);
   useEffect(() => {
     let active = true;
     const load = () => { void plans.getWorkoutWeekNavigation(slot.clientId, slot.programId, slot.plannedWorkoutId)
@@ -490,6 +530,59 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   }
   const { workout, state, previous, mode } = diary;
   const targetFact = target === null ? undefined : state.facts.get(target.set.id);
+  const volumeOf = (exerciseId: string) => [...state.facts.values()].filter((fact) => fact.plannedExerciseId === exerciseId)
+    .reduce((sum, fact) => sum + factVolume(fact), 0);
+  const workoutVolume = workout.exercises.reduce((sum, exercise) => sum + volumeOf(exercise.id), 0);
+  const kg = (value: number) => `${Math.round(value).toLocaleString("ru-RU")} кг`;
+  const shareRows = workout.exercises.map((exercise) => {
+    const fields = diaryFields(lookup.get(exercise.exerciseId)?.metrics ?? []);
+    return { name: lookup.get(exercise.exerciseId)?.name ?? "Упражнение", sets: exercise.sets.map((set) => {
+      const fact = state.facts.get(set.id);
+      return fact !== undefined && hasValues(fact.values) ? compactWithDrops(fact.values, fact.drops, fields) : `план: ${planText(set, fields)}`;
+    }) };
+  });
+  const share = () => {
+    if (sharing) return;
+    setNotice(null);
+    setSharing(true);
+    // Как в календаре: картинка рисуется вне экрана один кадр, снимается и уходит в «Поделиться».
+    setTimeout(() => {
+      void (async () => {
+        try {
+          if (!(await Sharing.isAvailableAsync())) throw new Error("SHARE_UNAVAILABLE");
+          const uri = await captureRef(posterRef, { format: "png", quality: 1, result: "tmpfile", width: 1080 });
+          await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: "Тренировка" });
+        } catch { setNavigationError("Не удалось подготовить картинку тренировки. Дневник не изменён."); }
+        finally { setSharing(false); }
+      })();
+    }, 150);
+  };
+  const openMatrix = () => {
+    if (busy) return;
+    setBusy(true);
+    void finishInput().then((saved) => { if (saved) { Keyboard.dismiss(); onOpenMatrix(); } }).finally(() => setBusy(false));
+  };
+  const pinch = Gesture.Pinch().onEnd((event) => {
+    "worklet";
+    if (event.scale < 0.75) scheduleOnRN(openMatrix);
+  });
+  const indexOf = (exercise: PlannedExercise) => workout.exercises.findIndex((item) => item.id === exercise.id);
+  const menuAction = (action: ExerciseMenuAction) => {
+    menuSheet.current?.dismiss();
+    const exercise = menuFor;
+    if (exercise === null) return;
+    flushPending();
+    if (action === "order") setOrdering(workout.exercises.map((item) => item.id));
+    else if (action === "replace") onPickExercises(exercise.id);
+    else if (action === "superset") supersetSheet.current?.present();
+    else if (action === "leaveSuperset") setEdit({ kind: "leaveSuperset", exerciseId: exercise.id });
+    else if (action === "remove") setEdit({ kind: "remove", exerciseId: exercise.id });
+    else if (weekNavigation !== null) {
+      const cycleId = weekNavigation.mesocycleId;
+      setBusy(true);
+      void finishInput().then((saved) => { if (saved) { Keyboard.dismiss(); onEditWeek(cycleId); } }).finally(() => setBusy(false));
+    }
+  };
 
   const chooseType = async (setType: SetType) => {
     typeSheet.current?.dismiss();
@@ -504,56 +597,102 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
 
   return (
     <>
-      <KeyboardAwareScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content}
+      <GestureDetector gesture={pinch}>
+      <KeyboardAwareScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={[styles.content, { paddingBottom: timers > 0 ? 200 : 24 }]}
         keyboardShouldPersistTaps="handled" bottomOffset={24}>
-        <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>{workout.title}</Text>
-        <View style={styles.metaRow}>
-          <View style={styles.dateRow}>
-            <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Неделя ${slot.weekIndex}`}</Text>
-            {state.session !== null ? (
-              // §48.84: дата проведения — по умолчанию день первого ввода, можно указать прошедший день.
-              <Pressable accessibilityRole="button" hitSlop={8}
-                accessibilityLabel={`Дата тренировки ${shortDate(state.session.actualDate)}. Изменить`}
-                onPress={() => {
-                  const current = state.session?.actualDate;
-                  if (current === undefined) return;
-                  void pickDate({ value: current, max: localDateOf(new Date()) }).then((date) => {
-                    if (date !== null && date !== current) void diary.setActualDate(date);
-                  });
-                }}
-                style={[styles.dateButton, { borderColor: colors.border }]}>
-                <CalendarDays size={15} color={colors.accentInk} strokeWidth={2} />
-                <Text style={[styles.dateText, { color: colors.accentInk }]}>{shortDate(state.session.actualDate)}</Text>
-              </Pressable>
-            ) : null}
+        <View style={[styles.topCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.titleRow}>
+            <View style={[styles.stripe, { backgroundColor: colors.accentFill }]} />
+            <Text accessibilityRole="header" numberOfLines={2} style={[styles.heading, { color: colors.textPrimary }]}>{workout.title}</Text>
+            <View style={styles.volume}>
+              <Text style={[styles.volumeLabel, { color: colors.textMuted }]}>Объём</Text>
+              <Text style={[styles.volumeValue, { color: colors.textPrimary }]}>{kg(workoutVolume)}</Text>
+            </View>
           </View>
-          <StatusTag kind={statusKinds[diary.status]} label={workoutStatusLabels[diary.status]} />
+          <View style={styles.metaRow}>
+            <View style={styles.dateRow}>
+              <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Неделя ${slot.weekIndex}`}</Text>
+              {state.session !== null ? (
+                // §48.84: дата проведения — по умолчанию день первого ввода, можно указать прошедший день.
+                <Pressable accessibilityRole="button" hitSlop={8}
+                  accessibilityLabel={`Дата тренировки ${shortDate(state.session.actualDate)}. Изменить`}
+                  onPress={() => {
+                    const current = state.session?.actualDate;
+                    if (current === undefined) return;
+                    void pickDate({ value: current, max: localDateOf(new Date()) }).then((date) => {
+                      if (date !== null && date !== current) void diary.setActualDate(date);
+                    });
+                  }}
+                  style={[styles.dateButton, { borderColor: colors.border }]}>
+                  <CalendarDays size={15} color={colors.accentInk} strokeWidth={2} />
+                  <Text style={[styles.dateText, { color: colors.accentInk }]}>{shortDate(state.session.actualDate)}</Text>
+                </Pressable>
+              ) : null}
+              {others.length > 0 ? (
+                <Pressable accessibilityRole="button" accessibilityLabel={`Другие тренировки в работе: ${others.length}. Перейти`}
+                  hitSlop={6} onPress={() => { flushPending(); Keyboard.dismiss(); activeSheet.current?.present(); }}
+                  style={[styles.othersButton, { borderColor: colors.border }]}>
+                  <Users size={14} color={colors.accentInk} strokeWidth={2} />
+                  <Text style={[styles.othersText, { color: colors.accentInk }]}>{`ещё ${others.length}`}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <StatusTag kind={statusKinds[diary.status]} label={workoutStatusLabels[diary.status]} />
+          </View>
+          <View style={styles.actions}>
+            {([
+              { label: "Добавить упражнение", icon: <Plus size={16} color={colors.accentInk} strokeWidth={2.2} />,
+                onPress: () => { flushPending(); Keyboard.dismiss(); onPickExercises(); } },
+              { label: "Обзор программы", icon: <LayoutGrid size={16} color={colors.accentInk} strokeWidth={2} />, onPress: openMatrix },
+              { label: "Поделиться", icon: <Share2 size={16} color={colors.accentInk} strokeWidth={2} />, onPress: share },
+            ] as const).map((action) => (
+              <Pressable key={action.label} accessibilityRole="button" accessibilityLabel={action.label} disabled={busy || sharing}
+                onPress={action.onPress} style={({ pressed }) => [styles.action, { borderColor: colors.border,
+                  backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: busy || sharing ? 0.6 : 1 }]}>
+                {action.icon}
+                <Text numberOfLines={2} style={[styles.actionText, { color: colors.accentInk }]}>{action.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {weekNavigation !== null ? (
+            <WeekCards weeks={weekNavigation.weeks} selected={slot.weekIndex} disabled={busy || diary.switching}
+              onSelect={(index) => { void changeWeek(index); }} />
+          ) : null}
         </View>
-        {others.length > 0 ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={`Другие тренировки в работе: ${others.length}. Перейти`}
-            hitSlop={6} onPress={() => { flushPending(); Keyboard.dismiss(); activeSheet.current?.present(); }}
-            style={[styles.othersButton, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-            <Users size={16} color={colors.accentInk} strokeWidth={2} />
-            <Text style={[styles.othersText, { color: colors.accentInk }]}>{`В работе ещё: ${others.length}`}</Text>
-          </Pressable>
-        ) : null}
         {diary.message !== null ? <InlineNotice kind="error">{diary.message}</InlineNotice> : null}
         {navigationError !== null ? <InlineNotice kind="error">{navigationError}</InlineNotice> : null}
         {restError !== null ? <InlineNotice kind="error">{restError}</InlineNotice> : null}
-        {weekNavigation !== null ? <>
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>{weekNavigation.programTitle}</Text>
-          <AppButton compact variant="secondary" label={weekNavigation.mesocycleId === null ? "Изменить план тренировки" : "Изменить план недели"} disabled={busy}
-            icon={(color) => <PencilLine size={18} color={color} />} onPress={() => {
-              const cycleId = weekNavigation.mesocycleId;
-              if (busy) return;
-              setBusy(true);
-              void finishInput().then((saved) => { if (saved) { Keyboard.dismiss(); onEditWeek(cycleId); } }).finally(() => setBusy(false));
-            }} />
-          <WeekCards weeks={weekNavigation.weeks} selected={slot.weekIndex} disabled={busy || diary.switching}
-            onSelect={(index) => { void changeWeek(index); }} />
+        {notice !== null ? <InlineNotice kind="success">{notice}</InlineNotice> : null}
+        {ordering !== null ? <>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>Перетащите упражнения за ручку, затем «Готово».</Text>
+          <Sortable.Grid data={[...ordering]} keyExtractor={(id) => id} columns={1} rowGap={8} customHandle activeItemScale={1.03}
+            renderItem={({ item }: Readonly<{ item: string }>) => {
+              const exercise = workout.exercises.find((value) => value.id === item);
+              return (
+                <View style={[styles.orderRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <Sortable.Handle>
+                    <View accessible accessibilityLabel={`Перетащить: ${lookup.get(exercise?.exerciseId ?? "")?.name ?? "упражнение"}`} style={styles.handle}>
+                      <GripVertical size={20} color={colors.textMuted} strokeWidth={1.8} />
+                    </View>
+                  </Sortable.Handle>
+                  <Text numberOfLines={2} style={[styles.exercise, styles.grow, { color: colors.textPrimary }]}>
+                    {lookup.get(exercise?.exerciseId ?? "")?.name ?? "Упражнение"}
+                  </Text>
+                </View>
+              );
+            }}
+            onDragEnd={({ data }) => setOrdering(data)} />
+          <View style={styles.orderActions}>
+            <View style={styles.grow}><AppButton compact variant="secondary" label="Отмена" onPress={() => setOrdering(null)} /></View>
+            <View style={styles.grow}><AppButton compact label="Готово" onPress={() => {
+              const order = ordering;
+              setOrdering(null);
+              if (order.some((id, index) => workout.exercises[index]?.id !== id)) setEdit({ kind: "reorder", order });
+            }} /></View>
+          </View>
         </> : null}
         {/* Смена недели — тот же экран: пока грузится новая неделя, прежние значения приглушены и не нажимаются. */}
-        <View pointerEvents={diary.switching ? "none" : "auto"} style={[styles.body, diary.switching && styles.switching]}>
+        {ordering === null ? <View pointerEvents={diary.switching ? "none" : "auto"} style={[styles.body, diary.switching && styles.switching]}>
         {workout.exercises.map((exercise) => {
           const info = lookup.get(exercise.exerciseId);
           const group = supersetNumber(workout, exercise);
@@ -571,7 +710,12 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
               <View style={styles.cardHead}>
                 {info?.thumbnail != null ? <Image source={info.thumbnail} style={[styles.thumb, { backgroundColor: colors.input }]} /> : null}
                 <View style={styles.exerciseText}>
-                  <Text style={[styles.exercise, { color: colors.textPrimary }]} numberOfLines={2}>{info?.name ?? "Упражнение"}</Text>
+                  <Pressable accessibilityRole={onOpenExercise === undefined ? undefined : "button"} disabled={onOpenExercise === undefined}
+                    accessibilityLabel={`${info?.name ?? "Упражнение"}. Открыть карточку упражнения`} hitSlop={4}
+                    onPress={() => onOpenExercise?.(exercise.exerciseId)} style={styles.nameRow}>
+                    <Text style={[styles.exercise, styles.nameText, { color: colors.textPrimary }]} numberOfLines={2}>{info?.name ?? "Упражнение"}</Text>
+                    {onOpenExercise !== undefined ? <ChevronRight size={16} color={colors.accentInk} strokeWidth={2.4} /> : null}
+                  </Pressable>
                   <View style={styles.subRow}>
                   <Pressable accessibilityRole="button" hitSlop={8} onPress={() => { Keyboard.dismiss(); setRestFor(exercise); }}
                     accessibilityLabel={exercise.restSec === null ? "Таймер отдыха выключен. Изменить"
@@ -588,7 +732,16 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                   ) : null}
                   </View>
                 </View>
-                <Text style={[styles.meta, { color: colors.textSecondary }]}>{`${done}/${rows.length}`}</Text>
+                <View style={styles.volume}>
+                  <Text style={[styles.volumeLabel, { color: colors.textMuted }]}>Объём</Text>
+                  <Text style={[styles.exerciseVolume, { color: colors.accentInk }]}>{kg(volumeOf(exercise.id))}</Text>
+                  <Text style={[styles.meta, { color: colors.textSecondary }]}>{`${done}/${rows.length}`}</Text>
+                </View>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Действия: ${info?.name ?? "упражнение"}`} hitSlop={6}
+                  onPress={() => { flushPending(); Keyboard.dismiss(); setMenuFor(exercise); menuSheet.current?.present(); }}
+                  style={styles.more}>
+                  <EllipsisVertical size={20} color={colors.textPrimary} strokeWidth={2} />
+                </Pressable>
               </View>
               {exercise.instruction !== null ? (
                 <Text accessibilityLabel={`Указание тренера: ${exercise.instruction}`}
@@ -611,6 +764,12 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                   sided={info?.unilateral === true}
                   pending={pending} onSave={onSave} onToggle={onToggle} onPickType={onPickType} onPickRpe={onPickRpe} />
               ))}
+              <Pressable accessibilityRole="button" accessibilityLabel={`Добавить подход: ${info?.name ?? "упражнение"}`}
+                onPress={() => { flushPending(); setEdit({ kind: "addSet", exerciseId: exercise.id }); }}
+                style={({ pressed }) => [styles.addSet, { borderColor: colors.border, backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
+                <Plus size={15} color={colors.accentInk} strokeWidth={2.2} />
+                <Text style={[styles.addSetText, { color: colors.accentInk }]}>Подход</Text>
+              </Pressable>
               <NoteField noteKey={`note:${exercise.id}`} value={state.notes.get(exercise.id) ?? ""} pending={pending}
                 onCommit={(text) => diary.saveNote(exercise.id, text)} />
             </View>
@@ -636,8 +795,9 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
             <Text style={[styles.deleteRunText, { color: colors.danger }]}>Удалить результаты тренировки</Text>
           </Pressable>
         ) : null}
-        </View>
+        </View> : null}
       </KeyboardAwareScrollView>
+      </GestureDetector>
       <DurationWheelPicker visible={restFor !== null} title="Отдых после подхода"
         value={restFor?.restSec ?? REST_DEFAULT_SEC} min={REST_MIN_SEC} max={REST_MAX_SEC}
         clearLabel={restFor?.restSec === null ? undefined : "Без таймера"}
@@ -689,6 +849,28 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         confirmLabel="Завершить" cancelLabel="Вернуться" confirmBusy={busy}
         onCancel={() => setConfirmIncomplete(false)}
         onConfirm={() => { void applyOutcome("COMPLETED").finally(() => setConfirmIncomplete(false)); }} />
+      <ExerciseMenuSheet ref={menuSheet} title={lookup.get(menuFor?.exerciseId ?? "")?.name ?? "Упражнение"}
+        inSuperset={menuFor?.supersetId !== undefined} canReorder={workout.exercises.length > 1}
+        canSuperset={menuFor !== null && workout.exercises.length > 1} onSelect={menuAction} />
+      <SupersetPickSheet ref={supersetSheet}
+        above={menuFor === null ? null : lookup.get(workout.exercises[indexOf(menuFor) - 1]?.exerciseId ?? "")?.name ?? null}
+        below={menuFor === null ? null : lookup.get(workout.exercises[indexOf(menuFor) + 1]?.exerciseId ?? "")?.name ?? null}
+        onSelect={(side) => {
+          supersetSheet.current?.dismiss();
+          if (menuFor === null) return;
+          const neighbour = workout.exercises[indexOf(menuFor) + (side === "above" ? -1 : 1)];
+          if (neighbour !== undefined) setEdit({ kind: "superset", exerciseIds: side === "above" ? [neighbour.id, menuFor.id] : [menuFor.id, neighbour.id] });
+        }} />
+      <DiaryEditDialog clientId={slot.clientId} programId={slot.programId} mesocycleId={weekNavigation?.mesocycleId ?? null}
+        weekIndex={slot.weekIndex} workoutId={slot.plannedWorkoutId} repository={plans} exercises={exercises} edit={edit}
+        onClose={() => setEdit(null)} onDone={(text) => { setEdit(null); setNotice(text); }} />
+      {sharing ? (
+        <View pointerEvents="none" style={styles.offscreen}>
+          <WorkoutSharePoster posterRef={posterRef} title={workout.title}
+            subtitle={[clientName, `Неделя ${slot.weekIndex}`, state.session !== null ? shortDate(state.session.actualDate) : null]
+              .filter(Boolean).join(" · ")} exercises={shareRows} />
+        </View>
+      ) : null}
       <ConfirmDialog visible={exitAction !== null} title="Завершить тренировку?"
         description="«Нет» — выйти и оставить тренировку в работе. Введённые результаты сохранятся."
         confirmLabel="Да" tertiaryLabel="Нет" cancelLabel="Остаться" confirmBusy={busy}
@@ -713,9 +895,29 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
 
 const styles = StyleSheet.create({
   center: { flex: 1, padding: 16, gap: 12, justifyContent: "center" },
-  // Снизу место под панель таймеров отдыха, чтобы она не закрывала кнопки исходов.
-  content: { padding: 16, gap: 12, paddingBottom: 200 },
-  heading: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },
+  content: { padding: 16, gap: 12 },
+  heading: { flex: 1, fontFamily: fonts.bold, fontSize: 18, lineHeight: 23 },
+  topCard: { borderWidth: 1, borderRadius: 16, padding: 12, gap: 10 },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  stripe: { width: 4, alignSelf: "stretch", minHeight: 26, borderRadius: 2 },
+  volume: { alignItems: "flex-end" },
+  volumeLabel: { fontFamily: fonts.semibold, fontSize: 10, lineHeight: 13, textTransform: "uppercase", letterSpacing: 0.6 },
+  volumeValue: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
+  exerciseVolume: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
+  actions: { flexDirection: "row", gap: 8 },
+  action: { flex: 1, minHeight: 48, borderWidth: 1, borderRadius: 12, alignItems: "center", justifyContent: "center", gap: 2,
+    paddingHorizontal: 4, paddingVertical: 6 },
+  actionText: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14, textAlign: "center" },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 2 },
+  nameText: { flexShrink: 1 },
+  more: { width: 32, height: 40, alignItems: "center", justifyContent: "center" },
+  addSet: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 40, borderWidth: 1,
+    borderRadius: 10, marginTop: 4 },
+  addSetText: { fontFamily: fonts.semibold, fontSize: 13 },
+  orderRow: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: 12, paddingRight: 12, minHeight: 52 },
+  handle: { width: 44, minHeight: 48, alignItems: "center", justifyContent: "center" },
+  orderActions: { flexDirection: "row", gap: 8 },
+  offscreen: { position: "absolute", left: -10000, top: 0 },
   metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   dateRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   dateButton: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 32, borderWidth: 1, borderRadius: 8,
@@ -739,23 +941,23 @@ const styles = StyleSheet.create({
   marker: { width: 34, height: 34, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   markerText: { fontFamily: fonts.semibold, fontSize: 13 },
   plan: { flex: 1, fontFamily: fonts.regular, fontSize: 11, textAlign: "center" },
-  previous: { flex: 1, minHeight: 40, justifyContent: "center" },
-  previousText: { fontFamily: fonts.medium, fontSize: 11, textAlign: "center" },
+  previous: { flex: 1, minHeight: 34, justifyContent: "center" },
+  previousChip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 2 },
+  previousText: { fontFamily: fonts.semibold, fontSize: 11, textAlign: "center" },
   instructionText: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, borderLeftWidth: 2, paddingLeft: 8,
     marginHorizontal: 2, marginBottom: 2 },
   noteAdd: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 40, alignSelf: "flex-start", paddingHorizontal: 2 },
   noteAddText: { fontFamily: fonts.medium, fontSize: 12 },
   note: { minHeight: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, textAlignVertical: "top",
     fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, marginTop: 4 },
-  othersButton: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", minHeight: 36,
-    borderWidth: 1, borderRadius: 8, paddingHorizontal: 10 },
+  othersButton: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 32, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8 },
   othersText: { fontFamily: fonts.medium, fontSize: 12 },
   deleteRun: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 48, marginTop: 4 },
   deleteRunText: { fontFamily: fonts.medium, fontSize: 13 },
   sideLabel: { width: 14, textAlign: "center", fontFamily: fonts.semibold, fontSize: 12 },
   dropLabel: { flex: 1, fontFamily: fonts.medium, fontSize: 11, textAlign: "right", paddingRight: 4 },
-  inputHead: { width: 54 },
-  input: { width: 54, height: 40, borderWidth: 1, borderRadius: 8, textAlign: "center", fontFamily: fonts.medium,
+  inputHead: { width: 46 },
+  input: { width: 46, height: 40, borderWidth: 1, borderRadius: 8, textAlign: "center", fontFamily: fonts.medium,
     fontSize: 14, paddingHorizontal: 2, paddingVertical: 0 },
   side: { width: 34, minHeight: 40, alignItems: "center", justifyContent: "center" },
   sideHead: { width: 34 },

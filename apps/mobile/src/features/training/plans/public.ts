@@ -7,6 +7,8 @@ export { WeekEditorScreen } from "./presentation/WeekEditorScreen.tsx";
 export { TemplateLibraryScreen } from "./presentation/TemplateLibraryScreen.tsx";
 export { TemplateEditorScreen } from "./presentation/TemplateEditorScreen.tsx";
 export { SimpleWorkoutEditorScreen } from "./presentation/SimpleWorkoutEditorScreen.tsx";
+export { DiaryEditDialog } from "./presentation/DiaryEditDialog.tsx";
+export type { DiaryEdit } from "./domain/DiaryEdit.ts";
 export type { PickedExercise } from "./presentation/usePickedExercise.ts";
 export { useExerciseLookup } from "./presentation/useExerciseLookup.ts";
 export type { ExerciseInfo, ExerciseLookupPort } from "./domain/ExerciseLookupPort.ts";

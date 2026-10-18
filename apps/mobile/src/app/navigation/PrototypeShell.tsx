@@ -148,7 +148,8 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
             onOpenEdit={(clientId) => navigation.navigate("ClientEditorDev", { clientId })}
             onOpenAccounting={(clientId) => navigation.navigate("ClientAccounting", { clientId })}
             onOpenMeasurements={(clientId) => navigation.navigate("ClientMeasurements", { clientId })}
-            onClose={() => navigation.goBack()} onOpenClients={() => navigation.popTo("Root")} />}
+            onClose={() => navigation.goBack()} onOpenClients={() => navigation.popTo("Root")}
+            onOpenExercise={(exerciseId) => navigation.navigate("ExerciseDetail", { exerciseId })} />}
         </Stack.Screen>
         <Stack.Screen name="ClientAccounting" options={{ title: "Абонемент и оплата" }}>
           {({ route }) => <ClientAccountingScreen clientId={route.params.clientId}
