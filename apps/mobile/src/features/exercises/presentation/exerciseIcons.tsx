@@ -16,8 +16,8 @@ const bodyParts: Readonly<Record<BodyPart, Readonly<{ slugs: readonly Slug[]; si
   full_body: { slugs: ["chest", "abs", "obliques", "deltoids", "biceps", "forearm", "quadriceps", "adductors", "tibialis"], side: "front" },
 };
 
-/** Силуэт тела с подсвеченной группой — SVG; `scale` 0,17 даёт фигуру около 34×68. */
-export function BodyPartIcon({ part, scale = 0.17 }: Readonly<{ part: BodyPart; scale?: number }>) {
+/** Силуэт тела с подсвеченной группой — SVG; `scale` 0,21 даёт фигуру около 42×84. */
+export function BodyPartIcon({ part, scale = 0.21 }: Readonly<{ part: BodyPart; scale?: number }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const { slugs, side } = bodyParts[part];

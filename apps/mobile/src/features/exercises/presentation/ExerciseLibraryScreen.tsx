@@ -1,5 +1,5 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { BackHandler, FlatList, Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { BackHandler, FlatList, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, type BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Check, ChevronRight, Dumbbell, Plus, SlidersHorizontal, Star, X } from "lucide-react-native";
@@ -259,15 +259,18 @@ export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, pi
             icon={(color) => <SlidersHorizontal size={14} color={color} strokeWidth={1.8} />} onPress={() => setSheet("more")} />
         </View>
         {chips.length > 0 ? (
-          <View style={styles.chipRow}>
+          // Снимаемые метки — одной строкой с горизонтальной прокруткой, видимая высота 30 (UI-OWN-030).
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled"
+            style={styles.chipScroll} contentContainerStyle={styles.chipRow}>
             {chips.map((chip) => (
               <Pressable key={chip.key} accessibilityRole="button" accessibilityLabel={`Снять фильтр: ${chip.label}`}
-                onPress={chip.remove} style={[styles.activeChip, { borderColor: colors.accentInk }]}>
+                onPress={chip.remove} hitSlop={{ top: 9, bottom: 9 }}
+                style={[styles.activeChip, { borderColor: colors.accentInk }]}>
                 <Text style={[styles.activeChipText, { color: colors.accentInk }]}>{chip.label}</Text>
-                <X size={14} color={colors.accentInk} strokeWidth={2} />
+                <X size={13} color={colors.accentInk} strokeWidth={2} />
               </Pressable>
             ))}
-          </View>
+          </ScrollView>
         ) : null}
       </View>
       <View style={styles.listArea}>
@@ -341,8 +344,9 @@ const styles = StyleSheet.create({
   center: { flex: 1, padding: 16, gap: 12, justifyContent: "center" },
   top: { paddingHorizontal: 16, paddingTop: 12, gap: 10 },
   pills: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  activeChip: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, minHeight: 48 },
+  chipScroll: { flexGrow: 0, marginHorizontal: -16 },
+  chipRow: { flexDirection: "row", gap: 6, paddingHorizontal: 16 },
+  activeChip: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderRadius: 15, paddingHorizontal: 10, height: 30 },
   activeChipText: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
   listContent: { paddingBottom: 96, paddingHorizontal: 16, gap: 8 },
   counter: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 },
@@ -361,8 +365,8 @@ const styles = StyleSheet.create({
   sheetHead: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16 },
   sheetBody: { paddingHorizontal: 16, paddingVertical: 8, gap: 6 },
   optionWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  tile: { width: "31.6%", minHeight: 124, borderRadius: 12, alignItems: "center", paddingTop: 8, paddingBottom: 8, paddingHorizontal: 4, gap: 2 },
-  tileIcon: { height: 70, alignItems: "center", justifyContent: "center" },
+  tile: { width: "31.6%", minHeight: 136, borderRadius: 12, alignItems: "center", paddingTop: 8, paddingBottom: 8, paddingHorizontal: 4, gap: 2 },
+  tileIcon: { height: 86, alignItems: "center", justifyContent: "center" },
   tileCompact: { minHeight: 84, paddingTop: 6, paddingBottom: 6 },
   tileIconCompact: { height: 36 },
   tileLabel: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 15, textAlign: "center" },
