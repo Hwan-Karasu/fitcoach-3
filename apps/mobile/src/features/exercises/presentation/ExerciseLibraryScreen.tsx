@@ -1,15 +1,15 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { BackHandler, FlatList, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { BackHandler, FlatList, Image, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, type BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Check, ChevronRight, Dumbbell, Plus, SlidersHorizontal, Star, X } from "lucide-react-native";
 import { AppButton, FilterPill, FloatingActionButton, InlineNotice, LoadingState, SearchField,
-  SelectionChip } from "../../../shared/ui/components/public.ts";
+  } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import type { ExerciseCatalogPort } from "../domain/ExerciseCatalogPort.ts";
 import { bodyPartLabels, equipmentLabel, trackingProfileLabels } from "../domain/ExerciseLabels.ts";
-import { BODY_PARTS, TRACKING_PROFILE_IDS } from "../domain/ExerciseModel.ts";
+import { BODY_PARTS, TRACKING_PROFILE_IDS, type TrackingProfileId } from "../domain/ExerciseModel.ts";
 import { displayNameOf, filterCatalog, filterOptionCounts, NO_FILTERS, type CatalogEntry, type CatalogFilters,
   type CatalogMode } from "../domain/ExerciseRules.ts";
 import { EquipmentGlyph } from "./equipmentGlyphs.tsx";
@@ -147,6 +147,34 @@ function OptionTile({ icon, label, count, selected, onPress, compact = false }: 
   );
 }
 
+/** Пример записи подхода — чтобы способ учёта узнавался без чтения определений (UI-OWN-032). */
+const profileExamples: Readonly<Record<TrackingProfileId, string>> = {
+  REPS: "12 повт.", LOAD_REPS: "60 кг × 10", ADDED_LOAD_REPS: "+10 кг × 8", ASSISTANCE_REPS: "−20 кг × 8", DURATION: "0:45",
+  REPS_DURATION: "20 за 1:00", DISTANCE_DURATION: "2 км · 10:00", LOAD_DISTANCE: "24 кг · 40 м", LOAD_DURATION: "20 кг · 0:30",
+};
+
+/** Способ записи подхода — плитка 3 в ряд (9 вариантов — сетка 3×3): название, пример и число упражнений; выбор как у плиток мышц. */
+function ProfileTile({ label, example, count, selected, onPress }: Readonly<{
+  label: string; example: string; count: number; selected: boolean; onPress: () => void;
+}>) {
+  const { palette } = usePrototypeTheme();
+  const colors = palette.tokens;
+  return (
+    <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: selected }}
+      accessibilityLabel={`${label}, например ${example}, упражнений: ${count}`} onPress={onPress}
+      style={({ pressed }) => [styles.profileTile, { borderColor: selected ? colors.accentInk : colors.border, borderWidth: selected ? 2 : 1,
+        backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: count === 0 && !selected ? 0.45 : 1 }]}>
+      <View style={styles.profileHead}>
+        <Text numberOfLines={2} style={[styles.profileLabel, { color: selected ? colors.accentInk : colors.textPrimary }]}>{label}</Text>
+        {selected ? <View style={[styles.profileCheck, { backgroundColor: colors.accentFill }]}>
+          <Check size={11} color={colors.onAccentFill} strokeWidth={3} /></View>
+          : <Text style={[styles.tileCount, { color: colors.textMuted }]}>{count}</Text>}
+      </View>
+      <Text style={[styles.profileExample, { color: colors.textSecondary, backgroundColor: colors.surfaceRaised }]}>{example}</Text>
+    </Pressable>
+  );
+}
+
 /**
  * Каталог упражнений (§31): поиск сразу, быстрые режимы, фильтры в нижнем окне и снимаемые метки
  * активных фильтров, плотный список. Нет совпадений — «Создать «запрос»». В выборе для тренировки можно
@@ -210,8 +238,9 @@ export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, pi
     return <ExerciseRow entry={item} onPressId={onPressId} order={index < 0 ? null : index + 1}
       favorite={favorites.get(item.definition.id) ?? item.overlay.favorite} onFavoriteEntry={onFavoriteEntry} />;
   }, [favorites, onFavoriteEntry, onPressId, selected]);
-  const optionCounts = useMemo(() => entries === null || kind === "more" ? new Map<string, number>()
-    : filterOptionCounts(entries, query, mode, filters, kind === "muscles" ? "bodyParts" : "equipment"), [entries, filters, mode, query, kind]);
+  const optionCounts = useMemo(() => entries === null ? new Map<string, number>()
+    : filterOptionCounts(entries, query, mode, filters, kind === "muscles" ? "bodyParts" : kind === "equipment" ? "equipment" : "profiles"),
+    [entries, filters, mode, query, kind]);
   const meta = repository.meta();
 
   if (entries === null) {
@@ -326,16 +355,23 @@ export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, pi
           selected={filters.equipment.has(item)} onPress={() => setFilters({ ...filters, equipment: toggled(filters.equipment, item) })} />)}
         </View>
         </> : <>
-        <Text style={[styles.group, { color: colors.textPrimary }]}>Как записывается подход</Text>
-        <View style={styles.chips}>
-          {TRACKING_PROFILE_IDS.map((profile) => <SelectionChip key={profile} group="Учёт" label={trackingProfileLabels[profile]}
-            selected={filters.profiles.has(profile)} onPress={() => setFilters({ ...filters, profiles: toggled(filters.profiles, profile) })} />)}
+        <Text style={[styles.group, { color: colors.textSecondary }]}>Как записывается подход</Text>
+        <View style={styles.optionWrap}>
+          {TRACKING_PROFILE_IDS.map((profile) => <ProfileTile key={profile} label={trackingProfileLabels[profile]}
+            example={profileExamples[profile]} count={optionCounts.get(profile) ?? 0} selected={filters.profiles.has(profile)}
+            onPress={() => setFilters({ ...filters, profiles: toggled(filters.profiles, profile) })} />)}
         </View>
-        <Text style={[styles.group, { color: colors.textPrimary }]}>Скрытые упражнения</Text>
-        <View style={styles.chips}>
-          <SelectionChip group="Скрытые" label="Показывать скрытые" selected={filters.showHidden}
-            onPress={() => setFilters({ ...filters, showHidden: !filters.showHidden })} />
-        </View>
+        <Text style={[styles.group, styles.groupGap, { color: colors.textSecondary }]}>Список</Text>
+        <Pressable accessibilityRole="switch" accessibilityState={{ checked: filters.showHidden }}
+          accessibilityLabel="Показывать скрытые упражнения" onPress={() => setFilters({ ...filters, showHidden: !filters.showHidden })}
+          style={[styles.switchRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.grow}>
+            <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>Показывать скрытые</Text>
+            <Text style={[styles.switchHint, { color: colors.textSecondary }]}>Упражнения, которые вы скрыли из каталога</Text>
+          </View>
+          <Switch value={filters.showHidden} onValueChange={(showHidden) => setFilters({ ...filters, showHidden })}
+            trackColor={{ false: colors.border, true: colors.accentFill }} thumbColor={colors.surface} />
+        </Pressable>
         </>}
       </CatalogSheet>
     </View>
@@ -377,8 +413,18 @@ const styles = StyleSheet.create({
   tileCount: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
   tileCheck: { position: "absolute", top: 6, right: 6, width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   star: { width: 36, height: 40, alignItems: "center", justifyContent: "center" },
-  group: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, marginTop: 4 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  group: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16, marginTop: 4, textTransform: "uppercase", letterSpacing: 0.4 },
+  groupGap: { marginTop: 10 },
+  profileTile: { width: "31.6%", minHeight: 74, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 8, gap: 6, justifyContent: "space-between" },
+  profileHead: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
+  profileLabel: { flex: 1, fontFamily: fonts.semibold, fontSize: 12, lineHeight: 15 },
+  profileCheck: { width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  profileExample: { alignSelf: "flex-start", fontFamily: fonts.medium, fontSize: 11, lineHeight: 14, borderRadius: 6,
+    paddingHorizontal: 6, paddingVertical: 2, overflow: "hidden" },
+  switchRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 12, paddingLeft: 12, paddingRight: 6,
+    minHeight: 56 },
+  switchTitle: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
+  switchHint: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
   sheetActions: { flexDirection: "row", gap: 10, paddingHorizontal: 16 },
   order: { minWidth: 26, height: 26, borderRadius: 13, paddingHorizontal: 6, alignItems: "center", justifyContent: "center" },
   orderText: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 16 },

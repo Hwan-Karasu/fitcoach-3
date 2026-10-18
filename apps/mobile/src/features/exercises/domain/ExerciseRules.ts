@@ -78,11 +78,12 @@ export function activeFilterCount(filters: CatalogFilters): number {
  * выбора в этом же измерении — иначе отмеченные варианты скрыли бы остальные.
  */
 export function filterOptionCounts(entries: readonly CatalogEntry[], query: string, mode: CatalogMode, filters: CatalogFilters,
-  dimension: "bodyParts" | "equipment"): ReadonlyMap<string, number> {
-  const open: CatalogFilters = dimension === "bodyParts" ? { ...filters, bodyParts: new Set() } : { ...filters, equipment: new Set() };
+  dimension: "bodyParts" | "equipment" | "profiles"): ReadonlyMap<string, number> {
+  const open: CatalogFilters = { ...filters, [dimension]: new Set() };
   const counts = new Map<string, number>();
   for (const { definition } of filterCatalog(entries, query, mode, open)) {
-    const key = dimension === "bodyParts" ? definition.bodyPart : definition.equipment ?? "none";
+    const key = dimension === "bodyParts" ? definition.bodyPart : dimension === "profiles" ? definition.trackingProfile
+      : definition.equipment ?? "none";
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;

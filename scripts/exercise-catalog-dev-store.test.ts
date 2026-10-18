@@ -123,6 +123,8 @@ test("UI-OWN-030 фильтры каталога: число упражнени�
     const equipment = filterOptionCounts(entries, "", "ALL", { ...NO_FILTERS, bodyParts: new Set(["core"]) }, "equipment");
     assert.deepEqual([...equipment.entries()], [["none", 1]], "чужой фильтр (мышцы) сужает варианты оборудования");
     assert.deepEqual([...filterOptionCounts(entries, "жим", "ALL", NO_FILTERS, "bodyParts").entries()], [["chest", 1]], "поиск учитывается");
+    assert.deepEqual([...filterOptionCounts(entries, "", "ALL", { ...NO_FILTERS, profiles: new Set(["DURATION"]) }, "profiles").entries()].sort(),
+      [["DURATION", 1], ["LOAD_REPS", 1]], "способ записи — так же");
   } finally {
     await repository.close();
   }
