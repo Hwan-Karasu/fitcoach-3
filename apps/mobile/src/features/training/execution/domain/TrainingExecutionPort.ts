@@ -64,6 +64,16 @@ export interface TrainingExecutionPort {
   toggleSetConfirmation(identity: SetIdentity, now?: Date, side?: Side): Promise<SetSaveResult>;
   /** §48.31, §48.38: исход тренировки или `null` — снять исход. Факты не удаляются. */
   setOutcome(slot: WorkoutSlot, outcome: WorkoutOutcome | null, expectedRevision: number | null, now?: Date): Promise<WorkoutSession>;
+  /**
+   * §48.67: заметка о том, как прошло упражнение в этой тренировке; пустая — убирается. Не план и не
+   * начало тренировки (статус по-прежнему по введённым подходам).
+   */
+  saveExerciseNote(slot: WorkoutSlot, plannedExerciseId: string, text: string, now?: Date): Promise<void>;
+  /**
+   * §48.30: окончательно удалить выполнение тренировки — подходы, мини-сеты, стороны, заметки, исход и дату.
+   * Плановая тренировка остаётся; Calendar и абонемент не меняются.
+   */
+  deleteWorkoutExecution(slot: WorkoutSlot, expectedRevision: number): Promise<void>;
   /** §48.84: фактическая дата проведения. */
   setActualDate(slot: WorkoutSlot, date: string, expectedRevision: number, now?: Date): Promise<WorkoutSession>;
   subscribeCommittedChanges(listener: (change: TrainingExecutionCommittedChange) => void): () => void;

@@ -5,7 +5,7 @@ import { DevClientRepository } from "../apps/mobile/src/features/clients/data/De
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant, NEW_SIMPLE_DRAFT_KEY } from
   "../apps/mobile/src/features/training/plans/data/DevTrainingPlansRepository.ts";
 import { addExercise, addSet, addWorkout, fillSets, newDraft, removeExercise, removeSet, reorderExercises, setTitle,
-  setRest, updateSet } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
+  setInstruction, setRest, updateSet } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
 import type { SimpleProgramDraft } from "../apps/mobile/src/features/training/plans/domain/SimplePlanModel.ts";
 import { parseDuration, parseLoad, setsSummary, validateDraft, type TrackingMetric } from
   "../apps/mobile/src/features/training/plans/domain/SimplePlanRules.ts";
@@ -204,5 +204,22 @@ test("T03 миграция v4 планов: отдых до 60 мин в схе�
   } finally {
     await shared.release();
     await clients.close();
+  }
+});
+
+test("T03 указание к упражнению (§48.67): часть плана, хранится и меняется отдельно у каждого упражнения", async () => {
+  const draft = setInstruction(sampleDraft(), "e1", "  Темп 3–1–1–0, пауза на груди  ");
+  assert.equal(draft.plan.workouts[0]!.exercises[0]!.instruction, "Темп 3–1–1–0, пауза на груди", "пробелы по краям убраны");
+  assert.equal(draft.plan.workouts[1]!.exercises[0]!.instruction, null, "у другого упражнения указания нет");
+  assert.equal(setInstruction(draft, "e1", "   ").plan.workouts[0]!.exercises[0]!.instruction, null, "пустое — нет указания");
+  assert.ok(validateDraft(setInstruction(draft, "e1", "x".repeat(501)), metricsOf).length > 0, "не длиннее 500 символов");
+  const { clients, plans, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const program = await plans.createSimpleProgram(a.id, draft);
+    assert.equal((await plans.getSimplePlan(a.id, program.id))!.draft.plan.workouts[0]!.exercises[0]!.instruction,
+      "Темп 3–1–1–0, пауза на груди");
+  } finally {
+    await close();
   }
 });

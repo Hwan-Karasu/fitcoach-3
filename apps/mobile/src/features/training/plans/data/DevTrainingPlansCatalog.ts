@@ -164,4 +164,12 @@ export const devTrainingPlansCatalog: readonly MigrationStep[] = [{
     `CREATE INDEX dev_training_planned_exercises_workout ON dev_training_planned_exercises(workspace_id, workout_id, position)`,
     `CREATE INDEX dev_training_planned_sets_exercise ON dev_training_planned_sets(workspace_id, planned_exercise_id, position)`,
   ],
+}, {
+  version: 5,
+  checksum: "t03-dev-training-plans-v5-exercise-instruction-20261018",
+  statements: [
+    // §48.67: плановое указание упражнения (часть плана, копируется с ним); фактические заметки — в дневнике.
+    `ALTER TABLE dev_training_planned_exercises ADD COLUMN instruction TEXT
+      CHECK (instruction IS NULL OR length(trim(instruction)) BETWEEN 1 AND 500)`,
+  ],
 }];

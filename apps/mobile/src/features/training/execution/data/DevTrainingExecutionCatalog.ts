@@ -241,4 +241,19 @@ export const devTrainingExecutionCatalog: readonly MigrationStep[] = [{
       PRIMARY KEY (workspace_id, set_id, side)
     )`,
   ],
+}, {
+  version: 6,
+  checksum: "t03-dev-training-execution-v6-exercise-notes-20261018",
+  statements: [
+    // §48.67: заметка о фактическом выполнении упражнения в конкретной тренировке (не плановое указание).
+    `CREATE TABLE dev_training_exercise_notes (
+      workspace_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      planned_exercise_id TEXT NOT NULL,
+      note TEXT NOT NULL CHECK (length(trim(note)) BETWEEN 1 AND 1000),
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (workspace_id, session_id, planned_exercise_id),
+      FOREIGN KEY (session_id, workspace_id) REFERENCES dev_training_sessions(id, workspace_id) ON DELETE RESTRICT
+    )`,
+  ],
 }];

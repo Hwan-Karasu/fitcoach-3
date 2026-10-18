@@ -97,7 +97,11 @@ export interface WorkoutExecution {
   readonly session: WorkoutSession | null;
   /** Ключ — ID планового подхода. */
   readonly facts: ReadonlyMap<string, SetFact>;
+  /** §48.67: заметки о фактическом выполнении; ключ — плановое упражнение. */
+  readonly notes: ReadonlyMap<string, string>;
 }
+
+export const NOTE_MAX = 1000;
 
 /** §37.9: прошлый подход и его дата. */
 export interface PreviousSet {

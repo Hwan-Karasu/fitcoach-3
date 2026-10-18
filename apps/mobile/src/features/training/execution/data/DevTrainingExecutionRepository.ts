@@ -3,7 +3,7 @@ import { SharedSqliteDatabase } from "../../../../shared/db/SharedSqliteDatabase
 import { UUID_V4_SQL } from "../../../../shared/db/SqlIds.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../../shared/db/WriterCoordinator.ts";
-import { DEFAULT_CONFIRMATION_MODE, SET_TYPES, type ConfirmationMode, type PreviousQuery, type PreviousSet,
+import { DEFAULT_CONFIRMATION_MODE, NOTE_MAX, SET_TYPES, type ConfirmationMode, type PreviousQuery, type PreviousSet,
   type SessionStatus, type SetFact, type SetType, type SetValues, type WorkoutExecution, type WorkoutOutcome,
   type WorkoutSession, type WorkoutSlot } from "../domain/ExecutionModel.ts";
 import { assertDropStructure, confirmationAfterSave, isLocalDate, localDateOf, matchPrevious, sidesAfterSave, toggleConfirmation,
@@ -103,7 +103,7 @@ function mergeSides(change: SidesChange): ConfirmationChange {
 /** Сторона дневника в PermanentlyDeleteArchivedClient (§15.7): выполнения и факты подходов клиента. */
 export const devTrainingExecutionClientDeletionParticipant = {
   owner: "training.execution",
-  tables: ["dev_training_performed_sides", "dev_training_performed_drops", "dev_training_performed_sets", "dev_training_sessions",
+  tables: ["dev_training_exercise_notes", "dev_training_performed_sides", "dev_training_performed_drops", "dev_training_performed_sets", "dev_training_sessions",
     "dev_training_rest_timers"] as const,
   async count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number> {
     const row = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM dev_training_sessions
@@ -111,6 +111,8 @@ export const devTrainingExecutionClientDeletionParticipant = {
     return row?.n ?? 0;
   },
   async detach(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<void> {
+    await tx.run(`DELETE FROM dev_training_exercise_notes WHERE workspace_id = ? AND session_id IN
+      (SELECT id FROM dev_training_sessions WHERE workspace_id = ? AND client_id = ?)`, [workspaceId, workspaceId, clientId]);
     await tx.run(`DELETE FROM dev_training_performed_sides WHERE workspace_id = ? AND set_id IN
       (SELECT f.id FROM dev_training_performed_sets f JOIN dev_training_sessions s ON s.id = f.session_id
         WHERE s.workspace_id = ? AND s.client_id = ?)`, [workspaceId, workspaceId, clientId]);
@@ -222,13 +224,16 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
   async getWorkout(slot: WorkoutSlot): Promise<WorkoutExecution> {
     const { connection } = this.ready();
     const session = await this.sessionOf(connection, slot);
-    if (session === null) return { session: null, facts: new Map() };
+    if (session === null) return { session: null, facts: new Map(), notes: new Map() };
     const rows = await connection.all<FactRow>(`SELECT ${FACT_COLUMNS} FROM dev_training_performed_sets
       WHERE workspace_id = ? AND session_id = ? AND removed_at IS NULL`, [this.workspaceId, session.id]);
     const drops = await dropsOf(connection, this.workspaceId, rows.filter((row) => row.setType === "DROP").map((row) => row.id));
     const sides = await sidesOf(connection, this.workspaceId, rows.filter((row) => row.sided === 1).map((row) => row.id));
+    const notes = await connection.all<{ plannedExerciseId: string; note: string }>(`SELECT planned_exercise_id AS plannedExerciseId,
+      note FROM dev_training_exercise_notes WHERE workspace_id = ? AND session_id = ?`, [this.workspaceId, session.id]);
     return { session, facts: new Map(rows.map((row) => [row.plannedSetId,
-      toFact(row, drops.get(row.id) ?? [], factSides(row, sides.get(row.id)))])) };
+      toFact(row, drops.get(row.id) ?? [], factSides(row, sides.get(row.id)))])),
+    notes: new Map(notes.map((item) => [item.plannedExerciseId, item.note])) };
   }
 
   async getProgramStatuses(clientId: string, programId: string): Promise<readonly SessionStatus[]> {
@@ -441,6 +446,44 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       if (fact.revision !== expectedRevision) throw new Error("STALE_SESSION");
       await tx.run(`UPDATE dev_training_performed_sets SET removed_at = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ?`, [now.toISOString(), now.toISOString(), this.workspaceId, fact.id]);
+    });
+    this.publish(slot);
+  }
+
+  async saveExerciseNote(slot: WorkoutSlot, plannedExerciseId: string, text: string, now: Date = new Date()): Promise<void> {
+    assertSlot(slot);
+    const note = text.trim();
+    if (!plannedExerciseId || note.length > NOTE_MAX) throw new Error("INVALID_METRIC");
+    await this.ready().writer.write(async (tx) => {
+      if (note === "") {
+        const session = await this.sessionOf(tx, slot);
+        if (session !== null) await tx.run(`DELETE FROM dev_training_exercise_notes WHERE workspace_id = ? AND session_id = ?
+          AND planned_exercise_id = ?`, [this.workspaceId, session.id, plannedExerciseId]);
+        return;
+      }
+      const session = await this.ensureSession(tx, slot, now);
+      await tx.run(`INSERT INTO dev_training_exercise_notes (workspace_id, session_id, planned_exercise_id, note, updated_at)
+        VALUES (?, ?, ?, ?, ?) ON CONFLICT (workspace_id, session_id, planned_exercise_id)
+        DO UPDATE SET note = excluded.note, updated_at = excluded.updated_at`,
+      [this.workspaceId, session.id, plannedExerciseId, note, now.toISOString()]);
+    });
+    this.publish(slot);
+  }
+
+  async deleteWorkoutExecution(slot: WorkoutSlot, expectedRevision: number): Promise<void> {
+    assertSlot(slot);
+    await this.ready().writer.write(async (tx) => {
+      const session = await this.sessionOf(tx, slot);
+      if (session === null) throw new Error("FACT_NOT_FOUND");
+      if (session.revision !== expectedRevision) throw new Error("STALE_SESSION");
+      const facts = `SELECT id FROM dev_training_performed_sets WHERE workspace_id = ? AND session_id = ?`;
+      await tx.run(`DELETE FROM dev_training_performed_sides WHERE workspace_id = ? AND set_id IN (${facts})`,
+        [this.workspaceId, this.workspaceId, session.id]);
+      await tx.run(`DELETE FROM dev_training_performed_drops WHERE workspace_id = ? AND set_id IN (${facts})`,
+        [this.workspaceId, this.workspaceId, session.id]);
+      await tx.run("DELETE FROM dev_training_performed_sets WHERE workspace_id = ? AND session_id = ?", [this.workspaceId, session.id]);
+      await tx.run("DELETE FROM dev_training_exercise_notes WHERE workspace_id = ? AND session_id = ?", [this.workspaceId, session.id]);
+      await tx.run("DELETE FROM dev_training_sessions WHERE workspace_id = ? AND id = ?", [this.workspaceId, session.id]);
     });
     this.publish(slot);
   }

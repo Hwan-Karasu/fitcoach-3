@@ -14,8 +14,9 @@ export async function readStructure(tx: SqliteStatementPort, workspaceId: string
   weeks: number): Promise<SimplePlan> {
   const workouts = await tx.all<{ id: string; title: string }>(`SELECT id, title FROM dev_training_workouts
     WHERE workspace_id = ? AND program_id = ? ORDER BY position`, [workspaceId, programId]);
-  const exercises = await tx.all<{ id: string; workoutId: string; exerciseId: string; restSec: number | null }>(`SELECT e.id,
-      e.workout_id AS workoutId, e.exercise_id AS exerciseId, e.rest_sec AS restSec FROM dev_training_planned_exercises e
+  const exercises = await tx.all<{ id: string; workoutId: string; exerciseId: string; restSec: number | null;
+    instruction: string | null }>(`SELECT e.id, e.workout_id AS workoutId, e.exercise_id AS exerciseId, e.rest_sec AS restSec,
+      e.instruction FROM dev_training_planned_exercises e
     JOIN dev_training_workouts w ON w.id = e.workout_id AND w.workspace_id = e.workspace_id
     WHERE e.workspace_id = ? AND w.program_id = ? ORDER BY e.position`, [workspaceId, programId]);
   const sets = await tx.all<SetRow>(`SELECT s.id, s.planned_exercise_id AS exerciseRowId, s.reps, s.load_grams AS loadGrams,
@@ -30,7 +31,7 @@ export async function readStructure(tx: SqliteStatementPort, workspaceId: string
     workouts: workouts.map((workout): PlannedWorkout => ({ ...workout,
       exercises: exercises.filter((exercise) => exercise.workoutId === workout.id)
         .map((exercise): PlannedExercise => ({ id: exercise.id, exerciseId: exercise.exerciseId, restSec: exercise.restSec,
-          sets: setsOf(exercise.id) })) })),
+          instruction: exercise.instruction, sets: setsOf(exercise.id) })) })),
   };
 }
 
@@ -60,10 +61,11 @@ export async function writeStructure(tx: SqliteStatementPort, workspaceId: strin
     for (const [exerciseIndex, exercise] of workout.exercises.entries()) {
       await assertFree(tx, "dev_training_planned_exercises", exercise.id, owned.exercises);
       keep.exercises.add(exercise.id);
-      await tx.run(`INSERT INTO dev_training_planned_exercises (id, workspace_id, workout_id, position, exercise_id, rest_sec)
-        VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET workout_id = excluded.workout_id, position = excluded.position,
-        exercise_id = excluded.exercise_id, rest_sec = excluded.rest_sec`,
-      [exercise.id, workspaceId, workout.id, exerciseIndex, exercise.exerciseId, exercise.restSec]);
+      await tx.run(`INSERT INTO dev_training_planned_exercises (id, workspace_id, workout_id, position, exercise_id, rest_sec,
+        instruction) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET workout_id = excluded.workout_id,
+        position = excluded.position, exercise_id = excluded.exercise_id, rest_sec = excluded.rest_sec,
+        instruction = excluded.instruction`,
+      [exercise.id, workspaceId, workout.id, exerciseIndex, exercise.exerciseId, exercise.restSec, exercise.instruction]);
       for (const [setIndex, set] of exercise.sets.entries()) {
         await assertFree(tx, "dev_training_planned_sets", set.id, owned.sets);
         keep.sets.add(set.id);

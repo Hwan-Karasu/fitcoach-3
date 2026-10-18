@@ -7,7 +7,8 @@ import { AppButton, AppIconButton } from "../../../../shared/ui/components/publi
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseInfo } from "../domain/ExerciseLookupPort.ts";
-import { REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, type PlannedExercise, type PlannedSet } from "../domain/SimplePlanModel.ts";
+import { INSTRUCTION_MAX, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, type PlannedExercise,
+  type PlannedSet } from "../domain/SimplePlanModel.ts";
 import { formatDuration, parseDuration, parseLoad, setFieldsOf, type SetField } from "../domain/SimplePlanRules.ts";
 
 const columnLabels: Readonly<Record<SetField, string>> = { loadGrams: "Вес, кг", reps: "Повторы", durationSec: "Время", distanceM: "Метры" };
@@ -58,10 +59,12 @@ export const SetsEditorSheet = forwardRef<BottomSheetModal, Readonly<{
   onFillAll: () => void;
   /** §48.56: отдых этого упражнения; `null` — таймер выключен. */
   onChangeRest: (restSec: number | null) => void;
+  /** §48.67: плановое указание к упражнению. */
+  onChangeInstruction: (text: string) => void;
   onRemoveExercise: () => void;
   onDismiss: () => void;
-}>>(function SetsEditorSheet({ exercise, info, onChangeSet, onAddSet, onRemoveSet, onFillAll, onChangeRest, onRemoveExercise,
-  onDismiss }, ref) {
+}>>(function SetsEditorSheet({ exercise, info, onChangeSet, onAddSet, onRemoveSet, onFillAll, onChangeRest, onChangeInstruction,
+  onRemoveExercise, onDismiss }, ref) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const fields = info === null ? [] : setFieldsOf(info.metrics);
@@ -130,6 +133,11 @@ export const SetsEditorSheet = forwardRef<BottomSheetModal, Readonly<{
               </Pressable>
             </>}
           </View>
+          <Text style={[styles.headText, { color: colors.textSecondary }]}>Указание к упражнению</Text>
+          <BottomSheetTextInput key={exercise.id} defaultValue={exercise.instruction ?? ""} multiline maxLength={INSTRUCTION_MAX}
+            accessibilityLabel="Указание к упражнению" placeholder="Например: темп 3–1–1–0, пауза на груди"
+            placeholderTextColor={colors.textMuted} onChangeText={onChangeInstruction}
+            style={[styles.instruction, { color: colors.textPrimary, backgroundColor: colors.input, borderColor: colors.border }]} />
           <AppButton variant="secondary" label="Убрать упражнение из тренировки" onPress={onRemoveExercise} />
         </BottomSheetScrollView>
       ) : null}
@@ -156,4 +164,6 @@ const styles = StyleSheet.create({
   restLabel: { flex: 1, fontFamily: fonts.medium, fontSize: 15 },
   restValue: { minWidth: 48, textAlign: "center", fontFamily: fonts.semibold, fontSize: 16 },
   restToggle: { minHeight: 44, justifyContent: "center", paddingHorizontal: 4 },
+  instruction: { minHeight: 64, borderWidth: 1, borderRadius: 8, padding: 10, textAlignVertical: "top",
+    fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
 });

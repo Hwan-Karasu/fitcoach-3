@@ -108,7 +108,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
     setState((current) => {
       const facts = new Map(current?.facts ?? []);
       facts.set(fact.plannedSetId, fact);
-      const next = { session: sessionState, facts };
+      const next = { session: sessionState, facts, notes: current?.notes ?? new Map<string, string>() };
       stateRef.current = next;
       return next;
     });
@@ -186,7 +186,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
     setState((current) => {
       const facts = new Map(current?.facts ?? []);
       facts.delete(plannedSetId);
-      const next = { session: current?.session ?? null, facts };
+      const next = { session: current?.session ?? null, facts, notes: current?.notes ?? new Map<string, string>() };
       stateRef.current = next;
       return next;
     });
@@ -199,17 +199,41 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
     if (revision === undefined) return null;
     const session = await execution.setActualDate(stableSlot, date, revision);
     setState((current) => {
-      const next = { session, facts: current?.facts ?? new Map() };
+      const next = { session, facts: current?.facts ?? new Map(), notes: current?.notes ?? new Map<string, string>() };
       stateRef.current = next;
       return next;
     });
     return session;
   }), [enqueue, execution, stableSlot]);
 
+  /** §48.67: заметка о выполнении упражнения в этой тренировке. */
+  const saveNote = useCallback((plannedExerciseId: string, text: string) => enqueue(async () => {
+    await execution.saveExerciseNote(stableSlot, plannedExerciseId, text);
+    setState((current) => {
+      const notes = new Map(current?.notes ?? []);
+      if (text.trim() === "") notes.delete(plannedExerciseId); else notes.set(plannedExerciseId, text.trim());
+      const next = { session: current?.session ?? null, facts: current?.facts ?? new Map(), notes };
+      stateRef.current = next;
+      return next;
+    });
+    return text;
+  }), [enqueue, execution, stableSlot]);
+
+  /** §48.30: удалить выполнение целиком; плановая тренировка остаётся пустой. */
+  const deleteExecution = useCallback(() => enqueue(async () => {
+    const revision = stateRef.current?.session?.revision;
+    if (revision === undefined) return null;
+    await execution.deleteWorkoutExecution(stableSlot, revision);
+    const next = { session: null, facts: new Map<string, SetFact>(), notes: new Map<string, string>() };
+    stateRef.current = next;
+    setState(next);
+    return revision;
+  }), [enqueue, execution, stableSlot]);
+
   const setOutcome = useCallback((outcome: WorkoutOutcome | null) => enqueue(async () => {
     const session = await execution.setOutcome(stableSlot, outcome, stateRef.current?.session?.revision ?? null);
     setState((current) => {
-      const next = { session, facts: current?.facts ?? new Map() };
+      const next = { session, facts: current?.facts ?? new Map(), notes: current?.notes ?? new Map<string, string>() };
       stateRef.current = next;
       return next;
     });
@@ -220,7 +244,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   return {
     workout, state, previous, mode, message,
     status: workoutStatus(state?.session?.outcome ?? null, started),
-    saveSet, toggleSet, setOutcome, addWarmup, removeWarmup, setActualDate,
+    saveSet, toggleSet, setOutcome, addWarmup, removeWarmup, setActualDate, saveNote, deleteExecution,
     dismissMessage: () => setMessage(null),
   };
 }

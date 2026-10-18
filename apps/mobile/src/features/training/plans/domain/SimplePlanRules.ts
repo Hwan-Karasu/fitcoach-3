@@ -1,5 +1,5 @@
 import { normalizeTitle } from "./ProgramRules.ts";
-import { REST_MAX_SEC, REST_MIN_SEC, WEEKS_MAX, WEEKS_MIN, type PlannedExercise, type PlannedSet, type SimpleProgramDraft } from "./SimplePlanModel.ts";
+import { INSTRUCTION_MAX, REST_MAX_SEC, REST_MIN_SEC, WEEKS_MAX, WEEKS_MIN, type PlannedExercise, type PlannedSet, type SimpleProgramDraft } from "./SimplePlanModel.ts";
 
 /** §33.2 Величины подхода (тот же контракт, что у каталога упражнений; профиль упражнения даёт каталог). */
 export type TrackingMetric = "reps" | "load" | "addedLoad" | "assistance" | "duration" | "distance";
@@ -55,6 +55,9 @@ export function validateDraft(draft: SimpleProgramDraft,
       if (exercise.restSec !== null && (!Number.isInteger(exercise.restSec) || exercise.restSec < REST_MIN_SEC
         || exercise.restSec > REST_MAX_SEC)) {
         issues.push({ workoutId: workout.id, exerciseId: exercise.id, message: "Отдых — от 1 секунды до 60 минут." });
+      }
+      if (exercise.instruction !== null && (exercise.instruction.trim() === "" || exercise.instruction.length > INSTRUCTION_MAX)) {
+        issues.push({ workoutId: workout.id, exerciseId: exercise.id, message: `Указание — до ${INSTRUCTION_MAX} символов.` });
       }
       const allowed = new Set(setFieldsOf(metrics));
       for (const set of exercise.sets) {

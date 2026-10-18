@@ -4,7 +4,7 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useKeepAwake } from "expo-keep-awake";
 import { usePreventRemove, useNavigation } from "@react-navigation/native";
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { CalendarDays, Check, Plus, Timer, X } from "lucide-react-native";
+import { CalendarDays, Check, NotebookPen, Plus, Timer, Trash2, X } from "lucide-react-native";
 import { ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, StatusTag,
   type StatusKind } from "../../../../shared/ui/components/public.ts";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
@@ -12,7 +12,7 @@ import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemePro
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { formatDuration, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookup, type ExerciseLookupPort,
   type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort } from "../../plans/public.ts";
-import { DROPS_MAX, EMPTY_VALUES, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type Side,
+import { DROPS_MAX, EMPTY_VALUES, NOTE_MAX, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type Side,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
 import { displayOrder, localDateOf, nextOutcome, type SetField } from "../domain/ExecutionRules.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
@@ -97,6 +97,63 @@ function ValueCell({ cellKey, field, value, pending, onCommit }: Readonly<{
       }}
       style={[styles.input, { color: colors.textPrimary, backgroundColor: colors.input,
         borderColor: invalid ? colors.danger : colors.border }]} />
+  );
+}
+
+/**
+ * Заметка о выполнении упражнения (§48.67): запись через паузу после ввода или при уходе фокуса; отложенная
+ * запись дописывается перед сменой исхода, как у значений подходов.
+ */
+function NoteField({ noteKey, value, pending, onCommit }: Readonly<{
+  noteKey: string; value: string; pending: PendingRegistry; onCommit: (text: string) => void;
+}>) {
+  const { palette } = usePrototypeTheme();
+  const colors = palette.tokens;
+  const [text, setText] = useState(value);
+  const [open, setOpen] = useState(value !== "");
+  const focused = useRef(false);
+  const textRef = useRef(value);
+  const valueRef = useRef(value);
+  const commitRef = useRef(onCommit);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  valueRef.current = value;
+  commitRef.current = onCommit;
+  useEffect(() => {
+    if (focused.current) return;
+    textRef.current = value;
+    setText(value);
+    if (value !== "") setOpen(true);
+  }, [value]);
+  const flush = useCallback(() => {
+    if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = null;
+    pending.delete(noteKey);
+    if (textRef.current.trim() !== valueRef.current.trim()) commitRef.current(textRef.current);
+  }, [noteKey, pending]);
+  useEffect(() => () => { if (pending.has(noteKey)) flush(); }, [flush, noteKey, pending]);
+  if (!open) {
+    return (
+      <Pressable accessibilityRole="button" accessibilityLabel="Добавить заметку о выполнении" hitSlop={6}
+        onPress={() => setOpen(true)} style={styles.noteAdd}>
+        <NotebookPen size={15} color={colors.textSecondary} strokeWidth={1.8} />
+        <Text style={[styles.noteAddText, { color: colors.textSecondary }]}>Заметка о выполнении</Text>
+      </Pressable>
+    );
+  }
+  return (
+    <TextInput value={text} multiline maxLength={NOTE_MAX} placeholder="Как прошло: самочувствие, техника, замены…"
+      placeholderTextColor={colors.textMuted} accessibilityLabel="Заметка о выполнении"
+      autoFocus={value === "" && text === ""}
+      onFocus={() => { focused.current = true; }}
+      onBlur={() => { focused.current = false; flush(); if (textRef.current.trim() === "") setOpen(false); }}
+      onChangeText={(next) => {
+        textRef.current = next;
+        setText(next);
+        if (timer.current !== null) clearTimeout(timer.current);
+        pending.set(noteKey, flush);
+        timer.current = setTimeout(flush, SAVE_DELAY_MS);
+      }}
+      style={[styles.note, { color: colors.textPrimary, backgroundColor: colors.input, borderColor: colors.border }]} />
   );
 }
 
@@ -281,6 +338,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const [restError, setRestError] = useState<string | null>(null);
   const { saveSet, toggleSet, setOutcome, addWarmup, removeWarmup } = diary;
   const [removeWarm, setRemoveWarm] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   /** §48.56: отдых упражнения сохраняется в план — у каждого упражнения свой таймер. */
   const saveRest = (exercise: PlannedExercise, restSec: number | null) => {
@@ -410,6 +468,12 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                 </View>
                 <Text style={[styles.meta, { color: colors.textSecondary }]}>{`${done}/${rows.length}`}</Text>
               </View>
+              {exercise.instruction !== null ? (
+                <Text accessibilityLabel={`Указание тренера: ${exercise.instruction}`}
+                  style={[styles.instructionText, { color: colors.textSecondary, borderColor: colors.border }]}>
+                  {exercise.instruction}
+                </Text>
+              ) : null}
               <View style={[styles.row, styles.headRow]}>
                 <Text style={[styles.head, styles.markerSpace, { color: colors.textMuted }]}>Сет</Text>
                 <Text style={[styles.head, styles.plan, { color: colors.textMuted }]}>План</Text>
@@ -424,6 +488,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                   sided={info?.unilateral === true}
                   pending={pending} onSave={onSave} onToggle={onToggle} onPickType={onPickType} onPickRpe={onPickRpe} />
               ))}
+              <NoteField noteKey={`note:${exercise.id}`} value={state.notes.get(exercise.id) ?? ""} pending={pending}
+                onCommit={(text) => { void diary.saveNote(exercise.id, text); }} />
             </View>
           );
         })}
@@ -441,6 +507,12 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
             );
           })}
         </View>
+        {state.session !== null ? (
+          <Pressable accessibilityRole="button" onPress={() => { flushPending(); setConfirmDelete(true); }} style={styles.deleteRun}>
+            <Trash2 size={16} color={colors.danger} strokeWidth={1.8} />
+            <Text style={[styles.deleteRunText, { color: colors.danger }]}>Удалить результаты тренировки</Text>
+          </Pressable>
+        ) : null}
       </KeyboardAwareScrollView>
       <DurationWheelPicker visible={restFor !== null} title="Отдых после подхода"
         value={restFor?.restSec ?? REST_DEFAULT_SEC} min={REST_MIN_SEC} max={REST_MAX_SEC}
@@ -471,6 +543,14 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         confirmLabel="Убрать" cancelLabel="Оставить" destructive
         onCancel={() => setRemoveDrops(null)}
         onConfirm={() => { if (removeDrops !== null) onSave(removeDrops.target, { setType: removeDrops.setType }); setRemoveDrops(null); }} />
+      <ConfirmDialog visible={confirmDelete} destructive confirmBusy={busy} title="Удалить результаты тренировки?"
+        description="Будут удалены все веса, повторения и подходы этой тренировки, заметки о выполнении, дата и итог. Плановая тренировка останется пустой. История и статистика пересчитаются без этих данных. Вернуть можно только из резервной копии."
+        confirmLabel="Удалить" cancelLabel="Отмена"
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          setBusy(true);
+          void diary.deleteExecution().finally(() => { setBusy(false); setConfirmDelete(false); });
+        }} />
       <ConfirmDialog visible={confirmIncomplete} title="Не все подходы выполнены"
         description="Тренировку можно завершить и так: незаполненные подходы останутся пустыми, введённые результаты сохранятся."
         confirmLabel="Завершить" cancelLabel="Вернуться" confirmBusy={busy}
@@ -521,6 +601,14 @@ const styles = StyleSheet.create({
   plan: { flex: 1, fontFamily: fonts.regular, fontSize: 12, textAlign: "center" },
   previous: { flex: 1, minHeight: 40, justifyContent: "center" },
   previousText: { fontFamily: fonts.medium, fontSize: 12, textAlign: "center" },
+  instructionText: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, borderLeftWidth: 2, paddingLeft: 8,
+    marginHorizontal: 2, marginBottom: 2 },
+  noteAdd: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 40, alignSelf: "flex-start", paddingHorizontal: 2 },
+  noteAddText: { fontFamily: fonts.medium, fontSize: 13 },
+  note: { minHeight: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, textAlignVertical: "top",
+    fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, marginTop: 4 },
+  deleteRun: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 48, marginTop: 4 },
+  deleteRunText: { fontFamily: fonts.medium, fontSize: 14 },
   sideLabel: { width: 14, textAlign: "center", fontFamily: fonts.semibold, fontSize: 13 },
   dropLabel: { flex: 1, fontFamily: fonts.medium, fontSize: 12, textAlign: "right", paddingRight: 4 },
   inputHead: { width: 54 },

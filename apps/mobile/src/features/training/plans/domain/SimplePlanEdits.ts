@@ -59,7 +59,7 @@ export const moveWorkout = (draft: SimpleProgramDraft, workoutId: string, direct
 /** Новое упражнение в конец тренировки с подходами по умолчанию (пустые плановые значения). */
 export const addExercise = (draft: SimpleProgramDraft, workoutId: string, plannedId: string, exerciseId: string,
   setId: (index: number) => string) => produce(draft, (d) => {
-  workoutOf(d, workoutId)?.exercises.push({ id: plannedId, exerciseId, restSec: REST_DEFAULT_SEC,
+  workoutOf(d, workoutId)?.exercises.push({ id: plannedId, exerciseId, restSec: REST_DEFAULT_SEC, instruction: null,
     sets: Array.from({ length: DEFAULT_SETS }, (_, index) => emptySet(setId(index))) });
 });
 
@@ -70,10 +70,19 @@ export const setRest = (draft: SimpleProgramDraft, plannedId: string, restSec: n
   exercise.restSec = restSec === null ? null : Math.min(REST_MAX_SEC, Math.max(REST_MIN_SEC, Math.round(restSec)));
 });
 
-/** Черновик, сохранённый до появления отдыха, получает отдых по умолчанию. */
+/** §48.67: плановое указание упражнения; пустое — нет указания. Длину проверяет `validateDraft`. */
+export const setInstruction = (draft: SimpleProgramDraft, plannedId: string, text: string) => produce(draft, (d) => {
+  const exercise = exerciseOf(d, plannedId);
+  if (exercise !== undefined) exercise.instruction = text.trim() === "" ? null : text.trim();
+});
+
+/** Черновик, сохранённый до появления отдыха и указаний, получает значения по умолчанию. */
 export const withRestDefaults = (draft: SimpleProgramDraft): SimpleProgramDraft => produce(draft, (d) => {
   for (const workout of d.plan.workouts) {
-    for (const exercise of workout.exercises) if (exercise.restSec === undefined) exercise.restSec = REST_DEFAULT_SEC;
+    for (const exercise of workout.exercises) {
+      if (exercise.restSec === undefined) exercise.restSec = REST_DEFAULT_SEC;
+      if (exercise.instruction === undefined) exercise.instruction = null;
+    }
   }
 });
 

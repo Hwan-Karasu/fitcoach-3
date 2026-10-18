@@ -412,3 +412,44 @@ test("T03 миграция v5 дневника: стороны, прежние �
     await clients.close();
   }
 });
+
+test("T03 заметка о выполнении (§48.67): своя у упражнения в каждой тренировке, не начинает тренировку сама", async () => {
+  const { clients, execution, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const w1: WorkoutSlot = { clientId: a.id, programId: "program-a", weekIndex: 1, plannedWorkoutId: "w1" };
+    const w2: WorkoutSlot = { ...w1, weekIndex: 2 };
+    await execution.saveExerciseNote(w1, "pe-bench", "  Болело плечо, снизили вес  ", DAY1);
+    assert.equal((await execution.getWorkout(w1)).notes.get("pe-bench"), "Болело плечо, снизили вес");
+    assert.equal((await execution.getWorkout(w2)).notes.size, 0, "заметка не переходит в другую неделю");
+    await execution.saveExerciseNote(w1, "pe-bench", "Хорошо", DAY1);
+    assert.equal((await execution.getWorkout(w1)).notes.get("pe-bench"), "Хорошо", "правка — та же заметка");
+    await execution.saveExerciseNote(w1, "pe-bench", "  ", DAY1);
+    assert.equal((await execution.getWorkout(w1)).notes.has("pe-bench"), false, "пустая — убирается");
+    await assert.rejects(execution.saveExerciseNote(w1, "pe-bench", "x".repeat(1001), DAY1), message("INVALID_METRIC"));
+  } finally { await close(); }
+});
+
+test("T03 удаление выполнения тренировки (§48.30): факты, мини-сеты, стороны и заметки уходят, другие недели на месте", async () => {
+  const { clients, execution, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const w1: WorkoutSlot = { clientId: a.id, programId: "program-a", weekIndex: 1, plannedWorkoutId: "w1" };
+    const w2: WorkoutSlot = { ...w1, weekIndex: 2 };
+    await execution.saveSet(bench(w1, "s1", 0, values(100_000, 8), null), DAY1);
+    await execution.saveSet({ ...bench(w1, "s2", 1, values(100_000, 8), null), setType: "DROP", drops: [values(80_000, 6)] }, DAY1);
+    await execution.saveSet({ ...bench(w1, "s3", 2, values(null, null), null), sides: { left: values(10_000, 8), right: values(null, null) } }, DAY1);
+    await execution.saveExerciseNote(w1, "pe-bench", "Заметка", DAY1);
+    const done = await execution.setOutcome(w1, "COMPLETED", (await execution.getWorkout(w1)).session!.revision, DAY1);
+    await execution.saveSet(bench(w2, "s1", 0, values(105_000, 8), null), DAY2);
+    await assert.rejects(execution.deleteWorkoutExecution(w1, done.revision - 1), message("STALE_SESSION"));
+    await execution.deleteWorkoutExecution(w1, done.revision);
+    const gone = await execution.getWorkout(w1);
+    assert.equal(gone.session, null, "выполнение удалено целиком");
+    assert.equal(gone.facts.size, 0);
+    assert.deepEqual(await execution.getProgramStatuses(a.id, "program-a"), [{ weekIndex: 2, plannedWorkoutId: "w1", status: "IN_PROGRESS" }]);
+    const previous = await execution.getPrevious(w2, [{ plannedExerciseId: "pe-bench", exerciseId: BENCH, plannedSetIds: ["s1"] }], DAY2);
+    assert.equal(previous.size, 0, "удалённые факты не возвращаются через «Пред.»");
+    assert.equal((await execution.getWorkout(w2)).facts.get("s1")?.values.loadGrams, 105_000, "другая неделя не тронута");
+  } finally { await close(); }
+});

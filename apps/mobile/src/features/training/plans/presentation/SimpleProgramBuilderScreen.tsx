@@ -9,7 +9,7 @@ import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, LoadingState, St
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
-import { addExercise, addSet, addWorkout, fillSets, newDraft, removeExercise, removeSet, removeWorkout, renameWorkout, setRest,
+import { addExercise, addSet, addWorkout, fillSets, newDraft, removeExercise, removeSet, removeWorkout, renameWorkout, setInstruction, setRest,
   reorderExercises, setTitle, setWeeks, updateSet } from "../domain/SimplePlanEdits.ts";
 import { WEEKS_MAX, WEEKS_MIN, type PlannedExercise, type SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
 import { formatDuration, setFieldsOf, setsSummary, validateDraft } from "../domain/SimplePlanRules.ts";
@@ -230,6 +230,7 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
           sheet.current?.dismiss();
         }}
         onChangeRest={(restSec) => { if (editing !== null) change(setRest(draft, editing, restSec)); }}
+        onChangeInstruction={(text) => { if (editing !== null) change(setInstruction(draft, editing, text)); }}
         onRemoveExercise={() => { if (editing !== null) { change(removeExercise(draft, editing)); sheet.current?.dismiss(); } }} />
       <ConfirmDialog visible={removing !== null} destructive title="Удалить тренировку?"
         description="Тренировка и её упражнения уйдут из плана. Сохранение — кнопкой внизу; до него можно выйти без изменений."
