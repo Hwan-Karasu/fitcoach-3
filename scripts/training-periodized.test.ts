@@ -12,6 +12,8 @@ import { addExercise, addWorkout, fillSets, newDraft, removeExercise, renameWork
   setSetCount } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
 import type { PlannedWorkout, SimpleProgramDraft } from "../apps/mobile/src/features/training/plans/domain/SimplePlanModel.ts";
 import { joinPreviousSuperset, leaveSuperset } from "../apps/mobile/src/features/training/plans/domain/SupersetRules.ts";
+import { rebaseDraft } from "../apps/mobile/src/features/training/plans/domain/DraftRebase.ts";
+import { validateDraft } from "../apps/mobile/src/features/training/plans/domain/SimplePlanRules.ts";
 import { DevTrainingExecutionRepository } from "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 
 const BENCH = "sys:repdb:bench";
@@ -659,4 +661,28 @@ test("T04 порядок мезоциклов: только полный спи�
   } finally {
     await close();
   }
+});
+
+test("T04 черновик по старой ревизии: правки переносятся на текущий план, чужие изменения плана сохраняются", () => {
+  const [base] = newMesocycleWeeks(firstWeek(), 1, ids("n"));
+  const benchId = base!.workouts[0]!.exercises[0]!.id;
+  const squatId = base!.workouts[0]!.exercises[1]!.id;
+  // Черновик: жим 5 повторов. Тем временем в плане присед получил отдых 120 с (например, из дневника).
+  const edited = edit(base!.workouts, (draft) => fillSets(draft, benchId, "reps", 5));
+  const current = base!.workouts.map((workout) => ({ ...workout, exercises: workout.exercises.map((exercise) =>
+    exercise.id === squatId ? { ...exercise, restSec: 120 } : exercise) }));
+  const rebased = rebaseDraft(base!.workouts, edited, current, ids("r"));
+  assert.deepEqual(rebased[0]!.exercises[0]!.sets.map((set) => set.reps), [5, 5, 5]);
+  assert.equal(rebased[0]!.exercises[1]!.restSec, 120, "изменение плана после черновика не откатывается");
+  assert.deepEqual(rebased[0]!.exercises[0]!.sets.map((set) => set.id), base!.workouts[0]!.exercises[0]!.sets.map((set) => set.id));
+});
+
+test("T04 суперсет — упражнения подряд: разорванная перестановкой группа не проходит проверку", () => {
+  let draft = { title: "М", plan: { weeks: 1, workouts: firstWeek() } };
+  draft = addExercise(draft, "w1", "e3", ROW, ids("e3s"));
+  draft = joinPreviousSuperset(draft, "w1", "e2");
+  const metrics = () => ["load", "reps"] as const;
+  assert.deepEqual(validateDraft(draft, metrics), []);
+  const broken = reorderExercises(draft, "w1", ["e1", "e3", "e2"]);
+  assert.ok(validateDraft(broken, metrics).some((issue) => issue.message.includes("подряд")));
 });

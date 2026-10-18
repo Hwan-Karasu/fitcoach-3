@@ -4,7 +4,7 @@ import { ChevronDown } from "lucide-react-native";
 import { AppButton } from "./AppButton.tsx";
 import { DropdownMenu, type DropdownOption } from "./DropdownMenu.tsx";
 
-/** Searchable selection with a bounded, virtualized menu shared by plan source selectors. */
+/** Выбор с поиском и виртуализированным меню; общий для выбора источника плана. */
 export function SearchableSelect({ title, value, options, onSelect, disabled = false }: Readonly<{
   title: string; value: string; options: readonly DropdownOption<string>[];
   onSelect: (value: string) => void; disabled?: boolean;

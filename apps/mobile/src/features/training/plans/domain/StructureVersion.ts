@@ -1,6 +1,6 @@
 import type { Mesocycle } from "./PeriodizedModel.ts";
 
-/** A structural snapshot only. Execution facts are always read from their owner. */
+/** Только снимок структуры; факты выполнения всегда читаются у их владельца — дневника. */
 export interface MesocycleVersion {
   readonly id: string;
   readonly validFrom: string;

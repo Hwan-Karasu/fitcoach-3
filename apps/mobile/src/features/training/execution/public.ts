@@ -10,3 +10,4 @@ export type { RestSignalPort, RestTimerStorePort, RestTimersPort } from "./domai
 export type { RestTimer, RestTimerStart } from "./domain/RestTimerRules.ts";
 export type { SaveSetInput, SetIdentity, SetSaveResult, TrainingExecutionCommittedChange,
   TrainingExecutionPort } from "./domain/TrainingExecutionPort.ts";
+export type { WeekExecutionParticipant, WorkoutCopyMapping } from "./domain/WeekCopyParticipant.ts";

@@ -81,7 +81,7 @@ function EmptyMesocycleCreator({ clientId, programId, repository, exercises, lis
     let active = true;
     void Promise.all([repository.getPeriodizedPlan(clientId, programId), repository.getPeriodizedDraft(clientId, programId, "new:MESOCYCLE")]).then(([plan, saved]) => {
       if (!active || plan === null) return;
-      setRevision(saved?.baseRevision ?? plan.program.revision);
+      setRevision(plan.program.revision);
       setMembers(plan.program.memberClientIds);
       // По умолчанию — всем участникам: общий мезоцикл — обычный случай групповой программы.
       setSelected(saved?.clientIds ?? plan.program.memberClientIds);

@@ -42,3 +42,15 @@ test("T03 ввод во время записи не теряется после
   assert.equal(await saving, true);
   assert.deepEqual(writes, [10, 105]);
 });
+
+test("T03 отметка подхода дописывает только его ячейки: ошибка в другом подходе её не блокирует", async () => {
+  const pending = new PendingInputWrites();
+  const writes: string[] = [];
+  pending.set("set-1:reps", async () => { writes.push("set-1:reps"); return true; });
+  pending.set("set-1:L:loadGrams", async () => { writes.push("set-1:L:loadGrams"); return true; });
+  pending.set("set-2:reps", async () => false);
+  assert.equal(await pending.flushPrefix("set-1:"), true);
+  assert.deepEqual(writes.sort(), ["set-1:L:loadGrams", "set-1:reps"]);
+  assert.equal(pending.has("set-2:reps"), true, "неверное значение другого подхода остаётся на экране");
+  assert.equal(await pending.flushPrefix("set-2:"), false, "ошибка своего подхода — отметка не ставится");
+});

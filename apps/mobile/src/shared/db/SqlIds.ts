@@ -4,3 +4,7 @@ export const UUID_V4_SQL = `SELECT lower(hex(randomblob(4))) || '-' || lower(hex
   substr('89ab', 1 + abs(random() % 4), 1) ||
   substr(lower(hex(randomblob(2))), 2) || '-' ||
   lower(hex(randomblob(6))) AS id`;
+
+/** Пачка UUID одним запросом (параметр — сколько): `randomblob` вычисляется для каждой строки. */
+export const UUID_V4_BATCH_SQL = `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
+  ${UUID_V4_SQL} FROM n`;

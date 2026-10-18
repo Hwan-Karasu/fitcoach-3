@@ -20,6 +20,13 @@ export class PendingInputWrites {
     return operation.then((saved) => saved && this.entries.has(key) ? this.flush(key) : saved);
   }
 
+  /** Только записи, ключ которых начинается с префикса (например, ячейки одного подхода). */
+  async flushPrefix(prefix: string): Promise<boolean> {
+    const keys = [...this.entries.keys()].filter((key) => key.startsWith(prefix));
+    const results = await Promise.all(keys.map((key) => this.flush(key)));
+    return results.every(Boolean);
+  }
+
   async flushAll(): Promise<boolean> {
     const results = await Promise.all([...this.entries.keys()].map((key) => this.flush(key)));
     return results.every(Boolean) && this.entries.size === 0;

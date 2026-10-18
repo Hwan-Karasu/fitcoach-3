@@ -24,7 +24,7 @@ export interface PlannedSet {
 
 export interface PlannedExercise {
   readonly id: string;
-  /** Group identity scoped to this workout; grouping never replaces exercise/set identities. */
+  /** Группа суперсета в пределах тренировки; группировка не меняет ID упражнений и подходов. */
   readonly supersetId?: string;
   /** Расширенная программа: «родство» с упражнением базовой недели (§48.6); у Простой — нет. */
   readonly lineageId?: string;

@@ -237,7 +237,8 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
           onChangeWeek={(weekIndex, workoutId, mesocycleId) => {
             const context = { programId: route.params.programId, weekIndex, ...(mesocycleId === null ? {} : { mesocycleId }) };
             if (workoutId === null) navigation.popTo("TrainingProgram", context);
-            else navigation.replace("TrainingWorkout", { ...context, workoutId });
+            // Тот же экран с другими параметрами: без анимации перехода и без пересоздания дневника.
+            else navigation.setParams({ ...context, workoutId });
           }} />}
       </TrainingStack.Screen>
     </TrainingStack.Navigator>

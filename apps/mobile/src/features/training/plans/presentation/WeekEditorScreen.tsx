@@ -19,6 +19,9 @@ import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
 import { WorkoutsEditor } from "./WorkoutsEditor.tsx";
 import { useRecoveryDraftSave } from "./useRecoveryDraftSave.ts";
 import type { PeriodizedDraft } from "../domain/PeriodizedDraft.ts";
+import { REBASED_NOTICE, rebaseDraft } from "../domain/DraftRebase.ts";
+import type { PlannedWorkout } from "../domain/SimplePlanModel.ts";
+import { newPlanId } from "./WorkoutsEditor.tsx";
 
 const errors: Readonly<Record<string, string>> = {
   DRAFT_INVALID: "Неделя не сохранилась: проверьте тренировки.",
@@ -67,12 +70,14 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
   const [preview, setPreview] = useState<WeekEditPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [replaceConflicts, setReplaceConflicts] = useState<readonly string[]>([]);
+  const [baseWorkouts, setBaseWorkouts] = useState<readonly PlannedWorkout[]>([]);
+  const [rebased, setRebased] = useState(false);
   const recovery = useRecoveryDraftSave<PeriodizedDraft>((value) => repository.savePeriodizedDraft(clientId, programId, value));
   const { schedule } = recovery;
   useEffect(() => {
     if (dirty && draft !== null && revision !== null) schedule({ kind: "WEEK", baseRevision: revision, draft, clientIds: selected,
-      mesocycleId, weekIndex, type, scope, replaceConflicts });
-  }, [dirty, draft, revision, selected, mesocycleId, weekIndex, type, scope, replaceConflicts, schedule]);
+      mesocycleId, weekIndex, type, scope, replaceConflicts, baseWorkouts });
+  }, [dirty, draft, revision, selected, mesocycleId, weekIndex, type, scope, replaceConflicts, baseWorkouts, schedule]);
 
   useEffect(() => {
     let active = true;
@@ -83,13 +88,22 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
       const week = found?.weeks.find((item) => item.index === weekIndex);
       if (plan === null || found === undefined || week === undefined) { setMessage("Неделя не найдена."); return; }
       setMesocycle(found);
-      setRevision(saved?.baseRevision ?? plan.program.revision);
+      const week0 = saved?.kind === "WEEK" ? saved : null;
+      const stale = week0 !== null && week0.baseRevision !== plan.program.revision && week0.baseWorkouts !== undefined;
+      setRebased(stale);
+      setDirty(stale);
+      setBaseWorkouts(stale || week0?.baseWorkouts === undefined ? week.workouts : week0.baseWorkouts);
+      setRevision(stale ? plan.program.revision : saved?.baseRevision ?? plan.program.revision);
       setMembers(plan.program.memberClientIds);
       setType(saved?.kind === "WEEK" ? saved.type : week.type);
       setScope(saved?.kind === "WEEK" ? saved.scope : "CURRENT");
-      setReplaceConflicts(saved?.kind === "WEEK" ? saved.replaceConflicts ?? [] : []);
+      setReplaceConflicts(saved?.kind === "WEEK" && !stale ? saved.replaceConflicts ?? [] : []);
       setSelected(saved?.clientIds ?? [clientId]);
-      setDraft(saved?.draft ?? { title: found.title, plan: { weeks: 1, workouts: week.workouts } });
+      setDraft(saved === null ? { title: found.title, plan: { weeks: 1, workouts: week.workouts } }
+        : stale && week0?.baseWorkouts !== undefined
+          ? { ...saved.draft, plan: { ...saved.draft.plan, workouts: rebaseDraft(week0.baseWorkouts, saved.draft.plan.workouts,
+            week.workouts, () => newPlanId("r")) } }
+          : saved.draft);
       setRestored(saved !== null);
     }).catch(() => { if (active) setMessage("Не удалось открыть неделю."); });
     listCandidates().then((rows) => { if (active) setNames(new Map(rows.map((row) => [row.id, row.displayName]))); })
@@ -101,7 +115,7 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
   usePickedExercise(picked, draft, lookup, change);
   const metricsOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.metrics ?? null, [lookup]);
   const issues = useMemo(() => draft === null || lookup === null ? [] : validateDraft(draft, metricsOf), [draft, lookup, metricsOf]);
-  // Scope uses the source week's saved type, exactly as the transaction does.
+  // Область считается по сохранённому типу открытой недели — так же, как при сохранении.
   const affected = useMemo(() => mesocycle === null ? [] : targetWeeks(mesocycle.weeks, weekIndex, scope), [mesocycle, scope, weekIndex]);
 
   useEffect(() => {
@@ -149,7 +163,7 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
       if (!plan || !cycle || !week) throw new Error("TARGET_NOT_FOUND");
       await recovery.beforePublish();
       await repository.clearPeriodizedDraft(clientId, programId, `week:${mesocycleId}:${weekIndex}`);
-      setDirty(false); setMesocycle(cycle); setRevision(plan.program.revision);
+      setDirty(false); setMesocycle(cycle); setRevision(plan.program.revision); setBaseWorkouts(week.workouts); setRebased(false);
       setDraft({ title: cycle.title, plan: { weeks: 1, workouts: week.workouts } });
       setType(week.type); setScope("CURRENT"); setSelected([clientId]); setReplaceConflicts([]); setRestored(false); setMessage(null);
     } catch { setMessage("Не удалось загрузить сохранённую неделю. Изменения остаются в редакторе."); }
@@ -159,7 +173,7 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
   return (
     <TrainingEditorLayout>
       <Animated.ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {restored ? <InlineNotice kind="info">Восстановлены несохранённые изменения недели.</InlineNotice> : null}
+        {restored ? <InlineNotice kind="info">{rebased ? REBASED_NOTICE : "Восстановлены несохранённые изменения недели."}</InlineNotice> : null}
         {restored || previewError ? <AppButton variant="secondary" label="Отменить несохранённые изменения" disabled={busy}
           onPress={() => { void discard(); }} /> : null}
         <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>
@@ -198,14 +212,13 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
       <StickyEditorFooter actionLabel="Сохранить неделю" busy={busy} disabled={preview === null} onAction={() => { void save(); }}
         onCancel={onCancel}
         message={recovery.error ?? message} messageKind={message?.startsWith("Сохранено") === true ? "info" : "error"}
-        note="Тип недели меняется только у этой недели" />
+        note={selected.length > 1 ? "Тип недели меняется у этой недели — у вас и у выбранных участников" : "Тип недели меняется только у этой недели"} />
     </TrainingEditorLayout>
   );
 }
 
 const styles = StyleSheet.create({
   application: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 8 },
-  root: { flex: 1 },
   center: { flex: 1, padding: 16, justifyContent: "center" },
   content: { padding: 16, gap: 12, paddingBottom: 24 },
   heading: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 26 },

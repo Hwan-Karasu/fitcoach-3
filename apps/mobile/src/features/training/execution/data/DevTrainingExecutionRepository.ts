@@ -14,6 +14,7 @@ import type { SaveSetInput, SetIdentity, SetSaveResult, TrainingExecutionCommitt
 import type { RestTimerStorePort } from "../domain/RestTimerPorts.ts";
 import type { RestTimer } from "../domain/RestTimerRules.ts";
 import { DEV_TRAINING_EXECUTION_LEDGER, devTrainingExecutionCatalog } from "./DevTrainingExecutionCatalog.ts";
+import type { WeekExecutionParticipant, WorkoutCopyMapping } from "../domain/WeekCopyParticipant.ts";
 
 const OUTCOMES: readonly WorkoutOutcome[] = ["COMPLETED", "MISSED", "CANCELLED"];
 
@@ -181,7 +182,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     return () => { this.listeners.delete(listener); };
   }
 
-  private publish(slot: WorkoutSlot): void {
+  private publish(slot: Pick<WorkoutSlot, "clientId" | "programId">): void {
     for (const listener of this.listeners) {
       try { listener({ clientId: slot.clientId, programId: slot.programId }); } catch { /* Наблюдатель не превращает коммит в ошибку. */ }
     }
@@ -229,7 +230,10 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
   }
 
   async getWorkout(slot: WorkoutSlot): Promise<WorkoutExecution> {
-    const { connection } = this.ready();
+    return this.readWorkout(this.ready().connection, slot);
+  }
+
+  private async readWorkout(connection: SqliteStatementPort, slot: WorkoutSlot): Promise<WorkoutExecution> {
     const session = await this.sessionOf(connection, slot);
     if (session === null) return { session: null, facts: new Map(), notes: new Map() };
     const rows = await connection.all<FactRow>(`SELECT ${FACT_COLUMNS} FROM dev_training_performed_sets
@@ -489,17 +493,66 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       const session = await this.sessionOf(tx, slot);
       if (session === null) throw new Error("FACT_NOT_FOUND");
       if (session.revision !== expectedRevision) throw new Error("STALE_SESSION");
-      const facts = `SELECT id FROM dev_training_performed_sets WHERE workspace_id = ? AND session_id = ?`;
-      await tx.run(`DELETE FROM dev_training_performed_sides WHERE workspace_id = ? AND set_id IN (${facts})`,
-        [this.workspaceId, this.workspaceId, session.id]);
-      await tx.run(`DELETE FROM dev_training_performed_drops WHERE workspace_id = ? AND set_id IN (${facts})`,
-        [this.workspaceId, this.workspaceId, session.id]);
-      await tx.run("DELETE FROM dev_training_performed_sets WHERE workspace_id = ? AND session_id = ?", [this.workspaceId, session.id]);
-      await tx.run("DELETE FROM dev_training_exercise_notes WHERE workspace_id = ? AND session_id = ?", [this.workspaceId, session.id]);
-      await tx.run("DELETE FROM dev_training_sessions WHERE workspace_id = ? AND id = ?", [this.workspaceId, session.id]);
+      await this.deleteSession(tx, session.id);
     });
     this.publish(slot);
   }
+
+  private async deleteSession(tx: SqliteStatementPort, sessionId: string): Promise<void> {
+      const facts = `SELECT id FROM dev_training_performed_sets WHERE workspace_id = ? AND session_id = ?`;
+      await tx.run(`DELETE FROM dev_training_performed_sides WHERE workspace_id = ? AND set_id IN (${facts})`,
+        [this.workspaceId, this.workspaceId, sessionId]);
+      await tx.run(`DELETE FROM dev_training_performed_drops WHERE workspace_id = ? AND set_id IN (${facts})`,
+        [this.workspaceId, this.workspaceId, sessionId]);
+      await tx.run("DELETE FROM dev_training_performed_sets WHERE workspace_id = ? AND session_id = ?", [this.workspaceId, sessionId]);
+      await tx.run("DELETE FROM dev_training_exercise_notes WHERE workspace_id = ? AND session_id = ?", [this.workspaceId, sessionId]);
+      await tx.run("DELETE FROM dev_training_sessions WHERE workspace_id = ? AND id = ?", [this.workspaceId, sessionId]);
+  }
+
+  private async copyWorkoutFacts(tx: SqliteStatementPort, mapping: WorkoutCopyMapping, confirm: boolean, now: Date) {
+    const source = await this.readWorkout(tx, mapping.source);
+    for (const exercise of mapping.exercises) {
+      const sourceFacts = [...source.facts.values()].filter((fact) => fact.plannedExerciseId === exercise.sourceId
+        && (fact.extra || exercise.sets.some((set) => set.sourceId === fact.plannedSetId)));
+      for (const fact of sourceFacts) {
+        const plannedSetId = fact.extra ? (await tx.first<{ id: string }>(UUID_V4_SQL))?.id
+          : exercise.sets.find((set) => set.sourceId === fact.plannedSetId)?.targetId;
+        if (!plannedSetId || fact.exerciseId !== exercise.exerciseId) throw new Error("WRONG_CLIENT_SCOPE");
+        const content = { setType: fact.setType, values: fact.values, drops: fact.drops };
+        const pair = fact.sides ? { left: fact.sides.left.values, right: fact.sides.right.values } : null;
+        if (pair) validateSides(content, pair, fact.rpe, exercise.metrics);
+        else validateContent(content, fact.rpe, exercise.metrics);
+        const copied = await this.writeFact(tx, { slot: mapping.target, plannedExerciseId: exercise.targetId,
+          exerciseId: exercise.exerciseId, plannedSetId, position: fact.position, metrics: exercise.metrics, expectedRevision: null },
+        now, () => {
+          const mode = confirm ? "AUTO" : "MANUAL";
+          if (!pair) return { content, rpe: fact.rpe, sides: null,
+            change: confirmationAfterSave(mode, false, content, exercise.metrics) };
+          const change = sidesAfterSave(mode, { left: false, right: false }, pair, exercise.metrics);
+          return { content, rpe: fact.rpe, sides: { pair, change }, change: mergeSides(change) };
+        });
+        await tx.run("UPDATE dev_training_performed_sets SET origin = 'COPY', extra = ? WHERE workspace_id = ? AND id = ?",
+          [fact.extra ? 1 : 0, this.workspaceId, copied.fact.id]);
+      }
+    }
+  }
+
+  readonly weekCopyParticipant: WeekExecutionParticipant<SqliteStatementPort> = {
+    read: async (tx, slots) => {
+      const values: WorkoutExecution[] = [];
+      for (const slot of slots) { assertSlot(slot); values.push(await this.readWorkout(tx, slot)); }
+      return values;
+    },
+    replace: async (tx, targets, mappings, mode, now) => {
+      for (const slot of targets) {
+        assertSlot(slot);
+        const session = await this.sessionOf(tx, slot);
+        if (session) await this.deleteSession(tx, session.id);
+      }
+      if (mode !== "PLAN") for (const mapping of mappings) await this.copyWorkoutFacts(tx, mapping, mode === "CONFIRM", now);
+    },
+    notify: (clientId, programId) => this.publish({ clientId, programId }),
+  };
 
   async setOutcome(slot: WorkoutSlot, outcome: WorkoutOutcome | null, expectedRevision: number | null,
     now: Date = new Date()): Promise<WorkoutSession> {

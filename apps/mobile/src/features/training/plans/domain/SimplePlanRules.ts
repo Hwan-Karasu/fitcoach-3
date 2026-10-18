@@ -49,6 +49,11 @@ export function validateDraft(draft: SimpleProgramDraft,
     if ([...groups].some(([id, count]) => !id.trim() || count < 2)) {
       issues.push({ workoutId: workout.id, exerciseId: null, message: "В суперсете нужны хотя бы два упражнения." });
     }
+    const runs = workout.exercises.map((exercise) => exercise.supersetId ?? null)
+      .filter((group, index, all) => group !== null && all[index - 1] !== group);
+    if (new Set(runs).size !== runs.length) {
+      issues.push({ workoutId: workout.id, exerciseId: null, message: "Упражнения суперсета должны идти подряд." });
+    }
     unique(workout.id);
     if (!workout.title.trim()) issues.push({ workoutId: workout.id, exerciseId: null, message: "У тренировки нет названия." });
     for (const exercise of workout.exercises) {

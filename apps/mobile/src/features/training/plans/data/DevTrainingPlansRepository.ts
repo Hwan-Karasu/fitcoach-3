@@ -1,6 +1,6 @@
 import { runMigrations } from "../../../../shared/db/MigrationRunner.ts";
 import { SharedSqliteDatabase } from "../../../../shared/db/SharedSqliteDatabase.ts";
-import { UUID_V4_SQL } from "../../../../shared/db/SqlIds.ts";
+import { UUID_V4_BATCH_SQL, UUID_V4_SQL } from "../../../../shared/db/SqlIds.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../../shared/db/WriterCoordinator.ts";
 import type { ClientProgramLibrary, CreateProgramInput, ProgramCard, TrainingProgram } from "../domain/ProgramModel.ts";
@@ -23,6 +23,7 @@ import type { MesocycleVersion } from "../domain/StructureVersion.ts";
 import { simpleWorkoutDraftKey, type SimpleWorkoutDraft, type SimpleWorkoutEdit } from "../domain/SimpleWorkoutEdit.ts";
 import { assertSimpleIdentities, preserveSimple, readSimpleHistory, readSimpleWeeks, writeSimpleOverride } from "./SimpleWeekStore.ts";
 import { independentWeeks, weekRowCount, type CopyMesocycleInput } from "../domain/PlanCopy.ts";
+import type { WeekPlansParticipant, WeekCopyRequest } from "../domain/WeekCopy.ts";
 
 /** Ключ черновика ещё не созданной Простой программы (§48.29 п. 4: черновик привязан к объекту правки). */
 export const NEW_SIMPLE_DRAFT_KEY = "new:SIMPLE";
@@ -489,12 +490,9 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   /** Запас новых ID: функции домена синхронные, ID для них берутся заранее. */
   private async idPool(tx: SqliteStatementPort, count: number): Promise<() => string> {
-    const pool: string[] = [];
-    for (let index = 0; index < count; index += 1) {
-      const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
-      if (!id) throw new Error("PROGRAM_ID_UNAVAILABLE");
-      pool.push(id);
-    }
+    // Одним запросом: правка «все недели» у нескольких участников требует тысячи ID.
+    const pool = count < 1 ? [] : (await tx.all<{ id: string }>(UUID_V4_BATCH_SQL, [count])).map((row) => row.id);
+    if (pool.length !== Math.max(0, count) || new Set(pool).size !== pool.length) throw new Error("PROGRAM_ID_UNAVAILABLE");
     return () => {
       const id = pool.pop();
       if (id === undefined) throw new Error("PROGRAM_ID_UNAVAILABLE");
@@ -562,6 +560,33 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     return created;
   }
 
+  private async weekCopyContext(tx: SqliteStatementPort, request: WeekCopyRequest) {
+    const { clientId, programId, mesocycleId, sourceWeek, targetWeek, expectedRevision } = request;
+    await this.assertTargets(tx, clientId, programId, [clientId]);
+    const program = await programById(tx, this.workspaceId, programId);
+    if (program.revision !== expectedRevision) throw new Error("PROGRAM_REVISION_CONFLICT");
+    const cycle = (await readMesocycles(tx, this.workspaceId, programId, clientId)).find((item) => item.id === mesocycleId);
+    const source = cycle?.weeks.find((week) => week.index === sourceWeek);
+    const target = cycle?.weeks.find((week) => week.index === targetWeek);
+    if (!cycle || !source || !target || source.id === target.id) throw new Error("TARGET_NOT_FOUND");
+    return { cycle, source, target };
+  }
+
+  readonly weekCopyParticipant: WeekPlansParticipant<SqliteStatementPort> = {
+    read: async (tx, request) => this.weekCopyContext(tx, request),
+    replace: async (tx, request, now) => {
+      const { cycle, source, target } = await this.weekCopyContext(tx, request);
+      const take = await this.idPool(tx, weekRowCount([source]));
+      const copied = copyWeeks([source], take)[0]!;
+      const replacement = { ...copied, id: target.id, index: target.index };
+      await this.bumpRevision(tx, request.programId, request.expectedRevision, now);
+      await preserveMesocycle(tx, this.workspaceId, request.clientId, request.programId, cycle, now);
+      await writeWeek(tx, this.workspaceId, request.programId, replacement);
+      return { source, target: replacement };
+    },
+    notify: (clientId) => this.publish({ clientIds: [clientId] }),
+  };
+
   private async prepareWeekEdit(tx: SqliteStatementPort, clientId: string, programId: string, expectedRevision: number,
     input: WeekEditInput, allocate: (count: number) => Promise<() => string>) {
       await this.assertTargets(tx, clientId, programId, input.clientIds);
@@ -624,7 +649,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   }
 
   async previewWeekEdit(clientId: string, programId: string, expectedRevision: number, input: WeekEditInput): Promise<WeekEditPreview> {
-    // The writer serializes a read-only transaction with structural commands: one coherent revision, no events or writes.
+    // Предпросмотр идёт через очередь записи: одна согласованная ревизия, без записей и уведомлений.
     return this.ready().writer.write(async (tx) => {
       let next = 0;
       return (await this.prepareWeekEdit(tx, clientId, programId, expectedRevision, input,

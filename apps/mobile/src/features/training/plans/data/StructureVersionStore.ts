@@ -20,14 +20,14 @@ export async function mesocycleCreatedAt(tx: SqliteStatementPort, workspaceId: s
   return row.at;
 }
 
-/** Called inside the same transaction as the structural write, once per changed participant/cycle. */
+/** Вызывается в той же транзакции, что и структурная запись, — один раз на изменённого участника и мезоцикл. */
 export async function preserveMesocycle(tx: SqliteStatementPort, workspaceId: string, clientId: string,
   programId: string, structure: Mesocycle, now: Date): Promise<void> {
   const previous = await tx.first<{ at: string }>(`SELECT valid_to AS at FROM dev_training_structure_versions
     WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND mesocycle_id = ? ORDER BY rowid DESC LIMIT 1`,
   [workspaceId, clientId, programId, structure.id]);
   const from = previous?.at ?? await mesocycleCreatedAt(tx, workspaceId, clientId, programId, structure.id);
-  // A backwards device clock cannot produce a reversed interval. Ordering is also retained by rowid.
+  // Часы устройства, переведённые назад, не дают перевёрнутый интервал; порядок дополнительно держится на rowid.
   const to = new Date(Math.max(new Date(from).getTime(), now.getTime())).toISOString();
   const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
   if (!id) throw new Error("PROGRAM_ID_UNAVAILABLE");

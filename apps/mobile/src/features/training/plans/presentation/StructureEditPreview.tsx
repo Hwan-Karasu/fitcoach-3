@@ -4,7 +4,7 @@ import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemePro
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseInfo } from "../domain/ExerciseLookupPort.ts";
 import type { WeekEditPreview } from "../domain/PeriodizedModel.ts";
-import { formatRange, setsSummary } from "../domain/SimplePlanRules.ts";
+import { formatDuration, formatRange, setsSummary } from "../domain/SimplePlanRules.ts";
 
 export function StructureEditPreview({ preview, names, lookup, replace, onChange }: Readonly<{
   preview: WeekEditPreview; names: ReadonlyMap<string, string>; lookup: ReadonlyMap<string, ExerciseInfo>;
@@ -28,7 +28,7 @@ export function StructureEditPreview({ preview, names, lookup, replace, onChange
       {([["Сейчас", conflict.currentExercise], ["После применения", conflict.proposedExercise]] as const)
         .map(([label, exercise]) => exercise ? <Text key={label} style={[styles.meta, { color: colors.textSecondary }]}>
           {`${label}: ${lookup.get(exercise.exerciseId)?.name ?? "Упражнение"} · ${setsSummary(exercise)}${exercise.rir
-            ? ` · RIR ${formatRange(exercise.rir)}` : ""} · отдых ${exercise.restSec ?? 0} с${exercise.instruction ? ` · ${exercise.instruction}` : ""}`}
+            ? ` · RIR ${formatRange(exercise.rir)}` : ""} · ${exercise.restSec === null ? "без таймера" : `отдых ${formatDuration(exercise.restSec)}`}${exercise.instruction ? ` · ${exercise.instruction}` : ""}`}
         </Text> : null)}
       {conflict.canReplace ? <View style={styles.chips}>
         <SelectionChip group="Конфликт" label="Сохранить индивидуальное" selected={!replace.includes(conflict.key)}

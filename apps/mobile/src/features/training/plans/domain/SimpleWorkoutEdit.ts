@@ -25,6 +25,8 @@ export interface SimplePlanVersion {
 export interface SimpleWorkoutDraft {
   readonly baseRevision: number;
   readonly input: SimpleWorkoutEdit;
+  /** Тренировка, с которой начата правка: если план потом изменился, правки переносятся на новый план. */
+  readonly baseWorkout?: PlannedWorkout;
 }
 export const simpleWorkoutDraftKey = (programId: string, weekIndex: number, workoutId: string) =>
   `workout:${programId}:${weekIndex}:${workoutId}`;

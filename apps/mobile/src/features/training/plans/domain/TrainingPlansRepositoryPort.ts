@@ -67,7 +67,7 @@ export interface TrainingPlansRepositoryPort {
   getWorkoutWeekNavigation(clientId: string, programId: string, plannedWorkoutId: string): Promise<WorkoutWeekNavigation | null>;
   /** Расширенная программа этого участника: его мезоциклы, недели и выбранный мезоцикл. */
   getPeriodizedPlan(clientId: string, programId: string): Promise<PeriodizedPlan | null>;
-  /** Current first, then every immutable historical structure; another client's cycle returns no versions. */
+  /** Сначала действующая, затем все неизменяемые исторические версии; у чужого мезоцикла версий нет. */
   getMesocycleVersions(clientId: string, programId: string, mesocycleId: string): Promise<readonly MesocycleVersion[]>;
   /**
    * Новый мезоцикл (§48.12.1 п. 1): каждому выбранному участнику — своя копия с общим родством, одной
@@ -75,7 +75,7 @@ export interface TrainingPlansRepositoryPort {
    */
   createMesocycle(clientId: string, programId: string, expectedRevision: number, input: NewMesocycleInput,
     now?: Date): Promise<Readonly<{ program: TrainingProgram; mesocycleId: string }>>;
-  /** Independent current structure, selected recipients only; source and destination revisions checked atomically. */
+  /** Независимая копия действующей структуры только выбранным получателям; ревизии источника и цели проверяются в одной транзакции. */
   copyMesocycle(clientId: string, programId: string, expectedRevision: number, input: CopyMesocycleInput,
     now?: Date): Promise<Readonly<{ program: TrainingProgram; mesocycleId: string }>>;
   /**

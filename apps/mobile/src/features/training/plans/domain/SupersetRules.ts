@@ -6,7 +6,7 @@ export function withoutSuperset(exercise: PlannedExercise): PlannedExercise {
   return rest;
 }
 
-/** Removing one member of a pair dissolves the pair, without touching either exercise's identity. */
+/** Если в группе осталось одно упражнение, суперсет распадается; ID упражнений не меняются. */
 export function cleanSupersets(exercises: readonly PlannedExercise[]): readonly PlannedExercise[] {
   const counts = new Map<string, number>();
   for (const item of exercises) if (item.supersetId) counts.set(item.supersetId, (counts.get(item.supersetId) ?? 0) + 1);
@@ -39,7 +39,7 @@ export function leaveSuperset(draft: SimpleProgramDraft, workoutId: string, exer
     : { ...workout, exercises: cleanSupersets(workout.exercises.map((item) => item.id === exerciseId ? withoutSuperset(item) : item)) }) } };
 }
 
-/** New group identities for a copied workout. No relationship to the source group is retained. */
+/** Новые ID групп у копии тренировки; связь с группами источника не сохраняется. */
 export function remapSupersets(workout: PlannedWorkout): PlannedWorkout {
   const groups = new Map<string, string>();
   return { ...workout, exercises: workout.exercises.map((item) => {
@@ -50,7 +50,7 @@ export function remapSupersets(workout: PlannedWorkout): PlannedWorkout {
   }) };
 }
 
-/** Compare group membership by lineage, never by a group ID from another participant/week. */
+/** Состав групп сравнивается по родству, а не по ID группы другого участника или недели. */
 export function supersetGroups(workout: PlannedWorkout): readonly (readonly string[])[] {
   const groups = new Map<string, string[]>();
   for (const item of workout.exercises) {

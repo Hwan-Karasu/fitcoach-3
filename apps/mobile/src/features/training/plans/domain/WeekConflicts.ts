@@ -65,7 +65,7 @@ function conflictReason(op: WeekOp, before: readonly PlannedWorkout[], after: re
   return previous && same(shape(current), shape(previous)) ? null : "PERSONAL_CHANGE";
 }
 
-/** Explicit replacement restores only the affected exercise (or the missing workout), with new IDs where needed. */
+/** Явная замена восстанавливает только затронутое упражнение (или недостающую тренировку), с новыми ID, где нужно. */
 function replaceConflict(target: readonly PlannedWorkout[], op: WeekOp, before: readonly PlannedWorkout[],
   after: readonly PlannedWorkout[], newId: () => string): readonly PlannedWorkout[] {
   const { workout: source } = context(op, before, after);
@@ -122,7 +122,7 @@ export function applyWithConflicts(before: readonly PlannedWorkout[], after: rea
       if (!replace.includes(key)) { skipped += 1; continue; }
       workouts = replaceConflict(workouts, op, before, after, newId);
     } else {
-      // An already applied add/remove is a no-op, not a missing-element error.
+      // Уже применённое добавление или удаление — пустая операция, а не ошибка «нет элемента».
       workouts = applyWeekOps(workouts, [op], newId).workouts;
     }
   }

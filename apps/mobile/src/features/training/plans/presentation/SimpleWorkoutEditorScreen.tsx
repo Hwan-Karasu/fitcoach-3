@@ -13,7 +13,9 @@ import { validateDraft } from "../domain/SimplePlanRules.ts";
 import { useRecoveryDraftSave } from "./useRecoveryDraftSave.ts";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
 import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
-import { WorkoutsEditor } from "./WorkoutsEditor.tsx";
+import { newPlanId, WorkoutsEditor } from "./WorkoutsEditor.tsx";
+import { REBASED_NOTICE, rebaseDraft } from "../domain/DraftRebase.ts";
+import type { PlannedWorkout } from "../domain/SimplePlanModel.ts";
 import { StructureEditPreview } from "./StructureEditPreview.tsx";
 
 const errorText = (error: unknown) => error instanceof Error && error.message === "PROGRAM_REVISION_CONFLICT"
@@ -40,23 +42,32 @@ export function SimpleWorkoutEditorScreen({ clientId, clientName, programId, wee
   const [message, setMessage] = useState<string | null>(null);
   const [preview, setPreview] = useState<WeekEditPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [baseWorkout, setBaseWorkout] = useState<PlannedWorkout | null>(null);
+  const [rebased, setRebased] = useState(false);
   const recovery = useRecoveryDraftSave<SimpleWorkoutDraft>((value) => repository.saveSimpleWorkoutDraft(clientId, programId, value));
   const { schedule } = recovery;
   const input = useMemo<SimpleWorkoutEdit | null>(() => draft ? { weekIndex, workoutId, workout: draft.plan.workouts[0]!,
     scope, replaceConflicts: replace } : null, [draft, weekIndex, workoutId, scope, replace]);
   useEffect(() => {
-    if (dirty && revision !== null && input) schedule({ baseRevision: revision, input });
-  }, [dirty, revision, input, schedule]);
+    if (dirty && revision !== null && input) schedule({ baseRevision: revision, input, ...(baseWorkout ? { baseWorkout } : {}) });
+  }, [dirty, revision, input, baseWorkout, schedule]);
   useEffect(() => {
     let active = true;
     void Promise.all([repository.findWorkout(clientId, programId, workoutId, weekIndex),
       repository.getSimpleWorkoutDraft(clientId, programId, weekIndex, workoutId)]).then(([found, saved]) => {
       if (!active) return;
       if (!found) { setMessage("Тренировка не найдена."); return; }
-      setDraft({ title: found.program.title, plan: { weeks: 1, workouts: [saved?.input.workout ?? found.workout] } });
-      setRevision(saved?.baseRevision ?? found.program.revision);
+      const stale = saved !== null && saved.baseRevision !== found.program.revision && saved.baseWorkout !== undefined;
+      const workout = saved === null ? found.workout : stale && saved.baseWorkout !== undefined
+        ? rebaseDraft([saved.baseWorkout], [saved.input.workout], [found.workout], () => newPlanId("r"))[0] ?? found.workout
+        : saved.input.workout;
+      setDraft({ title: found.program.title, plan: { weeks: 1, workouts: [workout] } });
+      setBaseWorkout(stale || saved?.baseWorkout === undefined ? found.workout : saved.baseWorkout);
+      setRebased(stale);
+      setDirty(stale);
+      setRevision(stale ? found.program.revision : saved?.baseRevision ?? found.program.revision);
       setScope(saved?.input.scope ?? "CURRENT");
-      setReplace(saved?.input.replaceConflicts ?? []);
+      setReplace(stale ? [] : saved?.input.replaceConflicts ?? []);
       setRestored(saved !== null);
     }).catch(() => { if (active) setMessage("Не удалось открыть план тренировки."); });
     return () => { active = false; };
@@ -99,14 +110,14 @@ export function SimpleWorkoutEditorScreen({ clientId, clientName, programId, wee
       await repository.clearBuilderDraft(clientId, simpleWorkoutDraftKey(programId, weekIndex, workoutId));
       setDirty(false);
       setDraft({ title: found.program.title, plan: { weeks: 1, workouts: [found.workout] } });
-      setRevision(found.program.revision);
+      setRevision(found.program.revision); setBaseWorkout(found.workout); setRebased(false);
       setScope("CURRENT"); setReplace([]); setRestored(false); setMessage(null);
     } catch { setMessage("Не удалось загрузить сохранённый план. Изменения остаются в редакторе."); }
     finally { recovery.resume(); setBusy(false); }
   };
   return <TrainingEditorLayout>
     <Animated.ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      {restored ? <InlineNotice kind="info">Восстановлены несохранённые изменения тренировки.</InlineNotice> : null}
+      {restored ? <InlineNotice kind="info">{rebased ? REBASED_NOTICE : "Восстановлены несохранённые изменения тренировки."}</InlineNotice> : null}
       {restored || previewError ? <AppButton variant="secondary" label="Отменить несохранённые изменения" disabled={busy}
         onPress={() => { void discard(); }} /> : null}
       <Text style={[styles.heading, { color: colors.textPrimary }]}>{`${draft.title} · Неделя ${weekIndex}`}</Text>

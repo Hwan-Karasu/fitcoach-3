@@ -10,6 +10,8 @@ export function useRecoveryDraftSave<T>(write: (value: T) => Promise<void>) {
   const queue = useRef<Promise<void>>(Promise.resolve());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const paused = useRef(false);
+  // Черновик не записался: второе «Назад» выпускает с экрана без него — иначе при сбое базы выйти нельзя.
+  const leaveAnyway = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const flush = useCallback(async () => {
     if (timer.current !== null) clearTimeout(timer.current);
@@ -28,6 +30,7 @@ export function useRecoveryDraftSave<T>(write: (value: T) => Promise<void>) {
   }, []);
   const schedule = useCallback((value: T) => {
     if (paused.current) return;
+    leaveAnyway.current = false;
     pending.current = { value };
     if (timer.current !== null) clearTimeout(timer.current);
     timer.current = setTimeout(() => { void flush().catch(() => undefined); }, 800);
@@ -37,8 +40,11 @@ export function useRecoveryDraftSave<T>(write: (value: T) => Promise<void>) {
     if (!paused.current) void flush().catch(() => undefined);
   }, [flush]);
   usePreventRemove(true, ({ data }) => {
-    if (paused.current) { navigation.dispatch(data.action); return; }
-    void flush().then(() => navigation.dispatch(data.action)).catch(() => undefined);
+    if (paused.current || leaveAnyway.current) { navigation.dispatch(data.action); return; }
+    void flush().then(() => navigation.dispatch(data.action)).catch(() => {
+      leaveAnyway.current = true;
+      setError("Не удалось сохранить черновик. Нажмите «Назад» ещё раз, чтобы выйти без него.");
+    });
   });
   return { schedule, error, flush,
     beforePublish: async () => { await flush(); paused.current = true; },

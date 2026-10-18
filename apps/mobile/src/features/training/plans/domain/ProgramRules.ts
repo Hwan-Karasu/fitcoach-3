@@ -40,7 +40,7 @@ export function compareLibrary(a: ProgramCard, b: ProgramCard): number {
   return a.sortPosition - b.sortPosition;
 }
 
-/** A reorder must contain every current item exactly once. */
+/** Новый порядок должен содержать каждый текущий элемент ровно один раз. */
 export function validateOrder(currentIds: readonly string[], orderedIds: readonly string[]): void {
   const current = new Set(currentIds);
   if (orderedIds.some((id) => !current.has(id))) throw new Error("TARGET_NOT_FOUND");

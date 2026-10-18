@@ -2,6 +2,7 @@ import { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState, ty
 import { Image, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useKeepAwake } from "expo-keep-awake";
+import * as Haptics from "expo-haptics";
 import { usePreventRemove, useNavigation } from "@react-navigation/native";
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { CalendarDays, Check, Gauge, NotebookPen, PencilLine, Plus, Timer, Trash2, Users, X } from "lucide-react-native";
@@ -416,7 +417,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     setBusy(true);
     try {
       if (!await finishInput()) return;
-      navigationAuthorized.current = true;
+      // Без соответствующей тренировки — уход к списку недели (экран закрывается); иначе тот же экран, другая неделя.
+      if (targetWeek.workoutId === null) navigationAuthorized.current = true;
       Keyboard.dismiss();
       onChangeWeek(index, targetWeek.workoutId, weekNavigation?.mesocycleId ?? null);
     } finally { setBusy(false); }
@@ -430,9 +432,14 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
 
   const onSave = useCallback((item: SetTarget, patch: SetPatch) =>
     saveSet(item.exercise, item.set, item.position, patch), [saveSet]);
+  // Перед отметкой дописываются только ячейки этого подхода: ошибка в другом подходе её не блокирует.
   const onToggle = useCallback((item: SetTarget, side?: Side) => {
-    void flushPending().then((saved) => { if (saved) void toggleSet(item.exercise, item.set, item.position, side); });
-  }, [flushPending, toggleSet]);
+    void pending.flushPrefix(`${item.set.id}:`).then((saved) => {
+      if (saved) { setNavigationError(null); void toggleSet(item.exercise, item.set, item.position, side); return; }
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
+      setNavigationError("В этом подходе неверное значение — исправьте подсвеченную ячейку и отметьте снова.");
+    });
+  }, [pending, toggleSet]);
   const onPickType = useCallback((item: SetTarget) => {
     Keyboard.dismiss();
     setTarget(item);
@@ -542,9 +549,11 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
               setBusy(true);
               void finishInput().then((saved) => { if (saved) { Keyboard.dismiss(); onEditWeek(cycleId); } }).finally(() => setBusy(false));
             }} />
-          <WeekCards weeks={weekNavigation.weeks} selected={slot.weekIndex} disabled={busy}
+          <WeekCards weeks={weekNavigation.weeks} selected={slot.weekIndex} disabled={busy || diary.switching}
             onSelect={(index) => { void changeWeek(index); }} />
         </> : null}
+        {/* Смена недели — тот же экран: пока грузится новая неделя, прежние значения приглушены и не нажимаются. */}
+        <View pointerEvents={diary.switching ? "none" : "auto"} style={[styles.body, diary.switching && styles.switching]}>
         {workout.exercises.map((exercise) => {
           const info = lookup.get(exercise.exerciseId);
           const group = supersetNumber(workout, exercise);
@@ -554,8 +563,10 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
           const rows = displayOrder([...extras, ...exercise.sets.map((set, position) => ({ set, position,
             setType: state.facts.get(set.id)?.setType ?? "NORMAL" }))]);
           const done = rows.filter(({ item }) => state.facts.get(item.set.id)?.confirmed === true).length;
+          const extraIds = new Set(extras.map((extra) => extra.set.id));
+          // Ключи — по месту в плане, а не по ID недели: при смене недели строки не пересоздаются.
           return (
-            <View key={exercise.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View key={exercise.lineageId ?? exercise.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               {group !== null ? <Text style={[styles.meta, { color: colors.accentInk }]}>{`Суперсет ${group}`}</Text> : null}
               <View style={styles.cardHead}>
                 {info?.thumbnail != null ? <Image source={info.thumbnail} style={[styles.thumb, { backgroundColor: colors.input }]} /> : null}
@@ -595,7 +606,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                 {mode === "MANUAL" ? <View style={styles.side} /> : null}
               </View>
               {rows.map(({ item, number }) => (
-                <SetRow key={item.set.id} target={{ exercise, set: item.set, position: item.position }} number={number}
+                <SetRow key={extraIds.has(item.set.id) ? item.set.id : `p:${item.position}`} target={{ exercise, set: item.set, position: item.position }} number={number}
                   fact={state.facts.get(item.set.id)} previous={previous.get(item.set.id)} fields={fields} mode={mode}
                   sided={info?.unilateral === true}
                   pending={pending} onSave={onSave} onToggle={onToggle} onPickType={onPickType} onPickRpe={onPickRpe} />
@@ -625,6 +636,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
             <Text style={[styles.deleteRunText, { color: colors.danger }]}>Удалить результаты тренировки</Text>
           </Pressable>
         ) : null}
+        </View>
       </KeyboardAwareScrollView>
       <DurationWheelPicker visible={restFor !== null} title="Отдых после подхода"
         value={restFor?.restSec ?? REST_DEFAULT_SEC} min={REST_MIN_SEC} max={REST_MAX_SEC}
@@ -753,6 +765,8 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center", gap: 6 },
   addDropText: { fontFamily: fonts.medium, fontSize: 13 },
   dim: { opacity: 0.4 },
+  body: { gap: 12 },
+  switching: { opacity: 0.55 },
   outcomes: { flexDirection: "row", gap: 8, marginTop: 4 },
   outcome: { flex: 1, minHeight: 56, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center",
     paddingHorizontal: 6 },

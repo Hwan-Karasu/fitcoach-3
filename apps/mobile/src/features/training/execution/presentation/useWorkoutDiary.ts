@@ -65,9 +65,18 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const writeFailed = useRef(false);
   stateRef.current = state;
+  // Неделя меняется без пересоздания экрана: пока данные новой недели не пришли, на экране прежние значения,
+  // и запись с ними недопустима (в Простой программе ID подходов во всех неделях одни и те же).
+  const slotKey = `${clientId}|${programId}|${weekIndex}|${plannedWorkoutId}`;
+  const slotKeyRef = useRef(slotKey);
+  slotKeyRef.current = slotKey;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const loadedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
+    const key = slotKey;
+    const loaded = () => { loadedKeyRef.current = key; setLoadedKey(key); };
     void (async () => {
       try {
         const found = (await plans.findWorkout(clientId, programId, plannedWorkoutId, weekIndex))?.workout ?? null;
@@ -82,12 +91,13 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
         setState(current);
         setMode(nextMode);
         setPrevious(nextPrevious);
+        loaded();
       } catch {
-        if (active) { setWorkout((value) => value === undefined ? null : value); setMessage("Не удалось открыть тренировку."); }
+        if (active) { setWorkout((value) => value === undefined ? null : value); setMessage("Не удалось открыть тренировку."); loaded(); }
       }
     })();
     return () => { active = false; };
-  }, [clientId, execution, plannedWorkoutId, plans, programId, stableSlot, version, weekIndex]);
+  }, [clientId, execution, plannedWorkoutId, plans, programId, slotKey, stableSlot, version, weekIndex]);
 
   // Режим подтверждения — общая настройка тренера (§48.54): после смены в настройках дневник берёт новый.
   useFocusEffect(useCallback(() => {
@@ -114,6 +124,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   }, []);
 
   const enqueue = useCallback(<T,>(task: () => Promise<T>): Promise<T | null> => {
+    if (loadedKeyRef.current !== slotKeyRef.current) return Promise.resolve(null);
     const run = queue.current.then(task).then((value) => { setMessage(null); return value; }, (error: unknown) => {
       writeFailed.current = true;
       setMessage(errorText(error));
@@ -251,6 +262,8 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   const started = state !== null && hasEnteredData(state.facts.values());
   return {
     workout, state, previous, mode, message,
+    /** Открыта другая неделя, её данные ещё грузятся: на экране прежние значения, ввод закрыт. */
+    switching: workout !== undefined && loadedKey !== slotKey,
     status: workoutStatus(state?.session?.outcome ?? null, started),
     saveSet, toggleSet, setOutcome, addWarmup, removeWarmup, setActualDate, saveNote, deleteExecution, finishSaving,
     dismissMessage: () => setMessage(null),

@@ -41,7 +41,7 @@ export async function preserveSimple(tx: SqliteStatementPort, workspaceId: strin
   [id, workspaceId, clientId, programId, from, to, JSON.stringify({ title, weeks })]);
 }
 
-/** JSON overrides must not smuggle identities belonging to another workout/client into this slot. */
+/** Недельный снимок не должен присвоить ID, принадлежащие другой тренировке или клиенту. */
 export async function assertSimpleIdentities(tx: SqliteStatementPort, workspaceId: string, clientId: string,
   programId: string, workout: PlannedWorkout, known: readonly PlannedWorkout[]): Promise<void> {
   const idsOf = (item: PlannedWorkout) => item.exercises.flatMap((exercise) => [exercise.id, ...exercise.sets.map((set) => set.id)]);
@@ -52,16 +52,18 @@ export async function assertSimpleIdentities(tx: SqliteStatementPort, workspaceI
     if (exercises.has(exercise.id) && exercises.get(exercise.id) !== exercise.exerciseId) throw new Error("DRAFT_INVALID");
     for (const set of exercise.sets) if (setOwners.has(set.id) && setOwners.get(set.id) !== exercise.id) throw new Error("DRAFT_INVALID");
   }
-  for (const id of idsOf(workout)) {
-    if (owned.has(id)) continue;
+  const fresh = idsOf(workout).filter((id) => !owned.has(id));
+  if (fresh.length === 0) return;
+  // ID чужих снимков собираются одним проходом, а не сканом всех снимков на каждый новый ID.
+  const foreign = new Set((await tx.all<{ id: string }>(`SELECT j.value AS id FROM dev_training_simple_overrides o,
+    json_tree(o.workout_json) j WHERE j.key = 'id' AND NOT
+    (o.workspace_id = ? AND o.client_id = ? AND o.program_id = ? AND o.workout_id = ?)`,
+  [workspaceId, clientId, programId, workout.id])).map((row) => row.id));
+  for (const id of fresh) {
+    if (foreign.has(id)) throw new Error("DRAFT_INVALID");
     const taken = await tx.first<{ id: string }>(`SELECT id FROM dev_training_planned_exercises WHERE id = ?
       UNION ALL SELECT id FROM dev_training_planned_sets WHERE id = ?
       UNION ALL SELECT id FROM dev_training_workouts WHERE id = ? LIMIT 1`, [id, id, id]);
     if (taken) throw new Error("DRAFT_INVALID");
-    const foreign = await tx.first<{ id: string }>(`SELECT j.value AS id FROM dev_training_simple_overrides o,
-      json_tree(o.workout_json) j WHERE j.key = 'id' AND j.value = ? AND NOT
-      (o.workspace_id = ? AND o.client_id = ? AND o.program_id = ? AND o.workout_id = ?) LIMIT 1`,
-    [id, workspaceId, clientId, programId, workout.id]);
-    if (foreign) throw new Error("DRAFT_INVALID");
   }
 }

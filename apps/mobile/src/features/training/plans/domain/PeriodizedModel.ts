@@ -71,7 +71,7 @@ export interface WeekEditInput {
   readonly type: WeekType;
   readonly scope: WeekScope;
   readonly clientIds: readonly string[];
-  /** Explicit replacements from the preview of this exact revision/input; unlisted conflicts keep personal structure. */
+  /** Явные замены из предпросмотра этой же ревизии и правки; не перечисленные конфликты оставляют персональную структуру. */
   readonly replaceConflicts?: readonly string[];
 }
 
