@@ -754,6 +754,12 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     });
   }
 
+  async saveSimpleDraftAsTemplate(draft: SimpleProgramDraft, now: Date = new Date()): Promise<ProgramTemplate> {
+    assertStructure(draft);
+    return this.ready().writer.write((tx) => this.insertTemplate(tx, draft.title,
+      { kind: "SIMPLE", weeks: draft.plan.weeks, workouts: draft.plan.workouts }, now));
+  }
+
   async saveMesocycleAsTemplate(clientId: string, programId: string, mesocycleId: string, title: string,
     now: Date = new Date()): Promise<ProgramTemplate> {
     return this.ready().writer.write(async (tx) => {

@@ -17,6 +17,8 @@ interface StickyEditorFooterProps {
   readonly messageKind?: NoticeKind;
   readonly note?: string;
   readonly onCancel?: () => void;
+  /** Второстепенное действие рядом с «Отмена»; тогда главная кнопка — отдельной строкой во всю ширину. */
+  readonly secondaryAction?: Readonly<{ label: string; onPress: () => void; busy?: boolean }>;
 }
 
 export function StickyEditorFooter({
@@ -29,6 +31,7 @@ export function StickyEditorFooter({
   messageKind = "info",
   note,
   onCancel,
+  secondaryAction,
 }: Readonly<StickyEditorFooterProps>) {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const insets = useSafeAreaInsets();
@@ -44,7 +47,16 @@ export function StickyEditorFooter({
   return (
     <View onLayout={onLayout} style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: keyboardVisible ? 8 : Math.max(8, insets.bottom) }]}>
       {message ? <InlineNotice kind={messageKind}>{message}</InlineNotice> : null}
-      <View style={{ flexDirection: fontScale > 1.3 ? "column" : "row", gap: 8 }}>
+      {secondaryAction !== undefined ? <>
+        <AppButton label={actionLabel} accessibilityLabel={actionAccessibilityLabel} onPress={onAction} busy={busy}
+          disabled={disabled || secondaryAction.busy === true} />
+        <View style={{ flexDirection: fontScale > 1.3 ? "column" : "row", gap: 8 }}>
+          <View style={fontScale > 1.3 ? undefined : { flex: 1 }}><AppButton label={secondaryAction.label} variant="secondary"
+            busy={secondaryAction.busy} disabled={busy} onPress={secondaryAction.onPress} /></View>
+          {onCancel ? <View style={fontScale > 1.3 ? undefined : { flex: 1 }}><AppButton label="Отмена" variant="secondary"
+            disabled={busy || secondaryAction.busy === true} onPress={onCancel} /></View> : null}
+        </View>
+      </> : <View style={{ flexDirection: fontScale > 1.3 ? "column" : "row", gap: 8 }}>
       {onCancel ? <View style={fontScale > 1.3 ? undefined : { flex: 1 }}><AppButton label="Отмена" variant="secondary" disabled={busy} onPress={onCancel} /></View> : null}
       <View style={fontScale > 1.3 ? undefined : { flex: 2 }}><AppButton
         label={actionLabel}
@@ -53,7 +65,7 @@ export function StickyEditorFooter({
         busy={busy}
         disabled={disabled}
       /></View>
-      </View>
+      </View>}
       {note && !keyboardVisible ? <Text style={[styles.note, { color: colors.textMuted }]}>{note}</Text> : null}
     </View>
   );

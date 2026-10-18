@@ -3,6 +3,7 @@ export { AppIconButton } from "./AppIconButton.tsx";
 export { SearchField } from "./SearchField.tsx";
 export { SelectionChip } from "./SelectionChip.tsx";
 export { SectionTabs } from "./SectionTabs.tsx";
+export { SegmentedControl } from "./SegmentedControl.tsx";
 export { InlineNotice, type NoticeKind } from "./InlineNotice.tsx";
 export { ConfirmDialog } from "./ConfirmDialog.tsx";
 export { StickyEditorFooter } from "./StickyEditorFooter.tsx";

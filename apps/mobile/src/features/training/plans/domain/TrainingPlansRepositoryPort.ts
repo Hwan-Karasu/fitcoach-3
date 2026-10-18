@@ -36,6 +36,11 @@ export interface TrainingPlansRepositoryPort {
    * программы — мезоциклы именно этого участника). Только план; программа и факты не меняются.
    */
   saveProgramAsTemplate(clientId: string, programId: string, title: string, now?: Date): Promise<ProgramTemplate>;
+  /**
+   * «В шаблон» Простого конструктора (UI-OWN-026, как в 2.0): несохранённый черновик — шаблон Простой программы
+   * с его названием. Программа не создаётся и не меняется; структура проверяется как у плана (DRAFT_INVALID).
+   */
+  saveSimpleDraftAsTemplate(draft: SimpleProgramDraft, now?: Date): Promise<ProgramTemplate>;
   /** §48.14.1 п. 1: один мезоцикл этого клиента как шаблон мезоцикла. */
   saveMesocycleAsTemplate(clientId: string, programId: string, mesocycleId: string, title: string, now?: Date): Promise<ProgramTemplate>;
   renameTemplate(templateId: string, expectedRevision: number, title: string, now?: Date): Promise<ProgramTemplate>;

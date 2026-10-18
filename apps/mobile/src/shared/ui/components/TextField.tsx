@@ -20,6 +20,8 @@ interface TextFieldProps {
   readonly onSubmitEditing?: TextInputProps["onSubmitEditing"];
   readonly inputRef?: Ref<TextInput>;
   readonly testID?: string;
+  /** Подпись только для TalkBack: смысл поля ясен из карточки (например, название тренировки). */
+  readonly hideLabel?: boolean;
 }
 
 export function TextField({
@@ -39,6 +41,7 @@ export function TextField({
   onSubmitEditing,
   inputRef,
   testID,
+  hideLabel = false,
 }: Readonly<TextFieldProps>) {
   const [focused, setFocused] = useState(false);
   const { palette } = usePrototypeTheme();
@@ -47,7 +50,7 @@ export function TextField({
   const helpText = error ?? (disabled ? disabledReason : hint);
   return (
     <View style={styles.field}>
-      <Text style={[styles.label, { color: colors.textPrimary }]}>{label}{required ? " *" : ""}</Text>
+      {hideLabel ? null : <Text style={[styles.label, { color: colors.textPrimary }]}>{label}{required ? " *" : ""}</Text>}
       <TextInput
         ref={inputRef}
         accessibilityLabel={required ? `${label}, обязательное поле` : label}

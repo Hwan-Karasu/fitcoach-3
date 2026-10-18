@@ -216,3 +216,18 @@ test("T04 правка шаблона (§48.16.2 п. 2): следующее пр
     await close();
   }
 });
+
+test("UI-OWN-026 «В шаблон» из простого конструктора: черновик без программы становится шаблоном Простой программы", async () => {
+  const { plans, a, close } = await setup();
+  try {
+    const workouts = week("d");
+    const template = await plans.saveSimpleDraftAsTemplate({ title: "Черновик", plan: { weeks: 6, workouts } });
+    assert.deepEqual([template.kind, template.title, template.payload], ["SIMPLE", "Черновик", { kind: "SIMPLE", weeks: 6, workouts }]);
+    assert.equal((await plans.getLibrary(a.id)).active.length, 0, "программа не создана");
+    await assert.rejects(plans.saveSimpleDraftAsTemplate({ title: " ", plan: { weeks: 6, workouts } }),
+      (error: unknown) => error instanceof Error && error.message === "DRAFT_INVALID");
+    assert.equal((await plans.listTemplates()).length, 1, "отказ ничего не записал");
+  } finally {
+    await close();
+  }
+});

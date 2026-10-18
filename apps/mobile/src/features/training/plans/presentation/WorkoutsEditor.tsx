@@ -3,7 +3,7 @@ import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-nativ
 import type Animated from "react-native-reanimated";
 import type { AnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
-import { ArrowLeftRight, ArrowUpDown, Dumbbell, GripVertical, Link2, Unlink, Plus, Trash2, X } from "lucide-react-native";
+import { ArrowLeftRight, ArrowUpDown, Dumbbell, GripVertical, Link2, Unlink, Plus, X } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
@@ -232,12 +232,20 @@ export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scro
     ) : null}
     {draft.plan.workouts.map((workout) => (
       <View key={workout.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {/* Шапка как в 2.0 (UI-OWN-026): акцентная полоса, название без подписи, «×» удаляет тренировку. */}
         <View style={styles.workoutHead}>
+          <View style={[styles.stripe, { backgroundColor: colors.accentFill }]} />
           <View style={styles.grow}>
-            <TextField label="Тренировка" value={workout.title} onChangeText={(title) => change(renameWorkout(draft, workout.id, title))} />
+            <TextField label="Название тренировки" hideLabel value={workout.title}
+              onChangeText={(title) => change(renameWorkout(draft, workout.id, title))} />
           </View>
-          {!singleWorkout ? <AppIconButton compact label={`Удалить тренировку ${workout.title}`} disabled={draft.plan.workouts.length === 1}
-            icon={<Trash2 size={18} color={colors.textSecondary} strokeWidth={1.8} />} onPress={() => setRemoving(workout.id)} /> : null}
+          {!singleWorkout && draft.plan.workouts.length > 1 ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={`Удалить тренировку ${workout.title}`}
+              onPress={() => setRemoving(workout.id)}
+              style={({ pressed }) => [styles.removeWorkout, { borderColor: colors.danger, opacity: pressed ? 0.7 : 1 }]}>
+              <X size={20} color={colors.danger} strokeWidth={2} />
+            </Pressable>
+          ) : null}
         </View>
         {workout.exercises.length > 0 ? (
           <Sortable.Grid data={[...workout.exercises]} keyExtractor={(item) => item.id} columns={1} rowGap={0} customHandle
@@ -248,15 +256,11 @@ export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scro
                 onReplace={() => onReplaceExercise(workout.id, item.id)} />
             )}
             onDragEnd={({ data }) => change(reorderExercises(draft, workout.id, data.map((item) => item.id)))} />
-        ) : (
-          <Text style={[styles.empty, { color: colors.textMuted }]}>Упражнений пока нет.</Text>
-        )}
-        <Pressable accessibilityRole="button" accessibilityLabel={`Добавить упражнение в ${workout.title}`}
-          onPress={() => onPickExercise(workout.id)}
-          style={({ pressed }) => [styles.addRow, { borderTopColor: colors.border, backgroundColor: pressed ? colors.surfaceRaised : "transparent" }]}>
-          <Plus size={16} color={colors.accentInk} strokeWidth={2} />
-          <Text style={[styles.addText, { color: colors.accentInk }]}>Добавить упражнение</Text>
-        </Pressable>
+        ) : null}
+        <View style={styles.addExercise}>
+          <AppButton variant="secondary" label="Добавить упражнение" accessibilityLabel={`Добавить упражнение в ${workout.title}`}
+            icon={(color) => <Plus size={18} color={color} strokeWidth={2} />} onPress={() => onPickExercise(workout.id)} />
+        </View>
       </View>
     ))}
     {!singleWorkout ? <AppButton variant="secondary" label="Добавить тренировку" icon={(color) => <Plus size={18} color={color} strokeWidth={2} />}
@@ -271,7 +275,10 @@ export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scro
 const styles = StyleSheet.create({
   grow: { flex: 1, minWidth: 0 },
   card: { borderWidth: 1, borderRadius: 12, overflow: "hidden" },
-  workoutHead: { flexDirection: "row", alignItems: "flex-end", gap: 4, padding: 12, paddingRight: 4 },
+  workoutHead: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12 },
+  stripe: { width: 4, alignSelf: "stretch", borderRadius: 2 },
+  removeWorkout: { width: 48, height: 48, borderWidth: 1, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  addExercise: { padding: 12, paddingTop: 4 },
   exerciseRow: { flexDirection: "row", alignItems: "stretch", borderTopWidth: StyleSheet.hairlineWidth, paddingBottom: 10 },
   handle: { width: 48, flex: 1, alignItems: "center", justifyContent: "center", minHeight: 48 },
   groupActions: { gap: 4, paddingRight: 12, paddingBottom: 6, alignItems: "flex-start" },
@@ -288,9 +295,6 @@ const styles = StyleSheet.create({
     textAlignVertical: "top", fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   instructionAdd: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", minHeight: 48, marginTop: 4 },
   instructionAddText: { fontFamily: fonts.medium, fontSize: 13 },
-  empty: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, paddingHorizontal: 12, paddingBottom: 8 },
-  addRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, minHeight: 48, borderTopWidth: StyleSheet.hairlineWidth },
-  addText: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 19 },
   orderRow: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 12, paddingRight: 12, minHeight: 56 },
   orderTitle: { flex: 1, fontFamily: fonts.semibold, fontSize: 15 },
   hint: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
