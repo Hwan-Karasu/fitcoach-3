@@ -1,6 +1,5 @@
-import type { BuilderWeek, MesocycleSettings } from "./MesocycleBuilder.ts";
 import type { TrainingProgram } from "./ProgramModel.ts";
-import type { PlannedExercise, PlannedWorkout } from "./SimplePlanModel.ts";
+import type { PlannedExercise, PlannedWorkout, PlanRange } from "./SimplePlanModel.ts";
 
 /**
  * Расширенная программа (§48.3): книга мезоциклов, у каждой недели свой план (§48.4). У каждого участника —
@@ -21,6 +20,23 @@ export interface PlanWeek {
   readonly id: string;
   /** Номер недели в мезоцикле, с 1. */
   readonly index: number;
+  readonly type: WeekType;
+  readonly workouts: readonly PlannedWorkout[];
+}
+
+/** Тип цикла мезоцикла (UI-OWN-038, как в 2.0); подписи и повторения — в MesocycleBuilder. */
+export type CycleType = "hypertrophy" | "strength" | "power" | "endurance" | "recomp" | "custom";
+
+/** Настройки мезоцикла (хранятся у мезоцикла; решение владельца 2026-10-18). */
+export interface MesocycleSettings {
+  readonly cycleType: CycleType | null;
+  /** Повторения по умолчанию для новых упражнений мезоцикла. */
+  readonly repRange: PlanRange | null;
+  /** Дата старта (YYYY-MM-DD): от неё считаются даты недель. */
+  readonly startDate: string | null;
+}
+
+export interface BuilderWeek {
   readonly type: WeekType;
   readonly workouts: readonly PlannedWorkout[];
 }

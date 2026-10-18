@@ -1,6 +1,5 @@
-import type { CycleType } from "../domain/MesocycleBuilder.ts";
 import type { SqliteStatementPort } from "../../../../shared/db/SqlitePort.ts";
-import type { Mesocycle, PlanWeek, WeekType } from "../domain/PeriodizedModel.ts";
+import type { CycleType, Mesocycle, PlanWeek, WeekType } from "../domain/PeriodizedModel.ts";
 import { readWorkouts, writeWorkouts } from "./SimplePlanStore.ts";
 
 /**

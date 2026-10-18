@@ -1,13 +1,13 @@
-import type { WeekType } from "./PeriodizedModel.ts";
+import type { BuilderWeek, CycleType } from "./PeriodizedModel.ts";
 import { withLineage } from "./PeriodizedRules.ts";
-import type { PlannedWorkout, PlanRange } from "./SimplePlanModel.ts";
+import type { PlanRange } from "./SimplePlanModel.ts";
 import { remapSupersets } from "./SupersetRules.ts";
 
 /**
  * Конструктор Расширенной программы (UI-OWN-038, как в 2.0): мезоцикл с типом цикла, повторениями по умолчанию и
  * датой старта; каждая неделя — свой план и тип.
  */
-export type CycleType = "hypertrophy" | "strength" | "power" | "endurance" | "recomp" | "custom";
+export type { BuilderWeek, CycleType, MesocycleSettings } from "./PeriodizedModel.ts";
 
 export const CYCLE_TYPES: readonly Readonly<{ id: CycleType; label: string; reps: PlanRange }>[] = [
   { id: "hypertrophy", label: "Гипертрофия", reps: { min: 8, max: 12 } },
@@ -19,20 +19,6 @@ export const CYCLE_TYPES: readonly Readonly<{ id: CycleType; label: string; reps
 ];
 
 export const cycleTypeLabels = Object.fromEntries(CYCLE_TYPES.map((item) => [item.id, item.label])) as Readonly<Record<CycleType, string>>;
-
-/** Настройки мезоцикла (хранятся у мезоцикла; решение владельца 2026-10-18). */
-export interface MesocycleSettings {
-  readonly cycleType: CycleType | null;
-  /** Повторения по умолчанию для новых упражнений мезоцикла. */
-  readonly repRange: PlanRange | null;
-  /** Дата старта (YYYY-MM-DD): от неё считаются даты недель. */
-  readonly startDate: string | null;
-}
-
-export interface BuilderWeek {
-  readonly type: WeekType;
-  readonly workouts: readonly PlannedWorkout[];
-}
 
 /** «Скопировать из недели»: план и тип недели; новые ID, родство — с исходными тренировками и упражнениями. */
 export function copyWeekPlan(source: BuilderWeek, newId: () => string): BuilderWeek {
