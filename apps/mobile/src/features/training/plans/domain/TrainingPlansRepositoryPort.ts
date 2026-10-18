@@ -1,6 +1,6 @@
 import type { ClientProgramLibrary, CreateProgramInput, TrainingProgram } from "./ProgramModel.ts";
 import type { ProgramTemplate, TemplatePayload } from "./TemplateModel.ts";
-import type { NewMesocycleInput, PeriodizedPlan, WeekEditInput, WeekEditPreview, WeekEditResult } from "./PeriodizedModel.ts";
+import type { NewMesocycleInput, NewPeriodizedProgramInput, PeriodizedPlan, WeekEditInput, WeekEditPreview, WeekEditResult } from "./PeriodizedModel.ts";
 import type { PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
 import type { PeriodizedDraft } from "./PeriodizedDraft.ts";
 import type { MesocycleVersion } from "./StructureVersion.ts";
@@ -28,6 +28,11 @@ export interface TrainingPlansRepositoryPort {
   getProgram(clientId: string, programId: string): Promise<TrainingProgram | null>;
   /** Новая программа выбранным клиентам; выбранная программа каждого из них не меняется. */
   createProgram(input: CreateProgramInput, now?: Date): Promise<TrainingProgram>;
+  /**
+   * UI-OWN-038: Расширенная программа сразу с первым мезоциклом — одной транзакцией. Пустые недели получают план
+   * ближайшей заполненной (защита от мисклика); всё пусто или неверные настройки — DRAFT_INVALID, ничего не пишется.
+   */
+  createPeriodizedProgram(input: NewPeriodizedProgramInput, now?: Date): Promise<TrainingProgram>;
   renameProgram(programId: string, expectedRevision: number, title: string, now?: Date): Promise<TrainingProgram>;
   /** §48.16: библиотека шаблонов тренера (все типы); новые сверху. */
   listTemplates(): Promise<readonly ProgramTemplate[]>;

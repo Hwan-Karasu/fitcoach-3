@@ -12,9 +12,10 @@ import { withRestDefaults } from "../domain/SimplePlanEdits.ts";
 import { DEV_TRAINING_PLANS_LEDGER, devTrainingPlansCatalog } from "./DevTrainingPlansCatalog.ts";
 import { deleteStructure, readStructure, readWorkouts, writeStructure } from "./SimplePlanStore.ts";
 import { deleteMemberMesocycles, insertMesocycle, readMesocycles, saveSelection, selectedMesocycle, writeWeek } from "./PeriodizedStore.ts";
-import { MESOCYCLE_WEEKS_MAX, weekTypeLabels, type Mesocycle, type NewMesocycleInput, type PeriodizedPlan, type PlanWeek, type WeekEditInput,
+import { MESOCYCLE_WEEKS_MAX, weekTypeLabels, type Mesocycle, type NewMesocycleInput, type NewPeriodizedProgramInput, type PeriodizedPlan, type PlanWeek, type WeekEditInput,
   type WeekEditConflict, type WeekEditPreview, type WeekEditResult } from "../domain/PeriodizedModel.ts";
-import { copyWeeks, diffWeek, newMesocycleWeeks, targetWeeks } from "../domain/PeriodizedRules.ts";
+import { copyWeeks, diffWeek, newMesocycleWeeks, targetWeeks, withLineage } from "../domain/PeriodizedRules.ts";
+import { fillEmptyWeeks, type MesocycleSettings } from "../domain/MesocycleBuilder.ts";
 import { applyWithConflicts } from "../domain/WeekConflicts.ts";
 import type { PlannedWorkout } from "../domain/SimplePlanModel.ts";
 import { periodizedDraftKey, type PeriodizedDraft } from "../domain/PeriodizedDraft.ts";
@@ -47,6 +48,14 @@ export const NEW_SIMPLE_DRAFT_KEY = "new:SIMPLE";
  */
 function assertStructure(draft: SimpleProgramDraft): void {
   if (validateDraft(draft, () => ["reps", "load", "duration", "distance"]).length > 0) throw new Error("DRAFT_INVALID");
+}
+
+/** Настройки мезоцикла (UI-OWN-038): повторения 1–100, верх не меньше низа; дата — YYYY-MM-DD. */
+function assertSettings(settings: MesocycleSettings): void {
+  const reps = settings.repRange;
+  if (reps !== null && (!Number.isInteger(reps.min) || reps.min < 1 || reps.min > 100
+    || (reps.max !== null && (!Number.isInteger(reps.max) || reps.max < reps.min || reps.max > 100)))) throw new Error("DRAFT_INVALID");
+  if (settings.startDate !== null && !/^\d{4}-\d{2}-\d{2}$/u.test(settings.startDate)) throw new Error("DRAFT_INVALID");
 }
 
 /** Неделя Расширенной программы проверяется теми же правилами, что и тренировки Простой. */
@@ -195,6 +204,37 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   async createProgram(input: CreateProgramInput, now: Date = new Date()): Promise<TrainingProgram> {
     const valid = validateCreate(input);
     const created = await this.ready().writer.write((tx) => this.insertProgram(tx, valid, now, null));
+    this.publish({ clientIds: created.memberClientIds });
+    return created;
+  }
+
+  async createPeriodizedProgram(input: NewPeriodizedProgramInput, now: Date = new Date()): Promise<TrainingProgram> {
+    const valid = validateCreate({ kind: "PERIODIZED", title: input.title, clientIds: input.clientIds });
+    const { mesocycle } = input;
+    const title = normalizeTitle(mesocycle.title);
+    assertSettings(mesocycle);
+    if (mesocycle.weeks.length < 1 || mesocycle.weeks.length > MESOCYCLE_WEEKS_MAX) throw new Error("DRAFT_INVALID");
+    // Временные ID только для заполнения; настоящие выдаются ниже вместе с новым родством.
+    let local = 0;
+    const filled = fillEmptyWeeks(mesocycle.weeks, () => `fill:${local++}`);
+    if (filled.some((week) => week.workouts.length === 0)) throw new Error("DRAFT_INVALID");
+    for (const week of filled) assertWeek(title, week.workouts);
+    const weeks: readonly PlanWeek[] = filled.map((week, index) => ({ id: `week:${index}`, index: index + 1, type: week.type,
+      workouts: withLineage(week.workouts) }));
+    const created = await this.ready().writer.write(async (tx) => {
+      const program = await this.insertProgram(tx, valid, now, null);
+      const rows = weekRowCount(weeks);
+      const take = await this.idPool(tx, 1 + 2 * rows + valid.clientIds.length * (1 + rows));
+      const lineageId = take();
+      const template = independentWeeks(weeks, take);
+      for (const [index, memberId] of valid.clientIds.entries()) {
+        const id = take();
+        await insertMesocycle(tx, this.workspaceId, program.id, memberId, { id, lineageId, title, cycleType: mesocycle.cycleType,
+          repRange: mesocycle.repRange, startDate: mesocycle.startDate, weeks: index === 0 ? template : copyWeeks(template, take) }, now);
+        await saveSelection(tx, this.workspaceId, program.id, memberId, id);
+      }
+      return program;
+    });
     this.publish({ clientIds: created.memberClientIds });
     return created;
   }

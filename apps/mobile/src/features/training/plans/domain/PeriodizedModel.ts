@@ -1,3 +1,4 @@
+import type { BuilderWeek, MesocycleSettings } from "./MesocycleBuilder.ts";
 import type { TrainingProgram } from "./ProgramModel.ts";
 import type { PlannedExercise, PlannedWorkout } from "./SimplePlanModel.ts";
 
@@ -24,7 +25,7 @@ export interface PlanWeek {
   readonly workouts: readonly PlannedWorkout[];
 }
 
-export interface Mesocycle {
+export interface Mesocycle extends Partial<MesocycleSettings> {
   readonly id: string;
   /** Общий у копий мезоцикла разных участников. */
   readonly lineageId: string;
@@ -52,6 +53,20 @@ export interface PeriodizedPlan {
   readonly mesocycles: readonly Mesocycle[];
   /** Последний выбранный мезоцикл этого клиента в этой программе; хранится в базе (§48.10 п. 6). */
   readonly selectedMesocycleId: string | null;
+}
+
+/** Мезоцикл из конструктора (UI-OWN-038): настройки и план каждой недели; пустые недели заполняются при сохранении. */
+export interface BuilderMesocycleInput extends MesocycleSettings {
+  readonly title: string;
+  readonly weeks: readonly BuilderWeek[];
+}
+
+/** Новая Расширенная программа сразу с первым мезоциклом — одной записью (как в 2.0). */
+export interface NewPeriodizedProgramInput {
+  readonly title: string;
+  /** Участники; у каждого своя копия мезоцикла. Первый — открывший клиент. */
+  readonly clientIds: readonly string[];
+  readonly mesocycle: BuilderMesocycleInput;
 }
 
 /** «+ Мезоцикл»: план первой недели копируется во все недели (решение владельца 2026-10-18). */

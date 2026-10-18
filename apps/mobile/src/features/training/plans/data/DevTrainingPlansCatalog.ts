@@ -361,4 +361,19 @@ export const devTrainingPlansCatalog: readonly MigrationStep[] = [{
     )`,
     `CREATE INDEX dev_training_templates_workspace ON dev_training_templates(workspace_id, kind, title)`,
   ],
+}, {
+  version: 14,
+  checksum: "ui-own-038-dev-training-plans-v14-mesocycle-settings-20261018",
+  statements: [
+    // UI-OWN-038 (решение владельца 2026-10-18): тип цикла, повторения по умолчанию и дата старта — у мезоцикла.
+    // NULL — не задано; CHECK через CASE, чтобы NULL не проходил там, где значение обязано быть согласованным.
+    `ALTER TABLE dev_training_mesocycles ADD COLUMN cycle_type TEXT
+      CHECK (CASE WHEN cycle_type IS NULL THEN 1 ELSE cycle_type IN ('hypertrophy','strength','power','endurance','recomp','custom') END)`,
+    `ALTER TABLE dev_training_mesocycles ADD COLUMN rep_min INTEGER
+      CHECK (CASE WHEN rep_min IS NULL THEN 1 ELSE rep_min BETWEEN 1 AND 100 END)`,
+    `ALTER TABLE dev_training_mesocycles ADD COLUMN rep_max INTEGER
+      CHECK (CASE WHEN rep_max IS NULL THEN 1 WHEN rep_min IS NULL THEN 0 ELSE rep_max BETWEEN rep_min AND 100 END)`,
+    `ALTER TABLE dev_training_mesocycles ADD COLUMN start_date TEXT
+      CHECK (CASE WHEN start_date IS NULL THEN 1 ELSE COALESCE(date(start_date) = start_date, 0) END)`,
+  ],
 }];
