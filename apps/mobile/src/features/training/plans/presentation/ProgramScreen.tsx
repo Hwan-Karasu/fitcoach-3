@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
 import { Bookmark, Ellipsis, Pencil, Plus } from "lucide-react-native";
-import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, InlineNotice, LoadingState, SelectionChip, TextField } from "../../../../shared/ui/components/public.ts";
+import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, InlineNotice, LoadingState, SegmentedControl, SelectionChip, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { TrainingProgram } from "../domain/ProgramModel.ts";
@@ -41,7 +41,7 @@ export interface ProgramWeeksView {
  * «Изменить программу»; Расширенная — мезоциклы этого участника (выбор хранится, §48.10), недели выбранного
  * и «Изменить неделю» (T04).
  */
-export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, onEditStructure,
+export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, renderTemplates, onEditStructure,
   onAddMesocycle, onEditWeek, onArchived, requestedWeek, requestedMesocycle, weekCopy, weekSwap, onOpenProgram, onOpenMatrix }: Readonly<{
   clientId: string;
   programId: string;
@@ -66,6 +66,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   onOpenProgram?: (programId: string) => void;
   /** T05: матрица недель (обзор программы). */
   onOpenMatrix?: () => void;
+  /** UI-OWN-036: вкладка «Шаблоны» — библиотека шаблонов тренера (её с переходами подставляет навигация). */
+  renderTemplates?: () => ReactNode;
   requestedMesocycle?: string;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -90,6 +92,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [periodized, setPeriodized] = useState<PeriodizedPlan | null>(null);
   const [orderReset, setOrderReset] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [tab, setTab] = useState<"program" | "templates">("program");
   const menuAnchor = useRef<View>(null);
   const [weeksByCycle, setWeeksByCycle] = useState<Readonly<Record<string, number>>>({});
   const scrollByCycle = useRef(new Map<string, number>());
@@ -190,7 +193,17 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   };
 
   const others = program.memberClientIds.filter((id) => id !== clientId);
+  // Переключатель «Программа | Шаблоны» (макет владельца, UI-OWN-036): над содержимым, не прокручивается.
+  const tabs = renderTemplates !== undefined ? <View style={[styles.tabs, { backgroundColor: colors.canvas }]}>
+    <SegmentedControl items={[{ id: "program", label: "Программа" }, { id: "templates", label: "Шаблоны" }]}
+      selectedId={tab} onSelect={setTab} />
+  </View> : null;
+  if (tab === "templates" && renderTemplates !== undefined) {
+    return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{tabs}{renderTemplates()}</View>;
+  }
   return (
+    <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
+    {tabs}
     <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
       scrollEventThrottle={32} onScroll={(event) => scrollByCycle.current.set(cycleKey, event.nativeEvent.contentOffset.y)}>
       {program.kind === "PERIODIZED" ? <View style={styles.row}><View style={styles.grow}>
@@ -406,6 +419,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           : "Программа уйдёт в архив клиента. Вернуть можно из списка программ."}
         confirmLabel="В архив" onCancel={() => setConfirmArchive(false)} onConfirm={() => { void archive(); }} />
     </Animated.ScrollView>
+    </View>
   );
 }
 
@@ -413,6 +427,8 @@ const styles = StyleSheet.create({
   center: { flex: 1, padding: 16, gap: 12, justifyContent: "center" },
   content: { padding: 16, gap: 12 },
   heading: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },
+  screen: { flex: 1 },
+  tabs: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 2 },
   cardHead: { gap: 8 },
   cardTitle: { fontFamily: fonts.bold, fontSize: 20, lineHeight: 25 },
   cardMeta: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },

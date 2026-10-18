@@ -105,7 +105,7 @@ export function TemplateLibraryScreen({ clientId, repository, listCandidates, on
       <SearchField query={query} onChangeQuery={setQuery} accessibilityLabel="Поиск шаблона" placeholder="Поиск по названию" />
       <View style={styles.filters}>
         {filters.map((item) => (
-          <FilterPill key={item} label={filterLabels[item]} accessibilityLabel={`Тип: ${filterLabels[item]}`}
+          <FilterPill key={item} grow label={filterLabels[item]} accessibilityLabel={`Тип: ${filterLabels[item]}`}
             selected={filter === item} onPress={() => setFilter(item)} />
         ))}
       </View>
@@ -180,7 +180,7 @@ export function TemplateLibraryScreen({ clientId, repository, listCandidates, on
 const styles = StyleSheet.create({
   center: { flex: 1, padding: 16, justifyContent: "center" },
   content: { padding: 16, gap: 12, paddingBottom: 96 },
-  filters: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  filters: { flexDirection: "row", gap: 6 },
   card: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 8 },
   cardHead: { flexDirection: "row", alignItems: "center", gap: 8 },
   grow: { flex: 1, minWidth: 0 },
