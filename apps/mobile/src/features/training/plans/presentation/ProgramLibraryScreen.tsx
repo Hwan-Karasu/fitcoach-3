@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
-import { ChevronRight, Layers, Plus, Repeat } from "lucide-react-native";
+import { ChevronRight, FileText, Plus, Rocket, TrendingUp } from "lucide-react-native";
 import { AppButton, FloatingActionButton, InlineNotice, ListSectionHeader, LoadingState,
   StatusTag } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -12,45 +12,61 @@ import { membersWord, programKindLabels } from "../domain/ProgramRules.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import { useProgramLibrary } from "./useProgramLibrary.ts";
 
-const modeDetails: Readonly<Record<ProgramKind, string>> = {
-  SIMPLE: "Для одного клиента. План недели повторяется каждую неделю, результаты каждой недели — свои.",
-  PERIODIZED: "Мезоциклы и свой план каждой недели. Одну программу можно назначить нескольким клиентам.",
+/** Короткие тезисы конструкторов (макет владельца 2026-10-18), по правилам §48.4. */
+const modePoints: Readonly<Record<ProgramKind, readonly string[]>> = {
+  SIMPLE: ["Быстрый старт", "Минимум настроек", "План недели повторяется", "Для одного клиента"],
+  PERIODIZED: ["Мезоциклы и типы недель", "Свой план каждой недели", "Для нескольких клиентов",
+    "Контроль прогресса"],
 };
 
 /** §48.4: выбор конструктора — отдельный шаг; список существующих программ здесь не повторяется. */
-export function ProgramModeChooser({ onChoose }: Readonly<{ onChoose: (kind: ProgramKind) => void }>) {
+function ProgramModeChooser({ onChoose }: Readonly<{ onChoose: (kind: ProgramKind) => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
     <View style={styles.modes}>
       {(["SIMPLE", "PERIODIZED"] as const).map((kind) => (
-        <Pressable key={kind} accessibilityRole="button" accessibilityLabel={`${programKindLabels[kind]} программа. ${modeDetails[kind]}`}
+        <Pressable key={kind} accessibilityRole="button"
+          accessibilityLabel={`${programKindLabels[kind]} программа. ${modePoints[kind].join(". ")}`}
           onPress={() => onChoose(kind)}
           style={({ pressed }) => [styles.card, styles.mode, { borderColor: colors.border,
             backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
           <View style={[styles.modeIcon, { backgroundColor: colors.surfaceRaised }]}>
-            {kind === "SIMPLE" ? <Repeat size={22} color={colors.accentInk} strokeWidth={1.8} />
-              : <Layers size={22} color={colors.accentInk} strokeWidth={1.8} />}
+            {kind === "SIMPLE" ? <Rocket size={22} color={colors.accentInk} strokeWidth={1.8} />
+              : <TrendingUp size={22} color={colors.accentInk} strokeWidth={1.8} />}
           </View>
           <View style={styles.grow}>
             <Text style={[styles.title, { color: colors.textPrimary }]}>{`${programKindLabels[kind]} программа`}</Text>
-            <Text style={[styles.meta, { color: colors.textSecondary }]}>{modeDetails[kind]}</Text>
+            {modePoints[kind].map((point) => (
+              <View key={point} style={styles.point}>
+                <View style={[styles.bullet, { backgroundColor: colors.textMuted }]} />
+                <Text style={[styles.meta, { color: colors.textSecondary }]}>{point}</Text>
+              </View>
+            ))}
           </View>
-          <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.8} />
+          <View style={styles.chevron}><ChevronRight size={20} color={colors.textMuted} strokeWidth={1.8} /></View>
         </Pressable>
       ))}
     </View>
   );
 }
 
-/** Отдельный экран выбора конструктора (из «+ Создать программу»). */
-export function ProgramModeChooserScreen({ onChoose }: Readonly<{ onChoose: (kind: ProgramKind) => void }>) {
+/** Отдельный экран выбора конструктора (из «+ Создать программу»): два конструктора и «Дополнительно». */
+export function ProgramModeChooserScreen({ onChoose, onOpenTemplates }: Readonly<{
+  onChoose: (kind: ProgramKind) => void;
+  /** §48.16: программа из шаблона. */
+  onOpenTemplates?: () => void;
+}>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
-    <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content}>
-      <Text style={[styles.body, { color: colors.textSecondary }]}>Выберите конструктор.</Text>
+    <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={[styles.content, styles.chooser]}>
       <ProgramModeChooser onChoose={onChoose} />
+      {onOpenTemplates !== undefined ? <>
+        <ListSectionHeader title="Дополнительно" />
+        <FeatureRow title="Создать из шаблона" detail="Готовые варианты программ"
+          icon={(color) => <FileText size={20} color={color} strokeWidth={1.8} />} onPress={onOpenTemplates} />
+      </> : null}
     </ScrollView>
   );
 }
@@ -78,9 +94,29 @@ function ProgramCardRow({ card, selected, onPress, onRestore }: Readonly<{
   );
 }
 
+function FeatureRow({ icon, title, detail, onPress }: Readonly<{
+  icon: (color: string) => ReactNode; title: string; detail: string; onPress: () => void;
+}>) {
+  const { palette } = usePrototypeTheme();
+  const colors = palette.tokens;
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={`${title}. ${detail}`} onPress={onPress}
+      style={({ pressed }) => [styles.card, styles.feature, { borderColor: colors.border,
+        backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
+      <View style={[styles.featureIcon, { backgroundColor: colors.surfaceRaised }]}>{icon(colors.accentInk)}</View>
+      <View style={styles.grow}>
+        <Text style={[styles.featureTitle, { color: colors.textPrimary }]}>{title}</Text>
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>{detail}</Text>
+      </View>
+      <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.8} />
+    </Pressable>
+  );
+}
+
 /**
  * §48.4 корень вкладки «Тренировки»: список программ клиента (простые и расширенные вместе), а при
- * пустой библиотеке — сразу выбор конструктора. Архив — у участия этого клиента.
+ * пустой библиотеке — сразу экран «Создать программу» (решение владельца 2026-10-18: без отдельного
+ * экрана-приветствия, чтобы не дублировать выбор). Архив — у участия этого клиента.
  */
 export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate, onOpenProgram, onOpenTemplates }: Readonly<{
   clientId: string;
@@ -111,13 +147,7 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
   }
 
   if (library.active.length === 0 && library.archived.length === 0) {
-    return (
-      <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content}>
-        <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>Программ пока нет</Text>
-        <Text style={[styles.body, { color: colors.textSecondary }]}>Выберите конструктор для первой программы клиента.</Text>
-        <ProgramModeChooser onChoose={onChoose} />
-      </ScrollView>
-    );
+    return <ProgramModeChooserScreen onChoose={onChoose} onOpenTemplates={onOpenTemplates} />;
   }
 
   return (
@@ -171,11 +201,17 @@ const styles = StyleSheet.create({
   center: { flex: 1, padding: 16, gap: 12, justifyContent: "center" },
   content: { padding: 16, gap: 10 },
   withFab: { paddingBottom: 96 },
-  heading: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 26 },
   body: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
+  chooser: { paddingBottom: 96 },
+  feature: { flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: 12, paddingRight: 10, paddingVertical: 10, minHeight: 60 },
+  featureIcon: { width: 40, height: 40, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  featureTitle: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
   modes: { gap: 10, marginTop: 6 },
   card: { borderWidth: 1, borderRadius: 12 },
-  mode: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
+  mode: { flexDirection: "row", alignItems: "flex-start", gap: 12, padding: 14 },
+  chevron: { alignSelf: "center" },
+  point: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  bullet: { width: 4, height: 4, borderRadius: 2, marginTop: 7 },
   modeIcon: { width: 44, height: 44, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   program: { flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: 14, paddingRight: 10, paddingVertical: 12, minHeight: 64 },
   grow: { flex: 1, minWidth: 0, gap: 2 },

@@ -41,7 +41,7 @@ type PickReturn =
   | Readonly<{ name: "TrainingTemplateEdit"; params: { templateId: string } }>;
 
 const trainingTitles: Readonly<Record<keyof TrainingRoutes, string>> = {
-  TrainingIndex: "Программы", TrainingChooser: "Новая программа", TrainingCreate: "Создание программы",
+  TrainingIndex: "Программы", TrainingChooser: "Создать программу", TrainingCreate: "Создание программы",
   TrainingProgram: "Программа", TrainingBuilder: "Простой конструктор", TrainingMesocycle: "Новый мезоцикл",
   TrainingWeek: "Редактирование недели", TrainingPickExercise: "Выбор упражнения", TrainingWorkout: "Дневник тренировки",
   TrainingCreateExercise: "Своё упражнение",
@@ -169,7 +169,8 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId } }] })} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingChooser">
-        {({ navigation }) => <ProgramModeChooserScreen onChoose={(kind) => { const route = createRoute(kind); navigation.navigate(route.name, route.params as never); }} />}
+        {({ navigation }) => <ProgramModeChooserScreen onChoose={(kind) => { const route = createRoute(kind); navigation.navigate(route.name, route.params as never); }}
+          onOpenTemplates={() => navigation.navigate("TrainingTemplates")} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingCreate">
         {({ navigation, route }) => <CreateProgramScreen clientId={clientId} kind={route.params.kind} repository={repository}
