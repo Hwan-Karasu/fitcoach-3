@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { AppButton, InlineNotice, LoadingState, SearchableSelect, StickyEditorFooter, TextField, TrainingEditorLayout } from "../../../../shared/ui/components/public.ts";
+import { AppButton, InlineNotice, LoadingState, SearchableSelect, SelectionChip, StickyEditorFooter, TextField,
+  TrainingEditorLayout } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import type { TrainingProgram, ProgramCard } from "../domain/ProgramModel.ts";
-import { weekTypeLabels, type PeriodizedPlan } from "../domain/PeriodizedModel.ts";
+import { weekTypeLabels, type PeriodizedPlan, type WeekType } from "../domain/PeriodizedModel.ts";
+import type { PlannedWorkout } from "../domain/SimplePlanModel.ts";
+import { templateKindLabels, type ProgramTemplate, type TemplateMesocycle } from "../domain/TemplateModel.ts";
+
+/** §48.13.1 п. 2: два источника копии в одном мастере. */
+type Source = "CLIENT" | "TEMPLATE";
 import { PROGRAM_TITLE_MAX } from "../domain/ProgramRules.ts";
 import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
 import { ParticipantChips } from "./ParticipantChips.tsx";
@@ -29,6 +35,17 @@ export function MesocycleCopyScreen({ clientId, programId, repository, listCandi
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
+  const [source, setSource] = useState<Source>("CLIENT");
+  const [templates, setTemplates] = useState<readonly ProgramTemplate[]>([]);
+  const [templateId, setTemplateId] = useState("");
+  const [templateCycle, setTemplateCycle] = useState("");
+  useEffect(() => {
+    let active = true;
+    // Простой шаблон — не мезоцикл (§48.14.2 п. 4): предлагаются шаблоны мезоциклов и Расширенных программ.
+    void repository.listTemplates().then((rows) => { if (active) setTemplates(rows.filter((item) => item.kind !== "SIMPLE")); })
+      .catch(() => { if (active) setMessage("Не удалось загрузить шаблоны."); });
+    return () => { active = false; };
+  }, [repository, refresh]);
   useEffect(() => {
     let active = true;
     void Promise.all([repository.getProgram(clientId, programId), listCandidates()]).then(([program, candidates]) => {
@@ -59,13 +76,30 @@ export function MesocycleCopyScreen({ clientId, programId, repository, listCandi
     return () => { active = false; };
   }, [repository, sourceClient, sourceProgram, refresh]);
   const cycle = plan?.mesocycles.find((item) => item.id === sourceCycle);
+  const template = templates.find((item) => item.id === templateId);
+  const templateCycles: readonly TemplateMesocycle[] = template === undefined ? []
+    : template.payload.kind === "MESOCYCLE" ? [template.payload.mesocycle]
+      : template.payload.kind === "PERIODIZED" ? template.payload.mesocycles : [];
+  const chosenTemplateCycle = templateCycle === "" ? undefined : templateCycles[Number(templateCycle)];
+  // Общий предпросмотр для обоих источников.
+  const preview: Readonly<{ weeks: readonly Readonly<{ key: string; index: number; type: WeekType; workouts: readonly PlannedWorkout[] }>[] }> | null =
+    source === "CLIENT" ? (cycle === undefined ? null : { weeks: cycle.weeks.map((week) => ({ key: week.id, index: week.index,
+      type: week.type, workouts: week.workouts })) })
+      : chosenTemplateCycle === undefined ? null : { weeks: chosenTemplateCycle.weeks.map((week, index) => ({ key: String(index),
+        index: index + 1, type: week.type, workouts: week.workouts })) };
   const save = async () => {
-    if (!target || !plan || !cycle || busy) return;
+    if (!target || preview === null || busy) return;
     setBusy(true); setMessage(null);
     try {
-      await repository.copyMesocycle(clientId, programId, target.revision, { sourceClientId: sourceClient,
-        sourceProgramId: sourceProgram, sourceMesocycleId: cycle.id, sourceRevision: plan.program.revision,
-        title, clientIds: selected });
+      if (source === "TEMPLATE") {
+        await repository.createMesocycleFromTemplate(clientId, programId, target.revision, { templateId,
+          mesocycleIndex: Number(templateCycle), title, clientIds: selected });
+      } else {
+        if (!plan || !cycle) return;
+        await repository.copyMesocycle(clientId, programId, target.revision, { sourceClientId: sourceClient,
+          sourceProgramId: sourceProgram, sourceMesocycleId: cycle.id, sourceRevision: plan.program.revision,
+          title, clientIds: selected });
+      }
       onCreated();
     } catch (error) {
       const code = error instanceof Error ? error.message : "";
@@ -76,6 +110,27 @@ export function MesocycleCopyScreen({ clientId, programId, repository, listCandi
   return <TrainingEditorLayout>
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text style={[styles.heading, { color: colors.textPrimary }]}>Источник плана</Text>
+      <View style={styles.chips}>
+        <SelectionChip group="Источник" label="Из программы клиента" selected={source === "CLIENT"}
+          onPress={() => { setSource("CLIENT"); setTitle(""); }} />
+        <SelectionChip group="Источник" label="Из сохранённых шаблонов" selected={source === "TEMPLATE"}
+          onPress={() => { setSource("TEMPLATE"); setTitle(""); }} />
+      </View>
+      {source === "TEMPLATE" ? <>
+        {templates.length === 0 ? <InlineNotice kind="info">Шаблонов мезоциклов и Расширенных программ пока нет. Сохраните их из меню «⋯» программы.</InlineNotice> : null}
+        <SearchableSelect title="Шаблон" value={templateId} disabled={busy || templates.length === 0}
+          options={templates.map((item) => ({ value: item.id, label: `${item.title} · ${templateKindLabels[item.kind]}` }))}
+          onSelect={(value) => {
+            const next = templates.find((item) => item.id === value);
+            setTemplateId(value);
+            // Шаблон мезоцикла — сразу он; из книги мезоцикл выбирается явно (§48.13.1 п. 8, §48.14.2 п. 2).
+            if (next?.payload.kind === "MESOCYCLE") { setTemplateCycle("0"); setTitle(next.payload.mesocycle.title.slice(0, PROGRAM_TITLE_MAX)); }
+            else { setTemplateCycle(""); setTitle(""); }
+          }} />
+        {template?.payload.kind === "PERIODIZED" ? <SearchableSelect title="Мезоцикл" value={templateCycle} disabled={busy}
+          options={templateCycles.map((item, index) => ({ value: String(index), label: item.title }))}
+          onSelect={(value) => { setTemplateCycle(value); setTitle((templateCycles[Number(value)]?.title ?? "Мезоцикл").slice(0, PROGRAM_TITLE_MAX)); }} /> : null}
+      </> : <>
       <SearchableSelect title="Клиент" value={sourceClient} disabled={busy} options={[...names].map(([value, label]) => ({ value, label }))}
         onSelect={(value) => { setSourceClient(value); setSourceProgram(""); setSourceCycle(""); setTitle(""); setPlan(null); }} />
       <SearchableSelect title="Программа" value={sourceProgram} disabled={busy || programs.length === 0}
@@ -86,10 +141,11 @@ export function MesocycleCopyScreen({ clientId, programId, repository, listCandi
         disabled={busy || !plan?.mesocycles.length} options={plan?.mesocycles.map((item) => ({ value: item.id, label: item.title })) ?? []}
         onSelect={(value) => { setSourceCycle(value); setTitle(`${plan?.mesocycles.find((item) => item.id === value)?.title ?? "Мезоцикл"} — копия`.slice(0, PROGRAM_TITLE_MAX)); }} />}
       {plan && !plan.mesocycles.length ? <InlineNotice kind="info">В программе пока нет мезоциклов.</InlineNotice> : null}
-      {cycle ? <>
+      </>}
+      {preview !== null ? <>
         <TextField label="Название нового мезоцикла" required value={title} onChangeText={setTitle} />
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Создать в «${target?.title ?? "…"}». Скопируется текущий план всех ${cycle.weeks.length} недель.`}</Text>
-        {cycle.weeks.map((week) => <View key={week.id} style={[styles.card, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Создать в «${target?.title ?? "…"}». Скопируется план всех ${preview.weeks.length} недель.`}</Text>
+        {preview.weeks.map((week) => <View key={week.key} style={[styles.card, { borderColor: colors.border, backgroundColor: colors.surface }]}>
           <Text style={[styles.heading, { color: colors.textPrimary }]}>{`Неделя ${week.index} · ${weekTypeLabels[week.type]}`}</Text>
           <Text style={[styles.meta, { color: colors.textSecondary }]}>{week.workouts.map((workout) => `${workout.title} (${workout.exercises.length})`).join(" · ")}</Text>
         </View>)}
@@ -100,8 +156,9 @@ export function MesocycleCopyScreen({ clientId, programId, repository, listCandi
       {message ? <><InlineNotice kind="error">{message}</InlineNotice><AppButton label="Обновить предпросмотр" variant="secondary"
         disabled={busy} onPress={() => { setMessage(null); setRefresh((value) => value + 1); }} /></> : null}
     </ScrollView>
-    <StickyEditorFooter actionLabel="Создать копию" busy={busy} disabled={!cycle || !target || !title.trim() || title.trim().length > PROGRAM_TITLE_MAX}
-      onAction={() => { void save(); }} onCancel={onCancel} note="Новый мезоцикл будет независимым" />
+    <StickyEditorFooter actionLabel="Создать копию" busy={busy} disabled={preview === null || !target || !title.trim() || title.trim().length > PROGRAM_TITLE_MAX}
+      onAction={() => { void save(); }} onCancel={onCancel} note="Новый мезоцикл будет независимым"
+      message={message} messageKind="error" />
   </TrainingEditorLayout>;
 }
 
@@ -110,4 +167,5 @@ const styles = StyleSheet.create({
   heading: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 21 },
   meta: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   card: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 6 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 });

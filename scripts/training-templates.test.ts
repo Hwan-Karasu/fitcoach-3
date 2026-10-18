@@ -120,3 +120,40 @@ test("T04 программа из шаблона (§48.14.3 п. 5, 7, 8): нов
     await close();
   }
 });
+
+test("T04 мезоцикл из шаблона (§48.14.3 п. 3–4, §48.13.3 п. 6–8): один мезоцикл, выбранным участникам, без фактов", async () => {
+  const { plans, a, b, c, close } = await setup();
+  try {
+    const source = await plans.createProgram({ kind: "PERIODIZED", title: "Источник", clientIds: [a.id] });
+    let revision = source.revision;
+    for (const [index, title] of ["База", "Пик"].entries()) {
+      revision = (await plans.createMesocycle(a.id, source.id, revision, { title, weeks: index + 2, firstWeek: week(`x${index}`),
+        clientIds: [a.id] })).program.revision;
+    }
+    const whole = await plans.saveProgramAsTemplate(a.id, source.id, "Книга");
+    const single = await plans.saveMesocycleAsTemplate(a.id, source.id,
+      (await plans.getPeriodizedPlan(a.id, source.id))!.mesocycles[0]!.id, "База — шаблон");
+    const simple = await plans.createSimpleProgram(c.id, { title: "Простая", plan: { weeks: 2, workouts: week("y") } });
+    const simpleTemplate = await plans.saveProgramAsTemplate(c.id, simple.id, "Простая — шаблон");
+
+    const target = await plans.createProgram({ kind: "PERIODIZED", title: "Цель", clientIds: [a.id, b.id, c.id] });
+    const fromSingle = await plans.createMesocycleFromTemplate(a.id, target.id, target.revision,
+      { templateId: single.id, mesocycleIndex: 0, title: "Новая база", clientIds: [a.id, b.id] });
+    const fromWhole = await plans.createMesocycleFromTemplate(a.id, target.id, fromSingle.program.revision,
+      { templateId: whole.id, mesocycleIndex: 1, title: "Новый пик", clientIds: [a.id] });
+    const cyclesA = (await plans.getPeriodizedPlan(a.id, target.id))!.mesocycles;
+    assert.deepEqual(cyclesA.map((item) => [item.title, item.weeks.length]), [["Новая база", 2], ["Новый пик", 3]],
+      "из книги — только выбранный мезоцикл, без остальных");
+    assert.deepEqual((await plans.getPeriodizedPlan(b.id, target.id))!.mesocycles.map((item) => item.title), ["Новая база"]);
+    assert.deepEqual((await plans.getPeriodizedPlan(c.id, target.id))!.mesocycles, [], "C не выбран");
+    assert.equal((await plans.getPeriodizedPlan(a.id, target.id))!.selectedMesocycleId, fromWhole.mesocycleId);
+    await assert.rejects(plans.createMesocycleFromTemplate(a.id, target.id, fromWhole.program.revision,
+      { templateId: simpleTemplate.id, mesocycleIndex: 0, title: "Нельзя", clientIds: [a.id] }),
+    (error: unknown) => error instanceof Error && error.message === "DRAFT_INVALID", "Простая программа — не мезоцикл");
+    await assert.rejects(plans.createMesocycleFromTemplate(a.id, target.id, target.revision,
+      { templateId: single.id, mesocycleIndex: 0, title: "Старая ревизия", clientIds: [a.id] }),
+    (error: unknown) => error instanceof Error && error.message === "PROGRAM_REVISION_CONFLICT");
+  } finally {
+    await close();
+  }
+});

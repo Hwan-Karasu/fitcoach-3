@@ -41,6 +41,13 @@ export interface TrainingPlansRepositoryPort {
   renameTemplate(templateId: string, expectedRevision: number, title: string, now?: Date): Promise<ProgramTemplate>;
   /** Независимая копия шаблона (§48.16 п. 3). */
   duplicateTemplate(templateId: string, title: string, now?: Date): Promise<ProgramTemplate>;
+  /**
+   * §48.13.1 п. 8, §48.14.2 п. 2: новый мезоцикл в открытой программе из шаблона мезоцикла или одного мезоцикла
+   * (`mesocycleIndex`) шаблона Расширенной программы. Выбранным участникам — свои копии; новые ID и родство.
+   */
+  createMesocycleFromTemplate(clientId: string, programId: string, expectedRevision: number,
+    input: Readonly<{ templateId: string; mesocycleIndex: number; title: string; clientIds: readonly string[] }>,
+    now?: Date): Promise<Readonly<{ program: TrainingProgram; mesocycleId: string }>>;
   /** Удаление шаблона не трогает программы, созданные по нему (§48.16 п. 4). */
   deleteTemplate(templateId: string): Promise<void>;
   /**

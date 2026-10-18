@@ -787,6 +787,38 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     });
   }
 
+  async createMesocycleFromTemplate(clientId: string, programId: string, expectedRevision: number,
+    input: Readonly<{ templateId: string; mesocycleIndex: number; title: string; clientIds: readonly string[] }>,
+    now: Date = new Date()) {
+    const title = normalizeTitle(input.title);
+    const created = await this.ready().writer.write(async (tx) => {
+      const { payload } = await this.templateById(tx, input.templateId);
+      // Шаблон Простой программы — не мезоцикл (§48.14.2 п. 4); у Расширенной — только выбранный мезоцикл.
+      const source = payload.kind === "MESOCYCLE" ? payload.mesocycle
+        : payload.kind === "PERIODIZED" ? payload.mesocycles[input.mesocycleIndex] : undefined;
+      if (source === undefined) throw new Error("DRAFT_INVALID");
+      await this.assertTargets(tx, clientId, programId, input.clientIds);
+      if ((await programById(tx, this.workspaceId, programId)).revision !== expectedRevision) throw new Error("PROGRAM_REVISION_CONFLICT");
+      for (const week of source.weeks) assertWeek(title, week.workouts);
+      await this.bumpRevision(tx, programId, expectedRevision, now);
+      const rows = source.weeks.reduce((sum, week) => sum + 1 + week.workouts.reduce((inner, workout) => inner + 1
+        + workout.exercises.reduce((n, exercise) => n + 1 + exercise.sets.length, 0), 0), 0);
+      const take = await this.idPool(tx, 1 + input.clientIds.length + rows * (input.clientIds.length + 1));
+      const lineageId = take();
+      const template = weeksFromTemplate(source, take);
+      let ownId = "";
+      for (const [index, memberId] of input.clientIds.entries()) {
+        const mesocycle = { id: take(), lineageId, title, weeks: index === 0 ? template : copyWeeks(template, take) };
+        await insertMesocycle(tx, this.workspaceId, programId, memberId, mesocycle, now);
+        if (memberId === clientId) ownId = mesocycle.id;
+      }
+      await saveSelection(tx, this.workspaceId, programId, clientId, ownId);
+      return { program: await programById(tx, this.workspaceId, programId), mesocycleId: ownId };
+    });
+    this.publish({ clientIds: input.clientIds });
+    return created;
+  }
+
   async createProgramFromTemplate(templateId: string, input: Readonly<{ title: string; clientIds: readonly string[] }>,
     now: Date = new Date()): Promise<TrainingProgram> {
     const created = await this.ready().writer.write(async (tx) => {
