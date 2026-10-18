@@ -1,8 +1,8 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { ScreenHeader } from "../../shared/ui/components/public.ts";
 import { CalendarScreen, CalendarSettingsScreen,
   type CalendarCreditPort, type CalendarParticipantDirectoryPort,
   type CalendarRepositoryPort, type GuestLinkRequest } from "../../features/calendar/public.ts";
-import { fonts } from "../../shared/ui/theme/typography.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 
 /** Маршруты вкладки «Календарь»; настройки открываются шестерёнкой в шапке вкладки. */
@@ -27,9 +27,8 @@ export function CalendarNavigator({ repository, participants, credit, onCreateCl
         // RootTabs already applies the top safe area; a nested header must not add it again.
         // Android-only and marked unstable in native-stack 7.19; re-check on upgrade (F01).
         unstable_headerInsets: { top: false },
-        headerStyle: { backgroundColor: colors.surface },
-        headerTintColor: colors.textPrimary,
-        headerTitleStyle: { fontFamily: fonts.bold },
+        header: ({ navigation, options, back }) => <ScreenHeader insetTop={false} title={options.title}
+          onBack={back !== undefined ? () => navigation.goBack() : undefined} />,
         contentStyle: { backgroundColor: colors.canvas },
       }}
     >

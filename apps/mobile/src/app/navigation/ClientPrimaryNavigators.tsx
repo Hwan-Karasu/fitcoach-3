@@ -11,7 +11,7 @@ import { ProgramMatrixScreen, CreateProgramScreen, MesocycleCreatorScreen, Progr
   type WorkoutSlot } from "../../features/training/public.ts";
 import { CustomExerciseEditorScreen, ExerciseLibraryScreen, type ExerciseCatalogPort } from "../../features/exercises/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
-import { TrainingHeader } from "./TrainingHeader.tsx";
+import { ClientHeader } from "./ClientHeader.tsx";
 
 type HomeRoutes = { HomeIndex: undefined };
 type NutritionRoutes = { NutritionIndex: undefined };
@@ -108,10 +108,11 @@ export function NutritionNavigator() {
  * Стек не сбрасывается при смене вкладок; после создания в стеке «список → программа».
  * Шапка — общая строка карточки клиента (UI-OWN-001), назад — системной кнопкой.
  */
-export function TrainingNavigator({ clientId, clientName, repository, execution, restTimers, activeWorkouts, onOpenWorkout,
+export function TrainingNavigator({ clientId, clientName, clientEmoji, repository, execution, restTimers, activeWorkouts, onOpenWorkout,
   listCandidates, exercises, exerciseLookup, weekCopy, weekSwap, onExitClient, onOpenClients }: Readonly<{
   clientId: string;
   clientName: string;
+  clientEmoji: string | null;
   repository: TrainingPlansRepositoryPort;
   execution: TrainingExecutionPort;
   restTimers: RestTimersPort;
@@ -132,7 +133,7 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
   return (
     <TrainingStack.Navigator initialRouteName="TrainingIndex" screenOptions={({ navigation, route }) => ({
       contentStyle: { backgroundColor: palette.tokens.canvas },
-      header: () => <TrainingHeader title={trainingTitles[route.name]} clientName={clientName}
+      header: () => <ClientHeader subtitle={trainingTitles[route.name]} client={{ displayName: clientName, emoji: clientEmoji }}
         onClients={onOpenClients} onBack={() => {
           if (route.name === "TrainingWorkout") {
             const params = route.params as TrainingRoutes["TrainingWorkout"];

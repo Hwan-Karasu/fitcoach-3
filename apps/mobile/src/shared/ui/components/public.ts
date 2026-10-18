@@ -27,6 +27,7 @@ export { emojiFromInput } from "./emojiInput.ts";
 export { HeaderScrollReporter, HeaderSearchProvider, useHeaderScrollHandler, useHeaderSearch,
   type HeaderSearchState } from "./HeaderScroll.tsx";
 export { BrandMark } from "./BrandMark.tsx";
+export { ScreenHeader, SCREEN_HEADER_HEIGHT } from "./ScreenHeader.tsx";
 export { FloatingActionButton } from "./FloatingActionButton.tsx";
 export { DurationWheelPicker, TimeWheelPicker } from "./TimeWheelPicker.tsx";
 export { pickDate } from "./pickDate.ts";

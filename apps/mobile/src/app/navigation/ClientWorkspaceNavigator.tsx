@@ -15,6 +15,7 @@ import type { ExerciseCatalogPort } from "../../features/exercises/public.ts";
 import { AppButton, LoadingState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { HomeNavigator, NutritionNavigator, TrainingNavigator } from "./ClientPrimaryNavigators.tsx";
+import { ClientHeader } from "./ClientHeader.tsx";
 import { MoreMenuScreen } from "./MoreMenuScreen.tsx";
 import { moreDestinations, workspaceTabs } from "./routeCatalog.ts";
 import { RootTabBar } from "./RootTabBar.tsx";
@@ -37,19 +38,21 @@ type MoreRoutes = {
 const Tabs = createBottomTabNavigator<WorkspaceTabs>();
 const MoreStack = createNativeStackNavigator<MoreRoutes>();
 
-function MoreNavigator({ clientId, questionnaire }: Readonly<{ clientId: string; questionnaire: QuestionnaireRepositoryPort }>) {
+function MoreNavigator({ client, questionnaire, onClose, onOpenClients }: Readonly<{
+  client: ClientRecord; questionnaire: QuestionnaireRepositoryPort; onClose: () => void; onOpenClients: () => void;
+}>) {
   const { palette } = usePrototypeTheme();
-  const colors = palette.tokens;
+  const clientId = client.id;
   return (
     <MoreStack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: colors.surface },
-        headerTintColor: colors.textPrimary,
-        headerTitleStyle: { fontFamily: fonts.bold },
-        contentStyle: { backgroundColor: colors.canvas },
+        contentStyle: { backgroundColor: palette.tokens.canvas },
+        // Шапка клиента (UI-OWN-035): подзаголовок — раздел; «←» — назад по стеку или из клиента.
+        header: ({ navigation, options, back }) => <ClientHeader client={client} subtitle={options.title ?? workspaceTabs.More}
+          onBack={back !== undefined ? () => navigation.goBack() : onClose} onClients={onOpenClients} />,
       }}
     >
-      <MoreStack.Screen name="MoreIndex" options={{ headerShown: false }}>
+      <MoreStack.Screen name="MoreIndex" options={{ title: workspaceTabs.More }}>
         {({ navigation }) => (
           <MoreMenuScreen
             onOpenQuestionnaire={() => navigation.navigate("Questionnaire")}
@@ -152,7 +155,8 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       tabBar={(props) => <RootTabBar {...props} />}
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.canvas } }}
     >
-      <Tabs.Screen name="Home" options={{ tabBarLabel: workspaceTabs.Home, tabBarAccessibilityLabel: workspaceTabs.Home}}>
+      <Tabs.Screen name="Home" options={{ tabBarLabel: workspaceTabs.Home, tabBarAccessibilityLabel: workspaceTabs.Home, headerShown: true,
+        header: () => <ClientHeader client={client} subtitle={workspaceTabs.Home} onBack={onClose} onClients={onOpenClients} /> }}>
         {() => <HomeNavigator client={client} accounting={accounting} measurements={measurements}
           onOpenEdit={() => onOpenEdit(client.id)}
           onOpenAccounting={() => onOpenAccounting(client.id)}
@@ -163,15 +167,17 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
             onClose();
           }} />}
       </Tabs.Screen>
-      <Tabs.Screen name="Nutrition" component={NutritionNavigator} options={{ tabBarLabel: workspaceTabs.Nutrition, tabBarAccessibilityLabel: workspaceTabs.Nutrition}} />
+      <Tabs.Screen name="Nutrition" component={NutritionNavigator} options={{ tabBarLabel: workspaceTabs.Nutrition,
+        tabBarAccessibilityLabel: workspaceTabs.Nutrition, headerShown: true,
+        header: () => <ClientHeader client={client} subtitle={workspaceTabs.Nutrition} onBack={onClose} onClients={onOpenClients} /> }} />
       <Tabs.Screen name="Training" options={{ tabBarLabel: workspaceTabs.Training, tabBarAccessibilityLabel: workspaceTabs.Training}}>
-        {() => <TrainingNavigator clientId={client.id} clientName={client.displayName} repository={trainingPlans}
+        {() => <TrainingNavigator clientId={client.id} clientName={client.displayName} clientEmoji={client.emoji} repository={trainingPlans}
           execution={trainingExecution} restTimers={restTimers} activeWorkouts={activeWorkouts} onOpenWorkout={onOpenWorkout}
           listCandidates={listCandidates} onExitClient={onClose} onOpenClients={onOpenClients}
           exercises={exercises} exerciseLookup={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap} />}
       </Tabs.Screen>
       <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More}}>
-        {() => <MoreNavigator clientId={client.id} questionnaire={questionnaire} />}
+        {() => <MoreNavigator client={client} questionnaire={questionnaire} onClose={onClose} onOpenClients={onOpenClients} />}
       </Tabs.Screen>
     </Tabs.Navigator></WeekNavigationProvider>
     </View>

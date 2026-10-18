@@ -1,7 +1,7 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { Animated, BackHandler, Pressable, StyleSheet, TextInput, View } from "react-native";
-import { ArrowLeft, Bell, Menu, Search, Settings, X } from "lucide-react-native";
-import { AppIconButton, BrandMark } from "../../shared/ui/components/public.ts";
+import { Bell, Menu, Search, Settings, X } from "lucide-react-native";
+import { AppIconButton, BrandMark, ScreenHeader, SCREEN_HEADER_HEIGHT } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 import { appBrandName } from "./routeCatalog.ts";
@@ -19,7 +19,8 @@ export interface RootHeaderSearch {
 
 /**
  * Одна строка шапки корневой вкладки (UI-OWN-001/016): вверху — знак и название приложения,
- * при прокрутке — название раздела; справа поиск, колокольчик и меню.
+ * при прокрутке — название раздела; справа поиск, колокольчик и меню. Та же карточка и высота, что у остальных
+ * экранов (UI-OWN-035); отступ сверху уже даёт RootTabs.
  */
 export function RootHeader({
   title,
@@ -54,13 +55,10 @@ export function RootHeader({
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => { closeSearch(); return true; });
     return () => subscription.remove();
   }, [closeSearch]);
-  const frame = [styles.header, { backgroundColor: colors.canvas, borderBottomColor: collapsed ? colors.border : "transparent" }];
 
   if (search?.open) {
     return (
-      <View style={[frame, styles.searchMode]}>
-        <AppIconButton label="Закрыть поиск" icon={<ArrowLeft size={20} color={colors.textPrimary} strokeWidth={1.8} />}
-          onPress={search.onClose} />
+      <ScreenHeader insetTop={false} onBack={search.onClose}>
         <View style={[styles.searchField, { backgroundColor: colors.input, borderColor: colors.focusRing }]}>
           <Search size={18} color={colors.textMuted} strokeWidth={2} />
           <TextInput autoFocus value={search.query} onChangeText={search.onChangeQuery} placeholder={search.placeholder}
@@ -73,21 +71,12 @@ export function RootHeader({
             </Pressable>
           ) : null}
         </View>
-      </View>
+      </ScreenHeader>
     );
   }
 
   return (
-    <View style={frame}>
-      <View accessible accessibilityRole="header" accessibilityLabel={`${appBrandName}, ${title}`} style={styles.titleSlot}>
-        <Animated.View style={[styles.layer, brandStyle]}>
-          <BrandMark size={24} color={colors.accentInk} />
-          <Animated.Text numberOfLines={1} style={[styles.brand, { color: colors.textPrimary }]}>{appBrandName}</Animated.Text>
-        </Animated.View>
-        <Animated.View style={[styles.layer, titleStyle]}>
-          <Animated.Text numberOfLines={1} style={[styles.title, { color: colors.textPrimary }]}>{title}</Animated.Text>
-        </Animated.View>
-      </View>
+    <ScreenHeader insetTop={false} right={<>
       {onOpenSettings ? (
         <AppIconButton compact label={`Настройки: ${title.toLowerCase()}`}
           icon={<Settings size={20} color={colors.textPrimary} strokeWidth={1.8} />} onPress={onOpenSettings} />
@@ -111,18 +100,26 @@ export function RootHeader({
         onPress={onOpenMenu}
         testID="open-menu"
       />
-    </View>
+    </>}>
+      <View accessible accessibilityRole="header" accessibilityLabel={`${appBrandName}, ${title}`} style={styles.titleSlot}>
+        <Animated.View style={[styles.layer, brandStyle]}>
+          <BrandMark size={24} color={colors.accentInk} />
+          <Animated.Text numberOfLines={1} style={[styles.brand, { color: colors.textPrimary }]}>{appBrandName}</Animated.Text>
+        </Animated.View>
+        <Animated.View style={[styles.layer, titleStyle]}>
+          <Animated.Text numberOfLines={1} style={[styles.title, { color: colors.textPrimary }]}>{title}</Animated.Text>
+        </Animated.View>
+      </View>
+    </ScreenHeader>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { minHeight: 48, paddingLeft: 16, paddingRight: 4, flexDirection: "row", alignItems: "center", borderBottomWidth: 1 },
-  searchMode: { paddingLeft: 4 },
-  titleSlot: { flex: 1, height: 48 },
+  titleSlot: { flex: 1, height: SCREEN_HEADER_HEIGHT - 2, marginLeft: 4 },
   layer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, flexDirection: "row", alignItems: "center", gap: 8 },
   brand: { flexShrink: 1, fontFamily: fonts.bold, fontSize: 17, lineHeight: 23 },
-  title: { flexShrink: 1, fontFamily: fonts.bold, fontSize: 19, lineHeight: 25 },
-  searchField: { flex: 1, height: 38, marginRight: 12, borderWidth: 1, borderRadius: 8, paddingLeft: 10, paddingRight: 2,
+  title: { flexShrink: 1, fontFamily: fonts.bold, fontSize: 18, lineHeight: 23 },
+  searchField: { flex: 1, height: 40, marginRight: 4, borderWidth: 1, borderRadius: 10, paddingLeft: 10, paddingRight: 2,
     flexDirection: "row", alignItems: "center", gap: 8 },
   searchInput: { flex: 1, fontFamily: fonts.regular, fontSize: 14, paddingVertical: 0 },
   clear: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },

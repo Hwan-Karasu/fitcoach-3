@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getFocusedRouteNameFromRoute, NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
@@ -14,7 +14,6 @@ import { ClientMeasurementsScreen } from "../../features/measurements/public.ts"
 import { QuestionnaireBuilderScreen } from "../../features/questionnaire/public.ts";
 import { CustomExerciseEditorScreen, ExerciseDetailScreen, ExerciseLibraryScreen } from "../../features/exercises/public.ts";
 import { useAppointmentOutcomeQueue } from "../bootstrap/useAppointmentOutcomeQueue.ts";
-import { fonts } from "../../shared/ui/theme/typography.ts";
 import { PrototypeThemeProvider, usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { WorkspaceRoutePreview } from "../../shared/ui/prototype/WorkspaceRoutePreview.tsx";
 import { ClientWorkspaceNavigator } from "./ClientWorkspaceNavigator.tsx";
@@ -26,7 +25,7 @@ import { homeSummaryRules } from "../../read-models/useClientHomeSummary.ts";
 import type { RosterOverviewPort } from "../../features/clients/public.ts";
 import { RootTabs } from "./RootTabs.tsx";
 import { SqliteDiagnosticsScreen } from "./SqliteDiagnosticsScreen.tsx";
-import { BottomDockLayoutProvider } from "../../shared/ui/components/public.ts";
+import { BottomDockLayoutProvider, ScreenHeader } from "../../shared/ui/components/public.ts";
 
 type RootStackRoutes = {
   Root: undefined;
@@ -61,9 +60,9 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
     <NavigationContainer>
       <Stack.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: colors.surface },
-          headerTintColor: colors.textPrimary,
-          headerTitleStyle: { fontFamily: fonts.bold },
+          // Единая шапка-карточка одной высоты (UI-OWN-035).
+          header: ({ navigation, options, back }) => <ScreenHeader title={options.title}
+            onBack={back !== undefined ? () => navigation.goBack() : undefined} />,
           contentStyle: { backgroundColor: colors.canvas },
         }}
       >
@@ -136,8 +135,8 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
         <Stack.Screen name="WorkspaceDev" options={{ title: "Маршрут клиента · демо" }}>
           {() => <WorkspaceRoutePreview context="Маршрут без выбранного клиента" />}
         </Stack.Screen>
-        <Stack.Screen name="ClientWorkspace" options={({ route }) => ({ title: "Карточка клиента",
-          headerShown: (getFocusedRouteNameFromRoute(route) ?? route.params.screen) !== "Training" })}>
+        {/* Шапку клиента рисуют вкладки и стеки клиента (UI-OWN-035). */}
+        <Stack.Screen name="ClientWorkspace" options={{ title: "Карточка клиента", headerShown: false }}>
           {({ navigation, route }) => <ClientWorkspaceNavigator
             clientId={route.params.clientId} repository={services.clients}
             accounting={services.accounting} measurements={services.measurements} questionnaire={services.questionnaire}
