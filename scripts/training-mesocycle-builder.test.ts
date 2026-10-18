@@ -64,6 +64,13 @@ test("UI-OWN-038 программа с первым мезоциклом одн�
     await assert.rejects(plans.createPeriodizedProgram({ title: "Пусто", clientIds: [a.id], mesocycle: { title: "Б", cycleType: null,
       repRange: null, startDate: null, weeks: [empty()] } }), (error: unknown) => error instanceof Error && error.message === "DRAFT_INVALID");
     assert.equal((await plans.getLibrary(a.id)).active.length, 1, "отказ ничего не записал");
+    const template = await plans.saveBuilderAsTemplate({ title: "Шаблон силы", mesocycle: { title: "Блок 1", cycleType: "strength",
+      repRange: { min: 3, max: 6 }, startDate: null, weeks: [{ type: "light", workouts: plan("t") }, empty("heavy")] } });
+    assert.equal(template.payload.kind, "PERIODIZED");
+    if (template.payload.kind === "PERIODIZED") {
+      assert.deepEqual(template.payload.mesocycles[0]!.weeks.map((week) => [week.type, week.workouts.length]), [["light", 1], ["heavy", 1]],
+        "«В шаблон» из конструктора: недели по типам, пустые заполнены");
+    }
   } finally {
     await plans.close(); await clients.close();
   }

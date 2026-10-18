@@ -1,6 +1,6 @@
 import type { ClientProgramLibrary, CreateProgramInput, TrainingProgram } from "./ProgramModel.ts";
 import type { ProgramTemplate, TemplatePayload } from "./TemplateModel.ts";
-import type { NewMesocycleInput, NewPeriodizedProgramInput, PeriodizedPlan, WeekEditInput, WeekEditPreview, WeekEditResult } from "./PeriodizedModel.ts";
+import type { BuilderMesocycleInput, NewMesocycleInput, NewPeriodizedProgramInput, PeriodizedPlan, WeekEditInput, WeekEditPreview, WeekEditResult } from "./PeriodizedModel.ts";
 import type { PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
 import type { PeriodizedDraft } from "./PeriodizedDraft.ts";
 import type { MesocycleVersion } from "./StructureVersion.ts";
@@ -33,6 +33,8 @@ export interface TrainingPlansRepositoryPort {
    * ближайшей заполненной (защита от мисклика); всё пусто или неверные настройки — DRAFT_INVALID, ничего не пишется.
    */
   createPeriodizedProgram(input: NewPeriodizedProgramInput, now?: Date): Promise<TrainingProgram>;
+  /** «В шаблон» конструктора Расширенной программы: черновик — шаблон программы из одного мезоцикла; программа не создаётся. */
+  saveBuilderAsTemplate(input: Readonly<{ title: string; mesocycle: BuilderMesocycleInput }>, now?: Date): Promise<ProgramTemplate>;
   renameProgram(programId: string, expectedRevision: number, title: string, now?: Date): Promise<TrainingProgram>;
   /** §48.16: библиотека шаблонов тренера (все типы); новые сверху. */
   listTemplates(): Promise<readonly ProgramTemplate[]>;

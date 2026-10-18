@@ -12,7 +12,7 @@ import { withRestDefaults } from "../domain/SimplePlanEdits.ts";
 import { DEV_TRAINING_PLANS_LEDGER, devTrainingPlansCatalog } from "./DevTrainingPlansCatalog.ts";
 import { deleteStructure, readStructure, readWorkouts, writeStructure } from "./SimplePlanStore.ts";
 import { deleteMemberMesocycles, insertMesocycle, readMesocycles, saveSelection, selectedMesocycle, writeWeek } from "./PeriodizedStore.ts";
-import { MESOCYCLE_WEEKS_MAX, weekTypeLabels, type Mesocycle, type NewMesocycleInput, type NewPeriodizedProgramInput, type PeriodizedPlan, type PlanWeek, type WeekEditInput,
+import { MESOCYCLE_WEEKS_MAX, weekTypeLabels, type Mesocycle, type NewMesocycleInput, type NewPeriodizedProgramInput, type BuilderMesocycleInput, type PeriodizedPlan, type PlanWeek, type WeekEditInput,
   type WeekEditConflict, type WeekEditPreview, type WeekEditResult } from "../domain/PeriodizedModel.ts";
 import { copyWeeks, diffWeek, newMesocycleWeeks, targetWeeks, withLineage } from "../domain/PeriodizedRules.ts";
 import { fillEmptyWeeks, type MesocycleSettings } from "../domain/MesocycleBuilder.ts";
@@ -237,6 +237,16 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     });
     this.publish({ clientIds: created.memberClientIds });
     return created;
+  }
+
+  async saveBuilderAsTemplate(input: Readonly<{ title: string; mesocycle: BuilderMesocycleInput }>, now: Date = new Date()): Promise<ProgramTemplate> {
+    const title = normalizeTitle(input.mesocycle.title);
+    let local = 0;
+    const filled = fillEmptyWeeks(input.mesocycle.weeks, () => `fill:${local++}`);
+    if (filled.length === 0 || filled.some((week) => week.workouts.length === 0)) throw new Error("DRAFT_INVALID");
+    for (const week of filled) assertWeek(title, week.workouts);
+    return this.ready().writer.write((tx) => this.insertTemplate(tx, input.title, { kind: "PERIODIZED",
+      mesocycles: [{ title, weeks: filled.map((week) => ({ type: week.type, workouts: week.workouts })) }] }, now));
   }
 
   private async insertProgram(tx: SqliteStatementPort, valid: CreateProgramInput, now: Date,
