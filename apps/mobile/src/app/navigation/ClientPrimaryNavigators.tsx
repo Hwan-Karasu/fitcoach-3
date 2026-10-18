@@ -133,7 +133,8 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, repositor
   return (
     <TrainingStack.Navigator initialRouteName="TrainingIndex" screenOptions={({ navigation, route }) => ({
       contentStyle: { backgroundColor: palette.tokens.canvas },
-      header: () => <ClientHeader subtitle={trainingTitles[route.name]} client={{ displayName: clientName, emoji: clientEmoji }}
+      // Подзаголовок — заголовок экрана; экран может его сменить (вкладка «Шаблоны» программы).
+      header: ({ options }) => <ClientHeader subtitle={options.title ?? trainingTitles[route.name]} client={{ displayName: clientName, emoji: clientEmoji }}
         onClients={onOpenClients} onBack={() => {
           if (route.name === "TrainingWorkout") {
             const params = route.params as TrainingRoutes["TrainingWorkout"];
@@ -185,6 +186,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, repositor
           requestedWeek={route.params.weekIndex} requestedMesocycle={route.params.mesocycleId}
           repository={repository} listCandidates={listCandidates} exercises={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap}
           onOpenMatrix={() => navigation.navigate("TrainingMatrix", { programId: route.params.programId })}
+          onTabChange={(tab) => navigation.setOptions({ title: tab === "templates" ? "Шаблоны" : trainingTitles.TrainingProgram })}
           renderTemplates={() => <TemplateLibraryScreen clientId={clientId} repository={repository} listCandidates={listCandidates}
             onEdit={(templateId) => navigation.navigate("TrainingTemplateEdit", { templateId })}
             onCreated={(createdId) => navigation.reset({ index: 1,

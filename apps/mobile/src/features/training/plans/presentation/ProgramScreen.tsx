@@ -41,7 +41,7 @@ export interface ProgramWeeksView {
  * «Изменить программу»; Расширенная — мезоциклы этого участника (выбор хранится, §48.10), недели выбранного
  * и «Изменить неделю» (T04).
  */
-export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, renderTemplates, onEditStructure,
+export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, renderTemplates, onTabChange, onEditStructure,
   onAddMesocycle, onEditWeek, onArchived, requestedWeek, requestedMesocycle, weekCopy, weekSwap, onOpenProgram, onOpenMatrix }: Readonly<{
   clientId: string;
   programId: string;
@@ -68,6 +68,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   onOpenMatrix?: () => void;
   /** UI-OWN-036: вкладка «Шаблоны» — библиотека шаблонов тренера (её с переходами подставляет навигация). */
   renderTemplates?: () => ReactNode;
+  /** Смена вкладки — чтобы шапка показала «Программа» или «Шаблоны». */
+  onTabChange?: (tab: "program" | "templates") => void;
   requestedMesocycle?: string;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -196,7 +198,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   // Переключатель «Программа | Шаблоны» (макет владельца, UI-OWN-036): над содержимым, не прокручивается.
   const tabs = renderTemplates !== undefined ? <View style={[styles.tabs, { backgroundColor: colors.canvas }]}>
     <SegmentedControl items={[{ id: "program", label: "Программа" }, { id: "templates", label: "Шаблоны" }]}
-      selectedId={tab} onSelect={setTab} />
+      selectedId={tab} onSelect={(next) => { setTab(next); onTabChange?.(next); }} />
   </View> : null;
   if (tab === "templates" && renderTemplates !== undefined) {
     return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{tabs}{renderTemplates()}</View>;
