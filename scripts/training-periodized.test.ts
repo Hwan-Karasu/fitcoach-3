@@ -139,6 +139,28 @@ async function stores() {
 
 const message = (code: string) => (error: unknown) => error instanceof Error && error.message.includes(code);
 
+test("T03 недели дневника: lineage только своего мезоцикла, отсутствие соответствия требует выбора", async () => {
+  const { plans, a, b, programId, mesocycleId, close } = await sharedProgram();
+  try {
+    const plan = (await plans.getPeriodizedPlan(a.id, programId))!;
+    const cycle = plan.mesocycles[0]!;
+    const source = cycle.weeks[0]!.workouts[0]!;
+    const navigation = (await plans.getWorkoutWeekNavigation(a.id, programId, source.id))!;
+    assert.equal(navigation.mesocycleId, mesocycleId);
+    assert.equal(navigation.weeks[2]!.workoutId, cycle.weeks[2]!.workouts[0]!.id);
+    assert.equal(await plans.getWorkoutWeekNavigation(b.id, programId, source.id), null);
+    await plans.saveWeek(a.id, programId, plan.program.revision, { mesocycleId, weekIndex: 2,
+      workouts: newDraft("replacement-workout").plan.workouts, type: "base", scope: "CURRENT", clientIds: [a.id] });
+    const changed = (await plans.getWorkoutWeekNavigation(a.id, programId, source.id))!;
+    assert.equal(changed.weeks[1]!.workoutId, null, "нельзя молча открыть тренировку по позиции");
+    assert.equal(changed.weeks[2]!.workoutId, cycle.weeks[2]!.workouts[0]!.id);
+    const simple = await plans.createSimpleProgram(a.id, { title: "Повтор", plan: { weeks: 3, workouts: firstWeek() } });
+    const simpleNavigation = (await plans.getWorkoutWeekNavigation(a.id, simple.id, "w1"))!;
+    assert.equal(simpleNavigation.mesocycleId, null);
+    assert.deepEqual(simpleNavigation.weeks.map((week) => week.workoutId), ["w1", "w1", "w1"]);
+  } finally { await close(); }
+});
+
 /** Расширенная программа на двоих с мезоциклом из четырёх недель у каждого. */
 async function sharedProgram() {
   const env = await stores();

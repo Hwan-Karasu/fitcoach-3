@@ -12,4 +12,4 @@ export { formatDuration, formatRange, parseDuration, parseLoad } from "./domain/
 export { INSTRUCTION_MAX, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC } from "./domain/SimplePlanModel.ts";
 export type { ClientProgramLibrary, CreateProgramInput, ProgramCard, ProgramKind,
   TrainingProgram } from "./domain/ProgramModel.ts";
-export type { TrainingPlansCommittedChange, TrainingPlansRepositoryPort } from "./domain/TrainingPlansRepositoryPort.ts";
+export type { TrainingPlansCommittedChange, TrainingPlansRepositoryPort, WorkoutWeekNavigation } from "./domain/TrainingPlansRepositoryPort.ts";

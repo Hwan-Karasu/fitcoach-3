@@ -63,6 +63,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   const unilateralRef = useRef(unilateralOf);
   unilateralRef.current = unilateralOf;
   const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const writeFailed = useRef(false);
   stateRef.current = state;
 
   useEffect(() => {
@@ -104,23 +105,31 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   }), [clientId, plans]);
 
   const applyFact = useCallback((fact: SetFact, sessionState: WorkoutExecution["session"]) => {
-    setState((current) => {
-      const facts = new Map(current?.facts ?? []);
-      facts.set(fact.plannedSetId, fact);
-      const next = { session: sessionState, facts, notes: current?.notes ?? new Map<string, string>() };
-      stateRef.current = next;
-      return next;
-    });
+    // Очередная команда читает ACK немедленно, не ждёт отложенного React-render с новой revision.
+    const facts = new Map(stateRef.current?.facts ?? []);
+    facts.set(fact.plannedSetId, fact);
+    const next = { session: sessionState, facts, notes: stateRef.current?.notes ?? new Map<string, string>() };
+    stateRef.current = next;
+    setState(next);
   }, []);
 
   const enqueue = useCallback(<T,>(task: () => Promise<T>): Promise<T | null> => {
     const run = queue.current.then(task).then((value) => { setMessage(null); return value; }, (error: unknown) => {
+      writeFailed.current = true;
       setMessage(errorText(error));
       setVersion((value) => value + 1);
       return null;
     });
     queue.current = run;
     return run;
+  }, []);
+
+  const finishSaving = useCallback(async (): Promise<boolean> => {
+    let waiting: Promise<unknown>;
+    do { waiting = queue.current; await waiting; } while (waiting !== queue.current);
+    const saved = !writeFailed.current;
+    writeFailed.current = false;
+    return saved;
   }, []);
 
   const identityOf = useCallback((exercise: PlannedExercise, set: PlannedSet, position: number) => {
@@ -243,7 +252,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   return {
     workout, state, previous, mode, message,
     status: workoutStatus(state?.session?.outcome ?? null, started),
-    saveSet, toggleSet, setOutcome, addWarmup, removeWarmup, setActualDate, saveNote, deleteExecution,
+    saveSet, toggleSet, setOutcome, addWarmup, removeWarmup, setActualDate, saveNote, deleteExecution, finishSaving,
     dismissMessage: () => setMessage(null),
   };
 }

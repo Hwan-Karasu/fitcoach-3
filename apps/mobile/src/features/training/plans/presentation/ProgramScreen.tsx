@@ -32,7 +32,7 @@ export interface ProgramWeeksView {
  * и «Изменить неделю» (T04).
  */
 export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, onEditStructure,
-  onAddMesocycle, onEditWeek, onArchived }: Readonly<{
+  onAddMesocycle, onEditWeek, onArchived, requestedWeek, requestedMesocycle }: Readonly<{
   clientId: string;
   programId: string;
   repository: TrainingPlansRepositoryPort;
@@ -47,6 +47,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   /** Расширенная: правка недели выбранного мезоцикла (T04). */
   onEditWeek: (mesocycleId: string, weekIndex: number) => void;
   onArchived: () => void;
+  requestedWeek?: number;
+  requestedMesocycle?: string;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -68,6 +70,18 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const bookRef = useAnimatedRef<Animated.ScrollView>();
   const lookup = useExerciseLookup(exercises);
+  const appliedContext = useRef<string | null>(null);
+  useEffect(() => {
+    if (requestedWeek === undefined || program == null) return;
+    const key = requestedMesocycle ?? (program.kind === "SIMPLE" ? "simple" : cycleKey);
+    const context = `${key}:${requestedWeek}`;
+    if (context === appliedContext.current || (program.kind === "PERIODIZED" && periodized === null)) return;
+    appliedContext.current = context;
+    setWeeksByCycle((current) => ({ ...current, [key]: requestedWeek }));
+    if (key !== "simple" && periodized?.selectedMesocycleId !== key) {
+      void repository.selectMesocycle(clientId, programId, key).catch(() => setMessage("Не удалось выбрать мезоцикл."));
+    }
+  }, [requestedWeek, requestedMesocycle, program, periodized, cycleKey, repository, clientId, programId]);
   useEffect(() => {
     const frame = requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: scrollByCycle.current.get(cycleKey) ?? 0, animated: false }));
     return () => cancelAnimationFrame(frame);

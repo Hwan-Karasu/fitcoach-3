@@ -52,7 +52,8 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
                   </View>
                 ) : null}
               </View>
-              <Text style={[styles.label, { color, fontFamily: focused ? fonts.semibold : fonts.medium }]}>{label}</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
+                style={[styles.label, { color, fontFamily: focused ? fonts.semibold : fonts.medium }]}>{label}</Text>
               <View style={[styles.indicator, { backgroundColor: focused ? colors.accentInk : "transparent" }]} />
             </Pressable>
           );

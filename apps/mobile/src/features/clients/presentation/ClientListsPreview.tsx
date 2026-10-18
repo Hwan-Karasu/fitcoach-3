@@ -399,7 +399,7 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
               </Text>
             </View>
           </View>
-          <View style={{ flexDirection: fontScale > 1.15 || width < 390 ? "column" : "row", gap: 8 }}>
+          <View style={{ flexDirection: fontScale > 1.15 || width < 340 ? "column" : "row", gap: 8 }}>
           <View style={styles.archiveAction}><AppButton variant="secondary" label="Вернуть в клиенты" busy={busyId === row.id}
             disabled={busyId !== null} disabledReason="Дождитесь завершения операции"
             onPress={() => { void restore(row); }} /></View>

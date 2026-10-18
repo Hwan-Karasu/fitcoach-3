@@ -25,7 +25,7 @@ type TrainingRoutes = {
   TrainingWeek: { programId: string; mesocycleId: string; weekIndex: number; picked?: PickedExercise };
   /** Каталог для выбора упражнения; результат возвращается на экран `returnTo` с теми же параметрами. */
   TrainingPickExercise: { workoutId: string; replace?: string; returnTo: PickReturn };
-  TrainingWorkout: { programId: string; weekIndex: number; workoutId: string };
+  TrainingWorkout: { programId: string; weekIndex: number; workoutId: string; mesocycleId?: string };
 };
 
 type PickReturn =
@@ -121,7 +121,7 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
         onClients={onOpenClients} onBack={() => {
           if (route.name === "TrainingWorkout") {
             const params = route.params as TrainingRoutes["TrainingWorkout"];
-            navigation.popTo("TrainingProgram", { programId: params.programId, weekIndex: params.weekIndex });
+            navigation.popTo("TrainingProgram", { programId: params.programId, weekIndex: params.weekIndex, mesocycleId: params.mesocycleId });
           } else if (route.name === "TrainingProgram") navigation.popTo("TrainingIndex");
           else if (route.name === "TrainingIndex") onExitClient();
           else navigation.goBack();
@@ -144,10 +144,12 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingProgram">
         {({ navigation, route }) => <ProgramScreen clientId={clientId} programId={route.params.programId}
+          requestedWeek={route.params.weekIndex} requestedMesocycle={route.params.mesocycleId}
           repository={repository} listCandidates={listCandidates} exercises={exerciseLookup}
           renderWeeks={(view) => <ProgramWeeksPanel key={view.key} clientId={clientId} programId={route.params.programId} weeks={view.weeks}
             renderWeekActions={view.weekActions} execution={execution} selectedWeek={view.selectedWeek} onSelectWeek={view.onSelectWeek}
-            onOpenWorkout={(weekIndex, workoutId) => navigation.navigate("TrainingWorkout", { programId: route.params.programId, weekIndex, workoutId })} />}
+            onOpenWorkout={(weekIndex, workoutId) => navigation.navigate("TrainingWorkout", { programId: route.params.programId, weekIndex, workoutId,
+              ...(view.key === "simple" ? {} : { mesocycleId: view.key }) })} />}
           onEditStructure={() => navigation.navigate("TrainingBuilder", { programId: route.params.programId })}
           onAddMesocycle={() => navigation.navigate("TrainingMesocycle", { programId: route.params.programId })}
           onEditWeek={(mesocycleId, weekIndex) => navigation.navigate("TrainingWeek", { programId: route.params.programId, mesocycleId, weekIndex })}
@@ -193,9 +195,14 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
           onSaved={() => navigation.popTo("TrainingProgram", { programId: route.params.programId })} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingWorkout">
-        {({ route }) => <WorkoutScreen slot={{ clientId, programId: route.params.programId, weekIndex: route.params.weekIndex,
+        {({ route, navigation }) => <WorkoutScreen slot={{ clientId, programId: route.params.programId, weekIndex: route.params.weekIndex,
           plannedWorkoutId: route.params.workoutId }} clientName={clientName} plans={repository} execution={execution}
-          restTimers={restTimers} activeWorkouts={activeWorkouts} onOpenWorkout={onOpenWorkout} exercises={exerciseLookup} />}
+          restTimers={restTimers} activeWorkouts={activeWorkouts} onOpenWorkout={onOpenWorkout} exercises={exerciseLookup}
+          onChangeWeek={(weekIndex, workoutId, mesocycleId) => {
+            const context = { programId: route.params.programId, weekIndex, ...(mesocycleId === null ? {} : { mesocycleId }) };
+            if (workoutId === null) navigation.popTo("TrainingProgram", context);
+            else navigation.replace("TrainingWorkout", { ...context, workoutId });
+          }} />}
       </TrainingStack.Screen>
     </TrainingStack.Navigator>
   );

@@ -5,13 +5,13 @@ import { useKeepAwake } from "expo-keep-awake";
 import { usePreventRemove, useNavigation } from "@react-navigation/native";
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { CalendarDays, Check, Gauge, NotebookPen, Plus, Timer, Trash2, Users, X } from "lucide-react-native";
-import { ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, StatusTag,
+import { ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, StatusTag, WeekCards, useWeekNavigation,
   type StatusKind } from "../../../../shared/ui/components/public.ts";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { formatDuration, formatRange, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookup, type ExerciseLookupPort,
-  type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort } from "../../plans/public.ts";
+  type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort, type WorkoutWeekNavigation } from "../../plans/public.ts";
 import { DROPS_MAX, EMPTY_VALUES, NOTE_MAX, type ActiveWorkoutCard, type ActiveWorkoutsPort, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type Side,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
 import { displayOrder, localDateOf, nextOutcome, type SetField } from "../domain/ExecutionRules.ts";
@@ -21,6 +21,7 @@ import { ActiveWorkoutsSheet, RpeSheet, SetTypeSheet } from "./SetPickers.tsx";
 import { compactValues, compactWithDrops, diaryFields, fieldHeaders, fieldNames, parseField, planText, rawOf, rpeTone, sanitizeField,
   setTypeLabels, setTypeTone, shortDate, workoutStatusLabels } from "./setFormat.ts";
 import { extraWarmups, useWorkoutDiary, type SetPatch } from "./useWorkoutDiary.ts";
+import { PendingInputWrites } from "../domain/PendingInputWrites.ts";
 
 /** Пауза после последнего нажатия, после которой значение ячейки записывается. */
 const SAVE_DELAY_MS = 700;
@@ -35,7 +36,7 @@ const outcomeLabels: Readonly<Record<WorkoutOutcome, readonly [string, string]>>
   CANCELLED: ["Отменена", "Отменить отмену"],
 };
 
-type PendingRegistry = Map<string, () => void>;
+type PendingRegistry = PendingInputWrites;
 type SetTarget = Readonly<{ exercise: PlannedExercise; set: PlannedSet; position: number }>;
 
 const hasValues = (values: SetValues) => Object.values(values).some((value) => value !== null);
@@ -52,7 +53,7 @@ const ValueCell = forwardRef(function ValueCell({ cellKey, field, value, pending
   cellKey: string; field: SetField; value: number | null; pending: PendingRegistry;
   /** Следующая ячейка строки; нет — ячейка последняя. */
   onNext: (() => void) | null;
-  onCommit: (value: number | null) => void;
+  onCommit: (value: number | null) => Promise<unknown>;
 }>, ref: Ref<TextInput>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -68,19 +69,17 @@ const ValueCell = forwardRef(function ValueCell({ cellKey, field, value, pending
   commitRef.current = onCommit;
 
   useEffect(() => {
-    if (focused.current) return;
+    if (focused.current || pending.has(cellKey)) return;
     textRef.current = raw;
     setText(raw);
     setInvalid(false);
-  }, [raw]);
+  }, [raw, pending, cellKey]);
 
   const flush = useCallback(() => {
     if (timer.current !== null) clearTimeout(timer.current);
     timer.current = null;
-    pending.delete(cellKey);
-    const parsed = parseField(field, textRef.current);
-    if (parsed !== "invalid" && parsed !== valueRef.current) commitRef.current(parsed);
-  }, [cellKey, field, pending]);
+    return pending.flush(cellKey);
+  }, [cellKey, pending]);
 
   useEffect(() => () => { if (pending.has(cellKey)) flush(); }, [cellKey, flush, pending]);
 
@@ -100,8 +99,11 @@ const ValueCell = forwardRef(function ValueCell({ cellKey, field, value, pending
         timer.current = null;
         const parsed = parseField(field, next);
         setInvalid(parsed === "invalid");
-        if (parsed === "invalid") { pending.delete(cellKey); return; }
-        pending.set(cellKey, flush);
+        pending.set(cellKey, async () => {
+          if (parsed === "invalid") return false;
+          if (parsed === valueRef.current) return true;
+          return await commitRef.current(parsed) !== null;
+        });
         timer.current = setTimeout(flush, SAVE_DELAY_MS);
       }}
       style={[styles.input, { color: colors.textPrimary, backgroundColor: colors.input,
@@ -114,7 +116,7 @@ const ValueCell = forwardRef(function ValueCell({ cellKey, field, value, pending
  * запись дописывается перед сменой исхода, как у значений подходов.
  */
 function NoteField({ noteKey, value, pending, onCommit }: Readonly<{
-  noteKey: string; value: string; pending: PendingRegistry; onCommit: (text: string) => void;
+  noteKey: string; value: string; pending: PendingRegistry; onCommit: (text: string) => Promise<unknown>;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -128,16 +130,15 @@ function NoteField({ noteKey, value, pending, onCommit }: Readonly<{
   valueRef.current = value;
   commitRef.current = onCommit;
   useEffect(() => {
-    if (focused.current) return;
+    if (focused.current || pending.has(noteKey)) return;
     textRef.current = value;
     setText(value);
     if (value !== "") setOpen(true);
-  }, [value]);
+  }, [value, pending, noteKey]);
   const flush = useCallback(() => {
     if (timer.current !== null) clearTimeout(timer.current);
     timer.current = null;
-    pending.delete(noteKey);
-    if (textRef.current.trim() !== valueRef.current.trim()) commitRef.current(textRef.current);
+    return pending.flush(noteKey);
   }, [noteKey, pending]);
   useEffect(() => () => { if (pending.has(noteKey)) flush(); }, [flush, noteKey, pending]);
   if (!open) {
@@ -159,7 +160,7 @@ function NoteField({ noteKey, value, pending, onCommit }: Readonly<{
         textRef.current = next;
         setText(next);
         if (timer.current !== null) clearTimeout(timer.current);
-        pending.set(noteKey, flush);
+        pending.set(noteKey, async () => next.trim() === valueRef.current.trim() || await commitRef.current(next) !== null);
         timer.current = setTimeout(flush, SAVE_DELAY_MS);
       }}
       style={[styles.note, { color: colors.textPrimary, backgroundColor: colors.input, borderColor: colors.border }]} />
@@ -177,7 +178,7 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
   /** Одностороннее упражнение: две строки «Л» / «П» со своими значениями и отметками (§48.66, §48.70). */
   sided: boolean;
   pending: PendingRegistry;
-  onSave: (target: SetTarget, patch: SetPatch) => void;
+  onSave: (target: SetTarget, patch: SetPatch) => Promise<unknown>;
   onToggle: (target: SetTarget, side?: Side) => void;
   onPickType: (target: SetTarget) => void;
   onPickRpe: (target: SetTarget) => void;
@@ -195,7 +196,7 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
   const manualSpacer = mode === "MANUAL" ? <View style={styles.side} /> : null;
   const inputs = useRef(new Map<string, TextInput | null>()).current;
   /** Ячейки одной строки (подход, сторона или мини-сет) с переходом «Далее» слева направо. */
-  const cells = (prefix: string, valueOf: (field: SetField) => number | null, commit: (field: SetField, value: number | null) => void) =>
+  const cells = (prefix: string, valueOf: (field: SetField) => number | null, commit: (field: SetField, value: number | null) => Promise<unknown>) =>
     fields.map((field, index) => {
       const next = fields[index + 1];
       return (
@@ -320,7 +321,7 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
  * исхода спрашивает «Завершить тренировку?» (§48.36).
  */
 export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, activeWorkouts, onOpenWorkout,
-  exercises }: Readonly<{
+  exercises, onChangeWeek }: Readonly<{
   slot: WorkoutSlot;
   /** Подпись таймера отдыха — таймеры разных клиентов различимы (§48.62). */
   clientName: string;
@@ -331,6 +332,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   activeWorkouts: ActiveWorkoutsPort;
   onOpenWorkout: (slot: WorkoutSlot) => void;
   exercises: ExerciseLookupPort;
+  onChangeWeek: (weekIndex: number, workoutId: string | null, mesocycleId: string | null) => void;
 }>) {
   useKeepAwake();
   const { palette } = usePrototypeTheme();
@@ -346,7 +348,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   }, [clientName, lookup, restTimers, slot.clientId]);
   const unilateralOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.unilateral === true, [lookup]);
   const diary = useWorkoutDiary(slot, plans, execution, metricsOf, unilateralOf, startRest);
-  const pending = useRef<PendingRegistry>(new Map()).current;
+  const pending = useRef(new PendingInputWrites()).current;
   const typeSheet = useRef<BottomSheetModal>(null);
   const rpeSheet = useRef<BottomSheetModal>(null);
   const [target, setTarget] = useState<SetTarget | null>(null);
@@ -361,6 +363,16 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const activeSheet = useRef<BottomSheetModal>(null);
   const [others, setOthers] = useState<readonly ActiveWorkoutCard[]>([]);
+  const [weekNavigation, setWeekNavigation] = useState<WorkoutWeekNavigation | null>(null);
+  const [navigationError, setNavigationError] = useState<string | null>(null);
+  const navigationAuthorized = useRef(false);
+  useEffect(() => {
+    let active = true;
+    plans.getWorkoutWeekNavigation(slot.clientId, slot.programId, slot.plannedWorkoutId)
+      .then((value) => { if (active) setWeekNavigation(value); })
+      .catch(() => { if (active) setNavigationError("Не удалось загрузить недели программы."); });
+    return () => { active = false; };
+  }, [plans, slot.clientId, slot.programId, slot.plannedWorkoutId]);
   useEffect(() => {
     let active = true;
     const load = () => {
@@ -383,16 +395,40 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     });
   };
 
-  const flushPending = useCallback(() => {
-    for (const flush of [...pending.values()]) flush();
-  }, [pending]);
+  const flushPending = useCallback(() => pending.flushAll(), [pending]);
+  const finishInput = async () => {
+    const inputsSaved = await flushPending();
+    const queueSaved = await diary.finishSaving();
+    if (!inputsSaved || !queueSaved) {
+      setNavigationError("Не удалось сохранить весь ввод. Проверьте поля и повторите переход — введённые значения оставлены на экране.");
+      return false;
+    }
+    setNavigationError(null);
+    return true;
+  };
+  const changeWeek = async (index: number) => {
+    if (busy || index === slot.weekIndex) return;
+    const targetWeek = weekNavigation?.weeks.find((week) => week.index === index);
+    if (!targetWeek) return;
+    setBusy(true);
+    try {
+      if (!await finishInput()) return;
+      navigationAuthorized.current = true;
+      Keyboard.dismiss();
+      onChangeWeek(index, targetWeek.workoutId, weekNavigation?.mesocycleId ?? null);
+    } finally { setBusy(false); }
+  };
+  const currentWeek = weekNavigation?.weeks.findIndex((week) => week.index === slot.weekIndex) ?? -1;
+  const previousWeek = weekNavigation?.weeks[currentWeek - 1];
+  const nextWeek = weekNavigation?.weeks[currentWeek + 1];
+  useWeekNavigation(weekNavigation === null ? null : { week: slot.weekIndex, busy,
+    previous: previousWeek ? () => { void changeWeek(previousWeek.index); } : null,
+    next: nextWeek ? () => { void changeWeek(nextWeek.index); } : null });
 
-  const onSave = useCallback((item: SetTarget, patch: SetPatch) => {
-    void saveSet(item.exercise, item.set, item.position, patch);
-  }, [saveSet]);
+  const onSave = useCallback((item: SetTarget, patch: SetPatch) =>
+    saveSet(item.exercise, item.set, item.position, patch), [saveSet]);
   const onToggle = useCallback((item: SetTarget, side?: Side) => {
-    flushPending();
-    void toggleSet(item.exercise, item.set, item.position, side);
+    void flushPending().then((saved) => { if (saved) void toggleSet(item.exercise, item.set, item.position, side); });
   }, [flushPending, toggleSet]);
   const onPickType = useCallback((item: SetTarget) => {
     Keyboard.dismiss();
@@ -406,16 +442,24 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   }, []);
 
   const outcome = diary.state?.session?.outcome ?? null;
-  usePreventRemove(diary.status === "IN_PROGRESS" && !busy, ({ data }) => setExitAction(data.action));
+  usePreventRemove(true, ({ data }) => {
+    if (navigationAuthorized.current) { navigation.dispatch(data.action); return; }
+    if (busy) return;
+    setBusy(true);
+    void finishInput().then((saved) => {
+      if (!saved) return;
+      if (diary.status === "IN_PROGRESS") setExitAction(data.action);
+      else navigation.dispatch(data.action);
+    }).finally(() => setBusy(false));
+  });
 
   const incomplete = useMemo(() => (diary.workout?.exercises.some((exercise) => exercise.sets.some((set) =>
     diary.state?.facts.get(set.id)?.confirmed !== true)) ?? false)
     || [...(diary.state?.facts.values() ?? [])].some((fact) => fact.extra && !fact.confirmed), [diary.state, diary.workout]);
 
   const applyOutcome = async (next: WorkoutOutcome | null) => {
-    flushPending();
     setBusy(true);
-    try { return await setOutcome(next); } finally { setBusy(false); }
+    try { if (!await finishInput()) return null; return await setOutcome(next); } finally { setBusy(false); }
   };
 
   const press = (pressed: WorkoutOutcome) => {
@@ -437,10 +481,10 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const { workout, state, previous, mode } = diary;
   const targetFact = target === null ? undefined : state.facts.get(target.set.id);
 
-  const chooseType = (setType: SetType) => {
+  const chooseType = async (setType: SetType) => {
     typeSheet.current?.dismiss();
     if (target === null || setType === (targetFact?.setType ?? "NORMAL")) return;
-    flushPending();
+    if (!await finishInput()) return;
     // Как в 2.0: разминка — новый подход сверху, выбранный подход не меняется.
     if (setType === "WARMUP") { void addWarmup(target.exercise); return; }
     // Заполненные мини-сеты не убираются молча: сначала вопрос.
@@ -484,7 +528,13 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
           </Pressable>
         ) : null}
         {diary.message !== null ? <InlineNotice kind="error">{diary.message}</InlineNotice> : null}
+        {navigationError !== null ? <InlineNotice kind="error">{navigationError}</InlineNotice> : null}
         {restError !== null ? <InlineNotice kind="error">{restError}</InlineNotice> : null}
+        {weekNavigation !== null ? <>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>{weekNavigation.programTitle}</Text>
+          <WeekCards weeks={weekNavigation.weeks} selected={slot.weekIndex} disabled={busy}
+            onSelect={(index) => { void changeWeek(index); }} />
+        </> : null}
         {workout.exercises.map((exercise) => {
           const info = lookup.get(exercise.exerciseId);
           const fields = diaryFields(info?.metrics ?? []);
@@ -539,7 +589,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                   pending={pending} onSave={onSave} onToggle={onToggle} onPickType={onPickType} onPickRpe={onPickRpe} />
               ))}
               <NoteField noteKey={`note:${exercise.id}`} value={state.notes.get(exercise.id) ?? ""} pending={pending}
-                onCommit={(text) => { void diary.saveNote(exercise.id, text); }} />
+                onCommit={(text) => diary.saveNote(exercise.id, text)} />
             </View>
           );
         })}
@@ -571,7 +621,13 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         onClear={() => { if (restFor !== null) saveRest(restFor, null); }}
         onClose={() => setRestFor(null)} />
       <ActiveWorkoutsSheet ref={activeSheet} cards={others}
-        onOpen={(card) => { activeSheet.current?.dismiss(); flushPending(); onOpenWorkout(card.slot); }} />
+        onOpen={(card) => {
+          if (busy) return;
+          setBusy(true);
+          void finishInput().then((saved) => {
+            if (saved) { activeSheet.current?.dismiss(); onOpenWorkout(card.slot); }
+          }).finally(() => setBusy(false));
+        }} />
       <SetTypeSheet ref={typeSheet} setType={targetFact?.setType ?? "NORMAL"} extra={targetFact?.extra === true}
         noDrop={target !== null && lookup.get(target.exercise.exerciseId)?.unilateral === true}
         onSelect={chooseType}
@@ -601,7 +657,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
           setBusy(true);
-          void diary.deleteExecution().finally(() => { setBusy(false); setConfirmDelete(false); });
+          void finishInput().then((saved) => saved ? diary.deleteExecution() : null)
+            .finally(() => { setBusy(false); setConfirmDelete(false); });
         }} />
       <ConfirmDialog visible={confirmIncomplete} title="Не все подходы выполнены"
         description="Тренировку можно завершить и так: незаполненные подходы останутся пустыми, введённые результаты сохранятся."
@@ -609,10 +666,16 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         onCancel={() => setConfirmIncomplete(false)}
         onConfirm={() => { void applyOutcome("COMPLETED").finally(() => setConfirmIncomplete(false)); }} />
       <ConfirmDialog visible={exitAction !== null} title="Завершить тренировку?"
-        description="Результаты уже сохранены. «Нет» — выйти, тренировка останется в работе."
+        description="«Нет» — выйти и оставить тренировку в работе. Введённые результаты сохранятся."
         confirmLabel="Да" tertiaryLabel="Нет" cancelLabel="Остаться" confirmBusy={busy}
         onCancel={() => setExitAction(null)}
-        onTertiary={() => { const action = exitAction; flushPending(); setExitAction(null); if (action !== null) navigation.dispatch(action); }}
+        onTertiary={() => {
+          const action = exitAction;
+          setBusy(true);
+          void finishInput().then((saved) => {
+            if (saved && action !== null) { setExitAction(null); navigation.dispatch(action); }
+          }).finally(() => setBusy(false));
+        }}
         onConfirm={() => {
           const action = exitAction;
           void applyOutcome("COMPLETED").then((saved) => {

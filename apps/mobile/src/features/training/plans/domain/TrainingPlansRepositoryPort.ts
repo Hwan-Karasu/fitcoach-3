@@ -7,6 +7,12 @@ export interface TrainingPlansCommittedChange {
   readonly clientIds: readonly string[];
 }
 
+export interface WorkoutWeekNavigation {
+  readonly programTitle: string;
+  readonly mesocycleId: string | null;
+  readonly weeks: readonly Readonly<{ index: number; caption: string | null; workoutId: string | null }>[];
+}
+
 /**
  * Владелец планов тренировок (§§48.1–48.4, Feature 09). Типизированные ошибки: DRAFT_INVALID,
  * PARTICIPANT_CONFLICT, PROGRAM_REVISION_CONFLICT, TARGET_NOT_FOUND, PROGRAM_ARCHIVED.
@@ -47,6 +53,8 @@ export interface TrainingPlansRepositoryPort {
   /** Тренировка программы по ID — для дневника, в Простой и Расширенной программе одинаково. */
   findWorkout(clientId: string, programId: string, plannedWorkoutId: string):
     Promise<Readonly<{ program: TrainingProgram; workout: PlannedWorkout }> | null>;
+  /** Тот же слот Простой / lineageId внутри текущего мезоцикла. Нет однозначного соответствия — null в неделе. */
+  getWorkoutWeekNavigation(clientId: string, programId: string, plannedWorkoutId: string): Promise<WorkoutWeekNavigation | null>;
   /** Расширенная программа этого участника: его мезоциклы, недели и выбранный мезоцикл. */
   getPeriodizedPlan(clientId: string, programId: string): Promise<PeriodizedPlan | null>;
   /**
