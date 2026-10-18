@@ -2,7 +2,8 @@ import { useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
-import { ChevronRight, FileText, Plus, Rocket, TrendingUp } from "lucide-react-native";
+import { CalendarDays, ChartColumnIncreasing, ChevronRight, CircleMinus, Clock, FileText, LayoutGrid, Plus, RefreshCw, Rocket,
+  FileSpreadsheet, SlidersHorizontal, TrendingUp, Users, Zap } from "lucide-react-native";
 import { AppButton, FloatingActionButton, InlineNotice, ListSectionHeader, LoadingState,
   StatusTag } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -12,11 +13,32 @@ import { membersWord, programKindLabels } from "../domain/ProgramRules.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import { useProgramLibrary } from "./useProgramLibrary.ts";
 
-/** Короткие тезисы конструкторов (макет владельца 2026-10-18), по правилам §48.4. */
-const modePoints: Readonly<Record<ProgramKind, readonly string[]>> = {
-  SIMPLE: ["Быстрый старт", "Минимум настроек", "План недели повторяется", "Для одного клиента"],
-  PERIODIZED: ["Мезоциклы и типы недель", "Свой план каждой недели", "Для нескольких клиентов",
-    "Контроль прогресса"],
+type IconRender = (color: string) => ReactNode;
+const icon = (Icon: typeof Rocket, size = 20): IconRender => (color) => <Icon size={size} color={color} strokeWidth={1.8} />;
+
+/** Описание конструктора (макет владельца 2026-10-18), по правилам §48.4: ячейки — пояснение, не кнопки. */
+interface ModeInfo {
+  readonly icon: IconRender;
+  readonly subtitle: string;
+  readonly badge: string;
+  readonly cells: readonly Readonly<{ icon: IconRender; label: string }>[];
+  readonly footerIcon: IconRender;
+  readonly footer: string;
+}
+
+const modeInfo: Readonly<Record<ProgramKind, ModeInfo>> = {
+  SIMPLE: {
+    icon: icon(Rocket), subtitle: "Минимум настроек для быстрого начала", badge: "Быстрый старт",
+    cells: [{ icon: icon(CalendarDays, 16), label: "Тренировки и недели" }, { icon: icon(FileText, 16), label: "Шаблоны" },
+      { icon: icon(SlidersHorizontal, 16), label: "Минимум настроек" }, { icon: icon(CircleMinus, 16), label: "Без циклов" }],
+    footerIcon: icon(Zap, 16), footer: "Один клиент, план недели повторяется",
+  },
+  PERIODIZED: {
+    icon: icon(TrendingUp), subtitle: "Планирование и контроль прогресса", badge: "Периодизация",
+    cells: [{ icon: icon(LayoutGrid, 16), label: "Мезоциклы и блоки" }, { icon: icon(RefreshCw, 16), label: "Смена циклов" },
+      { icon: icon(Users, 16), label: "Несколько клиентов" }, { icon: icon(ChartColumnIncreasing, 16), label: "Контроль прогресса" }],
+    footerIcon: icon(Clock, 16), footer: "Для долгих программ с циклами",
+  },
 };
 
 /** §48.4: выбор конструктора — отдельный шаг; список существующих программ здесь не повторяется. */
@@ -25,33 +47,48 @@ function ProgramModeChooser({ onChoose }: Readonly<{ onChoose: (kind: ProgramKin
   const colors = palette.tokens;
   return (
     <View style={styles.modes}>
-      {(["SIMPLE", "PERIODIZED"] as const).map((kind) => (
-        <Pressable key={kind} accessibilityRole="button"
-          accessibilityLabel={`${programKindLabels[kind]} программа. ${modePoints[kind].join(". ")}`}
-          onPress={() => onChoose(kind)}
-          style={({ pressed }) => [styles.card, styles.mode, { borderColor: colors.border,
-            backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
-          <View style={[styles.modeIcon, { backgroundColor: colors.surfaceRaised }]}>
-            {kind === "SIMPLE" ? <Rocket size={22} color={colors.accentInk} strokeWidth={1.8} />
-              : <TrendingUp size={22} color={colors.accentInk} strokeWidth={1.8} />}
-          </View>
-          <View style={styles.grow}>
-            <Text style={[styles.title, { color: colors.textPrimary }]}>{`${programKindLabels[kind]} программа`}</Text>
-            {modePoints[kind].map((point) => (
-              <View key={point} style={styles.point}>
-                <View style={[styles.bullet, { backgroundColor: colors.textMuted }]} />
-                <Text style={[styles.meta, { color: colors.textSecondary }]}>{point}</Text>
+      {(["SIMPLE", "PERIODIZED"] as const).map((kind) => {
+        const info = modeInfo[kind];
+        const title = `${programKindLabels[kind]} программа`;
+        return (
+          <Pressable key={kind} accessibilityRole="button"
+            accessibilityLabel={`${title}. ${info.subtitle}. ${info.cells.map((cell) => cell.label).join(", ")}. ${info.footer}`}
+            onPress={() => onChoose(kind)}
+            style={({ pressed }) => [styles.mode, { borderColor: colors.border,
+              backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
+            <View style={styles.modeHead}>
+              <View style={[styles.modeIcon, { backgroundColor: colors.surfaceRaised }]}>{info.icon(colors.accentInk)}</View>
+              <View style={styles.grow}>
+                <Text style={[styles.modeTitle, { color: colors.textPrimary }]}>{title}</Text>
+                <Text style={[styles.small, { color: colors.textSecondary }]}>{info.subtitle}</Text>
+                <View style={[styles.badge, { borderColor: colors.accentInk }]}>
+                  <Text style={[styles.badgeText, { color: colors.accentInk }]}>{info.badge}</Text>
+                </View>
               </View>
-            ))}
-          </View>
-          <View style={styles.chevron}><ChevronRight size={20} color={colors.textMuted} strokeWidth={1.8} /></View>
-        </Pressable>
-      ))}
+            </View>
+            <View style={styles.cells}>
+              {info.cells.map((cell) => (
+                <View key={cell.label} style={[styles.cell, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+                  <View style={[styles.cellIcon, { backgroundColor: colors.surfaceRaised }]}>{cell.icon(colors.accentInk)}</View>
+                  <Text style={[styles.cellText, { color: colors.textPrimary }]}>{cell.label}</Text>
+                </View>
+              ))}
+            </View>
+            <View style={[styles.modeFooter, { borderTopColor: colors.border }]}>
+              {info.footerIcon(colors.accentInk)}
+              <Text style={[styles.small, styles.grow, { color: colors.textSecondary }]}>{info.footer}</Text>
+            </View>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
-/** Отдельный экран выбора конструктора (из «+ Создать программу»): два конструктора и «Дополнительно». */
+/**
+ * Отдельный экран выбора конструктора (из «+ Создать программу»): два конструктора и «Дополнительно».
+ * Плотная вёрстка — всё помещается на один экран телефона (просьба владельца 2026-10-18).
+ */
 export function ProgramModeChooserScreen({ onChoose, onOpenTemplates }: Readonly<{
   onChoose: (kind: ProgramKind) => void;
   /** §48.16: программа из шаблона. */
@@ -60,13 +97,13 @@ export function ProgramModeChooserScreen({ onChoose, onOpenTemplates }: Readonly
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
-    <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={[styles.content, styles.chooser]}>
+    <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.chooser}>
       <ProgramModeChooser onChoose={onChoose} />
-      {onOpenTemplates !== undefined ? <>
-        <ListSectionHeader title="Дополнительно" />
-        <FeatureRow title="Создать из шаблона" detail="Готовые варианты программ"
-          icon={(color) => <FileText size={20} color={color} strokeWidth={1.8} />} onPress={onOpenTemplates} />
-      </> : null}
+      <ListSectionHeader title="Дополнительно" />
+      {onOpenTemplates !== undefined ? <FeatureRow title="Создать из шаблона" detail="Готовые варианты программ"
+        icon={icon(FileText, 18)} onPress={onOpenTemplates} /> : null}
+      {/* Импорт исключён из V1 (UI-OWN-024); владелец оставил место под будущую функцию — строка неактивна. */}
+      <FeatureRow title="Импортировать из Excel" detail="Будет в следующих версиях" icon={icon(FileSpreadsheet, 18)} soon />
     </ScrollView>
   );
 }
@@ -94,21 +131,25 @@ function ProgramCardRow({ card, selected, onPress, onRestore }: Readonly<{
   );
 }
 
-function FeatureRow({ icon, title, detail, onPress }: Readonly<{
-  icon: (color: string) => ReactNode; title: string; detail: string; onPress: () => void;
+/** Строка раздела «Дополнительно»; `soon` — будущая функция: неактивна, с плашкой «Скоро». */
+function FeatureRow({ icon: renderIcon, title, detail, onPress, soon = false }: Readonly<{
+  icon: IconRender; title: string; detail: string; onPress?: () => void; soon?: boolean;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${title}. ${detail}`} onPress={onPress}
+    <Pressable accessibilityRole="button" accessibilityLabel={`${title}. ${detail}`} accessibilityState={{ disabled: soon }}
+      disabled={soon} onPress={onPress}
       style={({ pressed }) => [styles.card, styles.feature, { borderColor: colors.border,
         backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
-      <View style={[styles.featureIcon, { backgroundColor: colors.surfaceRaised }]}>{icon(colors.accentInk)}</View>
+      <View style={[styles.featureIcon, { backgroundColor: colors.surfaceRaised }]}>{renderIcon(soon ? colors.textMuted : colors.accentInk)}</View>
       <View style={styles.grow}>
-        <Text style={[styles.featureTitle, { color: colors.textPrimary }]}>{title}</Text>
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>{detail}</Text>
+        <Text style={[styles.featureTitle, { color: soon ? colors.textSecondary : colors.textPrimary }]}>{title}</Text>
+        <Text style={[styles.small, { color: colors.textSecondary }]}>{detail}</Text>
       </View>
-      <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.8} />
+      {soon ? <View style={[styles.badge, { borderColor: colors.border }]}>
+        <Text style={[styles.badgeText, { color: colors.textSecondary }]}>Скоро</Text>
+      </View> : <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.8} />}
     </Pressable>
   );
 }
@@ -202,17 +243,25 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 10 },
   withFab: { paddingBottom: 96 },
   body: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
-  chooser: { paddingBottom: 96 },
-  feature: { flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: 12, paddingRight: 10, paddingVertical: 10, minHeight: 60 },
-  featureIcon: { width: 40, height: 40, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  featureTitle: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
-  modes: { gap: 10, marginTop: 6 },
+  chooser: { padding: 12, gap: 8, paddingBottom: 96 },
+  small: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  feature: { flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: 10, paddingRight: 10, paddingVertical: 6, minHeight: 52 },
+  featureIcon: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  featureTitle: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
+  modes: { gap: 8 },
   card: { borderWidth: 1, borderRadius: 12 },
-  mode: { flexDirection: "row", alignItems: "flex-start", gap: 12, padding: 14 },
-  chevron: { alignSelf: "center" },
-  point: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
-  bullet: { width: 4, height: 4, borderRadius: 2, marginTop: 7 },
-  modeIcon: { width: 44, height: 44, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  mode: { borderWidth: 1, borderRadius: 14, padding: 10, gap: 8 },
+  modeHead: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  modeTitle: { fontFamily: fonts.semibold, fontSize: 16, lineHeight: 20 },
+  badge: { alignSelf: "flex-start", borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 1, marginTop: 3 },
+  badgeText: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
+  cells: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  cell: { flexBasis: "47%", flexGrow: 1, flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: 10,
+    padding: 6, minHeight: 42 },
+  cellIcon: { width: 26, height: 26, borderRadius: 6, alignItems: "center", justifyContent: "center" },
+  cellText: { flex: 1, fontFamily: fonts.semibold, fontSize: 12, lineHeight: 15 },
+  modeFooter: { flexDirection: "row", alignItems: "center", gap: 8, borderTopWidth: 1, paddingTop: 8 },
+  modeIcon: { width: 36, height: 36, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   program: { flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: 14, paddingRight: 10, paddingVertical: 12, minHeight: 64 },
   grow: { flex: 1, minWidth: 0, gap: 2 },
   title: { fontFamily: fonts.semibold, fontSize: 16, lineHeight: 21 },
