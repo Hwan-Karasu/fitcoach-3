@@ -15,6 +15,7 @@ import type { RestTimerStorePort } from "../domain/RestTimerPorts.ts";
 import type { RestTimer } from "../domain/RestTimerRules.ts";
 import { DEV_TRAINING_EXECUTION_LEDGER, devTrainingExecutionCatalog } from "./DevTrainingExecutionCatalog.ts";
 import type { WeekExecutionParticipant, WorkoutCopyMapping } from "../domain/WeekCopyParticipant.ts";
+import type { WeekRenumberParticipant } from "../domain/WeekRenumberParticipant.ts";
 
 const OUTCOMES: readonly WorkoutOutcome[] = ["COMPLETED", "MISSED", "CANCELLED"];
 
@@ -536,6 +537,21 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       }
     }
   }
+
+  /** §48.21 п. 6: выполнения переставленных недель получают новый номер недели — те же факты, без копий. */
+  readonly weekRenumberParticipant: WeekRenumberParticipant<SqliteStatementPort> = {
+    renumber: async (tx, input, now) => {
+      for (const [ids, from, to] of [[input.toSecond, input.first, input.second], [input.toFirst, input.second, input.first]] as const) {
+        if (ids.length === 0) continue;
+        // Ревизия растёт: открытый дневник с прежним номером недели получит конфликт, а не запишет в чужую неделю.
+        await tx.run(`UPDATE dev_training_sessions SET week_index = ?, revision = revision + 1, updated_at = ?
+          WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND week_index = ?
+            AND planned_workout_id IN (${ids.map(() => "?").join(", ")})`,
+        [to, now.toISOString(), this.workspaceId, input.clientId, input.programId, from, ...ids]);
+      }
+    },
+    notify: (clientId, programId) => this.publish({ clientId, programId }),
+  };
 
   readonly weekCopyParticipant: WeekExecutionParticipant<SqliteStatementPort> = {
     read: async (tx, slots) => {

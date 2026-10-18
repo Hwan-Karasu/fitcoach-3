@@ -256,4 +256,17 @@ export const devTrainingExecutionCatalog: readonly MigrationStep[] = [{
       FOREIGN KEY (session_id, workspace_id) REFERENCES dev_training_sessions(id, workspace_id) ON DELETE RESTRICT
     )`,
   ],
+}, {
+  version: 7,
+  checksum: "t04-dev-training-execution-v7-week-number-is-position-20261018",
+  statements: [
+    // §48.21 п. 6: номер недели — её позиция. Перестановка недель меняет его у выполнений вместе с тренировкой;
+    // клиент, программа и плановая тренировка выполнения по-прежнему неизменны.
+    `DROP TRIGGER dev_training_sessions_slot_fixed`,
+    `CREATE TRIGGER dev_training_sessions_slot_fixed BEFORE UPDATE OF client_id, program_id, planned_workout_id
+        ON dev_training_sessions
+      WHEN NEW.client_id IS NOT OLD.client_id OR NEW.program_id IS NOT OLD.program_id
+        OR NEW.planned_workout_id IS NOT OLD.planned_workout_id
+      BEGIN SELECT RAISE(ABORT, 'WRONG_CLIENT_SCOPE'); END`,
+  ],
 }];

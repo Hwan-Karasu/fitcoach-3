@@ -24,6 +24,7 @@ import { simpleWorkoutDraftKey, type SimpleWorkoutDraft, type SimpleWorkoutEdit 
 import { assertSimpleIdentities, preserveSimple, readSimpleHistory, readSimpleWeeks, writeSimpleOverride } from "./SimpleWeekStore.ts";
 import { independentWeeks, weekRowCount, type CopyMesocycleInput } from "../domain/PlanCopy.ts";
 import type { WeekPlansParticipant, WeekCopyRequest } from "../domain/WeekCopy.ts";
+import type { WeekSwapPlansParticipant } from "../domain/WeekSwap.ts";
 
 /** Ключ черновика ещё не созданной Простой программы (§48.29 п. 4: черновик привязан к объекту правки). */
 export const NEW_SIMPLE_DRAFT_KEY = "new:SIMPLE";
@@ -571,6 +572,33 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     if (!cycle || !source || !target || source.id === target.id) throw new Error("TARGET_NOT_FOUND");
     return { cycle, source, target };
   }
+
+  /** §48.21 п. 5: две недели меняются позициями; прежняя структура — в истории мезоцикла (§48.21 п. 8). */
+  readonly weekSwapParticipant: WeekSwapPlansParticipant<SqliteStatementPort> = {
+    swap: async (tx, request, now) => {
+      const { clientId, programId, mesocycleId, first, second, expectedRevision } = request;
+      if (first === second) throw new Error("DRAFT_INVALID");
+      await this.assertTargets(tx, clientId, programId, [clientId]);
+      if ((await programById(tx, this.workspaceId, programId)).revision !== expectedRevision) throw new Error("PROGRAM_REVISION_CONFLICT");
+      const cycle = (await readMesocycles(tx, this.workspaceId, programId, clientId)).find((item) => item.id === mesocycleId);
+      const a = cycle?.weeks.find((week) => week.index === first);
+      const b = cycle?.weeks.find((week) => week.index === second);
+      if (!cycle || !a || !b) throw new Error("TARGET_NOT_FOUND");
+      await this.bumpRevision(tx, programId, expectedRevision, now);
+      await preserveMesocycle(tx, this.workspaceId, clientId, programId, cycle, now);
+      // UNIQUE(мезоцикл, позиция) проверяется построчно: одна неделя сначала уходит на свободную позицию.
+      const used = new Set(cycle.weeks.map((week) => week.index - 1));
+      const free = Array.from({ length: MESOCYCLE_WEEKS_MAX }, (_, index) => index).find((position) => !used.has(position));
+      if (free === undefined) throw new Error("WEEK_SWAP_NO_SLOT");
+      const move = (id: string, position: number) => tx.run("UPDATE dev_training_weeks SET position = ? WHERE workspace_id = ? AND id = ?",
+        [position, this.workspaceId, id]);
+      await move(a.id, free);
+      await move(b.id, first - 1);
+      await move(a.id, second - 1);
+      return { toSecond: a.workouts.map((workout) => workout.id), toFirst: b.workouts.map((workout) => workout.id) };
+    },
+    notify: (clientId) => this.publish({ clientIds: [clientId] }),
+  };
 
   readonly weekCopyParticipant: WeekPlansParticipant<SqliteStatementPort> = {
     read: async (tx, request) => this.weekCopyContext(tx, request),

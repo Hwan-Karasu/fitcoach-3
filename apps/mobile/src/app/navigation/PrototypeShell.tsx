@@ -145,7 +145,7 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
             onOpenWorkout={(slot) => navigation.push("ClientWorkspace", { clientId: slot.clientId, screen: "Training",
               params: { screen: "TrainingWorkout", params: { programId: slot.programId, weekIndex: slot.weekIndex,
                 workoutId: slot.plannedWorkoutId } } })}
-            exercises={services.exercises} exerciseLookup={services.exerciseLookup} weekCopy={services.weekCopy}
+            exercises={services.exercises} exerciseLookup={services.exerciseLookup} weekCopy={services.weekCopy} weekSwap={services.weekSwap}
             onOpenEdit={(clientId) => navigation.navigate("ClientEditorDev", { clientId })}
             onOpenAccounting={(clientId) => navigation.navigate("ClientAccounting", { clientId })}
             onOpenMeasurements={(clientId) => navigation.navigate("ClientMeasurements", { clientId })}

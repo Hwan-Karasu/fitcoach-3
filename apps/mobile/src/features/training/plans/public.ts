@@ -16,4 +16,5 @@ export { INSTRUCTION_MAX, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC } from ".
 export type { ClientProgramLibrary, CreateProgramInput, ProgramCard, ProgramKind,
   TrainingProgram } from "./domain/ProgramModel.ts";
 export type { TrainingPlansCommittedChange, TrainingPlansRepositoryPort, WorkoutWeekNavigation } from "./domain/TrainingPlansRepositoryPort.ts";
+export type { WeekSwapPlansParticipant, WeekSwapPort, WeekSwapRequest } from "./domain/WeekSwap.ts";
 export type { WeekCopyRequest, WeekCopyMode, WeekCopyPort, WeekCopyPreview, WeekPlansParticipant } from "./domain/WeekCopy.ts";

@@ -14,6 +14,8 @@ import type { PlannedWorkout, SimplePlan } from "../domain/SimplePlanModel.ts";
 import type { SimpleWeek } from "../domain/SimpleWorkoutEdit.ts";
 import type { WeekCopyPort, WeekCopyRequest } from "../domain/WeekCopy.ts";
 import { WeekCopyFlow } from "./WeekCopyFlow.tsx";
+import type { WeekSwapPort } from "../domain/WeekSwap.ts";
+import { WeekSwapPanel } from "./WeekSwapPanel.tsx";
 import { weekTypeLabels, type PeriodizedPlan } from "../domain/PeriodizedModel.ts";
 import { setsSummary } from "../domain/SimplePlanRules.ts";
 import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
@@ -35,7 +37,7 @@ export interface ProgramWeeksView {
  * и «Изменить неделю» (T04).
  */
 export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, onEditStructure,
-  onAddMesocycle, onEditWeek, onArchived, requestedWeek, requestedMesocycle, weekCopy }: Readonly<{
+  onAddMesocycle, onEditWeek, onArchived, requestedWeek, requestedMesocycle, weekCopy, weekSwap }: Readonly<{
   clientId: string;
   programId: string;
   repository: TrainingPlansRepositoryPort;
@@ -53,6 +55,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   requestedWeek?: number;
   /** Копирование недели мезоцикла (§48.21); без порта кнопки нет. */
   weekCopy?: WeekCopyPort;
+  /** Перестановка недель мезоцикла (§48.21 п. 5); без порта пункта меню нет. */
+  weekSwap?: WeekSwapPort;
   requestedMesocycle?: string;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -64,6 +68,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [swapping, setSwapping] = useState(false);
   const [copyRequest, setCopyRequest] = useState<Omit<WeekCopyRequest, "sourceWeek"> | null>(null);
   const [version, setVersion] = useState(0);
   const [plan, setPlan] = useState<SimplePlan | null>(null);
@@ -183,9 +188,12 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       </View><AppIconButton label="Действия программы" buttonRef={menuAnchor}
         icon={<Ellipsis size={24} color={colors.textPrimary} />} onPress={() => setMenuOpen(true)} /></View>
       <DropdownMenu visible={menuOpen} anchor={menuAnchor} title="Программа" selected=""
-        options={[{ value: "rename", label: "Переименовать" }, { value: "archive", label: "В архив" }]}
+        options={[{ value: "rename", label: "Переименовать" },
+          ...(weekSwap !== undefined && program.kind === "PERIODIZED" ? [{ value: "swap", label: "Поменять недели местами" }] : []),
+          { value: "archive", label: "В архив" }]}
         onClose={() => setMenuOpen(false)} onSelect={(value) => {
           if (value === "rename") setRenaming(program.title); else if (value === "archive") setConfirmArchive(true);
+          else if (value === "swap") { setNotice(null); setMessage(null); setSwapping(true); }
         }} />
       {message !== null ? <InlineNotice kind="error">{message}</InlineNotice> : null}
       {notice !== null ? <InlineNotice kind="success">{notice}</InlineNotice> : null}
@@ -217,7 +225,26 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       </> : periodized === null ? <LoadingState label="Открываем мезоциклы…" /> : (() => {
         const selected = periodized.mesocycles.find((item) => item.id === periodized.selectedMesocycleId) ?? periodized.mesocycles[0];
         return <>
-          {selected === undefined ? (
+          {swapping && weekSwap !== undefined && selected !== undefined ? <WeekSwapPanel scrollRef={scrollRef}
+            weeks={selected.weeks.map((week) => ({ id: week.id, index: week.index, caption: weekTypeLabels[week.type],
+              workouts: week.workouts.length }))}
+            onDone={() => setSwapping(false)}
+            onSwap={async (first, second) => {
+              setMessage(null);
+              try {
+                await weekSwap.swap({ clientId, programId, mesocycleId: selected.id, first, second,
+                  expectedRevision: periodized.program.revision });
+                setNotice(`Недели ${first} и ${second} поменялись местами.`);
+                return true;
+              } catch (error) {
+                const code = error instanceof Error ? error.message : "";
+                setMessage(code === "PROGRAM_REVISION_CONFLICT" ? "Программа изменилась — показан новый порядок, повторите."
+                  : code === "WEEK_SWAP_NO_SLOT" ? "В мезоцикле 52 недели — перестановка недоступна."
+                    : "Не удалось поменять недели местами. Порядок прежний.");
+                setVersion((value) => value + 1);
+                return false;
+              }
+            }} /> : selected === undefined ? (
             <InlineNotice kind="info">Мезоциклов пока нет. Создайте первый: план первой недели скопируется во все недели.</InlineNotice>
           ) : renderWeeks?.({ key: selected.id, selectedWeek: weeksByCycle[selected.id],
             onSelectWeek: (week) => selectWeek(selected.id, week),
