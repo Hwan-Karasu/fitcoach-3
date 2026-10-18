@@ -174,6 +174,19 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
     return fact;
   }), [enqueue, execution, stableSlot]);
 
+  /** §48.84: фактическая дата проведения — та же тренировка, без второго выполнения. */
+  const setActualDate = useCallback((date: string) => enqueue(async () => {
+    const revision = stateRef.current?.session?.revision;
+    if (revision === undefined) return null;
+    const session = await execution.setActualDate(stableSlot, date, revision);
+    setState((current) => {
+      const next = { session, facts: current?.facts ?? new Map() };
+      stateRef.current = next;
+      return next;
+    });
+    return session;
+  }), [enqueue, execution, stableSlot]);
+
   const setOutcome = useCallback((outcome: WorkoutOutcome | null) => enqueue(async () => {
     const session = await execution.setOutcome(stableSlot, outcome, stateRef.current?.session?.revision ?? null);
     setState((current) => {
@@ -188,7 +201,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   return {
     workout, state, previous, mode, message,
     status: workoutStatus(state?.session?.outcome ?? null, started),
-    saveSet, toggleSet, setOutcome, addWarmup, removeWarmup,
+    saveSet, toggleSet, setOutcome, addWarmup, removeWarmup, setActualDate,
     dismissMessage: () => setMessage(null),
   };
 }

@@ -4,8 +4,8 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useKeepAwake } from "expo-keep-awake";
 import { usePreventRemove, useNavigation } from "@react-navigation/native";
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { Check, Plus, Timer, X } from "lucide-react-native";
-import { ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, StatusTag,
+import { CalendarDays, Check, Plus, Timer, X } from "lucide-react-native";
+import { ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, StatusTag,
   type StatusKind } from "../../../../shared/ui/components/public.ts";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -14,7 +14,7 @@ import { formatDuration, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerci
   type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort } from "../../plans/public.ts";
 import { DROPS_MAX, EMPTY_VALUES, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
-import { displayOrder, nextOutcome, type SetField } from "../domain/ExecutionRules.ts";
+import { displayOrder, localDateOf, nextOutcome, type SetField } from "../domain/ExecutionRules.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
 import { RpeSheet, SetTypeSheet } from "./SetPickers.tsx";
@@ -316,9 +316,25 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         keyboardShouldPersistTaps="handled" bottomOffset={24}>
         <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>{workout.title}</Text>
         <View style={styles.metaRow}>
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>
-            {`Неделя ${slot.weekIndex}${state.session !== null ? ` · ${shortDate(state.session.actualDate)}` : ""}`}
-          </Text>
+          <View style={styles.dateRow}>
+            <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Неделя ${slot.weekIndex}`}</Text>
+            {state.session !== null ? (
+              // §48.84: дата проведения — по умолчанию день первого ввода, можно указать прошедший день.
+              <Pressable accessibilityRole="button" hitSlop={8}
+                accessibilityLabel={`Дата тренировки ${shortDate(state.session.actualDate)}. Изменить`}
+                onPress={() => {
+                  const current = state.session?.actualDate;
+                  if (current === undefined) return;
+                  void pickDate({ value: current, max: localDateOf(new Date()) }).then((date) => {
+                    if (date !== null && date !== current) void diary.setActualDate(date);
+                  });
+                }}
+                style={[styles.dateButton, { borderColor: colors.border }]}>
+                <CalendarDays size={15} color={colors.accentInk} strokeWidth={2} />
+                <Text style={[styles.dateText, { color: colors.accentInk }]}>{shortDate(state.session.actualDate)}</Text>
+              </Pressable>
+            ) : null}
+          </View>
           <StatusTag kind={statusKinds[diary.status]} label={workoutStatusLabels[diary.status]} />
         </View>
         {diary.message !== null ? <InlineNotice kind="error">{diary.message}</InlineNotice> : null}
@@ -435,6 +451,10 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12, paddingBottom: 200 },
   heading: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 26 },
   metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  dateRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  dateButton: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 32, borderWidth: 1, borderRadius: 8,
+    paddingHorizontal: 8 },
+  dateText: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18 },
   meta: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   card: { borderWidth: 1, borderRadius: 12, padding: 8, gap: 4 },
   cardHead: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 2, paddingHorizontal: 2 },
