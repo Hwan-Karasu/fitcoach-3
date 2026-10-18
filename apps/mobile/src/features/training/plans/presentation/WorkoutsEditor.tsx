@@ -3,7 +3,7 @@ import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-nativ
 import type Animated from "react-native-reanimated";
 import type { AnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
-import { ArrowLeftRight, ArrowUpDown, Dumbbell, GripVertical, Link2, Unlink, Plus, X } from "lucide-react-native";
+import { ArrowLeftRight, ArrowUpDown, Check, Dumbbell, GripVertical, Link2, Plus, X } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
@@ -13,7 +13,7 @@ import { addWorkout, fillSets, removeExercise, removeWorkout, renameWorkout, reo
 import { INSTRUCTION_MAX, type PlannedExercise, type PlannedWorkout, type SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
 import { formatDuration, formatRange, parseDuration, parseRange, sanitizeRange, setFieldsOf, type PlanIssue } from
   "../domain/SimplePlanRules.ts";
-import { joinPreviousSuperset, leaveSuperset, supersetNumber } from "../domain/SupersetRules.ts";
+import { applySupersetPress, IDLE_SUPERSET_PICK, pressSuperset, supersetNumber, type SupersetPick } from "../domain/SupersetRules.ts";
 
 let counter = 0;
 /** Новый стабильный ID строки структуры (тренировка, упражнение, подход). */
@@ -77,10 +77,12 @@ function shared(values: readonly string[]): Readonly<{ value: string; placeholde
  * «⇄» — заменить из каталога, «×» — убрать из тренировки. Вес и отдых в конструкторе не задаются: вес —
  * результат дневника, отдых — в самой тренировке (решение владельца 2026-10-18).
  */
-function ExerciseCard({ item, workout, info, broken, draft, change, onReplace }: Readonly<{
+function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, setState, onSet }: Readonly<{
   item: PlannedExercise; info: ExerciseInfo | null; broken: boolean; draft: SimpleProgramDraft;
   workout: PlannedWorkout;
   change: (next: SimpleProgramDraft) => void; onReplace: () => void;
+  /** Кнопка «Сет» (UI-OWN-028): выбрано / можно собрать / обычное состояние. */
+  setState: "idle" | "picked" | "ready"; onSet: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -90,8 +92,6 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace }:
   const [showInstruction, setShowInstruction] = useState(item.instruction !== null);
   const refs = useRef<(TextInput | null)[]>([]);
   const group = supersetNumber(workout, item);
-  const previous = workout.exercises[workout.exercises.findIndex((exercise) => exercise.id === item.id) - 1];
-  const canJoin = previous !== undefined && (!item.supersetId || item.supersetId !== previous.supersetId);
   const inputs: Readonly<{ key: string; label: string; kind: FieldKind; value: string; placeholder: string;
     commit: (text: string) => boolean }>[] = [
     { key: "count", label: "Подходов", kind: "count", value: String(item.sets.length), placeholder: "3",
@@ -130,41 +130,52 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace }:
         return true;
       } }] : []),
   ];
+  const name = info?.name ?? "упражнение";
+  const active = setState !== "idle";
   return (
-    <View style={[styles.exerciseRow, { borderTopColor: colors.border }]}>
-      <Sortable.Handle>
-        <View accessible accessibilityLabel={`Перетащить: ${info?.name ?? "упражнение"}`} style={styles.handle}>
-          <GripVertical size={18} color={colors.textMuted} strokeWidth={1.8} />
-        </View>
-      </Sortable.Handle>
-      <View style={styles.grow}>
-        <View style={styles.exerciseHead}>
-          <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>
-            {info?.thumbnail != null ? <Image source={info.thumbnail} style={styles.thumbImage} />
-              : <Dumbbell size={16} color={colors.accentInk} strokeWidth={1.8} />}
+    // Каждое упражнение — своя карточка (как в 2.0); участники суперсета — с акцентной полосой слева.
+    <View style={[styles.exerciseRow, { borderColor: colors.border, backgroundColor: colors.surface },
+      group !== null ? { borderLeftColor: colors.accentInk, borderLeftWidth: 4 } : null]}>
+      {/* Название и действия — на фоне карточки; поля ввода ниже — отдельной полосой другого тона (UI-OWN-028). */}
+      <View style={styles.exerciseHead}>
+        <Sortable.Handle>
+          <View accessible accessibilityLabel={`Перетащить: ${name}`} style={styles.handle}>
+            <GripVertical size={16} color={colors.textMuted} strokeWidth={1.8} />
           </View>
-          <Text numberOfLines={2} style={[styles.exerciseName, styles.grow, { color: broken ? colors.danger : colors.textPrimary }]}>
+        </Sortable.Handle>
+        <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>
+          {info?.thumbnail != null ? <Image source={info.thumbnail} style={styles.thumbImage} />
+            : <Dumbbell size={14} color={colors.accentInk} strokeWidth={1.8} />}
+        </View>
+        <View style={styles.grow}>
+          <Text numberOfLines={2} style={[styles.exerciseName, { color: broken ? colors.danger : colors.textPrimary }]}>
             {info?.name ?? "Упражнение не найдено в каталоге"}
           </Text>
-          <AppIconButton compact label={`Заменить: ${info?.name ?? "упражнение"}`}
-            icon={<ArrowLeftRight size={18} color={colors.textSecondary} strokeWidth={1.8} />} onPress={onReplace} />
-          <AppIconButton compact label={`Убрать из тренировки: ${info?.name ?? "упражнение"}`}
-            icon={<X size={20} color={colors.danger} strokeWidth={2} />} onPress={() => change(removeExercise(draft, item.id))} />
+          {group !== null ? <Text style={[styles.supersetTag, { color: colors.accentInk }]}>{`Суперсет ${group}`}</Text> : null}
         </View>
-        {group !== null || canJoin ? <View style={styles.groupActions}>
-          {group !== null ? <AppButton compact variant="ghost" label={`Суперсет ${group} · исключить`}
-            icon={(color) => <Unlink size={16} color={color} />}
-            onPress={() => change(leaveSuperset(draft, workout.id, item.id))} /> : null}
-          {canJoin ? <AppButton compact variant="ghost" label="В суперсет с предыдущим"
-            icon={(color) => <Link2 size={16} color={color} />}
-            onPress={() => change(joinPreviousSuperset(draft, workout.id, item.id))} /> : null}
-        </View> : null}
+        <AppIconButton compact label={`Заменить: ${name}`}
+          icon={<ArrowLeftRight size={17} color={colors.textSecondary} strokeWidth={1.8} />} onPress={onReplace} />
+        <AppIconButton compact label={`Убрать из тренировки: ${name}`}
+          icon={<X size={19} color={colors.danger} strokeWidth={2} />} onPress={() => change(removeExercise(draft, item.id))} />
+      </View>
+      <View style={[styles.exerciseBody, { backgroundColor: colors.surfaceRaised, borderTopColor: colors.border }]}>
         <View style={styles.fields}>
           {inputs.map((input, index) => (
             <InlineField key={input.key} ref={(node) => { refs.current[index] = node; }} label={input.label} kind={input.kind}
               value={input.value} placeholder={input.placeholder} last={index === inputs.length - 1}
               onNext={() => refs.current[index + 1]?.focus()} onCommit={input.commit} />
           ))}
+          <View style={styles.setCell}>
+            <Text numberOfLines={1} style={[styles.fieldLabel, { color: colors.textMuted }]}>Сет</Text>
+            <Pressable accessibilityRole="button" accessibilityState={{ selected: active }}
+              accessibilityLabel={setState === "ready" ? "Собрать сет" : group !== null ? `Сет: ${name}, в суперсете ${group}` : `Сет: ${name}`}
+              onPress={onSet} hitSlop={6}
+              style={({ pressed }) => [styles.setButton, { borderColor: active || group !== null ? colors.accentInk : colors.border,
+                backgroundColor: active ? colors.accentFill : pressed ? colors.surface : colors.input }]}>
+              {setState === "ready" ? <Check size={18} color={colors.onAccentFill} strokeWidth={2.2} />
+                : <Link2 size={18} color={active ? colors.onAccentFill : group !== null ? colors.accentInk : colors.textSecondary} strokeWidth={2} />}
+            </Pressable>
+          </View>
         </View>
         {showInstruction ? (
           <TextInput defaultValue={item.instruction ?? ""} multiline maxLength={INSTRUCTION_MAX} accessibilityLabel="Указание к упражнению"
@@ -173,8 +184,8 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace }:
             onBlur={() => { if (item.instruction === null) setShowInstruction(false); }}
             style={[styles.instruction, { color: colors.textPrimary, backgroundColor: colors.input, borderColor: colors.border }]} />
         ) : (
-          <Pressable accessibilityRole="button" hitSlop={6} onPress={() => setShowInstruction(true)} style={styles.instructionAdd}>
-            <Plus size={14} color={colors.textSecondary} strokeWidth={2} />
+          <Pressable accessibilityRole="button" hitSlop={8} onPress={() => setShowInstruction(true)} style={styles.instructionAdd}>
+            <Plus size={13} color={colors.textSecondary} strokeWidth={2} />
             <Text style={[styles.instructionAddText, { color: colors.textSecondary }]}>Указание</Text>
           </Pressable>
         )}
@@ -203,6 +214,25 @@ export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scro
   const colors = palette.tokens;
   const [removing, setRemoving] = useState<string | null>(null);
   const [ordering, setOrdering] = useState(false);
+  const [pick, setPick] = useState<SupersetPick>(IDLE_SUPERSET_PICK);
+  const [dissolving, setDissolving] = useState<Readonly<{ workoutId: string; groupId: string }> | null>(null);
+  const pressSet = (workout: PlannedWorkout, exerciseId: string) => {
+    const result = pressSuperset(pick, workout, exerciseId);
+    setPick(result.pick);
+    if (result.action.type === "dissolve") setDissolving({ workoutId: workout.id, groupId: result.action.groupId });
+    else if (result.action.type !== "none") change(applySupersetPress(draft, workout.id, result.action));
+  };
+  const setStateOf = (workoutId: string, exerciseId: string): "idle" | "picked" | "ready" => {
+    if (pick.mode === "picking" && pick.workoutId === workoutId && pick.ids.includes(exerciseId)) {
+      return pick.ids.length >= 2 && pick.ids[pick.ids.length - 1] === exerciseId ? "ready" : "picked";
+    }
+    return pick.mode === "leaving" && pick.workoutId === workoutId && pick.id === exerciseId ? "picked" : "idle";
+  };
+  const hintOf = (workoutId: string): string | null => {
+    if (pick.mode === "leaving" && pick.workoutId === workoutId) return "Ещё раз «Сет» — вынуть из сета. На другом упражнении сета — расформировать.";
+    if (pick.mode !== "picking" || pick.workoutId !== workoutId) return null;
+    return pick.ids.length < 2 ? "Теперь «Сет» на соседнем упражнении." : "Ещё раз «Сет» на последнем — собрать сет. Или добавьте соседнее.";
+  };
 
   if (ordering) {
     return <>
@@ -247,15 +277,21 @@ export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scro
             </Pressable>
           ) : null}
         </View>
+        {hintOf(workout.id) !== null ? (
+          <Text accessibilityLiveRegion="polite" style={[styles.setHint, { color: colors.accentInk }]}>{hintOf(workout.id)}</Text>
+        ) : null}
         {workout.exercises.length > 0 ? (
-          <Sortable.Grid data={[...workout.exercises]} keyExtractor={(item) => item.id} columns={1} rowGap={0} customHandle
+          <View style={styles.exercises}>
+          <Sortable.Grid data={[...workout.exercises]} keyExtractor={(item) => item.id} columns={1} rowGap={8} customHandle
             scrollableRef={scrollRef} activeItemScale={1.03}
             renderItem={({ item }: Readonly<{ item: PlannedExercise }>) => (
               <ExerciseCard item={item} workout={workout} info={lookup.get(item.exerciseId) ?? null} draft={draft} change={change}
                 broken={showIssues && issues.some((issue) => issue.exerciseId === item.id)}
-                onReplace={() => onReplaceExercise(workout.id, item.id)} />
+                onReplace={() => onReplaceExercise(workout.id, item.id)}
+                setState={setStateOf(workout.id, item.id)} onSet={() => pressSet(workout, item.id)} />
             )}
             onDragEnd={({ data }) => change(reorderExercises(draft, workout.id, data.map((item) => item.id)))} />
+          </View>
         ) : null}
         <View style={styles.addExercise}>
           <AppButton variant="secondary" label="Добавить упражнение" accessibilityLabel={`Добавить упражнение в ${workout.title}`}
@@ -269,6 +305,13 @@ export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scro
       description="Тренировка и её упражнения уйдут из плана. Сохранение — кнопкой внизу; до него можно выйти без изменений."
       confirmLabel="Удалить" onCancel={() => setRemoving(null)}
       onConfirm={() => { if (removing !== null) change(removeWorkout(draft, removing)); setRemoving(null); }} />
+    <ConfirmDialog visible={dissolving !== null} destructive title="Расформировать сет?"
+      description="Упражнения останутся в тренировке по отдельности." confirmLabel="Расформировать"
+      onCancel={() => setDissolving(null)}
+      onConfirm={() => {
+        if (dissolving !== null) change(applySupersetPress(draft, dissolving.workoutId, { type: "dissolve", groupId: dissolving.groupId }));
+        setDissolving(null);
+      }} />
   </>;
 }
 
@@ -278,22 +321,27 @@ const styles = StyleSheet.create({
   workoutHead: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12 },
   stripe: { width: 4, alignSelf: "stretch", borderRadius: 2 },
   removeWorkout: { width: 42, height: 42, borderWidth: 1, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  addExercise: { padding: 12, paddingTop: 4 },
-  exerciseRow: { flexDirection: "row", alignItems: "stretch", borderTopWidth: StyleSheet.hairlineWidth, paddingBottom: 10 },
-  handle: { width: 48, flex: 1, alignItems: "center", justifyContent: "center", minHeight: 48 },
-  groupActions: { gap: 4, paddingRight: 12, paddingBottom: 6, alignItems: "flex-start" },
-  exerciseHead: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6, paddingRight: 4 },
-  thumb: { width: 40, height: 40, borderRadius: 8, overflow: "hidden", alignItems: "center", justifyContent: "center" },
-  thumbImage: { width: 40, height: 40 },
+  addExercise: { padding: 10 },
+  exercises: { paddingHorizontal: 10 },
+  exerciseRow: { borderWidth: 1, borderRadius: 10, overflow: "hidden" },
+  handle: { width: 28, minHeight: 44, alignItems: "center", justifyContent: "center" },
+  exerciseHead: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, paddingHorizontal: 2 },
+  exerciseBody: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 10, paddingTop: 6, paddingBottom: 4 },
+  supersetTag: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
+  setCell: { width: 44, gap: 3 },
+  setButton: { minHeight: 36, borderWidth: 1, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  setHint: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16, paddingHorizontal: 12, paddingBottom: 6 },
+  thumb: { width: 32, height: 32, borderRadius: 6, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  thumbImage: { width: 32, height: 32 },
   exerciseName: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 18 },
-  fields: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingRight: 12 },
-  field: { flex: 1, minWidth: 0, gap: 4 },
+  fields: { flexDirection: "row", alignItems: "flex-end", gap: 6 },
+  field: { flex: 1, minWidth: 0, gap: 3 },
   fieldLabel: { fontFamily: fonts.medium, fontSize: 10, lineHeight: 13, textAlign: "center" },
-  fieldInput: { minHeight: 40, borderWidth: 1, borderRadius: 8, textAlign: "center", fontFamily: fonts.medium, fontSize: 14,
+  fieldInput: { minHeight: 36, borderWidth: 1, borderRadius: 8, textAlign: "center", fontFamily: fonts.medium, fontSize: 14,
     paddingHorizontal: 4, paddingVertical: 0 },
-  instruction: { minHeight: 40, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, marginTop: 8, marginRight: 12,
+  instruction: { minHeight: 36, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginTop: 6,
     textAlignVertical: "top", fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
-  instructionAdd: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", minHeight: 36, marginTop: 2 },
+  instructionAdd: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", minHeight: 30 },
   instructionAddText: { fontFamily: fonts.medium, fontSize: 12 },
   orderRow: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 12, paddingRight: 12, minHeight: 56 },
   orderTitle: { flex: 1, fontFamily: fonts.semibold, fontSize: 14 },
