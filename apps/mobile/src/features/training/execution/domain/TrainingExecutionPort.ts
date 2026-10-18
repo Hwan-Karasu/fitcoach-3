@@ -50,6 +50,14 @@ export interface TrainingExecutionPort {
   getPrevious(slot: WorkoutSlot, queries: readonly PreviousQuery[], now?: Date): Promise<ReadonlyMap<string, PreviousSet>>;
   /** Ввод значений, «Пред.» или смена типа подхода: тот же факт по ID, подтверждение по режиму тренера. */
   saveSet(input: SaveSetInput, now?: Date): Promise<SetSaveResult>;
+  /**
+   * Разминка (как в 2.0): новый дополнительный разминочный подход сверху упражнения; плановые подходы
+   * не меняются. Его ключ — `fact.plannedSetId`.
+   */
+  addWarmupSet(slot: WorkoutSlot, where: Readonly<{ plannedExerciseId: string; exerciseId: string }>,
+    now?: Date): Promise<SetSaveResult>;
+  /** Убрать дополнительный разминочный подход: скрывается из дневника, «Пред.» и статистики; запись остаётся. */
+  removeWarmupSet(slot: WorkoutSlot, plannedSetId: string, expectedRevision: number, now?: Date): Promise<void>;
   /** Галочка ручного режима. */
   toggleSetConfirmation(identity: SetIdentity, now?: Date): Promise<SetSaveResult>;
   /** §48.31, §48.38: исход тренировки или `null` — снять исход. Факты не удаляются. */

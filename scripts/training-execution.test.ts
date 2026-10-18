@@ -289,3 +289,40 @@ test("T03 «Пред.» в тот же день: только выполнени
       "у утреннего выполнения вечернее не становится «прошлым»");
   } finally { await close(); }
 });
+
+test("T03 разминка — новый подход сверху, плановые не меняются; удаление прячет только его (как в 2.0)", async () => {
+  const { clients, execution, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const w1: WorkoutSlot = { clientId: a.id, programId: "program-a", weekIndex: 1, plannedWorkoutId: "w1" };
+    const w2: WorkoutSlot = { ...w1, weekIndex: 2 };
+    const where = { plannedExerciseId: "pe-bench", exerciseId: BENCH };
+    await execution.saveSet(bench(w1, "s1", 0, values(100_000, 8), null), DAY1);
+    const warm = await execution.addWarmupSet(w1, where, DAY1);
+    assert.equal(warm.fact.setType, "WARMUP");
+    assert.equal(warm.fact.extra, true, "дополнительный подход, не плановый");
+    const after = await execution.getWorkout(w1);
+    assert.equal(after.facts.get("s1")?.setType, "NORMAL", "плановый подход остался обычным");
+    assert.equal([...after.facts.values()].filter((fact) => fact.extra).length, 1);
+    const filled = await execution.saveSet({ ...bench(w1, warm.fact.plannedSetId, warm.fact.position, values(40_000, 12),
+      warm.fact.revision), setType: "WARMUP" }, DAY1);
+    assert.equal(filled.fact.id, warm.fact.id);
+    await assert.rejects(execution.saveSet({ ...bench(w1, warm.fact.plannedSetId, warm.fact.position, values(40_000, 12),
+      filled.fact.revision), setType: "NORMAL" }, DAY1), message("INVALID_METRIC"), "дополнительный — всегда разминочный");
+
+    const previous = await execution.getPrevious(w2, [{ ...where, plannedSetIds: ["s1"] }], DAY2);
+    assert.equal(previous.get("s1")?.values.reps, 8, "разминка прошлого раза не сдвигает рабочий подход");
+    const nextWarm = await execution.addWarmupSet(w2, where, DAY2);
+    const warmPrevious = await execution.getPrevious(w2, [{ ...where, plannedSetIds: [nextWarm.fact.plannedSetId, "s1"] }], DAY2);
+    assert.equal(warmPrevious.get(nextWarm.fact.plannedSetId)?.values.loadGrams, 40_000, "разминка — с разминкой");
+
+    await execution.removeWarmupSet(w1, filled.fact.plannedSetId, filled.fact.revision, DAY1);
+    const removed = await execution.getWorkout(w1);
+    assert.equal(removed.facts.has(filled.fact.plannedSetId), false, "удалённая разминка не видна");
+    assert.equal(removed.facts.get("s1")?.values.reps, 8, "плановые подходы на месте");
+    const noWarm = await execution.getPrevious(w2, [{ ...where, plannedSetIds: [nextWarm.fact.plannedSetId] }], DAY2);
+    assert.equal(noWarm.size, 0, "удалённая разминка не источник «Пред.»");
+    await assert.rejects(execution.removeWarmupSet(w1, "s1", removed.facts.get("s1")!.revision, DAY1),
+      message("INVALID_METRIC"), "плановый подход так не удаляется");
+  } finally { await close(); }
+});

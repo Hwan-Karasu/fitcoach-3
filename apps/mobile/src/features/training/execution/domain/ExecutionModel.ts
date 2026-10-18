@@ -67,6 +67,8 @@ export interface SetFact {
   readonly drops: readonly SetValues[];
   readonly rpe: number | null;
   readonly confirmed: boolean;
+  /** Дополнительный разминочный подход дневника сверх плана (как в 2.0); у плановых — false. */
+  readonly extra: boolean;
   readonly revision: number;
 }
 

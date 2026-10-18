@@ -7,6 +7,12 @@ import { EMPTY_VALUES } from "../domain/ExecutionModel.ts";
 import { dropsForType, hasEnteredData, workoutStatus } from "../domain/ExecutionRules.ts";
 import type { SaveSetInput, TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 
+/** Добавленные разминочные подходы упражнения по порядку добавления. */
+export function extraWarmups(state: WorkoutExecution | null, plannedExerciseId: string): readonly SetFact[] {
+  return [...(state?.facts.values() ?? [])].filter((fact) => fact.extra && fact.plannedExerciseId === plannedExerciseId)
+    .sort((a, b) => a.position - b.position);
+}
+
 /** Правка подхода; поля накладываются на последние сохранённые значения в момент записи. */
 export interface SetPatch {
   readonly fields?: Partial<SetValues>;
@@ -56,13 +62,12 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
       try {
         const loaded = await plans.getSimplePlan(clientId, programId);
         const found = loaded?.draft.plan.workouts.find((item) => item.id === plannedWorkoutId) ?? null;
-        const [current, nextMode, nextPrevious] = await Promise.all([
-          execution.getWorkout(stableSlot),
-          execution.getConfirmationMode(),
-          found === null ? Promise.resolve(new Map<string, PreviousSet>()) : execution.getPrevious(stableSlot,
-            found.exercises.map((exercise) => ({ plannedExerciseId: exercise.id, exerciseId: exercise.exerciseId,
-              plannedSetIds: exercise.sets.map((set) => set.id) }))),
-        ]);
+        const [current, nextMode] = await Promise.all([execution.getWorkout(stableSlot), execution.getConfirmationMode()]);
+        // Добавленные разминки тоже получают «Пред.» — по типу и номеру среди разминок.
+        const nextPrevious = found === null ? new Map<string, PreviousSet>() : await execution.getPrevious(stableSlot,
+          found.exercises.map((exercise) => ({ plannedExerciseId: exercise.id, exerciseId: exercise.exerciseId,
+            plannedSetIds: [...extraWarmups(current, exercise.id).map((fact) => fact.plannedSetId),
+              ...exercise.sets.map((set) => set.id)] })));
         if (!active) return;
         setWorkout(found);
         setState(current);
@@ -140,6 +145,27 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
       return result;
     }), [applyFact, enqueue, execution, identityOf]);
 
+  /** Разминка (как в 2.0): новый подход сверху упражнения, плановые не меняются. */
+  const addWarmup = useCallback((exercise: PlannedExercise) => enqueue(async () => {
+    const result = await execution.addWarmupSet(stableSlot, { plannedExerciseId: exercise.id, exerciseId: exercise.exerciseId });
+    applyFact(result.fact, result.session);
+    return result;
+  }), [applyFact, enqueue, execution, stableSlot]);
+
+  const removeWarmup = useCallback((plannedSetId: string) => enqueue(async () => {
+    const fact = stateRef.current?.facts.get(plannedSetId);
+    if (fact === undefined) return null;
+    await execution.removeWarmupSet(stableSlot, plannedSetId, fact.revision);
+    setState((current) => {
+      const facts = new Map(current?.facts ?? []);
+      facts.delete(plannedSetId);
+      const next = { session: current?.session ?? null, facts };
+      stateRef.current = next;
+      return next;
+    });
+    return fact;
+  }), [enqueue, execution, stableSlot]);
+
   const setOutcome = useCallback((outcome: WorkoutOutcome | null) => enqueue(async () => {
     const session = await execution.setOutcome(stableSlot, outcome, stateRef.current?.session?.revision ?? null);
     setState((current) => {
@@ -154,7 +180,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   return {
     workout, state, previous, mode, message,
     status: workoutStatus(state?.session?.outcome ?? null, started),
-    saveSet, toggleSet, setOutcome,
+    saveSet, toggleSet, setOutcome, addWarmup, removeWarmup,
     dismissMessage: () => setMessage(null),
   };
 }

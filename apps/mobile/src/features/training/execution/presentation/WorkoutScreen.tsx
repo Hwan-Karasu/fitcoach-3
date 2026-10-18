@@ -20,7 +20,7 @@ import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
 import { RpeSheet, SetTypeSheet } from "./SetPickers.tsx";
 import { compactValues, compactWithDrops, diaryFields, fieldHeaders, fieldNames, parseField, rawOf, rpeTone, setTypeLabels,
   setTypeTone, shortDate, workoutStatusLabels } from "./setFormat.ts";
-import { useWorkoutDiary, type SetPatch } from "./useWorkoutDiary.ts";
+import { extraWarmups, useWorkoutDiary, type SetPatch } from "./useWorkoutDiary.ts";
 
 /** Пауза после последнего нажатия, после которой значение ячейки записывается. */
 const SAVE_DELAY_MS = 700;
@@ -234,7 +234,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const [busy, setBusy] = useState(false);
   const [restFor, setRestFor] = useState<PlannedExercise | null>(null);
   const [restError, setRestError] = useState<string | null>(null);
-  const { saveSet, toggleSet, setOutcome } = diary;
+  const { saveSet, toggleSet, setOutcome, addWarmup, removeWarmup } = diary;
+  const [removeWarm, setRemoveWarm] = useState<string | null>(null);
 
   /** §48.56: отдых упражнения сохраняется в план — у каждого упражнения свой таймер. */
   const saveRest = (exercise: PlannedExercise, restSec: number | null) => {
@@ -269,8 +270,9 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const outcome = diary.state?.session?.outcome ?? null;
   usePreventRemove(diary.status === "IN_PROGRESS" && !busy, ({ data }) => setExitAction(data.action));
 
-  const incomplete = useMemo(() => diary.workout?.exercises.some((exercise) => exercise.sets.some((set) =>
-    diary.state?.facts.get(set.id)?.confirmed !== true)) ?? false, [diary.state, diary.workout]);
+  const incomplete = useMemo(() => (diary.workout?.exercises.some((exercise) => exercise.sets.some((set) =>
+    diary.state?.facts.get(set.id)?.confirmed !== true)) ?? false)
+    || [...(diary.state?.facts.values() ?? [])].some((fact) => fact.extra && !fact.confirmed), [diary.state, diary.workout]);
 
   const applyOutcome = async (next: WorkoutOutcome | null) => {
     flushPending();
@@ -301,6 +303,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     typeSheet.current?.dismiss();
     if (target === null || setType === (targetFact?.setType ?? "NORMAL")) return;
     flushPending();
+    // Как в 2.0: разминка — новый подход сверху, выбранный подход не меняется.
+    if (setType === "WARMUP") { void addWarmup(target.exercise); return; }
     // Заполненные мини-сеты не убираются молча: сначала вопрос.
     if (targetFact?.setType === "DROP" && targetFact.drops.some(hasValues)) { setRemoveDrops({ target, setType }); return; }
     onSave(target, { setType });
@@ -322,9 +326,11 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         {workout.exercises.map((exercise) => {
           const info = lookup.get(exercise.exerciseId);
           const fields = diaryFields(info?.metrics ?? []);
-          const done = exercise.sets.filter((set) => state.facts.get(set.id)?.confirmed === true).length;
-          const rows = displayOrder(exercise.sets.map((set, position) => ({ set, position,
-            setType: state.facts.get(set.id)?.setType ?? "NORMAL" })));
+          const extras = extraWarmups(state, exercise.id).map((fact) => ({ set: { id: fact.plannedSetId, reps: null,
+            loadGrams: null, durationSec: null, distanceM: null }, position: fact.position, setType: fact.setType }));
+          const rows = displayOrder([...extras, ...exercise.sets.map((set, position) => ({ set, position,
+            setType: state.facts.get(set.id)?.setType ?? "NORMAL" }))]);
+          const done = rows.filter(({ item }) => state.facts.get(item.set.id)?.confirmed === true).length;
           return (
             <View key={exercise.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.cardHead}>
@@ -341,7 +347,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                     </Text>
                   </Pressable>
                 </View>
-                <Text style={[styles.meta, { color: colors.textSecondary }]}>{`${done}/${exercise.sets.length}`}</Text>
+                <Text style={[styles.meta, { color: colors.textSecondary }]}>{`${done}/${rows.length}`}</Text>
               </View>
               <View style={[styles.row, styles.headRow]}>
                 <Text style={[styles.head, styles.markerSpace, { color: colors.textMuted }]}>Сет</Text>
@@ -380,7 +386,21 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         onConfirm={(seconds) => { if (restFor !== null) saveRest(restFor, seconds); }}
         onClear={() => { if (restFor !== null) saveRest(restFor, null); }}
         onClose={() => setRestFor(null)} />
-      <SetTypeSheet ref={typeSheet} setType={targetFact?.setType ?? "NORMAL"} onSelect={chooseType} />
+      <SetTypeSheet ref={typeSheet} setType={targetFact?.setType ?? "NORMAL"} extra={targetFact?.extra === true}
+        onSelect={chooseType}
+        onRemove={() => {
+          typeSheet.current?.dismiss();
+          if (targetFact === undefined) return;
+          flushPending();
+          // Заполненную разминку не убираем молча.
+          if (hasValues(targetFact.values) || targetFact.confirmed) setRemoveWarm(targetFact.plannedSetId);
+          else void removeWarmup(targetFact.plannedSetId);
+        }} />
+      <ConfirmDialog visible={removeWarm !== null} title="Удалить разминочный подход?"
+        description="Его значения уйдут из дневника, «Пред.» и статистики. Плановые подходы не изменятся."
+        confirmLabel="Удалить" cancelLabel="Оставить" destructive
+        onCancel={() => setRemoveWarm(null)}
+        onConfirm={() => { if (removeWarm !== null) void removeWarmup(removeWarm); setRemoveWarm(null); }} />
       <RpeSheet ref={rpeSheet} rpe={targetFact?.rpe ?? null}
         onSelect={(rpe) => { rpeSheet.current?.dismiss(); if (target !== null) onSave(target, { rpe }); }} />
       <ConfirmDialog visible={removeDrops !== null} title="Убрать мини-сеты?"

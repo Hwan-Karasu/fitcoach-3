@@ -30,10 +30,26 @@ const PickerSheet = forwardRef<BottomSheetModal, Readonly<{ title: string; child
 /** Тип подхода (§48.57): нажатие на номер подхода. Выбор сразу закрывает окно. */
 export const SetTypeSheet = forwardRef<BottomSheetModal, Readonly<{
   setType: SetType;
+  /** Добавленный разминочный подход: тип не меняется, его можно только удалить. */
+  extra: boolean;
   onSelect: (type: SetType) => void;
-}>>(function SetTypeSheet({ setType, onSelect }, ref) {
+  onRemove: () => void;
+}>>(function SetTypeSheet({ setType, extra, onSelect, onRemove }, ref) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
+  if (extra) {
+    return (
+      <PickerSheet ref={ref} title="Разминочный подход">
+        <Text style={[styles.optionHint, { color: colors.textSecondary }]}>
+          Добавлен к плану на эту тренировку. Удаление уберёт только его — плановые подходы останутся.
+        </Text>
+        <Pressable accessibilityRole="button" onPress={onRemove}
+          style={[styles.option, { borderColor: colors.danger, backgroundColor: withAlpha(colors.danger, 0.1) }]}>
+          <Text style={[styles.optionTitle, { color: colors.danger }]}>Удалить подход</Text>
+        </Pressable>
+      </PickerSheet>
+    );
+  }
   return (
     <PickerSheet ref={ref} title="Тип подхода">
       {SET_TYPES.map((type) => {

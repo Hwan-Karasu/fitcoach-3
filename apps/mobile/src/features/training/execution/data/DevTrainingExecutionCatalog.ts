@@ -145,4 +145,19 @@ export const devTrainingExecutionCatalog: readonly MigrationStep[] = [{
       UNIQUE (workspace_id, client_id, exercise_key)
     )`,
   ],
+}, {
+  version: 4,
+  checksum: "t03-dev-training-execution-v4-extra-warmups-20261018",
+  statements: [
+    // Дополнительные разминочные подходы сверх плана (решение владельца 2026-10-18, как в 2.0) и мягкое
+    // удаление: факт не стирается, а скрывается из дневника, «Пред.» и статистики.
+    `ALTER TABLE dev_training_performed_sets ADD COLUMN extra INTEGER NOT NULL DEFAULT 0 CHECK (extra IN (0, 1))`,
+    `ALTER TABLE dev_training_performed_sets ADD COLUMN removed_at TEXT`,
+    `CREATE TRIGGER dev_training_performed_sets_extra_warmup_insert BEFORE INSERT ON dev_training_performed_sets
+      WHEN NEW.extra = 1 AND NEW.set_type <> 'WARMUP'
+      BEGIN SELECT RAISE(ABORT, 'INVALID_METRIC'); END`,
+    `CREATE TRIGGER dev_training_performed_sets_extra_warmup_update BEFORE UPDATE OF set_type, extra ON dev_training_performed_sets
+      WHEN NEW.extra = 1 AND NEW.set_type <> 'WARMUP'
+      BEGIN SELECT RAISE(ABORT, 'INVALID_METRIC'); END`,
+  ],
 }];
