@@ -11,6 +11,7 @@ import { membersWord, PROGRAM_TITLE_MAX, programKindLabels } from "../domain/Pro
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
 import type { PlannedWorkout, SimplePlan } from "../domain/SimplePlanModel.ts";
+import type { SimpleWeek } from "../domain/SimpleWorkoutEdit.ts";
 import { weekTypeLabels, type PeriodizedPlan } from "../domain/PeriodizedModel.ts";
 import { setsSummary } from "../domain/SimplePlanRules.ts";
 import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
@@ -60,6 +61,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [message, setMessage] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
   const [plan, setPlan] = useState<SimplePlan | null>(null);
+  const [simpleWeeks, setSimpleWeeks] = useState<readonly SimpleWeek[]>([]);
   const [periodized, setPeriodized] = useState<PeriodizedPlan | null>(null);
   const [orderReset, setOrderReset] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -96,7 +98,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       if (next !== null) void repository.selectProgram(clientId, programId).catch(() => undefined);
       if (next?.kind === "SIMPLE") {
         const loaded = await repository.getSimplePlan(clientId, programId);
-        if (active) setPlan(loaded?.draft.plan ?? null);
+        const weeks = await repository.getSimpleWeeks(clientId, programId);
+        if (active) { setPlan(loaded?.draft.plan ?? null); setSimpleWeeks(weeks); }
       }
       if (next?.kind === "PERIODIZED") {
         const loaded = await repository.getPeriodizedPlan(clientId, programId);
@@ -189,11 +192,10 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       {program.kind === "SIMPLE" ? <>
         <AppButton label="Изменить" onPress={onEditStructure} />
         {plan !== null ? (
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Недель: ${plan.weeks} · план недели повторяется`}</Text>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Недель: ${plan.weeks} · простая программа`}</Text>
         ) : null}
         {plan !== null && renderWeeks !== undefined ? renderWeeks({ key: "simple", selectedWeek: weeksByCycle.simple,
-          onSelectWeek: (week) => selectWeek("simple", week), weeks: Array.from({ length: plan.weeks },
-          (_, index) => ({ index: index + 1, caption: null, workouts: plan.workouts })) }) : plan?.workouts.map((workout) => (
+          onSelectWeek: (week) => selectWeek("simple", week), weeks: simpleWeeks.map((week) => ({ ...week, caption: null })) }) : plan?.workouts.map((workout) => (
           <View key={workout.id} style={[styles.workout, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.workoutTitle, { color: colors.textPrimary }]}>{workout.title}</Text>
             {workout.exercises.length === 0 ? (

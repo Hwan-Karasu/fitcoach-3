@@ -5,7 +5,7 @@ import { localDateOf, parseValueX10, type MeasurementRepositoryPort } from "../.
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
 import { NutritionWorkspacePreview } from "../../features/nutrition/public.ts";
 import { CreateProgramScreen, MesocycleCreatorScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, SimpleProgramBuilderScreen,
-  WeekEditorScreen, type PickedExercise,
+  WeekEditorScreen, SimpleWorkoutEditorScreen, type PickedExercise,
   type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
   type TrainingPlansRepositoryPort, ProgramWeeksPanel, WorkoutScreen, type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort,
   type WorkoutSlot } from "../../features/training/public.ts";
@@ -23,6 +23,7 @@ type TrainingRoutes = {
   TrainingBuilder: { programId?: string; picked?: PickedExercise } | undefined;
   TrainingMesocycle: { programId: string; picked?: PickedExercise };
   TrainingWeek: { programId: string; mesocycleId: string; weekIndex: number; picked?: PickedExercise };
+  TrainingSimpleWorkout: { programId: string; weekIndex: number; workoutId: string; picked?: PickedExercise };
   /** Каталог для выбора упражнения; результат возвращается на экран `returnTo` с теми же параметрами. */
   TrainingPickExercise: { workoutId: string; replace?: string; returnTo: PickReturn };
   TrainingCreateExercise: { initialName: string; pick: TrainingRoutes["TrainingPickExercise"] };
@@ -32,13 +33,15 @@ type TrainingRoutes = {
 type PickReturn =
   | Readonly<{ name: "TrainingBuilder"; params: { programId?: string } }>
   | Readonly<{ name: "TrainingMesocycle"; params: { programId: string } }>
-  | Readonly<{ name: "TrainingWeek"; params: { programId: string; mesocycleId: string; weekIndex: number } }>;
+  | Readonly<{ name: "TrainingWeek"; params: { programId: string; mesocycleId: string; weekIndex: number } }>
+  | Readonly<{ name: "TrainingSimpleWorkout"; params: { programId: string; weekIndex: number; workoutId: string } }>;
 
 const trainingTitles: Readonly<Record<keyof TrainingRoutes, string>> = {
   TrainingIndex: "Программы", TrainingChooser: "Новая программа", TrainingCreate: "Создание программы",
   TrainingProgram: "Программа", TrainingBuilder: "Простой конструктор", TrainingMesocycle: "Новый мезоцикл",
   TrainingWeek: "Редактирование недели", TrainingPickExercise: "Выбор упражнения", TrainingWorkout: "Дневник тренировки",
   TrainingCreateExercise: "Своё упражнение",
+  TrainingSimpleWorkout: "План тренировки",
 };
 
 const HomeStack = createNativeStackNavigator<HomeRoutes>();
@@ -176,6 +179,7 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
             const back = route.params.returnTo;
             if (back.name === "TrainingBuilder") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
             else if (back.name === "TrainingMesocycle") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
+            else if (back.name === "TrainingWeek") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
             else navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
           }} />}
       </TrainingStack.Screen>
@@ -188,6 +192,7 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
             const back = source.returnTo;
             if (back.name === "TrainingBuilder") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
             else if (back.name === "TrainingMesocycle") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
+            else if (back.name === "TrainingWeek") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
             else navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
           }} />}
       </TrainingStack.Screen>
@@ -211,12 +216,24 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
               weekIndex: route.params.weekIndex } } })}
           onSaved={() => navigation.goBack()} />}
       </TrainingStack.Screen>
+      <TrainingStack.Screen name="TrainingSimpleWorkout">
+        {({ navigation, route }) => <SimpleWorkoutEditorScreen clientId={clientId} clientName={clientName}
+          programId={route.params.programId} weekIndex={route.params.weekIndex} workoutId={route.params.workoutId}
+          repository={repository} exercises={exerciseLookup} picked={route.params.picked ?? null}
+          onCancel={() => navigation.goBack()} onSaved={() => navigation.goBack()}
+          onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId,
+            ...(replace === undefined ? {} : { replace }), returnTo: { name: "TrainingSimpleWorkout",
+              params: { programId: route.params.programId, weekIndex: route.params.weekIndex, workoutId: route.params.workoutId } } })} />}
+      </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingWorkout">
         {({ route, navigation }) => <WorkoutScreen slot={{ clientId, programId: route.params.programId, weekIndex: route.params.weekIndex,
           plannedWorkoutId: route.params.workoutId }} clientName={clientName} plans={repository} execution={execution}
           restTimers={restTimers} activeWorkouts={activeWorkouts} onOpenWorkout={onOpenWorkout} exercises={exerciseLookup}
-          onEditWeek={(mesocycleId) => navigation.navigate("TrainingWeek", { programId: route.params.programId,
-            mesocycleId, weekIndex: route.params.weekIndex })}
+          onEditWeek={(mesocycleId) => {
+            if (mesocycleId === null) navigation.navigate("TrainingSimpleWorkout", { programId: route.params.programId,
+              workoutId: route.params.workoutId, weekIndex: route.params.weekIndex });
+            else navigation.navigate("TrainingWeek", { programId: route.params.programId, mesocycleId, weekIndex: route.params.weekIndex });
+          }}
           onChangeWeek={(weekIndex, workoutId, mesocycleId) => {
             const context = { programId: route.params.programId, weekIndex, ...(mesocycleId === null ? {} : { mesocycleId }) };
             if (workoutId === null) navigation.popTo("TrainingProgram", context);

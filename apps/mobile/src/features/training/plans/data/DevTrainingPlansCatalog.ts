@@ -311,4 +311,35 @@ export const devTrainingPlansCatalog: readonly MigrationStep[] = [{
     `ALTER TABLE dev_training_planned_exercises ADD COLUMN superset_id TEXT
       CHECK(superset_id IS NULL OR length(trim(superset_id)) > 0)`,
   ],
+}, {
+  version: 12,
+  checksum: "t02-dev-training-plans-v12-simple-workout-overrides-versions-20261018",
+  statements: [
+    `CREATE TABLE dev_training_simple_overrides (
+      workspace_id TEXT NOT NULL, client_id TEXT NOT NULL, program_id TEXT NOT NULL,
+      week_index INTEGER NOT NULL CHECK(week_index BETWEEN 1 AND 52), workout_id TEXT NOT NULL,
+      workout_json TEXT NOT NULL CHECK(CASE WHEN json_valid(workout_json)
+        THEN COALESCE(json_extract(workout_json, '$.id') = workout_id, 0) ELSE 0 END),
+      PRIMARY KEY(workspace_id, client_id, program_id, week_index, workout_id),
+      FOREIGN KEY(workspace_id, program_id, client_id)
+        REFERENCES dev_training_program_members(workspace_id, program_id, client_id) ON DELETE RESTRICT
+    )`,
+    `CREATE TABLE dev_training_simple_versions (
+      id TEXT PRIMARY KEY NOT NULL, workspace_id TEXT NOT NULL, client_id TEXT NOT NULL, program_id TEXT NOT NULL,
+      valid_from TEXT NOT NULL, valid_to TEXT NOT NULL CHECK(valid_to >= valid_from),
+      structure_json TEXT NOT NULL CHECK(CASE WHEN json_valid(structure_json)
+        THEN json_type(structure_json) = 'object' ELSE 0 END),
+      FOREIGN KEY(workspace_id, program_id, client_id)
+        REFERENCES dev_training_program_members(workspace_id, program_id, client_id) ON DELETE RESTRICT
+    )`,
+    `CREATE INDEX dev_training_simple_versions_scope ON dev_training_simple_versions(workspace_id, client_id, program_id)`,
+    `CREATE TRIGGER dev_training_simple_versions_immutable BEFORE UPDATE ON dev_training_simple_versions
+      BEGIN SELECT RAISE(ABORT, 'STRUCTURE_VERSION_IMMUTABLE'); END`,
+    ...["INSERT", "UPDATE"].map((operation) => `CREATE TRIGGER dev_training_simple_overrides_${operation.toLowerCase()}
+      BEFORE ${operation} ON dev_training_simple_overrides WHEN NOT EXISTS
+      (SELECT 1 FROM dev_training_programs p JOIN dev_training_workouts w ON w.program_id = p.id AND w.workspace_id = p.workspace_id
+        WHERE p.workspace_id = NEW.workspace_id AND p.id = NEW.program_id AND p.kind = 'SIMPLE'
+          AND w.id = NEW.workout_id AND NEW.week_index <= p.weeks)
+      BEGIN SELECT RAISE(ABORT, 'DRAFT_INVALID'); END`),
+  ],
 }];

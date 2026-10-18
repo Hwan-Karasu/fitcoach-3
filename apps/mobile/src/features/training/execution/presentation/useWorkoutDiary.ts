@@ -70,7 +70,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
     let active = true;
     void (async () => {
       try {
-        const found = (await plans.findWorkout(clientId, programId, plannedWorkoutId))?.workout ?? null;
+        const found = (await plans.findWorkout(clientId, programId, plannedWorkoutId, weekIndex))?.workout ?? null;
         const [current, nextMode] = await Promise.all([execution.getWorkout(stableSlot), execution.getConfirmationMode()]);
         // Добавленные разминки тоже получают «Пред.» — по типу и номеру среди разминок.
         const nextPrevious = found === null ? new Map<string, PreviousSet>() : await execution.getPrevious(stableSlot,
@@ -87,7 +87,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
       }
     })();
     return () => { active = false; };
-  }, [clientId, execution, plannedWorkoutId, plans, programId, stableSlot, version]);
+  }, [clientId, execution, plannedWorkoutId, plans, programId, stableSlot, version, weekIndex]);
 
   // Режим подтверждения — общая настройка тренера (§48.54): после смены в настройках дневник берёт новый.
   useFocusEffect(useCallback(() => {

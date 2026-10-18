@@ -108,13 +108,17 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
   };
 
   const discardRecovery = async () => {
-    await recovery.beforePublish();
-    await repository.clearBuilderDraft(clientId, key);
-    const saved = programId === null ? null : await repository.getSimplePlan(clientId, programId);
-    setDraft(saved?.draft ?? newDraft(newPlanId("w")));
-    setRevision(saved?.program.revision ?? null);
-    setRestored(false);
-    recovery.resume();
+    setBusy(true);
+    try {
+      const saved = programId === null ? null : await repository.getSimplePlan(clientId, programId);
+      if (programId !== null && saved === null) throw new Error("TARGET_NOT_FOUND");
+      await recovery.beforePublish();
+      await repository.clearBuilderDraft(clientId, key);
+      setDraft(saved?.draft ?? newDraft(newPlanId("w")));
+      setRevision(saved?.program.revision ?? null);
+      setRestored(false); setMessage(null);
+    } catch { setMessage("Не удалось загрузить сохранённый план. Изменения остаются в редакторе."); }
+    finally { recovery.resume(); setBusy(false); }
   };
 
   return (
@@ -125,6 +129,7 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
         ) : null}
         {restored ? <AppButton compact variant="secondary" label="Отменить несохранённые изменения" onPress={() => { void discardRecovery(); }} /> : null}
         <TextField label="Название программы" required value={draft.title} onChangeText={(title) => change(setTitle(draft, title))} />
+        {programId !== null ? <InlineNotice kind="info">При правке базового плана индивидуальные отличия недель сохраняются. Их можно изменить из дневника с выбором области.</InlineNotice> : null}
         <View style={[styles.weeks, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.grow}>
             <Text style={[styles.weeksLabel, { color: colors.textPrimary }]}>Недель в программе</Text>

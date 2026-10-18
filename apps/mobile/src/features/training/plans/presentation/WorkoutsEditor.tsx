@@ -187,12 +187,13 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace }:
  * Редактор тренировок одной недели: общий для Простого и Расширенного конструкторов. Упражнения
  * перетаскиваются внутри тренировки, тренировки — в режиме «Порядок тренировок».
  */
-export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scrollRef, onPickExercise, onReplaceExercise }: Readonly<{
+export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scrollRef, onPickExercise, onReplaceExercise, singleWorkout = false }: Readonly<{
   draft: SimpleProgramDraft;
   change: (next: SimpleProgramDraft) => void;
   lookup: ReadonlyMap<string, ExerciseInfo>;
   issues: readonly PlanIssue[];
   showIssues: boolean;
+  singleWorkout?: boolean;
   scrollRef: AnimatedRef<Animated.ScrollView>;
   onPickExercise: (workoutId: string) => void;
   /** «⇄»: выбрать в каталоге упражнение на замену этого. */
@@ -235,8 +236,8 @@ export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scro
           <View style={styles.grow}>
             <TextField label="Тренировка" value={workout.title} onChangeText={(title) => change(renameWorkout(draft, workout.id, title))} />
           </View>
-          <AppIconButton compact label={`Удалить тренировку ${workout.title}`} disabled={draft.plan.workouts.length === 1}
-            icon={<Trash2 size={18} color={colors.textSecondary} strokeWidth={1.8} />} onPress={() => setRemoving(workout.id)} />
+          {!singleWorkout ? <AppIconButton compact label={`Удалить тренировку ${workout.title}`} disabled={draft.plan.workouts.length === 1}
+            icon={<Trash2 size={18} color={colors.textSecondary} strokeWidth={1.8} />} onPress={() => setRemoving(workout.id)} /> : null}
         </View>
         {workout.exercises.length > 0 ? (
           <Sortable.Grid data={[...workout.exercises]} keyExtractor={(item) => item.id} columns={1} rowGap={0} customHandle
@@ -258,8 +259,8 @@ export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scro
         </Pressable>
       </View>
     ))}
-    <AppButton variant="secondary" label="Добавить тренировку" icon={(color) => <Plus size={18} color={color} strokeWidth={2} />}
-      onPress={() => change(addWorkout(draft, newPlanId("w")))} />
+    {!singleWorkout ? <AppButton variant="secondary" label="Добавить тренировку" icon={(color) => <Plus size={18} color={color} strokeWidth={2} />}
+      onPress={() => change(addWorkout(draft, newPlanId("w")))} /> : null}
     <ConfirmDialog visible={removing !== null} destructive title="Удалить тренировку?"
       description="Тренировка и её упражнения уйдут из плана. Сохранение — кнопкой внизу; до него можно выйти без изменений."
       confirmLabel="Удалить" onCancel={() => setRemoving(null)}

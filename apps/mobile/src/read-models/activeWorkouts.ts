@@ -13,7 +13,7 @@ export function createActiveWorkouts(execution: Pick<TrainingExecutionPort, "lis
       const active = await execution.listActiveWorkouts();
       const cards = await Promise.all(active.map(async (item): Promise<ActiveWorkoutCard | null> => {
         const [client, found] = await Promise.all([clients.get(item.clientId),
-          plans.findWorkout(item.clientId, item.programId, item.plannedWorkoutId)]);
+          plans.findWorkout(item.clientId, item.programId, item.plannedWorkoutId, item.weekIndex)]);
         if (client === null || client.lifecycle !== "ACTIVE" || found === null) return null;
         const { program, workout } = found;
         return { slot: { clientId: item.clientId, programId: item.programId, weekIndex: item.weekIndex,

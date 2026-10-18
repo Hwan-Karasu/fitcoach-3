@@ -333,7 +333,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   onOpenWorkout: (slot: WorkoutSlot) => void;
   exercises: ExerciseLookupPort;
   onChangeWeek: (weekIndex: number, workoutId: string | null, mesocycleId: string | null) => void;
-  onEditWeek: (mesocycleId: string) => void;
+  onEditWeek: (mesocycleId: string | null) => void;
 }>) {
   useKeepAwake();
   const { palette } = usePrototypeTheme();
@@ -535,13 +535,13 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         {restError !== null ? <InlineNotice kind="error">{restError}</InlineNotice> : null}
         {weekNavigation !== null ? <>
           <Text style={[styles.meta, { color: colors.textSecondary }]}>{weekNavigation.programTitle}</Text>
-          {weekNavigation.mesocycleId !== null ? <AppButton compact variant="secondary" label="Изменить план недели" disabled={busy}
+          <AppButton compact variant="secondary" label={weekNavigation.mesocycleId === null ? "Изменить план тренировки" : "Изменить план недели"} disabled={busy}
             icon={(color) => <PencilLine size={18} color={color} />} onPress={() => {
               const cycleId = weekNavigation.mesocycleId;
-              if (cycleId === null || busy) return;
+              if (busy) return;
               setBusy(true);
               void finishInput().then((saved) => { if (saved) { Keyboard.dismiss(); onEditWeek(cycleId); } }).finally(() => setBusy(false));
-            }} /> : null}
+            }} />
           <WeekCards weeks={weekNavigation.weeks} selected={slot.weekIndex} disabled={busy}
             onSelect={(index) => { void changeWeek(index); }} />
         </> : null}

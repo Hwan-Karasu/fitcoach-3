@@ -14,6 +14,7 @@ import { DEV_TRAINING_PLANS_LEDGER, devTrainingPlansCatalog } from
   "../apps/mobile/src/features/training/plans/data/DevTrainingPlansCatalog.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
+import { DevTrainingExecutionRepository } from "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 
 const WS = "synthetic-workspace-a";
 const BENCH = "sys:repdb:synthetic-bench";
@@ -30,6 +31,110 @@ function sampleDraft(): SimpleProgramDraft {
   draft = addWorkout(draft, "w2");
   return addExercise(draft, "w2", "e2", PLANK, seq("e2s"));
 }
+
+test("T02 дневник: три области меняют только свой слот, ALL сохраняет одну историческую матрицу", async () => {
+  const { plans, clients, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticSimple" });
+    const other = await clients.create({ displayName: "SyntheticOther" });
+    const draft = sampleDraft();
+    const program = await plans.createSimpleProgram(client.id, draft);
+    const changed = (workout: typeof draft.plan.workouts[number], reps: number) => fillSets({ title: "База",
+      plan: { weeks: 1, workouts: [workout] } }, workout.exercises[0]!.id, "reps", reps).plan.workouts[0]!;
+    const input = { weekIndex: 2, workoutId: "w1", workout: changed(draft.plan.workouts[0]!, 8), scope: "CURRENT" as const };
+    const local = await plans.saveSimpleWorkout(client.id, program.id, program.revision, input);
+    let weeks = await plans.getSimpleWeeks(client.id, program.id);
+    const reps = () => weeks.map((week) => week.workouts[0]!.exercises[0]!.sets[0]!.reps);
+    assert.deepEqual(reps(), [10, 8, 10, 10]);
+    assert.equal((await plans.getSimpleVersions(client.id, program.id)).length, 1, "локальная правка без глобальной версии");
+    const future = await plans.saveSimpleWorkout(client.id, program.id, local.revision,
+      { ...input, weekIndex: 3, scope: "FOLLOWING", workout: changed(weeks[2]!.workouts[0]!, 6) });
+    weeks = await plans.getSimpleWeeks(client.id, program.id);
+    assert.deepEqual(reps(), [10, 8, 6, 6]);
+    const before = weeks;
+    const all = { ...input, weekIndex: 3, scope: "ALL" as const, workout: changed(weeks[2]!.workouts[0]!, 5) };
+    const preview = await plans.previewSimpleWorkout(client.id, program.id, future.revision, all);
+    assert.deepEqual(preview.conflicts.map((conflict) => conflict.weekIndex), [1, 2]);
+    const result = await plans.saveSimpleWorkout(client.id, program.id, future.revision,
+      { ...all, replaceConflicts: preview.conflicts.map((conflict) => conflict.key) });
+    weeks = await plans.getSimpleWeeks(client.id, program.id);
+    assert.deepEqual(reps(), [5, 5, 5, 5]);
+    assert.equal(weeks.length, 4, "структурная правка не добавляет недель");
+    for (const week of weeks) assert.deepEqual(week.workouts[1], draft.plan.workouts[1], "другой слот не меняется");
+    const versions = await plans.getSimpleVersions(client.id, program.id);
+    assert.equal(versions.length, 2);
+    assert.deepEqual(versions[1]!.weeks, before);
+    assert.equal((await plans.findWorkout(client.id, program.id, "w1", 2))!.workout.exercises[0]!.sets[0]!.reps, 5);
+    await assert.rejects(plans.saveSimpleWorkout(other.id, program.id, result.revision, all), message("TARGET_NOT_FOUND"));
+    await assert.rejects(plans.saveSimpleWorkout(client.id, program.id, future.revision, all), message("PROGRAM_REVISION_CONFLICT"));
+    await plans.saveSimpleWorkout(client.id, program.id, result.revision, all);
+    assert.equal((await plans.getSimpleVersions(client.id, program.id)).length, 2, "повтор без изменений не добавляет версию");
+  } finally { await close(); }
+});
+
+test("T02 локальные планы: recovery, чужие ID, базовая правка и окончательное удаление изолированы", async () => {
+  const { plans, clients, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const b = await clients.create({ displayName: "SyntheticB" });
+    const base = sampleDraft();
+    const program = await plans.createSimpleProgram(a.id, base);
+    const foreignDraft = addExercise(setTitle(newDraft("foreign-w"), "Другая"), "foreign-w", "foreign-e", BENCH, seq("foreign-s"));
+    const foreign = await plans.createSimpleProgram(b.id, foreignDraft);
+    let nextSet = 0;
+    const personal = replaceExercise(base, "e1", "personal-e", PLANK, ["durationSec"], () => `personal-${nextSet++}`).plan.workouts[0]!;
+    const input = { weekIndex: 2, workoutId: "w1", workout: personal, scope: "CURRENT" as const };
+    const recovery = { baseRevision: program.revision, input };
+    await plans.saveSimpleWorkoutDraft(a.id, program.id, recovery);
+    assert.deepEqual(await plans.getSimpleWorkoutDraft(a.id, program.id, 2, "w1"), recovery);
+    assert.equal(await plans.getSimpleWorkoutDraft(b.id, program.id, 2, "w1"), null);
+    await assert.rejects(plans.saveSimpleWorkout(a.id, program.id, program.revision, { ...input,
+      workout: { ...personal, exercises: foreignDraft.plan.workouts[0]!.exercises } }), message("DRAFT_INVALID"));
+    assert.deepEqual(await plans.getSimpleWorkoutDraft(a.id, program.id, 2, "w1"), recovery, "отказ не очищает черновик");
+    const local = await plans.saveSimpleWorkout(a.id, program.id, program.revision, input);
+    assert.equal(await plans.getSimpleWorkoutDraft(a.id, program.id, 2, "w1"), null);
+    await plans.setExerciseRest(a.id, program.id, "personal-e", 120);
+    assert.equal((await plans.findWorkout(a.id, program.id, "w1", 2))!.workout.exercises[0]!.restSec, 120);
+    await assert.rejects(plans.saveSimpleWorkout(a.id, program.id, local.revision, input), message("PROGRAM_REVISION_CONFLICT"));
+    const current = (await plans.getSimplePlan(a.id, program.id))!;
+    const updatedBase = fillSets(current.draft, "e1", "reps", 7);
+    await plans.saveSimplePlan(a.id, program.id, current.program.revision, updatedBase);
+    const weeks = await plans.getSimpleWeeks(a.id, program.id);
+    assert.equal(weeks[0]!.workouts[0]!.exercises[0]!.sets[0]!.reps, 7);
+    assert.equal(weeks[1]!.workouts[0]!.exercises[0]!.exerciseId, PLANK, "базовая правка не затирает персональную замену");
+    assert.equal((await plans.getSimpleVersions(a.id, program.id)).length, 2);
+    await clients.setArchived(a.id, a.revision, true);
+    await clients.deleteArchivedPermanently(a.id, (await clients.get(a.id))!.revision);
+    assert.deepEqual(await plans.getSimpleVersions(a.id, program.id), []);
+    assert.deepEqual((await plans.getSimplePlan(b.id, foreign.id))!.draft, foreignDraft);
+  } finally { await close(); }
+});
+
+test("T02 замена во всех неделях не перепривязывает факты и исторический снимок не копирует выполнения", async () => {
+  const { plans, clients, shared, close } = await stores();
+  const execution = new DevTrainingExecutionRepository(shared, WS);
+  await execution.initialize();
+  try {
+    const client = await clients.create({ displayName: "SyntheticFacts" });
+    const draft = sampleDraft();
+    const program = await plans.createSimpleProgram(client.id, draft);
+    const slot = { clientId: client.id, programId: program.id, weekIndex: 1, plannedWorkoutId: "w1" };
+    await execution.saveSet({ slot, plannedExerciseId: "e1", plannedSetId: "e1s0", exerciseId: BENCH, position: 0,
+      metrics: ["load", "reps"], values: { loadGrams: 60_000, reps: 10, durationSec: null, distanceM: null },
+      setType: "NORMAL", drops: [], rpe: null, expectedRevision: null });
+    const facts = await execution.getWorkout(slot);
+    let id = 0;
+    const replacement = replaceExercise(draft, "e1", "new-plank", PLANK, ["durationSec"], () => `plank-${id++}`).plan.workouts[0]!;
+    await plans.saveSimpleWorkout(client.id, program.id, program.revision,
+      { weekIndex: 1, workoutId: "w1", workout: replacement, scope: "ALL" });
+    assert.deepEqual(await execution.getWorkout(slot), facts, "тот же факт, включая дату и исходный канонический ID");
+    assert.equal((await execution.getWorkout({ ...slot, weekIndex: 2 })).facts.size, 0);
+    const history = await plans.getSimpleVersions(client.id, program.id);
+    assert.equal(history.length, 2);
+    assert.equal(history[1]!.weeks[0]!.workouts[0]!.exercises[0]!.id, "e1");
+    assert.equal((await plans.findWorkout(client.id, program.id, "w1", 1))!.workout.exercises[0]!.id, "new-plank");
+  } finally { await execution.close(); await close(); }
+});
 
 test("T02 правки черновика: три пустых подхода, копия последнего, не меньше одного, порядок; исходник не меняется", () => {
   const base = newDraft("w1");
@@ -70,7 +175,7 @@ async function stores() {
   await clients.initialize();
   const plans = new DevTrainingPlansRepository(shared, WS);
   await plans.initialize();
-  return { clients, plans, close: async () => { await plans.close(); await clients.close(); } };
+  return { clients, plans, shared, close: async () => { await plans.close(); await clients.close(); } };
 }
 
 const message = (code: string) => (error: unknown) => error instanceof Error && error.message.includes(code);

@@ -3,6 +3,7 @@ import type { NewMesocycleInput, PeriodizedPlan, WeekEditInput, WeekEditPreview,
 import type { PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
 import type { PeriodizedDraft } from "./PeriodizedDraft.ts";
 import type { MesocycleVersion } from "./StructureVersion.ts";
+import type { SimplePlanVersion, SimpleWeek, SimpleWorkoutDraft, SimpleWorkoutEdit } from "./SimpleWorkoutEdit.ts";
 
 export interface TrainingPlansCommittedChange {
   /** Клиенты, чья библиотека изменилась. */
@@ -53,8 +54,14 @@ export interface TrainingPlansRepositoryPort {
   setExerciseRest(clientId: string, programId: string, plannedExerciseId: string, restSec: number | null,
     now?: Date): Promise<TrainingProgram>;
   /** Тренировка программы по ID — для дневника, в Простой и Расширенной программе одинаково. */
-  findWorkout(clientId: string, programId: string, plannedWorkoutId: string):
+  findWorkout(clientId: string, programId: string, plannedWorkoutId: string, weekIndex?: number):
     Promise<Readonly<{ program: TrainingProgram; workout: PlannedWorkout }> | null>;
+  getSimpleWeeks(clientId: string, programId: string): Promise<readonly SimpleWeek[]>;
+  getSimpleVersions(clientId: string, programId: string): Promise<readonly SimplePlanVersion[]>;
+  previewSimpleWorkout(clientId: string, programId: string, expectedRevision: number, input: SimpleWorkoutEdit): Promise<WeekEditPreview>;
+  saveSimpleWorkout(clientId: string, programId: string, expectedRevision: number, input: SimpleWorkoutEdit, now?: Date): Promise<TrainingProgram>;
+  getSimpleWorkoutDraft(clientId: string, programId: string, weekIndex: number, workoutId: string): Promise<SimpleWorkoutDraft | null>;
+  saveSimpleWorkoutDraft(clientId: string, programId: string, draft: SimpleWorkoutDraft): Promise<void>;
   /** Тот же слот Простой / lineageId внутри текущего мезоцикла. Нет однозначного соответствия — null в неделе. */
   getWorkoutWeekNavigation(clientId: string, programId: string, plannedWorkoutId: string): Promise<WorkoutWeekNavigation | null>;
   /** Расширенная программа этого участника: его мезоциклы, недели и выбранный мезоцикл. */

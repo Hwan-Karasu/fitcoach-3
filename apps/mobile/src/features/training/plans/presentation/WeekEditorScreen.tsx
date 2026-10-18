@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
-import { InlineNotice, LoadingState, SelectionChip, StickyEditorFooter, TrainingEditorLayout } from "../../../../shared/ui/components/public.ts";
+import { AppButton, InlineNotice, LoadingState, SelectionChip, StickyEditorFooter, TrainingEditorLayout } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
@@ -9,7 +9,8 @@ import { WEEK_SCOPES, WEEK_TYPES, weekScopeLabels, weekTypeLabels, type Mesocycl
   type WeekEditPreview, type WeekType } from "../domain/PeriodizedModel.ts";
 import { targetWeeks } from "../domain/PeriodizedRules.ts";
 import type { SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
-import { formatRange, setsSummary, validateDraft } from "../domain/SimplePlanRules.ts";
+import { validateDraft } from "../domain/SimplePlanRules.ts";
+import { StructureEditPreview } from "./StructureEditPreview.tsx";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
 import { ParticipantChips } from "./ParticipantChips.tsx";
@@ -139,11 +140,28 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
     }
     setBusy(false);
   };
+  const discard = async () => {
+    setBusy(true);
+    try {
+      const plan = await repository.getPeriodizedPlan(clientId, programId);
+      const cycle = plan?.mesocycles.find((item) => item.id === mesocycleId);
+      const week = cycle?.weeks.find((item) => item.index === weekIndex);
+      if (!plan || !cycle || !week) throw new Error("TARGET_NOT_FOUND");
+      await recovery.beforePublish();
+      await repository.clearPeriodizedDraft(clientId, programId, `week:${mesocycleId}:${weekIndex}`);
+      setDirty(false); setMesocycle(cycle); setRevision(plan.program.revision);
+      setDraft({ title: cycle.title, plan: { weeks: 1, workouts: week.workouts } });
+      setType(week.type); setScope("CURRENT"); setSelected([clientId]); setReplaceConflicts([]); setRestored(false); setMessage(null);
+    } catch { setMessage("Не удалось загрузить сохранённую неделю. Изменения остаются в редакторе."); }
+    finally { recovery.resume(); setBusy(false); }
+  };
 
   return (
     <TrainingEditorLayout>
       <Animated.ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {restored ? <InlineNotice kind="info">Восстановлены несохранённые изменения недели.</InlineNotice> : null}
+        {restored || previewError ? <AppButton variant="secondary" label="Отменить несохранённые изменения" disabled={busy}
+          onPress={() => { void discard(); }} /> : null}
         <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>
           {`${mesocycle?.title ?? ""} · Неделя ${weekIndex}`}
         </Text>
@@ -170,31 +188,8 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
           note="Правка у выбранных — в их собственных копиях этого мезоцикла." />
         {previewError ? <InlineNotice kind="error">{previewError}</InlineNotice> : preview === null
           ? <Text style={[styles.meta, { color: colors.textMuted }]}>{issues.length > 0 ? "Исправьте поля для проверки изменений." : "Проверяем персональные отличия…"}</Text>
-          : <>
-            {preview.affectedWeeks.map((item) => <Text key={item.clientId} style={[styles.meta, { color: colors.textSecondary }]}>
-              {`${names.get(item.clientId) ?? "Участник"}: недели ${item.weeks.join(", ")}`}</Text>)}
-            {preview.conflicts.length === 0 ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Конфликтов нет.</Text>
-              : <InlineNotice kind="info">Есть персональные отличия. Они сохранятся, пока вы явно не выберете общую правку.</InlineNotice>}
-            {preview.conflicts.map((conflict) => <View key={conflict.key} style={[styles.conflict, { borderColor: colors.border }]}>
-              <Text style={[styles.section, { color: colors.textPrimary }]}>{`${names.get(conflict.clientId) ?? "Участник"} · Неделя ${conflict.weekIndex}`}</Text>
-              <Text style={[styles.meta, { color: colors.textSecondary }]}>{`${conflict.operation}: ${conflict.exerciseId
-                ? lookup.get(conflict.exerciseId)?.name ?? "Упражнение" : conflict.workoutTitle}`}</Text>
-              <Text style={[styles.meta, { color: colors.textSecondary }]}>{conflict.reason === "PERSONAL_CHANGE" ? "План отличается от открытой недели."
-                : conflict.reason === "MISSING_EXERCISE" ? "Соответствующее упражнение отсутствует."
-                  : conflict.reason === "MISSING_WORKOUT" ? "Соответствующая тренировка отсутствует. При применении восстановится её план из открытой недели." : "У участника нет этого мезоцикла. Его план останется прежним."}</Text>
-              {([ ["Сейчас", conflict.currentExercise], ["После применения", conflict.proposedExercise] ] as const)
-                .map(([label, exercise]) => exercise ? <Text key={label} style={[styles.meta, { color: colors.textSecondary }]}>
-                  {`${label}: ${lookup.get(exercise.exerciseId)?.name ?? "Упражнение"} · ${setsSummary(exercise)}${exercise.rir
-                    ? ` · RIR ${formatRange(exercise.rir)}` : ""} · отдых ${exercise.restSec ?? 0} с${exercise.instruction ? ` · ${exercise.instruction}` : ""}`}
-                </Text> : null)}
-              {conflict.canReplace ? <View style={styles.chips}>
-                <SelectionChip group="Конфликт" label="Сохранить индивидуальное" selected={!replaceConflicts.includes(conflict.key)}
-                  onPress={() => { setDirty(true); setReplaceConflicts((keys) => keys.filter((key) => key !== conflict.key)); }} />
-                <SelectionChip group="Конфликт" label="Применить общую правку" selected={replaceConflicts.includes(conflict.key)}
-                  onPress={() => { setDirty(true); setReplaceConflicts((keys) => [...new Set([...keys, conflict.key])]); }} />
-              </View> : null}
-            </View>)}
-          </>}
+          : <StructureEditPreview preview={preview} names={names} lookup={lookup} replace={replaceConflicts}
+            onChange={(keys) => { setDirty(true); setReplaceConflicts(keys); }} />}
         </View>
         <WorkoutsEditor draft={draft} change={change} lookup={lookup} issues={issues} showIssues={showIssues} scrollRef={scrollRef}
           onPickExercise={(workoutId) => onPickExercise(workoutId)}
@@ -209,7 +204,6 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
 }
 
 const styles = StyleSheet.create({
-  conflict: { borderTopWidth: 1, paddingTop: 8, gap: 8 },
   application: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 8 },
   root: { flex: 1 },
   center: { flex: 1, padding: 16, justifyContent: "center" },
