@@ -403,7 +403,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const posterRef = useRef<View>(null);
   const appliedPick = useRef<string | null>(null);
   useEffect(() => {
-    if (picked === null || appliedPick.current === picked.token) return;
+    if (!picked || appliedPick.current === picked.token) return;
     appliedPick.current = picked.token;
     const [first] = picked.exerciseIds;
     if (picked.replace !== undefined && first !== undefined) setEdit({ kind: "replace", exerciseId: picked.replace, newExerciseId: first });

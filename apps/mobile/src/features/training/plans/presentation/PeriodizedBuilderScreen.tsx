@@ -96,10 +96,10 @@ export function PeriodizedBuilderScreen({ clientId, repository, exercises, listC
   const week = weeks[editing] ?? weeks[0]!;
   const draft: SimpleProgramDraft = useMemo(() => ({ title: title || "Мезоцикл", plan: { weeks: 1, workouts: week.workouts } }),
     [title, week.workouts]);
-  const touch = () => { setDirty(true); setSaved(null); };
+  const touch = () => { setDirty(true); setSaved(null); setMessage(null); };
   const updateWeek = useCallback((index: number, next: BuilderWeek) => {
     setWeeks((current) => current.map((item, at) => at === index ? next : item));
-    setDirty(true); setSaved(null);
+    setDirty(true); setSaved(null); setMessage(null);
   }, []);
   // Новые упражнения получают повторения мезоцикла (как в 2.0), если упражнение считается повторами.
   const change = useCallback((next: SimpleProgramDraft) => {
