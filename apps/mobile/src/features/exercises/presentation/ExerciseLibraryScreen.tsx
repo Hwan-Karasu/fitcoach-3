@@ -12,7 +12,8 @@ import { bodyPartLabels, equipmentLabel, trackingProfileLabels } from "../domain
 import { BODY_PARTS, TRACKING_PROFILE_IDS } from "../domain/ExerciseModel.ts";
 import { displayNameOf, filterCatalog, filterOptionCounts, NO_FILTERS, type CatalogEntry, type CatalogFilters,
   type CatalogMode } from "../domain/ExerciseRules.ts";
-import { BodyPartIcon, equipmentIcon } from "./exerciseIcons.tsx";
+import { EquipmentGlyph } from "./equipmentGlyphs.tsx";
+import { BodyPartIcon } from "./exerciseIcons.tsx";
 import { thumbnailOf } from "./exerciseImage.ts";
 import { useExerciseCatalog } from "./useExerciseCatalog.ts";
 
@@ -124,17 +125,19 @@ function CatalogSheet({ visible, title, onClose, onReset, children }: Readonly<{
  * подпись и число упражнений с учётом остальных фильтров. Выбранная — акцентная рамка и галочка; фон светлый,
  * чтобы силуэт оставался виден.
  */
-function OptionTile({ icon, label, count, selected, onPress }: Readonly<{
+function OptionTile({ icon, label, count, selected, onPress, compact = false }: Readonly<{
   icon: (color: string) => ReactNode; label: string; count: number; selected: boolean; onPress: () => void;
+  /** Оборудование: значок меньше силуэта — плитка ниже, мышцы не меняются. */
+  compact?: boolean;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
     <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: selected }} accessibilityLabel={`${label}, упражнений: ${count}`}
-      onPress={onPress} style={({ pressed }) => [styles.tile, {
+      onPress={onPress} style={({ pressed }) => [styles.tile, compact ? styles.tileCompact : null, {
         borderColor: selected ? colors.accentInk : colors.border, borderWidth: selected ? 2 : 1,
         backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: count === 0 && !selected ? 0.45 : 1 }]}>
-      <View style={styles.tileIcon}>{icon(selected ? colors.accentInk : colors.textSecondary)}</View>
+      <View style={[styles.tileIcon, compact ? styles.tileIconCompact : null]}>{icon(selected ? colors.accentInk : colors.textSecondary)}</View>
       <Text numberOfLines={2} style={[styles.tileLabel, { color: selected ? colors.accentInk : colors.textPrimary }]}>{label}</Text>
       <Text style={[styles.tileCount, { color: colors.textMuted }]}>{count}</Text>
       {selected ? <View style={[styles.tileCheck, { backgroundColor: colors.accentFill }]}>
@@ -312,7 +315,7 @@ export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, pi
         </View>
         </> : kind === "equipment" ? <>
         <View style={styles.optionWrap}>
-        {equipmentOptions.map((item) => <OptionTile key={item} icon={(color) => equipmentIcon(item, color, 30)} label={equipmentFilterLabel(item)} count={optionCounts.get(item) ?? 0}
+        {equipmentOptions.map((item) => <OptionTile key={item} compact icon={(color) => <EquipmentGlyph id={item} color={color} size={28} />} label={equipmentFilterLabel(item)} count={optionCounts.get(item) ?? 0}
           selected={filters.equipment.has(item)} onPress={() => setFilters({ ...filters, equipment: toggled(filters.equipment, item) })} />)}
         </View>
         </> : <>
@@ -360,6 +363,8 @@ const styles = StyleSheet.create({
   optionWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tile: { width: "31.6%", minHeight: 124, borderRadius: 12, alignItems: "center", paddingTop: 8, paddingBottom: 8, paddingHorizontal: 4, gap: 2 },
   tileIcon: { height: 70, alignItems: "center", justifyContent: "center" },
+  tileCompact: { minHeight: 84, paddingTop: 6, paddingBottom: 6 },
+  tileIconCompact: { height: 36 },
   tileLabel: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 15, textAlign: "center" },
   tileCount: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
   tileCheck: { position: "absolute", top: 6, right: 6, width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
