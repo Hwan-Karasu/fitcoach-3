@@ -1,5 +1,5 @@
 export { CreateProgramScreen, MesocycleCreatorScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, SimpleProgramBuilderScreen,
-  WeekEditorScreen, SimpleWorkoutEditorScreen, type PickedExercise,
+  WeekEditorScreen, SimpleWorkoutEditorScreen, type PickedExercise, type WeekCopyPort,
   type ExerciseInfo, type ExerciseLookupPort,
   type ProgramKind, type TrainingParticipantCandidate, type TrainingPlansRepositoryPort } from "./plans/public.ts";
 export { ProgramWeeksPanel, RestTimerDock, RestTimerService, TrainingSettingsScreen, WorkoutScreen, type RestSignalPort, type RestTimersPort,

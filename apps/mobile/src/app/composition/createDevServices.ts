@@ -37,6 +37,10 @@ import { createDevBootDependencies, DEV_WORKSPACE_ID } from "../bootstrap/DevBoo
 type DevClientServices = ClientRepositoryPort & ClientRecoveryDraftPort & ClientRosterPort
   & ClientChangePort & ClientArchivePort;
 
+import { createWeekCopyWorkflow } from "../../workflows/copyTrainingWeek.ts";
+import type { WeekCopyPort } from "../../features/training/plans/public.ts";
+import type { SqliteDatabaseLease } from "../../shared/db/SharedSqliteDatabase.ts";
+
 /** Explicit dev composition. Production boot will get separate, owner-scoped bindings. */
 export interface DevServices {
   readonly runSqliteProbe: () => Promise<F04ProbeReport>;
@@ -55,6 +59,8 @@ export interface DevServices {
   readonly exercises: ExerciseCatalogPort;
   /** Каталог глазами планов тренировок: название, величины подхода, миниатюра. */
   readonly exerciseLookup: ExerciseLookupPort;
+  /** §48.21, §48.24: копирование недели мезоцикла — планы и дневник в одной транзакции. */
+  readonly weekCopy: WeekCopyPort;
   /** Active session types that can consume a credit, for SESSION_TYPE packs. */
   readonly listCreditSessionTypes: () => Promise<readonly Readonly<{ id: string; name: string }>[]>;
 }
@@ -89,7 +95,8 @@ function exerciseLookup(exercises: ExerciseCatalogPort): ExerciseLookupPort {
 export function createDevServices(clients: DevClientServices, calendar: CalendarRepositoryPort,
   accounting: AccountingRepositoryPort, measurements: MeasurementRepositoryPort,
   questionnaire: QuestionnaireRepositoryPort, trainingPlans: TrainingPlansRepositoryPort,
-  trainingExecution: TrainingExecutionPort, restTimers: RestTimersPort, exercises: ExerciseCatalogPort): DevServices {
+  trainingExecution: TrainingExecutionPort, restTimers: RestTimersPort, exercises: ExerciseCatalogPort,
+  weekCopy: WeekCopyPort): DevServices {
   return {
     runSqliteProbe: () => runF04Probe(() => openExpoSqliteConnection("fitcoach_f04_probe.db")),
     clients,
@@ -104,6 +111,7 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
     activeWorkouts: createActiveWorkouts(trainingExecution, trainingPlans, clients),
     exercises,
     exerciseLookup: exerciseLookup(exercises),
+    weekCopy,
     listCreditSessionTypes: async () => (await calendar.listSessionTypes())
       .filter((type) => type.requiresCredit && !type.archived)
       .map((type) => ({ id: type.id, name: type.name })),
@@ -134,6 +142,10 @@ export function createDevRuntime(): DevRuntime {
   const exercises = new DevExerciseCatalogRepository(database, DEV_WORKSPACE_ID, systemCatalogJson as SystemCatalog);
   // Calendar commands move reservations inside their own transactions.
   calendar.subscribeCommittedChanges(() => accounting.notifyExternalChange());
+  // Общая транзакция для workflow: база открыта на всё время работы приложения, как у репозиториев.
+  let lease: Promise<SqliteDatabaseLease> | null = null;
+  const weekCopy = createWeekCopyWorkflow(async (task) => (await (lease ??= database.acquire())).writer.write(task),
+    trainingPlans.weekCopyParticipant, trainingExecution.weekCopyParticipant, exerciseLookup(exercises));
   return {
     boot: new BootCoordinator(createDevBootDependencies(
       () => openExpoSqliteConnection("fitcoach_f03_dev_gate.db"),
@@ -151,6 +163,6 @@ export function createDevRuntime(): DevRuntime {
         await exercises.initialize();
       },
     )),
-    services: createDevServices(clients, calendar, accounting, measurements, questionnaire, trainingPlans, trainingExecution, restTimers, exercises),
+    services: createDevServices(clients, calendar, accounting, measurements, questionnaire, trainingPlans, trainingExecution, restTimers, exercises, weekCopy),
   };
 }

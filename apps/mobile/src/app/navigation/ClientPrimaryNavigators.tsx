@@ -5,7 +5,7 @@ import { localDateOf, parseValueX10, type MeasurementRepositoryPort } from "../.
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
 import { NutritionWorkspacePreview } from "../../features/nutrition/public.ts";
 import { CreateProgramScreen, MesocycleCreatorScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, SimpleProgramBuilderScreen,
-  WeekEditorScreen, SimpleWorkoutEditorScreen, type PickedExercise,
+  WeekEditorScreen, SimpleWorkoutEditorScreen, type PickedExercise, type WeekCopyPort,
   type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
   type TrainingPlansRepositoryPort, ProgramWeeksPanel, WorkoutScreen, type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort,
   type WorkoutSlot } from "../../features/training/public.ts";
@@ -101,7 +101,7 @@ export function NutritionNavigator() {
  * Шапка — общая строка карточки клиента (UI-OWN-001), назад — системной кнопкой.
  */
 export function TrainingNavigator({ clientId, clientName, repository, execution, restTimers, activeWorkouts, onOpenWorkout,
-  listCandidates, exercises, exerciseLookup, onExitClient, onOpenClients }: Readonly<{
+  listCandidates, exercises, exerciseLookup, weekCopy, onExitClient, onOpenClients }: Readonly<{
   clientId: string;
   clientName: string;
   repository: TrainingPlansRepositoryPort;
@@ -112,6 +112,7 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
   listCandidates: () => Promise<readonly TrainingParticipantCandidate[]>;
   exercises: ExerciseCatalogPort;
   exerciseLookup: ExerciseLookupPort;
+  weekCopy: WeekCopyPort;
   onExitClient: () => void;
   onOpenClients: () => void;
 }>) {
@@ -150,7 +151,7 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
       <TrainingStack.Screen name="TrainingProgram">
         {({ navigation, route }) => <ProgramScreen clientId={clientId} programId={route.params.programId}
           requestedWeek={route.params.weekIndex} requestedMesocycle={route.params.mesocycleId}
-          repository={repository} listCandidates={listCandidates} exercises={exerciseLookup}
+          repository={repository} listCandidates={listCandidates} exercises={exerciseLookup} weekCopy={weekCopy}
           renderWeeks={(view) => <ProgramWeeksPanel key={view.key} clientId={clientId} programId={route.params.programId} weeks={view.weeks}
             renderWeekActions={view.weekActions} execution={execution} selectedWeek={view.selectedWeek} onSelectWeek={view.onSelectWeek}
             onOpenWorkout={(weekIndex, workoutId) => navigation.navigate("TrainingWorkout", { programId: route.params.programId, weekIndex, workoutId,

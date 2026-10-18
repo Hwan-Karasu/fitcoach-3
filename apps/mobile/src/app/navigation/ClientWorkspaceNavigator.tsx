@@ -10,7 +10,7 @@ import type { MeasurementRepositoryPort } from "../../features/measurements/publ
 import { ClientQuestionnaireScreen, type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
 import { TrainingArchivePreview, TrainingStatisticsPreview, type ExerciseLookupPort,
   type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort, type TrainingPlansRepositoryPort,
-  type WorkoutSlot } from "../../features/training/public.ts";
+  type WeekCopyPort, type WorkoutSlot } from "../../features/training/public.ts";
 import type { ExerciseCatalogPort } from "../../features/exercises/public.ts";
 import { AppButton, LoadingState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -67,7 +67,7 @@ function MoreNavigator({ clientId, questionnaire }: Readonly<{ clientId: string;
   );
 }
 
-export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, questionnaire, trainingPlans, trainingExecution, restTimers, activeWorkouts, onOpenWorkout, exercises, exerciseLookup, onOpenEdit, onOpenAccounting,
+export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, questionnaire, trainingPlans, trainingExecution, restTimers, activeWorkouts, onOpenWorkout, exercises, exerciseLookup, weekCopy, onOpenEdit, onOpenAccounting,
   onOpenMeasurements, onClose, onOpenClients }: Readonly<{
   clientId: string;
   repository: ClientRepositoryPort & ClientRosterPort;
@@ -81,6 +81,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   onOpenWorkout: (slot: WorkoutSlot) => void;
   exercises: ExerciseCatalogPort;
   exerciseLookup: ExerciseLookupPort;
+  weekCopy: WeekCopyPort;
   onOpenEdit: (clientId: string) => void;
   onOpenAccounting: (clientId: string) => void;
   onOpenMeasurements: (clientId: string) => void;
@@ -166,7 +167,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
         {() => <TrainingNavigator clientId={client.id} clientName={client.displayName} repository={trainingPlans}
           execution={trainingExecution} restTimers={restTimers} activeWorkouts={activeWorkouts} onOpenWorkout={onOpenWorkout}
           listCandidates={listCandidates} onExitClient={onClose} onOpenClients={onOpenClients}
-          exercises={exercises} exerciseLookup={exerciseLookup} />}
+          exercises={exercises} exerciseLookup={exerciseLookup} weekCopy={weekCopy} />}
       </Tabs.Screen>
       <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More}}>
         {() => <MoreNavigator clientId={client.id} questionnaire={questionnaire} />}

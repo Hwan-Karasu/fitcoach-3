@@ -12,6 +12,8 @@ import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansReposit
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
 import type { PlannedWorkout, SimplePlan } from "../domain/SimplePlanModel.ts";
 import type { SimpleWeek } from "../domain/SimpleWorkoutEdit.ts";
+import type { WeekCopyPort, WeekCopyRequest } from "../domain/WeekCopy.ts";
+import { WeekCopyFlow } from "./WeekCopyFlow.tsx";
 import { weekTypeLabels, type PeriodizedPlan } from "../domain/PeriodizedModel.ts";
 import { setsSummary } from "../domain/SimplePlanRules.ts";
 import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
@@ -33,7 +35,7 @@ export interface ProgramWeeksView {
  * и «Изменить неделю» (T04).
  */
 export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, onEditStructure,
-  onAddMesocycle, onEditWeek, onArchived, requestedWeek, requestedMesocycle }: Readonly<{
+  onAddMesocycle, onEditWeek, onArchived, requestedWeek, requestedMesocycle, weekCopy }: Readonly<{
   clientId: string;
   programId: string;
   repository: TrainingPlansRepositoryPort;
@@ -49,6 +51,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   onEditWeek: (mesocycleId: string, weekIndex: number) => void;
   onArchived: () => void;
   requestedWeek?: number;
+  /** Копирование недели мезоцикла (§48.21); без порта кнопки нет. */
+  weekCopy?: WeekCopyPort;
   requestedMesocycle?: string;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -59,6 +63,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [copyRequest, setCopyRequest] = useState<Omit<WeekCopyRequest, "sourceWeek"> | null>(null);
   const [version, setVersion] = useState(0);
   const [plan, setPlan] = useState<SimplePlan | null>(null);
   const [simpleWeeks, setSimpleWeeks] = useState<readonly SimpleWeek[]>([]);
@@ -182,6 +188,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           if (value === "rename") setRenaming(program.title); else if (value === "archive") setConfirmArchive(true);
         }} />
       {message !== null ? <InlineNotice kind="error">{message}</InlineNotice> : null}
+      {notice !== null ? <InlineNotice kind="success">{notice}</InlineNotice> : null}
       {message !== null && plan === null && periodized === null ? <AppButton label="Повторить загрузку" variant="secondary"
         onPress={() => { setMessage(null); setVersion((value) => value + 1); }} /> : null}
       {others.length > 0 ? (
@@ -215,7 +222,20 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           ) : renderWeeks?.({ key: selected.id, selectedWeek: weeksByCycle[selected.id],
             onSelectWeek: (week) => selectWeek(selected.id, week),
             weeks: selected.weeks.map((week) => ({ index: week.index, caption: weekTypeLabels[week.type], workouts: week.workouts })),
-            weekActions: (weekIndex) => <AppButton label="Изменить" onPress={() => onEditWeek(selected.id, weekIndex)} /> })}
+            weekActions: (weekIndex) => <View style={styles.row}>
+              <View style={styles.grow}><AppButton label="Изменить" onPress={() => onEditWeek(selected.id, weekIndex)} /></View>
+              {weekCopy !== undefined && selected.weeks.length > 1 ? <View style={styles.grow}>
+                <AppButton variant="secondary" label="Копировать" onPress={() => {
+                  setNotice(null); setMessage(null);
+                  setCopyRequest({ clientId, programId, mesocycleId: selected.id, targetWeek: weekIndex,
+                    expectedRevision: periodized.program.revision });
+                }} />
+              </View> : null}
+            </View> })}
+          {weekCopy !== undefined ? <WeekCopyFlow port={weekCopy} request={copyRequest}
+            weeks={selected?.weeks.map((week) => ({ index: week.index, caption: weekTypeLabels[week.type] })) ?? []}
+            onClose={() => setCopyRequest(null)}
+            onDone={(result) => { if (result.ok) setNotice(result.text); else setMessage(result.text); }} /> : null}
           {/* Долгое нажатие на мезоцикл — перетащить: порядок свой у этого клиента (у каждого участника своя книга). */}
           <Animated.ScrollView ref={bookRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.book}>
           <Sortable.Flex key={orderReset} gap={8} flexWrap="nowrap" activeItemScale={1.03} scrollableRef={bookRef}
