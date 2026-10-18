@@ -1,16 +1,16 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState, type Ref } from "react";
 import { Image, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useKeepAwake } from "expo-keep-awake";
 import { usePreventRemove, useNavigation } from "@react-navigation/native";
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { CalendarDays, Check, NotebookPen, Plus, Timer, Trash2, Users, X } from "lucide-react-native";
+import { CalendarDays, Check, Gauge, NotebookPen, Plus, Timer, Trash2, Users, X } from "lucide-react-native";
 import { ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, StatusTag,
   type StatusKind } from "../../../../shared/ui/components/public.ts";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
-import { formatDuration, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookup, type ExerciseLookupPort,
+import { formatDuration, formatRange, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookup, type ExerciseLookupPort,
   type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort } from "../../plans/public.ts";
 import { DROPS_MAX, EMPTY_VALUES, NOTE_MAX, type ActiveWorkoutCard, type ActiveWorkoutsPort, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type Side,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
@@ -18,8 +18,8 @@ import { displayOrder, localDateOf, nextOutcome, type SetField } from "../domain
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
 import { ActiveWorkoutsSheet, RpeSheet, SetTypeSheet } from "./SetPickers.tsx";
-import { compactValues, compactWithDrops, diaryFields, fieldHeaders, fieldNames, parseField, rawOf, rpeTone, setTypeLabels,
-  setTypeTone, shortDate, workoutStatusLabels } from "./setFormat.ts";
+import { compactValues, compactWithDrops, diaryFields, fieldHeaders, fieldNames, parseField, planText, rawOf, rpeTone, sanitizeField,
+  setTypeLabels, setTypeTone, shortDate, workoutStatusLabels } from "./setFormat.ts";
 import { extraWarmups, useWorkoutDiary, type SetPatch } from "./useWorkoutDiary.ts";
 
 /** Пауза после последнего нажатия, после которой значение ячейки записывается. */
@@ -43,11 +43,14 @@ const hasValues = (values: SetValues) => Object.values(values).some((value) => v
 /**
  * Ячейка фактического значения: свой текст ввода; запись — через паузу после ввода или при уходе фокуса.
  * Отложенная запись регистрируется, чтобы смена исхода сначала дописала последнее значение (§48.23 п. 5).
+ * Кнопка клавиатуры: «Далее» — в соседнюю ячейку строки (повторы → кг), на последней — «Готово».
  */
-function ValueCell({ cellKey, field, value, pending, onCommit }: Readonly<{
+const ValueCell = forwardRef(function ValueCell({ cellKey, field, value, pending, onNext, onCommit }: Readonly<{
   cellKey: string; field: SetField; value: number | null; pending: PendingRegistry;
+  /** Следующая ячейка строки; нет — ячейка последняя. */
+  onNext: (() => void) | null;
   onCommit: (value: number | null) => void;
-}>) {
+}>, ref: Ref<TextInput>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const raw = rawOf({ ...EMPTY_VALUES, [field]: value }, field);
@@ -79,12 +82,15 @@ function ValueCell({ cellKey, field, value, pending, onCommit }: Readonly<{
   useEffect(() => () => { if (pending.has(cellKey)) flush(); }, [cellKey, flush, pending]);
 
   return (
-    <TextInput value={text} placeholder="—" placeholderTextColor={colors.textMuted} selectTextOnFocus
+    <TextInput ref={ref} value={text} placeholder="—" placeholderTextColor={colors.textMuted} selectTextOnFocus
       keyboardType={field === "durationSec" ? "numbers-and-punctuation" : field === "loadGrams" ? "decimal-pad" : "number-pad"}
       accessibilityLabel={fieldNames[field]}
+      returnKeyType={onNext === null ? "done" : "next"} submitBehavior={onNext === null ? "blurAndSubmit" : "submit"}
+      onSubmitEditing={() => onNext?.()}
       onFocus={() => { focused.current = true; }}
       onBlur={() => { focused.current = false; flush(); }}
-      onChangeText={(next) => {
+      onChangeText={(typed) => {
+        const next = sanitizeField(field, typed);
         textRef.current = next;
         setText(next);
         if (timer.current !== null) clearTimeout(timer.current);
@@ -98,7 +104,7 @@ function ValueCell({ cellKey, field, value, pending, onCommit }: Readonly<{
       style={[styles.input, { color: colors.textPrimary, backgroundColor: colors.input,
         borderColor: invalid ? colors.danger : colors.border }]} />
   );
-}
+});
 
 /**
  * Заметка о выполнении упражнения (§48.67): запись через паузу после ввода или при уходе фокуса; отложенная
@@ -184,6 +190,18 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
   const background = tone !== null ? withAlpha(tone, confirmed ? 0.3 : 0.14)
     : confirmed ? withAlpha(colors.success, 0.14) : "transparent";
   const manualSpacer = mode === "MANUAL" ? <View style={styles.side} /> : null;
+  const inputs = useRef(new Map<string, TextInput | null>()).current;
+  /** Ячейки одной строки (подход, сторона или мини-сет) с переходом «Далее» слева направо. */
+  const cells = (prefix: string, valueOf: (field: SetField) => number | null, commit: (field: SetField, value: number | null) => void) =>
+    fields.map((field, index) => {
+      const next = fields[index + 1];
+      return (
+        <ValueCell key={field} ref={(node) => { inputs.set(`${prefix}:${field}`, node); }} cellKey={`${prefix}:${field}`}
+          field={field} value={valueOf(field)} pending={pending}
+          onNext={next === undefined ? null : () => inputs.get(`${prefix}:${next}`)?.focus()}
+          onCommit={(value) => commit(field, value)} />
+      );
+    });
   // §48.80: одна засчитанная сторона — подход частично выполнен (номер подсвечен наполовину).
   const partial = sided && confirmed && fact?.sides?.left.confirmed !== fact?.sides?.right.confirmed;
   const full = confirmed && !partial;
@@ -193,10 +211,8 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
     return <>
       <Text accessibilityLabel={`${side === "L" ? "Левая" : "Правая"} сторона${done ? ", выполнена" : ""}`}
         style={[styles.sideLabel, { color: done ? colors.success : colors.textSecondary }]}>{side === "L" ? "Л" : "П"}</Text>
-      {fields.map((field) => (
-        <ValueCell key={field} cellKey={`${set.id}:${side}:${field}`} field={field} value={sideFact?.values[field] ?? null}
-          pending={pending} onCommit={(value) => onSave(target, { side: { side, fields: { [field]: value } } })} />
-      ))}
+      {cells(`${set.id}:${side}`, (field) => sideFact?.values[field] ?? null,
+        (field, value) => onSave(target, { side: { side, fields: { [field]: value } } }))}
     </>;
   };
   const sideCheck = (side: Side) => {
@@ -223,7 +239,7 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
             backgroundColor: full ? colors.success : partial ? withAlpha(colors.success, 0.35) : colors.surface }]}>
           <Text style={[styles.markerText, { color: full ? colors.canvas : tone ?? colors.textPrimary }]}>{marker}</Text>
         </Pressable>
-        <Text style={[styles.plan, { color: colors.textSecondary }]} numberOfLines={1}>{compactValues(set, fields)}</Text>
+        <Text style={[styles.plan, { color: colors.textSecondary }]} numberOfLines={1}>{number === null ? "—" : planText(set, fields)}</Text>
         <Pressable accessibilityRole="button" disabled={previous === undefined} hitSlop={6} style={styles.previous}
           accessibilityLabel={previous === undefined ? "Прошлого результата нет" : `Перенести прошлый результат ${previousText}`}
           onPress={() => {
@@ -235,13 +251,12 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
             {previousText}
           </Text>
         </Pressable>
-        {sided ? sideRow("L") : fields.map((field) => (
-          <ValueCell key={field} cellKey={`${set.id}:${field}`} field={field} value={fact?.values[field] ?? null} pending={pending}
-            onCommit={(value) => onSave(target, { fields: { [field]: value } })} />
-        ))}
+        {sided ? sideRow("L") : cells(set.id, (field) => fact?.values[field] ?? null,
+          (field, value) => onSave(target, { fields: { [field]: value } }))}
         <Pressable accessibilityRole="button" accessibilityLabel={fact?.rpe ? `RPE ${fact.rpe}. Изменить` : "Указать RPE"} hitSlop={6}
           onPress={() => onPickRpe(target)} style={styles.side}>
-          <Text style={[styles.rpeText, { color: fact?.rpe ? rpeTone(fact.rpe, colors) : colors.textMuted }]}>{fact?.rpe ?? "—"}</Text>
+          {fact?.rpe ? <Text style={[styles.rpeText, { color: rpeTone(fact.rpe, colors) }]}>{fact.rpe}</Text>
+            : <Gauge size={20} color={colors.textMuted} strokeWidth={1.8} />}
         </Pressable>
         {mode === "MANUAL" && sided ? sideCheck("L") : null}
         {mode === "MANUAL" && !sided ? (
@@ -270,10 +285,8 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
             <View style={styles.markerSpace} />
             <View style={styles.plan} />
             <Text style={[styles.dropLabel, { color: colors.textSecondary }]}>{`↳ ${index + 2}`}</Text>
-            {fields.map((field) => (
-              <ValueCell key={field} cellKey={`${set.id}:d${index}:${field}`} field={field} value={drop[field]} pending={pending}
-                onCommit={(value) => onSave(target, { drop: { index, fields: { [field]: value } } })} />
-            ))}
+            {cells(`${set.id}:d${index}`, (field) => drop[field],
+              (field, value) => onSave(target, { drop: { index, fields: { [field]: value } } }))}
             <Pressable accessibilityRole="button" accessibilityLabel={`Убрать мини-сет ${index + 2}`} hitSlop={6}
               disabled={confirmed || drops.length <= 1} style={[styles.side, (confirmed || drops.length <= 1) && styles.dim]}
               onPress={() => onSave(target, { drops: drops.filter((_, item) => item !== index) })}>
@@ -472,7 +485,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         {workout.exercises.map((exercise) => {
           const info = lookup.get(exercise.exerciseId);
           const fields = diaryFields(info?.metrics ?? []);
-          const extras = extraWarmups(state, exercise.id).map((fact) => ({ set: { id: fact.plannedSetId, reps: null,
+          const extras = extraWarmups(state, exercise.id).map((fact) => ({ set: { id: fact.plannedSetId, reps: null, repsMax: null,
             loadGrams: null, durationSec: null, distanceM: null }, position: fact.position, setType: fact.setType }));
           const rows = displayOrder([...extras, ...exercise.sets.map((set, position) => ({ set, position,
             setType: state.facts.get(set.id)?.setType ?? "NORMAL" }))]);
@@ -483,6 +496,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                 {info?.thumbnail != null ? <Image source={info.thumbnail} style={[styles.thumb, { backgroundColor: colors.input }]} /> : null}
                 <View style={styles.exerciseText}>
                   <Text style={[styles.exercise, { color: colors.textPrimary }]} numberOfLines={2}>{info?.name ?? "Упражнение"}</Text>
+                  <View style={styles.subRow}>
                   <Pressable accessibilityRole="button" hitSlop={8} onPress={() => { Keyboard.dismiss(); setRestFor(exercise); }}
                     accessibilityLabel={exercise.restSec === null ? "Таймер отдыха выключен. Изменить"
                       : `Отдых ${formatDuration(exercise.restSec)}. Изменить`}
@@ -492,6 +506,11 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                       {exercise.restSec === null ? "Без таймера" : formatDuration(exercise.restSec)}
                     </Text>
                   </Pressable>
+                  {exercise.rir !== null ? (
+                    <Text accessibilityLabel={`Плановый RIR ${formatRange(exercise.rir)}`}
+                      style={[styles.restText, { color: colors.textSecondary }]}>{`RIR ${formatRange(exercise.rir)}`}</Text>
+                  ) : null}
+                  </View>
                 </View>
                 <Text style={[styles.meta, { color: colors.textSecondary }]}>{`${done}/${rows.length}`}</Text>
               </View>
@@ -617,6 +636,7 @@ const styles = StyleSheet.create({
   thumb: { width: 40, height: 40, borderRadius: 8 },
   exerciseText: { flex: 1, gap: 2 },
   exercise: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
+  subRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   rest: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", minHeight: 28 },
   restText: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18 },
   block: { borderRadius: 10, paddingVertical: 2, paddingHorizontal: 2, gap: 4 },

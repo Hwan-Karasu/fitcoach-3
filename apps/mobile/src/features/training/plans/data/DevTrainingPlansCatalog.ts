@@ -172,4 +172,15 @@ export const devTrainingPlansCatalog: readonly MigrationStep[] = [{
     `ALTER TABLE dev_training_planned_exercises ADD COLUMN instruction TEXT
       CHECK (instruction IS NULL OR length(trim(instruction)) BETWEEN 1 AND 500)`,
   ],
+}, {
+  version: 6,
+  checksum: "t02-dev-training-plans-v6-rep-ranges-rir-20261018",
+  statements: [
+    // Как в 2.0: повторы «8–12» (верхняя граница) и плановый RIR «1–2» у упражнения.
+    `ALTER TABLE dev_training_planned_sets ADD COLUMN reps_max INTEGER
+      CHECK (reps_max IS NULL OR (reps IS NOT NULL AND reps_max > reps AND reps_max <= 999))`,
+    `ALTER TABLE dev_training_planned_exercises ADD COLUMN rir_min INTEGER CHECK (rir_min IS NULL OR rir_min BETWEEN 0 AND 10)`,
+    `ALTER TABLE dev_training_planned_exercises ADD COLUMN rir_max INTEGER
+      CHECK (rir_max IS NULL OR (rir_min IS NOT NULL AND rir_max > rir_min AND rir_max <= 10))`,
+  ],
 }];

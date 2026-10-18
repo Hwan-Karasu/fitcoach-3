@@ -3,10 +3,19 @@
  * ID тренировок, упражнений и подходов стабильны между сохранениями — к ним привяжутся факты (§48.5.7).
  */
 
+/** Число или диапазон «от–до» (повторы, RIR). */
+export interface PlanRange {
+  readonly min: number;
+  readonly max: number | null;
+}
+
 /** Плановые значения подхода. Какие поля используются — решает профиль учёта упражнения (§33). */
 export interface PlannedSet {
   readonly id: string;
+  /** Плановые повторы; при диапазоне «8–12» — нижняя граница. */
   readonly reps: number | null;
+  /** Верхняя граница диапазона повторов (как в 2.0); `null` — одно число. */
+  readonly repsMax: number | null;
   /** Вес, доп. вес или помощь — в граммах, чтобы 62,5 и 1,25 кг хранились точно. */
   readonly loadGrams: number | null;
   readonly durationSec: number | null;
@@ -15,17 +24,23 @@ export interface PlannedSet {
 
 export interface PlannedExercise {
   readonly id: string;
+  /** Расширенная программа: «родство» с упражнением базовой недели (§48.6); у Простой — нет. */
+  readonly lineageId?: string;
   /** Стабильный ID упражнения каталога (`sys:repdb:…` или `usr:…`). */
   readonly exerciseId: string;
   /** §48.56: свой отдых упражнения в секундах; `null` — таймер у упражнения выключен. */
   readonly restSec: number | null;
   /** §48.67, §48.78: плановое указание тренера (что делать, на что смотреть, темп); не фактическая заметка. */
   readonly instruction: string | null;
+  /** Плановый запас повторений RIR (как в 2.0): «2» или «1–2»; `null` — не задан. */
+  readonly rir: PlanRange | null;
   readonly sets: readonly PlannedSet[];
 }
 
 export interface PlannedWorkout {
   readonly id: string;
+  /** Расширенная программа: «родство» с тренировкой базовой недели (§48.6); у Простой — нет. */
+  readonly lineageId?: string;
   readonly title: string;
   readonly exercises: readonly PlannedExercise[];
 }
@@ -48,5 +63,6 @@ export const DEFAULT_WEEKS = 4;
 /** Отдых нового упражнения и допустимые границы: барабан 0–60 мин и 0–59 с (решение владельца 2026-10-18). */
 export const REST_DEFAULT_SEC = 90;
 export const INSTRUCTION_MAX = 500;
+export const RIR_MAX = 10;
 export const REST_MIN_SEC = 1;
 export const REST_MAX_SEC = 3600;

@@ -7,9 +7,9 @@ import { AppButton, AppIconButton, InlineNotice, LoadingState, StickyEditorFoote
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
-import { addExercise, newDraft, setTitle, setWeeks } from "../domain/SimplePlanEdits.ts";
+import { addExercise, newDraft, replaceExercise, setTitle, setWeeks } from "../domain/SimplePlanEdits.ts";
 import { WEEKS_MAX, WEEKS_MIN, type SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
-import { validateDraft } from "../domain/SimplePlanRules.ts";
+import { setFieldsOf, validateDraft } from "../domain/SimplePlanRules.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
 import { newPlanId, WorkoutsEditor } from "./WorkoutsEditor.tsx";
@@ -35,9 +35,10 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
   programId: string | null;
   repository: TrainingPlansRepositoryPort;
   exercises: ExerciseLookupPort;
-  /** Упражнение, выбранное в каталоге для тренировки (передаёт навигация). */
-  picked: Readonly<{ token: string; workoutId: string; exerciseId: string }> | null;
-  onPickExercise: (workoutId: string) => void;
+  /** Упражнение, выбранное в каталоге для тренировки (передаёт навигация); `replace` — какое заменить. */
+  picked: Readonly<{ token: string; workoutId: string; exerciseId: string; replace?: string }> | null;
+  /** Открыть каталог: добавить упражнение или (`replace`) заменить им имеющееся. */
+  onPickExercise: (workoutId: string, replace?: string) => void;
   onSaved: (programId: string) => void;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -75,13 +76,16 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
   }, [clientId, key, repository, revision]);
   useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
 
-  // Выбранное в каталоге упражнение добавляется один раз.
+  // Выбранное в каталоге упражнение добавляется (или заменяет «⇄») один раз.
   useEffect(() => {
-    if (picked === null || draft === null || appliedPick.current === picked.token) return;
+    if (picked === null || draft === null || lookup === null || appliedPick.current === picked.token) return;
     appliedPick.current = picked.token;
     const plannedId = newPlanId("e");
-    change(addExercise(draft, picked.workoutId, plannedId, picked.exerciseId, () => newPlanId("s")));
-  }, [change, draft, picked]);
+    change(picked.replace === undefined
+      ? addExercise(draft, picked.workoutId, plannedId, picked.exerciseId, () => newPlanId("s"))
+      : replaceExercise(draft, picked.replace, plannedId, picked.exerciseId, setFieldsOf(lookup.get(picked.exerciseId)?.metrics ?? []),
+        () => newPlanId("s")));
+  }, [change, draft, lookup, picked]);
 
   const metricsOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.metrics ?? null, [lookup]);
   const issues = useMemo(() => draft === null || lookup === null ? [] : validateDraft(draft, metricsOf), [draft, lookup, metricsOf]);
@@ -138,7 +142,8 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
         </View>
 
         <WorkoutsEditor draft={draft} change={change} lookup={lookup} issues={issues} showIssues={showIssues}
-          scrollRef={scrollRef} onPickExercise={onPickExercise} />
+          scrollRef={scrollRef} onPickExercise={(workoutId) => onPickExercise(workoutId)}
+          onReplaceExercise={(workoutId, plannedId) => onPickExercise(workoutId, plannedId)} />
       </Animated.ScrollView>
 
       <StickyEditorFooter actionLabel={programId === null ? "Создать программу" : "Сохранить"} busy={busy}
@@ -158,15 +163,4 @@ const styles = StyleSheet.create({
   weeksLabel: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
   weeksValue: { minWidth: 28, textAlign: "center", fontFamily: fonts.semibold, fontSize: 18 },
   meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
-  card: { borderWidth: 1, borderRadius: 12, overflow: "hidden" },
-  workoutHead: { flexDirection: "row", alignItems: "flex-end", gap: 4, padding: 12, paddingRight: 4 },
-  exerciseRow: { flexDirection: "row", alignItems: "stretch", minHeight: 60, borderTopWidth: StyleSheet.hairlineWidth },
-  handle: { width: 40, flex: 1, alignItems: "center", justifyContent: "center" },
-  exercisePress: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, paddingRight: 12, paddingVertical: 8 },
-  thumb: { width: 44, height: 44, borderRadius: 8, overflow: "hidden", alignItems: "center", justifyContent: "center" },
-  thumbImage: { width: 44, height: 44 },
-  exerciseName: { fontFamily: fonts.medium, fontSize: 15, lineHeight: 20 },
-  empty: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, paddingHorizontal: 12, paddingBottom: 8 },
-  addRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, minHeight: 48, borderTopWidth: StyleSheet.hairlineWidth },
-  addText: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 19 },
 });

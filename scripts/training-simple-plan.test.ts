@@ -4,10 +4,10 @@ import test from "node:test";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant, NEW_SIMPLE_DRAFT_KEY } from
   "../apps/mobile/src/features/training/plans/data/DevTrainingPlansRepository.ts";
-import { addExercise, addSet, addWorkout, fillSets, newDraft, removeExercise, removeSet, reorderExercises, setTitle,
-  setInstruction, setRest, setSetCount, updateSet } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
+import { addExercise, addSet, addWorkout, fillSets, newDraft, removeExercise, removeSet, reorderExercises, reorderWorkouts, setTitle,
+  replaceExercise, setInstruction, setRepsRange, setRest, setRir, setSetCount, updateSet } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
 import type { SimpleProgramDraft } from "../apps/mobile/src/features/training/plans/domain/SimplePlanModel.ts";
-import { parseDuration, parseLoad, setsSummary, validateDraft, type TrackingMetric } from
+import { formatRange, parseDuration, parseLoad, parseRange, sanitizeRange, setsSummary, validateDraft, type TrackingMetric } from
   "../apps/mobile/src/features/training/plans/domain/SimplePlanRules.ts";
 import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
 import { DEV_TRAINING_PLANS_LEDGER, devTrainingPlansCatalog } from
@@ -234,4 +234,60 @@ test('T02 «Подходов» в карточке (как в 2.0): больше
   assert.deepEqual(setSetCount(five, 'e1', 2, id).plan.workouts[0]!.exercises[0]!.sets.map((set) => set.id), ['e1s0', 'e1s1']);
   assert.equal(setSetCount(five, 'e1', 0, id).plan.workouts[0]!.exercises[0]!.sets.length, 1, 'не меньше одного');
   assert.equal(setSetCount(five, 'e1', 99, id).plan.workouts[0]!.exercises[0]!.sets.length, 20, 'не больше 20');
+});
+
+test("T02 повторы и RIR как в 2.0: число или диапазон, буквы не вводятся", () => {
+  assert.equal(sanitizeRange("8a-1x2"), "8-12", "буквы выбрасываются");
+  assert.equal(sanitizeRange("8–12—"), "8-12", "длинные тире — одно тире");
+  assert.deepEqual(parseRange("8"), { min: 8, max: null });
+  assert.deepEqual(parseRange("8-12"), { min: 8, max: 12 });
+  assert.equal(parseRange("8-"), "invalid", "незаконченный диапазон");
+  assert.equal(parseRange("12-8"), "invalid", "по убыванию нельзя");
+  assert.equal(parseRange(""), null);
+  assert.equal(formatRange({ min: 8, max: 12 }), "8–12");
+  const ranged = setRir(setRepsRange(sampleDraft(), "e1", { min: 8, max: 12 }), "e1", { min: 1, max: 2 });
+  const bench = ranged.plan.workouts[0]!.exercises[0]!;
+  assert.deepEqual(bench.sets.map((set) => [set.reps, set.repsMax]), [[8, 12], [8, 12], [8, 12]]);
+  assert.deepEqual(bench.rir, { min: 1, max: 2 });
+  assert.equal(setsSummary(bench), "3 × 60 кг × 8–12");
+  assert.deepEqual(validateDraft(ranged, metricsOf), []);
+  assert.ok(validateDraft(setRir(ranged, "e1", { min: 3, max: 2 }), metricsOf).length > 0, "RIR по убыванию — ошибка");
+});
+
+test("T02 «⇄ Заменить» (§48.5.7 п. 1): новая идентичность на том же месте, план — по профилю нового", () => {
+  let n = 0;
+  const id = () => "n" + String(n++);
+  const ranged = setRir(setRepsRange(sampleDraft(), "e1", { min: 8, max: 12 }), "e1", { min: 2, max: null });
+  const replaced = replaceExercise(ranged, "e1", "e9", PLANK, ["durationSec"], id);
+  const swapped = replaced.plan.workouts[0]!.exercises[0]!;
+  assert.equal(swapped.id, "e9", "новое плановое упражнение — новый ID");
+  assert.equal(swapped.exerciseId, PLANK);
+  assert.deepEqual(swapped.sets.map((set) => set.id), ["n0", "n1", "n2"], "подходы — новые ID, число то же");
+  assert.deepEqual(swapped.sets.map((set) => [set.reps, set.loadGrams]), [[null, null], [null, null], [null, null]],
+    "повторы и вес не подходят планке");
+  assert.equal(swapped.rir, null);
+  const sameProfile = replaceExercise(ranged, "e1", "e8", "sys:repdb:synthetic-row", ["loadGrams", "reps"], id).plan.workouts[0]!.exercises[0]!;
+  assert.deepEqual([sameProfile.sets[0]!.reps, sameProfile.sets[0]!.repsMax, sameProfile.rir], [8, 12, { min: 2, max: null }]);
+});
+
+test("T02 диапазоны и RIR сохраняются в хранилище", async () => {
+  const { clients, plans, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const draft = setRir(setRepsRange(sampleDraft(), "e1", { min: 8, max: 12 }), "e1", { min: 1, max: 2 });
+    const program = await plans.createSimpleProgram(a.id, draft);
+    const loaded = (await plans.getSimplePlan(a.id, program.id))!.draft.plan.workouts[0]!.exercises[0]!;
+    assert.deepEqual([loaded.sets[0]!.reps, loaded.sets[0]!.repsMax, loaded.rir], [8, 12, { min: 1, max: 2 }]);
+  } finally {
+    await close();
+  }
+});
+
+test("T02 порядок тренировок перетаскиванием: новый порядок целиком, неполный список не применяется", () => {
+  const draft = sampleDraft();
+  const swapped = reorderWorkouts(draft, ["w2", "w1"]);
+  assert.deepEqual(swapped.plan.workouts.map((workout) => workout.id), ["w2", "w1"]);
+  assert.deepEqual(swapped.plan.workouts[1]!.exercises.map((item) => item.id), ["e1"], "упражнения едут вместе с тренировкой");
+  assert.deepEqual(reorderWorkouts(draft, ["w2"]).plan.workouts.map((workout) => workout.id), ["w1", "w2"]);
+  assert.deepEqual(draft.plan.workouts.map((workout) => workout.id), ["w1", "w2"], "исходник не меняется");
 });

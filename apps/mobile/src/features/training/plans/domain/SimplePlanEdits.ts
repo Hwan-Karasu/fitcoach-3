@@ -1,7 +1,8 @@
 import { produce, type Draft } from "immer";
-import { DEFAULT_WEEKS, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, type PlannedSet,
+import { DEFAULT_WEEKS, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, type PlannedSet, type PlanRange,
   type SimpleProgramDraft } from "./SimplePlanModel.ts";
 import type { SetField } from "./SimplePlanRules.ts";
+import type { PlannedExercise } from "./SimplePlanModel.ts";
 
 /**
  * Правки черновика конструктора (immer): каждая возвращает новый черновик, исходный не меняется.
@@ -10,7 +11,7 @@ import type { SetField } from "./SimplePlanRules.ts";
 
 export const DEFAULT_SETS = 3;
 
-const emptySet = (id: string): PlannedSet => ({ id, reps: null, loadGrams: null, durationSec: null, distanceM: null });
+const emptySet = (id: string): PlannedSet => ({ id, reps: null, repsMax: null, loadGrams: null, durationSec: null, distanceM: null });
 
 export function newDraft(firstWorkoutId: string): SimpleProgramDraft {
   return { title: "", plan: { weeks: DEFAULT_WEEKS, workouts: [{ id: firstWorkoutId, title: "Тренировка 1", exercises: [] }] } };
@@ -59,7 +60,7 @@ export const moveWorkout = (draft: SimpleProgramDraft, workoutId: string, direct
 /** Новое упражнение в конец тренировки с подходами по умолчанию (пустые плановые значения). */
 export const addExercise = (draft: SimpleProgramDraft, workoutId: string, plannedId: string, exerciseId: string,
   setId: (index: number) => string) => produce(draft, (d) => {
-  workoutOf(d, workoutId)?.exercises.push({ id: plannedId, exerciseId, restSec: REST_DEFAULT_SEC, instruction: null,
+  workoutOf(d, workoutId)?.exercises.push({ id: plannedId, exerciseId, restSec: REST_DEFAULT_SEC, instruction: null, rir: null,
     sets: Array.from({ length: DEFAULT_SETS }, (_, index) => emptySet(setId(index))) });
 });
 
@@ -82,12 +83,21 @@ export const withRestDefaults = (draft: SimpleProgramDraft): SimpleProgramDraft 
     for (const exercise of workout.exercises) {
       if (exercise.restSec === undefined) exercise.restSec = REST_DEFAULT_SEC;
       if (exercise.instruction === undefined) exercise.instruction = null;
+      if (exercise.rir === undefined) exercise.rir = null;
+      for (const set of exercise.sets) if (set.repsMax === undefined) set.repsMax = null;
     }
   }
 });
 
 export const removeExercise = (draft: SimpleProgramDraft, plannedId: string) => produce(draft, (d) => {
   for (const workout of d.plan.workouts) workout.exercises = workout.exercises.filter((item) => item.id !== plannedId);
+});
+
+/** Новый порядок тренировок (перетаскивание); применяется, только если в нём ровно все тренировки. */
+export const reorderWorkouts = (draft: SimpleProgramDraft, order: readonly string[]) => produce(draft, (d) => {
+  const byId = new Map(d.plan.workouts.map((item) => [item.id, item]));
+  const sorted = order.flatMap((id) => { const item = byId.get(id); return item === undefined ? [] : [item]; });
+  if (sorted.length === d.plan.workouts.length) d.plan.workouts = sorted;
 });
 
 /** Новый порядок упражнений тренировки (после перетаскивания); ID, которых нет, игнорируются. */
@@ -105,6 +115,39 @@ export const addSet = (draft: SimpleProgramDraft, plannedId: string, setId: stri
   if (exercise === undefined) return;
   const last = exercise.sets.at(-1);
   exercise.sets.push(last === undefined ? emptySet(setId) : { ...last, id: setId });
+});
+
+/** «Повторы» в карточке (как в 2.0): число или диапазон — во все подходы упражнения; `null` — пусто. */
+export const setRepsRange = (draft: SimpleProgramDraft, plannedId: string, range: PlanRange | null) => produce(draft, (d) => {
+  const exercise = exerciseOf(d, plannedId);
+  if (exercise === undefined) return;
+  for (const set of exercise.sets) { set.reps = range?.min ?? null; set.repsMax = range?.max ?? null; }
+});
+
+/** «RIR» в карточке (как в 2.0): число или диапазон. */
+export const setRir = (draft: SimpleProgramDraft, plannedId: string, range: PlanRange | null) => produce(draft, (d) => {
+  const exercise = exerciseOf(d, plannedId);
+  if (exercise !== undefined) exercise.rir = range;
+});
+
+/**
+ * «⇄ Заменить» (§48.5.7 п. 1): новое упражнение получает новую идентичность (ID упражнения и подходов),
+ * поэтому факты прежнего за ним не переходят. Сохраняются место в тренировке, число подходов и то из плана,
+ * что подходит новому профилю (повторы, RIR, отдых); указание относилось к прежнему — сбрасывается.
+ */
+export const replaceExercise = (draft: SimpleProgramDraft, plannedId: string, newPlannedId: string, exerciseId: string,
+  allowed: readonly SetField[], setId: () => string) => produce(draft, (d) => {
+  for (const workout of d.plan.workouts) {
+    const index = workout.exercises.findIndex((item) => item.id === plannedId);
+    if (index < 0) continue;
+    const old = workout.exercises[index] as PlannedExercise;
+    const keep = (field: SetField, value: number | null) => allowed.includes(field) ? value : null;
+    workout.exercises[index] = { id: newPlannedId, exerciseId, restSec: old.restSec, instruction: null,
+      rir: allowed.includes("reps") ? old.rir : null,
+      sets: old.sets.map((set) => ({ id: setId(), reps: keep("reps", set.reps), repsMax: keep("reps", set.repsMax),
+        loadGrams: keep("loadGrams", set.loadGrams), durationSec: keep("durationSec", set.durationSec),
+        distanceM: keep("distanceM", set.distanceM) })) };
+  }
 });
 
 export const SETS_MAX = 20;

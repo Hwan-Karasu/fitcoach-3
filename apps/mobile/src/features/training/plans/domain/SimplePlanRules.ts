@@ -1,5 +1,5 @@
 import { normalizeTitle } from "./ProgramRules.ts";
-import { INSTRUCTION_MAX, REST_MAX_SEC, REST_MIN_SEC, WEEKS_MAX, WEEKS_MIN, type PlannedExercise, type PlannedSet, type SimpleProgramDraft } from "./SimplePlanModel.ts";
+import { INSTRUCTION_MAX, REST_MAX_SEC, REST_MIN_SEC, RIR_MAX, WEEKS_MAX, WEEKS_MIN, type PlannedExercise, type PlannedSet, type PlanRange, type SimpleProgramDraft } from "./SimplePlanModel.ts";
 
 /** §33.2 Величины подхода (тот же контракт, что у каталога упражнений; профиль упражнения даёт каталог). */
 export type TrackingMetric = "reps" | "load" | "addedLoad" | "assistance" | "duration" | "distance";
@@ -56,6 +56,15 @@ export function validateDraft(draft: SimpleProgramDraft,
         || exercise.restSec > REST_MAX_SEC)) {
         issues.push({ workoutId: workout.id, exerciseId: exercise.id, message: "Отдых — от 1 секунды до 60 минут." });
       }
+      if (exercise.rir !== null && (!Number.isInteger(exercise.rir.min) || exercise.rir.min < 0 || exercise.rir.min > RIR_MAX
+        || (exercise.rir.max !== null && (!Number.isInteger(exercise.rir.max) || exercise.rir.max <= exercise.rir.min
+          || exercise.rir.max > RIR_MAX)))) {
+        issues.push({ workoutId: workout.id, exerciseId: exercise.id, message: `RIR — от 0 до ${RIR_MAX}, «от–до» по возрастанию.` });
+      }
+      if (exercise.sets.some((set) => set.repsMax !== null && (set.reps === null || !Number.isInteger(set.repsMax)
+        || set.repsMax <= set.reps || set.repsMax > SET_LIMITS.reps.max))) {
+        issues.push({ workoutId: workout.id, exerciseId: exercise.id, message: "Повторы «от–до» — по возрастанию." });
+      }
       if (exercise.instruction !== null && (exercise.instruction.trim() === "" || exercise.instruction.length > INSTRUCTION_MAX)) {
         issues.push({ workoutId: workout.id, exerciseId: exercise.id, message: `Указание — до ${INSTRUCTION_MAX} символов.` });
       }
@@ -75,6 +84,30 @@ export function validateDraft(draft: SimpleProgramDraft,
     }
   }
   return issues;
+}
+
+/** Только цифры и одно тире: буквы и прочее не вводятся (как просил владелец для «Повторы» и «RIR»). */
+export function sanitizeRange(text: string): string {
+  const cleaned = text.replace(/[‐-―−]/gu, "-").replace(/[^\d-]/gu, "");
+  const dash = cleaned.indexOf("-");
+  return dash < 0 ? cleaned : `${cleaned.slice(0, dash + 1)}${cleaned.slice(dash + 1).replace(/-/gu, "")}`;
+}
+
+/** «8» или «8-12» → диапазон; пусто → null; неполный или убывающий → "invalid". */
+export function parseRange(text: string): PlanRange | null | "invalid" {
+  const value = sanitizeRange(text);
+  if (value === "") return null;
+  const match = /^(\d{1,3})(?:-(\d{1,3}))?$/u.exec(value);
+  if (match === null) return "invalid";
+  const min = Number(match[1]);
+  const max = match[2] === undefined ? null : Number(match[2]);
+  return max !== null && max <= min ? "invalid" : { min, max };
+}
+
+/** Диапазон для показа: «8» или «8–12». */
+export function formatRange(range: PlanRange | null): string {
+  if (range === null) return "";
+  return range.max === null ? String(range.min) : `${range.min}–${range.max}`;
 }
 
 /** Вес из ввода «62,5» → граммы; пусто → null; неверно → "invalid". Шаг — 10 г. */
@@ -118,7 +151,8 @@ function setsWord(count: number): string {
 }
 
 function describeSet(set: PlannedSet): string {
-  return [set.loadGrams !== null ? formatLoad(set.loadGrams) : null, set.reps !== null ? `${set.reps}` : null,
+  return [set.loadGrams !== null ? formatLoad(set.loadGrams) : null,
+    set.reps !== null ? formatRange({ min: set.reps, max: set.repsMax }) : null,
     set.durationSec !== null ? formatDuration(set.durationSec) : null, set.distanceM !== null ? formatDistance(set.distanceM) : null]
     .filter((part) => part !== null).join(" × ");
 }
@@ -128,7 +162,7 @@ export function setsSummary(exercise: PlannedExercise): string {
   const { sets } = exercise;
   if (sets.length === 0) return "нет подходов";
   const first = sets[0] as PlannedSet;
-  const same = sets.every((set) => set.reps === first.reps && set.loadGrams === first.loadGrams
+  const same = sets.every((set) => set.reps === first.reps && set.repsMax === first.repsMax && set.loadGrams === first.loadGrams
     && set.durationSec === first.durationSec && set.distanceM === first.distanceM);
   const value = describeSet(first);
   if (!same || value === "") return setsWord(sets.length);

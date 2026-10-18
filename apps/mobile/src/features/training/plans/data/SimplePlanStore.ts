@@ -7,7 +7,7 @@ import type { PlannedExercise, PlannedSet, PlannedWorkout, SimplePlan } from "..
  * Чужие ID (другой программы) отклоняются — иначе правка задела бы чужую структуру.
  */
 
-type SetRow = Readonly<{ id: string; exerciseRowId: string; reps: number | null; loadGrams: number | null;
+type SetRow = Readonly<{ id: string; exerciseRowId: string; reps: number | null; repsMax: number | null; loadGrams: number | null;
   durationSec: number | null; distanceM: number | null }>;
 
 export async function readStructure(tx: SqliteStatementPort, workspaceId: string, programId: string,
@@ -15,23 +15,26 @@ export async function readStructure(tx: SqliteStatementPort, workspaceId: string
   const workouts = await tx.all<{ id: string; title: string }>(`SELECT id, title FROM dev_training_workouts
     WHERE workspace_id = ? AND program_id = ? ORDER BY position`, [workspaceId, programId]);
   const exercises = await tx.all<{ id: string; workoutId: string; exerciseId: string; restSec: number | null;
-    instruction: string | null }>(`SELECT e.id, e.workout_id AS workoutId, e.exercise_id AS exerciseId, e.rest_sec AS restSec,
-      e.instruction FROM dev_training_planned_exercises e
+    instruction: string | null; rirMin: number | null; rirMax: number | null }>(`SELECT e.id, e.workout_id AS workoutId,
+      e.exercise_id AS exerciseId, e.rest_sec AS restSec, e.instruction, e.rir_min AS rirMin, e.rir_max AS rirMax
+      FROM dev_training_planned_exercises e
     JOIN dev_training_workouts w ON w.id = e.workout_id AND w.workspace_id = e.workspace_id
     WHERE e.workspace_id = ? AND w.program_id = ? ORDER BY e.position`, [workspaceId, programId]);
-  const sets = await tx.all<SetRow>(`SELECT s.id, s.planned_exercise_id AS exerciseRowId, s.reps, s.load_grams AS loadGrams,
+  const sets = await tx.all<SetRow>(`SELECT s.id, s.planned_exercise_id AS exerciseRowId, s.reps, s.reps_max AS repsMax,
+      s.load_grams AS loadGrams,
       s.duration_sec AS durationSec, s.distance_m AS distanceM FROM dev_training_planned_sets s
     JOIN dev_training_planned_exercises e ON e.id = s.planned_exercise_id AND e.workspace_id = s.workspace_id
     JOIN dev_training_workouts w ON w.id = e.workout_id AND w.workspace_id = e.workspace_id
     WHERE s.workspace_id = ? AND w.program_id = ? ORDER BY s.position`, [workspaceId, programId]);
   const setsOf = (exerciseRowId: string): PlannedSet[] => sets.filter((set) => set.exerciseRowId === exerciseRowId)
-    .map(({ id, reps, loadGrams, durationSec, distanceM }) => ({ id, reps, loadGrams, durationSec, distanceM }));
+    .map(({ id, reps, repsMax, loadGrams, durationSec, distanceM }) => ({ id, reps, repsMax, loadGrams, durationSec, distanceM }));
   return {
     weeks,
     workouts: workouts.map((workout): PlannedWorkout => ({ ...workout,
       exercises: exercises.filter((exercise) => exercise.workoutId === workout.id)
         .map((exercise): PlannedExercise => ({ id: exercise.id, exerciseId: exercise.exerciseId, restSec: exercise.restSec,
-          instruction: exercise.instruction, sets: setsOf(exercise.id) })) })),
+          instruction: exercise.instruction, rir: exercise.rirMin === null ? null : { min: exercise.rirMin, max: exercise.rirMax },
+          sets: setsOf(exercise.id) })) })),
   };
 }
 
@@ -62,18 +65,20 @@ export async function writeStructure(tx: SqliteStatementPort, workspaceId: strin
       await assertFree(tx, "dev_training_planned_exercises", exercise.id, owned.exercises);
       keep.exercises.add(exercise.id);
       await tx.run(`INSERT INTO dev_training_planned_exercises (id, workspace_id, workout_id, position, exercise_id, rest_sec,
-        instruction) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET workout_id = excluded.workout_id,
+        instruction, rir_min, rir_max) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET workout_id = excluded.workout_id,
         position = excluded.position, exercise_id = excluded.exercise_id, rest_sec = excluded.rest_sec,
-        instruction = excluded.instruction`,
-      [exercise.id, workspaceId, workout.id, exerciseIndex, exercise.exerciseId, exercise.restSec, exercise.instruction]);
+        instruction = excluded.instruction, rir_min = excluded.rir_min, rir_max = excluded.rir_max`,
+      [exercise.id, workspaceId, workout.id, exerciseIndex, exercise.exerciseId, exercise.restSec, exercise.instruction,
+        exercise.rir?.min ?? null, exercise.rir?.max ?? null]);
       for (const [setIndex, set] of exercise.sets.entries()) {
         await assertFree(tx, "dev_training_planned_sets", set.id, owned.sets);
         keep.sets.add(set.id);
-        await tx.run(`INSERT INTO dev_training_planned_sets (id, workspace_id, planned_exercise_id, position, reps, load_grams,
-            duration_sec, distance_m) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        await tx.run(`INSERT INTO dev_training_planned_sets (id, workspace_id, planned_exercise_id, position, reps, reps_max,
+            load_grams, duration_sec, distance_m) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET planned_exercise_id = excluded.planned_exercise_id, position = excluded.position,
-            reps = excluded.reps, load_grams = excluded.load_grams, duration_sec = excluded.duration_sec, distance_m = excluded.distance_m`,
-        [set.id, workspaceId, exercise.id, setIndex, set.reps, set.loadGrams, set.durationSec, set.distanceM]);
+            reps = excluded.reps, reps_max = excluded.reps_max, load_grams = excluded.load_grams,
+            duration_sec = excluded.duration_sec, distance_m = excluded.distance_m`,
+        [set.id, workspaceId, exercise.id, setIndex, set.reps, set.repsMax, set.loadGrams, set.durationSec, set.distanceM]);
       }
     }
   }

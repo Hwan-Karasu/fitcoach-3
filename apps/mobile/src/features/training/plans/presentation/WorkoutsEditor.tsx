@@ -1,21 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useRef, useState, type Ref } from "react";
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type Animated from "react-native-reanimated";
 import type { AnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
-import type { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { ChevronRight, Dumbbell, GripVertical, Plus, Timer, Trash2 } from "lucide-react-native";
-import { AppButton, AppIconButton, ConfirmDialog, DurationWheelPicker, TextField } from
-  "../../../../shared/ui/components/public.ts";
+import { ArrowLeftRight, ArrowUpDown, Dumbbell, GripVertical, Plus, Trash2, X } from "lucide-react-native";
+import { AppButton, AppIconButton, ConfirmDialog, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseInfo } from "../domain/ExerciseLookupPort.ts";
-import { addSet, addWorkout, fillSets, removeExercise, removeSet, removeWorkout, renameWorkout, reorderExercises, setInstruction,
-  setRest, setSetCount, SETS_MAX, updateSet } from "../domain/SimplePlanEdits.ts";
-import { REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, type PlannedExercise, type SimpleProgramDraft } from
-  "../domain/SimplePlanModel.ts";
-import { formatDuration, parseDuration, parseLoad, setFieldsOf, type PlanIssue, type SetField } from "../domain/SimplePlanRules.ts";
-import { SetsEditorSheet } from "./SetsEditorSheet.tsx";
+import { addWorkout, fillSets, removeExercise, removeWorkout, renameWorkout, reorderExercises, reorderWorkouts,
+  setInstruction, setRepsRange, setRir, setSetCount } from "../domain/SimplePlanEdits.ts";
+import { INSTRUCTION_MAX, type PlannedExercise, type PlannedWorkout, type SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
+import { formatDuration, formatRange, parseDuration, parseRange, sanitizeRange, setFieldsOf, type PlanIssue } from
+  "../domain/SimplePlanRules.ts";
 
 let counter = 0;
 /** Новый стабильный ID строки структуры (тренировка, упражнение, подход). */
@@ -24,30 +21,24 @@ export function newPlanId(prefix: string): string {
   return `${prefix}:${Date.now().toString(36)}${counter.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-const fieldLabels: Readonly<Record<SetField, string>> = { reps: "Повторы", loadGrams: "Вес, кг", durationSec: "Время", distanceM: "Метры" };
+type FieldKind = "count" | "range" | "duration" | "number";
 
-function rawOf(field: SetField, value: number): string {
-  if (field === "loadGrams") return String(value / 1000).replace(".", ",");
-  if (field === "durationSec") return formatDuration(value);
-  return String(value);
-}
-
-function parseField(field: SetField | "count", text: string): number | null | "invalid" {
-  if (field === "loadGrams") return parseLoad(text);
-  if (field === "durationSec") return parseDuration(text);
-  const value = text.trim();
-  if (value === "") return null;
-  return /^\d+$/.test(value) ? Number(value) : "invalid";
+/** Только допустимые символы: буквы в поля конструктора не вводятся (решение владельца 2026-10-18). */
+function sanitize(kind: FieldKind, text: string): string {
+  if (kind === "range") return sanitizeRange(text);
+  if (kind === "duration") return text.replace(/[^\d:]/gu, "");
+  return text.replace(/\D/gu, "");
 }
 
 /**
- * Поле карточки упражнения (как в 2.0): правится на месте, без открытия окна. Свой текст ввода, пока поле
- * в фокусе; снаружи — общее значение подходов («разные», если подходы отличаются).
+ * Поле карточки упражнения (как в 2.0): правится на месте. Свой текст ввода, пока поле в фокусе; кнопка
+ * клавиатуры «Далее» переводит в следующее поле карточки, на последнем — «Готово».
  */
-function InlineField({ label, value, placeholder, field, onCommit }: Readonly<{
-  label: string; value: string; placeholder: string; field: SetField | "count";
-  onCommit: (value: number | null) => void;
-}>) {
+const InlineField = forwardRef(function InlineField({ label, value, placeholder, kind, last, onNext, onCommit }: Readonly<{
+  label: string; value: string; placeholder: string; kind: FieldKind; last: boolean; onNext: () => void;
+  /** Возвращает false, если ввод пока не годится (подсветка ошибкой). */
+  onCommit: (text: string) => boolean;
+}>, ref: Ref<TextInput>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const [text, setText] = useState(value);
@@ -57,37 +48,133 @@ function InlineField({ label, value, placeholder, field, onCommit }: Readonly<{
   return (
     <View style={styles.field}>
       <Text numberOfLines={1} style={[styles.fieldLabel, { color: colors.textMuted }]}>{label}</Text>
-      <TextInput value={text} placeholder={placeholder} placeholderTextColor={colors.textMuted} selectTextOnFocus
-        accessibilityLabel={label}
-        keyboardType={field === "durationSec" ? "numbers-and-punctuation" : field === "loadGrams" ? "decimal-pad" : "number-pad"}
+      <TextInput ref={ref} value={text} placeholder={placeholder} placeholderTextColor={colors.textMuted} selectTextOnFocus
+        accessibilityLabel={label} keyboardType={kind === "duration" || kind === "range" ? "numbers-and-punctuation" : "number-pad"}
+        returnKeyType={last ? "done" : "next"} submitBehavior={last ? "blurAndSubmit" : "submit"}
+        onSubmitEditing={() => { if (!last) onNext(); }}
         onFocus={() => { focused.current = true; }}
         onBlur={() => { focused.current = false; setText(value); setInvalid(false); }}
         onChangeText={(next) => {
-          setText(next);
-          const parsed = parseField(field, next);
-          setInvalid(parsed === "invalid");
-          if (parsed !== "invalid" && !(field === "count" && parsed === null)) onCommit(parsed);
+          const clean = sanitize(kind, next);
+          setText(clean);
+          setInvalid(!onCommit(clean));
         }}
         style={[styles.fieldInput, { color: colors.textPrimary, backgroundColor: colors.input,
           borderColor: invalid ? colors.danger : colors.border }]} />
     </View>
   );
-}
+});
 
-/** Общее значение поля у всех подходов упражнения; разные — пусто с подсказкой «разные». */
-function sharedValue(exercise: PlannedExercise, field: SetField): Readonly<{ text: string; placeholder: string }> {
-  const values = exercise.sets.map((set) => set[field]);
-  const first = values[0] ?? null;
-  if (values.every((value) => value === first)) return { text: first === null ? "" : rawOf(field, first), placeholder: "—" };
-  return { text: "", placeholder: "разные" };
+/** Общее значение у всех подходов; если подходы различаются — пусто с подсказкой «разные». */
+function shared(values: readonly string[]): Readonly<{ value: string; placeholder: string }> {
+  const first = values[0] ?? "";
+  return values.every((value) => value === first) ? { value: first, placeholder: "—" } : { value: "", placeholder: "разные" };
 }
 
 /**
- * Редактор тренировок одной недели: общий для Простого и Расширенного конструкторов. В карточке упражнения
- * на виду «Подходов», плановые значения по профилю и отдых; каждый подход отдельно — в окне по нажатию
- * на название (§48.79).
+ * Карточка упражнения конструктора (как в 2.0): «Подходов», повторы (или время/метры — по профилю), RIR;
+ * «⇄» — заменить из каталога, «×» — убрать из тренировки. Вес и отдых в конструкторе не задаются: вес —
+ * результат дневника, отдых — в самой тренировке (решение владельца 2026-10-18).
  */
-export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scrollRef, onPickExercise }: Readonly<{
+function ExerciseCard({ item, info, broken, draft, change, onReplace }: Readonly<{
+  item: PlannedExercise; info: ExerciseInfo | null; broken: boolean; draft: SimpleProgramDraft;
+  change: (next: SimpleProgramDraft) => void; onReplace: () => void;
+}>) {
+  const { palette } = usePrototypeTheme();
+  const colors = palette.tokens;
+  const metrics = info?.metrics ?? [];
+  const fields = setFieldsOf(metrics).filter((field) => field !== "loadGrams");
+  const withReps = fields.includes("reps");
+  const [showInstruction, setShowInstruction] = useState(item.instruction !== null);
+  const refs = useRef<(TextInput | null)[]>([]);
+  const inputs: Readonly<{ key: string; label: string; kind: FieldKind; value: string; placeholder: string;
+    commit: (text: string) => boolean }>[] = [
+    { key: "count", label: "Подходов", kind: "count", value: String(item.sets.length), placeholder: "3",
+      commit: (text) => {
+        if (text === "") return false;
+        change(setSetCount(draft, item.id, Number(text), () => newPlanId("s")));
+        return true;
+      } },
+    ...fields.map((field) => {
+      if (field === "reps") {
+        const value = shared(item.sets.map((set) => formatRange(set.reps === null ? null : { min: set.reps, max: set.repsMax })
+          .replace("–", "-")));
+        return { key: field, label: "Повторы", kind: "range" as const, ...value, placeholder: value.placeholder === "—" ? "8-12" : value.placeholder,
+          commit: (text: string) => {
+            const range = parseRange(text);
+            if (range === "invalid") return false;
+            change(setRepsRange(draft, item.id, range));
+            return true;
+          } };
+      }
+      const duration = field === "durationSec";
+      const value = shared(item.sets.map((set) => set[field] === null ? "" : duration ? formatDuration(set[field] as number) : String(set[field])));
+      return { key: field, label: duration ? "Время" : "Метры", kind: duration ? "duration" as const : "number" as const, ...value,
+        commit: (text: string) => {
+          const parsed = text === "" ? null : duration ? parseDuration(text) : Number(text);
+          if (parsed === "invalid" || (parsed !== null && (!Number.isInteger(parsed) || parsed <= 0))) return false;
+          change(fillSets(draft, item.id, field, parsed));
+          return true;
+        } };
+    }),
+    ...(withReps ? [{ key: "rir", label: "RIR", kind: "range" as const, value: formatRange(item.rir).replace("–", "-"), placeholder: "1-2",
+      commit: (text: string) => {
+        const range = parseRange(text);
+        if (range === "invalid" || (range !== null && (range.min > 10 || (range.max ?? 0) > 10))) return false;
+        change(setRir(draft, item.id, range));
+        return true;
+      } }] : []),
+  ];
+  return (
+    <View style={[styles.exerciseRow, { borderTopColor: colors.border }]}>
+      <Sortable.Handle>
+        <View accessible accessibilityLabel={`Перетащить: ${info?.name ?? "упражнение"}`} style={styles.handle}>
+          <GripVertical size={18} color={colors.textMuted} strokeWidth={1.8} />
+        </View>
+      </Sortable.Handle>
+      <View style={styles.grow}>
+        <View style={styles.exerciseHead}>
+          <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>
+            {info?.thumbnail != null ? <Image source={info.thumbnail} style={styles.thumbImage} />
+              : <Dumbbell size={16} color={colors.accentInk} strokeWidth={1.8} />}
+          </View>
+          <Text numberOfLines={2} style={[styles.exerciseName, styles.grow, { color: broken ? colors.danger : colors.textPrimary }]}>
+            {info?.name ?? "Упражнение не найдено в каталоге"}
+          </Text>
+          <AppIconButton compact label={`Заменить: ${info?.name ?? "упражнение"}`}
+            icon={<ArrowLeftRight size={18} color={colors.textSecondary} strokeWidth={1.8} />} onPress={onReplace} />
+          <AppIconButton compact label={`Убрать из тренировки: ${info?.name ?? "упражнение"}`}
+            icon={<X size={20} color={colors.danger} strokeWidth={2} />} onPress={() => change(removeExercise(draft, item.id))} />
+        </View>
+        <View style={styles.fields}>
+          {inputs.map((input, index) => (
+            <InlineField key={input.key} ref={(node) => { refs.current[index] = node; }} label={input.label} kind={input.kind}
+              value={input.value} placeholder={input.placeholder} last={index === inputs.length - 1}
+              onNext={() => refs.current[index + 1]?.focus()} onCommit={input.commit} />
+          ))}
+        </View>
+        {showInstruction ? (
+          <TextInput defaultValue={item.instruction ?? ""} multiline maxLength={INSTRUCTION_MAX} accessibilityLabel="Указание к упражнению"
+            placeholder="Указание: темп, на что обратить внимание" placeholderTextColor={colors.textMuted}
+            autoFocus={item.instruction === null} onChangeText={(text) => change(setInstruction(draft, item.id, text))}
+            onBlur={() => { if (item.instruction === null) setShowInstruction(false); }}
+            style={[styles.instruction, { color: colors.textPrimary, backgroundColor: colors.input, borderColor: colors.border }]} />
+        ) : (
+          <Pressable accessibilityRole="button" hitSlop={6} onPress={() => setShowInstruction(true)} style={styles.instructionAdd}>
+            <Plus size={14} color={colors.textSecondary} strokeWidth={2} />
+            <Text style={[styles.instructionAddText, { color: colors.textSecondary }]}>Указание</Text>
+          </Pressable>
+        )}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Редактор тренировок одной недели: общий для Простого и Расширенного конструкторов. Упражнения
+ * перетаскиваются внутри тренировки, тренировки — в режиме «Порядок тренировок».
+ */
+export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scrollRef, onPickExercise, onReplaceExercise }: Readonly<{
   draft: SimpleProgramDraft;
   change: (next: SimpleProgramDraft) => void;
   lookup: ReadonlyMap<string, ExerciseInfo>;
@@ -95,66 +182,40 @@ export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scro
   showIssues: boolean;
   scrollRef: AnimatedRef<Animated.ScrollView>;
   onPickExercise: (workoutId: string) => void;
+  /** «⇄»: выбрать в каталоге упражнение на замену этого. */
+  onReplaceExercise: (workoutId: string, plannedExerciseId: string) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const [editing, setEditing] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
-  const [restFor, setRestFor] = useState<PlannedExercise | null>(null);
-  const sheet = useRef<BottomSheetModal>(null);
-  const editingExercise = useMemo(() => draft.plan.workouts.flatMap((workout) => workout.exercises)
-    .find((exercise) => exercise.id === editing) ?? null, [draft, editing]);
+  const [ordering, setOrdering] = useState(false);
 
-  const exerciseRow = ({ item }: Readonly<{ item: PlannedExercise }>) => {
-    const info = lookup.get(item.exerciseId) ?? null;
-    const fields = info === null ? [] : setFieldsOf(info.metrics);
-    const broken = showIssues && issues.some((issue) => issue.exerciseId === item.id);
-    return (
-      <View style={[styles.exerciseRow, { borderTopColor: colors.border }]}>
-        <Sortable.Handle>
-          <View accessible accessibilityLabel={`Перетащить: ${info?.name ?? "упражнение"}`} style={styles.handle}>
-            <GripVertical size={18} color={colors.textMuted} strokeWidth={1.8} />
-          </View>
-        </Sortable.Handle>
-        <View style={styles.grow}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`${info?.name ?? "Упражнение"}. Подходы по отдельности, указание`}
-            onPress={() => { setEditing(item.id); sheet.current?.present(); }}
-            style={({ pressed }) => [styles.exercisePress, { backgroundColor: pressed ? colors.surfaceRaised : "transparent" }]}>
-            <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>
-              {info?.thumbnail != null ? <Image source={info.thumbnail} style={styles.thumbImage} />
-                : <Dumbbell size={16} color={colors.accentInk} strokeWidth={1.8} />}
-            </View>
-            <Text numberOfLines={2} style={[styles.exerciseName, styles.grow, { color: broken ? colors.danger : colors.textPrimary }]}>
-              {info?.name ?? "Упражнение не найдено в каталоге"}
-            </Text>
-            <ChevronRight size={18} color={colors.textMuted} strokeWidth={1.8} />
-          </Pressable>
-          <View style={styles.fields}>
-            <InlineField label="Подходов" field="count" value={String(item.sets.length)} placeholder="3"
-              onCommit={(count) => { if (count !== null) change(setSetCount(draft, item.id, count, () => newPlanId("s"))); }} />
-            {fields.map((field) => {
-              const shared = sharedValue(item, field);
-              return <InlineField key={field} label={fieldLabels[field]} field={field} value={shared.text} placeholder={shared.placeholder}
-                onCommit={(value) => change(fillSets(draft, item.id, field, value))} />;
-            })}
-            <Pressable accessibilityRole="button" hitSlop={6}
-              accessibilityLabel={item.restSec === null ? "Таймер отдыха выключен. Изменить" : `Отдых ${formatDuration(item.restSec)}. Изменить`}
-              onPress={() => setRestFor(item)} style={styles.rest}>
-              <Text numberOfLines={1} style={[styles.fieldLabel, { color: colors.textMuted }]}>Отдых</Text>
-              <View style={[styles.restValue, { borderColor: colors.border }]}>
-                <Timer size={14} color={item.restSec === null ? colors.textMuted : colors.accentInk} strokeWidth={2} />
-                <Text style={[styles.restText, { color: item.restSec === null ? colors.textMuted : colors.accentInk }]}>
-                  {item.restSec === null ? "нет" : formatDuration(item.restSec)}
-                </Text>
+  if (ordering) {
+    return <>
+      <Text style={[styles.hint, { color: colors.textSecondary }]}>Перетащите тренировки за ручку, затем нажмите «Готово».</Text>
+      <Sortable.Grid data={[...draft.plan.workouts]} keyExtractor={(item) => item.id} columns={1} rowGap={8} customHandle
+        scrollableRef={scrollRef} activeItemScale={1.03}
+        renderItem={({ item }: Readonly<{ item: PlannedWorkout }>) => (
+          <View style={[styles.orderRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Sortable.Handle>
+              <View accessible accessibilityLabel={`Перетащить тренировку ${item.title}`} style={styles.handle}>
+                <GripVertical size={20} color={colors.textMuted} strokeWidth={1.8} />
               </View>
-            </Pressable>
+            </Sortable.Handle>
+            <Text numberOfLines={1} style={[styles.orderTitle, { color: colors.textPrimary }]}>{item.title}</Text>
+            <Text style={[styles.hint, { color: colors.textMuted }]}>{`упражнений: ${item.exercises.length}`}</Text>
           </View>
-        </View>
-      </View>
-    );
-  };
+        )}
+        onDragEnd={({ data }) => change(reorderWorkouts(draft, data.map((item) => item.id)))} />
+      <AppButton label="Готово" onPress={() => setOrdering(false)} />
+    </>;
+  }
 
   return <>
+    {draft.plan.workouts.length > 1 ? (
+      <AppButton compact variant="ghost" label="Порядок тренировок" icon={(color) => <ArrowUpDown size={18} color={color} strokeWidth={2} />}
+        onPress={() => setOrdering(true)} />
+    ) : null}
     {draft.plan.workouts.map((workout) => (
       <View key={workout.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.workoutHead}>
@@ -165,8 +226,13 @@ export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scro
             icon={<Trash2 size={18} color={colors.textSecondary} strokeWidth={1.8} />} onPress={() => setRemoving(workout.id)} />
         </View>
         {workout.exercises.length > 0 ? (
-          <Sortable.Grid data={[...workout.exercises]} keyExtractor={(item) => item.id} renderItem={exerciseRow}
-            columns={1} rowGap={0} customHandle scrollableRef={scrollRef} activeItemScale={1.03}
+          <Sortable.Grid data={[...workout.exercises]} keyExtractor={(item) => item.id} columns={1} rowGap={0} customHandle
+            scrollableRef={scrollRef} activeItemScale={1.03}
+            renderItem={({ item }: Readonly<{ item: PlannedExercise }>) => (
+              <ExerciseCard item={item} info={lookup.get(item.exerciseId) ?? null} draft={draft} change={change}
+                broken={showIssues && issues.some((issue) => issue.exerciseId === item.id)}
+                onReplace={() => onReplaceExercise(workout.id, item.id)} />
+            )}
             onDragEnd={({ data }) => change(reorderExercises(draft, workout.id, data.map((item) => item.id)))} />
         ) : (
           <Text style={[styles.empty, { color: colors.textMuted }]}>Упражнений пока нет.</Text>
@@ -181,32 +247,6 @@ export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scro
     ))}
     <AppButton variant="secondary" label="Добавить тренировку" icon={(color) => <Plus size={18} color={color} strokeWidth={2} />}
       onPress={() => change(addWorkout(draft, newPlanId("w")))} />
-
-    <SetsEditorSheet ref={sheet} exercise={editingExercise}
-      info={editingExercise === null ? null : lookup.get(editingExercise.exerciseId) ?? null}
-      onDismiss={() => setEditing(null)}
-      onChangeSet={(setId, field, value) => { if (editing !== null) change(updateSet(draft, editing, setId, field, value)); }}
-      onAddSet={() => { if (editing !== null && (editingExercise?.sets.length ?? 0) < SETS_MAX) change(addSet(draft, editing, newPlanId("s"))); }}
-      onRemoveSet={(setId) => { if (editing !== null) change(removeSet(draft, editing, setId)); }}
-      onFillAll={() => {
-        if (editingExercise === null) return;
-        const first = editingExercise.sets[0];
-        const info = lookup.get(editingExercise.exerciseId);
-        if (first === undefined || info === undefined) return;
-        let next = draft;
-        for (const field of setFieldsOf(info.metrics)) next = fillSets(next, editingExercise.id, field, first[field]);
-        change(next);
-        sheet.current?.dismiss();
-      }}
-      onChangeRest={(restSec) => { if (editing !== null) change(setRest(draft, editing, restSec)); }}
-      onChangeInstruction={(text) => { if (editing !== null) change(setInstruction(draft, editing, text)); }}
-      onRemoveExercise={() => { if (editing !== null) { change(removeExercise(draft, editing)); sheet.current?.dismiss(); } }} />
-    <DurationWheelPicker visible={restFor !== null} title="Отдых после подхода"
-      value={restFor?.restSec ?? REST_DEFAULT_SEC} min={REST_MIN_SEC} max={REST_MAX_SEC}
-      clearLabel={restFor?.restSec === null ? undefined : "Без таймера"}
-      onConfirm={(seconds) => { if (restFor !== null) change(setRest(draft, restFor.id, seconds)); }}
-      onClear={() => { if (restFor !== null) change(setRest(draft, restFor.id, null)); }}
-      onClose={() => setRestFor(null)} />
     <ConfirmDialog visible={removing !== null} destructive title="Удалить тренировку?"
       description="Тренировка и её упражнения уйдут из плана. Сохранение — кнопкой внизу; до него можно выйти без изменений."
       confirmLabel="Удалить" onCancel={() => setRemoving(null)}
@@ -219,8 +259,8 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 12, overflow: "hidden" },
   workoutHead: { flexDirection: "row", alignItems: "flex-end", gap: 4, padding: 12, paddingRight: 4 },
   exerciseRow: { flexDirection: "row", alignItems: "stretch", borderTopWidth: StyleSheet.hairlineWidth, paddingBottom: 10 },
-  handle: { width: 36, flex: 1, alignItems: "center", justifyContent: "center" },
-  exercisePress: { flexDirection: "row", alignItems: "center", gap: 10, paddingRight: 12, paddingVertical: 8 },
+  handle: { width: 36, flex: 1, alignItems: "center", justifyContent: "center", minHeight: 48 },
+  exerciseHead: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6, paddingRight: 4 },
   thumb: { width: 40, height: 40, borderRadius: 8, overflow: "hidden", alignItems: "center", justifyContent: "center" },
   thumbImage: { width: 40, height: 40 },
   exerciseName: { fontFamily: fonts.medium, fontSize: 15, lineHeight: 20 },
@@ -229,11 +269,14 @@ const styles = StyleSheet.create({
   fieldLabel: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14, textAlign: "center" },
   fieldInput: { minHeight: 40, borderWidth: 1, borderRadius: 8, textAlign: "center", fontFamily: fonts.medium, fontSize: 15,
     paddingHorizontal: 4, paddingVertical: 0 },
-  rest: { gap: 4, minWidth: 64 },
-  restValue: { minHeight: 40, borderWidth: 1, borderRadius: 8, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 4, paddingHorizontal: 6 },
-  restText: { fontFamily: fonts.medium, fontSize: 14 },
+  instruction: { minHeight: 44, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, marginTop: 8, marginRight: 12,
+    textAlignVertical: "top", fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
+  instructionAdd: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", minHeight: 36, marginTop: 4 },
+  instructionAddText: { fontFamily: fonts.medium, fontSize: 13 },
   empty: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, paddingHorizontal: 12, paddingBottom: 8 },
   addRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, minHeight: 48, borderTopWidth: StyleSheet.hairlineWidth },
   addText: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 19 },
+  orderRow: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 12, paddingRight: 12, minHeight: 56 },
+  orderTitle: { flex: 1, fontFamily: fonts.semibold, fontSize: 15 },
+  hint: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
 });

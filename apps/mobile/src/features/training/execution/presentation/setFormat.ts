@@ -1,5 +1,5 @@
 import type { PaletteTokens } from "../../../../shared/ui/theme/resolver.ts";
-import { formatDuration, parseDuration, parseLoad } from "../../plans/public.ts";
+import { formatDuration, formatRange, parseDuration, parseLoad, type PlannedSet } from "../../plans/public.ts";
 import type { SetType, SetValues, TrackingMetric, WeekStatus, WorkoutStatus } from "../domain/ExecutionModel.ts";
 import { fieldsOf, type SetField } from "../domain/ExecutionRules.ts";
 
@@ -31,7 +31,24 @@ export function parseField(field: SetField, text: string): number | null | "inva
   return /^\d+$/.test(value) ? Number(value) : "invalid";
 }
 
-/** Компактно для колонок «План» и «Пред.»: `8 × 60`; пусто — «—». */
+/** Только допустимые символы ячейки: буквы в дневник не вводятся. */
+export function sanitizeField(field: SetField, text: string): string {
+  if (field === "loadGrams") return text.replace(/[^\d.,]/gu, "");
+  if (field === "durationSec") return text.replace(/[^\d:]/gu, "");
+  return text.replace(/\D/gu, "");
+}
+
+/**
+ * Колонка «План» (решение владельца 2026-10-18): цель подхода — повторы или диапазон «8–12», у упражнений
+ * без повторов — время или метры. Вес в плане не задаётся.
+ */
+export function planText(set: PlannedSet, fields: readonly SetField[]): string {
+  if (fields.includes("reps")) return set.reps === null ? "—" : formatRange({ min: set.reps, max: set.repsMax });
+  const parts = fields.filter((field) => field !== "loadGrams" && set[field] !== null).map((field) => rawOf(set, field));
+  return parts.length === 0 ? "—" : parts.join(" × ");
+}
+
+/** Компактно для колонки «Пред.»: `8 × 60`; пусто — «—». */
 export function compactValues(values: SetValues, fields: readonly SetField[]): string {
   const parts = fields.map((field) => values[field] === null ? null : rawOf(values, field)).filter((part) => part !== null);
   return parts.length === 0 ? "—" : parts.join(" × ");

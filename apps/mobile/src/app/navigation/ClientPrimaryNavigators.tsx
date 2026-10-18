@@ -18,8 +18,8 @@ type TrainingRoutes = {
   TrainingChooser: undefined;
   TrainingCreate: { kind: ProgramKind };
   TrainingProgram: { programId: string };
-  TrainingBuilder: { programId?: string; picked?: { token: string; workoutId: string; exerciseId: string } } | undefined;
-  TrainingPickExercise: { workoutId: string; programId?: string };
+  TrainingBuilder: { programId?: string; picked?: { token: string; workoutId: string; exerciseId: string; replace?: string } } | undefined;
+  TrainingPickExercise: { workoutId: string; programId?: string; replace?: string };
   TrainingWorkout: { programId: string; weekIndex: number; workoutId: string };
 };
 
@@ -125,7 +125,8 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
       <TrainingStack.Screen name="TrainingBuilder">
         {({ navigation, route }) => <SimpleProgramBuilderScreen clientId={clientId} programId={route.params?.programId ?? null}
           repository={repository} exercises={exerciseLookup} picked={route.params?.picked ?? null}
-          onPickExercise={(workoutId) => navigation.navigate("TrainingPickExercise", { workoutId, programId: route.params?.programId })}
+          onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId, programId: route.params?.programId,
+            ...(replace === undefined ? {} : { replace }) })}
           onSaved={(programId) => navigation.reset({ index: 1,
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId } }] })} />}
       </TrainingStack.Screen>
@@ -133,7 +134,8 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
         {({ navigation, route }) => <ExerciseLibraryScreen repository={exercises} picking
           onCreate={() => undefined}
           onOpen={(exerciseId) => navigation.popTo("TrainingBuilder", { programId: route.params.programId,
-            picked: { token: `${Date.now()}`, workoutId: route.params.workoutId, exerciseId } }, { merge: true })} />}
+            picked: { token: `${Date.now()}`, workoutId: route.params.workoutId, exerciseId,
+              ...(route.params.replace === undefined ? {} : { replace: route.params.replace }) } }, { merge: true })} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingWorkout">
         {({ route }) => <WorkoutScreen slot={{ clientId, programId: route.params.programId, weekIndex: route.params.weekIndex,
