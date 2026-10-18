@@ -257,6 +257,18 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
         AND f.session_id = s.id AND f.removed_at IS NULL) DESC`, [this.workspaceId]);
   }
 
+  async listProgramExecutions(clientId: string, programId: string) {
+    const { connection } = this.ready();
+    const sessions = await connection.all<{ weekIndex: number; plannedWorkoutId: string }>(`SELECT week_index AS weekIndex,
+      planned_workout_id AS plannedWorkoutId FROM dev_training_sessions
+      WHERE workspace_id = ? AND client_id = ? AND program_id = ?`, [this.workspaceId, clientId, programId]);
+    const result = [];
+    for (const session of sessions) {
+      result.push({ ...session, execution: await this.readWorkout(connection, { clientId, programId, ...session }) });
+    }
+    return result;
+  }
+
   async getProgramStatuses(clientId: string, programId: string): Promise<readonly SessionStatus[]> {
     const rows = await this.ready().connection.all<{ weekIndex: number; plannedWorkoutId: string;
       outcome: WorkoutOutcome | null; started: number }>(`SELECT s.week_index AS weekIndex,

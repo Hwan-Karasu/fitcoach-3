@@ -4,7 +4,7 @@ import { ClientHomePreview, type ClientRecord } from "../../features/clients/pub
 import { localDateOf, parseValueX10, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
 import { NutritionWorkspacePreview } from "../../features/nutrition/public.ts";
-import { CreateProgramScreen, MesocycleCreatorScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, SimpleProgramBuilderScreen,
+import { ProgramMatrixScreen, CreateProgramScreen, MesocycleCreatorScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, SimpleProgramBuilderScreen,
   WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort,
   type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
   type TrainingPlansRepositoryPort, ProgramWeeksPanel, WorkoutScreen, type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort,
@@ -19,6 +19,7 @@ type TrainingRoutes = {
   TrainingIndex: undefined;
   TrainingChooser: undefined;
   TrainingTemplates: undefined;
+  TrainingMatrix: { programId: string };
   TrainingTemplateEdit: { templateId: string; picked?: PickedExercise };
   TrainingCreate: { kind: ProgramKind };
   TrainingProgram: { programId: string; weekIndex?: number; mesocycleId?: string };
@@ -46,6 +47,7 @@ const trainingTitles: Readonly<Record<keyof TrainingRoutes, string>> = {
   TrainingCreateExercise: "Своё упражнение",
   TrainingSimpleWorkout: "План тренировки",
   TrainingTemplates: "Шаблоны",
+  TrainingMatrix: "Матрица недель",
   TrainingTemplateEdit: "Шаблон",
 };
 
@@ -154,6 +156,12 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
             returnTo: { name: "TrainingTemplateEdit", params: { templateId: route.params.templateId } } })}
           onSaved={() => navigation.goBack()} onCancel={() => navigation.goBack()} />}
       </TrainingStack.Screen>
+      <TrainingStack.Screen name="TrainingMatrix">
+        {({ navigation, route }) => <ProgramMatrixScreen clientId={clientId} programId={route.params.programId} plans={repository}
+          execution={execution} exercises={exerciseLookup}
+          onOpenWorkout={(weekIndex, workoutId, mesocycleId) => navigation.navigate("TrainingWorkout", { programId: route.params.programId,
+            weekIndex, workoutId, ...(mesocycleId === null ? {} : { mesocycleId }) })} />}
+      </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingTemplates">
         {({ navigation }) => <TemplateLibraryScreen clientId={clientId} repository={repository} listCandidates={listCandidates}
           onEdit={(templateId) => navigation.navigate("TrainingTemplateEdit", { templateId })}
@@ -173,6 +181,7 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
         {({ navigation, route }) => <ProgramScreen clientId={clientId} programId={route.params.programId}
           requestedWeek={route.params.weekIndex} requestedMesocycle={route.params.mesocycleId}
           repository={repository} listCandidates={listCandidates} exercises={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap}
+          onOpenMatrix={() => navigation.navigate("TrainingMatrix", { programId: route.params.programId })}
           onOpenProgram={(createdId) => navigation.reset({ index: 1,
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId: createdId } }] })}
           renderWeeks={(view) => <ProgramWeeksPanel key={view.key} clientId={clientId} programId={route.params.programId} weeks={view.weeks}

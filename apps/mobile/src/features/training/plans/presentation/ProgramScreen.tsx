@@ -38,7 +38,7 @@ export interface ProgramWeeksView {
  * и «Изменить неделю» (T04).
  */
 export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, onEditStructure,
-  onAddMesocycle, onEditWeek, onArchived, requestedWeek, requestedMesocycle, weekCopy, weekSwap, onOpenProgram }: Readonly<{
+  onAddMesocycle, onEditWeek, onArchived, requestedWeek, requestedMesocycle, weekCopy, weekSwap, onOpenProgram, onOpenMatrix }: Readonly<{
   clientId: string;
   programId: string;
   repository: TrainingPlansRepositoryPort;
@@ -60,6 +60,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   weekSwap?: WeekSwapPort;
   /** Открыть другую программу (созданную на основе этой, §48.17). */
   onOpenProgram?: (programId: string) => void;
+  /** T05: матрица недель (обзор программы). */
+  onOpenMatrix?: () => void;
   requestedMesocycle?: string;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -198,6 +200,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       <DropdownMenu visible={menuOpen} anchor={menuAnchor} title="Программа" selected=""
         options={[{ value: "rename", label: "Переименовать" },
           ...(weekSwap !== undefined && program.kind === "PERIODIZED" ? [{ value: "swap", label: "Поменять недели местами" }] : []),
+          ...(onOpenMatrix !== undefined ? [{ value: "matrix", label: "Матрица недель" }] : []),
           { value: "save-program", label: "Сохранить как шаблон" },
           ...(program.kind === "SIMPLE" && onOpenProgram !== undefined ? [{ value: "upgrade", label: "Создать расширенную на основе" }] : []),
           ...(program.kind === "PERIODIZED" && (periodized?.mesocycles.length ?? 0) > 0
@@ -206,6 +209,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
         onClose={() => setMenuOpen(false)} onSelect={(value) => {
           if (value === "rename") setRenaming(program.title); else if (value === "archive") setConfirmArchive(true);
           else if (value === "swap") { setNotice(null); setMessage(null); setSwapping(true); }
+          else if (value === "matrix") onOpenMatrix?.();
           else if (value === "upgrade") {
             setNotice(null); setMessage(null);
             setUpgrade({ title: `${program.title} — расширенная`.slice(0, 80), clientIds: [clientId] });

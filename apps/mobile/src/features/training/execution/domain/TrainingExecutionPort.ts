@@ -41,6 +41,13 @@ export interface TrainingExecutionCommittedChange {
  * Выполнение создаётся первым вводом (§48.34): просмотр дневника ничего не записывает.
  * Calendar и Credit Ledger отсюда не меняются (§48.39).
  */
+/** Выполнение одной тренировки программы — для матрицы недель. */
+export interface ProgramExecution {
+  readonly weekIndex: number;
+  readonly plannedWorkoutId: string;
+  readonly execution: WorkoutExecution;
+}
+
 export interface TrainingExecutionPort {
   getConfirmationMode(): Promise<ConfirmationMode>;
   /** Не ретроспективно: сохранённые факты и неподтверждённые значения остаются как есть (§48.53 п. 3). */
@@ -48,6 +55,11 @@ export interface TrainingExecutionPort {
   getWorkout(slot: WorkoutSlot): Promise<WorkoutExecution>;
   /** §48.83: начатые и не разобранные тренировки всех клиентов; последний ввод — первым. */
   listActiveWorkouts(): Promise<readonly ActiveWorkout[]>;
+  /**
+   * Матрица недель (T05): все выполнения программы клиента с их фактами — одним вызовом; порядок не важен.
+   * Только чтение; без выполнений — пустой список.
+   */
+  listProgramExecutions(clientId: string, programId: string): Promise<readonly ProgramExecution[]>;
   /** Статусы всех начатых или разобранных тренировок программы клиента. */
   getProgramStatuses(clientId: string, programId: string): Promise<readonly SessionStatus[]>;
   /** §48.74–48.75: прошлые подтверждённые подходы этого клиента в этой программе; ключ — плановый подход. */
