@@ -139,6 +139,36 @@ async function stores() {
 
 const message = (code: string) => (error: unknown) => error instanceof Error && error.message.includes(code);
 
+test("T04 черновик недели изолирован, сохраняет базовую ревизию и очищается только вместе с успешной публикацией", async () => {
+  const { plans, clients, a, b, programId, mesocycleId, close } = await sharedProgram();
+  try {
+    const plan = (await plans.getPeriodizedPlan(a.id, programId))!;
+    const key = `week:${mesocycleId}:1`;
+    const draft = { kind: "WEEK" as const, baseRevision: plan.program.revision, draft: { title: "Блок 1",
+      plan: { weeks: 1, workouts: plan.mesocycles[0]!.weeks[0]!.workouts } }, clientIds: [a.id],
+      mesocycleId, weekIndex: 1, type: "heavy" as const, scope: "CURRENT" as const };
+    await plans.savePeriodizedDraft(a.id, programId, draft);
+    await plans.savePeriodizedDraft(a.id, programId, draft);
+    assert.deepEqual(await plans.getPeriodizedDraft(a.id, programId, key), draft);
+    assert.equal(await plans.getPeriodizedDraft(b.id, programId, key), null);
+    await assert.rejects(plans.savePeriodizedDraft(b.id, programId, { ...draft, clientIds: [b.id] }), message("TARGET_NOT_FOUND"));
+    const renamed = await plans.renameProgram(programId, plan.program.revision, "Новое название");
+    const input = { mesocycleId, weekIndex: 1, workouts: draft.draft.plan.workouts, type: draft.type,
+      scope: draft.scope, clientIds: draft.clientIds };
+    await assert.rejects(plans.saveWeek(a.id, programId, draft.baseRevision, input), message("PROGRAM_REVISION_CONFLICT"));
+    assert.deepEqual(await plans.getPeriodizedDraft(a.id, programId, key), draft, "отказ не теряет черновик");
+    await plans.saveWeek(a.id, programId, renamed.revision, input);
+    assert.equal(await plans.getPeriodizedDraft(a.id, programId, key), null);
+    await plans.savePeriodizedDraft(a.id, programId, { kind: "MESOCYCLE", baseRevision: renamed.revision + 1,
+      draft: { title: "Новый блок", plan: { weeks: 2, workouts: firstWeek() } }, clientIds: [a.id] });
+    await clients.setArchived(a.id, a.revision, true);
+    const archived = (await clients.get(a.id))!;
+    await clients.deleteArchivedPermanently(a.id, archived.revision);
+    assert.equal(await plans.getPeriodizedDraft(a.id, programId, "new:MESOCYCLE"), null);
+    assert.ok(await plans.getProgram(b.id, programId), "участие другого клиента остаётся");
+  } finally { await close(); }
+});
+
 test("T03 недели дневника: lineage только своего мезоцикла, отсутствие соответствия требует выбора", async () => {
   const { plans, a, b, programId, mesocycleId, close } = await sharedProgram();
   try {

@@ -261,4 +261,20 @@ export const devTrainingPlansCatalog: readonly MigrationStep[] = [{
     `ALTER TABLE dev_training_program_members ADD COLUMN sort_position INTEGER
       CHECK (sort_position IS NULL OR sort_position >= 0)`,
   ],
+}, {
+  version: 9,
+  checksum: "t04-dev-training-plans-v9-periodized-drafts-20261018",
+  statements: [
+    `CREATE TABLE dev_training_periodized_drafts (
+      workspace_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      program_id TEXT NOT NULL,
+      draft_key TEXT NOT NULL,
+      draft_json TEXT NOT NULL CHECK(json_valid(draft_json)),
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY(workspace_id, client_id, program_id, draft_key),
+      FOREIGN KEY(workspace_id, program_id, client_id)
+        REFERENCES dev_training_program_members(workspace_id, program_id, client_id) ON DELETE RESTRICT
+    )`,
+  ],
 }];

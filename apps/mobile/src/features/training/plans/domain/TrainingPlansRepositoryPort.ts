@@ -1,6 +1,7 @@
 import type { ClientProgramLibrary, CreateProgramInput, TrainingProgram } from "./ProgramModel.ts";
 import type { NewMesocycleInput, PeriodizedPlan, WeekEditInput, WeekEditResult } from "./PeriodizedModel.ts";
 import type { PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
+import type { PeriodizedDraft } from "./PeriodizedDraft.ts";
 
 export interface TrainingPlansCommittedChange {
   /** Клиенты, чья библиотека изменилась. */
@@ -74,5 +75,8 @@ export interface TrainingPlansRepositoryPort {
   getBuilderDraft(clientId: string, key: string): Promise<Readonly<{ baseRevision: number | null; draft: SimpleProgramDraft }> | null>;
   saveBuilderDraft(clientId: string, key: string, baseRevision: number | null, draft: SimpleProgramDraft): Promise<void>;
   clearBuilderDraft(clientId: string, key: string): Promise<void>;
+  getPeriodizedDraft(clientId: string, programId: string, key: string): Promise<PeriodizedDraft | null>;
+  savePeriodizedDraft(clientId: string, programId: string, draft: PeriodizedDraft): Promise<void>;
+  clearPeriodizedDraft(clientId: string, programId: string, key: string): Promise<void>;
   subscribeCommittedChanges(listener: (change: TrainingPlansCommittedChange) => void): () => void;
 }

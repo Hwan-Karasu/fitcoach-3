@@ -16,6 +16,8 @@ import { ParticipantChips } from "./ParticipantChips.tsx";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
 import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
 import { newPlanId, WorkoutsEditor } from "./WorkoutsEditor.tsx";
+import { useRecoveryDraftSave } from "./useRecoveryDraftSave.ts";
+import type { PeriodizedDraft } from "../domain/PeriodizedDraft.ts";
 
 const errors: Readonly<Record<string, string>> = {
   DRAFT_INVALID: "Мезоцикл не сохранился: проверьте название и тренировки.",
@@ -53,23 +55,31 @@ export function MesocycleCreatorScreen({ clientId, programId, repository, exerci
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [showIssues, setShowIssues] = useState(false);
+  const [restored, setRestored] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const recovery = useRecoveryDraftSave<PeriodizedDraft>((value) => repository.savePeriodizedDraft(clientId, programId, value));
+  const { schedule } = recovery;
+  useEffect(() => {
+    if (dirty && draft !== null && revision !== null) schedule({ kind: "MESOCYCLE", baseRevision: revision, draft, clientIds: selected });
+  }, [dirty, draft, revision, selected, schedule]);
 
   useEffect(() => {
     let active = true;
-    void repository.getPeriodizedPlan(clientId, programId).then((plan) => {
+    void Promise.all([repository.getPeriodizedPlan(clientId, programId), repository.getPeriodizedDraft(clientId, programId, "new:MESOCYCLE")]).then(([plan, saved]) => {
       if (!active || plan === null) return;
-      setRevision(plan.program.revision);
+      setRevision(saved?.baseRevision ?? plan.program.revision);
       setMembers(plan.program.memberClientIds);
       // По умолчанию — всем участникам: общий мезоцикл — обычный случай групповой программы.
-      setSelected(plan.program.memberClientIds);
-      setDraft(setTitle(newDraft(newPlanId("w")), `Мезоцикл ${plan.mesocycles.length + 1}`));
+      setSelected(saved?.clientIds ?? plan.program.memberClientIds);
+      setDraft(saved?.draft ?? setTitle(newDraft(newPlanId("w")), `Мезоцикл ${plan.mesocycles.length + 1}`));
+      setRestored(saved !== null);
     }).catch(() => { if (active) setMessage("Не удалось открыть программу."); });
     listCandidates().then((rows) => { if (active) setNames(new Map(rows.map((row) => [row.id, row.displayName]))); })
       .catch(() => undefined);
     return () => { active = false; };
   }, [clientId, listCandidates, programId, repository]);
 
-  const change = useCallback((next: SimpleProgramDraft) => setDraft(next), []);
+  const change = useCallback((next: SimpleProgramDraft) => { setDirty(true); setDraft(next); }, []);
   usePickedExercise(picked, draft, lookup, change);
   const metricsOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.metrics ?? null, [lookup]);
   const issues = useMemo(() => draft === null || lookup === null ? [] : validateDraft(draft, metricsOf), [draft, lookup, metricsOf]);
@@ -86,10 +96,12 @@ export function MesocycleCreatorScreen({ clientId, programId, repository, exerci
     setBusy(true);
     setMessage(null);
     try {
+      await recovery.beforePublish();
       await repository.createMesocycle(clientId, programId, revision, { title: draft.title, weeks: draft.plan.weeks,
         firstWeek: draft.plan.workouts, clientIds: selected });
       onCreated();
     } catch (error) {
+      recovery.resume();
       setMessage(errors[error instanceof Error ? error.message : ""] ?? "Не удалось создать мезоцикл. Попробуйте ещё раз.");
     } finally {
       setBusy(false);
@@ -99,6 +111,7 @@ export function MesocycleCreatorScreen({ clientId, programId, repository, exerci
   return (
     <TrainingEditorLayout>
       <Animated.ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {restored ? <InlineNotice kind="info">Восстановлен несохранённый мезоцикл.</InlineNotice> : null}
         <TextField label="Название мезоцикла" required value={draft.title} onChangeText={(title) => change(setTitle(draft, title))} />
         <View style={[styles.weeks, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.grow}>
@@ -111,7 +124,8 @@ export function MesocycleCreatorScreen({ clientId, programId, repository, exerci
           <AppIconButton compact label="Больше недель" disabled={draft.plan.weeks >= MESOCYCLE_WEEKS_MAX}
             icon={<Plus size={18} color={colors.textPrimary} strokeWidth={2} />} onPress={() => change(setWeeks(draft, draft.plan.weeks + 1))} />
         </View>
-        <ParticipantChips clientId={clientId} memberIds={members} names={names} selected={selected} onChange={setSelected}
+        <ParticipantChips clientId={clientId} memberIds={members} names={names} selected={selected}
+          onChange={(ids) => { setDirty(true); setSelected(ids); }}
           note="Каждый выбранный получит свою копию мезоцикла; результаты у всех свои." />
         <Text style={[styles.section, { color: colors.textPrimary }]}>Неделя 1</Text>
         <WorkoutsEditor draft={draft} change={change} lookup={lookup} issues={issues} showIssues={showIssues} scrollRef={scrollRef}
@@ -120,7 +134,7 @@ export function MesocycleCreatorScreen({ clientId, programId, repository, exerci
       </Animated.ScrollView>
       <StickyEditorFooter actionLabel="Создать мезоцикл" busy={busy} onAction={() => { void save(); }}
         onCancel={onCancel}
-        message={message} messageKind="error" note="До создания ничего не сохраняется" />
+        message={recovery.error ?? message} messageKind="error" note="Изменения хранятся в черновике до создания мезоцикла" />
     </TrainingEditorLayout>
   );
 }

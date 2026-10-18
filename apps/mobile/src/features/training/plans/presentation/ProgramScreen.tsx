@@ -90,17 +90,21 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
 
   useEffect(() => {
     let active = true;
-    repository.getProgram(clientId, programId).then((next) => {
+    repository.getProgram(clientId, programId).then(async (next) => {
       if (!active) return;
       setProgram(next);
       if (next !== null) void repository.selectProgram(clientId, programId).catch(() => undefined);
       if (next?.kind === "SIMPLE") {
-        void repository.getSimplePlan(clientId, programId).then((loaded) => { if (active) setPlan(loaded?.draft.plan ?? null); });
+        const loaded = await repository.getSimplePlan(clientId, programId);
+        if (active) setPlan(loaded?.draft.plan ?? null);
       }
       if (next?.kind === "PERIODIZED") {
-        void repository.getPeriodizedPlan(clientId, programId).then((loaded) => { if (active) setPeriodized(loaded); });
+        const loaded = await repository.getPeriodizedPlan(clientId, programId);
+        if (active) setPeriodized(loaded);
       }
-    }).catch(() => { if (active) setProgram(null); });
+    }).catch(() => {
+      if (active) { setProgram((current) => current === undefined ? null : current); setMessage("Не удалось загрузить структуру программы."); }
+    });
     return () => { active = false; };
   }, [clientId, programId, repository, version]);
 
@@ -175,6 +179,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           if (value === "rename") setRenaming(program.title); else if (value === "archive") setConfirmArchive(true);
         }} />
       {message !== null ? <InlineNotice kind="error">{message}</InlineNotice> : null}
+      {message !== null && plan === null && periodized === null ? <AppButton label="Повторить загрузку" variant="secondary"
+        onPress={() => { setMessage(null); setVersion((value) => value + 1); }} /> : null}
       {others.length > 0 ? (
         <Text style={[styles.body, { color: colors.textSecondary }]}>
           {`Также у: ${others.map((id) => names.get(id) ?? "клиент в архиве").join(", ")}`}

@@ -16,6 +16,7 @@ import { MESOCYCLE_WEEKS_MAX, weekTypeLabels, type Mesocycle, type NewMesocycleI
   type WeekEditResult } from "../domain/PeriodizedModel.ts";
 import { applyWeekOps, copyWeeks, diffWeek, newMesocycleWeeks, targetWeeks } from "../domain/PeriodizedRules.ts";
 import type { PlannedWorkout } from "../domain/SimplePlanModel.ts";
+import { periodizedDraftKey, type PeriodizedDraft } from "../domain/PeriodizedDraft.ts";
 
 /** Ключ черновика ещё не созданной Простой программы (§48.29 п. 4: черновик привязан к объекту правки). */
 export const NEW_SIMPLE_DRAFT_KEY = "new:SIMPLE";
@@ -61,7 +62,7 @@ export const devTrainingPlansClientDeletionParticipant = {
   owner: "training.plans",
   tables: ["dev_training_client_selection", "dev_training_program_members", "dev_training_programs",
     "dev_training_workouts", "dev_training_planned_exercises", "dev_training_planned_sets", "dev_training_builder_drafts",
-    "dev_training_mesocycles", "dev_training_weeks", "dev_training_mesocycle_selection"] as const,
+    "dev_training_mesocycles", "dev_training_weeks", "dev_training_mesocycle_selection", "dev_training_periodized_drafts"] as const,
   async count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number> {
     const row = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM dev_training_program_members
       WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
@@ -73,6 +74,7 @@ export const devTrainingPlansClientDeletionParticipant = {
         WHERE o.workspace_id = m.workspace_id AND o.program_id = m.program_id AND o.client_id <> m.client_id)`,
     [workspaceId, clientId]);
     // Свои мезоциклы клиента уходят и из общих программ: у остальных участников — их собственные копии.
+    await tx.run("DELETE FROM dev_training_periodized_drafts WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
     const programs = await tx.all<{ id: string }>(`SELECT program_id AS id FROM dev_training_program_members
       WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
     for (const program of programs) await deleteMemberMesocycles(tx, workspaceId, program.id, clientId);
@@ -357,6 +359,8 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         if (memberId === clientId) ownId = mesocycle.id;
       }
       await saveSelection(tx, this.workspaceId, programId, clientId, ownId);
+      await tx.run("DELETE FROM dev_training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key = ?",
+        [this.workspaceId, clientId, programId, "new:MESOCYCLE"]);
       return { program: await programById(tx, this.workspaceId, programId), mesocycleId: ownId };
     });
     this.publish({ clientIds: input.clientIds });
@@ -393,6 +397,8 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
             type: index === input.weekIndex ? input.type : week.type, workouts: applied.workouts });
         }
       }
+      await tx.run("DELETE FROM dev_training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key = ?",
+        [this.workspaceId, clientId, programId, `week:${input.mesocycleId}:${input.weekIndex}`]);
       return { program: await programById(tx, this.workspaceId, programId), skipped };
     });
     this.publish({ clientIds: input.clientIds });
@@ -446,6 +452,36 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     // Черновик удалённой программы не воскрешает её (§48.29 п. 7).
     if (key !== NEW_SIMPLE_DRAFT_KEY && (await this.getProgram(clientId, key)) === null) return null;
     return { baseRevision: row.baseRevision, draft: withRestDefaults(JSON.parse(row.draftJson) as SimpleProgramDraft) };
+  }
+
+  async getPeriodizedDraft(clientId: string, programId: string, key: string): Promise<PeriodizedDraft | null> {
+    if (await this.getProgram(clientId, programId) === null) return null;
+    const row = await this.ready().connection.first<{ json: string }>(`SELECT draft_json AS json FROM dev_training_periodized_drafts
+      WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key = ?`, [this.workspaceId, clientId, programId, key]);
+    return row === null ? null : JSON.parse(row.json) as PeriodizedDraft;
+  }
+
+  async savePeriodizedDraft(clientId: string, programId: string, draft: PeriodizedDraft): Promise<void> {
+    if (!Number.isInteger(draft.baseRevision) || draft.baseRevision < 1 || !draft.clientIds.includes(clientId)) throw new Error("DRAFT_INVALID");
+    await this.ready().writer.write(async (tx) => {
+      if ((await membership(tx, this.workspaceId, clientId, programId)).archivedAt !== null) throw new Error("PROGRAM_ARCHIVED");
+      if ((await programById(tx, this.workspaceId, programId)).kind !== "PERIODIZED") throw new Error("DRAFT_INVALID");
+      if (draft.kind === "WEEK") {
+        const cycle = (await readMesocycles(tx, this.workspaceId, programId, clientId)).find((item) => item.id === draft.mesocycleId);
+        if (!cycle?.weeks.some((week) => week.index === draft.weekIndex)) throw new Error("TARGET_NOT_FOUND");
+      }
+      await tx.run(`INSERT INTO dev_training_periodized_drafts(workspace_id, client_id, program_id, draft_key, draft_json, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(workspace_id, client_id, program_id, draft_key)
+        DO UPDATE SET draft_json = excluded.draft_json, updated_at = excluded.updated_at`,
+      [this.workspaceId, clientId, programId, periodizedDraftKey(draft), JSON.stringify(draft), new Date().toISOString()]);
+    });
+  }
+
+  async clearPeriodizedDraft(clientId: string, programId: string, key: string): Promise<void> {
+    await this.ready().writer.write(async (tx) => {
+      await tx.run("DELETE FROM dev_training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key = ?",
+        [this.workspaceId, clientId, programId, key]);
+    });
   }
 
   async saveBuilderDraft(clientId: string, key: string, baseRevision: number | null, draft: SimpleProgramDraft): Promise<void> {

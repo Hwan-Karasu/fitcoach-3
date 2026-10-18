@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import { Minus, Plus } from "lucide-react-native";
@@ -14,12 +14,12 @@ import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansReposit
 import { useExerciseLookup } from "./useExerciseLookup.ts";
 import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
 import { newPlanId, WorkoutsEditor } from "./WorkoutsEditor.tsx";
+import { useRecoveryDraftSave } from "./useRecoveryDraftSave.ts";
 
 export { newPlanId } from "./WorkoutsEditor.tsx";
 
 /** Ключ черновика ещё не созданной программы (совпадает с хранилищем). */
 const NEW_KEY = "new:SIMPLE";
-const AUTOSAVE_MS = 800;
 
 const errors: Readonly<Record<string, string>> = {
   DRAFT_INVALID: "Структура не сохранилась: проверьте название и тренировки.",
@@ -54,7 +54,9 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
   const [message, setMessage] = useState<string | null>(null);
   const [showIssues, setShowIssues] = useState(false);
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recovery = useRecoveryDraftSave<Readonly<{ draft: SimpleProgramDraft; revision: number | null }>>(
+    (value) => repository.saveBuilderDraft(clientId, key, value.revision, value.draft));
+  const { schedule } = recovery;
 
   // Загрузка: сохранённый план и, если есть, восстановленный черновик поверх него (§48.29 п. 2).
   useEffect(() => {
@@ -63,7 +65,7 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
       const saved = programId === null ? null : await repository.getSimplePlan(clientId, programId);
       const recovery = await repository.getBuilderDraft(clientId, key);
       if (!active) return;
-      setRevision(saved?.program.revision ?? null);
+      setRevision(recovery !== null ? recovery.baseRevision : saved?.program.revision ?? null);
       if (recovery !== null) { setDraft(recovery.draft); setRestored(true); }
       else setDraft(saved?.draft ?? newDraft(newPlanId("w")));
     })().catch(() => { if (active) setMessage("Не удалось открыть конструктор."); });
@@ -72,10 +74,8 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
 
   const change = useCallback((next: SimpleProgramDraft) => {
     setDraft(next);
-    if (timer.current !== null) clearTimeout(timer.current);
-    timer.current = setTimeout(() => { void repository.saveBuilderDraft(clientId, key, revision, next).catch(() => undefined); }, AUTOSAVE_MS);
-  }, [clientId, key, repository, revision]);
-  useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
+    schedule({ draft: next, revision });
+  }, [schedule, revision]);
 
   usePickedExercise(picked, draft, lookup, change);
 
@@ -91,15 +91,16 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
   const save = async () => {
     setShowIssues(true);
     if (issues.length > 0) { setMessage(issues[0]?.message ?? "Проверьте программу."); return; }
-    if (timer.current !== null) clearTimeout(timer.current);
     setBusy(true);
     setMessage(null);
     try {
+      await recovery.beforePublish();
       const program = programId === null || revision === null
         ? await repository.createSimpleProgram(clientId, draft)
         : await repository.saveSimplePlan(clientId, programId, revision, draft);
       onSaved(program.id);
     } catch (error) {
+      recovery.resume();
       setMessage(errors[error instanceof Error ? error.message : ""] ?? "Не удалось сохранить. Черновик на месте.");
     } finally {
       setBusy(false);
@@ -107,10 +108,13 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
   };
 
   const discardRecovery = async () => {
+    await recovery.beforePublish();
     await repository.clearBuilderDraft(clientId, key);
     const saved = programId === null ? null : await repository.getSimplePlan(clientId, programId);
     setDraft(saved?.draft ?? newDraft(newPlanId("w")));
+    setRevision(saved?.program.revision ?? null);
     setRestored(false);
+    recovery.resume();
   };
 
   return (
@@ -139,12 +143,8 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
       </Animated.ScrollView>
 
       <StickyEditorFooter actionLabel={programId === null ? "Создать программу" : "Сохранить"} busy={busy}
-        onCancel={() => {
-          if (timer.current !== null) clearTimeout(timer.current);
-          void repository.saveBuilderDraft(clientId, key, revision, draft).then(onCancel)
-            .catch(() => setMessage("Не удалось сохранить черновик. Повторите выход."));
-        }}
-        onAction={() => { void save(); }} message={message} messageKind="error"
+        onCancel={onCancel}
+        onAction={() => { void save(); }} message={recovery.error ?? message} messageKind="error"
         note="Несохранённые изменения хранятся в черновике и не попадают в дневник" />
 
     </TrainingEditorLayout>

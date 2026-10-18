@@ -16,6 +16,8 @@ import { ParticipantChips } from "./ParticipantChips.tsx";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
 import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
 import { WorkoutsEditor } from "./WorkoutsEditor.tsx";
+import { useRecoveryDraftSave } from "./useRecoveryDraftSave.ts";
+import type { PeriodizedDraft } from "../domain/PeriodizedDraft.ts";
 
 const errors: Readonly<Record<string, string>> = {
   DRAFT_INVALID: "Неделя не сохранилась: проверьте тренировки.",
@@ -59,26 +61,38 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [showIssues, setShowIssues] = useState(false);
+  const [restored, setRestored] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const recovery = useRecoveryDraftSave<PeriodizedDraft>((value) => repository.savePeriodizedDraft(clientId, programId, value));
+  const { schedule } = recovery;
+  useEffect(() => {
+    if (dirty && draft !== null && revision !== null) schedule({ kind: "WEEK", baseRevision: revision, draft, clientIds: selected,
+      mesocycleId, weekIndex, type, scope });
+  }, [dirty, draft, revision, selected, mesocycleId, weekIndex, type, scope, schedule]);
 
   useEffect(() => {
     let active = true;
-    void repository.getPeriodizedPlan(clientId, programId).then((plan) => {
+    void Promise.all([repository.getPeriodizedPlan(clientId, programId), repository.getPeriodizedDraft(clientId, programId,
+      `week:${mesocycleId}:${weekIndex}`)]).then(([plan, saved]) => {
       if (!active) return;
       const found = plan?.mesocycles.find((item) => item.id === mesocycleId);
       const week = found?.weeks.find((item) => item.index === weekIndex);
       if (plan === null || found === undefined || week === undefined) { setMessage("Неделя не найдена."); return; }
       setMesocycle(found);
-      setRevision(plan.program.revision);
+      setRevision(saved?.baseRevision ?? plan.program.revision);
       setMembers(plan.program.memberClientIds);
-      setType(week.type);
-      setDraft({ title: found.title, plan: { weeks: 1, workouts: week.workouts } });
+      setType(saved?.kind === "WEEK" ? saved.type : week.type);
+      setScope(saved?.kind === "WEEK" ? saved.scope : "CURRENT");
+      setSelected(saved?.clientIds ?? [clientId]);
+      setDraft(saved?.draft ?? { title: found.title, plan: { weeks: 1, workouts: week.workouts } });
+      setRestored(saved !== null);
     }).catch(() => { if (active) setMessage("Не удалось открыть неделю."); });
     listCandidates().then((rows) => { if (active) setNames(new Map(rows.map((row) => [row.id, row.displayName]))); })
       .catch(() => undefined);
     return () => { active = false; };
   }, [clientId, listCandidates, mesocycleId, programId, repository, weekIndex]);
 
-  const change = useCallback((next: SimpleProgramDraft) => setDraft(next), []);
+  const change = useCallback((next: SimpleProgramDraft) => { setDirty(true); setDraft(next); }, []);
   usePickedExercise(picked, draft, lookup, change);
   const metricsOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.metrics ?? null, [lookup]);
   const issues = useMemo(() => draft === null || lookup === null ? [] : validateDraft(draft, metricsOf), [draft, lookup, metricsOf]);
@@ -98,17 +112,20 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
     setBusy(true);
     setMessage(null);
     try {
+      await recovery.beforePublish();
       const result = await repository.saveWeek(clientId, programId, revision, { mesocycleId, weekIndex, workouts: draft.plan.workouts,
         type, scope, clientIds: selected });
       if (result.skipped > 0) {
         // §48.6.5 п. 8: где нет такого же элемента, правка не подменяет другой — об этом нужно сказать.
         setRevision(result.program.revision);
+        recovery.resume();
         setMessage(`Сохранено. Часть правок не применена в других неделях или у других участников (${result.skipped}): там нет такого же упражнения или тренировки.`);
         setBusy(false);
         return;
       }
       onSaved();
     } catch (error) {
+      recovery.resume();
       setMessage(errors[error instanceof Error ? error.message : ""] ?? "Не удалось сохранить. Неделя не изменена.");
     }
     setBusy(false);
@@ -117,26 +134,30 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
   return (
     <TrainingEditorLayout>
       <Animated.ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {restored ? <InlineNotice kind="info">Восстановлены несохранённые изменения недели.</InlineNotice> : null}
         <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>
           {`${mesocycle?.title ?? ""} · Неделя ${weekIndex}`}
         </Text>
         <Text style={[styles.section, { color: colors.textPrimary }]}>Тип недели</Text>
         <View style={styles.chips}>
           {WEEK_TYPES.map((item) => (
-            <SelectionChip key={item} group="Тип недели" label={weekTypeLabels[item]} selected={item === type} onPress={() => setType(item)} />
+            <SelectionChip key={item} group="Тип недели" label={weekTypeLabels[item]} selected={item === type}
+              onPress={() => { setDirty(true); setType(item); }} />
           ))}
         </View>
         <View style={[styles.application, { borderColor: colors.border, backgroundColor: colors.surface }]}>
         <Text style={[styles.section, { color: colors.textPrimary }]}>Применить правки</Text>
         <View style={styles.chips}>
           {WEEK_SCOPES.map((item) => (
-            <SelectionChip key={item} group="Область" label={weekScopeLabels[item]} selected={item === scope} onPress={() => setScope(item)} />
+            <SelectionChip key={item} group="Область" label={weekScopeLabels[item]} selected={item === scope}
+              onPress={() => { setDirty(true); setScope(item); }} />
           ))}
         </View>
         <Text style={[styles.meta, { color: colors.textSecondary }]}>
           {`Изменятся недели: ${affected.join(", ")}. Результаты тренировок не переносятся.`}
         </Text>
-        <ParticipantChips clientId={clientId} memberIds={members} names={names} selected={selected} onChange={setSelected}
+        <ParticipantChips clientId={clientId} memberIds={members} names={names} selected={selected}
+          onChange={(ids) => { setDirty(true); setSelected(ids); }}
           note="Правка у выбранных — в их собственных копиях этого мезоцикла." />
         </View>
         <WorkoutsEditor draft={draft} change={change} lookup={lookup} issues={issues} showIssues={showIssues} scrollRef={scrollRef}
@@ -145,7 +166,7 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
       </Animated.ScrollView>
       <StickyEditorFooter actionLabel="Сохранить неделю" busy={busy} onAction={() => { void save(); }}
         onCancel={onCancel}
-        message={message} messageKind={message?.startsWith("Сохранено") === true ? "info" : "error"}
+        message={recovery.error ?? message} messageKind={message?.startsWith("Сохранено") === true ? "info" : "error"}
         note="Тип недели меняется только у этой недели" />
     </TrainingEditorLayout>
   );
