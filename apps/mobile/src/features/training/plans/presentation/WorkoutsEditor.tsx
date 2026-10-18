@@ -133,9 +133,9 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, s
   const name = info?.name ?? "упражнение";
   const active = setState !== "idle";
   return (
-    // Каждое упражнение — своя карточка (как в 2.0); участники суперсета — с акцентной полосой слева.
-    <View style={[styles.exerciseRow, { borderColor: colors.border, backgroundColor: colors.surface },
-      group !== null ? { borderLeftColor: colors.accentInk, borderLeftWidth: 4 } : null]}>
+    // Каждое упражнение — своя карточка (как в 2.0); участники суперсета — с акцентной полосой слева. Полоса —
+    // отдельный слой: смена толщины рамки на лету у скруглённой карточки на Android оставляла её пустой.
+    <View style={[styles.exerciseRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
       {/* Название и действия — на фоне карточки; поля ввода ниже — отдельной полосой другого тона (UI-OWN-028). */}
       <View style={styles.exerciseHead}>
         <Sortable.Handle>
@@ -190,6 +190,7 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, s
           </Pressable>
         )}
       </View>
+      {group !== null ? <View pointerEvents="none" style={[styles.supersetStripe, { backgroundColor: colors.accentInk }]} /> : null}
     </View>
   );
 }
@@ -327,6 +328,7 @@ const styles = StyleSheet.create({
   handle: { width: 28, minHeight: 44, alignItems: "center", justifyContent: "center" },
   exerciseHead: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, paddingHorizontal: 2 },
   exerciseBody: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 10, paddingTop: 6, paddingBottom: 4 },
+  supersetStripe: { position: "absolute", left: 0, top: 0, bottom: 0, width: 4 },
   supersetTag: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
   setCell: { width: 44, gap: 3 },
   setButton: { minHeight: 36, borderWidth: 1, borderRadius: 8, alignItems: "center", justifyContent: "center" },
