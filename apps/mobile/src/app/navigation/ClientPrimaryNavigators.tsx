@@ -29,7 +29,8 @@ type TrainingRoutes = {
   TrainingSimpleWorkout: { programId: string; weekIndex: number; workoutId: string; picked?: PickedExercise };
   /** Каталог для выбора упражнения; результат возвращается на экран `returnTo` с теми же параметрами. */
   TrainingPickExercise: { workoutId: string; replace?: string; returnTo: PickReturn };
-  TrainingCreateExercise: { initialName: string; pick: TrainingRoutes["TrainingPickExercise"] };
+  /** `selected` — уже отмеченные в каталоге упражнения: созданное встаёт после них (UI-OWN-029). */
+  TrainingCreateExercise: { initialName: string; pick: TrainingRoutes["TrainingPickExercise"]; selected?: readonly string[] };
   TrainingWorkout: { programId: string; weekIndex: number; workoutId: string; mesocycleId?: string };
 };
 
@@ -206,9 +207,10 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingPickExercise">
         {({ navigation, route }) => <ExerciseLibraryScreen repository={exercises} picking
-          onCreate={(initialName) => navigation.navigate("TrainingCreateExercise", { initialName, pick: route.params })}
-          onOpen={(exerciseId) => {
-            const picked: PickedExercise = { token: `${Date.now()}`, workoutId: route.params.workoutId, exerciseId,
+          multiPick={route.params.replace === undefined}
+          onCreate={(initialName, selected) => navigation.navigate("TrainingCreateExercise", { initialName, pick: route.params, selected })}
+          onPick={(exerciseIds) => {
+            const picked: PickedExercise = { token: `${Date.now()}`, workoutId: route.params.workoutId, exerciseIds,
               ...(route.params.replace === undefined ? {} : { replace: route.params.replace }) };
             const back = route.params.returnTo;
             if (back.name === "TrainingBuilder") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
@@ -221,7 +223,8 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
         {({ navigation, route }) => <CustomExerciseEditorScreen repository={exercises} initialName={route.params.initialName}
           onCancel={() => navigation.goBack()} onSaved={(exerciseId) => {
             const source = route.params.pick;
-            const picked: PickedExercise = { token: `${Date.now()}`, workoutId: source.workoutId, exerciseId,
+            const picked: PickedExercise = { token: `${Date.now()}`, workoutId: source.workoutId,
+              exerciseIds: [...(route.params.selected ?? []), exerciseId],
               ...(source.replace === undefined ? {} : { replace: source.replace }) };
             const back = source.returnTo;
             if (back.name === "TrainingBuilder") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });

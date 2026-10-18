@@ -32,7 +32,8 @@ function toggled<T>(set: ReadonlySet<T>, value: T): ReadonlySet<T> {
   return next;
 }
 
-function ExerciseRow({ entry, onPress }: Readonly<{ entry: CatalogEntry; onPress: () => void }>) {
+/** `order` — номер в выборе нескольких упражнений (UI-OWN-029); `null` — не отмечено. */
+function ExerciseRow({ entry, onPress, order = null }: Readonly<{ entry: CatalogEntry; onPress: () => void; order?: number | null }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const { definition, overlay } = entry;
@@ -41,8 +42,9 @@ function ExerciseRow({ entry, onPress }: Readonly<{ entry: CatalogEntry; onPress
   const name = displayNameOf(entry);
   const thumbnail = thumbnailOf(definition.media);
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${name}. ${meta}${overlay.favorite ? ". В избранном" : ""}`}
-      onPress={onPress} style={({ pressed }) => [styles.row, { borderColor: colors.border,
+    <Pressable accessibilityRole="button" accessibilityState={order === null ? undefined : { selected: true }}
+      accessibilityLabel={`${name}. ${meta}${overlay.favorite ? ". В избранном" : ""}${order === null ? "" : `. Выбрано, номер ${order}`}`}
+      onPress={onPress} style={({ pressed }) => [styles.row, { borderColor: order === null ? colors.border : colors.accentInk,
         backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: overlay.hidden ? 0.55 : 1 }]}>
       <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>
         {thumbnail !== null ? <Image source={thumbnail} style={styles.thumbImage} accessibilityIgnoresInvertColors />
@@ -54,7 +56,11 @@ function ExerciseRow({ entry, onPress }: Readonly<{ entry: CatalogEntry; onPress
       </View>
       {overlay.favorite ? <Star size={16} color={colors.accentInk} fill={colors.accentInk} strokeWidth={1.8} /> : null}
       {definition.origin === "CUSTOM" ? <Text style={[styles.badge, { color: colors.accentInk, borderColor: colors.border }]}>Моё</Text> : null}
-      <ChevronRight size={18} color={colors.textMuted} strokeWidth={1.8} />
+      {order !== null ? (
+        <View style={[styles.order, { backgroundColor: colors.accentFill }]}>
+          <Text style={[styles.orderText, { color: colors.onAccentFill }]}>{order}</Text>
+        </View>
+      ) : <ChevronRight size={18} color={colors.textMuted} strokeWidth={1.8} />}
     </Pressable>
   );
 }
@@ -113,14 +119,19 @@ function FiltersSheet({ visible, filters, onChange, onClose }: Readonly<{
 
 /**
  * Каталог упражнений (§31): поиск сразу, быстрые режимы, фильтры в нижнем окне и снимаемые метки
- * активных фильтров, плотный список. Нет совпадений — «Создать «запрос»».
+ * активных фильтров, плотный список. Нет совпадений — «Создать «запрос»». В выборе для тренировки можно
+ * отметить несколько упражнений: номер на строке — порядок добавления (UI-OWN-029).
  */
-export function ExerciseLibraryScreen({ repository, onOpen, onCreate, picking = false }: Readonly<{
+export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, picking = false, multiPick = false }: Readonly<{
   repository: ExerciseCatalogPort;
-  /** Каталог: открыть карточку; выбор: вернуть упражнение (§31.9 один каталог, разные режимы). */
-  onOpen: (exerciseId: string) => void;
-  onCreate: (name: string) => void;
+  /** Каталог: открыть карточку (§31.9 один каталог, разные режимы). */
+  onOpen?: (exerciseId: string) => void;
+  /** Выбор: вернуть упражнения в порядке выбора (одно — при замене). */
+  onPick?: (exerciseIds: readonly string[]) => void;
+  /** `selected` — уже отмеченные, чтобы созданное упражнение встало после них. */
+  onCreate: (name: string, selected: readonly string[]) => void;
   picking?: boolean;
+  multiPick?: boolean;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -129,6 +140,13 @@ export function ExerciseLibraryScreen({ repository, onOpen, onCreate, picking = 
   const [mode, setMode] = useState<CatalogMode>("ALL");
   const [filters, setFilters] = useState<CatalogFilters>(NO_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [selected, setSelected] = useState<readonly string[]>([]);
+  const press = (exerciseId: string) => {
+    if (multiPick) {
+      setSelected((current) => current.includes(exerciseId) ? current.filter((id) => id !== exerciseId) : [...current, exerciseId]);
+    } else if (picking) onPick?.([exerciseId]);
+    else onOpen?.(exerciseId);
+  };
   const shown = useMemo(() => entries === null ? [] : filterCatalog(entries, query, mode, filters), [entries, filters, mode, query]);
   const meta = repository.meta();
 
@@ -179,16 +197,21 @@ export function ExerciseLibraryScreen({ repository, onOpen, onCreate, picking = 
       </View>
       <FlatList data={shown} keyExtractor={(entry) => entry.definition.id} keyboardShouldPersistTaps="handled"
         initialNumToRender={16} windowSize={9} contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => <ExerciseRow entry={item} onPress={() => onOpen(item.definition.id)} />}
+        extraData={selected}
+        renderItem={({ item }) => {
+          const index = selected.indexOf(item.definition.id);
+          return <ExerciseRow entry={item} onPress={() => press(item.definition.id)} order={index < 0 ? null : index + 1} />;
+        }}
         ListHeaderComponent={<Text style={[styles.counter, { color: colors.textMuted }]}>
-          {picking ? `Выберите упражнение · найдено: ${shown.length}` : `Найдено: ${shown.length}`}</Text>}
+          {multiPick ? `Отмечайте по порядку — так они встанут в тренировку · найдено: ${shown.length}`
+            : picking ? `Выберите упражнение · найдено: ${shown.length}` : `Найдено: ${shown.length}`}</Text>}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={[styles.meta, { color: colors.textSecondary }]}>
               {mode === "MINE" && query.trim() === "" ? "Своих упражнений пока нет." : "Ничего не найдено."}
             </Text>
             {query.trim() !== "" ? (
-              <AppButton variant="secondary" label={`Создать «${query.trim()}»`} onPress={() => onCreate(query.trim())} />
+              <AppButton variant="secondary" label={`Создать «${query.trim()}»`} onPress={() => onCreate(query.trim(), selected)} />
             ) : null}
           </View>
         }
@@ -197,8 +220,15 @@ export function ExerciseLibraryScreen({ repository, onOpen, onCreate, picking = 
             <Text style={[styles.attribution, { color: colors.textMuted }]}>{meta.attribution}</Text>
           </Pressable>
         } />
+      {multiPick && selected.length > 0 ? (
+        <View style={[styles.pickBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+          <View style={styles.grow}><AppButton compact variant="secondary" label="Сбросить" onPress={() => setSelected([])} /></View>
+          <View style={styles.pickMain}><AppButton compact label={`Добавить (${selected.length})`}
+            accessibilityLabel={`Добавить в тренировку: ${selected.length}`} onPress={() => onPick?.(selected)} /></View>
+        </View>
+      ) : null}
       {picking ? null : <FloatingActionButton label="Создать своё упражнение" icon={(color) => <Plus size={26} color={color} strokeWidth={2} />}
-        onPress={() => onCreate(query.trim())} />}
+        onPress={() => onCreate(query.trim(), selected)} />}
       <FiltersSheet visible={filtersOpen} filters={filters} onChange={setFilters} onClose={() => setFiltersOpen(false)} />
     </View>
   );
@@ -230,4 +260,8 @@ const styles = StyleSheet.create({
   group: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, marginTop: 4 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   sheetActions: { flexDirection: "row", gap: 10, paddingHorizontal: 16 },
+  order: { minWidth: 26, height: 26, borderRadius: 13, paddingHorizontal: 6, alignItems: "center", justifyContent: "center" },
+  orderText: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 16 },
+  pickBar: { flexDirection: "row", gap: 8, borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 8 },
+  pickMain: { flex: 2 },
 });

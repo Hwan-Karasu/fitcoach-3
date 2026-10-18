@@ -65,6 +65,12 @@ export const addExercise = (draft: SimpleProgramDraft, workoutId: string, planne
     sets: Array.from({ length: DEFAULT_SETS }, (_, index) => emptySet(setId(index))) });
 });
 
+/** Несколько упражнений из каталога за раз (UI-OWN-029): в конец тренировки в порядке выбора. */
+export function addExercises(draft: SimpleProgramDraft, workoutId: string, exerciseIds: readonly string[],
+  newId: (prefix: string) => string): SimpleProgramDraft {
+  return exerciseIds.reduce((current, exerciseId) => addExercise(current, workoutId, newId("e"), exerciseId, () => newId("s")), draft);
+}
+
 /** §48.56: отдых упражнения в границах 1 с – 60 мин; `null` выключает таймер. */
 export const setRest = (draft: SimpleProgramDraft, plannedId: string, restSec: number | null) => produce(draft, (d) => {
   const exercise = exerciseOf(d, plannedId);
