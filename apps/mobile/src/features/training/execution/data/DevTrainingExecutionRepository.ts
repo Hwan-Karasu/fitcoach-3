@@ -3,7 +3,7 @@ import { SharedSqliteDatabase } from "../../../../shared/db/SharedSqliteDatabase
 import { UUID_V4_SQL } from "../../../../shared/db/SqlIds.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../../shared/db/WriterCoordinator.ts";
-import { DEFAULT_CONFIRMATION_MODE, NOTE_MAX, SET_TYPES, type ConfirmationMode, type PreviousQuery, type PreviousSet,
+import { DEFAULT_CONFIRMATION_MODE, NOTE_MAX, SET_TYPES, type ActiveWorkout, type ConfirmationMode, type PreviousQuery, type PreviousSet,
   type SessionStatus, type SetFact, type SetType, type SetValues, type WorkoutExecution, type WorkoutOutcome,
   type WorkoutSession, type WorkoutSlot } from "../domain/ExecutionModel.ts";
 import { assertDropStructure, confirmationAfterSave, isLocalDate, localDateOf, matchPrevious, sidesAfterSave, toggleConfirmation,
@@ -16,6 +16,13 @@ import type { RestTimer } from "../domain/RestTimerRules.ts";
 import { DEV_TRAINING_EXECUTION_LEDGER, devTrainingExecutionCatalog } from "./DevTrainingExecutionCatalog.ts";
 
 const OUTCOMES: readonly WorkoutOutcome[] = ["COMPLETED", "MISSED", "CANCELLED"];
+
+/** §48.34: тренировка начата, если есть внесённое значение или засчитанный подход (сессия `s`). */
+const STARTED_SQL = `EXISTS (SELECT 1 FROM dev_training_performed_sets f WHERE f.workspace_id = s.workspace_id
+  AND f.session_id = s.id AND f.removed_at IS NULL AND (f.confirmed_at IS NOT NULL
+    OR COALESCE(f.reps, f.load_grams, f.duration_sec, f.distance_m) IS NOT NULL
+    OR EXISTS (SELECT 1 FROM dev_training_performed_sides d WHERE d.workspace_id = f.workspace_id AND d.set_id = f.id
+      AND COALESCE(d.reps, d.load_grams, d.duration_sec, d.distance_m) IS NOT NULL)))`;
 
 const SESSION_COLUMNS = `id, client_id AS clientId, program_id AS programId, week_index AS weekIndex,
   planned_workout_id AS plannedWorkoutId, outcome, actual_date AS actualDate, revision`;
@@ -236,14 +243,20 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     notes: new Map(notes.map((item) => [item.plannedExerciseId, item.note])) };
   }
 
+  listActiveWorkouts(): Promise<readonly ActiveWorkout[]> {
+    return this.ready().connection.all<ActiveWorkout>(`SELECT s.client_id AS clientId, s.program_id AS programId,
+        s.week_index AS weekIndex, s.planned_workout_id AS plannedWorkoutId, s.actual_date AS actualDate
+      FROM dev_training_sessions s
+      WHERE s.workspace_id = ? AND s.outcome IS NULL AND ${STARTED_SQL}
+      ORDER BY (SELECT max(f.updated_at) FROM dev_training_performed_sets f WHERE f.workspace_id = s.workspace_id
+        AND f.session_id = s.id AND f.removed_at IS NULL) DESC`, [this.workspaceId]);
+  }
+
   async getProgramStatuses(clientId: string, programId: string): Promise<readonly SessionStatus[]> {
     const rows = await this.ready().connection.all<{ weekIndex: number; plannedWorkoutId: string;
       outcome: WorkoutOutcome | null; started: number }>(`SELECT s.week_index AS weekIndex,
         s.planned_workout_id AS plannedWorkoutId, s.outcome,
-        EXISTS (SELECT 1 FROM dev_training_performed_sets f WHERE f.workspace_id = s.workspace_id AND f.session_id = s.id
-          AND f.removed_at IS NULL AND (f.confirmed_at IS NOT NULL OR COALESCE(f.reps, f.load_grams, f.duration_sec, f.distance_m) IS NOT NULL
-            OR EXISTS (SELECT 1 FROM dev_training_performed_sides d WHERE d.workspace_id = f.workspace_id AND d.set_id = f.id
-              AND COALESCE(d.reps, d.load_grams, d.duration_sec, d.distance_m) IS NOT NULL))) AS started
+        ${STARTED_SQL} AS started
       FROM dev_training_sessions s WHERE s.workspace_id = ? AND s.client_id = ? AND s.program_id = ?`,
     [this.workspaceId, clientId, programId]);
     return rows.map((row) => ({ weekIndex: row.weekIndex, plannedWorkoutId: row.plannedWorkoutId,

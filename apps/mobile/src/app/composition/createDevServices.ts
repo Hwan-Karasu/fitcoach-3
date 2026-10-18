@@ -19,7 +19,9 @@ import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant }
   "../../features/training/plans/data/DevTrainingPlansRepository.ts";
 import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParticipant } from
   "../../features/training/execution/data/DevTrainingExecutionRepository.ts";
-import type { RestTimersPort, TrainingExecutionPort, TrainingPlansRepositoryPort } from "../../features/training/public.ts";
+import type { ActiveWorkoutsPort, RestTimersPort, TrainingExecutionPort, TrainingPlansRepositoryPort } from
+  "../../features/training/public.ts";
+import { createActiveWorkouts } from "../../read-models/activeWorkouts.ts";
 import { RestTimerService } from "../../features/training/public.ts";
 import { expoRestSignal, preloadRestSignal } from "./expoRestSignal.ts";
 import { DevExerciseCatalogRepository } from "../../features/exercises/data/DevExerciseCatalogRepository.ts";
@@ -48,6 +50,8 @@ export interface DevServices {
   readonly trainingExecution: TrainingExecutionPort;
   /** Таймеры отдыха всех клиентов (§48.62): глобальная панель и запуск из дневника. */
   readonly restTimers: RestTimersPort;
+  /** Тренировки «в работе» у всех клиентов — быстрый переход между дневниками (§48.83). */
+  readonly activeWorkouts: ActiveWorkoutsPort;
   readonly exercises: ExerciseCatalogPort;
   /** Каталог глазами планов тренировок: название, величины подхода, миниатюра. */
   readonly exerciseLookup: ExerciseLookupPort;
@@ -97,6 +101,7 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
     trainingPlans,
     trainingExecution,
     restTimers,
+    activeWorkouts: createActiveWorkouts(trainingExecution, trainingPlans, clients),
     exercises,
     exerciseLookup: exerciseLookup(exercises),
     listCreditSessionTypes: async () => (await calendar.listSessionTypes())

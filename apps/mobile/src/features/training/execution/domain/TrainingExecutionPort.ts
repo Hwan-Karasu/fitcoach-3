@@ -1,4 +1,4 @@
-import type { ConfirmationMode, PreviousQuery, Side, PreviousSet, SessionStatus, SetFact, SetType, SetValues, TrackingMetric,
+import type { ActiveWorkout, ConfirmationMode, PreviousQuery, Side, PreviousSet, SessionStatus, SetFact, SetType, SetValues, TrackingMetric,
   WorkoutExecution, WorkoutOutcome, WorkoutSession, WorkoutSlot } from "./ExecutionModel.ts";
 
 /** Плановый подход, к которому относится факт, и профиль его упражнения (профиль знает каталог). */
@@ -46,6 +46,8 @@ export interface TrainingExecutionPort {
   /** Не ретроспективно: сохранённые факты и неподтверждённые значения остаются как есть (§48.53 п. 3). */
   setConfirmationMode(mode: ConfirmationMode): Promise<void>;
   getWorkout(slot: WorkoutSlot): Promise<WorkoutExecution>;
+  /** §48.83: начатые и не разобранные тренировки всех клиентов; последний ввод — первым. */
+  listActiveWorkouts(): Promise<readonly ActiveWorkout[]>;
   /** Статусы всех начатых или разобранных тренировок программы клиента. */
   getProgramStatuses(clientId: string, programId: string): Promise<readonly SessionStatus[]>;
   /** §48.74–48.75: прошлые подтверждённые подходы этого клиента в этой программе; ключ — плановый подход. */

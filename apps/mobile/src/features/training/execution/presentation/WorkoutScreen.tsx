@@ -4,7 +4,7 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useKeepAwake } from "expo-keep-awake";
 import { usePreventRemove, useNavigation } from "@react-navigation/native";
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { CalendarDays, Check, NotebookPen, Plus, Timer, Trash2, X } from "lucide-react-native";
+import { CalendarDays, Check, NotebookPen, Plus, Timer, Trash2, Users, X } from "lucide-react-native";
 import { ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, StatusTag,
   type StatusKind } from "../../../../shared/ui/components/public.ts";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
@@ -12,12 +12,12 @@ import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemePro
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { formatDuration, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookup, type ExerciseLookupPort,
   type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort } from "../../plans/public.ts";
-import { DROPS_MAX, EMPTY_VALUES, NOTE_MAX, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type Side,
+import { DROPS_MAX, EMPTY_VALUES, NOTE_MAX, type ActiveWorkoutCard, type ActiveWorkoutsPort, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type Side,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
 import { displayOrder, localDateOf, nextOutcome, type SetField } from "../domain/ExecutionRules.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
-import { RpeSheet, SetTypeSheet } from "./SetPickers.tsx";
+import { ActiveWorkoutsSheet, RpeSheet, SetTypeSheet } from "./SetPickers.tsx";
 import { compactValues, compactWithDrops, diaryFields, fieldHeaders, fieldNames, parseField, rawOf, rpeTone, setTypeLabels,
   setTypeTone, shortDate, workoutStatusLabels } from "./setFormat.ts";
 import { extraWarmups, useWorkoutDiary, type SetPatch } from "./useWorkoutDiary.ts";
@@ -303,13 +303,17 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
  * упражнением (§48.31). После завершения экран остаётся тем же (§48.68). Выход из начатой тренировки без
  * исхода спрашивает «Завершить тренировку?» (§48.36).
  */
-export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, exercises }: Readonly<{
+export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, activeWorkouts, onOpenWorkout,
+  exercises }: Readonly<{
   slot: WorkoutSlot;
   /** Подпись таймера отдыха — таймеры разных клиентов различимы (§48.62). */
   clientName: string;
   plans: TrainingPlansRepositoryPort;
   execution: TrainingExecutionPort;
   restTimers: RestTimersPort;
+  /** §48.83: тренировки «в работе» у других клиентов и переход к их дневнику. */
+  activeWorkouts: ActiveWorkoutsPort;
+  onOpenWorkout: (slot: WorkoutSlot) => void;
   exercises: ExerciseLookupPort;
 }>) {
   useKeepAwake();
@@ -339,6 +343,21 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const { saveSet, toggleSet, setOutcome, addWarmup, removeWarmup } = diary;
   const [removeWarm, setRemoveWarm] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const activeSheet = useRef<BottomSheetModal>(null);
+  const [others, setOthers] = useState<readonly ActiveWorkoutCard[]>([]);
+  useEffect(() => {
+    let active = true;
+    const load = () => {
+      activeWorkouts.list().then((cards) => {
+        if (!active) return;
+        setOthers(cards.filter((card) => !(card.slot.clientId === slot.clientId && card.slot.programId === slot.programId
+          && card.slot.weekIndex === slot.weekIndex && card.slot.plannedWorkoutId === slot.plannedWorkoutId)));
+      }).catch(() => undefined);
+    };
+    load();
+    const unsubscribe = activeWorkouts.subscribe(load);
+    return () => { active = false; unsubscribe(); };
+  }, [activeWorkouts, slot.clientId, slot.plannedWorkoutId, slot.programId, slot.weekIndex]);
 
   /** §48.56: отдых упражнения сохраняется в план — у каждого упражнения свой таймер. */
   const saveRest = (exercise: PlannedExercise, restSec: number | null) => {
@@ -440,6 +459,14 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
           </View>
           <StatusTag kind={statusKinds[diary.status]} label={workoutStatusLabels[diary.status]} />
         </View>
+        {others.length > 0 ? (
+          <Pressable accessibilityRole="button" accessibilityLabel={`Другие тренировки в работе: ${others.length}. Перейти`}
+            hitSlop={6} onPress={() => { flushPending(); Keyboard.dismiss(); activeSheet.current?.present(); }}
+            style={[styles.othersButton, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+            <Users size={16} color={colors.accentInk} strokeWidth={2} />
+            <Text style={[styles.othersText, { color: colors.accentInk }]}>{`В работе ещё: ${others.length}`}</Text>
+          </Pressable>
+        ) : null}
         {diary.message !== null ? <InlineNotice kind="error">{diary.message}</InlineNotice> : null}
         {restError !== null ? <InlineNotice kind="error">{restError}</InlineNotice> : null}
         {workout.exercises.map((exercise) => {
@@ -520,6 +547,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         onConfirm={(seconds) => { if (restFor !== null) saveRest(restFor, seconds); }}
         onClear={() => { if (restFor !== null) saveRest(restFor, null); }}
         onClose={() => setRestFor(null)} />
+      <ActiveWorkoutsSheet ref={activeSheet} cards={others}
+        onOpen={(card) => { activeSheet.current?.dismiss(); flushPending(); onOpenWorkout(card.slot); }} />
       <SetTypeSheet ref={typeSheet} setType={targetFact?.setType ?? "NORMAL"} extra={targetFact?.extra === true}
         noDrop={target !== null && lookup.get(target.exercise.exerciseId)?.unilateral === true}
         onSelect={chooseType}
@@ -607,6 +636,9 @@ const styles = StyleSheet.create({
   noteAddText: { fontFamily: fonts.medium, fontSize: 13 },
   note: { minHeight: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, textAlignVertical: "top",
     fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, marginTop: 4 },
+  othersButton: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", minHeight: 36,
+    borderWidth: 1, borderRadius: 8, paddingHorizontal: 10 },
+  othersText: { fontFamily: fonts.medium, fontSize: 13 },
   deleteRun: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 48, marginTop: 4 },
   deleteRunText: { fontFamily: fonts.medium, fontSize: 14 },
   sideLabel: { width: 14, textAlign: "center", fontFamily: fonts.semibold, fontSize: 13 },

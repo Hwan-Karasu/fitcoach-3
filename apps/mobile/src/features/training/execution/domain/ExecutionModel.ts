@@ -119,6 +119,25 @@ export interface PreviousQuery {
   readonly plannedSetIds: readonly string[];
 }
 
+/** Начатая и ещё не разобранная тренировка клиента (§48.83). */
+export interface ActiveWorkout extends WorkoutSlot {
+  readonly actualDate: string;
+}
+
+/** Карточка быстрого перехода: кто и что сейчас тренирует. */
+export interface ActiveWorkoutCard {
+  readonly slot: WorkoutSlot;
+  readonly clientName: string;
+  readonly programTitle: string;
+  readonly workoutTitle: string;
+}
+
+/** Тренировки «в работе» у всех клиентов с подписями — собирается в слое приложения. */
+export interface ActiveWorkoutsPort {
+  list(): Promise<readonly ActiveWorkoutCard[]>;
+  subscribe(listener: () => void): () => void;
+}
+
 /** Статус одной тренировки недели в программе клиента. */
 export interface SessionStatus {
   readonly weekIndex: number;

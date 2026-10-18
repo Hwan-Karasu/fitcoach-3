@@ -40,7 +40,9 @@ type RootStackRoutes = {
   ExerciseEditor: { exerciseId?: string; name?: string } | undefined;
   Appearance: undefined;
   WorkspaceDev: undefined;
-  ClientWorkspace: { clientId: string };
+  /** `screen`/`params` — сразу открыть тренировку клиента (быстрый переход между дневниками, §48.83). */
+  ClientWorkspace: { clientId: string; screen?: "Training";
+    params?: { screen: "TrainingWorkout"; params: { programId: string; weekIndex: number; workoutId: string } } };
   ClientAccounting: { clientId: string };
   ClientMeasurements: { clientId: string };
   ClientEditorDev: { clientId?: string; guestLink?: GuestLinkRequest } | undefined;
@@ -136,7 +138,11 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
           {({ navigation, route }) => <ClientWorkspaceNavigator
             clientId={route.params.clientId} repository={services.clients}
             accounting={services.accounting} measurements={services.measurements} questionnaire={services.questionnaire}
-            trainingPlans={services.trainingPlans} trainingExecution={services.trainingExecution} restTimers={services.restTimers} exercises={services.exercises} exerciseLookup={services.exerciseLookup}
+            trainingPlans={services.trainingPlans} trainingExecution={services.trainingExecution} restTimers={services.restTimers} activeWorkouts={services.activeWorkouts}
+            onOpenWorkout={(slot) => navigation.push("ClientWorkspace", { clientId: slot.clientId, screen: "Training",
+              params: { screen: "TrainingWorkout", params: { programId: slot.programId, weekIndex: slot.weekIndex,
+                workoutId: slot.plannedWorkoutId } } })}
+            exercises={services.exercises} exerciseLookup={services.exerciseLookup}
             onOpenEdit={(clientId) => navigation.navigate("ClientEditorDev", { clientId })}
             onOpenAccounting={(clientId) => navigation.navigate("ClientAccounting", { clientId })}
             onOpenMeasurements={(clientId) => navigation.navigate("ClientMeasurements", { clientId })}

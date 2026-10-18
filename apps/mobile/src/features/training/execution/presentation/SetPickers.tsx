@@ -5,7 +5,7 @@ import { Check } from "lucide-react-native";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
-import { SET_TYPES, type SetType } from "../domain/ExecutionModel.ts";
+import { SET_TYPES, type ActiveWorkoutCard, type SetType } from "../domain/ExecutionModel.ts";
 import { rpeTone, setTypeHints, setTypeLabels, setTypeTone } from "./setFormat.ts";
 
 const RPE_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -71,6 +71,32 @@ export const SetTypeSheet = forwardRef<BottomSheetModal, Readonly<{
           </Pressable>
         );
       })}
+    </PickerSheet>
+  );
+});
+
+/** §48.83: тренировки «в работе» у других клиентов — переход сразу в их дневник. */
+export const ActiveWorkoutsSheet = forwardRef<BottomSheetModal, Readonly<{
+  cards: readonly ActiveWorkoutCard[];
+  onOpen: (card: ActiveWorkoutCard) => void;
+}>>(function ActiveWorkoutsSheet({ cards, onOpen }, ref) {
+  const { palette } = usePrototypeTheme();
+  const colors = palette.tokens;
+  return (
+    <PickerSheet ref={ref} title="Тренировки в работе">
+      {cards.map((card) => (
+        <Pressable key={`${card.slot.clientId}:${card.slot.programId}:${card.slot.weekIndex}:${card.slot.plannedWorkoutId}`}
+          accessibilityRole="button" accessibilityLabel={`${card.clientName}, ${card.workoutTitle}, неделя ${card.slot.weekIndex}`}
+          onPress={() => onOpen(card)}
+          style={[styles.option, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+          <View style={styles.optionText}>
+            <Text style={[styles.optionTitle, { color: colors.textPrimary }]} numberOfLines={1}>{card.clientName}</Text>
+            <Text style={[styles.optionHint, { color: colors.textSecondary }]} numberOfLines={1}>
+              {`${card.workoutTitle} · неделя ${card.slot.weekIndex} · ${card.programTitle}`}
+            </Text>
+          </View>
+        </Pressable>
+      ))}
     </PickerSheet>
   );
 });

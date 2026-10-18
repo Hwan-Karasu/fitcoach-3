@@ -453,3 +453,21 @@ test("T03 удаление выполнения тренировки (§48.30): 
     assert.equal((await execution.getWorkout(w2)).facts.get("s1")?.values.loadGrams, 105_000, "другая неделя не тронута");
   } finally { await close(); }
 });
+
+test("T03 тренировки «в работе» у всех клиентов (§48.83): начатые без исхода, последние сверху", async () => {
+  const { clients, execution, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const b = await clients.create({ displayName: "SyntheticB" });
+    const slotOf = (clientId: string, plannedWorkoutId: string): WorkoutSlot =>
+      ({ clientId, programId: `program-${clientId}`, weekIndex: 1, plannedWorkoutId });
+    await execution.saveSet(bench(slotOf(a.id, "w1"), "s1", 0, values(100_000, 8), null), new Date(2026, 9, 17, 9, 0));
+    await execution.saveSet(bench(slotOf(b.id, "w1"), "s1", 0, values(60_000, 10), null), new Date(2026, 9, 17, 9, 30));
+    const doneRun = await execution.saveSet(bench(slotOf(a.id, "w2"), "s1", 0, values(80_000, 8), null), DAY1);
+    await execution.setOutcome(slotOf(a.id, "w2"), "COMPLETED", doneRun.session.revision, DAY1);
+    await execution.saveExerciseNote(slotOf(b.id, "w2"), "pe-bench", "Только заметка", DAY1);
+    const active = await execution.listActiveWorkouts();
+    assert.deepEqual(active.map((item) => [item.clientId, item.plannedWorkoutId]), [[b.id, "w1"], [a.id, "w1"]],
+      "завершённая и не начатая (только заметка) — не «в работе»; свежий ввод — первым");
+  } finally { await close(); }
+});

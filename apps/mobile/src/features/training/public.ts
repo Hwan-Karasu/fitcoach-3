@@ -2,6 +2,6 @@ export { CreateProgramScreen, ProgramLibraryScreen, ProgramModeChooserScreen, Pr
   type ExerciseInfo, type ExerciseLookupPort,
   type ProgramKind, type TrainingParticipantCandidate, type TrainingPlansRepositoryPort } from "./plans/public.ts";
 export { ProgramWeeksPanel, RestTimerDock, RestTimerService, TrainingSettingsScreen, WorkoutScreen, type RestSignalPort, type RestTimersPort,
-  type TrainingExecutionPort } from "./execution/public.ts";
+  type TrainingExecutionPort, type ActiveWorkoutCard, type ActiveWorkoutsPort, type WorkoutSlot } from "./execution/public.ts";
 export { TrainingArchivePreview } from "./archive/public.ts";
 export { TrainingStatisticsPreview } from "./analytics/public.ts";
