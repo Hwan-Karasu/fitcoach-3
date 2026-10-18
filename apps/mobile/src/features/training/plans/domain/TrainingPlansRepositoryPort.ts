@@ -1,4 +1,5 @@
 import type { ClientProgramLibrary, CreateProgramInput, TrainingProgram } from "./ProgramModel.ts";
+import type { ProgramTemplate } from "./TemplateModel.ts";
 import type { NewMesocycleInput, PeriodizedPlan, WeekEditInput, WeekEditPreview, WeekEditResult } from "./PeriodizedModel.ts";
 import type { PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
 import type { PeriodizedDraft } from "./PeriodizedDraft.ts";
@@ -28,6 +29,26 @@ export interface TrainingPlansRepositoryPort {
   /** Новая программа выбранным клиентам; выбранная программа каждого из них не меняется. */
   createProgram(input: CreateProgramInput, now?: Date): Promise<TrainingProgram>;
   renameProgram(programId: string, expectedRevision: number, title: string, now?: Date): Promise<TrainingProgram>;
+  /** §48.16: библиотека шаблонов тренера (все типы); новые сверху. */
+  listTemplates(): Promise<readonly ProgramTemplate[]>;
+  /**
+   * §48.14–48.15: план открытой программы этого клиента — шаблон Простой или Расширенной программы (у общей
+   * программы — мезоциклы именно этого участника). Только план; программа и факты не меняются.
+   */
+  saveProgramAsTemplate(clientId: string, programId: string, title: string, now?: Date): Promise<ProgramTemplate>;
+  /** §48.14.1 п. 1: один мезоцикл этого клиента как шаблон мезоцикла. */
+  saveMesocycleAsTemplate(clientId: string, programId: string, mesocycleId: string, title: string, now?: Date): Promise<ProgramTemplate>;
+  renameTemplate(templateId: string, expectedRevision: number, title: string, now?: Date): Promise<ProgramTemplate>;
+  /** Независимая копия шаблона (§48.16 п. 3). */
+  duplicateTemplate(templateId: string, title: string, now?: Date): Promise<ProgramTemplate>;
+  /** Удаление шаблона не трогает программы, созданные по нему (§48.16 п. 4). */
+  deleteTemplate(templateId: string): Promise<void>;
+  /**
+   * §48.14.2 п. 1, 3: новая программа из шаблона Простой (один клиент) или Расширенной (выбранные участники,
+   * у каждого своя копия) программы — новые ID, без фактов; одной транзакцией.
+   */
+  createProgramFromTemplate(templateId: string, input: Readonly<{ title: string; clientIds: readonly string[] }>,
+    now?: Date): Promise<TrainingProgram>;
   /** Полный порядок действующих программ этого клиента; у других участников свой. Неполный список/повторы — DRAFT_INVALID. */
   reorderPrograms(clientId: string, programIds: readonly string[]): Promise<void>;
   /** Полный порядок мезоциклов активного участия клиента; выбор и содержимое не меняются. Неполный список/повторы — DRAFT_INVALID. */

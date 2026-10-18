@@ -25,6 +25,18 @@ import { assertSimpleIdentities, preserveSimple, readSimpleHistory, readSimpleWe
 import { independentWeeks, weekRowCount, type CopyMesocycleInput } from "../domain/PlanCopy.ts";
 import type { WeekPlansParticipant, WeekCopyRequest } from "../domain/WeekCopy.ts";
 import type { WeekSwapPlansParticipant } from "../domain/WeekSwap.ts";
+import { templateMesocycle, weeksFromTemplate, workoutsFromTemplate, type ProgramTemplate, type TemplateKind,
+  type TemplatePayload } from "../domain/TemplateModel.ts";
+
+type TemplateRow = Readonly<{ id: string; kind: TemplateKind; title: string; revision: number; createdAt: string;
+  updatedAt: string; payloadJson: string }>;
+
+const TEMPLATE_COLUMNS = `id, kind, title, revision, created_at AS createdAt, updated_at AS updatedAt, payload_json AS payloadJson`;
+
+function templateOf(row: TemplateRow): ProgramTemplate {
+  const { payloadJson, ...rest } = row;
+  return { ...rest, payload: JSON.parse(payloadJson) as TemplatePayload };
+}
 
 /** Ключ черновика ещё не созданной Простой программы (§48.29 п. 4: черновик привязан к объекту правки). */
 export const NEW_SIMPLE_DRAFT_KEY = "new:SIMPLE";
@@ -700,6 +712,115 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     });
     this.publish({ clientIds: input.clientIds });
     return saved;
+  }
+
+  async listTemplates(): Promise<readonly ProgramTemplate[]> {
+    const rows = await this.ready().connection.all<TemplateRow>(`SELECT ${TEMPLATE_COLUMNS} FROM dev_training_templates
+      WHERE workspace_id = ? ORDER BY updated_at DESC, title`, [this.workspaceId]);
+    return rows.map(templateOf);
+  }
+
+  private async templateById(tx: SqliteStatementPort, templateId: string): Promise<ProgramTemplate> {
+    const row = await tx.first<TemplateRow>(`SELECT ${TEMPLATE_COLUMNS} FROM dev_training_templates
+      WHERE workspace_id = ? AND id = ?`, [this.workspaceId, templateId]);
+    if (row === null) throw new Error("TARGET_NOT_FOUND");
+    return templateOf(row);
+  }
+
+  private async insertTemplate(tx: SqliteStatementPort, title: string, payload: TemplatePayload, now: Date): Promise<ProgramTemplate> {
+    const take = await this.idPool(tx, 1);
+    const id = take();
+    const stamp = now.toISOString();
+    await tx.run(`INSERT INTO dev_training_templates (id, workspace_id, kind, title, payload_json, revision, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 1, ?, ?)`, [id, this.workspaceId, payload.kind, normalizeTitle(title), JSON.stringify(payload), stamp, stamp]);
+    return this.templateById(tx, id);
+  }
+
+  async saveProgramAsTemplate(clientId: string, programId: string, title: string, now: Date = new Date()): Promise<ProgramTemplate> {
+    return this.ready().writer.write(async (tx) => {
+      await membership(tx, this.workspaceId, clientId, programId);
+      const program = await programById(tx, this.workspaceId, programId);
+      if (program.kind === "SIMPLE") {
+        const row = await tx.first<{ weeks: number }>("SELECT weeks FROM dev_training_programs WHERE workspace_id = ? AND id = ?",
+          [this.workspaceId, programId]);
+        // §48.14.1 п. 3: повторяющийся план Простой программы; разовые отличия недель в шаблон не входят.
+        const plan = await readStructure(tx, this.workspaceId, programId, row?.weeks ?? DEFAULT_WEEKS);
+        return this.insertTemplate(tx, title, { kind: "SIMPLE", weeks: plan.weeks, workouts: plan.workouts }, now);
+      }
+      // §48.15: мезоциклы открытого участника, а не смесь участников.
+      const mesocycles = await readMesocycles(tx, this.workspaceId, programId, clientId);
+      if (mesocycles.length === 0) throw new Error("DRAFT_INVALID");
+      return this.insertTemplate(tx, title, { kind: "PERIODIZED", mesocycles: mesocycles.map(templateMesocycle) }, now);
+    });
+  }
+
+  async saveMesocycleAsTemplate(clientId: string, programId: string, mesocycleId: string, title: string,
+    now: Date = new Date()): Promise<ProgramTemplate> {
+    return this.ready().writer.write(async (tx) => {
+      await membership(tx, this.workspaceId, clientId, programId);
+      const mesocycle = (await readMesocycles(tx, this.workspaceId, programId, clientId)).find((item) => item.id === mesocycleId);
+      if (mesocycle === undefined) throw new Error("TARGET_NOT_FOUND");
+      return this.insertTemplate(tx, title, { kind: "MESOCYCLE", mesocycle: templateMesocycle(mesocycle) }, now);
+    });
+  }
+
+  async renameTemplate(templateId: string, expectedRevision: number, title: string, now: Date = new Date()): Promise<ProgramTemplate> {
+    const value = normalizeTitle(title);
+    return this.ready().writer.write(async (tx) => {
+      const result = await tx.run(`UPDATE dev_training_templates SET title = ?, revision = revision + 1, updated_at = ?
+        WHERE workspace_id = ? AND id = ? AND revision = ?`, [value, now.toISOString(), this.workspaceId, templateId, expectedRevision]);
+      if (result.changes !== 1) {
+        await this.templateById(tx, templateId);
+        throw new Error("TEMPLATE_REVISION_CONFLICT");
+      }
+      return this.templateById(tx, templateId);
+    });
+  }
+
+  async duplicateTemplate(templateId: string, title: string, now: Date = new Date()): Promise<ProgramTemplate> {
+    return this.ready().writer.write(async (tx) => this.insertTemplate(tx, title, (await this.templateById(tx, templateId)).payload, now));
+  }
+
+  async deleteTemplate(templateId: string): Promise<void> {
+    await this.ready().writer.write(async (tx) => {
+      await tx.run("DELETE FROM dev_training_templates WHERE workspace_id = ? AND id = ?", [this.workspaceId, templateId]);
+    });
+  }
+
+  async createProgramFromTemplate(templateId: string, input: Readonly<{ title: string; clientIds: readonly string[] }>,
+    now: Date = new Date()): Promise<TrainingProgram> {
+    const created = await this.ready().writer.write(async (tx) => {
+      const template = await this.templateById(tx, templateId);
+      const { payload } = template;
+      if (payload.kind === "MESOCYCLE") throw new Error("DRAFT_INVALID");
+      const valid = validateCreate({ kind: payload.kind, title: input.title, clientIds: input.clientIds });
+      if (payload.kind === "SIMPLE") {
+        const rows = payload.workouts.reduce((sum, workout) => sum + 1
+          + workout.exercises.reduce((inner, exercise) => inner + 1 + exercise.sets.length, 0), 0);
+        const workouts = workoutsFromTemplate(payload.workouts, await this.idPool(tx, rows + 2));
+        const draft = { title: valid.title, plan: { weeks: payload.weeks, workouts } };
+        assertStructure(draft);
+        const program = await this.insertProgram(tx, valid, now, payload.weeks);
+        await writeStructure(tx, this.workspaceId, program.id, draft.plan);
+        return program;
+      }
+      const program = await this.insertProgram(tx, valid, now, null);
+      for (const cycle of payload.mesocycles) {
+        const rows = cycle.weeks.reduce((sum, week) => sum + 1 + week.workouts.reduce((inner, workout) => inner + 1
+          + workout.exercises.reduce((n, exercise) => n + 1 + exercise.sets.length, 0), 0), 0);
+        const take = await this.idPool(tx, 1 + valid.clientIds.length + rows * (valid.clientIds.length + 1));
+        const lineageId = take();
+        const template = weeksFromTemplate(cycle, take);
+        for (const week of template) assertWeek(cycle.title, week.workouts);
+        for (const [index, memberId] of valid.clientIds.entries()) {
+          await insertMesocycle(tx, this.workspaceId, program.id, memberId, { id: take(), lineageId, title: cycle.title,
+            weeks: index === 0 ? template : copyWeeks(template, take) }, now);
+        }
+      }
+      return programById(tx, this.workspaceId, program.id);
+    });
+    this.publish({ clientIds: created.memberClientIds });
+    return created;
   }
 
   async reorderPrograms(clientId: string, programIds: readonly string[]): Promise<void> {

@@ -69,6 +69,9 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [message, setMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [swapping, setSwapping] = useState(false);
+  // §48.14–48.15: сохранение плана этого клиента как шаблона; название по умолчанию — из программы/мезоцикла.
+  const [templateForm, setTemplateForm] = useState<Readonly<{ kind: "program" | "mesocycle"; mesocycleId: string | null;
+    title: string }> | null>(null);
   const [copyRequest, setCopyRequest] = useState<Omit<WeekCopyRequest, "sourceWeek"> | null>(null);
   const [version, setVersion] = useState(0);
   const [plan, setPlan] = useState<SimplePlan | null>(null);
@@ -190,13 +193,47 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       <DropdownMenu visible={menuOpen} anchor={menuAnchor} title="Программа" selected=""
         options={[{ value: "rename", label: "Переименовать" },
           ...(weekSwap !== undefined && program.kind === "PERIODIZED" ? [{ value: "swap", label: "Поменять недели местами" }] : []),
+          { value: "save-program", label: "Сохранить как шаблон" },
+          ...(program.kind === "PERIODIZED" && (periodized?.mesocycles.length ?? 0) > 0
+            ? [{ value: "save-mesocycle", label: "Сохранить мезоцикл как шаблон" }] : []),
           { value: "archive", label: "В архив" }]}
         onClose={() => setMenuOpen(false)} onSelect={(value) => {
           if (value === "rename") setRenaming(program.title); else if (value === "archive") setConfirmArchive(true);
           else if (value === "swap") { setNotice(null); setMessage(null); setSwapping(true); }
+          else if (value === "save-program") { setNotice(null); setTemplateForm({ kind: "program", mesocycleId: null, title: program.title }); }
+          else if (value === "save-mesocycle") {
+            const cycle = periodized?.mesocycles.find((item) => item.id === periodized.selectedMesocycleId) ?? periodized?.mesocycles[0];
+            if (cycle !== undefined) { setNotice(null); setTemplateForm({ kind: "mesocycle", mesocycleId: cycle.id, title: cycle.title }); }
+          }
         }} />
       {message !== null ? <InlineNotice kind="error">{message}</InlineNotice> : null}
       {notice !== null ? <InlineNotice kind="success">{notice}</InlineNotice> : null}
+      {templateForm !== null ? (
+        <View style={styles.rename}>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>
+            {templateForm.kind === "program" ? "Шаблон программы: только план этого клиента, без результатов."
+              : "Шаблон мезоцикла: только план этого клиента, без результатов."}
+          </Text>
+          <TextField label="Название шаблона" required value={templateForm.title}
+            onChangeText={(title) => setTemplateForm({ ...templateForm, title })} />
+          <View style={styles.row}>
+            <View style={styles.grow}><AppButton variant="secondary" label="Отмена" onPress={() => setTemplateForm(null)} /></View>
+            <View style={styles.grow}><AppButton label="Сохранить" busy={busy} disabled={templateForm.title.trim().length === 0}
+              onPress={() => {
+                const form = templateForm;
+                setBusy(true); setMessage(null);
+                const saving = form.kind === "program" || form.mesocycleId === null
+                  ? repository.saveProgramAsTemplate(clientId, programId, form.title)
+                  : repository.saveMesocycleAsTemplate(clientId, programId, form.mesocycleId, form.title);
+                void saving.then((template) => { setTemplateForm(null); setNotice(`Шаблон «${template.title}» сохранён.`); })
+                  .catch((error: unknown) => setMessage(error instanceof Error && error.message === "DRAFT_INVALID"
+                    ? "Введите название (до 80 символов); у программы должен быть хотя бы один мезоцикл."
+                    : "Не удалось сохранить шаблон. Программа не изменена."))
+                  .finally(() => setBusy(false));
+              }} /></View>
+          </View>
+        </View>
+      ) : null}
       {message !== null && plan === null && periodized === null ? <AppButton label="Повторить загрузку" variant="secondary"
         onPress={() => { setMessage(null); setVersion((value) => value + 1); }} /> : null}
       {others.length > 0 ? (

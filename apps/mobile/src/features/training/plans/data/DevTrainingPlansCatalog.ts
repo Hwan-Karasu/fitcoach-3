@@ -342,4 +342,23 @@ export const devTrainingPlansCatalog: readonly MigrationStep[] = [{
           AND w.id = NEW.workout_id AND NEW.week_index <= p.weeks)
       BEGIN SELECT RAISE(ABORT, 'DRAFT_INVALID'); END`),
   ],
+}, {
+  version: 13,
+  checksum: "t04-dev-training-plans-v13-template-library-20261018",
+  statements: [
+    // §48.14–48.16: одна библиотека шаблонов тренера, три типа. Только план (JSON-снимок): на шаблон не ссылаются
+    // факты, при применении все ID создаются заново. Клиентских данных и участников в шаблоне нет.
+    `CREATE TABLE dev_training_templates (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      kind TEXT NOT NULL CHECK (kind IN ('SIMPLE','PERIODIZED','MESOCYCLE')),
+      title TEXT NOT NULL CHECK (length(trim(title)) BETWEEN 1 AND 80),
+      payload_json TEXT NOT NULL CHECK (CASE WHEN json_valid(payload_json)
+        THEN COALESCE(json_extract(payload_json, '$.kind') = kind, 0) ELSE 0 END),
+      revision INTEGER NOT NULL CHECK (revision > 0),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`,
+    `CREATE INDEX dev_training_templates_workspace ON dev_training_templates(workspace_id, kind, title)`,
+  ],
 }];

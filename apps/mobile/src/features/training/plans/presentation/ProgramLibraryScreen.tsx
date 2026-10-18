@@ -82,13 +82,15 @@ function ProgramCardRow({ card, selected, onPress, onRestore }: Readonly<{
  * §48.4 корень вкладки «Тренировки»: список программ клиента (простые и расширенные вместе), а при
  * пустой библиотеке — сразу выбор конструктора. Архив — у участия этого клиента.
  */
-export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate, onOpenProgram }: Readonly<{
+export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate, onOpenProgram, onOpenTemplates }: Readonly<{
   clientId: string;
   repository: TrainingPlansRepositoryPort;
   /** Пустая библиотека: конструктор выбран прямо здесь. */
   onChoose: (kind: ProgramKind) => void;
   onCreate: () => void;
   onOpenProgram: (programId: string) => void;
+  /** §48.16: библиотека шаблонов тренера. */
+  onOpenTemplates?: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -123,6 +125,7 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
       <Animated.ScrollView ref={scrollRef} contentContainerStyle={[styles.content, styles.withFab]}>
         {failed ? <InlineNotice kind="error">Не удалось обновить список. Показан последний загруженный.</InlineNotice> : null}
         {orderError ? <InlineNotice kind="error">Не удалось сохранить порядок. Повторите перетаскивание.</InlineNotice> : null}
+        {onOpenTemplates !== undefined ? <AppButton compact variant="secondary" label="Шаблоны" onPress={onOpenTemplates} /> : null}
         <ListSectionHeader title="Программы" count={library.active.length} />
         {library.active.length === 0 ? (
           <Text style={[styles.body, { color: colors.textSecondary }]}>Все программы в архиве. Создайте новую или верните из архива.</Text>

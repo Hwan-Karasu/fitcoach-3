@@ -5,7 +5,7 @@ import { localDateOf, parseValueX10, type MeasurementRepositoryPort } from "../.
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
 import { NutritionWorkspacePreview } from "../../features/nutrition/public.ts";
 import { CreateProgramScreen, MesocycleCreatorScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, SimpleProgramBuilderScreen,
-  WeekEditorScreen, SimpleWorkoutEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort,
+  WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort,
   type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
   type TrainingPlansRepositoryPort, ProgramWeeksPanel, WorkoutScreen, type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort,
   type WorkoutSlot } from "../../features/training/public.ts";
@@ -18,6 +18,7 @@ type NutritionRoutes = { NutritionIndex: undefined };
 type TrainingRoutes = {
   TrainingIndex: undefined;
   TrainingChooser: undefined;
+  TrainingTemplates: undefined;
   TrainingCreate: { kind: ProgramKind };
   TrainingProgram: { programId: string; weekIndex?: number; mesocycleId?: string };
   TrainingBuilder: { programId?: string; picked?: PickedExercise } | undefined;
@@ -42,6 +43,7 @@ const trainingTitles: Readonly<Record<keyof TrainingRoutes, string>> = {
   TrainingWeek: "Редактирование недели", TrainingPickExercise: "Выбор упражнения", TrainingWorkout: "Дневник тренировки",
   TrainingCreateExercise: "Своё упражнение",
   TrainingSimpleWorkout: "План тренировки",
+  TrainingTemplates: "Шаблоны",
 };
 
 const HomeStack = createNativeStackNavigator<HomeRoutes>();
@@ -138,7 +140,13 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
         {({ navigation }) => <ProgramLibraryScreen clientId={clientId} repository={repository}
           onChoose={(kind) => { const route = createRoute(kind); navigation.navigate(route.name, route.params as never); }}
           onCreate={() => navigation.navigate("TrainingChooser")}
+          onOpenTemplates={() => navigation.navigate("TrainingTemplates")}
           onOpenProgram={(programId) => navigation.navigate("TrainingProgram", { programId })} />}
+      </TrainingStack.Screen>
+      <TrainingStack.Screen name="TrainingTemplates">
+        {({ navigation }) => <TemplateLibraryScreen clientId={clientId} repository={repository} listCandidates={listCandidates}
+          onCreated={(programId) => navigation.reset({ index: 1,
+            routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId } }] })} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingChooser">
         {({ navigation }) => <ProgramModeChooserScreen onChoose={(kind) => { const route = createRoute(kind); navigation.navigate(route.name, route.params as never); }} />}
