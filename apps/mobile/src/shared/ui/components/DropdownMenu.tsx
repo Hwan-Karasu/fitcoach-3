@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   },
   search: { padding: 8 },
   option: { minHeight: 48, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
-  label: { flexShrink: 1, fontFamily: fonts.medium, fontSize: 15, lineHeight: 20 },
+  label: { flexShrink: 1, fontFamily: fonts.medium, fontSize: 14, lineHeight: 18 },
   noteBox: { borderTopWidth: 1, marginTop: 4, paddingHorizontal: 14, paddingTop: 8, paddingBottom: 6 },
-  note: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
+  note: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
 });

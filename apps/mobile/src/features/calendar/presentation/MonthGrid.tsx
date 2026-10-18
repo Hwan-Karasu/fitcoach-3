@@ -153,15 +153,15 @@ export function MonthGrid({ viewMonth, selected, today, counts, onBrowse, onSele
 
 const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 12, padding: CARD_PADDING, overflow: "hidden" },
-  title: { height: 30, fontSize: 15, lineHeight: 30, fontFamily: fonts.bold, paddingLeft: 6, paddingRight: 110 },
+  title: { height: 30, fontSize: 14, lineHeight: 27, fontFamily: fonts.bold, paddingLeft: 6, paddingRight: 110 },
   today: { position: "absolute", top: CARD_PADDING, right: CARD_PADDING + 2, height: 30, borderWidth: 1, borderRadius: 6,
     paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 5 },
-  todayText: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18 },
+  todayText: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
   row: { flexDirection: "row" },
   week: { borderRadius: 8 },
-  weekday: { flex: 1, textAlign: "center", fontFamily: fonts.regular, fontSize: 11, lineHeight: 16 },
+  weekday: { flex: 1, textAlign: "center", fontFamily: fonts.regular, fontSize: 10, lineHeight: 14 },
   cell: { flex: 1, padding: 2 },
   dayBox: { height: 42, borderRadius: 6, alignItems: "center", justifyContent: "center" },
-  date: { fontSize: 14, lineHeight: 17 },
-  count: { fontSize: 10, lineHeight: 12, fontFamily: fonts.bold },
+  date: { fontSize: 13, lineHeight: 15 },
+  count: { fontSize: 10, lineHeight: 11, fontFamily: fonts.bold },
 });

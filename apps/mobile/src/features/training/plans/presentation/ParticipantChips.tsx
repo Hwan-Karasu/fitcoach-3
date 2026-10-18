@@ -35,7 +35,7 @@ export function ParticipantChips({ clientId, memberIds, names, selected, onChang
 
 const styles = StyleSheet.create({
   block: { gap: 6 },
-  group: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
-  note: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
+  group: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
+  note: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 });

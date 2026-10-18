@@ -149,5 +149,5 @@ export function ClientEditorRoute({ clientId, repository, questionnaire, onClose
 
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: "center", padding: 24, gap: 16 },
-  title: { fontSize: 20, lineHeight: 26, fontFamily: fonts.bold },
+  title: { fontSize: 18, lineHeight: 23, fontFamily: fonts.bold },
 });

@@ -136,16 +136,16 @@ export const RpeSheet = forwardRef<BottomSheetModal, Readonly<{
 
 const styles = StyleSheet.create({
   body: { padding: 16, paddingBottom: 32, gap: 10 },
-  title: { fontFamily: fonts.semibold, fontSize: 17, lineHeight: 22, marginBottom: 2 },
+  title: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, marginBottom: 2 },
   option: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 56, borderWidth: 1, borderRadius: 12,
     paddingHorizontal: 12, paddingVertical: 8 },
   swatch: { width: 14, height: 14, borderRadius: 4 },
   optionText: { flex: 1, gap: 2 },
-  optionTitle: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
-  optionHint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  optionTitle: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
+  optionHint: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14 },
   rpeRow: { flexDirection: "row", gap: 4 },
   rpe: { flex: 1, minWidth: 0, height: 44, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  rpeText: { fontFamily: fonts.semibold, fontSize: 15 },
+  rpeText: { fontFamily: fonts.semibold, fontSize: 14 },
   clear: { minHeight: 48, justifyContent: "center", alignSelf: "flex-start" },
-  clearText: { fontFamily: fonts.medium, fontSize: 14 },
+  clearText: { fontFamily: fonts.medium, fontSize: 13 },
 });

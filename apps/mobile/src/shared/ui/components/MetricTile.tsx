@@ -32,9 +32,9 @@ export function MetricTile({ label, value, unit, status }: Readonly<MetricTileDa
 
 const styles = StyleSheet.create({
   tile: { minWidth: 100, minHeight: 88, flexGrow: 1, borderWidth: 1, borderRadius: 10, padding: 12, gap: 4 },
-  label: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
+  label: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
   valueLine: { flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", gap: 4 },
-  value: { fontSize: 20, lineHeight: 26, fontFamily: fonts.bold },
-  unit: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18 },
-  status: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 16 },
+  value: { fontSize: 18, lineHeight: 23, fontFamily: fonts.bold },
+  unit: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 16 },
+  status: { fontFamily: fonts.regular, fontSize: 10, lineHeight: 14 },
 });

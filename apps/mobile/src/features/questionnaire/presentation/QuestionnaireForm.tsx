@@ -144,10 +144,10 @@ export function QuestionnaireForm({ schema, inputs, errors, onChange, disabled =
 const styles = StyleSheet.create({
   form: { gap: 12 },
   section: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 14 },
-  sectionTitle: { fontSize: 18, lineHeight: 24, fontFamily: fonts.bold },
+  sectionTitle: { fontSize: 16, lineHeight: 22, fontFamily: fonts.bold },
   field: { gap: 6 },
-  label: { fontSize: 15, lineHeight: 21, fontFamily: fonts.semibold },
-  help: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
-  error: { fontSize: 13, lineHeight: 18, fontFamily: fonts.semibold },
+  label: { fontSize: 14, lineHeight: 19, fontFamily: fonts.semibold },
+  help: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  error: { fontSize: 12, lineHeight: 16, fontFamily: fonts.semibold },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 });

@@ -63,6 +63,6 @@ export function SimpleTemplatesPanel({ repository, reloadKey, onApply }: Readonl
 const styles = StyleSheet.create({
   list: { gap: 10 },
   card: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 6 },
-  title: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
-  meta: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
+  title: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
+  meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
 });

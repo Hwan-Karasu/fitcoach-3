@@ -59,7 +59,7 @@ export function RootHeader({
   if (search?.open) {
     return (
       <View style={[frame, styles.searchMode]}>
-        <AppIconButton label="Закрыть поиск" icon={<ArrowLeft size={22} color={colors.textPrimary} strokeWidth={1.8} />}
+        <AppIconButton label="Закрыть поиск" icon={<ArrowLeft size={20} color={colors.textPrimary} strokeWidth={1.8} />}
           onPress={search.onClose} />
         <View style={[styles.searchField, { backgroundColor: colors.input, borderColor: colors.focusRing }]}>
           <Search size={18} color={colors.textMuted} strokeWidth={2} />
@@ -81,7 +81,7 @@ export function RootHeader({
     <View style={frame}>
       <View accessible accessibilityRole="header" accessibilityLabel={`${appBrandName}, ${title}`} style={styles.titleSlot}>
         <Animated.View style={[styles.layer, brandStyle]}>
-          <BrandMark size={28} color={colors.accentInk} />
+          <BrandMark size={24} color={colors.accentInk} />
           <Animated.Text numberOfLines={1} style={[styles.brand, { color: colors.textPrimary }]}>{appBrandName}</Animated.Text>
         </Animated.View>
         <Animated.View style={[styles.layer, titleStyle]}>
@@ -90,16 +90,16 @@ export function RootHeader({
       </View>
       {onOpenSettings ? (
         <AppIconButton compact label={`Настройки: ${title.toLowerCase()}`}
-          icon={<Settings size={22} color={colors.textPrimary} strokeWidth={1.8} />} onPress={onOpenSettings} />
+          icon={<Settings size={20} color={colors.textPrimary} strokeWidth={1.8} />} onPress={onOpenSettings} />
       ) : null}
       {search ? (
-        <AppIconButton compact label={search.placeholder} icon={<Search size={22} color={colors.textPrimary} strokeWidth={1.8} />}
+        <AppIconButton compact label={search.placeholder} icon={<Search size={20} color={colors.textPrimary} strokeWidth={1.8} />}
           onPress={search.onOpen} />
       ) : null}
       <AppIconButton
         compact
         label="Открыть центр уведомлений"
-        icon={<Bell size={22} color={colors.textPrimary} strokeWidth={1.8} />}
+        icon={<Bell size={20} color={colors.textPrimary} strokeWidth={1.8} />}
         onPress={onOpenNotifications}
         testID="open-notifications"
       />
@@ -107,7 +107,7 @@ export function RootHeader({
         compact
         label="Открыть главное меню"
         buttonRef={menuButtonRef}
-        icon={<Menu size={22} color={colors.textPrimary} strokeWidth={1.8} />}
+        icon={<Menu size={20} color={colors.textPrimary} strokeWidth={1.8} />}
         onPress={onOpenMenu}
         testID="open-menu"
       />
@@ -116,14 +116,14 @@ export function RootHeader({
 }
 
 const styles = StyleSheet.create({
-  header: { minHeight: 56, paddingLeft: 16, paddingRight: 4, flexDirection: "row", alignItems: "center", borderBottomWidth: 1 },
+  header: { minHeight: 48, paddingLeft: 16, paddingRight: 4, flexDirection: "row", alignItems: "center", borderBottomWidth: 1 },
   searchMode: { paddingLeft: 4 },
-  titleSlot: { flex: 1, height: 56 },
+  titleSlot: { flex: 1, height: 48 },
   layer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, flexDirection: "row", alignItems: "center", gap: 8 },
-  brand: { flexShrink: 1, fontFamily: fonts.bold, fontSize: 19, lineHeight: 25 },
-  title: { flexShrink: 1, fontFamily: fonts.bold, fontSize: 22, lineHeight: 28 },
-  searchField: { flex: 1, height: 44, marginRight: 12, borderWidth: 1, borderRadius: 8, paddingLeft: 10, paddingRight: 2,
+  brand: { flexShrink: 1, fontFamily: fonts.bold, fontSize: 17, lineHeight: 23 },
+  title: { flexShrink: 1, fontFamily: fonts.bold, fontSize: 19, lineHeight: 25 },
+  searchField: { flex: 1, height: 38, marginRight: 12, borderWidth: 1, borderRadius: 8, paddingLeft: 10, paddingRight: 2,
     flexDirection: "row", alignItems: "center", gap: 8 },
-  searchInput: { flex: 1, fontFamily: fonts.regular, fontSize: 15, paddingVertical: 0 },
+  searchInput: { flex: 1, fontFamily: fonts.regular, fontSize: 14, paddingVertical: 0 },
   clear: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
 });

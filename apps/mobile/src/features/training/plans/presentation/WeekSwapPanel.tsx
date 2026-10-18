@@ -61,6 +61,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 12, paddingRight: 12, minHeight: 64 },
   handle: { width: 44, minHeight: 56, alignItems: "center", justifyContent: "center" },
   grow: { flex: 1, minWidth: 0, gap: 2 },
-  title: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
-  hint: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
+  title: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
+  hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
 });

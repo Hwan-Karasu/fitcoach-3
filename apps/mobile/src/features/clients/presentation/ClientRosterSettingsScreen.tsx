@@ -100,6 +100,6 @@ export function ClientRosterSettingsScreen({ repository }: Readonly<{
 
 const styles = StyleSheet.create({
   choices: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  label: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
-  message: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19 },
+  label: { fontSize: 13, lineHeight: 18, fontFamily: fonts.bold },
+  message: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
 });

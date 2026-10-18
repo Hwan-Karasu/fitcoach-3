@@ -140,9 +140,9 @@ export function DurationWheelPicker({ visible, title, value, min, max, clearLabe
             pickerFeedback={() => Haptics.selectionAsync().catch(() => undefined)}
             styles={{
               backgroundColor: colors.surface,
-              pickerItem: { fontFamily: fonts.medium, fontSize: 22, color: colors.textMuted },
+              pickerItem: { fontFamily: fonts.medium, fontSize: 19, color: colors.textMuted },
               selectedPickerItem: { fontFamily: fonts.semibold, color: colors.textPrimary },
-              pickerLabel: { fontFamily: fonts.medium, fontSize: 14, color: colors.textSecondary },
+              pickerLabel: { fontFamily: fonts.medium, fontSize: 13, color: colors.textSecondary },
               pickerItemContainer: { height: 44 },
               pickerContainer: { backgroundColor: colors.surface },
             }} />
@@ -161,17 +161,17 @@ export function DurationWheelPicker({ visible, title, value, min, max, clearLabe
 }
 
 const styles = StyleSheet.create({
-  hint: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, textAlign: "center" },
+  hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, textAlign: "center" },
   scrim: { backgroundColor: "rgba(0,0,0,0.45)" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   card: { minWidth: 260, borderWidth: 1, borderRadius: 12, padding: 12, gap: 8, alignItems: "stretch" },
-  title: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, textAlign: "center" },
+  title: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18, textAlign: "center" },
   wheels: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   wheel: { width: 64, height: ITEM * VISIBLE },
   selection: { position: "absolute", left: 0, right: 0, top: ITEM * Math.floor(VISIBLE / 2), height: ITEM, borderWidth: 1, borderRadius: 8 },
   item: { height: ITEM, alignItems: "center", justifyContent: "center" },
-  value: { fontSize: 18, lineHeight: 23 },
-  colon: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 26 },
+  value: { fontSize: 16, lineHeight: 21 },
+  colon: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },
   actions: { flexDirection: "row", gap: 8 },
   action: { flex: 1 },
 });

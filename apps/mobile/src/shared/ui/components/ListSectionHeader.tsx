@@ -18,6 +18,6 @@ export function ListSectionHeader({ title, count, accent = false }: Readonly<{ t
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", paddingTop: 8 },
-  title: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
-  count: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18 },
+  title: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
+  count: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
 });

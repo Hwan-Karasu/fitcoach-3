@@ -57,5 +57,5 @@ const styles = StyleSheet.create({
   // Ширина по тексту, без сжатия; свободное место ряда делится поровну.
   grow: { flexGrow: 1, flexShrink: 0, flexBasis: "auto" },
   labelFull: { flexShrink: 0 },
-  label: { flexShrink: 1, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18 },
+  label: { flexShrink: 1, fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
 });

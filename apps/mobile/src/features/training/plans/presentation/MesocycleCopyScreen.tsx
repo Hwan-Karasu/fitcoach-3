@@ -164,8 +164,8 @@ export function MesocycleCopyScreen({ clientId, programId, repository, listCandi
 
 const styles = StyleSheet.create({
   content: { padding: 16, gap: 12, paddingBottom: 24 },
-  heading: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 21 },
-  meta: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
+  heading: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
+  meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   card: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 6 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 });

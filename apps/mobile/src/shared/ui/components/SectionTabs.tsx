@@ -71,5 +71,5 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 0 },
   content: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
   tab: { minHeight: 48, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 2, borderRadius: 24, justifyContent: "center" },
-  label: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold, textAlign: "center" },
+  label: { fontSize: 13, lineHeight: 18, fontFamily: fonts.bold, textAlign: "center" },
 });

@@ -33,7 +33,7 @@ export function AppIconButton({ icon, label, onPress, disabled = false, disabled
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       testID={testID}
-      hitSlop={compact ? { left: 4, right: 4 } : undefined}
+      hitSlop={compact ? { left: 6, right: 6, top: 4, bottom: 4 } : 3}
       style={({ pressed }) => [styles.button, compact ? styles.compact : null, { borderColor: focused ? colors.focusRing : "transparent", opacity: disabled ? 0.5 : pressed ? 0.75 : 1 }]}
     >
       {icon}
@@ -47,8 +47,8 @@ export function AppIconButton({ icon, label, onPress, disabled = false, disabled
 }
 
 const styles = StyleSheet.create({
-  compact: { width: 40 },
-  button: { width: 48, height: 48, borderWidth: 2, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  compact: { width: 36, height: 40 },
+  button: { width: 42, height: 42, borderWidth: 2, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   badge: { position: "absolute", top: 1, right: 0, minWidth: 17, height: 17, paddingHorizontal: 3, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  badgeText: { fontSize: 10, lineHeight: 12, fontFamily: fonts.bold },
+  badgeText: { fontSize: 10, lineHeight: 11, fontFamily: fonts.bold },
 });

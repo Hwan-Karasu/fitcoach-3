@@ -144,6 +144,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, padding: 16, justifyContent: "center" },
   content: { padding: 16, gap: 12, paddingBottom: 24 },
   application: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 10 },
-  heading: { fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
-  meta: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
+  heading: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20 },
+  meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
 });

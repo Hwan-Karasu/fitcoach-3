@@ -184,8 +184,8 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 8 },
   cardHead: { flexDirection: "row", alignItems: "center", gap: 8 },
   grow: { flex: 1, minWidth: 0 },
-  title: { fontFamily: fonts.semibold, fontSize: 16, lineHeight: 21 },
-  meta: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
+  title: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
+  meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   form: { gap: 10 },
   row: { flexDirection: "row", gap: 10 },
 });

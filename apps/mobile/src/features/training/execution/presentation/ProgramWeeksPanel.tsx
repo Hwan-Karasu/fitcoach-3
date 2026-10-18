@@ -110,8 +110,8 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: views, execution
 const styles = StyleSheet.create({
   panel: { gap: 10 },
   weeks: { gap: 8, paddingRight: 8 },
-  meta: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
+  meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   workout: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 12, padding: 12, minHeight: 64 },
   grow: { flex: 1, gap: 2 },
-  title: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
+  title: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
 });

@@ -60,6 +60,7 @@ export function AppButton({
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       testID={testID}
+      hitSlop={compact ? 6 : 3}
       style={({ pressed }) => [
         styles.button,
         compact ? styles.compact : null,
@@ -80,9 +81,9 @@ export function AppButton({
 }
 
 const styles = StyleSheet.create({
-  button: { minHeight: 48, borderRadius: 8, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
-  compact: { minHeight: 48, paddingHorizontal: 12 },
-  compactLabel: { fontSize: 14, lineHeight: 19 },
+  button: { minHeight: 42, borderRadius: 8, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
+  compact: { minHeight: 36, paddingHorizontal: 10 },
+  compactLabel: { fontSize: 13, lineHeight: 17 },
   content: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  label: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, textAlign: "center", flexShrink: 1 },
+  label: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18, textAlign: "center", flexShrink: 1 },
 });

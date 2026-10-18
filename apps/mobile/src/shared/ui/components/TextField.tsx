@@ -80,7 +80,7 @@ export function TextField({
 
 const styles = StyleSheet.create({
   field: { gap: 6 },
-  label: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
-  input: { minHeight: 48, borderWidth: 2, borderRadius: 8, paddingHorizontal: 12, fontFamily: fonts.regular, fontSize: 16, lineHeight: 22 },
-  helper: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18 },
+  label: { fontSize: 13, lineHeight: 18, fontFamily: fonts.bold },
+  input: { minHeight: 42, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
+  helper: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 16 },
 });

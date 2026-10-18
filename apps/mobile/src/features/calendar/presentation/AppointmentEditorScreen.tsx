@@ -431,8 +431,8 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
 
 const styles = StyleSheet.create({
   stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  stepperValue: { flex: 1, textAlign: "center", fontSize: 17, lineHeight: 24, fontFamily: fonts.bold },
+  stepperValue: { flex: 1, textAlign: "center", fontSize: 15, lineHeight: 22, fontFamily: fonts.bold },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  selected: { fontSize: 16, lineHeight: 22, fontFamily: fonts.bold },
-  hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18 },
+  selected: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
+  hint: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 16 },
 });

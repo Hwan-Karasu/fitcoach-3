@@ -45,7 +45,7 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
               style={styles.tab}
             >
               <View>
-                <Icon size={22} color={color} strokeWidth={focused ? 2.2 : 1.8} />
+                <Icon size={20} color={color} strokeWidth={focused ? 2.2 : 1.8} />
                 {badge !== undefined ? (
                   <View style={[styles.badge, { backgroundColor: colors.accentFill }]}>
                     <Text style={[styles.badgeText, { color: colors.onAccentFill }]}>{String(badge)}</Text>
@@ -73,9 +73,9 @@ const styles = StyleSheet.create({
     flexDirection: "row", borderWidth: 1, borderRadius: 18, overflow: "visible",
     elevation: 6, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
   },
-  tab: { flex: 1, minHeight: 60, paddingTop: 9, alignItems: "center", justifyContent: "flex-start", gap: 3 },
-  label: { fontSize: 12, lineHeight: 16 },
+  tab: { flex: 1, minHeight: 52, paddingTop: 6, alignItems: "center", justifyContent: "flex-start", gap: 3 },
+  label: { fontSize: 11, lineHeight: 14 },
   indicator: { width: 20, height: 3, borderRadius: 2, marginTop: 2 },
   badge: { position: "absolute", top: -4, left: 14, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  badgeText: { fontFamily: fonts.bold, fontSize: 10, lineHeight: 13 },
+  badgeText: { fontFamily: fonts.bold, fontSize: 10, lineHeight: 12 },
 });

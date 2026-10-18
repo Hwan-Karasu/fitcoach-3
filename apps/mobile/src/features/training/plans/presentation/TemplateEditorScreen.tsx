@@ -183,9 +183,9 @@ export function TemplateEditorScreen({ templateId, repository, exercises, picked
 const styles = StyleSheet.create({
   center: { flex: 1, padding: 16, justifyContent: "center" },
   content: { padding: 16, gap: 12, paddingBottom: 24 },
-  meta: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
-  section: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
-  value: { minWidth: 28, textAlign: "center", fontFamily: fonts.semibold, fontSize: 18 },
+  meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  section: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
+  value: { minWidth: 28, textAlign: "center", fontFamily: fonts.semibold, fontSize: 16 },
   stepper: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderRadius: 12, paddingLeft: 14, paddingRight: 4,
     paddingVertical: 8 },
   grow: { flex: 1, minWidth: 0 },

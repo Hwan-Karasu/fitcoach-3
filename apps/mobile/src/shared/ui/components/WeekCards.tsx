@@ -40,6 +40,6 @@ export function WeekCards({ weeks, selected, onSelect, disabled = false }: Reado
 const styles = StyleSheet.create({
   strip: { gap: 8, paddingBottom: 2 },
   card: { minWidth: 128, maxWidth: 220, minHeight: 64, borderWidth: 1, borderRadius: 8, padding: 10, gap: 3 },
-  title: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20 },
-  caption: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
+  title: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
+  caption: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
 });

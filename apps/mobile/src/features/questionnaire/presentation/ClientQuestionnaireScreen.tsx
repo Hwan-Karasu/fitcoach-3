@@ -86,5 +86,5 @@ export function ClientQuestionnaireScreen({ clientId, repository }: Readonly<{
 
 const styles = StyleSheet.create({
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" },
-  version: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  version: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14 },
 });

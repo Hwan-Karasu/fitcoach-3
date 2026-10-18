@@ -55,8 +55,8 @@ const styles = StyleSheet.create({
   scrim: { backgroundColor: "rgba(0,0,0,0.45)" },
   sheet: { position: "absolute", left: 0, right: 0, bottom: 0, maxHeight: "80%", borderTopLeftRadius: 16,
     borderTopRightRadius: 16, borderWidth: 1, paddingTop: 12 },
-  title: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, paddingHorizontal: 20, paddingBottom: 6 },
+  title: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16, paddingHorizontal: 20, paddingBottom: 6 },
   item: { minHeight: 48, paddingHorizontal: 20, paddingVertical: 12, justifyContent: "center" },
-  label: { fontFamily: fonts.medium, fontSize: 15, lineHeight: 20 },
-  detail: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, marginTop: 2 },
+  label: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 18 },
+  detail: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14, marginTop: 2 },
 });

@@ -21,7 +21,7 @@ export function SegmentedControl<Id extends string>({ items, selectedId, onSelec
         const selected = item.id === selectedId;
         return (
           <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected }} accessibilityLabel={item.label}
-            onPress={() => onSelect(item.id)} hitSlop={{ top: 3, bottom: 3 }}
+            onPress={() => onSelect(item.id)} hitSlop={{ top: 7, bottom: 7 }}
             style={[styles.segment, { backgroundColor: selected ? colors.accentFill : "transparent" }]}>
             <Text numberOfLines={1} style={[styles.label, { color: selected ? colors.onAccentFill : colors.textSecondary }]}>{item.label}</Text>
           </Pressable>
@@ -33,6 +33,6 @@ export function SegmentedControl<Id extends string>({ items, selectedId, onSelec
 
 const styles = StyleSheet.create({
   track: { flexDirection: "row", borderWidth: 1, borderRadius: 12, padding: 3, gap: 3 },
-  segment: { flex: 1, minHeight: 44, borderRadius: 9, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
-  label: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
+  segment: { flex: 1, minHeight: 36, borderRadius: 9, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  label: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
 });

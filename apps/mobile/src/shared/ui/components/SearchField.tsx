@@ -60,7 +60,7 @@ export function SearchField({ query, onChangeQuery, accessibilityLabel, placehol
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  field: { flex: 1, minHeight: 48, borderRadius: 10, paddingLeft: 12, paddingRight: 4, flexDirection: "row", alignItems: "center", gap: 8 },
-  input: { flex: 1, minHeight: 44, fontFamily: fonts.regular, fontSize: 15, paddingVertical: 0 },
+  field: { flex: 1, minHeight: 42, borderRadius: 10, paddingLeft: 12, paddingRight: 4, flexDirection: "row", alignItems: "center", gap: 8 },
+  input: { flex: 1, minHeight: 40, fontFamily: fonts.regular, fontSize: 14, paddingVertical: 0 },
   clear: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
 });

@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
   card: { maxHeight: "90%", width: "100%", borderWidth: 1, borderRadius: 16, padding: 20, gap: 12 },
   copyScroll: { flexGrow: 0, flexShrink: 1 },
   copyContent: { gap: 12 },
-  title: { fontSize: 20, lineHeight: 26, fontFamily: fonts.bold },
-  description: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
+  title: { fontSize: 18, lineHeight: 23, fontFamily: fonts.bold },
+  description: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   actions: { gap: 8, marginTop: 8 },
 });

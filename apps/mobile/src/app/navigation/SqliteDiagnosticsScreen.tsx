@@ -48,6 +48,6 @@ export function SqliteDiagnosticsScreen({ runProbe }: Readonly<{ runProbe: () =>
 
 const styles = StyleSheet.create({
   results: { gap: 8, marginTop: 12 },
-  summary: { fontSize: 18, lineHeight: 24, fontFamily: fonts.bold },
-  row: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 22 },
+  summary: { fontSize: 16, lineHeight: 22, fontFamily: fonts.bold },
+  row: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 20 },
 });

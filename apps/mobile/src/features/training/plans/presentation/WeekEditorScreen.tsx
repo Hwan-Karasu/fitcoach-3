@@ -221,8 +221,8 @@ const styles = StyleSheet.create({
   application: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 8 },
   center: { flex: 1, padding: 16, justifyContent: "center" },
   content: { padding: 16, gap: 12, paddingBottom: 24 },
-  heading: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 26 },
-  section: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, marginTop: 4 },
-  meta: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
+  heading: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },
+  section: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18, marginTop: 4 },
+  meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 });

@@ -99,7 +99,7 @@ export function CustomExerciseEditorScreen({ exerciseId, initialName, repository
 
 const styles = StyleSheet.create({
   content: { padding: 16, gap: 10, paddingBottom: 32 },
-  heading: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 26 },
-  group: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19, marginTop: 6 },
+  heading: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },
+  group: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, marginTop: 6 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 });

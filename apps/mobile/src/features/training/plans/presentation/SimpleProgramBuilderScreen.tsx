@@ -206,9 +206,9 @@ const styles = StyleSheet.create({
   grow: { flex: 1, minWidth: 0 },
   tabs: { paddingHorizontal: 16, paddingTop: 12 },
   settings: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 10 },
-  settingsTitle: { fontFamily: fonts.semibold, fontSize: 17, lineHeight: 22 },
+  settingsTitle: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
   weeks: { flexDirection: "row", alignItems: "center", gap: 4 },
-  weeksLabel: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
-  weeksValue: { minWidth: 28, textAlign: "center", fontFamily: fonts.semibold, fontSize: 18 },
-  meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
+  weeksLabel: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
+  weeksValue: { minWidth: 28, textAlign: "center", fontFamily: fonts.semibold, fontSize: 16 },
+  meta: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
 });

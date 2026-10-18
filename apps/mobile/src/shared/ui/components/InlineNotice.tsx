@@ -35,6 +35,6 @@ export function InlineNotice({ kind = "info", children }: Readonly<{ kind?: Noti
 
 const styles = StyleSheet.create({
   notice: { minHeight: 48, borderWidth: 1, borderRadius: 8, padding: 12, flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  marker: { minWidth: 16, fontSize: 16, lineHeight: 20, fontFamily: fonts.bold, textAlign: "center" },
-  body: { flex: 1, fontFamily: fonts.regular, fontSize: 12, lineHeight: 18 },
+  marker: { minWidth: 16, fontSize: 14, lineHeight: 18, fontFamily: fonts.bold, textAlign: "center" },
+  body: { flex: 1, fontFamily: fonts.regular, fontSize: 11, lineHeight: 16 },
 });

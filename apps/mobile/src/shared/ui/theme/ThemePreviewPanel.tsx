@@ -37,8 +37,8 @@ export function ThemePreviewPanel() {
 
 const styles = StyleSheet.create({
   panel: { borderWidth: 1, borderRadius: 12, padding: 16, gap: 10 },
-  kicker: { fontSize: 11, lineHeight: 15, fontFamily: fonts.bold, letterSpacing: 0.8 },
-  title: { fontSize: 18, lineHeight: 24, fontFamily: fonts.bold },
-  description: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
+  kicker: { fontSize: 10, lineHeight: 14, fontFamily: fonts.bold, letterSpacing: 0.8 },
+  title: { fontSize: 16, lineHeight: 22, fontFamily: fonts.bold },
+  description: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   statusRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 });

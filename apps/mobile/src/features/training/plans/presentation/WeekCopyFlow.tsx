@@ -151,9 +151,9 @@ export function WeekCopyFlow({ port, request, weeks, onClose, onDone }: Readonly
 
 const styles = StyleSheet.create({
   sheet: { paddingHorizontal: 16, paddingBottom: 24, gap: 10 },
-  title: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 24 },
-  label: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, marginTop: 4 },
-  note: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
+  title: { fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
+  label: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16, marginTop: 4 },
+  note: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   row: { flexDirection: "row", gap: 10, marginTop: 6 },
   grow: { flex: 1 },

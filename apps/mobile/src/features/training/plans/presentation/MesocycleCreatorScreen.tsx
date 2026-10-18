@@ -159,8 +159,8 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12, paddingBottom: 24 },
   grow: { flex: 1, minWidth: 0 },
   weeks: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderRadius: 12, paddingLeft: 14, paddingRight: 4, paddingVertical: 8 },
-  weeksLabel: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
-  weeksValue: { minWidth: 28, textAlign: "center", fontFamily: fonts.semibold, fontSize: 18 },
-  meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
-  section: { fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22, marginTop: 4 },
+  weeksLabel: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
+  weeksValue: { minWidth: 28, textAlign: "center", fontFamily: fonts.semibold, fontSize: 16 },
+  meta: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
+  section: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20, marginTop: 4 },
 });

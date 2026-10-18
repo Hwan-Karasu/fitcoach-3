@@ -40,8 +40,8 @@ export function LoadingState({ label, background = false }: Readonly<{ label: st
 
 const styles = StyleSheet.create({
   panel: { borderWidth: 1, borderRadius: 12, padding: 24, minHeight: 192, alignItems: "center", justifyContent: "center", gap: 8 },
-  title: { fontSize: 16, lineHeight: 22, fontFamily: fonts.bold, textAlign: "center" },
-  body: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, textAlign: "center" },
+  title: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold, textAlign: "center" },
+  body: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, textAlign: "center" },
   backgroundLoading: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 8 },
-  loadingLabel: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
+  loadingLabel: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
 });

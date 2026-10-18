@@ -42,7 +42,7 @@ export function StructureEditPreview({ preview, names, lookup, replace, onChange
 
 const styles = StyleSheet.create({
   conflict: { borderTopWidth: 1, paddingTop: 8, gap: 8 },
-  meta: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
-  section: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
+  meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  section: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 });

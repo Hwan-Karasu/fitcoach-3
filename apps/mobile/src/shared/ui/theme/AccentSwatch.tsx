@@ -43,6 +43,6 @@ export function AccentSwatch({
 const styles = StyleSheet.create({
   choice: { minHeight: 52, borderRadius: 8, borderWidth: 2, paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 },
   dot: { width: 20, height: 20, borderRadius: 10, borderWidth: 1 },
-  name: { flex: 1, flexShrink: 1, fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
-  check: { minWidth: 20, fontSize: 16, lineHeight: 22, fontFamily: fonts.bold, textAlign: "center" },
+  name: { flex: 1, flexShrink: 1, fontSize: 13, lineHeight: 18, fontFamily: fonts.bold },
+  check: { minWidth: 20, fontSize: 14, lineHeight: 20, fontFamily: fonts.bold, textAlign: "center" },
 });

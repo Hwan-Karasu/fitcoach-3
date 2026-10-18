@@ -73,5 +73,5 @@ export function StickyEditorFooter({
 
 const styles = StyleSheet.create({
   footer: { borderTopWidth: 1, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 8 },
-  note: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15, textAlign: "center" },
+  note: { fontFamily: fonts.regular, fontSize: 10, lineHeight: 14, textAlign: "center" },
 });

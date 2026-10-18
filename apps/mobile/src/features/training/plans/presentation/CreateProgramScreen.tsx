@@ -100,8 +100,8 @@ export function CreateProgramScreen({ clientId, kind, repository, listCandidates
 
 const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
-  heading: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 26 },
-  group: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19, marginTop: 4 },
-  note: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
+  heading: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },
+  group: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, marginTop: 4 },
+  note: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 });

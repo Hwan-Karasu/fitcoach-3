@@ -43,6 +43,6 @@ export function SelectionChip({ group, label, selected, onPress, disabled = fals
 }
 
 const styles = StyleSheet.create({
-  chip: { minHeight: 48, borderRadius: 24, borderWidth: 2, paddingHorizontal: 16, paddingVertical: 8, justifyContent: "center" },
-  label: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold, textAlign: "center" },
+  chip: { minHeight: 36, borderRadius: 18, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6, justifyContent: "center" },
+  label: { fontSize: 13, lineHeight: 18, fontFamily: fonts.bold, textAlign: "center" },
 });
