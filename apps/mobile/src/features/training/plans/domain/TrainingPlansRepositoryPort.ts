@@ -1,5 +1,5 @@
 import type { ClientProgramLibrary, CreateProgramInput, TrainingProgram } from "./ProgramModel.ts";
-import type { ProgramTemplate } from "./TemplateModel.ts";
+import type { ProgramTemplate, TemplatePayload } from "./TemplateModel.ts";
 import type { NewMesocycleInput, PeriodizedPlan, WeekEditInput, WeekEditPreview, WeekEditResult } from "./PeriodizedModel.ts";
 import type { PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
 import type { PeriodizedDraft } from "./PeriodizedDraft.ts";
@@ -39,6 +39,13 @@ export interface TrainingPlansRepositoryPort {
   /** §48.14.1 п. 1: один мезоцикл этого клиента как шаблон мезоцикла. */
   saveMesocycleAsTemplate(clientId: string, programId: string, mesocycleId: string, title: string, now?: Date): Promise<ProgramTemplate>;
   renameTemplate(templateId: string, expectedRevision: number, title: string, now?: Date): Promise<ProgramTemplate>;
+  /** Шаблон по ID (открыть для просмотра и правки). */
+  getTemplate(templateId: string): Promise<ProgramTemplate | null>;
+  /**
+   * §48.16 п. 3: правка содержимого шаблона (тип не меняется) по ревизии. Программы, созданные по нему раньше,
+   * не меняются (§48.16 п. 4).
+   */
+  updateTemplate(templateId: string, expectedRevision: number, title: string, payload: TemplatePayload, now?: Date): Promise<ProgramTemplate>;
   /** Независимая копия шаблона (§48.16 п. 3). */
   duplicateTemplate(templateId: string, title: string, now?: Date): Promise<ProgramTemplate>;
   /**

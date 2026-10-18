@@ -189,3 +189,30 @@ test("T04 Расширенная на основе Простой (§48.17.2): �
     await close();
   }
 });
+
+test("T04 правка шаблона (§48.16.2 п. 2): следующее применение — новое содержимое, ранее созданное не меняется", async () => {
+  const { plans, a, b, close } = await setup();
+  try {
+    const simple = await plans.createSimpleProgram(a.id, { title: "Фулбади", plan: { weeks: 4, workouts: week("u") } });
+    const template = await plans.saveProgramAsTemplate(a.id, simple.id, "Фулбади — шаблон");
+    const before = await plans.createProgramFromTemplate(template.id, { title: "До правки", clientIds: [b.id] });
+    assert.equal(template.payload.kind, "SIMPLE");
+    if (template.payload.kind !== "SIMPLE") return;
+    const workouts = template.payload.workouts.map((workout) => ({ ...workout, exercises: workout.exercises.map((exercise) => ({
+      ...exercise, sets: exercise.sets.map((set) => ({ ...set, reps: 6 })) })) }));
+    const updated = await plans.updateTemplate(template.id, template.revision, "Фулбади v2", { kind: "SIMPLE", weeks: 5, workouts });
+    assert.equal(updated.title, "Фулбади v2");
+    const after = await plans.createProgramFromTemplate(template.id, { title: "После правки", clientIds: [b.id] });
+    const repsOf = async (programId: string) => (await plans.getSimplePlan(b.id, programId))!.draft.plan;
+    assert.deepEqual([(await repsOf(after.id)).weeks, (await repsOf(after.id)).workouts[0]!.exercises[0]!.sets[0]!.reps], [5, 6]);
+    assert.deepEqual([(await repsOf(before.id)).weeks, (await repsOf(before.id)).workouts[0]!.exercises[0]!.sets[0]!.reps], [4, 10],
+      "программа, созданная до правки, не изменилась");
+    await assert.rejects(plans.updateTemplate(template.id, template.revision, "Старая", { kind: "SIMPLE", weeks: 4, workouts }),
+      (error: unknown) => error instanceof Error && error.message === "TEMPLATE_REVISION_CONFLICT");
+    await assert.rejects(plans.updateTemplate(template.id, updated.revision, "Другой тип", { kind: "MESOCYCLE",
+      mesocycle: { title: "М", weeks: [{ type: "base", workouts }] } }), (error: unknown) => error instanceof Error && error.message === "DRAFT_INVALID");
+    assert.equal((await plans.getTemplate(template.id))!.revision, updated.revision, "отказы ничего не записали");
+  } finally {
+    await close();
+  }
+});

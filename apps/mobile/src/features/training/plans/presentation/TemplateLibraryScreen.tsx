@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ellipsis } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, EmptyState, FilterPill, InlineNotice, LoadingState, SearchField,
@@ -21,11 +22,13 @@ const filterLabels: Readonly<Record<Filter, string>> = { ALL: "Все", SIMPLE: 
  * сделать копию, удалить. Шаблон мезоцикла применяется в «+ Мезоцикл» программы. Действия с шаблоном не
  * меняют программы, созданные по нему (§48.16 п. 4).
  */
-export function TemplateLibraryScreen({ clientId, repository, listCandidates, onCreated }: Readonly<{
+export function TemplateLibraryScreen({ clientId, repository, listCandidates, onCreated, onEdit }: Readonly<{
   clientId: string;
   repository: TrainingPlansRepositoryPort;
   listCandidates: () => Promise<readonly TrainingParticipantCandidate[]>;
   onCreated: (programId: string) => void;
+  /** §48.16 п. 3: открыть шаблон для правки содержимого. */
+  onEdit?: (templateId: string) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -45,7 +48,8 @@ export function TemplateLibraryScreen({ clientId, repository, listCandidates, on
   const load = useCallback(() => {
     repository.listTemplates().then(setTemplates).catch(() => setMessage("Не удалось загрузить шаблоны."));
   }, [repository]);
-  useEffect(() => { load(); }, [load]);
+  // При возврате из редактора список перечитывается.
+  useFocusEffect(load);
   useEffect(() => {
     let active = true;
     listCandidates().then((rows) => { if (active) setCandidates(rows); }).catch(() => undefined);
@@ -90,6 +94,7 @@ export function TemplateLibraryScreen({ clientId, repository, listCandidates, on
 
   const options = (template: ProgramTemplate) => [
     ...(template.kind === "MESOCYCLE" ? [] : [{ value: "create" as const, label: "Создать программу клиенту" }]),
+    ...(onEdit === undefined ? [] : [{ value: "edit" as const, label: "Открыть и изменить" }]),
     { value: "rename" as const, label: "Переименовать" },
     { value: "duplicate" as const, label: "Сделать копию" },
     { value: "delete" as const, label: "Удалить" },
@@ -152,6 +157,7 @@ export function TemplateLibraryScreen({ clientId, repository, listCandidates, on
             setMenuFor(null);
             setMessage(null);
             if (value === "delete") { setRemoving(template); return; }
+            if (value === "edit") { onEdit?.(template.id); return; }
             if (value === "") return;
             setMembers([clientId]);
             setAction({ kind: value, template, title: value === "duplicate" ? `${template.title} — копия`.slice(0, 80) : template.title });

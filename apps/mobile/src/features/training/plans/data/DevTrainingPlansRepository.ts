@@ -777,6 +777,34 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     });
   }
 
+  async getTemplate(templateId: string): Promise<ProgramTemplate | null> {
+    return this.templateById(this.ready().connection, templateId).catch(() => null);
+  }
+
+  async updateTemplate(templateId: string, expectedRevision: number, title: string, payload: TemplatePayload,
+    now: Date = new Date()): Promise<ProgramTemplate> {
+    const value = normalizeTitle(title);
+    // План шаблона проверяется теми же правилами, что и рабочий план; пустых мезоцикла и недель не бывает.
+    const weeks = payload.kind === "SIMPLE" ? [payload.workouts]
+      : (payload.kind === "MESOCYCLE" ? [payload.mesocycle] : payload.mesocycles).flatMap((cycle) => {
+        if (cycle.weeks.length === 0 || cycle.weeks.length > MESOCYCLE_WEEKS_MAX) throw new Error("DRAFT_INVALID");
+        normalizeTitle(cycle.title);
+        return cycle.weeks.map((week) => week.workouts);
+      });
+    if (payload.kind === "PERIODIZED" && payload.mesocycles.length === 0) throw new Error("DRAFT_INVALID");
+    if (payload.kind === "SIMPLE") assertStructure({ title: value, plan: { weeks: payload.weeks, workouts: payload.workouts } });
+    else for (const workouts of weeks) assertWeek(value, workouts);
+    return this.ready().writer.write(async (tx) => {
+      const current = await this.templateById(tx, templateId);
+      if (current.kind !== payload.kind) throw new Error("DRAFT_INVALID");
+      const result = await tx.run(`UPDATE dev_training_templates SET title = ?, payload_json = ?, revision = revision + 1, updated_at = ?
+        WHERE workspace_id = ? AND id = ? AND revision = ?`,
+      [value, JSON.stringify(payload), now.toISOString(), this.workspaceId, templateId, expectedRevision]);
+      if (result.changes !== 1) throw new Error("TEMPLATE_REVISION_CONFLICT");
+      return this.templateById(tx, templateId);
+    });
+  }
+
   async duplicateTemplate(templateId: string, title: string, now: Date = new Date()): Promise<ProgramTemplate> {
     return this.ready().writer.write(async (tx) => this.insertTemplate(tx, title, (await this.templateById(tx, templateId)).payload, now));
   }

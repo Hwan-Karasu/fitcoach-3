@@ -5,7 +5,7 @@ import { localDateOf, parseValueX10, type MeasurementRepositoryPort } from "../.
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
 import { NutritionWorkspacePreview } from "../../features/nutrition/public.ts";
 import { CreateProgramScreen, MesocycleCreatorScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, SimpleProgramBuilderScreen,
-  WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort,
+  WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort,
   type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
   type TrainingPlansRepositoryPort, ProgramWeeksPanel, WorkoutScreen, type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort,
   type WorkoutSlot } from "../../features/training/public.ts";
@@ -19,6 +19,7 @@ type TrainingRoutes = {
   TrainingIndex: undefined;
   TrainingChooser: undefined;
   TrainingTemplates: undefined;
+  TrainingTemplateEdit: { templateId: string; picked?: PickedExercise };
   TrainingCreate: { kind: ProgramKind };
   TrainingProgram: { programId: string; weekIndex?: number; mesocycleId?: string };
   TrainingBuilder: { programId?: string; picked?: PickedExercise } | undefined;
@@ -35,7 +36,8 @@ type PickReturn =
   | Readonly<{ name: "TrainingBuilder"; params: { programId?: string } }>
   | Readonly<{ name: "TrainingMesocycle"; params: { programId: string } }>
   | Readonly<{ name: "TrainingWeek"; params: { programId: string; mesocycleId: string; weekIndex: number } }>
-  | Readonly<{ name: "TrainingSimpleWorkout"; params: { programId: string; weekIndex: number; workoutId: string } }>;
+  | Readonly<{ name: "TrainingSimpleWorkout"; params: { programId: string; weekIndex: number; workoutId: string } }>
+  | Readonly<{ name: "TrainingTemplateEdit"; params: { templateId: string } }>;
 
 const trainingTitles: Readonly<Record<keyof TrainingRoutes, string>> = {
   TrainingIndex: "Программы", TrainingChooser: "Новая программа", TrainingCreate: "Создание программы",
@@ -44,6 +46,7 @@ const trainingTitles: Readonly<Record<keyof TrainingRoutes, string>> = {
   TrainingCreateExercise: "Своё упражнение",
   TrainingSimpleWorkout: "План тренировки",
   TrainingTemplates: "Шаблоны",
+  TrainingTemplateEdit: "Шаблон",
 };
 
 const HomeStack = createNativeStackNavigator<HomeRoutes>();
@@ -143,8 +146,17 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
           onOpenTemplates={() => navigation.navigate("TrainingTemplates")}
           onOpenProgram={(programId) => navigation.navigate("TrainingProgram", { programId })} />}
       </TrainingStack.Screen>
+      <TrainingStack.Screen name="TrainingTemplateEdit">
+        {({ navigation, route }) => <TemplateEditorScreen templateId={route.params.templateId} repository={repository}
+          exercises={exerciseLookup} picked={route.params.picked ?? null}
+          onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId,
+            ...(replace === undefined ? {} : { replace }),
+            returnTo: { name: "TrainingTemplateEdit", params: { templateId: route.params.templateId } } })}
+          onSaved={() => navigation.goBack()} onCancel={() => navigation.goBack()} />}
+      </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingTemplates">
         {({ navigation }) => <TemplateLibraryScreen clientId={clientId} repository={repository} listCandidates={listCandidates}
+          onEdit={(templateId) => navigation.navigate("TrainingTemplateEdit", { templateId })}
           onCreated={(programId) => navigation.reset({ index: 1,
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId } }] })} />}
       </TrainingStack.Screen>

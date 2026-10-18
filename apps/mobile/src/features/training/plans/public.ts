@@ -5,6 +5,7 @@ export { SimpleProgramBuilderScreen } from "./presentation/SimpleProgramBuilderS
 export { MesocycleCreatorScreen } from "./presentation/MesocycleCreatorScreen.tsx";
 export { WeekEditorScreen } from "./presentation/WeekEditorScreen.tsx";
 export { TemplateLibraryScreen } from "./presentation/TemplateLibraryScreen.tsx";
+export { TemplateEditorScreen } from "./presentation/TemplateEditorScreen.tsx";
 export { SimpleWorkoutEditorScreen } from "./presentation/SimpleWorkoutEditorScreen.tsx";
 export type { PickedExercise } from "./presentation/usePickedExercise.ts";
 export { useExerciseLookup } from "./presentation/useExerciseLookup.ts";
