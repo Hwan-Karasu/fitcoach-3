@@ -6,7 +6,7 @@ import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParti
   "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 import type { SetValues, TrackingMetric, WorkoutSlot } from "../apps/mobile/src/features/training/execution/domain/ExecutionModel.ts";
 import { assertDropStructure, confirmationAfterSave, displayOrder, dropsForType, isSetComplete, matchPrevious, nextOutcome,
-  toggleConfirmation, weekStatus, type SetContent } from
+  sidesAfterSave, toggleConfirmation, toggleSide, weekStatus, type SetContent } from
   "../apps/mobile/src/features/training/execution/domain/ExecutionRules.ts";
 import type { SaveSetInput } from "../apps/mobile/src/features/training/execution/domain/TrainingExecutionPort.ts";
 import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
@@ -325,4 +325,90 @@ test("T03 разминка — новый подход сверху, плано�
     await assert.rejects(execution.removeWarmupSet(w1, "s1", removed.facts.get("s1")!.revision, DAY1),
       message("INVALID_METRIC"), "плановый подход так не удаляется");
   } finally { await close(); }
+});
+
+const EMPTY = values(null, null);
+const sided = (slot: WorkoutSlot, left: SetValues, right: SetValues, expectedRevision: number | null): SaveSetInput =>
+  ({ ...bench(slot, "s1", 0, EMPTY, expectedRevision), sides: { left, right } });
+
+test("T03 стороны — правила: каждая засчитывается отдельно (§48.76), галочка своей стороны", () => {
+  const change = sidesAfterSave("AUTO", { left: false, right: false }, { left: values(10_000, 8), right: EMPTY }, LOAD_REPS);
+  assert.deepEqual(change, { left: { confirmed: true, confirmedNow: true }, right: { confirmed: false, confirmedNow: false } });
+  const manual = sidesAfterSave("MANUAL", { left: false, right: false }, { left: values(10_000, 8), right: values(12_000, 10) },
+    LOAD_REPS);
+  assert.equal(manual.left.confirmed || manual.right.confirmed, false, "в ручном режиме цифры не засчитывают");
+  const toggled = toggleSide({ left: false, right: false }, { left: values(10_000, 8), right: values(12_000, 10) }, "R", LOAD_REPS);
+  assert.deepEqual(toggled, { left: { confirmed: false, confirmedNow: false }, right: { confirmed: true, confirmedNow: true } });
+  assert.throws(() => toggleSide({ left: false, right: false }, { left: values(10_000, null), right: EMPTY }, "L", LOAD_REPS),
+    message("INVALID_METRIC"));
+});
+
+test("T03 стороны в хранилище: один подход с двумя сторонами, частичное выполнение, «Пред.» по сторонам (§48.70–48.81)", async () => {
+  const { clients, execution, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const w1: WorkoutSlot = { clientId: a.id, programId: "program-a", weekIndex: 1, plannedWorkoutId: "w1" };
+    const left = await execution.saveSet(sided(w1, values(10_000, 8), EMPTY, null), DAY1);
+    assert.equal(left.fact.confirmed, true, "одна засчитанная сторона — подход частично выполнен, но засчитан");
+    assert.equal(left.fact.sides?.left.confirmed, true);
+    assert.equal(left.fact.sides?.right.confirmed, false);
+    assert.equal(left.confirmedNow, true);
+    assert.deepEqual(await execution.getProgramStatuses(a.id, "program-a"), [{ weekIndex: 1, plannedWorkoutId: "w1", status: "IN_PROGRESS" }]);
+    const both = await execution.saveSet(sided(w1, values(10_000, 8), values(12_000, 10), left.fact.revision), DAY1);
+    assert.equal(both.fact.id, left.fact.id, "вторая сторона — тот же подход, не второй");
+    assert.equal(both.confirmedNow, true, "новая засчитанная сторона — повод перезапустить таймер");
+    const fixed = await execution.saveSet(sided(w1, values(10_000, 8), values(13_000, 10), both.fact.revision), DAY1);
+    assert.equal(fixed.confirmedNow, false, "исправление числа стороны — без нового перехода");
+    const cleared = await execution.saveSet(sided(w1, values(10_000, null), values(13_000, 10), fixed.fact.revision), DAY1);
+    assert.equal(cleared.fact.sides?.left.confirmed, false, "очистка поля снимает отметку только этой стороны");
+    assert.equal(cleared.fact.confirmed, true, "правая засчитана — подход по-прежнему засчитан");
+    await assert.rejects(execution.saveSet({ ...sided(w1, EMPTY, EMPTY, cleared.fact.revision), setType: "DROP",
+      drops: [EMPTY] }, DAY1), message("INVALID_METRIC"), "дроп-сет со сторонами — пока нет");
+    await assert.rejects(execution.saveSet({ ...sided(w1, EMPTY, EMPTY, cleared.fact.revision), values: values(1, 1) }, DAY1),
+      message("INVALID_METRIC"), "у одностороннего значения только в сторонах");
+
+    const w2: WorkoutSlot = { ...w1, weekIndex: 2 };
+    const previous = await execution.getPrevious(w2, [{ plannedExerciseId: "pe-bench", exerciseId: BENCH, plannedSetIds: ["s1"] }], DAY2);
+    assert.deepEqual(previous.get("s1")?.sides, { left: null, right: values(13_000, 10) },
+      "в «Пред.» — только засчитанная сторона, другая не выдумывается");
+
+    await execution.setConfirmationMode("MANUAL");
+    const w3: WorkoutSlot = { ...w1, weekIndex: 3 };
+    const typed = await execution.saveSet(sided(w3, values(10_000, 8), values(12_000, 10), null), DAY2);
+    assert.equal(typed.fact.confirmed, false);
+    const identity = { ...bench(w3, "s1", 0, EMPTY, typed.fact.revision) };
+    const right = await execution.toggleSetConfirmation(identity, DAY2, "R");
+    assert.deepEqual([right.fact.sides?.left.confirmed, right.fact.sides?.right.confirmed, right.fact.confirmed], [false, true, true]);
+  } finally { await close(); }
+});
+
+test("T03 миграция v5 дневника: стороны, прежние подходы и мини-сеты сохранены", async () => {
+  const db = new DatabaseSync(":memory:");
+  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const clients = new DevClientRepository(shared, WS, [devTrainingExecutionClientDeletionParticipant]);
+  await clients.initialize();
+  const { writer } = await shared.acquire();
+  try {
+    const client = await clients.create({ displayName: "SyntheticA" });
+    await runMigrations(writer, devTrainingExecutionCatalog.slice(0, 4), DEV_TRAINING_EXECUTION_LEDGER);
+    db.prepare(`INSERT INTO dev_training_sessions (id, workspace_id, client_id, program_id, week_index, planned_workout_id,
+      actual_date, revision, created_at, updated_at) VALUES ('ses', ?, ?, 'p', 1, 'w', '2026-10-17', 1, 'x', 'x')`).run(WS, client.id);
+    db.prepare(`INSERT INTO dev_training_performed_sets (id, workspace_id, session_id, planned_set_id, planned_exercise_id,
+      exercise_id, position, set_type, reps, load_grams, confirmed_at, origin, revision, updated_at)
+      VALUES ('f1', ?, 'ses', 's1', 'pe', ?, 0, 'DROP', 8, 100000, 'x', 'INPUT', 1, 'x')`).run(WS, BENCH);
+    db.prepare("INSERT INTO dev_training_performed_drops (workspace_id, set_id, position, reps, load_grams) VALUES (?, 'f1', 2, 6, 80000)").run(WS);
+    await runMigrations(writer, devTrainingExecutionCatalog, DEV_TRAINING_EXECUTION_LEDGER);
+    assert.deepEqual({ ...db.prepare("SELECT reps, set_type AS type FROM dev_training_performed_sets WHERE id = 'f1'").get() },
+      { reps: 8, type: "DROP" });
+    assert.deepEqual({ ...db.prepare("SELECT reps FROM dev_training_performed_drops WHERE set_id = 'f1'").get() }, { reps: 6 });
+    assert.throws(() => db.prepare("INSERT INTO dev_training_performed_drops (workspace_id, set_id, position) VALUES (?, 'nope', 3)")
+      .run(WS), /FOREIGN KEY|INVALID_METRIC/, "мини-сет без подхода — ошибка");
+    assert.throws(() => db.prepare("UPDATE dev_training_performed_sets SET planned_set_id = 'z' WHERE id = 'f1'").run(),
+      /FACT_IDENTITY_FIXED/, "триггеры восстановлены");
+    assert.throws(() => db.prepare(`INSERT INTO dev_training_performed_sides (workspace_id, set_id, side, confirmed_at)
+      VALUES (?, 'f1', 'L', 'x')`).run(WS), /CHECK/, "засчитанная сторона без значения невозможна");
+  } finally {
+    await shared.release();
+    await clients.close();
+  }
 });

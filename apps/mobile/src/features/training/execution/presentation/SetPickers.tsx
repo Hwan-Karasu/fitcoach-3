@@ -32,9 +32,11 @@ export const SetTypeSheet = forwardRef<BottomSheetModal, Readonly<{
   setType: SetType;
   /** Добавленный разминочный подход: тип не меняется, его можно только удалить. */
   extra: boolean;
+  /** Без дроп-сета (одностороннее упражнение — дроп со сторонами пока не поддержан). */
+  noDrop?: boolean;
   onSelect: (type: SetType) => void;
   onRemove: () => void;
-}>>(function SetTypeSheet({ setType, extra, onSelect, onRemove }, ref) {
+}>>(function SetTypeSheet({ setType, extra, noDrop = false, onSelect, onRemove }, ref) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   if (extra) {
@@ -52,7 +54,7 @@ export const SetTypeSheet = forwardRef<BottomSheetModal, Readonly<{
   }
   return (
     <PickerSheet ref={ref} title="Тип подхода">
-      {SET_TYPES.map((type) => {
+      {SET_TYPES.filter((type) => !(noDrop && type === "DROP")).map((type) => {
         const tone = setTypeTone(type, colors) ?? colors.textSecondary;
         const selected = type === setType;
         return (

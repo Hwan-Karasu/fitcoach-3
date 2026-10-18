@@ -1,4 +1,4 @@
-import type { ConfirmationMode, PreviousQuery, PreviousSet, SessionStatus, SetFact, SetType, SetValues, TrackingMetric,
+import type { ConfirmationMode, PreviousQuery, Side, PreviousSet, SessionStatus, SetFact, SetType, SetValues, TrackingMetric,
   WorkoutExecution, WorkoutOutcome, WorkoutSession, WorkoutSlot } from "./ExecutionModel.ts";
 
 /** Плановый подход, к которому относится факт, и профиль его упражнения (профиль знает каталог). */
@@ -17,6 +17,8 @@ export interface SaveSetInput extends SetIdentity {
   readonly values: SetValues;
   /** Мини-сеты дроп-сета целиком (§48.60); у других типов — пусто. */
   readonly drops: readonly SetValues[];
+  /** Обе стороны одностороннего упражнения (§48.66); у обычного — не задаются, значения в `values`. */
+  readonly sides?: Readonly<{ left: SetValues; right: SetValues }>;
   readonly rpe: number | null;
   readonly setType: SetType;
 }
@@ -58,8 +60,8 @@ export interface TrainingExecutionPort {
     now?: Date): Promise<SetSaveResult>;
   /** Убрать дополнительный разминочный подход: скрывается из дневника, «Пред.» и статистики; запись остаётся. */
   removeWarmupSet(slot: WorkoutSlot, plannedSetId: string, expectedRevision: number, now?: Date): Promise<void>;
-  /** Галочка ручного режима. */
-  toggleSetConfirmation(identity: SetIdentity, now?: Date): Promise<SetSaveResult>;
+  /** Галочка ручного режима; у одностороннего — галочка своей стороны. */
+  toggleSetConfirmation(identity: SetIdentity, now?: Date, side?: Side): Promise<SetSaveResult>;
   /** §48.31, §48.38: исход тренировки или `null` — снять исход. Факты не удаляются. */
   setOutcome(slot: WorkoutSlot, outcome: WorkoutOutcome | null, expectedRevision: number | null, now?: Date): Promise<WorkoutSession>;
   /** §48.84: фактическая дата проведения. */

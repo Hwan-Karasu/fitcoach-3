@@ -12,7 +12,7 @@ import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemePro
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { formatDuration, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookup, type ExerciseLookupPort,
   type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort } from "../../plans/public.ts";
-import { DROPS_MAX, EMPTY_VALUES, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues,
+import { DROPS_MAX, EMPTY_VALUES, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type Side,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
 import { displayOrder, localDateOf, nextOutcome, type SetField } from "../domain/ExecutionRules.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
@@ -104,12 +104,15 @@ function ValueCell({ cellKey, field, value, pending, onCommit }: Readonly<{
  * Строка подхода. Тип красит строку (разминка — жёлтым, отказ — красным, дроп — синим), номер у рабочих
  * подходов не меняется; под дроп-сетом — строки мини-сетов (§48.60), их состав заморожен, пока подход выполнен.
  */
-const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mode, pending,
+const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mode, sided, pending,
   onSave, onToggle, onPickType, onPickRpe }: Readonly<{
   target: SetTarget; number: number | null; fact: SetFact | undefined; previous: PreviousSet | undefined;
-  fields: readonly SetField[]; mode: ConfirmationMode; pending: PendingRegistry;
+  fields: readonly SetField[]; mode: ConfirmationMode;
+  /** Одностороннее упражнение: две строки «Л» / «П» со своими значениями и отметками (§48.66, §48.70). */
+  sided: boolean;
+  pending: PendingRegistry;
   onSave: (target: SetTarget, patch: SetPatch) => void;
-  onToggle: (target: SetTarget) => void;
+  onToggle: (target: SetTarget, side?: Side) => void;
   onPickType: (target: SetTarget) => void;
   onPickRpe: (target: SetTarget) => void;
 }>) {
@@ -124,28 +127,58 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
   const background = tone !== null ? withAlpha(tone, confirmed ? 0.3 : 0.14)
     : confirmed ? withAlpha(colors.success, 0.14) : "transparent";
   const manualSpacer = mode === "MANUAL" ? <View style={styles.side} /> : null;
+  // §48.80: одна засчитанная сторона — подход частично выполнен (номер подсвечен наполовину).
+  const partial = sided && confirmed && fact?.sides?.left.confirmed !== fact?.sides?.right.confirmed;
+  const full = confirmed && !partial;
+  const sideRow = (side: Side) => {
+    const sideFact = side === "L" ? fact?.sides?.left : fact?.sides?.right;
+    const done = sideFact?.confirmed === true;
+    return <>
+      <Text accessibilityLabel={`${side === "L" ? "Левая" : "Правая"} сторона${done ? ", выполнена" : ""}`}
+        style={[styles.sideLabel, { color: done ? colors.success : colors.textSecondary }]}>{side === "L" ? "Л" : "П"}</Text>
+      {fields.map((field) => (
+        <ValueCell key={field} cellKey={`${set.id}:${side}:${field}`} field={field} value={sideFact?.values[field] ?? null}
+          pending={pending} onCommit={(value) => onSave(target, { side: { side, fields: { [field]: value } } })} />
+      ))}
+    </>;
+  };
+  const sideCheck = (side: Side) => {
+    const done = (side === "L" ? fact?.sides?.left.confirmed : fact?.sides?.right.confirmed) === true;
+    return (
+      <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: done }} hitSlop={6}
+        accessibilityLabel={`${side === "L" ? "Левая" : "Правая"} сторона: ${done ? "снять отметку" : "отметить выполненной"}`}
+        onPress={() => onToggle(target, side)}
+        style={[styles.check, { borderColor: done ? colors.success : colors.border, backgroundColor: done ? colors.success : colors.surface }]}>
+        {done ? <Check size={18} color={colors.canvas} strokeWidth={2.4} /> : null}
+      </Pressable>
+    );
+  };
+  const previousText = previous === undefined ? "—" : previous.sides !== null
+    ? `Л ${previous.sides.left === null ? "—" : compactValues(previous.sides.left, fields)}\nП ${previous.sides.right === null ? "—"
+      : compactValues(previous.sides.right, fields)}`
+    : compactWithDrops(previous.values, previous.drops, fields);
   return (
     <View style={[styles.block, { backgroundColor: background }]}>
       <View style={styles.row}>
         <Pressable accessibilityRole="button" hitSlop={6} onPress={() => onPickType(target)}
-          accessibilityLabel={`Подход ${marker}, ${setTypeLabels[type].toLowerCase()}${confirmed ? ", выполнен" : ""}. Сменить тип`}
+          accessibilityLabel={`Подход ${marker}, ${setTypeLabels[type].toLowerCase()}${full ? ", выполнен" : partial ? ", выполнен частично" : ""}. Сменить тип`}
           style={[styles.marker, { borderColor: confirmed ? colors.success : tone ?? colors.border,
-            backgroundColor: confirmed ? colors.success : colors.surface }]}>
-          <Text style={[styles.markerText, { color: confirmed ? colors.canvas : tone ?? colors.textPrimary }]}>{marker}</Text>
+            backgroundColor: full ? colors.success : partial ? withAlpha(colors.success, 0.35) : colors.surface }]}>
+          <Text style={[styles.markerText, { color: full ? colors.canvas : tone ?? colors.textPrimary }]}>{marker}</Text>
         </Pressable>
         <Text style={[styles.plan, { color: colors.textSecondary }]} numberOfLines={1}>{compactValues(set, fields)}</Text>
         <Pressable accessibilityRole="button" disabled={previous === undefined} hitSlop={6} style={styles.previous}
-          accessibilityLabel={previous === undefined ? "Прошлого результата нет"
-            : `Перенести прошлый результат ${compactWithDrops(previous.values, previous.drops, fields)}`}
+          accessibilityLabel={previous === undefined ? "Прошлого результата нет" : `Перенести прошлый результат ${previousText}`}
           onPress={() => {
             if (previous === undefined) return;
+            if (previous.sides !== null) { onSave(target, { sidesFrom: previous.sides }); return; }
             onSave(target, type === "DROP" ? { fields: previous.values, drops: previous.drops } : { fields: previous.values });
           }}>
           <Text style={[styles.previousText, { color: previous === undefined ? colors.textMuted : colors.accentInk }]} numberOfLines={2}>
-            {previous === undefined ? "—" : compactWithDrops(previous.values, previous.drops, fields)}
+            {previousText}
           </Text>
         </Pressable>
-        {fields.map((field) => (
+        {sided ? sideRow("L") : fields.map((field) => (
           <ValueCell key={field} cellKey={`${set.id}:${field}`} field={field} value={fact?.values[field] ?? null} pending={pending}
             onCommit={(value) => onSave(target, { fields: { [field]: value } })} />
         ))}
@@ -153,7 +186,8 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
           onPress={() => onPickRpe(target)} style={styles.side}>
           <Text style={[styles.rpeText, { color: fact?.rpe ? rpeTone(fact.rpe, colors) : colors.textMuted }]}>{fact?.rpe ?? "—"}</Text>
         </Pressable>
-        {mode === "MANUAL" ? (
+        {mode === "MANUAL" && sided ? sideCheck("L") : null}
+        {mode === "MANUAL" && !sided ? (
           <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: confirmed }}
             accessibilityLabel={confirmed ? "Снять отметку выполнения" : "Отметить подход выполненным"} hitSlop={6}
             onPress={() => onToggle(target)}
@@ -163,6 +197,16 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
           </Pressable>
         ) : null}
       </View>
+      {sided ? (
+        <View style={styles.row}>
+          <View style={styles.markerSpace} />
+          <View style={styles.plan} />
+          <View style={styles.grow} />
+          {sideRow("R")}
+          <View style={styles.side} />
+          {mode === "MANUAL" ? sideCheck("R") : null}
+        </View>
+      ) : null}
       {type === "DROP" ? <>
         {drops.map((drop, index) => (
           <View key={`drop-${index}`} style={styles.row}>
@@ -223,7 +267,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     void restTimers.start({ clientId: slot.clientId, clientName, exerciseKey: exercise.id,
       exerciseName: lookup?.get(exercise.exerciseId)?.name ?? "Упражнение", durationSec: exercise.restSec }).catch(() => undefined);
   }, [clientName, lookup, restTimers, slot.clientId]);
-  const diary = useWorkoutDiary(slot, plans, execution, metricsOf, startRest);
+  const unilateralOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.unilateral === true, [lookup]);
+  const diary = useWorkoutDiary(slot, plans, execution, metricsOf, unilateralOf, startRest);
   const pending = useRef<PendingRegistry>(new Map()).current;
   const typeSheet = useRef<BottomSheetModal>(null);
   const rpeSheet = useRef<BottomSheetModal>(null);
@@ -252,9 +297,9 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const onSave = useCallback((item: SetTarget, patch: SetPatch) => {
     void saveSet(item.exercise, item.set, item.position, patch);
   }, [saveSet]);
-  const onToggle = useCallback((item: SetTarget) => {
+  const onToggle = useCallback((item: SetTarget, side?: Side) => {
     flushPending();
-    void toggleSet(item.exercise, item.set, item.position);
+    void toggleSet(item.exercise, item.set, item.position, side);
   }, [flushPending, toggleSet]);
   const onPickType = useCallback((item: SetTarget) => {
     Keyboard.dismiss();
@@ -376,6 +421,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
               {rows.map(({ item, number }) => (
                 <SetRow key={item.set.id} target={{ exercise, set: item.set, position: item.position }} number={number}
                   fact={state.facts.get(item.set.id)} previous={previous.get(item.set.id)} fields={fields} mode={mode}
+                  sided={info?.unilateral === true}
                   pending={pending} onSave={onSave} onToggle={onToggle} onPickType={onPickType} onPickRpe={onPickRpe} />
               ))}
             </View>
@@ -403,6 +449,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         onClear={() => { if (restFor !== null) saveRest(restFor, null); }}
         onClose={() => setRestFor(null)} />
       <SetTypeSheet ref={typeSheet} setType={targetFact?.setType ?? "NORMAL"} extra={targetFact?.extra === true}
+        noDrop={target !== null && lookup.get(target.exercise.exerciseId)?.unilateral === true}
         onSelect={chooseType}
         onRemove={() => {
           typeSheet.current?.dismiss();
@@ -474,6 +521,7 @@ const styles = StyleSheet.create({
   plan: { flex: 1, fontFamily: fonts.regular, fontSize: 12, textAlign: "center" },
   previous: { flex: 1, minHeight: 40, justifyContent: "center" },
   previousText: { fontFamily: fonts.medium, fontSize: 12, textAlign: "center" },
+  sideLabel: { width: 14, textAlign: "center", fontFamily: fonts.semibold, fontSize: 13 },
   dropLabel: { flex: 1, fontFamily: fonts.medium, fontSize: 12, textAlign: "right", paddingRight: 4 },
   inputHead: { width: 54 },
   input: { width: 54, height: 40, borderWidth: 1, borderRadius: 8, textAlign: "center", fontFamily: fonts.medium,

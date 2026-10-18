@@ -160,4 +160,85 @@ export const devTrainingExecutionCatalog: readonly MigrationStep[] = [{
       WHEN NEW.extra = 1 AND NEW.set_type <> 'WARMUP'
       BEGIN SELECT RAISE(ABORT, 'INVALID_METRIC'); END`,
   ],
+}, {
+  version: 5,
+  checksum: "t03-dev-training-execution-v5-sides-20261018",
+  statements: [
+    // §48.66, §48.70: стороны одностороннего подхода. Засчитанный по сторонам подход хранит значения в строках
+    // сторон, поэтому CHECK подхода допускает пустые значения при sided = 1. CHECK в SQLite не меняется
+    // на месте — подходы и мини-сеты пересобираются с теми же данными, связи и триггеры восстанавливаются.
+    `CREATE TABLE dev_training_performed_sets_v5 (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      planned_set_id TEXT NOT NULL,
+      planned_exercise_id TEXT NOT NULL,
+      exercise_id TEXT NOT NULL CHECK (exercise_id LIKE 'sys:%' OR exercise_id LIKE 'usr:%'),
+      position INTEGER NOT NULL CHECK (position >= 0),
+      set_type TEXT NOT NULL CHECK (set_type IN ('NORMAL','WARMUP','FAILURE','DROP')),
+      reps INTEGER CHECK (reps IS NULL OR reps BETWEEN 1 AND 999),
+      load_grams INTEGER CHECK (load_grams IS NULL OR load_grams BETWEEN 0 AND 1000000),
+      duration_sec INTEGER CHECK (duration_sec IS NULL OR duration_sec BETWEEN 1 AND 86400),
+      distance_m INTEGER CHECK (distance_m IS NULL OR distance_m BETWEEN 1 AND 1000000),
+      rpe INTEGER CHECK (rpe IS NULL OR rpe BETWEEN 1 AND 10),
+      confirmed_at TEXT,
+      origin TEXT NOT NULL CHECK (origin IN ('INPUT','COPY','IMPORT')),
+      revision INTEGER NOT NULL CHECK (revision > 0),
+      updated_at TEXT NOT NULL,
+      extra INTEGER NOT NULL DEFAULT 0 CHECK (extra IN (0, 1)),
+      removed_at TEXT,
+      sided INTEGER NOT NULL DEFAULT 0 CHECK (sided IN (0, 1)),
+      CHECK (CASE WHEN confirmed_at IS NULL OR sided = 1 THEN 1
+        ELSE COALESCE(reps, load_grams, duration_sec, distance_m) IS NOT NULL END),
+      UNIQUE (workspace_id, session_id, planned_set_id),
+      FOREIGN KEY (session_id, workspace_id) REFERENCES dev_training_sessions(id, workspace_id) ON DELETE RESTRICT
+    )`,
+    `INSERT INTO dev_training_performed_sets_v5 (id, workspace_id, session_id, planned_set_id, planned_exercise_id, exercise_id, position, set_type, reps,
+      load_grams, duration_sec, distance_m, rpe, confirmed_at, origin, revision, updated_at, extra, removed_at) SELECT id, workspace_id, session_id, planned_set_id, planned_exercise_id, exercise_id, position, set_type, reps,
+      load_grams, duration_sec, distance_m, rpe, confirmed_at, origin, revision, updated_at, extra, removed_at FROM dev_training_performed_sets`,
+    `CREATE TABLE dev_training_performed_drops_v5 (
+      workspace_id TEXT NOT NULL,
+      set_id TEXT NOT NULL REFERENCES dev_training_performed_sets_v5(id) ON DELETE RESTRICT,
+      position INTEGER NOT NULL CHECK (position BETWEEN 2 AND 10),
+      reps INTEGER CHECK (reps IS NULL OR reps BETWEEN 1 AND 999),
+      load_grams INTEGER CHECK (load_grams IS NULL OR load_grams BETWEEN 0 AND 1000000),
+      duration_sec INTEGER CHECK (duration_sec IS NULL OR duration_sec BETWEEN 1 AND 86400),
+      distance_m INTEGER CHECK (distance_m IS NULL OR distance_m BETWEEN 1 AND 1000000),
+      PRIMARY KEY (workspace_id, set_id, position)
+    )`,
+    `INSERT INTO dev_training_performed_drops_v5 (workspace_id, set_id, position, reps, load_grams, duration_sec, distance_m)
+      SELECT workspace_id, set_id, position, reps, load_grams, duration_sec, distance_m FROM dev_training_performed_drops`,
+    `DROP TABLE dev_training_performed_drops`,
+    `DROP TABLE dev_training_performed_sets`,
+    `ALTER TABLE dev_training_performed_sets_v5 RENAME TO dev_training_performed_sets`,
+    `ALTER TABLE dev_training_performed_drops_v5 RENAME TO dev_training_performed_drops`,
+    `CREATE INDEX dev_training_performed_sets_exercise ON dev_training_performed_sets(workspace_id, exercise_id)`,
+    `CREATE TRIGGER dev_training_performed_sets_identity_fixed BEFORE UPDATE OF session_id, planned_set_id,
+        exercise_id ON dev_training_performed_sets
+      WHEN NEW.session_id IS NOT OLD.session_id OR NEW.planned_set_id IS NOT OLD.planned_set_id
+        OR NEW.exercise_id IS NOT OLD.exercise_id
+      BEGIN SELECT RAISE(ABORT, 'FACT_IDENTITY_FIXED'); END`,
+    `CREATE TRIGGER dev_training_performed_sets_extra_warmup_insert BEFORE INSERT ON dev_training_performed_sets
+      WHEN NEW.extra = 1 AND NEW.set_type <> 'WARMUP'
+      BEGIN SELECT RAISE(ABORT, 'INVALID_METRIC'); END`,
+    `CREATE TRIGGER dev_training_performed_sets_extra_warmup_update BEFORE UPDATE OF set_type, extra ON dev_training_performed_sets
+      WHEN NEW.extra = 1 AND NEW.set_type <> 'WARMUP'
+      BEGIN SELECT RAISE(ABORT, 'INVALID_METRIC'); END`,
+    `CREATE TRIGGER dev_training_performed_drops_only_drop BEFORE INSERT ON dev_training_performed_drops
+      WHEN COALESCE((SELECT set_type FROM dev_training_performed_sets WHERE id = NEW.set_id), '') <> 'DROP'
+      BEGIN SELECT RAISE(ABORT, 'INVALID_METRIC'); END`,
+    `CREATE TABLE dev_training_performed_sides (
+      workspace_id TEXT NOT NULL,
+      set_id TEXT NOT NULL REFERENCES dev_training_performed_sets(id) ON DELETE RESTRICT,
+      side TEXT NOT NULL CHECK (side IN ('L','R')),
+      reps INTEGER CHECK (reps IS NULL OR reps BETWEEN 1 AND 999),
+      load_grams INTEGER CHECK (load_grams IS NULL OR load_grams BETWEEN 0 AND 1000000),
+      duration_sec INTEGER CHECK (duration_sec IS NULL OR duration_sec BETWEEN 1 AND 86400),
+      distance_m INTEGER CHECK (distance_m IS NULL OR distance_m BETWEEN 1 AND 1000000),
+      confirmed_at TEXT,
+      CHECK (CASE WHEN confirmed_at IS NULL THEN 1
+        ELSE COALESCE(reps, load_grams, duration_sec, distance_m) IS NOT NULL END),
+      PRIMARY KEY (workspace_id, set_id, side)
+    )`,
+  ],
 }];

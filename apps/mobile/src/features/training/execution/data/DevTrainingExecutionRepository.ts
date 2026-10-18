@@ -6,8 +6,9 @@ import type { WriterCoordinator } from "../../../../shared/db/WriterCoordinator.
 import { DEFAULT_CONFIRMATION_MODE, SET_TYPES, type ConfirmationMode, type PreviousQuery, type PreviousSet,
   type SessionStatus, type SetFact, type SetType, type SetValues, type WorkoutExecution, type WorkoutOutcome,
   type WorkoutSession, type WorkoutSlot } from "../domain/ExecutionModel.ts";
-import { assertDropStructure, confirmationAfterSave, isLocalDate, localDateOf, matchPrevious, toggleConfirmation,
-  validateContent, workoutStatus, type ConfirmationChange, type SetContent } from "../domain/ExecutionRules.ts";
+import { assertDropStructure, confirmationAfterSave, isLocalDate, localDateOf, matchPrevious, sidesAfterSave, toggleConfirmation,
+  toggleSide, validateContent, validateSides, workoutStatus, type ConfirmationChange, type SetContent,
+  type SidesChange } from "../domain/ExecutionRules.ts";
 import type { SaveSetInput, SetIdentity, SetSaveResult, TrainingExecutionCommittedChange,
   TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import type { RestTimerStorePort } from "../domain/RestTimerPorts.ts";
@@ -22,21 +23,46 @@ const SESSION_COLUMNS = `id, client_id AS clientId, program_id AS programId, wee
 const FACT_COLUMNS = `id, planned_set_id AS plannedSetId, planned_exercise_id AS plannedExerciseId,
   exercise_id AS exerciseId, position, set_type AS setType, reps, load_grams AS loadGrams,
   duration_sec AS durationSec, distance_m AS distanceM, rpe, confirmed_at AS confirmedAt, revision, extra,
-  removed_at AS removedAt`;
+  removed_at AS removedAt, sided`;
 
 type FactRow = Readonly<{
   id: string; plannedSetId: string; plannedExerciseId: string; exerciseId: string; position: number;
   setType: SetType; reps: number | null; loadGrams: number | null; durationSec: number | null; distanceM: number | null;
-  rpe: number | null; confirmedAt: string | null; revision: number; extra: number; removedAt: string | null;
+  rpe: number | null; confirmedAt: string | null; revision: number; extra: number; removedAt: string | null; sided: number;
 }>;
+
+type SideRow = Readonly<{ setId: string; side: "L" | "R"; reps: number | null; loadGrams: number | null;
+  durationSec: number | null; distanceM: number | null; confirmedAt: string | null }>;
+type StoredSides = Readonly<{ L?: SideRow; R?: SideRow }>;
+
+/** Стороны односторонних подходов; ключ — ID факта. */
+async function sidesOf(port: SqliteStatementPort, workspaceId: string, setIds: readonly string[]):
+  Promise<ReadonlyMap<string, StoredSides>> {
+  const result = new Map<string, { L?: SideRow; R?: SideRow }>();
+  if (setIds.length === 0) return result;
+  const rows = await port.all<SideRow>(`SELECT set_id AS setId, side, reps, load_grams AS loadGrams, duration_sec AS durationSec,
+    distance_m AS distanceM, confirmed_at AS confirmedAt FROM dev_training_performed_sides
+    WHERE workspace_id = ? AND set_id IN (${setIds.map(() => "?").join(", ")})`, [workspaceId, ...setIds]);
+  for (const row of rows) result.set(row.setId, { ...result.get(row.setId), [row.side]: row });
+  return result;
+}
+
+const EMPTY_SIDE: SetValues = { reps: null, loadGrams: null, durationSec: null, distanceM: null };
+
+function factSides(row: FactRow, stored: StoredSides | undefined): SetFact["sides"] {
+  if (row.sided !== 1) return null;
+  const side = (value: SideRow | undefined) => ({ values: value === undefined ? EMPTY_SIDE : valuesOf(value),
+    confirmed: value?.confirmedAt != null });
+  return { left: side(stored?.L), right: side(stored?.R) };
+}
 
 function valuesOf(row: SetValues): SetValues {
   return { reps: row.reps, loadGrams: row.loadGrams, durationSec: row.durationSec, distanceM: row.distanceM };
 }
 
-function toFact(row: FactRow, drops: readonly SetValues[]): SetFact {
+function toFact(row: FactRow, drops: readonly SetValues[], sides: SetFact["sides"] = null): SetFact {
   return { id: row.id, plannedSetId: row.plannedSetId, plannedExerciseId: row.plannedExerciseId, exerciseId: row.exerciseId,
-    position: row.position, setType: row.setType, values: valuesOf(row), drops, rpe: row.rpe,
+    position: row.position, setType: row.setType, values: valuesOf(row), drops, sides, rpe: row.rpe,
     confirmed: row.confirmedAt !== null, extra: row.extra === 1, revision: row.revision };
 }
 
@@ -68,10 +94,16 @@ function assertIdentity(identity: SetIdentity): void {
   }
 }
 
+/** Подход засчитан, если засчитана хотя бы одна сторона (§48.80); новый переход любой стороны — новый переход. */
+function mergeSides(change: SidesChange): ConfirmationChange {
+  return { confirmed: change.left.confirmed || change.right.confirmed,
+    confirmedNow: change.left.confirmedNow || change.right.confirmedNow };
+}
+
 /** Сторона дневника в PermanentlyDeleteArchivedClient (§15.7): выполнения и факты подходов клиента. */
 export const devTrainingExecutionClientDeletionParticipant = {
   owner: "training.execution",
-  tables: ["dev_training_performed_drops", "dev_training_performed_sets", "dev_training_sessions",
+  tables: ["dev_training_performed_sides", "dev_training_performed_drops", "dev_training_performed_sets", "dev_training_sessions",
     "dev_training_rest_timers"] as const,
   async count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number> {
     const row = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM dev_training_sessions
@@ -79,6 +111,9 @@ export const devTrainingExecutionClientDeletionParticipant = {
     return row?.n ?? 0;
   },
   async detach(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<void> {
+    await tx.run(`DELETE FROM dev_training_performed_sides WHERE workspace_id = ? AND set_id IN
+      (SELECT f.id FROM dev_training_performed_sets f JOIN dev_training_sessions s ON s.id = f.session_id
+        WHERE s.workspace_id = ? AND s.client_id = ?)`, [workspaceId, workspaceId, clientId]);
     await tx.run(`DELETE FROM dev_training_performed_drops WHERE workspace_id = ? AND set_id IN
       (SELECT f.id FROM dev_training_performed_sets f JOIN dev_training_sessions s ON s.id = f.session_id
         WHERE s.workspace_id = ? AND s.client_id = ?)`, [workspaceId, workspaceId, clientId]);
@@ -191,7 +226,9 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     const rows = await connection.all<FactRow>(`SELECT ${FACT_COLUMNS} FROM dev_training_performed_sets
       WHERE workspace_id = ? AND session_id = ? AND removed_at IS NULL`, [this.workspaceId, session.id]);
     const drops = await dropsOf(connection, this.workspaceId, rows.filter((row) => row.setType === "DROP").map((row) => row.id));
-    return { session, facts: new Map(rows.map((row) => [row.plannedSetId, toFact(row, drops.get(row.id) ?? [])])) };
+    const sides = await sidesOf(connection, this.workspaceId, rows.filter((row) => row.sided === 1).map((row) => row.id));
+    return { session, facts: new Map(rows.map((row) => [row.plannedSetId,
+      toFact(row, drops.get(row.id) ?? [], factSides(row, sides.get(row.id)))])) };
   }
 
   async getProgramStatuses(clientId: string, programId: string): Promise<readonly SessionStatus[]> {
@@ -199,7 +236,9 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       outcome: WorkoutOutcome | null; started: number }>(`SELECT s.week_index AS weekIndex,
         s.planned_workout_id AS plannedWorkoutId, s.outcome,
         EXISTS (SELECT 1 FROM dev_training_performed_sets f WHERE f.workspace_id = s.workspace_id AND f.session_id = s.id
-          AND f.removed_at IS NULL AND (f.confirmed_at IS NOT NULL OR COALESCE(f.reps, f.load_grams, f.duration_sec, f.distance_m) IS NOT NULL)) AS started
+          AND f.removed_at IS NULL AND (f.confirmed_at IS NOT NULL OR COALESCE(f.reps, f.load_grams, f.duration_sec, f.distance_m) IS NOT NULL
+            OR EXISTS (SELECT 1 FROM dev_training_performed_sides d WHERE d.workspace_id = f.workspace_id AND d.set_id = f.id
+              AND COALESCE(d.reps, d.load_grams, d.duration_sec, d.distance_m) IS NOT NULL))) AS started
       FROM dev_training_sessions s WHERE s.workspace_id = ? AND s.client_id = ? AND s.program_id = ?`,
     [this.workspaceId, clientId, programId]);
     return rows.map((row) => ({ weekIndex: row.weekIndex, plannedWorkoutId: row.plannedWorkoutId,
@@ -231,8 +270,12 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     const slotId = rows[0]?.plannedExerciseId;
     const chosen = rows.filter((row) => row.plannedExerciseId === slotId).sort((a, b) => a.position - b.position);
     const drops = await dropsOf(port, this.workspaceId, chosen.filter((row) => row.setType === "DROP").map((row) => row.id));
+    const sides = await sidesOf(port, this.workspaceId, chosen.filter((row) => row.sided === 1).map((row) => row.id));
+    // §48.81 п. 3: только засчитанная сторона годится в «Пред.», другая не выдумывается.
+    const confirmedSide = (value: SideRow | undefined) => value?.confirmedAt != null ? valuesOf(value) : null;
     const sets = chosen.map((row) => ({ setType: row.setType,
-      value: { values: valuesOf(row), drops: drops.get(row.id) ?? [], date: session.date } }));
+      value: { values: valuesOf(row), drops: drops.get(row.id) ?? [], date: session.date,
+        sides: row.sided === 1 ? { left: confirmedSide(sides.get(row.id)?.L), right: confirmedSide(sides.get(row.id)?.R) } : null } }));
     return { date: session.date, sets };
   }
 
@@ -260,8 +303,10 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
 
   /** Записать факт по выбранному переходу подтверждения; ревизия проверяется в той же транзакции. */
   private async writeFact(tx: SqliteStatementPort, identity: SetIdentity, now: Date,
-    next: (existing: FactRow | null, existingDrops: readonly SetValues[], mode: ConfirmationMode) =>
-      Readonly<{ content: SetContent; rpe: number | null; change: ConfirmationChange }>): Promise<SetSaveResult> {
+    next: (existing: FactRow | null, existingDrops: readonly SetValues[], mode: ConfirmationMode, existingSides: StoredSides) =>
+      Readonly<{ content: SetContent; rpe: number | null; change: ConfirmationChange;
+        sides: Readonly<{ pair: Readonly<{ left: SetValues; right: SetValues }>; change: SidesChange }> | null }>):
+    Promise<SetSaveResult> {
     const mode = await this.modeOf(tx);
     const session = await this.ensureSession(tx, identity.slot, now);
     const existing = await this.factOf(tx, session.id, identity.plannedSetId);
@@ -269,7 +314,8 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     if ((existing?.revision ?? null) !== identity.expectedRevision) throw new Error("STALE_SESSION");
     if (existing !== null && existing.exerciseId !== identity.exerciseId) throw new Error("WRONG_CLIENT_SCOPE");
     const existingDrops = existing === null ? [] : (await dropsOf(tx, this.workspaceId, [existing.id])).get(existing.id) ?? [];
-    const { content, rpe, change } = next(existing, existingDrops, mode);
+    const existingSides = existing === null ? {} : (await sidesOf(tx, this.workspaceId, [existing.id])).get(existing.id) ?? {};
+    const { content, rpe, change, sides } = next(existing, existingDrops, mode, existingSides);
     if (existing !== null) {
       assertDropStructure({ confirmed: existing.confirmedAt !== null, setType: existing.setType, dropCount: existingDrops.length },
         content);
@@ -279,17 +325,17 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     const stamp = now.toISOString();
     const confirmedAt = !change.confirmed ? null : change.confirmedNow ? stamp : existing?.confirmedAt ?? stamp;
     const params = [identity.plannedExerciseId, identity.position, setType, values.reps, values.loadGrams, values.durationSec,
-      values.distanceM, rpe, confirmedAt, stamp];
+      values.distanceM, rpe, confirmedAt, stamp, sides === null ? 0 : 1];
     if (existing === null) {
       const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
       if (!id) throw new Error("FACT_ID_UNAVAILABLE");
       await tx.run(`INSERT INTO dev_training_performed_sets (planned_exercise_id, position, set_type, reps, load_grams,
-        duration_sec, distance_m, rpe, confirmed_at, updated_at, id, workspace_id, session_id, planned_set_id, exercise_id,
-        origin, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'INPUT', 1)`,
+        duration_sec, distance_m, rpe, confirmed_at, updated_at, sided, id, workspace_id, session_id, planned_set_id, exercise_id,
+        origin, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'INPUT', 1)`,
       [...params, id, this.workspaceId, session.id, identity.plannedSetId, identity.exerciseId]);
     } else {
       await tx.run(`UPDATE dev_training_performed_sets SET planned_exercise_id = ?, position = ?, set_type = ?, reps = ?,
-        load_grams = ?, duration_sec = ?, distance_m = ?, rpe = ?, confirmed_at = ?, updated_at = ?, origin = 'INPUT',
+        load_grams = ?, duration_sec = ?, distance_m = ?, rpe = ?, confirmed_at = ?, updated_at = ?, sided = ?, origin = 'INPUT',
         revision = revision + 1 WHERE workspace_id = ? AND id = ?`, [...params, this.workspaceId, existing.id]);
     }
     const saved = await this.factOf(tx, session.id, identity.plannedSetId);
@@ -301,30 +347,60 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
         distance_m) VALUES (?, ?, ?, ?, ?, ?, ?)`, [this.workspaceId, saved.id, index + 2, drop.reps, drop.loadGrams,
         drop.durationSec, drop.distanceM]);
     }
-    return { fact: toFact(saved, content.drops), session, confirmedNow: change.confirmedNow };
+    // Стороны — тоже часть того же факта: у каждой своя отметка выполнения (§48.76).
+    await tx.run("DELETE FROM dev_training_performed_sides WHERE workspace_id = ? AND set_id = ?", [this.workspaceId, saved.id]);
+    if (sides !== null) {
+      const sideStamp = (sideChange: ConfirmationChange, before: SideRow | undefined) =>
+        !sideChange.confirmed ? null : sideChange.confirmedNow ? stamp : before?.confirmedAt ?? stamp;
+      for (const [side, sideValues, sideChange, before] of [["L", sides.pair.left, sides.change.left, existingSides.L],
+        ["R", sides.pair.right, sides.change.right, existingSides.R]] as const) {
+        await tx.run(`INSERT INTO dev_training_performed_sides (workspace_id, set_id, side, reps, load_grams, duration_sec,
+          distance_m, confirmed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [this.workspaceId, saved.id, side, sideValues.reps,
+          sideValues.loadGrams, sideValues.durationSec, sideValues.distanceM, sideStamp(sideChange, before)]);
+      }
+    }
+    const storedSides = (await sidesOf(tx, this.workspaceId, [saved.id])).get(saved.id);
+    return { fact: toFact(saved, content.drops, factSides(saved, storedSides)), session, confirmedNow: change.confirmedNow };
   }
 
   async saveSet(input: SaveSetInput, now: Date = new Date()): Promise<SetSaveResult> {
     assertIdentity(input);
     if (!SET_TYPES.includes(input.setType)) throw new Error("INVALID_METRIC");
     const content: SetContent = { setType: input.setType, values: input.values, drops: input.drops };
-    validateContent(content, input.rpe, input.metrics);
-    const result = await this.ready().writer.write((tx) => this.writeFact(tx, input, now, (existing, _drops, mode) => ({
-      content, rpe: input.rpe, change: confirmationAfterSave(mode, existing?.confirmedAt != null, content, input.metrics),
-    })));
+    const pair = input.sides;
+    if (pair === undefined) validateContent(content, input.rpe, input.metrics);
+    else validateSides(content, pair, input.rpe, input.metrics);
+    const result = await this.ready().writer.write((tx) => this.writeFact(tx, input, now, (existing, _drops, mode, stored) => {
+      if (pair === undefined) {
+        return { content, rpe: input.rpe, sides: null,
+          change: confirmationAfterSave(mode, existing?.confirmedAt != null, content, input.metrics) };
+      }
+      const change = sidesAfterSave(mode, { left: stored.L?.confirmedAt != null, right: stored.R?.confirmedAt != null }, pair,
+        input.metrics);
+      return { content, rpe: input.rpe, sides: { pair, change }, change: mergeSides(change) };
+    }));
     this.publish(input.slot);
     return result;
   }
 
-  async toggleSetConfirmation(identity: SetIdentity, now: Date = new Date()): Promise<SetSaveResult> {
+  async toggleSetConfirmation(identity: SetIdentity, now: Date = new Date(), side?: "L" | "R"): Promise<SetSaveResult> {
     assertIdentity(identity);
     const result = await this.ready().writer.write(async (tx) => {
       const session = await this.sessionOf(tx, identity.slot);
       if (session === null || await this.factOf(tx, session.id, identity.plannedSetId) === null) throw new Error("FACT_NOT_FOUND");
-      return this.writeFact(tx, identity, now, (existing, drops) => {
+      return this.writeFact(tx, identity, now, (existing, drops, _mode, stored) => {
         const row = existing as FactRow;
         const content: SetContent = { setType: row.setType, values: valuesOf(row), drops };
-        return { content, rpe: row.rpe, change: toggleConfirmation(row.confirmedAt !== null, content, identity.metrics) };
+        if (row.sided !== 1) {
+          return { content, rpe: row.rpe, sides: null,
+            change: toggleConfirmation(row.confirmedAt !== null, content, identity.metrics) };
+        }
+        if (side === undefined) throw new Error("INVALID_METRIC");
+        const pair = { left: stored.L === undefined ? EMPTY_SIDE : valuesOf(stored.L),
+          right: stored.R === undefined ? EMPTY_SIDE : valuesOf(stored.R) };
+        const change = toggleSide({ left: stored.L?.confirmedAt != null, right: stored.R?.confirmedAt != null }, pair, side,
+          identity.metrics);
+        return { content, rpe: row.rpe, sides: { pair, change }, change: mergeSides(change) };
       });
     });
     this.publish(identity.slot);

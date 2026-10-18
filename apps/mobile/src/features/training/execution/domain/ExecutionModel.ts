@@ -37,6 +37,21 @@ export interface SetValues {
 
 export const EMPTY_VALUES: SetValues = { reps: null, loadGrams: null, durationSec: null, distanceM: null };
 
+/** Сторона одностороннего упражнения (§48.66, §48.70). */
+export type Side = "L" | "R";
+
+/** Значения и отметка выполнения одной стороны. */
+export interface SideFact {
+  readonly values: SetValues;
+  readonly confirmed: boolean;
+}
+
+/** Обе стороны одного подхода: каждая заполняется и засчитывается отдельно. */
+export interface SetSides {
+  readonly left: SideFact;
+  readonly right: SideFact;
+}
+
 /** Плановый слот: неделя Простой программы × плановая тренировка у конкретного клиента (§48.33). */
 export interface WorkoutSlot {
   readonly clientId: string;
@@ -66,7 +81,13 @@ export interface SetFact {
   /** Мини-сеты дроп-сета после основного (основной — `values`); у других типов пусто. */
   readonly drops: readonly SetValues[];
   readonly rpe: number | null;
+  /**
+   * Подход засчитан. У одностороннего — засчитана хотя бы одна сторона (§48.80): частично выполненный
+   * подход — всё равно один подход.
+   */
   readonly confirmed: boolean;
+  /** Стороны одностороннего упражнения; у обычного — `null` (значения в `values`). */
+  readonly sides: SetSides | null;
   /** Дополнительный разминочный подход дневника сверх плана (как в 2.0); у плановых — false. */
   readonly extra: boolean;
   readonly revision: number;
@@ -82,6 +103,8 @@ export interface WorkoutExecution {
 export interface PreviousSet {
   readonly values: SetValues;
   readonly drops: readonly SetValues[];
+  /** Засчитанные стороны прошлого подхода; незасчитанной стороны нет (§48.81 п. 3). */
+  readonly sides: Readonly<{ left: SetValues | null; right: SetValues | null }> | null;
   readonly date: string;
 }
 

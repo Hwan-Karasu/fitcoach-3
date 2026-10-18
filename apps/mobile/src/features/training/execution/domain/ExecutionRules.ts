@@ -87,6 +87,45 @@ export function toggleConfirmation(wasConfirmed: boolean, content: SetContent,
   return { confirmed: true, confirmedNow: true };
 }
 
+export interface SidesChange {
+  readonly left: ConfirmationChange;
+  readonly right: ConfirmationChange;
+}
+
+type SideFlags = Readonly<{ left: boolean; right: boolean }>;
+type SideValuesPair = Readonly<{ left: SetValues; right: SetValues }>;
+
+const plain = (values: SetValues): SetContent => ({ setType: "NORMAL", values, drops: [] });
+
+/**
+ * §48.76, §48.80: стороны одностороннего подхода засчитываются отдельно по тем же правилам, что и подход;
+ * новый переход любой стороны — повод для таймера (§48.80 п. 6).
+ */
+export function sidesAfterSave(mode: ConfirmationMode, was: SideFlags, sides: SideValuesPair,
+  metrics: readonly TrackingMetric[]): SidesChange {
+  return { left: confirmationAfterSave(mode, was.left, plain(sides.left), metrics),
+    right: confirmationAfterSave(mode, was.right, plain(sides.right), metrics) };
+}
+
+/** Галочка ручного режима у одной стороны; другая не меняется. */
+export function toggleSide(was: SideFlags, sides: SideValuesPair, side: "L" | "R",
+  metrics: readonly TrackingMetric[]): SidesChange {
+  const keep = (confirmed: boolean): ConfirmationChange => ({ confirmed, confirmedNow: false });
+  return side === "L"
+    ? { left: toggleConfirmation(was.left, plain(sides.left), metrics), right: keep(was.right) }
+    : { left: keep(was.left), right: toggleConfirmation(was.right, plain(sides.right), metrics) };
+}
+
+/** Односторонний подход: значения только в сторонах; дроп-сет со сторонами — отдельный срез. */
+export function validateSides(content: SetContent, sides: SideValuesPair, rpe: number | null,
+  metrics: readonly TrackingMetric[]): void {
+  if (content.setType === "DROP" || content.drops.length > 0 || hasEnteredData([{ values: content.values, confirmed: false }])) {
+    throw new Error("INVALID_METRIC");
+  }
+  validateContent(plain(sides.left), rpe, metrics);
+  validateContent(plain(sides.right), null, metrics);
+}
+
 /**
  * §48.61: у выполненного дроп-сета нельзя добавить, убрать или сменить на другой тип мини-сеты —
  * сначала снять выполнение. Числа в существующих мини-сетах исправлять можно.
@@ -104,9 +143,12 @@ export function dropsForType(setType: SetType, current: readonly SetValues[]): r
 }
 
 /** Начата ли тренировка (§48.34): есть внесённое значение или подтверждённый подход; просмотр — не начало. */
-export function hasEnteredData(facts: Iterable<Readonly<{ values: SetValues; confirmed: boolean }>>): boolean {
+export function hasEnteredData(facts: Iterable<Readonly<{ values: SetValues; confirmed: boolean;
+  sides?: Readonly<{ left: Readonly<{ values: SetValues }>; right: Readonly<{ values: SetValues }> }> | null }>>): boolean {
+  const filled = (values: SetValues) => ALL_FIELDS.some((field) => values[field] !== null);
   for (const fact of facts) {
-    if (fact.confirmed || ALL_FIELDS.some((field) => fact.values[field] !== null)) return true;
+    if (fact.confirmed || filled(fact.values)) return true;
+    if (fact.sides && (filled(fact.sides.left.values) || filled(fact.sides.right.values))) return true;
   }
   return false;
 }

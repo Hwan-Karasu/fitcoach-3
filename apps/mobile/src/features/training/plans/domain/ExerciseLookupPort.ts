@@ -6,6 +6,8 @@ export interface ExerciseInfo {
   readonly metrics: readonly TrackingMetric[];
   /** Ресурс картинки (Metro asset id) или null. */
   readonly thumbnail: number | null;
+  /** Одностороннее упражнение: левая и правая сторона записываются раздельно (§48.66). */
+  readonly unilateral: boolean;
 }
 
 /** Каталог упражнений глазами планов. Собирается в composition из публичного порта каталога. */

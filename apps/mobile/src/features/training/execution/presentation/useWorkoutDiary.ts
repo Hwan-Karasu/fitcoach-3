@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
 import type { PlannedExercise, PlannedSet, PlannedWorkout, TrainingPlansRepositoryPort } from "../../plans/public.ts";
-import type { ConfirmationMode, PreviousSet, SetFact, SetType, SetValues, TrackingMetric, WorkoutExecution,
+import type { ConfirmationMode, PreviousSet, SetFact, SetType, SetValues, Side, TrackingMetric, WorkoutExecution,
   WorkoutOutcome, WorkoutSlot } from "../domain/ExecutionModel.ts";
 import { EMPTY_VALUES } from "../domain/ExecutionModel.ts";
 import { dropsForType, hasEnteredData, workoutStatus } from "../domain/ExecutionRules.ts";
@@ -24,6 +24,10 @@ export interface SetPatch {
   readonly drops?: readonly SetValues[];
   /** Поле одного мини-сета. */
   readonly drop?: Readonly<{ index: number; fields: Partial<SetValues> }>;
+  /** Поле одной стороны одностороннего подхода. */
+  readonly side?: Readonly<{ side: Side; fields: Partial<SetValues> }>;
+  /** «Пред.» одностороннего подхода: переносятся только имеющиеся стороны (§48.81). */
+  readonly sidesFrom?: Readonly<{ left: SetValues | null; right: SetValues | null }>;
 }
 
 const errorText = (error: unknown) => {
@@ -40,6 +44,8 @@ const errorText = (error: unknown) => {
  */
 export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositoryPort, execution: TrainingExecutionPort,
   metricsOf: (exerciseId: string) => readonly TrackingMetric[] | null,
+  /** Одностороннее ли упражнение каталога (§48.66): тогда подход пишется по сторонам. */
+  unilateralOf: (exerciseId: string) => boolean,
   /** Новый переход «не выполнен → выполнен» при вводе в открытом дневнике — запуск таймера отдыха (§48.55). */
   onConfirmedNow: (exercise: PlannedExercise) => void) {
   const { clientId, programId, weekIndex, plannedWorkoutId } = slot;
@@ -54,6 +60,8 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   const stateRef = useRef<WorkoutExecution | null>(null);
   const confirmedRef = useRef(onConfirmedNow);
   confirmedRef.current = onConfirmedNow;
+  const unilateralRef = useRef(unilateralOf);
+  unilateralRef.current = unilateralOf;
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   stateRef.current = state;
 
@@ -130,8 +138,19 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
       if (patch.drops !== undefined) drops = patch.drops;
       const { drop } = patch;
       if (drop !== undefined) drops = drops.map((item, index) => index === drop.index ? { ...item, ...drop.fields } : item);
-      const input: SaveSetInput = { ...identity, values: { ...(fact?.values ?? EMPTY_VALUES), ...patch.fields }, drops,
-        rpe: patch.rpe !== undefined ? patch.rpe : fact?.rpe ?? null, setType };
+      let sides: SaveSetInput["sides"];
+      if (unilateralRef.current(exercise.exerciseId)) {
+        let left = fact?.sides?.left.values ?? EMPTY_VALUES;
+        let right = fact?.sides?.right.values ?? EMPTY_VALUES;
+        if (patch.side?.side === "L") left = { ...left, ...patch.side.fields };
+        if (patch.side?.side === "R") right = { ...right, ...patch.side.fields };
+        if (patch.sidesFrom?.left) left = patch.sidesFrom.left;
+        if (patch.sidesFrom?.right) right = patch.sidesFrom.right;
+        sides = { left, right };
+      }
+      const input: SaveSetInput = { ...identity, drops, sides, setType,
+        values: sides === undefined ? { ...(fact?.values ?? EMPTY_VALUES), ...patch.fields } : EMPTY_VALUES,
+        rpe: patch.rpe !== undefined ? patch.rpe : fact?.rpe ?? null };
       const result = await execution.saveSet(input);
       applyFact(result.fact, result.session);
       if (result.confirmedNow) {
@@ -141,10 +160,10 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
       return result;
     }), [applyFact, enqueue, execution, identityOf]);
 
-  const toggleSet = useCallback((exercise: PlannedExercise, set: PlannedSet, position: number) =>
+  const toggleSet = useCallback((exercise: PlannedExercise, set: PlannedSet, position: number, side?: Side) =>
     enqueue(async () => {
       const { identity } = identityOf(exercise, set, position);
-      const result = await execution.toggleSetConfirmation(identity);
+      const result = await execution.toggleSetConfirmation(identity, undefined, side);
       applyFact(result.fact, result.session);
       if (result.confirmedNow) {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);

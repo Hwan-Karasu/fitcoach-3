@@ -76,6 +76,7 @@ function exerciseLookup(exercises: ExerciseCatalogPort): ExerciseLookupPort {
       name: displayNameOf(entry),
       metrics: TRACKING_PROFILES[entry.definition.trackingProfile],
       thumbnail: thumbnailOf(entry.definition.media),
+      unilateral: entry.definition.unilateral,
     }])),
     subscribe: (listener) => exercises.subscribeCommittedChanges(listener),
   };
