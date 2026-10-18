@@ -6,8 +6,10 @@ export function SettingsPreview({
   onOpenClientRosterSettings,
   onOpenQuestionnaireBuilder,
   onOpenExerciseCatalog,
+  onOpenTrainingSettings,
 }: Readonly<{ onOpenAppearance: () => void; onOpenNotificationSettings: () => void;
-  onOpenClientRosterSettings: () => void; onOpenQuestionnaireBuilder: () => void; onOpenExerciseCatalog: () => void }>) {
+  onOpenClientRosterSettings: () => void; onOpenQuestionnaireBuilder: () => void; onOpenExerciseCatalog: () => void;
+  onOpenTrainingSettings: () => void }>) {
   return (
     <PrototypeScreen description="Локальные настройки тренера">
       <PrototypeNotice>
@@ -26,6 +28,8 @@ export function SettingsPreview({
         onPress={onOpenQuestionnaireBuilder} />
       <PrototypeLink title="Каталог упражнений" detail="Поиск, фильтры, избранное и свои упражнения"
         onPress={onOpenExerciseCatalog} />
+      <PrototypeLink title="Тренировки" detail="Как засчитывать подход: автоматически или галочкой"
+        onPress={onOpenTrainingSettings} />
       <PrototypeLink
         title="Уведомления"
         detail="Напоминания, тихие часы и история"

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
 import type { PlannedExercise, PlannedSet, PlannedWorkout, TrainingPlansRepositoryPort } from "../../plans/public.ts";
 import type { ConfirmationMode, PreviousSet, SetFact, SetType, SetValues, TrackingMetric, WorkoutExecution,
@@ -79,6 +80,13 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
     })();
     return () => { active = false; };
   }, [clientId, execution, plannedWorkoutId, plans, programId, stableSlot, version]);
+
+  // Режим подтверждения — общая настройка тренера (§48.54): после смены в настройках дневник берёт новый.
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    execution.getConfirmationMode().then((next) => { if (active) setMode(next); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [execution]));
 
   useEffect(() => execution.subscribeCommittedChanges((change) => {
     if (change.clientId === clientId && change.programId === programId) setVersion((value) => value + 1);

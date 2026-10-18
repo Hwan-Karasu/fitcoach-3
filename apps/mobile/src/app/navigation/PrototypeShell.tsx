@@ -4,7 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { KeyboardProvider } from "react-native-keyboard-controller";
-import { RestTimerDock } from "../../features/training/public.ts";
+import { RestTimerDock, TrainingSettingsScreen } from "../../features/training/public.ts";
 import { NotificationsPreview, NotificationSettingsPreview } from "../../features/notifications/public.ts";
 import { SettingsPreview, ThemeCatalogPreview } from "../../features/settings/public.ts";
 import { ClientRosterSettingsScreen } from "../../features/clients/public.ts";
@@ -33,6 +33,7 @@ type RootStackRoutes = {
   NotificationSettings: undefined;
   Settings: undefined;
   ClientRosterSettings: undefined;
+  TrainingSettings: undefined;
   QuestionnaireBuilder: undefined;
   ExerciseCatalog: undefined;
   ExerciseDetail: { exerciseId: string };
@@ -96,8 +97,12 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
               onOpenClientRosterSettings={() => navigation.navigate("ClientRosterSettings")}
               onOpenQuestionnaireBuilder={() => navigation.navigate("QuestionnaireBuilder")}
               onOpenExerciseCatalog={() => navigation.navigate("ExerciseCatalog")}
+              onOpenTrainingSettings={() => navigation.navigate("TrainingSettings")}
             />
           )}
+        </Stack.Screen>
+        <Stack.Screen name="TrainingSettings" options={{ title: "Тренировки" }}>
+          {() => <TrainingSettingsScreen execution={services.trainingExecution} />}
         </Stack.Screen>
         <Stack.Screen name="ClientRosterSettings" options={{ title: "Список клиентов" }}>
           {() => <ClientRosterSettingsScreen repository={services.clients} />}

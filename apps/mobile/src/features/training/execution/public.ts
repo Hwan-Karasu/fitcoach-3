@@ -2,6 +2,7 @@ export type { ConfirmationMode, PreviousQuery, PreviousSet, SessionStatus, SetFa
   WorkoutExecution, WorkoutOutcome, WorkoutSession, WorkoutSlot, WorkoutStatus } from "./domain/ExecutionModel.ts";
 export { hasEnteredData, isComplete, nextOutcome, weekStatus, workoutStatus } from "./domain/ExecutionRules.ts";
 export { WorkoutScreen } from "./presentation/WorkoutScreen.tsx";
+export { TrainingSettingsScreen } from "./presentation/TrainingSettingsScreen.tsx";
 export { ProgramWeeksPanel } from "./presentation/ProgramWeeksPanel.tsx";
 export { RestTimerDock } from "./presentation/RestTimerDock.tsx";
 export { RestTimerService } from "./application/RestTimerService.ts";
