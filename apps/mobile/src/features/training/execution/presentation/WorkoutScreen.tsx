@@ -40,6 +40,9 @@ type SetTarget = Readonly<{ exercise: PlannedExercise; set: PlannedSet; position
 
 const hasValues = (values: SetValues) => Object.values(values).some((value) => value !== null);
 
+/** Заголовок колонки в одну строку: при нехватке места шрифт ужимается. */
+const oneLine = { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.7 } as const;
+
 /**
  * Ячейка фактического значения: свой текст ввода; запись — через паузу после ввода или при уходе фокуса.
  * Отложенная запись регистрируется, чтобы смена исхода сначала дописала последнее значение (§48.23 п. 5).
@@ -222,7 +225,7 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
         accessibilityLabel={`${side === "L" ? "Левая" : "Правая"} сторона: ${done ? "снять отметку" : "отметить выполненной"}`}
         onPress={() => onToggle(target, side)}
         style={[styles.check, { borderColor: done ? colors.success : colors.border, backgroundColor: done ? colors.success : colors.surface }]}>
-        {done ? <Check size={18} color={colors.canvas} strokeWidth={2.4} /> : null}
+        <Check size={18} color={done ? colors.canvas : colors.border} strokeWidth={2.4} />
       </Pressable>
     );
   };
@@ -265,7 +268,7 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
             onPress={() => onToggle(target)}
             style={[styles.check, { borderColor: confirmed ? colors.success : colors.border,
               backgroundColor: confirmed ? colors.success : colors.surface }]}>
-            {confirmed ? <Check size={18} color={colors.canvas} strokeWidth={2.4} /> : null}
+            <Check size={18} color={confirmed ? colors.canvas : colors.border} strokeWidth={2.4} />
           </Pressable>
         ) : null}
       </View>
@@ -521,11 +524,12 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                 </Text>
               ) : null}
               <View style={[styles.row, styles.headRow]}>
-                <Text style={[styles.head, styles.markerSpace, { color: colors.textMuted }]}>Сет</Text>
-                <Text style={[styles.head, styles.plan, { color: colors.textMuted }]}>План</Text>
-                <Text style={[styles.head, styles.grow, { color: colors.textMuted }]}>Пред.</Text>
-                {fields.map((field) => <Text key={field} style={[styles.head, styles.inputHead, { color: colors.textMuted }]}>{fieldHeaders[field]}</Text>)}
-                <Text style={[styles.head, styles.side, { color: colors.textMuted }]}>RPE</Text>
+                {/* Заголовки — в одну строку: в ручном режиме колонкам теснее, шрифт ужимается, а не переносится. */}
+                <Text {...oneLine} style={[styles.markerSpace, styles.head, { color: colors.textMuted }]}>Сет</Text>
+                <Text {...oneLine} style={[styles.grow, styles.head, { color: colors.textMuted }]}>План</Text>
+                <Text {...oneLine} style={[styles.grow, styles.head, { color: colors.textMuted }]}>Пред.</Text>
+                {fields.map((field) => <Text key={field} {...oneLine} style={[styles.inputHead, styles.head, { color: colors.textMuted }]}>{fieldHeaders[field]}</Text>)}
+                <Text {...oneLine} style={[styles.sideHead, styles.head, { color: colors.textMuted }]}>RPE</Text>
                 {mode === "MANUAL" ? <View style={styles.side} /> : null}
               </View>
               {rows.map(({ item, number }) => (
@@ -640,7 +644,7 @@ const styles = StyleSheet.create({
   rest: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", minHeight: 28 },
   restText: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18 },
   block: { borderRadius: 10, paddingVertical: 2, paddingHorizontal: 2, gap: 4 },
-  row: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44 },
+  row: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 44 },
   headRow: { minHeight: 20, paddingHorizontal: 2 },
   head: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14, textAlign: "center" },
   grow: { flex: 1 },
@@ -667,6 +671,7 @@ const styles = StyleSheet.create({
   input: { width: 54, height: 40, borderWidth: 1, borderRadius: 8, textAlign: "center", fontFamily: fonts.medium,
     fontSize: 15, paddingHorizontal: 2, paddingVertical: 0 },
   side: { width: 34, minHeight: 40, alignItems: "center", justifyContent: "center" },
+  sideHead: { width: 34 },
   rpeText: { fontFamily: fonts.semibold, fontSize: 14, textAlign: "center" },
   check: { width: 34, height: 34, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   addDrop: { flex: 1, minHeight: 40, borderRadius: 8, borderWidth: 1, borderStyle: "dashed", flexDirection: "row",
