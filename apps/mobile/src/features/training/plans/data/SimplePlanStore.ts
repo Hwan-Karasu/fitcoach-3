@@ -18,9 +18,9 @@ export async function readWorkouts(tx: SqliteStatementPort, workspaceId: string,
       lineage_id AS lineageId FROM dev_training_workouts
     WHERE workspace_id = ? AND program_id = ? AND week_id IS ? ORDER BY position`, [workspaceId, programId, weekId]);
   const exercises = await tx.all<{ id: string; workoutId: string; exerciseId: string; restSec: number | null;
-    instruction: string | null; rirMin: number | null; rirMax: number | null; lineageId: string | null }>(`SELECT e.id,
+    instruction: string | null; rirMin: number | null; rirMax: number | null; lineageId: string | null; supersetId: string | null }>(`SELECT e.id,
       e.workout_id AS workoutId, e.exercise_id AS exerciseId, e.rest_sec AS restSec, e.instruction, e.rir_min AS rirMin,
-      e.rir_max AS rirMax, e.lineage_id AS lineageId
+      e.rir_max AS rirMax, e.lineage_id AS lineageId, e.superset_id AS supersetId
       FROM dev_training_planned_exercises e
     JOIN dev_training_workouts w ON w.id = e.workout_id AND w.workspace_id = e.workspace_id
     WHERE e.workspace_id = ? AND w.program_id = ? AND w.week_id IS ? ORDER BY e.position`, [workspaceId, programId, weekId]);
@@ -36,6 +36,7 @@ export async function readWorkouts(tx: SqliteStatementPort, workspaceId: string,
     ...(workout.lineageId === null ? {} : { lineageId: workout.lineageId }),
     exercises: exercises.filter((exercise) => exercise.workoutId === workout.id)
       .map((exercise): PlannedExercise => ({ id: exercise.id,
+        ...(exercise.supersetId === null ? {} : { supersetId: exercise.supersetId }),
         ...(exercise.lineageId === null ? {} : { lineageId: exercise.lineageId }),
         exerciseId: exercise.exerciseId, restSec: exercise.restSec,
         instruction: exercise.instruction, rir: exercise.rirMin === null ? null : { min: exercise.rirMin, max: exercise.rirMax },
@@ -78,12 +79,12 @@ export async function writeWorkouts(tx: SqliteStatementPort, workspaceId: string
       await assertFree(tx, "dev_training_planned_exercises", exercise.id, owned.exercises);
       keep.exercises.add(exercise.id);
       await tx.run(`INSERT INTO dev_training_planned_exercises (id, workspace_id, workout_id, position, exercise_id, rest_sec,
-        instruction, rir_min, rir_max, lineage_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
+        instruction, rir_min, rir_max, lineage_id, superset_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
         workout_id = excluded.workout_id, position = excluded.position, exercise_id = excluded.exercise_id,
         rest_sec = excluded.rest_sec, instruction = excluded.instruction, rir_min = excluded.rir_min, rir_max = excluded.rir_max,
-        lineage_id = excluded.lineage_id`,
+        lineage_id = excluded.lineage_id, superset_id = excluded.superset_id`,
       [exercise.id, workspaceId, workout.id, exerciseIndex, exercise.exerciseId, exercise.restSec, exercise.instruction,
-        exercise.rir?.min ?? null, exercise.rir?.max ?? null, exercise.lineageId ?? null]);
+        exercise.rir?.min ?? null, exercise.rir?.max ?? null, exercise.lineageId ?? null, exercise.supersetId ?? null]);
       for (const [setIndex, set] of exercise.sets.entries()) {
         await assertFree(tx, "dev_training_planned_sets", set.id, owned.sets);
         keep.sets.add(set.id);

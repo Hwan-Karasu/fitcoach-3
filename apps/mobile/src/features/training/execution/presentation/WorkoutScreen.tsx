@@ -10,7 +10,7 @@ import { ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDat
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
-import { formatDuration, formatRange, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookup, type ExerciseLookupPort,
+import { formatDuration, formatRange, supersetNumber, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookup, type ExerciseLookupPort,
   type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort, type WorkoutWeekNavigation } from "../../plans/public.ts";
 import { DROPS_MAX, EMPTY_VALUES, NOTE_MAX, type ActiveWorkoutCard, type ActiveWorkoutsPort, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type Side,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
@@ -537,6 +537,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         </> : null}
         {workout.exercises.map((exercise) => {
           const info = lookup.get(exercise.exerciseId);
+          const group = supersetNumber(workout, exercise);
           const fields = diaryFields(info?.metrics ?? []);
           const extras = extraWarmups(state, exercise.id).map((fact) => ({ set: { id: fact.plannedSetId, reps: null, repsMax: null,
             loadGrams: null, durationSec: null, distanceM: null }, position: fact.position, setType: fact.setType }));
@@ -545,6 +546,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
           const done = rows.filter(({ item }) => state.facts.get(item.set.id)?.confirmed === true).length;
           return (
             <View key={exercise.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              {group !== null ? <Text style={[styles.meta, { color: colors.accentInk }]}>{`Суперсет ${group}`}</Text> : null}
               <View style={styles.cardHead}>
                 {info?.thumbnail != null ? <Image source={info.thumbnail} style={[styles.thumb, { backgroundColor: colors.input }]} /> : null}
                 <View style={styles.exerciseText}>

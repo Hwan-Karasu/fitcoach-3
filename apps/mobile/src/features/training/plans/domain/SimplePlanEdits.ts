@@ -3,6 +3,7 @@ import { DEFAULT_WEEKS, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, type Plann
   type SimpleProgramDraft } from "./SimplePlanModel.ts";
 import type { SetField } from "./SimplePlanRules.ts";
 import type { PlannedExercise } from "./SimplePlanModel.ts";
+import { cleanSupersets } from "./SupersetRules.ts";
 
 /**
  * Правки черновика конструктора (immer): каждая возвращает новый черновик, исходный не меняется.
@@ -90,7 +91,7 @@ export const withRestDefaults = (draft: SimpleProgramDraft): SimpleProgramDraft 
 });
 
 export const removeExercise = (draft: SimpleProgramDraft, plannedId: string) => produce(draft, (d) => {
-  for (const workout of d.plan.workouts) workout.exercises = workout.exercises.filter((item) => item.id !== plannedId);
+  for (const workout of d.plan.workouts) workout.exercises = cleanSupersets(workout.exercises.filter((item) => item.id !== plannedId)) as Draft<PlannedExercise>[];
 });
 
 /** Новый порядок тренировок (перетаскивание); применяется, только если в нём ровно все тренировки. */
@@ -144,6 +145,7 @@ export const replaceExercise = (draft: SimpleProgramDraft, plannedId: string, ne
     const keep = (field: SetField, value: number | null) => allowed.includes(field) ? value : null;
     // Родство (Расширенный конструктор) остаётся: замена «на этом месте» доходит до тех же мест других недель.
     workout.exercises[index] = { id: newPlannedId, ...(old.lineageId === undefined ? {} : { lineageId: old.lineageId }),
+      ...(old.supersetId === undefined ? {} : { supersetId: old.supersetId }),
       exerciseId, restSec: old.restSec, instruction: null,
       rir: allowed.includes("reps") ? old.rir : null,
       sets: old.sets.map((set) => ({ id: setId(), reps: keep("reps", set.reps), repsMax: keep("reps", set.repsMax),

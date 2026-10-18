@@ -304,4 +304,11 @@ export const devTrainingPlansCatalog: readonly MigrationStep[] = [{
         AND workspace_id = NEW.workspace_id AND client_id = NEW.client_id AND program_id = NEW.program_id)
       BEGIN SELECT RAISE(ABORT, 'TARGET_NOT_FOUND'); END`,
   ],
+}, {
+  version: 11,
+  checksum: "t04-dev-training-plans-v11-supersets-20261018",
+  statements: [
+    `ALTER TABLE dev_training_planned_exercises ADD COLUMN superset_id TEXT
+      CHECK(superset_id IS NULL OR length(trim(superset_id)) > 0)`,
+  ],
 }];

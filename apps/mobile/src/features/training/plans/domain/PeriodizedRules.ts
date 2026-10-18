@@ -1,5 +1,6 @@
 import type { PlannedExercise, PlannedSet, PlannedWorkout } from "./SimplePlanModel.ts";
 import type { PlanWeek, WeekScope, WeekType } from "./PeriodizedModel.ts";
+import { cleanSupersets, remapSupersets, supersetGroups, withoutSuperset } from "./SupersetRules.ts";
 
 /**
  * Правила Расширенного конструктора (§48.6). Правка недели — разница «до/после» по родству (`lineageId`):
@@ -30,7 +31,8 @@ export type WeekOp =
   | Readonly<{ kind: "removeExercise"; lineageId: string }>
   | Readonly<{ kind: "replaceExercise"; lineageId: string; exercise: PlannedExercise }>
   | Readonly<{ kind: "updateExercise"; lineageId: string; patch: ExercisePatch }>
-  | Readonly<{ kind: "orderExercises"; workoutLineageId: string; order: readonly string[] }>;
+  | Readonly<{ kind: "orderExercises"; workoutLineageId: string; order: readonly string[] }>
+  | Readonly<{ kind: "groupExercises"; workoutLineageId: string; affected: readonly string[]; groups: readonly (readonly string[])[] }>;
 
 const valuesOf = (set: PlannedSet): SetValues => ({ reps: set.reps, repsMax: set.repsMax, loadGrams: set.loadGrams,
   durationSec: set.durationSec, distanceM: set.distanceM });
@@ -42,8 +44,8 @@ function cloneExercise(exercise: PlannedExercise, newId: NewId): PlannedExercise
 }
 
 function cloneWorkout(workout: PlannedWorkout, newId: NewId): PlannedWorkout {
-  return { ...workout, id: newId(), lineageId: lineageOf(workout),
-    exercises: workout.exercises.map((exercise) => cloneExercise(exercise, newId)) };
+  return remapSupersets({ ...workout, id: newId(), lineageId: lineageOf(workout),
+    exercises: workout.exercises.map((exercise) => cloneExercise(exercise, newId)) });
 }
 
 /** Тренировки недели с явным родством (у новых — по ID). */
@@ -116,6 +118,14 @@ export function diffWeek(beforeWeek: readonly PlannedWorkout[], afterWeek: reado
     if (orderChanged(previous.exercises.map(lineageOf), newLineages)) {
       ops.push({ kind: "orderExercises", workoutLineageId: lineageId, order: newLineages });
     }
+    const oldGroups = supersetGroups(previous);
+    const groups = supersetGroups(workout);
+    if (!sameJson(oldGroups, groups)) {
+      const changedOld = oldGroups.filter((group) => !groups.some((next) => sameJson(group, next)));
+      const changedNew = groups.filter((group) => !oldGroups.some((old) => sameJson(group, old)));
+      ops.push({ kind: "groupExercises", workoutLineageId: lineageId,
+        affected: [...new Set([...changedOld.flat(), ...changedNew.flat()])], groups: changedNew });
+    }
   });
   if (orderChanged(before.map(lineageOf), afterLineages)) ops.push({ kind: "orderWorkouts", order: afterLineages });
   return ops;
@@ -159,9 +169,8 @@ export function applyWeekOps(week: readonly PlannedWorkout[], ops: readonly Week
     switch (op.kind) {
       case "addWorkout":
         if (workouts.some((workout) => lineageOf(workout) === op.lineageId)) { skipped += 1; break; }
-        workouts = insertAfter(workouts, op.after, { ...cloneWorkout(op.workout, newId), exercises: [] as PlannedExercise[] });
-        workouts = workouts.map((workout) => lineageOf(workout) === op.lineageId
-          ? { ...workout, exercises: op.workout.exercises.map((exercise) => cloneExercise(exercise, newId)) } : workout);
+        { const copy = cloneWorkout(op.workout, newId);
+          workouts = insertAfter(workouts, op.after, { ...copy, exercises: [...copy.exercises] }); }
         break;
       case "removeWorkout":
         if (!workouts.some((workout) => lineageOf(workout) === op.lineageId)) { skipped += 1; break; }
@@ -189,7 +198,8 @@ export function applyWeekOps(week: readonly PlannedWorkout[], ops: readonly Week
         break;
       case "replaceExercise":
         // Новая идентичность (§48.5.7 п. 1): факты прежнего упражнения к новому не переходят.
-        mapExercises(op.lineageId, () => cloneExercise({ ...op.exercise, lineageId: op.lineageId }, newId));
+        mapExercises(op.lineageId, (previous) => cloneExercise({ ...withoutSuperset(op.exercise), lineageId: op.lineageId,
+          ...(previous.supersetId === undefined ? {} : { supersetId: previous.supersetId }) }, newId));
         break;
       case "updateExercise":
         mapExercises(op.lineageId, (exercise) => ({ ...exercise,
@@ -204,9 +214,24 @@ export function applyWeekOps(week: readonly PlannedWorkout[], ops: readonly Week
           ? { ...workout, exercises: reorder(workout.exercises, op.order) } : workout);
         break;
       }
+      case "groupExercises": {
+        const target = workouts.find((workout) => lineageOf(workout) === op.workoutLineageId);
+        if (!target || op.groups.some((group) => group.some((id) => !target.exercises.some((item) => lineageOf(item) === id)))) {
+          skipped += 1; break;
+        }
+        workouts = workouts.map((workout) => workout !== target ? workout : { ...workout,
+          exercises: [...cleanSupersets(workout.exercises.map((item) => {
+            if (!op.affected.includes(lineageOf(item))) return item;
+            const group = op.groups.find((members) => members.includes(lineageOf(item)));
+            if (!group) return withoutSuperset(item);
+            const first = workout.exercises.find((member) => lineageOf(member) === group[0])!;
+            return { ...item, supersetId: `superset:${workout.id}:${first.id}` };
+          }))] });
+        break;
+      }
     }
   }
-  return { workouts, skipped };
+  return { workouts: workouts.map((workout) => ({ ...workout, exercises: cleanSupersets(workout.exercises) })), skipped };
 }
 
 /** §48.6.1: недели мезоцикла, которые получает правка открытой недели. */

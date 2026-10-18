@@ -11,6 +11,7 @@ import { applyWeekOps, diffWeek, newMesocycleWeeks, targetWeeks, copyWeeks } fro
 import { addExercise, addWorkout, fillSets, newDraft, removeExercise, renameWorkout, reorderExercises, replaceExercise,
   setSetCount } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
 import type { PlannedWorkout, SimpleProgramDraft } from "../apps/mobile/src/features/training/plans/domain/SimplePlanModel.ts";
+import { joinPreviousSuperset, leaveSuperset } from "../apps/mobile/src/features/training/plans/domain/SupersetRules.ts";
 
 const BENCH = "sys:repdb:bench";
 const SQUAT = "sys:repdb:squat";
@@ -36,6 +37,37 @@ function edit(week: readonly PlannedWorkout[], change: (draft: SimpleProgramDraf
 }
 
 const weekTypes = ["heavy", "light", "heavy", "light", "heavy", "light"] as const;
+
+test("T04 суперсет: группировка, выход, копия и распространение не меняют ID упражнений и подходов", () => {
+  const draft = { title: "Группы", plan: { weeks: 3, workouts: firstWeek() } };
+  const grouped = joinPreviousSuperset(draft, "w1", "e2");
+  const exercises = grouped.plan.workouts[0]!.exercises;
+  assert.ok(exercises[0]!.supersetId);
+  assert.equal(exercises[0]!.supersetId, exercises[1]!.supersetId);
+  assert.deepEqual(exercises.map(({ supersetId, ...item }) => { assert.ok(supersetId); return item; }), draft.plan.workouts[0]!.exercises);
+  assert.deepEqual(leaveSuperset(grouped, "w1", "e2"), draft, "одиночный участник уже не суперсет");
+  assert.deepEqual(removeExercise(grouped, "e1").plan.workouts[0]!.exercises, [draft.plan.workouts[0]!.exercises[1]]);
+  const [w1, w2] = newMesocycleWeeks(grouped.plan.workouts, 2, ids("n"));
+  assert.notEqual(w1!.workouts[0]!.exercises[0]!.supersetId, w2!.workouts[0]!.exercises[0]!.supersetId);
+  assert.equal(w2!.workouts[0]!.exercises[0]!.supersetId, w2!.workouts[0]!.exercises[1]!.supersetId);
+  const replaced = edit(w1!.workouts, (value) => replaceExercise(value, w1!.workouts[0]!.exercises[0]!.id,
+    "new-exercise", ROW, ["reps"], ids("r")));
+  const target = applyWeekOps(w2!.workouts, diffWeek(w1!.workouts, replaced), ids("replacement"));
+  assert.equal(target.workouts[0]!.exercises[0]!.supersetId, w2!.workouts[0]!.exercises[1]!.supersetId,
+    "замена сохраняет группу целевой недели, не ID группы источника");
+  const [plain1, plain2] = newMesocycleWeeks(draft.plan.workouts, 2, ids("p"));
+  const local = { title: "М", plan: { weeks: 1, workouts: plain1!.workouts } };
+  const after = joinPreviousSuperset(local, plain1!.workouts[0]!.id, plain1!.workouts[0]!.exercises[1]!.id);
+  const ops = diffWeek(plain1!.workouts, after.plan.workouts);
+  assert.deepEqual(ops.map((op) => op.kind), ["groupExercises"]);
+  const applied = applyWeekOps(plain2!.workouts, ops, ids("a"));
+  assert.equal(applied.skipped, 0);
+  assert.deepEqual(applied.workouts[0]!.exercises.map((item) => item.id), plain2!.workouts[0]!.exercises.map((item) => item.id));
+  assert.notEqual(applied.workouts[0]!.exercises[0]!.supersetId, after.plan.workouts[0]!.exercises[0]!.supersetId);
+  const ungroup = diffWeek(after.plan.workouts, leaveSuperset(after, plain1!.workouts[0]!.id,
+    plain1!.workouts[0]!.exercises[0]!.id).plan.workouts);
+  assert.deepEqual(applyWeekOps(applied.workouts, ungroup, ids("u")).workouts, plain2!.workouts);
+});
 
 test("T04 «первая неделя → во все»: у каждой недели свои ID, общее родство с первой", () => {
   const weeks = newMesocycleWeeks(firstWeek(), 4, ids("n"));
@@ -201,6 +233,35 @@ async function sharedProgram() {
     { title: "Блок 1", weeks: 4, firstWeek: firstWeek(), clientIds: [a.id, b.id] });
   return { ...env, a, b, programId: program.id, revision: created.program.revision, mesocycleId: created.mesocycleId };
 }
+
+test("T04 суперсеты сохраняются участникам независимо; новая тренировка копируется один раз", async () => {
+  const { plans, a, b, programId, mesocycleId, close } = await sharedProgram();
+  try {
+    const plan = (await plans.getPeriodizedPlan(a.id, programId))!;
+    const week = plan.mesocycles[0]!.weeks[0]!;
+    let draft = { title: "М", plan: { weeks: 1, workouts: week.workouts } };
+    draft = joinPreviousSuperset(draft, week.workouts[0]!.id, week.workouts[0]!.exercises[1]!.id);
+    draft = addWorkout(draft, "extra-workout");
+    draft = addExercise(draft, "extra-workout", "extra-exercise", ROW, ids("extra-set"));
+    await plans.saveWeek(a.id, programId, plan.program.revision, { mesocycleId, weekIndex: 1, type: "base", scope: "ALL",
+      clientIds: [a.id, b.id], workouts: draft.plan.workouts });
+    const afterA = (await plans.getPeriodizedPlan(a.id, programId))!.mesocycles[0]!;
+    const afterB = (await plans.getPeriodizedPlan(b.id, programId))!.mesocycles[0]!;
+    const allWeeks = [...afterA.weeks, ...afterB.weeks];
+    assert.equal(new Set(allWeeks.map((value) => value.workouts[0]!.exercises[0]!.supersetId)).size, 8);
+    for (const value of allWeeks) {
+      const [first, second] = value.workouts[0]!.exercises;
+      assert.ok(first!.supersetId);
+      assert.equal(first!.supersetId, second!.supersetId);
+      assert.equal(value.workouts.length, 2);
+      assert.equal(value.workouts[1]!.exercises[0]!.sets.length, 3);
+    }
+    assert.equal(afterA.weeks[0]!.workouts[0]!.exercises[0]!.id, week.workouts[0]!.exercises[0]!.id);
+    assert.deepEqual(afterA.weeks[0]!.workouts[0]!.exercises[0]!.sets, week.workouts[0]!.exercises[0]!.sets);
+    assert.equal((await plans.getMesocycleVersions(a.id, programId, mesocycleId)).length, 2);
+    assert.equal((await plans.getMesocycleVersions(b.id, programId, afterB.id)).length, 2);
+  } finally { await close(); }
+});
 
 test("T04 версии: одна на реальное сохранение участника, без дубликатов и при отказе CAS", async () => {
   const { plans, clients, db, a, b, programId, mesocycleId, close } = await sharedProgram();

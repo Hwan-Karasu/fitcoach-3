@@ -42,6 +42,13 @@ export function validateDraft(draft: SimpleProgramDraft,
   const ids = new Set<string>();
   const unique = (id: string) => { if (ids.has(id)) issues.push({ workoutId: null, exerciseId: null, message: "Повторяющийся ID в структуре." }); ids.add(id); };
   for (const workout of workouts) {
+    const groups = new Map<string, number>();
+    for (const exercise of workout.exercises) {
+      if (exercise.supersetId !== undefined) groups.set(exercise.supersetId, (groups.get(exercise.supersetId) ?? 0) + 1);
+    }
+    if ([...groups].some(([id, count]) => !id.trim() || count < 2)) {
+      issues.push({ workoutId: workout.id, exerciseId: null, message: "В суперсете нужны хотя бы два упражнения." });
+    }
     unique(workout.id);
     if (!workout.title.trim()) issues.push({ workoutId: workout.id, exerciseId: null, message: "У тренировки нет названия." });
     for (const exercise of workout.exercises) {

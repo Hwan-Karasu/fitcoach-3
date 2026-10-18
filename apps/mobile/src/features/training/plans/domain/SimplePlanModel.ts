@@ -24,6 +24,8 @@ export interface PlannedSet {
 
 export interface PlannedExercise {
   readonly id: string;
+  /** Group identity scoped to this workout; grouping never replaces exercise/set identities. */
+  readonly supersetId?: string;
   /** Расширенная программа: «родство» с упражнением базовой недели (§48.6); у Простой — нет. */
   readonly lineageId?: string;
   /** Стабильный ID упражнения каталога (`sys:repdb:…` или `usr:…`). */

@@ -81,8 +81,8 @@ export function AppButton({
 
 const styles = StyleSheet.create({
   button: { minHeight: 48, borderRadius: 8, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
-  compact: { minHeight: 40, paddingHorizontal: 12 },
+  compact: { minHeight: 48, paddingHorizontal: 12 },
   compactLabel: { fontSize: 14, lineHeight: 19 },
   content: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  label: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, textAlign: "center" },
+  label: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, textAlign: "center", flexShrink: 1 },
 });
