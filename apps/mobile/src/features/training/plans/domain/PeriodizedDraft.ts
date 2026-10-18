@@ -7,6 +7,7 @@ export type PeriodizedDraft = Readonly<{
   clientIds: readonly string[];
 }> & (Readonly<{ kind: "MESOCYCLE" }> | Readonly<{
   kind: "WEEK"; mesocycleId: string; weekIndex: number; type: WeekType; scope: WeekScope;
+  replaceConflicts?: readonly string[];
 }>);
 
 export function periodizedDraftKey(draft: PeriodizedDraft): string {

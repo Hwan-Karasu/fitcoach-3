@@ -4,8 +4,8 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useKeepAwake } from "expo-keep-awake";
 import { usePreventRemove, useNavigation } from "@react-navigation/native";
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { CalendarDays, Check, Gauge, NotebookPen, Plus, Timer, Trash2, Users, X } from "lucide-react-native";
-import { ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, StatusTag, WeekCards, useWeekNavigation,
+import { CalendarDays, Check, Gauge, NotebookPen, PencilLine, Plus, Timer, Trash2, Users, X } from "lucide-react-native";
+import { AppButton, ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, StatusTag, WeekCards, useWeekNavigation,
   type StatusKind } from "../../../../shared/ui/components/public.ts";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -321,7 +321,7 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
  * исхода спрашивает «Завершить тренировку?» (§48.36).
  */
 export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, activeWorkouts, onOpenWorkout,
-  exercises, onChangeWeek }: Readonly<{
+  exercises, onChangeWeek, onEditWeek }: Readonly<{
   slot: WorkoutSlot;
   /** Подпись таймера отдыха — таймеры разных клиентов различимы (§48.62). */
   clientName: string;
@@ -333,6 +333,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   onOpenWorkout: (slot: WorkoutSlot) => void;
   exercises: ExerciseLookupPort;
   onChangeWeek: (weekIndex: number, workoutId: string | null, mesocycleId: string | null) => void;
+  onEditWeek: (mesocycleId: string) => void;
 }>) {
   useKeepAwake();
   const { palette } = usePrototypeTheme();
@@ -368,10 +369,12 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const navigationAuthorized = useRef(false);
   useEffect(() => {
     let active = true;
-    plans.getWorkoutWeekNavigation(slot.clientId, slot.programId, slot.plannedWorkoutId)
+    const load = () => { void plans.getWorkoutWeekNavigation(slot.clientId, slot.programId, slot.plannedWorkoutId)
       .then((value) => { if (active) setWeekNavigation(value); })
-      .catch(() => { if (active) setNavigationError("Не удалось загрузить недели программы."); });
-    return () => { active = false; };
+      .catch(() => { if (active) setNavigationError("Не удалось загрузить недели программы."); }); };
+    load();
+    const unsubscribe = plans.subscribeCommittedChanges((change) => { if (change.clientIds.includes(slot.clientId)) load(); });
+    return () => { active = false; unsubscribe(); };
   }, [plans, slot.clientId, slot.programId, slot.plannedWorkoutId]);
   useEffect(() => {
     let active = true;
@@ -532,6 +535,13 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         {restError !== null ? <InlineNotice kind="error">{restError}</InlineNotice> : null}
         {weekNavigation !== null ? <>
           <Text style={[styles.meta, { color: colors.textSecondary }]}>{weekNavigation.programTitle}</Text>
+          {weekNavigation.mesocycleId !== null ? <AppButton compact variant="secondary" label="Изменить план недели" disabled={busy}
+            icon={(color) => <PencilLine size={18} color={color} />} onPress={() => {
+              const cycleId = weekNavigation.mesocycleId;
+              if (cycleId === null || busy) return;
+              setBusy(true);
+              void finishInput().then((saved) => { if (saved) { Keyboard.dismiss(); onEditWeek(cycleId); } }).finally(() => setBusy(false));
+            }} /> : null}
           <WeekCards weeks={weekNavigation.weeks} selected={slot.weekIndex} disabled={busy}
             onSelect={(index) => { void changeWeek(index); }} />
         </> : null}

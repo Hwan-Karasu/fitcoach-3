@@ -263,6 +263,77 @@ test("T04 суперсеты сохраняются участникам нез�
   } finally { await close(); }
 });
 
+test("T04 предпросмотр: персональная замена сохраняется по умолчанию, явное применение адресно", async () => {
+  const { plans, a, b, programId, mesocycleId, close } = await sharedProgram();
+  try {
+    const planB = (await plans.getPeriodizedPlan(b.id, programId))!;
+    const cycleB = planB.mesocycles[0]!;
+    const personal = edit(cycleB.weeks[0]!.workouts, (draft) => replaceExercise(draft,
+      cycleB.weeks[0]!.workouts[0]!.exercises[0]!.id, "personal-row", ROW, ["reps", "loadGrams"], ids("personal-set")));
+    await plans.saveWeek(b.id, programId, planB.program.revision, { mesocycleId: cycleB.id, weekIndex: 1,
+      workouts: personal, type: "base", scope: "CURRENT", clientIds: [b.id] });
+    const current = (await plans.getPeriodizedPlan(a.id, programId))!;
+    const week = current.mesocycles[0]!.weeks[0]!;
+    const input = { mesocycleId, weekIndex: 1, type: "base" as const, scope: "ALL" as const, clientIds: [a.id, b.id],
+      workouts: edit(week.workouts, (draft) => fillSets(draft, week.workouts[0]!.exercises[0]!.id, "reps", 8)) };
+    const preview = await plans.previewWeekEdit(a.id, programId, current.program.revision, input);
+    assert.deepEqual(await plans.getPeriodizedPlan(a.id, programId), current, "предпросмотр не пишет структуру/ревизию");
+    assert.equal(preview.conflicts.length, 1);
+    assert.equal(preview.conflicts[0]!.clientId, b.id);
+    assert.equal(preview.conflicts[0]!.weekIndex, 1);
+    assert.equal(preview.conflicts[0]!.reason, "PERSONAL_CHANGE");
+    assert.equal(preview.conflicts[0]!.currentExercise!.exerciseId, ROW);
+    assert.equal(preview.conflicts[0]!.proposedExercise!.exerciseId, BENCH);
+    const kept = await plans.saveWeek(a.id, programId, current.program.revision, input);
+    assert.equal(kept.skipped, 1);
+    const afterB = (await plans.getPeriodizedPlan(b.id, programId))!.mesocycles[0]!;
+    assert.deepEqual(afterB.weeks[0]!.workouts, personal);
+    assert.equal(afterB.weeks[1]!.workouts[0]!.exercises[0]!.sets[0]!.reps, 8, "конфликт одной недели не блокирует остальные");
+    const afterA = (await plans.getPeriodizedPlan(a.id, programId))!;
+    const next = { ...input, workouts: edit(afterA.mesocycles[0]!.weeks[0]!.workouts, (draft) =>
+      fillSets(draft, week.workouts[0]!.exercises[0]!.id, "reps", 6)) };
+    const second = await plans.previewWeekEdit(a.id, programId, kept.program.revision, next);
+    await plans.saveWeek(a.id, programId, kept.program.revision, { ...next,
+      replaceConflicts: second.conflicts.map((conflict) => conflict.key) });
+    const replaced = (await plans.getPeriodizedPlan(b.id, programId))!.mesocycles[0]!.weeks[0]!.workouts[0]!;
+    assert.equal(replaced.exercises[0]!.exerciseId, BENCH);
+    assert.notEqual(replaced.exercises[0]!.id, "personal-row", "факты тяги не присваиваются жиму");
+    assert.equal(replaced.exercises[0]!.sets[0]!.reps, 6);
+    assert.deepEqual(replaced.exercises[1], personal[0]!.exercises[1], "соседнее упражнение не перезаписывается");
+    await assert.rejects(plans.saveWeek(a.id, programId, kept.program.revision, next), message("PROGRAM_REVISION_CONFLICT"));
+  } finally { await close(); }
+});
+
+test("T04 конфликты: пропавшее упражнение восстанавливается явно, персональный тип недели не затирается", async () => {
+  const { plans, a, b, programId, mesocycleId, close } = await sharedProgram();
+  try {
+    const planB = (await plans.getPeriodizedPlan(b.id, programId))!;
+    const cycleB = planB.mesocycles[0]!;
+    await plans.saveWeek(b.id, programId, planB.program.revision, { mesocycleId: cycleB.id, weekIndex: 1, type: "heavy",
+      scope: "CURRENT", clientIds: [b.id], workouts: edit(cycleB.weeks[0]!.workouts,
+        (draft) => removeExercise(draft, cycleB.weeks[0]!.workouts[0]!.exercises[0]!.id)) });
+    const plan = (await plans.getPeriodizedPlan(a.id, programId))!;
+    const week = plan.mesocycles[0]!.weeks[0]!;
+    const input = { mesocycleId, weekIndex: 1, type: "base" as const, scope: "CURRENT" as const, clientIds: [a.id, b.id],
+      workouts: edit(week.workouts, (draft) => fillSets(draft, week.workouts[0]!.exercises[0]!.id, "reps", 5)) };
+    const preview = await plans.previewWeekEdit(a.id, programId, plan.program.revision, input);
+    assert.equal(preview.conflicts.length, 1);
+    assert.equal(preview.conflicts[0]!.reason, "MISSING_EXERCISE");
+    const applied = await plans.saveWeek(a.id, programId, plan.program.revision, { ...input,
+      replaceConflicts: preview.conflicts.map((conflict) => conflict.key) });
+    const restored = (await plans.getPeriodizedPlan(b.id, programId))!.mesocycles[0]!.weeks[0]!;
+    assert.equal(restored.type, "heavy", "тип А не изменён — нельзя перезаписывать тип Б");
+    assert.equal(restored.workouts[0]!.exercises[0]!.exerciseId, BENCH);
+    assert.equal(restored.workouts[0]!.exercises[0]!.sets[0]!.reps, 5);
+    assert.notEqual(restored.workouts[0]!.exercises[0]!.id, cycleB.weeks[0]!.workouts[0]!.exercises[0]!.id);
+    const typeInput = { ...input, type: "light" as const };
+    const types = await plans.previewWeekEdit(a.id, programId, applied.program.revision, typeInput);
+    assert.deepEqual(types.conflicts.map((conflict) => conflict.operation), ["Тип недели"]);
+    await plans.saveWeek(a.id, programId, applied.program.revision, typeInput);
+    assert.equal((await plans.getPeriodizedPlan(b.id, programId))!.mesocycles[0]!.weeks[0]!.type, "heavy");
+  } finally { await close(); }
+});
+
 test("T04 версии: одна на реальное сохранение участника, без дубликатов и при отказе CAS", async () => {
   const { plans, clients, db, a, b, programId, mesocycleId, close } = await sharedProgram();
   try {
@@ -287,7 +358,8 @@ test("T04 версии: одна на реальное сохранение уч
     assert.equal((await plans.getMesocycleVersions(b.id, programId, other.id)).length, 1);
     assert.deepEqual(await plans.getMesocycleVersions(b.id, programId, mesocycleId), []);
     await assert.rejects(plans.saveWeek(a.id, programId, original.program.revision, input), message("PROGRAM_REVISION_CONFLICT"));
-    await plans.saveWeek(a.id, programId, result.program.revision, input, new Date(at.getTime() + 1000));
+    await plans.saveWeek(a.id, programId, result.program.revision, { ...input,
+      workouts: input.workouts.map((workout) => ({ ...workout, title: `${workout.title} ` })) }, new Date(at.getTime() + 1000));
     assert.deepEqual(await plans.getMesocycleVersions(a.id, programId, mesocycleId), versions,
       "повтор без изменений не создаёт историю и не сдвигает период");
     const current = (await plans.getPeriodizedPlan(a.id, programId))!;

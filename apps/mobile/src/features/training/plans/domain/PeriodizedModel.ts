@@ -1,5 +1,5 @@
 import type { TrainingProgram } from "./ProgramModel.ts";
-import type { PlannedWorkout } from "./SimplePlanModel.ts";
+import type { PlannedExercise, PlannedWorkout } from "./SimplePlanModel.ts";
 
 /**
  * Расширенная программа (§48.3): книга мезоциклов, у каждой недели свой план (§48.4). У каждого участника —
@@ -71,6 +71,26 @@ export interface WeekEditInput {
   readonly type: WeekType;
   readonly scope: WeekScope;
   readonly clientIds: readonly string[];
+  /** Explicit replacements from the preview of this exact revision/input; unlisted conflicts keep personal structure. */
+  readonly replaceConflicts?: readonly string[];
+}
+
+export interface WeekEditConflict {
+  readonly key: string;
+  readonly clientId: string;
+  readonly weekIndex: number;
+  readonly workoutTitle: string;
+  readonly exerciseId: string | null;
+  readonly currentExercise?: PlannedExercise;
+  readonly proposedExercise?: PlannedExercise;
+  readonly operation: string;
+  readonly reason: "PERSONAL_CHANGE" | "MISSING_EXERCISE" | "MISSING_WORKOUT" | "MISSING_MESOCYCLE";
+  readonly canReplace: boolean;
+}
+
+export interface WeekEditPreview {
+  readonly conflicts: readonly WeekEditConflict[];
+  readonly affectedWeeks: readonly Readonly<{ clientId: string; weeks: readonly number[] }>[];
 }
 
 export interface WeekEditResult {

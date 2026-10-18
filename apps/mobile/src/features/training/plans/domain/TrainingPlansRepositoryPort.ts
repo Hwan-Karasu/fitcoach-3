@@ -1,5 +1,5 @@
 import type { ClientProgramLibrary, CreateProgramInput, TrainingProgram } from "./ProgramModel.ts";
-import type { NewMesocycleInput, PeriodizedPlan, WeekEditInput, WeekEditResult } from "./PeriodizedModel.ts";
+import type { NewMesocycleInput, PeriodizedPlan, WeekEditInput, WeekEditPreview, WeekEditResult } from "./PeriodizedModel.ts";
 import type { PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
 import type { PeriodizedDraft } from "./PeriodizedDraft.ts";
 import type { MesocycleVersion } from "./StructureVersion.ts";
@@ -72,6 +72,7 @@ export interface TrainingPlansRepositoryPort {
    * недели области у каждого выбранного участника. Одной транзакцией; факты не копируются.
    */
   saveWeek(clientId: string, programId: string, expectedRevision: number, input: WeekEditInput, now?: Date): Promise<WeekEditResult>;
+  previewWeekEdit(clientId: string, programId: string, expectedRevision: number, input: WeekEditInput): Promise<WeekEditPreview>;
   /** §48.10: ручной выбор мезоцикла — только у этого клиента, хранится в базе; не правка плана. */
   selectMesocycle(clientId: string, programId: string, mesocycleId: string): Promise<void>;
   /** §48.29 Recovery Draft: ключ — `new:SIMPLE` или ID программы. Не публикует изменения в план. */

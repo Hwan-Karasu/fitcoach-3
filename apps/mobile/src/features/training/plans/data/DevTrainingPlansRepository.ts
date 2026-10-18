@@ -13,8 +13,9 @@ import { DEV_TRAINING_PLANS_LEDGER, devTrainingPlansCatalog } from "./DevTrainin
 import { deleteStructure, readStructure, readWorkouts, writeStructure } from "./SimplePlanStore.ts";
 import { deleteMemberMesocycles, insertMesocycle, readMesocycles, saveSelection, selectedMesocycle, writeWeek } from "./PeriodizedStore.ts";
 import { MESOCYCLE_WEEKS_MAX, weekTypeLabels, type Mesocycle, type NewMesocycleInput, type PeriodizedPlan, type PlanWeek, type WeekEditInput,
-  type WeekEditResult } from "../domain/PeriodizedModel.ts";
-import { applyWeekOps, copyWeeks, diffWeek, newMesocycleWeeks, targetWeeks } from "../domain/PeriodizedRules.ts";
+  type WeekEditConflict, type WeekEditPreview, type WeekEditResult } from "../domain/PeriodizedModel.ts";
+import { copyWeeks, diffWeek, newMesocycleWeeks, targetWeeks } from "../domain/PeriodizedRules.ts";
+import { applyWithConflicts } from "../domain/WeekConflicts.ts";
 import type { PlannedWorkout } from "../domain/SimplePlanModel.ts";
 import { periodizedDraftKey, type PeriodizedDraft } from "../domain/PeriodizedDraft.ts";
 import { mesocycleCreatedAt, preserveMesocycle, readMesocycleHistory } from "./StructureVersionStore.ts";
@@ -381,25 +382,32 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     return created;
   }
 
-  async saveWeek(clientId: string, programId: string, expectedRevision: number, input: WeekEditInput,
-    now: Date = new Date()): Promise<WeekEditResult> {
-    const saved = await this.ready().writer.write(async (tx) => {
+  private async prepareWeekEdit(tx: SqliteStatementPort, clientId: string, programId: string, expectedRevision: number,
+    input: WeekEditInput, allocate: (count: number) => Promise<() => string>) {
       await this.assertTargets(tx, clientId, programId, input.clientIds);
+      if ((await programById(tx, this.workspaceId, programId)).revision !== expectedRevision) throw new Error("PROGRAM_REVISION_CONFLICT");
       const own = (await readMesocycles(tx, this.workspaceId, programId, clientId)).find((item) => item.id === input.mesocycleId);
       const open = own?.weeks.find((week) => week.index === input.weekIndex);
       if (own === undefined || open === undefined) throw new Error("TARGET_NOT_FOUND");
       assertWeek(own.title, input.workouts);
-      await this.bumpRevision(tx, programId, expectedRevision, now);
-      const ops = diffWeek(open.workouts, input.workouts);
       const rows = input.workouts.reduce((sum, workout) => sum + 1
         + workout.exercises.reduce((inner, exercise) => inner + 1 + exercise.sets.length, 0), 0);
       let skipped = 0;
+      const conflicts: WeekEditConflict[] = [];
+      const affectedWeeks: { clientId: string; weeks: readonly number[] }[] = [];
+      const changes: { clientId: string; mesocycle: Mesocycle; weeks: PlanWeek[] }[] = [];
       for (const memberId of input.clientIds) {
         const mesocycle = memberId === clientId ? own
           : (await readMesocycles(tx, this.workspaceId, programId, memberId)).find((item) => item.lineageId === own.lineageId);
-        if (mesocycle === undefined) { skipped += 1; continue; }
+        if (mesocycle === undefined) {
+          conflicts.push({ key: `${memberId}/missing-cycle`, clientId: memberId, weekIndex: input.weekIndex,
+            workoutTitle: own.title, exerciseId: null, operation: "Изменить мезоцикл", reason: "MISSING_MESOCYCLE", canReplace: false });
+          skipped += 1; continue;
+        }
         const changedWeeks: PlanWeek[] = [];
-        for (const index of targetWeeks(mesocycle.weeks, input.weekIndex, input.scope)) {
+        const indices = targetWeeks(mesocycle.weeks, input.weekIndex, input.scope, open.type);
+        affectedWeeks.push({ clientId: memberId, weeks: indices });
+        for (const index of indices) {
           const week = mesocycle.weeks.find((item) => item.index === index) as PlanWeek;
           // Открытая неделя открывшего клиента сохраняется ровно такой, какой её отредактировали.
           if (memberId === clientId && index === input.weekIndex) {
@@ -408,21 +416,54 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
             }
             continue;
           }
-          const applied = applyWeekOps(week.workouts, ops, await this.idPool(tx, rows));
+          const applied = applyWithConflicts(open.workouts, input.workouts, week.workouts, memberId, index,
+            input.replaceConflicts ?? [], await allocate(rows * 2));
           skipped += applied.skipped;
-          const type = index === input.weekIndex ? input.type : week.type;
+          conflicts.push(...applied.conflicts);
+          let type = week.type;
+          if (index === input.weekIndex && input.type !== open.type) {
+            if (week.type !== open.type && week.type !== input.type) {
+              const key = `${memberId}/${index}/type`;
+              conflicts.push({ key, clientId: memberId, weekIndex: index, exerciseId: null,
+                workoutTitle: `${weekTypeLabels[week.type]} → ${weekTypeLabels[input.type]}`,
+                operation: "Тип недели", reason: "PERSONAL_CHANGE", canReplace: true });
+              if (input.replaceConflicts?.includes(key)) type = input.type;
+              else skipped += 1;
+            } else type = input.type;
+          }
           if (week.type !== type || diffWeek(week.workouts, applied.workouts).length > 0) {
             changedWeeks.push({ ...week, type, workouts: applied.workouts });
           }
         }
-        if (changedWeeks.length > 0) {
-          await preserveMesocycle(tx, this.workspaceId, memberId, programId, mesocycle, now);
-          for (const week of changedWeeks) await writeWeek(tx, this.workspaceId, programId, week);
-        }
+        if (changedWeeks.length > 0) changes.push({ clientId: memberId, mesocycle, weeks: changedWeeks });
+      }
+      if (input.replaceConflicts?.some((key) => !conflicts.some((conflict) => conflict.key === key && conflict.canReplace))) {
+        throw new Error("DRAFT_INVALID");
+      }
+      return { changes, skipped, preview: { conflicts, affectedWeeks } };
+  }
+
+  async previewWeekEdit(clientId: string, programId: string, expectedRevision: number, input: WeekEditInput): Promise<WeekEditPreview> {
+    // The writer serializes a read-only transaction with structural commands: one coherent revision, no events or writes.
+    return this.ready().writer.write(async (tx) => {
+      let next = 0;
+      return (await this.prepareWeekEdit(tx, clientId, programId, expectedRevision, input,
+        async () => () => `preview:${next++}`)).preview;
+    });
+  }
+
+  async saveWeek(clientId: string, programId: string, expectedRevision: number, input: WeekEditInput,
+    now: Date = new Date()): Promise<WeekEditResult> {
+    const saved = await this.ready().writer.write(async (tx) => {
+      const prepared = await this.prepareWeekEdit(tx, clientId, programId, expectedRevision, input, (count) => this.idPool(tx, count));
+      await this.bumpRevision(tx, programId, expectedRevision, now);
+      for (const change of prepared.changes) {
+        await preserveMesocycle(tx, this.workspaceId, change.clientId, programId, change.mesocycle, now);
+        for (const week of change.weeks) await writeWeek(tx, this.workspaceId, programId, week);
       }
       await tx.run("DELETE FROM dev_training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key = ?",
         [this.workspaceId, clientId, programId, `week:${input.mesocycleId}:${input.weekIndex}`]);
-      return { program: await programById(tx, this.workspaceId, programId), skipped };
+      return { program: await programById(tx, this.workspaceId, programId), skipped: prepared.skipped };
     });
     this.publish({ clientIds: input.clientIds });
     return saved;

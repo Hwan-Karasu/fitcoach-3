@@ -209,12 +209,14 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
             ...(replace === undefined ? {} : { replace }),
             returnTo: { name: "TrainingWeek", params: { programId: route.params.programId, mesocycleId: route.params.mesocycleId,
               weekIndex: route.params.weekIndex } } })}
-          onSaved={() => navigation.popTo("TrainingProgram", { programId: route.params.programId })} />}
+          onSaved={() => navigation.goBack()} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingWorkout">
         {({ route, navigation }) => <WorkoutScreen slot={{ clientId, programId: route.params.programId, weekIndex: route.params.weekIndex,
           plannedWorkoutId: route.params.workoutId }} clientName={clientName} plans={repository} execution={execution}
           restTimers={restTimers} activeWorkouts={activeWorkouts} onOpenWorkout={onOpenWorkout} exercises={exerciseLookup}
+          onEditWeek={(mesocycleId) => navigation.navigate("TrainingWeek", { programId: route.params.programId,
+            mesocycleId, weekIndex: route.params.weekIndex })}
           onChangeWeek={(weekIndex, workoutId, mesocycleId) => {
             const context = { programId: route.params.programId, weekIndex, ...(mesocycleId === null ? {} : { mesocycleId }) };
             if (workoutId === null) navigation.popTo("TrainingProgram", context);

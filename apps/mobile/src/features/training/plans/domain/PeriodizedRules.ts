@@ -97,7 +97,7 @@ export function diffWeek(beforeWeek: readonly PlannedWorkout[], afterWeek: reado
       ops.push({ kind: "addWorkout", lineageId, after: index === 0 ? null : afterLineages[index - 1] ?? null, workout });
       return;
     }
-    if (previous.title !== workout.title) ops.push({ kind: "renameWorkout", lineageId, title: workout.title });
+    if (previous.title.trim() !== workout.title.trim()) ops.push({ kind: "renameWorkout", lineageId, title: workout.title.trim() });
     const oldByLineage = new Map(previous.exercises.map((exercise) => [lineageOf(exercise), exercise]));
     const newLineages = workout.exercises.map(lineageOf);
     for (const exercise of previous.exercises) {
@@ -235,11 +235,12 @@ export function applyWeekOps(week: readonly PlannedWorkout[], ops: readonly Week
 }
 
 /** §48.6.1: недели мезоцикла, которые получает правка открытой недели. */
-export function targetWeeks(weeks: readonly Pick<PlanWeek, "index" | "type">[], openIndex: number, scope: WeekScope): readonly number[] {
+export function targetWeeks(weeks: readonly Pick<PlanWeek, "index" | "type">[], openIndex: number, scope: WeekScope,
+  sourceType?: WeekType): readonly number[] {
   const open = weeks.find((week) => week.index === openIndex);
-  if (open === undefined) return [];
+  if (open === undefined && sourceType === undefined) return [];
   return weeks.filter((week) => scope === "CURRENT" ? week.index === openIndex
     : scope === "FOLLOWING" ? week.index >= openIndex
-      : scope === "SAME_TYPE" ? week.type === open.type
+      : scope === "SAME_TYPE" ? week.type === (sourceType ?? open?.type)
         : true).map((week) => week.index);
 }
