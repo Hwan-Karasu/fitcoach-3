@@ -120,7 +120,7 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: views, execution
             {tiles.map((tile) => (
               <View key={tile.label} accessible accessibilityLabel={`${tile.label}: ${tile.value}`}
                 style={[styles.tile, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
-                <Text numberOfLines={1} style={[styles.tileLabel, { color: colors.textSecondary }]}>{tile.label}</Text>
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.tileLabel, { color: colors.textSecondary }]}>{tile.label}</Text>
                 <Text style={[styles.tileValue, { color: tile.ink }]}>{tile.value}</Text>
               </View>
             ))}
@@ -182,10 +182,10 @@ const styles = StyleSheet.create({
   sectionHead: { flexDirection: "row", alignItems: "center", gap: 6 },
   sectionTitle: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16, textTransform: "uppercase", letterSpacing: 0.6 },
   tiles: { flexDirection: "row", gap: 8 },
-  tile: { flex: 1, justifyContent: "center", gap: 2, borderWidth: 1,
-    borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, minHeight: 56 },
-  tileLabel: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
-  tileValue: { fontFamily: fonts.bold, fontSize: 20, lineHeight: 24 },
+  tile: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 4, borderWidth: 1,
+    borderRadius: 12, paddingHorizontal: 8, minHeight: 48 },
+  tileLabel: { flexShrink: 1, fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
+  tileValue: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 22 },
   meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   strong: { fontFamily: fonts.bold },
   workout: { flexDirection: "row", borderWidth: 1, borderRadius: 14, overflow: "hidden", minHeight: 64 },
