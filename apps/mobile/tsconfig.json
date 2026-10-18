@@ -6,5 +6,5 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["index.ts", "App.tsx", "src/**/*.ts", "src/**/*.tsx", "scripts/**/*.ts"]
+  "include": ["index.ts", "App.tsx", "metro.config.ts", "src/**/*.ts", "src/**/*.tsx", "scripts/**/*.ts"]
 }

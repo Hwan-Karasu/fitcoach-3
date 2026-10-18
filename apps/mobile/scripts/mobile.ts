@@ -10,7 +10,7 @@ const address = `127.0.0.1:${port}`;
 const pinnedNode = resolve(projectDir, "node_modules/node/bin/node.exe");
 
 function onlineDevice(): string {
-  const rows = execFileSync("adb", ["devices"], { encoding: "utf8" }).split(/\r?\n/u);
+  const rows = execFileSync("adb", ["devices"], { encoding: "utf8", timeout: 10_000 }).split(/\r?\n/u);
   const serials = rows.flatMap((row) => {
     const match = /^([^\s]+)\s+device\s*$/u.exec(row);
     return match?.[1] ? [match[1]] : [];
@@ -35,7 +35,7 @@ async function metroReady(): Promise<boolean> {
 async function main(): Promise<void> {
   const serial = onlineDevice();
   if (await metroReady()) throw new Error(`Порт ${port} уже занят`);
-  execFileSync("adb", ["-s", serial, "reverse", `tcp:${port}`, `tcp:${port}`], { stdio: "inherit" });
+  execFileSync("adb", ["-s", serial, "reverse", `tcp:${port}`, `tcp:${port}`], { stdio: "inherit", timeout: 10_000 });
   console.info("Запускается FitCoach 3: TypeScript dev-приложение с локальной базой клиентов.");
   const child = spawn(
     pinnedNode,
@@ -50,16 +50,17 @@ async function main(): Promise<void> {
       },
     },
   );
-  const stopped = new Promise<void>((done) => child.once("exit", () => done()));
+  const stopped = new Promise<number | null>((done) => child.once("exit", (code) => done(code)));
   for (let attempt = 0; attempt < 90; attempt += 1) {
     if (await metroReady()) {
       execFileSync(
         "adb",
         ["-s", serial, "shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", `exp://${address}`, "host.exp.exponent"],
-        { stdio: "inherit" },
+        { stdio: "inherit", timeout: 10_000 },
       );
       console.info("FitCoach 3 dev-проект открыт в Expo Go через USB.");
-      await stopped;
+      const code = await stopped;
+      if (code !== 0) throw new Error(`Metro завершился с кодом ${code ?? "сигнал"}`);
       return;
     }
     if (child.exitCode !== null) throw new Error(`Metro завершился с кодом ${child.exitCode}`);
