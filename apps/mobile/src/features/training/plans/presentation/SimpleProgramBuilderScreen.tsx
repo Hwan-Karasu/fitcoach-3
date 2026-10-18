@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import { Minus, Plus } from "lucide-react-native";
-import { AppButton, AppIconButton, InlineNotice, LoadingState, StickyEditorFooter,
+import { AppButton, AppIconButton, InlineNotice, LoadingState, StickyEditorFooter, TrainingEditorLayout,
   TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
@@ -31,7 +31,7 @@ const errors: Readonly<Record<string, string>> = {
  * Простой конструктор (§48.2, §48.4): название, число недель, тренировки базовой недели, упражнения из
  * каталога и плановые подходы. Несохранённое — в Recovery Draft (§48.29), публикация — только «Сохранить».
  */
-export function SimpleProgramBuilderScreen({ clientId, programId, repository, exercises, picked, onPickExercise, onSaved }: Readonly<{
+export function SimpleProgramBuilderScreen({ clientId, programId, repository, exercises, picked, onPickExercise, onSaved, onCancel }: Readonly<{
   clientId: string;
   programId: string | null;
   repository: TrainingPlansRepositoryPort;
@@ -41,6 +41,7 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
   /** Открыть каталог: добавить упражнение или (`replace`) заменить им имеющееся. */
   onPickExercise: (workoutId: string, replace?: string) => void;
   onSaved: (programId: string) => void;
+  onCancel: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -113,7 +114,7 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.canvas }]}>
+    <TrainingEditorLayout>
       <Animated.ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {restored ? (
           <InlineNotice kind="info">Восстановлен несохранённый черновик.</InlineNotice>
@@ -138,10 +139,15 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
       </Animated.ScrollView>
 
       <StickyEditorFooter actionLabel={programId === null ? "Создать программу" : "Сохранить"} busy={busy}
+        onCancel={() => {
+          if (timer.current !== null) clearTimeout(timer.current);
+          void repository.saveBuilderDraft(clientId, key, revision, draft).then(onCancel)
+            .catch(() => setMessage("Не удалось сохранить черновик. Повторите выход."));
+        }}
         onAction={() => { void save(); }} message={message} messageKind="error"
         note="Несохранённые изменения хранятся в черновике и не попадают в дневник" />
 
-    </View>
+    </TrainingEditorLayout>
   );
 }
 

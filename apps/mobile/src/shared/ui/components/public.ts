@@ -6,6 +6,8 @@ export { SectionTabs } from "./SectionTabs.tsx";
 export { InlineNotice, type NoticeKind } from "./InlineNotice.tsx";
 export { ConfirmDialog } from "./ConfirmDialog.tsx";
 export { StickyEditorFooter } from "./StickyEditorFooter.tsx";
+export { BottomDockLayoutProvider, useEditorDockHeight } from "./BottomDockLayout.tsx";
+export { TrainingEditorLayout } from "./TrainingEditorLayout.tsx";
 export { WeekCards, type WeekCardItem } from "./WeekCards.tsx";
 export { WeekNavigationProvider, useWeekNavigation, useWeekNavigationState } from "./WeekNavigation.tsx";
 export { TextField } from "./TextField.tsx";

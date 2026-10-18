@@ -7,6 +7,7 @@ import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemePro
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { ADJUST_STEP_SEC, remainingSec, type RestTimer } from "../domain/RestTimerRules.ts";
 import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
+import { useEditorDockHeight } from "../../../../shared/ui/components/public.ts";
 
 /** Сколько секунд закончившийся таймер остаётся на панели с надписью «Отдых окончен». */
 const FINISHED_VISIBLE_MS = 4000;
@@ -64,6 +65,7 @@ export function RestTimerDock({ timers }: Readonly<{ timers: RestTimersPort }>) 
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const insets = useSafeAreaInsets();
+  const editorHeight = useEditorDockHeight();
   const subscribe = useCallback((listener: () => void) => timers.subscribe(listener), [timers]);
   const list = useSyncExternalStore(subscribe, () => timers.list());
   const [now, setNow] = useState(() => Date.now());
@@ -103,7 +105,7 @@ export function RestTimerDock({ timers }: Readonly<{ timers: RestTimersPort }>) 
   const visible = ordered.slice(start, start + 2);
   const hidden = ordered.length - visible.length;
   return (
-    <View pointerEvents="box-none" style={[styles.dock, { bottom: insets.bottom + TAB_BAR_HEIGHT }]}>
+    <View pointerEvents="box-none" style={[styles.dock, { bottom: insets.bottom + TAB_BAR_HEIGHT + editorHeight }]}>
       <View style={styles.row}>
         {visible.map((timer) => <TimerSegment key={timer.id} timer={timer} now={now} compact={visible.length > 1} timers={timers} />)}
       </View>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import { Minus, Plus } from "lucide-react-native";
-import { AppIconButton, InlineNotice, LoadingState, StickyEditorFooter, TextField } from "../../../../shared/ui/components/public.ts";
+import { AppIconButton, InlineNotice, LoadingState, StickyEditorFooter, TextField, TrainingEditorLayout } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
@@ -30,7 +30,7 @@ const errors: Readonly<Record<string, string>> = {
  * ничего не записывается: отмена не оставляет недостроенный мезоцикл (§48.12.3 п. 5).
  */
 export function MesocycleCreatorScreen({ clientId, programId, repository, exercises, listCandidates, picked, onPickExercise,
-  onCreated }: Readonly<{
+  onCreated, onCancel }: Readonly<{
   clientId: string;
   programId: string;
   repository: TrainingPlansRepositoryPort;
@@ -39,6 +39,7 @@ export function MesocycleCreatorScreen({ clientId, programId, repository, exerci
   picked: PickedExercise | null;
   onPickExercise: (workoutId: string, replace?: string) => void;
   onCreated: () => void;
+  onCancel: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -96,7 +97,7 @@ export function MesocycleCreatorScreen({ clientId, programId, repository, exerci
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.canvas }]}>
+    <TrainingEditorLayout>
       <Animated.ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <TextField label="Название мезоцикла" required value={draft.title} onChangeText={(title) => change(setTitle(draft, title))} />
         <View style={[styles.weeks, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -118,8 +119,9 @@ export function MesocycleCreatorScreen({ clientId, programId, repository, exerci
           onReplaceExercise={(workoutId, plannedId) => onPickExercise(workoutId, plannedId)} />
       </Animated.ScrollView>
       <StickyEditorFooter actionLabel="Создать мезоцикл" busy={busy} onAction={() => { void save(); }}
+        onCancel={onCancel}
         message={message} messageKind="error" note="До создания ничего не сохраняется" />
-    </View>
+    </TrainingEditorLayout>
   );
 }
 

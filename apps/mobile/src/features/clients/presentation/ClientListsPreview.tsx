@@ -400,10 +400,10 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
             </View>
           </View>
           <View style={{ flexDirection: fontScale > 1.15 || width < 340 ? "column" : "row", gap: 8 }}>
-          <View style={styles.archiveAction}><AppButton variant="secondary" label="Вернуть в клиенты" busy={busyId === row.id}
+          <View style={fontScale > 1.15 || width < 340 ? undefined : styles.archiveAction}><AppButton variant="secondary" label="Вернуть в клиенты" busy={busyId === row.id}
             disabled={busyId !== null} disabledReason="Дождитесь завершения операции"
             onPress={() => { void restore(row); }} /></View>
-          <View style={styles.archiveAction}><AppButton variant="destructive" label="Удалить окончательно"
+          <View style={fontScale > 1.15 || width < 340 ? undefined : styles.archiveAction}><AppButton variant="destructive" label="Удалить окончательно"
             disabled={busyId !== null} disabledReason="Дождитесь завершения операции"
             onPress={() => { void requestDelete(row); }} /></View>
           </View>

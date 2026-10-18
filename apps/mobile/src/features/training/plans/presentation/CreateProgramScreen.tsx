@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { AppButton, InlineNotice, SelectionChip, TextField } from "../../../../shared/ui/components/public.ts";
+import { StickyEditorFooter, TrainingEditorLayout, SelectionChip, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ProgramKind } from "../domain/ProgramModel.ts";
@@ -23,12 +23,13 @@ const errors: Readonly<Record<string, string>> = {
  * Создание программы (T01): название и, у расширенной, участники. Структура программы — в конструкторе
  * (T02 простой, T04 расширенный); после сохранения сразу открывается созданная программа (§48.4.5).
  */
-export function CreateProgramScreen({ clientId, kind, repository, listCandidates, onCreated }: Readonly<{
+export function CreateProgramScreen({ clientId, kind, repository, listCandidates, onCreated, onCancel }: Readonly<{
   clientId: string;
   kind: ProgramKind;
   repository: TrainingPlansRepositoryPort;
   listCandidates: () => Promise<readonly TrainingParticipantCandidate[]>;
   onCreated: (programId: string) => void;
+  onCancel: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -66,6 +67,7 @@ export function CreateProgramScreen({ clientId, kind, repository, listCandidates
     ? current.filter((member) => member !== id) : [...current, id]);
 
   return (
+    <TrainingEditorLayout>
     <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>
         {`${programKindLabels[kind]} программа`}
@@ -89,9 +91,10 @@ export function CreateProgramScreen({ clientId, kind, repository, listCandidates
       </> : (
         <Text style={[styles.note, { color: colors.textSecondary }]}>Простая программа — только для этого клиента.</Text>
       )}
-      {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
-      <AppButton label="Создать программу" busy={busy} disabled={title.trim().length === 0} onPress={() => { void save(); }} />
     </ScrollView>
+    <StickyEditorFooter actionLabel="Создать программу" busy={busy} disabled={title.trim().length === 0}
+      onAction={() => { void save(); }} onCancel={onCancel} message={error} messageKind="error" />
+    </TrainingEditorLayout>
   );
 }
 

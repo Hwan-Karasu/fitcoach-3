@@ -138,7 +138,7 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingCreate">
         {({ navigation, route }) => <CreateProgramScreen clientId={clientId} kind={route.params.kind} repository={repository}
-          listCandidates={listCandidates}
+          listCandidates={listCandidates} onCancel={() => navigation.goBack()}
           onCreated={(programId) => navigation.reset({ index: 1,
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId } }] })} />}
       </TrainingStack.Screen>
@@ -157,6 +157,7 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingBuilder">
         {({ navigation, route }) => <SimpleProgramBuilderScreen clientId={clientId} programId={route.params?.programId ?? null}
+          onCancel={() => navigation.goBack()}
           repository={repository} exercises={exerciseLookup} picked={route.params?.picked ?? null}
           onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId,
             ...(replace === undefined ? {} : { replace }),
@@ -178,6 +179,7 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingMesocycle">
         {({ navigation, route }) => <MesocycleCreatorScreen clientId={clientId} programId={route.params.programId}
+          onCancel={() => navigation.goBack()}
           repository={repository} exercises={exerciseLookup} listCandidates={listCandidates} picked={route.params.picked ?? null}
           onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId,
             ...(replace === undefined ? {} : { replace }),
@@ -186,6 +188,7 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingWeek">
         {({ navigation, route }) => <WeekEditorScreen clientId={clientId} programId={route.params.programId}
+          onCancel={() => navigation.goBack()}
           mesocycleId={route.params.mesocycleId} weekIndex={route.params.weekIndex}
           repository={repository} exercises={exerciseLookup} listCandidates={listCandidates} picked={route.params.picked ?? null}
           onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId,

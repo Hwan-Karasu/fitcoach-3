@@ -26,6 +26,7 @@ import { homeSummaryRules } from "../../read-models/useClientHomeSummary.ts";
 import type { RosterOverviewPort } from "../../features/clients/public.ts";
 import { RootTabs } from "./RootTabs.tsx";
 import { SqliteDiagnosticsScreen } from "./SqliteDiagnosticsScreen.tsx";
+import { BottomDockLayoutProvider } from "../../shared/ui/components/public.ts";
 
 type RootStackRoutes = {
   Root: undefined;
@@ -205,6 +206,7 @@ export function PrototypeShell({ services, workspaceId }: Readonly<{
     <SafeAreaProvider>
       <KeyboardProvider>
       <PrototypeThemeProvider>
+        <BottomDockLayoutProvider>
         <BottomSheetModalProvider>
         <CalendarUndoProvider repository={services.calendar}>
           <ShellNavigator services={services} clientLists={clientLists} rosterOverview={rosterOverview} />
@@ -212,6 +214,7 @@ export function PrototypeShell({ services, workspaceId }: Readonly<{
           <RestTimerDock timers={services.restTimers} />
         </CalendarUndoProvider>
         </BottomSheetModalProvider>
+        </BottomDockLayoutProvider>
       </PrototypeThemeProvider>
       </KeyboardProvider>
     </SafeAreaProvider>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
-import { InlineNotice, LoadingState, SelectionChip, StickyEditorFooter } from "../../../../shared/ui/components/public.ts";
+import { InlineNotice, LoadingState, SelectionChip, StickyEditorFooter, TrainingEditorLayout } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
@@ -30,7 +30,7 @@ const errors: Readonly<Record<string, string>> = {
  * неделя сохраняется как есть, остальным неделям и участникам — та же правка по родству; факты не копируются.
  */
 export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, repository, exercises, listCandidates, picked,
-  onPickExercise, onSaved }: Readonly<{
+  onPickExercise, onSaved, onCancel }: Readonly<{
   clientId: string;
   programId: string;
   mesocycleId: string;
@@ -41,6 +41,7 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
   picked: PickedExercise | null;
   onPickExercise: (workoutId: string, replace?: string) => void;
   onSaved: () => void;
+  onCancel: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -114,7 +115,7 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.canvas }]}>
+    <TrainingEditorLayout>
       <Animated.ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>
           {`${mesocycle?.title ?? ""} · Неделя ${weekIndex}`}
@@ -125,9 +126,7 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
             <SelectionChip key={item} group="Тип недели" label={weekTypeLabels[item]} selected={item === type} onPress={() => setType(item)} />
           ))}
         </View>
-        <WorkoutsEditor draft={draft} change={change} lookup={lookup} issues={issues} showIssues={showIssues} scrollRef={scrollRef}
-          onPickExercise={(workoutId) => onPickExercise(workoutId)}
-          onReplaceExercise={(workoutId, plannedId) => onPickExercise(workoutId, plannedId)} />
+        <View style={[styles.application, { borderColor: colors.border, backgroundColor: colors.surface }]}>
         <Text style={[styles.section, { color: colors.textPrimary }]}>Применить правки</Text>
         <View style={styles.chips}>
           {WEEK_SCOPES.map((item) => (
@@ -139,15 +138,21 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
         </Text>
         <ParticipantChips clientId={clientId} memberIds={members} names={names} selected={selected} onChange={setSelected}
           note="Правка у выбранных — в их собственных копиях этого мезоцикла." />
+        </View>
+        <WorkoutsEditor draft={draft} change={change} lookup={lookup} issues={issues} showIssues={showIssues} scrollRef={scrollRef}
+          onPickExercise={(workoutId) => onPickExercise(workoutId)}
+          onReplaceExercise={(workoutId, plannedId) => onPickExercise(workoutId, plannedId)} />
       </Animated.ScrollView>
       <StickyEditorFooter actionLabel="Сохранить неделю" busy={busy} onAction={() => { void save(); }}
+        onCancel={onCancel}
         message={message} messageKind={message?.startsWith("Сохранено") === true ? "info" : "error"}
         note="Тип недели меняется только у этой недели" />
-    </View>
+    </TrainingEditorLayout>
   );
 }
 
 const styles = StyleSheet.create({
+  application: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 8 },
   root: { flex: 1 },
   center: { flex: 1, padding: 16, justifyContent: "center" },
   content: { padding: 16, gap: 12, paddingBottom: 24 },
