@@ -157,3 +157,35 @@ test("T04 мезоцикл из шаблона (§48.14.3 п. 3–4, §48.13.3 �
     await close();
   }
 });
+
+test("T04 Расширенная на основе Простой (§48.17.2): план по неделям в первый мезоцикл, без фактов, Простая не меняется", async () => {
+  const { plans, execution, a, b, close } = await setup();
+  try {
+    const simple = await plans.createSimpleProgram(a.id, { title: "Фулбади", plan: { weeks: 6, workouts: week("f") } });
+    const base = (await plans.getSimplePlan(a.id, simple.id))!.draft.plan.workouts[0]!;
+    // Разовое отличие недели 3: 5 повторов вместо 10.
+    const changed = { ...base, exercises: base.exercises.map((exercise) => ({ ...exercise,
+      sets: exercise.sets.map((set) => ({ ...set, reps: 5 })) })) };
+    await plans.saveSimpleWorkout(a.id, simple.id, simple.revision, { weekIndex: 3, workoutId: base.id, workout: changed, scope: "CURRENT" });
+    await execution.saveSet({ slot: { clientId: a.id, programId: simple.id, weekIndex: 1, plannedWorkoutId: base.id },
+      plannedExerciseId: base.exercises[0]!.id, exerciseId: BENCH, plannedSetId: base.exercises[0]!.sets[0]!.id, position: 0,
+      metrics: ["load", "reps"], values: { loadGrams: 100_000, reps: 8, durationSec: null, distanceM: null }, setType: "NORMAL",
+      drops: [], rpe: null, expectedRevision: null });
+    const sourceBefore = await plans.getSimplePlan(a.id, simple.id);
+
+    const created = await plans.createPeriodizedFromSimple(a.id, simple.id,
+      { title: "Фулбади — расширенная", mesocycleTitle: "Мезоцикл 1", clientIds: [a.id, b.id] });
+    assert.equal(created.kind, "PERIODIZED");
+    const cycles = (await plans.getPeriodizedPlan(a.id, created.id))!.mesocycles;
+    assert.equal(cycles.length, 1);
+    assert.equal(cycles[0]!.weeks.length, 6, "шесть недель");
+    assert.deepEqual(cycles[0]!.weeks.map((item) => item.workouts[0]!.exercises[0]!.sets[0]!.reps), [10, 10, 5, 10, 10, 10]);
+    assert.notEqual(cycles[0]!.weeks[0]!.workouts[0]!.id, base.id, "новые ID — факты Простой к ним не привязаны");
+    assert.deepEqual(await execution.getProgramStatuses(a.id, created.id), [], "результатов в новой программе нет");
+    assert.equal((await plans.getPeriodizedPlan(b.id, created.id))!.mesocycles[0]!.weeks.length, 6, "у B своя копия");
+    assert.deepEqual(await plans.getSimplePlan(a.id, simple.id), sourceBefore, "Простая не изменилась");
+    assert.equal((await execution.getProgramStatuses(a.id, simple.id)).length, 1, "её результаты на месте");
+  } finally {
+    await close();
+  }
+});

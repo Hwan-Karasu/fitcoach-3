@@ -16,6 +16,7 @@ import type { WeekCopyPort, WeekCopyRequest } from "../domain/WeekCopy.ts";
 import { WeekCopyFlow } from "./WeekCopyFlow.tsx";
 import type { WeekSwapPort } from "../domain/WeekSwap.ts";
 import { WeekSwapPanel } from "./WeekSwapPanel.tsx";
+import { ParticipantChips } from "./ParticipantChips.tsx";
 import { weekTypeLabels, type PeriodizedPlan } from "../domain/PeriodizedModel.ts";
 import { setsSummary } from "../domain/SimplePlanRules.ts";
 import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
@@ -37,7 +38,7 @@ export interface ProgramWeeksView {
  * и «Изменить неделю» (T04).
  */
 export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, onEditStructure,
-  onAddMesocycle, onEditWeek, onArchived, requestedWeek, requestedMesocycle, weekCopy, weekSwap }: Readonly<{
+  onAddMesocycle, onEditWeek, onArchived, requestedWeek, requestedMesocycle, weekCopy, weekSwap, onOpenProgram }: Readonly<{
   clientId: string;
   programId: string;
   repository: TrainingPlansRepositoryPort;
@@ -57,6 +58,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   weekCopy?: WeekCopyPort;
   /** Перестановка недель мезоцикла (§48.21 п. 5); без порта пункта меню нет. */
   weekSwap?: WeekSwapPort;
+  /** Открыть другую программу (созданную на основе этой, §48.17). */
+  onOpenProgram?: (programId: string) => void;
   requestedMesocycle?: string;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -69,6 +72,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [message, setMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [swapping, setSwapping] = useState(false);
+  // §48.17: новая Расширенная на основе этой Простой — название и участники.
+  const [upgrade, setUpgrade] = useState<Readonly<{ title: string; clientIds: readonly string[] }> | null>(null);
   // §48.14–48.15: сохранение плана этого клиента как шаблона; название по умолчанию — из программы/мезоцикла.
   const [templateForm, setTemplateForm] = useState<Readonly<{ kind: "program" | "mesocycle"; mesocycleId: string | null;
     title: string }> | null>(null);
@@ -194,12 +199,17 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
         options={[{ value: "rename", label: "Переименовать" },
           ...(weekSwap !== undefined && program.kind === "PERIODIZED" ? [{ value: "swap", label: "Поменять недели местами" }] : []),
           { value: "save-program", label: "Сохранить как шаблон" },
+          ...(program.kind === "SIMPLE" && onOpenProgram !== undefined ? [{ value: "upgrade", label: "Создать расширенную на основе" }] : []),
           ...(program.kind === "PERIODIZED" && (periodized?.mesocycles.length ?? 0) > 0
             ? [{ value: "save-mesocycle", label: "Сохранить мезоцикл как шаблон" }] : []),
           { value: "archive", label: "В архив" }]}
         onClose={() => setMenuOpen(false)} onSelect={(value) => {
           if (value === "rename") setRenaming(program.title); else if (value === "archive") setConfirmArchive(true);
           else if (value === "swap") { setNotice(null); setMessage(null); setSwapping(true); }
+          else if (value === "upgrade") {
+            setNotice(null); setMessage(null);
+            setUpgrade({ title: `${program.title} — расширенная`.slice(0, 80), clientIds: [clientId] });
+          }
           else if (value === "save-program") { setNotice(null); setTemplateForm({ kind: "program", mesocycleId: null, title: program.title }); }
           else if (value === "save-mesocycle") {
             const cycle = periodized?.mesocycles.find((item) => item.id === periodized.selectedMesocycleId) ?? periodized?.mesocycles[0];
@@ -208,6 +218,33 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
         }} />
       {message !== null ? <InlineNotice kind="error">{message}</InlineNotice> : null}
       {notice !== null ? <InlineNotice kind="success">{notice}</InlineNotice> : null}
+      {upgrade !== null ? (
+        <View style={styles.rename}>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>
+            Новая Расширенная программа: план этой программы по неделям станет первым мезоциклом. Эта программа и её
+            результаты не изменятся, результаты в новую не переносятся.
+          </Text>
+          <TextField label="Название новой программы" required value={upgrade.title}
+            onChangeText={(title) => setUpgrade({ ...upgrade, title })} />
+          <ParticipantChips clientId={clientId} memberIds={[clientId, ...[...names.keys()].filter((id) => id !== clientId)]}
+            names={names} selected={upgrade.clientIds} onChange={(clientIds) => setUpgrade({ ...upgrade, clientIds })}
+            note="Каждый получит свою копию плана; результаты у всех свои." />
+          <View style={styles.row}>
+            <View style={styles.grow}><AppButton variant="secondary" label="Отмена" onPress={() => setUpgrade(null)} /></View>
+            <View style={styles.grow}><AppButton label="Создать" busy={busy} disabled={upgrade.title.trim().length === 0}
+              onPress={() => {
+                const form = upgrade;
+                setBusy(true); setMessage(null);
+                void repository.createPeriodizedFromSimple(clientId, programId, { title: form.title, mesocycleTitle: "Мезоцикл 1",
+                  clientIds: form.clientIds })
+                  .then((created) => { setUpgrade(null); onOpenProgram?.(created.id); })
+                  .catch((error: unknown) => setMessage(error instanceof Error && error.message === "DRAFT_INVALID"
+                    ? "Введите название (до 80 символов)." : "Не удалось создать программу. Эта программа не изменена."))
+                  .finally(() => setBusy(false));
+              }} /></View>
+          </View>
+        </View>
+      ) : null}
       {templateForm !== null ? (
         <View style={styles.rename}>
           <Text style={[styles.meta, { color: colors.textSecondary }]}>

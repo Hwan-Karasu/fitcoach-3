@@ -161,6 +161,8 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
         {({ navigation, route }) => <ProgramScreen clientId={clientId} programId={route.params.programId}
           requestedWeek={route.params.weekIndex} requestedMesocycle={route.params.mesocycleId}
           repository={repository} listCandidates={listCandidates} exercises={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap}
+          onOpenProgram={(createdId) => navigation.reset({ index: 1,
+            routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId: createdId } }] })}
           renderWeeks={(view) => <ProgramWeeksPanel key={view.key} clientId={clientId} programId={route.params.programId} weeks={view.weeks}
             renderWeekActions={view.weekActions} execution={execution} selectedWeek={view.selectedWeek} onSelectWeek={view.onSelectWeek}
             onOpenWorkout={(weekIndex, workoutId) => navigation.navigate("TrainingWorkout", { programId: route.params.programId, weekIndex, workoutId,

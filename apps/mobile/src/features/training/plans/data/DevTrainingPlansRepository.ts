@@ -819,6 +819,37 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     return created;
   }
 
+  async createPeriodizedFromSimple(clientId: string, simpleProgramId: string,
+    input: Readonly<{ title: string; mesocycleTitle: string; clientIds: readonly string[] }>, now: Date = new Date()): Promise<TrainingProgram> {
+    const mesocycleTitle = normalizeTitle(input.mesocycleTitle);
+    const created = await this.ready().writer.write(async (tx) => {
+      await membership(tx, this.workspaceId, clientId, simpleProgramId);
+      const source = await programById(tx, this.workspaceId, simpleProgramId);
+      if (source.kind !== "SIMPLE") throw new Error("DRAFT_INVALID");
+      const valid = validateCreate({ kind: "PERIODIZED", title: input.title, clientIds: input.clientIds });
+      const row = await tx.first<{ weeks: number }>("SELECT weeks FROM dev_training_programs WHERE workspace_id = ? AND id = ?",
+        [this.workspaceId, simpleProgramId]);
+      // Действующий план по неделям (с разовыми отличиями); история версий новыми мезоциклами не становится (§48.17.1 п. 7).
+      const weeks = await readSimpleWeeks(tx, this.workspaceId, clientId, simpleProgramId,
+        await readStructure(tx, this.workspaceId, simpleProgramId, row?.weeks ?? DEFAULT_WEEKS));
+      const cycle = { title: mesocycleTitle, weeks: weeks.map((week) => ({ type: "base" as const, workouts: week.workouts })) };
+      for (const week of cycle.weeks) assertWeek(mesocycleTitle, week.workouts);
+      const program = await this.insertProgram(tx, valid, now, null);
+      const rows = cycle.weeks.reduce((sum, week) => sum + 1 + week.workouts.reduce((inner, workout) => inner + 1
+        + workout.exercises.reduce((n, exercise) => n + 1 + exercise.sets.length, 0), 0), 0);
+      const take = await this.idPool(tx, 1 + valid.clientIds.length + rows * (valid.clientIds.length + 1));
+      const lineageId = take();
+      const template = weeksFromTemplate(cycle, take);
+      for (const [index, memberId] of valid.clientIds.entries()) {
+        await insertMesocycle(tx, this.workspaceId, program.id, memberId, { id: take(), lineageId, title: mesocycleTitle,
+          weeks: index === 0 ? template : copyWeeks(template, take) }, now);
+      }
+      return programById(tx, this.workspaceId, program.id);
+    });
+    this.publish({ clientIds: created.memberClientIds });
+    return created;
+  }
+
   async createProgramFromTemplate(templateId: string, input: Readonly<{ title: string; clientIds: readonly string[] }>,
     now: Date = new Date()): Promise<TrainingProgram> {
     const created = await this.ready().writer.write(async (tx) => {

@@ -48,6 +48,12 @@ export interface TrainingPlansRepositoryPort {
   createMesocycleFromTemplate(clientId: string, programId: string, expectedRevision: number,
     input: Readonly<{ templateId: string; mesocycleIndex: number; title: string; clientIds: readonly string[] }>,
     now?: Date): Promise<Readonly<{ program: TrainingProgram; mesocycleId: string }>>;
+  /**
+   * §48.17: новая Расширенная программа на основе Простой этого клиента — её текущий план по неделям становится
+   * первым мезоциклом (у каждого участника своя копия). Простая не меняется, факты не переносятся.
+   */
+  createPeriodizedFromSimple(clientId: string, simpleProgramId: string,
+    input: Readonly<{ title: string; mesocycleTitle: string; clientIds: readonly string[] }>, now?: Date): Promise<TrainingProgram>;
   /** Удаление шаблона не трогает программы, созданные по нему (§48.16 п. 4). */
   deleteTemplate(templateId: string): Promise<void>;
   /**
