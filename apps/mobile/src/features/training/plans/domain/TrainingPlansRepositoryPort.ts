@@ -2,6 +2,7 @@ import type { ClientProgramLibrary, CreateProgramInput, TrainingProgram } from "
 import type { NewMesocycleInput, PeriodizedPlan, WeekEditInput, WeekEditResult } from "./PeriodizedModel.ts";
 import type { PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
 import type { PeriodizedDraft } from "./PeriodizedDraft.ts";
+import type { MesocycleVersion } from "./StructureVersion.ts";
 
 export interface TrainingPlansCommittedChange {
   /** Клиенты, чья библиотека изменилась. */
@@ -58,6 +59,8 @@ export interface TrainingPlansRepositoryPort {
   getWorkoutWeekNavigation(clientId: string, programId: string, plannedWorkoutId: string): Promise<WorkoutWeekNavigation | null>;
   /** Расширенная программа этого участника: его мезоциклы, недели и выбранный мезоцикл. */
   getPeriodizedPlan(clientId: string, programId: string): Promise<PeriodizedPlan | null>;
+  /** Current first, then every immutable historical structure; another client's cycle returns no versions. */
+  getMesocycleVersions(clientId: string, programId: string, mesocycleId: string): Promise<readonly MesocycleVersion[]>;
   /**
    * Новый мезоцикл (§48.12.1 п. 1): каждому выбранному участнику — своя копия с общим родством, одной
    * транзакцией по ревизии программы; открывшему клиенту он становится выбранным.

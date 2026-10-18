@@ -17,6 +17,8 @@ import { MESOCYCLE_WEEKS_MAX, weekTypeLabels, type Mesocycle, type NewMesocycleI
 import { applyWeekOps, copyWeeks, diffWeek, newMesocycleWeeks, targetWeeks } from "../domain/PeriodizedRules.ts";
 import type { PlannedWorkout } from "../domain/SimplePlanModel.ts";
 import { periodizedDraftKey, type PeriodizedDraft } from "../domain/PeriodizedDraft.ts";
+import { mesocycleCreatedAt, preserveMesocycle, readMesocycleHistory } from "./StructureVersionStore.ts";
+import type { MesocycleVersion } from "../domain/StructureVersion.ts";
 
 /** Ключ черновика ещё не созданной Простой программы (§48.29 п. 4: черновик привязан к объекту правки). */
 export const NEW_SIMPLE_DRAFT_KEY = "new:SIMPLE";
@@ -62,7 +64,8 @@ export const devTrainingPlansClientDeletionParticipant = {
   owner: "training.plans",
   tables: ["dev_training_client_selection", "dev_training_program_members", "dev_training_programs",
     "dev_training_workouts", "dev_training_planned_exercises", "dev_training_planned_sets", "dev_training_builder_drafts",
-    "dev_training_mesocycles", "dev_training_weeks", "dev_training_mesocycle_selection", "dev_training_periodized_drafts"] as const,
+    "dev_training_mesocycles", "dev_training_weeks", "dev_training_mesocycle_selection", "dev_training_periodized_drafts",
+    "dev_training_structure_versions"] as const,
   async count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number> {
     const row = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM dev_training_program_members
       WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
@@ -75,6 +78,7 @@ export const devTrainingPlansClientDeletionParticipant = {
     [workspaceId, clientId]);
     // Свои мезоциклы клиента уходят и из общих программ: у остальных участников — их собственные копии.
     await tx.run("DELETE FROM dev_training_periodized_drafts WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run("DELETE FROM dev_training_structure_versions WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
     const programs = await tx.all<{ id: string }>(`SELECT program_id AS id FROM dev_training_program_members
       WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
     for (const program of programs) await deleteMemberMesocycles(tx, workspaceId, program.id, clientId);
@@ -286,6 +290,16 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     return { program, mesocycles, selectedMesocycleId: selected ?? mesocycles[0]?.id ?? null };
   }
 
+  async getMesocycleVersions(clientId: string, programId: string, mesocycleId: string): Promise<readonly MesocycleVersion[]> {
+    const plan = await this.getPeriodizedPlan(clientId, programId);
+    const structure = plan?.mesocycles.find((cycle) => cycle.id === mesocycleId);
+    if (!structure) return [];
+    const { connection } = this.ready();
+    const history = await readMesocycleHistory(connection, this.workspaceId, clientId, programId, mesocycleId);
+    const validFrom = history[0]?.validTo ?? await mesocycleCreatedAt(connection, this.workspaceId, clientId, programId, mesocycleId);
+    return [{ id: "current", validFrom, validTo: null, structure }, ...history];
+  }
+
   async getWorkoutWeekNavigation(clientId: string, programId: string, plannedWorkoutId: string) {
     const found = await this.findWorkout(clientId, programId, plannedWorkoutId);
     if (found === null) return null;
@@ -384,17 +398,26 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         const mesocycle = memberId === clientId ? own
           : (await readMesocycles(tx, this.workspaceId, programId, memberId)).find((item) => item.lineageId === own.lineageId);
         if (mesocycle === undefined) { skipped += 1; continue; }
+        const changedWeeks: PlanWeek[] = [];
         for (const index of targetWeeks(mesocycle.weeks, input.weekIndex, input.scope)) {
           const week = mesocycle.weeks.find((item) => item.index === index) as PlanWeek;
           // Открытая неделя открывшего клиента сохраняется ровно такой, какой её отредактировали.
           if (memberId === clientId && index === input.weekIndex) {
-            await writeWeek(tx, this.workspaceId, programId, { ...week, type: input.type, workouts: input.workouts });
+            if (week.type !== input.type || diffWeek(week.workouts, input.workouts).length > 0) {
+              changedWeeks.push({ ...week, type: input.type, workouts: input.workouts });
+            }
             continue;
           }
           const applied = applyWeekOps(week.workouts, ops, await this.idPool(tx, rows));
           skipped += applied.skipped;
-          await writeWeek(tx, this.workspaceId, programId, { ...week,
-            type: index === input.weekIndex ? input.type : week.type, workouts: applied.workouts });
+          const type = index === input.weekIndex ? input.type : week.type;
+          if (week.type !== type || diffWeek(week.workouts, applied.workouts).length > 0) {
+            changedWeeks.push({ ...week, type, workouts: applied.workouts });
+          }
+        }
+        if (changedWeeks.length > 0) {
+          await preserveMesocycle(tx, this.workspaceId, memberId, programId, mesocycle, now);
+          for (const week of changedWeeks) await writeWeek(tx, this.workspaceId, programId, week);
         }
       }
       await tx.run("DELETE FROM dev_training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key = ?",

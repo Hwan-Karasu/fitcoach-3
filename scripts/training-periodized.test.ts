@@ -202,6 +202,60 @@ async function sharedProgram() {
   return { ...env, a, b, programId: program.id, revision: created.program.revision, mesocycleId: created.mesocycleId };
 }
 
+test("T04 версии: одна на реальное сохранение участника, без дубликатов и при отказе CAS", async () => {
+  const { plans, clients, db, a, b, programId, mesocycleId, close } = await sharedProgram();
+  try {
+    const original = (await plans.getPeriodizedPlan(a.id, programId))!;
+    const cycle = original.mesocycles[0]!;
+    const initial = await plans.getMesocycleVersions(a.id, programId, mesocycleId);
+    assert.equal(initial.length, 1);
+    assert.equal(initial[0]!.validTo, null);
+    const changed = edit(cycle.weeks[0]!.workouts, (draft) =>
+      fillSets(draft, cycle.weeks[0]!.workouts[0]!.exercises[0]!.id, "reps", 7));
+    const input = { mesocycleId, weekIndex: 1, workouts: changed, type: "heavy" as const,
+      scope: "ALL" as const, clientIds: [a.id] };
+    const at = new Date(Date.now() + 1000);
+    const result = await plans.saveWeek(a.id, programId, original.program.revision, input, at);
+    const versions = await plans.getMesocycleVersions(a.id, programId, mesocycleId);
+    assert.equal(versions.length, 2, "все четыре недели — одна версия мезоцикла");
+    assert.equal(versions[0]!.validFrom, at.toISOString());
+    assert.equal(versions[1]!.validTo, at.toISOString());
+    assert.deepEqual(versions[1]!.structure, cycle, "снимок прежнего плана со стабильными ID");
+    assert.equal(versions[0]!.structure.weeks[3]!.workouts[0]!.exercises[0]!.sets[0]!.reps, 7);
+    const other = (await plans.getPeriodizedPlan(b.id, programId))!.mesocycles[0]!;
+    assert.equal((await plans.getMesocycleVersions(b.id, programId, other.id)).length, 1);
+    assert.deepEqual(await plans.getMesocycleVersions(b.id, programId, mesocycleId), []);
+    await assert.rejects(plans.saveWeek(a.id, programId, original.program.revision, input), message("PROGRAM_REVISION_CONFLICT"));
+    await plans.saveWeek(a.id, programId, result.program.revision, input, new Date(at.getTime() + 1000));
+    assert.deepEqual(await plans.getMesocycleVersions(a.id, programId, mesocycleId), versions,
+      "повтор без изменений не создаёт историю и не сдвигает период");
+    const current = (await plans.getPeriodizedPlan(a.id, programId))!;
+    const second = { ...input, type: "light" as const, scope: "CURRENT" as const };
+    await plans.saveWeek(a.id, programId, current.program.revision, second, new Date(at.getTime() + 2000));
+    const all = await plans.getMesocycleVersions(a.id, programId, mesocycleId);
+    assert.equal(all.length, 3);
+    assert.equal(all[1]!.validFrom, at.toISOString());
+    assert.equal(all[1]!.validTo, all[0]!.validFrom);
+    assert.deepEqual(all[2], versions[1], "самая ранняя версия неизменна");
+    assert.throws(() => db.prepare("UPDATE dev_training_structure_versions SET valid_from = valid_to WHERE id = ?")
+      .run(all[1]!.id), /STRUCTURE_VERSION_IMMUTABLE/u);
+    const latest = (await plans.getPeriodizedPlan(a.id, programId))!;
+    const illegal = edit(latest.mesocycles[0]!.weeks[0]!.workouts, (draft) =>
+      fillSets(draft, draft.plan.workouts[0]!.exercises[0]!.id, "reps", 9));
+    const foreignSet = other.weeks[0]!.workouts[0]!.exercises[0]!.sets[0]!.id;
+    const bad = illegal.map((workout) => ({ ...workout, exercises: workout.exercises.map((exercise, index) => index === 0
+      ? { ...exercise, sets: exercise.sets.map((set, setIndex) => setIndex === 0 ? { ...set, id: foreignSet } : set) } : exercise) }));
+    await assert.rejects(plans.saveWeek(a.id, programId, latest.program.revision, { ...second, workouts: bad }));
+    assert.deepEqual(await plans.getMesocycleVersions(a.id, programId, mesocycleId), all,
+      "ошибка после вставки снимка откатывает снимок вместе с правкой");
+    assert.deepEqual(await plans.getPeriodizedPlan(a.id, programId), latest, "ревизия и структура тоже откатились");
+    await clients.setArchived(a.id, a.revision, true);
+    await clients.deleteArchivedPermanently(a.id, (await clients.get(a.id))!.revision);
+    assert.deepEqual(await plans.getMesocycleVersions(a.id, programId, mesocycleId), []);
+    assert.equal((await plans.getMesocycleVersions(b.id, programId, other.id)).length, 1);
+  } finally { await close(); }
+});
+
 test("T04 хранилище: мезоцикл у каждого участника свой, общее только родство; выбор — у открывшего", async () => {
   const { plans, a, b, programId, mesocycleId, close } = await sharedProgram();
   try {

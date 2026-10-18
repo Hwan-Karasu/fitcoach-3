@@ -277,4 +277,31 @@ export const devTrainingPlansCatalog: readonly MigrationStep[] = [{
         REFERENCES dev_training_program_members(workspace_id, program_id, client_id) ON DELETE RESTRICT
     )`,
   ],
+}, {
+  version: 10,
+  checksum: "t04-dev-training-plans-v10-cycle-versions-20261018",
+  statements: [
+    `CREATE TABLE dev_training_structure_versions (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      program_id TEXT NOT NULL,
+      mesocycle_id TEXT NOT NULL,
+      valid_from TEXT NOT NULL,
+      valid_to TEXT NOT NULL CHECK(valid_to >= valid_from),
+      structure_json TEXT NOT NULL CHECK(CASE WHEN json_valid(structure_json)
+        THEN json_type(structure_json) = 'object' ELSE 0 END),
+      FOREIGN KEY(workspace_id, program_id, client_id)
+        REFERENCES dev_training_program_members(workspace_id, program_id, client_id) ON DELETE RESTRICT,
+      FOREIGN KEY(mesocycle_id, workspace_id) REFERENCES dev_training_mesocycles(id, workspace_id) ON DELETE RESTRICT
+    )`,
+    `CREATE INDEX dev_training_structure_versions_scope
+      ON dev_training_structure_versions(workspace_id, client_id, program_id, mesocycle_id)`,
+    `CREATE TRIGGER dev_training_structure_versions_immutable BEFORE UPDATE ON dev_training_structure_versions
+      BEGIN SELECT RAISE(ABORT, 'STRUCTURE_VERSION_IMMUTABLE'); END`,
+    `CREATE TRIGGER dev_training_structure_versions_owner BEFORE INSERT ON dev_training_structure_versions
+      WHEN NOT EXISTS (SELECT 1 FROM dev_training_mesocycles WHERE id = NEW.mesocycle_id
+        AND workspace_id = NEW.workspace_id AND client_id = NEW.client_id AND program_id = NEW.program_id)
+      BEGIN SELECT RAISE(ABORT, 'TARGET_NOT_FOUND'); END`,
+  ],
 }];
