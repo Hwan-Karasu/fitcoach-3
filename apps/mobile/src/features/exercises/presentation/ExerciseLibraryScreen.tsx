@@ -2,18 +2,19 @@ import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useSta
 import { BackHandler, FlatList, Image, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, type BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Check, ChevronRight, Dumbbell, Plus, SlidersHorizontal, Star, X } from "lucide-react-native";
+import { ChevronRight, Dumbbell, Plus, SlidersHorizontal, Star, X } from "lucide-react-native";
 import { AppButton, FilterPill, FloatingActionButton, InlineNotice, LoadingState, SearchField,
   } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import type { ExerciseCatalogPort } from "../domain/ExerciseCatalogPort.ts";
 import { bodyPartLabels, equipmentLabel, trackingProfileLabels } from "../domain/ExerciseLabels.ts";
-import { BODY_PARTS, TRACKING_PROFILE_IDS, type TrackingProfileId } from "../domain/ExerciseModel.ts";
+import { BODY_PARTS, TRACKING_PROFILE_IDS } from "../domain/ExerciseModel.ts";
 import { displayNameOf, filterCatalog, filterOptionCounts, NO_FILTERS, type CatalogEntry, type CatalogFilters,
   type CatalogMode } from "../domain/ExerciseRules.ts";
 import { EquipmentGlyph } from "./equipmentGlyphs.tsx";
 import { BodyPartIcon } from "./exerciseIcons.tsx";
+import { OptionTile, profileExamples, ProfileTile } from "./choiceTiles.tsx";
 import { thumbnailOf } from "./exerciseImage.ts";
 import { useExerciseCatalog } from "./useExerciseCatalog.ts";
 
@@ -117,61 +118,6 @@ function CatalogSheet({ visible, title, onClose, onReset, children }: Readonly<{
         <BottomSheetScrollView contentContainerStyle={styles.sheetBody}>{children}</BottomSheetScrollView>
       </View>
     </BottomSheet>
-  );
-}
-
-/**
- * Вариант фильтра — плитка сетки в 3 колонки (UI-OWN-031): крупный значок (силуэт тела или оборудование),
- * подпись и число упражнений с учётом остальных фильтров. Выбранная — акцентная рамка и галочка; фон светлый,
- * чтобы силуэт оставался виден.
- */
-function OptionTile({ icon, label, count, selected, onPress, compact = false }: Readonly<{
-  icon: (color: string) => ReactNode; label: string; count: number; selected: boolean; onPress: () => void;
-  /** Оборудование: значок меньше силуэта — плитка ниже, мышцы не меняются. */
-  compact?: boolean;
-}>) {
-  const { palette } = usePrototypeTheme();
-  const colors = palette.tokens;
-  return (
-    <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: selected }} accessibilityLabel={`${label}, упражнений: ${count}`}
-      onPress={onPress} style={({ pressed }) => [styles.tile, compact ? styles.tileCompact : null, {
-        borderColor: selected ? colors.accentInk : colors.border, borderWidth: selected ? 2 : 1,
-        backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: count === 0 && !selected ? 0.45 : 1 }]}>
-      <View style={[styles.tileIcon, compact ? styles.tileIconCompact : null]}>{icon(selected ? colors.accentInk : colors.textSecondary)}</View>
-      <Text numberOfLines={2} style={[styles.tileLabel, { color: selected ? colors.accentInk : colors.textPrimary }]}>{label}</Text>
-      <Text style={[styles.tileCount, { color: colors.textMuted }]}>{count}</Text>
-      {selected ? <View style={[styles.tileCheck, { backgroundColor: colors.accentFill }]}>
-        <Check size={12} color={colors.onAccentFill} strokeWidth={3} />
-      </View> : null}
-    </Pressable>
-  );
-}
-
-/** Пример записи подхода — чтобы способ учёта узнавался без чтения определений (UI-OWN-032). */
-const profileExamples: Readonly<Record<TrackingProfileId, string>> = {
-  REPS: "12 повт.", LOAD_REPS: "60 кг × 10", ADDED_LOAD_REPS: "+10 кг × 8", ASSISTANCE_REPS: "−20 кг × 8", DURATION: "0:45",
-  REPS_DURATION: "20 за 1:00", DISTANCE_DURATION: "2 км · 10:00", LOAD_DISTANCE: "24 кг · 40 м", LOAD_DURATION: "20 кг · 0:30",
-};
-
-/** Способ записи подхода — плитка 3 в ряд (9 вариантов — сетка 3×3): название, пример и число упражнений; выбор как у плиток мышц. */
-function ProfileTile({ label, example, count, selected, onPress }: Readonly<{
-  label: string; example: string; count: number; selected: boolean; onPress: () => void;
-}>) {
-  const { palette } = usePrototypeTheme();
-  const colors = palette.tokens;
-  return (
-    <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: selected }}
-      accessibilityLabel={`${label}, например ${example}, упражнений: ${count}`} onPress={onPress}
-      style={({ pressed }) => [styles.profileTile, { borderColor: selected ? colors.accentInk : colors.border, borderWidth: selected ? 2 : 1,
-        backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: count === 0 && !selected ? 0.45 : 1 }]}>
-      <View style={styles.profileHead}>
-        <Text numberOfLines={2} style={[styles.profileLabel, { color: selected ? colors.accentInk : colors.textPrimary }]}>{label}</Text>
-        {selected ? <View style={[styles.profileCheck, { backgroundColor: colors.accentFill }]}>
-          <Check size={11} color={colors.onAccentFill} strokeWidth={3} /></View>
-          : <Text style={[styles.tileCount, { color: colors.textMuted }]}>{count}</Text>}
-      </View>
-      <Text style={[styles.profileExample, { color: colors.textSecondary, backgroundColor: colors.surfaceRaised }]}>{example}</Text>
-    </Pressable>
   );
 }
 
@@ -405,22 +351,9 @@ const styles = StyleSheet.create({
   sheetHead: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16 },
   sheetBody: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16, gap: 6 },
   optionWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  tile: { width: "31.6%", minHeight: 136, borderRadius: 12, alignItems: "center", paddingTop: 8, paddingBottom: 8, paddingHorizontal: 4, gap: 2 },
-  tileIcon: { height: 86, alignItems: "center", justifyContent: "center" },
-  tileCompact: { minHeight: 84, paddingTop: 6, paddingBottom: 6 },
-  tileIconCompact: { height: 36 },
-  tileLabel: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 15, textAlign: "center" },
-  tileCount: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
-  tileCheck: { position: "absolute", top: 6, right: 6, width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   star: { width: 36, height: 40, alignItems: "center", justifyContent: "center" },
   group: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16, marginTop: 4, textTransform: "uppercase", letterSpacing: 0.4 },
   groupGap: { marginTop: 10 },
-  profileTile: { width: "31.6%", minHeight: 74, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 8, gap: 6, justifyContent: "space-between" },
-  profileHead: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
-  profileLabel: { flex: 1, fontFamily: fonts.semibold, fontSize: 12, lineHeight: 15 },
-  profileCheck: { width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  profileExample: { alignSelf: "flex-start", fontFamily: fonts.medium, fontSize: 11, lineHeight: 14, borderRadius: 6,
-    paddingHorizontal: 6, paddingVertical: 2, overflow: "hidden" },
   switchRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 12, paddingLeft: 12, paddingRight: 6,
     minHeight: 56 },
   switchTitle: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },

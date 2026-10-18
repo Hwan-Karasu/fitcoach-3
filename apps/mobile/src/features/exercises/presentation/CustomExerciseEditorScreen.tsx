@@ -1,13 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { StickyEditorFooter, TrainingEditorLayout, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
+import { AppButton, StickyEditorFooter, TrainingEditorLayout, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import type { ExerciseCatalogPort } from "../domain/ExerciseCatalogPort.ts";
-import { bodyPartLabels, trackingProfileLabels } from "../domain/ExerciseLabels.ts";
+import { bodyPartLabels, equipmentLabel, trackingProfileLabels } from "../domain/ExerciseLabels.ts";
 import { BODY_PARTS, TRACKING_PROFILE_IDS, type BodyPart, type TrackingProfileId } from "../domain/ExerciseModel.ts";
 import { EXERCISE_NAME_MAX } from "../domain/ExerciseRules.ts";
+import { OptionTile, profileExamples, ProfileTile, TileGrid } from "./choiceTiles.tsx";
+import { EquipmentGlyph } from "./equipmentGlyphs.tsx";
+import { BodyPartIcon } from "./exerciseIcons.tsx";
 import { COMMON_EQUIPMENT, equipmentFilterLabel } from "./ExerciseLibraryScreen.tsx";
+import { useExerciseCatalog } from "./useExerciseCatalog.ts";
 
 const errors: Readonly<Record<string, string>> = {
   EXERCISE_NAME_INVALID: `Введите название (до ${EXERCISE_NAME_MAX} символов).`,
@@ -16,7 +20,10 @@ const errors: Readonly<Record<string, string>> = {
   EXERCISE_STALE: "Упражнение изменилось. Откройте его заново и повторите правку.",
 };
 
-/** §31.11 Своё упражнение: название, группа мышц (обязательно), оборудование, способ записи подхода. */
+/**
+ * §31.11 Своё упражнение: название, группа мышц (обязательно), способ записи подхода (обязательно), оборудование.
+ * Выбор — теми же плитками, что и фильтры каталога (UI-OWN-033): силуэт тела, пример записи, значок оборудования.
+ */
 export function CustomExerciseEditorScreen({ exerciseId, initialName, repository, onSaved, onCancel }: Readonly<{
   exerciseId?: string;
   initialName?: string;
@@ -34,6 +41,19 @@ export function CustomExerciseEditorScreen({ exerciseId, initialName, repository
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const saving = useRef(false);
+  // Оборудование: сначала 12 самых частых и выбранное, остальное — по кнопке (60 плиток — слишком длинно).
+  const [allEquipment, setAllEquipment] = useState(false);
+  // Оборудование: всё, что встречается в каталоге, частое — первым; выбранное всегда в списке.
+  const { entries } = useExerciseCatalog(repository);
+  const equipmentOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const entry of entries ?? []) {
+      const key = entry.definition.equipment ?? "none";
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [...new Set([...COMMON_EQUIPMENT, ...counts.keys(), equipment])]
+      .sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0));
+  }, [entries, equipment]);
 
   useEffect(() => {
     if (exerciseId === undefined) return undefined;
@@ -67,28 +87,36 @@ export function CustomExerciseEditorScreen({ exerciseId, initialName, repository
     }
   };
 
+  const section = (title: string, hint: string | null) => (
+    <View style={styles.sectionHead}>
+      <Text accessibilityRole="header" style={[styles.group, { color: colors.textSecondary }]}>{title}</Text>
+      {hint !== null ? <Text style={[styles.hint, { color: colors.textMuted }]}>{hint}</Text> : null}
+    </View>
+  );
+
   return (
     <TrainingEditorLayout>
     <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>
-        {exerciseId === undefined ? "Новое упражнение" : "Изменить упражнение"}
-      </Text>
-      <TextField label="Название" required value={name} onChangeText={setName} />
-      <Text style={[styles.group, { color: colors.textPrimary }]}>Группа мышц *</Text>
-      <View style={styles.chips}>
-        {BODY_PARTS.map((part) => <SelectionChip key={part} group="Группа мышц" label={bodyPartLabels[part]}
+      <TextField label="Название" hideLabel required placeholder="Название упражнения" value={name} onChangeText={setName} />
+      {section("Группа мышц", bodyPart === null ? "обязательно" : bodyPartLabels[bodyPart])}
+      <TileGrid>
+        {BODY_PARTS.map((part) => <OptionTile key={part} radio icon={() => <BodyPartIcon part={part} />} label={bodyPartLabels[part]}
           selected={bodyPart === part} onPress={() => setBodyPart(part)} />)}
-      </View>
-      <Text style={[styles.group, { color: colors.textPrimary }]}>Как записывается подход *</Text>
-      <View style={styles.chips}>
-        {TRACKING_PROFILE_IDS.map((item) => <SelectionChip key={item} group="Учёт" label={trackingProfileLabels[item]}
-          selected={profile === item} onPress={() => setProfile(item)} />)}
-      </View>
-      <Text style={[styles.group, { color: colors.textPrimary }]}>Оборудование</Text>
-      <View style={styles.chips}>
-        {COMMON_EQUIPMENT.map((item) => <SelectionChip key={item} group="Оборудование" label={equipmentFilterLabel(item)}
+      </TileGrid>
+      {section("Как записывается подход", profile === null ? "обязательно" : null)}
+      <TileGrid>
+        {TRACKING_PROFILE_IDS.map((item) => <ProfileTile key={item} radio label={trackingProfileLabels[item]}
+          example={profileExamples[item]} selected={profile === item} onPress={() => setProfile(item)} />)}
+      </TileGrid>
+      {section("Оборудование", equipment === "none" ? null : equipmentLabel(equipment))}
+      <TileGrid>
+        {(allEquipment ? equipmentOptions : equipmentOptions.filter((item, index) => index < 12 || item === equipment)).map((item) => <OptionTile key={item} radio compact label={equipmentFilterLabel(item)}
+          icon={(color) => <EquipmentGlyph id={item} color={color} size={28} />}
           selected={equipment === item} onPress={() => setEquipment(item)} />)}
-      </View>
+      </TileGrid>
+      {equipmentOptions.length > 12 ? <AppButton compact variant="ghost"
+        label={allEquipment ? "Свернуть" : `Всё оборудование (${equipmentOptions.length})`}
+        onPress={() => setAllEquipment((value) => !value)} /> : null}
     </ScrollView>
     <StickyEditorFooter actionLabel={exerciseId === undefined ? "Создать упражнение" : "Сохранить"} busy={busy}
       disabled={name.trim().length === 0 || (exerciseId !== undefined && revision === null)}
@@ -98,8 +126,8 @@ export function CustomExerciseEditorScreen({ exerciseId, initialName, repository
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, gap: 10, paddingBottom: 32 },
-  heading: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },
-  group: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, marginTop: 6 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  content: { padding: 16, gap: 8, paddingBottom: 24 },
+  sectionHead: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginTop: 10 },
+  group: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16, textTransform: "uppercase", letterSpacing: 0.4 },
+  hint: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
 });
