@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
-import { Ellipsis, Plus } from "lucide-react-native";
+import { Bookmark, Ellipsis, Pencil, Plus } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, InlineNotice, LoadingState, SelectionChip, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
@@ -30,6 +30,10 @@ export interface ProgramWeeksView {
   readonly weekActions?: (weekIndex: number) => ReactNode;
   readonly selectedWeek?: number;
   readonly onSelectWeek: (weekIndex: number) => void;
+  /** UI-OWN-034: верх карточки программы (название, тип, действия) — внутри общей карточки с неделями. */
+  readonly header?: (weekIndex: number) => ReactNode;
+  /** Между карточкой и тренировками. */
+  readonly afterCard?: ReactNode;
 }
 
 /**
@@ -189,14 +193,14 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   return (
     <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
       scrollEventThrottle={32} onScroll={(event) => scrollByCycle.current.set(cycleKey, event.nativeEvent.contentOffset.y)}>
-      <View style={styles.row}><View style={styles.grow}>
+      {program.kind === "PERIODIZED" ? <View style={styles.row}><View style={styles.grow}>
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>{program.title}</Text>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>
         {program.kind === "PERIODIZED" ? `${programKindLabels[program.kind]} · ${membersWord(program.memberClientIds.length)}`
           : programKindLabels[program.kind]}
       </Text>
       </View><AppIconButton label="Действия программы" buttonRef={menuAnchor}
-        icon={<Ellipsis size={24} color={colors.textPrimary} />} onPress={() => setMenuOpen(true)} /></View>
+        icon={<Ellipsis size={24} color={colors.textPrimary} />} onPress={() => setMenuOpen(true)} /></View> : null}
       <DropdownMenu visible={menuOpen} anchor={menuAnchor} title="Программа" selected=""
         options={[{ value: "rename", label: "Переименовать" },
           ...(weekSwap !== undefined && program.kind === "PERIODIZED" ? [{ value: "swap", label: "Поменять недели местами" }] : []),
@@ -283,12 +287,30 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
         </Text>
       ) : null}
       {program.kind === "SIMPLE" ? <>
-        <AppButton label="Изменить" onPress={onEditStructure} />
-        {plan !== null ? (
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Недель: ${plan.weeks} · простая программа`}</Text>
-        ) : null}
         {plan !== null && renderWeeks !== undefined ? renderWeeks({ key: "simple", selectedWeek: weeksByCycle.simple,
-          onSelectWeek: (week) => selectWeek("simple", week), weeks: simpleWeeks.map((week) => ({ ...week, caption: null })) }) : plan?.workouts.map((workout) => (
+          onSelectWeek: (week) => selectWeek("simple", week), weeks: simpleWeeks.map((week) => ({ ...week, caption: null })),
+          // Компоновка владельца (UI-OWN-034): название, неделя, тип; «Изменить», «В шаблоны», «⋯».
+          header: (week) => <View style={styles.cardHead}>
+            <Text accessibilityRole="header" numberOfLines={2} style={[styles.cardTitle, { color: colors.textPrimary }]}>{program.title}</Text>
+            <View style={styles.cardMeta}>
+              <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Неделя ${week} из ${plan.weeks}`}</Text>
+              <Text style={[styles.kind, { color: colors.accentInk, borderColor: colors.border }]}>{programKindLabels[program.kind]}</Text>
+            </View>
+            <View style={styles.cardActions}>
+              <View style={styles.grow}><AppButton compact variant="secondary" label="Изменить"
+                icon={(color) => <Pencil size={16} color={color} strokeWidth={2} />} onPress={onEditStructure} /></View>
+              <View style={styles.grow}><AppButton compact variant="secondary" label="В шаблоны"
+                icon={(color) => <Bookmark size={16} color={color} strokeWidth={2} />}
+                onPress={() => { setNotice(null); setTemplateForm({ kind: "program", mesocycleId: null, title: program.title }); }} /></View>
+              <View ref={menuAnchor} collapsable={false} style={[styles.more, { borderColor: colors.border }]}>
+                <AppIconButton compact label="Действия программы"
+                  icon={<Ellipsis size={20} color={colors.textPrimary} />} onPress={() => setMenuOpen(true)} />
+              </View>
+            </View>
+          </View>,
+          afterCard: <AppButton variant="secondary" label="Добавить тренировку"
+            icon={(color) => <Plus size={18} color={color} strokeWidth={2} />} onPress={onEditStructure} />,
+        }) : plan?.workouts.map((workout) => (
           <View key={workout.id} style={[styles.workout, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.workoutTitle, { color: colors.textPrimary }]}>{workout.title}</Text>
             {workout.exercises.length === 0 ? (
@@ -391,6 +413,12 @@ const styles = StyleSheet.create({
   center: { flex: 1, padding: 16, gap: 12, justifyContent: "center" },
   content: { padding: 16, gap: 12 },
   heading: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },
+  cardHead: { gap: 8 },
+  cardTitle: { fontFamily: fonts.bold, fontSize: 20, lineHeight: 25 },
+  cardMeta: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  kind: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14, borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  cardActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  more: { borderWidth: 1, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   body: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   rename: { gap: 10 },

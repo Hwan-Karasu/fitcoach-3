@@ -69,7 +69,8 @@ function factText(fact: SetFact, fields: readonly SetField[], format: MatrixForm
   return hasValue(fact.values) || fact.drops.some(hasValue) ? format.values(fact.values, fact.drops, fields) : null;
 }
 
-function factVolume(fact: SetFact): number {
+/** Тоннаж засчитанного подхода, кг: стороны — по засчитанной стороне, дроп-сеты входят. */
+export function factVolume(fact: SetFact): number {
   if (!fact.confirmed) return 0;
   if (fact.sides !== null) {
     return (fact.sides.left.confirmed ? tonnage(fact.sides.left.values) : 0)

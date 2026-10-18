@@ -20,7 +20,7 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
   const insets = useSafeAreaInsets();
   const weeks = useWeekNavigationState();
   return (
-    <View style={[styles.dock, { backgroundColor: colors.canvas, paddingBottom: insets.bottom + 8 }]}>
+    <View style={[styles.dock, { backgroundColor: colors.canvas, paddingBottom: insets.bottom + 18 }]}>
       <View style={[styles.bar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {weeks ? <View style={styles.arrow}><AppIconButton label={`Предыдущая неделя. Сейчас неделя ${weeks.week}`}
           disabled={weeks.previous === null || weeks.busy} onPress={() => weeks.previous?.()}
