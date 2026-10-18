@@ -249,3 +249,79 @@ test("T04 окончательное удаление участника: его
     await close();
   }
 });
+
+test("T04 перетаскивание: порядок программ и мезоциклов — свой у каждого клиента, новая программа сверху", async () => {
+  const { plans, a, b, programId, revision, mesocycleId, close } = await sharedProgram();
+  try {
+    const simple = await plans.createSimpleProgram(a.id, { title: "Просто", plan: { weeks: 2, workouts: firstWeek() } });
+    const titlesOf = async (clientId: string) => (await plans.getLibrary(clientId)).active.map((card) => card.title);
+    assert.deepEqual(await titlesOf(a.id), ["Просто", "Сила"], "без порядка — новые сверху");
+    await plans.reorderPrograms(a.id, [programId, simple.id]);
+    assert.deepEqual(await titlesOf(a.id), ["Сила", "Просто"]);
+    await plans.createSimpleProgram(a.id, { title: "Новая", plan: { weeks: 1, workouts: newDraft("w-new").plan.workouts } });
+    assert.deepEqual(await titlesOf(a.id), ["Новая", "Сила", "Просто"], "новая программа — сверху");
+    await assert.rejects(plans.reorderPrograms(b.id, [simple.id]), message("TARGET_NOT_FOUND"), "чужую программу не упорядочить");
+
+    const second = await plans.createMesocycle(a.id, programId, revision, { title: "Блок 2", weeks: 2, firstWeek: firstWeek(),
+      clientIds: [a.id, b.id] });
+    const mesocyclesOf = async (clientId: string) => (await plans.getPeriodizedPlan(clientId, programId))!.mesocycles.map((item) => item.title);
+    assert.deepEqual(await mesocyclesOf(a.id), ["Блок 1", "Блок 2"]);
+    await plans.reorderMesocycles(a.id, programId, [second.mesocycleId, mesocycleId]);
+    assert.deepEqual(await mesocyclesOf(a.id), ["Блок 2", "Блок 1"]);
+    assert.deepEqual(await mesocyclesOf(b.id), ["Блок 1", "Блок 2"], "у второго участника порядок прежний");
+    await assert.rejects(plans.reorderMesocycles(b.id, programId, [mesocycleId]), message("TARGET_NOT_FOUND"));
+  } finally {
+    await close();
+  }
+});
+
+test("T04 порядок программ: неполный список, дубликаты и архив отклоняются без записи и уведомления", async () => {
+  const { plans, a, programId, close } = await sharedProgram();
+  try {
+    const simple = await plans.createSimpleProgram(a.id, { title: "Просто", plan: { weeks: 2, workouts: firstWeek() } });
+    const before = await plans.getLibrary(a.id);
+    let notifications = 0;
+    const unsubscribe = plans.subscribeCommittedChanges(() => { notifications += 1; });
+    for (const order of [[programId], [programId, programId], []]) {
+      await assert.rejects(plans.reorderPrograms(a.id, order), message("DRAFT_INVALID"));
+      assert.deepEqual(await plans.getLibrary(a.id), before);
+    }
+    await assert.rejects(plans.reorderPrograms(a.id, [programId, "missing"]), message("TARGET_NOT_FOUND"));
+    assert.deepEqual(await plans.getLibrary(a.id), before);
+    assert.equal(notifications, 0);
+    unsubscribe();
+    await plans.archiveForClient(a.id, simple.id);
+    await assert.rejects(plans.reorderPrograms(a.id, [programId, simple.id]), message("TARGET_NOT_FOUND"));
+  } finally {
+    await close();
+  }
+});
+
+test("T04 порядок мезоциклов: только полный список активного участия, выбор и недели не меняются", async () => {
+  const { plans, a, b, programId, revision, mesocycleId, close } = await sharedProgram();
+  try {
+    const second = await plans.createMesocycle(a.id, programId, revision, { title: "Блок 2", weeks: 2,
+      firstWeek: firstWeek(), clientIds: [a.id, b.id] });
+    await plans.selectMesocycle(a.id, programId, mesocycleId);
+    const before = (await plans.getPeriodizedPlan(a.id, programId))!;
+    const other = await plans.getPeriodizedPlan(b.id, programId);
+    let notifications = 0;
+    const unsubscribe = plans.subscribeCommittedChanges(() => { notifications += 1; });
+    for (const order of [[mesocycleId], [mesocycleId, mesocycleId], []]) {
+      await assert.rejects(plans.reorderMesocycles(a.id, programId, order), message("DRAFT_INVALID"));
+      assert.deepEqual(await plans.getPeriodizedPlan(a.id, programId), before);
+    }
+    await assert.rejects(plans.reorderMesocycles(a.id, programId, [second.mesocycleId, "missing"]), message("TARGET_NOT_FOUND"));
+    assert.deepEqual(await plans.getPeriodizedPlan(a.id, programId), before);
+    assert.equal(notifications, 0);
+    await plans.reorderMesocycles(a.id, programId, [second.mesocycleId, mesocycleId]);
+    assert.deepEqual(await plans.getPeriodizedPlan(a.id, programId), { ...before, mesocycles: [...before.mesocycles].reverse() });
+    assert.deepEqual(await plans.getPeriodizedPlan(b.id, programId), other);
+    assert.equal(notifications, 1);
+    unsubscribe();
+    await plans.archiveForClient(a.id, programId);
+    await assert.rejects(plans.reorderMesocycles(a.id, programId, [mesocycleId, second.mesocycleId]), message("PROGRAM_ARCHIVED"));
+  } finally {
+    await close();
+  }
+});

@@ -1,4 +1,7 @@
+import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import Animated, { useAnimatedRef } from "react-native-reanimated";
+import Sortable from "react-native-sortables";
 import { ChevronRight, Layers, Plus, Repeat } from "lucide-react-native";
 import { AppButton, FloatingActionButton, InlineNotice, ListSectionHeader, LoadingState,
   StatusTag } from "../../../../shared/ui/components/public.ts";
@@ -91,6 +94,9 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const { library, failed, reload } = useProgramLibrary(repository, clientId);
+  const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  const [orderError, setOrderError] = useState(false);
+  const [orderReset, setOrderReset] = useState(0);
 
   if (library === null) {
     return (
@@ -115,15 +121,35 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
 
   return (
     <View style={[styles.root, { backgroundColor: colors.canvas }]}>
-      <ScrollView contentContainerStyle={[styles.content, styles.withFab]}>
+      <Animated.ScrollView ref={scrollRef} contentContainerStyle={[styles.content, styles.withFab]}>
         {failed ? <InlineNotice kind="error">Не удалось обновить список. Показан последний загруженный.</InlineNotice> : null}
+        {orderError ? <InlineNotice kind="error">Не удалось сохранить порядок. Повторите перетаскивание.</InlineNotice> : null}
         <ListSectionHeader title="Программы" count={library.active.length} />
         {library.active.length === 0 ? (
           <Text style={[styles.body, { color: colors.textSecondary }]}>Все программы в архиве. Создайте новую или верните из архива.</Text>
-        ) : library.active.map((card) => (
-          <ProgramCardRow key={card.id} card={card} selected={card.id === library.selectedProgramId}
-            onPress={() => onOpenProgram(card.id)} />
-        ))}
+        ) : (
+          // Долгое нажатие — перетащить (порядок свой у этого клиента), короткое — открыть.
+          <Sortable.Grid key={orderReset} data={[...library.active]} keyExtractor={(card) => card.id} columns={1} rowGap={10}
+            scrollableRef={scrollRef} activeItemScale={1.03}
+            renderItem={({ item }: Readonly<{ item: ProgramCard }>) => (
+              <Sortable.Touchable onTap={() => onOpenProgram(item.id)} accessibilityRole="button"
+                accessible accessibilityLabel={`${item.title}. ${programKindLabels[item.kind]}${item.id === library.selectedProgramId ? ". Текущая" : ""}`}
+                onAccessibilityTap={() => onOpenProgram(item.id)}
+                accessibilityHint="Долгое нажатие — перетащить">
+                <View pointerEvents="none" importantForAccessibility="no-hide-descendants">
+                  <ProgramCardRow card={item} selected={item.id === library.selectedProgramId} />
+                </View>
+              </Sortable.Touchable>
+            )}
+            onDragEnd={({ data }) => {
+              setOrderError(false);
+              void repository.reorderPrograms(clientId, data.map((card) => card.id)).catch(() => {
+                setOrderError(true);
+                setOrderReset((value) => value + 1);
+                reload();
+              });
+            }} />
+        )}
         {library.archived.length > 0 ? <>
           <ListSectionHeader title="Архив" count={library.archived.length} />
           {library.archived.map((card) => (
@@ -131,7 +157,7 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
               onRestore={() => { void repository.restoreForClient(clientId, card.id).catch(reload); }} />
           ))}
         </> : null}
-      </ScrollView>
+      </Animated.ScrollView>
       <FloatingActionButton label="Создать программу" icon={(color) => <Plus size={26} color={color} strokeWidth={2} />}
         onPress={onCreate} />
     </View>

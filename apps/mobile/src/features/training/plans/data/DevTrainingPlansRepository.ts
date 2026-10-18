@@ -4,7 +4,7 @@ import { UUID_V4_SQL } from "../../../../shared/db/SqlIds.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../../shared/db/WriterCoordinator.ts";
 import type { ClientProgramLibrary, CreateProgramInput, ProgramCard, TrainingProgram } from "../domain/ProgramModel.ts";
-import { compareCards, normalizeTitle, validateCreate } from "../domain/ProgramRules.ts";
+import { compareLibrary, normalizeTitle, validateCreate, validateOrder } from "../domain/ProgramRules.ts";
 import type { TrainingPlansCommittedChange, TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import { DEFAULT_WEEKS, REST_MAX_SEC, REST_MIN_SEC, type SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
 import { validateDraft } from "../domain/SimplePlanRules.ts";
@@ -144,7 +144,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     const { connection } = this.ready();
     const [cards, selection] = await Promise.all([
       connection.all<ProgramCard>(`SELECT p.id, p.kind, p.title, p.revision, p.created_at AS createdAt,
-          m.archived_at AS archivedAt,
+          m.archived_at AS archivedAt, m.sort_position AS sortPosition,
           (SELECT count(*) FROM dev_training_program_members o WHERE o.workspace_id = p.workspace_id
             AND o.program_id = p.id AND o.archived_at IS NULL) AS memberCount
         FROM dev_training_program_members m
@@ -155,8 +155,8 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     ]);
     return {
       clientId,
-      active: cards.filter((card) => card.archivedAt === null).sort(compareCards),
-      archived: cards.filter((card) => card.archivedAt !== null).sort(compareCards),
+      active: cards.filter((card) => card.archivedAt === null).sort(compareLibrary),
+      archived: cards.filter((card) => card.archivedAt !== null).sort(compareLibrary),
       selectedProgramId: selection?.programId ?? null,
     };
   }
@@ -377,6 +377,37 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     });
     this.publish({ clientIds: input.clientIds });
     return saved;
+  }
+
+  async reorderPrograms(clientId: string, programIds: readonly string[]): Promise<void> {
+    await this.ready().writer.write(async (tx) => {
+      const current = await tx.all<{ id: string }>(`SELECT program_id AS id FROM dev_training_program_members
+        WHERE workspace_id = ? AND client_id = ? AND archived_at IS NULL`, [this.workspaceId, clientId]);
+      validateOrder(current.map((item) => item.id), programIds);
+      for (const [index, programId] of programIds.entries()) {
+        const result = await tx.run(`UPDATE dev_training_program_members SET sort_position = ?
+          WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND archived_at IS NULL`,
+        [index, this.workspaceId, clientId, programId]);
+        if (result.changes !== 1) throw new Error("TARGET_NOT_FOUND");
+      }
+    });
+    this.publish({ clientIds: [clientId] });
+  }
+
+  async reorderMesocycles(clientId: string, programId: string, mesocycleIds: readonly string[]): Promise<void> {
+    await this.ready().writer.write(async (tx) => {
+      if ((await membership(tx, this.workspaceId, clientId, programId)).archivedAt !== null) throw new Error("PROGRAM_ARCHIVED");
+      const current = await tx.all<{ id: string }>(`SELECT id FROM dev_training_mesocycles
+        WHERE workspace_id = ? AND program_id = ? AND client_id = ?`, [this.workspaceId, programId, clientId]);
+      validateOrder(current.map((item) => item.id), mesocycleIds);
+      for (const [index, mesocycleId] of mesocycleIds.entries()) {
+        const result = await tx.run(`UPDATE dev_training_mesocycles SET position = ?
+          WHERE workspace_id = ? AND program_id = ? AND client_id = ? AND id = ?`,
+        [index, this.workspaceId, programId, clientId, mesocycleId]);
+        if (result.changes !== 1) throw new Error("TARGET_NOT_FOUND");
+      }
+    });
+    this.publish({ clientIds: [clientId] });
   }
 
   async selectMesocycle(clientId: string, programId: string, mesocycleId: string): Promise<void> {

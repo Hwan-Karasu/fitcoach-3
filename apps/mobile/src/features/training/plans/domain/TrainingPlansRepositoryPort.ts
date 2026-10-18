@@ -18,6 +18,10 @@ export interface TrainingPlansRepositoryPort {
   /** Новая программа выбранным клиентам; выбранная программа каждого из них не меняется. */
   createProgram(input: CreateProgramInput, now?: Date): Promise<TrainingProgram>;
   renameProgram(programId: string, expectedRevision: number, title: string, now?: Date): Promise<TrainingProgram>;
+  /** Полный порядок действующих программ этого клиента; у других участников свой. Неполный список/повторы — DRAFT_INVALID. */
+  reorderPrograms(clientId: string, programIds: readonly string[]): Promise<void>;
+  /** Полный порядок мезоциклов активного участия клиента; выбор и содержимое не меняются. Неполный список/повторы — DRAFT_INVALID. */
+  reorderMesocycles(clientId: string, programId: string, mesocycleIds: readonly string[]): Promise<void>;
   /** Открытая программа становится выбранной у этого клиента (не у остальных участников). */
   selectProgram(clientId: string, programId: string): Promise<void>;
   /** Архив участия клиента: у остальных участников программа остаётся. */

@@ -22,6 +22,8 @@ export interface ProgramCard {
   readonly createdAt: string;
   readonly memberCount: number;
   readonly archivedAt: string | null;
+  /** Место в библиотеке этого клиента после перетаскивания; `null` — ещё не упорядочена. */
+  readonly sortPosition: number | null;
 }
 
 export interface ClientProgramLibrary {

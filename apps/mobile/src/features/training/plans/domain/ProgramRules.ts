@@ -31,6 +31,24 @@ export function compareCards(a: ProgramCard, b: ProgramCard): number {
   return a.title.localeCompare(b.title, "ru");
 }
 
+/** Библиотека: новые (ещё не упорядоченные) сверху, затем — в порядке, заданном перетаскиванием. */
+export function compareLibrary(a: ProgramCard, b: ProgramCard): number {
+  if (a.sortPosition === null || b.sortPosition === null) {
+    if (a.sortPosition !== b.sortPosition) return a.sortPosition === null ? -1 : 1;
+    return compareCards(a, b);
+  }
+  return a.sortPosition - b.sortPosition;
+}
+
+/** A reorder must contain every current item exactly once. */
+export function validateOrder(currentIds: readonly string[], orderedIds: readonly string[]): void {
+  const current = new Set(currentIds);
+  if (orderedIds.some((id) => !current.has(id))) throw new Error("TARGET_NOT_FOUND");
+  if (orderedIds.length !== currentIds.length || new Set(orderedIds).size !== orderedIds.length) {
+    throw new Error("DRAFT_INVALID");
+  }
+}
+
 export function membersWord(count: number): string {
   const tail = count % 100;
   if (tail >= 11 && tail <= 14) return `${count} участников`;

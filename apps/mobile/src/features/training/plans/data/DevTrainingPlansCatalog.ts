@@ -253,4 +253,12 @@ export const devTrainingPlansCatalog: readonly MigrationStep[] = [{
         AND program_id = NEW.program_id AND client_id = NEW.client_id)
       BEGIN SELECT RAISE(ABORT, 'TARGET_NOT_FOUND'); END`,
   ],
+}, {
+  version: 8,
+  checksum: "t04-dev-training-plans-v8-library-order-20261018",
+  statements: [
+    // Порядок программ в библиотеке — свой у каждого клиента (перетаскивание); NULL — ещё не упорядочена (сверху).
+    `ALTER TABLE dev_training_program_members ADD COLUMN sort_position INTEGER
+      CHECK (sort_position IS NULL OR sort_position >= 0)`,
+  ],
 }];

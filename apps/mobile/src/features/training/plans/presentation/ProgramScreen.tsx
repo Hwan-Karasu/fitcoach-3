@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import Animated, { useAnimatedRef } from "react-native-reanimated";
+import Sortable from "react-native-sortables";
 import { AppButton, ConfirmDialog, InlineNotice, LoadingState, SelectionChip, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
@@ -54,6 +56,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [version, setVersion] = useState(0);
   const [plan, setPlan] = useState<SimplePlan | null>(null);
   const [periodized, setPeriodized] = useState<PeriodizedPlan | null>(null);
+  const [orderReset, setOrderReset] = useState(0);
+  const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const lookup = useExerciseLookup(exercises);
 
   useEffect(() => {
@@ -127,7 +131,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
 
   const others = program.memberClientIds.filter((id) => id !== clientId);
   return (
-    <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>{program.title}</Text>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>
         {program.kind === "PERIODIZED" ? `${programKindLabels[program.kind]} · ${membersWord(program.memberClientIds.length)}`
@@ -160,13 +164,32 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       </> : periodized === null ? <LoadingState label="Открываем мезоциклы…" /> : (() => {
         const selected = periodized.mesocycles.find((item) => item.id === periodized.selectedMesocycleId) ?? periodized.mesocycles[0];
         return <>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          {/* Долгое нажатие на мезоцикл — перетащить: порядок свой у этого клиента (у каждого участника своя книга). */}
+          <Sortable.Flex key={orderReset} gap={8} activeItemScale={1.05} scrollableRef={scrollRef}
+            onDragEnd={({ order }) => {
+              const ids = order(periodized.mesocycles.map((item) => item.id));
+              setMessage(null);
+              void repository.reorderMesocycles(clientId, programId, ids).catch(() => {
+                setMessage("Не удалось сохранить порядок мезоциклов. Повторите перетаскивание.");
+                setOrderReset((value) => value + 1);
+                setVersion((value) => value + 1);
+              });
+            }}>
             {periodized.mesocycles.map((item) => (
-              <SelectionChip key={item.id} group="Мезоцикл" label={item.title} selected={item.id === selected?.id}
-                onPress={() => { void repository.selectMesocycle(clientId, programId, item.id).catch(() => undefined); }} />
+              <Sortable.Touchable key={item.id} accessibilityHint="Долгое нажатие — перетащить"
+                accessible accessibilityRole="button" accessibilityLabel={`Мезоцикл: ${item.title}`}
+                accessibilityState={{ selected: item.id === selected?.id }}
+                onAccessibilityTap={() => { void repository.selectMesocycle(clientId, programId, item.id).catch(() => undefined); }}
+                onTap={() => { void repository.selectMesocycle(clientId, programId, item.id).catch(() => undefined); }}>
+                <View pointerEvents="none" importantForAccessibility="no-hide-descendants">
+                  <SelectionChip group="Мезоцикл" label={item.title} selected={item.id === selected?.id} onPress={() => undefined} />
+                </View>
+              </Sortable.Touchable>
             ))}
+          </Sortable.Flex>
+          <View style={styles.addRow}>
             <SelectionChip group="Мезоцикл" label="+ Мезоцикл" selected={false} onPress={onAddMesocycle} />
-          </ScrollView>
+          </View>
           {selected === undefined ? (
             <InlineNotice kind="info">Мезоциклов пока нет. Создайте первый: план первой недели скопируется во все недели.</InlineNotice>
           ) : renderWeeks?.({ key: selected.id,
@@ -195,7 +218,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           ? "Программа уйдёт в архив этого клиента. У остальных участников она останется. Вернуть можно из списка программ."
           : "Программа уйдёт в архив клиента. Вернуть можно из списка программ."}
         confirmLabel="В архив" onCancel={() => setConfirmArchive(false)} onConfirm={() => { void archive(); }} />
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 
@@ -209,6 +232,6 @@ const styles = StyleSheet.create({
   workout: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 4 },
   workoutTitle: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, marginBottom: 2 },
   row: { flexDirection: "row", gap: 10 },
-  chips: { gap: 8, paddingRight: 8 },
+  addRow: { flexDirection: "row" },
   grow: { flex: 1 },
 });
