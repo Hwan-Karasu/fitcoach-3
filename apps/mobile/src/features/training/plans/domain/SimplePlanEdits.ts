@@ -142,7 +142,9 @@ export const replaceExercise = (draft: SimpleProgramDraft, plannedId: string, ne
     if (index < 0) continue;
     const old = workout.exercises[index] as PlannedExercise;
     const keep = (field: SetField, value: number | null) => allowed.includes(field) ? value : null;
-    workout.exercises[index] = { id: newPlannedId, exerciseId, restSec: old.restSec, instruction: null,
+    // Родство (Расширенный конструктор) остаётся: замена «на этом месте» доходит до тех же мест других недель.
+    workout.exercises[index] = { id: newPlannedId, ...(old.lineageId === undefined ? {} : { lineageId: old.lineageId }),
+      exerciseId, restSec: old.restSec, instruction: null,
       rir: allowed.includes("reps") ? old.rir : null,
       sets: old.sets.map((set) => ({ id: setId(), reps: keep("reps", set.reps), repsMax: keep("reps", set.repsMax),
         loadGrams: keep("loadGrams", set.loadGrams), durationSec: keep("durationSec", set.durationSec),

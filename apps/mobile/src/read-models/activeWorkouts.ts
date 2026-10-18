@@ -7,16 +7,17 @@ import type { ActiveWorkoutCard, ActiveWorkoutsPort, TrainingExecutionPort, Trai
  * подписи — у клиентов и планов; архивный клиент и пропавшая из плана тренировка в список не попадают.
  */
 export function createActiveWorkouts(execution: Pick<TrainingExecutionPort, "listActiveWorkouts" | "subscribeCommittedChanges">,
-  plans: Pick<TrainingPlansRepositoryPort, "getSimplePlan">, clients: Pick<ClientRepositoryPort, "get">): ActiveWorkoutsPort {
+  plans: Pick<TrainingPlansRepositoryPort, "findWorkout">, clients: Pick<ClientRepositoryPort, "get">): ActiveWorkoutsPort {
   return {
     async list() {
       const active = await execution.listActiveWorkouts();
       const cards = await Promise.all(active.map(async (item): Promise<ActiveWorkoutCard | null> => {
-        const [client, plan] = await Promise.all([clients.get(item.clientId), plans.getSimplePlan(item.clientId, item.programId)]);
-        const workout = plan?.draft.plan.workouts.find((candidate) => candidate.id === item.plannedWorkoutId);
-        if (client === null || client.lifecycle !== "ACTIVE" || plan === null || workout === undefined) return null;
+        const [client, found] = await Promise.all([clients.get(item.clientId),
+          plans.findWorkout(item.clientId, item.programId, item.plannedWorkoutId)]);
+        if (client === null || client.lifecycle !== "ACTIVE" || found === null) return null;
+        const { program, workout } = found;
         return { slot: { clientId: item.clientId, programId: item.programId, weekIndex: item.weekIndex,
-          plannedWorkoutId: item.plannedWorkoutId }, clientName: client.displayName, programTitle: plan.program.title,
+          plannedWorkoutId: item.plannedWorkoutId }, clientName: client.displayName, programTitle: program.title,
         workoutTitle: workout.title };
       }));
       return cards.filter((card): card is ActiveWorkoutCard => card !== null);

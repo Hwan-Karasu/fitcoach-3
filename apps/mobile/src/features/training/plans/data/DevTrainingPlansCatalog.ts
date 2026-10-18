@@ -183,4 +183,74 @@ export const devTrainingPlansCatalog: readonly MigrationStep[] = [{
     `ALTER TABLE dev_training_planned_exercises ADD COLUMN rir_max INTEGER
       CHECK (rir_max IS NULL OR (rir_min IS NOT NULL AND rir_max > rir_min AND rir_max <= 10))`,
   ],
+}, {
+  version: 7,
+  checksum: "t04-dev-training-plans-v7-mesocycles-weeks-lineage-20261018",
+  statements: [
+    // §48.3, §48.28: мезоцикл — у каждого участника свой; копии одного мезоцикла связаны родством.
+    `CREATE TABLE dev_training_mesocycles (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      program_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      lineage_id TEXT NOT NULL,
+      position INTEGER NOT NULL CHECK (position >= 0),
+      title TEXT NOT NULL CHECK (length(trim(title)) BETWEEN 1 AND 80),
+      created_at TEXT NOT NULL,
+      UNIQUE (id, workspace_id),
+      UNIQUE (workspace_id, program_id, client_id, lineage_id),
+      FOREIGN KEY (workspace_id, program_id, client_id)
+        REFERENCES dev_training_program_members(workspace_id, program_id, client_id) ON DELETE RESTRICT
+    )`,
+    `CREATE INDEX dev_training_mesocycles_member ON dev_training_mesocycles(workspace_id, program_id, client_id, position)`,
+    // Мезоциклы — только у Расширенной программы (§48.3 п. 7).
+    `CREATE TRIGGER dev_training_mesocycles_periodized BEFORE INSERT ON dev_training_mesocycles
+      WHEN COALESCE((SELECT kind FROM dev_training_programs WHERE id = NEW.program_id AND workspace_id = NEW.workspace_id), '')
+        <> 'PERIODIZED'
+      BEGIN SELECT RAISE(ABORT, 'DRAFT_INVALID'); END`,
+    // Тип недели — как в FitCoach 2.0 (решение владельца 2026-10-18).
+    `CREATE TABLE dev_training_weeks (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      mesocycle_id TEXT NOT NULL,
+      position INTEGER NOT NULL CHECK (position BETWEEN 0 AND 51),
+      week_type TEXT NOT NULL CHECK (week_type IN ('base','light','medium','heavy','deload')),
+      UNIQUE (id, workspace_id),
+      UNIQUE (workspace_id, mesocycle_id, position),
+      FOREIGN KEY (mesocycle_id, workspace_id) REFERENCES dev_training_mesocycles(id, workspace_id) ON DELETE RESTRICT
+    )`,
+    // Тренировка Расширенной программы принадлежит неделе; у Простой недели нет.
+    `ALTER TABLE dev_training_workouts ADD COLUMN week_id TEXT REFERENCES dev_training_weeks(id) ON DELETE RESTRICT`,
+    `ALTER TABLE dev_training_workouts ADD COLUMN lineage_id TEXT`,
+    `ALTER TABLE dev_training_planned_exercises ADD COLUMN lineage_id TEXT`,
+    `CREATE INDEX dev_training_workouts_week ON dev_training_workouts(workspace_id, week_id, position)`,
+    // Неделя — той же программы, что и тренировка; у Расширенной тренировки неделя обязательна, у Простой — нет.
+    `CREATE TRIGGER dev_training_workouts_week_insert BEFORE INSERT ON dev_training_workouts
+      WHEN (NEW.week_id IS NULL) <> (COALESCE((SELECT kind FROM dev_training_programs
+          WHERE id = NEW.program_id AND workspace_id = NEW.workspace_id), '') <> 'PERIODIZED')
+        OR (NEW.week_id IS NOT NULL AND COALESCE((SELECT m.program_id FROM dev_training_weeks w
+          JOIN dev_training_mesocycles m ON m.id = w.mesocycle_id AND m.workspace_id = w.workspace_id
+          WHERE w.id = NEW.week_id AND w.workspace_id = NEW.workspace_id), '') <> NEW.program_id)
+      BEGIN SELECT RAISE(ABORT, 'DRAFT_INVALID'); END`,
+    `CREATE TRIGGER dev_training_workouts_week_fixed BEFORE UPDATE OF week_id, program_id ON dev_training_workouts
+      WHEN NEW.week_id IS NOT OLD.week_id OR NEW.program_id IS NOT OLD.program_id
+      BEGIN SELECT RAISE(ABORT, 'DRAFT_INVALID'); END`,
+    // §48.10 п. 6: выбранный мезоцикл — у пары клиент/программа, только из своих мезоциклов.
+    `CREATE TABLE dev_training_mesocycle_selection (
+      workspace_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      program_id TEXT NOT NULL,
+      mesocycle_id TEXT NOT NULL,
+      PRIMARY KEY (workspace_id, client_id, program_id),
+      FOREIGN KEY (mesocycle_id, workspace_id) REFERENCES dev_training_mesocycles(id, workspace_id) ON DELETE RESTRICT
+    )`,
+    `CREATE TRIGGER dev_training_mesocycle_selection_own_insert BEFORE INSERT ON dev_training_mesocycle_selection
+      WHEN NOT EXISTS (SELECT 1 FROM dev_training_mesocycles WHERE id = NEW.mesocycle_id AND workspace_id = NEW.workspace_id
+        AND program_id = NEW.program_id AND client_id = NEW.client_id)
+      BEGIN SELECT RAISE(ABORT, 'TARGET_NOT_FOUND'); END`,
+    `CREATE TRIGGER dev_training_mesocycle_selection_own_update BEFORE UPDATE ON dev_training_mesocycle_selection
+      WHEN NOT EXISTS (SELECT 1 FROM dev_training_mesocycles WHERE id = NEW.mesocycle_id AND workspace_id = NEW.workspace_id
+        AND program_id = NEW.program_id AND client_id = NEW.client_id)
+      BEGIN SELECT RAISE(ABORT, 'TARGET_NOT_FOUND'); END`,
+  ],
 }];

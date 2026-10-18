@@ -1,31 +1,46 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { AppButton, ConfirmDialog, InlineNotice, LoadingState, TextField } from "../../../../shared/ui/components/public.ts";
+import { AppButton, ConfirmDialog, InlineNotice, LoadingState, SelectionChip, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { TrainingProgram } from "../domain/ProgramModel.ts";
 import { membersWord, PROGRAM_TITLE_MAX, programKindLabels } from "../domain/ProgramRules.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
-import type { SimplePlan } from "../domain/SimplePlanModel.ts";
+import type { PlannedWorkout, SimplePlan } from "../domain/SimplePlanModel.ts";
+import { weekTypeLabels, type PeriodizedPlan } from "../domain/PeriodizedModel.ts";
 import { setsSummary } from "../domain/SimplePlanRules.ts";
 import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
 
+/** Неделя программы для панели недель (её рисует дневник — другой модуль). */
+export interface ProgramWeeksView {
+  /** Меняется при смене мезоцикла: панель начинает с его первой незакрытой недели. */
+  readonly key: string;
+  readonly weeks: readonly Readonly<{ index: number; caption: string | null; workouts: readonly PlannedWorkout[] }>[];
+  readonly weekActions?: (weekIndex: number) => ReactNode;
+}
+
 /**
- * Открытая программа клиента (T01): открытие делает её выбранной у этого клиента. Структура (тренировки,
- * упражнения, подходы) появится с конструкторами T02/T04; здесь — название, участники и архив.
+ * Открытая программа клиента (T01): открытие делает её выбранной у этого клиента. Простая — недели и
+ * «Изменить программу»; Расширенная — мезоциклы этого участника (выбор хранится, §48.10), недели выбранного
+ * и «Изменить неделю» (T04).
  */
-export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, onEditStructure, onArchived }: Readonly<{
+export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, onEditStructure,
+  onAddMesocycle, onEditWeek, onArchived }: Readonly<{
   clientId: string;
   programId: string;
   repository: TrainingPlansRepositoryPort;
   listCandidates: () => Promise<readonly TrainingParticipantCandidate[]>;
   exercises: ExerciseLookupPort;
   /** Недели и тренировки со статусами выполнения (дневник — другой модуль, подставляет навигатор). */
-  renderWeeks?: (plan: SimplePlan) => ReactNode;
+  renderWeeks?: (view: ProgramWeeksView) => ReactNode;
   /** Открыть конструктор структуры (Простая — T02). */
   onEditStructure: () => void;
+  /** Расширенная: «+ Мезоцикл» (T04). */
+  onAddMesocycle: () => void;
+  /** Расширенная: правка недели выбранного мезоцикла (T04). */
+  onEditWeek: (mesocycleId: string, weekIndex: number) => void;
   onArchived: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -38,6 +53,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [message, setMessage] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
   const [plan, setPlan] = useState<SimplePlan | null>(null);
+  const [periodized, setPeriodized] = useState<PeriodizedPlan | null>(null);
   const lookup = useExerciseLookup(exercises);
 
   useEffect(() => {
@@ -48,6 +64,9 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       if (next !== null) void repository.selectProgram(clientId, programId).catch(() => undefined);
       if (next?.kind === "SIMPLE") {
         void repository.getSimplePlan(clientId, programId).then((loaded) => { if (active) setPlan(loaded?.draft.plan ?? null); });
+      }
+      if (next?.kind === "PERIODIZED") {
+        void repository.getPeriodizedPlan(clientId, programId).then((loaded) => { if (active) setPeriodized(loaded); });
       }
     }).catch(() => { if (active) setProgram(null); });
     return () => { active = false; };
@@ -124,7 +143,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
         {plan !== null ? (
           <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Недель: ${plan.weeks} · план недели повторяется`}</Text>
         ) : null}
-        {plan !== null && renderWeeks !== undefined ? renderWeeks(plan) : plan?.workouts.map((workout) => (
+        {plan !== null && renderWeeks !== undefined ? renderWeeks({ key: "simple", weeks: Array.from({ length: plan.weeks },
+          (_, index) => ({ index: index + 1, caption: null, workouts: plan.workouts })) }) : plan?.workouts.map((workout) => (
           <View key={workout.id} style={[styles.workout, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.workoutTitle, { color: colors.textPrimary }]}>{workout.title}</Text>
             {workout.exercises.length === 0 ? (
@@ -137,9 +157,25 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           </View>
         ))}
         <AppButton label="Изменить программу" onPress={onEditStructure} />
-      </> : (
-        <InlineNotice kind="info">Мезоциклы, недели и тренировки появятся в расширенном конструкторе (следующий этап).</InlineNotice>
-      )}
+      </> : periodized === null ? <LoadingState label="Открываем мезоциклы…" /> : (() => {
+        const selected = periodized.mesocycles.find((item) => item.id === periodized.selectedMesocycleId) ?? periodized.mesocycles[0];
+        return <>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+            {periodized.mesocycles.map((item) => (
+              <SelectionChip key={item.id} group="Мезоцикл" label={item.title} selected={item.id === selected?.id}
+                onPress={() => { void repository.selectMesocycle(clientId, programId, item.id).catch(() => undefined); }} />
+            ))}
+            <SelectionChip group="Мезоцикл" label="+ Мезоцикл" selected={false} onPress={onAddMesocycle} />
+          </ScrollView>
+          {selected === undefined ? (
+            <InlineNotice kind="info">Мезоциклов пока нет. Создайте первый: план первой недели скопируется во все недели.</InlineNotice>
+          ) : renderWeeks?.({ key: selected.id,
+            weeks: selected.weeks.map((week) => ({ index: week.index, caption: weekTypeLabels[week.type], workouts: week.workouts })),
+            weekActions: (weekIndex) => (
+              <AppButton variant="secondary" label="Изменить неделю" onPress={() => onEditWeek(selected.id, weekIndex)} />
+            ) })}
+        </>;
+      })()}
       {renaming !== null ? (
         <View style={styles.rename}>
           <TextField label="Название" required value={renaming} onChangeText={setRenaming} />
@@ -173,5 +209,6 @@ const styles = StyleSheet.create({
   workout: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 4 },
   workoutTitle: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, marginBottom: 2 },
   row: { flexDirection: "row", gap: 10 },
+  chips: { gap: 8, paddingRight: 8 },
   grow: { flex: 1 },
 });

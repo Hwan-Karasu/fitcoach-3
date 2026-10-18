@@ -7,11 +7,12 @@ import { AppButton, AppIconButton, InlineNotice, LoadingState, StickyEditorFoote
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
-import { addExercise, newDraft, replaceExercise, setTitle, setWeeks } from "../domain/SimplePlanEdits.ts";
+import { newDraft, setTitle, setWeeks } from "../domain/SimplePlanEdits.ts";
 import { WEEKS_MAX, WEEKS_MIN, type SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
-import { setFieldsOf, validateDraft } from "../domain/SimplePlanRules.ts";
+import { validateDraft } from "../domain/SimplePlanRules.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
+import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
 import { newPlanId, WorkoutsEditor } from "./WorkoutsEditor.tsx";
 
 export { newPlanId } from "./WorkoutsEditor.tsx";
@@ -36,7 +37,7 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
   repository: TrainingPlansRepositoryPort;
   exercises: ExerciseLookupPort;
   /** Упражнение, выбранное в каталоге для тренировки (передаёт навигация); `replace` — какое заменить. */
-  picked: Readonly<{ token: string; workoutId: string; exerciseId: string; replace?: string }> | null;
+  picked: PickedExercise | null;
   /** Открыть каталог: добавить упражнение или (`replace`) заменить им имеющееся. */
   onPickExercise: (workoutId: string, replace?: string) => void;
   onSaved: (programId: string) => void;
@@ -53,7 +54,6 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
   const [showIssues, setShowIssues] = useState(false);
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const appliedPick = useRef<string | null>(null);
 
   // Загрузка: сохранённый план и, если есть, восстановленный черновик поверх него (§48.29 п. 2).
   useEffect(() => {
@@ -76,16 +76,7 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
   }, [clientId, key, repository, revision]);
   useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
 
-  // Выбранное в каталоге упражнение добавляется (или заменяет «⇄») один раз.
-  useEffect(() => {
-    if (picked === null || draft === null || lookup === null || appliedPick.current === picked.token) return;
-    appliedPick.current = picked.token;
-    const plannedId = newPlanId("e");
-    change(picked.replace === undefined
-      ? addExercise(draft, picked.workoutId, plannedId, picked.exerciseId, () => newPlanId("s"))
-      : replaceExercise(draft, picked.replace, plannedId, picked.exerciseId, setFieldsOf(lookup.get(picked.exerciseId)?.metrics ?? []),
-        () => newPlanId("s")));
-  }, [change, draft, lookup, picked]);
+  usePickedExercise(picked, draft, lookup, change);
 
   const metricsOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.metrics ?? null, [lookup]);
   const issues = useMemo(() => draft === null || lookup === null ? [] : validateDraft(draft, metricsOf), [draft, lookup, metricsOf]);

@@ -69,8 +69,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
     let active = true;
     void (async () => {
       try {
-        const loaded = await plans.getSimplePlan(clientId, programId);
-        const found = loaded?.draft.plan.workouts.find((item) => item.id === plannedWorkoutId) ?? null;
+        const found = (await plans.findWorkout(clientId, programId, plannedWorkoutId))?.workout ?? null;
         const [current, nextMode] = await Promise.all([execution.getWorkout(stableSlot), execution.getConfirmationMode()]);
         // Добавленные разминки тоже получают «Пред.» — по типу и номеру среди разминок.
         const nextPrevious = found === null ? new Map<string, PreviousSet>() : await execution.getPrevious(stableSlot,

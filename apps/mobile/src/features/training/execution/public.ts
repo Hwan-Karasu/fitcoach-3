@@ -3,7 +3,7 @@ export type { ActiveWorkout, ActiveWorkoutCard, ActiveWorkoutsPort, Confirmation
 export { hasEnteredData, isComplete, nextOutcome, weekStatus, workoutStatus } from "./domain/ExecutionRules.ts";
 export { WorkoutScreen } from "./presentation/WorkoutScreen.tsx";
 export { TrainingSettingsScreen } from "./presentation/TrainingSettingsScreen.tsx";
-export { ProgramWeeksPanel } from "./presentation/ProgramWeeksPanel.tsx";
+export { ProgramWeeksPanel, type ProgramWeekView } from "./presentation/ProgramWeeksPanel.tsx";
 export { RestTimerDock } from "./presentation/RestTimerDock.tsx";
 export { RestTimerService } from "./application/RestTimerService.ts";
 export type { RestSignalPort, RestTimerStorePort, RestTimersPort } from "./domain/RestTimerPorts.ts";

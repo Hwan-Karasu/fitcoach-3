@@ -1,5 +1,6 @@
 import type { ClientProgramLibrary, CreateProgramInput, TrainingProgram } from "./ProgramModel.ts";
-import type { SimpleProgramDraft } from "./SimplePlanModel.ts";
+import type { NewMesocycleInput, PeriodizedPlan, WeekEditInput, WeekEditResult } from "./PeriodizedModel.ts";
+import type { PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
 
 export interface TrainingPlansCommittedChange {
   /** Клиенты, чья библиотека изменилась. */
@@ -39,6 +40,24 @@ export interface TrainingPlansRepositoryPort {
    */
   setExerciseRest(clientId: string, programId: string, plannedExerciseId: string, restSec: number | null,
     now?: Date): Promise<TrainingProgram>;
+  /** Тренировка программы по ID — для дневника, в Простой и Расширенной программе одинаково. */
+  findWorkout(clientId: string, programId: string, plannedWorkoutId: string):
+    Promise<Readonly<{ program: TrainingProgram; workout: PlannedWorkout }> | null>;
+  /** Расширенная программа этого участника: его мезоциклы, недели и выбранный мезоцикл. */
+  getPeriodizedPlan(clientId: string, programId: string): Promise<PeriodizedPlan | null>;
+  /**
+   * Новый мезоцикл (§48.12.1 п. 1): каждому выбранному участнику — своя копия с общим родством, одной
+   * транзакцией по ревизии программы; открывшему клиенту он становится выбранным.
+   */
+  createMesocycle(clientId: string, programId: string, expectedRevision: number, input: NewMesocycleInput,
+    now?: Date): Promise<Readonly<{ program: TrainingProgram; mesocycleId: string }>>;
+  /**
+   * Правка недели (§48.6): неделя открывшего клиента сохраняется как есть; та же разница по родству — в целевые
+   * недели области у каждого выбранного участника. Одной транзакцией; факты не копируются.
+   */
+  saveWeek(clientId: string, programId: string, expectedRevision: number, input: WeekEditInput, now?: Date): Promise<WeekEditResult>;
+  /** §48.10: ручной выбор мезоцикла — только у этого клиента, хранится в базе; не правка плана. */
+  selectMesocycle(clientId: string, programId: string, mesocycleId: string): Promise<void>;
   /** §48.29 Recovery Draft: ключ — `new:SIMPLE` или ID программы. Не публикует изменения в план. */
   getBuilderDraft(clientId: string, key: string): Promise<Readonly<{ baseRevision: number | null; draft: SimpleProgramDraft }> | null>;
   saveBuilderDraft(clientId: string, key: string, baseRevision: number | null, draft: SimpleProgramDraft): Promise<void>;

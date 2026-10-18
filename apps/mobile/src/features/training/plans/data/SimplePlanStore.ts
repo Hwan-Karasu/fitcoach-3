@@ -2,48 +2,58 @@ import type { SqliteStatementPort } from "../../../../shared/db/SqlitePort.ts";
 import type { PlannedExercise, PlannedSet, PlannedWorkout, SimplePlan } from "../domain/SimplePlanModel.ts";
 
 /**
- * Чтение и запись структуры Простой программы. Запись — по стабильным ID: существующие строки
- * обновляются (порядок, название, значения), убранные удаляются, новые добавляются (§48.5.7 п. 5).
- * Чужие ID (другой программы) отклоняются — иначе правка задела бы чужую структуру.
+ * Чтение и запись тренировок программы. У Простой программы тренировки без недели (`week_id IS NULL`), у
+ * Расширенной — у каждой недели свои (T04). Запись — по стабильным ID: существующие строки обновляются (порядок,
+ * название, значения), убранные удаляются, новые добавляются (§48.5.7 п. 5). Чужие ID отклоняются — иначе правка
+ * задела бы чужую структуру.
  */
 
 type SetRow = Readonly<{ id: string; exerciseRowId: string; reps: number | null; repsMax: number | null; loadGrams: number | null;
   durationSec: number | null; distanceM: number | null }>;
 
-export async function readStructure(tx: SqliteStatementPort, workspaceId: string, programId: string,
-  weeks: number): Promise<SimplePlan> {
-  const workouts = await tx.all<{ id: string; title: string }>(`SELECT id, title FROM dev_training_workouts
-    WHERE workspace_id = ? AND program_id = ? ORDER BY position`, [workspaceId, programId]);
+/** Тренировки программы (`weekId = null`) или одной недели Расширенной программы. */
+export async function readWorkouts(tx: SqliteStatementPort, workspaceId: string, programId: string,
+  weekId: string | null): Promise<readonly PlannedWorkout[]> {
+  const workouts = await tx.all<{ id: string; title: string; lineageId: string | null }>(`SELECT id, title,
+      lineage_id AS lineageId FROM dev_training_workouts
+    WHERE workspace_id = ? AND program_id = ? AND week_id IS ? ORDER BY position`, [workspaceId, programId, weekId]);
   const exercises = await tx.all<{ id: string; workoutId: string; exerciseId: string; restSec: number | null;
-    instruction: string | null; rirMin: number | null; rirMax: number | null }>(`SELECT e.id, e.workout_id AS workoutId,
-      e.exercise_id AS exerciseId, e.rest_sec AS restSec, e.instruction, e.rir_min AS rirMin, e.rir_max AS rirMax
+    instruction: string | null; rirMin: number | null; rirMax: number | null; lineageId: string | null }>(`SELECT e.id,
+      e.workout_id AS workoutId, e.exercise_id AS exerciseId, e.rest_sec AS restSec, e.instruction, e.rir_min AS rirMin,
+      e.rir_max AS rirMax, e.lineage_id AS lineageId
       FROM dev_training_planned_exercises e
     JOIN dev_training_workouts w ON w.id = e.workout_id AND w.workspace_id = e.workspace_id
-    WHERE e.workspace_id = ? AND w.program_id = ? ORDER BY e.position`, [workspaceId, programId]);
+    WHERE e.workspace_id = ? AND w.program_id = ? AND w.week_id IS ? ORDER BY e.position`, [workspaceId, programId, weekId]);
   const sets = await tx.all<SetRow>(`SELECT s.id, s.planned_exercise_id AS exerciseRowId, s.reps, s.reps_max AS repsMax,
       s.load_grams AS loadGrams,
       s.duration_sec AS durationSec, s.distance_m AS distanceM FROM dev_training_planned_sets s
     JOIN dev_training_planned_exercises e ON e.id = s.planned_exercise_id AND e.workspace_id = s.workspace_id
     JOIN dev_training_workouts w ON w.id = e.workout_id AND w.workspace_id = e.workspace_id
-    WHERE s.workspace_id = ? AND w.program_id = ? ORDER BY s.position`, [workspaceId, programId]);
+    WHERE s.workspace_id = ? AND w.program_id = ? AND w.week_id IS ? ORDER BY s.position`, [workspaceId, programId, weekId]);
   const setsOf = (exerciseRowId: string): PlannedSet[] => sets.filter((set) => set.exerciseRowId === exerciseRowId)
     .map(({ id, reps, repsMax, loadGrams, durationSec, distanceM }) => ({ id, reps, repsMax, loadGrams, durationSec, distanceM }));
-  return {
-    weeks,
-    workouts: workouts.map((workout): PlannedWorkout => ({ ...workout,
-      exercises: exercises.filter((exercise) => exercise.workoutId === workout.id)
-        .map((exercise): PlannedExercise => ({ id: exercise.id, exerciseId: exercise.exerciseId, restSec: exercise.restSec,
-          instruction: exercise.instruction, rir: exercise.rirMin === null ? null : { min: exercise.rirMin, max: exercise.rirMax },
-          sets: setsOf(exercise.id) })) })),
-  };
+  return workouts.map((workout): PlannedWorkout => ({ id: workout.id, title: workout.title,
+    ...(workout.lineageId === null ? {} : { lineageId: workout.lineageId }),
+    exercises: exercises.filter((exercise) => exercise.workoutId === workout.id)
+      .map((exercise): PlannedExercise => ({ id: exercise.id,
+        ...(exercise.lineageId === null ? {} : { lineageId: exercise.lineageId }),
+        exerciseId: exercise.exerciseId, restSec: exercise.restSec,
+        instruction: exercise.instruction, rir: exercise.rirMin === null ? null : { min: exercise.rirMin, max: exercise.rirMax },
+        sets: setsOf(exercise.id) })) }));
 }
 
-async function ownedIds(tx: SqliteStatementPort, workspaceId: string, programId: string) {
-  const plan = await readStructure(tx, workspaceId, programId, 1);
-  const workouts = new Set(plan.workouts.map((workout) => workout.id));
-  const exercises = new Set(plan.workouts.flatMap((workout) => workout.exercises.map((exercise) => exercise.id)));
-  const sets = new Set(plan.workouts.flatMap((workout) => workout.exercises.flatMap((exercise) => exercise.sets.map((set) => set.id))));
-  return { workouts, exercises, sets };
+export async function readStructure(tx: SqliteStatementPort, workspaceId: string, programId: string,
+  weeks: number): Promise<SimplePlan> {
+  return { weeks, workouts: await readWorkouts(tx, workspaceId, programId, null) };
+}
+
+async function ownedIds(tx: SqliteStatementPort, workspaceId: string, programId: string, weekId: string | null) {
+  const workouts = await readWorkouts(tx, workspaceId, programId, weekId);
+  return {
+    workouts: new Set(workouts.map((workout) => workout.id)),
+    exercises: new Set(workouts.flatMap((workout) => workout.exercises.map((exercise) => exercise.id))),
+    sets: new Set(workouts.flatMap((workout) => workout.exercises.flatMap((exercise) => exercise.sets.map((set) => set.id)))),
+  };
 }
 
 async function assertFree(tx: SqliteStatementPort, table: string, id: string, owned: ReadonlySet<string>) {
@@ -52,24 +62,28 @@ async function assertFree(tx: SqliteStatementPort, table: string, id: string, ow
   if (taken !== null) throw new Error("DRAFT_INVALID");
 }
 
-export async function writeStructure(tx: SqliteStatementPort, workspaceId: string, programId: string, plan: SimplePlan): Promise<void> {
-  const owned = await ownedIds(tx, workspaceId, programId);
+/** Запись тренировок программы (`weekId = null`) или одной недели. */
+export async function writeWorkouts(tx: SqliteStatementPort, workspaceId: string, programId: string, weekId: string | null,
+  workouts: readonly PlannedWorkout[]): Promise<void> {
+  const owned = await ownedIds(tx, workspaceId, programId, weekId);
   const keep = { workouts: new Set<string>(), exercises: new Set<string>(), sets: new Set<string>() };
-  for (const [workoutIndex, workout] of plan.workouts.entries()) {
+  for (const [workoutIndex, workout] of workouts.entries()) {
     await assertFree(tx, "dev_training_workouts", workout.id, owned.workouts);
     keep.workouts.add(workout.id);
-    await tx.run(`INSERT INTO dev_training_workouts (id, workspace_id, program_id, position, title) VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET position = excluded.position, title = excluded.title`,
-    [workout.id, workspaceId, programId, workoutIndex, workout.title.trim()]);
+    await tx.run(`INSERT INTO dev_training_workouts (id, workspace_id, program_id, position, title, week_id, lineage_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET position = excluded.position, title = excluded.title, lineage_id = excluded.lineage_id`,
+    [workout.id, workspaceId, programId, workoutIndex, workout.title.trim(), weekId, workout.lineageId ?? null]);
     for (const [exerciseIndex, exercise] of workout.exercises.entries()) {
       await assertFree(tx, "dev_training_planned_exercises", exercise.id, owned.exercises);
       keep.exercises.add(exercise.id);
       await tx.run(`INSERT INTO dev_training_planned_exercises (id, workspace_id, workout_id, position, exercise_id, rest_sec,
-        instruction, rir_min, rir_max) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET workout_id = excluded.workout_id,
-        position = excluded.position, exercise_id = excluded.exercise_id, rest_sec = excluded.rest_sec,
-        instruction = excluded.instruction, rir_min = excluded.rir_min, rir_max = excluded.rir_max`,
+        instruction, rir_min, rir_max, lineage_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
+        workout_id = excluded.workout_id, position = excluded.position, exercise_id = excluded.exercise_id,
+        rest_sec = excluded.rest_sec, instruction = excluded.instruction, rir_min = excluded.rir_min, rir_max = excluded.rir_max,
+        lineage_id = excluded.lineage_id`,
       [exercise.id, workspaceId, workout.id, exerciseIndex, exercise.exerciseId, exercise.restSec, exercise.instruction,
-        exercise.rir?.min ?? null, exercise.rir?.max ?? null]);
+        exercise.rir?.min ?? null, exercise.rir?.max ?? null, exercise.lineageId ?? null]);
       for (const [setIndex, set] of exercise.sets.entries()) {
         await assertFree(tx, "dev_training_planned_sets", set.id, owned.sets);
         keep.sets.add(set.id);
@@ -88,7 +102,11 @@ export async function writeStructure(tx: SqliteStatementPort, workspaceId: strin
   for (const id of owned.workouts) if (!keep.workouts.has(id)) await tx.run("DELETE FROM dev_training_workouts WHERE id = ?", [id]);
 }
 
-/** Удаление всей структуры программы (окончательное удаление её единственного клиента). */
+export async function writeStructure(tx: SqliteStatementPort, workspaceId: string, programId: string, plan: SimplePlan): Promise<void> {
+  await writeWorkouts(tx, workspaceId, programId, null, plan.workouts);
+}
+
+/** Удаление всей структуры Простой программы (окончательное удаление её единственного клиента). */
 export async function deleteStructure(tx: SqliteStatementPort, workspaceId: string, programId: string): Promise<void> {
-  await writeStructure(tx, workspaceId, programId, { weeks: 1, workouts: [] });
+  await writeWorkouts(tx, workspaceId, programId, null, []);
 }

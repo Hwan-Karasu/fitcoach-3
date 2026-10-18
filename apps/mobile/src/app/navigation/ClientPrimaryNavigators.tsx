@@ -4,7 +4,8 @@ import { ClientHomePreview, type ClientRecord } from "../../features/clients/pub
 import { localDateOf, parseValueX10, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
 import { NutritionWorkspacePreview } from "../../features/nutrition/public.ts";
-import { CreateProgramScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, SimpleProgramBuilderScreen,
+import { CreateProgramScreen, MesocycleCreatorScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, SimpleProgramBuilderScreen,
+  WeekEditorScreen, type PickedExercise,
   type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
   type TrainingPlansRepositoryPort, ProgramWeeksPanel, WorkoutScreen, type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort,
   type WorkoutSlot } from "../../features/training/public.ts";
@@ -18,10 +19,18 @@ type TrainingRoutes = {
   TrainingChooser: undefined;
   TrainingCreate: { kind: ProgramKind };
   TrainingProgram: { programId: string };
-  TrainingBuilder: { programId?: string; picked?: { token: string; workoutId: string; exerciseId: string; replace?: string } } | undefined;
-  TrainingPickExercise: { workoutId: string; programId?: string; replace?: string };
+  TrainingBuilder: { programId?: string; picked?: PickedExercise } | undefined;
+  TrainingMesocycle: { programId: string; picked?: PickedExercise };
+  TrainingWeek: { programId: string; mesocycleId: string; weekIndex: number; picked?: PickedExercise };
+  /** Каталог для выбора упражнения; результат возвращается на экран `returnTo` с теми же параметрами. */
+  TrainingPickExercise: { workoutId: string; replace?: string; returnTo: PickReturn };
   TrainingWorkout: { programId: string; weekIndex: number; workoutId: string };
 };
+
+type PickReturn =
+  | Readonly<{ name: "TrainingBuilder"; params: { programId?: string } }>
+  | Readonly<{ name: "TrainingMesocycle"; params: { programId: string } }>
+  | Readonly<{ name: "TrainingWeek"; params: { programId: string; mesocycleId: string; weekIndex: number } }>;
 
 const HomeStack = createNativeStackNavigator<HomeRoutes>();
 const NutritionStack = createNativeStackNavigator<NutritionRoutes>();
@@ -116,26 +125,52 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
       <TrainingStack.Screen name="TrainingProgram">
         {({ navigation, route }) => <ProgramScreen clientId={clientId} programId={route.params.programId}
           repository={repository} listCandidates={listCandidates} exercises={exerciseLookup}
-          renderWeeks={(plan) => <ProgramWeeksPanel clientId={clientId} programId={route.params.programId} weeks={plan.weeks}
-            workouts={plan.workouts} execution={execution}
+          renderWeeks={(view) => <ProgramWeeksPanel key={view.key} clientId={clientId} programId={route.params.programId} weeks={view.weeks}
+            renderWeekActions={view.weekActions} execution={execution}
             onOpenWorkout={(weekIndex, workoutId) => navigation.navigate("TrainingWorkout", { programId: route.params.programId, weekIndex, workoutId })} />}
           onEditStructure={() => navigation.navigate("TrainingBuilder", { programId: route.params.programId })}
+          onAddMesocycle={() => navigation.navigate("TrainingMesocycle", { programId: route.params.programId })}
+          onEditWeek={(mesocycleId, weekIndex) => navigation.navigate("TrainingWeek", { programId: route.params.programId, mesocycleId, weekIndex })}
           onArchived={() => navigation.popTo("TrainingIndex")} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingBuilder">
         {({ navigation, route }) => <SimpleProgramBuilderScreen clientId={clientId} programId={route.params?.programId ?? null}
           repository={repository} exercises={exerciseLookup} picked={route.params?.picked ?? null}
-          onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId, programId: route.params?.programId,
-            ...(replace === undefined ? {} : { replace }) })}
+          onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId,
+            ...(replace === undefined ? {} : { replace }),
+            returnTo: { name: "TrainingBuilder", params: { ...(route.params?.programId === undefined ? {} : { programId: route.params.programId }) } } })}
           onSaved={(programId) => navigation.reset({ index: 1,
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId } }] })} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingPickExercise">
         {({ navigation, route }) => <ExerciseLibraryScreen repository={exercises} picking
           onCreate={() => undefined}
-          onOpen={(exerciseId) => navigation.popTo("TrainingBuilder", { programId: route.params.programId,
-            picked: { token: `${Date.now()}`, workoutId: route.params.workoutId, exerciseId,
-              ...(route.params.replace === undefined ? {} : { replace: route.params.replace }) } }, { merge: true })} />}
+          onOpen={(exerciseId) => {
+            const picked: PickedExercise = { token: `${Date.now()}`, workoutId: route.params.workoutId, exerciseId,
+              ...(route.params.replace === undefined ? {} : { replace: route.params.replace }) };
+            const back = route.params.returnTo;
+            if (back.name === "TrainingBuilder") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
+            else if (back.name === "TrainingMesocycle") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
+            else navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
+          }} />}
+      </TrainingStack.Screen>
+      <TrainingStack.Screen name="TrainingMesocycle">
+        {({ navigation, route }) => <MesocycleCreatorScreen clientId={clientId} programId={route.params.programId}
+          repository={repository} exercises={exerciseLookup} listCandidates={listCandidates} picked={route.params.picked ?? null}
+          onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId,
+            ...(replace === undefined ? {} : { replace }),
+            returnTo: { name: "TrainingMesocycle", params: { programId: route.params.programId } } })}
+          onCreated={() => navigation.popTo("TrainingProgram", { programId: route.params.programId })} />}
+      </TrainingStack.Screen>
+      <TrainingStack.Screen name="TrainingWeek">
+        {({ navigation, route }) => <WeekEditorScreen clientId={clientId} programId={route.params.programId}
+          mesocycleId={route.params.mesocycleId} weekIndex={route.params.weekIndex}
+          repository={repository} exercises={exerciseLookup} listCandidates={listCandidates} picked={route.params.picked ?? null}
+          onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId,
+            ...(replace === undefined ? {} : { replace }),
+            returnTo: { name: "TrainingWeek", params: { programId: route.params.programId, mesocycleId: route.params.mesocycleId,
+              weekIndex: route.params.weekIndex } } })}
+          onSaved={() => navigation.popTo("TrainingProgram", { programId: route.params.programId })} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingWorkout">
         {({ route }) => <WorkoutScreen slot={{ clientId, programId: route.params.programId, weekIndex: route.params.weekIndex,

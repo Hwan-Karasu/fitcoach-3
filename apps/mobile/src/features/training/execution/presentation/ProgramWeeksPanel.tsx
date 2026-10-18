@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 import { SelectionChip, StatusTag, type StatusKind } from "../../../../shared/ui/components/public.ts";
@@ -16,17 +16,26 @@ const statusKinds: Readonly<Record<WorkoutStatus, StatusKind>> = {
 
 const weekMarks: Readonly<Record<WeekStatus, string>> = { NOT_STARTED: "", IN_PROGRESS: " •", COMPLETED: " ✓", CLOSED_WITH_DEVIATIONS: " ✓!" };
 
+/** Неделя для панели: у Простой программы тренировки всех недель одни и те же, у Расширенной — свои. */
+export interface ProgramWeekView {
+  readonly index: number;
+  /** Подпись недели (тип недели Расширенной программы); `null` — без подписи. */
+  readonly caption: string | null;
+  readonly workouts: readonly PlannedWorkout[];
+}
+
 /**
- * Недели Простой программы со статусами (§48.26, §48.46): выбор недели и её тренировки. Открытие тренировки —
+ * Недели программы со статусами (§48.26, §48.46): выбор недели и её тренировки. Открытие тренировки —
  * только по нажатию; завершение не переключает неделю само (§48.10, §48.72).
  */
-export function ProgramWeeksPanel({ clientId, programId, weeks, workouts, execution, onOpenWorkout }: Readonly<{
+export function ProgramWeeksPanel({ clientId, programId, weeks: views, execution, onOpenWorkout, renderWeekActions }: Readonly<{
   clientId: string;
   programId: string;
-  weeks: number;
-  workouts: readonly PlannedWorkout[];
+  weeks: readonly ProgramWeekView[];
   execution: TrainingExecutionPort;
   onOpenWorkout: (weekIndex: number, workoutId: string) => void;
+  /** Действия выбранной недели (например, «Изменить неделю» Расширенной программы). */
+  renderWeekActions?: (weekIndex: number) => ReactNode;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -48,11 +57,15 @@ export function ProgramWeeksPanel({ clientId, programId, weeks, workouts, execut
     const map = new Map(statuses.map((item) => [`${item.weekIndex}:${item.plannedWorkoutId}`, item.status]));
     return (week: number, workoutId: string): WorkoutStatus => map.get(`${week}:${workoutId}`) ?? "NOT_STARTED";
   }, [statuses]);
-  const weekOf = (week: number) => weekStatus(workouts.map((workout) => statusOf(week, workout.id)));
+  const weeks = views.length;
+  const viewOf = (week: number) => views[week - 1];
+  const weekOf = (week: number) => weekStatus((viewOf(week)?.workouts ?? []).map((workout) => statusOf(week, workout.id)));
   // По умолчанию — первая неделя, которая ещё не закрыта.
   const firstOpen = Array.from({ length: weeks }, (_, index) => index + 1)
     .find((week) => { const status = weekOf(week); return status === "NOT_STARTED" || status === "IN_PROGRESS"; }) ?? weeks;
   const week = Math.min(selected ?? firstOpen, weeks);
+  const caption = viewOf(week)?.caption ?? null;
+  const workouts = viewOf(week)?.workouts ?? [];
 
   return (
     <View style={styles.panel}>
@@ -62,7 +75,7 @@ export function ProgramWeeksPanel({ clientId, programId, weeks, workouts, execut
             onPress={() => setSelected(item)} />
         ))}
       </ScrollView>
-      <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Неделя ${week}: ${weekStatusLabels[weekOf(week)].toLowerCase()}`}</Text>
+      <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Неделя ${week}${caption === null ? "" : ` · ${caption}`}: ${weekStatusLabels[weekOf(week)].toLowerCase()}`}</Text>
       {workouts.map((workout) => {
         const status = statusOf(week, workout.id);
         return (
@@ -81,6 +94,7 @@ export function ProgramWeeksPanel({ clientId, programId, weeks, workouts, execut
           </Pressable>
         );
       })}
+      {weeks > 0 ? renderWeekActions?.(week) : null}
     </View>
   );
 }
