@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useFocusEffect } from "@react-navigation/native";
-import { AppState, ScrollView, StyleSheet, Text, View } from "react-native";
+import { AppState, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Cake, CalendarClock, CalendarDays, Dumbbell, PinOff, Plus, Ticket } from "lucide-react-native";
 import { AppButton, AppIconButton, ClientRosterCard, ConfirmDialog, EmptyState, FilterPill, FloatingActionButton,
   InlineNotice,
-  ListSectionHeader, DropdownMenu, SelectionChip, SkeletonList, useHeaderScrollHandler, useHeaderSearch,
+  ListSectionHeader, DropdownMenu, SkeletonList, useHeaderScrollHandler, useHeaderSearch,
   type DropdownOption } from "../../../shared/ui/components/public.ts";
-import { EmptyPanel, PrototypeScreen } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { ArchiveSortMode, ClientArchivePort, ClientDeletionManifest } from
   "../domain/ClientArchivePort.ts";
@@ -55,6 +54,10 @@ function ListLoadState({ snapshot, error, onRetry }: Readonly<{
 const sortOptions: readonly DropdownOption<RosterSortMode>[] = [
   { value: "NAME", label: "Имя А–Я" },
   { value: "RECENT", label: "Недавние" },
+];
+const archiveSortOptions: readonly DropdownOption<ArchiveSortMode>[] = [
+  { value: "ARCHIVED_AT", label: "Недавно архивированные" },
+  { value: "NAME", label: "Имя А–Я" },
 ];
 
 const metricLook: Readonly<Record<RosterMetricId, Readonly<{ label: string; icon: (color: string) => ReactNode }>>> = {
@@ -284,7 +287,12 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
   repository: ClientRepositoryPort & ClientArchivePort;
   readModel: ClientListQueryPort;
 }>) {
-  const { query } = useHeaderSearch();
+  const { query, setQuery } = useHeaderSearch();
+  const { width, fontScale } = useWindowDimensions();
+  const [sortOpen, setSortOpen] = useState(false);
+  const [toolbarHeight, setToolbarHeight] = useState(52);
+  const sortAnchor = useRef<View>(null);
+  const onScroll = useHeaderScrollHandler();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -354,13 +362,17 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
   };
 
   return (
-    <PrototypeScreen>
-      <View style={styles.filters}>
-        <SelectionChip group="Сортировка" label="Сначала недавно архивированные"
-          selected={sort === "ARCHIVED_AT"} onPress={() => { void chooseSort("ARCHIVED_AT"); }} />
-        <SelectionChip group="Сортировка" label="По имени А–Я" selected={sort === "NAME"}
-          onPress={() => { void chooseSort("NAME"); }} />
+    <View style={styles.screen}>
+      <View style={styles.toolbar} pointerEvents="box-none"
+        onLayout={(event) => setToolbarHeight(event.nativeEvent.layout.height)}>
+        <View style={styles.pills}>
+          <FilterPill label={sort === "NAME" ? "Имя А–Я" : "Недавно архивированные"}
+            accessibilityLabel="Сортировка архива" menu expanded={sortOpen} anchorRef={sortAnchor}
+            onPress={() => setSortOpen(true)} />
+        </View>
       </View>
+      <ScrollView onScroll={onScroll} scrollEventThrottle={16} keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[styles.content, { paddingTop: toolbarHeight + 8 }]}>
       {data !== null && total > 0 ? (
         <Text style={[styles.message, { color: colors.textSecondary }]}>В архиве: {total}</Text>
       ) : null}
@@ -368,43 +380,51 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
       <ListLoadState snapshot={snapshot} error={error}
         onRetry={() => { setError(null); readModel.refresh(); }} />
       {visible !== null && visible.length === 0 ? (
-        <EmptyPanel
+        <EmptyState reason={total > 0 ? "no-match" : "no-data"}
           title={total > 0 ? "Ничего не найдено" : "Архив пуст"}
           body={total > 0 ? "Попробуйте другое имя или очистите поиск."
             : "Архивированные карточки появятся здесь."}
+          action={query.trim() ? { label: "Очистить поиск", onPress: () => setQuery("") } : undefined}
         />
       ) : null}
       {visible?.map((row) => (
         <View key={row.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.identityMain}>
-            <Text accessibilityElementsHidden style={[styles.avatar,
+            <Text accessibilityElementsHidden style={[styles.avatar, { borderRadius: 8 },
               { color: colors.textPrimary, backgroundColor: colors.surfaceRaised }]}>{clientMark(row)}</Text>
             <View style={styles.cardText}>
-              <Text style={[styles.name, { color: colors.textPrimary }]}>{row.displayName}</Text>
+              <Text numberOfLines={2} style={[styles.name, { color: colors.textPrimary }]}>{row.displayName}</Text>
               <Text style={[styles.detail, { color: colors.textSecondary }]}>
                 {formatArchivedSince(row.archivedAt)}
               </Text>
             </View>
           </View>
-          <AppButton variant="secondary" label="Вернуть в клиенты" busy={busyId === row.id}
+          <View style={{ flexDirection: fontScale > 1.15 || width < 390 ? "column" : "row", gap: 8 }}>
+          <View style={styles.archiveAction}><AppButton variant="secondary" label="Вернуть в клиенты" busy={busyId === row.id}
             disabled={busyId !== null} disabledReason="Дождитесь завершения операции"
-            onPress={() => { void restore(row); }} />
-          <AppButton variant="destructive" label="Удалить окончательно"
+            onPress={() => { void restore(row); }} /></View>
+          <View style={styles.archiveAction}><AppButton variant="destructive" label="Удалить окончательно"
             disabled={busyId !== null} disabledReason="Дождитесь завершения операции"
-            onPress={() => { void requestDelete(row); }} />
+            onPress={() => { void requestDelete(row); }} /></View>
+          </View>
         </View>
       ))}
+      </ScrollView>
+      <DropdownMenu visible={sortOpen} anchor={sortAnchor} title="Сортировка архива"
+        options={archiveSortOptions} selected={sort} onSelect={(mode) => { void chooseSort(mode); }}
+        onClose={() => setSortOpen(false)} />
       <ConfirmDialog visible={pendingDelete !== null} confirmBusy={deleting} destructive
         title={`Удалить «${pendingDelete?.displayName ?? ""}» окончательно?`}
         description={pendingDelete === null ? "" : permanentDeleteDescription(pendingDelete)}
         confirmLabel="Удалить окончательно"
         onCancel={() => setPendingDelete(null)} onConfirm={() => { void confirmDelete(); }} />
-    </PrototypeScreen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  archiveAction: { flexGrow: 1, flexBasis: 0 },
   // Нижний отступ — чтобы последняя карточка не уходила под плавающую кнопку.
   toolbar: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, paddingHorizontal: 16, paddingTop: 4,
     paddingBottom: 8, gap: 8 },
