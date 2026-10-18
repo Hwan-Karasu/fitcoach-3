@@ -73,6 +73,21 @@ export function activeFilterCount(filters: CatalogFilters): number {
   return filters.bodyParts.size + filters.equipment.size + filters.profiles.size + (filters.showHidden ? 1 : 0);
 }
 
+/**
+ * Число упражнений у каждого варианта фильтра (UI-OWN-030): с учётом поиска, режима и остальных фильтров, но без
+ * выбора в этом же измерении — иначе отмеченные варианты скрыли бы остальные.
+ */
+export function filterOptionCounts(entries: readonly CatalogEntry[], query: string, mode: CatalogMode, filters: CatalogFilters,
+  dimension: "bodyParts" | "equipment"): ReadonlyMap<string, number> {
+  const open: CatalogFilters = dimension === "bodyParts" ? { ...filters, bodyParts: new Set() } : { ...filters, equipment: new Set() };
+  const counts = new Map<string, number>();
+  for (const { definition } of filterCatalog(entries, query, mode, open)) {
+    const key = dimension === "bodyParts" ? definition.bodyPart : definition.equipment ?? "none";
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
 export function filterCatalog(entries: readonly CatalogEntry[], query: string, mode: CatalogMode,
   filters: CatalogFilters): readonly CatalogEntry[] {
   const words = queryWords(query);

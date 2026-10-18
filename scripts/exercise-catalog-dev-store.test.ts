@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { DevExerciseCatalogRepository } from "../apps/mobile/src/features/exercises/data/DevExerciseCatalogRepository.ts";
 import type { ExerciseDefinition, SystemCatalog } from "../apps/mobile/src/features/exercises/domain/ExerciseModel.ts";
-import { EMPTY_OVERLAY, filterCatalog, matchesQuery, NO_FILTERS, normalizeAliases, sortCatalog, validateCustom } from
+import { EMPTY_OVERLAY, filterCatalog, filterOptionCounts, matchesQuery, NO_FILTERS, normalizeAliases, sortCatalog, validateCustom } from
   "../apps/mobile/src/features/exercises/domain/ExerciseRules.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
@@ -109,6 +109,20 @@ test("X01 личный слой: избранное и скрытое у сис�
     assert.throws(() => db.prepare(`INSERT INTO dev_custom_exercises (id, workspace_id, name, body_part, tracking_profile,
       revision, created_at, updated_at) VALUES ('usr:x', ?, 'Без группы', 'tail', 'REPS', 1, 'now', 'now')`).run(WS), /CHECK/);
     assert.deepEqual(normalizeAliases(["a", "A ", "б"]), ["a", "б"]);
+  } finally {
+    await repository.close();
+  }
+});
+
+test("UI-OWN-030 фильтры каталога: число упражнений у каждого варианта — с учётом остальных фильтров, но не своего", async () => {
+  const { repository } = await store();
+  try {
+    const entries = await repository.list();
+    const muscles = filterOptionCounts(entries, "", "ALL", { ...NO_FILTERS, bodyParts: new Set(["core"]) }, "bodyParts");
+    assert.deepEqual([...muscles.entries()].sort(), [["chest", 1], ["core", 1]], "свой выбор не сужает свои варианты");
+    const equipment = filterOptionCounts(entries, "", "ALL", { ...NO_FILTERS, bodyParts: new Set(["core"]) }, "equipment");
+    assert.deepEqual([...equipment.entries()], [["none", 1]], "чужой фильтр (мышцы) сужает варианты оборудования");
+    assert.deepEqual([...filterOptionCounts(entries, "жим", "ALL", NO_FILTERS, "bodyParts").entries()], [["chest", 1]], "поиск учитывается");
   } finally {
     await repository.close();
   }
