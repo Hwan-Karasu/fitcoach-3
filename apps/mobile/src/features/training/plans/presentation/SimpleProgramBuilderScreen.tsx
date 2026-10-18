@@ -202,9 +202,9 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, ex
 const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, padding: 16, justifyContent: "center" },
-  content: { padding: 16, gap: 12, paddingBottom: 24 },
+  content: { paddingHorizontal: 16, paddingTop: 10, gap: 10, paddingBottom: 24 },
   grow: { flex: 1, minWidth: 0 },
-  tabs: { paddingHorizontal: 16, paddingTop: 12 },
+  tabs: { paddingHorizontal: 16, paddingTop: 4 },
   settings: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 10 },
   settingsTitle: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
   weeks: { flexDirection: "row", alignItems: "center", gap: 4 },

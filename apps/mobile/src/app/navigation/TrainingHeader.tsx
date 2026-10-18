@@ -30,7 +30,7 @@ export function TrainingHeader({ title, clientName, onBack, onClients }: Readonl
   </View>;
 }
 const styles = StyleSheet.create({
-  bar: { minHeight: 48, flexDirection: "row", alignItems: "center", paddingHorizontal: 4, gap: 2 },
+  bar: { minHeight: 44, flexDirection: "row", alignItems: "center", paddingHorizontal: 4, gap: 2 },
   text: { flex: 1, minWidth: 0 },
   title: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
   client: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
