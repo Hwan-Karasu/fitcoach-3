@@ -11,6 +11,7 @@ import { CreateProgramScreen, MesocycleCreatorScreen, ProgramLibraryScreen, Prog
   type WorkoutSlot } from "../../features/training/public.ts";
 import { ExerciseLibraryScreen, type ExerciseCatalogPort } from "../../features/exercises/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
+import { TrainingHeader } from "./TrainingHeader.tsx";
 
 type HomeRoutes = { HomeIndex: undefined };
 type NutritionRoutes = { NutritionIndex: undefined };
@@ -18,7 +19,7 @@ type TrainingRoutes = {
   TrainingIndex: undefined;
   TrainingChooser: undefined;
   TrainingCreate: { kind: ProgramKind };
-  TrainingProgram: { programId: string };
+  TrainingProgram: { programId: string; weekIndex?: number; mesocycleId?: string };
   TrainingBuilder: { programId?: string; picked?: PickedExercise } | undefined;
   TrainingMesocycle: { programId: string; picked?: PickedExercise };
   TrainingWeek: { programId: string; mesocycleId: string; weekIndex: number; picked?: PickedExercise };
@@ -31,6 +32,12 @@ type PickReturn =
   | Readonly<{ name: "TrainingBuilder"; params: { programId?: string } }>
   | Readonly<{ name: "TrainingMesocycle"; params: { programId: string } }>
   | Readonly<{ name: "TrainingWeek"; params: { programId: string; mesocycleId: string; weekIndex: number } }>;
+
+const trainingTitles: Readonly<Record<keyof TrainingRoutes, string>> = {
+  TrainingIndex: "Программы", TrainingChooser: "Новая программа", TrainingCreate: "Создание программы",
+  TrainingProgram: "Программа", TrainingBuilder: "Простой конструктор", TrainingMesocycle: "Новый мезоцикл",
+  TrainingWeek: "Редактирование недели", TrainingPickExercise: "Выбор упражнения", TrainingWorkout: "Дневник тренировки",
+};
 
 const HomeStack = createNativeStackNavigator<HomeRoutes>();
 const NutritionStack = createNativeStackNavigator<NutritionRoutes>();
@@ -89,7 +96,7 @@ export function NutritionNavigator() {
  * Шапка — общая строка карточки клиента (UI-OWN-001), назад — системной кнопкой.
  */
 export function TrainingNavigator({ clientId, clientName, repository, execution, restTimers, activeWorkouts, onOpenWorkout,
-  listCandidates, exercises, exerciseLookup }: Readonly<{
+  listCandidates, exercises, exerciseLookup, onExitClient, onOpenClients }: Readonly<{
   clientId: string;
   clientName: string;
   repository: TrainingPlansRepositoryPort;
@@ -100,13 +107,26 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
   listCandidates: () => Promise<readonly TrainingParticipantCandidate[]>;
   exercises: ExerciseCatalogPort;
   exerciseLookup: ExerciseLookupPort;
+  onExitClient: () => void;
+  onOpenClients: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
   // Простая программа создаётся сразу в конструкторе; расширенная — пока через название и участников.
   const createRoute = (kind: ProgramKind) => kind === "SIMPLE" ? { name: "TrainingBuilder" as const, params: {} }
     : { name: "TrainingCreate" as const, params: { kind } };
   return (
-    <TrainingStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.tokens.canvas } }}>
+    <TrainingStack.Navigator initialRouteName="TrainingIndex" screenOptions={({ navigation, route }) => ({
+      contentStyle: { backgroundColor: palette.tokens.canvas },
+      header: () => <TrainingHeader title={trainingTitles[route.name]} clientName={clientName}
+        onClients={onOpenClients} onBack={() => {
+          if (route.name === "TrainingWorkout") {
+            const params = route.params as TrainingRoutes["TrainingWorkout"];
+            navigation.popTo("TrainingProgram", { programId: params.programId, weekIndex: params.weekIndex });
+          } else if (route.name === "TrainingProgram") navigation.popTo("TrainingIndex");
+          else if (route.name === "TrainingIndex") onExitClient();
+          else navigation.goBack();
+        }} />,
+    })}>
       <TrainingStack.Screen name="TrainingIndex">
         {({ navigation }) => <ProgramLibraryScreen clientId={clientId} repository={repository}
           onChoose={(kind) => { const route = createRoute(kind); navigation.navigate(route.name, route.params as never); }}
@@ -126,7 +146,7 @@ export function TrainingNavigator({ clientId, clientName, repository, execution,
         {({ navigation, route }) => <ProgramScreen clientId={clientId} programId={route.params.programId}
           repository={repository} listCandidates={listCandidates} exercises={exerciseLookup}
           renderWeeks={(view) => <ProgramWeeksPanel key={view.key} clientId={clientId} programId={route.params.programId} weeks={view.weeks}
-            renderWeekActions={view.weekActions} execution={execution}
+            renderWeekActions={view.weekActions} execution={execution} selectedWeek={view.selectedWeek} onSelectWeek={view.onSelectWeek}
             onOpenWorkout={(weekIndex, workoutId) => navigation.navigate("TrainingWorkout", { programId: route.params.programId, weekIndex, workoutId })} />}
           onEditStructure={() => navigation.navigate("TrainingBuilder", { programId: route.params.programId })}
           onAddMesocycle={() => navigation.navigate("TrainingMesocycle", { programId: route.params.programId })}

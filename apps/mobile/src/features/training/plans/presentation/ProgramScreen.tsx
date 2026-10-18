@@ -1,8 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
-import { AppButton, ConfirmDialog, InlineNotice, LoadingState, SelectionChip, TextField } from "../../../../shared/ui/components/public.ts";
+import { Ellipsis, Plus } from "lucide-react-native";
+import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, InlineNotice, LoadingState, SelectionChip, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { TrainingProgram } from "../domain/ProgramModel.ts";
@@ -21,6 +22,8 @@ export interface ProgramWeeksView {
   readonly key: string;
   readonly weeks: readonly Readonly<{ index: number; caption: string | null; workouts: readonly PlannedWorkout[] }>[];
   readonly weekActions?: (weekIndex: number) => ReactNode;
+  readonly selectedWeek?: number;
+  readonly onSelectWeek: (weekIndex: number) => void;
 }
 
 /**
@@ -57,8 +60,19 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [plan, setPlan] = useState<SimplePlan | null>(null);
   const [periodized, setPeriodized] = useState<PeriodizedPlan | null>(null);
   const [orderReset, setOrderReset] = useState(0);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuAnchor = useRef<View>(null);
+  const [weeksByCycle, setWeeksByCycle] = useState<Readonly<Record<string, number>>>({});
+  const scrollByCycle = useRef(new Map<string, number>());
+  const cycleKey = periodized?.selectedMesocycleId ?? periodized?.mesocycles[0]?.id ?? "simple";
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  const bookRef = useAnimatedRef<Animated.ScrollView>();
   const lookup = useExerciseLookup(exercises);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: scrollByCycle.current.get(cycleKey) ?? 0, animated: false }));
+    return () => cancelAnimationFrame(frame);
+  }, [cycleKey, scrollRef]);
+  const selectWeek = (key: string, week: number) => setWeeksByCycle((current) => ({ ...current, [key]: week }));
 
   useEffect(() => {
     let active = true;
@@ -131,12 +145,21 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
 
   const others = program.memberClientIds.filter((id) => id !== clientId);
   return (
-    <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
+      scrollEventThrottle={32} onScroll={(event) => scrollByCycle.current.set(cycleKey, event.nativeEvent.contentOffset.y)}>
+      <View style={styles.row}><View style={styles.grow}>
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>{program.title}</Text>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>
         {program.kind === "PERIODIZED" ? `${programKindLabels[program.kind]} · ${membersWord(program.memberClientIds.length)}`
           : programKindLabels[program.kind]}
       </Text>
+      </View><AppIconButton label="Действия программы" buttonRef={menuAnchor}
+        icon={<Ellipsis size={24} color={colors.textPrimary} />} onPress={() => setMenuOpen(true)} /></View>
+      <DropdownMenu visible={menuOpen} anchor={menuAnchor} title="Программа" selected=""
+        options={[{ value: "rename", label: "Переименовать" }, { value: "archive", label: "В архив" }]}
+        onClose={() => setMenuOpen(false)} onSelect={(value) => {
+          if (value === "rename") setRenaming(program.title); else if (value === "archive") setConfirmArchive(true);
+        }} />
       {message !== null ? <InlineNotice kind="error">{message}</InlineNotice> : null}
       {others.length > 0 ? (
         <Text style={[styles.body, { color: colors.textSecondary }]}>
@@ -144,10 +167,12 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
         </Text>
       ) : null}
       {program.kind === "SIMPLE" ? <>
+        <AppButton label="Изменить" onPress={onEditStructure} />
         {plan !== null ? (
           <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Недель: ${plan.weeks} · план недели повторяется`}</Text>
         ) : null}
-        {plan !== null && renderWeeks !== undefined ? renderWeeks({ key: "simple", weeks: Array.from({ length: plan.weeks },
+        {plan !== null && renderWeeks !== undefined ? renderWeeks({ key: "simple", selectedWeek: weeksByCycle.simple,
+          onSelectWeek: (week) => selectWeek("simple", week), weeks: Array.from({ length: plan.weeks },
           (_, index) => ({ index: index + 1, caption: null, workouts: plan.workouts })) }) : plan?.workouts.map((workout) => (
           <View key={workout.id} style={[styles.workout, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.workoutTitle, { color: colors.textPrimary }]}>{workout.title}</Text>
@@ -160,12 +185,18 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
             ))}
           </View>
         ))}
-        <AppButton label="Изменить программу" onPress={onEditStructure} />
       </> : periodized === null ? <LoadingState label="Открываем мезоциклы…" /> : (() => {
         const selected = periodized.mesocycles.find((item) => item.id === periodized.selectedMesocycleId) ?? periodized.mesocycles[0];
         return <>
+          {selected === undefined ? (
+            <InlineNotice kind="info">Мезоциклов пока нет. Создайте первый: план первой недели скопируется во все недели.</InlineNotice>
+          ) : renderWeeks?.({ key: selected.id, selectedWeek: weeksByCycle[selected.id],
+            onSelectWeek: (week) => selectWeek(selected.id, week),
+            weeks: selected.weeks.map((week) => ({ index: week.index, caption: weekTypeLabels[week.type], workouts: week.workouts })),
+            weekActions: (weekIndex) => <AppButton label="Изменить" onPress={() => onEditWeek(selected.id, weekIndex)} /> })}
           {/* Долгое нажатие на мезоцикл — перетащить: порядок свой у этого клиента (у каждого участника своя книга). */}
-          <Sortable.Flex key={orderReset} gap={8} activeItemScale={1.05} scrollableRef={scrollRef}
+          <Animated.ScrollView ref={bookRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.book}>
+          <Sortable.Flex key={orderReset} gap={8} flexWrap="nowrap" activeItemScale={1.03} scrollableRef={bookRef}
             onDragEnd={({ order }) => {
               const ids = order(periodized.mesocycles.map((item) => item.id));
               setMessage(null);
@@ -187,16 +218,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
               </Sortable.Touchable>
             ))}
           </Sortable.Flex>
-          <View style={styles.addRow}>
-            <SelectionChip group="Мезоцикл" label="+ Мезоцикл" selected={false} onPress={onAddMesocycle} />
-          </View>
-          {selected === undefined ? (
-            <InlineNotice kind="info">Мезоциклов пока нет. Создайте первый: план первой недели скопируется во все недели.</InlineNotice>
-          ) : renderWeeks?.({ key: selected.id,
-            weeks: selected.weeks.map((week) => ({ index: week.index, caption: weekTypeLabels[week.type], workouts: week.workouts })),
-            weekActions: (weekIndex) => (
-              <AppButton variant="secondary" label="Изменить неделю" onPress={() => onEditWeek(selected.id, weekIndex)} />
-            ) })}
+          <AppIconButton label="Добавить мезоцикл" icon={<Plus size={22} color={colors.accentInk} />} onPress={onAddMesocycle} />
+          </Animated.ScrollView>
         </>;
       })()}
       {renaming !== null ? (
@@ -207,12 +230,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
             <View style={styles.grow}><AppButton label="Сохранить" busy={busy} onPress={() => { void rename(); }} /></View>
           </View>
         </View>
-      ) : (
-        <View style={styles.row}>
-          <View style={styles.grow}><AppButton variant="secondary" label="Переименовать" onPress={() => setRenaming(program.title)} /></View>
-          <View style={styles.grow}><AppButton variant="secondary" label="В архив" onPress={() => setConfirmArchive(true)} /></View>
-        </View>
-      )}
+      ) : null}
       <ConfirmDialog visible={confirmArchive} confirmBusy={busy} title="Перенести в архив?"
         description={others.length > 0
           ? "Программа уйдёт в архив этого клиента. У остальных участников она останется. Вернуть можно из списка программ."
@@ -232,6 +250,6 @@ const styles = StyleSheet.create({
   workout: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 4 },
   workoutTitle: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, marginBottom: 2 },
   row: { flexDirection: "row", gap: 10 },
-  addRow: { flexDirection: "row" },
+  book: { flexDirection: "row", alignItems: "center", gap: 8, paddingTop: 8, paddingBottom: 4 },
   grow: { flex: 1 },
 });

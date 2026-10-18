@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import { getFocusedRouteNameFromRoute, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
@@ -134,7 +134,8 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
         <Stack.Screen name="WorkspaceDev" options={{ title: "Маршрут клиента · демо" }}>
           {() => <WorkspaceRoutePreview context="Маршрут без выбранного клиента" />}
         </Stack.Screen>
-        <Stack.Screen name="ClientWorkspace" options={{ title: "Карточка клиента" }}>
+        <Stack.Screen name="ClientWorkspace" options={({ route }) => ({ title: "Карточка клиента",
+          headerShown: (getFocusedRouteNameFromRoute(route) ?? route.params.screen) !== "Training" })}>
           {({ navigation, route }) => <ClientWorkspaceNavigator
             clientId={route.params.clientId} repository={services.clients}
             accounting={services.accounting} measurements={services.measurements} questionnaire={services.questionnaire}
@@ -146,7 +147,7 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
             onOpenEdit={(clientId) => navigation.navigate("ClientEditorDev", { clientId })}
             onOpenAccounting={(clientId) => navigation.navigate("ClientAccounting", { clientId })}
             onOpenMeasurements={(clientId) => navigation.navigate("ClientMeasurements", { clientId })}
-            onClose={() => navigation.goBack()} />}
+            onClose={() => navigation.goBack()} onOpenClients={() => navigation.popTo("Root")} />}
         </Stack.Screen>
         <Stack.Screen name="ClientAccounting" options={{ title: "Абонемент и оплата" }}>
           {({ route }) => <ClientAccountingScreen clientId={route.params.clientId}

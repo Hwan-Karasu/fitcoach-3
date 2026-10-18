@@ -1,6 +1,7 @@
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Archive, CalendarDays, Dumbbell, Ellipsis, House, Users, Utensils, type LucideIcon } from "lucide-react-native";
+import { Archive, CalendarDays, ChevronLeft, ChevronRight, Dumbbell, Ellipsis, House, Users, Utensils, type LucideIcon } from "lucide-react-native";
+import { AppIconButton, useWeekNavigationState } from "../../shared/ui/components/public.ts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
@@ -17,9 +18,13 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const insets = useSafeAreaInsets();
+  const weeks = useWeekNavigationState();
   return (
     <View style={[styles.dock, { backgroundColor: colors.canvas, paddingBottom: insets.bottom + 8 }]}>
       <View style={[styles.bar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {weeks ? <View style={styles.arrow}><AppIconButton label={`Предыдущая неделя. Сейчас неделя ${weeks.week}`}
+          disabled={weeks.previous === null || weeks.busy} onPress={() => weeks.previous?.()}
+          icon={<ChevronLeft size={24} color={colors.accentInk} />} /></View> : null}
         {state.routes.map((route, index) => {
           const options = descriptors[route.key]?.options;
           const focused = state.index === index;
@@ -52,12 +57,16 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
             </Pressable>
           );
         })}
+        {weeks ? <View style={styles.arrow}><AppIconButton label={`Следующая неделя. Сейчас неделя ${weeks.week}`}
+          disabled={weeks.next === null || weeks.busy} onPress={() => weeks.next?.()}
+          icon={<ChevronRight size={24} color={colors.accentInk} />} /></View> : null}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  arrow: { justifyContent: "center" },
   dock: { paddingHorizontal: 12, paddingTop: 4 },
   bar: {
     flexDirection: "row", borderWidth: 1, borderRadius: 18, overflow: "visible",

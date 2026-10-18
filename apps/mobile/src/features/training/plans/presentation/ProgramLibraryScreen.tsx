@@ -49,7 +49,6 @@ export function ProgramModeChooserScreen({ onChoose }: Readonly<{ onChoose: (kin
   const colors = palette.tokens;
   return (
     <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content}>
-      <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>Новая программа</Text>
       <Text style={[styles.body, { color: colors.textSecondary }]}>Выберите конструктор.</Text>
       <ProgramModeChooser onChoose={onChoose} />
     </ScrollView>

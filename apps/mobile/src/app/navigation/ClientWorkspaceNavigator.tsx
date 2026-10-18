@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { WeekNavigationProvider } from "../../shared/ui/components/public.ts";
 import { useFocusEffect } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -67,7 +68,7 @@ function MoreNavigator({ clientId, questionnaire }: Readonly<{ clientId: string;
 }
 
 export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, questionnaire, trainingPlans, trainingExecution, restTimers, activeWorkouts, onOpenWorkout, exercises, exerciseLookup, onOpenEdit, onOpenAccounting,
-  onOpenMeasurements, onClose }: Readonly<{
+  onOpenMeasurements, onClose, onOpenClients }: Readonly<{
   clientId: string;
   repository: ClientRepositoryPort & ClientRosterPort;
   accounting: AccountingRepositoryPort;
@@ -84,6 +85,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   onOpenAccounting: (clientId: string) => void;
   onOpenMeasurements: (clientId: string) => void;
   onClose: () => void;
+  onOpenClients: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -143,7 +145,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       {activityErrorFor === clientId ? <Text style={[styles.warning, { color: colors.danger }]}>
         Не удалось обновить «Недавно открытые»; карточка доступна.
       </Text> : null}
-    <Tabs.Navigator
+    <WeekNavigationProvider><Tabs.Navigator
       backBehavior="history"
       tabBar={(props) => <RootTabBar {...props} />}
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.canvas } }}
@@ -163,13 +165,13 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       <Tabs.Screen name="Training" options={{ tabBarLabel: workspaceTabs.Training, tabBarAccessibilityLabel: workspaceTabs.Training}}>
         {() => <TrainingNavigator clientId={client.id} clientName={client.displayName} repository={trainingPlans}
           execution={trainingExecution} restTimers={restTimers} activeWorkouts={activeWorkouts} onOpenWorkout={onOpenWorkout}
-          listCandidates={listCandidates}
+          listCandidates={listCandidates} onExitClient={onClose} onOpenClients={onOpenClients}
           exercises={exercises} exerciseLookup={exerciseLookup} />}
       </Tabs.Screen>
       <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More}}>
         {() => <MoreNavigator clientId={client.id} questionnaire={questionnaire} />}
       </Tabs.Screen>
-    </Tabs.Navigator>
+    </Tabs.Navigator></WeekNavigationProvider>
     </View>
   );
 }
