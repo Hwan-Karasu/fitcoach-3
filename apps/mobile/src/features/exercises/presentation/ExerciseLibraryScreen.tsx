@@ -186,6 +186,10 @@ export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, pi
     }));
   };
   const [selected, setSelected] = useState<readonly string[]>([]);
+  // Набор меток изменился (сброс, снятие) — полоса возвращается в начало, иначе после сокращения видна пустота.
+  const chipScroll = useRef<ScrollView>(null);
+  const chipsKey = [...filters.bodyParts, ...filters.equipment, ...filters.profiles, filters.showHidden].join("|");
+  useEffect(() => { chipScroll.current?.scrollTo({ x: 0, animated: true }); }, [chipsKey]);
   const press = (exerciseId: string) => {
     if (multiPick) {
       setSelected((current) => current.includes(exerciseId) ? current.filter((id) => id !== exerciseId) : [...current, exerciseId]);
@@ -260,7 +264,7 @@ export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, pi
         </View>
         {chips.length > 0 ? (
           // Снимаемые метки — одной строкой с горизонтальной прокруткой, видимая высота 30 (UI-OWN-030).
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled"
+          <ScrollView ref={chipScroll} horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled"
             style={styles.chipScroll} contentContainerStyle={styles.chipRow}>
             {chips.map((chip) => (
               <Pressable key={chip.key} accessibilityRole="button" accessibilityLabel={`Снять фильтр: ${chip.label}`}
