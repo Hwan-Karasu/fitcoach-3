@@ -4,13 +4,14 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useKeepAwake } from "expo-keep-awake";
 import { usePreventRemove, useNavigation } from "@react-navigation/native";
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { Check, Plus, X } from "lucide-react-native";
-import { ConfirmDialog, InlineNotice, LoadingState, StatusTag, type StatusKind } from "../../../../shared/ui/components/public.ts";
+import { Check, Plus, Timer, X } from "lucide-react-native";
+import { ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, StatusTag,
+  type StatusKind } from "../../../../shared/ui/components/public.ts";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
-import { useExerciseLookup, type ExerciseLookupPort, type PlannedExercise, type PlannedSet,
-  type TrainingPlansRepositoryPort } from "../../plans/public.ts";
+import { formatDuration, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookup, type ExerciseLookupPort,
+  type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort } from "../../plans/public.ts";
 import { DROPS_MAX, EMPTY_VALUES, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
 import { displayOrder, nextOutcome, type SetField } from "../domain/ExecutionRules.ts";
@@ -231,7 +232,17 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const [confirmIncomplete, setConfirmIncomplete] = useState(false);
   const [exitAction, setExitAction] = useState<Parameters<typeof navigation.dispatch>[0] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [restFor, setRestFor] = useState<PlannedExercise | null>(null);
+  const [restError, setRestError] = useState<string | null>(null);
   const { saveSet, toggleSet, setOutcome } = diary;
+
+  /** §48.56: отдых упражнения сохраняется в план — у каждого упражнения свой таймер. */
+  const saveRest = (exercise: PlannedExercise, restSec: number | null) => {
+    setRestError(null);
+    void plans.setExerciseRest(slot.clientId, slot.programId, exercise.id, restSec).catch(() => {
+      setRestError("Не удалось изменить отдых. План не изменён — повторите.");
+    });
+  };
 
   const flushPending = useCallback(() => {
     for (const flush of [...pending.values()]) flush();
@@ -307,6 +318,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
           <StatusTag kind={statusKinds[diary.status]} label={workoutStatusLabels[diary.status]} />
         </View>
         {diary.message !== null ? <InlineNotice kind="error">{diary.message}</InlineNotice> : null}
+        {restError !== null ? <InlineNotice kind="error">{restError}</InlineNotice> : null}
         {workout.exercises.map((exercise) => {
           const info = lookup.get(exercise.exerciseId);
           const fields = diaryFields(info?.metrics ?? []);
@@ -317,7 +329,18 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
             <View key={exercise.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.cardHead}>
                 {info?.thumbnail != null ? <Image source={info.thumbnail} style={[styles.thumb, { backgroundColor: colors.input }]} /> : null}
-                <Text style={[styles.exercise, { color: colors.textPrimary }]} numberOfLines={2}>{info?.name ?? "Упражнение"}</Text>
+                <View style={styles.exerciseText}>
+                  <Text style={[styles.exercise, { color: colors.textPrimary }]} numberOfLines={2}>{info?.name ?? "Упражнение"}</Text>
+                  <Pressable accessibilityRole="button" hitSlop={8} onPress={() => { Keyboard.dismiss(); setRestFor(exercise); }}
+                    accessibilityLabel={exercise.restSec === null ? "Таймер отдыха выключен. Изменить"
+                      : `Отдых ${formatDuration(exercise.restSec)}. Изменить`}
+                    style={styles.rest}>
+                    <Timer size={15} color={exercise.restSec === null ? colors.textMuted : colors.accentInk} strokeWidth={2} />
+                    <Text style={[styles.restText, { color: exercise.restSec === null ? colors.textMuted : colors.accentInk }]}>
+                      {exercise.restSec === null ? "Без таймера" : formatDuration(exercise.restSec)}
+                    </Text>
+                  </Pressable>
+                </View>
                 <Text style={[styles.meta, { color: colors.textSecondary }]}>{`${done}/${exercise.sets.length}`}</Text>
               </View>
               <View style={[styles.row, styles.headRow]}>
@@ -351,6 +374,12 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
           })}
         </View>
       </KeyboardAwareScrollView>
+      <DurationWheelPicker visible={restFor !== null} title="Отдых после подхода"
+        value={restFor?.restSec ?? REST_DEFAULT_SEC} min={REST_MIN_SEC} max={REST_MAX_SEC}
+        clearLabel={restFor?.restSec === null ? undefined : "Без таймера"}
+        onConfirm={(seconds) => { if (restFor !== null) saveRest(restFor, seconds); }}
+        onClear={() => { if (restFor !== null) saveRest(restFor, null); }}
+        onClose={() => setRestFor(null)} />
       <SetTypeSheet ref={typeSheet} setType={targetFact?.setType ?? "NORMAL"} onSelect={chooseType} />
       <RpeSheet ref={rpeSheet} rpe={targetFact?.rpe ?? null}
         onSelect={(rpe) => { rpeSheet.current?.dismiss(); if (target !== null) onSave(target, { rpe }); }} />
@@ -390,7 +419,10 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 12, padding: 8, gap: 4 },
   cardHead: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 2, paddingHorizontal: 2 },
   thumb: { width: 40, height: 40, borderRadius: 8 },
-  exercise: { flex: 1, fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
+  exerciseText: { flex: 1, gap: 2 },
+  exercise: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
+  rest: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", minHeight: 28 },
+  restText: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18 },
   block: { borderRadius: 10, paddingVertical: 2, paddingHorizontal: 2, gap: 4 },
   row: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44 },
   headRow: { minHeight: 20, paddingHorizontal: 2 },

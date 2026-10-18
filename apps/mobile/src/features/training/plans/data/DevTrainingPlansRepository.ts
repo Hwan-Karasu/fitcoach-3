@@ -6,7 +6,7 @@ import type { WriterCoordinator } from "../../../../shared/db/WriterCoordinator.
 import type { ClientProgramLibrary, CreateProgramInput, ProgramCard, TrainingProgram } from "../domain/ProgramModel.ts";
 import { compareCards, normalizeTitle, validateCreate } from "../domain/ProgramRules.ts";
 import type { TrainingPlansCommittedChange, TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
-import { DEFAULT_WEEKS, type SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
+import { DEFAULT_WEEKS, REST_MAX_SEC, REST_MIN_SEC, type SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
 import { validateDraft } from "../domain/SimplePlanRules.ts";
 import { withRestDefaults } from "../domain/SimplePlanEdits.ts";
 import { DEV_TRAINING_PLANS_LEDGER, devTrainingPlansCatalog } from "./DevTrainingPlansCatalog.ts";
@@ -219,6 +219,26 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       await writeStructure(tx, this.workspaceId, programId, draft.plan);
       await tx.run("DELETE FROM dev_training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND draft_key = ?",
         [this.workspaceId, clientId, programId]);
+      return programById(tx, this.workspaceId, programId);
+    });
+    this.publish({ clientIds: saved.memberClientIds });
+    return saved;
+  }
+
+  async setExerciseRest(clientId: string, programId: string, plannedExerciseId: string, restSec: number | null,
+    now: Date = new Date()): Promise<TrainingProgram> {
+    if (restSec !== null && (!Number.isInteger(restSec) || restSec < REST_MIN_SEC || restSec > REST_MAX_SEC)) {
+      throw new Error("DRAFT_INVALID");
+    }
+    const saved = await this.ready().writer.write(async (tx) => {
+      await membership(tx, this.workspaceId, clientId, programId);
+      const result = await tx.run(`UPDATE dev_training_planned_exercises SET rest_sec = ?
+        WHERE workspace_id = ? AND id = ? AND workout_id IN
+          (SELECT id FROM dev_training_workouts WHERE workspace_id = ? AND program_id = ?)`,
+      [restSec, this.workspaceId, plannedExerciseId, this.workspaceId, programId]);
+      if (result.changes !== 1) throw new Error("TARGET_NOT_FOUND");
+      await tx.run("UPDATE dev_training_programs SET revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND id = ?",
+        [now.toISOString(), this.workspaceId, programId]);
       return programById(tx, this.workspaceId, programId);
     });
     this.publish({ clientIds: saved.memberClientIds });

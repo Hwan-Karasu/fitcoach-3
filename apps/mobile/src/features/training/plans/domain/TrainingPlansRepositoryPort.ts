@@ -33,6 +33,12 @@ export interface TrainingPlansRepositoryPort {
    */
   saveSimplePlan(clientId: string, programId: string, expectedRevision: number, draft: SimpleProgramDraft,
     now?: Date): Promise<TrainingProgram>;
+  /**
+   * §48.56: отдых одного упражнения программы (из дневника); `null` — таймер выключен. Это правка плана:
+   * ревизия программы растёт, открытый конструктор со старой ревизией получит конфликт, а не затрёт её.
+   */
+  setExerciseRest(clientId: string, programId: string, plannedExerciseId: string, restSec: number | null,
+    now?: Date): Promise<TrainingProgram>;
   /** §48.29 Recovery Draft: ключ — `new:SIMPLE` или ID программы. Не публикует изменения в план. */
   getBuilderDraft(clientId: string, key: string): Promise<Readonly<{ baseRevision: number | null; draft: SimpleProgramDraft }> | null>;
   saveBuilderDraft(clientId: string, key: string, baseRevision: number | null, draft: SimpleProgramDraft): Promise<void>;

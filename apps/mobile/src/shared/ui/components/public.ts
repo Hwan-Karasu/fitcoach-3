@@ -22,4 +22,4 @@ export { HeaderScrollReporter, HeaderSearchProvider, useHeaderScrollHandler, use
   type HeaderSearchState } from "./HeaderScroll.tsx";
 export { BrandMark } from "./BrandMark.tsx";
 export { FloatingActionButton } from "./FloatingActionButton.tsx";
-export { TimeWheelPicker } from "./TimeWheelPicker.tsx";
+export { DurationWheelPicker, TimeWheelPicker } from "./TimeWheelPicker.tsx";

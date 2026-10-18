@@ -145,3 +145,26 @@ test("T03 отдых упражнения (§48.56): 90 с по умолчани
     await close();
   }
 });
+
+test("T03 отдых упражнения из дневника: меняется только это упражнение, ревизия растёт, чужое не трогается", async () => {
+  const { clients, plans, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const b = await clients.create({ displayName: "SyntheticB" });
+    const program = await plans.createSimpleProgram(a.id, sampleDraft());
+    const other = await plans.createSimpleProgram(b.id, { ...newDraft("w9"), title: "Чужая" });
+    const changed = await plans.setExerciseRest(a.id, program.id, "e1", 135);
+    assert.equal(changed.revision, program.revision + 1, "правка плана повышает ревизию (конструктор получит конфликт)");
+    const loaded = (await plans.getSimplePlan(a.id, program.id))!.draft.plan;
+    assert.deepEqual(loaded.workouts.map((workout) => workout.exercises[0]!.restSec), [135, 90]);
+    await plans.setExerciseRest(a.id, program.id, "e2", null);
+    assert.equal((await plans.getSimplePlan(a.id, program.id))!.draft.plan.workouts[1]!.exercises[0]!.restSec, null);
+    await assert.rejects(plans.setExerciseRest(a.id, program.id, "e1", 10), message("DRAFT_INVALID"), "меньше 15 с нельзя");
+    await assert.rejects(plans.setExerciseRest(a.id, other.id, "e1", 60), message("TARGET_NOT_FOUND"),
+      "чужая программа — не своя");
+    await assert.rejects(plans.setExerciseRest(b.id, program.id, "e1", 60), message("TARGET_NOT_FOUND"),
+      "клиент не участник программы");
+  } finally {
+    await close();
+  }
+});
