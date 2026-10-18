@@ -107,6 +107,24 @@ export const addSet = (draft: SimpleProgramDraft, plannedId: string, setId: stri
   exercise.sets.push(last === undefined ? emptySet(setId) : { ...last, id: setId });
 });
 
+export const SETS_MAX = 20;
+
+/**
+ * «Подходов» в карточке упражнения (как в 2.0): больше — копии последнего подхода, меньше — убираются с конца.
+ * От 1 до SETS_MAX.
+ */
+export const setSetCount = (draft: SimpleProgramDraft, plannedId: string, count: number, setId: () => string) =>
+  produce(draft, (d) => {
+    const exercise = exerciseOf(d, plannedId);
+    if (exercise === undefined || !Number.isInteger(count)) return;
+    const target = Math.min(SETS_MAX, Math.max(1, count));
+    while (exercise.sets.length > target) exercise.sets.pop();
+    while (exercise.sets.length < target) {
+      const last = exercise.sets.at(-1);
+      exercise.sets.push(last === undefined ? emptySet(setId()) : { ...last, id: setId() });
+    }
+  });
+
 export const removeSet = (draft: SimpleProgramDraft, plannedId: string, setId: string) => produce(draft, (d) => {
   const exercise = exerciseOf(d, plannedId);
   if (exercise !== undefined && exercise.sets.length > 1) exercise.sets = exercise.sets.filter((set) => set.id !== setId);

@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
+import { DevClientRepository } from "../src/features/clients/data/DevClientRepository.ts";
 import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParticipant } from
-  "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionRepository.ts";
+  "../src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant } from
-  "../apps/mobile/src/features/training/plans/data/DevTrainingPlansRepository.ts";
-import { addExercise, newDraft, setTitle } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
-import { createActiveWorkouts } from "../apps/mobile/src/read-models/activeWorkouts.ts";
-import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
-import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
+  "../src/features/training/plans/data/DevTrainingPlansRepository.ts";
+import { addExercise, newDraft, setTitle } from "../src/features/training/plans/domain/SimplePlanEdits.ts";
+import { createActiveWorkouts } from "../src/read-models/activeWorkouts.ts";
+import { SharedSqliteDatabase } from "../src/shared/db/SharedSqliteDatabase.ts";
+import { nodeSqlitePort } from "../../../scripts/support/node-sqlite-port.ts";
 
 const WS = "synthetic-workspace-a";
 const BENCH = "sys:repdb:synthetic-bench";

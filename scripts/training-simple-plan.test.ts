@@ -5,7 +5,7 @@ import { DevClientRepository } from "../apps/mobile/src/features/clients/data/De
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant, NEW_SIMPLE_DRAFT_KEY } from
   "../apps/mobile/src/features/training/plans/data/DevTrainingPlansRepository.ts";
 import { addExercise, addSet, addWorkout, fillSets, newDraft, removeExercise, removeSet, reorderExercises, setTitle,
-  setInstruction, setRest, updateSet } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
+  setInstruction, setRest, setSetCount, updateSet } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
 import type { SimpleProgramDraft } from "../apps/mobile/src/features/training/plans/domain/SimplePlanModel.ts";
 import { parseDuration, parseLoad, setsSummary, validateDraft, type TrackingMetric } from
   "../apps/mobile/src/features/training/plans/domain/SimplePlanRules.ts";
@@ -222,4 +222,16 @@ test("T03 указание к упражнению (§48.67): часть пла�
   } finally {
     await close();
   }
+});
+
+test('T02 «Подходов» в карточке (как в 2.0): больше — копии последнего, меньше — с конца, от 1 до 20', () => {
+  let n = 0;
+  const id = () => "x" + String(n++);
+  const filled = fillSets(sampleDraft(), 'e1', 'reps', 10);
+  const five = setSetCount(updateSet(filled, 'e1', 'e1s2', 'reps', 6), 'e1', 5, id);
+  assert.deepEqual(five.plan.workouts[0]!.exercises[0]!.sets.map((set) => [set.id, set.reps]),
+    [['e1s0', 10], ['e1s1', 10], ['e1s2', 6], ['x0', 6], ['x1', 6]], 'новые — копии последнего, прежние ID на месте');
+  assert.deepEqual(setSetCount(five, 'e1', 2, id).plan.workouts[0]!.exercises[0]!.sets.map((set) => set.id), ['e1s0', 'e1s1']);
+  assert.equal(setSetCount(five, 'e1', 0, id).plan.workouts[0]!.exercises[0]!.sets.length, 1, 'не меньше одного');
+  assert.equal(setSetCount(five, 'e1', 99, id).plan.workouts[0]!.exercises[0]!.sets.length, 20, 'не больше 20');
 });
