@@ -28,6 +28,7 @@ import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
 import { ActiveWorkoutsSheet, ExerciseMenuSheet, RpeSheet, SetTypeSheet, SupersetPickSheet, type ExerciseMenuAction } from "./SetPickers.tsx";
 import { factVolume } from "./programMatrix.ts";
 import { WorkoutSharePoster } from "./WorkoutSharePoster.tsx";
+import { labeledPlan, labeledWithDrops } from "./shareFormat.ts";
 import { compactValues, compactWithDrops, diaryFields, fieldHeaders, fieldNames, parseField, planText, rawOf, rpeTone, sanitizeField,
   setTypeLabels, setTypeTone, shortDate, workoutStatusLabels } from "./setFormat.ts";
 import { extraWarmups, useWorkoutDiary, type SetPatch } from "./useWorkoutDiary.ts";
@@ -538,7 +539,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     const fields = diaryFields(lookup.get(exercise.exerciseId)?.metrics ?? []);
     return { name: lookup.get(exercise.exerciseId)?.name ?? "Упражнение", sets: exercise.sets.map((set) => {
       const fact = state.facts.get(set.id);
-      return fact !== undefined && hasValues(fact.values) ? compactWithDrops(fact.values, fact.drops, fields) : `план: ${planText(set, fields)}`;
+      return fact !== undefined && hasValues(fact.values) ? labeledWithDrops(fact.values, fact.drops, fields, rawOf)
+        : `план: ${labeledPlan(planText(set, fields), fields)}`;
     }) };
   });
   const share = () => {
