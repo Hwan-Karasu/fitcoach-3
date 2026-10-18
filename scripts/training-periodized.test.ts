@@ -12,6 +12,7 @@ import { addExercise, addWorkout, fillSets, newDraft, removeExercise, renameWork
   setSetCount } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
 import type { PlannedWorkout, SimpleProgramDraft } from "../apps/mobile/src/features/training/plans/domain/SimplePlanModel.ts";
 import { joinPreviousSuperset, leaveSuperset } from "../apps/mobile/src/features/training/plans/domain/SupersetRules.ts";
+import { DevTrainingExecutionRepository } from "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 
 const BENCH = "sys:repdb:bench";
 const SQUAT = "sys:repdb:squat";
@@ -159,14 +160,19 @@ test("T04 добавление, порядок, переименование и 
 
 const WS = "synthetic-workspace-a";
 
-async function stores() {
+async function stores(beforeWrite?: (sql: string) => void) {
   const db = new DatabaseSync(":memory:");
-  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const shared = new SharedSqliteDatabase(async () => {
+    const port = nodeSqlitePort(db);
+    return { ...port, exclusive: (task) => port.exclusive((tx) => task({ ...tx,
+      run: (sql, bindings) => { beforeWrite?.(sql); return tx.run(sql, bindings); },
+    })) };
+  });
   const clients = new DevClientRepository(shared, WS, [devTrainingPlansClientDeletionParticipant]);
   await clients.initialize();
   const plans = new DevTrainingPlansRepository(shared, WS);
   await plans.initialize();
-  return { db, clients, plans, close: async () => { await plans.close(); await clients.close(); } };
+  return { db, shared, clients, plans, close: async () => { await plans.close(); await clients.close(); } };
 }
 
 const message = (code: string) => (error: unknown) => error instanceof Error && error.message.includes(code);
@@ -224,8 +230,8 @@ test("T03 недели дневника: lineage только своего ме�
 });
 
 /** Расширенная программа на двоих с мезоциклом из четырёх недель у каждого. */
-async function sharedProgram() {
-  const env = await stores();
+async function sharedProgram(beforeWrite?: (sql: string) => void) {
+  const env = await stores(beforeWrite);
   const a = await env.clients.create({ displayName: "SyntheticA" });
   const b = await env.clients.create({ displayName: "SyntheticB" });
   const program = await env.plans.createProgram({ kind: "PERIODIZED", title: "Сила", clientIds: [a.id, b.id] });
@@ -233,6 +239,96 @@ async function sharedProgram() {
     { title: "Блок 1", weeks: 4, firstWeek: firstWeek(), clientIds: [a.id, b.id] });
   return { ...env, a, b, programId: program.id, revision: created.program.revision, mesocycleId: created.mesocycleId };
 }
+
+test("T04 копия мезоцикла: сбой SQLite после записи первого участника откатывает всё", async () => {
+  let armed = false;
+  let inserted = 0;
+  const { plans, a, b, programId, mesocycleId, close } = await sharedProgram((sql) => {
+    if (armed && sql.startsWith("INSERT INTO dev_training_mesocycles") && ++inserted === 2) throw new Error("SQLITE_IOERR");
+  });
+  try {
+    const beforeA = (await plans.getPeriodizedPlan(a.id, programId))!;
+    const beforeB = (await plans.getPeriodizedPlan(b.id, programId))!;
+    let notifications = 0;
+    const stop = plans.subscribeCommittedChanges(() => { notifications += 1; });
+    armed = true;
+    await assert.rejects(plans.copyMesocycle(a.id, programId, beforeA.program.revision, {
+      sourceClientId: a.id, sourceProgramId: programId, sourceMesocycleId: mesocycleId,
+      sourceRevision: beforeA.program.revision, title: "Копия", clientIds: [a.id, b.id],
+    }), message("SQLITE_IOERR"));
+    assert.equal(inserted, 2);
+    assert.equal(notifications, 0);
+    stop();
+    assert.deepEqual(await plans.getPeriodizedPlan(a.id, programId), beforeA);
+    assert.deepEqual(await plans.getPeriodizedPlan(b.id, programId), beforeB);
+  } finally { await close(); }
+});
+
+test("T04 копия мезоцикла: текущие исключения, новые ID/родство/версии, выбранные участники и CAS", async () => {
+  const { plans, shared, a, b, programId, mesocycleId, close } = await sharedProgram();
+  const execution = new DevTrainingExecutionRepository(shared, WS);
+  await execution.initialize();
+  try {
+    const before = (await plans.getPeriodizedPlan(a.id, programId))!;
+    const week = before.mesocycles[0]!.weeks[1]!;
+    const changed = joinPreviousSuperset({ title: "М", plan: { weeks: 1, workouts: week.workouts } },
+      week.workouts[0]!.id, week.workouts[0]!.exercises[1]!.id);
+    const result = await plans.saveWeek(a.id, programId, before.program.revision, { mesocycleId, weekIndex: 2,
+      type: "heavy", scope: "CURRENT", clientIds: [a.id], workouts: changed.plan.workouts });
+    const source = (await plans.getPeriodizedPlan(a.id, programId))!.mesocycles[0]!;
+    const sourceWorkout = source.weeks[0]!.workouts[0]!;
+    const sourceExercise = sourceWorkout.exercises[0]!;
+    const slot = { clientId: a.id, programId, weekIndex: 1, plannedWorkoutId: sourceWorkout.id };
+    await execution.saveSet({ slot, plannedExerciseId: sourceExercise.id, plannedSetId: sourceExercise.sets[0]!.id,
+      exerciseId: BENCH, position: 0, metrics: ["load", "reps"],
+      values: { loadGrams: 60_000, reps: 10, durationSec: null, distanceM: null },
+      setType: "NORMAL", drops: [], rpe: 8, expectedRevision: null });
+    await execution.saveExerciseNote(slot, sourceExercise.id, "Фактическая заметка");
+    const originalFacts = await execution.getWorkout(slot);
+    const otherBefore = (await plans.getPeriodizedPlan(b.id, programId))!.mesocycles;
+    const input = { sourceClientId: a.id, sourceProgramId: programId, sourceMesocycleId: mesocycleId,
+      sourceRevision: result.program.revision, title: "Копия блока", clientIds: [a.id] };
+    const copied = await plans.copyMesocycle(a.id, programId, result.program.revision, input);
+    const after = (await plans.getPeriodizedPlan(a.id, programId))!;
+    const copy = after.mesocycles[1]!;
+    assert.equal(after.selectedMesocycleId, copied.mesocycleId);
+    assert.deepEqual(after.mesocycles[0], source);
+    assert.deepEqual((await plans.getPeriodizedPlan(b.id, programId))!.mesocycles, otherBefore);
+    assert.equal(copy.weeks.length, 4);
+    assert.equal(copy.weeks[1]!.type, "heavy");
+    assert.notEqual(copy.id, source.id);
+    assert.notEqual(copy.lineageId, source.lineageId);
+    for (const [index, value] of copy.weeks.entries()) {
+      const original = source.weeks[index]!;
+      assert.notEqual(value.id, original.id);
+      assert.notEqual(value.workouts[0]!.id, original.workouts[0]!.id);
+      assert.notEqual(value.workouts[0]!.lineageId, original.workouts[0]!.lineageId);
+      assert.equal(value.workouts[0]!.lineageId, copy.weeks[0]!.workouts[0]!.lineageId);
+      assert.notEqual(value.workouts[0]!.exercises[0]!.sets[0]!.id, original.workouts[0]!.exercises[0]!.sets[0]!.id);
+      assert.deepEqual(value.workouts[0]!.exercises[0]!.sets.map((set) => set.reps), [10, 10, 10]);
+    }
+    const grouped = copy.weeks[1]!.workouts[0]!.exercises;
+    assert.ok(grouped[0]!.supersetId);
+    assert.equal(grouped[0]!.supersetId, grouped[1]!.supersetId);
+    assert.notEqual(grouped[0]!.supersetId, source.weeks[1]!.workouts[0]!.exercises[0]!.supersetId);
+    assert.equal((await plans.getMesocycleVersions(a.id, programId, copy.id)).length, 1);
+    assert.equal((await plans.getMesocycleVersions(a.id, programId, source.id)).length, 2);
+    assert.deepEqual(await execution.getWorkout(slot), originalFacts);
+    for (const value of copy.weeks) for (const workout of value.workouts) {
+      const copiedFacts = await execution.getWorkout({ ...slot, weekIndex: value.index, plannedWorkoutId: workout.id });
+      assert.equal(copiedFacts.session, null);
+      assert.equal(copiedFacts.facts.size, 0);
+      assert.equal(copiedFacts.notes.size, 0);
+    }
+    await assert.rejects(plans.copyMesocycle(a.id, programId, result.program.revision, input), message("PROGRAM_REVISION_CONFLICT"));
+    const target = await plans.createProgram({ kind: "PERIODIZED", title: "Другая", clientIds: [b.id] });
+    await assert.rejects(plans.copyMesocycle(b.id, target.id, target.revision, input), message("SOURCE_REVISION_CONFLICT"));
+    const cross = await plans.copyMesocycle(b.id, target.id, target.revision,
+      { ...input, sourceRevision: copied.program.revision, clientIds: [b.id] });
+    assert.equal((await plans.getPeriodizedPlan(b.id, target.id))!.mesocycles[0]!.id, cross.mesocycleId);
+    assert.equal((await plans.getPeriodizedPlan(a.id, programId))!.mesocycles.length, 2);
+  } finally { await execution.close(); await close(); }
+});
 
 test("T04 суперсеты сохраняются участникам независимо; новая тренировка копируется один раз", async () => {
   const { plans, a, b, programId, mesocycleId, close } = await sharedProgram();

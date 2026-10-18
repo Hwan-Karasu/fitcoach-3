@@ -4,6 +4,7 @@ import type { PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
 import type { PeriodizedDraft } from "./PeriodizedDraft.ts";
 import type { MesocycleVersion } from "./StructureVersion.ts";
 import type { SimplePlanVersion, SimpleWeek, SimpleWorkoutDraft, SimpleWorkoutEdit } from "./SimpleWorkoutEdit.ts";
+import type { CopyMesocycleInput } from "./PlanCopy.ts";
 
 export interface TrainingPlansCommittedChange {
   /** Клиенты, чья библиотека изменилась. */
@@ -73,6 +74,9 @@ export interface TrainingPlansRepositoryPort {
    * транзакцией по ревизии программы; открывшему клиенту он становится выбранным.
    */
   createMesocycle(clientId: string, programId: string, expectedRevision: number, input: NewMesocycleInput,
+    now?: Date): Promise<Readonly<{ program: TrainingProgram; mesocycleId: string }>>;
+  /** Independent current structure, selected recipients only; source and destination revisions checked atomically. */
+  copyMesocycle(clientId: string, programId: string, expectedRevision: number, input: CopyMesocycleInput,
     now?: Date): Promise<Readonly<{ program: TrainingProgram; mesocycleId: string }>>;
   /**
    * Правка недели (§48.6): неделя открывшего клиента сохраняется как есть; та же разница по родству — в целевые

@@ -22,6 +22,7 @@ import { mesocycleCreatedAt, preserveMesocycle, readMesocycleHistory } from "./S
 import type { MesocycleVersion } from "../domain/StructureVersion.ts";
 import { simpleWorkoutDraftKey, type SimpleWorkoutDraft, type SimpleWorkoutEdit } from "../domain/SimpleWorkoutEdit.ts";
 import { assertSimpleIdentities, preserveSimple, readSimpleHistory, readSimpleWeeks, writeSimpleOverride } from "./SimpleWeekStore.ts";
+import { independentWeeks, weekRowCount, type CopyMesocycleInput } from "../domain/PlanCopy.ts";
 
 /** Ключ черновика ещё не созданной Простой программы (§48.29 п. 4: черновик привязан к объекту правки). */
 export const NEW_SIMPLE_DRAFT_KEY = "new:SIMPLE";
@@ -523,6 +524,38 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       await saveSelection(tx, this.workspaceId, programId, clientId, ownId);
       await tx.run("DELETE FROM dev_training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key = ?",
         [this.workspaceId, clientId, programId, "new:MESOCYCLE"]);
+      return { program: await programById(tx, this.workspaceId, programId), mesocycleId: ownId };
+    });
+    this.publish({ clientIds: input.clientIds });
+    return created;
+  }
+
+  async copyMesocycle(clientId: string, programId: string, expectedRevision: number, input: CopyMesocycleInput,
+    now: Date = new Date()) {
+    const title = normalizeTitle(input.title);
+    const created = await this.ready().writer.write(async (tx) => {
+      await membership(tx, this.workspaceId, clientId, programId);
+      const target = await programById(tx, this.workspaceId, programId);
+      if (target.revision !== expectedRevision) throw new Error("PROGRAM_REVISION_CONFLICT");
+      await membership(tx, this.workspaceId, input.sourceClientId, input.sourceProgramId);
+      const sourceProgram = await programById(tx, this.workspaceId, input.sourceProgramId);
+      if (sourceProgram.revision !== input.sourceRevision) throw new Error("SOURCE_REVISION_CONFLICT");
+      const source = (await readMesocycles(tx, this.workspaceId, input.sourceProgramId, input.sourceClientId))
+        .find((item) => item.id === input.sourceMesocycleId);
+      if (!source || sourceProgram.kind !== "PERIODIZED") throw new Error("TARGET_NOT_FOUND");
+      await this.assertTargets(tx, clientId, programId, input.clientIds);
+      for (const week of source.weeks) assertWeek(title, week.workouts);
+      await this.bumpRevision(tx, programId, expectedRevision, now);
+      const take = await this.idPool(tx, 1 + input.clientIds.length + weekRowCount(source.weeks) * (input.clientIds.length + 1));
+      const lineageId = take();
+      const template = independentWeeks(source.weeks, take);
+      let ownId = "";
+      for (const [index, memberId] of input.clientIds.entries()) {
+        const cycle = { id: take(), lineageId, title, weeks: index === 0 ? template : copyWeeks(template, take) };
+        await insertMesocycle(tx, this.workspaceId, programId, memberId, cycle, now);
+        if (memberId === clientId) ownId = cycle.id;
+      }
+      await saveSelection(tx, this.workspaceId, programId, clientId, ownId);
       return { program: await programById(tx, this.workspaceId, programId), mesocycleId: ownId };
     });
     this.publish({ clientIds: input.clientIds });

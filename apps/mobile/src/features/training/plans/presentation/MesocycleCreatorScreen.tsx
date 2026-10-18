@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import { Minus, Plus } from "lucide-react-native";
-import { AppIconButton, InlineNotice, LoadingState, StickyEditorFooter, TextField, TrainingEditorLayout } from "../../../../shared/ui/components/public.ts";
+import { AppButton, AppIconButton, InlineNotice, LoadingState, StickyEditorFooter, TextField, TrainingEditorLayout } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
@@ -18,6 +18,20 @@ import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
 import { newPlanId, WorkoutsEditor } from "./WorkoutsEditor.tsx";
 import { useRecoveryDraftSave } from "./useRecoveryDraftSave.ts";
 import type { PeriodizedDraft } from "../domain/PeriodizedDraft.ts";
+import { MesocycleCopyScreen } from "./MesocycleCopyScreen.tsx";
+
+export function MesocycleCreatorScreen(props: ComponentProps<typeof EmptyMesocycleCreator>) {
+  const { palette } = usePrototypeTheme();
+  const [mode, setMode] = useState<"EMPTY" | "COPY" | null>(null);
+  if (mode === "EMPTY") return <EmptyMesocycleCreator {...props} />;
+  if (mode === "COPY") return <MesocycleCopyScreen {...props} onCancel={() => setMode(null)} />;
+  return <View style={[styles.content, { backgroundColor: palette.tokens.canvas, flex: 1 }]}>
+    <AppButton label="Создать пустой мезоцикл" onPress={() => setMode("EMPTY")} />
+    <Text style={[styles.meta, { color: palette.tokens.textSecondary }]}>Настройте недели и состав тренировок с нуля.</Text>
+    <AppButton label="Скопировать существующий" variant="secondary" onPress={() => setMode("COPY")} />
+    <Text style={[styles.meta, { color: palette.tokens.textSecondary }]}>Возьмите текущий план из программы клиента. Результаты останутся у источника.</Text>
+  </View>;
+}
 
 const errors: Readonly<Record<string, string>> = {
   DRAFT_INVALID: "Мезоцикл не сохранился: проверьте название и тренировки.",
@@ -31,7 +45,7 @@ const errors: Readonly<Record<string, string>> = {
  * (решение владельца 2026-10-18). Выбранным участникам — по своей копии (§48.12.3 п. 1). До сохранения
  * ничего не записывается: отмена не оставляет недостроенный мезоцикл (§48.12.3 п. 5).
  */
-export function MesocycleCreatorScreen({ clientId, programId, repository, exercises, listCandidates, picked, onPickExercise,
+function EmptyMesocycleCreator({ clientId, programId, repository, exercises, listCandidates, picked, onPickExercise,
   onCreated, onCancel }: Readonly<{
   clientId: string;
   programId: string;
