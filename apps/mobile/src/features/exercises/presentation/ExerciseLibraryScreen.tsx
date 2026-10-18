@@ -105,7 +105,7 @@ function CatalogSheet({ visible, title, onClose, onReset, children }: Readonly<{
     return () => back.remove();
   }, [visible, onClose]);
   return (
-    <BottomSheet ref={sheet} index={-1} snapPoints={["75%"]} enableDynamicSizing={false} enablePanDownToClose onClose={onClose}
+    <BottomSheet ref={sheet} index={-1} snapPoints={["88%"]} enableDynamicSizing={false} enablePanDownToClose onClose={onClose}
       backdropComponent={backdrop} backgroundStyle={{ backgroundColor: colors.canvas, borderRadius: 12 }}
       handleIndicatorStyle={{ backgroundColor: colors.border }}>
       <View style={[styles.sheet, { paddingBottom: 8 + insets.bottom }]}>
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
   sheet: { flex: 1, paddingTop: 8, gap: 8 },
   sheetTitle: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
   sheetHead: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16 },
-  sheetBody: { paddingHorizontal: 16, paddingVertical: 8, gap: 6 },
+  sheetBody: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16, gap: 6 },
   optionWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tile: { width: "31.6%", minHeight: 136, borderRadius: 12, alignItems: "center", paddingTop: 8, paddingBottom: 8, paddingHorizontal: 4, gap: 2 },
   tileIcon: { height: 86, alignItems: "center", justifyContent: "center" },
