@@ -285,10 +285,10 @@ export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, pi
             accessibilityLabel={`Оборудование: ${equipmentPicked}`} onPress={() => setSheet("equipment")} />
         </View>
         <View style={styles.pills}>
-          {modes.map((item) => <FilterPill key={item.id} label={item.label} accessibilityLabel={`Показать: ${item.label}`}
+          {modes.map((item) => <FilterPill key={item.id} grow label={item.label} accessibilityLabel={`Показать: ${item.label}`}
             selected={mode === item.id} onPress={() => setMode(item.id)}
             icon={item.id === "FAVORITES" ? (color) => <Star size={14} color={color} strokeWidth={2} /> : undefined} />)}
-          <FilterPill label={moreCount > 0 ? `Ещё · ${moreCount}` : "Ещё"} accessibilityLabel="Ещё фильтры" selected={moreCount > 0}
+          <FilterPill grow label={moreCount > 0 ? `Ещё · ${moreCount}` : "Ещё"} accessibilityLabel="Ещё фильтры" selected={moreCount > 0}
             icon={(color) => <SlidersHorizontal size={14} color={color} strokeWidth={1.8} />} onPress={() => setSheet("more")} />
         </View>
         {chips.length > 0 ? (
