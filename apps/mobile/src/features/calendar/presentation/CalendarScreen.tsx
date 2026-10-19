@@ -24,6 +24,7 @@ import { ShareWeekPoster } from "./ShareWeekPoster.tsx";
 import { TIMELINE_HEADER, type TimelineHandlers } from "./TimelineGrid.tsx";
 import { WeekPager } from "./WeekPager.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
+import { shadow } from "../../../shared/ui/theme/style.ts";
 
 export interface OpenAppointmentParams {
   readonly appointmentId?: string;
@@ -56,7 +57,7 @@ function StatTile({ label, value }: Readonly<{ label: string; value: string }>) 
   const colors = palette.tokens;
   return (
     <View accessible accessibilityLabel={`${label}: ${value}`}
-      style={[styles.stat, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      style={[styles.stat, { backgroundColor: colors.surfaceRaised }]}>
       <Text numberOfLines={1} style={[styles.statLabel, { color: colors.textSecondary }]}>{label}</Text>
       <Text style={[styles.statValue, { color: colors.textPrimary }]}>{value}</Text>
     </View>
@@ -73,8 +74,8 @@ function ToolButton({ label, icon, onPress, disabled = false, busy = false, dang
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: disabled || busy, busy }}
       disabled={disabled || busy} onPress={onPress}
-      style={({ pressed }) => [styles.tool, { borderColor: colors.border,
-        backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: disabled ? 0.45 : 1 }]}>
+      style={({ pressed }) => [styles.tool, {
+        backgroundColor: pressed ? colors.surfaceRaised : danger ? colors.surfaceRaised : colors.accentSoft, opacity: disabled ? 0.45 : 1 }]}>
       {icon(ink)}
       <Text numberOfLines={1} style={[styles.toolLabel, { color: ink }]}>{busy ? "…" : label}</Text>
     </Pressable>
@@ -320,7 +321,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
         onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}
         contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {/* Настройки всего календаря — одна рамка: счётчики, рабочие дни, начало и конец дня. */}
-        <View style={[styles.settingsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.settingsCard, shadow.card, { backgroundColor: colors.surface }]}>
         <View style={styles.stats}>
           <StatTile label="На неделе" value={data ? String(data.appointments.length) : "…"} />
           <StatTile label={`В ${monthPrepositional[viewMonthIndex] ?? "месяце"}`} value={String(monthTotal)} />
@@ -352,23 +353,23 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
           onBrowse={setViewMonth} onSelect={select} onToday={goToday} />
 
         {/* Рамка второго календаря: шапка (как в 2.0) — «Сегодня» и режим, затем действия с неделей. */}
-        <View style={[styles.frame, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.frame, shadow.card, { backgroundColor: colors.surface }]}>
         <View style={styles.toolbarRow}>
           <Pressable accessibilityRole="button" accessibilityLabel="Вернуться к сегодняшнему дню"
             disabled={selected === today} onPress={() => select(today)}
-            style={({ pressed }) => [styles.todayButton, { borderColor: colors.border,
-              backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: selected === today ? 0.45 : 1 }]}>
-            <Undo2 size={16} color={colors.textPrimary} strokeWidth={2} />
-            <Text style={[styles.todayText, { color: colors.textPrimary }]}>Сегодня</Text>
+            style={({ pressed }) => [styles.todayButton, {
+              backgroundColor: pressed ? colors.surfaceRaised : colors.accentSoft, opacity: selected === today ? 0.45 : 1 }]}>
+            <Undo2 size={16} color={colors.accentInk} strokeWidth={2.2} />
+            <Text style={[styles.todayText, { color: colors.accentInk }]}>Сегодня</Text>
           </Pressable>
-          <View style={[styles.segments, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+          <View style={[styles.segments, { backgroundColor: colors.border }]}>
             {segment("WEEK", "Неделя")}
             {segment("DAY", "День")}
           </View>
           <Pressable accessibilityRole="button" accessibilityLabel={showHint ? "Скрыть подсказку по жестам" : "Подсказка по жестам"}
             accessibilityState={{ expanded: showHint }} onPress={() => setShowHint((value) => !value)}
-            style={({ pressed }) => [styles.helpButton, { borderColor: showHint ? colors.accentInk : colors.border,
-              backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
+            style={({ pressed }) => [styles.helpButton, { borderColor: showHint ? colors.accentInk : "transparent",
+              backgroundColor: pressed ? colors.surfaceRaised : colors.surfaceRaised }]}>
             <CircleHelp size={18} color={showHint ? colors.accentInk : colors.textSecondary} strokeWidth={1.8} />
           </Pressable>
         </View>
@@ -468,34 +469,34 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
 const styles = StyleSheet.create({
   content: { padding: 16, gap: 12, paddingBottom: 32 },
   offscreen: { position: "absolute", left: -10000, top: 0 },
-  settingsCard: { borderWidth: 1, borderRadius: 12, padding: 8, gap: 8 },
+  settingsCard: { borderRadius: 20, padding: 12, gap: 10 },
   stats: { flexDirection: "row", gap: 8 },
-  stat: { flex: 1, minHeight: 40, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, flexDirection: "row",
+  stat: { flex: 1, minHeight: 44, borderRadius: 14, paddingHorizontal: 12, flexDirection: "row",
     alignItems: "center", justifyContent: "space-between", gap: 6 },
-  statLabel: { flexShrink: 1, fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  statValue: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },
+  statLabel: { flexShrink: 1, fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
+  statValue: { fontFamily: fonts.bold, fontSize: 20, lineHeight: 25 },
   weekdays: { flexDirection: "row", gap: 4 },
-  dayToggle: { flex: 1, minHeight: 32, borderWidth: 1, borderRadius: 6, alignItems: "center", justifyContent: "center" },
-  dayToggleText: { fontSize: 11, lineHeight: 14, fontFamily: fonts.semibold },
+  dayToggle: { flex: 1, minHeight: 36, borderWidth: 1, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  dayToggleText: { fontSize: 13, lineHeight: 16, fontFamily: fonts.bold },
   window: { flexDirection: "row", gap: 8 },
-  timeButton: { flex: 1, minHeight: 40, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, flexDirection: "row",
+  timeButton: { flex: 1, minHeight: 44, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, flexDirection: "row",
     alignItems: "center", gap: 6 },
-  timeLabel: { flex: 1, fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  timeValue: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
+  timeLabel: { flex: 1, fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
+  timeValue: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
   // Рамка недели чуть шире отступов экрана: колонка часов узкая, пустого места слева меньше.
-  frame: { marginHorizontal: -8, borderWidth: 1, borderRadius: 12, overflow: "hidden", paddingTop: 6, gap: 6 },
+  frame: { marginHorizontal: -8, borderRadius: 20, overflow: "hidden", paddingTop: 8, gap: 8 },
   toolbarRow: { flexDirection: "row", gap: 6, paddingHorizontal: 6 },
-  todayButton: { minHeight: 34, borderWidth: 1, borderRadius: 6, paddingHorizontal: 10, flexDirection: "row",
+  todayButton: { minHeight: 44, borderRadius: 22, paddingHorizontal: 12, flexDirection: "row",
     alignItems: "center", gap: 5 },
-  todayText: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
-  segments: { flex: 1, flexDirection: "row", borderWidth: 1, borderRadius: 6, padding: 2, gap: 2 },
-  segment: { flex: 1, minHeight: 28, borderRadius: 4, alignItems: "center", justifyContent: "center" },
-  segmentText: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
-  tool: { flex: 1, minHeight: 42, borderWidth: 1, borderRadius: 6, alignItems: "center", justifyContent: "center",
-    gap: 2, paddingHorizontal: 2 },
-  toolLabel: { fontFamily: fonts.medium, fontSize: 10, lineHeight: 12 },
+  todayText: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
+  segments: { flex: 1, flexDirection: "row", borderRadius: 22, padding: 3, gap: 3 },
+  segment: { flex: 1, minHeight: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  segmentText: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
+  tool: { flex: 1, minHeight: 52, borderRadius: 14, alignItems: "center", justifyContent: "center",
+    gap: 3, paddingHorizontal: 2 },
+  toolLabel: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14 },
   hint: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15, paddingHorizontal: 8 },
-  helpButton: { width: 34, minHeight: 34, borderWidth: 1, borderRadius: 6, alignItems: "center", justifyContent: "center" },
+  helpButton: { width: 44, minHeight: 44, borderWidth: 2, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   sheetScrim: { backgroundColor: "rgba(0,0,0,0.45)" },
   sheet: { flex: 1, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderWidth: 1, overflow: "hidden" },
   sheetHeader: { minHeight: 52, paddingLeft: 16, paddingRight: 4, flexDirection: "row", alignItems: "center",

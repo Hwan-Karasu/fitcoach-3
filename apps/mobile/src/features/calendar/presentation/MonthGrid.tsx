@@ -7,6 +7,7 @@ import { addMonths, monthGridWeeks } from "../domain/CalendarGeometry.ts";
 import { addDays, mondayOf } from "../domain/CalendarRules.ts";
 import { dayTitle, monthTitle, weekdayShort } from "./calendarPresentation.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
+import { shadow } from "../../../shared/ui/theme/style.ts";
 
 /** Сколько месяцев в каждую сторону можно пролистать от текущего. */
 const SPAN = 120;
@@ -73,9 +74,9 @@ const MonthPage = memo(function MonthPage({ month, width, selected, today, count
                 accessibilityLabel={`${dayTitle(date)}${isToday ? ", сегодня" : ""}, записей: ${count}`}
                 style={styles.cell}>
                 <View style={[styles.dayBox, {
-                  backgroundColor: isSelected ? colors.accentFill : colors.surface,
-                  borderColor: isSelected ? colors.accentFill : isToday ? colors.accentInk : colors.border,
-                  borderWidth: isToday && !isSelected ? 2 : 1,
+                  backgroundColor: isSelected ? colors.accentFill : "transparent",
+                  borderColor: isToday && !isSelected ? colors.accentInk : "transparent",
+                  borderWidth: 2,
                   opacity: inMonth ? 1 : 0.55,
                 }]}>
                   <Text style={[styles.date, { color: ink, fontFamily: isToday || isSelected ? fonts.bold : fonts.medium }]}>
@@ -122,7 +123,7 @@ export function MonthGrid({ viewMonth, selected, today, counts, onBrowse, onSele
   }, [target, width]);
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={[styles.card, shadow.card, { backgroundColor: colors.surface }]}>
       {/* Ширина страницы = точная ширина области ленты: иначе доли пикселя копятся по страницам и месяц съезжает. */}
       <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
       {width > 0 ? (
@@ -142,26 +143,26 @@ export function MonthGrid({ viewMonth, selected, today, counts, onBrowse, onSele
       {/* «Сегодня» стоит на месте в строке заголовка, а название месяца листается со страницей. */}
       <Pressable accessibilityRole="button" accessibilityLabel="Вернуться к текущему месяцу и сегодняшнему дню"
         disabled={atToday} onPress={onToday} hitSlop={6}
-        style={({ pressed }) => [styles.today, { borderColor: colors.border,
-          backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: atToday ? 0.45 : 1 }]}>
-        <Undo2 size={14} color={colors.textPrimary} strokeWidth={2} />
-        <Text style={[styles.todayText, { color: colors.textPrimary }]}>Сегодня</Text>
+        style={({ pressed }) => [styles.today, {
+          backgroundColor: pressed ? colors.surfaceRaised : colors.accentSoft, opacity: atToday ? 0.45 : 1 }]}>
+        <Undo2 size={14} color={colors.accentInk} strokeWidth={2.2} />
+        <Text style={[styles.todayText, { color: colors.accentInk }]}>Сегодня</Text>
       </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 12, padding: CARD_PADDING, overflow: "hidden" },
-  title: { height: 30, fontSize: 14, lineHeight: 27, fontFamily: fonts.bold, paddingLeft: 6, paddingRight: 110 },
-  today: { position: "absolute", top: CARD_PADDING, right: CARD_PADDING + 2, height: 30, borderWidth: 1, borderRadius: 6,
-    paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 5 },
-  todayText: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
+  card: { borderRadius: 20, padding: CARD_PADDING, overflow: "hidden" },
+  title: { height: 32, fontSize: 17, lineHeight: 30, fontFamily: fonts.bold, paddingLeft: 6, paddingRight: 110 },
+  today: { position: "absolute", top: CARD_PADDING, right: CARD_PADDING + 2, height: 32, borderRadius: 16,
+    paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 5 },
+  todayText: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
   row: { flexDirection: "row" },
   week: { borderRadius: 8 },
-  weekday: { flex: 1, textAlign: "center", fontFamily: fonts.regular, fontSize: 10, lineHeight: 14 },
+  weekday: { flex: 1, textAlign: "center", fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, textTransform: "uppercase" },
   cell: { flex: 1, padding: 2 },
-  dayBox: { height: 42, borderRadius: 6, alignItems: "center", justifyContent: "center" },
-  date: { fontSize: 13, lineHeight: 15 },
+  dayBox: { height: 42, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  date: { fontSize: 14, lineHeight: 17 },
   count: { fontSize: 10, lineHeight: 11, fontFamily: fonts.bold },
 });
