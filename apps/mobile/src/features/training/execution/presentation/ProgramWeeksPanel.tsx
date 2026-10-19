@@ -125,8 +125,8 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: views, execution
             {tiles.map((tile) => (
               <View key={tile.label} accessible accessibilityLabel={`${tile.label}: ${tile.value}`}
                 style={[styles.tile, { backgroundColor: colors.surfaceRaised }]}>
-                <Text style={[styles.tileValue, { color: tile.ink }]}>{tile.value}</Text>
                 <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.tileLabel, { color: colors.textSecondary }]}>{tile.label}</Text>
+                <Text style={[styles.tileValue, { color: tile.ink }]}>{tile.value}</Text>
               </View>
             ))}
           </View>
@@ -190,9 +190,10 @@ const styles = StyleSheet.create({
   sectionHead: { flexDirection: "row", alignItems: "center", gap: 6 },
   sectionTitle: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16, textTransform: "uppercase", letterSpacing: 1 },
   tiles: { flexDirection: "row", gap: 6 },
-  tile: { flex: 1, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, gap: 2 },
-  tileLabel: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
-  tileValue: { fontFamily: fonts.bold, fontSize: 22, lineHeight: 27 },
+  tile: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 4, borderRadius: 14,
+    paddingHorizontal: 10, minHeight: 48 },
+  tileLabel: { flexShrink: 1, fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
+  tileValue: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 22 },
   meta: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 17 },
   strong: { fontFamily: fonts.bold },
   workout: { flexDirection: "row", borderRadius: 22, minHeight: 64 },

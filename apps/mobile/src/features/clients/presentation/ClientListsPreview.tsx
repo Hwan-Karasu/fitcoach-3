@@ -223,7 +223,7 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
             accessibilityLabel={todayOnly ? "Сегодня по расписанию, включён" : "Сегодня по расписанию"}
             icon={(color) => <CalendarDays size={16} color={color} strokeWidth={1.8} />}
             onPress={() => setTodayOnly((value) => !value)} />
-          <FilterPill grow menu expanded={menu === "group"} anchorRef={groupAnchor} label="Все клиенты" accessibilityLabel="Группа клиентов: все клиенты"
+          <FilterPill grow menu expanded={menu === "group"} anchorRef={groupAnchor} label={"Все\nклиенты"} accessibilityLabel="Группа клиентов: все клиенты"
             onPress={() => setMenu("group")} />
           <FilterPill menu expanded={menu === "sort"} anchorRef={sortAnchor} label={todayOnly ? "Время" : sortLabel}
             accessibilityLabel={todayOnly ? "Сортировка: по времени записи" : `Сортировка: ${sortLabel}`}

@@ -44,7 +44,7 @@ export function FilterPill({ label, accessibilityLabel, onPress, selected = fals
       }]}
     >
       {icon?.(ink) ?? null}
-      <Text numberOfLines={1} adjustsFontSizeToFit={grow} minimumFontScale={0.7} style={[styles.label, grow ? styles.labelFull : null, { color: ink }]}>{label}</Text>
+      <Text numberOfLines={grow ? 2 : 1} style={[styles.label, grow ? styles.labelFull : null, { color: ink }]}>{label}</Text>
       {menu ? <ChevronDown size={16} color={ink} strokeWidth={2.4}
         style={expanded ? { transform: [{ rotate: "180deg" }] } : undefined} /> : null}
     </Pressable>
@@ -53,7 +53,7 @@ export function FilterPill({ label, accessibilityLabel, onPress, selected = fals
 
 const styles = StyleSheet.create({
   pill: { minHeight: TOUCH_TARGET, borderRadius: radius.pill, borderWidth: 2, flexDirection: "row", alignItems: "center",
-    justifyContent: "center", gap: 4, paddingHorizontal: 10 },
+    justifyContent: "center", gap: 2, paddingHorizontal: 8 },
   // Растягивается на свободное место ряда и сжимается первой, если места мало.
   grow: { flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0 },
   labelFull: { flexShrink: 1, textAlign: "center" },
