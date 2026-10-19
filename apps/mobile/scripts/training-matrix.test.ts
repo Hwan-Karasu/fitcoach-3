@@ -57,10 +57,26 @@ test("T05 матрица: замена — отдельная строка с п
     const [bench, row] = matrix.sections[0]!.rows;
     assert.deepEqual([bench!.exerciseId, [...bench!.cells.keys()]], [BENCH, [1, 3]], "в неделе 2 жима нет — прочерк");
     assert.deepEqual([row!.exerciseId, [...row!.cells.keys()]], [ROW, [2]], "тяга — отдельная строка");
-    assert.deepEqual(bench!.cells.get(1)!.sets[0], { label: "1", plan: "10", fact: "8 × 100", done: true });
-    assert.equal(bench!.cells.get(3)!.sets[0]!.fact, "6 × 100", "предварительное значение видно");
-    assert.equal(bench!.cells.get(3)!.sets[0]!.done, false);
+    const first = bench!.cells.get(1)!.sets[0]!;
+    assert.deepEqual([first.label, first.plan, first.fact, first.reps, first.loadGrams, first.done, first.previous],
+      ["1", "10", "8 × 100", 8, 100_000, true, null], "UI-OWN-045: повторы и вес — отдельными значениями");
+    assert.equal(first.target?.plannedSetId, cycle.weeks[0]!.workouts[0]!.exercises[0]!.sets[0]!.id, "запись — в этот плановый подход");
+    assert.equal(typeof first.target?.fact?.revision, "number", "у записанного подхода есть ревизия для CAS");
+    const third = bench!.cells.get(3)!.sets[0]!;
+    assert.equal(third.fact, "6 × 100", "предварительное значение видно");
+    assert.equal(third.done, false);
+    assert.equal(third.previous, "8 × 100", "«Пред.» — из последней предыдущей недели с этим упражнением (в неделе 2 его нет)");
+    assert.equal(bench!.cells.get(1)!.sets[1]!.target?.fact, null, "незаписанный подход тоже можно заполнить");
     assert.deepEqual([...matrix.totals.entries()], [[1, 800], [2, 0], [3, 0]], "тоннаж — только засчитанные подходы");
+    assert.deepEqual([...matrix.sections[0]!.totals.entries()], [[1, 800], [2, 0], [3, 0]], "объём тренировки по неделям");
+    // Регрессия (телефон, 2026-10-19): вес у упражнения без величины «вес» отклонялся INVALID_METRIC.
+    const repsOnly = buildProgramMatrix(cycle.weeks.map((week) => ({ index: week.index, caption: null, workouts: week.workouts })),
+      await execution.listProgramExecutions(a.id, program.id), (exerciseId) => exerciseId === ROW ? ["reps"] : ["reps", "loadGrams"],
+      { plan: () => "", values: () => "" });
+    const rowSet = repsOnly.sections[0]!.rows[1]!.cells.get(2)!.sets[0]!;
+    const benchSet = repsOnly.sections[0]!.rows[0]!.cells.get(1)!.sets[0]!;
+    assert.deepEqual([rowSet.hasReps, rowSet.hasLoad, benchSet.hasReps, benchSet.hasLoad], [true, false, true, true],
+      "правится только то, что упражнение считает");
   } finally {
     await execution.close(); await plans.close(); await clients.close();
   }

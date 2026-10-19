@@ -190,10 +190,9 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
           onSaved={() => navigation.goBack()} onCancel={() => navigation.goBack()} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingMatrix">
-        {({ navigation, route }) => <ProgramMatrixScreen clientId={viewer} programId={route.params.programId} plans={repository}
-          execution={execution} exercises={exerciseLookup}
-          onOpenWorkout={(weekIndex, workoutId, mesocycleId) => navigation.navigate("TrainingWorkout", { programId: route.params.programId,
-            weekIndex, workoutId, ...(mesocycleId === null ? {} : { mesocycleId }) })} />}
+        {/* UI-OWN-045: матрица — таблица с правкой на месте, без перехода в дневник по нажатию. */}
+        {({ route }) => <ProgramMatrixScreen clientId={viewer} programId={route.params.programId} plans={repository}
+          execution={execution} exercises={exerciseLookup} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingTemplates">
         {({ navigation }) => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}

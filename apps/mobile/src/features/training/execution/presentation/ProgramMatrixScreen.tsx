@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withDecay, type SharedValue } from "react-native-reanimated";
@@ -7,15 +7,22 @@ import { InlineNotice, LoadingState, SearchableSelect, SelectionChip } from "../
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
-import { useExerciseLookup, weekTypeLabels, weekTypeTone, type ExerciseLookupPort, type Mesocycle, type TrainingPlansRepositoryPort,
-  type TrainingProgram } from "../../plans/public.ts";
+import { parseLoad, useExerciseLookup, weekTypeLabels, weekTypeTone, type ExerciseLookupPort, type Mesocycle,
+  type TrainingPlansRepositoryPort, type TrainingProgram, type WeekType } from "../../plans/public.ts";
+import type { SetValues } from "../domain/ExecutionModel.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import { diaryFields, compactWithDrops, planText } from "./setFormat.ts";
-import { buildProgramMatrix, type MatrixCell, type MatrixWeek, type ProgramMatrix } from "./programMatrix.ts";
+import { buildProgramMatrix, type MatrixCell, type MatrixTarget, type MatrixWeek, type ProgramMatrix } from "./programMatrix.ts";
 
-const LABEL_WIDTH = 136;
-const CELL_WIDTH = 132;
+const LABEL_WIDTH = 112;
+// Колонки недели, как в 2.0: «План / Пред. / Повт / Кг».
+const PLAN_WIDTH = 50;
+const PREV_WIDTH = 52;
+const REPS_WIDTH = 40;
+const LOAD_WIDTH = 48;
+const CELL_WIDTH = PLAN_WIDTH + PREV_WIDTH + REPS_WIDTH + LOAD_WIDTH;
 const SIDE_PADDING = 16;
+const EMPTY: SetValues = { reps: null, loadGrams: null, durationSec: null, distanceM: null };
 
 /** Версия структуры для выбора в матрице: действующая или историческая с периодом действия (§48.5.4, §48.9). */
 interface MatrixVersion {
@@ -41,10 +48,14 @@ function versionLabel(validFrom: string, validTo: string | null): string {
     : `${dateOf(validFrom)}–${dateOf(validTo)}`;
 }
 
+const kgText = (grams: number | null) => grams === null ? "" : (grams / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+const volumeText = (kg: number) => Math.round(kg).toLocaleString("ru-RU");
+
 type Item =
   | Readonly<{ kind: "section"; key: string; title: string }>
-  | Readonly<{ kind: "row"; key: string; name: string; cells: ReadonlyMap<number, MatrixCell> }>
-  | Readonly<{ kind: "total"; key: string }>;
+  | Readonly<{ kind: "exercise"; key: string; name: string }>
+  | Readonly<{ kind: "set"; key: string; index: number; cells: ReadonlyMap<number, MatrixCell> }>
+  | Readonly<{ kind: "volume"; key: string; label: string; values: ReadonlyMap<number, number>; strong: boolean }>;
 
 /** Правая часть строки: ячейки недель, сдвинутые общей горизонтальной прокруткой. */
 function Shifted({ offset, width, children }: Readonly<{ offset: SharedValue<number>; width: number; children: React.ReactNode }>) {
@@ -52,40 +63,34 @@ function Shifted({ offset, width, children }: Readonly<{ offset: SharedValue<num
   return <View style={[styles.window, { width }]}><Animated.View style={[styles.track, style]}>{children}</Animated.View></View>;
 }
 
-const CellView = memo(function CellView({ cell, onOpen }: Readonly<{ cell: MatrixCell | undefined; onOpen: (() => void) | null }>) {
+/** Ячейка факта: правка на месте, запись после окончания ввода (как в Google-таблице). */
+const FactInput = memo(function FactInput({ value, width, label, keyboard, editable, onCommit }: Readonly<{
+  value: string; width: number; label: string; keyboard: "number-pad" | "decimal-pad"; editable: boolean;
+  onCommit: (text: string) => void;
+}>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  if (cell === undefined) {
-    return <View style={[styles.cell, { borderColor: colors.border }]}><Text style={[styles.dash, { color: colors.textMuted }]}>—</Text></View>;
-  }
-  const content = <>
-    {cell.sets.map((set, index) => (
-      <Text key={index} numberOfLines={1} style={[styles.set, { color: colors.textSecondary }]}>
-        {`${set.label}. ${set.plan} · `}
-        <Text style={{ color: set.done ? colors.success : set.fact === null ? colors.textMuted : colors.textPrimary }}>{set.fact ?? "—"}</Text>
-      </Text>
-    ))}
-  </>;
-  return onOpen === null
-    ? <View style={[styles.cell, { borderColor: colors.border }]}>{content}</View>
-    : <Pressable accessibilityRole="button" accessibilityLabel="Открыть дневник этой тренировки" onPress={onOpen}
-      style={({ pressed }) => [styles.cell, { borderColor: colors.border, backgroundColor: pressed ? colors.surfaceRaised : "transparent" }]}>
-      {content}
-    </Pressable>;
+  const [text, setText] = useState(value);
+  useEffect(() => setText(value), [value]);
+  if (!editable) return <Text numberOfLines={1} style={[styles.sub, styles.value, { width, color: colors.textPrimary }]}>{value || "—"}</Text>;
+  return <TextInput value={text} onChangeText={setText} placeholder="—" placeholderTextColor={colors.textMuted} selectTextOnFocus
+    keyboardType={keyboard} accessibilityLabel={label} returnKeyType="done" submitBehavior="blurAndSubmit"
+    onEndEditing={() => { if (text.trim() !== value) onCommit(text); }}
+    style={[styles.sub, styles.input, { width, color: colors.textPrimary, borderColor: colors.border, backgroundColor: colors.input }]} />;
 });
 
 /**
- * Матрица недель (T05): строки — упражнения по тренировкам, колонки — недели; названия слева и недели сверху
- * закреплены, прокрутка по двум осям. Выбор версии — только здесь и только для просмотра (§48.5.4); переход в
- * дневник — из действующей версии. Позиция прокрутки запоминается по мезоциклу и версии.
+ * Матрица недель (T05, UI-OWN-045 по 2.0): таблица — строки подходов упражнений по тренировкам, у недели колонки
+ * «План / Пред. / Повт / Кг»; повторы и вес правятся прямо в ячейке (тот же порт, что дневник; ревизия факта — CAS).
+ * Названия слева и недели сверху закреплены, прокрутка по двум осям; колонка недели — в цвете её типа. Историческая
+ * версия — только просмотр (§48.5.4). Позиция прокрутки запоминается по мезоциклу и версии.
  */
-export function ProgramMatrixScreen({ clientId, programId, plans, execution, exercises, onOpenWorkout }: Readonly<{
+export function ProgramMatrixScreen({ clientId, programId, plans, execution, exercises }: Readonly<{
   clientId: string;
   programId: string;
   plans: TrainingPlansRepositoryPort;
   execution: TrainingExecutionPort;
   exercises: ExerciseLookupPort;
-  onOpenWorkout: (weekIndex: number, workoutId: string, mesocycleId: string | null) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -98,6 +103,7 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
   const [versionId, setVersionId] = useState("current");
   const [executions, setExecutions] = useState<Awaited<ReturnType<TrainingExecutionPort["listProgramExecutions"]>>>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
 
   // Программа и мезоциклы.
@@ -155,11 +161,33 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
       { plan: planText, values: compactWithDrops }), [executions, lookup, version]);
 
   const items: readonly Item[] = useMemo(() => matrix === null ? [] : [
-    ...matrix.sections.flatMap((section): Item[] => [{ kind: "section", key: `s:${section.key}`, title: section.title },
-      ...section.rows.map((row): Item => ({ kind: "row", key: row.key, name: lookup?.get(row.exerciseId)?.name ?? "Упражнение",
-        cells: row.cells }))]),
-    { kind: "total", key: "total" },
+    ...matrix.sections.flatMap((section): Item[] => [
+      { kind: "section", key: `s:${section.key}`, title: section.title },
+      ...section.rows.flatMap((row): Item[] => {
+        const count = Math.max(0, ...[...row.cells.values()].map((cell) => cell.sets.length));
+        return [
+          { kind: "exercise", key: `e:${row.key}`, name: lookup?.get(row.exerciseId)?.name ?? "Упражнение" },
+          ...Array.from({ length: count }, (_, index): Item => ({ kind: "set", key: `p:${row.key}:${index}`, index, cells: row.cells })),
+          { kind: "volume", key: `v:${row.key}`, label: "Объём", strong: false,
+            values: new Map([...row.cells.entries()].map(([week, cell]) => [week, cell.volumeKg])) },
+        ];
+      }),
+      { kind: "volume", key: `t:${section.key}`, label: "Объём тренировки", strong: true, values: section.totals },
+    ]),
+    { kind: "volume", key: "total", label: "Тоннаж недели", strong: true, values: matrix.totals },
   ], [lookup, matrix]);
+
+  // Правка факта прямо в ячейке: тот же порт, что дневник; остальные значения подхода сохраняются.
+  const save = useCallback((weekIndex: number, workoutId: string, target: MatrixTarget, patch: Partial<SetValues>) => {
+    const fact = target.fact;
+    setSaveError(null);
+    void execution.saveSet({ slot: { clientId, programId, weekIndex, plannedWorkoutId: workoutId },
+      plannedExerciseId: target.plannedExerciseId, exerciseId: target.exerciseId, plannedSetId: target.plannedSetId,
+      position: target.position, metrics: lookup?.get(target.exerciseId)?.metrics ?? [],
+      values: { ...(fact?.values ?? EMPTY), ...patch }, drops: fact?.drops ?? [], rpe: fact?.rpe ?? null,
+      setType: fact?.setType ?? "NORMAL", expectedRevision: fact?.revision ?? null })
+      .catch(() => { setSaveError("Не удалось сохранить значение — матрица обновлена, повторите ввод."); setRevision((value) => value + 1); });
+  }, [clientId, execution, lookup, programId]);
 
   // Горизонтальная прокрутка — общий сдвиг для шапки и всех строк.
   const windowWidth = screenWidth - SIDE_PADDING * 2 - LABEL_WIDTH;
@@ -190,35 +218,78 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
     return () => cancelAnimationFrame(frame);
   }, [maxOffset, offset, positionKey]);
 
+  // Колонка недели целиком — в цвете её типа («Индивидуальная» — без окраски), как в 2.0.
+  const tintOf = useCallback((type: WeekType | undefined, alpha: number) =>
+    type === undefined || type === "base" ? "transparent" : withAlpha(weekTypeTone(type, colors), alpha), [colors]);
+  const editable = version?.current === true;
+
   const renderItem = useCallback(({ item }: Readonly<{ item: Item }>) => {
+    const weeks = matrix?.weeks ?? [];
     if (item.kind === "section") {
       return <View style={[styles.section, { backgroundColor: colors.surfaceRaised }]}>
         <Text numberOfLines={1} style={[styles.sectionText, { color: colors.textPrimary }]}>{item.title}</Text>
       </View>;
     }
-    if (item.kind === "total") {
+    if (item.kind === "exercise") {
       return <View style={[styles.row, { borderColor: colors.border }]}>
-        <Text style={[styles.label, styles.total, { color: colors.textPrimary }]}>Тоннаж, кг</Text>
+        <Text numberOfLines={3} style={[styles.label, styles.exercise, { color: colors.textPrimary }]}>{item.name}</Text>
         <Shifted offset={offset} width={windowWidth}>
-          {(matrix?.weeks ?? []).map((week) => (
-            <View key={week.index} style={[styles.cell, { borderColor: colors.border }]}>
-              <Text style={[styles.total, { color: colors.textPrimary }]}>{Math.round(matrix?.totals.get(week.index) ?? 0)}</Text>
-            </View>
-          ))}
+          {weeks.map((week) => <View key={week.index} style={[styles.cell, { borderColor: colors.border, backgroundColor: tintOf(week.type, 0.07) }]} />)}
         </Shifted>
       </View>;
     }
+    if (item.kind === "volume") {
+      return <View style={[styles.row, { borderColor: colors.border }]}>
+        <Text style={[styles.label, item.strong ? styles.strong : styles.muted, { color: item.strong ? colors.textPrimary : colors.textSecondary }]}>
+          {item.label}</Text>
+        <Shifted offset={offset} width={windowWidth}>
+          {weeks.map((week) => {
+            const value = item.values.get(week.index);
+            return <View key={week.index} style={[styles.cell, styles.volumeCell, { borderColor: colors.border, backgroundColor: tintOf(week.type, 0.07) }]}>
+              <Text style={[item.strong ? styles.strong : styles.muted, { color: item.strong ? colors.textPrimary : colors.accentInk }]}>
+                {value === undefined ? "—" : `${volumeText(value)} кг`}</Text>
+            </View>;
+          })}
+        </Shifted>
+      </View>;
+    }
+    const label = [...item.cells.values()].map((cell) => cell.sets[item.index]?.label).find((value) => value !== undefined) ?? "";
     return <View style={[styles.row, { borderColor: colors.border }]}>
-      <Text numberOfLines={3} style={[styles.label, { color: colors.textPrimary }]}>{item.name}</Text>
+      <Text style={[styles.label, styles.setLabel, { color: colors.textSecondary }]}>{label === "Р" ? "Разминка" : `Подход ${label}`}</Text>
       <Shifted offset={offset} width={windowWidth}>
-        {(matrix?.weeks ?? []).map((week) => {
+        {weeks.map((week) => {
           const cell = item.cells.get(week.index);
-          return <CellView key={week.index} cell={cell} onOpen={cell !== undefined && version?.current === true
-            ? () => onOpenWorkout(week.index, cell.workoutId, mesocycleId) : null} />;
+          const set = cell?.sets[item.index];
+          const tint = { borderColor: colors.border, backgroundColor: tintOf(week.type, 0.07) };
+          if (cell === undefined || set === undefined) {
+            return <View key={week.index} style={[styles.cell, styles.subRow, tint]}><Text style={[styles.dash, { color: colors.textMuted }]}>—</Text></View>;
+          }
+          const target = editable ? set.target : null;
+          // Упражнение без повторов и веса (время, дистанция) и стороны — текстом, без правки в матрице.
+          const plain = set.target === null || (!set.hasReps && !set.hasLoad);
+          return <View key={week.index} style={[styles.cell, styles.subRow, tint]}>
+            <Text numberOfLines={1} style={[styles.sub, { width: PLAN_WIDTH, color: colors.textSecondary }]}>{set.plan}</Text>
+            <Text numberOfLines={1} style={[styles.sub, { width: PREV_WIDTH, color: colors.textMuted }]}>{set.previous ?? "—"}</Text>
+            {plain ? <Text numberOfLines={1} style={[styles.sub, { width: REPS_WIDTH + LOAD_WIDTH,
+              color: set.done ? colors.success : colors.textPrimary }]}>{set.fact ?? "—"}</Text> : <>
+              <FactInput value={set.reps === null ? "" : String(set.reps)} width={REPS_WIDTH} keyboard="number-pad"
+                label={`Неделя ${week.index}, подход ${set.label}: повторы`} editable={target !== null && set.hasReps}
+                onCommit={(text) => {
+                  const reps = text.trim() === "" ? null : Number.parseInt(text, 10);
+                  if (target !== null && (reps === null || (Number.isInteger(reps) && reps >= 0 && reps <= 999))) save(week.index, cell.workoutId, target, { reps });
+                }} />
+              <FactInput value={kgText(set.loadGrams)} width={LOAD_WIDTH} keyboard="decimal-pad"
+                label={`Неделя ${week.index}, подход ${set.label}: вес, кг`} editable={target !== null && set.hasLoad}
+                onCommit={(text) => {
+                  const loadGrams = parseLoad(text);
+                  if (target !== null && loadGrams !== "invalid") save(week.index, cell.workoutId, target, { loadGrams });
+                }} />
+            </>}
+          </View>;
         })}
       </Shifted>
     </View>;
-  }, [colors, matrix, mesocycleId, offset, onOpenWorkout, version, windowWidth]);
+  }, [colors, editable, matrix, offset, save, tintOf, windowWidth]);
 
   if (message !== null) return <View style={[styles.center, { backgroundColor: colors.canvas }]}><InlineNotice kind="error">{message}</InlineNotice></View>;
   if (program === null || versions === null || matrix === null) {
@@ -242,29 +313,33 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
         {version?.current === false ? (
           <InlineNotice kind="info">Историческая версия — только просмотр. Дневник и действующий план не меняются.</InlineNotice>
         ) : null}
+        {saveError !== null ? <InlineNotice kind="error">{saveError}</InlineNotice> : null}
       </View>
       <GestureDetector gesture={pan}>
         <View style={styles.grid}>
           <View style={[styles.row, styles.header, { borderColor: colors.border, backgroundColor: colors.canvas }]}>
             <Text style={[styles.label, styles.headText, { color: colors.textMuted }]}>Упражнение</Text>
             <Shifted offset={offset} width={windowWidth}>
-              {matrix.weeks.map((week) => (
-                // Колонка наследует цвет типа недели (UI-OWN-038).
-                <View key={week.index} style={[styles.headCell, week.type === undefined ? null : {
-                  backgroundColor: withAlpha(weekTypeTone(week.type, colors), 0.12), borderBottomWidth: 2,
-                  borderBottomColor: weekTypeTone(week.type, colors) }]}>
+              {matrix.weeks.map((week) => {
+                const tone = week.type === undefined || week.type === "base" ? null : weekTypeTone(week.type, colors);
+                return <View key={week.index} style={[styles.headCell, { borderColor: colors.border, backgroundColor: tintOf(week.type, 0.14),
+                  borderBottomColor: tone ?? colors.border }]}>
                   <Text style={[styles.headText, { color: colors.textPrimary }]}>{`Неделя ${week.index}`}</Text>
-                  {week.caption !== null ? <Text numberOfLines={1} style={[styles.caption, { color: week.type === undefined
-                    ? colors.textSecondary : weekTypeTone(week.type, colors) }]}>{week.caption}</Text> : null}
-                </View>
-              ))}
+                  {week.caption !== null ? <Text numberOfLines={1} style={[styles.caption, { color: tone ?? colors.textSecondary }]}>{week.caption}</Text> : null}
+                  <View style={styles.subHead}>
+                    {([["План", PLAN_WIDTH], ["Пред.", PREV_WIDTH], ["Повт", REPS_WIDTH], ["Кг", LOAD_WIDTH]] as const).map(([text, width]) => (
+                      <Text key={text} style={[styles.subHeadText, { width, color: colors.textMuted }]}>{text}</Text>
+                    ))}
+                  </View>
+                </View>;
+              })}
             </Shifted>
           </View>
           {matrix.sections.length === 0 ? (
             <Text style={[styles.empty, { color: colors.textSecondary }]}>В этой версии нет упражнений.</Text>
           ) : (
             <FlashList ref={listRef} data={items as Item[]} keyExtractor={(item) => item.key} getItemType={(item) => item.kind}
-              renderItem={renderItem} extraData={renderItem}
+              renderItem={renderItem} extraData={renderItem} keyboardShouldPersistTaps="handled"
               onScroll={(event) => { currentY.current = event.nativeEvent.contentOffset.y; }} />
           )}
         </View>
@@ -282,18 +357,27 @@ const styles = StyleSheet.create({
   grid: { flex: 1, marginTop: 10, paddingHorizontal: SIDE_PADDING },
   header: { borderBottomWidth: 1 },
   row: { flexDirection: "row", alignItems: "stretch", borderBottomWidth: StyleSheet.hairlineWidth },
-  label: { width: LABEL_WIDTH, paddingVertical: 8, paddingRight: 8, fontFamily: fonts.medium, fontSize: 12, lineHeight: 15 },
+  label: { width: LABEL_WIDTH, paddingVertical: 6, paddingRight: 8, fontFamily: fonts.medium, fontSize: 12, lineHeight: 15 },
+  exercise: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, paddingTop: 8 },
+  setLabel: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14, textAlignVertical: "center" },
   window: { overflow: "hidden" },
   track: { flexDirection: "row" },
-  headCell: { width: CELL_WIDTH, paddingVertical: 6, paddingHorizontal: 6 },
+  headCell: { width: CELL_WIDTH, paddingTop: 6, paddingBottom: 4, paddingHorizontal: 0, borderLeftWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 2, alignItems: "center" },
   headText: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 15 },
   caption: { fontFamily: fonts.regular, fontSize: 10, lineHeight: 13 },
-  cell: { width: CELL_WIDTH, paddingVertical: 6, paddingHorizontal: 6, borderLeftWidth: StyleSheet.hairlineWidth, gap: 2,
-    minHeight: 44, justifyContent: "center" },
-  set: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14 },
-  dash: { fontFamily: fonts.regular, fontSize: 13, textAlign: "center" },
+  subHead: { flexDirection: "row", marginTop: 4 },
+  subHeadText: { fontFamily: fonts.medium, fontSize: 10, lineHeight: 13, textAlign: "center" },
+  cell: { width: CELL_WIDTH, borderLeftWidth: StyleSheet.hairlineWidth, minHeight: 30 },
+  subRow: { flexDirection: "row", alignItems: "center", minHeight: 40 },
+  volumeCell: { alignItems: "center", justifyContent: "center", minHeight: 30 },
+  sub: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14, textAlign: "center", paddingHorizontal: 2 },
+  value: { fontFamily: fonts.medium },
+  input: { height: 32, borderWidth: 1, borderRadius: 6, paddingVertical: 0, marginHorizontal: 1, fontFamily: fonts.medium, fontSize: 12 },
+  dash: { flex: 1, fontFamily: fonts.regular, fontSize: 13, textAlign: "center" },
   section: { paddingVertical: 6, paddingHorizontal: 8, marginTop: 6, borderRadius: 6 },
   sectionText: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
-  total: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 15 },
+  strong: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 15 },
+  muted: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14 },
   empty: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, paddingVertical: 16 },
 });
