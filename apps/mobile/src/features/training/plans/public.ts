@@ -25,4 +25,5 @@ export type { ClientProgramLibrary, CreateProgramInput, ProgramCard, ProgramKind
   TrainingProgram } from "./domain/ProgramModel.ts";
 export type { TrainingPlansCommittedChange, TrainingPlansRepositoryPort, WorkoutWeekNavigation } from "./domain/TrainingPlansRepositoryPort.ts";
 export type { WeekSwapPlansParticipant, WeekSwapPort, WeekSwapRequest } from "./domain/WeekSwap.ts";
+export type { MesocycleSavePlansParticipant, MesocycleSavePort, MesocycleSaveRequest, MesocycleSaveResult } from "./domain/MesocycleSave.ts";
 export type { WeekCopyRequest, WeekCopyMode, WeekCopyPort, WeekCopyPreview, WeekPlansParticipant } from "./domain/WeekCopy.ts";

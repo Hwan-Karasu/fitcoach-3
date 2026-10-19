@@ -1,5 +1,18 @@
 # FitCoach 3.0 — статус
 
+## 2026-10-19 — Конструктор в режиме правки и «+ Мезоцикл», меню области (UI-OWN-041)
+
+- `PeriodizedBuilderScreen`: режимы создание / «+ Мезоцикл» / правка (маршрут `TrainingCreate` с `programId`,
+  `mesocycleId`, `weekIndex`); `ScopeMenu` после правки недели; `applyBuilderScope` (MesocycleBuilder.ts).
+- Запись — workflow `workflows/saveTrainingMesocycle.ts` (`MesocycleSavePort`): планы
+  (`mesocycleSaveParticipant`: настройки, все недели, новые недели, версия до правки, CAS) + дневник (результаты в
+  удаляемых неделях → `WEEK_HAS_RESULTS`). `MesocycleCreatorScreen`/маршрут `TrainingMesocycle` больше не
+  открываются с экрана программы (техдолг: убрать).
+- Проверки: typecheck, lint, arch, source, secrets, foundation 328/328 (+1 область в конструкторе, +3
+  `training-mesocycle-edit`). Android SmokeC «Лето»: правка открыла мезоцикл; удаление упражнения → меню, «Все
+  недели этого типа» → правка в неделях 1, 2, 4 (отменено, не сохранено); неделя 3 → «Тяжёлая» → сохранено, экран
+  окрашен цветом недели (подтверждение UI-OWN-039 на телефоне).
+
 ## 2026-10-19 — UI: экран открытой Расширенной программы по 2.0 (UI-OWN-040)
 
 - `ProgramScreen` (Расширенная): карточка мезоцикла в `ProgramWeeksPanel.header` (даты — `weekRangeLabel`, тип

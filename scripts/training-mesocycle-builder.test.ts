@@ -4,7 +4,7 @@ import test from "node:test";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant } from
   "../apps/mobile/src/features/training/plans/data/DevTrainingPlansRepository.ts";
-import { copyWeekPlan, fillEmptyWeeks, resizeBuilderWeeks, weekRangeLabel, weeksWord, type BuilderWeek } from
+import { applyBuilderScope, copyWeekPlan, fillEmptyWeeks, resizeBuilderWeeks, weekRangeLabel, weeksWord, type BuilderWeek } from
   "../apps/mobile/src/features/training/plans/domain/MesocycleBuilder.ts";
 import { addExercise, fillSets, newDraft } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
 import type { PlannedWorkout } from "../apps/mobile/src/features/training/plans/domain/SimplePlanModel.ts";
@@ -80,4 +80,18 @@ test("UI-OWN-040 карточка Расширенной программы: д�
   assert.equal(weekRangeLabel("2026-10-12", 3), "26 окт — 1 ноя");
   assert.equal(weekRangeLabel("2026-12-28", 1), "28 дек — 3 янв");
   assert.deepEqual([1, 3, 5, 11, 21, 22].map(weeksWord), ["1 неделя", "3 недели", "5 недель", "11 недель", "21 неделя", "22 недели"]);
+});
+
+test("UI-OWN-041 меню области в конструкторе: правка недели переносится на недели области по родству", () => {
+  const first: BuilderWeek = { type: "heavy", workouts: plan("q") };
+  const weeks: readonly BuilderWeek[] = [first, { ...copyWeekPlan(first, newId), type: "base" },
+    { ...copyWeekPlan(first, newId), type: "heavy" }, { ...copyWeekPlan(first, newId), type: "base" }];
+  const exerciseId = first.workouts[0]!.exercises[0]!.id;
+  const edited = fillSets({ title: "м", plan: { weeks: 1, workouts: first.workouts } }, exerciseId, "reps", 5).plan.workouts;
+  const draft = [{ type: "heavy" as const, workouts: edited }, ...weeks.slice(1)];
+  const reps = (list: readonly BuilderWeek[]) => list.map((week) => week.workouts[0]!.exercises[0]!.sets[0]!.reps);
+  assert.deepEqual(reps(applyBuilderScope(draft, 0, first.workouts, "SAME_TYPE", newId)), [5, 10, 5, 10], "только тяжёлые недели");
+  assert.deepEqual(reps(applyBuilderScope(draft, 0, first.workouts, "ALL", newId)), [5, 5, 5, 5]);
+  assert.deepEqual(reps(applyBuilderScope(draft, 0, first.workouts, "CURRENT", newId)), [5, 10, 10, 10], "закрыть меню — только эта неделя");
+  assert.equal(applyBuilderScope(weeks, 0, first.workouts, "ALL", newId), weeks, "нет правок — недели те же");
 });

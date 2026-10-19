@@ -10,7 +10,8 @@ import { DEFAULT_WEEKS, REST_MAX_SEC, REST_MIN_SEC, type SimpleProgramDraft } fr
 import { validateDraft } from "../domain/SimplePlanRules.ts";
 import { withRestDefaults } from "../domain/SimplePlanEdits.ts";
 import { DEV_TRAINING_PLANS_LEDGER, devTrainingPlansCatalog } from "./DevTrainingPlansCatalog.ts";
-import { deleteStructure, readStructure, readWorkouts, writeStructure } from "./SimplePlanStore.ts";
+import { deleteStructure, readStructure, readWorkouts, writeStructure, writeWorkouts } from "./SimplePlanStore.ts";
+import type { MesocycleSavePlansParticipant, MesocycleSaveRequest } from "../domain/MesocycleSave.ts";
 import { deleteMemberMesocycles, insertMesocycle, readMesocycles, saveSelection, selectedMesocycle, writeWeek } from "./PeriodizedStore.ts";
 import { MESOCYCLE_WEEKS_MAX, weekTypeLabels, type Mesocycle, type NewMesocycleInput, type NewPeriodizedProgramInput, type BuilderMesocycleInput, type PeriodizedPlan, type PlanWeek, type WeekEditInput,
   type WeekEditConflict, type WeekEditPreview, type WeekEditResult } from "../domain/PeriodizedModel.ts";
@@ -675,6 +676,80 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       return { source, target: replacement };
     },
     notify: (clientId) => this.publish({ clientIds: [clientId] }),
+  };
+
+  /** Недели конструктора: пустые получают план ближайшей заполненной (новые ID из пула), проверка как у недели. */
+  private async builderWeeks(tx: SqliteStatementPort, input: BuilderMesocycleInput): Promise<readonly PlanWeek[]> {
+    const title = normalizeTitle(input.title);
+    assertSettings(input);
+    if (input.weeks.length < 1 || input.weeks.length > MESOCYCLE_WEEKS_MAX) throw new Error("DRAFT_INVALID");
+    const largest = Math.max(...input.weeks.map((week) => weekRowCount([{ id: "", index: 1, type: week.type, workouts: week.workouts }])));
+    const empty = input.weeks.filter((week) => week.workouts.length === 0).length;
+    const filled = fillEmptyWeeks(input.weeks, await this.idPool(tx, largest * empty));
+    if (filled.some((week) => week.workouts.length === 0)) throw new Error("DRAFT_INVALID");
+    for (const week of filled) assertWeek(title, week.workouts);
+    return filled.map((week, index) => ({ id: `week:${index}`, index: index + 1, type: week.type, workouts: withLineage(week.workouts) }));
+  }
+
+  private async ownMesocycle(tx: SqliteStatementPort, request: MesocycleSaveRequest): Promise<Mesocycle> {
+    const cycle = (await readMesocycles(tx, this.workspaceId, request.programId, request.clientId))
+      .find((item) => item.id === request.mesocycleId);
+    if (cycle === undefined) throw new Error("TARGET_NOT_FOUND");
+    return cycle;
+  }
+
+  /** UI-OWN-041: «+ Мезоцикл» и правка мезоцикла из конструктора (вызывает workflow вместе с дневником). */
+  readonly mesocycleSaveParticipant: MesocycleSavePlansParticipant<SqliteStatementPort> = {
+    removedWorkouts: async (tx, request) => {
+      if (request.mesocycleId === null) return [];
+      const cycle = await this.ownMesocycle(tx, request);
+      return cycle.weeks.filter((week) => week.index > request.mesocycle.weeks.length)
+        .flatMap((week) => week.workouts.map((workout) => ({ weekIndex: week.index, plannedWorkoutId: workout.id })));
+    },
+    save: async (tx, request, now) => {
+      const { clientId, programId, expectedRevision } = request;
+      const title = normalizeTitle(request.mesocycle.title);
+      if (request.mesocycleId !== null && (request.clientIds.length !== 1 || request.clientIds[0] !== clientId)) throw new Error("DRAFT_INVALID");
+      await this.assertTargets(tx, clientId, programId, request.clientIds);
+      const weeks = await this.builderWeeks(tx, request.mesocycle);
+      await this.bumpRevision(tx, programId, expectedRevision, now);
+      const settings = { cycleType: request.mesocycle.cycleType, repRange: request.mesocycle.repRange, startDate: request.mesocycle.startDate };
+      if (request.mesocycleId === null) {
+        const rows = weekRowCount(weeks);
+        const take = await this.idPool(tx, 1 + 2 * rows + request.clientIds.length * (1 + rows));
+        const lineageId = take();
+        const template = independentWeeks(weeks, take);
+        let ownId = "";
+        for (const [index, memberId] of request.clientIds.entries()) {
+          const id = take();
+          await insertMesocycle(tx, this.workspaceId, programId, memberId, { id, lineageId, title, ...settings,
+            weeks: index === 0 ? template : copyWeeks(template, take) }, now);
+          if (memberId === clientId) ownId = id;
+        }
+        await saveSelection(tx, this.workspaceId, programId, clientId, ownId);
+        return { program: await programById(tx, this.workspaceId, programId), mesocycleId: ownId };
+      }
+      const cycle = await this.ownMesocycle(tx, request);
+      await preserveMesocycle(tx, this.workspaceId, clientId, programId, cycle, now);
+      await tx.run(`UPDATE dev_training_mesocycles SET title = ?, cycle_type = ?, rep_min = ?, rep_max = ?, start_date = ?
+        WHERE workspace_id = ? AND id = ? AND client_id = ?`, [title, settings.cycleType, settings.repRange?.min ?? null,
+        settings.repRange?.max ?? null, settings.startDate, this.workspaceId, cycle.id, clientId]);
+      const take = await this.idPool(tx, Math.max(0, weeks.length - cycle.weeks.length));
+      for (const week of weeks) {
+        const existing = cycle.weeks.find((item) => item.index === week.index);
+        if (existing !== undefined) { await writeWeek(tx, this.workspaceId, programId, { ...week, id: existing.id }); continue; }
+        const id = take();
+        await tx.run(`INSERT INTO dev_training_weeks (id, workspace_id, mesocycle_id, position, week_type) VALUES (?, ?, ?, ?, ?)`,
+          [id, this.workspaceId, cycle.id, week.index - 1, week.type]);
+        await writeWeek(tx, this.workspaceId, programId, { ...week, id });
+      }
+      for (const week of cycle.weeks.filter((item) => item.index > weeks.length)) {
+        await writeWorkouts(tx, this.workspaceId, programId, week.id, []);
+        await tx.run("DELETE FROM dev_training_weeks WHERE workspace_id = ? AND id = ?", [this.workspaceId, week.id]);
+      }
+      return { program: await programById(tx, this.workspaceId, programId), mesocycleId: cycle.id };
+    },
+    notify: (clientIds) => this.publish({ clientIds }),
   };
 
   private async prepareWeekEdit(tx: SqliteStatementPort, clientId: string, programId: string, expectedRevision: number,

@@ -1,6 +1,6 @@
-import type { BuilderWeek, CycleType } from "./PeriodizedModel.ts";
-import { withLineage } from "./PeriodizedRules.ts";
-import type { PlanRange } from "./SimplePlanModel.ts";
+import type { BuilderWeek, CycleType, WeekScope } from "./PeriodizedModel.ts";
+import { applyWeekOps, diffWeek, targetWeeks, withLineage } from "./PeriodizedRules.ts";
+import type { PlannedWorkout, PlanRange } from "./SimplePlanModel.ts";
 import { remapSupersets } from "./SupersetRules.ts";
 
 /**
@@ -39,6 +39,22 @@ export function fillEmptyWeeks(weeks: readonly BuilderWeek[], newId: () => strin
     if (week.workouts.length > 0) { source = week; return week; }
     return { type: week.type, workouts: copyWeekPlan(source, newId).workouts };
   });
+}
+
+/**
+ * Меню области после правки недели в конструкторе (§48.6, решение владельца 2026-10-19): изменения недели
+ * `editing` (0-based) относительно `baseline` переносятся на недели области по родству; сама неделя не меняется.
+ */
+export function applyBuilderScope(weeks: readonly BuilderWeek[], editing: number, baseline: readonly PlannedWorkout[],
+  scope: WeekScope, newId: () => string): readonly BuilderWeek[] {
+  const open = weeks[editing];
+  if (open === undefined) return weeks;
+  const ops = diffWeek(baseline, open.workouts);
+  if (ops.length === 0) return weeks;
+  const indexed = weeks.map((week, at) => ({ index: at + 1, type: week.type }));
+  const targets = new Set(targetWeeks(indexed, editing + 1, scope, open.type));
+  return weeks.map((week, at) => at === editing || !targets.has(at + 1) ? week
+    : { type: week.type, workouts: applyWeekOps(week.workouts, ops, newId).workouts });
 }
 
 /** Число недель: новые — пустые «Индивидуальные», лишние убираются с конца. */

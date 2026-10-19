@@ -1,18 +1,21 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import { CalendarDays, Minus, Plus } from "lucide-react-native";
-import { AppIconButton, LoadingState, pickDate, SegmentedControl, StickyEditorFooter, TextField,
+import { AppIconButton, InlineNotice, LoadingState, pickDate, SegmentedControl, StickyEditorFooter, TextField,
   TrainingEditorLayout } from "../../../../shared/ui/components/public.ts";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
-import { copyWeekPlan, CYCLE_TYPES, resizeBuilderWeeks, type BuilderWeek, type CycleType } from "../domain/MesocycleBuilder.ts";
+import { applyBuilderScope, copyWeekPlan, CYCLE_TYPES, resizeBuilderWeeks, type BuilderWeek, type CycleType } from "../domain/MesocycleBuilder.ts";
+import type { MesocycleSavePort } from "../domain/MesocycleSave.ts";
+import { diffWeek, targetWeeks } from "../domain/PeriodizedRules.ts";
+import { ScopeMenu } from "./ScopeMenu.tsx";
 import { MESOCYCLE_WEEKS_MAX, WEEK_TYPES, weekTypeLabels, type WeekType } from "../domain/PeriodizedModel.ts";
 import { PROGRAM_TITLE_MAX } from "../domain/ProgramRules.ts";
 import { setRepsRange } from "../domain/SimplePlanEdits.ts";
-import type { PlanRange, SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
+import type { PlannedWorkout, PlanRange, SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
 import { formatRange, parseRange, setFieldsOf, validateDraft } from "../domain/SimplePlanRules.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
@@ -25,6 +28,9 @@ import { newPlanId, WorkoutsEditor } from "./WorkoutsEditor.tsx";
 const errors: Readonly<Record<string, string>> = {
   DRAFT_INVALID: `Проверьте названия (до ${PROGRAM_TITLE_MAX} символов), повторения и тренировки — хотя бы одна неделя с упражнениями.`,
   TARGET_NOT_FOUND: "Клиент не найден или в архиве. Обновите список участников.",
+  WEEK_HAS_RESULTS: "В убираемых неделях есть результаты — такие недели не удаляются. Верните число недель.",
+  PROGRAM_REVISION_CONFLICT: "Программа изменилась в другом месте. Откройте конструктор ещё раз.",
+  PROGRAM_ARCHIVED: "У одного из участников программа в архиве.",
 };
 
 const today = () => {
@@ -48,11 +54,20 @@ function Section({ title, children }: Readonly<{ title: string; children: ReactN
  * Конструктор Расширенной программы (UI-OWN-038, компоновка и поведение 2.0): настройки мезоцикла, структура недель
  * с типами, программа выбранной недели, «Скопировать из недели». При первом создании вопросов об области нет;
  * пустые недели заполняются при сохранении копией ближайшей заполненной. Программа, участники и мезоцикл
- * создаются одной записью.
+ * создаются одной записью. Тот же конструктор открывает «Изменить» (мезоцикл этого клиента целиком) и
+ * «+ Мезоцикл» (UI-OWN-041); в правке после изменения недели всплывает меню области.
  */
-export function PeriodizedBuilderScreen({ clientId, repository, exercises, listCandidates, picked, onPickExercise, onCreated, onCancel,
-  renderTemplates }: Readonly<{
+export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, initialWeek, mesocycleSave, repository, exercises, listCandidates, picked,
+  onPickExercise, onCreated, onSaved, onCancel, renderTemplates }: Readonly<{
   clientId: string;
+  /** Существующая программа: «+ Мезоцикл» или правка (`mesocycleId`). */
+  programId?: string;
+  mesocycleId?: string;
+  /** Правка: открыть эту неделю (номер с 1). */
+  initialWeek?: number;
+  mesocycleSave?: MesocycleSavePort;
+  /** Мезоцикл сохранён (правка или «+ Мезоцикл»). */
+  onSaved?: (mesocycleId: string) => void;
   repository: TrainingPlansRepositoryPort;
   exercises: ExerciseLookupPort;
   listCandidates: () => Promise<readonly TrainingParticipantCandidate[]>;
@@ -82,6 +97,33 @@ export function PeriodizedBuilderScreen({ clientId, repository, exercises, listC
   const [message, setMessage] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [showIssues, setShowIssues] = useState(false);
+  const mode = programId === undefined ? "create" : mesocycleId === undefined ? "add" : "edit";
+  // Существующая программа: ревизия и участники; `null` — загружается, "ERROR" — не загрузилась.
+  const [program, setProgram] = useState<Readonly<{ revision: number; title: string; members: readonly string[] }> | null | "ERROR">(null);
+  // Меню области (только в правке): неделя «до» правки и признак открытого меню.
+  const baselines = useRef(new Map<number, readonly PlannedWorkout[]>());
+  const [scopeFor, setScopeFor] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (programId === undefined) return undefined;
+    let active = true;
+    repository.getPeriodizedPlan(clientId, programId).then((plan) => {
+      if (!active) return;
+      const cycle = plan?.mesocycles.find((item) => item.id === mesocycleId);
+      if (plan === null || (mesocycleId !== undefined && cycle === undefined)) { setProgram("ERROR"); return; }
+      setProgram({ revision: plan.program.revision, title: plan.program.title, members: plan.program.memberClientIds });
+      setMembers(plan.program.memberClientIds);
+      if (cycle === undefined) { setTitle(`Мезоцикл ${plan.mesocycles.length + 1}`); return; }
+      setTitle(cycle.title);
+      if (cycle.cycleType != null) setCycleType(cycle.cycleType);
+      setRepsText(cycle.repRange == null ? "" : formatRange(cycle.repRange).replace("–", "-"));
+      if (cycle.startDate != null) setStartDate(cycle.startDate);
+      setWeeks(cycle.weeks.map((week) => ({ type: week.type, workouts: week.workouts })));
+      baselines.current = new Map(cycle.weeks.map((week, index) => [index, week.workouts]));
+      if (initialWeek !== undefined) setEditing(Math.min(Math.max(initialWeek - 1, 0), cycle.weeks.length - 1));
+    }).catch(() => { if (active) setProgram("ERROR"); });
+    return () => { active = false; };
+  }, [clientId, initialWeek, mesocycleId, programId, repository]);
 
   useEffect(() => {
     let active = true;
@@ -118,13 +160,59 @@ export function PeriodizedBuilderScreen({ clientId, repository, exercises, listC
     updateWeek(editing, { type: week.type, workouts: result.plan.workouts });
   }, [editing, lookup, reps, updateWeek, week.type, week.workouts]);
   usePickedExercise(picked, draft, lookup, change);
+  const latest = useRef({ weeks, editing });
+  latest.current = { weeks, editing };
+  const keyboardOpen = useRef(false);
+  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const checkScope = useCallback(() => {
+    if (mode !== "edit") return;
+    const { weeks: current, editing: at } = latest.current;
+    const baseline = baselines.current.get(at) ?? [];
+    if (diffWeek(baseline, current[at]?.workouts ?? []).length > 0) setScopeFor(at);
+  }, [mode]);
+  const scheduleScope = useCallback((delay: number) => {
+    if (pending.current !== null) clearTimeout(pending.current);
+    pending.current = setTimeout(() => { pending.current = null; if (!keyboardOpen.current) checkScope(); }, delay);
+  }, [checkScope]);
+  useEffect(() => {
+    if (mode !== "edit") return undefined;
+    const show = Keyboard.addListener("keyboardDidShow", () => {
+      keyboardOpen.current = true;
+      if (pending.current !== null) { clearTimeout(pending.current); pending.current = null; }
+    });
+    const hide = Keyboard.addListener("keyboardDidHide", () => { keyboardOpen.current = false; scheduleScope(300); });
+    return () => { show.remove(); hide.remove(); if (pending.current !== null) clearTimeout(pending.current); };
+  }, [mode, scheduleScope]);
+  useEffect(() => { if (mode === "edit" && !keyboardOpen.current) scheduleScope(500); }, [mode, scheduleScope, week.workouts]);
+  // Переход к другой неделе без выбора области — правка остаётся только в этой неделе.
+  const openWeek = (index: number) => {
+    if (pending.current !== null) { clearTimeout(pending.current); pending.current = null; }
+    baselines.current.set(editing, week.workouts);
+    setEditing(index);
+  };
+  const pickScope = (scope: Parameters<typeof applyBuilderScope>[3]) => {
+    const at = scopeFor ?? editing;
+    const baseline = baselines.current.get(at) ?? [];
+    const next = scope === "CURRENT" ? weeks : applyBuilderScope(weeks, at, baseline, scope, () => newPlanId("s"));
+    setWeeks(next);
+    // Новая точка отсчёта: изменённые недели считаются «до» следующей правки.
+    next.forEach((item, index) => { if (index === at || item !== weeks[index]) baselines.current.set(index, item.workouts); });
+    setScopeFor(null);
+  };
   const metricsOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.metrics ?? null, [lookup]);
   const issues = useMemo(() => lookup === null ? [] : weeks.flatMap((item) => item.workouts.length === 0 ? []
     : validateDraft({ title: title || "Мезоцикл", plan: { weeks: 1, workouts: item.workouts } }, metricsOf)), [lookup, metricsOf, title, weeks]);
   const weekIssues = useMemo(() => lookup === null || week.workouts.length === 0 ? [] : validateDraft(draft, metricsOf),
     [draft, lookup, metricsOf, week.workouts.length]);
 
-  if (lookup === null) return <View style={[styles.center, { backgroundColor: colors.canvas }]}><LoadingState label="Открываем конструктор…" /></View>;
+  if (program === "ERROR") {
+    return <View style={[styles.center, { backgroundColor: colors.canvas }]}>
+      <InlineNotice kind="error">Не удалось открыть мезоцикл. Вернитесь к программе и повторите.</InlineNotice>
+    </View>;
+  }
+  if (lookup === null || (mode !== "create" && program === null)) {
+    return <View style={[styles.center, { backgroundColor: colors.canvas }]}><LoadingState label="Открываем конструктор…" /></View>;
+  }
 
   const input = () => ({ title, cycleType, repRange: reps === "invalid" ? null : reps, startDate, weeks });
   const check = () => {
@@ -134,7 +222,20 @@ export function PeriodizedBuilderScreen({ clientId, repository, exercises, listC
     if (issues.length > 0) { setMessage(issues[0]?.message ?? "Проверьте тренировки."); return false; }
     return true;
   };
+  const saveMesocycle = async () => {
+    if (!check() || programId === undefined || program === null || mesocycleSave === undefined) return;
+    setBusy("create"); setMessage(null);
+    try {
+      const result = await mesocycleSave.save({ clientId, programId, expectedRevision: program.revision,
+        mesocycleId: mesocycleId ?? null, clientIds: mode === "edit" ? [clientId] : members, mesocycle: input() });
+      setDirty(false);
+      onSaved?.(result.mesocycleId);
+    } catch (error) {
+      setMessage(errors[error instanceof Error ? error.message : ""] ?? "Не удалось сохранить мезоцикл. Изменения на экране.");
+    } finally { setBusy(null); }
+  };
   const create = async () => {
+    if (mode !== "create") { await saveMesocycle(); return; }
     if (!check()) return;
     if (programTitle.trim().length === 0) { setMessage("Введите название программы."); return; }
     setBusy("create"); setMessage(null);
@@ -157,7 +258,7 @@ export function PeriodizedBuilderScreen({ clientId, repository, exercises, listC
     } finally { setBusy(null); }
   };
 
-  const tabs = renderTemplates !== undefined ? (
+  const tabs = renderTemplates !== undefined && mode === "create" ? (
     <View style={styles.tabs}>
       <SegmentedControl items={[{ id: "program", label: "Программа" }, { id: "templates", label: "Шаблоны" }]} selectedId={tab} onSelect={setTab} />
     </View>
@@ -184,8 +285,9 @@ export function PeriodizedBuilderScreen({ clientId, repository, exercises, listC
         </View>
         {dirty ? <Text style={[styles.dirty, { color: colors.warning }]}>Есть несохранённые изменения</Text> : null}
         <Section title="Настройки мезоцикла">
-          <TextField label="Название программы" required value={programTitle} placeholder="Например, «Подготовка к лету»"
+          {mode === "create" ? <TextField label="Название программы" required value={programTitle} placeholder="Например, «Подготовка к лету»"
             onChangeText={(value) => { setProgramTitle(value); touch(); }} />
+            : <Text style={[styles.hint, { color: colors.textSecondary }]}>{`Программа «${program?.title ?? ""}»`}</Text>}
           <TextField label="Название мезоцикла" required value={title} onChangeText={(value) => { setTitle(value); touch(); }} />
           <Text style={[styles.label, { color: colors.textPrimary }]}>Тип цикла</Text>
           <View style={styles.grid}>
@@ -215,9 +317,11 @@ export function PeriodizedBuilderScreen({ clientId, repository, exercises, listC
               </Pressable>
             </View>
           </View>
-          <ParticipantChips clientId={clientId} memberIds={[clientId, ...candidates.map((item) => item.id).filter((id) => id !== clientId)]}
+          {mode === "edit" ? null : <ParticipantChips clientId={clientId}
+            memberIds={mode === "add" && program !== null ? program.members
+              : [clientId, ...candidates.map((item) => item.id).filter((id) => id !== clientId)]}
             names={new Map(candidates.map((item) => [item.id, item.displayName]))} selected={members}
-            onChange={(ids) => { setMembers(ids); touch(); }} note="Каждый получит свою копию; результаты у всех свои." />
+            onChange={(ids) => { setMembers(ids); touch(); }} note="Каждый получит свою копию; результаты у всех свои." />}
         </Section>
 
         <Section title="Структура недель">
@@ -237,7 +341,7 @@ export function PeriodizedBuilderScreen({ clientId, repository, exercises, listC
               return (
                 <Pressable key={index} accessibilityRole="button" accessibilityState={{ selected }}
                   accessibilityLabel={`Неделя ${index + 1}, ${weekTypeLabels[item.type]}${item.workouts.length === 0 ? ", пусто" : ""}`}
-                  onPress={() => setEditing(index)}
+                  onPress={() => openWeek(index)}
                   style={[styles.weekCard, { borderColor: selected ? tone : withAlpha(tone, 0.45), borderWidth: selected ? 2 : 1,
                     backgroundColor: withAlpha(tone, selected ? 0.14 : 0.06) }]}>
                   <Text style={[styles.weekTitle, { color: colors.textPrimary }]}>{`Неделя ${index + 1}`}</Text>
@@ -272,8 +376,8 @@ export function PeriodizedBuilderScreen({ clientId, repository, exercises, listC
           </> : null}
           {week.workouts.length === 0 ? (
             <Text style={[styles.hint, { color: colors.textSecondary }]}>
-              {editing === 0 ? "Добавьте тренировку — пустые недели при создании получат копию."
-                : "Пустая неделя при создании получит копию ближайшей заполненной."}
+              {editing === 0 ? "Добавьте тренировку — пустые недели при сохранении получат копию."
+                : "Пустая неделя при сохранении получит копию ближайшей заполненной."}
             </Text>
           ) : null}
           <WorkoutsEditor draft={draft} change={change} lookup={lookup} issues={weekIssues} showIssues={showIssues} scrollRef={scrollRef}
@@ -281,7 +385,9 @@ export function PeriodizedBuilderScreen({ clientId, repository, exercises, listC
             onReplaceExercise={(workoutId, plannedId) => onPickExercise(workoutId, plannedId)} />
         </Section>
       </Animated.ScrollView>
-      <StickyEditorFooter actionLabel="Создать" busy={busy === "create"} onCancel={onCancel}
+      <ScopeMenu visible={scopeFor !== null} weekIndex={(scopeFor ?? 0) + 1} onPick={pickScope}
+        weeksOf={(scope) => targetWeeks(weeks.map((item, index) => ({ index: index + 1, type: item.type })), (scopeFor ?? 0) + 1, scope)} />
+      <StickyEditorFooter actionLabel={mode === "edit" ? "Сохранить" : mode === "add" ? "Добавить" : "Создать"} busy={busy === "create"} onCancel={onCancel}
         secondaryAction={{ label: "В шаблон", busy: busy === "template", onPress: () => { void saveTemplate(); } }}
         onAction={() => { void create(); }} message={message ?? saved} messageKind={message !== null ? "error" : "success"} />
     </TrainingEditorLayout>

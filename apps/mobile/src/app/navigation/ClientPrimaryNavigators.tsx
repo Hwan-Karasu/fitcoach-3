@@ -5,7 +5,7 @@ import { localDateOf, parseValueX10, type MeasurementRepositoryPort } from "../.
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
 import { NutritionWorkspacePreview } from "../../features/nutrition/public.ts";
 import { ProgramMatrixScreen, PeriodizedBuilderScreen, MesocycleCreatorScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, SimpleProgramBuilderScreen,
-  WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort,
+  WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort,
   type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
   type TrainingPlansRepositoryPort, ProgramWeeksPanel, WorkoutScreen, type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort,
   type WorkoutSlot } from "../../features/training/public.ts";
@@ -21,7 +21,8 @@ type TrainingRoutes = {
   TrainingTemplates: undefined;
   TrainingMatrix: { programId: string };
   TrainingTemplateEdit: { templateId: string; picked?: PickedExercise };
-  TrainingCreate: { kind: ProgramKind; picked?: PickedExercise };
+  /** Конструктор Расширенной: создание; с `programId` — «+ Мезоцикл», с `mesocycleId` — правка (UI-OWN-041). */
+  TrainingCreate: { kind: ProgramKind; picked?: PickedExercise; programId?: string; mesocycleId?: string; weekIndex?: number };
   TrainingProgram: { programId: string; weekIndex?: number; mesocycleId?: string };
   TrainingBuilder: { programId?: string; picked?: PickedExercise } | undefined;
   TrainingMesocycle: { programId: string; picked?: PickedExercise };
@@ -40,7 +41,7 @@ type PickReturn =
   | Readonly<{ name: "TrainingWeek"; params: { programId: string; mesocycleId: string; weekIndex: number } }>
   | Readonly<{ name: "TrainingSimpleWorkout"; params: { programId: string; weekIndex: number; workoutId: string } }>
   | Readonly<{ name: "TrainingTemplateEdit"; params: { templateId: string } }>
-  | Readonly<{ name: "TrainingCreate"; params: { kind: ProgramKind } }>
+  | Readonly<{ name: "TrainingCreate"; params: { kind: ProgramKind; programId?: string; mesocycleId?: string; weekIndex?: number } }>
   | Readonly<{ name: "TrainingWorkout"; params: { programId: string; weekIndex: number; workoutId: string; mesocycleId?: string } }>;
 
 const trainingTitles: Readonly<Record<keyof TrainingRoutes, string>> = {
@@ -111,7 +112,7 @@ export function NutritionNavigator() {
  * Шапка — общая строка карточки клиента (UI-OWN-001), назад — системной кнопкой.
  */
 export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExercise, repository, execution, restTimers, activeWorkouts, onOpenWorkout,
-  listCandidates, exercises, exerciseLookup, weekCopy, weekSwap, onExitClient, onOpenClients }: Readonly<{
+  listCandidates, exercises, exerciseLookup, weekCopy, weekSwap, mesocycleSave, onExitClient, onOpenClients }: Readonly<{
   clientId: string;
   clientName: string;
   clientEmoji: string | null;
@@ -125,6 +126,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
   exerciseLookup: ExerciseLookupPort;
   weekCopy: WeekCopyPort;
   weekSwap: WeekSwapPort;
+  mesocycleSave: MesocycleSavePort;
   onExitClient: () => void;
   onOpenClients: () => void;
   /** Карточка упражнения из дневника (корневой стек). */
@@ -179,12 +181,18 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
         {({ navigation }) => <ProgramModeChooserScreen onChoose={(kind) => { const route = createRoute(kind); navigation.navigate(route.name, route.params as never); }}
           onOpenTemplates={() => navigation.navigate("TrainingTemplates")} />}
       </TrainingStack.Screen>
-      <TrainingStack.Screen name="TrainingCreate">
+      <TrainingStack.Screen name="TrainingCreate" options={({ route }) => ({ title: route.params.mesocycleId !== undefined ? "Изменение мезоцикла"
+        : route.params.programId !== undefined ? trainingTitles.TrainingMesocycle : trainingTitles.TrainingCreate })}>
         {/* Расширенная — конструктор 2.0 (UI-OWN-038): программа, участники и первый мезоцикл одной записью. */}
         {({ navigation, route }) => <PeriodizedBuilderScreen clientId={clientId} repository={repository} exercises={exerciseLookup}
+          programId={route.params.programId} mesocycleId={route.params.mesocycleId} initialWeek={route.params.weekIndex}
+          mesocycleSave={mesocycleSave}
+          onSaved={(mesocycleId) => navigation.popTo("TrainingProgram", { programId: route.params.programId!, mesocycleId })}
           listCandidates={listCandidates} picked={route.params.picked ?? null} onCancel={() => navigation.goBack()}
           onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId,
-            ...(replace === undefined ? {} : { replace }), returnTo: { name: "TrainingCreate", params: { kind: route.params.kind } } })}
+            ...(replace === undefined ? {} : { replace }), returnTo: { name: "TrainingCreate", params: { kind: route.params.kind,
+              ...(route.params.programId === undefined ? {} : { programId: route.params.programId }),
+              ...(route.params.mesocycleId === undefined ? {} : { mesocycleId: route.params.mesocycleId }) } } })}
           renderTemplates={() => <TemplateLibraryScreen clientId={clientId} repository={repository} listCandidates={listCandidates}
             onEdit={(templateId) => navigation.navigate("TrainingTemplateEdit", { templateId })}
             onCreated={(createdId) => navigation.reset({ index: 1,
@@ -210,8 +218,9 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
             onOpenWorkout={(weekIndex, workoutId) => navigation.navigate("TrainingWorkout", { programId: route.params.programId, weekIndex, workoutId,
               ...(view.key === "simple" ? {} : { mesocycleId: view.key }) })} />}
           onEditStructure={() => navigation.navigate("TrainingBuilder", { programId: route.params.programId })}
-          onAddMesocycle={() => navigation.navigate("TrainingMesocycle", { programId: route.params.programId })}
-          onEditWeek={(mesocycleId, weekIndex) => navigation.navigate("TrainingWeek", { programId: route.params.programId, mesocycleId, weekIndex })}
+          onAddMesocycle={() => navigation.navigate("TrainingCreate", { kind: "PERIODIZED", programId: route.params.programId })}
+          onEditWeek={(mesocycleId, weekIndex) => navigation.navigate("TrainingCreate", { kind: "PERIODIZED", programId: route.params.programId,
+            mesocycleId, weekIndex })}
           onArchived={() => navigation.popTo("TrainingIndex")} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingBuilder">
