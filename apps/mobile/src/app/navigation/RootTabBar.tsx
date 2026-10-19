@@ -5,6 +5,7 @@ import { AppIconButton, useWeekNavigationState } from "../../shared/ui/component
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
+import { shadow } from "../../shared/ui/theme/style.ts";
 
 /** Значки всех наборов вкладок: корень (Клиенты/Календарь/Архив) и карточка клиента (Главная/Питание/…). */
 const tabIcons: Readonly<Record<string, LucideIcon>> = { Clients: Users, Calendar: CalendarDays, Archive,
@@ -12,7 +13,7 @@ const tabIcons: Readonly<Record<string, LucideIcon>> = { Clients: Users, Calenda
 
 /**
  * Единая плавающая нижняя панель (UI-OWN-018) для всех наборов вкладок: вид один и тот же, меняются только
- * кнопки. Отступы от краёв, радиус 18; иконка + подпись, бейдж, черта под активной.
+ * кнопки. «Зефирка» (UI-OWN-048): белая, радиус 26, тень; активная вкладка — мягкий фон акцента.
  */
 export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTabBarProps>) {
   const { palette } = usePrototypeTheme();
@@ -20,8 +21,8 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
   const insets = useSafeAreaInsets();
   const weeks = useWeekNavigationState();
   return (
-    <View style={[styles.dock, { backgroundColor: colors.canvas, paddingBottom: insets.bottom + 18 }]}>
-      <View style={[styles.bar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={[styles.dock, { backgroundColor: colors.canvas, paddingBottom: insets.bottom + 12 }]}>
+      <View style={[styles.bar, shadow.floating, { backgroundColor: colors.surface }]}>
         {weeks ? <View style={styles.arrow}><AppIconButton label={`Предыдущая неделя. Сейчас неделя ${weeks.week}`}
           disabled={weeks.previous === null || weeks.busy} onPress={() => weeks.previous?.()}
           icon={<ChevronLeft size={24} color={colors.accentInk} />} /></View> : null}
@@ -42,10 +43,10 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
                 const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
                 if (!focused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
               }}
-              style={styles.tab}
+              style={[styles.tab, focused ? { backgroundColor: colors.accentSoft } : null]}
             >
               <View>
-                <Icon size={20} color={color} strokeWidth={focused ? 2.2 : 1.8} />
+                <Icon size={22} color={color} strokeWidth={focused ? 2.2 : 1.9} />
                 {badge !== undefined ? (
                   <View style={[styles.badge, { backgroundColor: colors.accentFill }]}>
                     <Text style={[styles.badgeText, { color: colors.onAccentFill }]}>{String(badge)}</Text>
@@ -53,8 +54,7 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
                 ) : null}
               </View>
               <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
-                style={[styles.label, { color, fontFamily: focused ? fonts.semibold : fonts.medium }]}>{label}</Text>
-              <View style={[styles.indicator, { backgroundColor: focused ? colors.accentInk : "transparent" }]} />
+                style={[styles.label, { color, fontFamily: focused ? fonts.bold : fonts.semibold }]}>{label}</Text>
             </Pressable>
           );
         })}
@@ -69,13 +69,9 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
 const styles = StyleSheet.create({
   arrow: { justifyContent: "center" },
   dock: { paddingHorizontal: 12, paddingTop: 4 },
-  bar: {
-    flexDirection: "row", borderWidth: 1, borderRadius: 18, overflow: "visible",
-    elevation: 6, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
-  },
-  tab: { flex: 1, minHeight: 52, paddingTop: 6, alignItems: "center", justifyContent: "flex-start", gap: 3 },
-  label: { fontSize: 11, lineHeight: 14 },
-  indicator: { width: 20, height: 3, borderRadius: 2, marginTop: 2 },
+  bar: { flexDirection: "row", borderRadius: 26, padding: 8, gap: 6, minHeight: 76 },
+  tab: { flex: 1, borderRadius: 18, alignItems: "center", justifyContent: "center", gap: 3 },
+  label: { fontSize: 12, lineHeight: 15 },
   badge: { position: "absolute", top: -4, left: 14, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   badgeText: { fontFamily: fonts.bold, fontSize: 10, lineHeight: 12 },
 });

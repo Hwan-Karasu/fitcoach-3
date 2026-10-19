@@ -10,14 +10,14 @@ export function ListSectionHeader({ title, count, accent = false }: Readonly<{ t
   return (
     <View accessible accessibilityRole="header"
       accessibilityLabel={count === undefined ? title : `${title}, ${count}`} style={styles.row}>
-      <Text style={[styles.title, { color: ink ?? colors.textPrimary }]}>{title}</Text>
+      <Text style={[styles.title, { color: ink ?? colors.textSecondary }]}>{title}</Text>
       {count === undefined ? null : <Text style={[styles.count, { color: ink ?? colors.textSecondary }]}>{count}</Text>}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", paddingTop: 8 },
-  title: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
-  count: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
+  row: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", paddingTop: 14, paddingHorizontal: 4 },
+  title: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17, letterSpacing: 1, textTransform: "uppercase" },
+  count: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
 });

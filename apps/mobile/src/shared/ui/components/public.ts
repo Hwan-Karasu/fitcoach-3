@@ -17,7 +17,7 @@ export { parseNumericDraft, type DecimalPolicy, type NumericDraft } from "./nume
 export { MetricTile, type MetricTileData } from "./MetricTile.tsx";
 export { StatusTag, type StatusKind } from "./StatusTag.tsx";
 export { EmptyState, LoadingState, type EmptyReason } from "./AsyncStates.tsx";
-export { ClientRosterCard, type ClientRosterCardData, type RosterMetric } from "./ClientRosterCard.tsx";
+export { ClientRosterCard, RosterGroup, type ClientRosterCardData, type RosterMetric } from "./ClientRosterCard.tsx";
 export { FilterPill } from "./FilterPill.tsx";
 export { ListSectionHeader } from "./ListSectionHeader.tsx";
 export { SkeletonList } from "./SkeletonList.tsx";

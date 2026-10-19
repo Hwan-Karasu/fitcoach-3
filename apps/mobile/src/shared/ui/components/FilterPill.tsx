@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, type View } from "react-native";
 import { ChevronDown } from "lucide-react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../theme/typography.ts";
+import { radius, shadow, TOUCH_TARGET } from "../theme/style.ts";
 
 interface FilterPillProps {
   readonly label: string;
@@ -22,7 +23,7 @@ interface FilterPillProps {
   readonly grow?: boolean;
 }
 
-/** Фильтр-пилюля списков (UI-OWN-017): скругление 8, видимая высота 36, зона нажатия 48. */
+/** Фильтр-пилюля списков (UI-OWN-017; «Зефирка»: белая, высота 44, радиус 20, тень, без рамки). */
 export function FilterPill({ label, accessibilityLabel, onPress, selected = false, menu = false, expanded = false, anchorRef, icon, grow = false }: Readonly<FilterPillProps>) {
   const [focused, setFocused] = useState(false);
   const { palette } = usePrototypeTheme();
@@ -34,28 +35,27 @@ export function FilterPill({ label, accessibilityLabel, onPress, selected = fals
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={menu ? { expanded } : { selected }}
-      hitSlop={{ top: 6, bottom: 6 }}
       onPress={onPress}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
-      style={({ pressed }) => [styles.pill, grow ? styles.grow : null, {
+      style={({ pressed }) => [styles.pill, selected ? null : shadow.control, grow ? styles.grow : null, {
         backgroundColor: selected ? colors.accentFill : pressed ? colors.surfaceRaised : colors.surface,
-        borderColor: focused ? colors.focusRing : selected ? colors.accentFill : colors.border,
-        borderWidth: focused ? 2 : 1,
+        borderColor: focused ? colors.focusRing : "transparent",
       }]}
     >
       {icon?.(ink) ?? null}
-      <Text numberOfLines={1} style={[styles.label, grow ? styles.labelFull : null, { color: ink }]}>{label}</Text>
-      {menu ? <ChevronDown size={14} color={ink} strokeWidth={2}
+      <Text numberOfLines={1} adjustsFontSizeToFit={grow} minimumFontScale={0.7} style={[styles.label, grow ? styles.labelFull : null, { color: ink }]}>{label}</Text>
+      {menu ? <ChevronDown size={16} color={ink} strokeWidth={2.4}
         style={expanded ? { transform: [{ rotate: "180deg" }] } : undefined} /> : null}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  pill: { minHeight: 36, borderRadius: 8, paddingHorizontal: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 },
-  // Ширина по тексту, без сжатия; свободное место ряда делится поровну.
-  grow: { flexGrow: 1, flexShrink: 0, flexBasis: "auto" },
-  labelFull: { flexShrink: 0 },
-  label: { flexShrink: 1, fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
+  pill: { minHeight: TOUCH_TARGET, borderRadius: radius.pill, borderWidth: 2, flexDirection: "row", alignItems: "center",
+    justifyContent: "center", gap: 4, paddingHorizontal: 10 },
+  // Растягивается на свободное место ряда и сжимается первой, если места мало.
+  grow: { flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0 },
+  labelFull: { flexShrink: 1, textAlign: "center" },
+  label: { flexShrink: 1, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
 });

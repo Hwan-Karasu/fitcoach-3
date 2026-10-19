@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useFocusEffect } from "@react-navigation/native";
 import { AppState, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Cake, CalendarClock, CalendarDays, Dumbbell, PinOff, Plus, Ticket } from "lucide-react-native";
-import { AppButton, AppIconButton, ClientRosterCard, ConfirmDialog, EmptyState, FilterPill, FloatingActionButton,
+import { AppButton, AppIconButton, ClientRosterCard, RosterGroup, ConfirmDialog, EmptyState, FilterPill, FloatingActionButton,
   InlineNotice,
   ListSectionHeader, DropdownMenu, SkeletonList, useHeaderScrollHandler, useHeaderSearch,
   type DropdownOption } from "../../../shared/ui/components/public.ts";
@@ -193,7 +193,7 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
   };
 
   const renderRow = (row: ClientRosterRow, birthdayText: string | null = null,
-    birthdayOccurrence: string | null = null) => {
+    birthdayOccurrence: string | null = null, pinned = false) => {
     const age = row.birthDate === null ? null : ageOn(row.birthDate, today);
     const facts = overview?.get(row.id);
     return (
@@ -202,7 +202,7 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
         highlight={birthdayText} highlightIcon={(color) => <Cake size={14} color={color} strokeWidth={2} />}
         metrics={facts?.metrics.map((metric) => ({ label: metricLook[metric.id].label, value: metric.value,
           icon: metricLook[metric.id].icon })) ?? []}
-        onOpen={onOpenClient} emoji={row.emoji}
+        onOpen={onOpenClient} emoji={row.emoji} inGroup={!pinned} metricTiles={pinned}
         onChangeEmoji={(_, emoji) => { void changeEmoji(row, emoji); }}
         action={birthdayOccurrence === null ? undefined : (
           <AppIconButton label={`Убрать ${row.displayName} из закреплённых`} disabled={dismissingId !== null}
@@ -219,13 +219,13 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
       <View style={styles.toolbar} pointerEvents="box-none"
         onLayout={(event) => setToolbarHeight(event.nativeEvent.layout.height)}>
         <View style={styles.pills}>
-          <FilterPill grow label="Сегодня" selected={todayOnly}
+          <FilterPill label="Сегодня" selected={todayOnly}
             accessibilityLabel={todayOnly ? "Сегодня по расписанию, включён" : "Сегодня по расписанию"}
             icon={(color) => <CalendarDays size={16} color={color} strokeWidth={1.8} />}
             onPress={() => setTodayOnly((value) => !value)} />
           <FilterPill grow menu expanded={menu === "group"} anchorRef={groupAnchor} label="Все клиенты" accessibilityLabel="Группа клиентов: все клиенты"
             onPress={() => setMenu("group")} />
-          <FilterPill grow menu expanded={menu === "sort"} anchorRef={sortAnchor} label={todayOnly ? "Время" : sortLabel}
+          <FilterPill menu expanded={menu === "sort"} anchorRef={sortAnchor} label={todayOnly ? "Время" : sortLabel}
             accessibilityLabel={todayOnly ? "Сортировка: по времени записи" : `Сортировка: ${sortLabel}`}
             onPress={() => setMenu("sort")} />
         </View>
@@ -250,13 +250,13 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
         {roster?.searching && !roster.todayOnly && visibleCount > 0 ? <ListSectionHeader title="Найдено" count={visibleCount} /> : null}
         {roster && roster.birthday.length > 0 ? <ListSectionHeader accent title="Дни рождения" count={roster.birthday.length} /> : null}
         {roster?.birthday.map((entry) => renderRow(entry.client, entry.birthdayText,
-          entry.birthdayOccurrence))}
+          entry.birthdayOccurrence, true))}
         {roster?.recent ? <ListSectionHeader title="Недавно открывали" count={1} /> : null}
         {roster?.recent ? renderRow(roster.recent.client, roster.recent.birthdayBadge === null ? null
-          : roster.recent.birthdayText) : null}
+          : roster.recent.birthdayText, null, true) : null}
         {roster && !roster.searching && !roster.todayOnly && roster.regular.length > 0
           ? <ListSectionHeader title="Все клиенты" count={roster.regular.length} /> : null}
-        {roster?.regular.map((entry) => renderRow(entry.client, entry.birthdayBadge === null ? null : entry.birthdayText))}
+        <RosterGroup>{roster?.regular.map((entry) => renderRow(entry.client, entry.birthdayBadge === null ? null : entry.birthdayText))}</RosterGroup>
       </ScrollView>
       <FloatingActionButton label="Создать карточку клиента" onPress={onOpenCreate}
         icon={(color) => <Plus size={26} color={color} strokeWidth={2.2} />} />
