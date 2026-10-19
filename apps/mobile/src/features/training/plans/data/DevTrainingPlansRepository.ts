@@ -12,6 +12,9 @@ import { withRestDefaults } from "../domain/SimplePlanEdits.ts";
 import { DEV_TRAINING_PLANS_LEDGER, devTrainingPlansCatalog } from "./DevTrainingPlansCatalog.ts";
 import { deleteStructure, readStructure, readWorkouts, writeStructure, writeWorkouts } from "./SimplePlanStore.ts";
 import type { MesocycleSavePlansParticipant, MesocycleSaveRequest } from "../domain/MesocycleSave.ts";
+import { preferredPlacement, type ClientPlacementOptions, type GroupCopy, type Placement, type PlacementProgram,
+  type PlacementTarget } from "../domain/Placement.ts";
+import { findCopy, groupOfCopy, readCopy } from "./MesocycleGroupStore.ts";
 import { deleteMemberMesocycles, insertMesocycle, readMesocycles, saveSelection, selectedMesocycle, writeWeek } from "./PeriodizedStore.ts";
 import { MESOCYCLE_WEEKS_MAX, weekTypeLabels, type Mesocycle, type NewMesocycleInput, type NewPeriodizedProgramInput, type BuilderMesocycleInput, type PeriodizedPlan, type PlanWeek, type WeekEditInput,
   type WeekEditConflict, type WeekEditPreview, type WeekEditResult } from "../domain/PeriodizedModel.ts";
@@ -66,20 +69,13 @@ function assertWeek(title: string, workouts: readonly PlannedWorkout[]): void {
 
 type ProgramRow = Readonly<{ id: string; kind: TrainingProgram["kind"]; title: string; revision: number; createdAt: string }>;
 
-/**
- * Программа с участниками. С `viewer` — группа глазами этого участника (UI-OWN-042): вышедший из группы видит
- * только себя, остальные — участников, которые из группы не выходили. Без `viewer` — все строки участия.
- */
-async function programById(tx: SqliteStatementPort, workspaceId: string, id: string, viewer?: string): Promise<TrainingProgram> {
+async function programById(tx: SqliteStatementPort, workspaceId: string, id: string): Promise<TrainingProgram> {
   const row = await tx.first<ProgramRow>(`SELECT id, kind, title, revision, created_at AS createdAt
     FROM dev_training_programs WHERE workspace_id = ? AND id = ?`, [workspaceId, id]);
   if (row === null) throw new Error("TARGET_NOT_FOUND");
-  const members = await tx.all<{ clientId: string; leftAt: string | null }>(`SELECT client_id AS clientId, group_left_at AS leftAt
-    FROM dev_training_program_members WHERE workspace_id = ? AND program_id = ? ORDER BY joined_at, rowid`, [workspaceId, id]);
-  const own = members.find((member) => member.clientId === viewer);
-  const group = viewer === undefined ? members : own === undefined ? [] : own.leftAt !== null ? [own]
-    : members.filter((member) => member.leftAt === null);
-  return { ...row, memberClientIds: group.map((member) => member.clientId) };
+  const members = await tx.all<{ clientId: string }>(`SELECT client_id AS clientId FROM dev_training_program_members
+    WHERE workspace_id = ? AND program_id = ? ORDER BY joined_at, rowid`, [workspaceId, id]);
+  return { ...row, memberClientIds: members.map((member) => member.clientId) };
 }
 
 async function membership(tx: SqliteStatementPort, workspaceId: string, clientId: string, programId: string):
@@ -188,9 +184,8 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     const [cards, selection] = await Promise.all([
       connection.all<ProgramCard>(`SELECT p.id, p.kind, p.title, p.revision, p.created_at AS createdAt,
           m.archived_at AS archivedAt, m.sort_position AS sortPosition,
-          CASE WHEN m.group_left_at IS NOT NULL THEN 1 ELSE (SELECT count(*) FROM dev_training_program_members o
-            WHERE o.workspace_id = p.workspace_id AND o.program_id = p.id AND o.archived_at IS NULL AND o.group_left_at IS NULL)
-          END AS memberCount
+          (SELECT count(*) FROM dev_training_program_members o WHERE o.workspace_id = p.workspace_id
+            AND o.program_id = p.id AND o.archived_at IS NULL) AS memberCount
         FROM dev_training_program_members m
         JOIN dev_training_programs p ON p.id = m.program_id AND p.workspace_id = m.workspace_id
         WHERE m.workspace_id = ? AND m.client_id = ?`, [this.workspaceId, clientId]),
@@ -206,7 +201,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   }
 
   async getProgram(clientId: string, programId: string): Promise<TrainingProgram | null> {
-    const program = await programById(this.ready().connection, this.workspaceId, programId, clientId).catch(() => null);
+    const program = await programById(this.ready().connection, this.workspaceId, programId).catch(() => null);
     return program !== null && program.memberClientIds.includes(clientId) ? program : null;
   }
 
@@ -218,7 +213,11 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   }
 
   async createPeriodizedProgram(input: NewPeriodizedProgramInput, now: Date = new Date()): Promise<TrainingProgram> {
-    const valid = validateCreate({ kind: "PERIODIZED", title: input.title, clientIds: input.clientIds });
+    const placements = new Map((input.placements ?? []).map((item) => [item.clientId, item.target]));
+    // Участники новой программы — открывший и те, кому выбрано «в эту программу»; остальным — копия в их программу.
+    const memberIds = input.clientIds.filter((id, index) => index === 0 || (placements.get(id)?.kind ?? "join") === "join");
+    const placed = input.clientIds.filter((id) => !memberIds.includes(id));
+    const valid = validateCreate({ kind: "PERIODIZED", title: input.title, clientIds: memberIds });
     const { mesocycle } = input;
     const title = normalizeTitle(mesocycle.title);
     assertSettings(mesocycle);
@@ -233,18 +232,23 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     const created = await this.ready().writer.write(async (tx) => {
       const program = await this.insertProgram(tx, valid, now, null);
       const rows = weekRowCount(weeks);
-      const take = await this.idPool(tx, 1 + 2 * rows + valid.clientIds.length * (1 + rows));
+      const take = await this.idPool(tx, 1 + 2 * rows + input.clientIds.length * (1 + rows));
       const lineageId = take();
       const template = independentWeeks(weeks, take);
+      const settings = { cycleType: mesocycle.cycleType, repRange: mesocycle.repRange, startDate: mesocycle.startDate };
       for (const [index, memberId] of valid.clientIds.entries()) {
         const id = take();
-        await insertMesocycle(tx, this.workspaceId, program.id, memberId, { id, lineageId, title, cycleType: mesocycle.cycleType,
-          repRange: mesocycle.repRange, startDate: mesocycle.startDate, weeks: index === 0 ? template : copyWeeks(template, take) }, now);
+        await insertMesocycle(tx, this.workspaceId, program.id, memberId, { id, lineageId, title, ...settings,
+          weeks: index === 0 ? template : copyWeeks(template, take) }, now);
         await saveSelection(tx, this.workspaceId, program.id, memberId, id);
+      }
+      for (const memberId of placed) {
+        await this.placeCopy(tx, memberId, placements.get(memberId)!, program.id,
+          { id: take(), lineageId, title, ...settings, weeks: copyWeeks(template, take) }, now);
       }
       return program;
     });
-    this.publish({ clientIds: created.memberClientIds });
+    this.publish({ clientIds: input.clientIds });
     return created;
   }
 
@@ -549,9 +553,9 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     if (result.changes !== 1) throw new Error("PROGRAM_REVISION_CONFLICT");
   }
 
-  /** Выбранные участники — группа открывшего клиента (UI-OWN-042), он сам среди них. */
+  /** Выбранные участники — действующие участники программы, открывший клиент среди них. */
   private async assertTargets(tx: SqliteStatementPort, clientId: string, programId: string, clientIds: readonly string[]) {
-    const program = await programById(tx, this.workspaceId, programId, clientId);
+    const program = await programById(tx, this.workspaceId, programId);
     if (program.kind !== "PERIODIZED" || !clientIds.includes(clientId) || new Set(clientIds).size !== clientIds.length
       || clientIds.some((id) => !program.memberClientIds.includes(id))) {
       throw new Error("DRAFT_INVALID");
@@ -719,7 +723,8 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       const { clientId, programId, expectedRevision } = request;
       const title = normalizeTitle(request.mesocycle.title);
       if (request.mesocycleId !== null && (request.clientIds.length !== 1 || request.clientIds[0] !== clientId)) throw new Error("DRAFT_INVALID");
-      await this.assertTargets(tx, clientId, programId, request.clientIds);
+      if (request.clientIds[0] !== clientId || new Set(request.clientIds).size !== request.clientIds.length) throw new Error("DRAFT_INVALID");
+      await this.assertTargets(tx, clientId, programId, [clientId]);
       const weeks = await this.builderWeeks(tx, request.mesocycle);
       await this.bumpRevision(tx, programId, expectedRevision, now);
       const settings = { cycleType: request.mesocycle.cycleType, repRange: request.mesocycle.repRange, startDate: request.mesocycle.startDate };
@@ -728,12 +733,14 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         const take = await this.idPool(tx, 1 + 2 * rows + request.clientIds.length * (1 + rows));
         const lineageId = take();
         const template = independentWeeks(weeks, take);
-        let ownId = "";
-        for (const [index, memberId] of request.clientIds.entries()) {
-          const id = take();
-          await insertMesocycle(tx, this.workspaceId, programId, memberId, { id, lineageId, title, ...settings,
-            weeks: index === 0 ? template : copyWeeks(template, take) }, now);
-          if (memberId === clientId) ownId = id;
+        const ownId = take();
+        await insertMesocycle(tx, this.workspaceId, programId, clientId, { id: ownId, lineageId, title, ...settings, weeks: template }, now);
+        const placements = new Map((request.placements ?? []).map((item) => [item.clientId, item.target]));
+        for (const memberId of request.clientIds.slice(1)) {
+          const member = await tx.first<{ archivedAt: string | null }>(`SELECT archived_at AS archivedAt FROM dev_training_program_members
+            WHERE workspace_id = ? AND program_id = ? AND client_id = ?`, [this.workspaceId, programId, memberId]);
+          await this.placeCopy(tx, memberId, member !== null && member.archivedAt === null ? { kind: "join" } : placements.get(memberId) ?? { kind: "join" },
+            programId, { id: take(), lineageId, title, ...settings, weeks: copyWeeks(template, take) }, now);
         }
         await saveSelection(tx, this.workspaceId, programId, clientId, ownId);
         return { program: await programById(tx, this.workspaceId, programId), mesocycleId: ownId };
@@ -763,7 +770,8 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   private async prepareWeekEdit(tx: SqliteStatementPort, clientId: string, programId: string, expectedRevision: number,
     input: WeekEditInput, allocate: (count: number) => Promise<() => string>) {
-      await this.assertTargets(tx, clientId, programId, input.clientIds);
+      await this.assertTargets(tx, clientId, programId, [clientId]);
+      if (!input.clientIds.includes(clientId) || new Set(input.clientIds).size !== input.clientIds.length) throw new Error("DRAFT_INVALID");
       if ((await programById(tx, this.workspaceId, programId)).revision !== expectedRevision) throw new Error("PROGRAM_REVISION_CONFLICT");
       const own = (await readMesocycles(tx, this.workspaceId, programId, clientId)).find((item) => item.id === input.mesocycleId);
       const open = own?.weeks.find((week) => week.index === input.weekIndex);
@@ -774,10 +782,13 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       let skipped = 0;
       const conflicts: WeekEditConflict[] = [];
       const affectedWeeks: { clientId: string; weeks: readonly number[] }[] = [];
-      const changes: { clientId: string; mesocycle: Mesocycle; weeks: PlanWeek[] }[] = [];
+      const changes: { clientId: string; programId: string; mesocycle: Mesocycle; weeks: PlanWeek[] }[] = [];
       for (const memberId of input.clientIds) {
-        const mesocycle = memberId === clientId ? own
-          : (await readMesocycles(tx, this.workspaceId, programId, memberId)).find((item) => item.lineageId === own.lineageId);
+        // UI-OWN-044: копия участника — в любой его программе, если он в группе этого мезоцикла.
+        const copy = memberId === clientId ? null : await findCopy(tx, this.workspaceId, memberId, own.lineageId);
+        const copyProgram = copy?.programId ?? programId;
+        const mesocycle = memberId === clientId ? own : copy === null || copy.leftAt !== null ? undefined
+          : (await readMesocycles(tx, this.workspaceId, copy.programId, memberId)).find((item) => item.id === copy.mesocycleId);
         if (mesocycle === undefined) {
           conflicts.push({ key: `${memberId}/missing-cycle`, clientId: memberId, weekIndex: input.weekIndex,
             workoutTitle: own.title, exerciseId: null, operation: "Изменить мезоцикл", reason: "MISSING_MESOCYCLE", canReplace: false });
@@ -814,7 +825,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
             changedWeeks.push({ ...week, type, workouts: applied.workouts });
           }
         }
-        if (changedWeeks.length > 0) changes.push({ clientId: memberId, mesocycle, weeks: changedWeeks });
+        if (changedWeeks.length > 0) changes.push({ clientId: memberId, programId: copyProgram, mesocycle, weeks: changedWeeks });
       }
       if (input.replaceConflicts?.some((key) => !conflicts.some((conflict) => conflict.key === key && conflict.canReplace))) {
         throw new Error("DRAFT_INVALID");
@@ -837,8 +848,9 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       const prepared = await this.prepareWeekEdit(tx, clientId, programId, expectedRevision, input, (count) => this.idPool(tx, count));
       await this.bumpRevision(tx, programId, expectedRevision, now);
       for (const change of prepared.changes) {
-        await preserveMesocycle(tx, this.workspaceId, change.clientId, programId, change.mesocycle, now);
-        for (const week of change.weeks) await writeWeek(tx, this.workspaceId, programId, week);
+        await preserveMesocycle(tx, this.workspaceId, change.clientId, change.programId, change.mesocycle, now);
+        for (const week of change.weeks) await writeWeek(tx, this.workspaceId, change.programId, week);
+        if (change.programId !== programId) await this.touchRevision(tx, change.programId, now);
       }
       await tx.run("DELETE FROM dev_training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key = ?",
         [this.workspaceId, clientId, programId, `week:${input.mesocycleId}:${input.weekIndex}`]);
@@ -1191,59 +1203,124 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     this.publish({ clientIds: [clientId] });
   }
 
-  async leaveGroup(clientId: string, programId: string, expectedRevision: number, memberId: string,
-    now: Date = new Date()): Promise<TrainingProgram> {
-    const result = await this.ready().writer.write(async (tx) => {
-      const group = await programById(tx, this.workspaceId, programId, clientId);
-      if (memberId === clientId || !group.memberClientIds.includes(clientId) || !group.memberClientIds.includes(memberId)) {
+  /** Ревизия программы, которую задела правка из другой программы (копия участника группы), без CAS. */
+  private async touchRevision(tx: SqliteStatementPort, programId: string, now: Date): Promise<void> {
+    await tx.run("UPDATE dev_training_programs SET revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND id = ?",
+      [now.toISOString(), this.workspaceId, programId]);
+  }
+
+  /**
+   * UI-OWN-044 (как в 2.0): копия мезоцикла клиенту — в его Расширенную программу, участием в программе `hostProgramId`
+   * или в новую программу с тем же названием. Копия становится выбранным мезоциклом той программы.
+   */
+  private async placeCopy(tx: SqliteStatementPort, memberId: string, target: PlacementTarget, hostProgramId: string,
+    cycle: Mesocycle, now: Date): Promise<void> {
+    const client = await tx.first<{ lifecycle: string }>("SELECT lifecycle FROM dev_clients WHERE workspace_id = ? AND id = ?",
+      [this.workspaceId, memberId]);
+    if (client?.lifecycle !== "ACTIVE") throw new Error("TARGET_NOT_FOUND");
+    if ((await findCopy(tx, this.workspaceId, memberId, cycle.lineageId)) !== null) throw new Error("DRAFT_INVALID");
+    let programId = hostProgramId;
+    if (target.kind === "program") {
+      const program = await programById(tx, this.workspaceId, target.programId);
+      if (program.kind !== "PERIODIZED" || (await membership(tx, this.workspaceId, memberId, program.id)).archivedAt !== null) {
         throw new Error("DRAFT_INVALID");
       }
+      programId = program.id;
+      await this.touchRevision(tx, programId, now);
+    } else if (target.kind === "new") {
+      const host = await programById(tx, this.workspaceId, hostProgramId);
+      programId = (await this.insertProgram(tx, { kind: "PERIODIZED", title: host.title, clientIds: [memberId] }, now, null)).id;
+    } else {
+      const member = await tx.first<{ archivedAt: string | null }>(`SELECT archived_at AS archivedAt FROM dev_training_program_members
+        WHERE workspace_id = ? AND program_id = ? AND client_id = ?`, [this.workspaceId, hostProgramId, memberId]);
+      if (member?.archivedAt != null) throw new Error("PROGRAM_ARCHIVED");
+      if (member === null) {
+        await tx.run(`INSERT INTO dev_training_program_members (workspace_id, program_id, client_id, joined_at) VALUES (?, ?, ?, ?)`,
+          [this.workspaceId, hostProgramId, memberId, now.toISOString()]);
+      }
+    }
+    await insertMesocycle(tx, this.workspaceId, programId, memberId, cycle, now);
+    await saveSelection(tx, this.workspaceId, programId, memberId, cycle.id);
+  }
+
+  /** Копия открывшего клиента: `mesocycleId` или мезоцикл тренировки `workoutId` в этой программе. */
+  private async viewerCopy(tx: SqliteStatementPort, clientId: string, programId: string,
+    ref: Readonly<{ mesocycleId: string } | { workoutId: string }>) {
+    const mesocycleId = "mesocycleId" in ref ? ref.mesocycleId : (await tx.first<{ id: string }>(`SELECT w.mesocycle_id AS id
+      FROM dev_training_workouts o JOIN dev_training_weeks w ON w.workspace_id = o.workspace_id AND w.id = o.week_id
+      WHERE o.workspace_id = ? AND o.id = ? AND o.program_id = ?`, [this.workspaceId, ref.workoutId, programId]))?.id;
+    const copy = mesocycleId === undefined ? null : await readCopy(tx, this.workspaceId, mesocycleId);
+    return copy !== null && copy.clientId === clientId && copy.programId === programId ? copy : null;
+  }
+
+  async getMesocycleGroup(clientId: string, programId: string,
+    ref: Readonly<{ mesocycleId: string } | { workoutId: string }>): Promise<readonly GroupCopy[]> {
+    const { connection } = this.ready();
+    const copy = await this.viewerCopy(connection, clientId, programId, ref);
+    return copy === null ? [] : groupOfCopy(connection, this.workspaceId, copy.mesocycleId);
+  }
+
+  async getPlacementOptions(clientIds: readonly string[], hostProgramId: string | null): Promise<readonly ClientPlacementOptions[]> {
+    const { connection } = this.ready();
+    const result: ClientPlacementOptions[] = [];
+    for (const clientId of clientIds) {
+      const programs = await connection.all<PlacementProgram>(`SELECT p.id, p.kind, p.title, p.created_at AS createdAt
+        FROM dev_training_program_members m JOIN dev_training_programs p ON p.workspace_id = m.workspace_id AND p.id = m.program_id
+        WHERE m.workspace_id = ? AND m.client_id = ? AND m.archived_at IS NULL`, [this.workspaceId, clientId]);
+      const selected = (await connection.first<{ id: string }>(`SELECT program_id AS id FROM dev_training_client_selection
+        WHERE workspace_id = ? AND client_id = ?`, [this.workspaceId, clientId]))?.id ?? null;
+      result.push({ clientId, preferred: preferredPlacement(programs, selected, hostProgramId),
+        programs: programs.filter((program) => program.kind === "PERIODIZED" && program.id !== hostProgramId)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+          .map((program) => ({ id: program.id, title: program.title, current: program.id === selected })) });
+    }
+    return result;
+  }
+
+  async leaveGroup(clientId: string, programId: string, expectedRevision: number, mesocycleId: string, memberId: string,
+    now: Date = new Date()): Promise<TrainingProgram> {
+    const result = await this.ready().writer.write(async (tx) => {
+      const own = await this.viewerCopy(tx, clientId, programId, { mesocycleId });
+      const member = own === null ? undefined : (await groupOfCopy(tx, this.workspaceId, own.mesocycleId))
+        .find((item) => item.clientId === memberId);
+      if (own === null || own.leftAt !== null || member === undefined || memberId === clientId) throw new Error("DRAFT_INVALID");
       await this.bumpRevision(tx, programId, expectedRevision, now);
-      await tx.run(`UPDATE dev_training_program_members SET group_left_at = ? WHERE workspace_id = ? AND program_id = ? AND client_id = ?`,
-        [now.toISOString(), this.workspaceId, programId, memberId]);
-      return programById(tx, this.workspaceId, programId, clientId);
+      await tx.run("UPDATE dev_training_mesocycles SET group_left_at = ? WHERE workspace_id = ? AND id = ?",
+        [now.toISOString(), this.workspaceId, member.mesocycleId]);
+      return programById(tx, this.workspaceId, programId);
     });
     this.publish({ clientIds: [clientId, memberId] });
     return result;
   }
 
-  async addParticipants(clientId: string, programId: string, expectedRevision: number, sourceClientId: string,
-    clientIds: readonly string[], now: Date = new Date()): Promise<TrainingProgram> {
-    if (clientIds.length === 0 || new Set(clientIds).size !== clientIds.length) throw new Error("DRAFT_INVALID");
+  async addParticipants(clientId: string, programId: string, expectedRevision: number, mesocycleId: string, sourceClientId: string,
+    placements: readonly Placement[], now: Date = new Date()): Promise<TrainingProgram> {
+    const ids = placements.map((item) => item.clientId);
+    if (ids.length === 0 || new Set(ids).size !== ids.length) throw new Error("DRAFT_INVALID");
     const result = await this.ready().writer.write(async (tx) => {
-      const group = await programById(tx, this.workspaceId, programId, clientId);
-      if (group.kind !== "PERIODIZED" || !group.memberClientIds.includes(sourceClientId)
-        || clientIds.some((id) => group.memberClientIds.includes(id))) throw new Error("DRAFT_INVALID");
+      const own = await this.viewerCopy(tx, clientId, programId, { mesocycleId });
+      const source = own === null ? undefined : (await groupOfCopy(tx, this.workspaceId, own.mesocycleId))
+        .find((item) => item.clientId === sourceClientId);
+      const cycle = source === undefined ? undefined : (await readMesocycles(tx, this.workspaceId, source.programId, sourceClientId))
+        .find((item) => item.id === source.mesocycleId);
+      if (own === null || cycle === undefined) throw new Error("DRAFT_INVALID");
       await this.bumpRevision(tx, programId, expectedRevision, now);
-      const source = await readMesocycles(tx, this.workspaceId, programId, sourceClientId);
-      const sourceSelected = await selectedMesocycle(tx, this.workspaceId, programId, sourceClientId);
-      const stamp = now.toISOString();
-      for (const memberId of clientIds) {
-        const client = await tx.first<{ lifecycle: string }>("SELECT lifecycle FROM dev_clients WHERE workspace_id = ? AND id = ?",
-          [this.workspaceId, memberId]);
-        if (client?.lifecycle !== "ACTIVE") throw new Error("TARGET_NOT_FOUND");
-        const existing = await tx.first<{ archivedAt: string | null }>(`SELECT archived_at AS archivedAt FROM dev_training_program_members
-          WHERE workspace_id = ? AND program_id = ? AND client_id = ?`, [this.workspaceId, programId, memberId]);
+      for (const placement of placements) {
+        const existing = await findCopy(tx, this.workspaceId, placement.clientId, cycle.lineageId);
         if (existing !== null) {
-          // Вышедший ранее участник возвращается со своим планом; план источника не перезаписывает его.
-          await tx.run(`UPDATE dev_training_program_members SET group_left_at = NULL WHERE workspace_id = ? AND program_id = ? AND client_id = ?`,
-            [this.workspaceId, programId, memberId]);
+          // Вышедший ранее участник возвращается со своим планом; план источника его не перезаписывает.
+          if (existing.leftAt === null) throw new Error("DRAFT_INVALID");
+          await tx.run("UPDATE dev_training_mesocycles SET group_left_at = NULL WHERE workspace_id = ? AND id = ?",
+            [this.workspaceId, existing.mesocycleId]);
           continue;
         }
-        await tx.run(`INSERT INTO dev_training_program_members (workspace_id, program_id, client_id, joined_at) VALUES (?, ?, ?, ?)`,
-          [this.workspaceId, programId, memberId, stamp]);
-        const take = await this.idPool(tx, source.reduce((sum, cycle) => sum + 1 + weekRowCount(cycle.weeks), 0));
-        let selected: string | null = null;
-        for (const cycle of source) {
-          const id = take();
-          await insertMesocycle(tx, this.workspaceId, programId, memberId, { ...cycle, id, weeks: copyWeeks(cycle.weeks, take) }, now);
-          if (cycle.id === sourceSelected || selected === null) selected = id;
-        }
-        if (selected !== null) await saveSelection(tx, this.workspaceId, programId, memberId, selected);
+        const take = await this.idPool(tx, 1 + weekRowCount(cycle.weeks));
+        await this.placeCopy(tx, placement.clientId, placement.target, programId,
+          { ...cycle, id: take(), weeks: copyWeeks(cycle.weeks, take) }, now);
       }
-      return programById(tx, this.workspaceId, programId, clientId);
+      return programById(tx, this.workspaceId, programId);
     });
-    this.publish({ clientIds: [clientId, ...clientIds] });
+    this.publish({ clientIds: [clientId, ...ids] });
     return result;
   }
 

@@ -148,10 +148,12 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
   }, [listCandidates]);
   const viewer = participant ?? clientId;
   const viewerName = participant === null ? clientName : names.get(participant) ?? "Клиент";
-  const switchTo = async (next: string, run: () => Promise<void>) => {
+  // `prepare` только вычисляет переход; участник и параметры маршрута меняются в одном такте — иначе экран на миг
+  // получает программу нового участника с прежним клиентом (ошибка «Не удалось выбрать мезоцикл»).
+  const switchTo = async (next: string, prepare: () => Promise<() => void>) => {
     if (switching) return;
     setSwitching(true);
-    try { await run(); setParticipant(next === clientId ? null : next); } catch { /* Прежний участник остаётся. */ }
+    try { const apply = await prepare(); setParticipant(next === clientId ? null : next); apply(); } catch { /* Прежний участник остаётся. */ }
     finally { setSwitching(false); }
   };
   // Простая программа создаётся сразу в конструкторе; расширенная — пока через название и участников.
@@ -231,10 +233,12 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
           onOpenMatrix={() => navigation.navigate("TrainingMatrix", { programId: route.params.programId })}
           onTabChange={(tab) => navigation.setOptions({ title: tab === "templates" ? "Шаблоны" : trainingTitles.TrainingProgram })}
           renderParticipants={(current) => <ParticipantSwitcher clientId={viewer} anchorClientId={clientId} programId={route.params.programId}
-            repository={repository} names={names} busy={switching} onSelect={(next) => { void switchTo(next, async () => {
-              const target = await participantTarget(repository, route.params.programId, viewer, next, current());
+            mesocycleId={current().mesocycleId}
+            repository={repository} names={names} busy={switching} onSelect={(next) => { void switchTo(next.clientId, async () => {
+              const target = await participantTarget(repository, { clientId: viewer, programId: route.params.programId }, next, current());
               if (target === null) throw new Error("TARGET_NOT_FOUND");
-              navigation.setParams({ weekIndex: target.weekIndex, ...(target.mesocycleId === null ? {} : { mesocycleId: target.mesocycleId }) });
+              return () => navigation.setParams({ programId: target.programId, weekIndex: target.weekIndex,
+                ...(target.mesocycleId === null ? {} : { mesocycleId: target.mesocycleId }) });
             }); }} />}
           renderTemplates={() => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
             onEdit={(templateId) => navigation.navigate("TrainingTemplateEdit", { templateId })}
@@ -328,18 +332,23 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
         {({ route, navigation }) => <WorkoutScreen slot={{ clientId: viewer, programId: route.params.programId, weekIndex: route.params.weekIndex,
           plannedWorkoutId: route.params.workoutId }} clientName={viewerName}
           renderParticipants={(finishInput) => <ParticipantSwitcher clientId={viewer} anchorClientId={clientId} programId={route.params.programId}
-            repository={repository} names={names} busy={switching} onSelect={(next) => { void switchTo(next, async () => {
+            workoutId={route.params.workoutId}
+            repository={repository} names={names} busy={switching} onSelect={(next) => { void switchTo(next.clientId, async () => {
               if (!await finishInput()) throw new Error("INPUT_NOT_SAVED");
-              const target = await participantTarget(repository, route.params.programId, viewer, next,
+              const target = await participantTarget(repository, { clientId: viewer, programId: route.params.programId }, next,
                 { mesocycleId: route.params.mesocycleId ?? null, weekIndex: route.params.weekIndex, workoutId: route.params.workoutId });
               if (target === null) throw new Error("TARGET_NOT_FOUND");
-              const context = { programId: route.params.programId, weekIndex: target.weekIndex,
+              // Копия участника может лежать в его собственной программе (UI-OWN-044).
+              const context = { programId: target.programId, weekIndex: target.weekIndex,
                 ...(target.mesocycleId === null ? {} : { mesocycleId: target.mesocycleId }) };
               // Экран программы под дневником тоже переходит к этому участнику (как маршруты 2.0).
-              const program = navigation.getState().routes.findLast((item: { name: string }) => item.name === "TrainingProgram");
-              if (program !== undefined) navigation.dispatch({ ...CommonActions.setParams(context), source: program.key });
-              if (target.workoutId === null) navigation.popTo("TrainingProgram", context);
-              else navigation.setParams({ ...context, workoutId: target.workoutId });
+              const workoutId = target.workoutId;
+              return () => {
+                const program = navigation.getState().routes.findLast((item: { name: string }) => item.name === "TrainingProgram");
+                if (program !== undefined) navigation.dispatch({ ...CommonActions.setParams(context), source: program.key });
+                if (workoutId === null) navigation.popTo("TrainingProgram", context);
+                else navigation.setParams({ ...context, workoutId });
+              };
             }); }} />} plans={repository} execution={execution}
           restTimers={restTimers} activeWorkouts={activeWorkouts} onOpenWorkout={onOpenWorkout} exercises={exerciseLookup}
           picked={route.params.picked ?? null} onOpenExercise={onOpenExercise}

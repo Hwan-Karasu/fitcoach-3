@@ -6,6 +6,7 @@ import type { PeriodizedDraft } from "./PeriodizedDraft.ts";
 import type { MesocycleVersion } from "./StructureVersion.ts";
 import type { SimplePlanVersion, SimpleWeek, SimpleWorkoutDraft, SimpleWorkoutEdit } from "./SimpleWorkoutEdit.ts";
 import type { CopyMesocycleInput } from "./PlanCopy.ts";
+import type { ClientPlacementOptions, GroupCopy, Placement } from "./Placement.ts";
 
 export interface TrainingPlansCommittedChange {
   /** Клиенты, чья библиотека изменилась. */
@@ -90,16 +91,22 @@ export interface TrainingPlansRepositoryPort {
   /** Архив участия клиента: у остальных участников программа остаётся. */
   archiveForClient(clientId: string, programId: string, now?: Date): Promise<void>;
   /**
-   * UI-OWN-042: участник `memberId` выходит из группы, открытой у `clientId`. Его программа, план и результаты
-   * остаются; в группе (и в `memberClientIds` у остальных) его больше нет, у него самого группа — только он.
+   * UI-OWN-044: группа мезоцикла — копии одного родства у участников в любых их программах (как в 2.0). Открывший
+   * клиент первым не упорядочивается — порядок задаёт переключатель. Вышедшая копия видит только себя.
    */
-  leaveGroup(clientId: string, programId: string, expectedRevision: number, memberId: string, now?: Date): Promise<TrainingProgram>;
+  getMesocycleGroup(clientId: string, programId: string, ref: Readonly<{ mesocycleId: string } | { workoutId: string }>):
+    Promise<readonly GroupCopy[]>;
+  /** Куда ляжет мезоцикл у добавляемых клиентов: их Расширенные программы и вариант по умолчанию (как в 2.0). */
+  getPlacementOptions(clientIds: readonly string[], hostProgramId: string | null): Promise<readonly ClientPlacementOptions[]>;
+  /** Участник `memberId` выходит из группы мезоцикла; его программа, план и результаты остаются. */
+  leaveGroup(clientId: string, programId: string, expectedRevision: number, mesocycleId: string, memberId: string,
+    now?: Date): Promise<TrainingProgram>;
   /**
-   * UI-OWN-042, §48: новые участники получают копию плана `sourceClientId` (все мезоциклы, то же родство), без
-   * результатов; планы остальных не меняются. Вышедший ранее клиент возвращается в группу со своим планом.
+   * §48, UI-OWN-044: новые участники получают копию мезоцикла участника `sourceClientId` (то же родство, без
+   * результатов) — по размещению. Вышедший ранее клиент возвращается со своим планом.
    */
-  addParticipants(clientId: string, programId: string, expectedRevision: number, sourceClientId: string,
-    clientIds: readonly string[], now?: Date): Promise<TrainingProgram>;
+  addParticipants(clientId: string, programId: string, expectedRevision: number, mesocycleId: string, sourceClientId: string,
+    placements: readonly Placement[], now?: Date): Promise<TrainingProgram>;
   /** Возврат из архива не делает программу выбранной. */
   restoreForClient(clientId: string, programId: string): Promise<void>;
   /** Простая программа со структурой (только если клиент — её участник). */

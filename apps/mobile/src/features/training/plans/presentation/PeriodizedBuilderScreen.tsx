@@ -12,6 +12,8 @@ import { applyBuilderScope, copyWeekPlan, CYCLE_TYPES, resizeBuilderWeeks, type 
 import type { MesocycleSavePort } from "../domain/MesocycleSave.ts";
 import { diffWeek, targetWeeks } from "../domain/PeriodizedRules.ts";
 import { ScopeMenu } from "./ScopeMenu.tsx";
+import { PlacementRows } from "./PlacementRows.tsx";
+import type { ClientPlacementOptions, Placement, PlacementTarget } from "../domain/Placement.ts";
 import { MESOCYCLE_WEEKS_MAX, WEEK_TYPES, weekTypeLabels, type WeekType } from "../domain/PeriodizedModel.ts";
 import { PROGRAM_TITLE_MAX } from "../domain/ProgramRules.ts";
 import { setRepsRange } from "../domain/SimplePlanEdits.ts";
@@ -107,6 +109,15 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
   const [leaving, setLeaving] = useState<string | null>(null);
   const [joining, setJoining] = useState<Readonly<{ ids: readonly string[]; source: string }> | null>(null);
   const [memberBusy, setMemberBusy] = useState(false);
+  // UI-OWN-044: группа мезоцикла в правке и размещение копии у добавляемых клиентов (как в 2.0).
+  const [group, setGroup] = useState<readonly string[]>([clientId]);
+  const [placementOptions, setPlacementOptions] = useState<ReadonlyMap<string, ClientPlacementOptions>>(new Map());
+  const [placements, setPlacements] = useState<ReadonlyMap<string, PlacementTarget>>(new Map());
+  const refreshGroup = useCallback(async () => {
+    if (programId === undefined || mesocycleId === undefined) return;
+    const copies = await repository.getMesocycleGroup(clientId, programId, { mesocycleId });
+    setGroup(copies.map((copy) => copy.clientId));
+  }, [clientId, mesocycleId, programId, repository]);
 
   useEffect(() => {
     if (programId === undefined) return undefined;
@@ -116,7 +127,9 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
       const cycle = plan?.mesocycles.find((item) => item.id === mesocycleId);
       if (plan === null || (mesocycleId !== undefined && cycle === undefined)) { setProgram("ERROR"); return; }
       setProgram({ revision: plan.program.revision, title: plan.program.title, members: plan.program.memberClientIds });
-      setMembers(plan.program.memberClientIds);
+      // «+ Мезоцикл» — только у этого участника; остальных тренер добавляет сам (решение владельца).
+      setMembers([clientId]);
+      void refreshGroup().catch(() => undefined);
       if (cycle === undefined) { setTitle(`Мезоцикл ${plan.mesocycles.length + 1}`); return; }
       setTitle(cycle.title);
       if (cycle.cycleType != null) setCycleType(cycle.cycleType);
@@ -127,7 +140,26 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
       if (initialWeek !== undefined) setEditing(Math.min(Math.max(initialWeek - 1, 0), cycle.weeks.length - 1));
     }).catch(() => { if (active) setProgram("ERROR"); });
     return () => { active = false; };
-  }, [clientId, initialWeek, mesocycleId, programId, repository]);
+  }, [clientId, initialWeek, mesocycleId, programId, refreshGroup, repository]);
+  // Добавленные клиенты вне этой программы: куда ляжет их копия.
+  const outsiders = useMemo(() => mode === "edit" ? joining?.ids ?? []
+    : members.filter((id) => id !== clientId && !(mode === "add" && program !== null && program !== "ERROR" && program.members.includes(id))),
+  [clientId, joining, members, mode, program]);
+  useEffect(() => {
+    const missing = outsiders.filter((id) => !placementOptions.has(id));
+    if (missing.length === 0) return undefined;
+    let active = true;
+    repository.getPlacementOptions(missing, programId ?? null).then((rows) => {
+      if (active) setPlacementOptions((current) => new Map([...current, ...rows.map((row) => [row.clientId, row] as const)]));
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [outsiders, placementOptions, programId, repository]);
+  const placementsFor = (ids: readonly string[]): readonly Placement[] => ids.map((id) => ({ clientId: id,
+    target: placements.get(id) ?? placementOptions.get(id)?.preferred ?? { kind: "join" } }));
+  const placementRows = (hostTitle: string) => <PlacementRows hostTitle={hostTitle}
+    options={outsiders.flatMap((id) => placementOptions.get(id) ?? [])} values={placements}
+    names={new Map(candidates.map((item) => [item.id, item.displayName]))}
+    onChange={(id, target) => setPlacements((current) => new Map(current).set(id, target))} />;
 
   useEffect(() => {
     let active = true;
@@ -233,7 +265,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
     try {
       const next = await run(program.revision);
       setProgram({ ...program, revision: next.revision, members: next.memberClientIds });
-      setMembers(next.memberClientIds);
+      await refreshGroup();
       setLeaving(null); setJoining(null);
     } catch (error) {
       setMessage(errors[error instanceof Error ? error.message : ""] ?? "Не удалось изменить участников. Состав прежний.");
@@ -245,7 +277,8 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
     setBusy("create"); setMessage(null);
     try {
       const result = await mesocycleSave.save({ clientId, programId, expectedRevision: program.revision,
-        mesocycleId: mesocycleId ?? null, clientIds: mode === "edit" ? [clientId] : members, mesocycle: input() });
+        mesocycleId: mesocycleId ?? null, clientIds: mode === "edit" ? [clientId] : [clientId, ...members.filter((id) => id !== clientId)],
+        mesocycle: input(), placements: mode === "edit" ? [] : placementsFor(outsiders) });
       setDirty(false);
       onSaved?.(result.mesocycleId);
     } catch (error) {
@@ -258,7 +291,8 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
     if (programTitle.trim().length === 0) { setMessage("Введите название программы."); return; }
     setBusy("create"); setMessage(null);
     try {
-      const program = await repository.createPeriodizedProgram({ title: programTitle, clientIds: members, mesocycle: input() });
+      const program = await repository.createPeriodizedProgram({ title: programTitle, clientIds: [clientId, ...members.filter((id) => id !== clientId)],
+        mesocycle: input(), placements: placementsFor(outsiders) });
       setDirty(false);
       onCreated(program.id);
     } catch (error) {
@@ -336,14 +370,14 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
             </View>
           </View>
           {mode === "edit" && program !== null ? <>
-            <ParticipantChips clientId={clientId} memberIds={[...program.members,
-              ...candidates.map((item) => item.id).filter((id) => !program.members.includes(id))]}
-              names={new Map(candidates.map((item) => [item.id, item.displayName]))} selected={program.members}
+            <ParticipantChips clientId={clientId} memberIds={[...group,
+              ...candidates.map((item) => item.id).filter((id) => !group.includes(id))]}
+              names={new Map(candidates.map((item) => [item.id, item.displayName]))} selected={group}
               note="Убранный участник сохранит программу, план и результаты — он лишь выйдет из группы."
               onChange={(ids) => {
-                const removed = program.members.find((id) => !ids.includes(id));
+                const removed = group.find((id) => !ids.includes(id));
                 if (removed !== undefined) { setLeaving(removed); return; }
-                const added = ids.filter((id) => !program.members.includes(id));
+                const added = ids.filter((id) => !group.includes(id));
                 if (added.length > 0) setJoining({ ids: added, source: joining?.source ?? clientId });
               }} />
             {joining !== null ? <View style={[styles.join, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
@@ -351,23 +385,25 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
                 {`План для «${joining.ids.map(nameOf).join("», «")}» скопировать у:`}
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.copyRow}>
-                {program.members.map((id) => <SelectionChip key={id} group="Источник плана" label={nameOf(id)}
+                {group.map((id) => <SelectionChip key={id} group="Источник плана" label={nameOf(id)}
                   selected={joining.source === id} onPress={() => setJoining({ ...joining, source: id })} />)}
               </ScrollView>
+              {placementRows(program.title)}
               <Text style={[styles.hint, { color: colors.textSecondary }]}>Результаты не копируются; планы остальных не меняются.</Text>
               <View style={styles.row}>
                 <View style={styles.grow}><AppButton compact variant="secondary" label="Отмена" disabled={memberBusy}
                   onPress={() => setJoining(null)} /></View>
                 <View style={styles.grow}><AppButton compact label="Добавить" busy={memberBusy}
                   onPress={() => { void changeMembers((revision) => repository.addParticipants(clientId, programId!, revision,
-                    joining.source, joining.ids)); }} /></View>
+                    mesocycleId!, joining.source, placementsFor(joining.ids))); }} /></View>
               </View>
             </View> : null}
-          </> : mode === "edit" ? null : <ParticipantChips clientId={clientId}
-            memberIds={mode === "add" && program !== null ? program.members
-              : [clientId, ...candidates.map((item) => item.id).filter((id) => id !== clientId)]}
-            names={new Map(candidates.map((item) => [item.id, item.displayName]))} selected={members}
-            onChange={(ids) => { setMembers(ids); touch(); }} note="Каждый получит свою копию; результаты у всех свои." />}
+          </> : mode === "edit" ? null : <>
+            <ParticipantChips clientId={clientId} memberIds={[clientId, ...candidates.map((item) => item.id).filter((id) => id !== clientId)]}
+              names={new Map(candidates.map((item) => [item.id, item.displayName]))} selected={members}
+              onChange={(ids) => { setMembers(ids); touch(); }} note="Каждый получит свою копию; результаты у всех свои." />
+            {placementRows(mode === "add" && program !== null ? program.title : programTitle)}
+          </>}
         </Section>
 
         <Section title="Структура недель">
@@ -435,7 +471,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
         title={`Убрать «${leaving === null ? "" : nameOf(leaving)}» из группы?`}
         description="Программа, план и результаты у него останутся. Из переключателя участников и групповых правок он пропадёт; вернуть можно, добавив снова."
         confirmLabel="Убрать" onCancel={() => setLeaving(null)}
-        onConfirm={() => { const id = leaving; if (id !== null) void changeMembers((revision) => repository.leaveGroup(clientId, programId!, revision, id)); }} />
+        onConfirm={() => { const id = leaving; if (id !== null) void changeMembers((revision) => repository.leaveGroup(clientId, programId!, revision, mesocycleId!, id)); }} />
       <ScopeMenu visible={scopeFor !== null} weekIndex={(scopeFor ?? 0) + 1} onPick={pickScope}
         weeksOf={(scope) => targetWeeks(weeks.map((item, index) => ({ index: index + 1, type: item.type })), (scopeFor ?? 0) + 1, scope)} />
       <StickyEditorFooter actionLabel={mode === "edit" ? "Сохранить" : mode === "add" ? "Добавить" : "Создать"} busy={busy === "create"} onCancel={onCancel}

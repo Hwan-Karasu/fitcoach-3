@@ -94,7 +94,9 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
       setDirty(stale);
       setBaseWorkouts(stale || week0?.baseWorkouts === undefined ? week.workouts : week0.baseWorkouts);
       setRevision(stale ? plan.program.revision : saved?.baseRevision ?? plan.program.revision);
-      setMembers(plan.program.memberClientIds);
+      // UI-OWN-044: участники правки — группа мезоцикла (их копии могут лежать в их собственных программах).
+      void repository.getMesocycleGroup(clientId, programId, { mesocycleId })
+        .then((copies) => { if (active) setMembers(copies.map((copy) => copy.clientId)); }).catch(() => undefined);
       setType(saved?.kind === "WEEK" ? saved.type : week.type);
       setScope(saved?.kind === "WEEK" ? saved.scope : "CURRENT");
       setReplaceConflicts(saved?.kind === "WEEK" && !stale ? saved.replaceConflicts ?? [] : []);

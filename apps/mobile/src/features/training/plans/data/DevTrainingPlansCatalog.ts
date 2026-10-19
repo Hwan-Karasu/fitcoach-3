@@ -385,4 +385,15 @@ export const devTrainingPlansCatalog: readonly MigrationStep[] = [{
     `ALTER TABLE dev_training_program_members ADD COLUMN group_left_at TEXT
       CHECK (CASE WHEN group_left_at IS NULL THEN 1 ELSE length(group_left_at) > 0 END)`,
   ],
+}, {
+  version: 16,
+  checksum: "ui-own-044-dev-training-plans-v16-mesocycle-group-left-20261019",
+  statements: [
+    // UI-OWN-044 (решение владельца 2026-10-19, как в 2.0): группа — копии мезоцикла одного родства в любых
+    // программах участников. Выход из группы — дата у копии; план и результаты остаются. Колонка v15 у участия
+    // программы больше не используется (группа уже не программа).
+    `ALTER TABLE dev_training_mesocycles ADD COLUMN group_left_at TEXT
+      CHECK (CASE WHEN group_left_at IS NULL THEN 1 ELSE length(group_left_at) > 0 END)`,
+    `CREATE INDEX dev_training_mesocycles_lineage ON dev_training_mesocycles(workspace_id, lineage_id)`,
+  ],
 }];

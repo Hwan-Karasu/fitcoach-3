@@ -3,6 +3,7 @@ export { CreateProgramScreen, type TrainingParticipantCandidate } from "./presen
 export { PeriodizedBuilderScreen } from "./presentation/PeriodizedBuilderScreen.tsx";
 export { ParticipantSwitcher, participantTarget } from "./presentation/ParticipantSwitcher.tsx";
 export type { CounterpartRef } from "./domain/ParticipantCounterpart.ts";
+export type { GroupCopy } from "./domain/Placement.ts";
 export { weekTypeTone } from "./presentation/weekTypeTone.ts";
 export { cycleTypeLabels, weekDates } from "./domain/MesocycleBuilder.ts";
 export { ProgramScreen } from "./presentation/ProgramScreen.tsx";

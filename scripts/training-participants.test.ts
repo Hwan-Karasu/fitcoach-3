@@ -5,13 +5,22 @@ import { DevClientRepository } from "../apps/mobile/src/features/clients/data/De
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant } from
   "../apps/mobile/src/features/training/plans/data/DevTrainingPlansRepository.ts";
 import { counterpartOf, participantOrder } from "../apps/mobile/src/features/training/plans/domain/ParticipantCounterpart.ts";
+import { preferredPlacement } from "../apps/mobile/src/features/training/plans/domain/Placement.ts";
 import { addExercise, fillSets, newDraft } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
 
 const WS = "synthetic-workspace-a";
 const BENCH = "sys:repdb:bench";
+let n = 0;
+const workouts = () => fillSets(addExercise(newDraft(`w${n}`), `w${n}`, `e${n}`, BENCH, () => `s${n++}`), `e${n - 1}`, "reps", 10).plan.workouts;
+const builder = (title: string) => ({ title, cycleType: null, repRange: null, startDate: null,
+  weeks: [{ type: "heavy" as const, workouts: workouts() }, { type: "base" as const, workouts: [] }] });
 
+/**
+ * A открывает общую программу. У B своя текущая Расширенная «Своя», у C — только Простая, у D программ нет.
+ * Как в 2.0: B получает мезоцикл в «Своя», C — участием в общей, D — по выбору тренера в новую программу.
+ */
 async function setup() {
   const db = new DatabaseSync(":memory:");
   const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
@@ -19,94 +28,135 @@ async function setup() {
   await clients.initialize();
   const plans = new DevTrainingPlansRepository(shared, WS);
   await plans.initialize();
-  const [a, b, c, d] = await Promise.all(["SyntheticA", "SyntheticB", "SyntheticC", "SyntheticD"]
-    .map((displayName) => clients.create({ displayName })));
-  let n = 0;
-  const workouts = fillSets(addExercise(newDraft("w1"), "w1", "e1", BENCH, () => `s${n++}`), "e1", "reps", 10).plan.workouts;
-  const program = await plans.createPeriodizedProgram({ title: "Группа", clientIds: [a!.id, b!.id, c!.id], mesocycle: {
-    title: "Блок", cycleType: null, repRange: null, startDate: null, weeks: [{ type: "heavy", workouts }, { type: "base", workouts: [] }] } });
-  const group = async (clientId: string) => (await plans.getProgram(clientId, program.id))?.memberClientIds;
-  const revision = async () => (await plans.getProgram(a!.id, program.id))!.revision;
-  return { db, plans, a: a!.id, b: b!.id, c: c!.id, d: d!.id, programId: program.id, group, revision,
-    close: async () => { await plans.close(); await clients.close(); } };
+  const [a, b, c, d] = (await Promise.all(["SyntheticA", "SyntheticB", "SyntheticC", "SyntheticD"]
+    .map((displayName) => clients.create({ displayName })))).map((client) => client.id) as [string, string, string, string];
+  const own = await plans.createPeriodizedProgram({ title: "Своя", clientIds: [b], mesocycle: builder("Свой блок") });
+  await plans.selectProgram(b, own.id);
+  const simple = await plans.createSimpleProgram(c, { title: "Простая C", plan: { weeks: 2, workouts: workouts() } });
+  await plans.selectProgram(c, simple.id);
+  return { db, plans, a, b, c, d, ownB: own.id, close: async () => { await plans.close(); await clients.close(); } };
 }
 
-test("UI-OWN-042 убранный участник сохраняет программу и план, но выходит из группы", async () => {
-  const { plans, a, b, c, programId, group, revision, close } = await setup();
-  try {
-    const planB = await plans.getPeriodizedPlan(b, programId);
-    await plans.leaveGroup(a, programId, await revision(), b);
+async function createGroup(env: Awaited<ReturnType<typeof setup>>) {
+  const { plans, a, b, c, d, ownB } = env;
+  const program = await plans.createPeriodizedProgram({ title: "Группа", clientIds: [a, b, c, d], mesocycle: builder("Общий"),
+    placements: [{ clientId: b, target: { kind: "program", programId: ownB } }, { clientId: c, target: { kind: "join" } },
+      { clientId: d, target: { kind: "new" } }] });
+  const mesocycleId = (await plans.getPeriodizedPlan(a, program.id))!.mesocycles[0]!.id;
+  const revision = async () => (await plans.getProgram(a, program.id))!.revision;
+  const group = async (clientId: string, programId: string, cycleId: string) =>
+    (await plans.getMesocycleGroup(clientId, programId, { mesocycleId: cycleId })).map((item) => item.clientId).sort();
+  return { programId: program.id, mesocycleId, revision, group };
+}
 
-    assert.deepEqual(await group(a), [a, c], "у остальных его нет");
-    assert.deepEqual(await group(c), [a, c]);
-    assert.deepEqual(await group(b), [b], "у него группа — только он");
-    assert.deepEqual((await plans.getPeriodizedPlan(b, programId))!.mesocycles, planB!.mesocycles, "план на месте");
-    assert.deepEqual([(await plans.getLibrary(a)).active[0]!.memberCount, (await plans.getLibrary(b)).active[0]!.memberCount], [2, 1]);
-    await assert.rejects(plans.createMesocycle(a, programId, await revision(), { title: "Новый", weeks: 1,
-      firstWeek: planB!.mesocycles[0]!.weeks[0]!.workouts, clientIds: [a, b] }),
-    (error: unknown) => error instanceof Error && error.message === "DRAFT_INVALID", "групповая правка его не задевает");
-    await assert.rejects(plans.leaveGroup(a, programId, await revision(), a),
-      (error: unknown) => error instanceof Error && error.message === "DRAFT_INVALID", "открывший клиент себя не убирает");
+test("UI-OWN-044 размещение по умолчанию, как в 2.0: текущая Расширенная → последняя Расширенная → участие", async () => {
+  const program = (id: string, kind: "SIMPLE" | "PERIODIZED", createdAt: string) => ({ id, kind, title: id, createdAt });
+  const list = [program("old", "PERIODIZED", "2026-01-01"), program("new", "PERIODIZED", "2026-05-01"), program("s", "SIMPLE", "2026-06-01")];
+  assert.deepEqual(preferredPlacement(list, "old", "host"), { kind: "program", programId: "old" }, "текущая Расширенная");
+  assert.deepEqual(preferredPlacement(list, "s", "host"), { kind: "program", programId: "new" }, "текущая Простая — последняя Расширенная");
+  assert.deepEqual(preferredPlacement([program("s", "SIMPLE", "2026-06-01")], "s", "host"), { kind: "join" });
+  assert.deepEqual(preferredPlacement([program("host", "PERIODIZED", "2026-06-01")], "host", "host"), { kind: "join" }, "эта же программа — не вариант");
+
+  const env = await setup();
+  try {
+    const options = await env.plans.getPlacementOptions([env.b, env.c, env.d], null);
+    assert.deepEqual(options.map((item) => item.preferred), [{ kind: "program", programId: env.ownB }, { kind: "join" }, { kind: "join" }]);
+    assert.deepEqual(options[0]!.programs, [{ id: env.ownB, title: "Своя", current: true }]);
   } finally {
-    await close();
+    await env.close();
   }
 });
 
-test("UI-OWN-042 добавленный участник получает копию плана выбранного источника; вернувшийся — свой план", async () => {
-  const { plans, a, b, c, d, programId, group, revision, close } = await setup();
+test("UI-OWN-044 общий мезоцикл ложится в программы участников; группа — копии одного родства", async () => {
+  const env = await setup();
   try {
-    const planA = (await plans.getPeriodizedPlan(a, programId))!;
-    const planC = (await plans.getPeriodizedPlan(c, programId))!;
-    await plans.leaveGroup(a, programId, await revision(), b);
-    const planB = (await plans.getPeriodizedPlan(b, programId))!;
-
-    await plans.addParticipants(a, programId, await revision(), c, [d, b]);
-
-    assert.deepEqual(await group(a), [a, b, c, d]);
-    const planD = (await plans.getPeriodizedPlan(d, programId))!;
-    const shape = (cycle: typeof planC.mesocycles[number]) => cycle.weeks.map((week) => [week.type,
-      week.workouts.map((workout) => workout.exercises.map((exercise) => [exercise.exerciseId, exercise.sets.length]))]);
-    assert.deepEqual(planD.mesocycles.map(shape), planC.mesocycles.map(shape), "план источника");
-    assert.notEqual(planD.mesocycles[0]!.id, planC.mesocycles[0]!.id, "своя копия");
-    assert.equal(planD.mesocycles[0]!.lineageId, planC.mesocycles[0]!.lineageId, "то же родство — групповые правки и переключение");
-    assert.equal(planD.selectedMesocycleId, planD.mesocycles[0]!.id);
-    assert.deepEqual((await plans.getPeriodizedPlan(b, programId))!.mesocycles, planB.mesocycles, "вернувшийся — со своим планом");
-    assert.deepEqual((await plans.getPeriodizedPlan(a, programId))!.mesocycles, planA.mesocycles, "остальные не изменились");
-    await assert.rejects(plans.addParticipants(a, programId, await revision(), c, [d]),
-      (error: unknown) => error instanceof Error && error.message === "DRAFT_INVALID", "уже в группе");
+    const { plans, a, b, c, d, ownB } = env;
+    const { programId, mesocycleId, group } = await createGroup(env);
+    assert.deepEqual((await plans.getProgram(a, programId))!.memberClientIds, [a, c], "в общей программе — A и C");
+    const inOwn = (await plans.getPeriodizedPlan(b, ownB))!;
+    assert.deepEqual(inOwn.mesocycles.map((cycle) => cycle.title), ["Свой блок", "Общий"], "у B — новым мезоциклом в «Своя»");
+    assert.equal(inOwn.selectedMesocycleId, inOwn.mesocycles[1]!.id);
+    const dLibrary = await plans.getLibrary(d);
+    assert.deepEqual(dLibrary.active.map((card) => card.title), ["Группа"], "у D — своя новая программа");
+    assert.notEqual(dLibrary.active[0]!.id, programId);
+    assert.deepEqual(await group(a, programId, mesocycleId), [a, b, c, d].sort());
+    assert.deepEqual(await group(b, ownB, inOwn.mesocycles[1]!.id), [a, b, c, d].sort(), "группа видна из чужой программы");
+    assert.deepEqual(await group(b, ownB, inOwn.mesocycles[0]!.id), [b], "свой мезоцикл B — без группы");
   } finally {
-    await close();
+    await env.close();
   }
 });
 
-test("UI-OWN-042 схема: дата выхода из группы не бывает пустой строкой", async () => {
-  const { db, b, programId, close } = await setup();
+test("UI-OWN-044 выход из группы мезоцикла: план и программа остаются; возврат — со своим планом", async () => {
+  const env = await setup();
   try {
-    assert.throws(() => db.prepare("UPDATE dev_training_program_members SET group_left_at = '' WHERE program_id = ? AND client_id = ?")
-      .run(programId, b), /CHECK/);
+    const { plans, a, b, c, d, ownB } = env;
+    const { programId, mesocycleId, revision, group } = await createGroup(env);
+    const copyB = (await plans.getPeriodizedPlan(b, ownB))!.mesocycles[1]!;
+    await plans.leaveGroup(a, programId, await revision(), mesocycleId, b);
+    assert.deepEqual(await group(a, programId, mesocycleId), [a, c, d].sort());
+    assert.deepEqual(await group(b, ownB, copyB.id), [b], "у него группа — только он");
+    assert.deepEqual((await plans.getPeriodizedPlan(b, ownB))!.mesocycles[1], copyB, "план на месте");
+    await assert.rejects(plans.leaveGroup(a, programId, await revision(), mesocycleId, a),
+      (error: unknown) => error instanceof Error && error.message === "DRAFT_INVALID", "открывший себя не убирает");
+
+    await plans.addParticipants(a, programId, await revision(), mesocycleId, c, [{ clientId: b, target: { kind: "join" } }]);
+    assert.deepEqual(await group(a, programId, mesocycleId), [a, b, c, d].sort());
+    assert.deepEqual((await plans.getPeriodizedPlan(b, ownB))!.mesocycles[1], copyB, "вернувшийся — со своим планом в своей программе");
+    assert.deepEqual((await plans.getProgram(a, programId))!.memberClientIds, [a, c], "в общую программу не добавлен");
   } finally {
-    await close();
+    await env.close();
   }
 });
 
-test("UI-OWN-043 переключатель: открывший клиент первым; то же место плана у другого участника по родству", async () => {
-  const { plans, a, b, c, programId, close } = await setup();
+test("UI-OWN-044 групповая правка недели доходит до копии участника в его программе", async () => {
+  const env = await setup();
   try {
+    const { plans, a, b, ownB } = env;
+    const { programId, mesocycleId, revision } = await createGroup(env);
+    const week = (await plans.getPeriodizedPlan(a, programId))!.mesocycles[0]!.weeks[0]!;
+    const exerciseId = week.workouts[0]!.exercises[0]!.id;
+    const edited = fillSets({ title: "м", plan: { weeks: 1, workouts: week.workouts } }, exerciseId, "reps", 5).plan.workouts;
+    const ownRevision = (await plans.getProgram(b, ownB))!.revision;
+    await plans.saveWeek(a, programId, await revision(), { mesocycleId, weekIndex: 1, workouts: edited, type: week.type,
+      scope: "CURRENT", clientIds: [a, b] });
+    const copy = (await plans.getPeriodizedPlan(b, ownB))!.mesocycles[1]!;
+    assert.equal(copy.weeks[0]!.workouts[0]!.exercises[0]!.sets[0]!.reps, 5);
+    assert.equal((await plans.getProgram(b, ownB))!.revision, ownRevision + 1, "ревизия его программы изменилась");
+  } finally {
+    await env.close();
+  }
+});
+
+test("UI-OWN-043/044 переключатель: открывший первым; то же место плана в программе другого участника", async () => {
+  const env = await setup();
+  try {
+    const { plans, a, b, c, ownB } = env;
     assert.deepEqual(participantOrder([a, b, c], c), [c, a, b]);
     assert.deepEqual(participantOrder([a, b], c), [a, b], "открывшего нет в группе — порядок группы");
+    const { programId } = await createGroup(env);
     const planA = (await plans.getPeriodizedPlan(a, programId))!;
-    const planB = (await plans.getPeriodizedPlan(b, programId))!;
+    const planB = (await plans.getPeriodizedPlan(b, ownB))!;
     const cycleA = planA.mesocycles[0]!;
-    const cycleB = planB.mesocycles[0]!;
+    const cycleB = planB.mesocycles[1]!;
     const workoutA = cycleA.weeks[1]!.workouts[0]!;
     assert.deepEqual(counterpartOf(planA.mesocycles, planB.mesocycles, planB.selectedMesocycleId,
       { mesocycleId: cycleA.id, weekIndex: 2, workoutId: workoutA.id }),
     { mesocycleId: cycleB.id, weekIndex: 2, workoutId: cycleB.weeks[1]!.workouts[0]!.id });
-    assert.deepEqual(counterpartOf(planA.mesocycles, planB.mesocycles, null, { mesocycleId: null, weekIndex: 2, workoutId: workoutA.id }),
-      { mesocycleId: cycleB.id, weekIndex: 2, workoutId: cycleB.weeks[1]!.workouts[0]!.id }, "мезоцикл находится по тренировке");
     assert.deepEqual(counterpartOf(planA.mesocycles, planB.mesocycles, null, { mesocycleId: cycleA.id, weekIndex: 9, workoutId: workoutA.id }),
       { mesocycleId: cycleB.id, weekIndex: 2, workoutId: null }, "недели нет — последняя неделя, без тренировки");
+    assert.deepEqual((await plans.getMesocycleGroup(a, programId, { workoutId: workoutA.id })).map((item) => item.clientId).length, 4,
+      "группа находится и по тренировке");
   } finally {
-    await close();
+    await env.close();
+  }
+});
+
+test("UI-OWN-044 схема: дата выхода копии из группы не бывает пустой строкой", async () => {
+  const env = await setup();
+  try {
+    assert.throws(() => env.db.prepare("UPDATE dev_training_mesocycles SET group_left_at = ''").run(), /CHECK/);
+  } finally {
+    await env.close();
   }
 });

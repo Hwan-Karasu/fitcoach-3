@@ -1,3 +1,4 @@
+import type { Placement } from "./Placement.ts";
 import type { TrainingProgram } from "./ProgramModel.ts";
 import type { PlannedExercise, PlannedWorkout, PlanRange } from "./SimplePlanModel.ts";
 
@@ -83,6 +84,8 @@ export interface NewPeriodizedProgramInput {
   /** Участники; у каждого своя копия мезоцикла. Первый — открывший клиент. */
   readonly clientIds: readonly string[];
   readonly mesocycle: BuilderMesocycleInput;
+  /** UI-OWN-044: куда ляжет копия у остальных клиентов; без размещения — участие в этой программе. */
+  readonly placements?: readonly Placement[];
 }
 
 /** «+ Мезоцикл»: план первой недели копируется во все недели (решение владельца 2026-10-18). */

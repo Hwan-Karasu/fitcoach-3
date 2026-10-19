@@ -1,5 +1,6 @@
 import type { BuilderMesocycleInput } from "./PeriodizedModel.ts";
 import type { TrainingProgram } from "./ProgramModel.ts";
+import type { Placement } from "./Placement.ts";
 
 /**
  * Сохранение мезоцикла из конструктора (UI-OWN-041): новый мезоцикл («+ Мезоцикл», у выбранных участников) или
@@ -15,6 +16,8 @@ export interface MesocycleSaveRequest {
   /** Новый мезоцикл: участники (открывший — среди них). Правка — только открытый клиент. */
   readonly clientIds: readonly string[];
   readonly mesocycle: BuilderMesocycleInput;
+  /** «+ Мезоцикл»: куда ляжет копия у клиентов вне этой программы (UI-OWN-044). */
+  readonly placements?: readonly Placement[];
 }
 
 export type MesocycleSaveResult = Readonly<{ program: TrainingProgram; mesocycleId: string }>;

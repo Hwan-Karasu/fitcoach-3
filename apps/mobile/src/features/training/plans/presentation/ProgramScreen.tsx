@@ -157,6 +157,16 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     return () => { active = false; };
   }, [listCandidates]);
 
+  // UI-OWN-044: участники — группа выбранного мезоцикла (копии в любых программах), а не участники программы.
+  const [groupSize, setGroupSize] = useState(1);
+  useEffect(() => {
+    if (cycleKey === "simple") return undefined;
+    let active = true;
+    repository.getMesocycleGroup(clientId, programId, { mesocycleId: cycleKey })
+      .then((copies) => { if (active) setGroupSize(Math.max(1, copies.length)); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [clientId, cycleKey, programId, repository, version]);
+
   useEffect(() => repository.subscribeCommittedChanges((change) => {
     if (change.clientIds.includes(clientId)) setVersion((value) => value + 1);
   }), [clientId, repository]);
@@ -396,7 +406,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
                 <View>
                   <Text accessibilityRole="header" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6} style={[styles.cardTitle, { color: colors.textPrimary }]}>{selected.title}</Text>
                   <Text numberOfLines={1} style={[styles.meta, { color: colors.textSecondary }]}>
-                    {`${program.title} · ${membersWord(program.memberClientIds.length)}`}
+                    {`${program.title} · ${membersWord(groupSize)}`}
                   </Text>
                 </View>
                 <View style={styles.cardMeta}>
