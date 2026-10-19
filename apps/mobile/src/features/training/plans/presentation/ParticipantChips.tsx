@@ -7,7 +7,8 @@ import { fonts } from "../../../../shared/ui/theme/typography.ts";
 
 /**
  * Выбор участников Расширенной программы (§48.1, §48.6.2): выбранные — короткие снимаемые метки, добавление —
- * поиском в выпадающем списке (решение владельца 2026-10-18: при 20+ клиентах пилюли всех не помещаются).
+ * поиском в выпадающем списке (решение владельца 2026-10-18: при 20+ клиентах пилюли всех не помещаются); пилюли — под
+ * поиском, «×» в пилюле убирает (2026-10-19).
  * Открывший клиент выбран всегда. Невыбранные участники не изменяются.
  */
 export function ParticipantChips({ clientId, memberIds, names, selected, onChange, note }: Readonly<{
@@ -29,6 +30,15 @@ export function ParticipantChips({ clientId, memberIds, names, selected, onChang
     <View style={styles.block}>
       <Text style={[styles.group, { color: colors.textPrimary }]}>Участники</Text>
       <Text style={[styles.note, { color: colors.textSecondary }]}>{note}</Text>
+      {available.length > 0 ? (
+        <View ref={anchor} collapsable={false}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Добавить клиента к программе" onPress={() => setOpen(true)}
+            style={({ pressed }) => [styles.add, { borderColor: colors.border, backgroundColor: pressed ? colors.surfaceRaised : colors.input }]}>
+            <Plus size={16} color={colors.accentInk} strokeWidth={2.2} />
+            <Text style={[styles.addText, { color: colors.accentInk }]}>Добавить клиента к программе</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <View style={styles.chips}>
         {selected.map((id) => {
           const fixed = id === clientId;
@@ -43,15 +53,6 @@ export function ParticipantChips({ clientId, memberIds, names, selected, onChang
           );
         })}
       </View>
-      {available.length > 0 ? (
-        <View ref={anchor} collapsable={false}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Добавить клиента к программе" onPress={() => setOpen(true)}
-            style={({ pressed }) => [styles.add, { borderColor: colors.border, backgroundColor: pressed ? colors.surfaceRaised : colors.input }]}>
-            <Plus size={16} color={colors.accentInk} strokeWidth={2.2} />
-            <Text style={[styles.addText, { color: colors.accentInk }]}>Добавить клиента к программе</Text>
-          </Pressable>
-        </View>
-      ) : null}
       <DropdownMenu searchable visible={open} anchor={anchor} title="Добавить клиента" selected=""
         options={available.map((id) => ({ value: id, label: nameOf(id) }))}
         onClose={() => setOpen(false)} onSelect={(id) => { onChange([...selected, id]); setOpen(false); }} />

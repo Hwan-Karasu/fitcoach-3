@@ -66,13 +66,20 @@ function assertWeek(title: string, workouts: readonly PlannedWorkout[]): void {
 
 type ProgramRow = Readonly<{ id: string; kind: TrainingProgram["kind"]; title: string; revision: number; createdAt: string }>;
 
-async function programById(tx: SqliteStatementPort, workspaceId: string, id: string): Promise<TrainingProgram> {
+/**
+ * Программа с участниками. С `viewer` — группа глазами этого участника (UI-OWN-042): вышедший из группы видит
+ * только себя, остальные — участников, которые из группы не выходили. Без `viewer` — все строки участия.
+ */
+async function programById(tx: SqliteStatementPort, workspaceId: string, id: string, viewer?: string): Promise<TrainingProgram> {
   const row = await tx.first<ProgramRow>(`SELECT id, kind, title, revision, created_at AS createdAt
     FROM dev_training_programs WHERE workspace_id = ? AND id = ?`, [workspaceId, id]);
   if (row === null) throw new Error("TARGET_NOT_FOUND");
-  const members = await tx.all<{ clientId: string }>(`SELECT client_id AS clientId FROM dev_training_program_members
-    WHERE workspace_id = ? AND program_id = ? ORDER BY joined_at, rowid`, [workspaceId, id]);
-  return { ...row, memberClientIds: members.map((member) => member.clientId) };
+  const members = await tx.all<{ clientId: string; leftAt: string | null }>(`SELECT client_id AS clientId, group_left_at AS leftAt
+    FROM dev_training_program_members WHERE workspace_id = ? AND program_id = ? ORDER BY joined_at, rowid`, [workspaceId, id]);
+  const own = members.find((member) => member.clientId === viewer);
+  const group = viewer === undefined ? members : own === undefined ? [] : own.leftAt !== null ? [own]
+    : members.filter((member) => member.leftAt === null);
+  return { ...row, memberClientIds: group.map((member) => member.clientId) };
 }
 
 async function membership(tx: SqliteStatementPort, workspaceId: string, clientId: string, programId: string):
@@ -181,8 +188,9 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     const [cards, selection] = await Promise.all([
       connection.all<ProgramCard>(`SELECT p.id, p.kind, p.title, p.revision, p.created_at AS createdAt,
           m.archived_at AS archivedAt, m.sort_position AS sortPosition,
-          (SELECT count(*) FROM dev_training_program_members o WHERE o.workspace_id = p.workspace_id
-            AND o.program_id = p.id AND o.archived_at IS NULL) AS memberCount
+          CASE WHEN m.group_left_at IS NOT NULL THEN 1 ELSE (SELECT count(*) FROM dev_training_program_members o
+            WHERE o.workspace_id = p.workspace_id AND o.program_id = p.id AND o.archived_at IS NULL AND o.group_left_at IS NULL)
+          END AS memberCount
         FROM dev_training_program_members m
         JOIN dev_training_programs p ON p.id = m.program_id AND p.workspace_id = m.workspace_id
         WHERE m.workspace_id = ? AND m.client_id = ?`, [this.workspaceId, clientId]),
@@ -198,7 +206,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   }
 
   async getProgram(clientId: string, programId: string): Promise<TrainingProgram | null> {
-    const program = await programById(this.ready().connection, this.workspaceId, programId).catch(() => null);
+    const program = await programById(this.ready().connection, this.workspaceId, programId, clientId).catch(() => null);
     return program !== null && program.memberClientIds.includes(clientId) ? program : null;
   }
 
@@ -541,10 +549,11 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     if (result.changes !== 1) throw new Error("PROGRAM_REVISION_CONFLICT");
   }
 
-  /** Выбранные участники — действующие участники программы, открывший клиент среди них. */
+  /** Выбранные участники — группа открывшего клиента (UI-OWN-042), он сам среди них. */
   private async assertTargets(tx: SqliteStatementPort, clientId: string, programId: string, clientIds: readonly string[]) {
-    const program = await programById(tx, this.workspaceId, programId);
-    if (program.kind !== "PERIODIZED" || !clientIds.includes(clientId) || new Set(clientIds).size !== clientIds.length) {
+    const program = await programById(tx, this.workspaceId, programId, clientId);
+    if (program.kind !== "PERIODIZED" || !clientIds.includes(clientId) || new Set(clientIds).size !== clientIds.length
+      || clientIds.some((id) => !program.memberClientIds.includes(id))) {
       throw new Error("DRAFT_INVALID");
     }
     for (const id of clientIds) {
@@ -1180,6 +1189,62 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         WHERE workspace_id = ? AND program_id = ? AND client_id = ?`, [now.toISOString(), this.workspaceId, programId, clientId]);
     });
     this.publish({ clientIds: [clientId] });
+  }
+
+  async leaveGroup(clientId: string, programId: string, expectedRevision: number, memberId: string,
+    now: Date = new Date()): Promise<TrainingProgram> {
+    const result = await this.ready().writer.write(async (tx) => {
+      const group = await programById(tx, this.workspaceId, programId, clientId);
+      if (memberId === clientId || !group.memberClientIds.includes(clientId) || !group.memberClientIds.includes(memberId)) {
+        throw new Error("DRAFT_INVALID");
+      }
+      await this.bumpRevision(tx, programId, expectedRevision, now);
+      await tx.run(`UPDATE dev_training_program_members SET group_left_at = ? WHERE workspace_id = ? AND program_id = ? AND client_id = ?`,
+        [now.toISOString(), this.workspaceId, programId, memberId]);
+      return programById(tx, this.workspaceId, programId, clientId);
+    });
+    this.publish({ clientIds: [clientId, memberId] });
+    return result;
+  }
+
+  async addParticipants(clientId: string, programId: string, expectedRevision: number, sourceClientId: string,
+    clientIds: readonly string[], now: Date = new Date()): Promise<TrainingProgram> {
+    if (clientIds.length === 0 || new Set(clientIds).size !== clientIds.length) throw new Error("DRAFT_INVALID");
+    const result = await this.ready().writer.write(async (tx) => {
+      const group = await programById(tx, this.workspaceId, programId, clientId);
+      if (group.kind !== "PERIODIZED" || !group.memberClientIds.includes(sourceClientId)
+        || clientIds.some((id) => group.memberClientIds.includes(id))) throw new Error("DRAFT_INVALID");
+      await this.bumpRevision(tx, programId, expectedRevision, now);
+      const source = await readMesocycles(tx, this.workspaceId, programId, sourceClientId);
+      const sourceSelected = await selectedMesocycle(tx, this.workspaceId, programId, sourceClientId);
+      const stamp = now.toISOString();
+      for (const memberId of clientIds) {
+        const client = await tx.first<{ lifecycle: string }>("SELECT lifecycle FROM dev_clients WHERE workspace_id = ? AND id = ?",
+          [this.workspaceId, memberId]);
+        if (client?.lifecycle !== "ACTIVE") throw new Error("TARGET_NOT_FOUND");
+        const existing = await tx.first<{ archivedAt: string | null }>(`SELECT archived_at AS archivedAt FROM dev_training_program_members
+          WHERE workspace_id = ? AND program_id = ? AND client_id = ?`, [this.workspaceId, programId, memberId]);
+        if (existing !== null) {
+          // Вышедший ранее участник возвращается со своим планом; план источника не перезаписывает его.
+          await tx.run(`UPDATE dev_training_program_members SET group_left_at = NULL WHERE workspace_id = ? AND program_id = ? AND client_id = ?`,
+            [this.workspaceId, programId, memberId]);
+          continue;
+        }
+        await tx.run(`INSERT INTO dev_training_program_members (workspace_id, program_id, client_id, joined_at) VALUES (?, ?, ?, ?)`,
+          [this.workspaceId, programId, memberId, stamp]);
+        const take = await this.idPool(tx, source.reduce((sum, cycle) => sum + 1 + weekRowCount(cycle.weeks), 0));
+        let selected: string | null = null;
+        for (const cycle of source) {
+          const id = take();
+          await insertMesocycle(tx, this.workspaceId, programId, memberId, { ...cycle, id, weeks: copyWeeks(cycle.weeks, take) }, now);
+          if (cycle.id === sourceSelected || selected === null) selected = id;
+        }
+        if (selected !== null) await saveSelection(tx, this.workspaceId, programId, memberId, selected);
+      }
+      return programById(tx, this.workspaceId, programId, clientId);
+    });
+    this.publish({ clientIds: [clientId, ...clientIds] });
+    return result;
   }
 
   async restoreForClient(clientId: string, programId: string): Promise<void> {

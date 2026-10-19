@@ -376,4 +376,13 @@ export const devTrainingPlansCatalog: readonly MigrationStep[] = [{
     `ALTER TABLE dev_training_mesocycles ADD COLUMN start_date TEXT
       CHECK (CASE WHEN start_date IS NULL THEN 1 ELSE COALESCE(date(start_date) = start_date, 0) END)`,
   ],
+}, {
+  version: 15,
+  checksum: "ui-own-042-dev-training-plans-v15-group-left-20261019",
+  statements: [
+    // UI-OWN-042 (решение владельца 2026-10-19): убранный из группы участник сохраняет программу, план и результаты,
+    // но выходит из группы — его нет в переключателе и групповых правках. Факт выхода — дата, строка участия остаётся.
+    `ALTER TABLE dev_training_program_members ADD COLUMN group_left_at TEXT
+      CHECK (CASE WHEN group_left_at IS NULL THEN 1 ELSE length(group_left_at) > 0 END)`,
+  ],
 }];

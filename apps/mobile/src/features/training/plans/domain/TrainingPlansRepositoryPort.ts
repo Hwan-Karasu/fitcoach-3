@@ -89,6 +89,17 @@ export interface TrainingPlansRepositoryPort {
   selectProgram(clientId: string, programId: string): Promise<void>;
   /** Архив участия клиента: у остальных участников программа остаётся. */
   archiveForClient(clientId: string, programId: string, now?: Date): Promise<void>;
+  /**
+   * UI-OWN-042: участник `memberId` выходит из группы, открытой у `clientId`. Его программа, план и результаты
+   * остаются; в группе (и в `memberClientIds` у остальных) его больше нет, у него самого группа — только он.
+   */
+  leaveGroup(clientId: string, programId: string, expectedRevision: number, memberId: string, now?: Date): Promise<TrainingProgram>;
+  /**
+   * UI-OWN-042, §48: новые участники получают копию плана `sourceClientId` (все мезоциклы, то же родство), без
+   * результатов; планы остальных не меняются. Вышедший ранее клиент возвращается в группу со своим планом.
+   */
+  addParticipants(clientId: string, programId: string, expectedRevision: number, sourceClientId: string,
+    clientIds: readonly string[], now?: Date): Promise<TrainingProgram>;
   /** Возврат из архива не делает программу выбранной. */
   restoreForClient(clientId: string, programId: string): Promise<void>;
   /** Простая программа со структурой (только если клиент — её участник). */

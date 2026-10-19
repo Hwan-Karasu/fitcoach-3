@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import { CalendarDays, Minus, Plus } from "lucide-react-native";
-import { AppIconButton, InlineNotice, LoadingState, pickDate, SegmentedControl, StickyEditorFooter, TextField,
+import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, LoadingState, pickDate, SelectionChip, SegmentedControl, StickyEditorFooter, TextField,
   TrainingEditorLayout } from "../../../../shared/ui/components/public.ts";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -103,6 +103,10 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
   // Меню области (только в правке): неделя «до» правки и признак открытого меню.
   const baselines = useRef(new Map<number, readonly PlannedWorkout[]>());
   const [scopeFor, setScopeFor] = useState<number | null>(null);
+  // Состав группы в правке (UI-OWN-042): убрать — с подтверждением; добавить — с выбором, чей план копировать.
+  const [leaving, setLeaving] = useState<string | null>(null);
+  const [joining, setJoining] = useState<Readonly<{ ids: readonly string[]; source: string }> | null>(null);
+  const [memberBusy, setMemberBusy] = useState(false);
 
   useEffect(() => {
     if (programId === undefined) return undefined;
@@ -222,6 +226,20 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
     if (issues.length > 0) { setMessage(issues[0]?.message ?? "Проверьте тренировки."); return false; }
     return true;
   };
+  const nameOf = (id: string) => candidates.find((item) => item.id === id)?.displayName ?? "Клиент";
+  const changeMembers = async (run: (revision: number) => Promise<Readonly<{ revision: number; memberClientIds: readonly string[] }>>) => {
+    if (program === null) return;
+    setMemberBusy(true); setMessage(null);
+    try {
+      const next = await run(program.revision);
+      setProgram({ ...program, revision: next.revision, members: next.memberClientIds });
+      setMembers(next.memberClientIds);
+      setLeaving(null); setJoining(null);
+    } catch (error) {
+      setMessage(errors[error instanceof Error ? error.message : ""] ?? "Не удалось изменить участников. Состав прежний.");
+      setLeaving(null);
+    } finally { setMemberBusy(false); }
+  };
   const saveMesocycle = async () => {
     if (!check() || programId === undefined || program === null || mesocycleSave === undefined) return;
     setBusy("create"); setMessage(null);
@@ -317,7 +335,35 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
               </Pressable>
             </View>
           </View>
-          {mode === "edit" ? null : <ParticipantChips clientId={clientId}
+          {mode === "edit" && program !== null ? <>
+            <ParticipantChips clientId={clientId} memberIds={[...program.members,
+              ...candidates.map((item) => item.id).filter((id) => !program.members.includes(id))]}
+              names={new Map(candidates.map((item) => [item.id, item.displayName]))} selected={program.members}
+              note="Убранный участник сохранит программу, план и результаты — он лишь выйдет из группы."
+              onChange={(ids) => {
+                const removed = program.members.find((id) => !ids.includes(id));
+                if (removed !== undefined) { setLeaving(removed); return; }
+                const added = ids.filter((id) => !program.members.includes(id));
+                if (added.length > 0) setJoining({ ids: added, source: joining?.source ?? clientId });
+              }} />
+            {joining !== null ? <View style={[styles.join, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
+              <Text style={[styles.label, { color: colors.textPrimary }]}>
+                {`План для «${joining.ids.map(nameOf).join("», «")}» скопировать у:`}
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.copyRow}>
+                {program.members.map((id) => <SelectionChip key={id} group="Источник плана" label={nameOf(id)}
+                  selected={joining.source === id} onPress={() => setJoining({ ...joining, source: id })} />)}
+              </ScrollView>
+              <Text style={[styles.hint, { color: colors.textSecondary }]}>Результаты не копируются; планы остальных не меняются.</Text>
+              <View style={styles.row}>
+                <View style={styles.grow}><AppButton compact variant="secondary" label="Отмена" disabled={memberBusy}
+                  onPress={() => setJoining(null)} /></View>
+                <View style={styles.grow}><AppButton compact label="Добавить" busy={memberBusy}
+                  onPress={() => { void changeMembers((revision) => repository.addParticipants(clientId, programId!, revision,
+                    joining.source, joining.ids)); }} /></View>
+              </View>
+            </View> : null}
+          </> : mode === "edit" ? null : <ParticipantChips clientId={clientId}
             memberIds={mode === "add" && program !== null ? program.members
               : [clientId, ...candidates.map((item) => item.id).filter((id) => id !== clientId)]}
             names={new Map(candidates.map((item) => [item.id, item.displayName]))} selected={members}
@@ -385,6 +431,11 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
             onReplaceExercise={(workoutId, plannedId) => onPickExercise(workoutId, plannedId)} />
         </Section>
       </Animated.ScrollView>
+      <ConfirmDialog visible={leaving !== null} destructive confirmBusy={memberBusy}
+        title={`Убрать «${leaving === null ? "" : nameOf(leaving)}» из группы?`}
+        description="Программа, план и результаты у него останутся. Из переключателя участников и групповых правок он пропадёт; вернуть можно, добавив снова."
+        confirmLabel="Убрать" onCancel={() => setLeaving(null)}
+        onConfirm={() => { const id = leaving; if (id !== null) void changeMembers((revision) => repository.leaveGroup(clientId, programId!, revision, id)); }} />
       <ScopeMenu visible={scopeFor !== null} weekIndex={(scopeFor ?? 0) + 1} onPick={pickScope}
         weeksOf={(scope) => targetWeeks(weeks.map((item, index) => ({ index: index + 1, type: item.type })), (scopeFor ?? 0) + 1, scope)} />
       <StickyEditorFooter actionLabel={mode === "edit" ? "Сохранить" : mode === "add" ? "Добавить" : "Создать"} busy={busy === "create"} onCancel={onCancel}
@@ -425,4 +476,5 @@ const styles = StyleSheet.create({
   copyRow: { gap: 6 },
   copyChip: { minHeight: 36, borderWidth: 1, borderRadius: 18, paddingHorizontal: 12, justifyContent: "center" },
   hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  join: { borderWidth: 1, borderRadius: 12, padding: 10, gap: 8 },
 });
