@@ -396,4 +396,11 @@ export const devTrainingPlansCatalog: readonly MigrationStep[] = [{
       CHECK (CASE WHEN group_left_at IS NULL THEN 1 ELSE length(group_left_at) > 0 END)`,
     `CREATE INDEX dev_training_mesocycles_lineage ON dev_training_mesocycles(workspace_id, lineage_id)`,
   ],
+}, {
+  version: 17,
+  checksum: "ui-own-044-dev-training-plans-v17-drop-member-group-left-20261019",
+  statements: [
+    // Выход из группы хранится у мезоцикла (v16); колонка v15 у участия программы больше не нужна (ADR-018).
+    `ALTER TABLE dev_training_program_members DROP COLUMN group_left_at`,
+  ],
 }];

@@ -129,6 +129,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   }, [scrollKey, scrollRef]);
   const selectWeek = (key: string, week: number) => setWeeksByCycle((current) => ({ ...current, [key]: week }));
 
+  useEffect(() => { setMessage(null); setNotice(null); }, [clientId, programId]);
+
   useEffect(() => {
     let active = true;
     repository.getProgram(clientId, programId).then(async (next) => {
@@ -451,6 +453,9 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       {renaming !== null ? (
         <View style={styles.rename}>
           <TextField label="Название" required value={renaming} onChangeText={setRenaming} />
+          {others.length > 0 ? <Text style={[styles.meta, { color: colors.textSecondary }]}>
+            {`Название общее: сменится у всех участников программы (${others.length + 1}).`}
+          </Text> : null}
           <View style={styles.row}>
             <View style={styles.grow}><AppButton variant="secondary" label="Отмена" onPress={() => setRenaming(null)} /></View>
             <View style={styles.grow}><AppButton label="Сохранить" busy={busy} onPress={() => { void rename(); }} /></View>
