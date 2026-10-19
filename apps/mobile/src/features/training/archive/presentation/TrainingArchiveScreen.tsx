@@ -1,37 +1,22 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { ChevronDown, ChevronUp } from "lucide-react-native";
-import { EmptyState, InlineNotice, LoadingState, SegmentedControl, SelectionChip, StatusTag, type StatusKind } from
+import { EmptyState, InlineNotice, LoadingState, SegmentedControl, StatusTag, type StatusKind } from
   "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
-import type { SetFact, SetValues, WorkoutStatus } from "../../execution/public.ts";
-import { formatDuration, useExerciseLookup, type ExerciseLookupPort } from "../../plans/public.ts";
+import type { WorkoutStatus } from "../../execution/public.ts";
+import { useExerciseLookup, type ExerciseLookupPort } from "../../plans/public.ts";
 import { completedCount, filterHistory, type HistoryFilter, type TrainingHistoryEntry } from "./trainingHistory.ts";
+import { HistoryFilterBar } from "./HistoryFilterBar.tsx";
+import { dateText, factText } from "./historyFormat.ts";
 
-const MONTHS = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
-const dateText = (date: string) => {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  return `${day} ${MONTHS[month - 1] ?? ""} ${year}`;
-};
 const statusLabels: Readonly<Record<WorkoutStatus, string>> = {
   NOT_STARTED: "Не начата", IN_PROGRESS: "В работе", COMPLETED: "Завершена", MISSED: "Пропущена", CANCELLED: "Отменена",
 };
 const statusKinds: Readonly<Record<WorkoutStatus, StatusKind>> = {
   NOT_STARTED: "neutral", IN_PROGRESS: "info", COMPLETED: "success", MISSED: "warning", CANCELLED: "warning",
 };
-
-/** «80 кг × 8», «1:30», «500 м» — только введённые величины. */
-function valuesText(values: SetValues): string {
-  const parts = [values.loadGrams === null ? null : `${(values.loadGrams / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 2 })} кг`,
-    values.reps === null ? null : `${values.reps} повт.`, values.durationSec === null ? null : formatDuration(values.durationSec),
-    values.distanceM === null ? null : `${values.distanceM} м`].filter((part): part is string => part !== null);
-  return parts.length === 0 ? "—" : parts.join(" × ");
-}
-function factText(fact: SetFact): string {
-  if (fact.sides !== null) return `Л ${valuesText(fact.sides.left.values)} · П ${valuesText(fact.sides.right.values)}`;
-  return [fact.values, ...fact.drops].map(valuesText).join(" → ");
-}
 
 function HistoryCard({ entry, names }: Readonly<{ entry: TrainingHistoryEntry; names: (exerciseId: string) => string }>) {
   const { palette } = usePrototypeTheme();
@@ -102,19 +87,6 @@ export function TrainingArchiveScreen({ clientId, history, exercises, renderProg
   }, [clientId, history, version]);
   useEffect(() => history.subscribe(clientId, () => setVersion((value) => value + 1)), [clientId, history]);
 
-  const programs = useMemo(() => {
-    const seen = new Map<string, TrainingHistoryEntry>();
-    for (const entry of entries ?? []) if (!seen.has(entry.programId)) seen.set(entry.programId, entry);
-    return [...seen.values()];
-  }, [entries]);
-  const selectedProgram = programs.find((entry) => entry.programId === filter.programId);
-  const mesocycles = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const entry of entries ?? []) {
-      if (entry.programId === filter.programId && entry.mesocycleId !== null) seen.set(entry.mesocycleId, entry.mesocycleTitle ?? "Мезоцикл");
-    }
-    return [...seen.entries()];
-  }, [entries, filter.programId]);
   const visible = useMemo(() => filterHistory(entries ?? [], filter), [entries, filter]);
   const names = (exerciseId: string) => lookup?.get(exerciseId)?.name ?? "Упражнение";
 
@@ -131,22 +103,7 @@ export function TrainingArchiveScreen({ clientId, history, exercises, renderProg
       {entries !== null ? <FlatList data={visible as TrainingHistoryEntry[]} keyExtractor={(entry) => entry.key}
         contentContainerStyle={styles.list}
         ListHeaderComponent={<View style={styles.header}>
-          {programs.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-            <SelectionChip group="Программа" label="Все программы" selected={filter.programId === null}
-              onPress={() => setFilter({ programId: null, mesocycleId: null })} />
-            {programs.map((entry) => <SelectionChip key={entry.programId} group="Программа"
-              label={entry.planDeleted ? `${entry.programTitle} (план удалён)` : entry.archived ? `${entry.programTitle} (архив)` : entry.programTitle}
-              selected={filter.programId === entry.programId}
-              onPress={() => setFilter({ programId: entry.programId, mesocycleId: null })} />)}
-          </ScrollView> : null}
-          {selectedProgram?.programKind === "PERIODIZED" && mesocycles.length > 1 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-              <SelectionChip group="Мезоцикл" label="Все мезоциклы" selected={filter.mesocycleId === null}
-                onPress={() => setFilter({ ...filter, mesocycleId: null })} />
-              {mesocycles.map(([id, title]) => <SelectionChip key={id} group="Мезоцикл" label={title} selected={filter.mesocycleId === id}
-                onPress={() => setFilter({ ...filter, mesocycleId: id })} />)}
-            </ScrollView>
-          ) : null}
+          <HistoryFilterBar entries={entries} filter={filter} onChange={setFilter} />
           <Text style={[styles.summary, { color: colors.textSecondary }]}>
             {`Проведено тренировок: ${completedCount(visible)} · записей: ${visible.length}`}</Text>
         </View>}
@@ -163,7 +120,6 @@ const styles = StyleSheet.create({
   pad: { paddingHorizontal: 16 },
   list: { paddingHorizontal: 16, paddingBottom: 24, gap: 10 },
   header: { gap: 8, paddingTop: 4 },
-  chips: { gap: 8, paddingRight: 8 },
   summary: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
   card: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 4 },
   cardHead: { flexDirection: "row", alignItems: "center", gap: 8 },

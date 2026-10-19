@@ -4,7 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { KeyboardProvider } from "react-native-keyboard-controller";
-import { RestTimerDock, TrainingSettingsScreen } from "../../features/training/public.ts";
+import { ClientExerciseScreen, RestTimerDock, TrainingSettingsScreen } from "../../features/training/public.ts";
 import { NotificationsPreview, NotificationSettingsPreview } from "../../features/notifications/public.ts";
 import { SettingsPreview, ThemeCatalogPreview } from "../../features/settings/public.ts";
 import { ClientRosterSettingsScreen } from "../../features/clients/public.ts";
@@ -37,6 +37,8 @@ type RootStackRoutes = {
   QuestionnaireBuilder: undefined;
   ExerciseCatalog: undefined;
   ExerciseDetail: { exerciseId: string };
+  /** X02: упражнение в контексте клиента — обзор, история, прогресс. */
+  ClientExercise: { clientId: string; exerciseId: string };
   ExerciseEditor: { exerciseId?: string; name?: string } | undefined;
   Appearance: undefined;
   WorkspaceDev: undefined;
@@ -151,7 +153,16 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
             onOpenAccounting={(clientId) => navigation.navigate("ClientAccounting", { clientId })}
             onOpenMeasurements={(clientId) => navigation.navigate("ClientMeasurements", { clientId })}
             onClose={() => navigation.goBack()} onOpenClients={() => navigation.popTo("Root")}
-            onOpenExercise={(exerciseId) => navigation.navigate("ExerciseDetail", { exerciseId })} />}
+            onOpenExercise={(exerciseId) => navigation.navigate("ClientExercise", { clientId: route.params.clientId, exerciseId })} />}
+        </Stack.Screen>
+        <Stack.Screen name="ClientExercise" options={{ title: "Упражнение" }}>
+          {({ navigation, route }) => <ClientExerciseScreen clientId={route.params.clientId} exerciseId={route.params.exerciseId}
+            history={services.trainingHistory} exercises={services.exerciseLookup}
+            renderOverview={() => <ExerciseDetailScreen exerciseId={route.params.exerciseId} repository={services.exercises}
+              onEdit={(exerciseId) => navigation.navigate("ExerciseEditor", { exerciseId })} onArchived={() => navigation.goBack()} />}
+            onOpenWorkout={(target) => navigation.push("ClientWorkspace", { clientId: route.params.clientId, screen: "Training",
+              params: { screen: "TrainingWorkout", params: { programId: target.programId, weekIndex: target.weekIndex,
+                workoutId: target.plannedWorkoutId } } })} />}
         </Stack.Screen>
         <Stack.Screen name="ClientAccounting" options={{ title: "Абонемент и оплата" }}>
           {({ route }) => <ClientAccountingScreen clientId={route.params.clientId}

@@ -31,3 +31,4 @@ export { ScreenHeader, SCREEN_HEADER_HEIGHT } from "./ScreenHeader.tsx";
 export { FloatingActionButton } from "./FloatingActionButton.tsx";
 export { DurationWheelPicker, TimeWheelPicker } from "./TimeWheelPicker.tsx";
 export { pickDate } from "./pickDate.ts";
+export { LineChart, type LineChartPoint } from "./LineChart.tsx";

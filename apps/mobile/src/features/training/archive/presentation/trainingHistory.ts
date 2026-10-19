@@ -19,6 +19,8 @@ export interface TrainingHistoryEntry {
   readonly mesocycleTitle: string | null;
   /** `null` — тренировки больше нет в плане (факты остаются). */
   readonly workoutTitle: string | null;
+  /** Плановый слот — переход из истории в тренировку (§37.3). */
+  readonly plannedWorkoutId: string;
   readonly weekIndex: number;
   readonly actualDate: string;
   readonly status: WorkoutStatus;

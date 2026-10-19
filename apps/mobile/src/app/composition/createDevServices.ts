@@ -22,7 +22,8 @@ import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParti
 import type { ActiveWorkoutsPort, RestTimersPort, TrainingExecutionPort, TrainingPlansRepositoryPort } from
   "../../features/training/public.ts";
 import { createActiveWorkouts } from "../../read-models/activeWorkouts.ts";
-import { RestTimerService } from "../../features/training/public.ts";
+import { RestTimerService, factVolume, sortHistory, workoutStatus } from "../../features/training/public.ts";
+import { createTrainingHistory, type TrainingHistoryPort } from "../../read-models/trainingHistory.ts";
 import { expoRestSignal, preloadRestSignal } from "./expoRestSignal.ts";
 import { DevExerciseCatalogRepository } from "../../features/exercises/data/DevExerciseCatalogRepository.ts";
 import systemCatalogJson from "../../features/exercises/data/system-catalog.generated.json";
@@ -61,6 +62,8 @@ export interface DevServices {
   readonly restTimers: RestTimersPort;
   /** Тренировки «в работе» у всех клиентов — быстрый переход между дневниками (§48.83). */
   readonly activeWorkouts: ActiveWorkoutsPort;
+  /** §48.85: хронология занятий клиента — история и прогресс упражнения (X02). */
+  readonly trainingHistory: TrainingHistoryPort;
   readonly exercises: ExerciseCatalogPort;
   /** Каталог глазами планов тренировок: название, величины подхода, миниатюра. */
   readonly exerciseLookup: ExerciseLookupPort;
@@ -121,6 +124,7 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
     trainingExecution,
     restTimers,
     activeWorkouts: createActiveWorkouts(trainingExecution, trainingPlans, clients),
+    trainingHistory: createTrainingHistory({ factVolume, workoutStatus, sortHistory }, trainingExecution, trainingPlans),
     exercises,
     exerciseLookup: exerciseLookup(exercises),
     weekCopy,
