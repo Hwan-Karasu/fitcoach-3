@@ -148,7 +148,7 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, s
             : <Dumbbell size={14} color={colors.accentInk} strokeWidth={1.8} />}
         </View>
         <View style={styles.grow}>
-          <Text numberOfLines={2} style={[styles.exerciseName, { color: broken ? colors.danger : colors.textPrimary }]}>
+          <Text style={[styles.exerciseName, { color: broken ? colors.danger : colors.textPrimary }]}>
             {info?.name ?? "Упражнение не найдено в каталоге"}
           </Text>
           {group !== null ? <Text style={[styles.supersetTag, { color: colors.accentInk }]}>{`Суперсет ${group}`}</Text> : null}

@@ -685,7 +685,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                       <GripVertical size={20} color={colors.textMuted} strokeWidth={1.8} />
                     </View>
                   </Sortable.Handle>
-                  <Text numberOfLines={2} style={[styles.exercise, styles.grow, { color: colors.textPrimary }]}>
+                  <Text style={[styles.exercise, styles.grow, { color: colors.textPrimary }]}>
                     {lookup.get(exercise?.exerciseId ?? "")?.name ?? "Упражнение"}
                   </Text>
                 </View>
@@ -723,7 +723,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                   <Pressable accessibilityRole={onOpenExercise === undefined ? undefined : "button"} disabled={onOpenExercise === undefined}
                     accessibilityLabel={`${info?.name ?? "Упражнение"}. Открыть карточку упражнения`} hitSlop={4}
                     onPress={() => onOpenExercise?.(exercise.exerciseId)} style={styles.nameRow}>
-                    <Text style={[styles.exercise, styles.nameText, { color: colors.textPrimary }]} numberOfLines={2}>{info?.name ?? "Упражнение"}</Text>
+                    <Text style={[styles.exercise, styles.nameText, { color: colors.textPrimary }]}>{info?.name ?? "Упражнение"}</Text>
                     {onOpenExercise !== undefined ? <ChevronRight size={16} color={colors.accentInk} strokeWidth={2.4} /> : null}
                   </Pressable>
                   <View style={styles.subRow}>

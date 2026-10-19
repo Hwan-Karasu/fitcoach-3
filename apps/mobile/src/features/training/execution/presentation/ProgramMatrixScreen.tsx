@@ -232,7 +232,7 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
     }
     if (item.kind === "exercise") {
       return <View style={[styles.row, { borderColor: colors.border }]}>
-        <Text numberOfLines={3} style={[styles.label, styles.exercise, { color: colors.textPrimary }]}>{item.name}</Text>
+        <Text style={[styles.label, styles.exercise, { color: colors.textPrimary }]}>{item.name}</Text>
         <Shifted offset={offset} width={windowWidth}>
           {weeks.map((week) => <View key={week.index} style={[styles.cell, { borderColor: colors.border, backgroundColor: tintOf(week.type, 0.07) }]} />)}
         </Shifted>

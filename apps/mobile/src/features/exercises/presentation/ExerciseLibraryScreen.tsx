@@ -65,7 +65,7 @@ const ExerciseRow = memo(function ExerciseRow({ entry, onPressId, order, favorit
           : <Dumbbell size={18} color={colors.accentInk} strokeWidth={1.8} />}
       </View>
       <View style={styles.grow}>
-        <Text numberOfLines={2} style={[styles.name, { color: colors.textPrimary }]}>{name}</Text>
+        <Text style={[styles.name, { color: colors.textPrimary }]}>{name}</Text>
         <Text numberOfLines={1} style={[styles.meta, { color: colors.textSecondary }]}>{meta}</Text>
       </View>
       {definition.origin === "CUSTOM" ? <Text style={[styles.badge, { color: colors.accentInk, borderColor: colors.border }]}>Моё</Text> : null}

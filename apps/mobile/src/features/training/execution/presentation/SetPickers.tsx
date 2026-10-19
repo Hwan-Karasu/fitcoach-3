@@ -202,7 +202,7 @@ export const SupersetPickSheet = forwardRef<BottomSheetModal, Readonly<{
           style={({ pressed }) => [styles.menuRow, { backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
           {side === "above" ? <ArrowUp size={18} color={colors.textPrimary} strokeWidth={1.9} />
             : <ArrowDown size={18} color={colors.textPrimary} strokeWidth={1.9} />}
-          <Text numberOfLines={2} style={[styles.menuText, { color: colors.textPrimary }]}>{name}</Text>
+          <Text style={[styles.menuText, { color: colors.textPrimary }]}>{name}</Text>
         </Pressable>
       ))}
     </PickerSheet>
