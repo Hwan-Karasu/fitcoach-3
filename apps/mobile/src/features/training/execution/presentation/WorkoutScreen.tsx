@@ -1,4 +1,4 @@
-import { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState, type Ref } from "react";
+import { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { Image, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useKeepAwake } from "expo-keep-awake";
@@ -337,7 +337,7 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
  * исхода спрашивает «Завершить тренировку?» (§48.36).
  */
 export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, activeWorkouts, onOpenWorkout,
-  exercises, onChangeWeek, onEditWeek, onOpenMatrix, onPickExercises, picked, onOpenExercise }: Readonly<{
+  exercises, onChangeWeek, onEditWeek, onOpenMatrix, onPickExercises, picked, onOpenExercise, renderParticipants }: Readonly<{
   slot: WorkoutSlot;
   /** Подпись таймера отдыха — таймеры разных клиентов различимы (§48.62). */
   clientName: string;
@@ -352,6 +352,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   onEditWeek: (mesocycleId: string | null) => void;
   /** «Обзор программы» и щипок — матрица недель (UI-OWN-037). */
   onOpenMatrix: () => void;
+  /** UI-OWN-043: полоса участников группы; `finishInput` дописывает ввод перед переключением. */
+  renderParticipants?: (finishInput: () => Promise<boolean>) => ReactNode;
   /** Каталог: добавить упражнения или (`replace`) заменить это. Результат приходит в `picked`. */
   onPickExercises: (replace?: string) => void;
   picked: PickedExercise | null;
@@ -603,6 +605,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
 
   return (
     <>
+      {renderParticipants?.(finishInput)}
       <GestureDetector gesture={pinch}>
       <KeyboardAwareScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={[styles.content, { paddingBottom: timers > 0 ? 200 : 24 }]}
         keyboardShouldPersistTaps="handled" bottomOffset={24}>

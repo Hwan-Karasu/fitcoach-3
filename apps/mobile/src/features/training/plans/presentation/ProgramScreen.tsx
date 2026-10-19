@@ -22,11 +22,14 @@ import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
 import { MesocycleBook } from "./MesocycleBook.tsx";
 import { cycleTypeLabels, weekRangeLabel } from "../domain/MesocycleBuilder.ts";
+import type { CounterpartRef } from "../domain/ParticipantCounterpart.ts";
 
 /** Неделя программы для панели недель (её рисует дневник — другой модуль). */
 export interface ProgramWeeksView {
   /** Меняется при смене мезоцикла: панель начинает с его первой незакрытой недели. */
   readonly key: string;
+  /** Мезоцикл Расширенной программы (ключ — его родство: у участников группы копии одного мезоцикла). */
+  readonly mesocycleId?: string;
   readonly weeks: readonly Readonly<{ index: number; caption: string | null; type?: WeekType; workouts: readonly PlannedWorkout[] }>[];
   readonly weekActions?: (weekIndex: number) => ReactNode;
   readonly selectedWeek?: number;
@@ -42,7 +45,7 @@ export interface ProgramWeeksView {
  * «Изменить программу»; Расширенная — мезоциклы этого участника (выбор хранится, §48.10), недели выбранного
  * и «Изменить неделю» (T04).
  */
-export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, renderTemplates, onTabChange, onEditStructure,
+export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, renderTemplates, renderParticipants, onTabChange, onEditStructure,
   onAddMesocycle, onEditWeek, onArchived, requestedWeek, requestedMesocycle, weekCopy, weekSwap, onOpenProgram, onOpenMatrix }: Readonly<{
   clientId: string;
   programId: string;
@@ -72,6 +75,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   /** Смена вкладки — чтобы шапка показала «Программа» или «Шаблоны». */
   onTabChange?: (tab: "program" | "templates") => void;
   requestedMesocycle?: string;
+  /** UI-OWN-043: полоса участников группы под шапкой; получает текущее место плана (мезоцикл и неделя). */
+  renderParticipants?: (current: () => CounterpartRef) => ReactNode;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -100,6 +105,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [weeksByCycle, setWeeksByCycle] = useState<Readonly<Record<string, number>>>({});
   const scrollByCycle = useRef(new Map<string, number>());
   const cycleKey = periodized?.selectedMesocycleId ?? periodized?.mesocycles[0]?.id ?? "simple";
+  // Прокрутка — по родству мезоцикла: при смене участника (своя копия того же мезоцикла) экран остаётся на месте.
+  const scrollKey = periodized?.mesocycles.find((item) => item.id === cycleKey)?.lineageId ?? cycleKey;
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   // Неделя, показанная в карточке Расширенной программы (её выбирает панель недель): для «Копировать неделю».
   const shownWeek = useRef(1);
@@ -117,9 +124,9 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     }
   }, [requestedWeek, requestedMesocycle, program, periodized, cycleKey, repository, clientId, programId]);
   useEffect(() => {
-    const frame = requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: scrollByCycle.current.get(cycleKey) ?? 0, animated: false }));
+    const frame = requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: scrollByCycle.current.get(scrollKey) ?? 0, animated: false }));
     return () => cancelAnimationFrame(frame);
-  }, [cycleKey, scrollRef]);
+  }, [scrollKey, scrollRef]);
   const selectWeek = (key: string, week: number) => setWeeksByCycle((current) => ({ ...current, [key]: week }));
 
   useEffect(() => {
@@ -207,14 +214,17 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     <SegmentedControl items={[{ id: "program", label: "Программа" }, { id: "templates", label: "Шаблоны" }]}
       selectedId={tab} onSelect={(next) => { setTab(next); onTabChange?.(next); }} />
   </View> : null;
+  const participants = renderParticipants?.(() => ({ mesocycleId: selectedCycle()?.id ?? null,
+    weekIndex: weeksByCycle[cycleKey] ?? shownWeek.current, workoutId: null }));
   if (tab === "templates" && renderTemplates !== undefined) {
-    return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{tabs}{renderTemplates()}</View>;
+    return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{participants}{tabs}{renderTemplates()}</View>;
   }
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
+    {participants}
     {tabs}
     <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
-      scrollEventThrottle={32} onScroll={(event) => scrollByCycle.current.set(cycleKey, event.nativeEvent.contentOffset.y)}>
+      scrollEventThrottle={32} onScroll={(event) => scrollByCycle.current.set(scrollKey, event.nativeEvent.contentOffset.y)}>
       {program.kind === "PERIODIZED" && periodized !== null && periodized.mesocycles.length === 0 ? <View style={styles.row}><View style={styles.grow}>
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>{program.title}</Text>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>
@@ -313,7 +323,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       ) : null}
       {message !== null && plan === null && periodized === null ? <AppButton label="Повторить загрузку" variant="secondary"
         onPress={() => { setMessage(null); setVersion((value) => value + 1); }} /> : null}
-      {others.length > 0 ? (
+      {others.length > 0 && renderParticipants === undefined ? (
         <Text style={[styles.body, { color: colors.textSecondary }]}>
           {`Также у: ${others.map((id) => names.get(id) ?? "клиент в архиве").join(", ")}`}
         </Text>
@@ -375,7 +385,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
               }
             }} /> : selected === undefined ? (
             <InlineNotice kind="info">Мезоциклов пока нет. Создайте первый: план первой недели скопируется во все недели.</InlineNotice>
-          ) : renderWeeks?.({ key: selected.id, selectedWeek: weeksByCycle[selected.id],
+          ) : renderWeeks?.({ key: selected.lineageId, mesocycleId: selected.id, selectedWeek: weeksByCycle[selected.id],
             onSelectWeek: (week) => selectWeek(selected.id, week),
             weeks: selected.weeks.map((week) => ({ index: week.index, caption: weekTypeLabels[week.type], type: week.type, workouts: week.workouts })),
             // Компоновка 2.0 (UI-OWN-040): мезоцикл, даты и номер недели, тип цикла и недели; «Изменить», «В шаблоны», «⋯».

@@ -1,5 +1,17 @@
 # FitCoach 3.0 — статус
 
+## 2026-10-19 — Переключатель участников групповой программы (UI-OWN-043)
+
+- `plans/domain/ParticipantCounterpart.ts` (`participantOrder`, `counterpartOf` — по родству мезоцикла и
+  тренировки, запасной вариант — позиция), `ParticipantSwitcher` + `participantTarget` (plans/public).
+- `TrainingNavigator`: текущий участник — состояние навигатора, все экраны стека получают его `clientId`; сброс
+  при возврате к списку программ. Программа: `renderParticipants`, прокрутка и ключ панели недель — по родству
+  мезоцикла. Дневник: `renderParticipants(finishInput)`, `setParams` в дневнике и на экране программы под ним.
+- Проверки: typecheck, lint, arch, source, secrets, foundation 332/332 (+1 соответствие и порядок). Android SmokeC
+  «Лето» (группа SmokeC+SmokeA): программа — неделя 3 и прокрутка на месте, шапка SmokeA; дневник — прокрутка у
+  «Армейского жима» сохранилась; «назад» — программа SmokeA, список — снова SmokeC. Не проверено: 3+ участника
+  (прокрутка полосы), заменённое упражнение у участника, переход без соответствующей тренировки.
+
 ## 2026-10-19 — Состав группы Расширенной программы (UI-OWN-042)
 
 - Миграция планов **v15**: `dev_training_program_members.group_left_at` (CHECK через CASE). `programById(…, viewer)`

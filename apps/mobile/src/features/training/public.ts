@@ -1,4 +1,4 @@
-export { CreateProgramScreen, PeriodizedBuilderScreen, MesocycleCreatorScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, SimpleProgramBuilderScreen,
+export { CreateProgramScreen, PeriodizedBuilderScreen, ParticipantSwitcher, participantTarget, type CounterpartRef, MesocycleCreatorScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, SimpleProgramBuilderScreen,
   WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort,
   type ExerciseInfo, type ExerciseLookupPort,
   type ProgramKind, type TrainingParticipantCandidate, type TrainingPlansRepositoryPort } from "./plans/public.ts";

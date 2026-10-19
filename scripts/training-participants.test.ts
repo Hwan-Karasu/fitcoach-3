@@ -4,6 +4,7 @@ import test from "node:test";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant } from
   "../apps/mobile/src/features/training/plans/data/DevTrainingPlansRepository.ts";
+import { counterpartOf, participantOrder } from "../apps/mobile/src/features/training/plans/domain/ParticipantCounterpart.ts";
 import { addExercise, fillSets, newDraft } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
@@ -83,6 +84,28 @@ test("UI-OWN-042 схема: дата выхода из группы не быв
   try {
     assert.throws(() => db.prepare("UPDATE dev_training_program_members SET group_left_at = '' WHERE program_id = ? AND client_id = ?")
       .run(programId, b), /CHECK/);
+  } finally {
+    await close();
+  }
+});
+
+test("UI-OWN-043 переключатель: открывший клиент первым; то же место плана у другого участника по родству", async () => {
+  const { plans, a, b, c, programId, close } = await setup();
+  try {
+    assert.deepEqual(participantOrder([a, b, c], c), [c, a, b]);
+    assert.deepEqual(participantOrder([a, b], c), [a, b], "открывшего нет в группе — порядок группы");
+    const planA = (await plans.getPeriodizedPlan(a, programId))!;
+    const planB = (await plans.getPeriodizedPlan(b, programId))!;
+    const cycleA = planA.mesocycles[0]!;
+    const cycleB = planB.mesocycles[0]!;
+    const workoutA = cycleA.weeks[1]!.workouts[0]!;
+    assert.deepEqual(counterpartOf(planA.mesocycles, planB.mesocycles, planB.selectedMesocycleId,
+      { mesocycleId: cycleA.id, weekIndex: 2, workoutId: workoutA.id }),
+    { mesocycleId: cycleB.id, weekIndex: 2, workoutId: cycleB.weeks[1]!.workouts[0]!.id });
+    assert.deepEqual(counterpartOf(planA.mesocycles, planB.mesocycles, null, { mesocycleId: null, weekIndex: 2, workoutId: workoutA.id }),
+      { mesocycleId: cycleB.id, weekIndex: 2, workoutId: cycleB.weeks[1]!.workouts[0]!.id }, "мезоцикл находится по тренировке");
+    assert.deepEqual(counterpartOf(planA.mesocycles, planB.mesocycles, null, { mesocycleId: cycleA.id, weekIndex: 9, workoutId: workoutA.id }),
+      { mesocycleId: cycleB.id, weekIndex: 2, workoutId: null }, "недели нет — последняя неделя, без тренировки");
   } finally {
     await close();
   }
