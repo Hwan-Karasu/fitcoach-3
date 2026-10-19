@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { WeekNavigationProvider } from "../../shared/ui/components/public.ts";
 import { useFocusEffect } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -8,7 +8,7 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import type { ClientRecord, ClientRepositoryPort, ClientRosterPort } from "../../features/clients/public.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { ClientQuestionnaireScreen, type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
-import { TrainingArchivePreview, TrainingStatisticsPreview, type ExerciseLookupPort,
+import { ArchivedProgramsPanel, TrainingArchiveScreen, TrainingStatisticsPreview, factVolume, sortHistory, workoutStatus, type ExerciseLookupPort,
   type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort, type TrainingPlansRepositoryPort,
   type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type MesocycleDeletePort, type ProgramDeletePort, type WorkoutSlot } from "../../features/training/public.ts";
 import type { ExerciseCatalogPort } from "../../features/exercises/public.ts";
@@ -21,6 +21,7 @@ import { MoreMenuScreen } from "./MoreMenuScreen.tsx";
 import { moreDestinations, workspaceTabs } from "./routeCatalog.ts";
 import { RootTabBar } from "./RootTabBar.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
+import { createTrainingHistory } from "../../read-models/trainingHistory.ts";
 
 type WorkspaceTabs = {
   Home: undefined;
@@ -39,11 +40,16 @@ type MoreRoutes = {
 const Tabs = createBottomTabNavigator<WorkspaceTabs>();
 const MoreStack = createNativeStackNavigator<MoreRoutes>();
 
-function MoreNavigator({ client, questionnaire, onClose, onOpenClients }: Readonly<{
+function MoreNavigator({ client, questionnaire, trainingPlans, trainingExecution, exerciseLookup, planDelete, onClose, onOpenClients }: Readonly<{
   client: ClientRecord; questionnaire: QuestionnaireRepositoryPort; onClose: () => void; onOpenClients: () => void;
+  trainingPlans: TrainingPlansRepositoryPort; trainingExecution: TrainingExecutionPort; exerciseLookup: ExerciseLookupPort;
+  planDelete: MesocycleDeletePort & ProgramDeletePort;
 }>) {
   const { palette } = usePrototypeTheme();
   const clientId = client.id;
+  // §48.85: история занятий — проекция дневника и планов (read-model).
+  const history = useMemo(() => createTrainingHistory({ factVolume, workoutStatus, sortHistory }, trainingExecution, trainingPlans),
+    [trainingExecution, trainingPlans]);
   return (
     <MoreStack.Navigator
       screenOptions={{
@@ -65,7 +71,10 @@ function MoreNavigator({ client, questionnaire, onClose, onOpenClients }: Readon
       <MoreStack.Screen name="Questionnaire" options={{ title: moreDestinations.Questionnaire }}>
         {() => <ClientQuestionnaireScreen clientId={clientId} repository={questionnaire} />}
       </MoreStack.Screen>
-      <MoreStack.Screen name="TrainingArchive" component={TrainingArchivePreview} options={{ title: "Архив клиента" }} />
+      <MoreStack.Screen name="TrainingArchive" options={{ title: "Архив клиента" }}>
+        {() => <TrainingArchiveScreen clientId={clientId} history={history} exercises={exerciseLookup}
+          renderPrograms={() => <ArchivedProgramsPanel clientId={clientId} repository={trainingPlans} planDelete={planDelete} />} />}
+      </MoreStack.Screen>
       <MoreStack.Screen name="Statistics" component={TrainingStatisticsPreview} options={{ title: moreDestinations.Statistics }} />
     </MoreStack.Navigator>
   );
@@ -183,7 +192,8 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
           exercises={exercises} exerciseLookup={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap} mesocycleSave={mesocycleSave} planDelete={planDelete} onOpenExercise={onOpenExercise} />}
       </Tabs.Screen>
       <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More}}>
-        {() => <MoreNavigator client={client} questionnaire={questionnaire} onClose={onClose} onOpenClients={onOpenClients} />}
+        {() => <MoreNavigator client={client} questionnaire={questionnaire} onClose={onClose} onOpenClients={onOpenClients}
+          trainingPlans={trainingPlans} trainingExecution={trainingExecution} exerciseLookup={exerciseLookup} planDelete={planDelete} />}
       </Tabs.Screen>
     </Tabs.Navigator></ScreenToneProvider></WeekNavigationProvider>
     </View>

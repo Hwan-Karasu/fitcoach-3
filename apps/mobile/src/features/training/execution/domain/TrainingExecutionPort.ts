@@ -48,6 +48,11 @@ export interface ProgramExecution {
   readonly execution: WorkoutExecution;
 }
 
+/** Выполнение клиента в любой его программе (§48.85, история занятий). */
+export interface ClientExecution extends ProgramExecution {
+  readonly programId: string;
+}
+
 export interface TrainingExecutionPort {
   getConfirmationMode(): Promise<ConfirmationMode>;
   /** Не ретроспективно: сохранённые факты и неподтверждённые значения остаются как есть (§48.53 п. 3). */
@@ -60,6 +65,8 @@ export interface TrainingExecutionPort {
    * Только чтение; без выполнений — пустой список.
    */
   listProgramExecutions(clientId: string, programId: string): Promise<readonly ProgramExecution[]>;
+  /** §48.85: все выполнения клиента во всех его программах (активных и архивных) — для единой хронологии. */
+  listClientExecutions(clientId: string): Promise<readonly ClientExecution[]>;
   /** Статусы всех начатых или разобранных тренировок программы клиента. */
   getProgramStatuses(clientId: string, programId: string): Promise<readonly SessionStatus[]>;
   /** §48.74–48.75: прошлые подтверждённые подходы этого клиента в этой программе; ключ — плановый подход. */

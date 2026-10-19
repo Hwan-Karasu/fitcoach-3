@@ -1,6 +1,7 @@
 export { ProgramLibraryScreen, ProgramModeChooserScreen } from "./presentation/ProgramLibraryScreen.tsx";
 export { CreateProgramScreen, type TrainingParticipantCandidate } from "./presentation/CreateProgramScreen.tsx";
 export { PeriodizedBuilderScreen } from "./presentation/PeriodizedBuilderScreen.tsx";
+export { ArchivedProgramsPanel } from "./presentation/ArchivedProgramsPanel.tsx";
 export { ParticipantSwitcher, participantTarget } from "./presentation/ParticipantSwitcher.tsx";
 export type { CounterpartRef } from "./domain/ParticipantCounterpart.ts";
 export type { GroupCopy } from "./domain/Placement.ts";

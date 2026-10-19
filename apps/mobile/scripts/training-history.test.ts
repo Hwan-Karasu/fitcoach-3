@@ -1,0 +1,122 @@
+import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
+import test from "node:test";
+import { DevClientRepository } from "../src/features/clients/data/DevClientRepository.ts";
+import { DevTrainingExecutionRepository } from "../src/features/training/execution/data/DevTrainingExecutionRepository.ts";
+import { completedCount, filterHistory, sortHistory } from "../src/features/training/archive/presentation/trainingHistory.ts";
+import { workoutStatus } from "../src/features/training/execution/domain/ExecutionRules.ts";
+import { factVolume } from "../src/features/training/execution/presentation/programMatrix.ts";
+import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant } from
+  "../src/features/training/plans/data/DevTrainingPlansRepository.ts";
+import { addExercise, fillSets, newDraft } from "../src/features/training/plans/domain/SimplePlanEdits.ts";
+import type { PlannedWorkout } from "../src/features/training/plans/domain/SimplePlanModel.ts";
+import { SharedSqliteDatabase } from "../src/shared/db/SharedSqliteDatabase.ts";
+import { createTrainingHistory } from "../src/read-models/trainingHistory.ts";
+import { createProgramDeleteWorkflow } from "../src/workflows/deleteTrainingProgram.ts";
+import { nodeSqlitePort } from "../../../scripts/support/node-sqlite-port.ts";
+
+// Read-model импортирует public.ts фич (там экраны .tsx), поэтому тест живёт здесь.
+const WS = "synthetic-workspace-a";
+const BENCH = "sys:repdb:bench";
+
+function week(prefix: string): readonly PlannedWorkout[] {
+  let n = 0;
+  return fillSets(addExercise(newDraft(`${prefix}w`), `${prefix}w`, `${prefix}e`, BENCH, () => `${prefix}s${n++}`), `${prefix}e`, "reps", 10)
+    .plan.workouts;
+}
+
+async function setup() {
+  const db = new DatabaseSync(":memory:");
+  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const clients = new DevClientRepository(shared, WS, [devTrainingPlansClientDeletionParticipant]);
+  await clients.initialize();
+  const plans = new DevTrainingPlansRepository(shared, WS);
+  await plans.initialize();
+  const execution = new DevTrainingExecutionRepository(shared, WS);
+  await execution.initialize();
+  const a = (await clients.create({ displayName: "SyntheticA" })).id;
+  const b = (await clients.create({ displayName: "SyntheticB" })).id;
+  const simple = await plans.createSimpleProgram(a, { title: "Сила", plan: { weeks: 4, workouts: week("s") } });
+  const periodized = await plans.createPeriodizedProgram({ title: "Сила", clientIds: [a], mesocycle: { title: "Блок 1", cycleType: null,
+    repRange: null, startDate: null, weeks: [{ type: "base", workouts: week("p") }, { type: "base", workouts: [] }] } });
+  const revision = async (programId: string) => (await plans.getProgram(a, programId))!.revision;
+  await plans.createMesocycle(a, periodized.id, await revision(periodized.id), { title: "Блок 2", weeks: 2, firstWeek: week("q"), clientIds: [a] });
+  const otherProgram = await plans.createSimpleProgram(b, { title: "Сила", plan: { weeks: 2, workouts: week("o") } });
+  const history = createTrainingHistory({ factVolume, workoutStatus, sortHistory }, execution, plans);
+  /** Подход в тренировке недели и исход «Завершена»; дата — фактическая дата занятия. */
+  const complete = async (clientId: string, programId: string, weekIndex: number, workout: PlannedWorkout, date: string) => {
+    const exercise = workout.exercises[0]!;
+    const slot = { clientId, programId, weekIndex, plannedWorkoutId: workout.id };
+    await execution.saveSet({ slot, plannedExerciseId: exercise.id, exerciseId: BENCH, plannedSetId: exercise.sets[0]!.id, position: 0,
+      metrics: ["load", "reps"], values: { loadGrams: 50_000, reps: 10, durationSec: null, distanceM: null }, setType: "NORMAL",
+      drops: [], rpe: null, expectedRevision: null }, new Date(`${date}T10:00:00Z`));
+    const current = (await execution.getWorkout(slot)).session!;
+    return execution.setOutcome(slot, "COMPLETED", current.revision);
+  };
+  const simpleWorkout = (await plans.getSimplePlan(a, simple.id))!.draft.plan.workouts[0]!;
+  const cycles = (await plans.getPeriodizedPlan(a, periodized.id))!.mesocycles;
+  const lease = await shared.acquire();
+  const deleteProgram = createProgramDeleteWorkflow((task) => lease.writer.write(task), plans.deleteParticipant, execution.cleanupParticipant);
+  return { plans, execution, history, complete, a, b, simple: simple.id, periodized: periodized.id, otherProgram: otherProgram.id,
+    simpleWorkout, cycles, revision, deleteProgram,
+    close: async () => { await shared.release(); await execution.close(); await plans.close(); await clients.close(); } };
+}
+
+test("§48.85.2 п. 1, 2, 5: общая хронология всех программ клиента, фильтры программа → мезоцикл, чужих занятий нет", async () => {
+  const env = await setup();
+  try {
+    const { a, b, simple, periodized, cycles, complete, simpleWorkout, history } = env;
+    for (const [index, date] of ["2026-10-01", "2026-10-03", "2026-10-05"].entries()) await complete(a, simple, index + 1, simpleWorkout, date);
+    await complete(a, periodized, 1, cycles[0]!.weeks[0]!.workouts[0]!, "2026-10-02");
+    await complete(a, periodized, 1, cycles[1]!.weeks[0]!.workouts[0]!, "2026-10-04");
+    const otherWorkout = (await env.plans.getSimplePlan(b, env.otherProgram))!.draft.plan.workouts[0]!;
+    await complete(b, env.otherProgram, 1, otherWorkout, "2026-10-04");
+
+    const entries = await history.list(a);
+    assert.equal(entries.length, 5, "пять разных записей, занятий другого клиента нет");
+    assert.deepEqual(entries.map((entry) => entry.actualDate), ["2026-10-05", "2026-10-04", "2026-10-03", "2026-10-02", "2026-10-01"]);
+    assert.equal(completedCount(filterHistory(entries, { programId: simple, mesocycleId: null })), 3);
+    assert.equal(completedCount(filterHistory(entries, { programId: periodized, mesocycleId: null })), 2);
+    const second = filterHistory(entries, { programId: periodized, mesocycleId: cycles[1]!.id });
+    assert.deepEqual(second.map((entry) => [entry.mesocycleTitle, entry.workoutTitle, entry.weekIndex]), [["Блок 2", "Тренировка 1", 1]]);
+    assert.deepEqual([entries[0]!.confirmedSets, entries[0]!.volumeKg], [1, 500], "подходы и объём — по фактам");
+  } finally {
+    await env.close();
+  }
+});
+
+test("§48.85.2 п. 3, 4: смена даты двигает запись, повторное завершение — одна запись", async () => {
+  const env = await setup();
+  try {
+    const { a, simple, complete, simpleWorkout, execution, history } = env;
+    const slot = { clientId: a, programId: simple, weekIndex: 1, plannedWorkoutId: simpleWorkout.id };
+    await complete(a, simple, 1, simpleWorkout, "2026-10-01");
+    await complete(a, simple, 2, simpleWorkout, "2026-10-05");
+    let session = (await execution.getWorkout(slot)).session!;
+    session = await execution.setOutcome(slot, null, session.revision);
+    await execution.setOutcome(slot, "COMPLETED", session.revision);
+    session = (await execution.getWorkout(slot)).session!;
+    await execution.setActualDate(slot, "2026-10-09", session.revision);
+    const entries = await history.list(a);
+    assert.equal(entries.length, 2, "завершить → отменить → завершить: одна запись");
+    assert.equal(completedCount(entries), 2);
+    assert.deepEqual(entries.map((entry) => [entry.weekIndex, entry.actualDate]), [[1, "2026-10-09"], [2, "2026-10-05"]], "дата сдвинула запись");
+  } finally {
+    await env.close();
+  }
+});
+
+test("§48.85.2 п. 6: архивная программа остаётся в истории; полное удаление убирает её занятия", async () => {
+  const env = await setup();
+  try {
+    const { a, simple, complete, simpleWorkout, plans, history, deleteProgram, revision } = env;
+    await complete(a, simple, 1, simpleWorkout, "2026-10-01");
+    await plans.archiveForClient(a, simple);
+    const archived = await history.list(a);
+    assert.deepEqual(archived.map((entry) => [entry.programTitle, entry.archived]), [["Сила", true]]);
+    await deleteProgram.deleteProgram({ clientId: a, programId: simple, expectedRevision: await revision(simple) });
+    assert.deepEqual(await history.list(a), [], "удалено с результатами — записи нет");
+  } finally {
+    await env.close();
+  }
+});
