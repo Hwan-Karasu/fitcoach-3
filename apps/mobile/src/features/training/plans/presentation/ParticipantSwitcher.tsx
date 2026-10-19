@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
+import { shadow } from "../../../../shared/ui/theme/style.ts";
 import { counterpartOf, participantOrder, type CounterpartRef } from "../domain/ParticipantCounterpart.ts";
 import type { GroupCopy } from "../domain/Placement.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
@@ -47,8 +48,8 @@ export function ParticipantSwitcher({ clientId, anchorClientId, programId, mesoc
   const ordered = participantOrder(members.map((copy) => copy.clientId), anchorClientId);
   return (
     <View style={[styles.wrap, { backgroundColor: colors.canvas }]}>
-      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Text style={[styles.eyebrow, { color: colors.textMuted }]}>УЧАСТНИКИ</Text>
+      <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>Участники</Text>
+      <View style={[styles.card, { backgroundColor: colors.border }]}>
         <ScrollView ref={scroll} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}
           keyboardShouldPersistTaps="handled">
           {ordered.map((id) => {
@@ -58,10 +59,10 @@ export function ParticipantSwitcher({ clientId, anchorClientId, programId, mesoc
               <Pressable key={id} accessibilityRole="button" accessibilityLabel={current ? `${name}, открыт` : `Переключиться на ${name}`}
                 accessibilityState={{ selected: current, disabled: current || busy }} disabled={current || busy}
                 onLayout={(event) => positions.current.set(id, event.nativeEvent.layout.x)} onPress={() => onSelect(byClient.get(id)!)}
-                style={({ pressed }) => [styles.chip, { borderColor: current ? colors.accentFill : colors.border,
-                  backgroundColor: current ? colors.accentFill : pressed ? colors.surfaceRaised : colors.input, opacity: busy && !current ? 0.6 : 1 }]}>
+                style={({ pressed }) => [styles.chip, current ? shadow.control : null, {
+                  backgroundColor: current ? colors.surface : pressed ? colors.surfaceRaised : "transparent", opacity: busy && !current ? 0.6 : 1 }]}>
                 <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}
-                  style={[styles.chipText, { color: current ? colors.onAccentFill : colors.textPrimary }]}>{name}</Text>
+                  style={[styles.chipText, current ? styles.chipCurrent : null, { color: current ? colors.accentInk : colors.textSecondary }]}>{name}</Text>
               </Pressable>
             );
           })}
@@ -81,10 +82,11 @@ export async function participantTarget(repository: TrainingPlansRepositoryPort,
 }
 
 const styles = StyleSheet.create({
-  wrap: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 4 },
-  card: { borderWidth: 1, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 8, gap: 6 },
-  eyebrow: { fontFamily: fonts.bold, fontSize: 10, lineHeight: 13, letterSpacing: 1.3 },
-  row: { gap: 8 },
-  chip: { width: 144, minHeight: 48, borderWidth: 1, borderRadius: 14, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
-  chipText: { fontFamily: fonts.semibold, fontSize: 13, textAlign: "center" },
+  wrap: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, gap: 6 },
+  card: { borderRadius: 16, padding: 4 },
+  eyebrow: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16, letterSpacing: 1, textTransform: "uppercase", paddingLeft: 4 },
+  row: { gap: 4 },
+  chip: { width: 150, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  chipText: { fontFamily: fonts.semibold, fontSize: 15, textAlign: "center" },
+  chipCurrent: { fontFamily: fonts.bold },
 });

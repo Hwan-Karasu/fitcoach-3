@@ -4,8 +4,8 @@ import Animated, { useAnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
 import { Plus, X } from "lucide-react-native";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
-import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
+import { shadow } from "../../../../shared/ui/theme/style.ts";
 import { weeksWord } from "../domain/MesocycleBuilder.ts";
 import type { Mesocycle } from "../domain/PeriodizedModel.ts";
 
@@ -49,12 +49,12 @@ export function MesocycleBook({ mesocycles, selectedId, resetKey, onSelect, onRe
               accessible accessibilityRole="button" accessibilityLabel={`Мезоцикл: ${item.title}, ${weeksWord(item.weeks.length)}`}
               accessibilityState={{ selected }} onAccessibilityTap={() => onSelect(item.id)} onTap={() => onSelect(item.id)}>
               <View onLayout={(event) => measure(event.nativeEvent.layout.height)}
-                style={[styles.card, { minHeight: Math.max(height, MIN_HEIGHT), backgroundColor: selected ? withAlpha(colors.accentInk, 0.12) : colors.surface,
-                  borderColor: selected ? colors.accentInk : colors.border }]}>
+                style={[styles.card, selected ? null : shadow.card, { minHeight: Math.max(height, MIN_HEIGHT), backgroundColor: selected ? colors.accentSoft : colors.surface,
+                  borderColor: selected ? colors.accentInk : "transparent" }]}>
                 <View pointerEvents="none" importantForAccessibility="no-hide-descendants" style={styles.body}>
                   <Text numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.6} style={[styles.title, deletable ? styles.titleWithClose : null,
                     { color: selected ? colors.accentInk : colors.textPrimary }]}>{item.title}</Text>
-                  <Text style={[styles.meta, { color: colors.textSecondary }]}>{weeksWord(item.weeks.length)}</Text>
+                  <Text style={[styles.meta, { color: selected ? colors.accentInk : colors.textSecondary }]}>{weeksWord(item.weeks.length)}</Text>
                 </View>
                 {deletable ? <Pressable accessibilityRole="button" accessibilityLabel={`Удалить мезоцикл ${item.title}`}
                   hitSlop={12} onPress={() => onDelete?.(item)} style={styles.close}>
@@ -75,17 +75,17 @@ export function MesocycleBook({ mesocycles, selectedId, resetKey, onSelect, onRe
   );
 }
 
-const MIN_HEIGHT = 72;
+const MIN_HEIGHT = 88;
 
 const styles = StyleSheet.create({
   book: { flexDirection: "row", alignItems: "flex-start", gap: 8, paddingTop: 4, paddingBottom: 4 },
   // Рамка одной толщины: смена толщины меняла бы высоту и замер самой высокой.
-  card: { width: 128, borderRadius: 12, borderWidth: 2, padding: 10 },
+  card: { width: 150, borderRadius: 18, borderWidth: 2, padding: 12 },
   body: { gap: 4 },
   // Без lineHeight: интервал уменьшается вместе со шрифтом (adjustsFontSizeToFit).
-  title: { fontFamily: fonts.semibold, fontSize: 13 },
+  title: { fontFamily: fonts.bold, fontSize: 15 },
   titleWithClose: { paddingRight: 16 },
-  meta: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
+  meta: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
   close: { position: "absolute", top: 6, right: 6, width: 20, height: 20, alignItems: "center", justifyContent: "center" },
   add: { borderStyle: "dashed", alignItems: "center", justifyContent: "center", gap: 2 },
 });

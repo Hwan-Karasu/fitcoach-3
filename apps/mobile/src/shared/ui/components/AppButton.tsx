@@ -69,7 +69,7 @@ export function AppButton({
     >
       <View style={styles.content}>
         {busy ? <ActivityIndicator size="small" color={foregroundColor} /> : icon?.(foregroundColor) ?? null}
-        <Text style={[styles.label, compact ? styles.compactLabel : null, { color: foregroundColor }]}>{busy ? busyLabel : label}</Text>
+        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.label, compact ? styles.compactLabel : null, { color: foregroundColor }]}>{busy ? busyLabel : label}</Text>
       </View>
     </Pressable>
   );

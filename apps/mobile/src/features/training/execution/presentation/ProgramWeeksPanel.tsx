@@ -4,6 +4,7 @@ import { ChartColumnIncreasing, LayoutGrid } from "lucide-react-native";
 import { WeekCards, useWeekNavigation, StatusTag, type StatusKind } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
+import { shadow } from "../../../../shared/ui/theme/style.ts";
 import { weekTypeTone, type PlannedWorkout, type WeekType } from "../../plans/public.ts";
 import { useReportScreenTone } from "../../../../shared/ui/theme/ScreenTone.tsx";
 import type { SessionStatus, WorkoutExecution, WorkoutStatus } from "../domain/ExecutionModel.ts";
@@ -117,17 +118,15 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: views, execution
 
   return (
     <View style={styles.panel}>
-      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        {header?.(week)}
-        {weeks > 0 ? <>
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+      {header !== undefined ? <View style={[styles.card, shadow.card, { backgroundColor: colors.surface }]}>{header(week)}</View> : null}
+      {weeks > 0 ? <View style={[styles.card, shadow.card, { backgroundColor: colors.surface }]}>
           {sectionTitle(<ChartColumnIncreasing size={16} color={colors.accentInk} strokeWidth={2} />, "Сводка недели")}
           <View style={styles.tiles}>
             {tiles.map((tile) => (
               <View key={tile.label} accessible accessibilityLabel={`${tile.label}: ${tile.value}`}
-                style={[styles.tile, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
-                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.tileLabel, { color: colors.textSecondary }]}>{tile.label}</Text>
+                style={[styles.tile, { backgroundColor: colors.surfaceRaised }]}>
                 <Text style={[styles.tileValue, { color: tile.ink }]}>{tile.value}</Text>
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.tileLabel, { color: colors.textSecondary }]}>{tile.label}</Text>
               </View>
             ))}
           </View>
@@ -136,13 +135,15 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: views, execution
             <Text style={[styles.meta, { color: colors.textSecondary }]}>
               {"Прогресс "}<Text style={[styles.strong, { color: colors.textPrimary }]}>{`${percent(weekDone, weekSets)}%`}</Text>
             </Text>)}
+          <View style={[styles.track, { backgroundColor: colors.border }]}>
+            <View style={[styles.fill, { width: `${percent(weekDone, weekSets)}%`, backgroundColor: colors.accentFill }]} />
+          </View>
           <WeekCards weeks={views.map((view) => ({ index: view.index, caption: view.caption,
             tone: view.type === undefined ? null : toneOf(view.type) ?? colors.textMuted,
             status: view.workouts.length === 0 ? "Пусто" : view.index === firstOpen ? "Текущая" : weekStatusLabels[weekOf(view.index)] }))}
             selected={week} onSelect={chooseWeek} />
           {renderWeekActions?.(week)}
-        </> : null}
-      </View>
+      </View> : null}
       {afterCard}
       {workouts.map((workout, index) => {
         const status = statusOf(week, workout.id);
@@ -152,8 +153,7 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: views, execution
           <Pressable key={workout.id} accessibilityRole="button"
             accessibilityLabel={`${workout.title}, ${workoutStatusLabels[status]}, подходов ${item.done} из ${item.sets}, объём ${kg(item.volumeKg)}`}
             onPress={() => onOpenWorkout(week, workout.id)}
-            style={({ pressed }) => [styles.workout, { backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
-              borderColor: colors.border }]}>
+            style={({ pressed }) => [styles.workout, shadow.card, { backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
             <View style={[styles.stripe, { backgroundColor: colors.accentFill }]} />
             <View style={styles.workoutBody}>
               <View style={styles.workoutHead}>
@@ -170,7 +170,7 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: views, execution
                 </Text>
               </View>
               <View style={styles.barRow}>
-                <View style={[styles.track, { backgroundColor: colors.surfaceRaised }]}>
+                <View style={[styles.track, { backgroundColor: colors.border }]}>
                   <View style={[styles.fill, { width: `${share}%`, backgroundColor: colors.accentFill }]} />
                 </View>
                 <Text style={[styles.percent, { color: colors.accentInk }]}>{`${share}%`}</Text>
@@ -185,26 +185,25 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: views, execution
 
 const styles = StyleSheet.create({
   panel: { gap: 10 },
-  card: { borderWidth: 1, borderRadius: 16, padding: 12, gap: 10 },
-  divider: { height: StyleSheet.hairlineWidth },
+  card: { borderRadius: 22, padding: 16, gap: 12 },
+  divider: { height: 1 },
   sectionHead: { flexDirection: "row", alignItems: "center", gap: 6 },
-  sectionTitle: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16, textTransform: "uppercase", letterSpacing: 0.6 },
-  tiles: { flexDirection: "row", gap: 8 },
-  tile: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 4, borderWidth: 1,
-    borderRadius: 12, paddingHorizontal: 8, minHeight: 48 },
-  tileLabel: { flexShrink: 1, fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
-  tileValue: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 22 },
-  meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  sectionTitle: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16, textTransform: "uppercase", letterSpacing: 1 },
+  tiles: { flexDirection: "row", gap: 6 },
+  tile: { flex: 1, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, gap: 2 },
+  tileLabel: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
+  tileValue: { fontFamily: fonts.bold, fontSize: 22, lineHeight: 27 },
+  meta: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 17 },
   strong: { fontFamily: fonts.bold },
-  workout: { flexDirection: "row", borderWidth: 1, borderRadius: 14, overflow: "hidden", minHeight: 64 },
+  workout: { flexDirection: "row", borderRadius: 22, minHeight: 64 },
   stripe: { width: 4, marginVertical: 12, marginLeft: 10, borderRadius: 2 },
-  workoutBody: { flex: 1, padding: 12, paddingLeft: 10, gap: 8 },
+  workoutBody: { flex: 1, padding: 16, paddingLeft: 12, gap: 10 },
   workoutHead: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   grow: { flex: 1 },
-  title: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
+  title: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 23 },
   volume: { alignItems: "flex-end" },
-  volumeLabel: { fontFamily: fonts.semibold, fontSize: 10, lineHeight: 13, textTransform: "uppercase", letterSpacing: 0.6 },
-  volumeValue: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
+  volumeLabel: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, textTransform: "uppercase", letterSpacing: 1 },
+  volumeValue: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
   workoutMeta: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
   barRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   track: { flex: 1, height: 6, borderRadius: 3, overflow: "hidden" },

@@ -253,7 +253,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
 
   const others = program.memberClientIds.filter((id) => id !== clientId);
   const selectedCycle = () => periodized?.mesocycles.find((item) => item.id === periodized.selectedMesocycleId) ?? periodized?.mesocycles[0];
-  const menuButton = <View ref={menuAnchor} collapsable={false} style={[styles.more, { borderColor: colors.border }]}>
+  const menuButton = <View ref={menuAnchor} collapsable={false} style={[styles.more, { backgroundColor: colors.surfaceRaised }]}>
     <AppIconButton compact label="Действия программы"
       icon={<Ellipsis size={20} color={colors.textPrimary} />} onPress={() => setMenuOpen(true)} />
   </View>;
@@ -265,12 +265,12 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const participants = renderParticipants?.(() => ({ mesocycleId: selectedCycle()?.id ?? null,
     weekIndex: weeksByCycle[cycleKey] ?? shownWeek.current, workoutId: null }));
   if (tab === "templates" && renderTemplates !== undefined) {
-    return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{participants}{tabs}{renderTemplates()}</View>;
+    return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{tabs}{participants}{renderTemplates()}</View>;
   }
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
-    {participants}
     {tabs}
+    {participants}
     <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
       scrollEventThrottle={32} onScroll={(event) => scrollByCycle.current.set(scrollKey, event.nativeEvent.contentOffset.y)}>
       {program.kind === "PERIODIZED" && periodized !== null && periodized.mesocycles.length === 0 ? <View style={styles.row}><View style={styles.grow}>
@@ -393,10 +393,10 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
             <Text accessibilityRole="header" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6} style={[styles.cardTitle, { color: colors.textPrimary }]}>{program.title}</Text>
             <View style={styles.cardMeta}>
               <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Неделя ${week} из ${plan.weeks}`}</Text>
-              <Text style={[styles.kind, { color: colors.accentInk, borderColor: colors.border }]}>{programKindLabels[program.kind]}</Text>
+              <Text style={[styles.kind, { color: colors.accentInk, backgroundColor: colors.accentSoft }]}>{programKindLabels[program.kind]}</Text>
             </View>
             <View style={styles.cardActions}>
-              <View style={styles.grow}><AppButton compact variant="secondary" label="Изменить"
+              <View style={styles.grow}><AppButton compact label="Изменить"
                 icon={(color) => <Pencil size={16} color={color} strokeWidth={2} />} onPress={onEditStructure} /></View>
               <View style={styles.grow}><AppButton compact variant="secondary" label="В шаблоны"
                 icon={(color) => <Bookmark size={16} color={color} strokeWidth={2} />}
@@ -457,20 +457,20 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
                   </Text>
                 </View>
                 <View style={styles.cardMeta}>
-                  <View style={styles.dates}>
-                    <CalendarDays size={14} color={colors.textSecondary} strokeWidth={2} />
-                    <Text style={[styles.meta, { color: colors.textSecondary }]}>
+                  <View style={[styles.dates, { backgroundColor: colors.surfaceRaised }]}>
+                    <CalendarDays size={15} color={colors.textPrimary} strokeWidth={2} />
+                    <Text style={[styles.tag, { color: colors.textPrimary }]}>
                       {selected.startDate != null ? `${weekRangeLabel(selected.startDate, weekIndex)} · Неделя ${weekIndex}`
                         : `Неделя ${weekIndex} из ${selected.weeks.length}`}
                     </Text>
                   </View>
-                  {selected.cycleType != null ? <Text style={[styles.kind, { color: colors.textSecondary, borderColor: colors.border }]}>
+                  {selected.cycleType != null ? <Text style={[styles.kind, { color: colors.textSecondary, backgroundColor: colors.surfaceRaised }]}>
                     {cycleTypeLabels[selected.cycleType]}</Text> : null}
-                  {planWeek !== undefined ? <Text style={[styles.kind, { color: colors.accentInk, borderColor: colors.accentInk }]}>
+                  {planWeek !== undefined ? <Text style={[styles.kind, styles.kindStrong, { color: colors.accentInk, backgroundColor: colors.accentSoft }]}>
                     {weekTypeLabels[planWeek.type]}</Text> : null}
                 </View>
                 <View style={styles.cardActions}>
-                  <View style={styles.grow}><AppButton compact variant="secondary" label="Изменить"
+                  <View style={styles.grow}><AppButton compact label="Изменить"
                     icon={(color) => <Pencil size={16} color={color} strokeWidth={2} />} onPress={() => onEditWeek(selected.id, weekIndex)} /></View>
                   <View style={styles.grow}><AppButton compact variant="secondary" label="В шаблоны"
                     icon={(color) => <Bookmark size={16} color={color} strokeWidth={2} />}
@@ -531,15 +531,17 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
   heading: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },
   screen: { flex: 1 },
-  tabs: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 2 },
-  cardHead: { gap: 8 },
-  cardTitle: { fontFamily: fonts.bold, fontSize: 20 },
-  cardMeta: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  kind: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14, borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
-  dates: { flexDirection: "row", alignItems: "center", gap: 4 },
+  tabs: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 2 },
+  cardHead: { gap: 12 },
+  cardTitle: { fontFamily: fonts.bold, fontSize: 19, letterSpacing: -0.2 },
+  cardMeta: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
+  kind: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, overflow: "hidden" },
+  kindStrong: { fontFamily: fonts.bold },
+  tag: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
+  dates: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
   cardActions: { flexDirection: "row", alignItems: "center", gap: 8 },
-  more: { borderWidth: 1, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  more: { borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  meta: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 17 },
   body: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   rename: { gap: 10 },
   workout: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 4 },
