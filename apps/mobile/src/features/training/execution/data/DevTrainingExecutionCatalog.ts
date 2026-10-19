@@ -269,4 +269,18 @@ export const devTrainingExecutionCatalog: readonly MigrationStep[] = [{
         OR NEW.planned_workout_id IS NOT OLD.planned_workout_id
       BEGIN SELECT RAISE(ABORT, 'WRONG_CLIENT_SCOPE'); END`,
   ],
+}, {
+  version: 8,
+  checksum: "t07-dev-training-execution-v8-plan-deleted-origin-20261019",
+  statements: [
+    // §50.3 действие 1: «Удалить план, сохранить историю». Выполнение хранит неизменяемый снимок происхождения
+    // (программа, тип, мезоцикл, тренировка) и дату удаления плана — история не становится безымянной.
+    `ALTER TABLE dev_training_sessions ADD COLUMN origin_json TEXT
+      CHECK (CASE WHEN origin_json IS NULL THEN 1 ELSE json_valid(origin_json) END)`,
+    `ALTER TABLE dev_training_sessions ADD COLUMN plan_deleted_at TEXT
+      CHECK (CASE WHEN plan_deleted_at IS NULL THEN origin_json IS NULL ELSE origin_json IS NOT NULL AND length(plan_deleted_at) > 0 END)`,
+    `CREATE TRIGGER dev_training_sessions_origin_fixed BEFORE UPDATE OF origin_json, plan_deleted_at ON dev_training_sessions
+      WHEN OLD.plan_deleted_at IS NOT NULL
+      BEGIN SELECT RAISE(ABORT, 'ORIGIN_IMMUTABLE'); END`,
+  ],
 }];

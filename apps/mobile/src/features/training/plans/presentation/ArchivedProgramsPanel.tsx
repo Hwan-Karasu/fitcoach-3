@@ -6,7 +6,7 @@ import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemePro
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ProgramCard } from "../domain/ProgramModel.ts";
 import { programKindLabels } from "../domain/ProgramRules.ts";
-import type { ProgramDeletePort } from "../domain/PlanDeletion.ts";
+import type { PlanOnlyDeletePort, ProgramDeletePort } from "../domain/PlanDeletion.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 
 const MONTHS = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
@@ -14,12 +14,13 @@ const dateOf = (iso: string) => { const date = new Date(iso); return `${date.get
 
 /**
  * «Архив программ» клиента (§50.1–50.3): архивированные программы, новые сверху. «Восстановить» возвращает программу в
- * библиотеку, не делая её текущей (§50.2); «Удалить полностью» — план и результаты этого клиента (§50.3, действие 2).
+ * библиотеку, не делая её текущей (§50.2). «Удалить…» предлагает два разных действия (§50.3, АР3 = B): «Удалить план,
+ * сохранить историю» и «Удалить полностью с результатами» — второе с отдельным подтверждением.
  */
 export function ArchivedProgramsPanel({ clientId, repository, planDelete }: Readonly<{
   clientId: string;
   repository: TrainingPlansRepositoryPort;
-  planDelete: ProgramDeletePort;
+  planDelete: ProgramDeletePort & PlanOnlyDeletePort;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -27,6 +28,7 @@ export function ArchivedProgramsPanel({ clientId, repository, planDelete }: Read
   const [version, setVersion] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<ProgramCard | null>(null);
+  const [confirmFull, setConfirmFull] = useState<ProgramCard | null>(null);
   const [message, setMessage] = useState<Readonly<{ kind: "error" | "success"; text: string }> | null>(null);
 
   useEffect(() => {
@@ -48,15 +50,15 @@ export function ArchivedProgramsPanel({ clientId, repository, planDelete }: Read
     } catch { setMessage({ kind: "error", text: "Не удалось восстановить программу. Архив не изменён." }); }
     finally { setBusy(null); }
   };
-  const remove = async () => {
-    const card = deleting;
-    if (card === null) return;
+  const remove = async (card: ProgramCard, keepHistory: boolean) => {
     setBusy(card.id); setMessage(null);
     try {
-      await planDelete.deleteProgram({ clientId, programId: card.id, expectedRevision: card.revision });
-      setMessage({ kind: "success", text: `«${card.title}» удалена вместе с результатами.` });
+      const request = { clientId, programId: card.id, expectedRevision: card.revision };
+      if (keepHistory) await planDelete.deletePlanKeepHistory(request); else await planDelete.deleteProgram(request);
+      setMessage({ kind: "success", text: keepHistory ? `План «${card.title}» удалён. Занятия остались в истории.`
+        : `«${card.title}» удалена вместе с результатами.` });
     } catch { setMessage({ kind: "error", text: "Не удалось удалить программу. Ничего не изменено." }); }
-    finally { setBusy(null); setDeleting(null); }
+    finally { setBusy(null); setDeleting(null); setConfirmFull(null); }
   };
 
   if (cards === null) return message !== null ? <View style={styles.pad}><InlineNotice kind="error">{message.text}</InlineNotice></View>
@@ -79,9 +81,14 @@ export function ArchivedProgramsPanel({ clientId, repository, planDelete }: Read
             </View>
           </View>
         )} />
-      <ConfirmDialog visible={deleting !== null} destructive confirmBusy={busy !== null} title={`Удалить «${deleting?.title ?? ""}» полностью?`}
-        description="Удалятся план и все результаты этого клиента: занятия исчезнут из истории и статистики. У других участников программа останется. Это нельзя отменить."
-        confirmLabel="Удалить с результатами" onCancel={() => setDeleting(null)} onConfirm={() => { void remove(); }} />
+      <ConfirmDialog visible={deleting !== null} confirmBusy={busy !== null} title={`Удалить «${deleting?.title ?? ""}»?`}
+        description="Удалить план — недели и тренировки уйдут, а проведённые занятия останутся в истории и статистике с пометкой «исходный план удалён». Удалить полностью — вместе со всеми результатами этого клиента."
+        confirmLabel="Удалить план, сохранить историю" tertiaryLabel="Удалить полностью с результатами…"
+        onTertiary={() => { setConfirmFull(deleting); setDeleting(null); }}
+        onCancel={() => setDeleting(null)} onConfirm={() => { if (deleting !== null) void remove(deleting, true); }} />
+      <ConfirmDialog visible={confirmFull !== null} destructive confirmBusy={busy !== null} title={`Удалить «${confirmFull?.title ?? ""}» полностью?`}
+        description="Удалятся план и все результаты этого клиента: занятия исчезнут из истории и статистики, рекорды пересчитаются. У других участников программа останется. Это нельзя отменить."
+        confirmLabel="Удалить с результатами" onCancel={() => setConfirmFull(null)} onConfirm={() => { if (confirmFull !== null) void remove(confirmFull, false); }} />
     </>
   );
 }

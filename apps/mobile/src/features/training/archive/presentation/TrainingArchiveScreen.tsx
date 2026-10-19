@@ -37,7 +37,8 @@ function HistoryCard({ entry, names }: Readonly<{ entry: TrainingHistoryEntry; n
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const [open, setOpen] = useState(false);
-  const origin = [entry.archived ? `${entry.programTitle} (архив)` : entry.programTitle, entry.mesocycleTitle, `Неделя ${entry.weekIndex}`]
+  const program = entry.planDeleted ? `${entry.programTitle} (исходный план удалён)` : entry.archived ? `${entry.programTitle} (архив)` : entry.programTitle;
+  const origin = [program, entry.mesocycleTitle, `Неделя ${entry.weekIndex}`]
     .filter((part): part is string => part !== null).join(" · ");
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }}
@@ -51,7 +52,7 @@ function HistoryCard({ entry, names }: Readonly<{ entry: TrainingHistoryEntry; n
         {open ? <ChevronUp size={18} color={colors.textMuted} /> : <ChevronDown size={18} color={colors.textMuted} />}
       </View>
       <Text numberOfLines={2} style={[styles.title, { color: entry.workoutTitle === null ? colors.textMuted : colors.textPrimary }]}>
-        {entry.workoutTitle ?? "Тренировки больше нет в плане"}</Text>
+        {entry.workoutTitle ?? (entry.planDeleted ? "Тренировка" : "Тренировки больше нет в плане")}</Text>
       <Text numberOfLines={2} style={[styles.meta, { color: colors.textSecondary }]}>{origin}</Text>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>
         {`Подходов: ${entry.confirmedSets} · Объём: ${Math.round(entry.volumeKg).toLocaleString("ru-RU")} кг`}</Text>
@@ -134,7 +135,8 @@ export function TrainingArchiveScreen({ clientId, history, exercises, renderProg
             <SelectionChip group="Программа" label="Все программы" selected={filter.programId === null}
               onPress={() => setFilter({ programId: null, mesocycleId: null })} />
             {programs.map((entry) => <SelectionChip key={entry.programId} group="Программа"
-              label={entry.archived ? `${entry.programTitle} (архив)` : entry.programTitle} selected={filter.programId === entry.programId}
+              label={entry.planDeleted ? `${entry.programTitle} (план удалён)` : entry.archived ? `${entry.programTitle} (архив)` : entry.programTitle}
+              selected={filter.programId === entry.programId}
               onPress={() => setFilter({ programId: entry.programId, mesocycleId: null })} />)}
           </ScrollView> : null}
           {selectedProgram?.programKind === "PERIODIZED" && mesocycles.length > 1 ? (

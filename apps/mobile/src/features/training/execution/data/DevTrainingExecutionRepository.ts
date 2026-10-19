@@ -10,7 +10,7 @@ import { assertDropStructure, confirmationAfterSave, isLocalDate, localDateOf, m
   toggleSide, validateContent, validateSides, workoutStatus, type ConfirmationChange, type SetContent,
   type SidesChange } from "../domain/ExecutionRules.ts";
 import type { SaveSetInput, SetIdentity, SetSaveResult, TrainingExecutionCommittedChange,
-  TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
+  TrainingExecutionPort, SessionOrigin } from "../domain/TrainingExecutionPort.ts";
 import type { RestTimerStorePort } from "../domain/RestTimerPorts.ts";
 import type { RestTimer } from "../domain/RestTimerRules.ts";
 import { DEV_TRAINING_EXECUTION_LEDGER, devTrainingExecutionCatalog } from "./DevTrainingExecutionCatalog.ts";
@@ -262,7 +262,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     const { connection } = this.ready();
     const sessions = await connection.all<{ weekIndex: number; plannedWorkoutId: string }>(`SELECT week_index AS weekIndex,
       planned_workout_id AS plannedWorkoutId FROM dev_training_sessions
-      WHERE workspace_id = ? AND client_id = ? AND program_id = ?`, [this.workspaceId, clientId, programId]);
+      WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND plan_deleted_at IS NULL`, [this.workspaceId, clientId, programId]);
     const result = [];
     for (const session of sessions) {
       result.push({ ...session, execution: await this.readWorkout(connection, { clientId, programId, ...session }) });
@@ -272,11 +272,14 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
 
   async listClientExecutions(clientId: string) {
     const { connection } = this.ready();
-    const sessions = await connection.all<{ programId: string; weekIndex: number; plannedWorkoutId: string }>(`SELECT program_id AS programId,
-      week_index AS weekIndex, planned_workout_id AS plannedWorkoutId FROM dev_training_sessions WHERE workspace_id = ? AND client_id = ?`,
-    [this.workspaceId, clientId]);
+    const sessions = await connection.all<{ programId: string; weekIndex: number; plannedWorkoutId: string; originJson: string | null }>(
+      `SELECT program_id AS programId, week_index AS weekIndex, planned_workout_id AS plannedWorkoutId, origin_json AS originJson
+      FROM dev_training_sessions WHERE workspace_id = ? AND client_id = ?`, [this.workspaceId, clientId]);
     const result = [];
-    for (const session of sessions) result.push({ ...session, execution: await this.readWorkout(connection, { clientId, ...session }) });
+    for (const { originJson, ...session } of sessions) {
+      result.push({ ...session, origin: originJson === null ? null : JSON.parse(originJson) as SessionOrigin,
+        execution: await this.readWorkout(connection, { clientId, ...session }) });
+    }
     return result;
   }
 
@@ -285,7 +288,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       outcome: WorkoutOutcome | null; started: number }>(`SELECT s.week_index AS weekIndex,
         s.planned_workout_id AS plannedWorkoutId, s.outcome,
         ${STARTED_SQL} AS started
-      FROM dev_training_sessions s WHERE s.workspace_id = ? AND s.client_id = ? AND s.program_id = ?`,
+      FROM dev_training_sessions s WHERE s.workspace_id = ? AND s.client_id = ? AND s.program_id = ? AND s.plan_deleted_at IS NULL`,
     [this.workspaceId, clientId, programId]);
     return rows.map((row) => ({ weekIndex: row.weekIndex, plannedWorkoutId: row.plannedWorkoutId,
       status: workoutStatus(row.outcome, row.started === 1) }));
@@ -569,6 +572,15 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       const sessions = await tx.all<{ id: string }>(`SELECT id FROM dev_training_sessions
         WHERE workspace_id = ? AND client_id = ? AND program_id = ?${filter}`, [this.workspaceId, clientId, programId, ...(plannedWorkoutIds ?? [])]);
       for (const session of sessions) await this.deleteSession(tx, session.id);
+    },
+    keepAsHistory: async (tx, clientId, programId, originOf, now) => {
+      const sessions = await tx.all<{ id: string; weekIndex: number; plannedWorkoutId: string }>(`SELECT id, week_index AS weekIndex,
+        planned_workout_id AS plannedWorkoutId FROM dev_training_sessions
+        WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND plan_deleted_at IS NULL`, [this.workspaceId, clientId, programId]);
+      for (const session of sessions) {
+        await tx.run("UPDATE dev_training_sessions SET origin_json = ?, plan_deleted_at = ? WHERE workspace_id = ? AND id = ?",
+          [JSON.stringify(originOf(session.weekIndex, session.plannedWorkoutId)), now.toISOString(), this.workspaceId, session.id]);
+      }
     },
     notify: (clientId, programId) => this.publish({ clientId, programId }),
   };

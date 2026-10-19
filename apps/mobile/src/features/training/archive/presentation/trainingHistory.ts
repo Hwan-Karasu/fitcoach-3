@@ -13,6 +13,8 @@ export interface TrainingHistoryEntry {
   readonly programTitle: string;
   readonly programKind: "SIMPLE" | "PERIODIZED";
   readonly archived: boolean;
+  /** §50.3, действие 1: исходный план удалён, подписи — из неизменяемого снимка происхождения. */
+  readonly planDeleted: boolean;
   readonly mesocycleId: string | null;
   readonly mesocycleTitle: string | null;
   /** `null` — тренировки больше нет в плане (факты остаются). */

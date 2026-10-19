@@ -13,6 +13,7 @@ import type { PlannedWorkout } from "../src/features/training/plans/domain/Simpl
 import { SharedSqliteDatabase } from "../src/shared/db/SharedSqliteDatabase.ts";
 import { createTrainingHistory } from "../src/read-models/trainingHistory.ts";
 import { createProgramDeleteWorkflow } from "../src/workflows/deleteTrainingProgram.ts";
+import { createPlanOnlyDeleteWorkflow } from "../src/workflows/deleteTrainingPlanOnly.ts";
 import { nodeSqlitePort } from "../../../scripts/support/node-sqlite-port.ts";
 
 // Read-model импортирует public.ts фич (там экраны .tsx), поэтому тест живёт здесь.
@@ -57,7 +58,8 @@ async function setup() {
   const cycles = (await plans.getPeriodizedPlan(a, periodized.id))!.mesocycles;
   const lease = await shared.acquire();
   const deleteProgram = createProgramDeleteWorkflow((task) => lease.writer.write(task), plans.deleteParticipant, execution.cleanupParticipant);
-  return { plans, execution, history, complete, a, b, simple: simple.id, periodized: periodized.id, otherProgram: otherProgram.id,
+  const deletePlanOnly = createPlanOnlyDeleteWorkflow((task) => lease.writer.write(task), plans.deleteParticipant, execution.cleanupParticipant);
+  return { db, deletePlanOnly, plans, execution, history, complete, a, b, simple: simple.id, periodized: periodized.id, otherProgram: otherProgram.id,
     simpleWorkout, cycles, revision, deleteProgram,
     close: async () => { await shared.release(); await execution.close(); await plans.close(); await clients.close(); } };
 }
@@ -116,6 +118,47 @@ test("§48.85.2 п. 6: архивная программа остаётся в �
     assert.deepEqual(archived.map((entry) => [entry.programTitle, entry.archived]), [["Сила", true]]);
     await deleteProgram.deleteProgram({ clientId: a, programId: simple, expectedRevision: await revision(simple) });
     assert.deepEqual(await history.list(a), [], "удалено с результатами — записи нет");
+  } finally {
+    await env.close();
+  }
+});
+
+test("§50.3 действие 1: удалить план архивной программы — занятия остаются в истории с происхождением «план удалён»", async () => {
+  const env = await setup();
+  try {
+    const { a, periodized, cycles, complete, plans, history, deletePlanOnly, revision, db } = env;
+    await complete(a, periodized, 1, cycles[1]!.weeks[0]!.workouts[0]!, "2026-10-04");
+    await assert.rejects(deletePlanOnly.deletePlanKeepHistory({ clientId: a, programId: periodized, expectedRevision: await revision(periodized) }),
+      (error: unknown) => error instanceof Error && error.message === "PROGRAM_NOT_ARCHIVED", "только для архивной программы");
+    await plans.archiveForClient(a, periodized);
+    await deletePlanOnly.deletePlanKeepHistory({ clientId: a, programId: periodized, expectedRevision: await revision(periodized) });
+
+    assert.equal(await plans.getProgram(a, periodized), null, "плана больше нет");
+    const entries = await history.list(a);
+    assert.deepEqual(entries.map((entry) => [entry.programTitle, entry.mesocycleTitle, entry.workoutTitle, entry.planDeleted, entry.confirmedSets]),
+      [["Сила", "Блок 2", "Тренировка 1", true, 1]], "факт с неизменяемым происхождением");
+    assert.equal(completedCount(entries), 1, "проведённое занятие не потеряно");
+    assert.throws(() => db.prepare("UPDATE dev_training_sessions SET origin_json = '{}'").run(), /ORIGIN_IMMUTABLE/, "снимок неизменяем");
+    assert.equal((await history.list(a)).length, 1, "повторное чтение — без дублей");
+  } finally {
+    await env.close();
+  }
+});
+
+test("§50.2: восстановление архивной программы не делает её текущей и не меняет занятия", async () => {
+  const env = await setup();
+  try {
+    const { a, simple, periodized, complete, simpleWorkout, plans, history } = env;
+    await complete(a, simple, 1, simpleWorkout, "2026-10-01");
+    await plans.selectProgram(a, periodized);
+    await plans.archiveForClient(a, simple);
+    const before = await history.list(a);
+    await plans.restoreForClient(a, simple);
+    const library = await plans.getLibrary(a);
+    assert.equal(library.selectedProgramId, periodized, "текущей осталась прежняя программа");
+    assert.ok(library.active.some((card) => card.id === simple), "восстановленная — в списке");
+    assert.deepEqual((await history.list(a)).map((entry) => [entry.key, entry.archived]), before.map((entry) => [entry.key, false]),
+      "те же занятия, без дублей");
   } finally {
     await env.close();
   }

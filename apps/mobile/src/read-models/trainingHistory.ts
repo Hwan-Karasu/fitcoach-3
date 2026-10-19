@@ -24,7 +24,7 @@ export function createTrainingHistory(rules: TrainingHistoryRules,
       const [executions, library] = await Promise.all([execution.listClientExecutions(clientId), plans.getLibrary(clientId)]);
       const cards = new Map([...library.active, ...library.archived].map((card) => [card.id, card]));
       const origins = new Map<string, ReadonlyMap<string, Origin>>();
-      for (const programId of new Set(executions.map((item) => item.programId))) {
+      for (const programId of new Set(executions.filter((item) => item.origin === null).map((item) => item.programId))) {
         const card = cards.get(programId);
         const map = new Map<string, Origin>();
         if (card?.kind === "PERIODIZED") {
@@ -46,8 +46,10 @@ export function createTrainingHistory(rules: TrainingHistoryRules,
         const facts = [...item.execution.facts.values()];
         // Занятие — тренировка с записанными подходами или исходом; пустое выполнение (например, после «Удалить
         // результаты» или смены даты без ввода) в хронологию не входит.
-        if (session === null || card === undefined || (facts.length === 0 && session.outcome === null)) return [];
-        const origin = origins.get(item.programId)?.get(`${item.weekIndex}:${item.plannedWorkoutId}`);
+        // План удалён с сохранением истории — подписи из снимка дневника (§50.3, действие 1).
+        const snapshot = item.origin;
+        if (session === null || (card === undefined && snapshot === null) || (facts.length === 0 && session.outcome === null)) return [];
+        const origin = snapshot !== null ? undefined : origins.get(item.programId)?.get(`${item.weekIndex}:${item.plannedWorkoutId}`);
         // Порядок упражнений — как в плане; убранные из плана — после, в порядке записи.
         const order = origin?.workout.exercises.map((exercise) => exercise.id) ?? [];
         const groups = new Map<string, { exerciseId: string; facts: SetFact[] }>();
@@ -57,9 +59,10 @@ export function createTrainingHistory(rules: TrainingHistoryRules,
           group.facts.push(fact);
           groups.set(fact.plannedExerciseId, group);
         }
-        return [{ key: session.id, programId: item.programId, programTitle: card.title, programKind: card.kind,
-          archived: card.archivedAt !== null, mesocycleId: origin?.mesocycleId ?? null, mesocycleTitle: origin?.mesocycleTitle ?? null,
-          workoutTitle: origin?.workout.title ?? null, weekIndex: item.weekIndex, actualDate: session.actualDate,
+        return [{ key: session.id, programId: item.programId, programTitle: snapshot?.programTitle ?? card!.title,
+          programKind: snapshot?.programKind ?? card!.kind, archived: snapshot === null && card!.archivedAt !== null, planDeleted: snapshot !== null,
+          mesocycleId: origin?.mesocycleId ?? null, mesocycleTitle: snapshot !== null ? snapshot.mesocycleTitle : origin?.mesocycleTitle ?? null,
+          workoutTitle: snapshot !== null ? snapshot.workoutTitle : origin?.workout.title ?? null, weekIndex: item.weekIndex, actualDate: session.actualDate,
           status: workoutStatus(session.outcome, facts.length > 0),
           confirmedSets: facts.filter((fact) => fact.confirmed).length,
           volumeKg: facts.reduce((sum, fact) => sum + factVolume(fact), 0),

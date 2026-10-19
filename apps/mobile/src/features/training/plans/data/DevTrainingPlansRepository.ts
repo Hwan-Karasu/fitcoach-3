@@ -805,6 +805,28 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       await tx.run("DELETE FROM dev_training_mesocycles WHERE workspace_id = ? AND id = ?", [this.workspaceId, cycle.id]);
       return next;
     },
+    planOrigins: async (tx, request) => {
+      const { clientId, programId } = request;
+      if ((await membership(tx, this.workspaceId, clientId, programId)).archivedAt === null) throw new Error("PROGRAM_NOT_ARCHIVED");
+      const program = await programById(tx, this.workspaceId, programId);
+      if (program.revision !== request.expectedRevision) throw new Error("PROGRAM_REVISION_CONFLICT");
+      const slots = new Map<string, Readonly<{ mesocycleTitle: string | null; workoutTitle: string }>>();
+      if (program.kind === "PERIODIZED") {
+        for (const cycle of await readMesocycles(tx, this.workspaceId, programId, clientId)) {
+          for (const week of cycle.weeks) for (const workout of week.workouts) {
+            slots.set(`${week.index}:${workout.id}`, { mesocycleTitle: cycle.title, workoutTitle: workout.title });
+          }
+        }
+      } else {
+        const row = await tx.first<{ weeks: number | null }>("SELECT weeks FROM dev_training_programs WHERE workspace_id = ? AND id = ?",
+          [this.workspaceId, programId]);
+        const base = await readStructure(tx, this.workspaceId, programId, row?.weeks ?? DEFAULT_WEEKS);
+        for (const week of await readSimpleWeeks(tx, this.workspaceId, clientId, programId, base)) {
+          for (const workout of week.workouts) slots.set(`${week.index}:${workout.id}`, { mesocycleTitle: null, workoutTitle: workout.title });
+        }
+      }
+      return { programTitle: program.title, programKind: program.kind, slots };
+    },
     deleteProgram: async (tx, request, now) => {
       const { clientId, programId } = request;
       await membership(tx, this.workspaceId, clientId, programId);

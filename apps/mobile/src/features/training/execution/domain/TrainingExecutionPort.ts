@@ -48,9 +48,19 @@ export interface ProgramExecution {
   readonly execution: WorkoutExecution;
 }
 
+/** Неизменяемое происхождение занятия, когда план удалён с сохранением истории (§50.3, действие 1). */
+export interface SessionOrigin {
+  readonly programTitle: string;
+  readonly programKind: "SIMPLE" | "PERIODIZED";
+  readonly mesocycleTitle: string | null;
+  readonly workoutTitle: string | null;
+}
+
 /** Выполнение клиента в любой его программе (§48.85, история занятий). */
 export interface ClientExecution extends ProgramExecution {
   readonly programId: string;
+  /** Снимок происхождения, если план уже удалён; `null` — план существует. */
+  readonly origin: SessionOrigin | null;
 }
 
 export interface TrainingExecutionPort {

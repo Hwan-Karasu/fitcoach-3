@@ -10,7 +10,7 @@ export { RestTimerDock } from "./presentation/RestTimerDock.tsx";
 export { RestTimerService } from "./application/RestTimerService.ts";
 export type { RestSignalPort, RestTimerStorePort, RestTimersPort } from "./domain/RestTimerPorts.ts";
 export type { RestTimer, RestTimerStart } from "./domain/RestTimerRules.ts";
-export type { ClientExecution, ProgramExecution, SaveSetInput, SetIdentity, SetSaveResult, TrainingExecutionCommittedChange,
+export type { ClientExecution, ProgramExecution, SaveSetInput, SessionOrigin, SetIdentity, SetSaveResult, TrainingExecutionCommittedChange,
   TrainingExecutionPort } from "./domain/TrainingExecutionPort.ts";
 export type { WeekExecutionParticipant, WorkoutCopyMapping } from "./domain/WeekCopyParticipant.ts";
 export type { WeekRenumberInput, WeekRenumberParticipant } from "./domain/WeekRenumberParticipant.ts";

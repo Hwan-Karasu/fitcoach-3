@@ -10,7 +10,7 @@ import type { MeasurementRepositoryPort } from "../../features/measurements/publ
 import { ClientQuestionnaireScreen, type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
 import { ArchivedProgramsPanel, TrainingArchiveScreen, TrainingStatisticsPreview, factVolume, sortHistory, workoutStatus, type ExerciseLookupPort,
   type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort, type TrainingPlansRepositoryPort,
-  type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type MesocycleDeletePort, type ProgramDeletePort, type WorkoutSlot } from "../../features/training/public.ts";
+  type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort, type WorkoutSlot } from "../../features/training/public.ts";
 import type { ExerciseCatalogPort } from "../../features/exercises/public.ts";
 import { AppButton, LoadingState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -43,7 +43,7 @@ const MoreStack = createNativeStackNavigator<MoreRoutes>();
 function MoreNavigator({ client, questionnaire, trainingPlans, trainingExecution, exerciseLookup, planDelete, onClose, onOpenClients }: Readonly<{
   client: ClientRecord; questionnaire: QuestionnaireRepositoryPort; onClose: () => void; onOpenClients: () => void;
   trainingPlans: TrainingPlansRepositoryPort; trainingExecution: TrainingExecutionPort; exerciseLookup: ExerciseLookupPort;
-  planDelete: MesocycleDeletePort & ProgramDeletePort;
+  planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort;
 }>) {
   const { palette } = usePrototypeTheme();
   const clientId = client.id;
@@ -99,7 +99,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   weekCopy: WeekCopyPort;
   weekSwap: WeekSwapPort;
   mesocycleSave: MesocycleSavePort;
-  planDelete: MesocycleDeletePort & ProgramDeletePort;
+  planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort;
   onOpenEdit: (clientId: string) => void;
   onOpenAccounting: (clientId: string) => void;
   onOpenMeasurements: (clientId: string) => void;
