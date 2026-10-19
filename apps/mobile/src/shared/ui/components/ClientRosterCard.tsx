@@ -90,7 +90,7 @@ export function ClientRosterCard({ clientId, displayName, mark, emoji = null, su
           {metrics.slice(0, 3).map((metric) => (
             <View key={metric.label} accessible accessibilityLabel={`${metric.label}: ${metric.value ?? "нет данных"}`}
               style={[styles.tile, { backgroundColor: colors.surfaceRaised }]}>
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.tileLabel, { color: colors.textSecondary }]}>{metric.label}</Text>
+              <Text numberOfLines={2} style={[styles.tileLabel, { color: colors.textSecondary }]}>{metric.label}</Text>
               <Text numberOfLines={1} style={[styles.tileValue, { color: metric.value === null ? colors.textMuted : colors.textPrimary }]}>
                 {metric.value ?? "—"}</Text>
             </View>

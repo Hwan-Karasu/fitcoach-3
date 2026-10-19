@@ -104,7 +104,7 @@ export function RootHeader({
       <View accessible accessibilityRole="header" accessibilityLabel={`${appBrandName}, ${title}`} style={styles.titleSlot}>
         <Animated.View style={[styles.layer, brandStyle]}>
           <BrandMark size={24} color={colors.accentInk} />
-          <Animated.Text numberOfLines={1} style={[styles.brand, { color: colors.textPrimary }]}>{appBrandName}</Animated.Text>
+          <Animated.Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.brand, { color: colors.textPrimary }]}>{appBrandName}</Animated.Text>
         </Animated.View>
         <Animated.View style={[styles.layer, titleStyle]}>
           <Animated.Text numberOfLines={1} style={[styles.title, { color: colors.textPrimary }]}>{title}</Animated.Text>
