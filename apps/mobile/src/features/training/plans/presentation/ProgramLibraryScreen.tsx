@@ -4,10 +4,10 @@ import Animated, { useAnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
 import { CalendarDays, ChartColumnIncreasing, ChevronRight, CircleMinus, Clock, FileText, LayoutGrid, Plus, RefreshCw, Rocket,
   FileSpreadsheet, SlidersHorizontal, TrendingUp, Users, Zap } from "lucide-react-native";
-import { AppButton, FloatingActionButton, InlineNotice, ListSectionHeader, LoadingState,
-  StatusTag } from "../../../../shared/ui/components/public.ts";
+import { AppButton, FloatingActionButton, InlineNotice, ListSectionHeader, LoadingState } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
+import { shadow } from "../../../../shared/ui/theme/style.ts";
 import type { ProgramCard, ProgramKind } from "../domain/ProgramModel.ts";
 import { membersWord, programKindLabels } from "../domain/ProgramRules.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
@@ -115,16 +115,21 @@ function ProgramCardRow({ card, selected, onPress, onRestore }: Readonly<{
   const colors = palette.tokens;
   const meta = card.kind === "PERIODIZED" ? `${programKindLabels[card.kind]} · ${membersWord(card.memberCount)}`
     : programKindLabels[card.kind];
+  const chip = (text: string, soft: boolean) => <Text style={[styles.chip, { color: soft ? colors.accentInk : colors.textSecondary,
+    backgroundColor: soft ? colors.accentSoft : colors.surfaceRaised }]}>{text}</Text>;
   return (
     <Pressable accessibilityRole={onPress === undefined ? undefined : "button"} disabled={onPress === undefined}
       accessibilityLabel={`${card.title}. ${meta}${selected ? ". Текущая" : ""}`} onPress={onPress}
-      style={({ pressed }) => [styles.card, styles.program, { borderColor: colors.border,
+      style={({ pressed }) => [styles.card, styles.program, shadow.card, { borderColor: selected ? colors.accentInk : "transparent",
         backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
       <View style={styles.grow}>
         <Text numberOfLines={2} style={[styles.title, { color: colors.textPrimary, opacity: onRestore ? 0.6 : 1 }]}>{card.title}</Text>
-        <Text numberOfLines={2} style={[styles.meta, { color: colors.textSecondary }]}>{meta}</Text>
+        <View style={styles.chips}>
+          {chip(programKindLabels[card.kind], card.kind === "PERIODIZED")}
+          {card.kind === "PERIODIZED" ? chip(membersWord(card.memberCount), false) : null}
+        </View>
       </View>
-      {selected ? <StatusTag kind="success" label="Текущая" /> : null}
+      {selected ? <Text style={[styles.current, { color: colors.onAccentFill, backgroundColor: colors.accentFill }]}>Текущая</Text> : null}
       {onRestore !== undefined ? <AppButton compact variant="secondary" label="Вернуть" onPress={onRestore} />
         : <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.8} />}
     </Pressable>
@@ -140,7 +145,7 @@ function FeatureRow({ icon: renderIcon, title, detail, onPress, soon = false }: 
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`${title}. ${detail}`} accessibilityState={{ disabled: soon }}
       disabled={soon} onPress={onPress}
-      style={({ pressed }) => [styles.card, styles.feature, { borderColor: colors.border,
+      style={({ pressed }) => [styles.card, styles.feature, shadow.card, { borderColor: "transparent",
         backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
       <View style={[styles.featureIcon, { backgroundColor: colors.surfaceRaised }]}>{renderIcon(soon ? colors.textMuted : colors.accentInk)}</View>
       <View style={styles.grow}>
@@ -249,7 +254,7 @@ const styles = StyleSheet.create({
   featureIcon: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   featureTitle: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 16 },
   modes: { gap: 8 },
-  card: { borderWidth: 1, borderRadius: 12 },
+  card: { borderWidth: 2, borderRadius: 20 },
   mode: { borderWidth: 1, borderRadius: 14, padding: 10, gap: 8 },
   modeHead: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   modeTitle: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
@@ -262,8 +267,11 @@ const styles = StyleSheet.create({
   cellText: { flex: 1, fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14 },
   modeFooter: { flexDirection: "row", alignItems: "center", gap: 8, borderTopWidth: 1, paddingTop: 8 },
   modeIcon: { width: 36, height: 36, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  program: { flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: 14, paddingRight: 10, paddingVertical: 12, minHeight: 64 },
+  program: { flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: 16, paddingRight: 12, paddingVertical: 14, minHeight: 64 },
   grow: { flex: 1, minWidth: 0, gap: 2 },
-  title: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
+  title: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
+  chip: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 4, overflow: "hidden" },
+  current: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 4, overflow: "hidden" },
   meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
 });

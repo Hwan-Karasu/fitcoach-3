@@ -43,7 +43,7 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
                 const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
                 if (!focused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
               }}
-              style={[styles.tab, focused ? { backgroundColor: colors.accentSoft } : null]}
+              style={[styles.tab, focused ? [styles.focused, { backgroundColor: colors.accentSoft }] : null]}
             >
               <View>
                 <Icon size={22} color={color} strokeWidth={focused ? 2.2 : 1.9} />
@@ -71,6 +71,7 @@ const styles = StyleSheet.create({
   dock: { paddingHorizontal: 12, paddingTop: 4 },
   bar: { flexDirection: "row", borderRadius: 26, padding: 8, gap: 6, minHeight: 76 },
   tab: { flex: 1, borderRadius: 18, alignItems: "center", justifyContent: "center", gap: 3 },
+  focused: { flex: 1.25 },
   label: { fontSize: 12, lineHeight: 15 },
   badge: { position: "absolute", top: -4, left: 14, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   badgeText: { fontFamily: fonts.bold, fontSize: 10, lineHeight: 12 },
