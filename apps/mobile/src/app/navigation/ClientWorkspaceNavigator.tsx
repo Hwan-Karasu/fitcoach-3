@@ -16,6 +16,7 @@ import { AppButton, LoadingState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { HomeNavigator, NutritionNavigator, TrainingNavigator } from "./ClientPrimaryNavigators.tsx";
 import { ClientHeader } from "./ClientHeader.tsx";
+import { ScreenToneProvider } from "../../shared/ui/theme/ScreenTone.tsx";
 import { MoreMenuScreen } from "./MoreMenuScreen.tsx";
 import { moreDestinations, workspaceTabs } from "./routeCatalog.ts";
 import { RootTabBar } from "./RootTabBar.tsx";
@@ -151,7 +152,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       {activityErrorFor === clientId ? <Text style={[styles.warning, { color: colors.danger }]}>
         Не удалось обновить «Недавно открытые»; карточка доступна.
       </Text> : null}
-    <WeekNavigationProvider><Tabs.Navigator
+    <WeekNavigationProvider><ScreenToneProvider><Tabs.Navigator
       backBehavior="history"
       tabBar={(props) => <RootTabBar {...props} />}
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.canvas } }}
@@ -180,7 +181,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More}}>
         {() => <MoreNavigator client={client} questionnaire={questionnaire} onClose={onClose} onOpenClients={onOpenClients} />}
       </Tabs.Screen>
-    </Tabs.Navigator></WeekNavigationProvider>
+    </Tabs.Navigator></ScreenToneProvider></WeekNavigationProvider>
     </View>
   );
 }

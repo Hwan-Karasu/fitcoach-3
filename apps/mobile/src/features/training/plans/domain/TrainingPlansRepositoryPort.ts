@@ -1,6 +1,6 @@
 import type { ClientProgramLibrary, CreateProgramInput, TrainingProgram } from "./ProgramModel.ts";
 import type { ProgramTemplate, TemplatePayload } from "./TemplateModel.ts";
-import type { BuilderMesocycleInput, NewMesocycleInput, NewPeriodizedProgramInput, PeriodizedPlan, WeekEditInput, WeekEditPreview, WeekEditResult } from "./PeriodizedModel.ts";
+import type { WeekType, BuilderMesocycleInput, NewMesocycleInput, NewPeriodizedProgramInput, PeriodizedPlan, WeekEditInput, WeekEditPreview, WeekEditResult } from "./PeriodizedModel.ts";
 import type { PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
 import type { PeriodizedDraft } from "./PeriodizedDraft.ts";
 import type { MesocycleVersion } from "./StructureVersion.ts";
@@ -15,7 +15,7 @@ export interface TrainingPlansCommittedChange {
 export interface WorkoutWeekNavigation {
   readonly programTitle: string;
   readonly mesocycleId: string | null;
-  readonly weeks: readonly Readonly<{ index: number; caption: string | null; workoutId: string | null }>[];
+  readonly weeks: readonly Readonly<{ index: number; caption: string | null; workoutId: string | null; type?: WeekType }>[];
 }
 
 /**

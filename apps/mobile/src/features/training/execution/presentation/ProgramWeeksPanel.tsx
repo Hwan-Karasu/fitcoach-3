@@ -4,7 +4,8 @@ import { ChartColumnIncreasing, LayoutGrid } from "lucide-react-native";
 import { WeekCards, useWeekNavigation, StatusTag, type StatusKind } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
-import type { PlannedWorkout } from "../../plans/public.ts";
+import { weekTypeTone, type PlannedWorkout, type WeekType } from "../../plans/public.ts";
+import { useReportScreenTone } from "../../../../shared/ui/theme/ScreenTone.tsx";
 import type { SessionStatus, WorkoutExecution, WorkoutStatus } from "../domain/ExecutionModel.ts";
 import { weekStatus } from "../domain/ExecutionRules.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
@@ -20,6 +21,8 @@ export interface ProgramWeekView {
   readonly index: number;
   /** Подпись недели (тип недели Расширенной программы); `null` — без подписи. */
   readonly caption: string | null;
+  /** Тип недели Расширенной программы: цвет экрана и карточки недели (UI-OWN-039). */
+  readonly type?: WeekType;
   readonly workouts: readonly PlannedWorkout[];
 }
 
@@ -86,6 +89,9 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: views, execution
   const currentPosition = views.findIndex((view) => view.index === week);
   const previousWeek = views[currentPosition - 1];
   const nextWeek = views[currentPosition + 1];
+  // «Индивидуальная» — цвет темы; остальные типы окрашивают экран (как в 2.0).
+  const toneOf = (type: WeekType | undefined) => type === undefined || type === "base" ? null : weekTypeTone(type, colors);
+  useReportScreenTone(toneOf(viewOf(week)?.type));
   useWeekNavigation(weeks === 0 ? null : { week,
     previous: previousWeek ? () => chooseWeek(previousWeek.index) : null,
     next: nextWeek ? () => chooseWeek(nextWeek.index) : null });

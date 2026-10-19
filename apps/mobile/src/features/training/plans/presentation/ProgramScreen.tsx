@@ -17,7 +17,7 @@ import { WeekCopyFlow } from "./WeekCopyFlow.tsx";
 import type { WeekSwapPort } from "../domain/WeekSwap.ts";
 import { WeekSwapPanel } from "./WeekSwapPanel.tsx";
 import { ParticipantChips } from "./ParticipantChips.tsx";
-import { weekTypeLabels, type PeriodizedPlan } from "../domain/PeriodizedModel.ts";
+import { weekTypeLabels, type PeriodizedPlan, type WeekType } from "../domain/PeriodizedModel.ts";
 import { setsSummary } from "../domain/SimplePlanRules.ts";
 import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
@@ -26,7 +26,7 @@ import { useExerciseLookup } from "./useExerciseLookup.ts";
 export interface ProgramWeeksView {
   /** Меняется при смене мезоцикла: панель начинает с его первой незакрытой недели. */
   readonly key: string;
-  readonly weeks: readonly Readonly<{ index: number; caption: string | null; workouts: readonly PlannedWorkout[] }>[];
+  readonly weeks: readonly Readonly<{ index: number; caption: string | null; type?: WeekType; workouts: readonly PlannedWorkout[] }>[];
   readonly weekActions?: (weekIndex: number) => ReactNode;
   readonly selectedWeek?: number;
   readonly onSelectWeek: (weekIndex: number) => void;
@@ -363,7 +363,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
             <InlineNotice kind="info">Мезоциклов пока нет. Создайте первый: план первой недели скопируется во все недели.</InlineNotice>
           ) : renderWeeks?.({ key: selected.id, selectedWeek: weeksByCycle[selected.id],
             onSelectWeek: (week) => selectWeek(selected.id, week),
-            weeks: selected.weeks.map((week) => ({ index: week.index, caption: weekTypeLabels[week.type], workouts: week.workouts })),
+            weeks: selected.weeks.map((week) => ({ index: week.index, caption: weekTypeLabels[week.type], type: week.type, workouts: week.workouts })),
             weekActions: (weekIndex) => <View style={styles.row}>
               <View style={styles.grow}><AppButton label="Изменить" onPress={() => onEditWeek(selected.id, weekIndex)} /></View>
               {weekCopy !== undefined && selected.weeks.length > 1 ? <View style={styles.grow}>

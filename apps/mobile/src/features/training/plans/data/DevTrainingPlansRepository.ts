@@ -529,7 +529,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     return { programTitle: found.program.title, mesocycleId: cycle.id,
       weeks: cycle.weeks.map((week) => {
         const matches = week.workouts.filter((workout) => (workout.lineageId ?? workout.id) === lineage);
-        return { index: week.index, caption: weekTypeLabels[week.type], workoutId: matches.length === 1 ? matches[0]!.id : null };
+        return { index: week.index, caption: weekTypeLabels[week.type], type: week.type, workoutId: matches.length === 1 ? matches[0]!.id : null };
       }) };
   }
 

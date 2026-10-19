@@ -45,3 +45,14 @@ export function usePrototypeTheme(): PrototypeThemeState {
   if (!context) throw new Error("Prototype theme provider is missing");
   return context;
 }
+
+/**
+ * Палитра поддерева подменена (цвет недели, UI-OWN-039): дочерние экраны получают ту же тему с другими токенами.
+ * `tokens === null` — без подмены.
+ */
+export function PaletteOverride({ tokens, children }: Readonly<{ tokens: ResolvedPalette["tokens"] | null; children: ReactNode }>) {
+  const parent = usePrototypeTheme();
+  const value = useMemo<PrototypeThemeState>(() => tokens === null ? parent : { ...parent, palette: { ...parent.palette, tokens } },
+    [parent, tokens]);
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}

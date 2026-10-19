@@ -17,7 +17,8 @@ import { AppButton, ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingSta
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
-import { DiaryEditDialog, formatDuration, formatRange, supersetNumber, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookup,
+import { useReportScreenTone } from "../../../../shared/ui/theme/ScreenTone.tsx";
+import { weekTypeTone, DiaryEditDialog, formatDuration, formatRange, supersetNumber, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookup,
   type DiaryEdit, type ExerciseLookupPort, type PickedExercise, type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort,
   type WorkoutWeekNavigation } from "../../plans/public.ts";
 import { DROPS_MAX, EMPTY_VALUES, NOTE_MAX, type ActiveWorkoutCard, type ActiveWorkoutsPort, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type Side,
@@ -465,6 +466,9 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     } finally { setBusy(false); }
   };
   const currentWeek = weekNavigation?.weeks.findIndex((week) => week.index === slot.weekIndex) ?? -1;
+  // Дневник в цвете типа своей недели (UI-OWN-039); «Индивидуальная» — цвет темы.
+  const weekType = weekNavigation?.weeks[currentWeek]?.type;
+  useReportScreenTone(weekType === undefined || weekType === "base" ? null : weekTypeTone(weekType, colors));
   const previousWeek = weekNavigation?.weeks[currentWeek - 1];
   const nextWeek = weekNavigation?.weeks[currentWeek + 1];
   useWeekNavigation(weekNavigation === null ? null : { week: slot.weekIndex, busy,
