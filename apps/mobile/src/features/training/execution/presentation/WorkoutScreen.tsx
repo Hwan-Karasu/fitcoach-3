@@ -740,12 +740,11 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                     <Text accessibilityLabel={`Плановый RIR ${formatRange(exercise.rir)}`}
                       style={[styles.restText, { color: colors.textSecondary }]}>{`RIR ${formatRange(exercise.rir)}`}</Text>
                   ) : null}
+                  <Text accessibilityLabel={`Объём ${kg(volumeOf(exercise.id))}, выполнено ${done} из ${rows.length}`}
+                    style={[styles.restText, styles.cardVolume, { color: colors.textSecondary }]}>
+                    <Text style={{ color: colors.accentInk }}>{kg(volumeOf(exercise.id))}</Text>{` · ${done}/${rows.length}`}
+                  </Text>
                   </View>
-                </View>
-                <View style={styles.volume}>
-                  <Text style={[styles.volumeLabel, { color: colors.textMuted }]}>Объём</Text>
-                  <Text style={[styles.exerciseVolume, { color: colors.accentInk }]}>{kg(volumeOf(exercise.id))}</Text>
-                  <Text style={[styles.meta, { color: colors.textSecondary }]}>{`${done}/${rows.length}`}</Text>
                 </View>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Действия: ${info?.name ?? "упражнение"}`} hitSlop={6}
                   onPress={() => { flushPending(); Keyboard.dismiss(); setMenuFor(exercise); menuSheet.current?.present(); }}
@@ -911,9 +910,9 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   stripe: { width: 4, alignSelf: "stretch", minHeight: 26, borderRadius: 2 },
   volume: { alignItems: "flex-end" },
+  cardVolume: { marginLeft: "auto" },
   volumeLabel: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, textTransform: "uppercase", letterSpacing: 1 },
   volumeValue: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 23 },
-  exerciseVolume: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
   actions: { flexDirection: "row", gap: 6 },
   action: { flex: 1, minHeight: 56, borderRadius: 14, alignItems: "center", justifyContent: "center", gap: 3,
     paddingHorizontal: 4, paddingVertical: 6 },
@@ -935,10 +934,10 @@ const styles = StyleSheet.create({
   meta: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
   card: { ...shadow.card, borderRadius: 22, padding: 14, gap: 6 },
   cardHead: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 2, paddingHorizontal: 2 },
-  thumb: { width: 48, height: 48, borderRadius: 14 },
-  exerciseText: { flex: 1, gap: 2 },
+  thumb: { width: 40, height: 40, borderRadius: 12 },
+  exerciseText: { flex: 1, gap: 0 },
   exercise: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
-  subRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  subRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   rest: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", minHeight: 28 },
   restText: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
   block: { borderRadius: 12, paddingVertical: 3, paddingHorizontal: 4, gap: 4 },
