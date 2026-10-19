@@ -7,7 +7,7 @@ import { localDateOf, parseValueX10, type MeasurementRepositoryPort } from "../.
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
 import { NutritionWorkspacePreview } from "../../features/nutrition/public.ts";
 import { ParticipantSwitcher, participantTarget, ProgramMatrixScreen, PeriodizedBuilderScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, SimpleProgramBuilderScreen,
-  WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort,
+  WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type MesocycleDeletePort, type ProgramDeletePort,
   type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
   type TrainingPlansRepositoryPort, ProgramWeeksPanel, WorkoutScreen, type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort,
   type WorkoutSlot } from "../../features/training/public.ts";
@@ -112,7 +112,7 @@ export function NutritionNavigator() {
  * Шапка — общая строка карточки клиента (UI-OWN-001), назад — системной кнопкой.
  */
 export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExercise, repository, execution, restTimers, activeWorkouts, onOpenWorkout, onOpenClientPrograms,
-  listCandidates, exercises, exerciseLookup, weekCopy, weekSwap, mesocycleSave, onExitClient, onOpenClients }: Readonly<{
+  listCandidates, exercises, exerciseLookup, weekCopy, weekSwap, mesocycleSave, planDelete, onExitClient, onOpenClients }: Readonly<{
   clientId: string;
   clientName: string;
   clientEmoji: string | null;
@@ -129,6 +129,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
   weekCopy: WeekCopyPort;
   weekSwap: WeekSwapPort;
   mesocycleSave: MesocycleSavePort;
+  planDelete: MesocycleDeletePort & ProgramDeletePort;
   onExitClient: () => void;
   onOpenClients: () => void;
   /** Карточка упражнения из дневника (корневой стек). */
@@ -226,7 +227,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
       <TrainingStack.Screen name="TrainingProgram">
         {({ navigation, route }) => <ProgramScreen clientId={viewer} programId={route.params.programId}
           requestedWeek={route.params.weekIndex} requestedMesocycle={route.params.mesocycleId}
-          repository={repository} listCandidates={listCandidates} exercises={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap}
+          repository={repository} listCandidates={listCandidates} exercises={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap} planDelete={planDelete}
           onOpenMatrix={() => navigation.navigate("TrainingMatrix", { programId: route.params.programId })}
           onTabChange={(tab) => navigation.setOptions({ title: tab === "templates" ? "Шаблоны" : trainingTitles.TrainingProgram })}
           renderParticipants={(current) => <ParticipantSwitcher clientId={viewer} anchorClientId={clientId} programId={route.params.programId}

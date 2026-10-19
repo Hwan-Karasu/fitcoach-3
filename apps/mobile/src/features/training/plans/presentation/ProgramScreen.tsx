@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
-import { Bookmark, CalendarDays, Ellipsis, Pencil, Plus } from "lucide-react-native";
+import { Archive, ArrowLeftRight, Bookmark, CalendarDays, Copy, Ellipsis, LayoutGrid, Pencil, Plus, Trash2, TrendingUp } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, InlineNotice, LoadingState, SegmentedControl, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
@@ -23,6 +23,8 @@ import { useExerciseLookup } from "./useExerciseLookup.ts";
 import { MesocycleBook } from "./MesocycleBook.tsx";
 import { cycleTypeLabels, weekRangeLabel } from "../domain/MesocycleBuilder.ts";
 import type { CounterpartRef } from "../domain/ParticipantCounterpart.ts";
+import type { MesocycleDeletePort, ProgramDeletePort } from "../domain/PlanDeletion.ts";
+import type { Mesocycle } from "../domain/PeriodizedModel.ts";
 
 /** Неделя программы для панели недель (её рисует дневник — другой модуль). */
 export interface ProgramWeeksView {
@@ -45,7 +47,7 @@ export interface ProgramWeeksView {
  * «Изменить программу»; Расширенная — мезоциклы этого участника (выбор хранится, §48.10), недели выбранного
  * и «Изменить неделю» (T04).
  */
-export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, renderTemplates, renderParticipants, onTabChange, onEditStructure,
+export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, renderTemplates, renderParticipants, planDelete, onTabChange, onEditStructure,
   onAddMesocycle, onEditWeek, onArchived, requestedWeek, requestedMesocycle, weekCopy, weekSwap, onOpenProgram, onOpenMatrix }: Readonly<{
   clientId: string;
   programId: string;
@@ -77,6 +79,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   requestedMesocycle?: string;
   /** UI-OWN-043: полоса участников группы под шапкой; получает текущее место плана (мезоцикл и неделя). */
   renderParticipants?: (current: () => CounterpartRef) => ReactNode;
+  /** §48.11, §50.3: удаление мезоцикла и программы у этого клиента; без порта пунктов нет. */
+  planDelete?: MesocycleDeletePort & ProgramDeletePort;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -84,6 +88,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [names, setNames] = useState<ReadonlyMap<string, string>>(new Map());
   const [renaming, setRenaming] = useState<string | null>(null);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [deletingCycle, setDeletingCycle] = useState<Mesocycle | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -215,6 +221,36 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     }
   };
 
+  const deleteErrors: Readonly<Record<string, string>> = {
+    PROGRAM_REVISION_CONFLICT: "Программа изменилась в другом месте. Показана новая версия — повторите.",
+    LAST_MESOCYCLE: "Последний мезоцикл не удаляется: удалите программу целиком.",
+  };
+  const deleteCycle = async () => {
+    const cycle = deletingCycle;
+    if (cycle === null || planDelete === undefined || periodized === null) return;
+    setBusy(true); setMessage(null);
+    try {
+      await planDelete.deleteMesocycle({ clientId, programId, mesocycleId: cycle.id, expectedRevision: periodized.program.revision });
+      setNotice(`Мезоцикл «${cycle.title}» удалён.`);
+    } catch (error) {
+      setMessage(deleteErrors[error instanceof Error ? error.message : ""] ?? "Не удалось удалить мезоцикл. Ничего не изменено.");
+      setVersion((value) => value + 1);
+    } finally { setBusy(false); setDeletingCycle(null); }
+  };
+  const deleteProgram = async () => {
+    if (planDelete === undefined) return;
+    setBusy(true); setMessage(null);
+    try {
+      await planDelete.deleteProgram({ clientId, programId, expectedRevision: program.revision });
+      setConfirmDelete(false);
+      onArchived();
+    } catch (error) {
+      setMessage(deleteErrors[error instanceof Error ? error.message : ""] ?? "Не удалось удалить программу. Ничего не изменено.");
+      setConfirmDelete(false);
+      setVersion((value) => value + 1);
+    } finally { setBusy(false); }
+  };
+
   const others = program.memberClientIds.filter((id) => id !== clientId);
   const selectedCycle = () => periodized?.mesocycles.find((item) => item.id === periodized.selectedMesocycleId) ?? periodized?.mesocycles[0];
   const menuButton = <View ref={menuAnchor} collapsable={false} style={[styles.more, { borderColor: colors.border }]}>
@@ -246,18 +282,27 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       </View><AppIconButton label="Действия программы" buttonRef={menuAnchor}
         icon={<Ellipsis size={24} color={colors.textPrimary} />} onPress={() => setMenuOpen(true)} /></View> : null}
       <DropdownMenu visible={menuOpen} anchor={menuAnchor} title="Программа" selected=""
-        options={[{ value: "rename", label: "Переименовать" },
-          ...(weekSwap !== undefined && program.kind === "PERIODIZED" ? [{ value: "swap", label: "Поменять недели местами" }] : []),
-          ...(onOpenMatrix !== undefined ? [{ value: "matrix", label: "Матрица недель" }] : []),
-          { value: "save-program", label: "Сохранить как шаблон" },
-          ...(program.kind === "SIMPLE" && onOpenProgram !== undefined ? [{ value: "upgrade", label: "Создать расширенную на основе" }] : []),
+        options={[{ value: "rename", label: "Переименовать", icon: (color: string) => <Pencil size={18} color={color} strokeWidth={2} /> },
+          ...(weekSwap !== undefined && program.kind === "PERIODIZED" ? [{ value: "swap", label: "Поменять недели местами",
+            icon: (color: string) => <ArrowLeftRight size={18} color={color} strokeWidth={2} /> }] : []),
+          ...(onOpenMatrix !== undefined ? [{ value: "matrix", label: "Матрица недель", icon: (color: string) => <LayoutGrid size={18} color={color} strokeWidth={2} /> }] : []),
+          { value: "save-program", label: "Сохранить как шаблон", icon: (color: string) => <Bookmark size={18} color={color} strokeWidth={2} /> },
+          ...(program.kind === "SIMPLE" && onOpenProgram !== undefined ? [{ value: "upgrade", label: "Создать расширенную на основе",
+            icon: (color: string) => <TrendingUp size={18} color={color} strokeWidth={2} /> }] : []),
           ...(program.kind === "PERIODIZED" && weekCopy !== undefined && (selectedCycle()?.weeks.length ?? 0) > 1
-            ? [{ value: "copy-week", label: "Копировать неделю" }] : []),
+            ? [{ value: "copy-week", label: "Копировать неделю", icon: (color: string) => <Copy size={18} color={color} strokeWidth={2} /> }] : []),
           ...(program.kind === "PERIODIZED" && (periodized?.mesocycles.length ?? 0) > 0
-            ? [{ value: "save-mesocycle", label: "Сохранить мезоцикл как шаблон" }] : []),
-          { value: "archive", label: "В архив" }]}
+            ? [{ value: "save-mesocycle", label: "Сохранить мезоцикл как шаблон", icon: (color: string) => <Bookmark size={18} color={color} strokeWidth={2} /> }] : []),
+          { value: "archive", label: "В архив", icon: (color: string) => <Archive size={18} color={color} strokeWidth={2} /> },
+          ...(planDelete !== undefined && program.kind === "PERIODIZED" && (periodized?.mesocycles.length ?? 0) > 1
+            ? [{ value: "delete-mesocycle", label: "Удалить мезоцикл", danger: true,
+              icon: (color: string) => <Trash2 size={18} color={color} strokeWidth={2} /> }] : []),
+          ...(planDelete !== undefined ? [{ value: "delete-program", label: "Удалить программу", danger: true,
+            icon: (color: string) => <Trash2 size={18} color={color} strokeWidth={2} /> }] : [])]}
         onClose={() => setMenuOpen(false)} onSelect={(value) => {
           if (value === "rename") setRenaming(program.title); else if (value === "archive") setConfirmArchive(true);
+          else if (value === "delete-program") setConfirmDelete(true);
+          else if (value === "delete-mesocycle") setDeletingCycle(selectedCycle() ?? null);
           else if (value === "swap") { setNotice(null); setMessage(null); setSwapping(true); }
           else if (value === "matrix") onOpenMatrix?.();
           else if (value === "upgrade") {
@@ -439,6 +484,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
             onClose={() => setCopyRequest(null)}
             onDone={(result) => { if (result.ok) setNotice(result.text); else setMessage(result.text); }} /> : null}
           <MesocycleBook mesocycles={periodized.mesocycles} selectedId={selected?.id} resetKey={orderReset} onAdd={onAddMesocycle}
+            onDelete={planDelete === undefined ? undefined : setDeletingCycle}
             onSelect={(id) => { void repository.selectMesocycle(clientId, programId, id).catch(() => undefined); }}
             onReorder={(ids) => {
               setMessage(null);
@@ -462,6 +508,14 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           </View>
         </View>
       ) : null}
+      <ConfirmDialog visible={deletingCycle !== null} destructive confirmBusy={busy} title={`Удалить «${deletingCycle?.title ?? ""}»?`}
+        description="Мезоцикл и все его тренировки, включая записанные результаты, удалятся у этого клиента. У других участников группы их копии останутся. Это нельзя отменить."
+        confirmLabel="Удалить" onCancel={() => setDeletingCycle(null)} onConfirm={() => { void deleteCycle(); }} />
+      <ConfirmDialog visible={confirmDelete} destructive confirmBusy={busy} title={`Удалить программу «${program.title}» полностью?`}
+        description={others.length > 0
+          ? "Удалятся план и все результаты этого клиента. У остальных участников программа останется. Это нельзя отменить."
+          : "Программа, план и все результаты будут удалены. Это нельзя отменить. Если нужно лишь убрать программу из списка — «В архив»."}
+        confirmLabel="Удалить" onCancel={() => setConfirmDelete(false)} onConfirm={() => { void deleteProgram(); }} />
       <ConfirmDialog visible={confirmArchive} confirmBusy={busy} title="Перенести в архив?"
         description={others.length > 0
           ? "Программа уйдёт в архив этого клиента. У остальных участников она останется. Вернуть можно из списка программ."

@@ -13,3 +13,4 @@ export type { ProgramExecution, SaveSetInput, SetIdentity, SetSaveResult, Traini
   TrainingExecutionPort } from "./domain/TrainingExecutionPort.ts";
 export type { WeekExecutionParticipant, WorkoutCopyMapping } from "./domain/WeekCopyParticipant.ts";
 export type { WeekRenumberInput, WeekRenumberParticipant } from "./domain/WeekRenumberParticipant.ts";
+export type { ExecutionCleanupParticipant } from "./domain/ExecutionCleanupParticipant.ts";

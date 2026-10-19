@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Animated, Easing, FlatList, Keyboard, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Check } from "lucide-react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
@@ -8,6 +8,10 @@ import { SearchField } from "./SearchField.tsx";
 export interface DropdownOption<T extends string> {
   readonly value: T;
   readonly label: string;
+  /** Значок слева (UI-OWN-046): получает цвет пункта. */
+  readonly icon?: (color: string) => ReactNode;
+  /** Разрушительное действие — красным (например, «Удалить»). */
+  readonly danger?: boolean;
 }
 
 type Frame = Readonly<{ x: number; y: number; width: number; height: number }>;
@@ -73,12 +77,14 @@ export function DropdownMenu<T extends string>({ visible, anchor, title, note, o
             ListEmptyComponent={<Text style={[styles.note, styles.search, { color: colors.textSecondary }]}>Ничего не найдено</Text>}
             renderItem={({ item: option }) => {
             const active = option.value === selected;
+            const ink = option.danger === true ? colors.danger : active ? colors.accentInk : colors.textPrimary;
             return (
               <Pressable key={option.value} accessibilityRole="radio" accessibilityState={{ checked: active }}
                 accessibilityLabel={option.label}
                 onPress={() => { onSelect(option.value); onClose(); }}
                 style={({ pressed }) => [styles.option, pressed ? { backgroundColor: colors.surfaceRaised } : null]}>
-                <Text style={[styles.label, { color: active ? colors.accentInk : colors.textPrimary }]}>{option.label}</Text>
+                {option.icon !== undefined ? <View style={styles.icon}>{option.icon(option.danger === true ? colors.danger : colors.accentInk)}</View> : null}
+                <Text style={[styles.label, styles.grow, { color: ink }]}>{option.label}</Text>
                 {active ? <Check size={18} color={colors.accentInk} strokeWidth={2} /> : null}
               </Pressable>
             );
@@ -101,6 +107,8 @@ const styles = StyleSheet.create({
   search: { padding: 8 },
   option: { minHeight: 48, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   label: { flexShrink: 1, fontFamily: fonts.medium, fontSize: 14, lineHeight: 18 },
+  grow: { flexGrow: 1 },
+  icon: { width: 20, alignItems: "center" },
   noteBox: { borderTopWidth: 1, marginTop: 4, paddingHorizontal: 14, paddingTop: 8, paddingBottom: 6 },
   note: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
 });

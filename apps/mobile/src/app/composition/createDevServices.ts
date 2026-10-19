@@ -40,7 +40,9 @@ type DevClientServices = ClientRepositoryPort & ClientRecoveryDraftPort & Client
 import { createWeekCopyWorkflow, type TrainingTransaction } from "../../workflows/copyTrainingWeek.ts";
 import { createWeekSwapWorkflow } from "../../workflows/swapTrainingWeeks.ts";
 import { createMesocycleSaveWorkflow } from "../../workflows/saveTrainingMesocycle.ts";
-import type { MesocycleSavePort, WeekCopyPort, WeekSwapPort } from "../../features/training/plans/public.ts";
+import { createMesocycleDeleteWorkflow } from "../../workflows/deleteTrainingMesocycle.ts";
+import { createProgramDeleteWorkflow } from "../../workflows/deleteTrainingProgram.ts";
+import type { MesocycleDeletePort, MesocycleSavePort, ProgramDeletePort, WeekCopyPort, WeekSwapPort } from "../../features/training/plans/public.ts";
 import type { SqliteDatabaseLease } from "../../shared/db/SharedSqliteDatabase.ts";
 
 /** Explicit dev composition. Production boot will get separate, owner-scoped bindings. */
@@ -67,6 +69,8 @@ export interface DevServices {
   readonly weekSwap: WeekSwapPort;
   /** UI-OWN-041: мезоцикл из конструктора — план и проверка результатов удаляемых недель в одной транзакции. */
   readonly mesocycleSave: MesocycleSavePort;
+  /** §48.11, §50.3: удаление мезоцикла и программы у клиента — план и результаты одной транзакцией. */
+  readonly planDelete: MesocycleDeletePort & ProgramDeletePort;
   /** Active session types that can consume a credit, for SESSION_TYPE packs. */
   readonly listCreditSessionTypes: () => Promise<readonly Readonly<{ id: string; name: string }>[]>;
 }
@@ -102,7 +106,8 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
   accounting: AccountingRepositoryPort, measurements: MeasurementRepositoryPort,
   questionnaire: QuestionnaireRepositoryPort, trainingPlans: TrainingPlansRepositoryPort,
   trainingExecution: TrainingExecutionPort, restTimers: RestTimersPort, exercises: ExerciseCatalogPort,
-  weekCopy: WeekCopyPort, weekSwap: WeekSwapPort, mesocycleSave: MesocycleSavePort): DevServices {
+  weekCopy: WeekCopyPort, weekSwap: WeekSwapPort, mesocycleSave: MesocycleSavePort,
+  planDelete: MesocycleDeletePort & ProgramDeletePort): DevServices {
   return {
     runSqliteProbe: () => runF04Probe(() => openExpoSqliteConnection("fitcoach_f04_probe.db")),
     clients,
@@ -120,6 +125,7 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
     weekCopy,
     weekSwap,
     mesocycleSave,
+    planDelete,
     listCreditSessionTypes: async () => (await calendar.listSessionTypes())
       .filter((type) => type.requiresCredit && !type.archived)
       .map((type) => ({ id: type.id, name: type.name })),
@@ -157,6 +163,8 @@ export function createDevRuntime(): DevRuntime {
     exerciseLookup(exercises));
   const weekSwap = createWeekSwapWorkflow(transaction, trainingPlans.weekSwapParticipant, trainingExecution.weekRenumberParticipant);
   const mesocycleSave = createMesocycleSaveWorkflow(transaction, trainingPlans.mesocycleSaveParticipant, trainingExecution.weekCopyParticipant);
+  const planDelete = { ...createMesocycleDeleteWorkflow(transaction, trainingPlans.deleteParticipant, trainingExecution.cleanupParticipant),
+    ...createProgramDeleteWorkflow(transaction, trainingPlans.deleteParticipant, trainingExecution.cleanupParticipant) };
   return {
     boot: new BootCoordinator(createDevBootDependencies(
       () => openExpoSqliteConnection("fitcoach_f03_dev_gate.db"),
@@ -174,6 +182,6 @@ export function createDevRuntime(): DevRuntime {
         await exercises.initialize();
       },
     )),
-    services: createDevServices(clients, calendar, accounting, measurements, questionnaire, trainingPlans, trainingExecution, restTimers, exercises, weekCopy, weekSwap, mesocycleSave),
+    services: createDevServices(clients, calendar, accounting, measurements, questionnaire, trainingPlans, trainingExecution, restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete),
   };
 }

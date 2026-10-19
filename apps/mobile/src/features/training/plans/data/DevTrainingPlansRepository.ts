@@ -12,6 +12,7 @@ import { withRestDefaults } from "../domain/SimplePlanEdits.ts";
 import { DEV_TRAINING_PLANS_LEDGER, devTrainingPlansCatalog } from "./DevTrainingPlansCatalog.ts";
 import { deleteStructure, readStructure, readWorkouts, writeStructure, writeWorkouts } from "./SimplePlanStore.ts";
 import type { MesocycleSavePlansParticipant, MesocycleSaveRequest } from "../domain/MesocycleSave.ts";
+import type { MesocycleDeleteRequest, PlanDeletePlansParticipant } from "../domain/PlanDeletion.ts";
 import { preferredPlacement, type ClientPlacementOptions, type GroupCopy, type Placement, type PlacementProgram,
   type PlacementTarget } from "../domain/Placement.ts";
 import { findCopy, groupOfCopy, readCopy } from "./MesocycleGroupStore.ts";
@@ -764,6 +765,67 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         await tx.run("DELETE FROM dev_training_weeks WHERE workspace_id = ? AND id = ?", [this.workspaceId, week.id]);
       }
       return { program: await programById(tx, this.workspaceId, programId), mesocycleId: cycle.id };
+    },
+    notify: (clientIds) => this.publish({ clientIds }),
+  };
+
+  private async deletableMesocycle(tx: SqliteStatementPort, request: MesocycleDeleteRequest) {
+    await this.assertTargets(tx, request.clientId, request.programId, [request.clientId]);
+    if ((await programById(tx, this.workspaceId, request.programId)).revision !== request.expectedRevision) throw new Error("PROGRAM_REVISION_CONFLICT");
+    const cycles = await readMesocycles(tx, this.workspaceId, request.programId, request.clientId);
+    const cycle = cycles.find((item) => item.id === request.mesocycleId);
+    if (cycle === undefined) throw new Error("TARGET_NOT_FOUND");
+    // §48.11: удаляется, только если у клиента в программе больше одного мезоцикла.
+    if (cycles.length < 2) throw new Error("LAST_MESOCYCLE");
+    return { cycles, cycle };
+  }
+
+  /** §48.11, §50.3: удаление мезоцикла и программы у этого клиента (вызывают workflow вместе с дневником). */
+  readonly deleteParticipant: PlanDeletePlansParticipant<SqliteStatementPort> = {
+    mesocycleWorkouts: async (tx, request) => (await this.deletableMesocycle(tx, request)).cycle.weeks
+      .flatMap((week) => week.workouts.map((workout) => workout.id)),
+    deleteMesocycle: async (tx, request, now) => {
+      const { cycles, cycle } = await this.deletableMesocycle(tx, request);
+      const { clientId, programId } = request;
+      await this.bumpRevision(tx, programId, request.expectedRevision, now);
+      // Выбор переходит к ближайшему: следующему, а если удалён последний — предыдущему (§48.11.1 п. 6).
+      const at = cycles.findIndex((item) => item.id === cycle.id);
+      const nearest = (cycles[at + 1] ?? cycles[at - 1])!;
+      const selected = await selectedMesocycle(tx, this.workspaceId, programId, clientId);
+      const next = selected === null || selected === cycle.id ? nearest.id : selected;
+      await saveSelection(tx, this.workspaceId, programId, clientId, next);
+      await tx.run("DELETE FROM dev_training_structure_versions WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND mesocycle_id = ?",
+        [this.workspaceId, clientId, programId, cycle.id]);
+      await tx.run("DELETE FROM dev_training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key LIKE ?",
+        [this.workspaceId, clientId, programId, `week:${cycle.id}:%`]);
+      for (const week of cycle.weeks) {
+        await writeWorkouts(tx, this.workspaceId, programId, week.id, []);
+        await tx.run("DELETE FROM dev_training_weeks WHERE workspace_id = ? AND id = ?", [this.workspaceId, week.id]);
+      }
+      await tx.run("DELETE FROM dev_training_mesocycles WHERE workspace_id = ? AND id = ?", [this.workspaceId, cycle.id]);
+      return next;
+    },
+    deleteProgram: async (tx, request, now) => {
+      const { clientId, programId } = request;
+      await membership(tx, this.workspaceId, clientId, programId);
+      await this.bumpRevision(tx, programId, request.expectedRevision, now);
+      const scoped = [this.workspaceId, clientId, programId];
+      for (const table of ["dev_training_periodized_drafts", "dev_training_structure_versions", "dev_training_simple_overrides",
+        "dev_training_simple_versions", "dev_training_client_selection"]) {
+        await tx.run(`DELETE FROM ${table} WHERE workspace_id = ? AND client_id = ? AND program_id = ?`, scoped);
+      }
+      await tx.run("DELETE FROM dev_training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND (draft_key = ? OR draft_key LIKE ?)",
+        [this.workspaceId, clientId, programId, `workout:${programId}:%`]);
+      await deleteMemberMesocycles(tx, this.workspaceId, programId, clientId);
+      await tx.run("DELETE FROM dev_training_program_members WHERE workspace_id = ? AND program_id = ? AND client_id = ?",
+        [this.workspaceId, programId, clientId]);
+      const left = await tx.first<{ n: number }>("SELECT count(*) AS n FROM dev_training_program_members WHERE workspace_id = ? AND program_id = ?",
+        [this.workspaceId, programId]);
+      if ((left?.n ?? 0) === 0) {
+        // Последний участник — программа удаляется целиком.
+        await deleteStructure(tx, this.workspaceId, programId);
+        await tx.run("DELETE FROM dev_training_programs WHERE workspace_id = ? AND id = ?", [this.workspaceId, programId]);
+      }
     },
     notify: (clientIds) => this.publish({ clientIds }),
   };

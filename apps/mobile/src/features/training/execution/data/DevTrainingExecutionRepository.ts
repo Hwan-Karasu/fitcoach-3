@@ -16,6 +16,7 @@ import type { RestTimer } from "../domain/RestTimerRules.ts";
 import { DEV_TRAINING_EXECUTION_LEDGER, devTrainingExecutionCatalog } from "./DevTrainingExecutionCatalog.ts";
 import type { WeekExecutionParticipant, WorkoutCopyMapping } from "../domain/WeekCopyParticipant.ts";
 import type { WeekRenumberParticipant } from "../domain/WeekRenumberParticipant.ts";
+import type { ExecutionCleanupParticipant } from "../domain/ExecutionCleanupParticipant.ts";
 
 const OUTCOMES: readonly WorkoutOutcome[] = ["COMPLETED", "MISSED", "CANCELLED"];
 
@@ -549,6 +550,18 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       }
     }
   }
+
+  /** §48.11, §50.3: выполнения и факты клиента в программе (или только перечисленных тренировок) удаляются. */
+  readonly cleanupParticipant: ExecutionCleanupParticipant<SqliteStatementPort> = {
+    remove: async (tx, clientId, programId, plannedWorkoutIds) => {
+      if (plannedWorkoutIds !== null && plannedWorkoutIds.length === 0) return;
+      const filter = plannedWorkoutIds === null ? "" : ` AND planned_workout_id IN (${plannedWorkoutIds.map(() => "?").join(", ")})`;
+      const sessions = await tx.all<{ id: string }>(`SELECT id FROM dev_training_sessions
+        WHERE workspace_id = ? AND client_id = ? AND program_id = ?${filter}`, [this.workspaceId, clientId, programId, ...(plannedWorkoutIds ?? [])]);
+      for (const session of sessions) await this.deleteSession(tx, session.id);
+    },
+    notify: (clientId, programId) => this.publish({ clientId, programId }),
+  };
 
   /** §48.21 п. 6: выполнения переставленных недель получают новый номер недели — те же факты, без копий. */
   readonly weekRenumberParticipant: WeekRenumberParticipant<SqliteStatementPort> = {
