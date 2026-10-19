@@ -54,3 +54,22 @@ export function weekDates(startDate: string, weekIndex: number): readonly [strin
   const to = new Date(from.getTime() + 6 * 86_400_000);
   return [from.toISOString().slice(0, 10), to.toISOString().slice(0, 10)];
 }
+
+const MONTHS = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+const dayMonth = (date: string) => {
+  const [, month, day] = date.split("-").map(Number) as [number, number, number];
+  return `${day} ${MONTHS[month - 1] ?? ""}`;
+};
+
+/** Подпись дат недели для карточки программы: «26 окт — 1 ноя». */
+export function weekRangeLabel(startDate: string, weekIndex: number): string {
+  const [from, to] = weekDates(startDate, weekIndex);
+  return `${dayMonth(from)} — ${dayMonth(to)}`;
+}
+
+export function weeksWord(count: number): string {
+  const tail = count % 100;
+  if (tail >= 11 && tail <= 14) return `${count} недель`;
+  if (count % 10 === 1) return `${count} неделя`;
+  return count % 10 >= 2 && count % 10 <= 4 ? `${count} недели` : `${count} недель`;
+}

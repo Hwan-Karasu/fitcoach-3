@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Pressable, ScrollView, StyleSheet, Text } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../theme/typography.ts";
 
@@ -7,6 +7,8 @@ export interface WeekCardItem {
   readonly index: number;
   readonly caption?: string | null;
   readonly status?: string;
+  /** Цвет типа недели (точка у подписи); без него точки нет. */
+  readonly tone?: string | null;
 }
 
 /** Общая лента недель программы и дневника; выбранная карточка остаётся в поле зрения. */
@@ -31,7 +33,10 @@ export function WeekCards({ weeks, selected, onSelect, disabled = false }: Reado
         borderBottomWidth: selected === week.index ? 3 : 1, opacity: disabled ? 0.6 : 1,
       }]}>
       <Text style={[styles.title, { color: colors.textPrimary }]}>Неделя {week.index}</Text>
-      {week.caption ? <Text style={[styles.caption, { color: colors.textSecondary }]}>{week.caption}</Text> : null}
+      {week.caption ? <View style={styles.captionRow}>
+        {week.tone ? <View style={[styles.dot, { backgroundColor: week.tone }]} /> : null}
+        <Text numberOfLines={1} style={[styles.caption, styles.grow, { color: colors.textSecondary }]}>{week.caption}</Text>
+      </View> : null}
       {week.status ? <Text style={[styles.caption, { color: colors.textSecondary }]}>{week.status}</Text> : null}
     </Pressable>)}
   </ScrollView>;
@@ -42,4 +47,7 @@ const styles = StyleSheet.create({
   card: { minWidth: 128, maxWidth: 220, minHeight: 64, borderWidth: 1, borderRadius: 8, padding: 10, gap: 3 },
   title: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
   caption: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
+  captionRow: { flexDirection: "row", alignItems: "center", gap: 5 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  grow: { flexShrink: 1 },
 });

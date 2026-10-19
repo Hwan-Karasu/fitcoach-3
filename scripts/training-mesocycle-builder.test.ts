@@ -4,7 +4,7 @@ import test from "node:test";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant } from
   "../apps/mobile/src/features/training/plans/data/DevTrainingPlansRepository.ts";
-import { copyWeekPlan, fillEmptyWeeks, resizeBuilderWeeks, type BuilderWeek } from
+import { copyWeekPlan, fillEmptyWeeks, resizeBuilderWeeks, weekRangeLabel, weeksWord, type BuilderWeek } from
   "../apps/mobile/src/features/training/plans/domain/MesocycleBuilder.ts";
 import { addExercise, fillSets, newDraft } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
 import type { PlannedWorkout } from "../apps/mobile/src/features/training/plans/domain/SimplePlanModel.ts";
@@ -74,4 +74,10 @@ test("UI-OWN-038 программа с первым мезоциклом одн�
   } finally {
     await plans.close(); await clients.close();
   }
+});
+
+test("UI-OWN-040 карточка Расширенной программы: даты недели от старта мезоцикла и число недель словом", () => {
+  assert.equal(weekRangeLabel("2026-10-12", 3), "26 окт — 1 ноя");
+  assert.equal(weekRangeLabel("2026-12-28", 1), "28 дек — 3 янв");
+  assert.deepEqual([1, 3, 5, 11, 21, 22].map(weeksWord), ["1 неделя", "3 недели", "5 недель", "11 недель", "21 неделя", "22 недели"]);
 });

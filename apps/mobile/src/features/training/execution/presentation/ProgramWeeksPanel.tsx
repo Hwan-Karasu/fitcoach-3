@@ -136,7 +136,9 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: views, execution
             <Text style={[styles.meta, { color: colors.textSecondary }]}>
               {"Прогресс "}<Text style={[styles.strong, { color: colors.textPrimary }]}>{`${percent(weekDone, weekSets)}%`}</Text>
             </Text>)}
-          <WeekCards weeks={views.map((view) => ({ index: view.index, caption: view.caption, status: weekStatusLabels[weekOf(view.index)] }))}
+          <WeekCards weeks={views.map((view) => ({ index: view.index, caption: view.caption,
+            tone: view.type === undefined ? null : toneOf(view.type) ?? colors.textMuted,
+            status: view.workouts.length === 0 ? "Пусто" : view.index === firstOpen ? "Текущая" : weekStatusLabels[weekOf(view.index)] }))}
             selected={week} onSelect={chooseWeek} />
           {renderWeekActions?.(week)}
         </> : null}

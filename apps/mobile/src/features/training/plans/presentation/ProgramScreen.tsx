@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
-import Sortable from "react-native-sortables";
-import { Bookmark, Ellipsis, Pencil, Plus } from "lucide-react-native";
-import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, InlineNotice, LoadingState, SegmentedControl, SelectionChip, TextField } from "../../../../shared/ui/components/public.ts";
+import { Bookmark, CalendarDays, Ellipsis, Pencil, Plus } from "lucide-react-native";
+import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, InlineNotice, LoadingState, SegmentedControl, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { TrainingProgram } from "../domain/ProgramModel.ts";
@@ -21,6 +20,8 @@ import { weekTypeLabels, type PeriodizedPlan, type WeekType } from "../domain/Pe
 import { setsSummary } from "../domain/SimplePlanRules.ts";
 import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
+import { MesocycleBook } from "./MesocycleBook.tsx";
+import { cycleTypeLabels, weekRangeLabel } from "../domain/MesocycleBuilder.ts";
 
 /** Неделя программы для панели недель (её рисует дневник — другой модуль). */
 export interface ProgramWeeksView {
@@ -100,7 +101,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const scrollByCycle = useRef(new Map<string, number>());
   const cycleKey = periodized?.selectedMesocycleId ?? periodized?.mesocycles[0]?.id ?? "simple";
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
-  const bookRef = useAnimatedRef<Animated.ScrollView>();
+  // Неделя, показанная в карточке Расширенной программы (её выбирает панель недель): для «Копировать неделю».
+  const shownWeek = useRef(1);
   const lookup = useExerciseLookup(exercises);
   const appliedContext = useRef<string | null>(null);
   useEffect(() => {
@@ -195,6 +197,11 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   };
 
   const others = program.memberClientIds.filter((id) => id !== clientId);
+  const selectedCycle = () => periodized?.mesocycles.find((item) => item.id === periodized.selectedMesocycleId) ?? periodized?.mesocycles[0];
+  const menuButton = <View ref={menuAnchor} collapsable={false} style={[styles.more, { borderColor: colors.border }]}>
+    <AppIconButton compact label="Действия программы"
+      icon={<Ellipsis size={20} color={colors.textPrimary} />} onPress={() => setMenuOpen(true)} />
+  </View>;
   // Переключатель «Программа | Шаблоны» (макет владельца, UI-OWN-036): над содержимым, не прокручивается.
   const tabs = renderTemplates !== undefined ? <View style={[styles.tabs, { backgroundColor: colors.canvas }]}>
     <SegmentedControl items={[{ id: "program", label: "Программа" }, { id: "templates", label: "Шаблоны" }]}
@@ -208,7 +215,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     {tabs}
     <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
       scrollEventThrottle={32} onScroll={(event) => scrollByCycle.current.set(cycleKey, event.nativeEvent.contentOffset.y)}>
-      {program.kind === "PERIODIZED" ? <View style={styles.row}><View style={styles.grow}>
+      {program.kind === "PERIODIZED" && periodized !== null && periodized.mesocycles.length === 0 ? <View style={styles.row}><View style={styles.grow}>
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>{program.title}</Text>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>
         {program.kind === "PERIODIZED" ? `${programKindLabels[program.kind]} · ${membersWord(program.memberClientIds.length)}`
@@ -222,6 +229,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           ...(onOpenMatrix !== undefined ? [{ value: "matrix", label: "Матрица недель" }] : []),
           { value: "save-program", label: "Сохранить как шаблон" },
           ...(program.kind === "SIMPLE" && onOpenProgram !== undefined ? [{ value: "upgrade", label: "Создать расширенную на основе" }] : []),
+          ...(program.kind === "PERIODIZED" && weekCopy !== undefined && (selectedCycle()?.weeks.length ?? 0) > 1
+            ? [{ value: "copy-week", label: "Копировать неделю" }] : []),
           ...(program.kind === "PERIODIZED" && (periodized?.mesocycles.length ?? 0) > 0
             ? [{ value: "save-mesocycle", label: "Сохранить мезоцикл как шаблон" }] : []),
           { value: "archive", label: "В архив" }]}
@@ -235,8 +244,16 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           }
           else if (value === "save-program") { setNotice(null); setTemplateForm({ kind: "program", mesocycleId: null, title: program.title }); }
           else if (value === "save-mesocycle") {
-            const cycle = periodized?.mesocycles.find((item) => item.id === periodized.selectedMesocycleId) ?? periodized?.mesocycles[0];
+            const cycle = selectedCycle();
             if (cycle !== undefined) { setNotice(null); setTemplateForm({ kind: "mesocycle", mesocycleId: cycle.id, title: cycle.title }); }
+          }
+          else if (value === "copy-week") {
+            const cycle = selectedCycle();
+            if (cycle !== undefined && periodized !== null) {
+              setNotice(null); setMessage(null);
+              setCopyRequest({ clientId, programId, mesocycleId: cycle.id, targetWeek: shownWeek.current,
+                expectedRevision: periodized.program.revision });
+            }
           }
         }} />
       {message !== null ? <InlineNotice kind="error">{message}</InlineNotice> : null}
@@ -306,7 +323,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           onSelectWeek: (week) => selectWeek("simple", week), weeks: simpleWeeks.map((week) => ({ ...week, caption: null })),
           // Компоновка владельца (UI-OWN-034): название, неделя, тип; «Изменить», «В шаблоны», «⋯».
           header: (week) => <View style={styles.cardHead}>
-            <Text accessibilityRole="header" numberOfLines={2} style={[styles.cardTitle, { color: colors.textPrimary }]}>{program.title}</Text>
+            <Text accessibilityRole="header" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6} style={[styles.cardTitle, { color: colors.textPrimary }]}>{program.title}</Text>
             <View style={styles.cardMeta}>
               <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Неделя ${week} из ${plan.weeks}`}</Text>
               <Text style={[styles.kind, { color: colors.accentInk, borderColor: colors.border }]}>{programKindLabels[program.kind]}</Text>
@@ -317,10 +334,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
               <View style={styles.grow}><AppButton compact variant="secondary" label="В шаблоны"
                 icon={(color) => <Bookmark size={16} color={color} strokeWidth={2} />}
                 onPress={() => { setNotice(null); setTemplateForm({ kind: "program", mesocycleId: null, title: program.title }); }} /></View>
-              <View ref={menuAnchor} collapsable={false} style={[styles.more, { borderColor: colors.border }]}>
-                <AppIconButton compact label="Действия программы"
-                  icon={<Ellipsis size={20} color={colors.textPrimary} />} onPress={() => setMenuOpen(true)} />
-              </View>
+              {menuButton}
             </View>
           </View>,
           afterCard: <AppButton variant="secondary" label="Добавить тренировку"
@@ -364,46 +378,54 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           ) : renderWeeks?.({ key: selected.id, selectedWeek: weeksByCycle[selected.id],
             onSelectWeek: (week) => selectWeek(selected.id, week),
             weeks: selected.weeks.map((week) => ({ index: week.index, caption: weekTypeLabels[week.type], type: week.type, workouts: week.workouts })),
-            weekActions: (weekIndex) => <View style={styles.row}>
-              <View style={styles.grow}><AppButton label="Изменить" onPress={() => onEditWeek(selected.id, weekIndex)} /></View>
-              {weekCopy !== undefined && selected.weeks.length > 1 ? <View style={styles.grow}>
-                <AppButton variant="secondary" label="Копировать" onPress={() => {
-                  setNotice(null); setMessage(null);
-                  setCopyRequest({ clientId, programId, mesocycleId: selected.id, targetWeek: weekIndex,
-                    expectedRevision: periodized.program.revision });
-                }} />
-              </View> : null}
-            </View> })}
+            // Компоновка 2.0 (UI-OWN-040): мезоцикл, даты и номер недели, тип цикла и недели; «Изменить», «В шаблоны», «⋯».
+            header: (weekIndex) => {
+              shownWeek.current = weekIndex;
+              const planWeek = selected.weeks.find((week) => week.index === weekIndex);
+              return <View style={styles.cardHead}>
+                <View>
+                  <Text accessibilityRole="header" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6} style={[styles.cardTitle, { color: colors.textPrimary }]}>{selected.title}</Text>
+                  <Text numberOfLines={1} style={[styles.meta, { color: colors.textSecondary }]}>
+                    {`${program.title} · ${membersWord(program.memberClientIds.length)}`}
+                  </Text>
+                </View>
+                <View style={styles.cardMeta}>
+                  <View style={styles.dates}>
+                    <CalendarDays size={14} color={colors.textSecondary} strokeWidth={2} />
+                    <Text style={[styles.meta, { color: colors.textSecondary }]}>
+                      {selected.startDate != null ? `${weekRangeLabel(selected.startDate, weekIndex)} · Неделя ${weekIndex}`
+                        : `Неделя ${weekIndex} из ${selected.weeks.length}`}
+                    </Text>
+                  </View>
+                  {selected.cycleType != null ? <Text style={[styles.kind, { color: colors.textSecondary, borderColor: colors.border }]}>
+                    {cycleTypeLabels[selected.cycleType]}</Text> : null}
+                  {planWeek !== undefined ? <Text style={[styles.kind, { color: colors.accentInk, borderColor: colors.accentInk }]}>
+                    {weekTypeLabels[planWeek.type]}</Text> : null}
+                </View>
+                <View style={styles.cardActions}>
+                  <View style={styles.grow}><AppButton compact variant="secondary" label="Изменить"
+                    icon={(color) => <Pencil size={16} color={color} strokeWidth={2} />} onPress={() => onEditWeek(selected.id, weekIndex)} /></View>
+                  <View style={styles.grow}><AppButton compact variant="secondary" label="В шаблоны"
+                    icon={(color) => <Bookmark size={16} color={color} strokeWidth={2} />}
+                    onPress={() => { setNotice(null); setTemplateForm({ kind: "mesocycle", mesocycleId: selected.id, title: selected.title }); }} /></View>
+                  {menuButton}
+                </View>
+              </View>;
+            } })}
           {weekCopy !== undefined ? <WeekCopyFlow port={weekCopy} request={copyRequest}
             weeks={selected?.weeks.map((week) => ({ index: week.index, caption: weekTypeLabels[week.type] })) ?? []}
             onClose={() => setCopyRequest(null)}
             onDone={(result) => { if (result.ok) setNotice(result.text); else setMessage(result.text); }} /> : null}
-          {/* Долгое нажатие на мезоцикл — перетащить: порядок свой у этого клиента (у каждого участника своя книга). */}
-          <Animated.ScrollView ref={bookRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.book}>
-          <Sortable.Flex key={orderReset} gap={8} flexWrap="nowrap" activeItemScale={1.03} scrollableRef={bookRef}
-            onDragEnd={({ order }) => {
-              const ids = order(periodized.mesocycles.map((item) => item.id));
+          <MesocycleBook mesocycles={periodized.mesocycles} selectedId={selected?.id} resetKey={orderReset} onAdd={onAddMesocycle}
+            onSelect={(id) => { void repository.selectMesocycle(clientId, programId, id).catch(() => undefined); }}
+            onReorder={(ids) => {
               setMessage(null);
               void repository.reorderMesocycles(clientId, programId, ids).catch(() => {
                 setMessage("Не удалось сохранить порядок мезоциклов. Повторите перетаскивание.");
                 setOrderReset((value) => value + 1);
                 setVersion((value) => value + 1);
               });
-            }}>
-            {periodized.mesocycles.map((item) => (
-              <Sortable.Touchable key={item.id} accessibilityHint="Долгое нажатие — перетащить"
-                accessible accessibilityRole="button" accessibilityLabel={`Мезоцикл: ${item.title}`}
-                accessibilityState={{ selected: item.id === selected?.id }}
-                onAccessibilityTap={() => { void repository.selectMesocycle(clientId, programId, item.id).catch(() => undefined); }}
-                onTap={() => { void repository.selectMesocycle(clientId, programId, item.id).catch(() => undefined); }}>
-                <View pointerEvents="none" importantForAccessibility="no-hide-descendants">
-                  <SelectionChip group="Мезоцикл" label={item.title} selected={item.id === selected?.id} onPress={() => undefined} />
-                </View>
-              </Sortable.Touchable>
-            ))}
-          </Sortable.Flex>
-          <AppIconButton label="Добавить мезоцикл" icon={<Plus size={22} color={colors.accentInk} />} onPress={onAddMesocycle} />
-          </Animated.ScrollView>
+            }} />
         </>;
       })()}
       {renaming !== null ? (
@@ -432,9 +454,10 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   tabs: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 2 },
   cardHead: { gap: 8 },
-  cardTitle: { fontFamily: fonts.bold, fontSize: 20, lineHeight: 25 },
+  cardTitle: { fontFamily: fonts.bold, fontSize: 20 },
   cardMeta: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   kind: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14, borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  dates: { flexDirection: "row", alignItems: "center", gap: 4 },
   cardActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   more: { borderWidth: 1, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
@@ -443,6 +466,5 @@ const styles = StyleSheet.create({
   workout: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 4 },
   workoutTitle: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18, marginBottom: 2 },
   row: { flexDirection: "row", gap: 10 },
-  book: { flexDirection: "row", alignItems: "center", gap: 8, paddingTop: 8, paddingBottom: 4 },
   grow: { flex: 1 },
 });
