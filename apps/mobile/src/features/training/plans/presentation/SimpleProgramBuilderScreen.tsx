@@ -210,5 +210,5 @@ const styles = StyleSheet.create({
   weeks: { flexDirection: "row", alignItems: "center", gap: 4 },
   weeksLabel: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
   weeksValue: { minWidth: 28, textAlign: "center", fontFamily: fonts.semibold, fontSize: 16 },
-  meta: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
+  meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
 });

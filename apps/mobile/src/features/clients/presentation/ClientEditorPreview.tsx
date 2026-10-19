@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   header: { minHeight: 56, borderBottomWidth: 1, flexDirection: "row", alignItems: "center", paddingRight: 16 },
   closeButton: { width: 56, minHeight: 56, alignItems: "center", justifyContent: "center" },
-  closeGlyph: { fontFamily: fonts.regular, fontSize: 24, lineHeight: 29 },
+  closeGlyph: { fontFamily: fonts.regular, fontSize: 20, lineHeight: 26 },
   pageTitle: { fontSize: 18, lineHeight: 23, fontFamily: fonts.bold },
   formContent: { padding: 16, paddingBottom: 32, gap: 12 },
   sectionCard: { borderWidth: 1, borderRadius: 12, padding: 16, gap: 10 },

@@ -49,5 +49,5 @@ export function AppIconButton({ icon, label, onPress, disabled = false, disabled
 const styles = StyleSheet.create({
   button: { width: TOUCH_TARGET, height: TOUCH_TARGET, borderWidth: 2, borderRadius: TOUCH_TARGET / 2, alignItems: "center", justifyContent: "center" },
   badge: { position: "absolute", top: 1, right: 0, minWidth: 17, height: 17, paddingHorizontal: 3, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  badgeText: { fontSize: 10, lineHeight: 11, fontFamily: fonts.bold },
+  badgeText: { fontSize: 11, lineHeight: 14, fontFamily: fonts.bold },
 });

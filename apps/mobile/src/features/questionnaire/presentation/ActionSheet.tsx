@@ -58,5 +58,5 @@ const styles = StyleSheet.create({
   title: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16, paddingHorizontal: 20, paddingBottom: 6 },
   item: { minHeight: 48, paddingHorizontal: 20, paddingVertical: 12, justifyContent: "center" },
   label: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 18 },
-  detail: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14, marginTop: 2 },
+  detail: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, marginTop: 2 },
 });

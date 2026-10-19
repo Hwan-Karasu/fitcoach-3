@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
   field: { gap: 6 },
   soon: { flex: 1, minHeight: 44, borderWidth: 1, borderStyle: "dashed", borderRadius: 12, alignItems: "center", justifyContent: "center" },
   soonText: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
-  soonBadge: { fontFamily: fonts.medium, fontSize: 10, lineHeight: 13 },
+  soonBadge: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
   dirty: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
   card: { borderWidth: 1, borderRadius: 16, padding: 12, gap: 8 },
   eyebrow: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, letterSpacing: 1.2, textTransform: "uppercase" },

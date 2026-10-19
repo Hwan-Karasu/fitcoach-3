@@ -82,5 +82,5 @@ const styles = StyleSheet.create({
   field: { gap: 6 },
   label: { fontSize: 13, lineHeight: 18, fontFamily: fonts.bold },
   input: { minHeight: 42, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
-  helper: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 16 },
+  helper: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
 });

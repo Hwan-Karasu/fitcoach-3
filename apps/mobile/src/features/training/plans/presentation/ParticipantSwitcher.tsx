@@ -61,7 +61,7 @@ export function ParticipantSwitcher({ clientId, anchorClientId, programId, mesoc
                 onLayout={(event) => positions.current.set(id, event.nativeEvent.layout.x)} onPress={() => onSelect(byClient.get(id)!)}
                 style={({ pressed }) => [styles.chip, current ? shadow.control : null, {
                   backgroundColor: current ? colors.surface : pressed ? colors.surfaceRaised : "transparent", opacity: busy && !current ? 0.6 : 1 }]}>
-                <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}
+                <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.85}
                   style={[styles.chipText, current ? styles.chipCurrent : null, { color: current ? colors.accentInk : colors.textSecondary }]}>{name}</Text>
               </Pressable>
             );

@@ -268,7 +268,7 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
             onSave(target, type === "DROP" ? { fields: previous.values, drops: previous.drops } : { fields: previous.values });
           }}>
           <Text style={[styles.previousText, { color: previous === undefined ? colors.textMuted : colors.accentInk }]} numberOfLines={1}
-            adjustsFontSizeToFit minimumFontScale={0.75}>
+            adjustsFontSizeToFit minimumFontScale={0.85}>
             {previousText}
           </Text>
         </Pressable>
@@ -906,7 +906,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
 const styles = StyleSheet.create({
   center: { flex: 1, padding: 16, gap: 12, justifyContent: "center" },
   content: { padding: 16, gap: 12 },
-  heading: { flex: 1, fontFamily: fonts.bold, fontSize: 22, lineHeight: 27, letterSpacing: -0.2 },
+  heading: { flex: 1, fontFamily: fonts.bold, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
   topCard: { ...shadow.card, borderRadius: 22, padding: 16, gap: 12 },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   stripe: { width: 4, alignSelf: "stretch", minHeight: 26, borderRadius: 2 },
@@ -952,7 +952,7 @@ const styles = StyleSheet.create({
   plan: { flex: 1, fontFamily: fonts.semibold, fontSize: 12, textAlign: "center" },
   previous: { flex: 1, minHeight: 34, justifyContent: "center" },
   previousChip: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 2 },
-  previousText: { fontFamily: fonts.semibold, fontSize: 11, textAlign: "center" },
+  previousText: { fontFamily: fonts.semibold, fontSize: 12, textAlign: "center" },
   instructionText: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, borderLeftWidth: 2, paddingLeft: 8,
     marginHorizontal: 2, marginBottom: 2 },
   noteAdd: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 40, alignSelf: "flex-start", paddingHorizontal: 2 },
@@ -964,7 +964,7 @@ const styles = StyleSheet.create({
   deleteRun: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 48, marginTop: 4 },
   deleteRunText: { fontFamily: fonts.medium, fontSize: 13 },
   sideLabel: { width: 14, textAlign: "center", fontFamily: fonts.semibold, fontSize: 12 },
-  dropLabel: { flex: 1, fontFamily: fonts.medium, fontSize: 11, textAlign: "right", paddingRight: 4 },
+  dropLabel: { flex: 1, fontFamily: fonts.medium, fontSize: 12, textAlign: "right", paddingRight: 4 },
   inputHead: { width: 46 },
   input: { width: 46, height: 44, borderWidth: 1.5, borderRadius: 12, textAlign: "center", fontFamily: fonts.bold,
     fontSize: 15, paddingHorizontal: 2, paddingVertical: 0 },

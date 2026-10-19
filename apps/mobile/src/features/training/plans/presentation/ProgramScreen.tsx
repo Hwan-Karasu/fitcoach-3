@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   tabs: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 2 },
   cardHead: { gap: 12 },
-  cardTitle: { fontFamily: fonts.bold, fontSize: 19, letterSpacing: -0.2 },
+  cardTitle: { fontFamily: fonts.bold, fontSize: 18, letterSpacing: -0.2 },
   cardMeta: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
   kind: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, overflow: "hidden" },
   kindStrong: { fontFamily: fonts.bold },

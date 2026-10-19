@@ -26,8 +26,8 @@ export default function FoundationScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#f4f7fa" },
   content: { flex: 1, justifyContent: "center", paddingHorizontal: 28, gap: 18 },
-  label: { color: "#40688b", fontSize: 11, fontFamily: fonts.bold, letterSpacing: 1.4 },
-  title: { color: "#162b3c", fontSize: 25, fontFamily: fonts.bold },
+  label: { color: "#40688b", fontSize: 12, fontFamily: fonts.bold, letterSpacing: 1.4 },
+  title: { color: "#162b3c", fontSize: 20, fontFamily: fonts.bold },
   body: { color: "#345067", fontFamily: fonts.regular, fontSize: 14, lineHeight: 22 },
   note: { color: "#718397", fontFamily: fonts.regular, fontSize: 12 },
 });

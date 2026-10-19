@@ -117,7 +117,7 @@ export function RootHeader({
 const styles = StyleSheet.create({
   titleSlot: { flex: 1, height: SCREEN_HEADER_HEIGHT - 2, marginLeft: 4 },
   layer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, flexDirection: "row", alignItems: "center", gap: 8 },
-  brand: { flexShrink: 1, fontFamily: fonts.bold, fontSize: 17, lineHeight: 23 },
+  brand: { flexShrink: 1, fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
   title: { flexShrink: 1, fontFamily: fonts.bold, fontSize: 18, lineHeight: 23 },
   searchField: { flex: 1, height: 40, marginRight: 4, borderWidth: 1, borderRadius: 10, paddingLeft: 10, paddingRight: 2,
     flexDirection: "row", alignItems: "center", gap: 8 },

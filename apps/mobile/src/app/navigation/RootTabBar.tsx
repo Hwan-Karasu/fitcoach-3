@@ -74,5 +74,5 @@ const styles = StyleSheet.create({
   focused: { flex: 1.25 },
   label: { fontSize: 12, lineHeight: 15 },
   badge: { position: "absolute", top: -4, left: 14, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  badgeText: { fontFamily: fonts.bold, fontSize: 10, lineHeight: 12 },
+  badgeText: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14 },
 });

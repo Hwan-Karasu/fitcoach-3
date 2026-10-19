@@ -154,7 +154,7 @@ export function MonthGrid({ viewMonth, selected, today, counts, onBrowse, onSele
 
 const styles = StyleSheet.create({
   card: { borderRadius: 20, padding: CARD_PADDING, overflow: "hidden" },
-  title: { height: 32, fontSize: 17, lineHeight: 30, fontFamily: fonts.bold, paddingLeft: 6, paddingRight: 110 },
+  title: { height: 32, fontSize: 16, lineHeight: 21, fontFamily: fonts.bold, paddingLeft: 6, paddingRight: 110 },
   today: { position: "absolute", top: CARD_PADDING, right: CARD_PADDING + 2, height: 32, borderRadius: 16,
     paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 5 },
   todayText: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
@@ -164,5 +164,5 @@ const styles = StyleSheet.create({
   cell: { flex: 1, padding: 2 },
   dayBox: { height: 42, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   date: { fontSize: 14, lineHeight: 17 },
-  count: { fontSize: 10, lineHeight: 11, fontFamily: fonts.bold },
+  count: { fontSize: 11, lineHeight: 14, fontFamily: fonts.bold },
 });

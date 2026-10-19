@@ -157,9 +157,9 @@ export function ClientHomePreview({ client, summary, onEdit, onOpenAccounting, o
 const styles = StyleSheet.create({
   hero: { borderWidth: 1, borderRadius: 16, padding: 16, flexDirection: "row", gap: 14, alignItems: "center" },
   avatar: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 21, lineHeight: 27, fontFamily: fonts.bold },
+  avatarText: { fontSize: 20, lineHeight: 26, fontFamily: fonts.bold },
   heroText: { flex: 1, gap: 2 },
-  name: { fontSize: 19, lineHeight: 25, fontFamily: fonts.bold },
+  name: { fontSize: 18, lineHeight: 23, fontFamily: fonts.bold },
   detail: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   tiles: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tile: { flexGrow: 1, flexBasis: 100 },

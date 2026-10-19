@@ -110,5 +110,5 @@ const styles = StyleSheet.create({
   grow: { flexGrow: 1 },
   icon: { width: 20, alignItems: "center" },
   noteBox: { borderTopWidth: 1, marginTop: 4, paddingHorizontal: 14, paddingTop: 8, paddingBottom: 6 },
-  note: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
+  note: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
 });

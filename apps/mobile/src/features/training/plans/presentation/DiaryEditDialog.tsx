@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: "center", padding: 20 },
   scrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.48)" },
   card: { maxHeight: "90%", width: "100%", borderWidth: 1, borderRadius: 16, padding: 16, gap: 10 },
-  title: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
+  title: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
   hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   list: { flexGrow: 0 },
   listContent: { gap: 8 },

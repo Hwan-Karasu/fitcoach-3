@@ -42,5 +42,5 @@ export function StatusTag({ kind, label }: Readonly<{ kind: StatusKind; label: s
 const styles = StyleSheet.create({
   tag: { minHeight: 28, borderWidth: 1, borderRadius: 14, paddingHorizontal: 8, paddingVertical: 3, flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 5 },
   marker: { fontSize: 12, lineHeight: 16, fontFamily: fonts.bold },
-  label: { fontSize: 10, lineHeight: 14, fontFamily: fonts.bold, flexShrink: 1 },
+  label: { fontSize: 11, lineHeight: 14, fontFamily: fonts.bold, flexShrink: 1 },
 });

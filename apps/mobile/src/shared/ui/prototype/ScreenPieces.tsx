@@ -69,12 +69,12 @@ export function PrototypeLink({
 
 const styles = StyleSheet.create({
   screenContent: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 36, gap: 12 },
-  pageTitle: { fontSize: 19, lineHeight: 25, fontFamily: fonts.bold },
+  pageTitle: { fontSize: 18, lineHeight: 23, fontFamily: fonts.bold },
   description: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   sectionHeading: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold, marginTop: 8 },
   link: { minHeight: 64, borderWidth: 2, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 12 },
   linkText: { flex: 1, gap: 3 },
   linkTitle: { fontSize: 13, lineHeight: 18, fontFamily: fonts.bold },
-  linkDetail: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14 },
-  chevron: { fontFamily: fonts.regular, fontSize: 22, lineHeight: 25 },
+  linkDetail: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  chevron: { fontFamily: fonts.regular, fontSize: 20, lineHeight: 26 },
 });

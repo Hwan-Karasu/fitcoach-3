@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
   swatch: { width: 14, height: 14, borderRadius: 4 },
   optionText: { flex: 1, gap: 2 },
   optionTitle: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
-  optionHint: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14 },
+  optionHint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   rpeRow: { flexDirection: "row", gap: 4 },
   rpe: { flex: 1, minWidth: 0, height: 44, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   rpeText: { fontFamily: fonts.semibold, fontSize: 14 },

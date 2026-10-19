@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
   anchor: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12 },
   sectionHead: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 12, paddingRight: 4, minHeight: 56 },
   sectionTitle: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
-  meta: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14 },
+  meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   fieldRow: { flexDirection: "row", alignItems: "stretch", minHeight: 52, borderTopWidth: StyleSheet.hairlineWidth },
   handle: { width: 40, flex: 1, alignItems: "center", justifyContent: "center" },
   frameTop: { borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1, borderTopLeftRadius: 12, borderTopRightRadius: 12,

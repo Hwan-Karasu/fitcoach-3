@@ -434,5 +434,5 @@ const styles = StyleSheet.create({
   stepperValue: { flex: 1, textAlign: "center", fontSize: 15, lineHeight: 22, fontFamily: fonts.bold },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   selected: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
-  hint: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 16 },
+  hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
 });

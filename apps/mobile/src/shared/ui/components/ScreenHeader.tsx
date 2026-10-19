@@ -56,6 +56,6 @@ const styles = StyleSheet.create({
   mark: { width: 40, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   markText: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 20 },
   text: { flex: 1, minWidth: 0, justifyContent: "center" },
-  title: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 21 },
+  title: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
   subtitle: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 17 },
 });

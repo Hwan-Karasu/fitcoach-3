@@ -203,5 +203,5 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
 const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, justifyContent: "center", padding: 24, gap: 16 },
-  warning: { paddingHorizontal: 16, paddingVertical: 6, fontFamily: fonts.regular, fontSize: 11, lineHeight: 16 },
+  warning: { paddingHorizontal: 16, paddingVertical: 6, fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
 });

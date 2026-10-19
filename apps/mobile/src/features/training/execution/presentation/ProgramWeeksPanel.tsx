@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   title: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 23 },
   volume: { alignItems: "flex-end" },
   volumeLabel: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, textTransform: "uppercase", letterSpacing: 1 },
-  volumeValue: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
+  volumeValue: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
   workoutMeta: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
   barRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   track: { flex: 1, height: 6, borderRadius: 3, overflow: "hidden" },

@@ -245,7 +245,7 @@ export function ClientAccountingScreen({ clientId, repository, listCreditSession
 
 const styles = StyleSheet.create({
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  hint: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 16 },
+  hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   summary: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 4 },
   big: { fontSize: 18, lineHeight: 23, fontFamily: fonts.bold },
   card: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 8 },

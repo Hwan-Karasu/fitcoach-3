@@ -140,7 +140,7 @@ export function DurationWheelPicker({ visible, title, value, min, max, clearLabe
             pickerFeedback={() => Haptics.selectionAsync().catch(() => undefined)}
             styles={{
               backgroundColor: colors.surface,
-              pickerItem: { fontFamily: fonts.medium, fontSize: 19, color: colors.textMuted },
+              pickerItem: { fontFamily: fonts.medium, fontSize: 18, color: colors.textMuted },
               selectedPickerItem: { fontFamily: fonts.semibold, color: colors.textPrimary },
               pickerLabel: { fontFamily: fonts.medium, fontSize: 13, color: colors.textSecondary },
               pickerItemContainer: { height: 44 },
