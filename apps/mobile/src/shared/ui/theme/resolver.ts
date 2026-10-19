@@ -1,4 +1,5 @@
-import { catalogThemes } from "./catalog.generated.ts";
+import { mix } from "./colorAlpha.ts";
+import { appThemes as catalogThemes } from "./themes.ts";
 
 export type ThemeId = typeof catalogThemes[number]["id"];
 export type ThemePreference = Readonly<{ themeId: string | null; accentId: string | null }>;
@@ -18,6 +19,8 @@ export interface PaletteTokens {
   readonly accentFill: string;
   readonly onAccentFill: string;
   readonly accentInk: string;
+  /** Мягкий фон акцента (brandSoft «Зефирки»): второстепенные кнопки, плашки, выбранное. */
+  readonly accentSoft: string;
   readonly focusRing: string;
   readonly success: string;
   readonly warning: string;
@@ -64,6 +67,7 @@ export function resolvePalette(preference: ThemePreference, fallbackThemeId: The
       onAccentFill: accent.resolvedOnFill,
       accentInk: accent.resolvedInk,
       focusRing: accent.resolvedInk,
+      accentSoft: "soft" in accent ? accent.soft : mix(theme.surface, accent.hex, theme.tone === "light" ? 0.13 : 0.22),
       success: theme.status.success,
       warning: theme.status.warning,
       danger: theme.status.danger,

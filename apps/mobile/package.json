@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@expo-google-fonts/inter": "0.4.2",
+    "@expo-google-fonts/manrope": "0.4.2",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-community/datetimepicker": "9.1.0",
     "@react-navigation/bottom-tabs": "7.19.2",

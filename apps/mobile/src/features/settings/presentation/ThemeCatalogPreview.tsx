@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { AccessibilityInfo, BackHandler, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { catalogThemes } from "../../../shared/ui/theme/catalog.generated.ts";
+import { appThemes as catalogThemes } from "../../../shared/ui/theme/themes.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { AccentSwatch } from "../../../shared/ui/theme/AccentSwatch.tsx";
 import { ThemeCard } from "../../../shared/ui/theme/ThemeCard.tsx";

@@ -1,9 +1,9 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import { catalogThemes } from "./catalog.generated.ts";
+import { appThemes as catalogThemes } from "./themes.ts";
 import { resolvePalette, type ResolvedPalette, type ThemeId } from "./resolver.ts";
 
 // Development-only presentation state. The eventual Settings repository owns persistence.
-const previewFallbackThemeId: ThemeId = "polar-teal";
+const previewFallbackThemeId: ThemeId = "zefirka";
 
 interface PrototypeThemeState {
   readonly palette: ResolvedPalette;

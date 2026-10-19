@@ -6,11 +6,11 @@ import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../theme/typography.ts";
 import { AppIconButton } from "./AppIconButton.tsx";
 
-/** Высота карточки шапки — одна на всех экранах (UI-OWN-035). */
+/** Высота строки шапки — одна на всех экранах (UI-OWN-035). */
 export const SCREEN_HEADER_HEIGHT = 56;
 
 /**
- * Шапка экрана — карточка одной высоты на всех экранах (UI-OWN-035, макет владельца): «←», знак (аватар клиента),
+ * Шапка экрана — строка одной высоты на всех экранах (UI-OWN-035; «Зефирка», UI-OWN-048 — без карточки): «←», знак,
  * заголовок и подзаголовок, справа действия. `insetTop: false` — для вложенного стека, где отступ уже есть.
  */
 export function ScreenHeader({ title, subtitle, mark, onBack, right, insetTop = true, children }: Readonly<{
@@ -28,13 +28,13 @@ export function ScreenHeader({ title, subtitle, mark, onBack, right, insetTop = 
   const colors = palette.tokens;
   const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.outer, { backgroundColor: colors.canvas, paddingTop: (insetTop ? insets.top : 0) + 6 }]}>
-      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={[styles.outer, { backgroundColor: colors.canvas, paddingTop: (insetTop ? insets.top : 0) + 8 }]}>
+      <View style={styles.card}>
         {onBack !== undefined ? <AppIconButton compact label="Назад"
-          icon={<ArrowLeft size={21} color={colors.textPrimary} strokeWidth={1.9} />} onPress={onBack} /> : <View style={styles.gap} />}
+          icon={<ArrowLeft size={22} color={colors.textPrimary} strokeWidth={2} />} onPress={onBack} /> : <View style={styles.gap} />}
         {children ?? <>
           {mark !== undefined ? (
-            <View style={[styles.mark, { backgroundColor: colors.surfaceRaised }]}>
+            <View style={[styles.mark, { backgroundColor: colors.accentSoft }]}>
               <Text numberOfLines={1} style={[styles.markText, { color: colors.accentInk }]}>{mark}</Text>
             </View>
           ) : null}
@@ -50,13 +50,12 @@ export function ScreenHeader({ title, subtitle, mark, onBack, right, insetTop = 
 }
 
 const styles = StyleSheet.create({
-  outer: { paddingHorizontal: 12, paddingBottom: 6 },
-  card: { height: SCREEN_HEADER_HEIGHT, flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: 14,
-    paddingHorizontal: 4, overflow: "hidden" },
-  gap: { width: 6 },
-  mark: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  markText: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
-  text: { flex: 1, minWidth: 0, justifyContent: "center", paddingLeft: 2 },
-  title: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
-  subtitle: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 15 },
+  outer: { paddingHorizontal: 12, paddingBottom: 4 },
+  card: { height: SCREEN_HEADER_HEIGHT, flexDirection: "row", alignItems: "center", gap: 8 },
+  gap: { width: 4 },
+  mark: { width: 40, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  markText: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 20 },
+  text: { flex: 1, minWidth: 0, justifyContent: "center" },
+  title: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 21 },
+  subtitle: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 17 },
 });

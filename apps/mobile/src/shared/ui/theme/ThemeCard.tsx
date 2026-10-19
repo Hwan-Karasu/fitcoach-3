@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import type { catalogThemes } from "./catalog.generated.ts";
+import type { appThemes as catalogThemes } from "./themes.ts";
 import { fonts } from "./typography.ts";
 
 type CatalogTheme = typeof catalogThemes[number];

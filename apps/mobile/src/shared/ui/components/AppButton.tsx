@@ -2,6 +2,8 @@ import { useState, type ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../theme/typography.ts";
+import { radius, TOUCH_TARGET } from "../theme/style.ts";
+import { withAlpha } from "../theme/colorAlpha.ts";
 
 export type AppButtonVariant = "primary" | "secondary" | "ghost" | "destructive";
 
@@ -17,11 +19,11 @@ interface AppButtonProps {
   readonly busyLabel?: string;
   readonly accessibilityLabel?: string;
   readonly testID?: string;
-  /** Компактная кнопка для плотных окон: высота 40, текст 14. */
+  /** Компактная: меньше отступы и текст 13; высота та же — 44 (UI-OWN-048). */
   readonly compact?: boolean;
 }
 
-/** Главная — залитая акцентом; второстепенные — тонкая рамка без заливки (UI-OWN-008/010). */
+/** Стиль «Зефирка» (UI-OWN-048): главная — заливка акцентом, второстепенная — мягкий фон акцента, без рамок. */
 export function AppButton({
   label,
   onPress,
@@ -39,15 +41,10 @@ export function AppButton({
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const unavailable = disabled || busy;
-  const backgroundColor = variant === "primary" ? colors.accentFill : "transparent";
+  const backgroundColor = variant === "primary" ? colors.accentFill : variant === "secondary" ? colors.accentSoft
+    : variant === "destructive" ? withAlpha(colors.danger, 0.1) : "transparent";
   const foregroundColor = variant === "primary" ? colors.onAccentFill : variant === "destructive" ? colors.danger : colors.accentInk;
-  const borderColor = focused
-    ? colors.focusRing
-    : variant === "destructive"
-      ? colors.danger
-      : variant === "secondary"
-        ? colors.border
-        : backgroundColor;
+  const borderColor = focused ? colors.focusRing : "transparent";
 
   return (
     <Pressable
@@ -60,14 +57,12 @@ export function AppButton({
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       testID={testID}
-      hitSlop={compact ? 6 : 3}
       style={({ pressed }) => [
         styles.button,
         compact ? styles.compact : null,
         {
-          backgroundColor: pressed && variant !== "primary" ? colors.surfaceRaised : backgroundColor,
+          backgroundColor: pressed && variant === "ghost" ? colors.surfaceRaised : backgroundColor,
           borderColor,
-          borderWidth: focused ? 2 : 1,
           opacity: unavailable ? 0.5 : pressed ? 0.85 : 1,
         },
       ]}
@@ -81,9 +76,9 @@ export function AppButton({
 }
 
 const styles = StyleSheet.create({
-  button: { minHeight: 42, borderRadius: 8, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
-  compact: { minHeight: 36, paddingHorizontal: 10 },
+  button: { minHeight: TOUCH_TARGET, borderRadius: radius.md, borderWidth: 2, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
+  compact: { paddingHorizontal: 10 },
   compactLabel: { fontSize: 13, lineHeight: 17 },
   content: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  label: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18, textAlign: "center", flexShrink: 1 },
+  label: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 18, textAlign: "center", flexShrink: 1 },
 });

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text } from "react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../theme/typography.ts";
+import { radius, shadow, TOUCH_TARGET } from "../theme/style.ts";
 
 interface SelectionChipProps {
   readonly group: string;
@@ -28,9 +29,10 @@ export function SelectionChip({ group, label, selected, onPress, disabled = fals
       onBlur={() => setFocused(false)}
       style={({ pressed }) => [
         styles.chip,
+        selected ? null : shadow.control,
         {
           backgroundColor: selected ? colors.accentFill : colors.surface,
-          borderColor: focused ? colors.focusRing : selected ? colors.accentFill : colors.border,
+          borderColor: focused ? colors.focusRing : "transparent",
           opacity: disabled ? 0.5 : pressed ? 0.8 : 1,
         },
       ]}
@@ -43,6 +45,6 @@ export function SelectionChip({ group, label, selected, onPress, disabled = fals
 }
 
 const styles = StyleSheet.create({
-  chip: { minHeight: 36, borderRadius: 18, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6, justifyContent: "center" },
-  label: { fontSize: 13, lineHeight: 18, fontFamily: fonts.bold, textAlign: "center" },
+  chip: { minHeight: TOUCH_TARGET, borderRadius: radius.pill, borderWidth: 2, paddingHorizontal: 14, justifyContent: "center" },
+  label: { fontSize: 14, lineHeight: 18, fontFamily: fonts.semibold, textAlign: "center" },
 });
