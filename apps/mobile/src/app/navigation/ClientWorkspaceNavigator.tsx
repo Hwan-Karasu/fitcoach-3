@@ -71,7 +71,7 @@ function MoreNavigator({ client, questionnaire, onClose, onOpenClients }: Readon
   );
 }
 
-export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, questionnaire, trainingPlans, trainingExecution, restTimers, activeWorkouts, onOpenWorkout, exercises, exerciseLookup, weekCopy, weekSwap, mesocycleSave, onOpenEdit, onOpenAccounting,
+export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, questionnaire, trainingPlans, trainingExecution, restTimers, activeWorkouts, onOpenWorkout, onOpenClientPrograms, exercises, exerciseLookup, weekCopy, weekSwap, mesocycleSave, onOpenEdit, onOpenAccounting,
   onOpenMeasurements, onClose, onOpenClients, onOpenExercise }: Readonly<{
   clientId: string;
   repository: ClientRepositoryPort & ClientRosterPort;
@@ -83,6 +83,8 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   restTimers: RestTimersPort;
   activeWorkouts: ActiveWorkoutsPort;
   onOpenWorkout: (slot: WorkoutSlot) => void;
+  /** UI-OWN-043: «назад» с программы другого участника группы — его карточка, список программ. */
+  onOpenClientPrograms: (clientId: string) => void;
   exercises: ExerciseCatalogPort;
   exerciseLookup: ExerciseLookupPort;
   weekCopy: WeekCopyPort;
@@ -175,7 +177,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
         header: () => <ClientHeader client={client} subtitle={workspaceTabs.Nutrition} onBack={onClose} onClients={onOpenClients} /> }} />
       <Tabs.Screen name="Training" options={{ tabBarLabel: workspaceTabs.Training, tabBarAccessibilityLabel: workspaceTabs.Training}}>
         {() => <TrainingNavigator clientId={client.id} clientName={client.displayName} clientEmoji={client.emoji} repository={trainingPlans}
-          execution={trainingExecution} restTimers={restTimers} activeWorkouts={activeWorkouts} onOpenWorkout={onOpenWorkout}
+          execution={trainingExecution} restTimers={restTimers} activeWorkouts={activeWorkouts} onOpenWorkout={onOpenWorkout} onOpenClientPrograms={onOpenClientPrograms}
           listCandidates={listCandidates} onExitClient={onClose} onOpenClients={onOpenClients}
           exercises={exercises} exerciseLookup={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap} mesocycleSave={mesocycleSave} onOpenExercise={onOpenExercise} />}
       </Tabs.Screen>

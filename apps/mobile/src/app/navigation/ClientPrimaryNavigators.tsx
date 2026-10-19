@@ -113,7 +113,7 @@ export function NutritionNavigator() {
  * Стек не сбрасывается при смене вкладок; после создания в стеке «список → программа».
  * Шапка — общая строка карточки клиента (UI-OWN-001), назад — системной кнопкой.
  */
-export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExercise, repository, execution, restTimers, activeWorkouts, onOpenWorkout,
+export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExercise, repository, execution, restTimers, activeWorkouts, onOpenWorkout, onOpenClientPrograms,
   listCandidates, exercises, exerciseLookup, weekCopy, weekSwap, mesocycleSave, onExitClient, onOpenClients }: Readonly<{
   clientId: string;
   clientName: string;
@@ -123,6 +123,8 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
   restTimers: RestTimersPort;
   activeWorkouts: ActiveWorkoutsPort;
   onOpenWorkout: (slot: WorkoutSlot) => void;
+  /** «Назад» с программы участника группы (не клиента карточки) — список программ этого участника. */
+  onOpenClientPrograms: (clientId: string) => void;
   listCandidates: () => Promise<readonly TrainingParticipantCandidate[]>;
   exercises: ExerciseCatalogPort;
   exerciseLookup: ExerciseLookupPort;
@@ -164,7 +166,10 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
           if (route.name === "TrainingWorkout") {
             const params = route.params as TrainingRoutes["TrainingWorkout"];
             navigation.popTo("TrainingProgram", { programId: params.programId, weekIndex: params.weekIndex, mesocycleId: params.mesocycleId });
-          } else if (route.name === "TrainingProgram") navigation.popTo("TrainingIndex");
+          } else if (route.name === "TrainingProgram") {
+            // Решение владельца: «назад» ведёт к программам того участника, чьи данные открыты.
+            if (participant !== null) onOpenClientPrograms(participant); else navigation.popTo("TrainingIndex");
+          }
           else if (route.name === "TrainingIndex") onExitClient();
           else navigation.goBack();
         }} />,
