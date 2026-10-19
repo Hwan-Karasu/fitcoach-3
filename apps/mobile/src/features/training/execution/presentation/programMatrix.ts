@@ -1,4 +1,4 @@
-import type { PlannedSet, PlannedWorkout } from "../../plans/public.ts";
+import type { PlannedSet, PlannedWorkout, WeekType } from "../../plans/public.ts";
 import type { SetFact, SetValues } from "../domain/ExecutionModel.ts";
 import type { SetField } from "../domain/ExecutionRules.ts";
 import type { ProgramExecution } from "../domain/TrainingExecutionPort.ts";
@@ -18,6 +18,8 @@ export interface MatrixFormat {
 export interface MatrixWeek {
   readonly index: number;
   readonly caption: string | null;
+  /** Тип недели Расширенной программы — цвет колонки (UI-OWN-038). */
+  readonly type?: WeekType;
   readonly workouts: readonly PlannedWorkout[];
 }
 
@@ -49,7 +51,7 @@ export interface MatrixSection {
 }
 
 export interface ProgramMatrix {
-  readonly weeks: readonly Readonly<{ index: number; caption: string | null }>[];
+  readonly weeks: readonly Readonly<{ index: number; caption: string | null; type?: WeekType }>[];
   readonly sections: readonly MatrixSection[];
   /** Тоннаж недели, кг. */
   readonly totals: ReadonlyMap<number, number>;
@@ -112,7 +114,7 @@ export function buildProgramMatrix(weeks: readonly MatrixWeek[], executions: rea
     }
   }
   return {
-    weeks: weeks.map((week) => ({ index: week.index, caption: week.caption })),
+    weeks: weeks.map((week) => ({ index: week.index, caption: week.caption, ...(week.type === undefined ? {} : { type: week.type }) })),
     sections: [...sections.entries()].map(([key, section]) => ({ key, title: section.title,
       rows: [...section.rows.entries()].map(([rowKey, row]) => ({ key: rowKey, exerciseId: row.exerciseId, cells: row.cells })) })),
     totals,

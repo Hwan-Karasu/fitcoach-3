@@ -5,8 +5,9 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withDecay, type SharedValue } from "react-native-reanimated";
 import { InlineNotice, LoadingState, SearchableSelect, SelectionChip } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
+import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
-import { useExerciseLookup, weekTypeLabels, type ExerciseLookupPort, type Mesocycle, type TrainingPlansRepositoryPort,
+import { useExerciseLookup, weekTypeLabels, weekTypeTone, type ExerciseLookupPort, type Mesocycle, type TrainingPlansRepositoryPort,
   type TrainingProgram } from "../../plans/public.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import { diaryFields, compactWithDrops, planText } from "./setFormat.ts";
@@ -128,7 +129,7 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
             weeks: item.weeks.map((week) => ({ index: week.index, caption: null, workouts: week.workouts })) })))
           : plans.getMesocycleVersions(clientId, programId, mesocycleId ?? "").then((items) => items.map((item) => ({ id: item.id,
             label: versionLabel(item.validFrom, item.validTo), current: item.validTo === null,
-            weeks: item.structure.weeks.map((week) => ({ index: week.index, caption: weekTypeLabels[week.type], workouts: week.workouts })) }))),
+            weeks: item.structure.weeks.map((week) => ({ index: week.index, caption: weekTypeLabels[week.type], type: week.type, workouts: week.workouts })) }))),
         execution.listProgramExecutions(clientId, programId),
       ]);
       if (!active) return;
@@ -248,9 +249,13 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
             <Text style={[styles.label, styles.headText, { color: colors.textMuted }]}>Упражнение</Text>
             <Shifted offset={offset} width={windowWidth}>
               {matrix.weeks.map((week) => (
-                <View key={week.index} style={styles.headCell}>
+                // Колонка наследует цвет типа недели (UI-OWN-038).
+                <View key={week.index} style={[styles.headCell, week.type === undefined ? null : {
+                  backgroundColor: withAlpha(weekTypeTone(week.type, colors), 0.12), borderBottomWidth: 2,
+                  borderBottomColor: weekTypeTone(week.type, colors) }]}>
                   <Text style={[styles.headText, { color: colors.textPrimary }]}>{`Неделя ${week.index}`}</Text>
-                  {week.caption !== null ? <Text numberOfLines={1} style={[styles.caption, { color: colors.textSecondary }]}>{week.caption}</Text> : null}
+                  {week.caption !== null ? <Text numberOfLines={1} style={[styles.caption, { color: week.type === undefined
+                    ? colors.textSecondary : weekTypeTone(week.type, colors) }]}>{week.caption}</Text> : null}
                 </View>
               ))}
             </Shifted>
