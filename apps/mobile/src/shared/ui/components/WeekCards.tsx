@@ -35,7 +35,7 @@ export function WeekCards({ weeks, selected, onSelect, disabled = false }: Reado
       <Text style={[styles.title, { color: colors.textPrimary }]}>Неделя {week.index}</Text>
       {week.caption ? <View style={styles.captionRow}>
         {week.tone ? <View style={[styles.dot, { backgroundColor: week.tone }]} /> : null}
-        <Text numberOfLines={1} style={[styles.caption, styles.grow, { color: colors.textSecondary }]}>{week.caption}</Text>
+        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.caption, styles.grow, { color: colors.textSecondary }]}>{week.caption}</Text>
       </View> : null}
       {week.status ? <Text style={[styles.status, { color: selected === week.index ? colors.accentInk : colors.textSecondary }]}>{week.status}</Text> : null}
     </Pressable>)}

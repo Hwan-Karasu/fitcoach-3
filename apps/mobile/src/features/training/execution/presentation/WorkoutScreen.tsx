@@ -17,6 +17,7 @@ import { AppButton, ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingSta
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
+import { shadow } from "../../../../shared/ui/theme/style.ts";
 import { useReportScreenTone } from "../../../../shared/ui/theme/ScreenTone.tsx";
 import { weekTypeTone, DiaryEditDialog, formatDuration, formatRange, supersetNumber, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookup,
   type DiaryEdit, type ExerciseLookupPort, type PickedExercise, type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort,
@@ -118,7 +119,7 @@ const ValueCell = forwardRef(function ValueCell({ cellKey, field, value, pending
         });
         timer.current = setTimeout(flush, SAVE_DELAY_MS);
       }}
-      style={[styles.input, { color: colors.textPrimary, backgroundColor: colors.input,
+      style={[styles.input, { color: colors.textPrimary, backgroundColor: colors.surface,
         borderColor: invalid ? colors.danger : colors.border }]} />
   );
 });
@@ -204,7 +205,7 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
   const drops = fact?.drops ?? [];
   const marker = number === null ? "Р" : String(number);
   const background = tone !== null ? withAlpha(tone, confirmed ? 0.3 : 0.14)
-    : confirmed ? withAlpha(colors.success, 0.14) : "transparent";
+    : confirmed ? withAlpha(colors.success, 0.14) : colors.surfaceRaised;
   const manualSpacer = mode === "MANUAL" ? <View style={styles.side} /> : null;
   const inputs = useRef(new Map<string, TextInput | null>()).current;
   /** Ячейки одной строки (подход, сторона или мини-сет) с переходом «Далее» слева направо. */
@@ -632,7 +633,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                       if (date !== null && date !== current) void diary.setActualDate(date);
                     });
                   }}
-                  style={[styles.dateButton, { borderColor: colors.border }]}>
+                  style={[styles.dateButton, { backgroundColor: colors.surfaceRaised }]}>
                   <CalendarDays size={15} color={colors.accentInk} strokeWidth={2} />
                   <Text style={[styles.dateText, { color: colors.accentInk }]}>{shortDate(state.session.actualDate)}</Text>
                 </Pressable>
@@ -640,7 +641,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
               {others.length > 0 ? (
                 <Pressable accessibilityRole="button" accessibilityLabel={`Другие тренировки в работе: ${others.length}. Перейти`}
                   hitSlop={6} onPress={() => { flushPending(); Keyboard.dismiss(); activeSheet.current?.present(); }}
-                  style={[styles.othersButton, { borderColor: colors.border }]}>
+                  style={[styles.othersButton, { backgroundColor: colors.surfaceRaised }]}>
                   <Users size={14} color={colors.accentInk} strokeWidth={2} />
                   <Text style={[styles.othersText, { color: colors.accentInk }]}>{`ещё ${others.length}`}</Text>
                 </Pressable>
@@ -656,8 +657,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
               { label: "Поделиться", icon: <Share2 size={16} color={colors.accentInk} strokeWidth={2} />, onPress: share },
             ] as const).map((action) => (
               <Pressable key={action.label} accessibilityRole="button" accessibilityLabel={action.label} disabled={busy || sharing}
-                onPress={action.onPress} style={({ pressed }) => [styles.action, { borderColor: colors.border,
-                  backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: busy || sharing ? 0.6 : 1 }]}>
+                onPress={action.onPress} style={({ pressed }) => [styles.action, {
+                  backgroundColor: pressed ? colors.surfaceRaised : colors.accentSoft, opacity: busy || sharing ? 0.6 : 1 }]}>
                 {action.icon}
                 <Text numberOfLines={2} style={[styles.actionText, { color: colors.accentInk }]}>{action.label}</Text>
               </Pressable>
@@ -775,7 +776,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
               ))}
               <Pressable accessibilityRole="button" accessibilityLabel={`Добавить подход: ${info?.name ?? "упражнение"}`}
                 onPress={() => { flushPending(); setEdit({ kind: "addSet", exerciseId: exercise.id }); }}
-                style={({ pressed }) => [styles.addSet, { borderColor: colors.border, backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
+                style={({ pressed }) => [styles.addSet, { borderColor: colors.accentInk, backgroundColor: pressed ? colors.accentSoft : "transparent" }]}>
                 <Plus size={15} color={colors.accentInk} strokeWidth={2.2} />
                 <Text style={[styles.addSetText, { color: colors.accentInk }]}>Подход</Text>
               </Pressable>
@@ -905,73 +906,72 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
 const styles = StyleSheet.create({
   center: { flex: 1, padding: 16, gap: 12, justifyContent: "center" },
   content: { padding: 16, gap: 12 },
-  heading: { flex: 1, fontFamily: fonts.bold, fontSize: 18, lineHeight: 23 },
-  topCard: { borderWidth: 1, borderRadius: 16, padding: 12, gap: 10 },
+  heading: { flex: 1, fontFamily: fonts.bold, fontSize: 22, lineHeight: 27, letterSpacing: -0.2 },
+  topCard: { ...shadow.card, borderRadius: 22, padding: 16, gap: 12 },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   stripe: { width: 4, alignSelf: "stretch", minHeight: 26, borderRadius: 2 },
   volume: { alignItems: "flex-end" },
-  volumeLabel: { fontFamily: fonts.semibold, fontSize: 10, lineHeight: 13, textTransform: "uppercase", letterSpacing: 0.6 },
-  volumeValue: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
-  exerciseVolume: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
-  actions: { flexDirection: "row", gap: 8 },
-  action: { flex: 1, minHeight: 48, borderWidth: 1, borderRadius: 12, alignItems: "center", justifyContent: "center", gap: 2,
+  volumeLabel: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, textTransform: "uppercase", letterSpacing: 1 },
+  volumeValue: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 23 },
+  exerciseVolume: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
+  actions: { flexDirection: "row", gap: 6 },
+  action: { flex: 1, minHeight: 56, borderRadius: 14, alignItems: "center", justifyContent: "center", gap: 3,
     paddingHorizontal: 4, paddingVertical: 6 },
-  actionText: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14, textAlign: "center" },
+  actionText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 14, textAlign: "center" },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 2 },
   nameText: { flexShrink: 1 },
   more: { width: 32, height: 40, alignItems: "center", justifyContent: "center" },
-  addSet: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 40, borderWidth: 1,
-    borderRadius: 10, marginTop: 4 },
-  addSetText: { fontFamily: fonts.semibold, fontSize: 13 },
+  addSet: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 44, borderWidth: 1.5,
+    borderStyle: "dashed", borderRadius: 14, marginTop: 4 },
+  addSetText: { fontFamily: fonts.bold, fontSize: 14 },
   orderRow: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: 12, paddingRight: 12, minHeight: 52 },
   handle: { width: 44, minHeight: 48, alignItems: "center", justifyContent: "center" },
   orderActions: { flexDirection: "row", gap: 8 },
   offscreen: { position: "absolute", left: -10000, top: 0 },
   metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   dateRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  dateButton: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 32, borderWidth: 1, borderRadius: 8,
-    paddingHorizontal: 8 },
-  dateText: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
-  meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  card: { borderWidth: 1, borderRadius: 12, padding: 8, gap: 4 },
+  dateButton: { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 28, borderRadius: 10, paddingHorizontal: 9 },
+  dateText: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
+  meta: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
+  card: { ...shadow.card, borderRadius: 22, padding: 14, gap: 6 },
   cardHead: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 2, paddingHorizontal: 2 },
-  thumb: { width: 40, height: 40, borderRadius: 8 },
+  thumb: { width: 48, height: 48, borderRadius: 14 },
   exerciseText: { flex: 1, gap: 2 },
-  exercise: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
+  exercise: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
   subRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   rest: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", minHeight: 28 },
-  restText: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
-  block: { borderRadius: 10, paddingVertical: 2, paddingHorizontal: 2, gap: 4 },
+  restText: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
+  block: { borderRadius: 12, paddingVertical: 3, paddingHorizontal: 4, gap: 4 },
   row: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 44 },
   headRow: { minHeight: 20, paddingHorizontal: 2 },
-  head: { fontFamily: fonts.medium, fontSize: 10, lineHeight: 13, textAlign: "center" },
+  head: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, textAlign: "center", textTransform: "uppercase", letterSpacing: 0.6 },
   grow: { flex: 1 },
-  markerSpace: { width: 34 },
-  marker: { width: 34, height: 34, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  markerText: { fontFamily: fonts.semibold, fontSize: 13 },
-  plan: { flex: 1, fontFamily: fonts.regular, fontSize: 11, textAlign: "center" },
+  markerSpace: { width: 40 },
+  marker: { width: 40, height: 44, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  markerText: { fontFamily: fonts.bold, fontSize: 15 },
+  plan: { flex: 1, fontFamily: fonts.semibold, fontSize: 12, textAlign: "center" },
   previous: { flex: 1, minHeight: 34, justifyContent: "center" },
-  previousChip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 2 },
+  previousChip: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 2 },
   previousText: { fontFamily: fonts.semibold, fontSize: 11, textAlign: "center" },
   instructionText: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, borderLeftWidth: 2, paddingLeft: 8,
     marginHorizontal: 2, marginBottom: 2 },
   noteAdd: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 40, alignSelf: "flex-start", paddingHorizontal: 2 },
-  noteAddText: { fontFamily: fonts.medium, fontSize: 12 },
-  note: { minHeight: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, textAlignVertical: "top",
-    fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, marginTop: 4 },
-  othersButton: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 32, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8 },
-  othersText: { fontFamily: fonts.medium, fontSize: 12 },
+  noteAddText: { fontFamily: fonts.semibold, fontSize: 14 },
+  note: { minHeight: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, textAlignVertical: "top",
+    fontFamily: fonts.medium, fontSize: 14, lineHeight: 19, marginTop: 4 },
+  othersButton: { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 28, borderRadius: 10, paddingHorizontal: 9 },
+  othersText: { fontFamily: fonts.bold, fontSize: 12 },
   deleteRun: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 48, marginTop: 4 },
   deleteRunText: { fontFamily: fonts.medium, fontSize: 13 },
   sideLabel: { width: 14, textAlign: "center", fontFamily: fonts.semibold, fontSize: 12 },
   dropLabel: { flex: 1, fontFamily: fonts.medium, fontSize: 11, textAlign: "right", paddingRight: 4 },
   inputHead: { width: 46 },
-  input: { width: 46, height: 40, borderWidth: 1, borderRadius: 8, textAlign: "center", fontFamily: fonts.medium,
-    fontSize: 14, paddingHorizontal: 2, paddingVertical: 0 },
+  input: { width: 46, height: 44, borderWidth: 1.5, borderRadius: 12, textAlign: "center", fontFamily: fonts.bold,
+    fontSize: 15, paddingHorizontal: 2, paddingVertical: 0 },
   side: { width: 34, minHeight: 40, alignItems: "center", justifyContent: "center" },
   sideHead: { width: 34 },
   rpeText: { fontFamily: fonts.semibold, fontSize: 13, textAlign: "center" },
-  check: { width: 34, height: 34, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  check: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   addDrop: { flex: 1, minHeight: 40, borderRadius: 8, borderWidth: 1, borderStyle: "dashed", flexDirection: "row",
     alignItems: "center", justifyContent: "center", gap: 6 },
   addDropText: { fontFamily: fonts.medium, fontSize: 12 },
@@ -979,7 +979,7 @@ const styles = StyleSheet.create({
   body: { gap: 12 },
   switching: { opacity: 0.55 },
   outcomes: { flexDirection: "row", gap: 8, marginTop: 4 },
-  outcome: { flex: 1, minHeight: 56, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center",
+  outcome: { flex: 1, minHeight: 56, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center",
     paddingHorizontal: 6 },
-  outcomeText: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 15, textAlign: "center" },
+  outcomeText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 15, textAlign: "center" },
 });
