@@ -1211,7 +1211,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       await membership(tx, this.workspaceId, clientId, programId);
       return saveSelection(tx, this.workspaceId, programId, clientId, mesocycleId);
     });
-    if (changed) this.publish({ clientIds: [clientId] });
+    if (changed) this.publish({ clientIds: [clientId], selectionOnly: true });
   }
 
   async getBuilderDraft(clientId: string, key: string) {
@@ -1297,7 +1297,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       return result.changes > 0;
     });
     // Повторное открытие той же программы — не изменение: иначе экран программы перезагружает сам себя.
-    if (changed) this.publish({ clientIds: [clientId] });
+    if (changed) this.publish({ clientIds: [clientId], selectionOnly: true });
   }
 
   async archiveForClient(clientId: string, programId: string, now: Date = new Date()): Promise<void> {

@@ -128,3 +128,22 @@ test("повторное чтение плана без записи — из к
     await env.close();
   }
 });
+
+test("запись выбора мезоцикла оповещает как «только выбор» (экран не перезагружается), переименование — как обычное изменение", async () => {
+  const env = await setup();
+  try {
+    const plan = (await env.plans.getPeriodizedPlan(env.big, env.bigProgram))!;
+    const other = plan.mesocycles.find((cycle) => cycle.id !== plan.selectedMesocycleId)!;
+    const changes: boolean[] = [];
+    const stop = env.plans.subscribeCommittedChanges((change) => changes.push(change.selectionOnly === true));
+    await env.plans.selectMesocycle(env.big, env.bigProgram, other.id);
+    const program = (await env.plans.getProgram(env.big, env.bigProgram))!;
+    await env.plans.renameProgram(program.id, program.revision, "Другая");
+    stop();
+    assert.deepEqual(changes, [true, false], "выбор — только выбор; переименование — обычное изменение");
+    assert.equal((await env.plans.getPeriodizedPlan(env.big, env.bigProgram))!.selectedMesocycleId, other.id,
+      "выбор виден при следующем чтении — кэш сброшен");
+  } finally {
+    await env.close();
+  }
+});

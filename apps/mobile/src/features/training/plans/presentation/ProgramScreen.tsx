@@ -104,6 +104,10 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [plan, setPlan] = useState<SimplePlan | null>(null);
   const [simpleWeeks, setSimpleWeeks] = useState<readonly SimpleWeek[]>([]);
   const [periodized, setPeriodized] = useState<PeriodizedPlan | null>(null);
+  /** Чьи данные сейчас на экране (`клиент:программа`): при переключении участника до загрузки они прежние — тогда экран приглушён. */
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const currentKey = `${clientId}:${programId}`;
+  const stale = loadedFor !== currentKey;
   const [orderReset, setOrderReset] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [tab, setTab] = useState<"program" | "templates">("program");
@@ -114,6 +118,21 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   // Прокрутка — по родству мезоцикла: при смене участника (своя копия того же мезоцикла) экран остаётся на месте.
   const scrollKey = periodized?.mesocycles.find((item) => item.id === cycleKey)?.lineageId ?? cycleKey;
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  const lastY = useRef(0);
+  /** Позиция, которую вернуть после смены участника: страница нового участника может быть короче (меньше мезоциклов). */
+  const pendingRestore = useRef<number | null>(null);
+  const shownKey = useRef(currentKey);
+  useEffect(() => {
+    if (shownKey.current === currentKey) return;
+    shownKey.current = currentKey;
+    pendingRestore.current = lastY.current;
+  }, [currentKey]);
+  useEffect(() => {
+    if (stale || pendingRestore.current === null) return undefined;
+    // Позиция возвращается при первой смене размера страницы; если размер не изменился, прокрутка и так на месте.
+    const timer = setTimeout(() => { pendingRestore.current = null; }, 400);
+    return () => clearTimeout(timer);
+  }, [stale]);
   // Неделя, показанная в карточке Расширенной программы (её выбирает панель недель): для «Копировать неделю».
   const shownWeek = useRef(1);
   const lookup = useExerciseLookup(exercises);
@@ -126,10 +145,13 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     appliedContext.current = context;
     setWeeksByCycle((current) => ({ ...current, [key]: requestedWeek }));
     if (key !== "simple" && periodized?.selectedMesocycleId !== key) {
+      setPeriodized((current) => current === null ? current : { ...current, selectedMesocycleId: key });
       void repository.selectMesocycle(clientId, programId, key).catch(() => setMessage("Не удалось выбрать мезоцикл."));
     }
   }, [requestedWeek, requestedMesocycle, program, periodized, cycleKey, repository, clientId, programId]);
   useEffect(() => {
+    // При смене участника позицию возвращает `pendingRestore`; по родству мезоцикла — только при смене мезоцикла у того же участника.
+    if (pendingRestore.current !== null) return undefined;
     const frame = requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: scrollByCycle.current.get(scrollKey) ?? 0, animated: false }));
     return () => cancelAnimationFrame(frame);
   }, [scrollKey, scrollRef]);
@@ -141,17 +163,17 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     let active = true;
     repository.getProgram(clientId, programId).then(async (next) => {
       if (!active) return;
-      setProgram(next);
       if (next !== null) void repository.selectProgram(clientId, programId).catch(() => undefined);
-      if (next?.kind === "SIMPLE") {
-        const loaded = await repository.getSimplePlan(clientId, programId);
-        const weeks = await repository.getSimpleWeeks(clientId, programId);
-        if (active) { setPlan(loaded?.draft.plan ?? null); setSimpleWeeks(weeks); }
-      }
-      if (next?.kind === "PERIODIZED") {
-        const loaded = await repository.getPeriodizedPlan(clientId, programId);
-        if (active) setPeriodized(loaded);
-      }
+      // Всё читается до отрисовки и ставится одним обновлением: экран не показывает смесь данных двух участников.
+      const simple = next?.kind === "SIMPLE" ? await repository.getSimplePlan(clientId, programId) : null;
+      const weeks = next?.kind === "SIMPLE" ? await repository.getSimpleWeeks(clientId, programId) : [];
+      const loaded = next?.kind === "PERIODIZED" ? await repository.getPeriodizedPlan(clientId, programId) : null;
+      if (!active) return;
+      setProgram(next);
+      setPlan(simple?.draft.plan ?? null);
+      setSimpleWeeks(weeks);
+      setPeriodized(loaded);
+      setLoadedFor(`${clientId}:${programId}`);
     }).catch(() => {
       if (active) { setProgram((current) => current === undefined ? null : current); setMessage("Не удалось загрузить структуру программы."); }
     });
@@ -176,7 +198,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   }, [clientId, cycleKey, programId, repository, version]);
 
   useEffect(() => repository.subscribeCommittedChanges((change) => {
-    if (change.clientIds.includes(clientId)) setVersion((value) => value + 1);
+    if (change.selectionOnly !== true && change.clientIds.includes(clientId)) setVersion((value) => value + 1);
   }), [clientId, repository]);
 
   if (program === undefined) return <View style={[styles.center, { backgroundColor: colors.canvas }]}><LoadingState label="Открываем программу…" /></View>;
@@ -271,8 +293,15 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
     {tabs}
     {participants}
-    <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
-      scrollEventThrottle={32} onScroll={(event) => scrollByCycle.current.set(scrollKey, event.nativeEvent.contentOffset.y)}>
+    <Animated.ScrollView ref={scrollRef} style={[{ backgroundColor: colors.canvas }, stale ? styles.switching : null]} pointerEvents={stale ? "none" : "auto"}
+      contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
+      onContentSizeChange={() => {
+        if (stale || pendingRestore.current === null) return;
+        const y = pendingRestore.current;
+        pendingRestore.current = null;
+        scrollRef.current?.scrollTo({ y, animated: false });
+      }}
+      onScroll={(event) => { lastY.current = event.nativeEvent.contentOffset.y; scrollByCycle.current.set(scrollKey, lastY.current); }}>
       {program.kind === "PERIODIZED" && periodized !== null && periodized.mesocycles.length === 0 ? <View style={styles.row}><View style={styles.grow}>
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>{program.title}</Text>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>
@@ -485,7 +514,10 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
             onDone={(result) => { if (result.ok) setNotice(result.text); else setMessage(result.text); }} /> : null}
           <MesocycleBook mesocycles={periodized.mesocycles} selectedId={selected?.id} resetKey={orderReset} onAdd={onAddMesocycle}
             onDelete={planDelete === undefined ? undefined : setDeletingCycle}
-            onSelect={(id) => { void repository.selectMesocycle(clientId, programId, id).catch(() => undefined); }}
+            onSelect={(id) => {
+              setPeriodized((current) => current === null ? current : { ...current, selectedMesocycleId: id });
+              void repository.selectMesocycle(clientId, programId, id).catch(() => setVersion((value) => value + 1));
+            }}
             onReorder={(ids) => {
               setMessage(null);
               void repository.reorderMesocycles(clientId, programId, ids).catch(() => {
@@ -527,6 +559,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
 }
 
 const styles = StyleSheet.create({
+  /** Данные прежнего участника, пока грузится новый (как в дневнике). */
+  switching: { opacity: 0.55 },
   center: { flex: 1, padding: 16, gap: 12, justifyContent: "center" },
   content: { padding: 16, gap: 12 },
   heading: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },

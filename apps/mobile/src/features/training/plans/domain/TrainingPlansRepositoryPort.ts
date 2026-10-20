@@ -11,6 +11,11 @@ import type { ClientPlacementOptions, GroupCopy, Placement } from "./Placement.t
 export interface TrainingPlansCommittedChange {
   /** Клиенты, чья библиотека изменилась. */
   readonly clientIds: readonly string[];
+  /**
+   * Изменился только выбор («текущая» программа или мезоцикл): экрану, который сам его сделал, перезагружаться не нужно —
+   * иначе переключение участника запускало лишние полные чтения.
+   */
+  readonly selectionOnly?: boolean;
 }
 
 export interface WorkoutWeekNavigation {
