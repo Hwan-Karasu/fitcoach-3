@@ -141,7 +141,7 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
         <Stack.Screen name="ClientWorkspace" options={{ title: "Карточка клиента", headerShown: false }}>
           {({ navigation, route }) => <ClientWorkspaceNavigator
             clientId={route.params.clientId} repository={services.clients}
-            accounting={services.accounting} measurements={services.measurements} questionnaire={services.questionnaire}
+            accounting={services.accounting} measurements={services.measurements} nutrition={services.nutrition} questionnaire={services.questionnaire}
             trainingPlans={services.trainingPlans} trainingExecution={services.trainingExecution} trainingHistory={services.trainingHistory} clientBodyweight={services.clientBodyweight} restTimers={services.restTimers} activeWorkouts={services.activeWorkouts}
             onOpenWorkout={(slot, options) => navigation.push("ClientWorkspace", { clientId: slot.clientId, screen: "Training",
               params: { screen: "TrainingWorkout", params: { programId: slot.programId, weekIndex: slot.weekIndex,

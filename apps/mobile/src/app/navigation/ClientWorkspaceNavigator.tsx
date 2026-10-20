@@ -7,6 +7,7 @@ import { StyleSheet, Text, View } from "react-native";
 import type { AccountingRepositoryPort } from "../../features/accounting/public.ts";
 import type { ClientRecord, ClientRepositoryPort, ClientRosterPort } from "../../features/clients/public.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
+import type { FoodCatalogPort, NutritionDiaryPort, NutritionTargetsPort, RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ClientQuestionnaireScreen, type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
 import { ExecutionDetailsScreen, ExerciseHistoryList, HistoryProgramScreen, MonthlyReportScreen, TrainingArchiveScreen, TrainingStatisticsScreen, retainHistoryView,
   retainStatsFilters, type ExerciseLookupPort,
@@ -104,12 +105,13 @@ function MoreNavigator({ client, questionnaire, history, bodyweight, exerciseLoo
   );
 }
 
-export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, questionnaire, trainingPlans, trainingExecution, trainingHistory, clientBodyweight, restTimers, activeWorkouts, onOpenWorkout, onOpenClientPrograms, exercises, exerciseLookup, weekCopy, weekSwap, mesocycleSave, planDelete, onOpenEdit, onOpenAccounting,
+export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, nutrition, questionnaire, trainingPlans, trainingExecution, trainingHistory, clientBodyweight, restTimers, activeWorkouts, onOpenWorkout, onOpenClientPrograms, exercises, exerciseLookup, weekCopy, weekSwap, mesocycleSave, planDelete, onOpenEdit, onOpenAccounting,
   onOpenMeasurements, onClose, onOpenClients, onOpenExercise }: Readonly<{
   clientId: string;
   repository: ClientRepositoryPort & ClientRosterPort;
   accounting: AccountingRepositoryPort;
   measurements: MeasurementRepositoryPort;
+  nutrition: Readonly<{ foods: FoodCatalogPort; recipes: RecipeCatalogPort; diary: NutritionDiaryPort; targets: NutritionTargetsPort }>;
   questionnaire: QuestionnaireRepositoryPort;
   trainingPlans: TrainingPlansRepositoryPort;
   trainingExecution: TrainingExecutionPort;
@@ -217,9 +219,10 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
             onClose();
           }} />}
       </Tabs.Screen>
-      <Tabs.Screen name="Nutrition" component={NutritionNavigator} options={{ tabBarLabel: workspaceTabs.Nutrition,
-        tabBarAccessibilityLabel: workspaceTabs.Nutrition, headerShown: true,
-        header: () => <ClientHeader client={client} subtitle={workspaceTabs.Nutrition} onBack={onClose} onClients={onOpenClients} /> }} />
+      <Tabs.Screen name="Nutrition" options={{ tabBarLabel: workspaceTabs.Nutrition, tabBarAccessibilityLabel: workspaceTabs.Nutrition }}>
+        {() => <NutritionNavigator clientId={client.id} clientName={client.displayName} clientEmoji={client.emoji} foods={nutrition.foods} recipes={nutrition.recipes}
+          diary={nutrition.diary} targets={nutrition.targets} onExitClient={onClose} onOpenClients={onOpenClients} />}
+      </Tabs.Screen>
       <Tabs.Screen name="Training" options={{ tabBarLabel: workspaceTabs.Training, tabBarAccessibilityLabel: workspaceTabs.Training}}>
         {() => <TrainingNavigator clientId={client.id} clientName={client.displayName} clientEmoji={client.emoji} repository={trainingPlans}
           execution={trainingExecution} restTimers={restTimers} activeWorkouts={activeWorkouts} onOpenWorkout={onOpenWorkout} onOpenClientPrograms={onOpenClientPrograms}

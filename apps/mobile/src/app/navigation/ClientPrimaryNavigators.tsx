@@ -5,7 +5,8 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import { ClientHomePreview, type ClientRecord } from "../../features/clients/public.ts";
 import { localDateOf, parseValueX10, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
-import { NutritionWorkspacePreview } from "../../features/nutrition/public.ts";
+import { AddFoodScreen, FoodEditorScreen, NutritionDiaryScreen, type FoodCatalogPort, type MealSlot, type NutritionDiaryPort, type NutritionTargetsPort,
+  type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ArchivedProgramsPanel, ParticipantSwitcher, participantTarget, ProgramMatrixScreen, PeriodizedBuilderScreen, ProgramLibraryScreen, ProgramModeChooserScreen, programLibraryTabTitles, ProgramScreen, SimpleProgramBuilderScreen,
   WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort,
   type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
@@ -16,7 +17,12 @@ import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.
 import { ClientHeader } from "./ClientHeader.tsx";
 
 type HomeRoutes = { HomeIndex: undefined };
-type NutritionRoutes = { NutritionIndex: undefined };
+type NutritionRoutes = {
+  NutritionIndex: undefined;
+  NutritionAdd: { localDate: string; slot: MealSlot };
+  NutritionFood: { name: string };
+};
+const nutritionTitles: Readonly<Record<keyof NutritionRoutes, string>> = { NutritionIndex: "Питание", NutritionAdd: "Добавить еду", NutritionFood: "Новый продукт" };
 type TrainingRoutes = {
   TrainingIndex: undefined;
   TrainingChooser: undefined;
@@ -98,11 +104,30 @@ export function HomeNavigator(props: HomeProps) {
   );
 }
 
-export function NutritionNavigator() {
+/** «Питание» клиента: дневник, добавление еды из своего каталога, создание продукта. Шапку клиента рисует стек (как у «Тренировок»). */
+export function NutritionNavigator({ clientId, clientName, clientEmoji, foods, recipes, diary, targets, onExitClient, onOpenClients }: Readonly<{
+  clientId: string; clientName: string; clientEmoji: string | null;
+  foods: FoodCatalogPort; recipes: RecipeCatalogPort; diary: NutritionDiaryPort; targets: NutritionTargetsPort;
+  onExitClient: () => void; onOpenClients: () => void;
+}>) {
   const { palette } = usePrototypeTheme();
   return (
-    <NutritionStack.Navigator screenOptions={{ contentStyle: { backgroundColor: palette.tokens.canvas } }}>
-      <NutritionStack.Screen name="NutritionIndex" component={NutritionWorkspacePreview} options={{ headerShown: false }} />
+    <NutritionStack.Navigator screenOptions={({ navigation, route }) => ({
+      contentStyle: { backgroundColor: palette.tokens.canvas },
+      header: () => <ClientHeader subtitle={nutritionTitles[route.name]} client={{ displayName: clientName, emoji: clientEmoji }}
+        onClients={onOpenClients} onBack={() => { if (route.name === "NutritionIndex") onExitClient(); else navigation.goBack(); }} />,
+    })}>
+      <NutritionStack.Screen name="NutritionIndex">
+        {({ navigation }) => <NutritionDiaryScreen clientId={clientId} diary={diary} targets={targets}
+          onAdd={(localDate, slot) => navigation.navigate("NutritionAdd", { localDate, slot })} />}
+      </NutritionStack.Screen>
+      <NutritionStack.Screen name="NutritionAdd">
+        {({ navigation, route }) => <AddFoodScreen clientId={clientId} localDate={route.params.localDate} slot={route.params.slot}
+          foods={foods} recipes={recipes} diary={diary} onCreateFood={(name) => navigation.navigate("NutritionFood", { name })} />}
+      </NutritionStack.Screen>
+      <NutritionStack.Screen name="NutritionFood">
+        {({ navigation, route }) => <FoodEditorScreen foods={foods} initialName={route.params.name} onSaved={() => navigation.goBack()} />}
+      </NutritionStack.Screen>
     </NutritionStack.Navigator>
   );
 }
