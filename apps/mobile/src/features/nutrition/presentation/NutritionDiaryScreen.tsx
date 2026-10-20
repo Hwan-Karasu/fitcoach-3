@@ -1,12 +1,12 @@
 import { useCallback, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { ChevronLeft, ChevronRight, Droplets, Plus } from "lucide-react-native";
-import { AppButton, AppIconButton, EmptyState, InlineNotice, LoadingState, StatusTag, TextField } from "../../../shared/ui/components/public.ts";
+import { ChevronLeft, ChevronRight, ClipboardPaste, Copy, Droplets, Plus, Repeat2 } from "lucide-react-native";
+import { AppButton, AppIconButton, ConfirmDialog, EmptyState, InlineNotice, LoadingState, StatusTag, TextField } from "../../../shared/ui/components/public.ts";
 import { pickDate } from "../../../shared/ui/components/pickDate.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
-import { MEAL_SLOTS, type DiaryEntry, type MealSlot } from "../domain/DiaryModel.ts";
+import { MEAL_SLOTS, type CopyEntriesRequest, type DiaryEntry, type MealSlot } from "../domain/DiaryModel.ts";
 import { sumNutrients } from "../domain/DiaryRules.ts";
 import { formatDecimalX10, parseDecimalX10 } from "../domain/FoodRules.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
@@ -18,6 +18,9 @@ import { dayTitle, kcalText, metricLabels, nutritionErrorText, quantityText, ran
 import { useNutritionDay } from "./useNutritionDay.ts";
 
 const WATER_STEP_ML = 250;
+const WATER_QUICK_ML = [250, 500, 750, 1000] as const;
+
+interface PendingCopy { readonly request: CopyEntriesRequest; readonly text: string }
 
 function EntryRow({ entry, onOpen }: Readonly<{ entry: DiaryEntry; onOpen: () => void }>) {
   const { palette } = usePrototypeTheme();
@@ -89,6 +92,10 @@ export function NutritionDiaryScreen({ clientId, diary, targets, onAdd }: Readon
   const { data, failed } = useNutritionDay(clientId, localDate, diary, targets);
   const [editing, setEditing] = useState<DiaryEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<Readonly<{ date: string; slot: MealSlot }> | null>(null);
+  const [pending, setPending] = useState<PendingCopy | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [copying, setCopying] = useState(false);
 
   const guard = useCallback(async (work: () => Promise<unknown>): Promise<string | null> => {
     try { await work(); setError(null); return null; } catch (failure) { const message = nutritionErrorText(failure); setError(message); return message; }
@@ -96,6 +103,39 @@ export function NutritionDiaryScreen({ clientId, diary, targets, onAdd }: Readon
   const changeWater = (delta: number) => {
     const next = Math.max(0, (data?.waterMl ?? 0) + delta);
     void guard(() => next === 0 ? diary.clearWater(clientId, localDate) : diary.setWater(clientId, localDate, next));
+  };
+
+  const runCopy = async (request: CopyEntriesRequest) => {
+    if (copying) return;
+    setCopying(true); setPending(null);
+    const message = await guard(async () => {
+      const result = await diary.copyEntries(clientId, request);
+      setNotice(result.copied === 0 ? "Ничего не скопировано: нет подходящих записей или приёмы уже заполнены." : `Скопировано записей: ${result.copied}.`);
+    });
+    if (message !== null) setNotice(null);
+    setCopying(false);
+  };
+  /** Копирование проверяет конфликт: непустой приём/день не затирается, только дополняется после подтверждения (§49.5.6). */
+  const askCopy = (request: CopyEntriesRequest, filledTargets: boolean, text: string) => {
+    if (filledTargets) setPending({ request, text }); else void runCopy(request);
+  };
+  const copyPreviousDay = async () => {
+    const from = await diary.previousFoodDate(clientId, localDate, null);
+    if (from === null) { setNotice("Раньше этого дня записей о еде нет."); return; }
+    const request: CopyEntriesRequest = { fromDate: from, toDate: localDate, slot: null, targetSlot: null, mode: "SKIP_FILLED" };
+    askCopy(request, data !== null && data.entries.length > 0,
+      `В этом дне уже есть записи. Скопировать день ${dayTitle(from, today)} только в пустые приёмы пищи? Существующие записи не изменятся.`);
+  };
+  const repeatSlot = async (slot: MealSlot) => {
+    const from = await diary.previousFoodDate(clientId, localDate, slot);
+    if (from === null) { setNotice(`Прежних записей в приёме «${slotLabels[slot]}» нет.`); return; }
+    askCopy({ fromDate: from, toDate: localDate, slot, targetSlot: null, mode: "APPEND" }, data !== null && data.entries.some((entry) => entry.slot === slot),
+      `В приёме «${slotLabels[slot]}» уже есть записи. Добавить к ним приём из дня ${dayTitle(from, today)}?`);
+  };
+  const pasteSlot = (slot: MealSlot) => {
+    if (copied === null) return;
+    askCopy({ fromDate: copied.date, toDate: localDate, slot: copied.slot, targetSlot: slot, mode: "APPEND" }, data !== null && data.entries.some((entry) => entry.slot === slot),
+      `В приёме «${slotLabels[slot]}» уже есть записи. Добавить к ним скопированный приём «${slotLabels[copied.slot]}»?`);
   };
 
   const header = (
@@ -122,7 +162,9 @@ export function NutritionDiaryScreen({ clientId, diary, targets, onAdd }: Readon
       {header}
       <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
         {localDate !== today ? <AppButton compact variant="secondary" label="Вернуться к сегодняшнему дню" onPress={() => setLocalDate(today)} /> : null}
+        <AppButton compact variant="secondary" icon={(color) => <Repeat2 size={16} color={color} />} label="С прошлого дня" busy={copying} onPress={() => { void copyPreviousDay(); }} />
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
+        {notice !== null ? <InlineNotice kind="info">{notice}</InlineNotice> : null}
 
         <View style={[styles.card, { backgroundColor: colors.surface }]}>
           <View style={styles.totals}>
@@ -157,6 +199,14 @@ export function NutritionDiaryScreen({ clientId, diary, targets, onAdd }: Readon
               {slotEntries.map((entry) => <EntryRow key={entry.id} entry={entry} onOpen={() => setEditing(entry)} />)}
               <AppButton compact variant="secondary" icon={(color) => <Plus size={16} color={color} />} label="Добавить" onPress={() => onAdd(localDate, slot)}
                 accessibilityLabel={`Добавить в приём пищи: ${slotLabels[slot]}`} />
+              <View style={styles.waterRow}>
+                <View style={styles.grow}><AppButton compact variant="ghost" icon={(color) => <Repeat2 size={16} color={color} />} label="Повторить" disabled={copying}
+                  accessibilityLabel={`Повторить приём пищи: ${slotLabels[slot]}`} onPress={() => { void repeatSlot(slot); }} /></View>
+                {slotEntries.length > 0 ? <View style={styles.grow}><AppButton compact variant="ghost" icon={(color) => <Copy size={16} color={color} />} label="Копировать"
+                  accessibilityLabel={`Копировать приём пищи: ${slotLabels[slot]}`} onPress={() => { setCopied({ date: localDate, slot }); setNotice(`Скопирован приём «${slotLabels[slot]}». Откройте нужный приём и нажмите «Вставить».`); }} /></View> : null}
+                {copied !== null && !(copied.date === localDate && copied.slot === slot) ? <View style={styles.grow}><AppButton compact variant="ghost" icon={(color) => <ClipboardPaste size={16} color={color} />}
+                  label="Вставить" disabled={copying} accessibilityLabel={`Вставить скопированный приём в: ${slotLabels[slot]}`} onPress={() => pasteSlot(slot)} /></View> : null}
+              </View>
             </View>
           );
         })}
@@ -168,15 +218,17 @@ export function NutritionDiaryScreen({ clientId, diary, targets, onAdd }: Readon
             <Text style={[styles.meta, { color: colors.textSecondary }]}>{data.waterMl === null ? "не записана" : `${wholeText(data.waterMl * 10)} мл`}</Text>
           </View>
           <View style={styles.waterRow}>
-            <View style={styles.grow}><AppButton compact variant="secondary" label={`+${WATER_STEP_ML} мл`} onPress={() => changeWater(WATER_STEP_ML)} /></View>
-            <View style={styles.grow}><AppButton compact variant="ghost" label={`−${WATER_STEP_ML} мл`} disabled={data.waterMl === null} onPress={() => changeWater(-WATER_STEP_ML)} /></View>
+            {WATER_QUICK_ML.map((ml) => <View key={ml} style={styles.grow}><AppButton compact variant="secondary" label={`+${ml}`} accessibilityLabel={`Добавить воды: ${ml} мл`} onPress={() => changeWater(ml)} /></View>)}
           </View>
+          <AppButton compact variant="ghost" label={`−${WATER_STEP_ML} мл`} disabled={data.waterMl === null} onPress={() => changeWater(-WATER_STEP_ML)} />
           <Text style={[styles.meta, { color: colors.textMuted }]}>Вода не считается едой и не влияет на оценку дня.</Text>
         </View>
 
         {!recorded && data.waterMl === null ? <EmptyState reason="no-data" title="В этот день записей нет"
           body="Добавьте продукт или рецепт в приём пищи — итоги и оценка по цели появятся сразу." /> : null}
       </ScrollView>
+      <ConfirmDialog visible={pending !== null} title="Копировать приём?" description={pending?.text ?? ""} confirmLabel="Скопировать" onCancel={() => setPending(null)}
+        onConfirm={() => { if (pending !== null) void runCopy(pending.request); }} />
       <EntryDialog entry={editing} onClose={() => setEditing(null)}
         onSave={(entry, quantityX10) => guard(() => diary.updateQuantity(clientId, entry.id, entry.revision, quantityX10))}
         onRemove={(entry) => guard(() => diary.removeEntry(clientId, entry.id, entry.revision))} />

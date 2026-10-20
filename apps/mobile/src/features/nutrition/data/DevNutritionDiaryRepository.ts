@@ -3,7 +3,7 @@ import { SharedSqliteDatabase } from "../../../shared/db/SharedSqliteDatabase.ts
 import { UUID_V4_SQL } from "../../../shared/db/SqlIds.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
-import { MEAL_SLOTS, type DiaryEntry, type DiaryEntryInput, type MealSlot, type WaterDay } from "../domain/DiaryModel.ts";
+import { MEAL_SLOTS, type CopyEntriesRequest, type CopyEntriesResult, type DiaryEntry, type DiaryEntryInput, type MealSlot, type WaterDay } from "../domain/DiaryModel.ts";
 import { assertDate, assertQuantity, assertSlot, assertWater, normalizeSnapshot } from "../domain/DiaryRules.ts";
 import type { FoodBasisUnit } from "../domain/FoodModel.ts";
 import { scaleNutrients } from "../domain/FoodRules.ts";
@@ -173,6 +173,71 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
       await tx.run("DELETE FROM dev_food_diary_entries WHERE workspace_id = ? AND client_id = ? AND id = ?", [this.workspaceId, clientId, id]);
     });
     this.publish({ clientId, localDate });
+  }
+
+  async copyEntries(clientId: string, request: CopyEntriesRequest, now: Date = new Date()): Promise<CopyEntriesResult> {
+    assertDate(request.fromDate);
+    assertDate(request.toDate);
+    if (request.slot !== null) assertSlot(request.slot);
+    if (request.targetSlot !== null) { assertSlot(request.targetSlot); if (request.slot === null) throw new Error("DIARY_SLOT_INVALID"); }
+    const targetOf = (slot: MealSlot): MealSlot => request.targetSlot ?? slot;
+    if (request.fromDate === request.toDate && request.slot !== null && targetOf(request.slot) === request.slot) throw new Error("DIARY_COPY_SAME_TARGET");
+    if (request.fromDate === request.toDate && request.slot === null) throw new Error("DIARY_COPY_SAME_TARGET");
+    const result = await this.ready().writer.write(async (tx) => {
+      const sourceRows = (await tx.all<EntryRow>(`SELECT ${columns} FROM dev_food_diary_entries WHERE workspace_id = ? AND client_id = ? AND local_date = ?`,
+        [this.workspaceId, clientId, request.fromDate])).map(toEntry)
+        .filter((entry) => request.slot === null || entry.slot === request.slot)
+        .sort((a, b) => slotOrder(a.slot) - slotOrder(b.slot) || a.position - b.position);
+      const targetSlots = [...new Set(sourceRows.map((entry) => targetOf(entry.slot)))];
+      let replaced = 0;
+      const skipped = new Set<MealSlot>();
+      for (const slot of targetSlots) {
+        const existing = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM dev_food_diary_entries WHERE workspace_id = ? AND client_id = ? AND local_date = ? AND slot = ?`,
+          [this.workspaceId, clientId, request.toDate, slot]);
+        if ((existing?.n ?? 0) === 0) continue;
+        if (request.mode === "SKIP_FILLED") skipped.add(slot);
+        else if (request.mode === "REPLACE") {
+          await tx.run(`DELETE FROM dev_food_diary_entries WHERE workspace_id = ? AND client_id = ? AND local_date = ? AND slot = ?`,
+            [this.workspaceId, clientId, request.toDate, slot]);
+          replaced += existing?.n ?? 0;
+        }
+      }
+      const next = new Map<MealSlot, number>();
+      let copied = 0;
+      const stamp = now.toISOString();
+      for (const entry of sourceRows) {
+        const slot = targetOf(entry.slot);
+        if (skipped.has(slot)) continue;
+        if (!next.has(slot)) {
+          const last = await tx.first<{ position: number | null }>(`SELECT max(position) AS position FROM dev_food_diary_entries
+            WHERE workspace_id = ? AND client_id = ? AND local_date = ? AND slot = ?`, [this.workspaceId, clientId, request.toDate, slot]);
+          next.set(slot, (last?.position ?? -1) + 1);
+        }
+        const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
+        if (!id) throw new Error("DIARY_ID_UNAVAILABLE");
+        const snapshot = entry.snapshot;
+        const position = next.get(slot)!;
+        next.set(slot, position + 1);
+        await tx.run(`INSERT INTO dev_food_diary_entries (id, workspace_id, client_id, local_date, slot, position, source_kind, source_id, name, brand,
+            basis_unit, basis_amount_x10, per_kcal_x10, per_protein_x10, per_fat_x10, per_carbs_x10, quantity_x10, ingredients_json, revision,
+            created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+        [id, this.workspaceId, clientId, request.toDate, slot, position, snapshot.source.kind, snapshot.source.id, snapshot.name, snapshot.brand,
+          snapshot.basis.unit, snapshot.basis.amountX10, snapshot.perBasis.kcalX10, snapshot.perBasis.proteinX10, snapshot.perBasis.fatX10,
+          snapshot.perBasis.carbsX10, snapshot.quantityX10, JSON.stringify(snapshot.ingredients), stamp, stamp]);
+        copied += 1;
+      }
+      return { copied, replaced };
+    });
+    if (result.copied > 0 || result.replaced > 0) this.publish({ clientId, localDate: request.toDate });
+    return result;
+  }
+
+  async previousFoodDate(clientId: string, beforeDate: string, slot: MealSlot | null): Promise<string | null> {
+    assertDate(beforeDate);
+    if (slot !== null) assertSlot(slot);
+    const row = await this.ready().connection.first<{ localDate: string | null }>(`SELECT max(local_date) AS localDate FROM dev_food_diary_entries
+      WHERE workspace_id = ? AND client_id = ? AND local_date < ? AND (? IS NULL OR slot = ?)`, [this.workspaceId, clientId, beforeDate, slot, slot]);
+    return row?.localDate ?? null;
   }
 
   async listWater(clientId: string, fromDate: string, toDate: string): Promise<readonly WaterDay[]> {

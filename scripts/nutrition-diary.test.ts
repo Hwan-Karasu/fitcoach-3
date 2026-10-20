@@ -4,7 +4,7 @@ import test from "node:test";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { DevNutritionDiaryRepository, devNutritionClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionDiaryRepository.ts";
 import { devNutritionTargetsClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionTargetsRepository.ts";
-import { accountedDates, isLocalDate, summarizeDay } from "../apps/mobile/src/features/nutrition/domain/DiaryRules.ts";
+import { accountedDates, isLocalDate, rankUsage, summarizeDay } from "../apps/mobile/src/features/nutrition/domain/DiaryRules.ts";
 import type { FoodProduct } from "../apps/mobile/src/features/nutrition/domain/FoodModel.ts";
 import { snapshotOfFood } from "../apps/mobile/src/features/nutrition/domain/FoodSnapshot.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
@@ -168,4 +168,92 @@ test("§15.7 окончательное удаление клиента убир
     const archived = await blocked.clients.setArchived(client.id, client.revision, true);
     await assert.rejects(blocked.clients.deleteArchivedPermanently(client.id, archived.revision), { message: "CLIENT_DELETION_BLOCKED" });
   } finally { await blocked.close(); }
+});
+
+const PREV = "2026-10-19";
+
+test("§49.5.6: копирование приёма в пустую цель создаёт записи со снимками и не трогает источник", async () => {
+  const { clients, diary, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticA" });
+    await diary.addEntry(client.id, { localDate: PREV, slot: "BREAKFAST", snapshot: snapshotOfFood(OATS, 500) }, NOW);
+    await diary.addEntry(client.id, { localDate: PREV, slot: "BREAKFAST", snapshot: snapshotOfFood(MILK, 2000) }, NOW);
+    await diary.addEntry(client.id, { localDate: PREV, slot: "DINNER", snapshot: snapshotOfFood(OATS, 1000) }, NOW);
+    const result = await diary.copyEntries(client.id, { fromDate: PREV, toDate: DAY, slot: "BREAKFAST", targetSlot: null, mode: "APPEND" }, NOW);
+    assert.deepEqual(result, { copied: 2, replaced: 0 });
+    const target = await diary.listEntries(client.id, DAY, DAY);
+    assert.deepEqual(target.map((entry) => [entry.slot, entry.position, entry.snapshot.name, entry.snapshot.quantityX10]),
+      [["BREAKFAST", 0, "Овсянка", 500], ["BREAKFAST", 1, "Молоко", 2000]]);
+    assert.equal((await diary.listEntries(client.id, PREV, PREV)).length, 3, "источник не изменился");
+  } finally { await close(); }
+});
+
+test("§49.5.6: SKIP_FILLED копирует день только в пустые приёмы; повтор ничего не дублирует", async () => {
+  const { clients, diary, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticA" });
+    await diary.addEntry(client.id, { localDate: PREV, slot: "BREAKFAST", snapshot: snapshotOfFood(OATS, 500) }, NOW);
+    await diary.addEntry(client.id, { localDate: PREV, slot: "DINNER", snapshot: snapshotOfFood(MILK, 2000) }, NOW);
+    await diary.addEntry(client.id, { localDate: DAY, slot: "BREAKFAST", snapshot: snapshotOfFood(SUGAR, 100) }, NOW);
+    const request = { fromDate: PREV, toDate: DAY, slot: null, targetSlot: null, mode: "SKIP_FILLED" } as const;
+    assert.deepEqual(await diary.copyEntries(client.id, request, NOW), { copied: 1, replaced: 0 }, "завтрак цели занят — копируется только ужин");
+    assert.deepEqual(await diary.copyEntries(client.id, request, NOW), { copied: 0, replaced: 0 }, "повтор безопасен");
+    const target = await diary.listEntries(client.id, DAY, DAY);
+    assert.deepEqual(target.map((entry) => [entry.slot, entry.snapshot.name]), [["BREAKFAST", "Сахар"], ["DINNER", "Молоко"]]);
+  } finally { await close(); }
+});
+
+test("§49.5.6: REPLACE заменяет только область копирования; APPEND добавляет в конец без потерь", async () => {
+  const { clients, diary, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticA" });
+    await diary.addEntry(client.id, { localDate: PREV, slot: "LUNCH", snapshot: snapshotOfFood(OATS, 500) }, NOW);
+    await diary.addEntry(client.id, { localDate: DAY, slot: "LUNCH", snapshot: snapshotOfFood(SUGAR, 100) }, NOW);
+    await diary.addEntry(client.id, { localDate: DAY, slot: "DINNER", snapshot: snapshotOfFood(SUGAR, 200) }, NOW);
+    await diary.copyEntries(client.id, { fromDate: PREV, toDate: DAY, slot: "LUNCH", targetSlot: null, mode: "APPEND" }, NOW);
+    assert.deepEqual((await diary.listEntries(client.id, DAY, DAY)).filter((entry) => entry.slot === "LUNCH").map((entry) => [entry.position, entry.snapshot.name]),
+      [[0, "Сахар"], [1, "Овсянка"]]);
+    const replaced = await diary.copyEntries(client.id, { fromDate: PREV, toDate: DAY, slot: "LUNCH", targetSlot: null, mode: "REPLACE" }, NOW);
+    assert.deepEqual(replaced, { copied: 1, replaced: 2 });
+    const after = await diary.listEntries(client.id, DAY, DAY);
+    assert.deepEqual(after.map((entry) => [entry.slot, entry.snapshot.name]), [["LUNCH", "Овсянка"], ["DINNER", "Сахар"]], "ужин не тронут");
+  } finally { await close(); }
+});
+
+test("§49.5.6: копирование в другой приём, на ту же дату и несуществующий источник; клиенты изолированы", async () => {
+  const { clients, diary, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const b = await clients.create({ displayName: "SyntheticB" });
+    await diary.addEntry(a.id, { localDate: DAY, slot: "SNACK", snapshot: snapshotOfFood(OATS, 500) }, NOW);
+    assert.deepEqual(await diary.copyEntries(a.id, { fromDate: DAY, toDate: DAY, slot: "SNACK", targetSlot: "BREAKFAST", mode: "APPEND" }, NOW), { copied: 1, replaced: 0 });
+    assert.deepEqual((await diary.listEntries(a.id, DAY, DAY)).map((entry) => entry.slot), ["BREAKFAST", "SNACK"]);
+    await assert.rejects(diary.copyEntries(a.id, { fromDate: DAY, toDate: DAY, slot: "SNACK", targetSlot: null, mode: "APPEND" }, NOW), code("DIARY_COPY_SAME_TARGET"));
+    await assert.rejects(diary.copyEntries(a.id, { fromDate: PREV, toDate: DAY, slot: null, targetSlot: "LUNCH", mode: "APPEND" }, NOW), code("DIARY_SLOT_INVALID"));
+    assert.deepEqual(await diary.copyEntries(b.id, { fromDate: DAY, toDate: PREV, slot: null, targetSlot: null, mode: "APPEND" }, NOW), { copied: 0, replaced: 0 },
+      "у клиента B нет записей: чужие данные не копируются");
+    assert.equal((await diary.listEntries(b.id, PREV, PREV)).length, 0);
+  } finally { await close(); }
+});
+
+test("P-21: ближайшая предыдущая дата с едой — по приёму и по дню; вода день не создаёт", async () => {
+  const { clients, diary, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticA" });
+    await diary.addEntry(client.id, { localDate: "2026-10-15", slot: "DINNER", snapshot: snapshotOfFood(OATS, 500) }, NOW);
+    await diary.addEntry(client.id, { localDate: "2026-10-17", slot: "BREAKFAST", snapshot: snapshotOfFood(OATS, 500) }, NOW);
+    await diary.setWater(client.id, "2026-10-18", 500, NOW);
+    assert.equal(await diary.previousFoodDate(client.id, DAY, null), "2026-10-17");
+    assert.equal(await diary.previousFoodDate(client.id, DAY, "DINNER"), "2026-10-15");
+    assert.equal(await diary.previousFoodDate(client.id, "2026-10-15", null), null);
+  } finally { await close(); }
+});
+
+test("P-31: недавние и частые строятся из записей дневника; пустая история — пустой список", () => {
+  const entry = (id: string, localDate: string, sourceId: string, kind: "FOOD" | "RECIPE" = "FOOD") => ({ id, clientId: "c", localDate, slot: "LUNCH" as const, position: 0, revision: 1,
+    snapshot: { ...snapshotOfFood(OATS, 500), source: { kind, id: sourceId } } });
+  const entries = [entry("1", "2026-10-10", "a"), entry("2", "2026-10-11", "b"), entry("3", "2026-10-12", "a"), entry("4", "2026-10-12", "c"), entry("5", "2026-10-13", "b", "RECIPE")];
+  assert.deepEqual(rankUsage(entries, "recent", 10).map((item) => `${item.kind}:${item.id}`), ["RECIPE:b", "FOOD:c", "FOOD:a", "FOOD:b"], "по последней дате, при равной — по порядку записи");
+  assert.deepEqual(rankUsage(entries, "frequent", 2).map((item) => [item.id, item.count]), [["a", 2], ["b", 1]], "частота, затем свежесть; лимит 2");
+  assert.deepEqual(rankUsage([], "recent", 10), []);
 });

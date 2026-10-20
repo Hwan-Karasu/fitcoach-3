@@ -1,4 +1,4 @@
-import type { DiaryEntry, DiaryEntryInput, WaterDay } from "./DiaryModel.ts";
+import type { CopyEntriesRequest, CopyEntriesResult, DiaryEntry, DiaryEntryInput, MealSlot, WaterDay } from "./DiaryModel.ts";
 
 export interface DiaryCommittedChange {
   readonly clientId: string;
@@ -19,6 +19,13 @@ export interface NutritionDiaryPort {
   updateQuantity(clientId: string, id: string, expectedRevision: number, quantityX10: number, now?: Date): Promise<DiaryEntry>;
   /** Явное удаление записи; последняя запись дня выводит дату из учёта, вода остаётся. */
   removeEntry(clientId: string, id: string, expectedRevision: number): Promise<void>;
+  /**
+   * Копирует снимки записей из источника в целевую дату одной транзакцией (§49.5.6): либо все записи, либо ни одной. Снимки не пересчитываются.
+   * Режим `REPLACE` удаляет записи цели в копируемой области — вызывать только после явного подтверждения.
+   */
+  copyEntries(clientId: string, request: CopyEntriesRequest, now?: Date): Promise<CopyEntriesResult>;
+  /** Ближайшая дата до `beforeDate` с пищевыми записями (в приёме `slot`, если задан); `null`, если такой нет. */
+  previousFoodDate(clientId: string, beforeDate: string, slot: MealSlot | null): Promise<string | null>;
   listWater(clientId: string, fromDate: string, toDate: string): Promise<readonly WaterDay[]>;
   /** Задаёт воду за день (заменяет прежнее значение). Еду и учёт дня не создаёт. */
   setWater(clientId: string, localDate: string, ml: number, now?: Date): Promise<WaterDay>;

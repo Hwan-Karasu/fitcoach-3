@@ -7,6 +7,7 @@ export type DiaryRuleError =
   | "DIARY_DATE_INVALID"
   | "DIARY_SLOT_INVALID"
   | "DIARY_SNAPSHOT_INVALID"
+  | "DIARY_COPY_SAME_TARGET"
   | "WATER_INVALID"
   | "INVALID_PORTION";
 
@@ -74,4 +75,32 @@ export function summarizeDay(localDate: string, entries: readonly DiaryEntry[]):
 /** Даты «с учётом» (П15=B): есть хотя бы одна пищевая запись. По возрастанию. */
 export function accountedDates(entries: readonly DiaryEntry[]): readonly string[] {
   return [...new Set(entries.map((entry) => entry.localDate))].sort();
+}
+
+export interface UsageItem {
+  readonly kind: "FOOD" | "RECIPE";
+  readonly id: string;
+  readonly name: string;
+  readonly count: number;
+  /** Последняя дата использования. */
+  readonly lastDate: string;
+}
+
+/**
+ * «Недавние» и «Частые» (§49.2) — производное чтение по записям дневника, отдельного хранилища нет. Недавние: по последней дате, при равенстве позже внесённая
+ * запись выше; частые: по числу использований, затем по свежести.
+ */
+export function rankUsage(entries: readonly DiaryEntry[], order: "recent" | "frequent", limit: number): readonly UsageItem[] {
+  const items = new Map<string, UsageItem & { seq: number }>();
+  entries.forEach((entry, seq) => {
+    const { source, name } = entry.snapshot;
+    const key = `${source.kind}:${source.id}`;
+    const before = items.get(key);
+    const newer = before === undefined || entry.localDate > before.lastDate || (entry.localDate === before.lastDate && seq > before.seq);
+    items.set(key, { kind: source.kind, id: source.id, name: newer ? name : before.name, count: (before?.count ?? 0) + 1,
+      lastDate: newer ? entry.localDate : before.lastDate, seq: newer ? seq : before.seq });
+  });
+  const recency = (a: UsageItem & { seq: number }, b: UsageItem & { seq: number }) => b.lastDate.localeCompare(a.lastDate) || b.seq - a.seq;
+  return [...items.values()].sort((a, b) => order === "frequent" ? b.count - a.count || recency(a, b) : recency(a, b)).slice(0, limit)
+    .map((item) => ({ kind: item.kind, id: item.id, name: item.name, count: item.count, lastDate: item.lastDate }));
 }

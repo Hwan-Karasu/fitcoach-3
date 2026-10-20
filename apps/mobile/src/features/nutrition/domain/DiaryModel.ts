@@ -40,3 +40,24 @@ export interface DaySummary {
   readonly totals: Nutrients;
   readonly bySlot: Readonly<Record<MealSlot, Nutrients | null>>;
 }
+
+/**
+ * Копирование приёма пищи (`slot`) или всего дня (`slot: null`) на целевую дату (§49.5.6). `APPEND` — добавить в конец; `SKIP_FILLED` — копировать только
+ * в приёмы, где у цели пока нет записей; `REPLACE` — заменить записи цели в копируемой области (требует подтверждения в UI).
+ */
+export type CopyMode = "APPEND" | "SKIP_FILLED" | "REPLACE";
+
+export interface CopyEntriesRequest {
+  readonly fromDate: string;
+  readonly toDate: string;
+  readonly slot: MealSlot | null;
+  /** Приём пищи цели; `null` — тот же слот, что у источника. Для копирования дня должен быть `null`. */
+  readonly targetSlot: MealSlot | null;
+  readonly mode: CopyMode;
+}
+
+export interface CopyEntriesResult {
+  readonly copied: number;
+  /** Сколько записей цели заменено (только `REPLACE`). */
+  readonly replaced: number;
+}
