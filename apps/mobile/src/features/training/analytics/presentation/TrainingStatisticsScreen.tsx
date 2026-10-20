@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { ChevronRight } from "lucide-react-native";
-import { AppButton, BarChart, EmptyState, InlineNotice, LoadingState, SelectionChip, type BarChartItem } from "../../../../shared/ui/components/public.ts";
+import { CalendarRange, ChevronRight } from "lucide-react-native";
+import { BarChart, EmptyState, FilterPill, InlineNotice, LoadingState, SegmentedControl, type BarChartItem } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { dateText, filterHistory, HistoryFilterBar, type HistoryFilter, type TrainingHistoryEntry } from "../../archive/public.ts";
@@ -16,9 +16,10 @@ import { bucketKeyOf, buckets, entriesInRange, entryTonnage, exerciseActivity, i
 
 type Section = "workouts" | "load" | "muscles" | "exercises";
 
+/** Короткие подписи — четыре равных сегмента; полные названия разделов — у карточек и в озвучке. */
 const sections: readonly Readonly<{ id: Section; label: string }>[] = [
   { id: "workouts", label: "Тренировки" }, { id: "load", label: "Нагрузка" },
-  { id: "muscles", label: "Мышечные группы" }, { id: "exercises", label: "Прогресс упражнений" },
+  { id: "muscles", label: "Мышцы" }, { id: "exercises", label: "Упражнения" },
 ];
 
 /**
@@ -109,31 +110,26 @@ export function TrainingStatisticsScreen({ clientId, history, bodyweight, exerci
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
       <ScrollView contentContainerStyle={styles.list}>
-        <View style={styles.header}>
-          <HistoryFilterBar entries={all} filter={filter} onChange={(next) => change({ filter: next })} />
-          <View style={styles.pills}>
-            <PeriodPill value={{ period: stored.period, custom: stored.custom }} today={rangeFor(now, 1).to} onChange={(next) => change(next)} />
-          </View>
-        </View>
+        <HistoryFilterBar entries={all} filter={filter} onChange={(next) => change({ filter: next })} trailing={<>
+          <PeriodPill grow value={{ period: stored.period, custom: stored.custom }} today={rangeFor(now, 1).to} onChange={(next) => change(next)} />
+          <FilterPill label="Отчёт за месяц" accessibilityLabel="Месячный отчёт" onPress={onOpenMonthlyReport}
+            icon={(color) => <CalendarRange size={18} color={color} strokeWidth={1.8} />} />
+        </>} />
 
         <View style={styles.summaryGrid}>
-          <SummaryCard label="Проведено" value={number(summary.completed)} caption={`из ${number(summary.workouts)} занятий с результатами`}
+          <SummaryCard label="Проведено" value={`${number(summary.completed)} из ${number(summary.workouts)}`}
             onPress={() => setDrill({ title: "Проведённые тренировки", mode: "workouts", entries: scoped.filter((entry) => entry.status === "COMPLETED") })} />
-          <SummaryCard label="Рабочих подходов" value={number(summary.workingSets)} caption="без разминки"
+          <SummaryCard label="Рабочих подходов" value={number(summary.workingSets)}
             onPress={() => setDrill({ title: "Рабочие подходы", mode: "sets", entries: scoped.filter((entry) => entry.exercises.some((exercise) => exercise.facts.some(isWorkingSet))) })} />
           <SummaryCard label="Тоннаж" value={summary.tonnageKg === null ? "Нет данных" : kg(summary.tonnageKg)}
             caption={incomplete ? "Неполные данные" : undefined} warning
             onPress={() => setDrill({ title: "Тоннаж", mode: "tonnage", entries: scoped })} />
-          <SummaryCard label="Средняя длительность" value="Нет данных" caption="время начала и конца не записывается" />
+          <SummaryCard label="Длительность" value="Нет данных" />
         </View>
         {incomplete ? <Text style={[styles.caption, { color: colors.warning }]}>{incompleteNote}</Text> : null}
         {completion === null ? null : <PlanCompletionCard completion={completion} />}
-        <AppButton variant="secondary" label="Месячный отчёт" onPress={onOpenMonthlyReport} />
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-          {sections.map((item) => <SelectionChip key={item.id} group="Раздел" label={item.label} selected={section === item.id}
-            onPress={() => setSection(item.id)} />)}
-        </ScrollView>
+        <SegmentedControl compact items={sections} selectedId={section} onSelect={setSection} />
 
         {scoped.length === 0 ? <EmptyState reason="no-data" title="Нет данных"
           body="За выбранный период и программу нет занятий с записанными подходами или исходом." /> : null}
@@ -227,8 +223,6 @@ const styles = StyleSheet.create({
   pad: { paddingHorizontal: 16 },
   list: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32, gap: 12 },
   header: { gap: 8 },
-  chips: { gap: 8, paddingRight: 8 },
-  pills: { flexDirection: "row", gap: 8 },
   summaryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   caption: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   empty: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },

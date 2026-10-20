@@ -4,6 +4,7 @@ import { bodyweightLookup, bucketKeyOf, buckets, compareMonths, delta, entriesIn
   "../src/features/training/analytics/presentation/trainingStats.ts";
 import type { SetFact, SetType, SetValues, WorkoutStatus } from "../src/features/training/execution/domain/ExecutionModel.ts";
 import type { TrainingHistoryEntry } from "../src/features/training/archive/presentation/trainingHistory.ts";
+import { ALL_OPTION, mesocycleOptions, programOptions } from "../src/features/training/archive/presentation/trainingHistory.ts";
 import { periodRange } from "../src/features/training/analytics/presentation/statsFilters.ts";
 import type { ExerciseInfo } from "../src/features/training/plans/domain/ExerciseLookupPort.ts";
 
@@ -216,4 +217,28 @@ test("границы периода: готовый — от сегодняшн�
   assert.deepEqual(periodRange(now, { period: "custom", custom: { from: "2026-09-12", to: "2026-10-20" } }), { from: "2026-09-12", to: "2026-10-20" });
   assert.deepEqual(periodRange(now, { period: "custom", custom: null }), { from: "2026-08-02", to: "2026-10-30" });
   assert.deepEqual(periodRange(now, { period: "all", custom: { from: "2026-09-12", to: "2026-10-20" } }), { from: null, to: "2026-10-30" }, "запомненный свой период не влияет на «Всё время»");
+});
+
+test("варианты выбора программы: «Все» первым, по одной строке на программу, архив и удалённый план помечены", () => {
+  const base = entry("a", "2026-10-03", "COMPLETED", [fact(BENCH, values(1, 1))], "P1");
+  const entries = [
+    { ...base, key: "1", programTitle: "Сила" },
+    { ...base, key: "2", programId: "P2", programTitle: "Лето", archived: true },
+    { ...base, key: "3", programId: "P3", programTitle: "Старая", planDeleted: true },
+    { ...base, key: "4", programTitle: "Сила" },
+  ];
+  assert.deepEqual(programOptions(entries), [{ value: ALL_OPTION, label: "Все программы" }, { value: "P1", label: "Сила" },
+    { value: "P2", label: "Лето (архив)" }, { value: "P3", label: "Старая (план удалён)" }]);
+  assert.deepEqual(programOptions([]), [{ value: ALL_OPTION, label: "Все программы" }], "нет занятий — только «Все»");
+});
+
+test("варианты мезоциклов: только выбранной программы, без повторов и без простой программы", () => {
+  const base = entry("a", "2026-10-03", "COMPLETED", [fact(BENCH, values(1, 1))], "P1");
+  const entries = [
+    { ...base, key: "1", mesocycleId: "M1", mesocycleTitle: "Блок 1" }, { ...base, key: "2", mesocycleId: "M2", mesocycleTitle: "Блок 2" },
+    { ...base, key: "3", mesocycleId: "M1", mesocycleTitle: "Блок 1" }, { ...base, key: "4", programId: "P9", mesocycleId: "M9", mesocycleTitle: "Чужой" },
+    { ...base, key: "5", programId: "P2", mesocycleId: null, mesocycleTitle: null },
+  ];
+  assert.deepEqual(mesocycleOptions(entries, "P1"), [{ value: ALL_OPTION, label: "Все мезоциклы" }, { value: "M1", label: "Блок 1" }, { value: "M2", label: "Блок 2" }]);
+  assert.deepEqual(mesocycleOptions(entries, "P2"), [{ value: ALL_OPTION, label: "Все мезоциклы" }]);
 });

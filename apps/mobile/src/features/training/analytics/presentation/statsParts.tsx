@@ -41,8 +41,8 @@ export function SummaryCard({ label, value, caption, warning, onPress }: Readonl
     <Pressable accessibilityRole={onPress === undefined ? undefined : "button"} disabled={onPress === undefined}
       accessibilityLabel={`${label}: ${value}${caption === undefined ? "" : `. ${caption}`}${onPress === undefined ? "" : ". Показать источники"}`}
       onPress={onPress} style={({ pressed }) => [styles.summary, { backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
-      <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>{label}</Text>
-      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.summaryValue, { color: colors.textPrimary }]}>{value}</Text>
+      <Text numberOfLines={1} style={[styles.summaryLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.summaryValue, { color: colors.textPrimary }]}>{value}</Text>
       {caption === undefined ? null : <Text style={[styles.caption, { color: warning === true ? colors.warning : colors.textMuted }]}>{caption}</Text>}
     </Pressable>
   );
@@ -67,15 +67,17 @@ export function PlanCompletionCard({ completion }: Readonly<{ completion: PlanCo
   const percent = completion.pct === null ? null : Math.min(completion.pct, 100);
   return (
     <View accessible accessibilityLabel={completion.pct === null ? "Выполнение плана: нет данных"
-      : `Выполнение плана: ${completion.done} из ${completion.planned}, ${number(completion.pct)} процентов`} style={[styles.card, { backgroundColor: colors.surface }]}>
-      <Text accessibilityRole="header" style={[styles.cardTitle, { color: colors.textPrimary }]}>Выполнение плана</Text>
-      <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
-        {completion.pct === null ? "Нет данных" : `${completion.done} из ${completion.planned} · ${number(completion.pct)}%`}</Text>
+      : `Выполнение плана: ${completion.done} из ${completion.planned}, ${number(completion.pct)} процентов`} style={[styles.card, styles.planCard, { backgroundColor: colors.surface }]}>
+      <View style={styles.planHead}>
+        <Text accessibilityRole="header" style={[styles.planTitle, { color: colors.textPrimary }]}>Выполнение плана</Text>
+        <Text style={[styles.planValue, { color: colors.textPrimary }]}>
+          {completion.pct === null ? "Нет данных" : `${completion.done} из ${completion.planned} · ${number(completion.pct)}%`}</Text>
+      </View>
       {percent === null ? null : <View style={[styles.planTrack, { backgroundColor: colors.surfaceRaised }]}>
         <View style={[styles.planFill, { backgroundColor: colors.accentInk, width: `${Math.max(percent, 1)}%` }]} />
       </View>}
       <Text style={[styles.caption, { color: colors.textMuted }]}>
-        {`Завершённые плановые тренировки всей выбранной программы или мезоцикла; период не учитывается. Пропущено: ${completion.missed} · отменено: ${completion.cancelled}`}</Text>
+        {`Вся программа или мезоцикл, период не учитывается · пропущено ${completion.missed} · отменено ${completion.cancelled}`}</Text>
     </View>
   );
 }
@@ -164,14 +166,18 @@ export function DrillDownModal({ target, infoOf, nameOf, bodyOf, onClose, onOpen
 }
 
 const styles = StyleSheet.create({
-  summary: { ...shadow.card, flexBasis: "47%", flexGrow: 1, borderRadius: 20, padding: 14, gap: 2, minHeight: 92 },
+  summary: { ...shadow.card, flexBasis: "47%", flexGrow: 1, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, gap: 0, minHeight: 60 },
   summaryLabel: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
-  summaryValue: { fontFamily: fonts.bold, fontSize: 20, lineHeight: 26 },
+  summaryValue: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 24 },
   caption: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   card: { ...shadow.card, borderRadius: 20, padding: 14, gap: 8 },
   cardTitle: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
   rowLabel: { flexShrink: 1, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
   grow: { flex: 1 },
+  planCard: { padding: 12, gap: 6 },
+  planHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  planTitle: { flexShrink: 1, fontFamily: fonts.bold, fontSize: 15, lineHeight: 20 },
+  planValue: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 20 },
   planTrack: { height: 8, borderRadius: 4, overflow: "hidden" },
   planFill: { height: 8, borderRadius: 4 },
   modal: { flex: 1, paddingTop: 48 },

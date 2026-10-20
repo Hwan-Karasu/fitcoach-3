@@ -11,6 +11,7 @@ import { MONTHS, dateText, factText, filterHistory, HistoryFilterBar, type Histo
 import type { SetFact } from "../../execution/public.ts";
 import { formatDuration, useExerciseLookup, type ExerciseLookupPort } from "../../plans/public.ts";
 import { periodRange } from "./statsFilters.ts";
+import { rangeFor } from "./trainingStats.ts";
 import { PeriodPill, type PeriodValue } from "./PeriodPill.tsx";
 import { exerciseSessions, progressMetrics, progressSeries, repRecords, sessionValue, type ExerciseSession,
   type ProgressMetricId } from "./exerciseProgress.ts";
@@ -156,12 +157,12 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
       {tabs}
       <ScrollView contentContainerStyle={styles.list}>
         <View style={styles.header}>
-          {filters}
-          <View style={styles.pills}><PeriodPill value={period} today={range.to} onChange={setPeriod} /></View>
-          {metrics.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          <HistoryFilterBar entries={own} filter={filter} onChange={setFilter}
+            trailing={<PeriodPill grow value={period} today={rangeFor(now, 1).to} onChange={setPeriod} />} />
+          {metrics.length > 1 ? <View style={styles.chips}>
             {metrics.map((item) => <SelectionChip key={item} group="Показатель" label={metricLabels[item]} selected={metric === item}
               onPress={() => setChosen(item)} />)}
-          </ScrollView> : null}
+          </View> : null}
         </View>
         {metric === null ? <EmptyState reason="no-data" title="Прогресс не строится"
           body="У этого упражнения нет величин для графика." /> : points.length === 0 ? <EmptyState reason="no-data" title="Нет данных"
@@ -216,8 +217,7 @@ const styles = StyleSheet.create({
   pad: { paddingHorizontal: 16 },
   list: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   header: { gap: 8, paddingTop: 4 },
-  chips: { gap: 8, paddingRight: 8 },
-  pills: { flexDirection: "row", gap: 8 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   summary: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
   card: { ...shadow.card, borderRadius: 20, padding: 14, gap: 6 },
   cardHead: { flexDirection: "row", alignItems: "center", gap: 8 },

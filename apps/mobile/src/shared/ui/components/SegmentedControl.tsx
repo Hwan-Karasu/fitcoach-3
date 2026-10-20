@@ -9,22 +9,24 @@ interface SegmentItem<Id extends string> {
 }
 
 /** Переключатель из 2–3 равных сегментов во всю ширину (UI-OWN-026); «Зефирка»: дорожка, выбранный — белый с тенью. */
-export function SegmentedControl<Id extends string>({ items, selectedId, onSelect }: Readonly<{
+export function SegmentedControl<Id extends string>({ items, selectedId, onSelect, compact = false }: Readonly<{
   items: readonly SegmentItem<Id>[];
   selectedId: Id;
   onSelect: (id: Id) => void;
+  /** Четыре и более пункта: ниже, мельче шрифт, подпись ужимается, а не обрезается. */
+  compact?: boolean;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
-    <View accessibilityRole="tablist" style={[styles.track, { backgroundColor: colors.border }]}>
+    <View accessibilityRole="tablist" style={[styles.track, compact ? styles.trackCompact : null, { backgroundColor: colors.border }]}>
       {items.map((item) => {
         const selected = item.id === selectedId;
         return (
           <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected }} accessibilityLabel={item.label}
             onPress={() => onSelect(item.id)}
-            style={[styles.segment, selected ? [shadow.control, { backgroundColor: colors.surface }] : null]}>
-            <Text numberOfLines={1} style={[styles.label, selected ? styles.selected : null, { color: selected ? colors.accentInk : colors.textSecondary }]}>{item.label}</Text>
+            style={[styles.segment, compact ? styles.segmentCompact : null, selected ? [shadow.control, { backgroundColor: colors.surface }] : null]}>
+            <Text numberOfLines={1} adjustsFontSizeToFit={compact} minimumFontScale={0.85} style={[styles.label, compact ? styles.labelCompact : null, selected ? styles.selected : null, { color: selected ? colors.accentInk : colors.textSecondary }]}>{item.label}</Text>
           </Pressable>
         );
       })}
@@ -37,4 +39,7 @@ const styles = StyleSheet.create({
   segment: { flex: 1, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   label: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 19 },
   selected: { fontFamily: fonts.bold },
+  trackCompact: { height: 44, borderRadius: 14, padding: 3, gap: 2 },
+  segmentCompact: { borderRadius: 11, paddingHorizontal: 2 },
+  labelCompact: { fontSize: 13, lineHeight: 17 },
 });

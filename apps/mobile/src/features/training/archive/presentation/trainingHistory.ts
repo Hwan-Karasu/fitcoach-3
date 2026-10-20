@@ -50,3 +50,34 @@ export function filterHistory(entries: readonly TrainingHistoryEntry[], filter: 
 export function completedCount(entries: readonly TrainingHistoryEntry[]): number {
   return entries.filter((entry) => entry.status === "COMPLETED").length;
 }
+
+/** Значение «Все» в списках выбора программы и мезоцикла. */
+export const ALL_OPTION = "__all__";
+
+export interface FilterOption {
+  readonly value: string;
+  readonly label: string;
+}
+
+/** Подпись программы в списках: удалённый план и архив помечены (§50.3). */
+export function programLabel(entry: Pick<TrainingHistoryEntry, "programTitle" | "planDeleted" | "archived">): string {
+  return entry.planDeleted ? `${entry.programTitle} (план удалён)` : entry.archived ? `${entry.programTitle} (архив)` : entry.programTitle;
+}
+
+/** «Все программы» и по одной строке на программу, где есть занятия, — в порядке записей (новые сверху). */
+export function programOptions(entries: readonly TrainingHistoryEntry[]): readonly FilterOption[] {
+  const seen = new Map<string, FilterOption>();
+  for (const entry of entries) if (!seen.has(entry.programId)) seen.set(entry.programId, { value: entry.programId, label: programLabel(entry) });
+  return [{ value: ALL_OPTION, label: "Все программы" }, ...seen.values()];
+}
+
+/** «Все мезоциклы» и мезоциклы выбранной программы, где есть занятия. */
+export function mesocycleOptions(entries: readonly TrainingHistoryEntry[], programId: string): readonly FilterOption[] {
+  const seen = new Map<string, FilterOption>();
+  for (const entry of entries) {
+    if (entry.programId === programId && entry.mesocycleId !== null && !seen.has(entry.mesocycleId)) {
+      seen.set(entry.mesocycleId, { value: entry.mesocycleId, label: entry.mesocycleTitle ?? "Мезоцикл" });
+    }
+  }
+  return [{ value: ALL_OPTION, label: "Все мезоциклы" }, ...seen.values()];
+}
