@@ -3,10 +3,12 @@ import test from "node:test";
 import { calcEat, calcMacros, calcNeat, calcRee, deriveCalc, goalDelta, proposeCorridors, type CalcProfile } from "../apps/mobile/src/features/nutrition/domain/CalcRules.ts";
 
 /** Профиль экрана «Расчёт» из спецификации и скриншотов Build 120: муж., 37 лет, 181 см, умеренный образ жизни, 3 тренировки по 60 мин, средняя интенсивность. */
-const PROFILE: CalcProfile = { sex: "MALE", age: 37, heightCm: 181, goal: "MAINTENANCE", activity: "MODERATE", workoutsPerWeek: 3, minutes: 60, intensity: "MEDIUM", stepKcal: 100 };
+const PROFILE: CalcProfile = { goal: "MAINTENANCE", activity: "MODERATE", workoutsPerWeek: 3, minutes: 60, intensity: "MEDIUM", stepKcal: 100 };
+/** Данные карточки клиента и замеров: пол, возраст, рост — из карточки. */
+const BODY = { sex: "MALE", age: 37, heightCm: 181 } as const;
 
 test("спецификация «Расчёт»: вес 85,35 кг, жир 20,4 % → REE 1837, NEAT 260, EAT 192, стартовый расход и итог 2289", () => {
-  const result = deriveCalc(PROFILE, { weightKg: 85.35, fatPercent: 20.4, avgSteps: null });
+  const result = deriveCalc(PROFILE, { ...BODY, weightKg: 85.35, fatPercent: 20.4, avgSteps: null });
   assert.equal(result.ree, 1837, "Кэтч–Макардл: 370 + 21,6 × 67,9 кг сухой массы");
   assert.equal(result.neat, 260);
   assert.equal(result.neatSource, "ACTIVITY");
@@ -45,15 +47,15 @@ test("цель: поправка на «шаг цели» — похудение
   assert.equal(goalDelta("GAIN", 100), 100);
   assert.equal(goalDelta("MAINTENANCE", 100), 0);
   assert.equal(goalDelta("LOSS", -50), -50, "знак шага не важен");
-  const loss = deriveCalc({ ...PROFILE, goal: "LOSS" }, { weightKg: 85.35, fatPercent: 20.4, avgSteps: null });
+  const loss = deriveCalc({ ...PROFILE, goal: "LOSS" }, { ...BODY, weightKg: 85.35, fatPercent: 20.4, avgSteps: null });
   assert.equal(loss.target, 2189);
 });
 
 test("итоги неизвестны, пока не хватает данных: нет веса — всё null, нет REE — нет стартового расхода", () => {
-  const empty = deriveCalc(PROFILE, { weightKg: null, fatPercent: null, avgSteps: null });
+  const empty = deriveCalc(PROFILE, { ...BODY, weightKg: null, fatPercent: null, avgSteps: null });
   assert.deepEqual([empty.ree, empty.eat, empty.startTdee, empty.target], [null, null, null, null]);
   assert.equal(empty.neat, 260, "NEAT по образу жизни известен и без веса");
-  const noSex = deriveCalc({ ...PROFILE, sex: null }, { weightKg: 85, fatPercent: null, avgSteps: null });
+  const noSex = deriveCalc(PROFILE, { ...BODY, sex: null, weightKg: 85, fatPercent: null, avgSteps: null });
   assert.equal(noSex.ree, null);
   assert.equal(noSex.startTdee, null);
 });

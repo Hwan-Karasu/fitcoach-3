@@ -2,6 +2,7 @@ export { ClientsArchivePreview, ClientsRosterPreview } from "./presentation/Clie
 export { ClientHomePreview } from "./presentation/ClientHomePreview.tsx";
 export { ClientEditorPreview, type ClientEditorAppendix } from "./presentation/ClientEditorPreview.tsx";
 export { ClientRosterSettingsScreen } from "./presentation/ClientRosterSettingsScreen.tsx";
+export { ageOn } from "./domain/ClientProfileValidation.ts";
 export type { ClientRecord, ClientRepositoryPort, CreateClientInput } from "./domain/ClientRepositoryPort.ts";
 export type { ClientFormDraft, ClientRecoveryDraft, ClientRecoveryDraftPort } from "./domain/ClientRecoveryDraftPort.ts";
 export type { ClientCommittedChange, ClientChangePort } from "./domain/ClientChangePort.ts";

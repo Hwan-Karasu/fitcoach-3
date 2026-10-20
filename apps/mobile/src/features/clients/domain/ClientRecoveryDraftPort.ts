@@ -4,6 +4,8 @@ export interface ClientFormDraft {
   readonly contactEmail: string;
   readonly birthDate: string;
   readonly heightDraft: string;
+  /** Пол; в черновиках, сохранённых до появления поля, отсутствует. */
+  readonly sex?: "MALE" | "FEMALE" | null;
   readonly emoji: string | null;
 }
 

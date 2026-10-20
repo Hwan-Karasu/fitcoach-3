@@ -18,7 +18,7 @@ const intensityLabels: Readonly<Record<CalcIntensity, string>> = { LIGHT: "Лё�
 const STEPS_WINDOW_DAYS = 30;
 
 /** Профиль по умолчанию: «не введено» остаётся пустым, а не угаданным (§49.10 п. 4); тренировок нет, пока тренер их не укажет. */
-const DEFAULT_PROFILE: CalcProfile = { sex: null, age: null, heightCm: null, goal: "MAINTENANCE", activity: "MODERATE", workoutsPerWeek: 0, minutes: 60, intensity: "MEDIUM", stepKcal: 100 };
+const DEFAULT_PROFILE: CalcProfile = { goal: "MAINTENANCE", activity: "MODERATE", workoutsPerWeek: 0, minutes: 60, intensity: "MEDIUM", stepKcal: 100 };
 
 /** «85,4» / «85.4» → число; пусто, лишние знаки и буквы → `null`. Допускается одна десятая. */
 function num(text: string): number | null {
@@ -27,19 +27,26 @@ function num(text: string): number | null {
 }
 const show = (value: number | null) => value === null ? "" : String(value).replace(".", ",");
 
+/** Данные карточки клиента для расчёта: пол и рост правятся здесь и записываются обратно в карточку, возраст считается из даты рождения. */
+export interface CalcClientBody {
+  readonly sex: CalcSex | null;
+  readonly age: number | null;
+  readonly heightCm: number | null;
+}
+
 interface Draft {
-  sex: CalcSex | null; age: string; height: string; weight: string; fat: string; activity: CalcActivity; workouts: string; minutes: string; step: string; intensity: CalcIntensity;
+  sex: CalcSex | null; height: string; weight: string; fat: string; activity: CalcActivity; workouts: string; minutes: string; step: string; intensity: CalcIntensity;
   neck: string; waist: string; hips: string;
 }
 
-function draftOf(profile: CalcProfile, weight: number | null, fat: number | null): Draft {
-  return { sex: profile.sex, age: show(profile.age), height: show(profile.heightCm), weight: show(weight), fat: show(fat), activity: profile.activity, workouts: String(profile.workoutsPerWeek),
+function draftOf(profile: CalcProfile, body: CalcClientBody, weight: number | null, fat: number | null): Draft {
+  return { sex: body.sex, height: show(body.heightCm), weight: show(weight), fat: show(fat), activity: profile.activity, workouts: String(profile.workoutsPerWeek),
     minutes: String(profile.minutes), step: String(profile.stepKcal), intensity: profile.intensity, neck: "", waist: "", hips: "" };
 }
 
 function profileOf(draft: Draft, goal: CalcGoal): CalcProfile {
   const whole = (text: string, fallback: number) => text.trim() === "" ? fallback : (num(text) ?? Number.NaN);
-  return { sex: draft.sex, age: draft.age.trim() === "" ? null : (num(draft.age) ?? Number.NaN), heightCm: draft.height.trim() === "" ? null : (num(draft.height) ?? Number.NaN), goal, activity: draft.activity,
+  return { goal, activity: draft.activity,
     workoutsPerWeek: whole(draft.workouts, 0), minutes: whole(draft.minutes, 60), intensity: draft.intensity, stepKcal: whole(draft.step, 100) };
 }
 
@@ -117,7 +124,9 @@ function HelpSheet({ visible, onClose }: Readonly<{ visible: boolean; onClose: (
  * Экран «Расчёт» (§49.10, UX «Расчёт»): просмотр и редактирование — состояния одного экрана; вес и % жира берутся из Measurements, шаги — из суточной активности.
  * Результат — оценка и черновик целей; действующей целью он становится только после явного «Применить как цели».
  */
-export function NutritionCalcScreen({ clientId, calc, targets, measurements }: Readonly<{ clientId: string; calc: NutritionCalcPort; targets: NutritionTargetsPort; measurements: MeasurementRepositoryPort }>) {
+export function NutritionCalcScreen({ clientId, body, onUpdateBody, calc, targets, measurements }: Readonly<{ clientId: string; body: CalcClientBody;
+  /** Записывает пол и рост в карточку клиента (владелец данных — Clients). */
+  onUpdateBody: (patch: Readonly<{ sex: CalcSex | null; heightCm: number | null }>) => Promise<void>; calc: NutritionCalcPort; targets: NutritionTargetsPort; measurements: MeasurementRepositoryPort }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const [loaded, setLoaded] = useState<Readonly<{ stored: StoredCalcProfile | null; weight: number | null; fat: number | null; steps: number | null }> | null>(null);
@@ -161,17 +170,17 @@ export function NutritionCalcScreen({ clientId, calc, targets, measurements }: R
       const goal = profile.goal;
       const parsed = profileOf(draft, goal);
       const clean = Object.values(parsed).every((value) => typeof value !== "number" || Number.isFinite(value));
-      return { profile: clean ? parsed : profile, weight: num(draft.weight), fat: num(draft.fat) };
+      return { profile: clean ? parsed : profile, sex: draft.sex, heightCm: num(draft.height), weight: num(draft.weight), fat: num(draft.fat) };
     }
-    return { profile, weight: loaded.weight, fat: loaded.fat };
-  }, [loaded, editing, draft, profile]);
-  const result = useMemo(() => live === null || loaded === null ? null : deriveCalc(live.profile, { weightKg: live.weight, fatPercent: live.fat, avgSteps: loaded.steps }), [live, loaded]);
+    return { profile, sex: body.sex, heightCm: body.heightCm, weight: loaded.weight, fat: loaded.fat };
+  }, [loaded, editing, draft, profile, body]);
+  const result = useMemo(() => live === null || loaded === null ? null : deriveCalc(live.profile, { sex: live.sex, age: body.age, heightCm: live.heightCm, weightKg: live.weight, fatPercent: live.fat, avgSteps: loaded.steps }), [live, loaded]);
 
   const navy = useMemo(() => draft === null ? null : navyBodyFat({ sex: draft.sex, heightCm: num(draft.height), neckCm: num(draft.neck), waistCm: num(draft.waist), hipsCm: num(draft.hips) }), [draft]);
 
   const startEdit = () => {
     if (loaded === null) return;
-    setDraft(draftOf(profile, loaded.weight, loaded.fat));
+    setDraft(draftOf(profile, body, loaded.weight, loaded.fat));
     setNavyOpen(false);
     setError(null);
     setNotice(null);
@@ -190,6 +199,7 @@ export function NutritionCalcScreen({ clientId, calc, targets, measurements }: R
   const done = async () => {
     if (loaded === null || draft === null || lock.current) return;
     const next = profileOf(draft, profile.goal);
+    if (draft.height.trim() !== "" && (num(draft.height) === null || (num(draft.height) as number) < 50 || (num(draft.height) as number) > 300)) { setError("Рост — от 50 до 300 см, например 181 или 172,5."); return; }
     const weight = draft.weight.trim() === "" ? null : num(draft.weight);
     const fat = draft.fat.trim() === "" ? null : num(draft.fat);
     if ((draft.weight.trim() !== "" && weight === null) || (draft.fat.trim() !== "" && fat === null)) { setError("Вес и % жира — числа с одним знаком после запятой, например 85,4."); return; }
@@ -198,6 +208,8 @@ export function NutritionCalcScreen({ clientId, calc, targets, measurements }: R
     setBusy(true);
     try {
       await calc.saveProfile(clientId, next, loaded.stored?.revision ?? null);
+      const heightCm = draft.height.trim() === "" ? null : num(draft.height);
+      if (draft.sex !== body.sex || heightCm !== body.heightCm) await onUpdateBody({ sex: draft.sex, heightCm });
       // Вес и % жира — факты Measurements: новая запись только при изменённом значении, без параллельного хранилища.
       const today = localDateOf(new Date());
       const journal = await measurements.listForClient(clientId);
@@ -280,7 +292,11 @@ export function NutritionCalcScreen({ clientId, calc, targets, measurements }: R
             {(["MALE", "FEMALE"] as const).map((id) => <SelectionChip key={id} group="Пол" label={id === "MALE" ? "Мужской" : "Женский"} selected={draft.sex === id} onPress={() => setField({ sex: id })} />)}
           </View>
           <View style={styles.pair}>
-            <View style={styles.grow}><TextField label="Возраст, лет" value={draft.age} onChangeText={(age) => setField({ age })} keyboardType="decimal-pad" placeholder="0" /></View>
+            <View style={styles.grow} accessible accessibilityLabel={`Возраст: ${body.age === null ? "не указан" : `${body.age} лет`}`}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Возраст</Text>
+              <Text style={[styles.resultValue, { color: colors.textPrimary }]}>{body.age === null ? "—" : `${body.age} лет`}</Text>
+              <Text style={[styles.hint, { color: colors.textMuted }]}>{body.age === null ? "Укажите дату рождения в карточке клиента." : "Из даты рождения в карточке клиента."}</Text>
+            </View>
             <View style={styles.grow}><TextField label="Рост, см" value={draft.height} onChangeText={(height) => setField({ height })} keyboardType="decimal-pad" placeholder="0" /></View>
           </View>
           <View style={styles.pair}>

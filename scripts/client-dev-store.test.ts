@@ -133,7 +133,7 @@ test("C03 basic profile validates dates and exact comma/dot height without inven
   } finally { await store.close(); }
 });
 
-test("F04 dev schema v6 upgrades an existing v1 client row in place", async () => {
+test("F04 dev schema v7 upgrades an existing v1 client row in place", async () => {
   const db = new DatabaseSync(":memory:");
   const port = sqlitePort(db);
   await runMigrations(new WriterCoordinator(port), [devClientCatalog[0]!]);
@@ -150,7 +150,8 @@ test("F04 dev schema v6 upgrades an existing v1 client row in place", async () =
     assert.equal(row?.displayName, "Before");
     assert.equal(row?.birthDate, null);
     assert.equal(row?.heightCmX10, null);
-    assert.equal((db.prepare("SELECT count(*) AS n FROM schema_migrations").get() as { n: number }).n, 6);
+    assert.equal(row?.sex, null, "пол у старой карточки не угадывается");
+    assert.equal((db.prepare("SELECT count(*) AS n FROM schema_migrations").get() as { n: number }).n, 7);
   } finally { await store.close(); }
 });
 

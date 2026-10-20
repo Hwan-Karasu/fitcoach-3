@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { devNutritionCatalog, DEV_NUTRITION_LEDGER } from "../apps/mobile/src/features/nutrition/data/DevNutritionCatalog.ts";
+import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
+import { WriterCoordinator } from "../apps/mobile/src/shared/db/WriterCoordinator.ts";
 import { devNutritionClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionDiaryRepository.ts";
 import { devNutritionTargetsClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionTargetsRepository.ts";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
@@ -11,7 +14,7 @@ import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
 
 const WS = "synthetic-workspace-a";
 const NOW = new Date("2026-10-20T10:00:00.000Z");
-const PROFILE: CalcProfile = { sex: "MALE", age: 37, heightCm: 181, goal: "MAINTENANCE", activity: "MODERATE", workoutsPerWeek: 3, minutes: 60, intensity: "MEDIUM", stepKcal: 100 };
+const PROFILE: CalcProfile = { goal: "MAINTENANCE", activity: "MODERATE", workoutsPerWeek: 3, minutes: 60, intensity: "MEDIUM", stepKcal: 100 };
 
 async function stores() {
   const db = new DatabaseSync(":memory:");
@@ -25,10 +28,9 @@ async function stores() {
 }
 const code = (name: string) => (error: unknown) => error instanceof Error && error.message === name;
 
-test("профиль расчёта: проверка ввода — возраст, рост, тренировки, минуты и шаг цели в разумных границах; пустой пол и возраст допустимы", () => {
+test("профиль расчёта: проверка ввода — тренировки, минуты и шаг цели в разумных границах", () => {
   assert.deepEqual(validateCalcProfile(PROFILE), PROFILE);
-  assert.equal(validateCalcProfile({ ...PROFILE, sex: null, age: null, heightCm: null }).age, null, "не введено — не ноль");
-  for (const bad of [{ age: 0 }, { age: 121 }, { age: 37.5 }, { heightCm: 20 }, { heightCm: 301 }, { workoutsPerWeek: -1 }, { workoutsPerWeek: 22 }, { minutes: 0 }, { minutes: 601 },
+  for (const bad of [{ workoutsPerWeek: -1 }, { workoutsPerWeek: 22 }, { minutes: 0 }, { minutes: 601 },
     { stepKcal: -1 }, { stepKcal: 1001 }]) {
     assert.throws(() => validateCalcProfile({ ...PROFILE, ...bad }), code("CALC_PROFILE_INVALID"), JSON.stringify(bad));
   }
@@ -41,13 +43,13 @@ test("профиль расчёта: нет записи — null; сохран�
     const b = await clients.create({ displayName: "SyntheticB" });
     assert.equal(await calc.getProfile(a.id), null);
     const first = await calc.saveProfile(a.id, PROFILE, null, NOW);
-    assert.deepEqual([first.revision, first.profile.age, first.profile.goal], [1, 37, "MAINTENANCE"]);
+    assert.deepEqual([first.revision, first.profile.workoutsPerWeek, first.profile.goal], [1, 3, "MAINTENANCE"]);
     await assert.rejects(calc.saveProfile(a.id, PROFILE, null, NOW), code("CALC_STALE"), "повторное создание без revision");
-    const second = await calc.saveProfile(a.id, { ...PROFILE, goal: "LOSS", heightCm: 181.5 }, 1, NOW);
-    assert.deepEqual([second.revision, second.profile.goal, second.profile.heightCm], [2, "LOSS", 181.5], "рост с десятой сохраняется");
+    const second = await calc.saveProfile(a.id, { ...PROFILE, goal: "LOSS", minutes: 45 }, 1, NOW);
+    assert.deepEqual([second.revision, second.profile.goal, second.profile.minutes], [2, "LOSS", 45]);
     await assert.rejects(calc.saveProfile(a.id, PROFILE, 1, NOW), code("CALC_STALE"), "устаревшая revision");
     assert.equal(await calc.getProfile(b.id), null, "чужой профиль не виден");
-    await assert.rejects(calc.saveProfile(a.id, { ...PROFILE, age: 0 }, 2, NOW), code("CALC_PROFILE_INVALID"));
+    await assert.rejects(calc.saveProfile(a.id, { ...PROFILE, minutes: 0 }, 2, NOW), code("CALC_PROFILE_INVALID"));
     assert.equal((await calc.getProfile(a.id))?.revision, 2, "отклонённая правка ничего не изменила");
   } finally { await close(); }
 });
@@ -99,4 +101,22 @@ test("§15.7 окончательное удаление клиента убир
     const archived = await blockedClients.setArchived(client.id, client.revision, true);
     await assert.rejects(blockedClients.deleteArchivedPermanently(client.id, archived.revision), { message: "CLIENT_DELETION_BLOCKED" });
   } finally { await blockedCalc.close(); await blockedClients.close(); }
+});
+
+test("миграция v7: профиль расчёта из v6 переживает пересоздание таблицы, пол/возраст/рост из него уходят в карточку клиента", async () => {
+  const db = new DatabaseSync(":memory:");
+  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const clients = new DevClientRepository(shared, WS, []);
+  await clients.initialize();
+  const client = await clients.create({ displayName: "Legacy" });
+  await runMigrations(new WriterCoordinator(nodeSqlitePort(db)), devNutritionCatalog.slice(0, 6), DEV_NUTRITION_LEDGER);
+  db.prepare(`INSERT INTO dev_nutrition_calc_profiles (workspace_id, client_id, sex, age, height_x10, goal, activity, workouts_per_week, workout_minutes, intensity, step_kcal, revision, updated_at)
+    VALUES (?, ?, 'MALE', 37, 1810, 'GAIN', 'ACTIVE', 4, 50, 'HEAVY', 200, 3, '2026-10-20T10:00:00.000Z')`).run(WS, client.id);
+  const calc = new DevNutritionCalcRepository(shared, WS);
+  await calc.initialize();
+  try {
+    const stored = await calc.getProfile(client.id);
+    assert.deepEqual(stored, { revision: 3, profile: { goal: "GAIN", activity: "ACTIVE", workoutsPerWeek: 4, minutes: 50, intensity: "HEAVY", stepKcal: 200 } });
+    assert.equal(db.prepare("SELECT count(*) AS n FROM pragma_table_info('dev_nutrition_calc_profiles') WHERE name IN ('sex','age','height_x10')").get()?.n, 0);
+  } finally { await calc.close(); await clients.close(); }
 });

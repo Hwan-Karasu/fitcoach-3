@@ -56,7 +56,7 @@ const draftColumns = `id, client_id AS clientId, mode,
 
 const columns = `id, display_name AS displayName, contact_phone AS contactPhone,
   contact_email AS contactEmail, birth_date AS birthDate,
-  height_cm_x10 AS heightCmX10, emoji, lifecycle, revision, created_at AS createdAt,
+  height_cm_x10 AS heightCmX10, sex, emoji, lifecycle, revision, created_at AS createdAt,
   updated_at AS updatedAt, archived_at AS archivedAt`;
 
 function optional(value: string | undefined, maxLength: number): string | null {
@@ -67,7 +67,7 @@ function optional(value: string | undefined, maxLength: number): string | null {
 
 function validatedInput(input: CreateClientInput): Readonly<{
   name: string; phone: string | null; email: string | null;
-  birthDate: string | null; heightCmX10: number | null; emoji: string | null;
+  birthDate: string | null; heightCmX10: number | null; emoji: string | null; sex: "MALE" | "FEMALE" | null | undefined;
 }> {
   const name = input.displayName.trim();
   if (!name || name.length > 200) throw new Error("CLIENT_NAME_INVALID");
@@ -82,8 +82,9 @@ function validatedInput(input: CreateClientInput): Readonly<{
   if (heightCmX10 !== null && (!Number.isSafeInteger(heightCmX10) || heightCmX10 <= 0)) {
     throw new Error("CLIENT_HEIGHT_INVALID");
   }
+  if (input.sex !== undefined && input.sex !== null && input.sex !== "MALE" && input.sex !== "FEMALE") throw new Error("CLIENT_SEX_INVALID");
   const emoji = normalizedEmoji(input.emoji);
-  return { name, phone, email, birthDate, heightCmX10, emoji };
+  return { name, phone, email, birthDate, heightCmX10, emoji, sex: input.sex };
 }
 
 /** Пустое — инициалы; эмодзи не длиннее 8 графем. */
@@ -376,7 +377,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
   }
 
   async create(input: CreateClientInput): Promise<ClientRecord> {
-    const { name, phone, email, birthDate, heightCmX10, emoji } = validatedInput(input);
+    const { name, phone, email, birthDate, heightCmX10, emoji, sex } = validatedInput(input);
     const { writer } = this.ready();
     const created = await writer.write(async (tx) => {
       const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
@@ -384,10 +385,10 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
       const now = new Date().toISOString();
       await tx.run(`INSERT INTO dev_clients
         (id, workspace_id, display_name, contact_phone, contact_email,
-         birth_date, height_cm_x10, emoji, lifecycle,
+         birth_date, height_cm_x10, sex, emoji, lifecycle,
          revision, created_at, updated_at, archived_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 1, ?, ?, NULL)`,
-      [id, this.workspaceId, name, phone, email, birthDate, heightCmX10, emoji, now, now]);
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 1, ?, ?, NULL)`,
+      [id, this.workspaceId, name, phone, email, birthDate, heightCmX10, sex ?? null, emoji, now, now]);
       await tx.run(`DELETE FROM dev_client_recovery_drafts
         WHERE workspace_id = ? AND mode = 'create'`, [this.workspaceId]);
       return clientById(tx, this.workspaceId, id);
@@ -400,14 +401,15 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
     if (!id.trim() || !Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
       throw new Error("CLIENT_COMMAND_INVALID");
     }
-    const { name, phone, email, birthDate, heightCmX10, emoji } = validatedInput(input);
+    const { name, phone, email, birthDate, heightCmX10, emoji, sex } = validatedInput(input);
     const { writer } = this.ready();
     const updated = await writer.write(async (tx) => {
       const result = await tx.run(`UPDATE dev_clients SET display_name = ?, contact_phone = ?,
         contact_email = ?, birth_date = ?, height_cm_x10 = ?, emoji = ?,
+        sex = CASE WHEN ? = 1 THEN ? ELSE sex END,
         updated_at = ?, revision = revision + 1
         WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'ACTIVE'`,
-      [name, phone, email, birthDate, heightCmX10, emoji,
+      [name, phone, email, birthDate, heightCmX10, emoji, sex === undefined ? 0 : 1, sex ?? null,
         new Date().toISOString(), this.workspaceId, id, expectedRevision]);
       if (result.changes !== 1) throw new Error("CLIENT_STALE_OR_WRONG_SCOPE");
       await tx.run(`DELETE FROM dev_client_recovery_drafts

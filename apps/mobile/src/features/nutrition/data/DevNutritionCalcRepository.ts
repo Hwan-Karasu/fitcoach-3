@@ -2,15 +2,12 @@ import { runMigrations } from "../../../shared/db/MigrationRunner.ts";
 import { SharedSqliteDatabase } from "../../../shared/db/SharedSqliteDatabase.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
-import { assertSteps, validateCalcProfile, type CalcActivity, type CalcGoal, type CalcIntensity, type CalcProfile, type CalcSex } from "../domain/CalcRules.ts";
+import { assertSteps, validateCalcProfile, type CalcActivity, type CalcGoal, type CalcIntensity, type CalcProfile } from "../domain/CalcRules.ts";
 import { assertDate } from "../domain/DiaryRules.ts";
 import type { CalcCommittedChange, NutritionCalcPort, StepsDay, StoredCalcProfile } from "../domain/NutritionCalcPort.ts";
 import { DEV_NUTRITION_LEDGER, devNutritionCatalog } from "./DevNutritionCatalog.ts";
 
 interface ProfileRow {
-  readonly sex: CalcSex | null;
-  readonly age: number | null;
-  readonly heightX10: number | null;
   readonly goal: CalcGoal;
   readonly activity: CalcActivity;
   readonly workouts: number;
@@ -20,9 +17,9 @@ interface ProfileRow {
   readonly revision: number;
 }
 
-const columns = `sex, age, height_x10 AS heightX10, goal, activity, workouts_per_week AS workouts, workout_minutes AS minutes, intensity, step_kcal AS stepKcal, revision`;
+const columns = `goal, activity, workouts_per_week AS workouts, workout_minutes AS minutes, intensity, step_kcal AS stepKcal, revision`;
 
-const toStored = (row: ProfileRow): StoredCalcProfile => ({ revision: row.revision, profile: { sex: row.sex, age: row.age, heightCm: row.heightX10 === null ? null : row.heightX10 / 10,
+const toStored = (row: ProfileRow): StoredCalcProfile => ({ revision: row.revision, profile: {
   goal: row.goal, activity: row.activity, workoutsPerWeek: row.workouts, minutes: row.minutes, intensity: row.intensity, stepKcal: row.stepKcal } });
 
 async function load(reader: SqliteStatementPort, workspaceId: string, clientId: string): Promise<StoredCalcProfile | null> {
@@ -104,19 +101,18 @@ export class DevNutritionCalcRepository implements NutritionCalcPort {
 
   async saveProfile(clientId: string, profile: CalcProfile, expectedRevision: number | null, now: Date = new Date()): Promise<StoredCalcProfile> {
     const valid = validateCalcProfile(profile);
-    const heightX10 = valid.heightCm === null ? null : Math.round(valid.heightCm * 10);
     const saved = await this.ready().writer.write(async (tx) => {
       const stamp = now.toISOString();
       if (expectedRevision === null) {
         const exists = await tx.first<{ n: number }>("SELECT count(*) AS n FROM dev_nutrition_calc_profiles WHERE workspace_id = ? AND client_id = ?", [this.workspaceId, clientId]);
         if ((exists?.n ?? 0) > 0) throw new Error("CALC_STALE");
-        await tx.run(`INSERT INTO dev_nutrition_calc_profiles (workspace_id, client_id, sex, age, height_x10, goal, activity, workouts_per_week, workout_minutes,
-            intensity, step_kcal, revision, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
-        [this.workspaceId, clientId, valid.sex, valid.age, heightX10, valid.goal, valid.activity, valid.workoutsPerWeek, valid.minutes, valid.intensity, valid.stepKcal, stamp]);
+        await tx.run(`INSERT INTO dev_nutrition_calc_profiles (workspace_id, client_id, goal, activity, workouts_per_week, workout_minutes,
+            intensity, step_kcal, revision, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+        [this.workspaceId, clientId, valid.goal, valid.activity, valid.workoutsPerWeek, valid.minutes, valid.intensity, valid.stepKcal, stamp]);
       } else {
-        const result = await tx.run(`UPDATE dev_nutrition_calc_profiles SET sex = ?, age = ?, height_x10 = ?, goal = ?, activity = ?, workouts_per_week = ?, workout_minutes = ?,
+        const result = await tx.run(`UPDATE dev_nutrition_calc_profiles SET goal = ?, activity = ?, workouts_per_week = ?, workout_minutes = ?,
             intensity = ?, step_kcal = ?, revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND client_id = ? AND revision = ?`,
-        [valid.sex, valid.age, heightX10, valid.goal, valid.activity, valid.workoutsPerWeek, valid.minutes, valid.intensity, valid.stepKcal, stamp, this.workspaceId, clientId, expectedRevision]);
+        [valid.goal, valid.activity, valid.workoutsPerWeek, valid.minutes, valid.intensity, valid.stepKcal, stamp, this.workspaceId, clientId, expectedRevision]);
         if (result.changes !== 1) throw new Error("CALC_STALE");
       }
       return (await load(tx, this.workspaceId, clientId)) as StoredCalcProfile;

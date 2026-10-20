@@ -99,4 +99,11 @@ export const devClientCatalog: readonly MigrationStep[] = [{
   statements: [
     "ALTER TABLE dev_roster_preferences ADD COLUMN archive_sort_mode TEXT NOT NULL DEFAULT 'ARCHIVED_AT' CHECK (archive_sort_mode IN ('ARCHIVED_AT','NAME'))",
   ],
+}, {
+  version: 7,
+  checksum: "f04-dev-client-store-v7-sex-20261020",
+  statements: [
+    // Пол нужен расчёту КБЖУ; NULL = не указан (не угадывается).
+    "ALTER TABLE dev_clients ADD COLUMN sex TEXT CHECK (sex IS NULL OR sex IN ('MALE','FEMALE'))",
+  ],
 }];

@@ -57,6 +57,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
   const [birthDate, setBirthDate] = useState(initialDraft?.birthDate ?? initial?.birthDate ?? "");
   const [heightDraft, setHeightDraft] = useState(initialDraft?.heightDraft
     ?? formatHeightCmX10(initial?.heightCmX10 ?? null));
+  const [sex, setSex] = useState<"MALE" | "FEMALE" | null>(initialDraft?.sex ?? initial?.sex ?? null);
   const [emoji, setEmoji] = useState<string | null>(initialDraft?.emoji ?? initial?.emoji ?? null);
   const [nameError, setNameError] = useState(false);
   const [birthDateError, setBirthDateError] = useState(false);
@@ -72,15 +73,15 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
   const pendingDraftWrite = useRef<Promise<void> | null>(null);
   const profileDirty = initial === undefined
     ? Boolean(displayName.trim() || phone.trim() || email.trim()
-      || birthDate.trim() || heightDraft.trim() || emoji)
+      || birthDate.trim() || heightDraft.trim() || sex !== null || emoji)
     : displayName !== initial.displayName || phone !== (initial.contactPhone ?? "")
       || email !== (initial.contactEmail ?? "") || birthDate !== (initial.birthDate ?? "")
-      || heightDraft !== formatHeightCmX10(initial.heightCmX10) || emoji !== initial.emoji;
+      || heightDraft !== formatHeightCmX10(initial.heightCmX10) || (sex ?? null) !== (initial.sex ?? null) || emoji !== initial.emoji;
   const dirty = profileDirty || (appendix?.dirty ?? false);
   const formRef = useRef<ClientFormDraft>({ displayName, contactPhone: phone,
-    contactEmail: email, birthDate, heightDraft, emoji });
+    contactEmail: email, birthDate, heightDraft, sex, emoji });
   formRef.current = { displayName, contactPhone: phone, contactEmail: email,
-    birthDate, heightDraft, emoji };
+    birthDate, heightDraft, sex, emoji };
 
   const persistDraft = useCallback((form: ClientFormDraft): Promise<void> => {
     const write = onSaveDraft(form).then(() => {
@@ -102,7 +103,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
       if (!savingRef.current) void persistDraft(formRef.current).catch(() => undefined);
     }, 600);
     return () => clearTimeout(timer);
-  }, [displayName, phone, email, birthDate, heightDraft, emoji, profileDirty, persistDraft]);
+  }, [displayName, phone, email, birthDate, heightDraft, sex, emoji, profileDirty, persistDraft]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
@@ -189,7 +190,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
       await pendingDraftWrite.current?.catch(() => undefined);
       await persistDraft(formRef.current);
       await onSave({ displayName, contactPhone: phone, contactEmail: email,
-        birthDate: normalizedBirthDate, heightCmX10, emoji });
+        birthDate: normalizedBirthDate, heightCmX10, sex, emoji });
       created = true;
     } catch (error) {
       const code = error instanceof Error ? error.message : "";
@@ -317,6 +318,12 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
             value={heightDraft}
             onChangeText={(value) => { setHeightDraft(value); setHeightError(false); setMessage(null); }}
           />
+          <Text style={[styles.sectionDescription, { color: colors.textSecondary }]}>Пол · нужен для расчёта КБЖУ, необязательно</Text>
+          <View style={styles.emojiChoices}>
+            <SelectionChip group="Пол" label="Не указан" selected={sex === null} onPress={() => setSex(null)} />
+            <SelectionChip group="Пол" label="Мужской" selected={sex === "MALE"} onPress={() => setSex("MALE")} />
+            <SelectionChip group="Пол" label="Женский" selected={sex === "FEMALE"} onPress={() => setSex("FEMALE")} />
+          </View>
           <Text style={[styles.sectionDescription, { color: colors.textSecondary }]}>Идентификатор карточки</Text>
           <View style={styles.emojiChoices}>
             <SelectionChip group="Идентификатор" label="Инициалы" selected={emoji === null}

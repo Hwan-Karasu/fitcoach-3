@@ -5,7 +5,7 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import { ClientHomePreview, type ClientRecord } from "../../features/clients/public.ts";
 import { localDateOf, parseValueX10, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
-import { AddFoodScreen, type CatalogFilter, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
+import { AddFoodScreen, type CalcClientBody, type CatalogFilter, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
   type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ArchivedProgramsPanel, ParticipantSwitcher, participantTarget, ProgramMatrixScreen, PeriodizedBuilderScreen, ProgramLibraryScreen, ProgramModeChooserScreen, programLibraryTabTitles, ProgramScreen, SimpleProgramBuilderScreen,
   WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort,
@@ -106,8 +106,8 @@ export function HomeNavigator(props: HomeProps) {
 }
 
 /** «Питание» клиента: дневник, добавление еды из своего каталога, создание продукта. Шапку клиента рисует стек (как у «Тренировок»). */
-export function NutritionNavigator({ clientId, clientName, clientEmoji, foods, recipes, diary, targets, calc, measurements, onExitClient, onOpenClients }: Readonly<{
-  clientId: string; clientName: string; clientEmoji: string | null;
+export function NutritionNavigator({ clientId, clientName, clientEmoji, body, onUpdateBody, foods, recipes, diary, targets, calc, measurements, onExitClient, onOpenClients }: Readonly<{
+  clientId: string; clientName: string; clientEmoji: string | null; body: CalcClientBody; onUpdateBody: (patch: Readonly<{ sex: "MALE" | "FEMALE" | null; heightCm: number | null }>) => Promise<void>;
   foods: FoodCatalogPort; recipes: RecipeCatalogPort; diary: NutritionDiaryPort; targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort;
   onExitClient: () => void; onOpenClients: () => void;
 }>) {
@@ -119,7 +119,7 @@ export function NutritionNavigator({ clientId, clientName, clientEmoji, foods, r
         onClients={onOpenClients} onBack={() => { if (route.name === "NutritionIndex") onExitClient(); else navigation.goBack(); }} />,
     })}>
       <NutritionStack.Screen name="NutritionIndex">
-        {({ navigation }) => <NutritionHomeScreen clientId={clientId} diary={diary} targets={targets} calc={calc} measurements={measurements}
+        {({ navigation }) => <NutritionHomeScreen clientId={clientId} body={body} onUpdateBody={onUpdateBody} diary={diary} targets={targets} calc={calc} measurements={measurements}
           onAdd={(localDate, slot, filter) => navigation.navigate("NutritionAdd", { localDate, slot, filter })} />}
       </NutritionStack.Screen>
       <NutritionStack.Screen name="NutritionAdd">

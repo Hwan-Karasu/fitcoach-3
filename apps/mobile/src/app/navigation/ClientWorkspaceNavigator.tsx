@@ -5,7 +5,8 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StyleSheet, Text, View } from "react-native";
 import type { AccountingRepositoryPort } from "../../features/accounting/public.ts";
-import type { ClientRecord, ClientRepositoryPort, ClientRosterPort } from "../../features/clients/public.ts";
+import { ageOn, type ClientRecord, type ClientRepositoryPort, type ClientRosterPort } from "../../features/clients/public.ts";
+import { localDateOf } from "../../features/measurements/public.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import type { FoodCatalogPort, NutritionCalcPort, NutritionDiaryPort, NutritionTargetsPort, RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ClientQuestionnaireScreen, type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
@@ -193,6 +194,15 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
     <AppButton variant="secondary" label="Вернуться к списку" onPress={onClose} />
   </View>;
 
+  /** Данные карточки для расчёта КБЖУ; возраст — из даты рождения на сегодня. */
+  const calcBody = { sex: client.sex ?? null, age: ageOn(client.birthDate, localDateOf(new Date())), heightCm: client.heightCmX10 === null ? null : client.heightCmX10 / 10 };
+  /** Пол и рост пишутся в карточку клиента (владелец — Clients) с CAS по revision; остальные поля карточки сохраняются как есть. */
+  const updateCalcBody = async (patch: Readonly<{ sex: "MALE" | "FEMALE" | null; heightCm: number | null }>): Promise<void> => {
+    const updated = await repository.update(client.id, client.revision, { displayName: client.displayName, contactPhone: client.contactPhone ?? undefined,
+      contactEmail: client.contactEmail ?? undefined, birthDate: client.birthDate, heightCmX10: patch.heightCm === null ? null : Math.round(patch.heightCm * 10), sex: patch.sex, emoji: client.emoji });
+    setSelection({ clientId, result: updated });
+  };
+
   return (
     <View style={styles.root}>
       {loadErrorFor === clientId ? <Text accessibilityRole="alert"
@@ -220,7 +230,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
           }} />}
       </Tabs.Screen>
       <Tabs.Screen name="Nutrition" options={{ tabBarLabel: workspaceTabs.Nutrition, tabBarAccessibilityLabel: workspaceTabs.Nutrition }}>
-        {() => <NutritionNavigator clientId={client.id} clientName={client.displayName} clientEmoji={client.emoji} foods={nutrition.foods} recipes={nutrition.recipes}
+        {() => <NutritionNavigator clientId={client.id} clientName={client.displayName} clientEmoji={client.emoji} body={calcBody} onUpdateBody={updateCalcBody} foods={nutrition.foods} recipes={nutrition.recipes}
           diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements} onExitClient={onClose} onOpenClients={onOpenClients} />}
       </Tabs.Screen>
       <Tabs.Screen name="Training" options={{ tabBarLabel: workspaceTabs.Training, tabBarAccessibilityLabel: workspaceTabs.Training}}>

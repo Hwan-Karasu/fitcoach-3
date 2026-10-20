@@ -14,11 +14,8 @@ export const CALC_GOALS: readonly CalcGoal[] = ["LOSS", "MAINTENANCE", "GAIN"];
 export const CALC_ACTIVITIES: readonly CalcActivity[] = ["SEDENTARY", "MODERATE", "ACTIVE", "VERY_ACTIVE"];
 export const CALC_INTENSITIES: readonly CalcIntensity[] = ["LIGHT", "MEDIUM", "HEAVY"];
 
-/** Параметры профиля, которые тренер вводит на экране «Расчёт». Вес и % жира сюда не входят: источник — Measurements. */
+/** Параметры расчёта, которые тренер вводит на экране «Расчёт». Пол, возраст и рост — из карточки клиента, вес и % жира — из Measurements: здесь их нет. */
 export interface CalcProfile {
-  readonly sex: CalcSex | null;
-  readonly age: number | null;
-  readonly heightCm: number | null;
   readonly goal: CalcGoal;
   readonly activity: CalcActivity;
   readonly workoutsPerWeek: number;
@@ -29,6 +26,10 @@ export interface CalcProfile {
 }
 
 export interface CalcInputs {
+  /** Из карточки клиента; `null` — не указано. */
+  readonly sex: CalcSex | null;
+  readonly age: number | null;
+  readonly heightCm: number | null;
   readonly weightKg: number | null;
   readonly fatPercent: number | null;
   /** Средние шаги в день по дням с известными шагами; `null` — шагов нет. */
@@ -89,7 +90,7 @@ export function goalDelta(goal: CalcGoal, stepKcal: number): number {
 
 export function deriveCalc(profile: CalcProfile, inputs: CalcInputs): CalcResult {
   const lean = leanMass(inputs.weightKg, inputs.fatPercent);
-  const ree = calcRee(profile.sex, profile.age, profile.heightCm, inputs.weightKg, lean);
+  const ree = calcRee(inputs.sex, inputs.age, inputs.heightCm, inputs.weightKg, lean);
   const fromSteps = positive(inputs.avgSteps) && positive(inputs.weightKg);
   const neat = calcNeat(inputs.avgSteps, inputs.weightKg, profile.activity);
   const eat = calcEat(inputs.weightKg, profile.workoutsPerWeek, profile.minutes, profile.intensity);
@@ -135,12 +136,9 @@ export type CalcRuleError = "CALC_PROFILE_INVALID" | "CALC_STEPS_INVALID";
 
 const isWhole = (value: number, min: number, max: number) => Number.isInteger(value) && value >= min && value <= max;
 
-/** Проверка профиля перед записью. Пол, возраст и рост могут быть не введены (`null`) — это не ошибка и не ноль; остальные границы — защита от опечаток. */
+/** Проверка профиля расчёта перед записью: границы — защита от опечаток. */
 export function validateCalcProfile(profile: CalcProfile): CalcProfile {
-  const heightOk = profile.heightCm === null || (Number.isFinite(profile.heightCm) && profile.heightCm >= 50 && profile.heightCm <= 300
-    && Math.abs(profile.heightCm * 10 - Math.round(profile.heightCm * 10)) < 1e-6);
-  const ok = (profile.sex === null || profile.sex === "MALE" || profile.sex === "FEMALE") && (profile.age === null || isWhole(profile.age, 1, 120)) && heightOk
-    && CALC_GOALS.includes(profile.goal) && CALC_ACTIVITIES.includes(profile.activity) && CALC_INTENSITIES.includes(profile.intensity)
+  const ok = CALC_GOALS.includes(profile.goal) && CALC_ACTIVITIES.includes(profile.activity) && CALC_INTENSITIES.includes(profile.intensity)
     && isWhole(profile.workoutsPerWeek, 0, 21) && isWhole(profile.minutes, 1, 600) && isWhole(profile.stepKcal, 0, 1000);
   if (!ok) throw new Error("CALC_PROFILE_INVALID");
   return { ...profile };

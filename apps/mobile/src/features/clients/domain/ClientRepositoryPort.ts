@@ -5,6 +5,8 @@ export interface ClientRecord {
   readonly contactEmail: string | null;
   readonly birthDate: string | null;
   readonly heightCmX10: number | null;
+  /** Пол для расчёта КБЖУ; `null` — не указан. */
+  readonly sex?: "MALE" | "FEMALE" | null;
   readonly emoji: string | null;
   readonly lifecycle: "ACTIVE" | "ARCHIVED";
   readonly revision: number;
@@ -19,6 +21,8 @@ export interface CreateClientInput {
   readonly contactEmail?: string;
   readonly birthDate?: string | null;
   readonly heightCmX10?: number | null;
+  /** `undefined` при правке сохраняет прежнее значение, `null` очищает. */
+  readonly sex?: "MALE" | "FEMALE" | null;
   readonly emoji?: string | null;
 }
 
