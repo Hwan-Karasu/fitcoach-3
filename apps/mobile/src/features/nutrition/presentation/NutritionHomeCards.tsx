@@ -154,7 +154,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
           </View>
           <View style={styles.dayCell}>
             <Text style={[styles.cellLabel, { color: colors.textPrimary }]}>Тренировка</Text>
-            <Pressable accessibilityRole="button" disabled={trainingAuto}
+            <Pressable accessibilityRole="button" disabled={trainingAuto} hitSlop={{ top: 3, bottom: 3 }}
               accessibilityLabel={`Тренировка сегодня: ${trainingState ? "да" : "нет"}${trainingAuto ? ", по дневнику тренировок" : ". Нажмите, чтобы изменить"}`}
               onPress={() => { void cycleTraining(); }} style={[styles.trainingButton, { borderColor: colors.border, backgroundColor: trainingState ? colors.accentSoft : colors.surfaceRaised, opacity: trainingAuto ? 0.85 : 1 }]}>
               <Text style={[styles.trainingText, { color: trainingState ? colors.accentInk : colors.textPrimary }]}>{trainingState ? "Да" : "Нет"}</Text>
@@ -220,10 +220,10 @@ const styles = StyleSheet.create({
   hint: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
   grow: { flex: 1 },
   dayRow: { flexDirection: "row", gap: 8, alignItems: "flex-start" },
-  dayCell: { flex: 1, gap: 4 },
-  cellLabel: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
-  trainingButton: { minHeight: 48, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  trainingText: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 20 },
+  dayCell: { flex: 1, gap: 6 },
+  cellLabel: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 18 },
+  trainingButton: { minHeight: 42, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  trainingText: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   summary: { flexDirection: "row", alignItems: "center", gap: 10 },
   pill: { alignSelf: "flex-start", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 4 },
   pillText: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 15 },
