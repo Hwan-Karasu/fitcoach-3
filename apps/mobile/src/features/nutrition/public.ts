@@ -1,6 +1,7 @@
 export { AddFoodScreen, type CatalogFilter } from "./presentation/AddFoodScreen.tsx";
 export { FoodEditorScreen } from "./presentation/FoodEditorScreen.tsx";
 export { NutritionHomeScreen } from "./presentation/NutritionHomeScreen.tsx";
+export { NutritionHomeCards } from "./presentation/NutritionHomeCards.tsx";
 export { NutritionTargetsScreen } from "./presentation/NutritionTargetsScreen.tsx";
 export type { CalcClientBody } from "./presentation/NutritionCalcScreen.tsx";
 export { RecipeEditorScreen } from "./presentation/RecipeEditorScreen.tsx";

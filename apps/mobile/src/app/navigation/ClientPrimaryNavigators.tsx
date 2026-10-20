@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CommonActions } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { AccountingRepositoryPort } from "../../features/accounting/public.ts";
@@ -71,11 +71,12 @@ const TrainingStack = createNativeStackNavigator<TrainingRoutes>();
 type HomeProps = Readonly<{
   client: ClientRecord; accounting: AccountingRepositoryPort; measurements: MeasurementRepositoryPort;
   onOpenEdit: () => void; onOpenAccounting: () => void; onOpenMeasurements: () => void;
+  nutritionSlot?: ReactNode;
   onArchive: () => Promise<void>;
 }>;
 
 /** Home composes owners' read projections; the weight entry goes to the Measurements owner. */
-function HomeIndexRoute({ client, accounting, measurements, onOpenEdit, onOpenAccounting, onOpenMeasurements,
+function HomeIndexRoute({ client, accounting, measurements, onOpenEdit, onOpenAccounting, onOpenMeasurements, nutritionSlot,
   onArchive }: HomeProps) {
   const summary = useClientHomeSummary(client.id, accounting, measurements);
   const recordWeight = async (text: string): Promise<string | null> => {
@@ -92,7 +93,7 @@ function HomeIndexRoute({ client, accounting, measurements, onOpenEdit, onOpenAc
     }
   };
   return <ClientHomePreview client={client} summary={summary} onEdit={onOpenEdit} onOpenAccounting={onOpenAccounting}
-    onOpenMeasurements={onOpenMeasurements} onRecordWeight={recordWeight} onArchive={onArchive} />;
+    onOpenMeasurements={onOpenMeasurements} onRecordWeight={recordWeight} nutritionSlot={nutritionSlot} onArchive={onArchive} />;
 }
 
 export function HomeNavigator(props: HomeProps) {

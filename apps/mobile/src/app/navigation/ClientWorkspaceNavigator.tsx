@@ -8,7 +8,7 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import { ageOn, type ClientRecord, type ClientRepositoryPort, type ClientRosterPort } from "../../features/clients/public.ts";
 import { localDateOf } from "../../features/measurements/public.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
-import type { FoodCatalogPort, NutritionCalcPort, NutritionDiaryPort, NutritionTargetsPort, RecipeCatalogPort } from "../../features/nutrition/public.ts";
+import { NutritionHomeCards, type FoodCatalogPort, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort, type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ClientQuestionnaireScreen, type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
 import { ExecutionDetailsScreen, ExerciseHistoryList, HistoryProgramScreen, MonthlyReportScreen, TrainingArchiveScreen, TrainingStatisticsScreen, retainHistoryView,
   retainStatsFilters, type ExerciseLookupPort,
@@ -219,7 +219,9 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
     >
       <Tabs.Screen name="Home" options={{ tabBarLabel: workspaceTabs.Home, tabBarAccessibilityLabel: workspaceTabs.Home, headerShown: true,
         header: () => <ClientHeader client={client} subtitle={workspaceTabs.Home} onBack={onClose} onClients={onOpenClients} /> }}>
-        {() => <HomeNavigator client={client} accounting={accounting} measurements={measurements}
+        {({ navigation }) => <HomeNavigator client={client} accounting={accounting} measurements={measurements}
+          nutritionSlot={<NutritionHomeCards clientId={client.id} body={calcBody} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements}
+            onOpenNutrition={() => navigation.navigate("Nutrition")} />}
           onOpenEdit={() => onOpenEdit(client.id)}
           onOpenAccounting={() => onOpenAccounting(client.id)}
           onOpenMeasurements={() => onOpenMeasurements(client.id)}

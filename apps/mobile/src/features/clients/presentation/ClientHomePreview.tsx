@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { AppButton, ConfirmDialog, InlineNotice, MetricTile, StatusTag, TextField } from
   "../../../shared/ui/components/public.ts";
@@ -45,8 +45,10 @@ function PackBody({ pack }: Readonly<{ pack: HomePackSummary | null }>) {
  * Client Home in the new layout (§§51, 53.4): identity, the approved stat tiles, weight entry and the
  * abonement summary — all projections of their owners' facts; no invented dashboard blocks.
  */
-export function ClientHomePreview({ client, summary, onEdit, onOpenAccounting, onOpenMeasurements, onRecordWeight,
+export function ClientHomePreview({ client, summary, onEdit, onOpenAccounting, onOpenMeasurements, onRecordWeight, nutritionSlot,
   onArchive }: Readonly<{
+  /** Блоки питания (шаги, КБЖУ) — проекция Nutrition, подставляется оболочкой; Clients не знает о питании. */
+  nutritionSlot?: ReactNode;
   client: ClientRecord;
   summary: ClientHomeSummary | null;
   onEdit: () => void;
@@ -131,6 +133,8 @@ export function ClientHomePreview({ client, summary, onEdit, onOpenAccounting, o
       {weightSaved ? <Text style={[styles.detail, { color: colors.success }]}>Записано в замеры.</Text> : null}
       <AppButton variant="ghost" label="Все замеры" onPress={onOpenMeasurements} />
     </View>
+
+    {nutritionSlot}
 
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.cardHead}>

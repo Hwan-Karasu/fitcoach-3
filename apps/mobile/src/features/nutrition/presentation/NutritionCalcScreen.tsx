@@ -1,24 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppButton, InlineNotice, LoadingState, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
-import { dailyPoints, latestPoint, localDateOf, MeasurementsCard, navyBodyFat, type MeasurementRepositoryPort } from "../../measurements/public.ts";
+import { dailyPoints, localDateOf, MeasurementsCard, navyBodyFat, type MeasurementRepositoryPort } from "../../measurements/public.ts";
 import { CALC_ACTIVITIES, CALC_GOALS, CALC_INTENSITIES, calcMacros, deriveCalc, type CalcActivity, type CalcGoal, type CalcIntensity,
   type CalcProfile, type CalcSex } from "../domain/CalcRules.ts";
-import type { NutritionCalcPort, StoredCalcProfile } from "../domain/NutritionCalcPort.ts";
+import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
 import { NutritionTargetRows } from "./NutritionTargetRows.tsx";
-import { nutritionErrorText, shiftDate } from "./nutritionFormat.ts";
+import { DEFAULT_CALC_PROFILE, useCalcData } from "./useCalcData.ts";
+import { nutritionErrorText } from "./nutritionFormat.ts";
 
 const goalLabels: Readonly<Record<CalcGoal, string>> = { LOSS: "Похудение", MAINTENANCE: "Поддержание", GAIN: "Набор" };
 const activityLabels: Readonly<Record<CalcActivity, string>> = { SEDENTARY: "Сидячий", MODERATE: "Умеренный", ACTIVE: "Активный", VERY_ACTIVE: "Очень активный" };
 const intensityLabels: Readonly<Record<CalcIntensity, string>> = { LIGHT: "Лёгкая", MEDIUM: "Средняя", HEAVY: "Тяжёлая" };
-const STEPS_WINDOW_DAYS = 30;
 
-/** Профиль по умолчанию: «не введено» остаётся пустым, а не угаданным (§49.10 п. 4); тренировок нет, пока тренер их не укажет. */
-const DEFAULT_PROFILE: CalcProfile = { goal: "MAINTENANCE", activity: "MODERATE", workoutsPerWeek: 0, minutes: 60, intensity: "MEDIUM", stepKcal: 100 };
 
 /** «85,4» / «85.4» → число; пусто, лишние знаки и буквы → `null`. Допускается одна десятая. */
 function num(text: string): number | null {
@@ -129,9 +127,7 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenSchedu
   onUpdateBody: (patch: Readonly<{ sex: CalcSex | null; heightCm: number | null }>) => Promise<void>; calc: NutritionCalcPort; targets: NutritionTargetsPort; measurements: MeasurementRepositoryPort }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const [loaded, setLoaded] = useState<Readonly<{ stored: StoredCalcProfile | null; weight: number | null; fat: number | null; steps: number | null }> | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [tick, setTick] = useState(0);
+  const { loaded, failed, reload } = useCalcData(clientId, calc, measurements);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [navyOpen, setNavyOpen] = useState(false);
@@ -142,25 +138,7 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenSchedu
   /** Замок от двойного нажатия: state `busy` обновляется асинхронно, ref — сразу. */
   const lock = useRef(false);
 
-  useEffect(() => {
-    let active = true;
-    const today = localDateOf(new Date());
-    void Promise.all([calc.getProfile(clientId), measurements.listForClient(clientId), calc.averageSteps(clientId, shiftDate(today, -STEPS_WINDOW_DAYS + 1), today)]).then(([stored, data, steps]) => {
-      if (!active) return;
-      const point = (type: "WEIGHT" | "BODY_FAT") => { const latest = latestPoint(data.measurements, data.primaries, type); return latest !== null && latest.kind === "VALUE" ? latest.measurement.valueX10 / 10 : null; };
-      setLoaded({ stored, weight: point("WEIGHT"), fat: point("BODY_FAT"), steps });
-      setFailed(false);
-    }, () => { if (active) setFailed(true); });
-    return () => { active = false; };
-  }, [calc, measurements, clientId, tick]);
-  useEffect(() => {
-    const refresh = () => setTick((value) => value + 1);
-    const offCalc = calc.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });
-    const offMeasurements = measurements.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });
-    return () => { offCalc(); offMeasurements(); };
-  }, [calc, measurements, clientId]);
-
-  const profile = loaded?.stored?.profile ?? DEFAULT_PROFILE;
+  const profile = loaded?.stored?.profile ?? DEFAULT_CALC_PROFILE;
   /** Что считать: в редактировании — живой черновик, иначе сохранённый профиль и последние замеры. */
   const live = useMemo(() => {
     if (loaded === null) return null;
@@ -189,7 +167,7 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenSchedu
     if (loaded === null || lock.current || goal === profile.goal) return;
     lock.current = true;
     setBusy(true);
-    try { await calc.saveProfile(clientId, { ...profile, goal }, loaded.stored?.revision ?? null); setError(null); } catch (failure) { setError(calcErrorText(failure)); setTick((value) => value + 1); }
+    try { await calc.saveProfile(clientId, { ...profile, goal }, loaded.stored?.revision ?? null); setError(null); } catch (failure) { setError(calcErrorText(failure)); reload(); }
     lock.current = false;
     setBusy(false);
   }, [loaded, profile, calc, clientId]);
@@ -224,7 +202,7 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenSchedu
       await write("BODY_FAT", fat, loaded.fat);
       setEditing(false);
       setError(null);
-    } catch (failure) { setError(calcErrorText(failure)); setTick((value) => value + 1); }
+    } catch (failure) { setError(calcErrorText(failure)); reload(); }
     lock.current = false;
     setBusy(false);
   };
