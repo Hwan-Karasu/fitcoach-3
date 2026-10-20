@@ -136,7 +136,7 @@ export function NutritionTargetRows({ clientId, targets, calories, defaults, mod
 
   return (
     <View style={styles.wrap}>
-      <Text style={[styles.label, { color: colors.textSecondary }]}>Ручная корректировка Б/Ж/У</Text>
+      <Text accessibilityRole="header" accessibilityLabel="Ручная корректировка Б/Ж/У" style={[styles.label, styles.centered, { color: colors.textSecondary }]}>— Ручная корректировка БЖУ —</Text>
       <View style={styles.row}>
         {MACROS.map((metric) => (
           <View key={metric} style={styles.cell}>
@@ -159,4 +159,5 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", gap: 8 },
   label: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
   cell: { flex: 1 },
+  centered: { textAlign: "center" },
 });
