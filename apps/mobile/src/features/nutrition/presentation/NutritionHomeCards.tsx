@@ -80,7 +80,8 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   const result = useMemo(() => loaded === null ? null : deriveCalc(profile, { sex: body.sex, age: body.age, heightCm: body.heightCm, weightKg: loaded.weight, fatPercent: loaded.fat, avgSteps: loaded.steps }), [loaded, profile, body]);
   /** Суточный ориентир = расчёт (с целью) + поправка по динамике веса за 7 дней. */
   const adjustment = loaded === null ? 0 : trendAdjustment(profile.goal, weightTrendKg(loaded.weights), loaded.weight);
-  const guide = result === null || result.target === null ? null : result.target + adjustment;
+  // Ориентир не бывает неположительным: поправка не должна обнулять расчёт.
+  const guide = result === null || result.target === null || result.target + adjustment <= 0 ? null : result.target + adjustment;
   const defaults = useMemo(() => result === null ? null : calcMacros(result.leanMassKg, guide, profile.goal), [result, guide, profile.goal]);
 
   const trainingAuto = trainedToday === true;
@@ -106,7 +107,8 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
     lock.current = true;
     setBusy(true);
     try {
-      if (weight !== "") await upsertDailyMeasurement(measurements, clientId, { type: "WEIGHT", valueX10: Math.round(Number(weight) * 10), localDate: localDateOf(new Date()), localMinute: null });
+      // Вес записывается только при изменении: без правки не растёт ревизия факта.
+      if (weight !== "" && Number(weight) !== loaded?.weightToday) await upsertDailyMeasurement(measurements, clientId, { type: "WEIGHT", valueX10: Math.round(Number(weight) * 10), localDate: localDateOf(new Date()), localMinute: null });
       if (steps === "") await calc.clearSteps(clientId, today); else await calc.setSteps(clientId, today, Number(steps));
       setDirty(false);
       setError(null);
@@ -117,7 +119,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
     }
     lock.current = false;
     setBusy(false);
-  }, [weightText, stepsText, measurements, clientId, calc, today]);
+  }, [weightText, stepsText, measurements, clientId, calc, today, loaded]);
 
   const recorded = data?.summary.state === "FOOD_RECORDED";
   const corridors = data === null || data.target.source === "NONE" ? null : data.target.corridors;

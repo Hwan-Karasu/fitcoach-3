@@ -225,7 +225,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       <Tabs.Screen name="Home" options={{ tabBarLabel: workspaceTabs.Home, tabBarAccessibilityLabel: workspaceTabs.Home, headerShown: true,
         header: () => <ClientHeader client={client} subtitle={workspaceTabs.Home} onBack={onClose} onClients={onOpenClients} /> }}>
         {({ navigation }) => <HomeNavigator client={client} accounting={accounting} measurements={measurements}
-          nutritionSlot={<NutritionHomeCards clientId={client.id} body={calcBody} trainedToday={trainedToday} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements}
+          nutritionSlot={<NutritionHomeCards key={client.id} clientId={client.id} body={calcBody} trainedToday={trainedToday} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements}
             onOpenNutrition={() => navigation.navigate("Nutrition")} onOpenSchedule={() => navigation.navigate("Nutrition", { screen: "NutritionTargets" })} />}
           onOpenEdit={() => onOpenEdit(client.id)}
           onOpenAccounting={() => onOpenAccounting(client.id)}
