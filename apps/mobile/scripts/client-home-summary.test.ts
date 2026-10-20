@@ -50,6 +50,7 @@ test("C05 abonement summary comes from ledger balances, with modes, expiry and t
   ]), null, TODAY).pack;
   assert.ok(pack.kind === "TRACKED");
   assert.equal(pack.available, 6);
+  assert.equal(pack.granted, 14, "начислено по действующим пакетам (10 + 4); просроченный не считается — «доступно 6/14»");
   assert.equal(pack.reserved, 1);
   assert.equal(pack.tone, "active");
   assert.equal(pack.expiresOn, "2026-11-01");

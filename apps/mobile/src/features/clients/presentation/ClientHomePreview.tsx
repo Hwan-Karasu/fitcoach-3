@@ -30,15 +30,13 @@ function PackBody({ pack }: Readonly<{ pack: HomePackSummary | null }>) {
   if (pack.kind === "UNAVAILABLE") return line("Сводка абонемента не загрузилась. Данные учёта не изменены.");
   if (pack.kind === "NOT_TRACKED") return line(`${pack.label}. Запись в календарь доступна без пакета.`);
   if (pack.kind === "NO_PACK") return line("Пакетов нет. Добавьте пакет или записывайте без списания.");
+  const extra = [pack.pricePerSession !== null ? `Цена: ${pack.pricePerSession}` : null, pack.expiresOn !== null ? `до ${formatIsoDate(pack.expiresOn)}` : null].filter((part) => part !== null).join(" · ");
   return <>
     <View style={styles.packLine}>
-      <Text style={[styles.packNumber, { color: colors.textPrimary }]}>{pack.available}</Text>
-      <Text style={[styles.detail, { color: colors.textSecondary }]}>
-        {`доступно${pack.reserved > 0 ? ` · ещё ${pack.reserved} в резерве за записями` : ""}`}
-      </Text>
+      <Text accessibilityLabel={`Доступно ${pack.available} из ${pack.granted} занятий`} style={[styles.packNumber, { color: colors.textPrimary }]}>{`${pack.available}/${pack.granted}`}</Text>
+      <Text style={[styles.detail, { color: colors.textSecondary }]}>доступно</Text>
     </View>
-    {pack.pricePerSession !== null ? line(`Цена тренировки: ${pack.pricePerSession}`) : null}
-    {pack.expiresOn !== null ? line(`Действует до ${formatIsoDate(pack.expiresOn)}`) : null}
+    {extra !== "" ? line(extra) : null}
   </>;
 }
 
@@ -119,19 +117,19 @@ export function ClientHomePreview({ client, summary, onEdit, onOpenAccounting, n
 }
 
 const styles = StyleSheet.create({
-  hero: { borderWidth: 1, borderRadius: 16, padding: 16, flexDirection: "row", gap: 14, alignItems: "center" },
-  avatar: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 20, lineHeight: 26, fontFamily: fonts.bold },
+  hero: { borderWidth: 1, borderRadius: 16, padding: 10, flexDirection: "row", gap: 10, alignItems: "center" },
+  avatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  avatarText: { fontSize: 16, lineHeight: 22, fontFamily: fonts.bold },
   heroText: { flex: 1, gap: 2 },
-  name: { fontSize: 18, lineHeight: 23, fontFamily: fonts.bold },
-  detail: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
+  name: { fontSize: 15, lineHeight: 20, fontFamily: fonts.bold },
+  detail: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   tiles: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tile: { flexGrow: 1, flexBasis: 100 },
-  card: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 8 },
+  card: { borderWidth: 1, borderRadius: 14, padding: 10, gap: 6 },
   cardHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  cardTitle: { fontSize: 15, lineHeight: 22, fontFamily: fonts.bold },
+  cardTitle: { fontSize: 14, lineHeight: 19, fontFamily: fonts.bold },
   weightRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   weightField: { flex: 1 },
   packLine: { flexDirection: "row", alignItems: "baseline", gap: 8, flexWrap: "wrap" },
-  packNumber: { fontSize: 28, lineHeight: 34, fontFamily: fonts.bold },
+  packNumber: { fontSize: 22, lineHeight: 28, fontFamily: fonts.bold },
 });

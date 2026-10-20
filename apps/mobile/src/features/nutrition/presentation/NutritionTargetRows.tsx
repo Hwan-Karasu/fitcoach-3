@@ -92,7 +92,6 @@ export function NutritionTargetRows({ clientId, targets, calories, defaults, mod
   const shown = useMemo<Drafts>(() => ({ protein: isAuto("protein") ? autoText("protein") : drafts.protein, fat: isAuto("fat") ? autoText("fat") : drafts.fat, carbs: isAuto("carbs") ? autoText("carbs") : drafts.carbs }),
     [drafts, rebalanced, manual]);
   const parsed = useMemo(() => corridorsFrom(shown, mode), [shown, mode]);
-  const kcalLine = parsed !== null && typeof parsed !== "string" && parsed.kcal !== null ? `Калории по Б/Ж/У (4/9/4): ${formatTargetText(parsed.kcal)} ккал` : null;
 
   const setField = (metric: MacroMetric, text: string) => {
     setDrafts({ ...drafts, [metric]: text });
@@ -138,9 +137,6 @@ export function NutritionTargetRows({ clientId, targets, calories, defaults, mod
   return (
     <View style={styles.wrap}>
       <Text style={[styles.label, { color: colors.textSecondary }]}>Ручная корректировка Б/Ж/У</Text>
-      <Text style={[styles.hint, { color: colors.textMuted }]}>
-        {mode === "EXACT" ? "В ячейке одно число (22). " : "В ячейке число (22) или диапазон (22-30). "}Введёте часть — остальное и калории досчитаются под суточный ориентир{mode === "RANGE" ? " коридором" : ""}.
-      </Text>
       <View style={styles.row}>
         {MACROS.map((metric) => (
           <View key={metric} style={styles.cell}>
@@ -149,7 +145,6 @@ export function NutritionTargetRows({ clientId, targets, calories, defaults, mod
           </View>
         ))}
       </View>
-      {kcalLine !== null ? <Text style={[styles.hint, { color: colors.textSecondary }]}>{kcalLine}</Text> : null}
       {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       {notice !== null ? <InlineNotice kind="success">{notice}</InlineNotice> : null}
       <AppButton label="Сохранить цели" busy={busy} disabled={!dirty || parsed === null} disabledReason="Измените значения в ручной корректировке." onPress={askSave} />
@@ -160,8 +155,7 @@ export function NutritionTargetRows({ clientId, targets, calories, defaults, mod
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 8 },
-  hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  wrap: { gap: 6 },
   row: { flexDirection: "row", gap: 8 },
   label: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
   cell: { flex: 1 },

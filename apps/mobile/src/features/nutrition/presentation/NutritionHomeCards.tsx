@@ -13,7 +13,7 @@ import type { CalcClientBody } from "./NutritionCalcScreen.tsx";
 import { useMacroColors } from "./MacroGrid.tsx";
 import { NutritionTargetRows, type TargetMode } from "./NutritionTargetRows.tsx";
 import { metricLabels, nutritionErrorText, rangeText, todayLocal, wholeText } from "./nutritionFormat.ts";
-import { DEFAULT_CALC_PROFILE, TREND_WINDOW_DAYS, useCalcData } from "./useCalcData.ts";
+import { DEFAULT_CALC_PROFILE, useCalcData } from "./useCalcData.ts";
 import { useNutritionDay } from "./useNutritionDay.ts";
 
 /** Шаги за сегодня: одно значение на дату; пусто — «нет данных», а не 0 (§49.5). Подписка снимается в cleanup. */
@@ -160,7 +160,6 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
               onPress={() => { void cycleTraining(); }} style={[styles.trainingButton, { borderColor: colors.border, backgroundColor: trainingState === true ? colors.accentSoft : colors.surfaceRaised, opacity: trainingAuto ? 0.85 : 1 }]}>
               <Text style={[styles.trainingText, { color: trainingState === true ? colors.accentInk : colors.textPrimary }]}>{trainingState === null ? "—" : trainingState ? "Да" : "Нет"}</Text>
             </Pressable>
-            {trainingAuto ? <Text style={[styles.hint, { color: colors.textMuted }]}>по дневнику</Text> : null}
           </View>
         </View>
         {dirty ? <AppButton compact label="Записать" busy={busy} onPress={() => { void saveDay(); }} /> : null}
@@ -169,7 +168,6 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
         <View accessible accessibilityLabel={`Суточный ориентир: ${guide === null ? "нужны данные для расчёта" : `${guide} ккал`}. ${guideLabel(adjustment)}`}>
           <Text style={[styles.hint, { color: colors.textSecondary }]}>Суточный ориентир</Text>
           <Text style={[styles.bigNumber, { color: colors.textPrimary }]}>{guide === null ? "—" : String(guide)}<Text style={[styles.unit, { color: colors.textSecondary }]}>{guide === null ? "" : " ккал"}</Text></Text>
-          <Text style={[styles.hint, { color: colors.textMuted }]}>{guide === null ? "Нужны пол, возраст, рост и вес — заполните карточку клиента и «Расчёт»." : `${guideLabel(adjustment)} · динамика и шаги за ${TREND_WINDOW_DAYS} дней`}</Text>
         </View>
       </View>
 
@@ -186,9 +184,8 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
           <View style={styles.grow} accessible accessibilityLabel={`Суточный ориентир: ${orientText === null ? "нет данных" : `${orientText} ккал`}`}>
             <View style={[styles.pill, { backgroundColor: colors.accentSoft }]}><Text style={[styles.pillText, { color: colors.accentInk }]}>Суточный ориентир</Text></View>
             <Text style={[styles.bigNumber, { color: colors.textPrimary }]}>{orientText ?? "—"}<Text style={[styles.unit, { color: colors.textSecondary }]}>{orientText === null ? "" : " ккал"}</Text></Text>
-            <Text style={[styles.hint, { color: colors.textSecondary }]}>{data === null ? "Загружаем…" : recorded ? `Съедено: ${wholeText(eatenKcalX10)} ккал` : "Записей о еде нет"}</Text>
           </View>
-          <SegmentedRing fraction={fraction} segments={segments} accessibilityLabel={`От цели по калориям: ${fraction === null ? "нет данных" : `${Math.round(fraction * 100)} процентов`}`}>
+          <SegmentedRing size={84} stroke={10} fraction={fraction} segments={segments} accessibilityLabel={`От цели по калориям: ${fraction === null ? "нет данных" : `${Math.round(fraction * 100)} процентов`}`}>
             <Text style={[styles.ringValue, { color: colors.textPrimary }]}>{fraction === null ? "—" : `${Math.round(fraction * 100)}%`}</Text>
             <Text style={[styles.hint, { color: colors.textSecondary }]}>от цели</Text>
           </SegmentedRing>
@@ -209,25 +206,25 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 8 },
+  card: { borderWidth: 1, borderRadius: 14, padding: 10, gap: 6 },
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 },
   headRight: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 },
-  cardTitle: { fontSize: 15, lineHeight: 22, fontFamily: fonts.bold },
-  hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  cardTitle: { fontSize: 14, lineHeight: 19, fontFamily: fonts.bold },
+  hint: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
   grow: { flex: 1 },
   dayRow: { flexDirection: "row", gap: 8, alignItems: "flex-start" },
   dayCell: { flex: 1, gap: 4 },
   cellLabel: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
   trainingButton: { minHeight: 48, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  trainingText: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
-  summary: { flexDirection: "row", alignItems: "center", gap: 12 },
+  trainingText: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 20 },
+  summary: { flexDirection: "row", alignItems: "center", gap: 10 },
   pill: { alignSelf: "flex-start", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 4 },
-  pillText: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
-  bigNumber: { fontFamily: fonts.bold, fontSize: 32, lineHeight: 38 },
+  pillText: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 15 },
+  bigNumber: { fontFamily: fonts.bold, fontSize: 24, lineHeight: 30 },
   unit: { fontFamily: fonts.regular, fontSize: 14 },
-  ringValue: { fontFamily: fonts.bold, fontSize: 24, lineHeight: 30 },
+  ringValue: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 21 },
   metrics: { flexDirection: "row", gap: 6 },
   metric: { flex: 1, alignItems: "center", gap: 2 },
-  value: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
+  value: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },
   rule: { height: StyleSheet.hairlineWidth },
 });

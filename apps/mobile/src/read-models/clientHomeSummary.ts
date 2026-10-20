@@ -37,6 +37,7 @@ export function packSummary(rules: HomeSummaryRules, snapshot: ClientAccountingS
   const usable = snapshot.packs.filter((row) => row.pack.expiresOn === null || row.pack.expiresOn >= today);
   const available = usable.reduce((sum, row) => sum + Math.max(row.available, 0), 0);
   const reserved = usable.reduce((sum, row) => sum + row.reserved, 0);
+  const granted = usable.reduce((sum, row) => sum + row.pack.grantedCount, 0);
   // The pack that serves next: the nearest expiry, then the oldest (§22.1.2 order without the type split).
   const next = usable.filter((row) => row.available > 0).sort((a, b) =>
     (a.pack.expiresOn ?? "9999-12-31").localeCompare(b.pack.expiresOn ?? "9999-12-31")
@@ -44,7 +45,7 @@ export function packSummary(rules: HomeSummaryRules, snapshot: ClientAccountingS
   const price = next !== undefined && next.pack.totalKopeks > 0
     ? rules.formatKopeks(rules.pricePerSessionKopeks(next.pack.totalKopeks, next.pack.grantedCount)) : null;
   return {
-    kind: "TRACKED", available, reserved,
+    kind: "TRACKED", available, granted, reserved,
     tone: available === 0 ? "empty" : available <= LOW_CREDITS ? "warning" : "active",
     pricePerSession: price, expiresOn: next?.pack.expiresOn ?? null,
   };
