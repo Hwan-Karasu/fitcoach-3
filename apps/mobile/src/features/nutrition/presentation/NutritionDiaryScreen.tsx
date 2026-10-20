@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ChevronDown, ChevronRight, ClipboardPaste, Copy, Droplets, Plus, Repeat2 } from "lucide-react-native";
-import { AppButton, ConfirmDialog, EmptyState, InlineNotice, LoadingState, TextField } from "../../../shared/ui/components/public.ts";
+import { AppButton, ConfirmDialog, EmptyState, SelectionChip, InlineNotice, LoadingState, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
@@ -56,14 +56,16 @@ function QuickChip({ label, icon, onPress, disabled = false, accessibilityLabel 
 
 /** Правка количества или удаление записи; снимок продукта не меняется (§49.5.2). */
 function EntryDialog({ entry, onClose, onSave, onRemove }: Readonly<{ entry: DiaryEntry | null; onClose: () => void;
-  onSave: (entry: DiaryEntry, quantityX10: number) => Promise<string | null>; onRemove: (entry: DiaryEntry) => Promise<string | null> }>) {
+  onSave: (entry: DiaryEntry, quantityX10: number, slot: MealSlot) => Promise<string | null>; onRemove: (entry: DiaryEntry) => Promise<string | null> }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const [text, setText] = useState("");
   const [shownId, setShownId] = useState<string | null>(null);
+  const [slot, setSlot] = useState<MealSlot>("BREAKFAST");
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  if (entry !== null && shownId !== entry.id) { setShownId(entry.id); setText(formatDecimalX10(entry.snapshot.quantityX10)); setError(null); }
+  if (entry !== null && shownId !== entry.id) { setShownId(entry.id); setText(formatDecimalX10(entry.snapshot.quantityX10)); setSlot(entry.slot); setConfirmRemove(false); setError(null); }
   const run = async (work: () => Promise<string | null>) => {
     setBusy(true);
     const message = await work();
@@ -74,7 +76,7 @@ function EntryDialog({ entry, onClose, onSave, onRemove }: Readonly<{ entry: Dia
     const quantity = parseDecimalX10(text);
     if (entry === null) return;
     if (quantity === null || quantity <= 0) { setError("Введите количество, например 150 или 1,5."); return; }
-    void run(() => onSave(entry, quantity));
+    void run(() => onSave(entry, quantity, slot));
   };
   return (
     <Modal visible={entry !== null} transparent animationType="fade" onRequestClose={onClose}>
@@ -83,8 +85,15 @@ function EntryDialog({ entry, onClose, onSave, onRemove }: Readonly<{ entry: Dia
           <Text style={[styles.dialogTitle, { color: colors.textPrimary }]}>{entry?.snapshot.name ?? ""}</Text>
           <TextField label={`Количество, ${entry === null ? "" : unitLabels[entry.snapshot.basis.unit]}`} value={text} onChangeText={setText} keyboardType="decimal-pad"
             hint="Значения продукта — из момента добавления." error={error ?? undefined} />
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>Приём пищи</Text>
+          <View style={styles.chipsWrap}>
+            {MEAL_SLOTS.map((id) => <SelectionChip key={id} group="Приём пищи" label={slotLabels[id]} selected={slot === id} disabled={busy} onPress={() => setSlot(id)} />)}
+          </View>
           <AppButton label="Сохранить" onPress={save} busy={busy} />
-          <AppButton variant="destructive" label="Удалить запись" disabled={busy} onPress={() => { if (entry !== null) void run(() => onRemove(entry)); }} />
+          {confirmRemove ? <>
+            <Text style={[styles.meta, { color: colors.danger }]}>Запись будет удалена из дневника. Итоги дня пересчитаются.</Text>
+            <AppButton variant="destructive" label="Подтвердить удаление" disabled={busy} onPress={() => { if (entry !== null) void run(() => onRemove(entry)); }} />
+          </> : <AppButton variant="destructive" label="Удалить запись" disabled={busy} onPress={() => setConfirmRemove(true)} />}
           <AppButton variant="ghost" label="Отмена" disabled={busy} onPress={onClose} />
         </View>
       </View>
@@ -252,7 +261,11 @@ export function NutritionDiaryScreen({ clientId, diary, targets, onAdd }: Readon
       <ConfirmDialog visible={pending !== null} title="Копировать приём?" description={pending?.text ?? ""} confirmLabel="Скопировать" onCancel={() => setPending(null)}
         onConfirm={() => { if (pending !== null) void runCopy(pending.request); }} />
       <EntryDialog entry={editing} onClose={() => setEditing(null)}
-        onSave={(entry, quantityX10) => guard(() => diary.updateQuantity(clientId, entry.id, entry.revision, quantityX10))}
+        onSave={(entry, quantityX10, slot) => guard(async () => {
+          // Две операции подряд (количество, затем приём): вторая берёт свежую revision; при сбое между ними дневник перечитывается подпиской.
+          const current = quantityX10 === entry.snapshot.quantityX10 ? entry : await diary.updateQuantity(clientId, entry.id, entry.revision, quantityX10);
+          if (slot !== entry.slot) await diary.moveEntry(clientId, current.id, current.revision, slot);
+        })}
         onRemove={(entry) => guard(() => diary.removeEntry(clientId, entry.id, entry.revision))} />
     </View>
   );
@@ -286,5 +299,6 @@ const styles = StyleSheet.create({
   waterRow: { flexDirection: "row", gap: 8 },
   backdrop: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "rgba(0,0,0,0.4)" },
   dialog: { borderRadius: 24, padding: 18, gap: 10 },
+  chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   dialogTitle: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
 });

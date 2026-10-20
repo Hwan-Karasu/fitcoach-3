@@ -19,6 +19,8 @@ export interface NutritionDiaryPort {
   addEntries(clientId: string, inputs: readonly DiaryEntryInput[], now?: Date): Promise<readonly DiaryEntry[]>;
   /** Исправляет только количество этой записи; снимок источника не переписывается (§49.5.2). */
   updateQuantity(clientId: string, id: string, expectedRevision: number, quantityX10: number, now?: Date): Promise<DiaryEntry>;
+  /** Переносит запись в другой приём той же даты (в конец приёма): снимок и количество не меняются, дубля нет. Тот же приём — без изменений; устаревшая revision — `DIARY_STALE`. */
+  moveEntry(clientId: string, id: string, expectedRevision: number, slot: MealSlot, now?: Date): Promise<DiaryEntry>;
   /** Явное удаление записи; последняя запись дня выводит дату из учёта, вода остаётся. */
   removeEntry(clientId: string, id: string, expectedRevision: number): Promise<void>;
   /**

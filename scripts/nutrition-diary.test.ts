@@ -273,3 +273,23 @@ test("P-29: одна позиция в несколько приёмов — о�
     assert.deepEqual(await diary.addEntries(client.id, [], NOW), []);
   } finally { await close(); }
 });
+
+test("NUT-FS-31: запись переносится в другой приём той же даты — без дубля, в конец приёма, снимок и количество прежние, revision растёт; чужая запись и устаревшая revision отклоняются", async () => {
+  const { clients, diary, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const b = await clients.create({ displayName: "SyntheticB" });
+    const oats = await diary.addEntry(a.id, { localDate: DAY, slot: "BREAKFAST", snapshot: snapshotOfFood(OATS, 500) }, NOW);
+    await diary.addEntry(a.id, { localDate: DAY, slot: "SNACK", snapshot: snapshotOfFood(MILK, 2000) }, NOW);
+    const moved = await diary.moveEntry(a.id, oats.id, oats.revision, "SNACK", NOW);
+    assert.deepEqual([moved.slot, moved.position, moved.revision, moved.snapshot.quantityX10, moved.snapshot.name], ["SNACK", 1, oats.revision + 1, 500, "Овсянка"]);
+    const day = await diary.listEntries(a.id, DAY, DAY);
+    assert.deepEqual(day.map((entry) => [entry.slot, entry.snapshot.name]), [["SNACK", "Молоко"], ["SNACK", "Овсянка"]], "в старом приёме записи нет, дубля нет");
+    assert.deepEqual(summarizeDay(DAY, day).totals, summarizeDay(DAY, [oats, ...day.filter((entry) => entry.id !== oats.id)]).totals, "итог дня не изменился");
+    const same = await diary.moveEntry(a.id, moved.id, moved.revision, "SNACK", NOW);
+    assert.equal(same.revision, moved.revision, "тот же приём — ничего не меняется");
+    await assert.rejects(diary.moveEntry(a.id, moved.id, oats.revision, "DINNER", NOW), code("DIARY_STALE"), "устаревшая revision");
+    await assert.rejects(diary.moveEntry(b.id, moved.id, moved.revision, "DINNER", NOW), code("DIARY_STALE"), "запись другого клиента");
+    await assert.rejects(diary.moveEntry(a.id, moved.id, moved.revision, "LATE" as never, NOW), code("DIARY_SLOT_INVALID"));
+  } finally { await close(); }
+});

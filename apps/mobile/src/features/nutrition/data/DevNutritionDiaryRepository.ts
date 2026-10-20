@@ -175,6 +175,25 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
     return updated;
   }
 
+  async moveEntry(clientId: string, id: string, expectedRevision: number, slot: MealSlot, now: Date = new Date()): Promise<DiaryEntry> {
+    assertSlot(slot);
+    let changed = false;
+    const moved = await this.ready().writer.write(async (tx) => {
+      const current = await byId(tx, this.workspaceId, clientId, id);
+      if (current.revision !== expectedRevision) throw new Error("DIARY_STALE");
+      if (current.slot === slot) return current;
+      const last = await tx.first<{ position: number | null }>(`SELECT max(position) AS position FROM dev_food_diary_entries
+        WHERE workspace_id = ? AND client_id = ? AND local_date = ? AND slot = ?`, [this.workspaceId, clientId, current.localDate, slot]);
+      const result = await tx.run(`UPDATE dev_food_diary_entries SET slot = ?, position = ?, revision = revision + 1, updated_at = ?
+        WHERE workspace_id = ? AND client_id = ? AND id = ? AND revision = ?`, [slot, (last?.position ?? -1) + 1, now.toISOString(), this.workspaceId, clientId, id, expectedRevision]);
+      if (result.changes !== 1) throw new Error("DIARY_STALE");
+      changed = true;
+      return byId(tx, this.workspaceId, clientId, id);
+    });
+    if (changed) this.publish({ clientId, localDate: moved.localDate });
+    return moved;
+  }
+
   async removeEntry(clientId: string, id: string, expectedRevision: number): Promise<void> {
     let localDate = "";
     await this.ready().writer.write(async (tx) => {
