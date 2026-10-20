@@ -98,14 +98,23 @@ function participantDirectory(clients: ClientRosterPort & ClientChangePort): Cal
 
 /** Планы получают только поля отображения и профиль учёта, через публичный порт каталога. */
 function exerciseLookup(exercises: ExerciseCatalogPort): ExerciseLookupPort {
+  const build = async () => new Map((await exercises.list()).map((entry) => [entry.definition.id, {
+    name: displayNameOf(entry),
+    metrics: TRACKING_PROFILES[entry.definition.trackingProfile],
+    thumbnail: thumbnailOf(entry.definition.media),
+    unilateral: entry.definition.unilateral,
+    group: { id: entry.definition.bodyPart, label: bodyPartLabels[entry.definition.bodyPart] },
+  }]));
+  // Справочник из 643 записей строится один раз и до следующей правки каталога отдаётся всем экранам: раньше каждый экран
+  // читал и пересобирал его заново.
+  let cached: ReturnType<typeof build> | null = null;
+  exercises.subscribeCommittedChanges(() => { cached = null; });
   return {
-    lookup: async () => new Map((await exercises.list()).map((entry) => [entry.definition.id, {
-      name: displayNameOf(entry),
-      metrics: TRACKING_PROFILES[entry.definition.trackingProfile],
-      thumbnail: thumbnailOf(entry.definition.media),
-      unilateral: entry.definition.unilateral,
-      group: { id: entry.definition.bodyPart, label: bodyPartLabels[entry.definition.bodyPart] },
-    }])),
+    lookup: () => {
+      const pending = cached ??= build();
+      pending.catch(() => { if (cached === pending) cached = null; });
+      return pending;
+    },
     subscribe: (listener) => exercises.subscribeCommittedChanges(listener),
   };
 }

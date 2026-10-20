@@ -1,7 +1,7 @@
 import { runMigrations } from "../../../../shared/db/MigrationRunner.ts";
 import { SharedSqliteDatabase } from "../../../../shared/db/SharedSqliteDatabase.ts";
 import { UUID_V4_SQL } from "../../../../shared/db/SqlIds.ts";
-import type { SqliteConnectionPort, SqliteStatementPort } from "../../../../shared/db/SqlitePort.ts";
+import type { SqliteConnectionPort, SqliteStatementPort, SqlValue } from "../../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../../shared/db/WriterCoordinator.ts";
 import { DEFAULT_CONFIRMATION_MODE, NOTE_MAX, SET_TYPES, type ActiveWorkout, type ConfirmationMode, type PreviousQuery, type PreviousSet,
   type SessionStatus, type SetFact, type SetType, type SetValues, type WorkoutExecution, type WorkoutOutcome,
@@ -46,15 +46,20 @@ type SideRow = Readonly<{ setId: string; side: "L" | "R"; reps: number | null; l
 type StoredSides = Readonly<{ L?: SideRow; R?: SideRow }>;
 
 /** Стороны односторонних подходов; ключ — ID факта. */
-async function sidesOf(port: SqliteStatementPort, workspaceId: string, setIds: readonly string[]):
+async function sidesWhere(port: SqliteStatementPort, workspaceId: string, condition: string, params: readonly SqlValue[]):
   Promise<ReadonlyMap<string, StoredSides>> {
   const result = new Map<string, { L?: SideRow; R?: SideRow }>();
-  if (setIds.length === 0) return result;
   const rows = await port.all<SideRow>(`SELECT set_id AS setId, side, reps, load_grams AS loadGrams, duration_sec AS durationSec,
     distance_m AS distanceM, confirmed_at AS confirmedAt FROM dev_training_performed_sides
-    WHERE workspace_id = ? AND set_id IN (${setIds.map(() => "?").join(", ")})`, [workspaceId, ...setIds]);
+    WHERE workspace_id = ? AND ${condition}`, [workspaceId, ...params]);
   for (const row of rows) result.set(row.setId, { ...result.get(row.setId), [row.side]: row });
   return result;
+}
+
+async function sidesOf(port: SqliteStatementPort, workspaceId: string, setIds: readonly string[]):
+  Promise<ReadonlyMap<string, StoredSides>> {
+  if (setIds.length === 0) return new Map();
+  return sidesWhere(port, workspaceId, `set_id IN (${setIds.map(() => "?").join(", ")})`, setIds);
 }
 
 const EMPTY_SIDE: SetValues = { reps: null, loadGrams: null, durationSec: null, distanceM: null };
@@ -80,16 +85,20 @@ type DropRow = Readonly<{ setId: string; reps: number | null; loadGrams: number 
   distanceM: number | null }>;
 
 /** Мини-сеты подходов по порядку; ключ — ID факта. */
-async function dropsOf(port: SqliteStatementPort, workspaceId: string, setIds: readonly string[]):
+async function dropsWhere(port: SqliteStatementPort, workspaceId: string, condition: string, params: readonly SqlValue[]):
   Promise<ReadonlyMap<string, readonly SetValues[]>> {
   const result = new Map<string, SetValues[]>();
-  if (setIds.length === 0) return result;
   const rows = await port.all<DropRow>(`SELECT set_id AS setId, reps, load_grams AS loadGrams, duration_sec AS durationSec,
     distance_m AS distanceM FROM dev_training_performed_drops
-    WHERE workspace_id = ? AND set_id IN (${setIds.map(() => "?").join(", ")}) ORDER BY set_id, position`,
-  [workspaceId, ...setIds]);
+    WHERE workspace_id = ? AND ${condition} ORDER BY set_id, position`, [workspaceId, ...params]);
   for (const row of rows) result.set(row.setId, [...(result.get(row.setId) ?? []), valuesOf(row)]);
   return result;
+}
+
+async function dropsOf(port: SqliteStatementPort, workspaceId: string, setIds: readonly string[]):
+  Promise<ReadonlyMap<string, readonly SetValues[]>> {
+  if (setIds.length === 0) return new Map();
+  return dropsWhere(port, workspaceId, `set_id IN (${setIds.map(() => "?").join(", ")})`, setIds);
 }
 
 function assertSlot(slot: WorkoutSlot): void {
@@ -258,29 +267,43 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
         AND f.session_id = s.id AND f.removed_at IS NULL) DESC`, [this.workspaceId]);
   }
 
+  /**
+   * Выполнения клиента (всей программы или всех программ) пакетом: занятия, подходы, мини-сеты, стороны и заметки — по одному
+   * запросу на вид, а не по пять на каждое занятие. `sessionsWhere` выбирает занятия (псевдоним `s`).
+   */
+  private async readExecutions(connection: SqliteStatementPort, sessionsWhere: string, params: readonly SqlValue[]) {
+    const ws = this.workspaceId;
+    const sessions = await connection.all<WorkoutSession & { originJson: string | null }>(
+      `SELECT ${SESSION_COLUMNS}, origin_json AS originJson FROM dev_training_sessions s WHERE s.workspace_id = ? AND ${sessionsWhere}`, [ws, ...params]);
+    if (sessions.length === 0) return [];
+    const inSessions = `SELECT s.id FROM dev_training_sessions s WHERE s.workspace_id = ? AND ${sessionsWhere}`;
+    const setIds = `SELECT id FROM dev_training_performed_sets WHERE workspace_id = ? AND removed_at IS NULL AND session_id IN (${inSessions})`;
+    const facts = await connection.all<FactRow & { sessionId: string }>(`SELECT ${FACT_COLUMNS}, session_id AS sessionId
+      FROM dev_training_performed_sets WHERE workspace_id = ? AND removed_at IS NULL AND session_id IN (${inSessions})`, [ws, ws, ...params]);
+    const drops = await dropsWhere(connection, ws, `set_id IN (${setIds})`, [ws, ws, ...params]);
+    const sides = await sidesWhere(connection, ws, `set_id IN (${setIds})`, [ws, ws, ...params]);
+    const notes = await connection.all<{ sessionId: string; plannedExerciseId: string; note: string }>(`SELECT session_id AS sessionId,
+      planned_exercise_id AS plannedExerciseId, note FROM dev_training_exercise_notes
+      WHERE workspace_id = ? AND session_id IN (${inSessions})`, [ws, ws, ...params]);
+    const factsBySession = new Map<string, FactRow[]>();
+    for (const { sessionId, ...row } of facts) factsBySession.set(sessionId, [...(factsBySession.get(sessionId) ?? []), row]);
+    const notesBySession = new Map<string, Map<string, string>>();
+    for (const item of notes) notesBySession.set(item.sessionId, (notesBySession.get(item.sessionId) ?? new Map()).set(item.plannedExerciseId, item.note));
+    return sessions.map(({ originJson, ...session }) => ({ session, originJson,
+      execution: { session, facts: new Map((factsBySession.get(session.id) ?? []).map((row) => [row.plannedSetId,
+        toFact(row, drops.get(row.id) ?? [], factSides(row, sides.get(row.id)))])),
+      notes: notesBySession.get(session.id) ?? new Map<string, string>() } satisfies WorkoutExecution }));
+  }
+
   async listProgramExecutions(clientId: string, programId: string) {
-    const { connection } = this.ready();
-    const sessions = await connection.all<{ weekIndex: number; plannedWorkoutId: string }>(`SELECT week_index AS weekIndex,
-      planned_workout_id AS plannedWorkoutId FROM dev_training_sessions
-      WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND plan_deleted_at IS NULL`, [this.workspaceId, clientId, programId]);
-    const result = [];
-    for (const session of sessions) {
-      result.push({ ...session, execution: await this.readWorkout(connection, { clientId, programId, ...session }) });
-    }
-    return result;
+    const rows = await this.readExecutions(this.ready().connection, "s.client_id = ? AND s.program_id = ? AND s.plan_deleted_at IS NULL", [clientId, programId]);
+    return rows.map(({ session, execution }) => ({ weekIndex: session.weekIndex, plannedWorkoutId: session.plannedWorkoutId, execution }));
   }
 
   async listClientExecutions(clientId: string) {
-    const { connection } = this.ready();
-    const sessions = await connection.all<{ programId: string; weekIndex: number; plannedWorkoutId: string; originJson: string | null }>(
-      `SELECT program_id AS programId, week_index AS weekIndex, planned_workout_id AS plannedWorkoutId, origin_json AS originJson
-      FROM dev_training_sessions WHERE workspace_id = ? AND client_id = ?`, [this.workspaceId, clientId]);
-    const result = [];
-    for (const { originJson, ...session } of sessions) {
-      result.push({ ...session, origin: originJson === null ? null : JSON.parse(originJson) as SessionOrigin,
-        execution: await this.readWorkout(connection, { clientId, ...session }) });
-    }
-    return result;
+    const rows = await this.readExecutions(this.ready().connection, "s.client_id = ?", [clientId]);
+    return rows.map(({ session, originJson, execution }) => ({ programId: session.programId, weekIndex: session.weekIndex,
+      plannedWorkoutId: session.plannedWorkoutId, origin: originJson === null ? null : JSON.parse(originJson) as SessionOrigin, execution }));
   }
 
   async getProgramStatuses(clientId: string, programId: string): Promise<readonly SessionStatus[]> {

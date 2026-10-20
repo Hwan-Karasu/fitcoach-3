@@ -1,6 +1,7 @@
 import type { SqliteStatementPort } from "../../../../shared/db/SqlitePort.ts";
 import type { CycleType, Mesocycle, PlanWeek, WeekType } from "../domain/PeriodizedModel.ts";
-import { readWorkouts, writeWorkouts } from "./SimplePlanStore.ts";
+import type { PlannedWorkout } from "../domain/SimplePlanModel.ts";
+import { plannedWorkoutOf, writeWorkouts, type ExerciseRow, type SetRow, type WorkoutRow } from "./SimplePlanStore.ts";
 
 /**
  * Мезоциклы Расширенной программы (T04): у каждого участника свои строки мезоциклов, недель и тренировок
@@ -12,23 +13,47 @@ type MesocycleRow = Readonly<{ id: string; lineageId: string; title: string; cyc
 
 export async function readMesocycles(tx: SqliteStatementPort, workspaceId: string, programId: string,
   clientId: string): Promise<readonly Mesocycle[]> {
+  // Пять запросов на всю программу клиента, а не по запросу на мезоцикл, неделю и упражнение: на телефоне каждое обращение
+  // идёт через мост Expo, и сотни последовательных чтений давали секунды при открытии и переключении участников.
   const rows = await tx.all<MesocycleRow>(`SELECT id, lineage_id AS lineageId, title, cycle_type AS cycleType, rep_min AS repMin, rep_max AS repMax,
     start_date AS startDate FROM dev_training_mesocycles
     WHERE workspace_id = ? AND program_id = ? AND client_id = ? ORDER BY position`, [workspaceId, programId, clientId]);
-  const result: Mesocycle[] = [];
-  for (const row of rows) {
-    const weeks = await tx.all<{ id: string; position: number; type: WeekType }>(`SELECT id, position, week_type AS type
-      FROM dev_training_weeks WHERE workspace_id = ? AND mesocycle_id = ? ORDER BY position`, [workspaceId, row.id]);
-    const planWeeks: PlanWeek[] = [];
-    for (const week of weeks) {
-      planWeeks.push({ id: week.id, index: week.position + 1, type: week.type,
-        workouts: await readWorkouts(tx, workspaceId, programId, week.id) });
-    }
-    const { repMin, repMax, ...rest } = row;
-    result.push({ ...rest, repRange: repMin === null ? null : { min: repMin, max: repMax }, weeks: planWeeks });
+  if (rows.length === 0) return [];
+  const weeks = await tx.all<{ id: string; mesocycleId: string; position: number; type: WeekType }>(`SELECT k.id, k.mesocycle_id AS mesocycleId,
+      k.position, k.week_type AS type FROM dev_training_weeks k
+    JOIN dev_training_mesocycles m ON m.id = k.mesocycle_id AND m.workspace_id = k.workspace_id
+    WHERE k.workspace_id = ? AND m.program_id = ? AND m.client_id = ? ORDER BY k.position`, [workspaceId, programId, clientId]);
+  const workouts = await tx.all<WorkoutRow & { weekId: string }>(`SELECT w.id, w.title, w.lineage_id AS lineageId, w.week_id AS weekId
+      FROM dev_training_workouts w ${OWNED_BY_CLIENT}
+    WHERE w.workspace_id = ? AND w.program_id = ? AND m.program_id = ? AND m.client_id = ? ORDER BY w.position`,
+  [workspaceId, programId, programId, clientId]);
+  const exercises = await tx.all<ExerciseRow>(`SELECT e.id, e.workout_id AS workoutId, e.exercise_id AS exerciseId, e.rest_sec AS restSec,
+      e.instruction, e.rir_min AS rirMin, e.rir_max AS rirMax, e.lineage_id AS lineageId, e.superset_id AS supersetId
+      FROM dev_training_planned_exercises e
+    JOIN dev_training_workouts w ON w.id = e.workout_id AND w.workspace_id = e.workspace_id ${OWNED_BY_CLIENT}
+    WHERE e.workspace_id = ? AND w.program_id = ? AND m.program_id = ? AND m.client_id = ? ORDER BY e.position`,
+  [workspaceId, programId, programId, clientId]);
+  const sets = await tx.all<SetRow>(`SELECT s.id, s.planned_exercise_id AS exerciseRowId, s.reps, s.reps_max AS repsMax,
+      s.load_grams AS loadGrams, s.duration_sec AS durationSec, s.distance_m AS distanceM FROM dev_training_planned_sets s
+    JOIN dev_training_planned_exercises e ON e.id = s.planned_exercise_id AND e.workspace_id = s.workspace_id
+    JOIN dev_training_workouts w ON w.id = e.workout_id AND w.workspace_id = e.workspace_id ${OWNED_BY_CLIENT}
+    WHERE s.workspace_id = ? AND w.program_id = ? AND m.program_id = ? AND m.client_id = ? ORDER BY s.position`,
+  [workspaceId, programId, programId, clientId]);
+  const toWorkout = plannedWorkoutOf(exercises, sets);
+  const workoutsByWeek = new Map<string, PlannedWorkout[]>();
+  for (const { weekId, ...workout } of workouts) workoutsByWeek.set(weekId, [...(workoutsByWeek.get(weekId) ?? []), toWorkout(workout)]);
+  const weeksByMesocycle = new Map<string, PlanWeek[]>();
+  for (const week of weeks) {
+    weeksByMesocycle.set(week.mesocycleId, [...(weeksByMesocycle.get(week.mesocycleId) ?? []),
+      { id: week.id, index: week.position + 1, type: week.type, workouts: workoutsByWeek.get(week.id) ?? [] }]);
   }
-  return result;
+  return rows.map(({ repMin, repMax, ...rest }): Mesocycle => ({ ...rest, repRange: repMin === null ? null : { min: repMin, max: repMax },
+    weeks: weeksByMesocycle.get(rest.id) ?? [] }));
 }
+
+/** Недели и мезоциклы, которыми владеет клиент выбранной программы: условие для запросов по тренировкам. */
+const OWNED_BY_CLIENT = `JOIN dev_training_weeks k ON k.id = w.week_id AND k.workspace_id = w.workspace_id
+  JOIN dev_training_mesocycles m ON m.id = k.mesocycle_id AND m.workspace_id = k.workspace_id`;
 
 /** Новый мезоцикл участника в конец его списка. */
 export async function insertMesocycle(tx: SqliteStatementPort, workspaceId: string, programId: string, clientId: string,

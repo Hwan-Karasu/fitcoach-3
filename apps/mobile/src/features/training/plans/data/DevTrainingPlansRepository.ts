@@ -174,7 +174,10 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     return () => { this.listeners.delete(listener); };
   }
 
+  private readonly planCache = new Map<string, Promise<PeriodizedPlan | null>>();
+
   private publish(change: TrainingPlansCommittedChange): void {
+    this.planCache.clear();
     for (const listener of this.listeners) {
       try { listener(change); } catch { /* Наблюдатель не превращает коммит в ошибку. */ }
     }
@@ -508,7 +511,29 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     return workout === undefined ? null : { program, workout };
   }
 
+  /**
+   * Чтение плана одного участника кэшируется до следующей записи: экран программы, переключатель участников, навигация
+   * недель и история читают его по нескольку раз. Любая запись планов оповещает подписчиков через `publish`, и кэш там
+   * сбрасывается; чтение, начатое до записи, в кэш не попадает (запись убирает и его). Окончательное удаление клиента
+   * стирает планы без оповещения плана, поэтому при чтении из кэша сверяется членство клиента в программе (один запрос).
+   */
   async getPeriodizedPlan(clientId: string, programId: string): Promise<PeriodizedPlan | null> {
+    const key = `${clientId}:${programId}`;
+    const cached = this.planCache.get(key);
+    if (cached !== undefined) {
+      const member = await this.ready().connection.first<{ present: number }>(`SELECT 1 AS present FROM dev_training_program_members
+        WHERE workspace_id = ? AND program_id = ? AND client_id = ?`, [this.workspaceId, programId, clientId]);
+      if (member !== null) return cached;
+      this.planCache.delete(key);
+      return null;
+    }
+    const pending = this.readPeriodizedPlan(clientId, programId);
+    this.planCache.set(key, pending);
+    pending.catch(() => { if (this.planCache.get(key) === pending) this.planCache.delete(key); });
+    return pending;
+  }
+
+  private async readPeriodizedPlan(clientId: string, programId: string): Promise<PeriodizedPlan | null> {
     const { connection } = this.ready();
     const program = await this.getProgram(clientId, programId);
     if (program === null || program.kind !== "PERIODIZED") return null;
@@ -1418,6 +1443,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   }
 
   async close(): Promise<void> {
+    this.planCache.clear();
     if (this.opening !== null) await this.opening.catch(() => undefined);
     if (this.connection === null) return;
     this.connection = null;

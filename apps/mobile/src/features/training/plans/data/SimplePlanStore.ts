@@ -8,7 +8,7 @@ import type { PlannedExercise, PlannedSet, PlannedWorkout, SimplePlan } from "..
  * задела бы чужую структуру.
  */
 
-type SetRow = Readonly<{ id: string; exerciseRowId: string; reps: number | null; repsMax: number | null; loadGrams: number | null;
+export type SetRow = Readonly<{ id: string; exerciseRowId: string; reps: number | null; repsMax: number | null; loadGrams: number | null;
   durationSec: number | null; distanceM: number | null }>;
 
 /** Тренировки программы (`weekId = null`) или одной недели Расширенной программы. */
@@ -30,17 +30,37 @@ export async function readWorkouts(tx: SqliteStatementPort, workspaceId: string,
     JOIN dev_training_planned_exercises e ON e.id = s.planned_exercise_id AND e.workspace_id = s.workspace_id
     JOIN dev_training_workouts w ON w.id = e.workout_id AND w.workspace_id = e.workspace_id
     WHERE s.workspace_id = ? AND w.program_id = ? AND w.week_id IS ? ORDER BY s.position`, [workspaceId, programId, weekId]);
-  const setsOf = (exerciseRowId: string): PlannedSet[] => sets.filter((set) => set.exerciseRowId === exerciseRowId)
-    .map(({ id, reps, repsMax, loadGrams, durationSec, distanceM }) => ({ id, reps, repsMax, loadGrams, durationSec, distanceM }));
-  return workouts.map((workout): PlannedWorkout => ({ id: workout.id, title: workout.title,
-    ...(workout.lineageId === null ? {} : { lineageId: workout.lineageId }),
-    exercises: exercises.filter((exercise) => exercise.workoutId === workout.id)
-      .map((exercise): PlannedExercise => ({ id: exercise.id,
-        ...(exercise.supersetId === null ? {} : { supersetId: exercise.supersetId }),
-        ...(exercise.lineageId === null ? {} : { lineageId: exercise.lineageId }),
-        exerciseId: exercise.exerciseId, restSec: exercise.restSec,
-        instruction: exercise.instruction, rir: exercise.rirMin === null ? null : { min: exercise.rirMin, max: exercise.rirMax },
-        sets: setsOf(exercise.id) })) }));
+  return workouts.map(plannedWorkoutOf(exercises, sets));
+}
+
+export type WorkoutRow = Readonly<{ id: string; title: string; lineageId: string | null }>;
+export type ExerciseRow = Readonly<{ id: string; workoutId: string; exerciseId: string; restSec: number | null;
+  instruction: string | null; rirMin: number | null; rirMax: number | null; lineageId: string | null; supersetId: string | null }>;
+
+/**
+ * Сборка тренировки из плоских строк запросов: упражнения и подходы группируются Map-ами за один проход, порядок — как в
+ * запросах (`ORDER BY position`). Одна функция для чтения недели и всей программы пакетом.
+ */
+export function plannedWorkoutOf(exercises: readonly ExerciseRow[], sets: readonly SetRow[]): (workout: WorkoutRow) => PlannedWorkout {
+  const setsByExercise = new Map<string, PlannedSet[]>();
+  for (const { id, exerciseRowId, reps, repsMax, loadGrams, durationSec, distanceM } of sets) {
+    const list = setsByExercise.get(exerciseRowId) ?? [];
+    list.push({ id, reps, repsMax, loadGrams, durationSec, distanceM });
+    setsByExercise.set(exerciseRowId, list);
+  }
+  const exercisesByWorkout = new Map<string, PlannedExercise[]>();
+  for (const exercise of exercises) {
+    const list = exercisesByWorkout.get(exercise.workoutId) ?? [];
+    list.push({ id: exercise.id,
+      ...(exercise.supersetId === null ? {} : { supersetId: exercise.supersetId }),
+      ...(exercise.lineageId === null ? {} : { lineageId: exercise.lineageId }),
+      exerciseId: exercise.exerciseId, restSec: exercise.restSec,
+      instruction: exercise.instruction, rir: exercise.rirMin === null ? null : { min: exercise.rirMin, max: exercise.rirMax },
+      sets: setsByExercise.get(exercise.id) ?? [] });
+    exercisesByWorkout.set(exercise.workoutId, list);
+  }
+  return (workout) => ({ id: workout.id, title: workout.title, ...(workout.lineageId === null ? {} : { lineageId: workout.lineageId }),
+    exercises: exercisesByWorkout.get(workout.id) ?? [] });
 }
 
 export async function readStructure(tx: SqliteStatementPort, workspaceId: string, programId: string,
