@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ConfirmDialog } from "../../shared/ui/components/public.ts";
 import { CommonActions } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { AccountingRepositoryPort } from "../../features/accounting/public.ts";
@@ -108,6 +109,29 @@ export function HomeNavigator(props: HomeProps) {
 }
 
 /** «Питание» клиента: дневник, добавление еды из своего каталога, создание продукта. Шапку клиента рисует стек (как у «Тренировок»). */
+/**
+ * Маршрут «Добавить еду»: пока в выборе есть позиции, выход (кнопка «назад», жест, системная кнопка) спрашивает «Отменить выбор?» (NUT-FS-26).
+ * После успешной записи выбор пуст — выход свободный.
+ */
+function NutritionAddRoute({ navigation, children }: Readonly<{ navigation: { addListener: (event: "beforeRemove", listener: (event: { preventDefault: () => void; data: { action: never } }) => void) => () => void;
+  dispatch: (action: never) => void }; children: (onDirtyChange: (dirty: boolean) => void) => ReactNode }>) {
+  const dirty = useRef(false);
+  const [pending, setPending] = useState<never | null>(null);
+  useEffect(() => navigation.addListener("beforeRemove", (event) => {
+    if (!dirty.current) return;
+    event.preventDefault();
+    setPending(event.data.action);
+  }), [navigation]);
+  return (
+    <>
+      {children((value) => { dirty.current = value; })}
+      <ConfirmDialog visible={pending !== null} destructive title="Отменить выбор?" confirmLabel="Отменить выбор" cancelLabel="Продолжить выбор"
+        description="Выбранные позиции не записаны в дневник и будут потеряны." onCancel={() => setPending(null)}
+        onConfirm={() => { const action = pending; setPending(null); dirty.current = false; if (action !== null) navigation.dispatch(action); }} />
+    </>
+  );
+}
+
 export function NutritionNavigator({ clientId, clientName, clientEmoji, body, onUpdateBody, foods, recipes, diary, targets, calc, measurements, onExitClient, onOpenClients }: Readonly<{
   clientId: string; clientName: string; clientEmoji: string | null; body: CalcClientBody; onUpdateBody: (patch: Readonly<{ sex: "MALE" | "FEMALE" | null; heightCm: number | null }>) => Promise<void>;
   foods: FoodCatalogPort; recipes: RecipeCatalogPort; diary: NutritionDiaryPort; targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort;
@@ -125,9 +149,11 @@ export function NutritionNavigator({ clientId, clientName, clientEmoji, body, on
           onAdd={(localDate, slot, filter) => navigation.navigate("NutritionAdd", { localDate, slot, filter })} />}
       </NutritionStack.Screen>
       <NutritionStack.Screen name="NutritionAdd">
-        {({ navigation, route }) => <AddFoodScreen clientId={clientId} localDate={route.params.localDate} slot={route.params.slot} initialFilter={route.params.filter}
-          foods={foods} recipes={recipes} diary={diary} onCreateFood={(name) => navigation.navigate("NutritionFood", { name })}
-          onCreateRecipe={() => navigation.navigate("NutritionRecipe")} onEditRecipe={(recipeId) => navigation.navigate("NutritionRecipe", { recipeId })} />}
+        {({ navigation, route }) => <NutritionAddRoute navigation={navigation}>
+          {(onDirtyChange) => <AddFoodScreen clientId={clientId} localDate={route.params.localDate} slot={route.params.slot} initialFilter={route.params.filter}
+            foods={foods} recipes={recipes} diary={diary} onCreateFood={(name) => navigation.navigate("NutritionFood", { name })} onDirtyChange={onDirtyChange} onAdded={() => navigation.goBack()}
+            onCreateRecipe={() => navigation.navigate("NutritionRecipe")} onEditRecipe={(recipeId) => navigation.navigate("NutritionRecipe", { recipeId })} />}
+        </NutritionAddRoute>}
       </NutritionStack.Screen>
       <NutritionStack.Screen name="NutritionFood">
         {({ navigation, route }) => <FoodEditorScreen foods={foods} initialName={route.params.name} onSaved={() => navigation.goBack()} />}
