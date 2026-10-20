@@ -57,3 +57,5 @@
 - Иконки рабочего пространства клиента — ещё самописный `TabGlyph`. Две версии TypeScript (корень 5.8.3, mobile 6.0.3).
 - Тесты, импортирующие `.tsx` через `public.ts`, — в `apps/mobile/scripts` (корневой tsconfig без JSX).
 - Только README у фич backup, import, rest-timer; каталог — в `exercises`, таймер — внутри `training`.
+- NUT-UX-PARITY-01: ввод шагов клиента есть только в порте `NutritionCalcPort.setSteps` (UI — на главной клиента, A02); `MeasurementsCard.save` пишет по одному факту без общей транзакции (порт Measurements без batch) — при сбое часть значений может не сохраниться, карточка перечитывается (`MeasurementsCard.tsx`).
+- NUT-UX-PARITY-01: БЖ в «Расчёте» считаются только при известном % жира (сухая масса); 8 границ предложения правятся на вкладке «Цели» после «Применить как цели» (`NutritionCalcScreen.tsx`).
