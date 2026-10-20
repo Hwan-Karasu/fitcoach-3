@@ -28,13 +28,17 @@ export function HistoryFilterBar({ entries, filter, onChange, trailing }: Readon
   const programLabel = programs.find((option) => option.value === (filter.programId ?? ALL_OPTION))?.label ?? "Все программы";
   const mesocycleLabel = mesocycles.find((option) => option.value === (filter.mesocycleId ?? ALL_OPTION))?.label ?? "Все мезоциклы";
   if (!showPrograms && trailing === undefined) return null;
+  // Программа и мезоцикл — свой ряд, соседние пилюли (период, отчёт) — следующий: в одном ряду на три пилюли
+  // «Все программы» не помещалось и обрезалось до «Все прог…».
   return (
-    <View style={styles.row}>
-      {showPrograms ? <FilterPill grow menu expanded={open === "program"} anchorRef={programAnchor} label={programLabel}
-        selected={filter.programId !== null} accessibilityLabel={`Программа: ${programLabel}`} onPress={() => setOpen("program")} /> : null}
-      {showMesocycles ? <FilterPill grow menu expanded={open === "mesocycle"} anchorRef={mesocycleAnchor} label={mesocycleLabel}
-        selected={filter.mesocycleId !== null} accessibilityLabel={`Мезоцикл: ${mesocycleLabel}`} onPress={() => setOpen("mesocycle")} /> : null}
-      {trailing}
+    <View style={styles.column}>
+      {showPrograms ? <View style={styles.row}>
+        <FilterPill grow menu expanded={open === "program"} anchorRef={programAnchor} label={programLabel}
+          selected={filter.programId !== null} accessibilityLabel={`Программа: ${programLabel}`} onPress={() => setOpen("program")} />
+        {showMesocycles ? <FilterPill grow menu expanded={open === "mesocycle"} anchorRef={mesocycleAnchor} label={mesocycleLabel}
+          selected={filter.mesocycleId !== null} accessibilityLabel={`Мезоцикл: ${mesocycleLabel}`} onPress={() => setOpen("mesocycle")} /> : null}
+      </View> : null}
+      {trailing !== undefined ? <View style={styles.row}>{trailing}</View> : null}
       <DropdownMenu visible={open === "program"} anchor={programAnchor} title="Программа" options={programs} selected={filter.programId ?? ALL_OPTION}
         searchable={programs.length > SEARCH_FROM} onClose={() => setOpen(null)}
         onSelect={(value) => onChange({ programId: value === ALL_OPTION ? null : value, mesocycleId: null })} />
@@ -46,5 +50,6 @@ export function HistoryFilterBar({ entries, filter, onChange, trailing }: Readon
 }
 
 const styles = StyleSheet.create({
+  column: { gap: 8 },
   row: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
 });

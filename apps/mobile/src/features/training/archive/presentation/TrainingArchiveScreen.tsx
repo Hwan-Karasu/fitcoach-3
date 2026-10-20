@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { ChevronDown, ChevronUp } from "lucide-react-native";
-import { EmptyState, InlineNotice, LoadingState, SegmentedControl, StatusTag, type StatusKind } from
+import { EmptyState, InlineNotice, LoadingState, StatusTag, type StatusKind } from
   "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
@@ -59,21 +59,19 @@ function HistoryCard({ entry, names }: Readonly<{ entry: TrainingHistoryEntry; n
 }
 
 /**
- * Архив клиента (§50.1, АР1 = A): «История занятий» — единая хронология фактов дневника из всех программ (§48.85) с
- * фильтрами программа → мезоцикл; «Архив программ» — архивные программы (их подставляет навигация). Отборы не
+ * «История занятий» клиента (§50.1): единая хронология фактов дневника из всех программ (§48.85) с фильтрами
+ * программа → мезоцикл. Архив программ — на главном экране «Тренировки» (решение владельца 2026-10-20). Отборы не
  * меняют факты; «Проведено» — только завершённые тренировки (§48.51).
  */
-export function TrainingArchiveScreen({ clientId, history, exercises, renderPrograms }: Readonly<{
+export function TrainingArchiveScreen({ clientId, history, exercises }: Readonly<{
   clientId: string;
   history: Readonly<{ list: (clientId: string) => Promise<readonly TrainingHistoryEntry[]>;
     subscribe: (clientId: string, listener: () => void) => () => void }>;
   exercises: ExerciseLookupPort;
-  renderPrograms: () => ReactNode;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const lookup = useExerciseLookup(exercises);
-  const [tab, setTab] = useState<"history" | "programs">("history");
   const [entries, setEntries] = useState<readonly TrainingHistoryEntry[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [version, setVersion] = useState(0);
@@ -90,14 +88,8 @@ export function TrainingArchiveScreen({ clientId, history, exercises, renderProg
   const visible = useMemo(() => filterHistory(entries ?? [], filter), [entries, filter]);
   const names = (exerciseId: string) => lookup?.get(exerciseId)?.name ?? "Упражнение";
 
-  const tabs = <View style={styles.tabs}>
-    <SegmentedControl items={[{ id: "history", label: "История занятий" }, { id: "programs", label: "Архив программ" }]}
-      selectedId={tab} onSelect={setTab} />
-  </View>;
-  if (tab === "programs") return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{tabs}{renderPrograms()}</View>;
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
-      {tabs}
       {failed ? <View style={styles.pad}><InlineNotice kind="error">Не удалось загрузить историю занятий.</InlineNotice></View> : null}
       {entries === null && !failed ? <LoadingState label="Собираем историю занятий…" /> : null}
       {entries !== null ? <FlatList data={visible as TrainingHistoryEntry[]} keyExtractor={(entry) => entry.key}
@@ -116,7 +108,6 @@ export function TrainingArchiveScreen({ clientId, history, exercises, renderProg
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  tabs: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
   pad: { paddingHorizontal: 16 },
   list: { paddingHorizontal: 16, paddingBottom: 24, gap: 10 },
   header: { gap: 8, paddingTop: 4 },

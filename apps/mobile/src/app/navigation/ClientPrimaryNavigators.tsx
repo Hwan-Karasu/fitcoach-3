@@ -6,8 +6,8 @@ import { ClientHomePreview, type ClientRecord } from "../../features/clients/pub
 import { localDateOf, parseValueX10, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
 import { NutritionWorkspacePreview } from "../../features/nutrition/public.ts";
-import { ParticipantSwitcher, participantTarget, ProgramMatrixScreen, PeriodizedBuilderScreen, ProgramLibraryScreen, ProgramModeChooserScreen, ProgramScreen, SimpleProgramBuilderScreen,
-  WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type MesocycleDeletePort, type ProgramDeletePort,
+import { ArchivedProgramsPanel, ParticipantSwitcher, participantTarget, ProgramMatrixScreen, PeriodizedBuilderScreen, ProgramLibraryScreen, ProgramModeChooserScreen, programLibraryTabTitles, ProgramScreen, SimpleProgramBuilderScreen,
+  WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort,
   type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
   type TrainingPlansRepositoryPort, ProgramWeeksPanel, WorkoutScreen, type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort,
   type WorkoutSlot } from "../../features/training/public.ts";
@@ -130,7 +130,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
   weekCopy: WeekCopyPort;
   weekSwap: WeekSwapPort;
   mesocycleSave: MesocycleSavePort;
-  planDelete: MesocycleDeletePort & ProgramDeletePort;
+  planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort;
   onExitClient: () => void;
   onOpenClients: () => void;
   /** Карточка упражнения из дневника (корневой стек). */
@@ -183,6 +183,11 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
           onChoose={(kind) => { const route = createRoute(kind); navigation.navigate(route.name, route.params as never); }}
           onCreate={() => navigation.navigate("TrainingChooser")}
           onOpenTemplates={() => navigation.navigate("TrainingTemplates")}
+          onTabChange={(tab) => navigation.setOptions({ title: programLibraryTabTitles[tab] })}
+          renderTemplates={() => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
+            onEdit={(templateId) => navigation.navigate("TrainingTemplateEdit", { templateId })}
+            onCreated={(programId) => navigation.navigate("TrainingProgram", { programId })} />}
+          renderArchive={() => <ArchivedProgramsPanel clientId={clientId} repository={repository} planDelete={planDelete} />}
           onOpenProgram={(programId) => navigation.navigate("TrainingProgram", { programId })} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingTemplateEdit">

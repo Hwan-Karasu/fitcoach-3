@@ -16,7 +16,7 @@ export function MoreMenuScreen({
         Здесь показаны самостоятельные маршруты карточки. Это dev-демонстрация без выбранного клиента.
       </PrototypeNotice>
       <PrototypeLink title={moreDestinations.Questionnaire} detail="Сведения клиента" onPress={onOpenQuestionnaire} />
-      <PrototypeLink title={moreDestinations.TrainingArchive} detail="История тренировок" onPress={onOpenArchive} />
+      <PrototypeLink title={moreDestinations.TrainingArchive} detail="Все проведённые тренировки" onPress={onOpenArchive} />
       <PrototypeLink title={moreDestinations.Statistics} detail="Общая статистика клиента" onPress={onOpenStatistics} />
     </PrototypeScreen>
   );

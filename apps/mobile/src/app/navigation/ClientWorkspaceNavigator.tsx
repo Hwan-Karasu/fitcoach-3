@@ -8,7 +8,7 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import type { ClientRecord, ClientRepositoryPort, ClientRosterPort } from "../../features/clients/public.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { ClientQuestionnaireScreen, type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
-import { ArchivedProgramsPanel, MonthlyReportScreen, TrainingArchiveScreen, TrainingStatisticsScreen, type ExerciseLookupPort,
+import { MonthlyReportScreen, TrainingArchiveScreen, TrainingStatisticsScreen, type ExerciseLookupPort,
   type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort, type TrainingPlansRepositoryPort,
   type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort, type WorkoutSlot } from "../../features/training/public.ts";
 import type { ExerciseCatalogPort } from "../../features/exercises/public.ts";
@@ -44,11 +44,10 @@ type MoreRoutes = {
 const Tabs = createBottomTabNavigator<WorkspaceTabs>();
 const MoreStack = createNativeStackNavigator<MoreRoutes>();
 
-function MoreNavigator({ client, questionnaire, trainingPlans, history, bodyweight, exerciseLookup, planDelete, onClose, onOpenClients, onOpenExercise, onOpenWorkout }: Readonly<{
+function MoreNavigator({ client, questionnaire, history, bodyweight, exerciseLookup, onClose, onOpenClients, onOpenExercise, onOpenWorkout }: Readonly<{
   client: ClientRecord; questionnaire: QuestionnaireRepositoryPort; onClose: () => void; onOpenClients: () => void;
-  trainingPlans: TrainingPlansRepositoryPort; history: TrainingHistoryPort; bodyweight: ClientBodyweightPort; exerciseLookup: ExerciseLookupPort;
+  history: TrainingHistoryPort; bodyweight: ClientBodyweightPort; exerciseLookup: ExerciseLookupPort;
   onOpenExercise: (exerciseId: string) => void; onOpenWorkout: OpenWorkout;
-  planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort;
 }>) {
   const { palette } = usePrototypeTheme();
   const clientId = client.id;
@@ -73,9 +72,8 @@ function MoreNavigator({ client, questionnaire, trainingPlans, history, bodyweig
       <MoreStack.Screen name="Questionnaire" options={{ title: moreDestinations.Questionnaire }}>
         {() => <ClientQuestionnaireScreen clientId={clientId} repository={questionnaire} />}
       </MoreStack.Screen>
-      <MoreStack.Screen name="TrainingArchive" options={{ title: "Архив клиента" }}>
-        {() => <TrainingArchiveScreen clientId={clientId} history={history} exercises={exerciseLookup}
-          renderPrograms={() => <ArchivedProgramsPanel clientId={clientId} repository={trainingPlans} planDelete={planDelete} />} />}
+      <MoreStack.Screen name="TrainingArchive" options={{ title: moreDestinations.TrainingArchive }}>
+        {() => <TrainingArchiveScreen clientId={clientId} history={history} exercises={exerciseLookup} />}
       </MoreStack.Screen>
       <MoreStack.Screen name="Statistics" options={{ title: moreDestinations.Statistics }}>
         {({ navigation }) => <TrainingStatisticsScreen clientId={clientId} history={history} bodyweight={bodyweight} exercises={exerciseLookup} onOpenExercise={onOpenExercise}
@@ -206,7 +204,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       </Tabs.Screen>
       <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More}}>
         {() => <MoreNavigator client={client} questionnaire={questionnaire} onClose={onClose} onOpenClients={onOpenClients}
-          trainingPlans={trainingPlans} history={trainingHistory} bodyweight={clientBodyweight} exerciseLookup={exerciseLookup} planDelete={planDelete}
+          history={trainingHistory} bodyweight={clientBodyweight} exerciseLookup={exerciseLookup}
           onOpenExercise={(exerciseId) => onOpenExercise?.(exerciseId)} onOpenWorkout={onOpenWorkout} />}
       </Tabs.Screen>
     </Tabs.Navigator></ScreenToneProvider></WeekNavigationProvider>

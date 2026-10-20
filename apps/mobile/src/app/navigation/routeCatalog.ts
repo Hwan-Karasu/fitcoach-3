@@ -20,7 +20,7 @@ export type WorkspaceTabName = keyof typeof workspaceTabs;
 
 export const moreDestinations = {
   Questionnaire: "Анкета",
-  TrainingArchive: "Архив",
+  TrainingArchive: "История занятий",
   Statistics: "Статистика",
 } as const;
 

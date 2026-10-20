@@ -4,7 +4,7 @@ import Animated, { useAnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
 import { CalendarDays, ChartColumnIncreasing, ChevronRight, CircleMinus, Clock, FileText, LayoutGrid, Plus, RefreshCw, Rocket,
   FileSpreadsheet, SlidersHorizontal, TrendingUp, Users, Zap } from "lucide-react-native";
-import { AppButton, FloatingActionButton, InlineNotice, ListSectionHeader, LoadingState } from "../../../../shared/ui/components/public.ts";
+import { AppButton, FloatingActionButton, InlineNotice, ListSectionHeader, LoadingState, SegmentedControl } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../../shared/ui/theme/style.ts";
@@ -164,7 +164,12 @@ function FeatureRow({ icon: renderIcon, title, detail, onPress, soon = false }: 
  * пустой библиотеке — сразу экран «Создать программу» (решение владельца 2026-10-18: без отдельного
  * экрана-приветствия, чтобы не дублировать выбор). Архив — у участия этого клиента.
  */
-export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate, onOpenProgram, onOpenTemplates }: Readonly<{
+export type ProgramLibraryTab = "programs" | "templates" | "archive";
+export const programLibraryTabTitles: Readonly<Record<ProgramLibraryTab, string>> = {
+  programs: "Программы", templates: "Шаблоны", archive: "Архив программ" };
+
+export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate, onOpenProgram, onOpenTemplates, renderTemplates, renderArchive,
+  onTabChange }: Readonly<{
   clientId: string;
   repository: TrainingPlansRepositoryPort;
   /** Пустая библиотека: конструктор выбран прямо здесь. */
@@ -173,10 +178,15 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
   onOpenProgram: (programId: string) => void;
   /** §48.16: библиотека шаблонов тренера. */
   onOpenTemplates?: () => void;
+  /** Вкладки «Шаблоны» и «Архив программ» (решение владельца 2026-10-20): содержимое подставляет навигация. */
+  renderTemplates?: () => ReactNode;
+  renderArchive?: () => ReactNode;
+  onTabChange?: (tab: ProgramLibraryTab) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const { library, failed, reload } = useProgramLibrary(repository, clientId);
+  const [tab, setTab] = useState<ProgramLibraryTab>("programs");
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const [orderError, setOrderError] = useState(false);
   const [orderReset, setOrderReset] = useState(0);
@@ -196,15 +206,30 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
     return <ProgramModeChooserScreen onChoose={onChoose} onOpenTemplates={onOpenTemplates} />;
   }
 
+  const tabItems = [{ id: "programs" as const, label: programLibraryTabTitles.programs },
+    ...(renderTemplates !== undefined ? [{ id: "templates" as const, label: programLibraryTabTitles.templates }] : []),
+    ...(renderArchive !== undefined ? [{ id: "archive" as const, label: programLibraryTabTitles.archive }] : [])];
+  const tabs = tabItems.length > 1 ? <View style={styles.tabs}>
+    <SegmentedControl fit items={tabItems} selectedId={tab} onSelect={(next) => { setTab(next); onTabChange?.(next); }} />
+  </View> : null;
+  if (tab === "templates" && renderTemplates !== undefined) {
+    return <View style={[styles.root, { backgroundColor: colors.canvas }]}>{tabs}{renderTemplates()}</View>;
+  }
+  if (tab === "archive" && renderArchive !== undefined) {
+    return <View style={[styles.root, { backgroundColor: colors.canvas }]}>{tabs}{renderArchive()}</View>;
+  }
+
   return (
     <View style={[styles.root, { backgroundColor: colors.canvas }]}>
+      {tabs}
       <Animated.ScrollView ref={scrollRef} contentContainerStyle={[styles.content, styles.withFab]}>
         {failed ? <InlineNotice kind="error">Не удалось обновить список. Показан последний загруженный.</InlineNotice> : null}
         {orderError ? <InlineNotice kind="error">Не удалось сохранить порядок. Повторите перетаскивание.</InlineNotice> : null}
-        {onOpenTemplates !== undefined ? <AppButton compact variant="secondary" label="Шаблоны" onPress={onOpenTemplates} /> : null}
+        {onOpenTemplates !== undefined && renderTemplates === undefined
+          ? <AppButton compact variant="secondary" label="Шаблоны" onPress={onOpenTemplates} /> : null}
         <ListSectionHeader title="Программы" count={library.active.length} />
         {library.active.length === 0 ? (
-          <Text style={[styles.body, { color: colors.textSecondary }]}>Все программы в архиве. Создайте новую или верните из архива.</Text>
+          <Text style={[styles.body, { color: colors.textSecondary }]}>Все программы в архиве — они на вкладке «Архив программ». Создайте новую или верните из архива.</Text>
         ) : (
           // Долгое нажатие — перетащить (порядок свой у этого клиента), короткое — открыть.
           <Sortable.Grid key={orderReset} data={[...library.active]} keyExtractor={(card) => card.id} columns={1} rowGap={10}
@@ -228,7 +253,7 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
               });
             }} />
         )}
-        {library.archived.length > 0 ? <>
+        {renderArchive === undefined && library.archived.length > 0 ? <>
           <ListSectionHeader title="Архив" count={library.archived.length} />
           {library.archived.map((card) => (
             <ProgramCardRow key={card.id} card={card} selected={false}
@@ -244,6 +269,7 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  tabs: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
   center: { flex: 1, padding: 16, gap: 12, justifyContent: "center" },
   content: { padding: 16, gap: 10 },
   withFab: { paddingBottom: 96 },

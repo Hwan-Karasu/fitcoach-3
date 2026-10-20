@@ -1,4 +1,4 @@
-export { ProgramLibraryScreen, ProgramModeChooserScreen } from "./presentation/ProgramLibraryScreen.tsx";
+export { ProgramLibraryScreen, ProgramModeChooserScreen, programLibraryTabTitles, type ProgramLibraryTab } from "./presentation/ProgramLibraryScreen.tsx";
 export { CreateProgramScreen, type TrainingParticipantCandidate } from "./presentation/CreateProgramScreen.tsx";
 export { PeriodizedBuilderScreen } from "./presentation/PeriodizedBuilderScreen.tsx";
 export { ArchivedProgramsPanel } from "./presentation/ArchivedProgramsPanel.tsx";
