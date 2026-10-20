@@ -36,6 +36,8 @@ export interface CalcInputs {
 
 export interface CalcResult {
   readonly leanMassKg: number | null;
+  /** Масса для расчёта белка и жира: сухая масса, а без % жира — 80 % веса (как в 2.0); без веса — `null`. */
+  readonly macroMassKg: number | null;
   readonly ree: number | null;
   readonly neat: number | null;
   readonly neatSource: "STEPS" | "ACTIVITY";
@@ -94,7 +96,8 @@ export function deriveCalc(profile: CalcProfile, inputs: CalcInputs): CalcResult
   const eat = calcEat(inputs.weightKg, profile.workoutsPerWeek, profile.minutes, profile.intensity);
   const startTdee = ree !== null && eat !== null ? Math.round(ree + neat + eat) : null;
   const delta = goalDelta(profile.goal, profile.stepKcal);
-  return { leanMassKg: lean, ree, neat, neatSource: fromSteps ? "STEPS" : "ACTIVITY", eat, startTdee, goalDelta: delta, target: startTdee === null ? null : startTdee + delta };
+  const macroMassKg = lean !== null ? lean : positive(inputs.weightKg) ? Math.round(inputs.weightKg * 0.8 * 10) / 10 : null;
+  return { leanMassKg: lean, macroMassKg, ree, neat, neatSource: fromSteps ? "STEPS" : "ACTIVITY", eat, startTdee, goalDelta: delta, target: startTdee === null ? null : startTdee + delta };
 }
 
 export interface MacroGrams {

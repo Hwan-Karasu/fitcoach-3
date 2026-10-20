@@ -28,12 +28,15 @@ export interface ClientEditorAppendix {
 const BASIC = "basic";
 
 export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDraft,
-  initial, initialDraft, recoveredDraft = false, appendix }: Readonly<{
+  initial, initialWeight, initialDraft, recoveredDraft = false, appendix }: Readonly<{
   onClose: () => void;
-  onSave: (input: CreateClientInput) => Promise<void>;
+  /** `extras.weightText` — вес из карточки (факт Measurements, записывается оболочкой); пустая строка — не вводился. */
+  onSave: (input: CreateClientInput, extras: Readonly<{ weightText: string }>) => Promise<void>;
   onSaveDraft: (form: ClientFormDraft) => Promise<void>;
   onDiscardDraft: () => Promise<void>;
   initial?: ClientRecord;
+  /** Последний вес клиента из замеров (для показа в карточке); вес — единый факт Measurements, а не поле карточки. */
+  initialWeight?: string;
   initialDraft?: ClientFormDraft;
   recoveredDraft?: boolean;
   /** Анкета клиента ниже основного: одна форма и одно сохранение. */
@@ -57,6 +60,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
   const [birthDate, setBirthDate] = useState(initialDraft?.birthDate ?? initial?.birthDate ?? "");
   const [heightDraft, setHeightDraft] = useState(initialDraft?.heightDraft
     ?? formatHeightCmX10(initial?.heightCmX10 ?? null));
+  const [weightText, setWeightText] = useState(initialWeight ?? "");
   const [sex, setSex] = useState<"MALE" | "FEMALE" | null>(initialDraft?.sex ?? initial?.sex ?? null);
   const [emoji, setEmoji] = useState<string | null>(initialDraft?.emoji ?? initial?.emoji ?? null);
   const [nameError, setNameError] = useState(false);
@@ -73,10 +77,10 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
   const pendingDraftWrite = useRef<Promise<void> | null>(null);
   const profileDirty = initial === undefined
     ? Boolean(displayName.trim() || phone.trim() || email.trim()
-      || birthDate.trim() || heightDraft.trim() || sex !== null || emoji)
+      || birthDate.trim() || heightDraft.trim() || weightText.trim() || sex !== null || emoji)
     : displayName !== initial.displayName || phone !== (initial.contactPhone ?? "")
       || email !== (initial.contactEmail ?? "") || birthDate !== (initial.birthDate ?? "")
-      || heightDraft !== formatHeightCmX10(initial.heightCmX10) || (sex ?? null) !== (initial.sex ?? null) || emoji !== initial.emoji;
+      || heightDraft !== formatHeightCmX10(initial.heightCmX10) || weightText !== (initialWeight ?? "") || (sex ?? null) !== (initial.sex ?? null) || emoji !== initial.emoji;
   const dirty = profileDirty || (appendix?.dirty ?? false);
   const formRef = useRef<ClientFormDraft>({ displayName, contactPhone: phone,
     contactEmail: email, birthDate, heightDraft, sex, emoji });
@@ -175,6 +179,11 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
       heightRef.current?.focus();
       return;
     }
+    if (weightText.trim() !== "" && !/^\d{2,3}([.,]\d)?$/u.test(weightText.trim())) {
+      setMessage("Вес — число в килограммах, например 85,4.");
+      scrollToSection(BASIC);
+      return;
+    }
     setNameError(false);
     setBirthDateError(false);
     setHeightError(false);
@@ -190,11 +199,12 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
       await pendingDraftWrite.current?.catch(() => undefined);
       await persistDraft(formRef.current);
       await onSave({ displayName, contactPhone: phone, contactEmail: email,
-        birthDate: normalizedBirthDate, heightCmX10, sex, emoji });
+        birthDate: normalizedBirthDate, heightCmX10, sex, emoji }, { weightText: weightText.trim() });
       created = true;
     } catch (error) {
       const code = error instanceof Error ? error.message : "";
-      setMessage(code === "CLIENT_EMAIL_INVALID" ? "Проверьте адрес электронной почты."
+      setMessage(code === "WEIGHT_SAVE_FAILED" ? "Карточка сохранена, а вес — нет: он должен быть от 20 до 400 кг, за сегодня не должно быть нескольких записей веса."
+        : code === "CLIENT_EMAIL_INVALID" ? "Проверьте адрес электронной почты."
         : code === "CLIENT_FIELD_TOO_LONG" ? "Слишком длинное значение одного из полей."
           : code === "CLIENT_STALE_OR_WRONG_SCOPE" ? "Карточка изменилась. Закройте форму и откройте её снова."
             : code === "CLIENT_DRAFT_SAVE_FAILED" ? "Не удалось защитить ввод черновиком. Повторите сохранение."
@@ -317,6 +327,13 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
             error={heightError ? "Положительное число, не более одного десятичного знака" : undefined}
             value={heightDraft}
             onChangeText={(value) => { setHeightDraft(value); setHeightError(false); setMessage(null); }}
+          />
+          <TextField
+            label="Вес, кг · необязательно"
+            placeholder="Например, 85,4"
+            keyboardType="decimal-pad"
+            value={weightText}
+            onChangeText={(value) => { setWeightText(value); setMessage(null); }}
           />
           <Text style={[styles.sectionDescription, { color: colors.textSecondary }]}>Пол · нужен для расчёта КБЖУ, необязательно</Text>
           <View style={styles.emojiChoices}>

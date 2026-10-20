@@ -85,7 +85,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   const adjustment = loaded === null ? 0 : trendAdjustment(profile.goal, weightTrendKg(loaded.weights), loaded.weight);
   // Ориентир не бывает неположительным: поправка не должна обнулять расчёт.
   const guide = result === null || result.target === null || result.target + adjustment <= 0 ? null : result.target + adjustment;
-  const defaults = useMemo(() => result === null ? null : calcMacros(result.leanMassKg, guide, profile.goal), [result, guide, profile.goal]);
+  const defaults = useMemo(() => result === null ? null : calcMacros(result.macroMassKg, guide, profile.goal), [result, guide, profile.goal]);
 
   const trainingAuto = trainedToday === true;
   const trainingState = trainingAuto || mark.done === true;

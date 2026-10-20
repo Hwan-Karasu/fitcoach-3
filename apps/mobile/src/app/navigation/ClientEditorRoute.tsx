@@ -5,6 +5,7 @@ import { ClientEditorPreview, type ClientEditorAppendix, type ClientRecord, type
   "../../features/clients/public.ts";
 import { QuestionnaireForm, useAnswersForm, type AnswerValue,
   type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
+import { latestPoint, localDateOf, parseValueX10, upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { AppButton, ConfirmDialog, LoadingState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
@@ -16,7 +17,7 @@ type Loaded = Readonly<{ client: ClientRecord | null; draft: ClientRecoveryDraft
  * с одним сохранением — сначала карточка, затем ответы по её ID. Если ответы не сохранились, повторное
  * сохранение не создаёт второго клиента, а дописывает ответы к уже сохранённой карточке.
  */
-export function ClientEditorRoute({ clientId, repository, questionnaire, onClose, prefillName, onCreated }: Readonly<{
+export function ClientEditorRoute({ clientId, repository, questionnaire, measurements, onClose, prefillName, onCreated }: Readonly<{
   clientId?: string;
   /** A guest name from Calendar; an existing recovery draft still asks first. */
   prefillName?: string;
@@ -24,6 +25,8 @@ export function ClientEditorRoute({ clientId, repository, questionnaire, onClose
   onCreated?: (client: ClientRecord) => Promise<void>;
   repository: ClientRepositoryPort & ClientRecoveryDraftPort;
   questionnaire: QuestionnaireRepositoryPort;
+  /** Вес клиента — единый факт Measurements: показывается и записывается из карточки. */
+  measurements: MeasurementRepositoryPort;
   onClose: () => void;
 }>) {
   const answers = useAnswersForm(questionnaire, clientId ?? null);
@@ -31,6 +34,7 @@ export function ClientEditorRoute({ clientId, repository, questionnaire, onClose
   /** Карточка, уже сохранённая в этой форме: повтор после сбоя ответов её обновляет, а не создаёт новую. */
   const savedClient = useRef<ClientRecord | null>(null);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [initialWeight, setInitialWeight] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [choice, setChoice] = useState<"ask" | "use" | "fresh">("ask");
   const [discardBusy, setDiscardBusy] = useState(false);
@@ -47,10 +51,18 @@ export function ClientEditorRoute({ clientId, repository, questionnaire, onClose
       repository.loadDraft(clientId ?? null)])
       .then(([client, draft]) => { if (active) setLoaded({ client, draft }); })
       .catch(() => { if (active) setLoadFailed(true); });
+    // Последний вес из замеров (неоднозначное значение дня не показывается); сбой чтения веса карточку не блокирует.
+    setInitialWeight(null);
+    if (clientId !== undefined) {
+      void measurements.listForClient(clientId).then((data) => {
+        const point = latestPoint(data.measurements, data.primaries, "WEIGHT");
+        if (active) setInitialWeight(point !== null && point.kind === "VALUE" ? String(point.measurement.valueX10 / 10).replace(".", ",") : "");
+      }, () => { if (active) setInitialWeight(""); });
+    }
     return () => { active = false; };
-  }, [clientId, repository]);
+  }, [clientId, repository, measurements]);
 
-  if (loaded === null && !loadFailed) {
+  if ((loaded === null && !loadFailed) || (clientId !== undefined && initialWeight === null && !loadFailed)) {
     return <View style={[styles.center, { backgroundColor: colors.canvas }]}>
       <LoadingState label="Открываем карточку…" />
     </View>;
@@ -124,6 +136,7 @@ export function ClientEditorRoute({ clientId, repository, questionnaire, onClose
   };
   return <ClientEditorPreview key={`${clientId ?? "new"}:${recovered ? draft?.id : "fresh"}`}
     initial={client ?? undefined}
+    initialWeight={initialWeight ?? ""}
     initialDraft={recovered ? draft?.formData : prefillName === undefined ? undefined
       : { displayName: prefillName, contactPhone: "", contactEmail: "", birthDate: "", heightDraft: "", emoji: null }}
     recoveredDraft={recovered}
@@ -134,7 +147,7 @@ export function ClientEditorRoute({ clientId, repository, questionnaire, onClose
         baseClientRevision: client?.revision ?? null, formData });
     }}
     onDiscardDraft={() => repository.discardDraft(clientId ?? null)}
-    onSave={async (input) => {
+    onSave={async (input, extras) => {
       const known = savedClient.current ?? client;
       if (known !== null) savedClient.current = await repository.update(known.id, known.revision, input);
       else {
@@ -144,6 +157,15 @@ export function ClientEditorRoute({ clientId, repository, questionnaire, onClose
       try { await answers.commit(savedClient.current.id, patch.current); }
       catch { throw new Error("QUESTIONNAIRE_SAVE_FAILED"); }
       patch.current = {};
+      // Вес из карточки — новый факт замеров за сегодня (или правка сегодняшнего), только если изменился.
+      const weightText = extras.weightText.replace(",", ".");
+      if (weightText !== "" && weightText !== (initialWeight ?? "").replace(",", ".")) {
+        const valueX10 = parseValueX10(weightText);
+        try {
+          if (valueX10 === null) throw new Error("WEIGHT_SAVE_FAILED");
+          await upsertDailyMeasurement(measurements, savedClient.current.id, { type: "WEIGHT", valueX10, localDate: localDateOf(new Date()), localMinute: null });
+        } catch { throw new Error("WEIGHT_SAVE_FAILED"); }
+      }
     }} />;
 }
 

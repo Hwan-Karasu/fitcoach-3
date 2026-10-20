@@ -115,3 +115,15 @@ test("пересчёт при диапазонах: точные числа да
   assert.deepEqual(rebalanceMacroRanges(null, defaults, { ...none, protein: { min: 130, max: 150 } }).carbs, null, "калорийного ориентира нет");
   assert.deepEqual(rebalanceMacroRanges(2289, { protein: null, fat: null, carbs: null }, { ...none, protein: { min: 130, max: 150 } }).fat, null, "нет сухой массы — жира по расчёту нет");
 });
+
+test("Б/Ж/У без процента жира: масса для белка и жира — 80 % веса (как в 2.0); с процентом жира — сухая масса", () => {
+  const profile = { goal: "MAINTENANCE", activity: "MODERATE", workoutsPerWeek: 0, minutes: 60, intensity: "MEDIUM", stepKcal: 100 } as const;
+  const body = { sex: "MALE", age: 37, heightCm: 181, avgSteps: null } as const;
+  const noFat = deriveCalc(profile, { ...body, weightKg: 85.4, fatPercent: null });
+  assert.equal(noFat.startTdee, 2065, "Миффлин 1805 + NEAT 260 + EAT 0");
+  assert.equal(noFat.macroMassKg, 68.3, "85,4 × 0,8");
+  assert.deepEqual(calcMacros(noFat.macroMassKg, noFat.target, "MAINTENANCE"), { protein: 116, fat: 55, carbs: 277 }, "Б 68,3×1,7; Ж 68,3×0,8; У = (2065 − 464 − 495) / 4 = 276,5");
+  const withFat = deriveCalc(profile, { ...body, weightKg: 85.35, fatPercent: 20.4 });
+  assert.equal(withFat.macroMassKg, 67.9, "известный % жира — сухая масса, а не 80 %");
+  assert.equal(deriveCalc(profile, { ...body, weightKg: null, fatPercent: null }).macroMassKg, null, "веса нет — массы нет");
+});
