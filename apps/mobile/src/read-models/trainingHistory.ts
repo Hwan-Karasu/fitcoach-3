@@ -21,8 +21,8 @@ export function createTrainingHistory(rules: TrainingHistoryRules,
   execution: Pick<TrainingExecutionPort, "listClientExecutions" | "subscribeCommittedChanges">,
   plans: Pick<TrainingPlansRepositoryPort, "getLibrary" | "getPeriodizedPlan" | "getSimpleWeeks" | "subscribeCommittedChanges">) {
   const { hasEnteredData, isWorkingSet, sessionDurationSec, workoutStatus, sortHistory } = rules;
-  return {
-    async list(clientId: string): Promise<readonly TrainingHistoryEntry[]> {
+  /** Расчёт хронологии клиента: дневник + планы (программы, мезоциклы, тренировки). */
+  async function compute(clientId: string): Promise<readonly TrainingHistoryEntry[]> {
       const [executions, library] = await Promise.all([execution.listClientExecutions(clientId), plans.getLibrary(clientId)]);
       const cards = new Map([...library.active, ...library.archived].map((card) => [card.id, card]));
       const origins = new Map<string, ReadonlyMap<string, Origin>>();
@@ -77,6 +77,22 @@ export function createTrainingHistory(rules: TrainingHistoryRules,
           exercises: [...groups.values()].filter((group) => group.facts.length > 0) }];
       });
       return sortHistory(entries);
+  }
+  // Один расчёт на всех читателей (история, программа, статистика, упражнение читают её независимо): повторные и параллельные чтения берут
+  // готовый результат, пересчёт — только после изменений дневника этого клиента или его планов. Выбор программы/мезоцикла (`selectionOnly`)
+  // историю не меняет. Подписки сбрасывают кэш раньше экранов: они зарегистрированы при создании, экраны — позже.
+  const cache = new Map<string, Promise<readonly TrainingHistoryEntry[]>>();
+  execution.subscribeCommittedChanges((change) => { cache.delete(change.clientId); });
+  plans.subscribeCommittedChanges((change) => { if (change.selectionOnly !== true) for (const id of change.clientIds) cache.delete(id); });
+  return {
+    list(clientId: string): Promise<readonly TrainingHistoryEntry[]> {
+      const found = cache.get(clientId);
+      if (found !== undefined) return found;
+      const pending = compute(clientId);
+      cache.set(clientId, pending);
+      // Ошибка не кэшируется: следующее чтение пробует снова.
+      pending.catch(() => { if (cache.get(clientId) === pending) cache.delete(clientId); });
+      return pending;
     },
     /**
      * §48.86.9: число плановых тренировок выбранной программы или мезоцикла (знаменатель выполнения плана). `null` — программа

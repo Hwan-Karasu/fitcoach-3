@@ -256,3 +256,39 @@ test("пустые строки подходов не делают заняти�
     await env.close();
   }
 });
+
+test("кэш хронологии: параллельные и повторные чтения — один расчёт; пересчёт — только после изменений этого клиента или его планов (P5)", async () => {
+  const env = await setup();
+  try {
+    const { a, b, simple, simpleWorkout, otherProgram, execution, plans, complete } = env;
+    let computed = 0;
+    // Подмена только внешней границы: считаем обращения к дневнику, остальное — настоящие репозитории.
+    const counted = { listClientExecutions: (clientId: string) => { computed += 1; return execution.listClientExecutions(clientId); },
+      subscribeCommittedChanges: execution.subscribeCommittedChanges.bind(execution) };
+    const cached = createTrainingHistory({ hasEnteredData, isWorkingSet, sessionDurationSec, workoutStatus, sortHistory }, counted, plans);
+    await complete(a, simple, 1, simpleWorkout, "2026-10-01");
+    const [first, second] = await Promise.all([cached.list(a), cached.list(a)]);
+    await cached.list(a);
+    assert.equal(computed, 1, "три чтения — один расчёт");
+    assert.equal(first, second, "параллельные читатели получают один и тот же результат");
+
+    await complete(a, simple, 2, simpleWorkout, "2026-10-08");
+    assert.equal((await cached.list(a)).length, 2, "новое занятие видно");
+    assert.equal(computed, 2, "изменение дневника клиента — пересчёт");
+
+    const otherWorkout = (await plans.getSimplePlan(b, otherProgram))!.draft.plan.workouts[0]!;
+    await complete(b, otherProgram, 1, otherWorkout, "2026-10-09");
+    await cached.list(a);
+    assert.equal(computed, 2, "изменения другого клиента кэш не сбрасывают");
+
+    await plans.renameProgram(simple, (await plans.getProgram(a, simple))!.revision, "Новое название");
+    assert.equal((await cached.list(a))[0]!.programTitle, "Новое название", "переименование программы — новая подпись");
+    assert.equal(computed, 3, "изменение планов клиента — пересчёт");
+
+    await plans.selectProgram(a, simple);
+    await cached.list(a);
+    assert.equal(computed, 3, "смена выбранной программы историю не меняет — без пересчёта");
+  } finally {
+    await env.close();
+  }
+});
