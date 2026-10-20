@@ -174,10 +174,17 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.head}>
           <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>КБЖУ</Text>
-          <View style={styles.headRight}>
-            <SelectionChip group="Режим цели" label="Точно" selected={mode === "EXACT"} onPress={() => setMode("EXACT")} />
-            <SelectionChip group="Режим цели" label="Коридор" selected={mode === "RANGE"} onPress={() => setMode("RANGE")} />
-            <AppButton compact variant="secondary" label="Питание" onPress={onOpenNutrition} />
+          <View style={[styles.group, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
+            {([["EXACT", "Точно"], ["RANGE", "Коридор"]] as const).map(([id, label]) => (
+              <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: mode === id }} accessibilityLabel={`Режим цели: ${label}`} hitSlop={{ top: 8, bottom: 8 }} onPress={() => setMode(id)}
+                style={[styles.segment, mode === id ? { backgroundColor: colors.accentFill } : null]}>
+                <Text style={[styles.segmentText, { color: mode === id ? colors.onAccentFill : colors.textPrimary }]}>{label}</Text>
+              </Pressable>
+            ))}
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <Pressable accessibilityRole="button" accessibilityLabel="Открыть раздел «Питание»" hitSlop={{ top: 8, bottom: 8 }} onPress={onOpenNutrition} style={styles.segment}>
+              <Text style={[styles.segmentText, { color: colors.accentInk }]}>Питание</Text>
+            </Pressable>
           </View>
         </View>
         <View style={styles.summary}>
@@ -207,8 +214,11 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
 
 const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 14, padding: 10, gap: 6 },
-  head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 },
-  headRight: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 },
+  head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  group: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 12, overflow: "hidden" },
+  segment: { minHeight: 28, paddingHorizontal: 8, alignItems: "center", justifyContent: "center" },
+  segmentText: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 15 },
+  divider: { width: StyleSheet.hairlineWidth, alignSelf: "stretch" },
   cardTitle: { fontSize: 14, lineHeight: 19, fontFamily: fonts.bold },
   hint: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
   grow: { flex: 1 },
