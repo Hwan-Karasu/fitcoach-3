@@ -10,9 +10,9 @@ import { scheduleOnRN } from "react-native-worklets";
 import { captureRef } from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
 import Sortable from "react-native-sortables";
-import { CalendarDays, Check, ChevronRight, EllipsisVertical, Gauge, GripVertical, LayoutGrid, NotebookPen, Plus, Share2, Timer, Trash2,
+import { CalendarDays, Check, ChevronRight, Clock, EllipsisVertical, Gauge, GripVertical, LayoutGrid, NotebookPen, Plus, Share2, Timer, Trash2,
   Users, X } from "lucide-react-native";
-import { AppButton, ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, StatusTag, WeekCards, useWeekNavigation,
+import { AppButton, ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, StatusTag, TimeWheelPicker, WeekCards, useWeekNavigation,
   type StatusKind } from "../../../../shared/ui/components/public.ts";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -24,7 +24,8 @@ import { weekTypeTone, DiaryEditDialog, formatDuration, formatRange, supersetNum
   type WorkoutWeekNavigation } from "../../plans/public.ts";
 import { DROPS_MAX, EMPTY_VALUES, NOTE_MAX, type ActiveWorkoutCard, type ActiveWorkoutsPort, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type Side,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
-import { displayOrder, localDateOf, nextOutcome, type SetField } from "../domain/ExecutionRules.ts";
+import { displayOrder, endInstantAfter, instantFromLocal, localDateOf, localMinuteOfDay, nextOutcome, sessionDurationSec, type SetField } from "../domain/ExecutionRules.ts";
+import { durationText, timeText } from "../../../../shared/format/clockText.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
 import { ActiveWorkoutsSheet, ExerciseMenuSheet, RpeSheet, SetTypeSheet, SupersetPickSheet, type ExerciseMenuAction } from "./SetPickers.tsx";
@@ -381,6 +382,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const [target, setTarget] = useState<SetTarget | null>(null);
   const [removeDrops, setRemoveDrops] = useState<Readonly<{ target: SetTarget; setType: SetType }> | null>(null);
   const [confirmIncomplete, setConfirmIncomplete] = useState(false);
+  /** Какая отметка времени сейчас правится (PC §48.86.13). */
+  const [timeEdit, setTimeEdit] = useState<"start" | "end" | null>(null);
   const [exitAction, setExitAction] = useState<Parameters<typeof navigation.dispatch>[0] | null>(null);
   const [busy, setBusy] = useState(false);
   const [restFor, setRestFor] = useState<PlannedExercise | null>(null);
@@ -649,6 +652,23 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
             </View>
             <StatusTag kind={statusKinds[diary.status]} label={workoutStatusLabels[diary.status]} />
           </View>
+          {state.session !== null ? (
+            // PC §48.86.13: начало ставится по первому подтверждённому подходу, окончание — при «Завершить»; обе отметки можно исправить.
+            <View style={styles.timeRow}>
+              {([["start", "Начало", state.session.startedAt], ["end", "Окончание", state.session.finishedAt]] as const).map(([kind, label, instant]) => (
+                <Pressable key={kind} accessibilityRole="button" hitSlop={6}
+                  accessibilityLabel={`${label} тренировки ${instant === null ? "не указано" : timeText(instant)}. Изменить`}
+                  onPress={() => { flushPending(); Keyboard.dismiss(); setTimeEdit(kind); }}
+                  style={[styles.dateButton, { backgroundColor: colors.surfaceRaised }]}>
+                  <Clock size={15} color={colors.accentInk} strokeWidth={2} />
+                  <Text style={[styles.dateText, { color: colors.accentInk }]}>{`${label} ${instant === null ? "—" : timeText(instant)}`}</Text>
+                </Pressable>
+              ))}
+              {state.session.startedAt !== null && state.session.finishedAt !== null
+                ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{sessionDurationSec(state.session.startedAt, state.session.finishedAt) === null
+                  ? "Длительность: нет данных" : durationText(sessionDurationSec(state.session.startedAt, state.session.finishedAt)!)}</Text> : null}
+            </View>
+          ) : null}
           <View style={styles.actions}>
             {([
               { label: "Добавить упражнение", icon: <Plus size={16} color={colors.accentInk} strokeWidth={2.2} />,
@@ -807,6 +827,27 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         </View> : null}
       </KeyboardAwareScrollView>
       </GestureDetector>
+      {/* PC §48.86.13: ручная правка отметок; окончание после полуночи учитывается, длительность — только при валидной паре. */}
+      <TimeWheelPicker visible={timeEdit !== null} minuteStep={1} min={0} max={24 * 60 - 1}
+        title={timeEdit === "end" ? "Окончание тренировки" : "Начало тренировки"}
+        value={(() => {
+          const known = timeEdit === "end" ? state.session?.finishedAt : state.session?.startedAt;
+          return known === null || known === undefined ? localMinuteOfDay(new Date().toISOString()) : localMinuteOfDay(known);
+        })()}
+        clearLabel="Убрать отметку"
+        onClear={() => {
+          const session = state.session;
+          if (session !== null && timeEdit !== null) void diary.setTimes({ startedAt: timeEdit === "start" ? null : session.startedAt,
+            finishedAt: timeEdit === "end" ? null : session.finishedAt });
+        }}
+        onConfirm={(minute) => {
+          const session = state.session;
+          if (session === null || timeEdit === null) return;
+          void diary.setTimes(timeEdit === "start"
+            ? { startedAt: instantFromLocal(session.actualDate, minute), finishedAt: session.finishedAt }
+            : { startedAt: session.startedAt, finishedAt: endInstantAfter(session.startedAt, session.actualDate, minute) });
+        }}
+        onClose={() => setTimeEdit(null)} />
       <DurationWheelPicker visible={restFor !== null} title="Отдых после подхода"
         value={restFor?.restSec ?? REST_DEFAULT_SEC} min={REST_MIN_SEC} max={REST_MAX_SEC}
         clearLabel={restFor?.restSec === null ? undefined : "Без таймера"}
@@ -929,6 +970,7 @@ const styles = StyleSheet.create({
   offscreen: { position: "absolute", left: -10000, top: 0 },
   metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   dateRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  timeRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
   dateButton: { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 28, borderRadius: 10, paddingHorizontal: 9 },
   dateText: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
   meta: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },

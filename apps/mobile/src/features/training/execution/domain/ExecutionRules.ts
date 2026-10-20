@@ -168,6 +168,29 @@ export function sessionDurationSec(startedAt: string | null, finishedAt: string 
   return seconds > 0 ? seconds : null;
 }
 
+/** Момент UTC из даты занятия `YYYY-MM-DD` и минут от начала суток по местному времени устройства (ручная правка отметок). */
+export function instantFromLocal(date: string, minuteOfDay: number, addDays = 0): string {
+  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
+  return new Date(year, month - 1, day + addDays, Math.floor(minuteOfDay / 60), minuteOfDay % 60).toISOString();
+}
+
+/** Минуты от начала суток по местному времени из момента UTC. */
+export function localMinuteOfDay(instant: string): number {
+  const date = new Date(instant);
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+/**
+ * Окончание, выбранное по часам: если оно не позже начала, занятие шло через полночь — окончание на следующий день, но только когда
+ * длительность не больше 12 часов; иначе (скорее опечатка) остаётся тот же день и пара считается невалидной («Нет данных» до правки).
+ */
+export function endInstantAfter(startedAt: string | null, date: string, minuteOfDay: number): string {
+  const sameDay = instantFromLocal(date, minuteOfDay);
+  if (startedAt === null || !isInstant(startedAt) || Date.parse(sameDay) > Date.parse(startedAt)) return sameDay;
+  const nextDay = instantFromLocal(date, minuteOfDay, 1);
+  return Date.parse(nextDay) - Date.parse(startedAt) <= 12 * 3600_000 ? nextDay : sameDay;
+}
+
 export function workoutStatus(outcome: WorkoutOutcome | null, started: boolean): WorkoutStatus {
   return outcome ?? (started ? "IN_PROGRESS" : "NOT_STARTED");
 }

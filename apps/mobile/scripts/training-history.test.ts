@@ -5,7 +5,7 @@ import { DevClientRepository } from "../src/features/clients/data/DevClientRepos
 import { DevTrainingExecutionRepository } from "../src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 import { completedCount, filterHistory, sortHistory } from "../src/features/training/archive/presentation/trainingHistory.ts";
 import { isWorkingSet } from "../src/features/training/analytics/presentation/workingSet.ts";
-import { sessionDurationSec, workoutStatus } from "../src/features/training/execution/domain/ExecutionRules.ts";
+import { hasEnteredData, sessionDurationSec, workoutStatus } from "../src/features/training/execution/domain/ExecutionRules.ts";
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant } from
   "../src/features/training/plans/data/DevTrainingPlansRepository.ts";
 import { addExercise, fillSets, newDraft } from "../src/features/training/plans/domain/SimplePlanEdits.ts";
@@ -43,7 +43,7 @@ async function setup() {
   const revision = async (programId: string) => (await plans.getProgram(a, programId))!.revision;
   await plans.createMesocycle(a, periodized.id, await revision(periodized.id), { title: "Блок 2", weeks: 2, firstWeek: week("q"), clientIds: [a] });
   const otherProgram = await plans.createSimpleProgram(b, { title: "Сила", plan: { weeks: 2, workouts: week("o") } });
-  const history = createTrainingHistory({ isWorkingSet, sessionDurationSec, workoutStatus, sortHistory }, execution, plans);
+  const history = createTrainingHistory({ hasEnteredData, isWorkingSet, sessionDurationSec, workoutStatus, sortHistory }, execution, plans);
   /** Подход в тренировке недели и исход «Завершена»; дата — фактическая дата занятия. */
   const complete = async (clientId: string, programId: string, weekIndex: number, workout: PlannedWorkout, date: string) => {
     const exercise = workout.exercises[0]!;
@@ -234,6 +234,24 @@ test("UX-контракт истории: ключ тренировки — ро
     const noted = entries.find((entry) => entry.programId === simple && entry.weekIndex === 1)!;
     assert.equal(noted.exercises[0]!.note, "Левое плечо не тянуло");
     assert.equal(entries.find((entry) => entry.programId === simple && entry.weekIndex === 2)!.exercises[0]!.note, null, "без заметки — null");
+  } finally {
+    await env.close();
+  }
+});
+
+test("пустые строки подходов не делают занятие «начатым»: в истории только введённое или с исходом (как в дневнике, §48.34)", async () => {
+  const env = await setup();
+  try {
+    const { a, simple, simpleWorkout, execution, history } = env;
+    const slot = { clientId: a, programId: simple, weekIndex: 1, plannedWorkoutId: simpleWorkout.id };
+    const exercise = simpleWorkout.exercises[0]!;
+    await execution.addWarmupSet(slot, { plannedExerciseId: exercise.id, exerciseId: BENCH }, new Date("2026-10-01T09:00:00Z"));
+    assert.deepEqual(await history.list(a), [], "одна пустая разминка — занятия в истории нет");
+    const session = (await execution.getWorkout(slot)).session!;
+    await execution.setOutcome(slot, "MISSED", session.revision, new Date("2026-10-01T09:30:00Z"));
+    const [entry] = await history.list(a);
+    assert.equal(entry!.status, "MISSED", "исход делает запись");
+    assert.deepEqual(entry!.exercises, [], "пустая строка подхода в запись не входит");
   } finally {
     await env.close();
   }

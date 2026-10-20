@@ -6,7 +6,7 @@ import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParti
   "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 import type { SetValues, TrackingMetric, WorkoutSlot } from "../apps/mobile/src/features/training/execution/domain/ExecutionModel.ts";
 import { assertDropStructure, confirmationAfterSave, displayOrder, dropsForType, isSetComplete, matchPrevious, nextOutcome,
-  sessionDurationSec, sidesAfterSave, toggleConfirmation, toggleSide, weekStatus, type SetContent } from
+  endInstantAfter, instantFromLocal, localMinuteOfDay, sessionDurationSec, sidesAfterSave, toggleConfirmation, toggleSide, weekStatus, type SetContent } from
   "../apps/mobile/src/features/training/execution/domain/ExecutionRules.ts";
 import type { SaveSetInput } from "../apps/mobile/src/features/training/execution/domain/TrainingExecutionPort.ts";
 import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
@@ -549,4 +549,15 @@ test("PC §48.86.13 миграция v9: существующие выполне
     await shared.release();
     await clients.close();
   }
+});
+
+test("PC §48.86.13 ручные отметки: местное время дня занятия ↔ момент UTC; окончание после полуночи, но не «через сутки» по опечатке", () => {
+  const date = "2026-10-20";
+  assert.equal(localMinuteOfDay(instantFromLocal(date, 10 * 60 + 10)), 610, "10:10 туда и обратно, в любом часовом поясе");
+  const start = instantFromLocal(date, 10 * 60);
+  assert.equal(sessionDurationSec(start, endInstantAfter(start, date, 11 * 60 + 15)), 75 * 60, "10:00–11:15");
+  const late = instantFromLocal(date, 23 * 60 + 30);
+  assert.equal(sessionDurationSec(late, endInstantAfter(late, date, 15)), 45 * 60, "23:30–00:15 — окончание на следующий день");
+  assert.equal(sessionDurationSec(start, endInstantAfter(start, date, 9 * 60)), null, "09:00 при начале 10:00 — не 23 часа, а нет данных до правки");
+  assert.equal(endInstantAfter(null, date, 11 * 60), instantFromLocal(date, 11 * 60), "без начала — тот же день");
 });

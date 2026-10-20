@@ -225,6 +225,19 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
     return session;
   }), [enqueue, execution, stableSlot]);
 
+  /** PC §48.86.13: ручная правка отметок времени занятия (момент UTC или `null`); исход и факты не меняются. */
+  const setTimes = useCallback((times: Readonly<{ startedAt: string | null; finishedAt: string | null }>) => enqueue(async () => {
+    const revision = stateRef.current?.session?.revision;
+    if (revision === undefined) return null;
+    const session = await execution.setTimes(stableSlot, times, revision);
+    setState((current) => {
+      const next = { session, facts: current?.facts ?? new Map(), notes: current?.notes ?? new Map<string, string>() };
+      stateRef.current = next;
+      return next;
+    });
+    return session;
+  }), [enqueue, execution, stableSlot]);
+
   /** §48.67: заметка о выполнении упражнения в этой тренировке. */
   const saveNote = useCallback((plannedExerciseId: string, text: string) => enqueue(async () => {
     await execution.saveExerciseNote(stableSlot, plannedExerciseId, text);
@@ -265,7 +278,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
     /** Открыта другая неделя, её данные ещё грузятся: на экране прежние значения, ввод закрыт. */
     switching: workout !== undefined && loadedKey !== slotKey,
     status: workoutStatus(state?.session?.outcome ?? null, started),
-    saveSet, toggleSet, setOutcome, addWarmup, removeWarmup, setActualDate, saveNote, deleteExecution, finishSaving,
+    saveSet, toggleSet, setOutcome, addWarmup, removeWarmup, setActualDate, setTimes, saveNote, deleteExecution, finishSaving,
     dismissMessage: () => setMessage(null),
   };
 }

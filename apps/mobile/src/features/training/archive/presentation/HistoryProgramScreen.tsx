@@ -7,7 +7,7 @@ import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../../shared/ui/theme/style.ts";
 import { mesocyclesWithHistory, scopeSummary, workoutGroups, type WorkoutGroup } from "./historyGroups.ts";
 import { dateText, statusKinds, statusLabels } from "./historyFormat.ts";
-import { durationText, plural, timeText } from "./historyText.ts";
+import { durationText, plural, timeText } from "../../../../shared/format/clockText.ts";
 import { programViewOf } from "./historyViewState.ts";
 import { ALL_OPTION, type TrainingHistoryEntry } from "./trainingHistory.ts";
 import { useClientHistory } from "./useClientHistory.ts";

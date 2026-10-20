@@ -3,7 +3,7 @@ import test from "node:test";
 import type { TrainingHistoryEntry } from "../src/features/training/archive/presentation/trainingHistory.ts";
 import { filterHistory } from "../src/features/training/archive/presentation/trainingHistory.ts";
 import { mesocyclesWithHistory, programsWithHistory, scopeSummary, workoutGroups, workoutOptions } from "../src/features/training/archive/presentation/historyGroups.ts";
-import { durationText, plural, timeText } from "../src/features/training/archive/presentation/historyText.ts";
+import { durationText, plural, timeText } from "../src/shared/format/clockText.ts";
 
 type Overrides = Partial<TrainingHistoryEntry> & Pick<TrainingHistoryEntry, "key" | "programId" | "actualDate">;
 const entry = (over: Overrides): TrainingHistoryEntry => ({ programTitle: over.programId, programKind: "PERIODIZED", archived: false, planDeleted: false,

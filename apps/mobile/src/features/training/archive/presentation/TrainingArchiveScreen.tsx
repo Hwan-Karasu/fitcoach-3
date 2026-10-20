@@ -6,7 +6,7 @@ import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemePro
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../../shared/ui/theme/style.ts";
 import { programsWithHistory, type ProgramHistorySummary } from "./historyGroups.ts";
-import { plural } from "./historyText.ts";
+import { plural } from "../../../../shared/format/clockText.ts";
 import type { HistoryMode } from "./historyTypes.ts";
 import { historyViewOf } from "./historyViewState.ts";
 import type { TrainingHistoryEntry } from "./trainingHistory.ts";

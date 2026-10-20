@@ -4,6 +4,7 @@ import type { PlannedWorkout } from "../features/training/plans/public.ts";
 
 /** Чистые правила владельцев (как у сводки «Главной»): рабочий подход, статус тренировки, порядок хронологии. */
 export interface TrainingHistoryRules {
+  readonly hasEnteredData: (facts: Iterable<SetFact>) => boolean;
   readonly isWorkingSet: (fact: SetFact) => boolean;
   readonly sessionDurationSec: (startedAt: string | null, finishedAt: string | null) => number | null;
   readonly workoutStatus: (outcome: WorkoutOutcome | null, started: boolean) => WorkoutStatus;
@@ -19,7 +20,7 @@ type Origin = Readonly<{ mesocycleId: string | null; mesocycleTitle: string | nu
 export function createTrainingHistory(rules: TrainingHistoryRules,
   execution: Pick<TrainingExecutionPort, "listClientExecutions" | "subscribeCommittedChanges">,
   plans: Pick<TrainingPlansRepositoryPort, "getLibrary" | "getPeriodizedPlan" | "getSimpleWeeks" | "subscribeCommittedChanges">) {
-  const { isWorkingSet, sessionDurationSec, workoutStatus, sortHistory } = rules;
+  const { hasEnteredData, isWorkingSet, sessionDurationSec, workoutStatus, sortHistory } = rules;
   return {
     async list(clientId: string): Promise<readonly TrainingHistoryEntry[]> {
       const [executions, library] = await Promise.all([execution.listClientExecutions(clientId), plans.getLibrary(clientId)]);
@@ -44,7 +45,8 @@ export function createTrainingHistory(rules: TrainingHistoryRules,
       const entries = executions.flatMap((item: ClientExecution): TrainingHistoryEntry[] => {
         const session = item.execution.session;
         const card = cards.get(item.programId);
-        const facts = [...item.execution.facts.values()];
+        // Пустые строки подходов (без значений и без отметки) — не данные: занятие «начато» по введённому, как в дневнике (§48.34).
+        const facts = [...item.execution.facts.values()].filter((fact) => hasEnteredData([fact]));
         // Занятие — тренировка с записанными подходами или исходом; пустое выполнение (например, после «Удалить
         // результаты» или смены даты без ввода) в хронологию не входит.
         // План удалён с сохранением истории — подписи из снимка дневника (§50.3, действие 1).

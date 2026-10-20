@@ -5,6 +5,6 @@ export { ArchivedProgramsPanel, CreateProgramScreen, PeriodizedBuilderScreen, Pa
 export { ProgramMatrixScreen, ProgramWeeksPanel, RestTimerDock, RestTimerService, TrainingSettingsScreen, WorkoutScreen, type RestSignalPort, type RestTimersPort,
   type TrainingExecutionPort, type ActiveWorkoutCard, type ActiveWorkoutsPort, type WorkoutSlot, type ClientExecution, type SetFact,
   type WorkoutOutcome, type WorkoutStatus,
-  sessionDurationSec, workoutStatus } from "./execution/public.ts";
+  hasEnteredData, sessionDurationSec, workoutStatus } from "./execution/public.ts";
 export { ExecutionDetailsScreen, HistoryProgramScreen, TrainingArchiveScreen, retainHistoryView, sortHistory, type TrainingHistoryEntry } from "./archive/public.ts";
 export { ClientExerciseScreen, ExerciseHistoryList, MonthlyReportScreen, TrainingStatisticsScreen, isWorkingSet, retainStatsFilters } from "./analytics/public.ts";

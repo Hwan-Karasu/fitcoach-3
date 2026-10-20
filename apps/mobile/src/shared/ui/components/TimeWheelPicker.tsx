@@ -54,31 +54,36 @@ function Wheel({ values, index, onChange, label }: Readonly<{
 const pad = (value: number) => String(value).padStart(2, "0");
 
 /**
- * Барабан времени «часы : минуты» с шагом 30 минут (сетка календаря), во всплывающем окне.
- * Значение — минуты от начала суток; `min`/`max` ограничивают выбор включительно, 24:00 допустимо как max.
+ * Барабан времени «часы : минуты» во всплывающем окне; по умолчанию шаг 30 минут (сетка календаря), `minuteStep = 1` — точное время
+ * (отметки начала и окончания тренировки). Значение — минуты от начала суток; `min`/`max` ограничивают выбор включительно, 24:00 допустимо как max.
+ * `onClear` + `clearLabel` — действие «убрать значение».
  */
-export function TimeWheelPicker({ visible, title, value, min, max, onConfirm, onClose }: Readonly<{
+export function TimeWheelPicker({ visible, title, value, min, max, minuteStep = 30, clearLabel, onConfirm, onClear, onClose }: Readonly<{
   visible: boolean;
   title: string;
   value: number;
   min: number;
   max: number;
+  minuteStep?: number;
+  clearLabel?: string;
   onConfirm: (minute: number) => void;
+  onClear?: () => void;
   onClose: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const [hour, setHour] = useState(Math.floor(value / 60));
-  const [half, setHalf] = useState(value % 60 >= 30 ? 1 : 0);
+  const slots = Array.from({ length: Math.floor(60 / minuteStep) }, (_, at) => at * minuteStep);
+  const [half, setHalf] = useState(Math.floor((value % 60) / minuteStep));
   useEffect(() => {
     if (!visible) return;
     setHour(Math.floor(value / 60));
-    setHalf(value % 60 >= 30 ? 1 : 0);
-  }, [value, visible]);
+    setHalf(Math.floor((value % 60) / minuteStep));
+  }, [value, visible, minuteStep]);
   const hours: number[] = [];
   for (let at = Math.floor(min / 60); at <= Math.floor(max / 60); at += 1) hours.push(at);
-  const minutes = hour === 24 ? ["00"] : ["00", "30"];
-  const chosen = Math.max(min, Math.min(max, hour * 60 + (hour === 24 ? 0 : half * 30)));
+  const minutes = hour === 24 ? ["00"] : slots.map(pad);
+  const chosen = Math.max(min, Math.min(max, hour * 60 + (hour === 24 ? 0 : (slots[half] ?? 0))));
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <Pressable accessibilityLabel="Закрыть" style={[StyleSheet.absoluteFill, styles.scrim]} onPress={onClose} />
@@ -91,6 +96,8 @@ export function TimeWheelPicker({ visible, title, value, min, max, onConfirm, on
             <Text style={[styles.colon, { color: colors.textPrimary }]}>:</Text>
             <Wheel label="Минуты" values={minutes} index={hour === 24 ? 0 : half} onChange={setHalf} />
           </View>
+          {onClear !== undefined && clearLabel !== undefined
+            ? <AppButton compact variant="secondary" label={clearLabel} onPress={() => { onClear(); onClose(); }} /> : null}
           <View style={styles.actions}>
             <View style={styles.action}><AppButton compact variant="secondary" label="Отмена" onPress={onClose} /></View>
             <View style={styles.action}><AppButton compact label="Готово" onPress={() => { onConfirm(chosen); onClose(); }} /></View>

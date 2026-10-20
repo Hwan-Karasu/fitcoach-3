@@ -7,7 +7,7 @@ import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../../shared/ui/theme/style.ts";
 import { useExerciseLookup, type ExerciseLookupPort } from "../../plans/public.ts";
 import { dateText, originText, setLabel, statusKinds, statusLabels } from "./historyFormat.ts";
-import { durationText, timeText } from "./historyText.ts";
+import { durationText, timeText } from "../../../../shared/format/clockText.ts";
 import type { TrainingHistoryEntry } from "./trainingHistory.ts";
 import { useClientHistory } from "./useClientHistory.ts";
 
