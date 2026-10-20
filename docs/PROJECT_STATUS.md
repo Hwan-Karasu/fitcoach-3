@@ -1,4 +1,14 @@
 
+## 2026-10-20 — N03: цели питания — коридоры, версии, исключения (dev, без UI)
+
+- Входы: Product §§49.8–49.12; Feature 15. Миграция `nutrition_schema_migrations` v4: `dev_nutrition_target_versions` (UNIQUE клиент+дата), `dev_nutrition_target_days`,
+  `dev_nutrition_target_exceptions`; CHECK: обе границы показателя заданы или обе пусты, `max ≥ min ≥ 0`. `DevNutritionTargetsRepository`, правила `resolveTarget/assessDay/
+  affectedPeriod/energyConsistency`, участник удаления клиента; подключено к `services.nutrition.targets` и загрузке. Тест `nutrition-targets.test.ts` (11): примеры §49.8.2 (1899/2000/2101),
+  §49.9.2 (пн/вт), §49.11 (версии A/B), §49.12 (суббота-исключение).
+- Решения по умолчанию: цели по каждому показателю необязательны (хотя бы один в версии); день недели без цели допустим; повторное сохранение на ту же дату — только с revision;
+  удаления версий нет (история). Калькулятор предложения коридоров (П6) и экраны не сделаны; UI-gate `nutrition-goals` не пройден. `N03=PARTIAL / NOT DONE`.
+- Дальше N04 (статистика питания: средние по дням с учётом, доля попаданий в коридор — на основе `accountedDates`, `assessDay`).
+
 ## 2026-10-20 — N02: пищевой дневник и вода (dev, без UI)
 
 - Входы: Product §§49.1–49.5, 49.22; Feature 14. Миграция `nutrition_schema_migrations` v3: `dev_food_diary_entries` (снимок + количество, FK на клиента), `dev_water_days`.

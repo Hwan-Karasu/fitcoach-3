@@ -2,6 +2,14 @@ import type { MigrationStep } from "../../../shared/db/MigrationRunner.ts";
 
 export const DEV_NUTRITION_LEDGER = "nutrition_schema_migrations";
 
+const METRICS = ["kcal", "protein", "fat", "carbs"];
+const SEPARATOR = ", ";
+/** Колонки коридоров: границы неотрицательны, max ≥ min. */
+const corridorColumns = METRICS.map((metric) => `${metric}_min_x10 INTEGER CHECK (${metric}_min_x10 IS NULL OR ${metric}_min_x10 >= 0),
+      ${metric}_max_x10 INTEGER CHECK (${metric}_max_x10 IS NULL OR ${metric}_max_x10 >= ${metric}_min_x10)`).join(SEPARATOR);
+/** Обе границы показателя заданы или обе пусты (иначе проверка max ≥ min пропустила бы NULL). */
+const corridorPairs = METRICS.map((metric) => `CHECK ((${metric}_min_x10 IS NULL) = (${metric}_max_x10 IS NULL))`).join(SEPARATOR);
+
 /**
  * New-install development schema in the shared dev file. Каталог — общий для рабочего пространства, без привязки к клиенту.
  * Not D01 production DDL and not a build120 nutrition import.
@@ -99,6 +107,41 @@ export const devNutritionCatalog: readonly MigrationStep[] = [{
       ml INTEGER NOT NULL CHECK (ml > 0 AND ml <= 20000),
       updated_at TEXT NOT NULL,
       PRIMARY KEY (workspace_id, client_id, local_date),
+      FOREIGN KEY (client_id, workspace_id) REFERENCES dev_clients(id, workspace_id) ON DELETE RESTRICT
+    )`,
+  ],
+}, {
+  version: 4,
+  checksum: "n03-dev-nutrition-v4-targets-versions-exceptions-20261020",
+  statements: [
+    // Датированные версии расписания целей; две версии на одну дату клиента невозможны (§49.11.5).
+    `CREATE TABLE dev_nutrition_target_versions (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      effective_from TEXT NOT NULL CHECK (date(effective_from) IS effective_from),
+      revision INTEGER NOT NULL CHECK (revision > 0),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (workspace_id, client_id, effective_from),
+      FOREIGN KEY (client_id, workspace_id) REFERENCES dev_clients(id, workspace_id) ON DELETE RESTRICT
+    )`,
+    `CREATE TABLE dev_nutrition_target_days (
+      version_id TEXT NOT NULL,
+      weekday INTEGER NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+      ${corridorColumns},
+      PRIMARY KEY (version_id, weekday),
+      ${corridorPairs},
+      FOREIGN KEY (version_id) REFERENCES dev_nutrition_target_versions(id) ON DELETE CASCADE
+    )`,
+    `CREATE TABLE dev_nutrition_target_exceptions (
+      workspace_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      local_date TEXT NOT NULL CHECK (date(local_date) IS local_date),
+      ${corridorColumns},
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (workspace_id, client_id, local_date),
+      ${corridorPairs},
       FOREIGN KEY (client_id, workspace_id) REFERENCES dev_clients(id, workspace_id) ON DELETE RESTRICT
     )`,
   ],

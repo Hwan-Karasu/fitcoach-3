@@ -10,3 +10,7 @@ export { snapshotOfFood, snapshotOfRecipe } from "./domain/FoodSnapshot.ts";
 export { MEAL_SLOTS, type DayState, type DaySummary, type DiaryEntry, type DiaryEntryInput, type MealSlot, type WaterDay } from "./domain/DiaryModel.ts";
 export type { DiaryCommittedChange, NutritionDiaryPort } from "./domain/NutritionDiaryPort.ts";
 export { accountedDates, isLocalDate, summarizeDay, sumNutrients } from "./domain/DiaryRules.ts";
+export { TARGET_METRICS, type Corridors, type RangeVerdict, type ResolvedTarget, type TargetException, type TargetMetric, type TargetRange, type TargetVersion,
+  type TargetVersionInput, type WeekdayIndex } from "./domain/TargetModel.ts";
+export type { NutritionTargetsPort, TargetsCommittedChange } from "./domain/NutritionTargetsPort.ts";
+export { affectedPeriod, assessDay, energyConsistency, judge, resolveTarget, validateCorridors, validateVersion, versionFor, weekdayOf } from "./domain/TargetRules.ts";

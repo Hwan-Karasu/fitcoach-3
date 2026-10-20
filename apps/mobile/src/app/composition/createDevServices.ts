@@ -11,8 +11,9 @@ import type { CalendarParticipantDirectoryPort, CalendarRepositoryPort } from
 import { DevClientRepository } from "../../features/clients/data/DevClientRepository.ts";
 import { DevFoodCatalogRepository } from "../../features/nutrition/data/DevFoodCatalogRepository.ts";
 import { DevNutritionDiaryRepository, devNutritionClientDeletionParticipant } from "../../features/nutrition/data/DevNutritionDiaryRepository.ts";
+import { DevNutritionTargetsRepository, devNutritionTargetsClientDeletionParticipant } from "../../features/nutrition/data/DevNutritionTargetsRepository.ts";
 import { DevRecipeCatalogRepository } from "../../features/nutrition/data/DevRecipeCatalogRepository.ts";
-import type { FoodCatalogPort, NutritionDiaryPort, RecipeCatalogPort } from "../../features/nutrition/public.ts";
+import type { FoodCatalogPort, NutritionDiaryPort, NutritionTargetsPort, RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { DevMeasurementRepository, devMeasurementClientDeletionParticipant } from
   "../../features/measurements/data/DevMeasurementRepository.ts";
 import { dailyPoints, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
@@ -57,6 +58,7 @@ export interface NutritionServices {
   readonly foods: FoodCatalogPort;
   readonly recipes: RecipeCatalogPort;
   readonly diary: NutritionDiaryPort;
+  readonly targets: NutritionTargetsPort;
 }
 
 /** Explicit dev composition. Production boot will get separate, owner-scoped bindings. */
@@ -181,13 +183,14 @@ export function createDevRuntime(): DevRuntime {
   const database = new SharedSqliteDatabase(() => openExpoSqliteConnection("fitcoach_f04_clients_dev.db"));
   const clients = new DevClientRepository(database, DEV_WORKSPACE_ID,
     [devAccountingClientDeletionParticipant, devCalendarClientDeletionParticipant,
-      devMeasurementClientDeletionParticipant, devNutritionClientDeletionParticipant, devQuestionnaireClientDeletionParticipant,
+      devMeasurementClientDeletionParticipant, devNutritionClientDeletionParticipant, devNutritionTargetsClientDeletionParticipant, devQuestionnaireClientDeletionParticipant,
       devTrainingPlansClientDeletionParticipant, devTrainingExecutionClientDeletionParticipant]);
   const calendar = new DevCalendarRepository(database, DEV_WORKSPACE_ID, devAccountingCalendarHook);
   const accounting = new DevAccountingRepository(database, DEV_WORKSPACE_ID);
   const measurements = new DevMeasurementRepository(database, DEV_WORKSPACE_ID);
   const nutrition = { foods: new DevFoodCatalogRepository(database, DEV_WORKSPACE_ID),
-    recipes: new DevRecipeCatalogRepository(database, DEV_WORKSPACE_ID), diary: new DevNutritionDiaryRepository(database, DEV_WORKSPACE_ID) };
+    recipes: new DevRecipeCatalogRepository(database, DEV_WORKSPACE_ID), diary: new DevNutritionDiaryRepository(database, DEV_WORKSPACE_ID),
+    targets: new DevNutritionTargetsRepository(database, DEV_WORKSPACE_ID) };
   const questionnaire = new DevQuestionnaireRepository(database, DEV_WORKSPACE_ID);
   const trainingPlans = new DevTrainingPlansRepository(database, DEV_WORKSPACE_ID);
   const trainingExecution = new DevTrainingExecutionRepository(database, DEV_WORKSPACE_ID);
@@ -218,6 +221,7 @@ export function createDevRuntime(): DevRuntime {
         await nutrition.foods.initialize();
         await nutrition.recipes.initialize();
         await nutrition.diary.initialize();
+        await nutrition.targets.initialize();
         await questionnaire.initialize();
         await trainingPlans.initialize();
         await trainingExecution.initialize();
