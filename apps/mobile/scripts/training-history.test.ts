@@ -4,8 +4,8 @@ import test from "node:test";
 import { DevClientRepository } from "../src/features/clients/data/DevClientRepository.ts";
 import { DevTrainingExecutionRepository } from "../src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 import { completedCount, filterHistory, sortHistory } from "../src/features/training/archive/presentation/trainingHistory.ts";
+import { isWorkingSet } from "../src/features/training/analytics/presentation/workingSet.ts";
 import { workoutStatus } from "../src/features/training/execution/domain/ExecutionRules.ts";
-import { factVolume } from "../src/features/training/execution/presentation/programMatrix.ts";
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant } from
   "../src/features/training/plans/data/DevTrainingPlansRepository.ts";
 import { addExercise, fillSets, newDraft } from "../src/features/training/plans/domain/SimplePlanEdits.ts";
@@ -43,7 +43,7 @@ async function setup() {
   const revision = async (programId: string) => (await plans.getProgram(a, programId))!.revision;
   await plans.createMesocycle(a, periodized.id, await revision(periodized.id), { title: "Блок 2", weeks: 2, firstWeek: week("q"), clientIds: [a] });
   const otherProgram = await plans.createSimpleProgram(b, { title: "Сила", plan: { weeks: 2, workouts: week("o") } });
-  const history = createTrainingHistory({ factVolume, workoutStatus, sortHistory }, execution, plans);
+  const history = createTrainingHistory({ isWorkingSet, workoutStatus, sortHistory }, execution, plans);
   /** Подход в тренировке недели и исход «Завершена»; дата — фактическая дата занятия. */
   const complete = async (clientId: string, programId: string, weekIndex: number, workout: PlannedWorkout, date: string) => {
     const exercise = workout.exercises[0]!;
@@ -81,7 +81,7 @@ test("§48.85.2 п. 1, 2, 5: общая хронология всех прогр
     assert.equal(completedCount(filterHistory(entries, { programId: periodized, mesocycleId: null })), 2);
     const second = filterHistory(entries, { programId: periodized, mesocycleId: cycles[1]!.id });
     assert.deepEqual(second.map((entry) => [entry.mesocycleTitle, entry.workoutTitle, entry.weekIndex]), [["Блок 2", "Тренировка 1", 1]]);
-    assert.deepEqual([entries[0]!.confirmedSets, entries[0]!.volumeKg], [1, 500], "подходы и объём — по фактам");
+    assert.equal(entries[0]!.workingSets, 1, "рабочие подходы — по фактам");
   } finally {
     await env.close();
   }
@@ -135,7 +135,7 @@ test("§50.3 действие 1: удалить план архивной про
 
     assert.equal(await plans.getProgram(a, periodized), null, "плана больше нет");
     const entries = await history.list(a);
-    assert.deepEqual(entries.map((entry) => [entry.programTitle, entry.mesocycleTitle, entry.workoutTitle, entry.planDeleted, entry.confirmedSets]),
+    assert.deepEqual(entries.map((entry) => [entry.programTitle, entry.mesocycleTitle, entry.workoutTitle, entry.planDeleted, entry.workingSets]),
       [["Сила", "Блок 2", "Тренировка 1", true, 1]], "факт с неизменяемым происхождением");
     assert.equal(completedCount(entries), 1, "проведённое занятие не потеряно");
     assert.throws(() => db.prepare("UPDATE dev_training_sessions SET origin_json = '{}'").run(), /ORIGIN_IMMUTABLE/, "снимок неизменяем");
@@ -177,6 +177,26 @@ test("§48.86.9: плановых тренировок выбранной про
     await plans.archiveForClient(a, simple);
     await deleteProgram.deleteProgram({ clientId: a, programId: simple, expectedRevision: await revision(simple) });
     assert.equal(await history.planned(a, { programId: simple, mesocycleId: null }), null, "удалённой программы нет");
+  } finally {
+    await env.close();
+  }
+});
+
+test("UX-контракт истории: «рабочих подходов» — засчитанные без разминки, одна функция для истории и статистики", async () => {
+  const env = await setup();
+  try {
+    const { a, simple, simpleWorkout, complete, execution, history } = env;
+    await complete(a, simple, 1, simpleWorkout, "2026-10-01");
+    const slot = { clientId: a, programId: simple, weekIndex: 1, plannedWorkoutId: simpleWorkout.id };
+    const exercise = simpleWorkout.exercises[0]!;
+    const warm = await execution.addWarmupSet(slot, { plannedExerciseId: exercise.id, exerciseId: BENCH }, new Date("2026-10-01T09:00:00Z"));
+    await execution.saveSet({ slot, plannedExerciseId: exercise.id, exerciseId: BENCH, plannedSetId: warm.fact.plannedSetId,
+      position: warm.fact.position, metrics: ["load", "reps"], values: { loadGrams: 20_000, reps: 10, durationSec: null, distanceM: null },
+      setType: "WARMUP", drops: [], rpe: null, expectedRevision: warm.fact.revision }, new Date("2026-10-01T09:05:00Z"));
+    const [entry] = await history.list(a);
+    const confirmed = entry!.exercises.flatMap((group) => group.facts).filter((fact) => fact.confirmed);
+    assert.equal(confirmed.length, 2, "засчитаны рабочий подход и разминка");
+    assert.equal(entry!.workingSets, 1, "разминка в рабочие не входит");
   } finally {
     await env.close();
   }

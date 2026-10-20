@@ -4,7 +4,6 @@ export { hasEnteredData, isComplete, nextOutcome, weekStatus, workoutStatus } fr
 export { WorkoutScreen } from "./presentation/WorkoutScreen.tsx";
 export { TrainingSettingsScreen } from "./presentation/TrainingSettingsScreen.tsx";
 export { ProgramMatrixScreen } from "./presentation/ProgramMatrixScreen.tsx";
-export { factVolume } from "./presentation/programMatrix.ts";
 export { ProgramWeeksPanel, type ProgramWeekView } from "./presentation/ProgramWeeksPanel.tsx";
 export { RestTimerDock } from "./presentation/RestTimerDock.tsx";
 export { RestTimerService } from "./application/RestTimerService.ts";

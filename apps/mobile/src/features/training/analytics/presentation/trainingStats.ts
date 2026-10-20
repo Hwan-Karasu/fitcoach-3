@@ -1,4 +1,5 @@
 import type { SetFact, WorkoutStatus } from "../../execution/public.ts";
+import { isWorkingSet } from "./workingSet.ts";
 import type { TrainingHistoryEntry } from "../../archive/public.ts";
 import type { ExerciseInfo } from "../../plans/public.ts";
 import { exerciseSessions, repRecords } from "./exerciseProgress.ts";
@@ -34,7 +35,7 @@ export function entriesInRange(entries: readonly TrainingHistoryEntry[], range: 
 }
 
 /** §48.44, §48.80: засчитанный рабочий подход — не разминка; частично выполненный односторонний тоже один подход. */
-export const isWorkingSet = (fact: SetFact) => fact.confirmed && fact.setType !== "WARMUP";
+export { isWorkingSet };
 
 const workingFacts = (entry: TrainingHistoryEntry) => entry.exercises.flatMap((exercise) => exercise.facts.filter(isWorkingSet));
 

@@ -1,4 +1,5 @@
 import type { SetFact, SetValues } from "../../execution/public.ts";
+import { isWorkingSet } from "./workingSet.ts";
 import type { ExerciseInfo } from "../../plans/public.ts";
 
 type TrackingMetric = ExerciseInfo["metrics"][number];
@@ -58,7 +59,6 @@ export function exerciseSessions(entries: readonly TrainingHistoryEntry[], exerc
   });
 }
 
-const working = (fact: SetFact) => fact.confirmed && fact.setType !== "WARMUP";
 
 /** Засчитанные стороны или основное значение подхода. */
 function mainValues(fact: SetFact): readonly SetValues[] {
@@ -68,12 +68,12 @@ function mainValues(fact: SetFact): readonly SetValues[] {
 
 /** Для рекордов и e1RM — одиночные обычные/отказные рабочие подходы (§48.86.8 п. 4). */
 function recordValues(facts: readonly SetFact[]): readonly SetValues[] {
-  return facts.filter((fact) => working(fact) && fact.setType !== "DROP").flatMap(mainValues);
+  return facts.filter((fact) => isWorkingSet(fact) && fact.setType !== "DROP").flatMap(mainValues);
 }
 
 /** Для объёма и суммы повторений — все рабочие, мини-сеты дроп-сета входят (§35.15). */
 function workValues(facts: readonly SetFact[]): readonly SetValues[] {
-  return facts.filter(working).flatMap((fact) => fact.sides === null ? [fact.values, ...fact.drops] : mainValues(fact));
+  return facts.filter(isWorkingSet).flatMap((fact) => fact.sides === null ? [fact.values, ...fact.drops] : mainValues(fact));
 }
 
 const maxOf = (numbers: readonly number[]) => numbers.length === 0 ? null : Math.max(...numbers);

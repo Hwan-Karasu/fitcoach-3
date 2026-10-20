@@ -40,7 +40,7 @@ function HistoryCard({ entry, names }: Readonly<{ entry: TrainingHistoryEntry; n
         {entry.workoutTitle ?? (entry.planDeleted ? "Тренировка" : "Тренировки больше нет в плане")}</Text>
       <Text numberOfLines={2} style={[styles.meta, { color: colors.textSecondary }]}>{origin}</Text>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>
-        {`Подходов: ${entry.confirmedSets} · Объём: ${Math.round(entry.volumeKg).toLocaleString("ru-RU")} кг`}</Text>
+        {`Рабочих подходов: ${entry.workingSets}`}</Text>
       {open ? <View style={[styles.details, { borderColor: colors.border }]}>
         {entry.exercises.length === 0 ? <Text style={[styles.meta, { color: colors.textMuted }]}>Подходы не записаны.</Text> : null}
         {entry.exercises.map((exercise, index) => (

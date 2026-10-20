@@ -24,8 +24,8 @@ export interface TrainingHistoryEntry {
   readonly weekIndex: number;
   readonly actualDate: string;
   readonly status: WorkoutStatus;
-  readonly confirmedSets: number;
-  readonly volumeKg: number;
+  /** Рабочие подходы: засчитанные, без разминки (единое правило `isWorkingSet`). */
+  readonly workingSets: number;
   /** Упражнения в порядке выполнения с их фактами. */
   readonly exercises: readonly Readonly<{ exerciseId: string; facts: readonly SetFact[] }>[];
 }

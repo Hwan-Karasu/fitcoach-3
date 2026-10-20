@@ -23,7 +23,7 @@ function entry(key: string, date: string, programId: string, facts: readonly Set
   for (const item of facts) groups.set(item.exerciseId, [...(groups.get(item.exerciseId) ?? []), item]);
   return { key, programId, programTitle: programId, programKind: "SIMPLE", archived: false, planDeleted: false, mesocycleId: null,
     mesocycleTitle: null, workoutTitle: "Тренировка 1", plannedWorkoutId: "w1", weekIndex: 1, actualDate: date, status: "COMPLETED",
-    confirmedSets: facts.length, volumeKg: 0, exercises: [...groups].map(([exerciseId, list]) => ({ exerciseId, facts: list })) };
+    workingSets: facts.length, exercises: [...groups].map(([exerciseId, list]) => ({ exerciseId, facts: list })) };
 }
 
 test("e1RM по Бжицки: 1–12 повторений, выше — не считается (§48.86.8)", () => {

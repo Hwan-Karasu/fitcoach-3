@@ -2,9 +2,9 @@ import type { ClientExecution, SetFact, TrainingExecutionPort, TrainingHistoryEn
   WorkoutStatus } from "../features/training/public.ts";
 import type { PlannedWorkout } from "../features/training/plans/public.ts";
 
-/** Чистые правила владельцев (как у сводки «Главной»): объём факта, статус тренировки, порядок хронологии. */
+/** Чистые правила владельцев (как у сводки «Главной»): рабочий подход, статус тренировки, порядок хронологии. */
 export interface TrainingHistoryRules {
-  readonly factVolume: (fact: SetFact) => number;
+  readonly isWorkingSet: (fact: SetFact) => boolean;
   readonly workoutStatus: (outcome: WorkoutOutcome | null, started: boolean) => WorkoutStatus;
   readonly sortHistory: (entries: readonly TrainingHistoryEntry[]) => readonly TrainingHistoryEntry[];
 }
@@ -18,7 +18,7 @@ type Origin = Readonly<{ mesocycleId: string | null; mesocycleTitle: string | nu
 export function createTrainingHistory(rules: TrainingHistoryRules,
   execution: Pick<TrainingExecutionPort, "listClientExecutions" | "subscribeCommittedChanges">,
   plans: Pick<TrainingPlansRepositoryPort, "getLibrary" | "getPeriodizedPlan" | "getSimpleWeeks" | "subscribeCommittedChanges">) {
-  const { factVolume, workoutStatus, sortHistory } = rules;
+  const { isWorkingSet, workoutStatus, sortHistory } = rules;
   return {
     async list(clientId: string): Promise<readonly TrainingHistoryEntry[]> {
       const [executions, library] = await Promise.all([execution.listClientExecutions(clientId), plans.getLibrary(clientId)]);
@@ -64,8 +64,7 @@ export function createTrainingHistory(rules: TrainingHistoryRules,
           mesocycleId: origin?.mesocycleId ?? null, mesocycleTitle: snapshot !== null ? snapshot.mesocycleTitle : origin?.mesocycleTitle ?? null,
           workoutTitle: snapshot !== null ? snapshot.workoutTitle : origin?.workout.title ?? null, plannedWorkoutId: item.plannedWorkoutId, weekIndex: item.weekIndex, actualDate: session.actualDate,
           status: workoutStatus(session.outcome, facts.length > 0),
-          confirmedSets: facts.filter((fact) => fact.confirmed).length,
-          volumeKg: facts.reduce((sum, fact) => sum + factVolume(fact), 0),
+          workingSets: facts.filter(isWorkingSet).length,
           exercises: [...groups.values()].filter((group) => group.facts.length > 0) }];
       });
       return sortHistory(entries);
