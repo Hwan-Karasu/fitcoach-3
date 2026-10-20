@@ -59,7 +59,9 @@ export function ExecutionDetailsScreen({ clientId, sessionKey, history, exercise
         <Text style={[styles.meta, { color: colors.textSecondary }]}>{timeLine(entry)}</Text>
         {entry.planDeleted
           ? <Text style={[styles.meta, { color: colors.textMuted }]}>Исходный план удалён — занятие доступно только для просмотра.</Text>
-          : <AppButton variant="secondary" label="Открыть в дневнике" onPress={() => onOpenInDiary(entry)} />}
+          : entry.workoutTitle === null
+            ? <Text style={[styles.meta, { color: colors.textMuted }]}>Тренировки больше нет в плане — занятие доступно только для просмотра.</Text>
+            : <AppButton variant="secondary" label="Открыть в дневнике" onPress={() => onOpenInDiary(entry)} />}
       </View>
       {entry.exercises.length === 0 ? <Text style={[styles.meta, { color: colors.textMuted }]}>Подходы не записаны.</Text> : null}
       {entry.exercises.map((exercise, index) => {

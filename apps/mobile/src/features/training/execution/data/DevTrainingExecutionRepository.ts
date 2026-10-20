@@ -670,10 +670,14 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
   async setActualDate(slot: WorkoutSlot, date: string, expectedRevision: number, now: Date = new Date()): Promise<WorkoutSession> {
     assertSlot(slot);
     if (!isLocalDate(date)) throw new Error("INVALID_METRIC");
+    // Отметки времени (§48.86.13) едут вместе с датой на ту же разницу в днях: время суток и длительность сохраняются.
+    const shifted = (column: string) => `CASE WHEN ${column} IS NULL OR actual_date IS NULL THEN ${column}
+      ELSE strftime('%Y-%m-%dT%H:%M:%fZ', ${column}, CAST(round(julianday(?) - julianday(actual_date)) AS INTEGER) || ' days') END`;
     const saved = await this.ready().writer.write(async (tx) => {
-      const result = await tx.run(`UPDATE dev_training_sessions SET actual_date = ?, revision = revision + 1, updated_at = ?
+      const result = await tx.run(`UPDATE dev_training_sessions SET started_at = ${shifted("started_at")}, finished_at = ${shifted("finished_at")},
+        actual_date = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND week_index = ? AND planned_workout_id = ?
-          AND revision = ?`, [date, now.toISOString(), this.workspaceId, slot.clientId, slot.programId, slot.weekIndex,
+          AND revision = ?`, [date, date, date, now.toISOString(), this.workspaceId, slot.clientId, slot.programId, slot.weekIndex,
         slot.plannedWorkoutId, expectedRevision]);
       if (result.changes !== 1) throw new Error("STALE_SESSION");
       return await this.sessionOf(tx, slot) as WorkoutSession;

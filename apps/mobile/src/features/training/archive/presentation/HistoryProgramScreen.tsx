@@ -89,7 +89,10 @@ export function HistoryProgramScreen({ clientId, programId, history, onOpenExecu
   const options = useMemo(() => mesocyclesWithHistory(programEntries, programId), [programEntries, programId]);
   const first = programEntries[0];
   const programTitle = first === undefined ? undefined : first.planDeleted ? `${first.programTitle} (план удалён)` : first.programTitle;
-  useEffect(() => { if (programTitle !== undefined) onTitle(programTitle); }, [programTitle, onTitle]);
+  // Колбэк навигации может меняться на каждый рендер — шапку обновляем только при смене названия.
+  const titleRef = useRef(onTitle);
+  titleRef.current = onTitle;
+  useEffect(() => { if (programTitle !== undefined) titleRef.current(programTitle); }, [programTitle]);
 
   // Выбор по умолчанию — мезоцикл с последним занятием; пропавший мезоцикл (удалён, нет занятий) заменяется тем же правилом.
   const latestMesocycle = programEntries.find((entry) => entry.mesocycleId !== null)?.mesocycleId ?? null;

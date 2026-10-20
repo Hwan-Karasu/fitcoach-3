@@ -561,3 +561,20 @@ test("PC §48.86.13 ручные отметки: местное время дн�
   assert.equal(sessionDurationSec(start, endInstantAfter(start, date, 9 * 60)), null, "09:00 при начале 10:00 — не 23 часа, а нет данных до правки");
   assert.equal(endInstantAfter(null, date, 11 * 60), instantFromLocal(date, 11 * 60), "без начала — тот же день");
 });
+
+test("PC §48.84 + §48.86.13: смена даты занятия переносит отметки времени на ту же разницу в днях, время суток сохраняется", async () => {
+  const { clients, execution, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticA" });
+    const w1: WorkoutSlot = { clientId: client.id, programId: "program-a", weekIndex: 1, plannedWorkoutId: "w1" };
+    const first = await execution.saveSet(bench(w1, "s1", 0, values(100_000, 8), null), new Date("2026-10-20T10:10:00.000Z"));
+    const done = await execution.setOutcome(w1, "COMPLETED", first.session.revision, new Date("2026-10-20T11:00:00.000Z"));
+    const moved = await execution.setActualDate(w1, "2026-10-18", done.revision, new Date("2026-10-20T12:00:00.000Z"));
+    assert.deepEqual([moved.actualDate, moved.startedAt, moved.finishedAt], ["2026-10-18", "2026-10-18T10:10:00.000Z", "2026-10-18T11:00:00.000Z"],
+      "результаты внесли сегодня за позавчера — отметки уехали вместе с датой, длительность прежняя");
+    assert.equal(sessionDurationSec(moved.startedAt, moved.finishedAt), 50 * 60);
+    const empty = await execution.setOutcome({ ...w1, plannedWorkoutId: "w2" }, "MISSED", null, new Date("2026-10-20T12:00:00.000Z"));
+    const noTimes = await execution.setActualDate({ ...w1, plannedWorkoutId: "w2" }, "2026-10-19", empty.revision);
+    assert.deepEqual([noTimes.startedAt, noTimes.finishedAt], [null, null], "без отметок — переносить нечего");
+  } finally { await close(); }
+});

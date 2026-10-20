@@ -656,7 +656,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
             // PC §48.86.13: начало ставится по первому подтверждённому подходу, окончание — при «Завершить»; обе отметки можно исправить.
             <View style={styles.timeRow}>
               {([["start", "Начало", state.session.startedAt], ["end", "Окончание", state.session.finishedAt]] as const).map(([kind, label, instant]) => (
-                <Pressable key={kind} accessibilityRole="button" hitSlop={6}
+                <Pressable key={kind} accessibilityRole="button" hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
                   accessibilityLabel={`${label} тренировки ${instant === null ? "не указано" : timeText(instant)}. Изменить`}
                   onPress={() => { flushPending(); Keyboard.dismiss(); setTimeEdit(kind); }}
                   style={[styles.dateButton, { backgroundColor: colors.surfaceRaised }]}>

@@ -39,8 +39,9 @@ export function retainStatsFilters(clientId: string): () => void {
   return () => {
     const left = (holders.get(clientId) ?? 1) - 1;
     if (left > 0) { holders.set(clientId, left); return; }
-    holders.delete(clientId);
-    byClient.delete(clientId);
+    holders.set(clientId, 0);
+    // Освобождение — после кадра: повторное монтирование (смена ключа экрана, StrictMode) успевает снова удержать фильтры.
+    setTimeout(() => { if (holders.get(clientId) !== 0) return; holders.delete(clientId); byClient.delete(clientId); }, 0);
   };
 }
 
