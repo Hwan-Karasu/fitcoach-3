@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { TrainingHistoryEntry } from "../src/features/training/archive/presentation/trainingHistory.ts";
-import { mesocyclesWithHistory, programsWithHistory, workoutGroups } from "../src/features/training/archive/presentation/historyGroups.ts";
+import { filterHistory } from "../src/features/training/archive/presentation/trainingHistory.ts";
+import { mesocyclesWithHistory, programsWithHistory, workoutGroups, workoutOptions } from "../src/features/training/archive/presentation/historyGroups.ts";
 
 type Overrides = Partial<TrainingHistoryEntry> & Pick<TrainingHistoryEntry, "key" | "programId" | "actualDate">;
 const entry = (over: Overrides): TrainingHistoryEntry => ({ programTitle: over.programId, programKind: "PERIODIZED", archived: false, planDeleted: false,
@@ -57,4 +58,13 @@ test("заголовок группы: если у ближайшего выпо
     entry({ key: "b", programId: "X", workoutKey: "k", workoutTitle: "День А", actualDate: "2026-01-01" })];
   assert.equal(workoutGroups(items, { programId: "X", mesocycleId: null })[0]!.title, "День А");
   assert.equal(workoutGroups([items[0]!], { programId: "X", mesocycleId: null })[0]!.title, "Тренировка");
+});
+
+test("фильтр «Тренировка»: третий уровень после программы и мезоцикла, варианты по группам", () => {
+  const filter = (programId: string | null, mesocycleId: string | null, workoutKey: string | null) => ({ programId, mesocycleId, workoutKey });
+  assert.deepEqual(filterHistory(E, filter("P", "m2", "up")).map((item) => item.key).sort(), ["e1", "e2"], "мезоцикл 2, тренировка up");
+  assert.deepEqual(filterHistory(E, filter("P", null, "up")).map((item) => item.key).sort(), ["e1", "e2", "e3"], "вся программа, тренировка up");
+  assert.deepEqual(filterHistory(E, filter("P", "m2", null)).length, 3, "без тренировки — весь мезоцикл");
+  assert.deepEqual(workoutOptions(E, "P", "m2"), [{ value: "__all__", label: "Все тренировки" }, { value: "low", label: "Верх тела" }, { value: "up", label: "Верх тела (новое)" }]);
+  assert.deepEqual(workoutOptions(E, "D", null).map((option) => option.label), ["Все тренировки", "День 2", "День 10"]);
 });

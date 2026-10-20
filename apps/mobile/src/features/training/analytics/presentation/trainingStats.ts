@@ -1,6 +1,6 @@
 import type { SetFact, WorkoutStatus } from "../../execution/public.ts";
 import { isWorkingSet } from "./workingSet.ts";
-import type { TrainingHistoryEntry } from "../../archive/public.ts";
+import type { HistoryFilter, TrainingHistoryEntry } from "../../archive/public.ts";
 import type { ExerciseInfo } from "../../plans/public.ts";
 import { exerciseSessions, repRecords } from "./exerciseProgress.ts";
 
@@ -309,11 +309,15 @@ export function delta(current: number | null, previous: number | null, reliable 
 }
 
 /** §48.86.16 п. 3: выбранной программы или мезоцикла уже нет в данных — безопасный сброс, а не чужие значения. */
-export function sanitizeFilter(entries: readonly TrainingHistoryEntry[], filter: { programId: string | null; mesocycleId: string | null }):
-  Readonly<{ programId: string | null; mesocycleId: string | null }> {
+export function sanitizeFilter(entries: readonly TrainingHistoryEntry[], filter: HistoryFilter): HistoryFilter {
   const inProgram = entries.filter((entry) => entry.programId === filter.programId);
-  if (filter.programId === null || inProgram.length === 0) return { programId: null, mesocycleId: null };
-  return inProgram.some((entry) => entry.mesocycleId === filter.mesocycleId) ? filter : { programId: filter.programId, mesocycleId: null };
+  if (filter.programId === null || inProgram.length === 0) return { programId: null, mesocycleId: null, workoutKey: null };
+  if (filter.mesocycleId !== null && !inProgram.some((entry) => entry.mesocycleId === filter.mesocycleId)) {
+    return { programId: filter.programId, mesocycleId: null, workoutKey: null };
+  }
+  const inScope = inProgram.filter((entry) => filter.mesocycleId === null || entry.mesocycleId === filter.mesocycleId);
+  return filter.workoutKey === null || inScope.some((entry) => entry.workoutKey === filter.workoutKey) ? filter
+    : { programId: filter.programId, mesocycleId: filter.mesocycleId, workoutKey: null };
 }
 
 /** §48.86.19: занятия, оставленные только с упражнениями выбранной категории (переход от мышечной группы). */

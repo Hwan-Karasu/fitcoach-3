@@ -158,9 +158,14 @@ test("разница: 8 → 10 даёт +2 и +25%; нулевая база — 
 
 test("фильтр, которого нет в данных, безопасно сбрасывается (§48.86.16 п. 3)", () => {
   const entries = [entry("a", "2026-10-01", "COMPLETED", [fact(BENCH, values(1, 1))], "A")];
-  assert.deepEqual(sanitizeFilter(entries, { programId: "A", mesocycleId: null }), { programId: "A", mesocycleId: null });
-  assert.deepEqual(sanitizeFilter(entries, { programId: "удалена", mesocycleId: "м" }), { programId: null, mesocycleId: null });
-  assert.deepEqual(sanitizeFilter(entries, { programId: "A", mesocycleId: "удалён" }), { programId: "A", mesocycleId: null });
+  assert.deepEqual(sanitizeFilter(entries, { programId: "A", mesocycleId: null, workoutKey: null }), { programId: "A", mesocycleId: null, workoutKey: null });
+  assert.deepEqual(sanitizeFilter(entries, { programId: "удалена", mesocycleId: "м", workoutKey: "w" }), { programId: null, mesocycleId: null, workoutKey: null });
+  assert.deepEqual(sanitizeFilter(entries, { programId: "A", mesocycleId: "удалён", workoutKey: "w" }), { programId: "A", mesocycleId: null, workoutKey: null },
+    "нет мезоцикла — сбрасывается и тренировка");
+  assert.deepEqual(sanitizeFilter(entries, { programId: "A", mesocycleId: null, workoutKey: "w" }), { programId: "A", mesocycleId: null, workoutKey: "w" },
+    "тренировка есть в данных — выбор остаётся");
+  assert.deepEqual(sanitizeFilter(entries, { programId: "A", mesocycleId: null, workoutKey: "удалена" }), { programId: "A", mesocycleId: null, workoutKey: null },
+    "тренировки уже нет в данных — безопасный сброс");
 });
 
 test("переход от столбца: занятия попадают в тот же интервал, что и столбец; от группы — только её упражнения (§48.86.19)", () => {

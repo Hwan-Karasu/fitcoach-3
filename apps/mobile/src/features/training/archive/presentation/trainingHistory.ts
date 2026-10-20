@@ -46,6 +46,8 @@ export interface HistoryFilter {
   readonly programId: string | null;
   /** Только у Расширенной программы. */
   readonly mesocycleId: string | null;
+  /** Конкретная тренировка программы (`workoutKey` записи): третий уровень после программы и мезоцикла. */
+  readonly workoutKey: string | null;
 }
 
 /** Новые сверху; при совпадении даты — устойчиво по ключу (§50.4 п. 1). */
@@ -55,7 +57,8 @@ export function sortHistory(entries: readonly TrainingHistoryEntry[]): readonly 
 
 export function filterHistory(entries: readonly TrainingHistoryEntry[], filter: HistoryFilter): readonly TrainingHistoryEntry[] {
   return entries.filter((entry) => (filter.programId === null || entry.programId === filter.programId)
-    && (filter.mesocycleId === null || entry.mesocycleId === filter.mesocycleId));
+    && (filter.mesocycleId === null || entry.mesocycleId === filter.mesocycleId)
+    && (filter.workoutKey === null || entry.workoutKey === filter.workoutKey));
 }
 
 /** §48.51, §48.85 п. 3: проведённой считается только тренировка со статусом «Завершена». */

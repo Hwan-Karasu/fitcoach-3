@@ -75,7 +75,7 @@ export function TrainingArchiveScreen({ clientId, history, exercises }: Readonly
   const [entries, setEntries] = useState<readonly TrainingHistoryEntry[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [version, setVersion] = useState(0);
-  const [filter, setFilter] = useState<HistoryFilter>({ programId: null, mesocycleId: null });
+  const [filter, setFilter] = useState<HistoryFilter>({ programId: null, mesocycleId: null, workoutKey: null });
 
   useEffect(() => {
     let active = true;

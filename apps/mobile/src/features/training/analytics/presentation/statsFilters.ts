@@ -22,7 +22,7 @@ export interface StatsFilters {
   readonly custom: CustomRange | null;
 }
 
-const DEFAULT: StatsFilters = { filter: { programId: null, mesocycleId: null }, period: "90", custom: null };
+const DEFAULT: StatsFilters = { filter: { programId: null, mesocycleId: null, workoutKey: null }, period: "90", custom: null };
 const byClient = new Map<string, StatsFilters>();
 
 /**

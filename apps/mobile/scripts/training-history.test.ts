@@ -77,9 +77,9 @@ test("§48.85.2 п. 1, 2, 5: общая хронология всех прогр
     const entries = await history.list(a);
     assert.equal(entries.length, 5, "пять разных записей, занятий другого клиента нет");
     assert.deepEqual(entries.map((entry) => entry.actualDate), ["2026-10-05", "2026-10-04", "2026-10-03", "2026-10-02", "2026-10-01"]);
-    assert.equal(completedCount(filterHistory(entries, { programId: simple, mesocycleId: null })), 3);
-    assert.equal(completedCount(filterHistory(entries, { programId: periodized, mesocycleId: null })), 2);
-    const second = filterHistory(entries, { programId: periodized, mesocycleId: cycles[1]!.id });
+    assert.equal(completedCount(filterHistory(entries, { programId: simple, mesocycleId: null, workoutKey: null })), 3);
+    assert.equal(completedCount(filterHistory(entries, { programId: periodized, mesocycleId: null, workoutKey: null })), 2);
+    const second = filterHistory(entries, { programId: periodized, mesocycleId: cycles[1]!.id, workoutKey: null });
     assert.deepEqual(second.map((entry) => [entry.mesocycleTitle, entry.workoutTitle, entry.weekIndex]), [["Блок 2", "Тренировка 1", 1]]);
     assert.equal(entries[0]!.workingSets, 1, "рабочие подходы — по фактам");
     assert.deepEqual([entries[0]!.startedAt, entries[0]!.finishedAt, entries[0]!.durationSec], ["2026-10-05T10:00:00.000Z", "2026-10-05T11:00:00.000Z", 3600],

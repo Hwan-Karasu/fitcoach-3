@@ -1,4 +1,4 @@
-import { completedCount, sortHistory, type TrainingHistoryEntry } from "./trainingHistory.ts";
+import { ALL_OPTION, completedCount, sortHistory, type FilterOption, type TrainingHistoryEntry } from "./trainingHistory.ts";
 
 /**
  * Иерархия истории «программа → мезоцикл → тренировка → выполнения» (UX-контракт истории v1.2). Чистые функции над единой хронологией
@@ -73,4 +73,10 @@ export function workoutGroups(entries: readonly TrainingHistoryEntry[], scope: R
     return { key, title: occurrences.find((item) => item.workoutTitle !== null)?.workoutTitle ?? "Тренировка", occurrences,
       completed: completedCount(occurrences) };
   }).sort((a, b) => a.title.localeCompare(b.title, "ru", { numeric: true }) || a.key.localeCompare(b.key));
+}
+
+/** «Все тренировки» и тренировки выбранной программы (и мезоцикла) — варианты третьей пилюли фильтра. */
+export function workoutOptions(entries: readonly TrainingHistoryEntry[], programId: string, mesocycleId: string | null): readonly FilterOption[] {
+  return [{ value: ALL_OPTION, label: "Все тренировки" },
+    ...workoutGroups(entries, { programId, mesocycleId }).map((group) => ({ value: group.key, label: group.title }))];
 }

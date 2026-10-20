@@ -96,7 +96,7 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
   const [entries, setEntries] = useState<readonly TrainingHistoryEntry[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [version, setVersion] = useState(0);
-  const [filter, setFilter] = useState<HistoryFilter>({ programId: null, mesocycleId: null });
+  const [filter, setFilter] = useState<HistoryFilter>({ programId: null, mesocycleId: null, workoutKey: null });
   const [period, setPeriod] = useState<PeriodValue>({ period: "all", custom: null });
   const [chosen, setChosen] = useState<ProgressMetricId | null>(null);
   /** Точка графика, выбранная касанием; без выбора или после смены фильтров — последняя. */
