@@ -214,13 +214,18 @@ export function NutritionDiaryScreen({ clientId, diary, targets, onAdd }: Readon
       <ConfirmDialog visible={pending !== null} title="Копировать приём?" description={pending?.text ?? ""} confirmLabel="Скопировать" onCancel={() => setPending(null)}
         onConfirm={() => { if (pending !== null) void runCopy(pending.request); }} />
       <EntryEditorDialog entry={editing} onClose={() => setEditing(null)}
-        onSave={(entry, quantityX10, slot, override) => guard(async () => {
+        onSave={async (entry, quantityX10, slot, override) => {
+          const message = await guard(async () => {
           // Несколько операций подряд (количество, правка нутриентов, приём): каждая берёт свежую revision; при сбое между ними дневник перечитывается подпиской.
           let current = quantityX10 === entry.snapshot.quantityX10 ? entry : await diary.updateQuantity(clientId, entry.id, entry.revision, quantityX10);
           if (override === "CLEAR") current = await diary.clearOverride(clientId, current.id, current.revision);
           else if (override !== null) current = await diary.setOverride(clientId, current.id, current.revision, override);
           if (slot !== entry.slot) await diary.moveEntry(clientId, current.id, current.revision, slot);
-        })}
+          });
+          // Часть операций могла пройти: диалог держит устаревшую revision, поэтому при ошибке он закрывается, а дневник уже перечитан подпиской.
+          if (message !== null) setEditing(null);
+          return message;
+        }}
         onRemove={(entry) => guard(() => diary.removeEntry(clientId, entry.id, entry.revision))} />
     </View>
   );

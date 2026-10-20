@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react-native";
-import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, LoadingState, TextField } from "../../../shared/ui/components/public.ts";
+import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, LoadingState, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
 import { pickDate } from "../../../shared/ui/components/pickDate.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
-import type { ClientMeasurements, Measurement, MeasurementType } from "../domain/MeasurementModel.ts";
+import { MEASUREMENT_GROUPS, MEASUREMENT_TYPES, type ClientMeasurements, type Measurement, type MeasurementGroup, type MeasurementType } from "../domain/MeasurementModel.ts";
 import type { MeasurementRepositoryPort } from "../domain/MeasurementRepositoryPort.ts";
 import { dailyPoints, formatDate, localDateOf, measurementTypeInfo, parseValueX10 } from "../domain/MeasurementRules.ts";
 
-/** Восемь окружностей в порядке карточки «Замеры»; масса и % жира живут в расчёте и в журнале замеров. */
-const CIRCUMFERENCES: readonly MeasurementType[] = ["NECK", "SHOULDERS", "CHEST", "WAIST", "HIPS", "ARM", "THIGH", "CALF"];
-const ROWS: readonly (readonly MeasurementType[])[] = [["NECK", "SHOULDERS", "CHEST"], ["WAIST", "HIPS", "ARM"], ["THIGH", "CALF"]];
+/** Окружности: всё, кроме массы и % жира (они живут в расчёте и в журнале замеров). */
+const CIRCUMFERENCES: readonly MeasurementType[] = MEASUREMENT_TYPES.filter((type) => type !== "WEIGHT" && type !== "BODY_FAT");
+/** Базовый набор карточки: прежние восемь обхватов (бицепс, бедро и голень — с сторонами). Остальные включаются в «Настроить замеры» (UX v1.1, NUT-FS-10). */
+const DEFAULT_VISIBLE: ReadonlySet<string> = new Set(["NECK", "SHOULDERS", "CHEST", "WAIST", "HIPS", "BICEPS", "THIGH", "CALF"]);
+const typesOf = (group: MeasurementGroup): readonly MeasurementType[] => [group.single, group.left, group.right, group.legacy].filter((type): type is MeasurementType => type !== undefined);
 
 type Cell = Readonly<{ kind: "EMPTY" }> | Readonly<{ kind: "VALUE"; measurement: Measurement }> | Readonly<{ kind: "MANY" }>;
 
@@ -31,7 +33,7 @@ function errorText(error: unknown): string {
   }
 }
 
-/** Ячейки восьми окружностей на дату по §49.18: единственная запись или выбранная основная — значение; несколько без выбора — «несколько», а не последняя и не среднее. */
+/** Ячейки обхватов на дату по §49.18: единственная запись или выбранная основная — значение; несколько без выбора — «несколько», а не последняя и не среднее. */
 function cellsOf(data: ClientMeasurements, localDate: string): Readonly<Record<MeasurementType, Cell>> {
   const cells = {} as Record<MeasurementType, Cell>;
   for (const type of CIRCUMFERENCES) {
@@ -41,11 +43,39 @@ function cellsOf(data: ClientMeasurements, localDate: string): Readonly<Record<M
   return cells;
 }
 
+const cellText = (cell: Cell): string => cell.kind === "VALUE" ? valueText(cell.measurement.valueX10) : cell.kind === "MANY" ? "несколько" : "—";
+const cellSpeech = (cell: Cell): string => cell.kind === "VALUE" ? `${valueText(cell.measurement.valueX10)} см` : cell.kind === "MANY" ? "несколько записей, основная не выбрана" : "нет данных";
+
 interface EditorState { readonly editingDate: string | null; readonly date: string; readonly values: Readonly<Record<MeasurementType, string>> }
 
+function Tile({ group, cells }: Readonly<{ group: MeasurementGroup; cells: Readonly<Record<MeasurementType, Cell>> }>) {
+  const { palette } = usePrototypeTheme();
+  const colors = palette.tokens;
+  const sided = group.left !== undefined && group.right !== undefined;
+  const legacy = group.legacy === undefined ? null : cells[group.legacy];
+  const hasLegacy = legacy !== null && legacy.kind !== "EMPTY";
+  const speech = sided
+    ? `${group.label}: левый ${cellSpeech(cells[group.left as MeasurementType])}, правый ${cellSpeech(cells[group.right as MeasurementType])}${hasLegacy ? `, без указания стороны ${cellSpeech(legacy)}` : ""}`
+    : `${group.label}: ${cellSpeech(cells[group.single as MeasurementType])}`;
+  const muted = (cell: Cell) => cell.kind === "VALUE" ? colors.textPrimary : colors.textMuted;
+  return (
+    <View accessible accessibilityLabel={speech} style={[styles.tile, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
+      <Text style={[styles.tileLabel, { color: colors.textSecondary }]}>{group.label}</Text>
+      {sided ? <>
+        <View style={styles.sides}>
+          <Text style={[styles.tileValue, { color: muted(cells[group.left as MeasurementType]) }]}>{`Л ${cellText(cells[group.left as MeasurementType])}`}</Text>
+          <Text style={[styles.tileValue, { color: muted(cells[group.right as MeasurementType]) }]}>{`П ${cellText(cells[group.right as MeasurementType])}`}</Text>
+        </View>
+        {hasLegacy ? <Text style={[styles.tileLabel, { color: colors.textMuted }]}>{`без стороны ${cellText(legacy)}`}</Text> : null}
+      </> : <Text style={[styles.tileValue, { color: muted(cells[group.single as MeasurementType]) }]}>{cellText(cells[group.single as MeasurementType])}{cells[group.single as MeasurementType].kind === "VALUE" ? " см" : ""}</Text>}
+    </View>
+  );
+}
+
 /**
- * Карточка «Замеры» (§§49.14–49.18, UX «Расчёт»): лента дат, «+», восемь окружностей, «Изменить» и «Удалить». Источник — единственный журнал Measurements;
- * пустое значение — «—», не ноль. Состояние редактирования независимо от формы расчёта.
+ * Карточка «Замеры» (§§49.14–49.18, UX «Расчёт», v1.1 NUT-FS-07…14): лента дат, «+», компактные группы обхватов (бицепс, предплечье, бедро, голень — Л и П в одном блоке), «Изменить»,
+ * «Удалить» и «Настроить замеры». Источник — единственный журнал Measurements; пусто — «—», не ноль; старые односторонние значения остаются «без стороны». Видимость полей — настройка
+ * экрана на время работы: скрытое поле не удаляет факты, а группа с данными за выбранную дату показывается всегда.
  */
 export function MeasurementsCard({ clientId, repository }: Readonly<{ clientId: string; repository: MeasurementRepositoryPort }>) {
   const { palette } = usePrototypeTheme();
@@ -58,6 +88,8 @@ export function MeasurementsCard({ clientId, repository }: Readonly<{ clientId: 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [visible, setVisible] = useState<ReadonlySet<string>>(DEFAULT_VISIBLE);
+  const [configuring, setConfiguring] = useState(false);
   const stripRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -70,19 +102,21 @@ export function MeasurementsCard({ clientId, repository }: Readonly<{ clientId: 
     return off;
   }, [repository, clientId]);
 
-  /** Даты, где есть хотя бы одна окружность, по возрастанию. */
+  /** Даты, где есть хотя бы один обхват, по возрастанию. */
   const dates = useMemo(() => data === null ? [] : [...new Set(data.measurements.filter((item) => CIRCUMFERENCES.includes(item.type)).map((item) => item.localDate))].sort(), [data]);
   const current = selected !== null && dates.includes(selected) ? selected : (dates[dates.length - 1] ?? null);
   const cells = useMemo(() => data === null || current === null ? null : cellsOf(data, current), [data, current]);
   const index = current === null ? -1 : dates.indexOf(current);
+  /** Показываемые группы: включённые в настройке и все, где за дату есть данные. */
+  const groupsFor = (shownCells: Readonly<Record<MeasurementType, Cell>> | null): readonly MeasurementGroup[] =>
+    MEASUREMENT_GROUPS.filter((group) => visible.has(group.id) || (shownCells !== null && typesOf(group).some((type) => shownCells[type].kind !== "EMPTY")));
+  const shownGroups = useMemo(() => groupsFor(cells), [cells, visible]);
 
-  const openNew = () => setEditor({ editingDate: null, date: localDateOf(new Date()), values: Object.fromEntries(CIRCUMFERENCES.map((type) => [type, ""])) as Record<MeasurementType, string> });
+  const emptyValues = () => Object.fromEntries(CIRCUMFERENCES.map((type) => [type, ""])) as Record<MeasurementType, string>;
+  const openNew = () => setEditor({ editingDate: null, date: localDateOf(new Date()), values: emptyValues() });
   const openEdit = () => {
     if (cells === null || current === null) return;
-    setEditor({ editingDate: current, date: current, values: Object.fromEntries(CIRCUMFERENCES.map((type) => {
-      const cell = cells[type];
-      return [type, cell.kind === "VALUE" ? valueText(cell.measurement.valueX10) : ""];
-    })) as Record<MeasurementType, string> });
+    setEditor({ editingDate: current, date: current, values: Object.fromEntries(CIRCUMFERENCES.map((type) => [type, cells[type].kind === "VALUE" ? valueText((cells[type] as { measurement: Measurement }).measurement.valueX10) : ""])) as Record<MeasurementType, string> });
   };
 
   const save = useCallback(async () => {
@@ -94,12 +128,11 @@ export function MeasurementsCard({ clientId, repository }: Readonly<{ clientId: 
     const source = cellsOf(data, editor.editingDate ?? editor.date);
     if (moving && CIRCUMFERENCES.some((type) => source[type].kind === "MANY")) { setError("За эту дату несколько записей одного показателя: смена даты недоступна. Выберите основную в журнале замеров."); return; }
     if (moving && data.measurements.some((row) => row.localDate === editor.date && CIRCUMFERENCES.includes(row.type))) { setError("На выбранную дату замеры уже есть. Откройте ту дату и измените её или выберите другую."); return; }
-    const existing = source;
     setBusy(true);
     setError(null);
     try {
       for (const item of parsed) {
-        const cell = existing[item.type];
+        const cell = source[item.type];
         if (cell.kind === "MANY") { if (item.valueX10 !== null && editor.editingDate === null) throw new Error("MEASUREMENT_MANY"); continue; }
         if (item.valueX10 === null) {
           // Пустое поле удаляет значение только при изменении существующей записи; в новой записи пустое поле ничего не делает.
@@ -139,6 +172,16 @@ export function MeasurementsCard({ clientId, repository }: Readonly<{ clientId: 
     const next = dates[index + step];
     if (next !== undefined) setSelected(next);
   };
+  const toggleGroup = (id: string) => setVisible((currentSet) => { const next = new Set(currentSet); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+
+  /** Группы одной строкой: одиночные по три, парные (Л/П) по две. */
+  const rows = (groups: readonly MeasurementGroup[]): readonly (readonly MeasurementGroup[])[] => {
+    const singles = groups.filter((group) => group.single !== undefined);
+    const sided = groups.filter((group) => group.single === undefined);
+    const chunk = (list: readonly MeasurementGroup[], size: number) => Array.from({ length: Math.ceil(list.length / size) }, (_, row) => list.slice(row * size, row * size + size));
+    return [...chunk(singles, 3), ...chunk(sided, 2)];
+  };
+  const editorGroups = groupsFor(editor !== null && editor.editingDate !== null ? cells : null);
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
@@ -173,22 +216,19 @@ export function MeasurementsCard({ clientId, repository }: Readonly<{ clientId: 
           <AppButton variant="secondary" label="Новая запись" onPress={openNew} />
         </> : <>
           <Text style={[styles.fullDate, { color: colors.textPrimary }]}>{fullDate(current)}</Text>
-          {ROWS.map((row) => (
-            <View key={row.join()} style={styles.tiles}>
-              {row.map((type) => {
-                const cell = cells[type];
-                const text = cell.kind === "VALUE" ? `${valueText(cell.measurement.valueX10)} см` : cell.kind === "MANY" ? "несколько" : "—";
-                return (
-                  <View key={type} accessible accessibilityLabel={`${measurementTypeInfo[type].label}: ${cell.kind === "VALUE" ? text : cell.kind === "MANY" ? "несколько записей, основная не выбрана" : "нет данных"}`}
-                    style={[styles.tile, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
-                    <Text style={[styles.tileLabel, { color: colors.textSecondary }]}>{measurementTypeInfo[type].label}</Text>
-                    <Text style={[styles.tileValue, { color: cell.kind === "VALUE" ? colors.textPrimary : colors.textMuted }]}>{text}</Text>
-                  </View>
-                );
-              })}
+          {rows(shownGroups).map((row) => (
+            <View key={row.map((group) => group.id).join()} style={styles.tiles}>
+              {row.map((group) => <Tile key={group.id} group={group} cells={cells} />)}
             </View>
           ))}
         </>}
+        <AppButton compact variant="ghost" label={configuring ? "Готово" : "Настроить замеры"} onPress={() => setConfiguring(!configuring)} />
+        {configuring ? <>
+          <Text style={[styles.hint, { color: colors.textSecondary }]}>Выберите показатели, которые показывать. Скрытие не удаляет внесённые значения; группа с данными за дату видна всегда. Настройка действует, пока открыто приложение.</Text>
+          <View style={styles.chips}>
+            {MEASUREMENT_GROUPS.map((group) => <SelectionChip key={group.id} group="Показать замер" label={group.label} selected={visible.has(group.id)} onPress={() => toggleGroup(group.id)} />)}
+          </View>
+        </> : null}
       </>}
 
       <Modal visible={editor !== null} transparent animationType="fade" onRequestClose={() => { if (!busy) setEditor(null); }}>
@@ -199,21 +239,30 @@ export function MeasurementsCard({ clientId, repository }: Readonly<{ clientId: 
               {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
               <AppButton variant="secondary" label={editor === null ? "" : formatDate(editor.date)} accessibilityLabel="Дата замера" disabled={busy}
                 onPress={() => { void pickDate({ value: editor?.date ?? localDateOf(new Date()), title: "Дата замера" }).then((picked) => { if (picked !== null && editor !== null) setEditor({ ...editor, date: picked }); }); }} />
-              <Text style={[styles.hint, { color: colors.textSecondary }]}>Заполните то, что измерено. Пустое поле остаётся «нет данных»; у существующей записи пустое поле удаляет это значение.</Text>
-              {editor === null ? null : [0, 2, 4, 6].map((start) => (
-                <View key={start} style={styles.tiles}>
-                  {CIRCUMFERENCES.slice(start, start + 2).map((type) => {
-                    const locked = editor.editingDate !== null && cells !== null && editor.editingDate === current && cells[type].kind === "MANY";
-                    return (
-                      <View key={type} style={styles.grow}>
-                        <TextField label={`${measurementTypeInfo[type].label}, см`} value={editor.values[type]} keyboardType="decimal-pad" disabled={locked || busy}
-                          disabledReason="За эту дату несколько записей: выберите основную в журнале замеров."
-                          onChangeText={(text) => setEditor({ ...editor, values: { ...editor.values, [type]: text } })} />
+              <Text style={[styles.hint, { color: colors.textSecondary }]}>Заполните то, что измерено. Пустое поле остаётся «нет данных»; у существующей записи пустое поле удаляет это значение. Левую и правую сторону можно вносить по отдельности.</Text>
+              {editor === null ? null : editorGroups.map((group) => {
+                const manyLocked = (type: MeasurementType) => editor.editingDate !== null && editor.editingDate === current && cells !== null && cells[type].kind === "MANY";
+                const field = (type: MeasurementType, label: string) => (
+                  <View key={type} style={styles.grow}>
+                    <TextField label={label} value={editor.values[type]} keyboardType="decimal-pad" disabled={manyLocked(type) || busy}
+                      disabledReason="За эту дату несколько записей: выберите основную в журнале замеров." onChangeText={(text) => setEditor({ ...editor, values: { ...editor.values, [type]: text } })} />
+                  </View>
+                );
+                const sided = group.left !== undefined && group.right !== undefined;
+                const legacyHasValue = group.legacy !== undefined && editor.values[group.legacy] !== "";
+                return (
+                  <View key={group.id} style={styles.editorGroup}>
+                    {sided ? <>
+                      <Text style={[styles.groupLabel, { color: colors.textPrimary }]}>{group.label}, см</Text>
+                      <View style={styles.tiles}>
+                        {field(group.left as MeasurementType, "Левый")}
+                        {field(group.right as MeasurementType, "Правый")}
                       </View>
-                    );
-                  })}
-                </View>
-              ))}
+                      {legacyHasValue ? <View style={styles.tiles}>{field(group.legacy as MeasurementType, "Без указания стороны")}</View> : null}
+                    </> : field(group.single as MeasurementType, `${group.label}, см`)}
+                  </View>
+                );
+              })}
             </ScrollView>
             <AppButton label="Сохранить" busy={busy} onPress={() => { void save(); }} />
             <AppButton variant="ghost" label="Отмена" disabled={busy} onPress={() => { setEditor(null); setError(null); }} />
@@ -228,7 +277,7 @@ export function MeasurementsCard({ clientId, repository }: Readonly<{ clientId: 
 
 const styles = StyleSheet.create({
   card: { ...shadow.card, borderRadius: 24, padding: 14, gap: 10 },
-  head: { flexDirection: "row", alignItems: "center", gap: 8 },
+  head: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   title: { flex: 1, fontFamily: fonts.bold, fontSize: 13, lineHeight: 18, letterSpacing: 0.6 },
   grow: { flex: 1 },
@@ -241,11 +290,15 @@ const styles = StyleSheet.create({
   empty: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 19 },
   tiles: { flexDirection: "row", gap: 8 },
   tile: { flex: 1, minHeight: 64, borderRadius: 16, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8, justifyContent: "center", gap: 2 },
+  sides: { flexDirection: "row", justifyContent: "space-between", gap: 6 },
   tileLabel: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  tileValue: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
+  tileValue: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 20 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   backdrop: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.4)" },
   dialog: { borderRadius: 24, padding: 18, gap: 10, maxHeight: "92%" },
   dialogTitle: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
   dialogBody: { gap: 10, paddingBottom: 4 },
+  editorGroup: { gap: 4 },
+  groupLabel: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
   hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
 });

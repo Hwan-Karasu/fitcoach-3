@@ -30,6 +30,15 @@ export const measurementTypeInfo: Readonly<Record<MeasurementType, TypeInfo>> = 
   ARM: circumference("Рука"),
   THIGH: circumference("Бедро"),
   CALF: circumference("Икра"),
+  ABDOMEN: circumference("Живот"),
+  ARM_L: circumference("Бицепс, левый"),
+  ARM_R: circumference("Бицепс, правый"),
+  FOREARM_L: circumference("Предплечье, левое"),
+  FOREARM_R: circumference("Предплечье, правое"),
+  THIGH_L: circumference("Бедро, левое"),
+  THIGH_R: circumference("Бедро, правое"),
+  CALF_L: circumference("Голень, левая"),
+  CALF_R: circumference("Голень, правая"),
 };
 
 /** «80,1», «80.1», «80» → 801; empty or more than one decimal → null (no unknown→zero). */
