@@ -4,7 +4,7 @@ import { AppButton, ConfirmDialog, InlineNotice, TextField } from "../../../shar
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { rebalanceMacroRanges, type GramRange, type MacroGrams } from "../domain/CalcRules.ts";
-import { kcalRangeFromMacros } from "../domain/EnergyRules.ts";
+import { kcalRangeFromEntered } from "../domain/EnergyRules.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
 import { TARGET_METRICS, type Corridors, type TargetException, type TargetVersion } from "../domain/TargetModel.ts";
 import { differsFromUniform, resolveTarget, uniformWeek, versionFor } from "../domain/TargetRules.ts";
@@ -29,7 +29,7 @@ function corridorsFrom(texts: Drafts, mode: TargetMode): Corridors | string | nu
     out[metric] = parsed;
   }
   if (MACROS.every((metric) => out[metric] === null)) return null;
-  return { kcal: kcalRangeFromMacros(out), protein: out.protein, fat: out.fat, carbs: out.carbs };
+  return { kcal: kcalRangeFromEntered(out), protein: out.protein, fat: out.fat, carbs: out.carbs };
 }
 
 /**
@@ -37,13 +37,15 @@ function corridorsFrom(texts: Drafts, mode: TargetMode): Corridors | string | nu
  * фиксируется, остальное и калории досчитываются под суточный ориентир (формулы 2.0, `rebalanceMacroRanges`; 1 г белка и углеводов = 4 ккал, жира = 9). Расчёт цель не меняет: сохраняется
  * только явное «Сохранить цели» (версия с сегодняшней даты, §49.11). Дни недели, версии и исключения — «Цели по дням недели».
  */
-export function NutritionTargetRows({ clientId, targets, calories, defaults, mode, onModeAutoChange, onOpenSchedule }: Readonly<{ clientId: string; targets: NutritionTargetsPort;
+export function NutritionTargetRows({ clientId, targets, calories, defaults, mode, onModeAutoChange, onLiveTarget, onOpenSchedule }: Readonly<{ clientId: string; targets: NutritionTargetsPort;
   /** Суточный ориентир, ккал (расчёт с поправкой по весу); `null` — расчёта нет. */
   calories: number | null;
   /** Расчётные Б/Ж/У под этот ориентир (от сухой массы); `null` — не определены. */
   defaults: MacroGrams | null; mode: TargetMode;
   /** Сохранённая цель с диапазоном открывается в режиме «Коридор», с точными числами — в «Точно». */
-  onModeAutoChange: (mode: TargetMode) => void; onOpenSchedule?: () => void }>) {
+  onModeAutoChange: (mode: TargetMode) => void;
+  /** Живая цель по тому, что сейчас в ячейках (расчёт, правка тренера, калории по введённому): для ориентира, кольца и «съедено/цель» в карточке; `null` — данных нет. */
+  onLiveTarget?: (target: Corridors | null) => void; onOpenSchedule?: () => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const today = todayLocal();
@@ -77,8 +79,8 @@ export function NutritionTargetRows({ clientId, targets, calories, defaults, mod
     onModeAutoChange(TARGET_METRICS.some((metric) => c[metric] !== null && c[metric]!.minX10 !== c[metric]!.maxX10) ? "RANGE" : "EXACT");
   }, [resolved, dirty, onModeAutoChange]);
 
+  /** Расчётные Б/Ж/У — стартовые значения ячеек; введённое тренером фиксируется, остальное досчитывается под исходный калораж (формулы 2.0). */
   const rebalanced = useMemo(() => {
-    if (!manual.protein && !manual.fat && !manual.carbs) return null;
     const range = (metric: MacroMetric): GramRange | null => {
       if (!manual[metric]) return null;
       const parsedRange = parseTargetText(drafts[metric]);
@@ -92,6 +94,19 @@ export function NutritionTargetRows({ clientId, targets, calories, defaults, mod
   const shown = useMemo<Drafts>(() => ({ protein: isAuto("protein") ? autoText("protein") : drafts.protein, fat: isAuto("fat") ? autoText("fat") : drafts.fat, carbs: isAuto("carbs") ? autoText("carbs") : drafts.carbs }),
     [drafts, rebalanced, manual]);
   const parsed = useMemo(() => corridorsFrom(shown, mode), [shown, mode]);
+  const anyManual = manual.protein || manual.fat || manual.carbs;
+  // Калории: введено что-то — считаются по ячейкам (даже по одному белку); иначе — исходный расчётный калораж.
+  const liveKcal = useMemo(() => {
+    if (anyManual) return parsed !== null && typeof parsed !== "string" ? parsed.kcal : null;
+    return calories === null ? null : { minX10: calories * 10, maxX10: calories * 10 };
+  }, [anyManual, parsed, calories]);
+  const live = useMemo<Corridors | null>(() => {
+    const base = parsed !== null && typeof parsed !== "string" ? parsed : null;
+    if (base === null && liveKcal === null) return null;
+    return { kcal: liveKcal, protein: base?.protein ?? null, fat: base?.fat ?? null, carbs: base?.carbs ?? null };
+  }, [parsed, liveKcal]);
+  const liveKey = JSON.stringify(live);
+  useEffect(() => { onLiveTarget?.(live); }, [liveKey, onLiveTarget]);
 
   const setField = (metric: MacroMetric, text: string) => {
     setDrafts({ ...drafts, [metric]: text });

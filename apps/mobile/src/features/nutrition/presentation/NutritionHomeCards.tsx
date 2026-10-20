@@ -8,6 +8,7 @@ import { calcMacros, deriveCalc, trendAdjustment, weightTrendKg } from "../domai
 import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
+import type { Corridors } from "../domain/TargetModel.ts";
 import { NUTRIENT_OF } from "../domain/TargetRules.ts";
 import type { CalcClientBody } from "./NutritionCalcScreen.tsx";
 import { useMacroColors } from "./MacroGrid.tsx";
@@ -62,6 +63,8 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   const stepsToday = useTodaySteps(clientId, calc, today);
   const mark = useTodayWorkoutMark(clientId, calc, today);
   const [mode, setMode] = useState<TargetMode>("EXACT");
+  /** Живая цель из ячеек ручной корректировки (расчёт или правка тренера). */
+  const [liveTarget, setLiveTarget] = useState<Corridors | null>(null);
   const [weightText, setWeightText] = useState("");
   const [stepsText, setStepsText] = useState("");
   const [dirty, setDirty] = useState(false);
@@ -123,16 +126,17 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   const recorded = data?.summary.state === "FOOD_RECORDED";
   const corridors = data === null || data.target.source === "NONE" ? null : data.target.corridors;
   /** Ориентир по калориям: цель тренера (коридор Б/Ж/У → ккал), иначе суточный ориентир расчёта. */
-  const kcalRange = rangeText(corridors?.kcal ?? null);
+  const liveKcal = liveTarget?.kcal ?? null;
+  const kcalRange = rangeText(liveKcal);
   const orientText = kcalRange ?? (guide === null ? null : String(guide));
-  const orientMiddle = corridors?.kcal != null ? midpoint(corridors.kcal) / 10 : guide;
+  const orientMiddle = liveKcal !== null ? midpoint(liveKcal) / 10 : guide;
   const eaten = (metric: "kcal" | "protein" | "fat" | "carbs"): number | null => (recorded && data !== null ? data.summary.totals[NUTRIENT_OF[metric]] : null);
   const eatenKcalX10 = eaten("kcal");
   const fraction = eatenKcalX10 === null || orientMiddle === null || orientMiddle <= 0 ? null : eatenKcalX10 / 10 / orientMiddle;
   /** Дуга делится по калориям съеденных белков, жиров и углеводов (4/9/4). */
   const segments = (["protein", "fat", "carbs"] as const).map((metric) => ({ weight: (eaten(metric) ?? 0) * (metric === "fat" ? 9 : 4), color: macroColors[metric] }));
   const targetText = (metric: "protein" | "fat" | "carbs"): string => {
-    const range = rangeText(corridors?.[metric] ?? null);
+    const range = rangeText(liveTarget?.[metric] ?? corridors?.[metric] ?? null);
     if (range !== null) return range;
     return defaults === null || defaults[metric] === null ? "—" : String(defaults[metric]);
   };
@@ -202,7 +206,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
           ))}
         </View>
         <View style={[styles.rule, { backgroundColor: colors.border }]} />
-        <NutritionTargetRows key={clientId} clientId={clientId} targets={targets} calories={guide} defaults={defaults} mode={mode} onModeAutoChange={setMode} onOpenSchedule={onOpenSchedule} />
+        <NutritionTargetRows key={clientId} clientId={clientId} targets={targets} calories={guide} defaults={defaults} mode={mode} onModeAutoChange={setMode} onLiveTarget={setLiveTarget} onOpenSchedule={onOpenSchedule} />
       </View>
     </>
   );

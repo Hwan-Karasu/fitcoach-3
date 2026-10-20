@@ -17,3 +17,15 @@ export function kcalRangeFromMacros(ranges: Readonly<{ protein: TargetRange | nu
   const max = kcalFromMacrosX10({ proteinX10: ranges.protein.maxX10, fatX10: ranges.fat.maxX10, carbsX10: ranges.carbs.maxX10 }) as number;
   return { minX10: whole(min), maxX10: whole(max) };
 }
+
+/**
+ * Калории по введённым макронутриентам (4/9/4): считаются сразу, даже если введён один показатель (UX 2.0, решение владельца); неведённые не учитываются. Ничего не введено — `null`.
+ * Округление до целых ккал. Для полного набора совпадает с `kcalRangeFromMacros`.
+ */
+export function kcalRangeFromEntered(ranges: Readonly<{ protein: TargetRange | null; fat: TargetRange | null; carbs: TargetRange | null }>): TargetRange | null {
+  const parts = [[ranges.protein, KCAL_PER_G.protein], [ranges.fat, KCAL_PER_G.fat], [ranges.carbs, KCAL_PER_G.carbs]] as const;
+  if (parts.every(([range]) => range === null)) return null;
+  const sum = (pick: (range: TargetRange) => number) => parts.reduce((total, [range, k]) => total + (range === null ? 0 : k * pick(range)), 0);
+  const whole = (valueX10: number) => Math.round(valueX10 / 10) * 10;
+  return { minX10: whole(sum((range) => range.minX10)), maxX10: whole(sum((range) => range.maxX10)) };
+}
