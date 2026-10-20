@@ -226,6 +226,9 @@ test("UX-контракт истории: ключ тренировки — ро
     assert.deepEqual(blockTwo, [first.lineageId, first.lineageId], "Расширенная: ключ — родство тренировки");
     const blockOne = entries.find((entry) => entry.mesocycleId === cycles[0]!.id)!;
     assert.notEqual(blockOne.workoutKey, first.lineageId, "у другого мезоцикла другое родство");
+    assert.deepEqual([blockOne.mesocycleIndex, entries.find((entry) => entry.mesocycleId === cycles[1]!.id)!.mesocycleIndex], [0, 1],
+      "порядок мезоцикла в программе");
+    assert.equal(entries.find((entry) => entry.programId === simple)!.mesocycleIndex, null, "у Простой мезоцикла нет");
     const noted = entries.find((entry) => entry.programId === simple && entry.weekIndex === 1)!;
     assert.equal(noted.exercises[0]!.note, "Левое плечо не тянуло");
     assert.equal(entries.find((entry) => entry.programId === simple && entry.weekIndex === 2)!.exercises[0]!.note, null, "без заметки — null");

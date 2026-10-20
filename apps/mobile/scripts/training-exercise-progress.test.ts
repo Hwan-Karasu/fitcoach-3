@@ -21,7 +21,7 @@ function fact(exerciseId: string, value: SetValues, options: Partial<Readonly<{ 
 function entry(key: string, date: string, programId: string, facts: readonly SetFact[]): TrainingHistoryEntry {
   const groups = new Map<string, SetFact[]>();
   for (const item of facts) groups.set(item.exerciseId, [...(groups.get(item.exerciseId) ?? []), item]);
-  return { key, programId, programTitle: programId, programKind: "SIMPLE", archived: false, planDeleted: false, mesocycleId: null,
+  return { key, programId, programTitle: programId, programKind: "SIMPLE", archived: false, planDeleted: false, mesocycleId: null, mesocycleIndex: null,
     mesocycleTitle: null, workoutTitle: "Тренировка 1", workoutKey: "w1", plannedWorkoutId: "w1", weekIndex: 1, actualDate: date, status: "COMPLETED",
     workingSets: facts.length, exercises: [...groups].map(([exerciseId, list]) => ({ exerciseId, facts: list, note: null })) };
 }

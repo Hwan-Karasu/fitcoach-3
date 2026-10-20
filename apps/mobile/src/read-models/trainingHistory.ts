@@ -9,7 +9,7 @@ export interface TrainingHistoryRules {
   readonly sortHistory: (entries: readonly TrainingHistoryEntry[]) => readonly TrainingHistoryEntry[];
 }
 
-type Origin = Readonly<{ mesocycleId: string | null; mesocycleTitle: string | null; workout: PlannedWorkout }>;
+type Origin = Readonly<{ mesocycleId: string | null; mesocycleTitle: string | null; mesocycleIndex: number | null; workout: PlannedWorkout }>;
 
 /**
  * §48.85, T06: единая хронология занятий клиента. Факты — у дневника, происхождение (программа, мезоцикл, день) —
@@ -28,14 +28,14 @@ export function createTrainingHistory(rules: TrainingHistoryRules,
         const card = cards.get(programId);
         const map = new Map<string, Origin>();
         if (card?.kind === "PERIODIZED") {
-          for (const cycle of (await plans.getPeriodizedPlan(clientId, programId))?.mesocycles ?? []) {
+          for (const [mesocycleIndex, cycle] of ((await plans.getPeriodizedPlan(clientId, programId))?.mesocycles ?? []).entries()) {
             for (const week of cycle.weeks) {
-              for (const workout of week.workouts) map.set(`${week.index}:${workout.id}`, { mesocycleId: cycle.id, mesocycleTitle: cycle.title, workout });
+              for (const workout of week.workouts) map.set(`${week.index}:${workout.id}`, { mesocycleId: cycle.id, mesocycleTitle: cycle.title, mesocycleIndex, workout });
             }
           }
         } else if (card?.kind === "SIMPLE") {
           for (const week of await plans.getSimpleWeeks(clientId, programId)) {
-            for (const workout of week.workouts) map.set(`${week.index}:${workout.id}`, { mesocycleId: null, mesocycleTitle: null, workout });
+            for (const workout of week.workouts) map.set(`${week.index}:${workout.id}`, { mesocycleId: null, mesocycleTitle: null, mesocycleIndex: null, workout });
           }
         }
         origins.set(programId, map);
@@ -65,6 +65,7 @@ export function createTrainingHistory(rules: TrainingHistoryRules,
         return [{ key: session.id, programId: item.programId, programTitle: snapshot?.programTitle ?? card!.title,
           programKind: snapshot?.programKind ?? card!.kind, archived: snapshot === null && card!.archivedAt !== null, planDeleted: snapshot !== null,
           mesocycleId: origin?.mesocycleId ?? null, mesocycleTitle: snapshot !== null ? snapshot.mesocycleTitle : origin?.mesocycleTitle ?? null,
+          mesocycleIndex: origin?.mesocycleIndex ?? null,
           workoutTitle: snapshot !== null ? snapshot.workoutTitle : origin?.workout.title ?? null,
           workoutKey: origin?.workout.lineageId ?? item.plannedWorkoutId, plannedWorkoutId: item.plannedWorkoutId, weekIndex: item.weekIndex, actualDate: session.actualDate,
           status: workoutStatus(session.outcome, facts.length > 0),

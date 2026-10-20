@@ -17,6 +17,8 @@ export interface TrainingHistoryEntry {
   readonly planDeleted: boolean;
   readonly mesocycleId: string | null;
   readonly mesocycleTitle: string | null;
+  /** Порядок мезоцикла в программе клиента (с 0); `null` — Простая программа или план удалён (мезоцикл — только подпись снимка). */
+  readonly mesocycleIndex: number | null;
   /** `null` — тренировки больше нет в плане (факты остаются). */
   readonly workoutTitle: string | null;
   /**
