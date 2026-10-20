@@ -5,6 +5,7 @@ import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvid
 import type { MealSlot } from "../domain/DiaryModel.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
+import type { CatalogFilter } from "./AddFoodScreen.tsx";
 import { NutritionDiaryScreen } from "./NutritionDiaryScreen.tsx";
 import { NutritionStatsScreen } from "./NutritionStatsScreen.tsx";
 import { NutritionTargetsScreen } from "./NutritionTargetsScreen.tsx";
@@ -14,7 +15,7 @@ const sections = [{ id: "diary", label: "Дневник" }, { id: "targets", lab
 
 /** Главный экран «Питания»: Дневник / Цели / Статистика (структура вкладок FitCoach 2.0, §49.2: «Расчёт / Дневник / Статистика»). */
 export function NutritionHomeScreen({ clientId, diary, targets, onAdd }: Readonly<{
-  clientId: string; diary: NutritionDiaryPort; targets: NutritionTargetsPort; onAdd: (localDate: string, slot: MealSlot) => void;
+  clientId: string; diary: NutritionDiaryPort; targets: NutritionTargetsPort; onAdd: (localDate: string, slot: MealSlot, filter?: CatalogFilter) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const [section, setSection] = useState<Section>("diary");

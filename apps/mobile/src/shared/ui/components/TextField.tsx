@@ -22,6 +22,8 @@ interface TextFieldProps {
   readonly testID?: string;
   /** Подпись только для TalkBack: смысл поля ясен из карточки (например, название тренировки). */
   readonly hideLabel?: boolean;
+  /** Многострочное поле (описание): минимальная высота — три строки, текст сверху. */
+  readonly multiline?: boolean;
 }
 
 export function TextField({
@@ -42,6 +44,7 @@ export function TextField({
   inputRef,
   testID,
   hideLabel = false,
+  multiline = false,
 }: Readonly<TextFieldProps>) {
   const [focused, setFocused] = useState(false);
   const { palette } = usePrototypeTheme();
@@ -70,7 +73,9 @@ export function TextField({
         returnKeyType={returnKeyType}
         onSubmitEditing={onSubmitEditing}
         testID={testID}
-        style={[styles.input, { backgroundColor: colors.input, borderColor, color: colors.textPrimary, opacity: disabled ? 0.6 : 1 }]}
+        multiline={multiline}
+        textAlignVertical={multiline ? "top" : "center"}
+        style={[styles.input, multiline ? styles.multiline : null, { backgroundColor: colors.input, borderColor, color: colors.textPrimary, opacity: disabled ? 0.6 : 1 }]}
       />
       {error ? <Text accessibilityLiveRegion="polite" style={[styles.helper, { color: colors.danger }]}>{error}</Text> : null}
       {!error && helpText ? <Text style={[styles.helper, { color: colors.textSecondary }]}>{helpText}</Text> : null}
@@ -79,6 +84,7 @@ export function TextField({
 }
 
 const styles = StyleSheet.create({
+  multiline: { minHeight: 96, paddingTop: 12 },
   field: { gap: 6 },
   label: { fontSize: 13, lineHeight: 18, fontFamily: fonts.bold },
   input: { minHeight: 42, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },

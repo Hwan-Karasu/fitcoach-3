@@ -15,6 +15,7 @@ import { TARGET_METRICS, type TargetMetric } from "../domain/TargetModel.ts";
 import { assessDay, NUTRIENT_OF } from "../domain/TargetRules.ts";
 import { dayTitle, kcalText, metricLabels, nutritionErrorText, quantityText, rangeText, shiftDate, slotLabels, todayLocal, unitLabels, verdictKinds, verdictLabels,
   wholeText } from "./nutritionFormat.ts";
+import type { CatalogFilter } from "./AddFoodScreen.tsx";
 import { useNutritionDay } from "./useNutritionDay.ts";
 
 const WATER_STEP_ML = 250;
@@ -83,7 +84,7 @@ export function NutritionDiaryScreen({ clientId, diary, targets, onAdd }: Readon
   clientId: string;
   diary: NutritionDiaryPort;
   targets: NutritionTargetsPort;
-  onAdd: (localDate: string, slot: MealSlot) => void;
+  onAdd: (localDate: string, slot: MealSlot, filter?: CatalogFilter) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -199,6 +200,10 @@ export function NutritionDiaryScreen({ clientId, diary, targets, onAdd }: Readon
               {slotEntries.map((entry) => <EntryRow key={entry.id} entry={entry} onOpen={() => setEditing(entry)} />)}
               <AppButton compact variant="secondary" icon={(color) => <Plus size={16} color={color} />} label="Добавить" onPress={() => onAdd(localDate, slot)}
                 accessibilityLabel={`Добавить в приём пищи: ${slotLabels[slot]}`} />
+              <View style={styles.waterRow}>
+                <View style={styles.grow}><AppButton compact variant="ghost" label="Из избранного" accessibilityLabel={`Добавить из избранного в: ${slotLabels[slot]}`} onPress={() => onAdd(localDate, slot, "FAVORITES")} /></View>
+                <View style={styles.grow}><AppButton compact variant="ghost" label="Из недавних" accessibilityLabel={`Добавить из недавних в: ${slotLabels[slot]}`} onPress={() => onAdd(localDate, slot, "RECENT")} /></View>
+              </View>
               <View style={styles.waterRow}>
                 <View style={styles.grow}><AppButton compact variant="ghost" icon={(color) => <Repeat2 size={16} color={color} />} label="Повторить" disabled={copying}
                   accessibilityLabel={`Повторить приём пищи: ${slotLabels[slot]}`} onPress={() => { void repeatSlot(slot); }} /></View>

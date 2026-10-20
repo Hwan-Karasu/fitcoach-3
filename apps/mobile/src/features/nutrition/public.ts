@@ -1,4 +1,4 @@
-export { AddFoodScreen } from "./presentation/AddFoodScreen.tsx";
+export { AddFoodScreen, type CatalogFilter } from "./presentation/AddFoodScreen.tsx";
 export { FoodEditorScreen } from "./presentation/FoodEditorScreen.tsx";
 export { NutritionHomeScreen } from "./presentation/NutritionHomeScreen.tsx";
 export { RecipeEditorScreen } from "./presentation/RecipeEditorScreen.tsx";

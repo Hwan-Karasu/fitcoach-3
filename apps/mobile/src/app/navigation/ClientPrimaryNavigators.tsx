@@ -5,7 +5,7 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import { ClientHomePreview, type ClientRecord } from "../../features/clients/public.ts";
 import { localDateOf, parseValueX10, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
-import { AddFoodScreen, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionDiaryPort, type NutritionTargetsPort,
+import { AddFoodScreen, type CatalogFilter, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionDiaryPort, type NutritionTargetsPort,
   type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ArchivedProgramsPanel, ParticipantSwitcher, participantTarget, ProgramMatrixScreen, PeriodizedBuilderScreen, ProgramLibraryScreen, ProgramModeChooserScreen, programLibraryTabTitles, ProgramScreen, SimpleProgramBuilderScreen,
   WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort,
@@ -19,7 +19,7 @@ import { ClientHeader } from "./ClientHeader.tsx";
 type HomeRoutes = { HomeIndex: undefined };
 type NutritionRoutes = {
   NutritionIndex: undefined;
-  NutritionAdd: { localDate: string; slot: MealSlot };
+  NutritionAdd: { localDate: string; slot: MealSlot; filter?: CatalogFilter };
   NutritionFood: { name: string };
   NutritionRecipe: { recipeId?: string } | undefined;
 };
@@ -120,10 +120,10 @@ export function NutritionNavigator({ clientId, clientName, clientEmoji, foods, r
     })}>
       <NutritionStack.Screen name="NutritionIndex">
         {({ navigation }) => <NutritionHomeScreen clientId={clientId} diary={diary} targets={targets}
-          onAdd={(localDate, slot) => navigation.navigate("NutritionAdd", { localDate, slot })} />}
+          onAdd={(localDate, slot, filter) => navigation.navigate("NutritionAdd", { localDate, slot, filter })} />}
       </NutritionStack.Screen>
       <NutritionStack.Screen name="NutritionAdd">
-        {({ navigation, route }) => <AddFoodScreen clientId={clientId} localDate={route.params.localDate} slot={route.params.slot}
+        {({ navigation, route }) => <AddFoodScreen clientId={clientId} localDate={route.params.localDate} slot={route.params.slot} initialFilter={route.params.filter}
           foods={foods} recipes={recipes} diary={diary} onCreateFood={(name) => navigation.navigate("NutritionFood", { name })}
           onCreateRecipe={() => navigation.navigate("NutritionRecipe")} onEditRecipe={(recipeId) => navigation.navigate("NutritionRecipe", { recipeId })} />}
       </NutritionStack.Screen>

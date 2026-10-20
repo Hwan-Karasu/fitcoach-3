@@ -27,6 +27,8 @@ export function FoodEditorScreen({ foods, initialName = "", onSaved }: Readonly<
   const colors = palette.tokens;
   const [name, setName] = useState(initialName);
   const [brand, setBrand] = useState("");
+  const [barcode, setBarcode] = useState("");
+  const [pieceMass, setPieceMass] = useState("");
   const [unit, setUnit] = useState<FoodBasisUnit>("G");
   const [amount, setAmount] = useState("100");
   const [values, setValues] = useState({ kcal: "", protein: "", fat: "", carbs: "" });
@@ -37,10 +39,12 @@ export function FoodEditorScreen({ foods, initialName = "", onSaved }: Readonly<
     const amountX10 = parseDecimalX10(amount);
     const parsed = { kcalX10: optionalValue(values.kcal), proteinX10: optionalValue(values.protein), fatX10: optionalValue(values.fat), carbsX10: optionalValue(values.carbs) };
     if (amountX10 === null || amountX10 <= 0) { setError("Укажите, на какое количество даны значения, например 100."); return; }
+    const pieceX10 = optionalValue(pieceMass);
+    if (pieceX10 === "invalid") { setError("Масса одной штуки — число, например 45."); return; }
     if (Object.values(parsed).includes("invalid")) { setError("Значения — числа не более чем с одним знаком после запятой, например 12,5."); return; }
     setBusy(true);
     try {
-      const created = await foods.create({ name, brand: brand.trim() === "" ? null : brand, unit, amountX10, kcalX10: parsed.kcalX10 as number | null,
+      const created = await foods.create({ name, brand: brand.trim() === "" ? null : brand, unit, amountX10, barcode: barcode.trim() === "" ? null : barcode, gramsPerPieceX10: pieceX10, kcalX10: parsed.kcalX10 as number | null,
         proteinX10: parsed.proteinX10 as number | null, fatX10: parsed.fatX10 as number | null, carbsX10: parsed.carbsX10 as number | null });
       onSaved(created);
     } catch (failure) {
@@ -54,6 +58,9 @@ export function FoodEditorScreen({ foods, initialName = "", onSaved }: Readonly<
       {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       <TextField label="Название" value={name} onChangeText={setName} required autoCapitalize="sentences" />
       <TextField label="Марка или описание" value={brand} onChangeText={setBrand} hint="Необязательно" />
+      <TextField label="Штрихкод" value={barcode} onChangeText={setBarcode} hint="Необязательно. Только для локального поиска: сетевого справочника нет." />
+      <TextField label="Масса одной штуки, г" value={pieceMass} onChangeText={setPieceMass} keyboardType="decimal-pad"
+        hint="Необязательно. Если указать, при добавлении еды можно вводить штуки; без неё штуки недоступны." />
       <Text style={[styles.label, { color: colors.textPrimary }]}>Значения даны</Text>
       <View style={styles.chips}>
         {units.map((item) => <SelectionChip key={item.id} group="Единица" label={item.label} selected={unit === item.id}

@@ -38,6 +38,8 @@ export function RecipeEditorScreen({ recipeId, foods, recipes, onSaved }: Readon
   const [name, setName] = useState("");
   const [servings, setServings] = useState("1");
   const [mass, setMass] = useState("");
+  const [description, setDescription] = useState("");
+  const [flags, setFlags] = useState<Readonly<{ favorite: boolean; inCookbook: boolean }>>({ favorite: false, inCookbook: false });
   const [rows, setRows] = useState<readonly Row[]>([]);
   const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState("");
@@ -53,7 +55,8 @@ export function RecipeEditorScreen({ recipeId, foods, recipes, onSaved }: Readon
       if (!active) return;
       if (recipe === null) { setError("Рецепт не найден."); setLoaded(true); return; }
       setName(recipe.name); setServings(formatDecimalX10(recipe.servingsX10)); setMass(recipe.cookedMassX10 === null ? "" : formatDecimalX10(recipe.cookedMassX10));
-      setRows(recipe.ingredients.map((item) => ({ food: item.food, quantity: formatDecimalX10(item.quantityX10) }))); setRevision(recipe.revision); setLoaded(true);
+      setRows(recipe.ingredients.map((item) => ({ food: item.food, quantity: formatDecimalX10(item.quantityX10) }))); setRevision(recipe.revision); setDescription(recipe.description ?? "");
+      setFlags({ favorite: recipe.favorite === true, inCookbook: recipe.inCookbook === true }); setLoaded(true);
     }, () => { if (active) { setError("Не удалось загрузить рецепт."); setLoaded(true); } });
     return () => { active = false; };
   }, [recipeId, recipes]);
@@ -79,13 +82,21 @@ export function RecipeEditorScreen({ recipeId, foods, recipes, onSaved }: Readon
     if (ingredients.some((item) => item.quantityX10 <= 0)) { setError("Укажите количество каждого ингредиента."); return; }
     setBusy(true);
     try {
-      const input = { name, servingsX10, cookedMassX10: massX10, ingredients };
+      const input = { name, servingsX10, cookedMassX10: massX10, description: description.trim() === "" ? null : description, ingredients };
       if (recipeId === undefined) await recipes.create(input); else await recipes.update(recipeId, revision, input);
       onSaved();
     } catch (failure) {
       setError(recipeError(failure));
       setBusy(false);
     }
+  };
+  const toggle = async (kind: "favorite" | "inCookbook") => {
+    if (recipeId === undefined) return;
+    try {
+      const next = kind === "favorite" ? await recipes.setFavorite(recipeId, !flags.favorite) : await recipes.setInCookbook(recipeId, !flags.inCookbook);
+      setFlags({ favorite: next.favorite === true, inCookbook: next.inCookbook === true });
+      setError(null);
+    } catch (failure) { setError(recipeError(failure)); }
   };
   const hide = async () => {
     if (recipeId === undefined) return;
@@ -99,6 +110,7 @@ export function RecipeEditorScreen({ recipeId, foods, recipes, onSaved }: Readon
       {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       <TextField label="Название" value={name} onChangeText={setName} required autoCapitalize="sentences" />
       <TextField label="Число порций" value={servings} onChangeText={setServings} keyboardType="decimal-pad" required />
+      <TextField label="Описание" value={description} onChangeText={setDescription} multiline hint="Необязательно, до 500 знаков." />
       <TextField label="Масса готового блюда, г" value={mass} onChangeText={setMass} keyboardType="decimal-pad"
         hint="Необязательно. Без неё рецепт вносится только в порциях — масса не выдумывается по сырому весу." />
 
@@ -136,6 +148,10 @@ export function RecipeEditorScreen({ recipeId, foods, recipes, onSaved }: Readon
         <Text style={[styles.meta, { color: colors.textMuted }]}>Сумма ингредиентов. «—» — у какого-то ингредиента нет этого значения.</Text>
       </View>
 
+      {recipeId !== undefined ? <View style={styles.rowHead}>
+        <View style={styles.flex}><AppButton compact variant="secondary" label={flags.inCookbook ? "Убрать из кулинарной книги" : "Добавить в кулинарную книгу"} disabled={busy} onPress={() => { void toggle("inCookbook"); }} /></View>
+        <View style={styles.flex}><AppButton compact variant="ghost" label={flags.favorite ? "Убрать из избранного" : "В избранное"} disabled={busy} onPress={() => { void toggle("favorite"); }} /></View>
+      </View> : null}
       <AppButton label={recipeId === undefined ? "Сохранить рецепт" : "Сохранить изменения"} onPress={() => { void save(); }} busy={busy} />
       {recipeId !== undefined ? <AppButton variant="destructive" label="Убрать рецепт из каталога" disabled={busy} onPress={() => setConfirmHide(true)} /> : null}
       <ConfirmDialog visible={confirmHide} destructive title="Убрать рецепт из каталога?" confirmLabel="Убрать" onCancel={() => setConfirmHide(false)} onConfirm={() => { void hide(); }}
@@ -148,6 +164,7 @@ function recipeError(error: unknown): string {
   switch (error instanceof Error ? error.message : "") {
     case "RECIPE_NAME_INVALID": return "Введите название (до 80 символов).";
     case "RECIPE_SERVINGS_INVALID": return "Число порций — больше нуля.";
+    case "RECIPE_DESCRIPTION_INVALID": return "Описание — не длиннее 500 знаков.";
     case "RECIPE_MASS_INVALID": return "Масса готового блюда — больше нуля.";
     case "RECIPE_INGREDIENT_INVALID": return "Добавьте хотя бы один ингредиент с количеством больше нуля.";
     case "FOOD_SOURCE_UNAVAILABLE": return "Один из продуктов недоступен (скрыт). Уберите его из состава.";
@@ -163,6 +180,7 @@ const styles = StyleSheet.create({
   title: { flex: 1, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
   meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   card: { ...shadow.card, borderRadius: 20, padding: 14, gap: 8 },
+  flex: { flex: 1 },
   rowHead: { flexDirection: "row", alignItems: "center", gap: 8 },
   option: { minHeight: 48, justifyContent: "center" },
 });

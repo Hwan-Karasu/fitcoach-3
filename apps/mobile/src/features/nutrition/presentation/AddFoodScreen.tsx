@@ -1,21 +1,34 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { AppButton, EmptyState, InlineNotice, SearchField, SegmentedControl, TextField } from "../../../shared/ui/components/public.ts";
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Star } from "lucide-react-native";
+import { AppButton, AppIconButton, EmptyState, InlineNotice, SearchField, SegmentedControl, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
-import type { MealSlot } from "../domain/DiaryModel.ts";
+import { MEAL_SLOTS, type DiaryEntryInput, type MealSlot } from "../domain/DiaryModel.ts";
+import { rankUsage } from "../domain/DiaryRules.ts";
 import type { FoodCatalogPort } from "../domain/FoodCatalogPort.ts";
 import type { FoodProduct } from "../domain/FoodModel.ts";
-import { formatDecimalX10, parseDecimalX10 } from "../domain/FoodRules.ts";
+import { formatDecimalX10, gramsFromPieces, parseDecimalX10 } from "../domain/FoodRules.ts";
 import { snapshotOfFood, snapshotOfRecipe, type FoodSnapshot } from "../domain/FoodSnapshot.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { RecipeCatalogPort } from "../domain/RecipeCatalogPort.ts";
 import type { Recipe } from "../domain/RecipeModel.ts";
 import { recipeBases } from "../domain/RecipeRules.ts";
-import { basisText, kcalText, nutritionErrorText, slotLabels, unitLabels } from "./nutritionFormat.ts";
+import { basisText, kcalText, nutritionErrorText, shiftDate, slotLabels, todayLocal, unitLabels } from "./nutritionFormat.ts";
 
 type Item = Readonly<{ kind: "FOOD"; food: FoodProduct }> | Readonly<{ kind: "RECIPE"; recipe: Recipe }>;
+/** Категории каталога (P-25). «Недавние» и «Частые» — производное чтение дневника клиента, без отдельного хранилища. */
+export type CatalogFilter = "ALL" | "RECENT" | "FREQUENT" | "FAVORITES" | "FOODS" | "RECIPES" | "COOKBOOK";
+const filters: readonly Readonly<{ id: CatalogFilter; label: string }>[] = [{ id: "ALL", label: "Все" }, { id: "RECENT", label: "Недавние" }, { id: "FREQUENT", label: "Частые" },
+  { id: "FAVORITES", label: "Избранное" }, { id: "FOODS", label: "Продукты" }, { id: "RECIPES", label: "Рецепты" }, { id: "COOKBOOK", label: "Кулинарная книга" }];
+const USAGE_DAYS = 120;
+const USAGE_LIMIT = 50;
+const emptyBodies: Readonly<Record<CatalogFilter, string>> = {
+  ALL: "Здесь появятся ваши продукты и рецепты. Создайте первый продукт.", RECENT: "Недавно добавленных позиций у этого клиента пока нет.",
+  FREQUENT: "Частые позиции появятся после нескольких записей в дневнике.", FAVORITES: "Отметьте продукт или рецепт звёздочкой — он появится здесь.",
+  FOODS: "Продуктов пока нет. Создайте первый.", RECIPES: "Рецептов пока нет. Создайте первый.", COOKBOOK: "Добавьте рецепт в кулинарную книгу — он появится здесь." };
+const isFavorite = (item: Item) => (item.kind === "FOOD" ? item.food.favorite : item.recipe.favorite) === true;
 const itemKey = (item: Item) => item.kind === "FOOD" ? `f:${item.food.id}` : `r:${item.recipe.id}`;
 
 /** Снимок для выбранной позиции и количества; `null` — количество не разобрано. */
@@ -23,18 +36,28 @@ function snapshotFor(item: Item, recipeUnit: "PORTION" | "G", quantityX10: numbe
   return item.kind === "FOOD" ? snapshotOfFood(item.food, quantityX10) : snapshotOfRecipe(item.recipe, recipeUnit, quantityX10);
 }
 
-function ItemCard({ item, open, onToggle, onAdd, onEditRecipe }: Readonly<{ item: Item; open: boolean; onToggle: () => void; onEditRecipe: (recipeId: string) => void;
-  onAdd: (snapshot: FoodSnapshot) => Promise<string | null> }>) {
+function ItemCard({ item, open, slot, onToggle, onAdd, onEditRecipe, onFavorite, onCookbook }: Readonly<{ item: Item; open: boolean; slot: MealSlot; onToggle: () => void;
+  onEditRecipe: (recipeId: string) => void; onFavorite: (item: Item) => void; onCookbook: (recipe: Recipe) => void;
+  onAdd: (snapshot: FoodSnapshot, slots: readonly MealSlot[]) => Promise<string | null> }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const bases = item.kind === "RECIPE" ? recipeBases(item.recipe) : [];
   const [recipeUnit, setRecipeUnit] = useState<"PORTION" | "G">("PORTION");
   const basis = item.kind === "FOOD" ? { unit: item.food.unit, amountX10: item.food.amountX10 }
     : (bases.find((candidate) => candidate.basis.unit === recipeUnit) ?? bases[0]!).basis;
+  const pieceMass = item.kind === "FOOD" && item.food.unit === "G" ? (item.food.gramsPerPieceX10 ?? null) : null;
+  const [mode, setMode] = useState<"BASIS" | "PIECES">("BASIS");
   const [text, setText] = useState(() => formatDecimalX10(basis.amountX10));
+  const [slots, setSlots] = useState<readonly MealSlot[]>([slot]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const quantity = parseDecimalX10(text);
+  const typed = parseDecimalX10(text);
+  /** Штуки переводятся в граммы по массе штуки продукта; в дневник всегда уходит количество в основе продукта. */
+  const quantity = useMemo(() => {
+    if (typed === null || typed <= 0) return null;
+    if (mode === "BASIS") return typed;
+    try { return gramsFromPieces(typed, pieceMass); } catch { return null; }
+  }, [typed, mode, pieceMass]);
   const preview = useMemo(() => {
     if (quantity === null || quantity <= 0) return null;
     try { return snapshotFor(item, recipeUnit, quantity).eaten; } catch { return null; }
@@ -45,8 +68,9 @@ function ItemCard({ item, open, onToggle, onAdd, onEditRecipe }: Readonly<{ item
 
   const add = async () => {
     if (quantity === null || quantity <= 0) { setError("Введите количество, например 150 или 1,5."); return; }
+    if (busy) return;
     setBusy(true);
-    const message = await onAdd(snapshotFor(item, recipeUnit, quantity));
+    const message = await onAdd(snapshotFor(item, recipeUnit, quantity), slots);
     setBusy(false);
     setError(message);
   };
@@ -57,16 +81,30 @@ function ItemCard({ item, open, onToggle, onAdd, onEditRecipe }: Readonly<{ item
         <Text numberOfLines={2} style={[styles.title, { color: colors.textPrimary }]}>{name}</Text>
         <Text style={[styles.meta, { color: colors.textSecondary }]}>{sub}</Text>
       </Pressable>
+      <View style={styles.star}><AppIconButton label={isFavorite(item) ? `Убрать из избранного: ${name}` : `В избранное: ${name}`}
+        icon={<Star size={20} color={colors.accentInk} fill={isFavorite(item) ? colors.accentInk : "transparent"} />} onPress={() => onFavorite(item)} /></View>
       {open ? <View style={styles.portion}>
         {item.kind === "RECIPE" && bases.length > 1 ? <SegmentedControl items={[{ id: "PORTION", label: "Порции" }, { id: "G", label: "Граммы" }]} selectedId={recipeUnit}
           onSelect={(next) => { setRecipeUnit(next); setText(next === "G" ? "100" : "1"); }} /> : null}
+        {pieceMass !== null ? <SegmentedControl items={[{ id: "BASIS", label: "Граммы" }, { id: "PIECES", label: "Штуки" }]} selectedId={mode}
+          onSelect={(next) => { setMode(next); setText(next === "PIECES" ? "1" : formatDecimalX10(basis.amountX10)); setError(null); }} /> : null}
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>Приёмы пищи</Text>
+        <View style={styles.chips}>
+          {MEAL_SLOTS.map((id) => <SelectionChip key={id} group="Приём пищи" label={slotLabels[id]} selected={slots.includes(id)}
+            onPress={() => setSlots((current) => current.includes(id) ? (current.length === 1 ? current : current.filter((value) => value !== id)) : [...current, id])} />)}
+        </View>
         <View style={styles.qtyRow}>
-          <View style={styles.grow}><TextField label={`Количество, ${unitLabels[basis.unit]}`} value={text} onChangeText={(next) => { setText(next); setError(null); }} keyboardType="decimal-pad" /></View>
+          <View style={styles.grow}><TextField label={mode === "PIECES" ? "Количество, шт." : `Количество, ${unitLabels[basis.unit]}`} value={text}
+            onChangeText={(next) => { setText(next); setError(null); }} keyboardType="decimal-pad" /></View>
           <View style={styles.grow}><AppButton label="Добавить" onPress={() => { void add(); }} busy={busy} /></View>
         </View>
         <Text style={[styles.meta, { color: colors.textSecondary }]}>{preview === null ? " " : `Будет внесено: ${kcalText(preview)}`}</Text>
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
-        {item.kind === "RECIPE" ? <AppButton compact variant="ghost" label="Изменить рецепт" onPress={() => onEditRecipe(item.recipe.id)} /> : null}
+        {mode === "PIECES" && quantity !== null ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{`≈ ${formatDecimalX10(quantity)} г`}</Text> : null}
+        {item.kind === "RECIPE" ? <View style={styles.qtyRow}>
+          <View style={styles.grow}><AppButton compact variant="ghost" label="Изменить рецепт" onPress={() => onEditRecipe(item.recipe.id)} /></View>
+          <View style={styles.grow}><AppButton compact variant="ghost" label={item.recipe.inCookbook === true ? "Убрать из книги" : "В кулинарную книгу"} onPress={() => onCookbook(item.recipe)} /></View>
+        </View> : null}
       </View> : null}
     </View>
   );
@@ -76,10 +114,11 @@ function ItemCard({ item, open, onToggle, onAdd, onEditRecipe }: Readonly<{ item
  * Добавление еды в приём пищи (§49.2): локальный поиск по своим продуктам и рецептам, выбор, количество, «Добавить». Можно добавить несколько позиций подряд;
  * экран остаётся открытым, пока тренер не вернётся к дневнику. Нет нужного продукта — «Создать продукт».
  */
-export function AddFoodScreen({ clientId, localDate, slot, foods, recipes, diary, onCreateFood, onCreateRecipe, onEditRecipe }: Readonly<{
+export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "ALL", foods, recipes, diary, onCreateFood, onCreateRecipe, onEditRecipe }: Readonly<{
   clientId: string;
   localDate: string;
   slot: MealSlot;
+  initialFilter?: CatalogFilter;
   foods: FoodCatalogPort;
   recipes: RecipeCatalogPort;
   diary: NutritionDiaryPort;
@@ -90,45 +129,77 @@ export function AddFoodScreen({ clientId, localDate, slot, foods, recipes, diary
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<CatalogFilter>(initialFilter);
   const [items, setItems] = useState<readonly Item[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [added, setAdded] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    void Promise.all([foods.search(query), recipes.search(query)]).then(([foodRows, recipeRows]) => {
-      if (active) {
-        setItems([...recipeRows.map((recipe) => ({ kind: "RECIPE", recipe }) as const), ...foodRows.map((food) => ({ kind: "FOOD", food }) as const)]);
-        setFailed(false);
+    const load = async (): Promise<readonly Item[]> => {
+      if (filter === "RECENT" || filter === "FREQUENT") {
+        const today = todayLocal();
+        const usage = rankUsage(await diary.listEntries(clientId, shiftDate(today, -USAGE_DAYS), today), filter === "RECENT" ? "recent" : "frequent", USAGE_LIMIT);
+        const needle = query.trim().toLocaleLowerCase("ru");
+        const resolved = await Promise.all(usage.map(async (used): Promise<Item | null> => {
+          if (needle !== "" && !used.name.toLocaleLowerCase("ru").includes(needle)) return null;
+          if (used.kind === "FOOD") { const food = await foods.get(used.id); return food === null || food.archivedAt !== null ? null : { kind: "FOOD", food }; }
+          const recipe = await recipes.get(used.id);
+          return recipe === null || recipe.archivedAt !== null ? null : { kind: "RECIPE", recipe };
+        }));
+        return resolved.filter((item): item is Item => item !== null);
       }
-    }, () => { if (active) setFailed(true); });
+      const wantFoods = filter === "ALL" || filter === "FOODS" || filter === "FAVORITES";
+      const wantRecipes = filter !== "FOODS";
+      const [foodRows, recipeRows] = await Promise.all([wantFoods ? foods.search(query, filter === "FAVORITES" ? "FAVORITES" : "ALL") : [],
+        wantRecipes ? recipes.search(query, filter === "FAVORITES" ? "FAVORITES" : filter === "COOKBOOK" ? "COOKBOOK" : "ALL") : []]);
+      return [...recipeRows.map((recipe) => ({ kind: "RECIPE", recipe }) as const), ...foodRows.map((food) => ({ kind: "FOOD", food }) as const)];
+    };
+    void load().then((rows) => { if (active) { setItems(rows); setFailed(false); } }, () => { if (active) setFailed(true); });
     return () => { active = false; };
-  }, [foods, recipes, query, tick]);
+  }, [foods, recipes, diary, clientId, query, filter, tick]);
   useEffect(() => {
     const refresh = () => setTick((value) => value + 1);
     const offFoods = foods.subscribeCommittedChanges(refresh);
     const offRecipes = recipes.subscribeCommittedChanges(refresh);
-    return () => { offFoods(); offRecipes(); };
-  }, [foods, recipes]);
+    const offDiary = diary.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });
+    return () => { offFoods(); offRecipes(); offDiary(); };
+  }, [foods, recipes, diary, clientId]);
 
-  const add = useCallback(async (snapshot: FoodSnapshot): Promise<string | null> => {
+  const add = useCallback(async (snapshot: FoodSnapshot, slots: readonly MealSlot[]): Promise<string | null> => {
     try {
-      await diary.addEntry(clientId, { localDate, slot, snapshot });
-      setAdded(snapshot.name);
+      const inputs: DiaryEntryInput[] = slots.map((target) => ({ localDate, slot: target, snapshot }));
+      await diary.addEntries(clientId, inputs);
+      setAdded(slots.length === 1 ? snapshot.name : `${snapshot.name} — приёмов: ${slots.length}`);
       return null;
     } catch (failure) {
       return nutritionErrorText(failure);
     }
-  }, [clientId, diary, localDate, slot]);
+  }, [clientId, diary, localDate]);
+  const reportFailure = useCallback((failure: unknown) => { setAdded(null); setActionError(nutritionErrorText(failure)); }, []);
+  const toggleFavorite = useCallback((item: Item) => {
+    setActionError(null);
+    const next = !isFavorite(item);
+    void (item.kind === "FOOD" ? foods.setFavorite(item.food.id, next) : recipes.setFavorite(item.recipe.id, next)).catch(reportFailure);
+  }, [foods, recipes, reportFailure]);
+  const toggleCookbook = useCallback((recipe: Recipe) => {
+    setActionError(null);
+    void recipes.setInCookbook(recipe.id, recipe.inCookbook !== true).catch(reportFailure);
+  }, [recipes, reportFailure]);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
       <View style={styles.header}>
         <Text style={[styles.meta, { color: colors.textSecondary }]}>{`В приём пищи: ${slotLabels[slot]}`}</Text>
         <SearchField query={query} onChangeQuery={setQuery} accessibilityLabel="Поиск продукта или рецепта" placeholder="Поиск продукта или рецепта" />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow} keyboardShouldPersistTaps="handled">
+          {filters.map((item) => <SelectionChip key={item.id} group="Категория" label={item.label} selected={filter === item.id} onPress={() => { setFilter(item.id); setOpenKey(null); }} />)}
+        </ScrollView>
         {added !== null ? <InlineNotice kind="success">{`Добавлено: ${added}`}</InlineNotice> : null}
+        {actionError !== null ? <InlineNotice kind="error">{actionError}</InlineNotice> : null}
         {failed ? <InlineNotice kind="error">Не удалось загрузить каталог.</InlineNotice> : null}
       </View>
       <FlatList data={items ?? []} keyExtractor={itemKey} contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled"
@@ -137,10 +208,11 @@ export function AddFoodScreen({ clientId, localDate, slot, foods, recipes, diary
           <View style={styles.grow}><AppButton compact variant="secondary" label="Создать рецепт" onPress={onCreateRecipe} /></View>
         </View>}
         ListEmptyComponent={items === null ? null : <EmptyState reason={query.trim() === "" ? "no-data" : "no-match"}
-          title={query.trim() === "" ? "Каталог пока пуст" : "Ничего не найдено"}
-          body={query.trim() === "" ? "Здесь появятся ваши продукты и рецепты. Создайте первый продукт." : "Измените запрос или создайте такой продукт."}
+          title={query.trim() === "" ? (filter === "ALL" ? "Каталог пока пуст" : "Здесь пока пусто") : "Ничего не найдено"}
+          body={query.trim() === "" ? emptyBodies[filter] : "Измените запрос или создайте такой продукт."}
           action={{ label: "Создать продукт", onPress: () => onCreateFood(query.trim()) }} />}
-        renderItem={({ item }) => <ItemCard item={item} open={openKey === itemKey(item)} onToggle={() => setOpenKey(openKey === itemKey(item) ? null : itemKey(item))} onAdd={add} onEditRecipe={onEditRecipe} />} />
+        renderItem={({ item }) => <ItemCard item={item} slot={slot} open={openKey === itemKey(item)} onToggle={() => setOpenKey(openKey === itemKey(item) ? null : itemKey(item))}
+          onAdd={add} onEditRecipe={onEditRecipe} onFavorite={toggleFavorite} onCookbook={toggleCookbook} />} />
     </View>
   );
 }
@@ -151,7 +223,10 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, gap: 8 },
   list: { paddingHorizontal: 16, paddingBottom: 24, gap: 10 },
   card: { ...shadow.card, borderRadius: 20, padding: 14, gap: 8 },
-  cardHead: { gap: 2, minHeight: 48, justifyContent: "center" },
+  cardHead: { gap: 2, minHeight: 48, justifyContent: "center", paddingRight: 52 },
+  star: { position: "absolute", right: 6, top: 6 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chipsRow: { flexDirection: "row", gap: 8, paddingVertical: 2 },
   title: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
   meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   portion: { gap: 8 },

@@ -63,6 +63,9 @@ export function nutritionErrorText(error: unknown): string {
     case "FOOD_BASIS_INVALID": return "Укажите, на какое количество даны значения: больше нуля.";
     case "FOOD_NUTRIENT_INVALID": return "Проверьте значения: они не могут быть отрицательными или слишком большими.";
     case "FOOD_NUTRIENTS_EMPTY": return "Заполните хотя бы одно значение: калории, белки, жиры или углеводы.";
+    case "FOOD_BARCODE_INVALID": return "Штрихкод — от 4 до 32 цифр или букв, без пробелов.";
+    case "FOOD_PIECE_MASS_INVALID": return "Масса одной штуки — число больше нуля, например 45.";
+    case "PIECE_MASS_UNKNOWN": return "Масса одной штуки не указана: откройте продукт и заполните её, чтобы вводить штуки.";
     case "INVALID_PORTION": return "Количество должно быть больше нуля.";
     case "WATER_INVALID": return "Вода — от 1 до 20 000 мл.";
     case "DIARY_STALE": return "Запись уже изменилась. Дневник обновлён, повторите действие.";
