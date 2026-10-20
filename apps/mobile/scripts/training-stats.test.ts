@@ -247,3 +247,11 @@ test("варианты мезоциклов: только выбранной п�
   assert.deepEqual(mesocycleOptions(entries, "P1"), [{ value: ALL_OPTION, label: "Все мезоциклы" }, { value: "M1", label: "Блок 1" }, { value: "M2", label: "Блок 2" }]);
   assert.deepEqual(mesocycleOptions(entries, "P2"), [{ value: ALL_OPTION, label: "Все мезоциклы" }]);
 });
+
+test("сводка: средняя длительность — по занятиям с парой отметок, при любом исходе (§48.86.17)", () => {
+  const timed = (key: string, status: WorkoutStatus, durationSec: number | null) => ({ ...entry(key, "2026-10-01", status, [fact(BENCH, values(50, 5))]), durationSec });
+  const summary = summarize([timed("a", "COMPLETED", 3600), timed("b", "MISSED", 1800), timed("c", "COMPLETED", null)], infoOf);
+  assert.equal(summary.avgDurationSec, 2700, "(60 + 30) / 2 минут; занятие без отметок не разбавляет среднее");
+  assert.equal(summary.timedWorkouts, 2);
+  assert.equal(summarize([timed("d", "COMPLETED", null)], infoOf).avgDurationSec, null);
+});

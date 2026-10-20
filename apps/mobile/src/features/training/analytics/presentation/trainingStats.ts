@@ -106,8 +106,12 @@ export function entryTonnage(entry: TrainingHistoryEntry, infoOf: InfoOf, bodyOf
   return { kg, incompleteSets };
 }
 
-/** §48.86.25: четыре ключевых показателя; средняя длительность не считается — время начала и конца не записывается. */
+/** §48.86.25: четыре ключевых показателя. Средняя длительность — по занятиям с валидной парой отметок, при любом исходе (§48.86.17). */
 export interface StatsSummary {
+  /** Среднее по занятиям с длительностью; `null` — таких занятий нет. */
+  readonly avgDurationSec: number | null;
+  /** Сколько занятий вошло в среднюю длительность. */
+  readonly timedWorkouts: number;
   /** Занятия с результатами. */
   readonly workouts: number;
   /** «Проведено» — только статус «Завершена» (§48.51). */
@@ -125,7 +129,9 @@ export function summarize(entries: readonly TrainingHistoryEntry[], infoOf: Info
     incompleteSets += tonnage.incompleteSets;
     if (tonnage.kg !== null) tonnageKg = (tonnageKg ?? 0) + tonnage.kg;
   }
-  return { workouts: entries.length, completed: entries.filter((entry) => entry.status === "COMPLETED").length,
+  const durations = entries.flatMap((entry) => entry.durationSec === null ? [] : [entry.durationSec]);
+  const avgDurationSec = durations.length === 0 ? null : durations.reduce((sum, value) => sum + value, 0) / durations.length;
+  return { avgDurationSec, timedWorkouts: durations.length, workouts: entries.length, completed: entries.filter((entry) => entry.status === "COMPLETED").length,
     workingSets: entries.reduce((sum, entry) => sum + workingFacts(entry).length, 0), tonnageKg, incompleteSets };
 }
 

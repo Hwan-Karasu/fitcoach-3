@@ -7,6 +7,7 @@ import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { dateText, filterHistory, HistoryFilterBar, type HistoryFilter, type TrainingHistoryEntry } from "../../archive/public.ts";
 import type { WorkoutSlot } from "../../execution/public.ts";
 import { useExerciseLookup, type ExerciseLookupPort } from "../../plans/public.ts";
+import { durationText } from "../../../../shared/format/clockText.ts";
 import { useBodyOf } from "./useBodyOf.ts";
 import { ChartCard, DrillDownModal, PlanCompletionCard, SummaryCard, bucketLabel, kg, number, scaleCaption, statusLabels, type DrillTarget } from "./statsParts.tsx";
 import { PeriodPill } from "./PeriodPill.tsx";
@@ -26,8 +27,8 @@ const sections: readonly Readonly<{ id: Section; label: string }>[] = [
  * «Статистика» клиента (A01, §48.86): четыре ключевых показателя над тематическими разделами, каждый график — своя
  * карточка. Данные — хронология занятий всех программ клиента (§48.85); фильтры программы/мезоцикла и период общие
  * для сводки и графиков и сохраняются между разделами и экранами (§48.86.16). Показатели и столбцы раскрываются до
- * исходных занятий и подходов (§48.86.19). Экран только читает. Средняя длительность не считается: время начала и
- * конца не записывается.
+ * исходных занятий и подходов (§48.86.19). Экран только читает. Средняя длительность — по занятиям с валидной парой
+ * отметок начала и конца (§48.86.17).
  */
 export function TrainingStatisticsScreen({ clientId, history, bodyweight, exercises, onOpenExercise, onOpenWorkout, onOpenMonthlyReport, now = new Date() }: Readonly<{
   clientId: string;
@@ -124,7 +125,8 @@ export function TrainingStatisticsScreen({ clientId, history, bodyweight, exerci
           <SummaryCard label="Тоннаж" value={summary.tonnageKg === null ? "Нет данных" : kg(summary.tonnageKg)}
             caption={incomplete ? "Неполные данные" : undefined} warning
             onPress={() => setDrill({ title: "Тоннаж", mode: "tonnage", entries: scoped })} />
-          <SummaryCard label="Длительность" value="Нет данных" />
+          <SummaryCard label="Длительность" value={summary.avgDurationSec === null ? "Нет данных" : durationText(summary.avgDurationSec)}
+            caption={summary.avgDurationSec === null ? undefined : `В среднем, по ${number(summary.timedWorkouts)} из ${number(summary.workouts)}`} />
         </View>
         {incomplete ? <Text style={[styles.caption, { color: colors.warning }]}>{incompleteNote}</Text> : null}
         {completion === null ? null : <PlanCompletionCard completion={completion} />}
