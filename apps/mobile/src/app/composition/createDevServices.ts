@@ -27,7 +27,7 @@ import { createTrainingHistory, type TrainingHistoryPort } from "../../read-mode
 import { expoRestSignal, preloadRestSignal } from "./expoRestSignal.ts";
 import { DevExerciseCatalogRepository } from "../../features/exercises/data/DevExerciseCatalogRepository.ts";
 import systemCatalogJson from "../../features/exercises/data/system-catalog.generated.json";
-import { displayNameOf, thumbnailOf, TRACKING_PROFILES, type ExerciseCatalogPort, type SystemCatalog } from
+import { bodyPartLabels, displayNameOf, thumbnailOf, TRACKING_PROFILES, type ExerciseCatalogPort, type SystemCatalog } from
   "../../features/exercises/public.ts";
 import type { ExerciseLookupPort } from "../../features/training/public.ts";
 import type { ClientArchivePort, ClientChangePort, ClientRecoveryDraftPort, ClientRepositoryPort,
@@ -101,6 +101,7 @@ function exerciseLookup(exercises: ExerciseCatalogPort): ExerciseLookupPort {
       metrics: TRACKING_PROFILES[entry.definition.trackingProfile],
       thumbnail: thumbnailOf(entry.definition.media),
       unilateral: entry.definition.unilateral,
+      group: { id: entry.definition.bodyPart, label: bodyPartLabels[entry.definition.bodyPart] },
     }])),
     subscribe: (listener) => exercises.subscribeCommittedChanges(listener),
   };

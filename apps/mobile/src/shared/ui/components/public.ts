@@ -32,3 +32,4 @@ export { FloatingActionButton } from "./FloatingActionButton.tsx";
 export { DurationWheelPicker, TimeWheelPicker } from "./TimeWheelPicker.tsx";
 export { pickDate } from "./pickDate.ts";
 export { LineChart, type LineChartPoint } from "./LineChart.tsx";
+export { BarChart, type BarChartItem } from "./BarChart.tsx";

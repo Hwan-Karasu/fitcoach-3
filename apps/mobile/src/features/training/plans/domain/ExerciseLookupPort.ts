@@ -8,6 +8,8 @@ export interface ExerciseInfo {
   readonly thumbnail: number | null;
   /** Одностороннее упражнение: левая и правая сторона записываются раздельно (§48.66). */
   readonly unilateral: boolean;
+  /** Категория упражнения (группа мышц каталога) — для статистики по мышечным группам (§48.86.27); без неё — «Без категории». */
+  readonly group?: Readonly<{ id: string; label: string }>;
 }
 
 /** Каталог упражнений глазами планов. Собирается в composition из публичного порта каталога. */

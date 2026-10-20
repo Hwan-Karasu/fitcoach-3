@@ -6,7 +6,11 @@
 
 ## Фокус и следующий шаг
 
-- **Сейчас: X02/A01.** Сделан X02 ч.1 (`ecae5ea`, UI-OWN-050): экран «Упражнение клиента» (Обзор / История / Прогресс)
+- **Сейчас: A01 ч.1** (UI-OWN-051): «Ещё» → «Статистика» (`TrainingStatisticsScreen`, правила `trainingStats.ts`, `BarChart`).
+  До этого X02 ч.1 (`ecae5ea`, UI-OWN-050): «Упражнение клиента» (`ClientExerciseScreen`, `exerciseProgress.ts`,
+  `LineChart`). Оба на телефоне не проверены. Графики `LineChart`/`BarChart` свои на react-native-svg — владельцу
+  предложено сравнение библиотек (gifted-charts / chart-kit / victory-native), решение за ним.
+- **Дальше:** A01 ч.2 — средняя длительность, масса тела в тоннаже, сравнение периодов, месячный отчёт, drill-down → A02 Главная клиента- **Сейчас: X02/A01.** Сделан X02 ч.1 (`ecae5ea`, UI-OWN-050): экран «Упражнение клиента» (Обзор / История / Прогресс)
   из дневника — `training/analytics/presentation/{ClientExerciseScreen,exerciseProgress}.ts*`, `LineChart`, общий
   `HistoryFilterBar`. На телефоне не проверен.
 - **Дальше:** A01 — раздел «Статистика» в «Ещё» (сейчас заглушка `TrainingStatisticsPreview`; §48.86.25 четыре

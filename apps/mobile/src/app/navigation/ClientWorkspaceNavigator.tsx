@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { WeekNavigationProvider } from "../../shared/ui/components/public.ts";
 import { useFocusEffect } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -8,7 +8,7 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import type { ClientRecord, ClientRepositoryPort, ClientRosterPort } from "../../features/clients/public.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { ClientQuestionnaireScreen, type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
-import { ArchivedProgramsPanel, TrainingArchiveScreen, TrainingStatisticsPreview, factVolume, sortHistory, workoutStatus, type ExerciseLookupPort,
+import { ArchivedProgramsPanel, TrainingArchiveScreen, TrainingStatisticsScreen, type ExerciseLookupPort,
   type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort, type TrainingPlansRepositoryPort,
   type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort, type WorkoutSlot } from "../../features/training/public.ts";
 import type { ExerciseCatalogPort } from "../../features/exercises/public.ts";
@@ -21,7 +21,7 @@ import { MoreMenuScreen } from "./MoreMenuScreen.tsx";
 import { moreDestinations, workspaceTabs } from "./routeCatalog.ts";
 import { RootTabBar } from "./RootTabBar.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
-import { createTrainingHistory } from "../../read-models/trainingHistory.ts";
+import type { TrainingHistoryPort } from "../../read-models/trainingHistory.ts";
 
 type WorkspaceTabs = {
   Home: undefined;
@@ -40,16 +40,14 @@ type MoreRoutes = {
 const Tabs = createBottomTabNavigator<WorkspaceTabs>();
 const MoreStack = createNativeStackNavigator<MoreRoutes>();
 
-function MoreNavigator({ client, questionnaire, trainingPlans, trainingExecution, exerciseLookup, planDelete, onClose, onOpenClients }: Readonly<{
+function MoreNavigator({ client, questionnaire, trainingPlans, history, exerciseLookup, planDelete, onClose, onOpenClients, onOpenExercise }: Readonly<{
   client: ClientRecord; questionnaire: QuestionnaireRepositoryPort; onClose: () => void; onOpenClients: () => void;
-  trainingPlans: TrainingPlansRepositoryPort; trainingExecution: TrainingExecutionPort; exerciseLookup: ExerciseLookupPort;
+  trainingPlans: TrainingPlansRepositoryPort; history: TrainingHistoryPort; exerciseLookup: ExerciseLookupPort;
+  onOpenExercise: (exerciseId: string) => void;
   planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort;
 }>) {
   const { palette } = usePrototypeTheme();
   const clientId = client.id;
-  // §48.85: история занятий — проекция дневника и планов (read-model).
-  const history = useMemo(() => createTrainingHistory({ factVolume, workoutStatus, sortHistory }, trainingExecution, trainingPlans),
-    [trainingExecution, trainingPlans]);
   return (
     <MoreStack.Navigator
       screenOptions={{
@@ -75,12 +73,14 @@ function MoreNavigator({ client, questionnaire, trainingPlans, trainingExecution
         {() => <TrainingArchiveScreen clientId={clientId} history={history} exercises={exerciseLookup}
           renderPrograms={() => <ArchivedProgramsPanel clientId={clientId} repository={trainingPlans} planDelete={planDelete} />} />}
       </MoreStack.Screen>
-      <MoreStack.Screen name="Statistics" component={TrainingStatisticsPreview} options={{ title: moreDestinations.Statistics }} />
+      <MoreStack.Screen name="Statistics" options={{ title: moreDestinations.Statistics }}>
+        {() => <TrainingStatisticsScreen clientId={clientId} history={history} exercises={exerciseLookup} onOpenExercise={onOpenExercise} />}
+      </MoreStack.Screen>
     </MoreStack.Navigator>
   );
 }
 
-export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, questionnaire, trainingPlans, trainingExecution, restTimers, activeWorkouts, onOpenWorkout, onOpenClientPrograms, exercises, exerciseLookup, weekCopy, weekSwap, mesocycleSave, planDelete, onOpenEdit, onOpenAccounting,
+export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, questionnaire, trainingPlans, trainingExecution, trainingHistory, restTimers, activeWorkouts, onOpenWorkout, onOpenClientPrograms, exercises, exerciseLookup, weekCopy, weekSwap, mesocycleSave, planDelete, onOpenEdit, onOpenAccounting,
   onOpenMeasurements, onClose, onOpenClients, onOpenExercise }: Readonly<{
   clientId: string;
   repository: ClientRepositoryPort & ClientRosterPort;
@@ -89,6 +89,8 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   questionnaire: QuestionnaireRepositoryPort;
   trainingPlans: TrainingPlansRepositoryPort;
   trainingExecution: TrainingExecutionPort;
+  /** §48.85: хронология занятий — архив, статистика, история упражнения. */
+  trainingHistory: TrainingHistoryPort;
   restTimers: RestTimersPort;
   activeWorkouts: ActiveWorkoutsPort;
   onOpenWorkout: (slot: WorkoutSlot) => void;
@@ -193,7 +195,8 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       </Tabs.Screen>
       <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More}}>
         {() => <MoreNavigator client={client} questionnaire={questionnaire} onClose={onClose} onOpenClients={onOpenClients}
-          trainingPlans={trainingPlans} trainingExecution={trainingExecution} exerciseLookup={exerciseLookup} planDelete={planDelete} />}
+          trainingPlans={trainingPlans} history={trainingHistory} exerciseLookup={exerciseLookup} planDelete={planDelete}
+          onOpenExercise={(exerciseId) => onOpenExercise?.(exerciseId)} />}
       </Tabs.Screen>
     </Tabs.Navigator></ScreenToneProvider></WeekNavigationProvider>
     </View>
