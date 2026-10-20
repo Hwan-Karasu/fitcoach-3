@@ -6,9 +6,8 @@ import { EmptyState, InlineNotice, LineChart, LoadingState, SegmentedControl, Se
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../../shared/ui/theme/style.ts";
-import { MONTHS, dateText, factText, filterHistory, HistoryFilterBar, type HistoryFilter, type TrainingHistoryEntry } from
+import { MONTHS, dateText, filterHistory, HistoryFilterBar, originText, setLabel, type HistoryFilter, type TrainingHistoryEntry } from
   "../../archive/public.ts";
-import type { SetFact } from "../../execution/public.ts";
 import { formatDuration, useExerciseLookup, type ExerciseLookupPort } from "../../plans/public.ts";
 import { periodRange } from "./statsFilters.ts";
 import { rangeFor } from "./trainingStats.ts";
@@ -38,18 +37,11 @@ const shortDate = (date: string) => {
   return `${day} ${MONTHS[month - 1] ?? ""}`;
 };
 
-function setLabel(fact: SetFact, ordinal: number): string {
-  const marks = [fact.setType === "FAILURE" ? "отказ" : null, fact.setType === "DROP" ? "дроп-сет" : null,
-    fact.rpe === null ? null : `RPE ${number(fact.rpe)}`, fact.confirmed ? null : "не засчитан"].filter((mark) => mark !== null);
-  return `${fact.setType === "WARMUP" ? "Р" : ordinal}. ${factText(fact)}${marks.length > 0 ? ` · ${marks.join(" · ")}` : ""}`;
-}
-
 function SessionCard({ session, onOpen }: Readonly<{ session: ExerciseSession; onOpen: () => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const { entry } = session;
-  const origin = [entry.planDeleted ? `${entry.programTitle} (план удалён)` : entry.archived ? `${entry.programTitle} (архив)` : entry.programTitle,
-    entry.mesocycleTitle, `Неделя ${entry.weekIndex}`].filter((part): part is string => part !== null).join(" · ");
+  const origin = originText(entry);
   let ordinal = 0;
   return (
     <Pressable accessibilityRole="button" disabled={entry.planDeleted}
@@ -135,15 +127,17 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
   if (failed) return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{tabs}
     <View style={styles.pad}><InlineNotice kind="error">Не удалось загрузить историю упражнения.</InlineNotice></View></View>;
   if (entries === null) return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{tabs}<LoadingState label="Собираем историю…" /></View>;
-  const filters = <HistoryFilterBar entries={own} filter={filter} onChange={setFilter} />;
+  // Период общий для «Истории» и «Прогресса» (UX-контракт истории v1.2): одна область данных на обе вкладки.
+  const filters = <HistoryFilterBar entries={own} filter={filter} onChange={setFilter}
+    trailing={<PeriodPill grow value={period} today={rangeFor(now, 1).to} onChange={setPeriod} />} />;
 
   if (tab === "history") {
     return (
       <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
         {tabs}
-        <FlatList data={sessions as ExerciseSession[]} keyExtractor={(session) => session.entry.key} contentContainerStyle={styles.list}
+        <FlatList data={inPeriod as ExerciseSession[]} keyExtractor={(session) => session.entry.key} contentContainerStyle={styles.list}
           ListHeaderComponent={<View style={styles.header}>{filters}
-            <Text style={[styles.summary, { color: colors.textSecondary }]}>{`Занятий с упражнением: ${sessions.length}`}</Text></View>}
+            <Text style={[styles.summary, { color: colors.textSecondary }]}>{`Занятий с упражнением: ${inPeriod.length}`}</Text></View>}
           ListEmptyComponent={<EmptyState reason="no-data" title="Упражнение ещё не выполнялось"
             body="Здесь появятся занятия с записанными подходами этого упражнения — из всех программ клиента." />}
           renderItem={({ item }) => <SessionCard session={item} onOpen={() => open(item)} />} />
@@ -161,8 +155,7 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
       {tabs}
       <ScrollView contentContainerStyle={styles.list}>
         <View style={styles.header}>
-          <HistoryFilterBar entries={own} filter={filter} onChange={setFilter}
-            trailing={<PeriodPill grow value={period} today={rangeFor(now, 1).to} onChange={setPeriod} />} />
+          {filters}
           {metrics.length > 1 ? <View style={styles.chips}>
             {metrics.map((item) => <SelectionChip key={item} group="Показатель" label={metricLabels[item]} selected={metric === item}
               onPress={() => setChosen(item)} />)}

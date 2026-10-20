@@ -80,3 +80,14 @@ export function workoutOptions(entries: readonly TrainingHistoryEntry[], program
   return [{ value: ALL_OPTION, label: "Все тренировки" },
     ...workoutGroups(entries, { programId, mesocycleId }).map((group) => ({ value: group.key, label: group.title }))];
 }
+
+export interface ScopeSummary {
+  readonly records: number;
+  readonly completed: number;
+  readonly workingSets: number;
+}
+
+/** «Проведено · Записей · Рабочих подходов» по записям выбора (программа или её мезоцикл). */
+export function scopeSummary(entries: readonly TrainingHistoryEntry[]): ScopeSummary {
+  return { records: entries.length, completed: completedCount(entries), workingSets: entries.reduce((sum, item) => sum + item.workingSets, 0) };
+}

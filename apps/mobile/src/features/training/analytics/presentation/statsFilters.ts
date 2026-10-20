@@ -32,6 +32,18 @@ const byClient = new Map<string, StatsFilters>();
 export const readStatsFilters = (clientId: string): StatsFilters => byClient.get(clientId) ?? DEFAULT;
 export const writeStatsFilters = (clientId: string, next: StatsFilters): void => { byClient.set(clientId, next); };
 
+const holders = new Map<string, number>();
+/** Карточка клиента открыта: фильтры сохраняются; при закрытии последней карточки клиента сбрасываются (UX-контракт истории v1.2 §5). */
+export function retainStatsFilters(clientId: string): () => void {
+  holders.set(clientId, (holders.get(clientId) ?? 0) + 1);
+  return () => {
+    const left = (holders.get(clientId) ?? 1) - 1;
+    if (left > 0) { holders.set(clientId, left); return; }
+    holders.delete(clientId);
+    byClient.delete(clientId);
+  };
+}
+
 /** Границы выбранного периода: готовый вариант — от сегодняшней даты, свой — как выбрано (без своих границ — 3 месяца). */
 export function periodRange(now: Date, stored: Readonly<{ period: PeriodId; custom: CustomRange | null }>): StatsRange {
   if (stored.period === "custom") return stored.custom ?? rangeFor(now, 90);

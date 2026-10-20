@@ -1,5 +1,10 @@
 export { TrainingArchiveScreen } from "./presentation/TrainingArchiveScreen.tsx";
+export { HistoryProgramScreen } from "./presentation/HistoryProgramScreen.tsx";
+export { ExecutionDetailsScreen } from "./presentation/ExecutionDetailsScreen.tsx";
+export { useClientHistory } from "./presentation/useClientHistory.ts";
+export { retainHistoryView } from "./presentation/historyViewState.ts";
+export { plural } from "./presentation/historyText.ts";
 export { HistoryFilterBar } from "./presentation/HistoryFilterBar.tsx";
-export { MONTHS, dateText, factText, valuesText } from "./presentation/historyFormat.ts";
+export { MONTHS, dateText, factText, originText, setLabel, valuesText } from "./presentation/historyFormat.ts";
 export { completedCount, filterHistory, sortHistory, type HistoryFilter, type TrainingHistoryEntry } from "./presentation/trainingHistory.ts";
 export { mesocyclesWithHistory, programsWithHistory, workoutGroups, type MesocycleOption, type ProgramHistorySummary, type WorkoutGroup } from "./presentation/historyGroups.ts";

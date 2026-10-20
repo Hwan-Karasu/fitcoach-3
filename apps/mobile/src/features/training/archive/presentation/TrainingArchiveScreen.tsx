@@ -1,107 +1,84 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { ChevronDown, ChevronUp } from "lucide-react-native";
-import { EmptyState, InlineNotice, LoadingState, StatusTag, type StatusKind } from
-  "../../../../shared/ui/components/public.ts";
+import { ChevronRight } from "lucide-react-native";
+import { EmptyState, InlineNotice, LoadingState, SearchField, SegmentedControl } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
-import type { WorkoutStatus } from "../../execution/public.ts";
-import { useExerciseLookup, type ExerciseLookupPort } from "../../plans/public.ts";
-import { completedCount, filterHistory, type HistoryFilter, type TrainingHistoryEntry } from "./trainingHistory.ts";
-import { HistoryFilterBar } from "./HistoryFilterBar.tsx";
-import { dateText, factText } from "./historyFormat.ts";
+import { shadow } from "../../../../shared/ui/theme/style.ts";
+import { programsWithHistory, type ProgramHistorySummary } from "./historyGroups.ts";
+import { plural } from "./historyText.ts";
+import type { HistoryMode } from "./historyTypes.ts";
+import { historyViewOf } from "./historyViewState.ts";
+import type { TrainingHistoryEntry } from "./trainingHistory.ts";
+import { useClientHistory } from "./useClientHistory.ts";
 
-const statusLabels: Readonly<Record<WorkoutStatus, string>> = {
-  NOT_STARTED: "Не начата", IN_PROGRESS: "В работе", COMPLETED: "Завершена", MISSED: "Пропущена", CANCELLED: "Отменена",
-};
-const statusKinds: Readonly<Record<WorkoutStatus, StatusKind>> = {
-  NOT_STARTED: "neutral", IN_PROGRESS: "info", COMPLETED: "success", MISSED: "warning", CANCELLED: "warning",
-};
-
-function HistoryCard({ entry, names }: Readonly<{ entry: TrainingHistoryEntry; names: (exerciseId: string) => string }>) {
+function ProgramCard({ program, onOpen }: Readonly<{ program: ProgramHistorySummary; onOpen: () => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const [open, setOpen] = useState(false);
-  const program = entry.planDeleted ? `${entry.programTitle} (исходный план удалён)` : entry.archived ? `${entry.programTitle} (архив)` : entry.programTitle;
-  const origin = [program, entry.mesocycleTitle, `Неделя ${entry.weekIndex}`]
-    .filter((part): part is string => part !== null).join(" · ");
+  const note = program.planDeleted ? "Исходный план удалён" : program.archived ? "Архивная" : null;
+  const counts = `Проведено ${program.completed} · Записей ${program.records} · Рабочих подходов ${program.workingSets}`;
+  const mesocycles = program.mesocycles > 0
+    ? `${program.mesocycles} ${plural(program.mesocycles, "мезоцикл", "мезоцикла", "мезоциклов")} с историей` : null;
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }}
-      accessibilityLabel={`${dateText(entry.actualDate)}, ${entry.workoutTitle ?? "тренировка"}, ${statusLabels[entry.status]}`}
-      onPress={() => setOpen((value) => !value)}
-      style={({ pressed }) => [styles.card, { backgroundColor: pressed ? colors.surfaceRaised : colors.surface, borderColor: colors.border }]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${program.title}${note === null ? "" : `, ${note}`}. ${counts}. Открыть историю программы`}
+      onPress={onOpen} style={({ pressed }) => [styles.card, { backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
       <View style={styles.cardHead}>
-        <Text style={[styles.date, { color: colors.accentInk }]}>{dateText(entry.actualDate)}</Text>
-        <StatusTag kind={statusKinds[entry.status]} label={statusLabels[entry.status]} />
-        <View style={styles.grow} />
-        {open ? <ChevronUp size={18} color={colors.textMuted} /> : <ChevronDown size={18} color={colors.textMuted} />}
+        <Text numberOfLines={2} style={[styles.title, { color: colors.textPrimary }]}>{program.title}</Text>
+        <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.8} />
       </View>
-      <Text numberOfLines={2} style={[styles.title, { color: entry.workoutTitle === null ? colors.textMuted : colors.textPrimary }]}>
-        {entry.workoutTitle ?? (entry.planDeleted ? "Тренировка" : "Тренировки больше нет в плане")}</Text>
-      <Text numberOfLines={2} style={[styles.meta, { color: colors.textSecondary }]}>{origin}</Text>
-      <Text style={[styles.meta, { color: colors.textSecondary }]}>
-        {`Рабочих подходов: ${entry.workingSets}`}</Text>
-      {open ? <View style={[styles.details, { borderColor: colors.border }]}>
-        {entry.exercises.length === 0 ? <Text style={[styles.meta, { color: colors.textMuted }]}>Подходы не записаны.</Text> : null}
-        {entry.exercises.map((exercise, index) => (
-          <View key={`${exercise.exerciseId}:${index}`} style={styles.exercise}>
-            <Text style={[styles.exerciseName, { color: colors.textPrimary }]}>{names(exercise.exerciseId)}</Text>
-            {exercise.facts.map((fact, number) => (
-              <Text key={fact.id} style={[styles.set, { color: fact.confirmed ? colors.textPrimary : colors.textMuted }]}>
-                {`${fact.extra ? "Р" : number + 1 - exercise.facts.filter((item, at) => at < number && item.extra).length}. ${factText(fact)}`}
-              </Text>
-            ))}
-          </View>
-        ))}
-      </View> : null}
+      {note !== null ? <Text style={[styles.note, { color: colors.accentInk, backgroundColor: colors.accentSoft }]}>{note}</Text> : null}
+      {mesocycles !== null ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{mesocycles}</Text> : null}
+      <Text style={[styles.meta, { color: colors.textSecondary }]}>{counts}</Text>
     </Pressable>
   );
 }
 
 /**
- * «История занятий» клиента (§50.1): единая хронология фактов дневника из всех программ (§48.85) с фильтрами
- * программа → мезоцикл. Архив программ — на главном экране «Тренировки» (решение владельца 2026-10-20). Отборы не
- * меняют факты; «Проведено» — только завершённые тренировки (§48.51).
+ * «История занятий» клиента (UX-контракт v1.2): два режима — «Тренировки» (список программ с историей; программа открывает свой экран с лентой
+ * мезоциклов и тренировками) и «Упражнения» (список упражнений клиента — его подставляет навигация). Данные — единая хронология (§48.85).
+ * Режим и поиск сохраняются, пока открыта карточка клиента. Экран только читает.
  */
-export function TrainingArchiveScreen({ clientId, history, exercises }: Readonly<{
+export function TrainingArchiveScreen({ clientId, history, onOpenProgram, renderExercises }: Readonly<{
   clientId: string;
   history: Readonly<{ list: (clientId: string) => Promise<readonly TrainingHistoryEntry[]>;
     subscribe: (clientId: string, listener: () => void) => () => void }>;
-  exercises: ExerciseLookupPort;
+  onOpenProgram: (programId: string) => void;
+  /** Список упражнений клиента (аналитика упражнений — другой модуль); получает поисковую строку. */
+  renderExercises: (query: string) => ReactNode;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const lookup = useExerciseLookup(exercises);
-  const [entries, setEntries] = useState<readonly TrainingHistoryEntry[] | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [version, setVersion] = useState(0);
-  const [filter, setFilter] = useState<HistoryFilter>({ programId: null, mesocycleId: null, workoutKey: null });
+  const view = historyViewOf(clientId);
+  const [mode, setMode] = useState<HistoryMode>(view.mode);
+  const [query, setQuery] = useState(view.query);
+  const { entries, failed } = useClientHistory(history, clientId);
+  useEffect(() => { view.mode = mode; view.query = query; }, [view, mode, query]);
 
-  useEffect(() => {
-    let active = true;
-    history.list(clientId).then((next) => { if (active) { setEntries(next); setFailed(false); } })
-      .catch(() => { if (active) setFailed(true); });
-    return () => { active = false; };
-  }, [clientId, history, version]);
-  useEffect(() => history.subscribe(clientId, () => setVersion((value) => value + 1)), [clientId, history]);
+  const programs = useMemo(() => programsWithHistory(entries ?? []), [entries]);
+  const shown = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase("ru");
+    return needle === "" ? programs : programs.filter((program) => program.title.toLocaleLowerCase("ru").includes(needle));
+  }, [programs, query]);
 
-  const visible = useMemo(() => filterHistory(entries ?? [], filter), [entries, filter]);
-  const names = (exerciseId: string) => lookup?.get(exerciseId)?.name ?? "Упражнение";
-
+  const header = (
+    <View style={styles.header}>
+      <SegmentedControl items={[{ id: "workouts", label: "Тренировки" }, { id: "exercises", label: "Упражнения" }]} selectedId={mode} onSelect={setMode} />
+      <SearchField query={query} onChangeQuery={setQuery} accessibilityLabel={mode === "workouts" ? "Поиск программы" : "Поиск упражнения"}
+        placeholder={mode === "workouts" ? "Поиск программы" : "Поиск упражнения"} />
+    </View>
+  );
+  if (mode === "exercises") return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{header}{renderExercises(query)}</View>;
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
+      {header}
       {failed ? <View style={styles.pad}><InlineNotice kind="error">Не удалось загрузить историю занятий.</InlineNotice></View> : null}
       {entries === null && !failed ? <LoadingState label="Собираем историю занятий…" /> : null}
-      {entries !== null ? <FlatList data={visible as TrainingHistoryEntry[]} keyExtractor={(entry) => entry.key}
-        contentContainerStyle={styles.list}
-        ListHeaderComponent={<View style={styles.header}>
-          <HistoryFilterBar entries={entries} filter={filter} onChange={setFilter} />
-          <Text style={[styles.summary, { color: colors.textSecondary }]}>
-            {`Проведено тренировок: ${completedCount(visible)} · записей: ${visible.length}`}</Text>
-        </View>}
-        ListEmptyComponent={<EmptyState reason="no-data" title="Занятий пока нет"
-          body="Здесь появятся тренировки, в которые записаны подходы или исход — из всех программ клиента." />}
-        renderItem={({ item }) => <HistoryCard entry={item} names={names} />} /> : null}
+      {entries !== null ? <FlatList data={shown as ProgramHistorySummary[]} keyExtractor={(program) => program.programId}
+        contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled"
+        ListEmptyComponent={<EmptyState reason={programs.length === 0 ? "no-data" : "no-match"}
+          title={programs.length === 0 ? "История занятий пока пуста" : "Ничего не найдено"}
+          body={programs.length === 0 ? "Здесь появятся программы, в которых есть тренировки с подходами или исходом." : "Измените поисковый запрос."} />}
+        renderItem={({ item }) => <ProgramCard program={item} onOpen={() => onOpenProgram(item.programId)} />} /> : null}
     </View>
   );
 }
@@ -109,17 +86,11 @@ export function TrainingArchiveScreen({ clientId, history, exercises }: Readonly
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   pad: { paddingHorizontal: 16 },
+  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, gap: 8 },
   list: { paddingHorizontal: 16, paddingBottom: 24, gap: 10 },
-  header: { gap: 8, paddingTop: 4 },
-  summary: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
-  card: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 4 },
+  card: { ...shadow.card, borderRadius: 20, padding: 14, gap: 6 },
   cardHead: { flexDirection: "row", alignItems: "center", gap: 8 },
-  date: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
-  grow: { flex: 1 },
-  title: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
+  title: { flex: 1, fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
+  note: { alignSelf: "flex-start", fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 4, overflow: "hidden" },
   meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  details: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 6, paddingTop: 8, gap: 8 },
-  exercise: { gap: 2 },
-  exerciseName: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
-  set: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
 });

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { WeekNavigationProvider } from "../../shared/ui/components/public.ts";
 import { useFocusEffect } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -8,7 +8,8 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import type { ClientRecord, ClientRepositoryPort, ClientRosterPort } from "../../features/clients/public.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { ClientQuestionnaireScreen, type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
-import { MonthlyReportScreen, TrainingArchiveScreen, TrainingStatisticsScreen, type ExerciseLookupPort,
+import { ExecutionDetailsScreen, ExerciseHistoryList, HistoryProgramScreen, MonthlyReportScreen, TrainingArchiveScreen, TrainingStatisticsScreen, retainHistoryView,
+  retainStatsFilters, type ExerciseLookupPort,
   type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort, type TrainingPlansRepositoryPort,
   type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort, type WorkoutSlot } from "../../features/training/public.ts";
 import type { ExerciseCatalogPort } from "../../features/exercises/public.ts";
@@ -37,6 +38,8 @@ type MoreRoutes = {
   MoreIndex: undefined;
   Questionnaire: undefined;
   TrainingArchive: undefined;
+  HistoryProgram: { programId: string };
+  HistoryExecution: { sessionKey: string };
   Statistics: undefined;
   MonthlyReport: undefined;
 };
@@ -73,7 +76,22 @@ function MoreNavigator({ client, questionnaire, history, bodyweight, exerciseLoo
         {() => <ClientQuestionnaireScreen clientId={clientId} repository={questionnaire} />}
       </MoreStack.Screen>
       <MoreStack.Screen name="TrainingArchive" options={{ title: moreDestinations.TrainingArchive }}>
-        {() => <TrainingArchiveScreen clientId={clientId} history={history} exercises={exerciseLookup} />}
+        {({ navigation }) => <TrainingArchiveScreen clientId={clientId} history={history}
+          onOpenProgram={(programId) => navigation.navigate("HistoryProgram", { programId })}
+          renderExercises={(query) => <ExerciseHistoryList clientId={clientId} history={history} exercises={exerciseLookup} query={query}
+            onOpenExercise={onOpenExercise} />} />}
+      </MoreStack.Screen>
+      {/* Название программы — подзаголовок шапки (одна строка шапки); выбор мезоцикла не добавляет экран в стек. */}
+      <MoreStack.Screen name="HistoryProgram" options={{ title: moreDestinations.TrainingArchive }}>
+        {({ navigation, route }) => <HistoryProgramScreen clientId={clientId} programId={route.params.programId} history={history}
+          onTitle={(title) => navigation.setOptions({ title })}
+          onOpenExecution={(entry) => navigation.navigate("HistoryExecution", { sessionKey: entry.key })} />}
+      </MoreStack.Screen>
+      <MoreStack.Screen name="HistoryExecution" options={{ title: "Занятие" }}>
+        {({ route }) => <ExecutionDetailsScreen clientId={clientId} sessionKey={route.params.sessionKey} history={history} exercises={exerciseLookup}
+          onOpenExercise={onOpenExercise}
+          onOpenInDiary={(entry) => onOpenWorkout({ clientId, programId: entry.programId, weekIndex: entry.weekIndex, plannedWorkoutId: entry.plannedWorkoutId },
+            { returnToCaller: true })} />}
       </MoreStack.Screen>
       <MoreStack.Screen name="Statistics" options={{ title: moreDestinations.Statistics }}>
         {({ navigation }) => <TrainingStatisticsScreen clientId={clientId} history={history} bodyweight={bodyweight} exercises={exerciseLookup} onOpenExercise={onOpenExercise}
@@ -127,6 +145,12 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   const [loadErrorFor, setLoadErrorFor] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const client = selection?.clientId === clientId ? selection.result : undefined;
+  // Режим, фильтры и раскрытые карточки истории и статистики живут, пока открыта карточка клиента (в том числе тренировка, открытая поверх неё).
+  useEffect(() => {
+    const releaseHistory = retainHistoryView(clientId);
+    const releaseStats = retainStatsFilters(clientId);
+    return () => { releaseHistory(); releaseStats(); };
+  }, [clientId]);
   // Участники программ — только поля отображения активных клиентов (владелец Clients).
   const listCandidates = useCallback(async () => (await repository.listRoster("ACTIVE"))
     .map((row) => ({ id: row.id, displayName: row.displayName })), [repository]);

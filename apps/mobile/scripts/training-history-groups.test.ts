@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { TrainingHistoryEntry } from "../src/features/training/archive/presentation/trainingHistory.ts";
 import { filterHistory } from "../src/features/training/archive/presentation/trainingHistory.ts";
-import { mesocyclesWithHistory, programsWithHistory, workoutGroups, workoutOptions } from "../src/features/training/archive/presentation/historyGroups.ts";
+import { mesocyclesWithHistory, programsWithHistory, scopeSummary, workoutGroups, workoutOptions } from "../src/features/training/archive/presentation/historyGroups.ts";
+import { durationText, plural, timeText } from "../src/features/training/archive/presentation/historyText.ts";
 
 type Overrides = Partial<TrainingHistoryEntry> & Pick<TrainingHistoryEntry, "key" | "programId" | "actualDate">;
 const entry = (over: Overrides): TrainingHistoryEntry => ({ programTitle: over.programId, programKind: "PERIODIZED", archived: false, planDeleted: false,
@@ -67,4 +68,20 @@ test("фильтр «Тренировка»: третий уровень пос�
   assert.deepEqual(filterHistory(E, filter("P", "m2", null)).length, 3, "без тренировки — весь мезоцикл");
   assert.deepEqual(workoutOptions(E, "P", "m2"), [{ value: "__all__", label: "Все тренировки" }, { value: "low", label: "Верх тела" }, { value: "up", label: "Верх тела (новое)" }]);
   assert.deepEqual(workoutOptions(E, "D", null).map((option) => option.label), ["Все тренировки", "День 2", "День 10"]);
+});
+
+test("сводка области: проведено / записей / рабочих подходов по записям выбора", () => {
+  assert.deepEqual(scopeSummary(E.filter((item) => item.programId === "P" && item.mesocycleId === "m2")), { records: 3, completed: 1, workingSets: 5 },
+    "e1 (3 подхода, проведена), e2 (2, в работе), e4 (0, пропущена)");
+  assert.deepEqual(scopeSummary([]), { records: 0, completed: 0, workingSets: 0 });
+});
+
+test("подписи: склонение, длительность и время", () => {
+  assert.deepEqual([1, 2, 5, 11, 12, 21, 22, 25].map((n) => plural(n, "выполнение", "выполнения", "выполнений")),
+    ["выполнение", "выполнения", "выполнений", "выполнений", "выполнений", "выполнение", "выполнения", "выполнений"]);
+  assert.equal(durationText(65 * 60), "1 ч 05 мин");
+  assert.equal(durationText(45 * 60), "45 мин");
+  assert.equal(durationText(2 * 3600), "2 ч");
+  assert.equal(durationText(20), "меньше минуты");
+  assert.equal(timeText(new Date(2026, 9, 20, 9, 5).toISOString()), "09:05", "местное время устройства");
 });
