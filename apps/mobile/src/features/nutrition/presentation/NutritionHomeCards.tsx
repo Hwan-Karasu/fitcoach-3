@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { AppButton, InlineNotice, SegmentedRing, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
+import { AppButton, InlineNotice, SegmentedRing, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { localDateOf, upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../measurements/public.ts";
