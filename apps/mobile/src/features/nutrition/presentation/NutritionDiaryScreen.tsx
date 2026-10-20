@@ -1,8 +1,7 @@
 import { useCallback, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { ChevronLeft, ChevronRight, ClipboardPaste, Copy, Droplets, Plus, Repeat2 } from "lucide-react-native";
-import { AppButton, AppIconButton, ConfirmDialog, EmptyState, InlineNotice, LoadingState, StatusTag, TextField } from "../../../shared/ui/components/public.ts";
-import { pickDate } from "../../../shared/ui/components/pickDate.ts";
+import { ChevronDown, ChevronRight, ClipboardPaste, Copy, Droplets, Plus, Repeat2 } from "lucide-react-native";
+import { AppButton, ConfirmDialog, EmptyState, InlineNotice, LoadingState, StatusTag, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
@@ -13,9 +12,10 @@ import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
 import { TARGET_METRICS, type TargetMetric } from "../domain/TargetModel.ts";
 import { assessDay, NUTRIENT_OF } from "../domain/TargetRules.ts";
-import { dayTitle, kcalText, metricLabels, nutritionErrorText, quantityText, rangeText, shiftDate, slotLabels, todayLocal, unitLabels, verdictKinds, verdictLabels,
+import { dayTitle, kcalText, metricLabels, nutritionErrorText, quantityText, rangeText, slotLabels, todayLocal, unitLabels, verdictKinds, verdictLabels,
   wholeText } from "./nutritionFormat.ts";
 import type { CatalogFilter } from "./AddFoodScreen.tsx";
+import { DiaryWeekHeader } from "./DiaryWeekHeader.tsx";
 import { useNutritionDay } from "./useNutritionDay.ts";
 
 const WATER_STEP_ML = 250;
@@ -97,6 +97,8 @@ export function NutritionDiaryScreen({ clientId, diary, targets, onAdd }: Readon
   const [pending, setPending] = useState<PendingCopy | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [copying, setCopying] = useState(false);
+  /** Ручное сворачивание приёмов; без выбора приём раскрыт, если в нём есть записи. */
+  const [expanded, setExpanded] = useState<Readonly<Partial<Record<MealSlot, boolean>>>>({});
 
   const guard = useCallback(async (work: () => Promise<unknown>): Promise<string | null> => {
     try { await work(); setError(null); return null; } catch (failure) { const message = nutritionErrorText(failure); setError(message); return message; }
@@ -141,12 +143,7 @@ export function NutritionDiaryScreen({ clientId, diary, targets, onAdd }: Readon
 
   const header = (
     <View style={styles.dateBar}>
-      <AppIconButton label="Предыдущий день" icon={<ChevronLeft size={22} color={colors.textPrimary} />} onPress={() => setLocalDate(shiftDate(localDate, -1))} />
-      <Pressable accessibilityRole="button" accessibilityLabel={`${dayTitle(localDate, today)}. Выбрать дату`} style={styles.dateTitle}
-        onPress={() => { void pickDate({ value: localDate, title: "Дата дневника" }).then((picked) => { if (picked !== null) setLocalDate(picked); }); }}>
-        <Text style={[styles.dateText, { color: colors.textPrimary }]}>{dayTitle(localDate, today)}</Text>
-      </Pressable>
-      <AppIconButton label="Следующий день" icon={<ChevronRight size={22} color={colors.textPrimary} />} onPress={() => setLocalDate(shiftDate(localDate, 1))} />
+      <DiaryWeekHeader clientId={clientId} diary={diary} localDate={localDate} today={today} onSelect={setLocalDate} />
     </View>
   );
 
@@ -162,8 +159,10 @@ export function NutritionDiaryScreen({ clientId, diary, targets, onAdd }: Readon
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
       {header}
       <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
-        {localDate !== today ? <AppButton compact variant="secondary" label="Вернуться к сегодняшнему дню" onPress={() => setLocalDate(today)} /> : null}
-        <AppButton compact variant="secondary" icon={(color) => <Repeat2 size={16} color={color} />} label="С прошлого дня" busy={copying} onPress={() => { void copyPreviousDay(); }} />
+        <View style={styles.waterRow}>
+          <View style={styles.grow}><AppButton compact variant="secondary" label="Сегодня" disabled={localDate === today} onPress={() => setLocalDate(today)} /></View>
+          <View style={styles.grow}><AppButton compact variant="secondary" icon={(color) => <Repeat2 size={16} color={color} />} label="С прошлого дня" busy={copying} onPress={() => { void copyPreviousDay(); }} /></View>
+        </View>
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
         {notice !== null ? <InlineNotice kind="info">{notice}</InlineNotice> : null}
 
@@ -191,12 +190,16 @@ export function NutritionDiaryScreen({ clientId, diary, targets, onAdd }: Readon
         {MEAL_SLOTS.map((slot) => {
           const slotEntries = data.entries.filter((entry) => entry.slot === slot);
           const total = slotEntries.length === 0 ? null : sumNutrients(slotEntries.map((entry) => entry.snapshot.eaten));
+          const open = expanded[slot] ?? slotEntries.length > 0;
           return (
             <View key={slot} style={[styles.card, { backgroundColor: colors.surface }]}>
-              <View style={styles.slotHead}>
+              <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={`${slotLabels[slot]}${total === null ? "" : `, ${kcalText(total)}`}. ${open ? "Свернуть" : "Раскрыть"}`}
+                style={styles.slotHead} onPress={() => setExpanded({ ...expanded, [slot]: !open })}>
+                {open ? <ChevronDown size={18} color={colors.textSecondary} /> : <ChevronRight size={18} color={colors.textSecondary} />}
                 <Text style={[styles.slotTitle, { color: colors.textPrimary }]}>{slotLabels[slot]}</Text>
                 <Text style={[styles.meta, { color: colors.textSecondary }]}>{total === null ? "" : kcalText(total)}</Text>
-              </View>
+              </Pressable>
+              {open ? <>
               {slotEntries.map((entry) => <EntryRow key={entry.id} entry={entry} onOpen={() => setEditing(entry)} />)}
               <AppButton compact variant="secondary" icon={(color) => <Plus size={16} color={color} />} label="Добавить" onPress={() => onAdd(localDate, slot)}
                 accessibilityLabel={`Добавить в приём пищи: ${slotLabels[slot]}`} />
@@ -212,6 +215,7 @@ export function NutritionDiaryScreen({ clientId, diary, targets, onAdd }: Readon
                 {copied !== null && !(copied.date === localDate && copied.slot === slot) ? <View style={styles.grow}><AppButton compact variant="ghost" icon={(color) => <ClipboardPaste size={16} color={color} />}
                   label="Вставить" disabled={copying} accessibilityLabel={`Вставить скопированный приём в: ${slotLabels[slot]}`} onPress={() => pasteSlot(slot)} /></View> : null}
               </View>
+              </> : null}
             </View>
           );
         })}
@@ -245,7 +249,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   pad: { paddingHorizontal: 16 },
   grow: { flex: 1 },
-  dateBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingTop: 4 },
+  dateBar: { paddingHorizontal: 16, paddingTop: 4 },
   dateTitle: { flex: 1, minHeight: 48, alignItems: "center", justifyContent: "center" },
   dateText: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
   list: { paddingHorizontal: 16, paddingBottom: 24, paddingTop: 8, gap: 10 },

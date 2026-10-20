@@ -25,6 +25,7 @@ function errorText(error: unknown): string {
   switch (error instanceof Error ? error.message : "") {
     case "MEASUREMENT_VALUE_INVALID": return "Проверьте значение: оно вне допустимого диапазона для окружности (10–250 см).";
     case "MEASUREMENT_DATE_INVALID": return "Замер не может быть в будущем.";
+    case "MEASUREMENT_MANY": return "За эту дату уже несколько записей показателя. Выберите основную в журнале замеров.";
     case "MEASUREMENT_STALE": return "Замер уже изменился. Список обновлён, повторите действие.";
     default: return "Не удалось сохранить. Часть замеров могла не измениться — проверьте карточку.";
   }
@@ -89,15 +90,20 @@ export function MeasurementsCard({ clientId, repository }: Readonly<{ clientId: 
     const parsed = CIRCUMFERENCES.map((type) => ({ type, text: editor.values[type].trim(), valueX10: parseValueX10(editor.values[type]) }));
     const invalid = parsed.find((item) => item.text !== "" && item.valueX10 === null);
     if (invalid !== undefined) { setError(`${measurementTypeInfo[invalid.type].label}: число не более чем с одним знаком после запятой, например 97,5.`); return; }
-    const existing = editor.editingDate === null ? null : cellsOf(data, editor.editingDate);
+    const moving = editor.editingDate !== null && editor.editingDate !== editor.date;
+    const source = cellsOf(data, editor.editingDate ?? editor.date);
+    if (moving && CIRCUMFERENCES.some((type) => source[type].kind === "MANY")) { setError("За эту дату несколько записей одного показателя: смена даты недоступна. Выберите основную в журнале замеров."); return; }
+    if (moving && data.measurements.some((row) => row.localDate === editor.date && CIRCUMFERENCES.includes(row.type))) { setError("На выбранную дату замеры уже есть. Откройте ту дату и измените её или выберите другую."); return; }
+    const existing = source;
     setBusy(true);
     setError(null);
     try {
       for (const item of parsed) {
-        const cell = existing === null ? ({ kind: "EMPTY" } as Cell) : existing[item.type];
-        if (cell.kind === "MANY") continue;
+        const cell = existing[item.type];
+        if (cell.kind === "MANY") { if (item.valueX10 !== null && editor.editingDate === null) throw new Error("MEASUREMENT_MANY"); continue; }
         if (item.valueX10 === null) {
-          if (cell.kind === "VALUE") await repository.remove(cell.measurement.id, cell.measurement.revision);
+          // Пустое поле удаляет значение только при изменении существующей записи; в новой записи пустое поле ничего не делает.
+          if (cell.kind === "VALUE" && editor.editingDate !== null) await repository.remove(cell.measurement.id, cell.measurement.revision);
           continue;
         }
         if (cell.kind === "VALUE") {

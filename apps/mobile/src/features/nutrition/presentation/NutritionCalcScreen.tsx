@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppButton, ConfirmDialog, InlineNotice, LoadingState, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
-import { latestPoint, localDateOf, MeasurementsCard, navyBodyFat, type MeasurementRepositoryPort } from "../../measurements/public.ts";
+import { dailyPoints, latestPoint, localDateOf, MeasurementsCard, navyBodyFat, type MeasurementRepositoryPort } from "../../measurements/public.ts";
 import { CALC_ACTIVITIES, CALC_GOALS, CALC_INTENSITIES, DEFAULT_TOLERANCE, calcMacros, deriveCalc, proposeCorridors, type CalcActivity, type CalcGoal, type CalcIntensity,
   type CalcProfile, type CalcSex } from "../domain/CalcRules.ts";
 import type { NutritionCalcPort, StoredCalcProfile } from "../domain/NutritionCalcPort.ts";
@@ -49,6 +49,7 @@ function calcErrorText(error: unknown): string {
     case "CALC_STALE": return "Профиль уже изменился. Данные обновлены — повторите действие.";
     case "MEASUREMENT_VALUE_INVALID": return "Вес и процент жира вне допустимого диапазона.";
     case "MEASUREMENT_DATE_INVALID": return "Замер не может быть в будущем.";
+    case "MEASUREMENT_AMBIGUOUS_TODAY": return "За сегодня несколько записей веса или % жира. Выберите основную в журнале замеров и повторите.";
     default: return nutritionErrorText(error);
   }
 }
@@ -130,7 +131,9 @@ export function NutritionCalcScreen({ clientId, calc, targets, measurements }: R
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [tolerance, setTolerance] = useState({ kcal: String(DEFAULT_TOLERANCE.kcalPercent), macro: String(DEFAULT_TOLERANCE.macroPercent) });
-  const [confirmApply, setConfirmApply] = useState(false);
+  const [confirmApply, setConfirmApply] = useState<string | null>(null);
+  /** Замок от двойного нажатия: state `busy` обновляется асинхронно, ref — сразу. */
+  const lock = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -176,28 +179,43 @@ export function NutritionCalcScreen({ clientId, calc, targets, measurements }: R
   };
 
   const selectGoal = useCallback(async (goal: CalcGoal) => {
-    if (loaded === null || busy || goal === profile.goal) return;
+    if (loaded === null || lock.current || goal === profile.goal) return;
+    lock.current = true;
     setBusy(true);
     try { await calc.saveProfile(clientId, { ...profile, goal }, loaded.stored?.revision ?? null); setError(null); } catch (failure) { setError(calcErrorText(failure)); setTick((value) => value + 1); }
+    lock.current = false;
     setBusy(false);
-  }, [loaded, busy, profile, calc, clientId]);
+  }, [loaded, profile, calc, clientId]);
 
   const done = async () => {
-    if (loaded === null || draft === null || busy) return;
+    if (loaded === null || draft === null || lock.current) return;
     const next = profileOf(draft, profile.goal);
     const weight = draft.weight.trim() === "" ? null : num(draft.weight);
     const fat = draft.fat.trim() === "" ? null : num(draft.fat);
     if ((draft.weight.trim() !== "" && weight === null) || (draft.fat.trim() !== "" && fat === null)) { setError("Вес и % жира — числа с одним знаком после запятой, например 85,4."); return; }
+    if ((weight !== null && (weight < 20 || weight > 400)) || (fat !== null && (fat < 2 || fat > 75))) { setError("Вес — от 20 до 400 кг, процент жира — от 2 до 75."); return; }
+    lock.current = true;
     setBusy(true);
     try {
       await calc.saveProfile(clientId, next, loaded.stored?.revision ?? null);
       // Вес и % жира — факты Measurements: новая запись только при изменённом значении, без параллельного хранилища.
       const today = localDateOf(new Date());
-      if (weight !== null && weight !== loaded.weight) await measurements.record(clientId, { type: "WEIGHT", valueX10: Math.round(weight * 10), localDate: today, localMinute: null });
-      if (fat !== null && fat !== loaded.fat) await measurements.record(clientId, { type: "BODY_FAT", valueX10: Math.round(fat * 10), localDate: today, localMinute: null });
+      const journal = await measurements.listForClient(clientId);
+      const write = async (type: "WEIGHT" | "BODY_FAT", value: number | null, current: number | null) => {
+        if (value === null || value === current) return;
+        const input = { type, valueX10: Math.round(value * 10), localDate: today, localMinute: null };
+        const point = dailyPoints(journal.measurements, journal.primaries, type).find((candidate) => candidate.localDate === today);
+        // За сегодня уже есть значение — исправляем его, а не добавляем вторую запись, иначе день станет неоднозначным (§49.15, §49.18).
+        if (point === undefined) await measurements.record(clientId, input);
+        else if (point.kind === "VALUE") await measurements.correct(point.measurement.id, point.measurement.revision, { ...input, localMinute: point.measurement.localMinute });
+        else throw new Error("MEASUREMENT_AMBIGUOUS_TODAY");
+      };
+      await write("WEIGHT", weight, loaded.weight);
+      await write("BODY_FAT", fat, loaded.fat);
       setEditing(false);
       setError(null);
     } catch (failure) { setError(calcErrorText(failure)); setTick((value) => value + 1); }
+    lock.current = false;
     setBusy(false);
   };
 
@@ -210,9 +228,19 @@ export function NutritionCalcScreen({ clientId, calc, targets, measurements }: R
   }, [result, tolValid, tol.kcalPercent, tol.macroPercent, profile.goal]);
   const hasProposal = proposal !== null && TARGET_METRICS.some((metric) => proposal[metric] !== null);
 
+  const askApply = async () => {
+    if (proposal === null || lock.current) return;
+    try {
+      const existing = (await targets.listVersions(clientId)).find((version) => version.effectiveFrom === localDateOf(new Date()));
+      setConfirmApply(existing === undefined
+        ? "С сегодняшней даты на все дни недели будут действовать эти коридоры. Прошлые версии целей и особые цели на даты сохраняются."
+        : "На сегодняшнюю дату цели уже заданы. Они будут заменены этими коридорами на все дни недели: прежние значения по дням, которых нет в предложении, пропадут. Прошлые версии и особые цели на даты сохраняются.");
+    } catch (failure) { setError(calcErrorText(failure)); }
+  };
   const apply = async () => {
-    setConfirmApply(false);
-    if (proposal === null) return;
+    setConfirmApply(null);
+    if (proposal === null || lock.current) return;
+    lock.current = true;
     setBusy(true);
     try {
       const today = localDateOf(new Date());
@@ -221,6 +249,7 @@ export function NutritionCalcScreen({ clientId, calc, targets, measurements }: R
       setNotice("Цели сохранены с сегодняшней даты. Уточнить границы по дням можно на вкладке «Цели».");
       setError(null);
     } catch (failure) { setError(calcErrorText(failure)); }
+    lock.current = false;
     setBusy(false);
   };
 
@@ -333,14 +362,13 @@ export function NutritionCalcScreen({ clientId, calc, targets, measurements }: R
           <Text style={[styles.resultValue, { color: colors.textPrimary }]}>{proposal === null || proposal[metric] === null ? "—" : rangeText(proposal[metric])}</Text>
         </View>)}
         <Text style={[styles.hint, { color: colors.textMuted }]}>Черновик по расчёту. Белки и жиры считаются от сухой массы — нужны вес и % жира; без них они остаются «—».</Text>
-        <AppButton label="Применить как цели" busy={busy} disabled={!hasProposal} disabledReason="Сначала заполните данные расчёта." onPress={() => setConfirmApply(true)} />
+        <AppButton label="Применить как цели" busy={busy} disabled={!hasProposal} disabledReason="Сначала заполните данные расчёта." onPress={() => { void askApply(); }} />
       </Card> : null}
 
       <MeasurementsCard clientId={clientId} repository={measurements} />
 
       <HelpSheet visible={help} onClose={() => setHelp(false)} />
-      <ConfirmDialog visible={confirmApply} title="Применить как цели?" confirmLabel="Применить" onCancel={() => setConfirmApply(false)} onConfirm={() => { void apply(); }}
-        description="С сегодняшней даты на все дни недели будут действовать эти коридоры. Прошлые версии целей и особые цели на даты сохраняются." />
+      <ConfirmDialog visible={confirmApply !== null} title="Применить как цели?" confirmLabel="Применить" onCancel={() => setConfirmApply(null)} onConfirm={() => { void apply(); }} description={confirmApply ?? ""} />
     </ScrollView>
   );
 }
