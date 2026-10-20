@@ -5,6 +5,7 @@ import { DevClientRepository } from "../apps/mobile/src/features/clients/data/De
 import { devMeasurementCatalog, DEV_MEASUREMENT_LEDGER } from "../apps/mobile/src/features/measurements/data/DevMeasurementCatalog.ts";
 import { DevMeasurementRepository } from "../apps/mobile/src/features/measurements/data/DevMeasurementRepository.ts";
 import { MEASUREMENT_GROUPS, MEASUREMENT_TYPES } from "../apps/mobile/src/features/measurements/domain/MeasurementModel.ts";
+import { upsertDailyMeasurement } from "../apps/mobile/src/features/measurements/domain/DailyMeasurement.ts";
 import { dailyPoints, measurementTypeInfo, validateMeasurement } from "../apps/mobile/src/features/measurements/domain/MeasurementRules.ts";
 import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
@@ -79,5 +80,26 @@ test("миграция замеров v2: данные, основные зна�
       VALUES ('x', ?, ?, 'FOOT', 100, '2026-10-15', 'MANUAL', 1, 'a', 'a')`).run(WS, client.id), /CHECK|constraint/iu, "схема отклоняет неизвестный тип");
     assert.throws(() => db.prepare("INSERT INTO dev_measurement_daily_primary (workspace_id, client_id, type, local_date, measurement_id) VALUES (?, ?, 'ARM', '2026-10-14', 'm2')").run(WS, client.id),
       /FOREIGN|constraint/iu, "связь основного значения с типом и датой не потеряна");
+  } finally { await measurements.close(); await clients.close(); }
+});
+
+test("запись дневного значения: нет записи — новая; одна запись — правится на месте (без второй); несколько без основной — отказ; время записи сохраняется", async () => {
+  const db = new DatabaseSync(":memory:");
+  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const clients = new DevClientRepository(shared, WS, []);
+  await clients.initialize();
+  const measurements = new DevMeasurementRepository(shared, WS);
+  await measurements.initialize();
+  try {
+    const client = await clients.create({ displayName: "SyntheticA" });
+    const first = await upsertDailyMeasurement(measurements, client.id, { type: "WEIGHT", valueX10: 854, localDate: DAY, localMinute: 480 }, NOW);
+    assert.equal(first.valueX10, 854);
+    const corrected = await upsertDailyMeasurement(measurements, client.id, { type: "WEIGHT", valueX10: 851, localDate: DAY, localMinute: null }, NOW);
+    assert.deepEqual([corrected.id, corrected.valueX10, corrected.localMinute], [first.id, 851, 480], "тот же факт, время прежнее");
+    assert.equal((await measurements.listForClient(client.id)).measurements.length, 1, "второй записи за день нет");
+    await measurements.record(client.id, { type: "WEIGHT", valueX10: 860, localDate: DAY, localMinute: 1200 }, NOW);
+    await assert.rejects(upsertDailyMeasurement(measurements, client.id, { type: "WEIGHT", valueX10: 855, localDate: DAY, localMinute: null }, NOW), { message: "MEASUREMENT_AMBIGUOUS_DAY" });
+    const other = await upsertDailyMeasurement(measurements, client.id, { type: "WEIGHT", valueX10: 850, localDate: "2026-10-19", localMinute: null }, NOW);
+    assert.equal(other.localDate, "2026-10-19", "другая дата — новая запись");
   } finally { await measurements.close(); await clients.close(); }
 });

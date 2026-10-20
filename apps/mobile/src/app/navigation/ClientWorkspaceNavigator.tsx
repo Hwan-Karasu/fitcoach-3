@@ -7,6 +7,7 @@ import { StyleSheet, Text, View } from "react-native";
 import type { AccountingRepositoryPort } from "../../features/accounting/public.ts";
 import { ageOn, type ClientRecord, type ClientRepositoryPort, type ClientRosterPort } from "../../features/clients/public.ts";
 import { localDateOf } from "../../features/measurements/public.ts";
+import { useTrainedOn } from "../../read-models/useTrainedOn.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { NutritionHomeCards, type FoodCatalogPort, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort, type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ClientQuestionnaireScreen, type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
@@ -147,6 +148,8 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   const [activityErrorFor, setActivityErrorFor] = useState<string | null>(null);
   const [loadErrorFor, setLoadErrorFor] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  /** Тренировка сегодня по дневнику тренировок — авто «Да» в «Данных дня». */
+  const trainedToday = useTrainedOn(clientId, localDateOf(new Date()), trainingHistory);
   const client = selection?.clientId === clientId ? selection.result : undefined;
   // Режим, фильтры и раскрытые карточки истории и статистики живут, пока открыта карточка клиента (в том числе тренировка, открытая поверх неё).
   useEffect(() => {
@@ -222,11 +225,10 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       <Tabs.Screen name="Home" options={{ tabBarLabel: workspaceTabs.Home, tabBarAccessibilityLabel: workspaceTabs.Home, headerShown: true,
         header: () => <ClientHeader client={client} subtitle={workspaceTabs.Home} onBack={onClose} onClients={onOpenClients} /> }}>
         {({ navigation }) => <HomeNavigator client={client} accounting={accounting} measurements={measurements}
-          nutritionSlot={<NutritionHomeCards clientId={client.id} body={calcBody} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements}
+          nutritionSlot={<NutritionHomeCards clientId={client.id} body={calcBody} trainedToday={trainedToday} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements}
             onOpenNutrition={() => navigation.navigate("Nutrition")} onOpenSchedule={() => navigation.navigate("Nutrition", { screen: "NutritionTargets" })} />}
           onOpenEdit={() => onOpenEdit(client.id)}
           onOpenAccounting={() => onOpenAccounting(client.id)}
-          onOpenMeasurements={() => onOpenMeasurements(client.id)}
           onArchive={async () => {
             try { await repository.setArchived(client.id, client.revision, true); }
             catch (error) { setRetryKey((current) => current + 1); throw error; }
@@ -235,7 +237,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       </Tabs.Screen>
       <Tabs.Screen name="Nutrition" options={{ tabBarLabel: workspaceTabs.Nutrition, tabBarAccessibilityLabel: workspaceTabs.Nutrition }}>
         {() => <NutritionNavigator clientId={client.id} clientName={client.displayName} clientEmoji={client.emoji} body={calcBody} onUpdateBody={updateCalcBody} foods={nutrition.foods} recipes={nutrition.recipes}
-          diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements} onExitClient={onClose} onOpenClients={onOpenClients} />}
+          diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements} onOpenJournal={() => onOpenMeasurements(client.id)} onExitClient={onClose} onOpenClients={onOpenClients} />}
       </Tabs.Screen>
       <Tabs.Screen name="Training" options={{ tabBarLabel: workspaceTabs.Training, tabBarAccessibilityLabel: workspaceTabs.Training}}>
         {() => <TrainingNavigator clientId={client.id} clientName={client.displayName} clientEmoji={client.emoji} repository={trainingPlans}

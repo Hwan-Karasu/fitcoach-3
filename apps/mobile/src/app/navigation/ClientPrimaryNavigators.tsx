@@ -4,7 +4,7 @@ import { CommonActions } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { AccountingRepositoryPort } from "../../features/accounting/public.ts";
 import { ClientHomePreview, type ClientRecord } from "../../features/clients/public.ts";
-import { localDateOf, parseValueX10, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
+import { type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
 import { AddFoodScreen, NutritionTargetsScreen, type CalcClientBody, type CatalogFilter, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
   type RecipeCatalogPort } from "../../features/nutrition/public.ts";
@@ -71,30 +71,17 @@ const TrainingStack = createNativeStackNavigator<TrainingRoutes>();
 
 type HomeProps = Readonly<{
   client: ClientRecord; accounting: AccountingRepositoryPort; measurements: MeasurementRepositoryPort;
-  onOpenEdit: () => void; onOpenAccounting: () => void; onOpenMeasurements: () => void;
+  onOpenEdit: () => void; onOpenAccounting: () => void;
   nutritionSlot?: ReactNode;
   onArchive: () => Promise<void>;
 }>;
 
 /** Home composes owners' read projections; the weight entry goes to the Measurements owner. */
-function HomeIndexRoute({ client, accounting, measurements, onOpenEdit, onOpenAccounting, onOpenMeasurements, nutritionSlot,
+function HomeIndexRoute({ client, accounting, measurements, onOpenEdit, onOpenAccounting, nutritionSlot,
   onArchive }: HomeProps) {
   const summary = useClientHomeSummary(client.id, accounting, measurements);
-  const recordWeight = async (text: string): Promise<string | null> => {
-    const valueX10 = parseValueX10(text);
-    if (valueX10 === null) return "Введите вес, например 80,1.";
-    const now = new Date();
-    try {
-      await measurements.record(client.id, { type: "WEIGHT", valueX10, localDate: localDateOf(now),
-        localMinute: now.getHours() * 60 + now.getMinutes() }, now);
-      return null;
-    } catch (error) {
-      return error instanceof Error && error.message === "MEASUREMENT_VALUE_INVALID"
-        ? "Вес вне допустимого диапазона (20–400 кг)." : "Не удалось записать вес. Замеры не изменены.";
-    }
-  };
   return <ClientHomePreview client={client} summary={summary} onEdit={onOpenEdit} onOpenAccounting={onOpenAccounting}
-    onOpenMeasurements={onOpenMeasurements} onRecordWeight={recordWeight} nutritionSlot={nutritionSlot} onArchive={onArchive} />;
+    nutritionSlot={nutritionSlot} onArchive={onArchive} />;
 }
 
 export function HomeNavigator(props: HomeProps) {
@@ -132,9 +119,9 @@ function NutritionAddRoute({ navigation, children }: Readonly<{ navigation: { ad
   );
 }
 
-export function NutritionNavigator({ clientId, clientName, clientEmoji, body, onUpdateBody, foods, recipes, diary, targets, calc, measurements, onExitClient, onOpenClients }: Readonly<{
+export function NutritionNavigator({ clientId, clientName, clientEmoji, body, onUpdateBody, onOpenJournal, foods, recipes, diary, targets, calc, measurements, onExitClient, onOpenClients }: Readonly<{
   clientId: string; clientName: string; clientEmoji: string | null; body: CalcClientBody; onUpdateBody: (patch: Readonly<{ sex: "MALE" | "FEMALE" | null; heightCm: number | null }>) => Promise<void>;
-  foods: FoodCatalogPort; recipes: RecipeCatalogPort; diary: NutritionDiaryPort; targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort;
+  foods: FoodCatalogPort; recipes: RecipeCatalogPort; diary: NutritionDiaryPort; targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; onOpenJournal: () => void;
   onExitClient: () => void; onOpenClients: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -145,7 +132,7 @@ export function NutritionNavigator({ clientId, clientName, clientEmoji, body, on
         onClients={onOpenClients} onBack={() => { if (route.name === "NutritionIndex") onExitClient(); else navigation.goBack(); }} />,
     })}>
       <NutritionStack.Screen name="NutritionIndex">
-        {({ navigation }) => <NutritionHomeScreen clientId={clientId} body={body} onUpdateBody={onUpdateBody} diary={diary} targets={targets} calc={calc} measurements={measurements}
+        {({ navigation }) => <NutritionHomeScreen clientId={clientId} onOpenJournal={onOpenJournal} body={body} onUpdateBody={onUpdateBody} diary={diary} targets={targets} calc={calc} measurements={measurements}
           onAdd={(localDate, slot, filter) => navigation.navigate("NutritionAdd", { localDate, slot, filter })} />}
       </NutritionStack.Screen>
       <NutritionStack.Screen name="NutritionAdd">

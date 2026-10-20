@@ -120,3 +120,27 @@ test("миграция v7: профиль расчёта из v6 пережив�
     assert.equal(db.prepare("SELECT count(*) AS n FROM pragma_table_info('dev_nutrition_calc_profiles') WHERE name IN ('sex','age','height_x10')").get()?.n, 0);
   } finally { await calc.close(); await clients.close(); }
 });
+
+test("отметка тренировки дня: Да/Нет вручную, снятие возвращает «нет данных»; клиенты изолированы; удаление клиента убирает отметки", async () => {
+  const { clients, calc, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const b = await clients.create({ displayName: "SyntheticB" });
+    assert.deepEqual(await calc.listWorkoutMarks(a.id, "2026-10-01", "2026-10-31"), []);
+    await calc.setWorkoutMark(a.id, "2026-10-19", true, NOW);
+    await calc.setWorkoutMark(a.id, "2026-10-20", false, NOW);
+    await calc.setWorkoutMark(a.id, "2026-10-19", false, NOW);
+    await calc.setWorkoutMark(b.id, "2026-10-19", true, NOW);
+    assert.deepEqual(await calc.listWorkoutMarks(a.id, "2026-10-01", "2026-10-31"), [{ localDate: "2026-10-19", done: false }, { localDate: "2026-10-20", done: false }], "повтор заменяет значение дня");
+    assert.deepEqual(await calc.listWorkoutMarks(b.id, "2026-10-01", "2026-10-31"), [{ localDate: "2026-10-19", done: true }], "чужие отметки не видны");
+    await calc.clearWorkoutMark(a.id, "2026-10-20");
+    assert.deepEqual((await calc.listWorkoutMarks(a.id, "2026-10-01", "2026-10-31")).map((day) => day.localDate), ["2026-10-19"], "снятая отметка — нет данных, а не «Нет»");
+    await assert.rejects(calc.setWorkoutMark(a.id, "2026-02-31", true, NOW), code("DIARY_DATE_INVALID"));
+    const archived = await clients.setArchived(a.id, a.revision, true);
+    const manifest = await clients.previewPermanentDelete(a.id);
+    assert.equal(manifest.owners.find((entry) => entry.owner === "nutrition.calc")?.rows, 1, "отметка входит в состав удаляемого");
+    await clients.deleteArchivedPermanently(a.id, archived.revision);
+    assert.deepEqual(await calc.listWorkoutMarks(a.id, "2026-10-01", "2026-10-31"), []);
+    assert.equal((await calc.listWorkoutMarks(b.id, "2026-10-01", "2026-10-31")).length, 1);
+  } finally { await close(); }
+});

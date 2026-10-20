@@ -6,3 +6,4 @@ export { dailyPoints, formatDate, formatValue, latestPoint, localDateOf, measure
   "./domain/MeasurementRules.ts";
 export { navyBodyFat, type NavyInput } from "./domain/NavyBodyFat.ts";
 export { MeasurementsCard } from "./presentation/MeasurementsCard.tsx";
+export { upsertDailyMeasurement } from "./domain/DailyMeasurement.ts";

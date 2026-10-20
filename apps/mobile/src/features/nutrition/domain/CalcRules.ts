@@ -191,6 +191,35 @@ export function rebalanceMacroRanges(calories: number | null, defaults: MacroGra
   return { protein: point(defaults.protein), fat: noCalories ? null : rest(k.low, k.high, 9), carbs: mc };
 }
 
+/**
+ * Динамика веса (формулы 2.0 `getWeightTrendKg`): не менее четырёх взвешиваний, по порядку дат; среднее второй половины минус среднее первой, с точностью 0,01 кг.
+ * Меньше четырёх — `null` (нет динамики, а не «0»).
+ */
+export function weightTrendKg(weights: readonly number[]): number | null {
+  if (weights.length < 4) return null;
+  const middle = Math.floor(weights.length / 2);
+  const average = (values: readonly number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
+  return Math.round((average(weights.slice(middle)) - average(weights.slice(0, middle))) * 100) / 100;
+}
+
+/**
+ * Поправка суточного ориентира по динамике веса, ккал (формулы 2.0 `calcTrendAdjustment`, без «рекомпозиции» — её в 3.0 нет):
+ * похудение — вес не снижается (Δ ≥ −0,15 кг) → −120, падает слишком быстро (≤ −1 %) → +120; набор — не растёт (Δ ≤ 0,05) → +120, растёт слишком быстро (≥ 0,35 %) → −100;
+ * поддержание — |Δ| ≥ 0,35 кг: рост → −100, снижение → +100. Нет динамики — 0.
+ */
+export function trendAdjustment(goal: CalcGoal, deltaKg: number | null, referenceWeightKg: number | null): number {
+  if (deltaKg === null) return 0;
+  const percent = referenceWeightKg !== null && referenceWeightKg > 0 ? (deltaKg / referenceWeightKg) * 100 : null;
+  if (goal === "LOSS") return deltaKg >= -0.15 ? -120 : percent !== null && percent <= -1 ? 120 : 0;
+  if (goal === "GAIN") return deltaKg <= 0.05 ? 120 : percent !== null && percent >= 0.35 ? -100 : 0;
+  return Math.abs(deltaKg) >= 0.35 ? (deltaKg > 0 ? -100 : 100) : 0;
+}
+
+/** Подпись под суточным ориентиром. */
+export function guideLabel(adjustment: number): string {
+  return adjustment === 0 ? "Без поправки по весу" : `Поправка ${adjustment > 0 ? "+" : "−"}${Math.abs(adjustment)} ккал`;
+}
+
 export type CalcRuleError = "CALC_PROFILE_INVALID" | "CALC_STEPS_INVALID";
 
 const isWhole = (value: number, min: number, max: number) => Number.isInteger(value) && value >= min && value <= max;

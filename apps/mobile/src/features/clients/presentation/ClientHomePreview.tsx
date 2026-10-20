@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { AppButton, ConfirmDialog, InlineNotice, MetricTile, StatusTag, TextField } from
+import { Pencil } from "lucide-react-native";
+import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, StatusTag } from
   "../../../shared/ui/components/public.ts";
 import { PrototypeScreen } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -42,10 +43,10 @@ function PackBody({ pack }: Readonly<{ pack: HomePackSummary | null }>) {
 }
 
 /**
- * Client Home in the new layout (§§51, 53.4): identity, the approved stat tiles, weight entry and the
- * abonement summary — all projections of their owners' facts; no invented dashboard blocks.
+ * Client Home (UX 2.0): identity header with the edit pencil, abonement first, then the nutrition blocks (day data and КБЖУ, supplied by the shell), archive last —
+ * all projections of their owners' facts; no invented dashboard blocks.
  */
-export function ClientHomePreview({ client, summary, onEdit, onOpenAccounting, onOpenMeasurements, onRecordWeight, nutritionSlot,
+export function ClientHomePreview({ client, summary, onEdit, onOpenAccounting, nutritionSlot,
   onArchive }: Readonly<{
   /** Блоки питания (шаги, КБЖУ) — проекция Nutrition, подставляется оболочкой; Clients не знает о питании. */
   nutritionSlot?: ReactNode;
@@ -53,9 +54,6 @@ export function ClientHomePreview({ client, summary, onEdit, onOpenAccounting, o
   summary: ClientHomeSummary | null;
   onEdit: () => void;
   onOpenAccounting: () => void;
-  onOpenMeasurements: () => void;
-  /** Creates one Body Weight measurement (§10.13.1); resolves to an error text or null. */
-  onRecordWeight: (value: string) => Promise<string | null>;
   /** Resolves only after the lifecycle commit; the caller leaves the workspace. */
   onArchive: () => Promise<void>;
 }>) {
@@ -64,10 +62,6 @@ export function ClientHomePreview({ client, summary, onEdit, onOpenAccounting, o
   const [confirming, setConfirming] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [archiveError, setArchiveError] = useState(false);
-  const [weight, setWeight] = useState("");
-  const [weightBusy, setWeightBusy] = useState(false);
-  const [weightError, setWeightError] = useState<string | null>(null);
-  const [weightSaved, setWeightSaved] = useState(false);
 
   const archive = async () => {
     if (archiving) return;
@@ -79,16 +73,6 @@ export function ClientHomePreview({ client, summary, onEdit, onOpenAccounting, o
       setConfirming(false);
       setArchiving(false);
     }
-  };
-
-  const recordWeight = async () => {
-    if (weightBusy) return;
-    setWeightBusy(true);
-    setWeightSaved(false);
-    const failure = await onRecordWeight(weight);
-    setWeightError(failure);
-    if (failure === null) { setWeight(""); setWeightSaved(true); }
-    setWeightBusy(false);
   };
 
   const age = client.birthDate === null ? null : ageOn(client.birthDate, localCalendarDate(new Date()));
@@ -107,34 +91,8 @@ export function ClientHomePreview({ client, summary, onEdit, onOpenAccounting, o
         {client.contactPhone ? <Text style={[styles.detail, { color: colors.textSecondary }]}>{client.contactPhone}</Text> : null}
         {client.contactEmail ? <Text style={[styles.detail, { color: colors.textSecondary }]}>{client.contactEmail}</Text> : null}
       </View>
+      <AppIconButton label="Редактировать карточку и анкету клиента" icon={<Pencil size={20} color={colors.textSecondary} />} onPress={onEdit} />
     </View>
-    <AppButton variant="ghost" label="Редактировать карточку" onPress={onEdit} />
-
-    <View style={styles.tiles}>
-      {(summary?.metrics ?? [{ label: "Вес", value: null }, { label: "% жира", value: null },
-        { label: "Трен./нед.", value: null }]).map((metric) => (
-        <View key={metric.label} style={styles.tile}>
-          <MetricTile label={metric.label} value={metric.value} unit={metric.unit} status={metric.status} />
-        </View>
-      ))}
-    </View>
-
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Вес сегодня</Text>
-      <View style={styles.weightRow}>
-        <View style={styles.weightField}>
-          <TextField label="Вес, кг" value={weight} keyboardType="decimal-pad" placeholder="Например, 80,1"
-            onChangeText={(value) => { setWeight(value); setWeightSaved(false); }} />
-        </View>
-        <AppButton label="Записать" busy={weightBusy} disabled={weight.trim() === ""}
-          onPress={() => { void recordWeight(); }} />
-      </View>
-      {weightError !== null ? <InlineNotice kind="error">{weightError}</InlineNotice> : null}
-      {weightSaved ? <Text style={[styles.detail, { color: colors.success }]}>Записано в замеры.</Text> : null}
-      <AppButton variant="ghost" label="Все замеры" onPress={onOpenMeasurements} />
-    </View>
-
-    {nutritionSlot}
 
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.cardHead}>
@@ -144,6 +102,8 @@ export function ClientHomePreview({ client, summary, onEdit, onOpenAccounting, o
       <PackBody pack={pack} />
       <AppButton variant="secondary" label="Абонемент и оплата" onPress={onOpenAccounting} />
     </View>
+
+    {nutritionSlot}
 
     {archiveError ? <InlineNotice kind="error">
       Не удалось переместить клиента в архив: карточка изменилась или операция не удалась. Данные не изменены.

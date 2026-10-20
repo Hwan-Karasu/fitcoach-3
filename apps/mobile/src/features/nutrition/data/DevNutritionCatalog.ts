@@ -221,4 +221,19 @@ export const devNutritionCatalog: readonly MigrationStep[] = [{
         ELSE (NEW.override_kcal_x10 IS NULL AND NEW.override_protein_x10 IS NULL AND NEW.override_fat_x10 IS NULL AND NEW.override_carbs_x10 IS NULL) END
       BEGIN SELECT RAISE(ABORT, 'DIARY_OVERRIDE_INVALID'); END`,
   ],
+}, {
+  version: 9,
+  checksum: "n09-dev-nutrition-v9-daily-workout-marks-20261020",
+  statements: [
+    // Ручная отметка «была ли тренировка» за день (главная клиента). Нет строки = нет данных; факт тренировки из дневника тренировок читается отдельно и ничего здесь не пишет.
+    `CREATE TABLE dev_nutrition_daily_workout_marks (
+      workspace_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      local_date TEXT NOT NULL CHECK (date(local_date) IS local_date),
+      done INTEGER NOT NULL CHECK (done IN (0, 1)),
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (workspace_id, client_id, local_date),
+      FOREIGN KEY (client_id, workspace_id) REFERENCES dev_clients(id, workspace_id) ON DELETE RESTRICT
+    )`,
+  ],
 }];

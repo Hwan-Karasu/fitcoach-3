@@ -1,62 +1,58 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { AppButton, ConfirmDialog, InlineNotice, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
+import { AppButton, ConfirmDialog, InlineNotice, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
-import { rebalanceMacroRanges, type CalcResult, type GramRange, type MacroGrams } from "../domain/CalcRules.ts";
-import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
-import { TARGET_METRICS, type Corridors, type TargetException, type TargetMetric, type TargetVersion } from "../domain/TargetModel.ts";
-import { differsFromUniform, energyConsistency, resolveTarget, uniformWeek, versionFor } from "../domain/TargetRules.ts";
+import { rebalanceMacroRanges, type GramRange, type MacroGrams } from "../domain/CalcRules.ts";
 import { kcalRangeFromMacros } from "../domain/EnergyRules.ts";
+import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
+import { TARGET_METRICS, type Corridors, type TargetException, type TargetVersion } from "../domain/TargetModel.ts";
+import { differsFromUniform, resolveTarget, uniformWeek, versionFor } from "../domain/TargetRules.ts";
 import { formatTargetText, parseTargetText } from "../domain/TargetText.ts";
-import { metricLabels, nutritionErrorText, todayLocal, wholeText } from "./nutritionFormat.ts";
-import { useMacroColors } from "./MacroGrid.tsx";
+import { metricLabels, nutritionErrorText, todayLocal } from "./nutritionFormat.ts";
 
 const NO_EXCEPTIONS: readonly TargetException[] = [];
-type Drafts = Readonly<Record<TargetMetric, string>>;
-const EMPTY: Drafts = { kcal: "", protein: "", fat: "", carbs: "" };
+export type TargetMode = "EXACT" | "RANGE";
 type MacroMetric = "protein" | "fat" | "carbs";
-/** «Точное значение» — одно число в ячейке; «Коридор» — число или диапазон `22-30` (UX 2.0 + §49.8). */
-type Mode = "EXACT" | "RANGE";
-const fieldLabels: Readonly<Record<TargetMetric, string>> = { kcal: "Ккал", protein: "Белки, г", fat: "Жиры, г", carbs: "Углеводы, г" };
+const MACROS: readonly MacroMetric[] = ["protein", "fat", "carbs"];
+type Drafts = Readonly<Record<MacroMetric, string>>;
+const EMPTY: Drafts = { protein: "", fat: "", carbs: "" };
+const fieldLabels: Readonly<Record<MacroMetric, string>> = { protein: "Белки, г", fat: "Жиры, г", carbs: "Углеводы, г" };
 
-/** Расчётные ориентиры для ряда «Расчёт»: ккал и граммы Б/Ж/У как отдельные числа (справочно), неизвестное — `null`. */
-function reference(result: CalcResult | null, macros: MacroGrams | null, metric: TargetMetric): number | null {
-  if (result === null) return null;
-  return metric === "kcal" ? result.target : macros === null ? null : macros[metric];
-}
-
-/** Тексты полей → коридоры; пустое поле — показатель без цели. Строка — текст ошибки. */
-function corridorsFrom(drafts: Drafts, mode: Mode): Corridors | string | null {
-  const out = {} as Record<TargetMetric, { minX10: number; maxX10: number } | null>;
-  for (const metric of TARGET_METRICS) {
-    const parsed = parseTargetText(drafts[metric]);
+/** Тексты полей → коридоры Б/Ж/У; калории — сумма 4/9/4 (считаются сами). Пустое поле — показатель без цели. Строка — текст ошибки. */
+function corridorsFrom(texts: Drafts, mode: TargetMode): Corridors | string | null {
+  const out = {} as Record<MacroMetric, { minX10: number; maxX10: number } | null>;
+  for (const metric of MACROS) {
+    const parsed = parseTargetText(texts[metric]);
     if (parsed === "invalid") return `${metricLabels[metric]}: введите ${mode === "EXACT" ? "одно число (22)" : "число (22) или диапазон (22-30)"}; нижняя граница не больше верхней.`;
-    if (mode === "EXACT" && parsed !== null && parsed.minX10 !== parsed.maxX10) return `${metricLabels[metric]}: в режиме «Точное значение» нужно одно число. Введите его или переключитесь на «Коридор».`;
+    if (mode === "EXACT" && parsed !== null && parsed.minX10 !== parsed.maxX10) return `${metricLabels[metric]}: в режиме «Точно» нужно одно число. Введите его или переключитесь на «Коридор».`;
     out[metric] = parsed;
   }
-  return TARGET_METRICS.every((metric) => out[metric] === null) ? null : out;
+  if (MACROS.every((metric) => out[metric] === null)) return null;
+  return { kcal: kcalRangeFromMacros(out), protein: out.protein, fat: out.fat, carbs: out.carbs };
 }
 
 /**
- * Два ряда КБЖУ (UX 2.0 + §49.8, UX v1.1): «Расчёт» — справочные ориентиры по формулам, только чтение; «Вручную» — цель тренера, по одной ячейке на показатель: «22» — точное число,
- * «22-30» — диапазон. Расчёт цель не меняет: сохраняется только явное «Сохранить цели» (версия с сегодняшней даты, §49.11). Дни недели, версии и исключения — «Цели по дням недели».
+ * Ручная корректировка Б/Ж/У = цель на сегодня (UX 2.0 + §49.8): по одной ячейке на показатель — «22» (точно) или «22-30» (коридор, режим переключается в шапке карточки КБЖУ). Введённое
+ * фиксируется, остальное и калории досчитываются под суточный ориентир (формулы 2.0, `rebalanceMacroRanges`; 1 г белка и углеводов = 4 ккал, жира = 9). Расчёт цель не меняет: сохраняется
+ * только явное «Сохранить цели» (версия с сегодняшней даты, §49.11). Дни недели, версии и исключения — «Цели по дням недели».
  */
-export function NutritionTargetRows({ clientId, targets, result, macros, onOpenSchedule }: Readonly<{ clientId: string; targets: NutritionTargetsPort; result: CalcResult | null;
-  macros: MacroGrams | null; onOpenSchedule?: () => void }>) {
+export function NutritionTargetRows({ clientId, targets, calories, defaults, mode, onModeAutoChange, onOpenSchedule }: Readonly<{ clientId: string; targets: NutritionTargetsPort;
+  /** Суточный ориентир, ккал (расчёт с поправкой по весу); `null` — расчёта нет. */
+  calories: number | null;
+  /** Расчётные Б/Ж/У под этот ориентир (от сухой массы); `null` — не определены. */
+  defaults: MacroGrams | null; mode: TargetMode;
+  /** Сохранённая цель с диапазоном открывается в режиме «Коридор», с точными числами — в «Точно». */
+  onModeAutoChange: (mode: TargetMode) => void; onOpenSchedule?: () => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const macroColors = useMacroColors();
   const today = todayLocal();
   const [data, setData] = useState<Readonly<{ versions: readonly TargetVersion[]; exceptions: readonly TargetException[] }> | null>(null);
   const [tick, setTick] = useState(0);
   const [drafts, setDrafts] = useState<Drafts>(EMPTY);
+  /** Какие из Б/Ж/У ввёл тренер: остальные досчитываются под ориентир, пока он их не введёт сам. */
+  const [manual, setManual] = useState<Readonly<Record<MacroMetric, boolean>>>({ protein: false, fat: false, carbs: false });
   const [dirty, setDirty] = useState(false);
-  /** Калории считаются сами из Б/Ж/У (4/9/4), пока тренер не ввёл их вручную; очистка поля возвращает авторасчёт. */
-  const [kcalManual, setKcalManual] = useState(false);
-  const [mode, setMode] = useState<Mode>("EXACT");
-  /** Какие из Б/Ж/У ввёл тренер: остальные досчитываются под калорийный ориентир (формулы 2.0), пока он их не введёт сам. */
-  const [macroManual, setMacroManual] = useState<Readonly<Record<MacroMetric, boolean>>>({ protein: false, fat: false, carbs: false });
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -74,49 +70,33 @@ export function NutritionTargetRows({ clientId, targets, result, macros, onOpenS
   // Пока тренер не правил поля, они показывают действующую цель; правка не затирается обновлением данных.
   useEffect(() => {
     if (resolved === null || dirty) return;
-    if (resolved.source === "NONE") { setDrafts(EMPTY); setKcalManual(false); setMode("EXACT"); setMacroManual({ protein: false, fat: false, carbs: false }); return; }
+    if (resolved.source === "NONE") { setDrafts(EMPTY); setManual({ protein: false, fat: false, carbs: false }); return; }
     const c = resolved.corridors;
-    // Сохранённая цель с диапазоном открывается в режиме «Коридор», с точными числами — в «Точное значение».
-    setMode(TARGET_METRICS.some((metric) => c[metric] !== null && c[metric]!.minX10 !== c[metric]!.maxX10) ? "RANGE" : "EXACT");
-    const auto = kcalRangeFromMacros({ protein: c.protein, fat: c.fat, carbs: c.carbs });
-    setDrafts({ kcal: formatTargetText(c.kcal), protein: formatTargetText(c.protein), fat: formatTargetText(c.fat), carbs: formatTargetText(c.carbs) });
-    setMacroManual({ protein: c.protein !== null, fat: c.fat !== null, carbs: c.carbs !== null });
-    // Сохранённая калорийная цель, отличающаяся от суммы 4/9/4, — осознанный ручной ввод: авторасчёт её не затирает.
-    setKcalManual(c.kcal !== null && (auto === null || auto.minX10 !== c.kcal.minX10 || auto.maxX10 !== c.kcal.maxX10));
-  }, [resolved, dirty]);
+    setDrafts({ protein: formatTargetText(c.protein), fat: formatTargetText(c.fat), carbs: formatTargetText(c.carbs) });
+    setManual({ protein: c.protein !== null, fat: c.fat !== null, carbs: c.carbs !== null });
+    onModeAutoChange(TARGET_METRICS.some((metric) => c[metric] !== null && c[metric]!.minX10 !== c[metric]!.maxX10) ? "RANGE" : "EXACT");
+  }, [resolved, dirty, onModeAutoChange]);
 
-  /** Пересчёт Б/Ж/У: введённые тренером — как введены (диапазон — серединой), остальные добираются до калорийного ориентира расчёта. */
   const rebalanced = useMemo(() => {
-    if (!macroManual.protein && !macroManual.fat && !macroManual.carbs) return null;
+    if (!manual.protein && !manual.fat && !manual.carbs) return null;
     const range = (metric: MacroMetric): GramRange | null => {
-      if (!macroManual[metric]) return null;
+      if (!manual[metric]) return null;
       const parsedRange = parseTargetText(drafts[metric]);
       return parsedRange === null || parsedRange === "invalid" || (mode === "EXACT" && parsedRange.minX10 !== parsedRange.maxX10) ? null : { min: parsedRange.minX10 / 10, max: parsedRange.maxX10 / 10 };
     };
-    return rebalanceMacroRanges(result?.target ?? null, macros ?? { protein: null, fat: null, carbs: null }, { protein: range("protein"), fat: range("fat"), carbs: range("carbs") });
-  }, [macroManual, drafts, result, macros, mode]);
-  const macroAuto = (metric: MacroMetric) => !macroManual[metric] && rebalanced !== null && rebalanced[metric] !== null;
+    return rebalanceMacroRanges(calories, defaults ?? { protein: null, fat: null, carbs: null }, { protein: range("protein"), fat: range("fat"), carbs: range("carbs") });
+  }, [manual, drafts, calories, defaults, mode]);
+  const isAuto = (metric: MacroMetric) => !manual[metric] && rebalanced !== null && rebalanced[metric] !== null;
   const autoText = (metric: MacroMetric) => { const r = rebalanced?.[metric]; return r === null || r === undefined ? "" : formatTargetText({ minX10: r.min * 10, maxX10: r.max * 10 }); };
   /** Б/Ж/У с автозаполнением: введённые — как есть, досчитанные — целыми граммами (в режиме «Коридор» — коридором). */
-  const filled = useMemo<Drafts>(() => ({ ...drafts, protein: macroAuto("protein") ? autoText("protein") : drafts.protein, fat: macroAuto("fat") ? autoText("fat") : drafts.fat,
-    carbs: macroAuto("carbs") ? autoText("carbs") : drafts.carbs }), [drafts, rebalanced, macroManual]);
+  const shown = useMemo<Drafts>(() => ({ protein: isAuto("protein") ? autoText("protein") : drafts.protein, fat: isAuto("fat") ? autoText("fat") : drafts.fat, carbs: isAuto("carbs") ? autoText("carbs") : drafts.carbs }),
+    [drafts, rebalanced, manual]);
+  const parsed = useMemo(() => corridorsFrom(shown, mode), [shown, mode]);
+  const kcalLine = parsed !== null && typeof parsed !== "string" && parsed.kcal !== null ? `Калории по Б/Ж/У (4/9/4): ${formatTargetText(parsed.kcal)} ккал` : null;
 
-  const autoKcal = useMemo(() => {
-    const ranges = { protein: parseTargetText(filled.protein), fat: parseTargetText(filled.fat), carbs: parseTargetText(filled.carbs) };
-    const { protein, fat, carbs } = ranges;
-    return protein === "invalid" || fat === "invalid" || carbs === "invalid" ? null : kcalRangeFromMacros({ protein, fat, carbs });
-  }, [filled]);
-  /** Тексты полей с учётом автозаполнения Б/Ж/У и калорий: так же они разбираются и сохраняются. */
-  const effective = useMemo<Drafts>(() => !kcalManual && autoKcal !== null ? { ...filled, kcal: formatTargetText(autoKcal) } : filled, [filled, kcalManual, autoKcal]);
-  const kcalAuto = !kcalManual && autoKcal !== null;
-
-  const parsed = useMemo(() => corridorsFrom(effective, mode), [effective, mode]);
-  const warning = parsed !== null && typeof parsed !== "string" && energyConsistency(parsed) === "INCOMPATIBLE"
-    ? "Калорийный коридор не сходится с энергией из Б/Ж/У (4·Б + 9·Ж + 4·У). Проверьте значения — они не изменены." : null;
-  const setField = (metric: TargetMetric, text: string) => {
+  const setField = (metric: MacroMetric, text: string) => {
     setDrafts({ ...drafts, [metric]: text });
-    if (metric === "kcal") setKcalManual(text.trim() !== "");
-    else setMacroManual({ ...macroManual, [metric]: text.trim() !== "" });
+    setManual({ ...manual, [metric]: text.trim() !== "" });
     setDirty(true);
     setError(null);
     setNotice(null);
@@ -155,39 +135,22 @@ export function NutritionTargetRows({ clientId, targets, result, macros, onOpenS
     void save();
   };
 
-  const source = resolved === null ? "" : resolved.source === "NONE" ? "Цель не установлена" : resolved.source === "EXCEPTION" ? "Сегодня действует особая цель на дату" : "Действует расписание целей";
-  const field = (metric: TargetMetric) => {
-    const calc = reference(result, macros, metric);
-    return (
-      <TextField label={metric === "kcal" ? (kcalAuto ? "Ккал (авто из Б/Ж/У)" : fieldLabels[metric]) : macroAuto(metric) ? `${fieldLabels[metric]} (авто)` : fieldLabels[metric]} value={effective[metric]} keyboardType="numbers-and-punctuation" disabled={busy}
-        hint={metric === "kcal" ? "1 г белка = 4 ккал, жира = 9, углеводов = 4. Можно ввести своё число — оно заменит авторасчёт." : undefined}
-        placeholder={calc === null ? (mode === "EXACT" ? "22" : "22 или 22-30") : `расчёт ${wholeText(calc * 10)}`} onChangeText={(text) => setField(metric, text)} />
-    );
-  };
   return (
     <View style={styles.wrap}>
-      <Text style={[styles.hint, { color: colors.textSecondary }]}>{source}</Text>
-      <View style={styles.row} accessible accessibilityLabel={`Расчёт: ${TARGET_METRICS.map((metric) => `${metricLabels[metric]} ${reference(result, macros, metric) === null ? "нет данных" : reference(result, macros, metric)}`).join(", ")}`}>
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Расчёт</Text>
-        {TARGET_METRICS.map((metric) => {
-          const value = reference(result, macros, metric);
-          return <Text key={metric} style={[styles.value, { color: macroColors[metric] }]}>{value === null ? "—" : wholeText(value * 10)}</Text>;
-        })}
-      </View>
-      <Text style={[styles.label, { color: colors.textSecondary }]}>Ручная корректировка</Text>
-      <View style={styles.modes}>
-        <SelectionChip group="Режим цели" label="Точное значение" selected={mode === "EXACT"} onPress={() => setMode("EXACT")} />
-        <SelectionChip group="Режим цели" label="Коридор" selected={mode === "RANGE"} onPress={() => setMode("RANGE")} />
-      </View>
-      <Text style={[styles.hint, { color: colors.textMuted }]}>{mode === "EXACT" ? "В ячейке одно число (22). " : "В ячейке число (22) или диапазон (22-30). "}Введёте часть Б/Ж/У — остальное и калории досчитаются под расчётный калораж{mode === "RANGE" ? " коридором" : ""}.</Text>
-      {field("kcal")}
+      <Text style={[styles.label, { color: colors.textSecondary }]}>Ручная корректировка Б/Ж/У</Text>
+      <Text style={[styles.hint, { color: colors.textMuted }]}>
+        {mode === "EXACT" ? "В ячейке одно число (22). " : "В ячейке число (22) или диапазон (22-30). "}Введёте часть — остальное и калории досчитаются под суточный ориентир{mode === "RANGE" ? " коридором" : ""}.
+      </Text>
       <View style={styles.row}>
-        <View style={styles.cell}>{field("protein")}</View>
-        <View style={styles.cell}>{field("fat")}</View>
-        <View style={styles.cell}>{field("carbs")}</View>
+        {MACROS.map((metric) => (
+          <View key={metric} style={styles.cell}>
+            <TextField label={isAuto(metric) ? `${fieldLabels[metric]} (авто)` : fieldLabels[metric]} value={shown[metric]} keyboardType="numbers-and-punctuation" disabled={busy}
+              placeholder={defaults === null || defaults[metric] === null ? (mode === "EXACT" ? "22" : "22-30") : `расчёт ${defaults[metric]}`} onChangeText={(text) => setField(metric, text)} />
+          </View>
+        ))}
       </View>
+      {kcalLine !== null ? <Text style={[styles.hint, { color: colors.textSecondary }]}>{kcalLine}</Text> : null}
       {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
-      {warning !== null ? <InlineNotice kind="warning">{warning}</InlineNotice> : null}
       {notice !== null ? <InlineNotice kind="success">{notice}</InlineNotice> : null}
       <AppButton label="Сохранить цели" busy={busy} disabled={!dirty || parsed === null} disabledReason="Измените значения в ручной корректировке." onPress={askSave} />
       {onOpenSchedule !== undefined ? <AppButton variant="secondary" label="Цели по дням недели" onPress={onOpenSchedule} /> : null}
@@ -199,9 +162,7 @@ export function NutritionTargetRows({ clientId, targets, result, macros, onOpenS
 const styles = StyleSheet.create({
   wrap: { gap: 8 },
   hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  row: { flexDirection: "row", alignItems: "center", gap: 8 },
+  row: { flexDirection: "row", gap: 8 },
   label: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
-  value: { flex: 1, textAlign: "center", fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
   cell: { flex: 1 },
-  modes: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 });

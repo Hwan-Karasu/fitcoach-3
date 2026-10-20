@@ -4,7 +4,7 @@ import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/
 import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
 import { assertSteps, validateCalcProfile, type CalcActivity, type CalcGoal, type CalcIntensity, type CalcProfile } from "../domain/CalcRules.ts";
 import { assertDate } from "../domain/DiaryRules.ts";
-import type { CalcCommittedChange, NutritionCalcPort, StepsDay, StoredCalcProfile } from "../domain/NutritionCalcPort.ts";
+import type { CalcCommittedChange, NutritionCalcPort, StepsDay, StoredCalcProfile, WorkoutMark } from "../domain/NutritionCalcPort.ts";
 import { DEV_NUTRITION_LEDGER, devNutritionCatalog } from "./DevNutritionCatalog.ts";
 
 interface ProfileRow {
@@ -30,15 +30,17 @@ async function load(reader: SqliteStatementPort, workspaceId: string, clientId: 
 /** Nutrition side of PermanentlyDeleteArchivedClient (§15.7): профиль расчёта и шаги. */
 export const devNutritionCalcClientDeletionParticipant = {
   owner: "nutrition.calc",
-  tables: ["dev_nutrition_calc_profiles", "dev_nutrition_daily_steps"] as const,
+  tables: ["dev_nutrition_calc_profiles", "dev_nutrition_daily_steps", "dev_nutrition_daily_workout_marks"] as const,
   async count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number> {
     const profiles = await tx.first<{ n: number }>("SELECT count(*) AS n FROM dev_nutrition_calc_profiles WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
     const steps = await tx.first<{ n: number }>("SELECT count(*) AS n FROM dev_nutrition_daily_steps WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
-    return (profiles?.n ?? 0) + (steps?.n ?? 0);
+    const marks = await tx.first<{ n: number }>("SELECT count(*) AS n FROM dev_nutrition_daily_workout_marks WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    return (profiles?.n ?? 0) + (steps?.n ?? 0) + (marks?.n ?? 0);
   },
   async detach(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<void> {
     await tx.run("DELETE FROM dev_nutrition_calc_profiles WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
     await tx.run("DELETE FROM dev_nutrition_daily_steps WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run("DELETE FROM dev_nutrition_daily_workout_marks WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
   },
 };
 
@@ -145,6 +147,33 @@ export class DevNutritionCalcRepository implements NutritionCalcPort {
     assertDate(localDate);
     await this.ready().writer.write(async (tx) => {
       await tx.run("DELETE FROM dev_nutrition_daily_steps WHERE workspace_id = ? AND client_id = ? AND local_date = ?", [this.workspaceId, clientId, localDate]);
+    });
+    this.publish({ clientId });
+  }
+
+  async listWorkoutMarks(clientId: string, fromDate: string, toDate: string): Promise<readonly WorkoutMark[]> {
+    assertDate(fromDate);
+    assertDate(toDate);
+    const rows = await this.ready().connection.all<{ localDate: string; done: number }>(`SELECT local_date AS localDate, done FROM dev_nutrition_daily_workout_marks
+      WHERE workspace_id = ? AND client_id = ? AND local_date BETWEEN ? AND ? ORDER BY local_date`, [this.workspaceId, clientId, fromDate, toDate]);
+    return rows.map((row) => ({ localDate: row.localDate, done: row.done === 1 }));
+  }
+
+  async setWorkoutMark(clientId: string, localDate: string, done: boolean, now: Date = new Date()): Promise<WorkoutMark> {
+    assertDate(localDate);
+    await this.ready().writer.write(async (tx) => {
+      await tx.run(`INSERT INTO dev_nutrition_daily_workout_marks (workspace_id, client_id, local_date, done, updated_at) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(workspace_id, client_id, local_date) DO UPDATE SET done = excluded.done, updated_at = excluded.updated_at`,
+      [this.workspaceId, clientId, localDate, done ? 1 : 0, now.toISOString()]);
+    });
+    this.publish({ clientId });
+    return { localDate, done };
+  }
+
+  async clearWorkoutMark(clientId: string, localDate: string): Promise<void> {
+    assertDate(localDate);
+    await this.ready().writer.write(async (tx) => {
+      await tx.run("DELETE FROM dev_nutrition_daily_workout_marks WHERE workspace_id = ? AND client_id = ? AND local_date = ?", [this.workspaceId, clientId, localDate]);
     });
     this.publish({ clientId });
   }

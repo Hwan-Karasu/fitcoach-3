@@ -10,6 +10,12 @@ export interface StepsDay {
   readonly steps: number;
 }
 
+/** Ручная отметка тренировки дня; дня нет в списке — отметки нет (нет данных). */
+export interface WorkoutMark {
+  readonly localDate: string;
+  readonly done: boolean;
+}
+
 export interface CalcCommittedChange {
   readonly clientId: string;
 }
@@ -26,6 +32,11 @@ export interface NutritionCalcPort {
   listSteps(clientId: string, fromDate: string, toDate: string): Promise<readonly StepsDay[]>;
   setSteps(clientId: string, localDate: string, steps: number, now?: Date): Promise<StepsDay>;
   clearSteps(clientId: string, localDate: string): Promise<void>;
+  /** Ручные отметки «была тренировка» за диапазон дат; дни без отметки не возвращаются. */
+  listWorkoutMarks(clientId: string, fromDate: string, toDate: string): Promise<readonly WorkoutMark[]>;
+  setWorkoutMark(clientId: string, localDate: string, done: boolean, now?: Date): Promise<WorkoutMark>;
+  /** Снимает отметку: день снова «нет данных». */
+  clearWorkoutMark(clientId: string, localDate: string): Promise<void>;
   /** Среднее по дням с известными шагами, округлённое; `null`, если шагов за период нет. */
   averageSteps(clientId: string, fromDate: string, toDate: string): Promise<number | null>;
   subscribeCommittedChanges(listener: (change: CalcCommittedChange) => void): () => void;

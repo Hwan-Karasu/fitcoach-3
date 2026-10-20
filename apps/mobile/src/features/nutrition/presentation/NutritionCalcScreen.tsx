@@ -4,7 +4,7 @@ import { AppButton, InlineNotice, LoadingState, SelectionChip, TextField } from 
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
-import { dailyPoints, localDateOf, MeasurementsCard, navyBodyFat, type MeasurementRepositoryPort } from "../../measurements/public.ts";
+import { localDateOf, MeasurementsCard, navyBodyFat, upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../measurements/public.ts";
 import { CALC_ACTIVITIES, CALC_GOALS, CALC_INTENSITIES, deriveCalc, type CalcActivity, type CalcGoal, type CalcIntensity,
   type CalcProfile, type CalcSex } from "../domain/CalcRules.ts";
 import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
@@ -52,7 +52,7 @@ function calcErrorText(error: unknown): string {
     case "CALC_STALE": return "Профиль уже изменился. Данные обновлены — повторите действие.";
     case "MEASUREMENT_VALUE_INVALID": return "Вес и процент жира вне допустимого диапазона.";
     case "MEASUREMENT_DATE_INVALID": return "Замер не может быть в будущем.";
-    case "MEASUREMENT_AMBIGUOUS_TODAY": return "За сегодня несколько записей веса или % жира. Выберите основную в журнале замеров и повторите.";
+    case "MEASUREMENT_AMBIGUOUS_DAY": return "За сегодня несколько записей веса или % жира. Выберите основную в журнале замеров и повторите.";
     default: return nutritionErrorText(error);
   }
 }
@@ -91,7 +91,7 @@ function HelpSheet({ visible, onClose }: Readonly<{ visible: boolean; onClose: (
   const items: readonly (readonly [string, string])[] = [
     ["Стартовый расход", "Оценка суточного расхода энергии: REE + NEAT + EAT. Это расчёт по формулам, а не измеренный расход."],
     ["REE — базовый обмен", "При известных весе и % жира — Кэтч–Макардл: 370 + 21,6 × сухая масса. Иначе — Миффлин–Сан-Жеор по полу, возрасту, росту и весу. Без данных значение не показывается."],
-    ["NEAT — повседневная активность", "По средним шагам за последние 30 дней и весу (0,03–0,06 ккал на шаг). Без шагов — по образу жизни: 180 / 260 / 360 / 460 ккал."],
+    ["NEAT — повседневная активность", "По средним шагам за последние 7 дней и весу (0,03–0,06 ккал на шаг). Без шагов — по образу жизни: 180 / 260 / 360 / 460 ккал."],
     ["EAT — тренировки", "MET × 3,5 × вес ÷ 200 × минуты × тренировок в неделю ÷ 7. MET: лёгкая 3,5, средняя 5, тяжёлая 6."],
     ["Итоговый калораж", "Стартовый расход с поправкой на цель: «Шаг цели» вычитается при похудении и прибавляется при наборе."],
     ["Цели", "Расчёт — справочный и цели не меняет. Цель задаётся на главной клиента: ячейка «ручная корректировка» принимает число (22) или диапазон (22-30)."],
@@ -120,7 +120,7 @@ function HelpSheet({ visible, onClose }: Readonly<{ visible: boolean; onClose: (
  * Экран «Расчёт» (§49.10, UX «Расчёт»): просмотр и редактирование — состояния одного экрана; вес и % жира берутся из Measurements, шаги — из суточной активности.
  * Результат — оценка и черновик целей; действующей целью он становится только после явного «Применить как цели».
  */
-export function NutritionCalcScreen({ clientId, body, onUpdateBody, calc, measurements }: Readonly<{ clientId: string; body: CalcClientBody;
+export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenJournal, calc, measurements }: Readonly<{ clientId: string; body: CalcClientBody; onOpenJournal: () => void;
   /** Записывает пол и рост в карточку клиента (владелец данных — Clients). */
   onUpdateBody: (patch: Readonly<{ sex: CalcSex | null; heightCm: number | null }>) => Promise<void>; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort }>) {
   const { palette } = usePrototypeTheme();
@@ -188,18 +188,8 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, calc, measur
       if (draft.sex !== body.sex || heightCm !== body.heightCm) await onUpdateBody({ sex: draft.sex, heightCm });
       // Вес и % жира — факты Measurements: новая запись только при изменённом значении, без параллельного хранилища.
       const today = localDateOf(new Date());
-      const journal = await measurements.listForClient(clientId);
-      const write = async (type: "WEIGHT" | "BODY_FAT", value: number | null, current: number | null) => {
-        if (value === null || value === current) return;
-        const input = { type, valueX10: Math.round(value * 10), localDate: today, localMinute: null };
-        const point = dailyPoints(journal.measurements, journal.primaries, type).find((candidate) => candidate.localDate === today);
-        // За сегодня уже есть значение — исправляем его, а не добавляем вторую запись, иначе день станет неоднозначным (§49.15, §49.18).
-        if (point === undefined) await measurements.record(clientId, input);
-        else if (point.kind === "VALUE") await measurements.correct(point.measurement.id, point.measurement.revision, { ...input, localMinute: point.measurement.localMinute });
-        else throw new Error("MEASUREMENT_AMBIGUOUS_TODAY");
-      };
-      await write("WEIGHT", weight, loaded.weight);
-      await write("BODY_FAT", fat, loaded.fat);
+      if (weight !== null && weight !== loaded.weight) await upsertDailyMeasurement(measurements, clientId, { type: "WEIGHT", valueX10: Math.round(weight * 10), localDate: today, localMinute: null });
+      if (fat !== null && fat !== loaded.fat) await upsertDailyMeasurement(measurements, clientId, { type: "BODY_FAT", valueX10: Math.round(fat * 10), localDate: today, localMinute: null });
       setEditing(false);
       setError(null);
     } catch (failure) { setError(calcErrorText(failure)); reload(); }
@@ -322,7 +312,7 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, calc, measur
       </Card>
 
 
-      <MeasurementsCard clientId={clientId} repository={measurements} />
+      <MeasurementsCard clientId={clientId} repository={measurements} onOpenJournal={onOpenJournal} />
 
       <HelpSheet visible={help} onClose={() => setHelp(false)} />
     </ScrollView>

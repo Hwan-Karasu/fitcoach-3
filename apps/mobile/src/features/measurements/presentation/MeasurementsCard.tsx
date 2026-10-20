@@ -77,7 +77,9 @@ function Tile({ group, cells }: Readonly<{ group: MeasurementGroup; cells: Reado
  * «Удалить» и «Настроить замеры». Источник — единственный журнал Measurements; пусто — «—», не ноль; старые односторонние значения остаются «без стороны». Видимость полей — настройка
  * экрана на время работы: скрытое поле не удаляет факты, а группа с данными за выбранную дату показывается всегда.
  */
-export function MeasurementsCard({ clientId, repository }: Readonly<{ clientId: string; repository: MeasurementRepositoryPort }>) {
+export function MeasurementsCard({ clientId, repository, onOpenJournal }: Readonly<{ clientId: string; repository: MeasurementRepositoryPort;
+  /** Полный журнал замеров: несколько значений за день, выбор основного, масса и % жира. */
+  onOpenJournal?: () => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const [data, setData] = useState<ClientMeasurements | null>(null);
@@ -222,7 +224,10 @@ export function MeasurementsCard({ clientId, repository }: Readonly<{ clientId: 
             </View>
           ))}
         </>}
-        <AppButton compact variant="ghost" label={configuring ? "Готово" : "Настроить замеры"} onPress={() => setConfiguring(!configuring)} />
+        <View style={styles.tiles}>
+          <View style={styles.grow}><AppButton compact variant="ghost" label={configuring ? "Готово" : "Настроить замеры"} onPress={() => setConfiguring(!configuring)} /></View>
+          {onOpenJournal !== undefined ? <View style={styles.grow}><AppButton compact variant="ghost" label="Журнал замеров" onPress={onOpenJournal} /></View> : null}
+        </View>
         {configuring ? <>
           <Text style={[styles.hint, { color: colors.textSecondary }]}>Выберите показатели, которые показывать. Скрытие не удаляет внесённые значения; группа с данными за дату видна всегда. Настройка действует, пока открыто приложение.</Text>
           <View style={styles.chips}>

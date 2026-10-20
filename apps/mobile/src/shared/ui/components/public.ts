@@ -34,4 +34,4 @@ export { pickDate } from "./pickDate.ts";
 export { LineChart, type LineChartPoint } from "./LineChart.tsx";
 export { BarChart, type BarChartItem } from "./BarChart.tsx";
 export { DateRangeCalendar, type DateRange } from "./DateRangeCalendar.tsx";
-export { ProgressRing } from "./ProgressRing.tsx";
+export { SegmentedRing, type RingSegment } from "./SegmentedRing.tsx";
