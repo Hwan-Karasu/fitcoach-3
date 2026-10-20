@@ -5,6 +5,7 @@ import type { PlannedWorkout } from "../features/training/plans/public.ts";
 /** Чистые правила владельцев (как у сводки «Главной»): рабочий подход, статус тренировки, порядок хронологии. */
 export interface TrainingHistoryRules {
   readonly isWorkingSet: (fact: SetFact) => boolean;
+  readonly sessionDurationSec: (startedAt: string | null, finishedAt: string | null) => number | null;
   readonly workoutStatus: (outcome: WorkoutOutcome | null, started: boolean) => WorkoutStatus;
   readonly sortHistory: (entries: readonly TrainingHistoryEntry[]) => readonly TrainingHistoryEntry[];
 }
@@ -18,7 +19,7 @@ type Origin = Readonly<{ mesocycleId: string | null; mesocycleTitle: string | nu
 export function createTrainingHistory(rules: TrainingHistoryRules,
   execution: Pick<TrainingExecutionPort, "listClientExecutions" | "subscribeCommittedChanges">,
   plans: Pick<TrainingPlansRepositoryPort, "getLibrary" | "getPeriodizedPlan" | "getSimpleWeeks" | "subscribeCommittedChanges">) {
-  const { isWorkingSet, workoutStatus, sortHistory } = rules;
+  const { isWorkingSet, sessionDurationSec, workoutStatus, sortHistory } = rules;
   return {
     async list(clientId: string): Promise<readonly TrainingHistoryEntry[]> {
       const [executions, library] = await Promise.all([execution.listClientExecutions(clientId), plans.getLibrary(clientId)]);
@@ -69,6 +70,7 @@ export function createTrainingHistory(rules: TrainingHistoryRules,
           workoutTitle: snapshot !== null ? snapshot.workoutTitle : origin?.workout.title ?? null,
           workoutKey: origin?.workout.lineageId ?? item.plannedWorkoutId, plannedWorkoutId: item.plannedWorkoutId, weekIndex: item.weekIndex, actualDate: session.actualDate,
           status: workoutStatus(session.outcome, facts.length > 0),
+          startedAt: session.startedAt, finishedAt: session.finishedAt, durationSec: sessionDurationSec(session.startedAt, session.finishedAt),
           workingSets: facts.filter(isWorkingSet).length,
           exercises: [...groups.values()].filter((group) => group.facts.length > 0) }];
       });

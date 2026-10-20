@@ -6,7 +6,7 @@ import type { WriterCoordinator } from "../../../../shared/db/WriterCoordinator.
 import { DEFAULT_CONFIRMATION_MODE, NOTE_MAX, SET_TYPES, type ActiveWorkout, type ConfirmationMode, type PreviousQuery, type PreviousSet,
   type SessionStatus, type SetFact, type SetType, type SetValues, type WorkoutExecution, type WorkoutOutcome,
   type WorkoutSession, type WorkoutSlot } from "../domain/ExecutionModel.ts";
-import { assertDropStructure, confirmationAfterSave, isLocalDate, localDateOf, matchPrevious, sidesAfterSave, toggleConfirmation,
+import { assertDropStructure, confirmationAfterSave, isInstant, isLocalDate, localDateOf, matchPrevious, sidesAfterSave, toggleConfirmation,
   toggleSide, validateContent, validateSides, workoutStatus, type ConfirmationChange, type SetContent,
   type SidesChange } from "../domain/ExecutionRules.ts";
 import type { SaveSetInput, SetIdentity, SetSaveResult, TrainingExecutionCommittedChange,
@@ -28,7 +28,7 @@ const STARTED_SQL = `EXISTS (SELECT 1 FROM dev_training_performed_sets f WHERE f
       AND COALESCE(d.reps, d.load_grams, d.duration_sec, d.distance_m) IS NOT NULL)))`;
 
 const SESSION_COLUMNS = `id, client_id AS clientId, program_id AS programId, week_index AS weekIndex,
-  planned_workout_id AS plannedWorkoutId, outcome, actual_date AS actualDate, revision`;
+  planned_workout_id AS plannedWorkoutId, outcome, actual_date AS actualDate, started_at AS startedAt, finished_at AS finishedAt, revision`;
 
 const FACT_COLUMNS = `id, planned_set_id AS plannedSetId, planned_exercise_id AS plannedExerciseId,
   exercise_id AS exerciseId, position, set_type AS setType, reps, load_grams AS loadGrams,
@@ -232,7 +232,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     await tx.run(`INSERT INTO dev_training_sessions (id, workspace_id, client_id, program_id, week_index, planned_workout_id,
       actual_date, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
     [id, this.workspaceId, slot.clientId, slot.programId, slot.weekIndex, slot.plannedWorkoutId, localDateOf(now), stamp, stamp]);
-    return { ...slot, id, outcome: null, actualDate: localDateOf(now), revision: 1 };
+    return { ...slot, id, outcome: null, actualDate: localDateOf(now), startedAt: null, finishedAt: null, revision: 1 };
   }
 
   private factOf(port: SqliteStatementPort, sessionId: string, plannedSetId: string): Promise<FactRow | null> {
@@ -432,7 +432,15 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       }
     }
     const storedSides = (await sidesOf(tx, this.workspaceId, [saved.id])).get(saved.id);
-    return { fact: toFact(saved, content.drops, factSides(saved, storedSides)), session, confirmedNow: change.confirmedNow };
+    // PC §48.86.13: первое подтверждение подхода в этой тренировке ставит предполагаемое начало занятия (правится вручную). Ревизию выполнения
+    // не меняем: ввод подходов не должен конфликтовать с правкой исхода и даты.
+    let started = session;
+    if (change.confirmedNow && session.startedAt === null) {
+      await tx.run(`UPDATE dev_training_sessions SET started_at = ? WHERE workspace_id = ? AND id = ? AND started_at IS NULL`,
+        [stamp, this.workspaceId, session.id]);
+      started = { ...session, startedAt: stamp };
+    }
+    return { fact: toFact(saved, content.drops, factSides(saved, storedSides)), session: started, confirmedNow: change.confirmedNow };
   }
 
   async saveSet(input: SaveSetInput, now: Date = new Date()): Promise<SetSaveResult> {
@@ -649,8 +657,10 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       if ((existing?.revision ?? null) !== expectedRevision) throw new Error("STALE_SESSION");
       // Исход у ещё не начатой тренировки (например, «Пропущена») создаёт выполнение без фактов.
       const session = existing ?? await this.ensureSession(tx, slot, now);
-      await tx.run(`UPDATE dev_training_sessions SET outcome = ?, revision = revision + 1, updated_at = ?
-        WHERE workspace_id = ? AND id = ?`, [outcome, now.toISOString(), this.workspaceId, session.id]);
+      // PC §48.86.13: «Завершить» записывает окончание, если его ещё нет; отмена завершения и повторное завершение отметки не стирают и не переписывают.
+      await tx.run(`UPDATE dev_training_sessions SET outcome = ?, finished_at = CASE WHEN ? = 'COMPLETED' THEN COALESCE(finished_at, ?) ELSE finished_at END,
+        revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND id = ?`,
+      [outcome, outcome, now.toISOString(), now.toISOString(), this.workspaceId, session.id]);
       return await this.sessionOf(tx, slot) as WorkoutSession;
     });
     this.publish(slot);
@@ -664,6 +674,22 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       const result = await tx.run(`UPDATE dev_training_sessions SET actual_date = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND week_index = ? AND planned_workout_id = ?
           AND revision = ?`, [date, now.toISOString(), this.workspaceId, slot.clientId, slot.programId, slot.weekIndex,
+        slot.plannedWorkoutId, expectedRevision]);
+      if (result.changes !== 1) throw new Error("STALE_SESSION");
+      return await this.sessionOf(tx, slot) as WorkoutSession;
+    });
+    this.publish(slot);
+    return saved;
+  }
+
+  async setTimes(slot: WorkoutSlot, times: Readonly<{ startedAt: string | null; finishedAt: string | null }>, expectedRevision: number,
+    now: Date = new Date()): Promise<WorkoutSession> {
+    assertSlot(slot);
+    for (const value of [times.startedAt, times.finishedAt]) if (value !== null && !isInstant(value)) throw new Error("INVALID_METRIC");
+    const saved = await this.ready().writer.write(async (tx) => {
+      const result = await tx.run(`UPDATE dev_training_sessions SET started_at = ?, finished_at = ?, revision = revision + 1, updated_at = ?
+        WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND week_index = ? AND planned_workout_id = ? AND revision = ?`,
+      [times.startedAt, times.finishedAt, now.toISOString(), this.workspaceId, slot.clientId, slot.programId, slot.weekIndex,
         slot.plannedWorkoutId, expectedRevision]);
       if (result.changes !== 1) throw new Error("STALE_SESSION");
       return await this.sessionOf(tx, slot) as WorkoutSession;

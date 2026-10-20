@@ -107,5 +107,8 @@ export interface TrainingExecutionPort {
   deleteWorkoutExecution(slot: WorkoutSlot, expectedRevision: number): Promise<void>;
   /** §48.84: фактическая дата проведения. */
   setActualDate(slot: WorkoutSlot, date: string, expectedRevision: number, now?: Date): Promise<WorkoutSession>;
+  /** Ручная правка отметок времени занятия (PC §48.86.13): момент UTC или `null`; CAS по ревизии выполнения. Исход и факты не меняются. */
+  setTimes(slot: WorkoutSlot, times: Readonly<{ startedAt: string | null; finishedAt: string | null }>, expectedRevision: number,
+    now?: Date): Promise<WorkoutSession>;
   subscribeCommittedChanges(listener: (change: TrainingExecutionCommittedChange) => void): () => void;
 }

@@ -22,7 +22,7 @@ function entry(key: string, date: string, programId: string, facts: readonly Set
   const groups = new Map<string, SetFact[]>();
   for (const item of facts) groups.set(item.exerciseId, [...(groups.get(item.exerciseId) ?? []), item]);
   return { key, programId, programTitle: programId, programKind: "SIMPLE", archived: false, planDeleted: false, mesocycleId: null, mesocycleIndex: null,
-    mesocycleTitle: null, workoutTitle: "Тренировка 1", workoutKey: "w1", plannedWorkoutId: "w1", weekIndex: 1, actualDate: date, status: "COMPLETED",
+    mesocycleTitle: null, workoutTitle: "Тренировка 1", workoutKey: "w1", plannedWorkoutId: "w1", weekIndex: 1, actualDate: date, status: "COMPLETED", startedAt: null, finishedAt: null, durationSec: null,
     workingSets: facts.length, exercises: [...groups].map(([exerciseId, list]) => ({ exerciseId, facts: list, note: null })) };
 }
 

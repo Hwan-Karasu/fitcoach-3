@@ -31,6 +31,10 @@ export interface TrainingHistoryEntry {
   readonly weekIndex: number;
   readonly actualDate: string;
   readonly status: WorkoutStatus;
+  /** Фактическое время занятия (PC §48.86.10/13/17): моменты UTC и длительность в секундах; `null` — не задано или пара невалидна. */
+  readonly startedAt: string | null;
+  readonly finishedAt: string | null;
+  readonly durationSec: number | null;
   /** Рабочие подходы: засчитанные, без разминки (единое правило `isWorkingSet`). */
   readonly workingSets: number;
   /** Упражнения в порядке выполнения с их фактами. */

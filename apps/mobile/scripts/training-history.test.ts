@@ -5,7 +5,7 @@ import { DevClientRepository } from "../src/features/clients/data/DevClientRepos
 import { DevTrainingExecutionRepository } from "../src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 import { completedCount, filterHistory, sortHistory } from "../src/features/training/archive/presentation/trainingHistory.ts";
 import { isWorkingSet } from "../src/features/training/analytics/presentation/workingSet.ts";
-import { workoutStatus } from "../src/features/training/execution/domain/ExecutionRules.ts";
+import { sessionDurationSec, workoutStatus } from "../src/features/training/execution/domain/ExecutionRules.ts";
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant } from
   "../src/features/training/plans/data/DevTrainingPlansRepository.ts";
 import { addExercise, fillSets, newDraft } from "../src/features/training/plans/domain/SimplePlanEdits.ts";
@@ -43,7 +43,7 @@ async function setup() {
   const revision = async (programId: string) => (await plans.getProgram(a, programId))!.revision;
   await plans.createMesocycle(a, periodized.id, await revision(periodized.id), { title: "Блок 2", weeks: 2, firstWeek: week("q"), clientIds: [a] });
   const otherProgram = await plans.createSimpleProgram(b, { title: "Сила", plan: { weeks: 2, workouts: week("o") } });
-  const history = createTrainingHistory({ isWorkingSet, workoutStatus, sortHistory }, execution, plans);
+  const history = createTrainingHistory({ isWorkingSet, sessionDurationSec, workoutStatus, sortHistory }, execution, plans);
   /** Подход в тренировке недели и исход «Завершена»; дата — фактическая дата занятия. */
   const complete = async (clientId: string, programId: string, weekIndex: number, workout: PlannedWorkout, date: string) => {
     const exercise = workout.exercises[0]!;
@@ -52,7 +52,7 @@ async function setup() {
       metrics: ["load", "reps"], values: { loadGrams: 50_000, reps: 10, durationSec: null, distanceM: null }, setType: "NORMAL",
       drops: [], rpe: null, expectedRevision: null }, new Date(`${date}T10:00:00Z`));
     const current = (await execution.getWorkout(slot)).session!;
-    return execution.setOutcome(slot, "COMPLETED", current.revision);
+    return execution.setOutcome(slot, "COMPLETED", current.revision, new Date(`${date}T11:00:00Z`));
   };
   const simpleWorkout = (await plans.getSimplePlan(a, simple.id))!.draft.plan.workouts[0]!;
   const cycles = (await plans.getPeriodizedPlan(a, periodized.id))!.mesocycles;
@@ -82,6 +82,8 @@ test("§48.85.2 п. 1, 2, 5: общая хронология всех прогр
     const second = filterHistory(entries, { programId: periodized, mesocycleId: cycles[1]!.id });
     assert.deepEqual(second.map((entry) => [entry.mesocycleTitle, entry.workoutTitle, entry.weekIndex]), [["Блок 2", "Тренировка 1", 1]]);
     assert.equal(entries[0]!.workingSets, 1, "рабочие подходы — по фактам");
+    assert.deepEqual([entries[0]!.startedAt, entries[0]!.finishedAt, entries[0]!.durationSec], ["2026-10-05T10:00:00.000Z", "2026-10-05T11:00:00.000Z", 3600],
+      "время занятия: первый подход 10:00, «Завершить» 11:00 — 60 минут");
   } finally {
     await env.close();
   }

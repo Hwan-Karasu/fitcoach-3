@@ -283,4 +283,15 @@ export const devTrainingExecutionCatalog: readonly MigrationStep[] = [{
       WHEN OLD.plan_deleted_at IS NOT NULL
       BEGIN SELECT RAISE(ABORT, 'ORIGIN_IMMUTABLE'); END`,
   ],
+}, {
+  version: 9,
+  checksum: "h-p4b-dev-training-execution-v9-session-times-20261020",
+  statements: [
+    // PC §48.86.10/13/17: фактическое начало и окончание занятия — моменты в UTC, nullable; у прежних выполнений времени нет и оно не
+    // выдумывается. Длительность не хранится: считается из пары отметок (`sessionDurationSec`).
+    `ALTER TABLE dev_training_sessions ADD COLUMN started_at TEXT
+      CHECK (started_at IS NULL OR (started_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*Z' AND datetime(started_at) IS NOT NULL))`,
+    `ALTER TABLE dev_training_sessions ADD COLUMN finished_at TEXT
+      CHECK (finished_at IS NULL OR (finished_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*Z' AND datetime(finished_at) IS NOT NULL))`,
+  ],
 }];

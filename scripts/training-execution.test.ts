@@ -6,7 +6,7 @@ import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParti
   "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 import type { SetValues, TrackingMetric, WorkoutSlot } from "../apps/mobile/src/features/training/execution/domain/ExecutionModel.ts";
 import { assertDropStructure, confirmationAfterSave, displayOrder, dropsForType, isSetComplete, matchPrevious, nextOutcome,
-  sidesAfterSave, toggleConfirmation, toggleSide, weekStatus, type SetContent } from
+  sessionDurationSec, sidesAfterSave, toggleConfirmation, toggleSide, weekStatus, type SetContent } from
   "../apps/mobile/src/features/training/execution/domain/ExecutionRules.ts";
 import type { SaveSetInput } from "../apps/mobile/src/features/training/execution/domain/TrainingExecutionPort.ts";
 import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
@@ -470,4 +470,83 @@ test("T03 тренировки «в работе» у всех клиентов 
     assert.deepEqual(active.map((item) => [item.clientId, item.plannedWorkoutId]), [[b.id, "w1"], [a.id, "w1"]],
       "завершённая и не начатая (только заметка) — не «в работе»; свежий ввод — первым");
   } finally { await close(); }
+});
+
+test("PC §48.86.10/13/17 длительность: только валидная пара отметок, окончание позже начала", () => {
+  const at = (hhmm: string) => `2026-10-20T${hhmm}:00.000Z`;
+  assert.equal(sessionDurationSec(at("10:00"), at("11:15")), 75 * 60, "10:00–11:15 — 75 минут");
+  assert.equal(sessionDurationSec(at("10:00"), null), null, "только начало — нет данных");
+  assert.equal(sessionDurationSec(null, at("11:00")), null, "только окончание — нет данных");
+  assert.equal(sessionDurationSec(at("11:00"), at("10:00")), null, "окончание раньше начала — нет данных до правки");
+  assert.equal(sessionDurationSec(at("10:00"), at("10:00")), null, "нулевой интервал — не длительность");
+  assert.equal(sessionDurationSec("вчера", at("10:00")), null, "не момент времени — нет данных");
+  assert.equal(sessionDurationSec("2026-10-20T23:30:00.000Z", "2026-10-21T00:15:00.000Z"), 45 * 60, "через полночь");
+});
+
+test("PC §48.86.13 время занятия: авто-начало по первому подтверждённому подходу, авто-окончание при «Завершить», ручная правка, отмена не стирает", async () => {
+  const { clients, execution, close } = await stores();
+  try {
+    const at = (hhmm: string) => `2026-10-20T${hhmm}:00.000Z`;
+    const client = await clients.create({ displayName: "SyntheticA" });
+    const w1: WorkoutSlot = { clientId: client.id, programId: "program-a", weekIndex: 1, plannedWorkoutId: "w1" };
+    const first = await execution.saveSet(bench(w1, "s1", 0, values(100_000, 8), null), new Date(at("10:10")));
+    assert.equal(first.session.startedAt, at("10:10"), "начало — момент первого подтверждённого подхода");
+    assert.equal(first.session.finishedAt, null);
+    const second = await execution.saveSet(bench(w1, "s2", 1, values(100_000, 8), null), new Date(at("10:30")));
+    assert.equal(second.session.startedAt, at("10:10"), "следующие подходы начало не двигают");
+    const session = (await execution.getWorkout(w1)).session!;
+    const done = await execution.setOutcome(w1, "COMPLETED", session.revision, new Date(at("11:00")));
+    assert.equal(done.finishedAt, at("11:00"), "окончание — момент «Завершить»");
+    assert.equal(sessionDurationSec(done.startedAt, done.finishedAt), 50 * 60, "10:10–11:00 — 50 минут");
+    const reopened = await execution.setOutcome(w1, null, done.revision, new Date(at("11:05")));
+    assert.deepEqual([reopened.startedAt, reopened.finishedAt], [at("10:10"), at("11:00")], "отмена завершения отметки не стирает");
+    const again = await execution.setOutcome(w1, "COMPLETED", reopened.revision, new Date(at("11:30")));
+    assert.equal(again.finishedAt, at("11:00"), "повторное завершение не переписывает окончание");
+    const fixed = await execution.setTimes(w1, { startedAt: at("10:00"), finishedAt: at("11:00") }, again.revision, new Date(at("12:00")));
+    assert.equal(sessionDurationSec(fixed.startedAt, fixed.finishedAt), 60 * 60, "тренер исправил начало на 10:00 — 60 минут");
+    assert.equal(fixed.revision, again.revision + 1, "правка времени — CAS по ревизии выполнения");
+    await assert.rejects(execution.setTimes(w1, { startedAt: null, finishedAt: null }, again.revision, new Date(at("12:01"))), message("STALE_SESSION"));
+    const cleared = await execution.setTimes(w1, { startedAt: at("10:00"), finishedAt: null }, fixed.revision, new Date(at("12:02")));
+    assert.equal(sessionDurationSec(cleared.startedAt, cleared.finishedAt), null, "очищенное окончание — длительности нет");
+    await assert.rejects(execution.setTimes(w1, { startedAt: "10:00", finishedAt: null }, cleared.revision, new Date(at("12:03"))), message("INVALID_METRIC"));
+  } finally { await close(); }
+});
+
+test("PC §48.86.13 время занятия не создаётся из пропуска, незавершённого ввода и ручного режима", async () => {
+  const { clients, execution, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticA" });
+    const w1: WorkoutSlot = { clientId: client.id, programId: "program-a", weekIndex: 1, plannedWorkoutId: "w1" };
+    const w2: WorkoutSlot = { ...w1, plannedWorkoutId: "w2" };
+    const missed = await execution.setOutcome(w1, "MISSED", null, DAY1);
+    assert.deepEqual([missed.startedAt, missed.finishedAt], [null, null], "пропуск без ввода — без времени");
+    await execution.setConfirmationMode("MANUAL");
+    const typed = await execution.saveSet(bench(w2, "s1", 0, values(100_000, 8), null), DAY1);
+    assert.equal(typed.session.startedAt, null, "в ручном режиме значения без галочки тренировку не начинают");
+    const toggled = await execution.toggleSetConfirmation({ slot: w2, plannedExerciseId: "pe-bench", exerciseId: BENCH, plannedSetId: "s1",
+      position: 0, metrics: LOAD_REPS, expectedRevision: typed.fact.revision }, new Date("2026-10-20T10:40:00.000Z"));
+    assert.equal(toggled.session.startedAt, "2026-10-20T10:40:00.000Z", "галочка — первое подтверждение");
+  } finally { await close(); }
+});
+
+test("PC §48.86.13 миграция v9: существующие выполнения получают пустые отметки, ограничение не пускает не-время", async () => {
+  const db = new DatabaseSync(":memory:");
+  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const clients = new DevClientRepository(shared, WS, [devTrainingExecutionClientDeletionParticipant]);
+  await clients.initialize();
+  const { writer } = await shared.acquire();
+  try {
+    const client = await clients.create({ displayName: "SyntheticA" });
+    await runMigrations(writer, devTrainingExecutionCatalog.slice(0, 8), DEV_TRAINING_EXECUTION_LEDGER);
+    db.prepare(`INSERT INTO dev_training_sessions (id, workspace_id, client_id, program_id, week_index, planned_workout_id,
+      actual_date, revision, created_at, updated_at) VALUES ('ses', ?, ?, 'p', 1, 'w', '2026-10-17', 1, 'x', 'x')`).run(WS, client.id);
+    await runMigrations(writer, devTrainingExecutionCatalog, DEV_TRAINING_EXECUTION_LEDGER);
+    assert.deepEqual({ ...db.prepare("SELECT started_at AS s, finished_at AS f, actual_date AS d FROM dev_training_sessions WHERE id = 'ses'").get() },
+      { s: null, f: null, d: "2026-10-17" }, "старая запись цела, времени нет");
+    assert.throws(() => db.prepare("UPDATE dev_training_sessions SET started_at = 'вчера' WHERE id = 'ses'").run(), /CHECK/, "не момент времени");
+    db.prepare("UPDATE dev_training_sessions SET started_at = '2026-10-17T07:00:00.000Z' WHERE id = 'ses'").run();
+  } finally {
+    await shared.release();
+    await clients.close();
+  }
 });

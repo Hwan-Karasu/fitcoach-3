@@ -6,7 +6,7 @@ import { mesocyclesWithHistory, programsWithHistory, workoutGroups } from "../sr
 type Overrides = Partial<TrainingHistoryEntry> & Pick<TrainingHistoryEntry, "key" | "programId" | "actualDate">;
 const entry = (over: Overrides): TrainingHistoryEntry => ({ programTitle: over.programId, programKind: "PERIODIZED", archived: false, planDeleted: false,
   mesocycleId: null, mesocycleTitle: null, mesocycleIndex: null, workoutTitle: "Тренировка 1", workoutKey: "k1", plannedWorkoutId: "w1", weekIndex: 1,
-  status: "COMPLETED", workingSets: 3, exercises: [], ...over });
+  status: "COMPLETED", startedAt: null, finishedAt: null, durationSec: null, workingSets: 3, exercises: [], ...over });
 
 const E = [
   entry({ key: "e1", programId: "P", programTitle: "Силовой блок", mesocycleId: "m2", mesocycleTitle: "Силовой", mesocycleIndex: 1, workoutKey: "up", workoutTitle: "Верх тела", actualDate: "2026-09-21", weekIndex: 3 }),

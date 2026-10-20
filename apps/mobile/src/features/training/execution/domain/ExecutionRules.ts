@@ -153,6 +153,21 @@ export function hasEnteredData(facts: Iterable<Readonly<{ values: SetValues; con
   return false;
 }
 
+const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
+
+/** Момент времени `YYYY-MM-DDTHH:MM:SS(.mmm)Z` (UTC), который можно разобрать. */
+export const isInstant = (value: string): boolean => INSTANT.test(value) && !Number.isNaN(Date.parse(value));
+
+/**
+ * PC §48.86.10/13/17: длительность занятия в секундах — только при обеих отметках, где окончание позже начала; иначе `null`
+ * («Нет данных», а не выдуманное значение). Исход тренировки на неё не влияет.
+ */
+export function sessionDurationSec(startedAt: string | null, finishedAt: string | null): number | null {
+  if (startedAt === null || finishedAt === null || !isInstant(startedAt) || !isInstant(finishedAt)) return null;
+  const seconds = (Date.parse(finishedAt) - Date.parse(startedAt)) / 1000;
+  return seconds > 0 ? seconds : null;
+}
+
 export function workoutStatus(outcome: WorkoutOutcome | null, started: boolean): WorkoutStatus {
   return outcome ?? (started ? "IN_PROGRESS" : "NOT_STARTED");
 }

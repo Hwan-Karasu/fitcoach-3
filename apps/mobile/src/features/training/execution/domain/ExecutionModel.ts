@@ -65,6 +65,12 @@ export interface WorkoutSession extends WorkoutSlot {
   readonly outcome: WorkoutOutcome | null;
   /** §48.84: фактическая дата `YYYY-MM-DD`, по умолчанию — день первого ввода. */
   readonly actualDate: string;
+  /**
+   * Отметки фактического времени занятия (PC §48.86.10/13): момент в UTC (`…Z`). Начало — автоматически при первом подтверждённом
+   * подходе, окончание — при «Завершить»; обе правятся вручную. `null` — не задано; длительность — только при валидной паре.
+   */
+  readonly startedAt: string | null;
+  readonly finishedAt: string | null;
   readonly revision: number;
 }
 

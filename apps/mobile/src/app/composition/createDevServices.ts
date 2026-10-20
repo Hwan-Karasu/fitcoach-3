@@ -22,7 +22,7 @@ import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParti
 import type { ActiveWorkoutsPort, RestTimersPort, TrainingExecutionPort, TrainingPlansRepositoryPort } from
   "../../features/training/public.ts";
 import { createActiveWorkouts } from "../../read-models/activeWorkouts.ts";
-import { RestTimerService, isWorkingSet, sortHistory, workoutStatus } from "../../features/training/public.ts";
+import { RestTimerService, isWorkingSet, sessionDurationSec, sortHistory, workoutStatus } from "../../features/training/public.ts";
 import { createTrainingHistory, type TrainingHistoryPort } from "../../read-models/trainingHistory.ts";
 import { createClientBodyweight, type ClientBodyweightPort } from "../../read-models/clientBodyweight.ts";
 import { expoRestSignal, preloadRestSignal } from "./expoRestSignal.ts";
@@ -143,7 +143,7 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
     trainingExecution,
     restTimers,
     activeWorkouts: createActiveWorkouts(trainingExecution, trainingPlans, clients),
-    trainingHistory: createTrainingHistory({ isWorkingSet, workoutStatus, sortHistory }, trainingExecution, trainingPlans),
+    trainingHistory: createTrainingHistory({ isWorkingSet, sessionDurationSec, workoutStatus, sortHistory }, trainingExecution, trainingPlans),
     clientBodyweight: createClientBodyweight(dailyPoints, measurements),
     exercises,
     exerciseLookup: exerciseLookup(exercises),
