@@ -28,7 +28,7 @@ import { createClientBodyweight, type ClientBodyweightPort } from "../../read-mo
 import { expoRestSignal, preloadRestSignal } from "./expoRestSignal.ts";
 import { DevExerciseCatalogRepository } from "../../features/exercises/data/DevExerciseCatalogRepository.ts";
 import systemCatalogJson from "../../features/exercises/data/system-catalog.generated.json";
-import { bodyPartLabels, displayNameOf, thumbnailOf, TRACKING_PROFILES, type ExerciseCatalogPort, type SystemCatalog } from
+import { bodyPartLabels, displayNameOf, thumbnailOf, TRACKING_PROFILES, type CatalogEntry, type ExerciseCatalogPort, type SystemCatalog } from
   "../../features/exercises/public.ts";
 import type { ExerciseLookupPort } from "../../features/training/public.ts";
 import type { ClientArchivePort, ClientChangePort, ClientRecoveryDraftPort, ClientRepositoryPort,
@@ -98,13 +98,19 @@ function participantDirectory(clients: ClientRosterPort & ClientChangePort): Cal
 
 /** Планы получают только поля отображения и профиль учёта, через публичный порт каталога. */
 function exerciseLookup(exercises: ExerciseCatalogPort): ExerciseLookupPort {
-  const build = async () => new Map((await exercises.list()).map((entry) => [entry.definition.id, {
+  const infoOf = (entry: CatalogEntry, archived: boolean) => [entry.definition.id, {
     name: displayNameOf(entry),
     metrics: TRACKING_PROFILES[entry.definition.trackingProfile],
     thumbnail: thumbnailOf(entry.definition.media),
     unilateral: entry.definition.unilateral,
     group: { id: entry.definition.bodyPart, label: bodyPartLabels[entry.definition.bodyPart] },
-  }]));
+    ...(archived ? { archived: true } : {}),
+  }] as const;
+  // Архивные свои упражнения остаются в справочнике только для чтения: в фактах они известны по id (имя и профиль не пропадают из истории).
+  const build = async () => {
+    const [active, archived] = await Promise.all([exercises.list(), exercises.listArchived()]);
+    return new Map([...active.map((entry) => infoOf(entry, false)), ...archived.map((entry) => infoOf(entry, true))]);
+  };
   // Справочник из 643 записей строится один раз и до следующей правки каталога отдаётся всем экранам: раньше каждый экран
   // читал и пересобирал его заново.
   let cached: ReturnType<typeof build> | null = null;

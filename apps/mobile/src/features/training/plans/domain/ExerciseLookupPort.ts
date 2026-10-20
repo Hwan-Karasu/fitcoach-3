@@ -10,6 +10,8 @@ export interface ExerciseInfo {
   readonly unilateral: boolean;
   /** Категория упражнения (группа мышц каталога) — для статистики по мышечным группам (§48.86.27); без неё — «Без категории». */
   readonly group?: Readonly<{ id: string; label: string }>;
+  /** Своё упражнение в архиве: в фактах и аналитике известно по id, выбрать в план нельзя. */
+  readonly archived?: boolean;
 }
 
 /** Каталог упражнений глазами планов. Собирается в composition из публичного порта каталога. */

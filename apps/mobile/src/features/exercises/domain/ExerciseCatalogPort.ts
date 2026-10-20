@@ -10,6 +10,11 @@ export interface ExerciseCatalogPort {
   meta(): SystemCatalogMeta;
   /** Все упражнения с личным слоем; архивные свои упражнения не входят. */
   list(): Promise<readonly CatalogEntry[]>;
+  /**
+   * Архивные свои упражнения — только чтение: имя и профиль нужны истории и аналитике, пока в фактах встречается их id (UX-контракт истории).
+   * В каталог и выбор упражнений они не возвращаются.
+   */
+  listArchived(): Promise<readonly CatalogEntry[]>;
   get(id: string): Promise<CatalogEntry | null>;
   createCustom(input: CustomExerciseInput, now?: Date): Promise<ExerciseDefinition>;
   updateCustom(id: string, expectedRevision: number, input: CustomExerciseInput, now?: Date): Promise<ExerciseDefinition>;

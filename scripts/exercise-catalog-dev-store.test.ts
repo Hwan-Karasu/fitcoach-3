@@ -129,3 +129,19 @@ test("UI-OWN-030 фильтры каталога: число упражнени�
     await repository.close();
   }
 });
+
+test("UX-контракт истории: архивное своё упражнение остаётся читаемым для истории (имя, профиль), в каталог не возвращается", async () => {
+  const { repository } = await store();
+  try {
+    const mine = await repository.createCustom({ name: "Хаммер", bodyPart: "chest", equipment: null, trackingProfile: "LOAD_REPS" });
+    assert.deepEqual(await repository.listArchived(), [], "пока не в архиве");
+    await repository.archiveCustom(mine.id);
+    const archived = await repository.listArchived();
+    assert.deepEqual(archived.map((entry) => [entry.definition.id, entry.definition.name, entry.definition.trackingProfile]),
+      [[mine.id, "Хаммер", "LOAD_REPS"]], "имя и профиль не пропали");
+    assert.equal((await repository.list()).some((entry) => entry.definition.id === mine.id), false, "каталог архивное не показывает");
+    assert.equal(await repository.get(mine.id), null, "get по-прежнему не находит архивное");
+  } finally {
+    await repository.close();
+  }
+});

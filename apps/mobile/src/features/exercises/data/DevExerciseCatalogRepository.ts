@@ -134,6 +134,18 @@ export class DevExerciseCatalogRepository implements ExerciseCatalogPort {
       .map((definition) => ({ definition, overlay: overlayOf(byId.get(definition.id)) }));
   }
 
+  async listArchived(): Promise<readonly CatalogEntry[]> {
+    const { connection } = this.ready();
+    const [custom, overlays] = await Promise.all([
+      connection.all<CustomRow>(`SELECT ${customColumns} FROM dev_custom_exercises
+        WHERE workspace_id = ? AND archived_at IS NOT NULL ORDER BY archived_at DESC, id`, [this.workspaceId]),
+      connection.all<OverlayRow>(`SELECT exercise_id AS exerciseId, favorite, hidden, display_name AS displayName,
+        aliases_json AS aliasesJson FROM dev_exercise_overlay WHERE workspace_id = ?`, [this.workspaceId]),
+    ]);
+    const byId = new Map(overlays.map((row) => [row.exerciseId, row]));
+    return custom.map((row) => ({ definition: customDefinition(row), overlay: overlayOf(byId.get(row.id)) }));
+  }
+
   private async definition(tx: SqliteStatementPort, id: string): Promise<ExerciseDefinition | null> {
     const system = this.systemById.get(id);
     if (system !== undefined) return system;
