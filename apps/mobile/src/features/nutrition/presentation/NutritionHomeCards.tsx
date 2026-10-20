@@ -4,7 +4,7 @@ import { AppButton, InlineNotice, SegmentedRing, TextField } from "../../../shar
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { localDateOf, upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../measurements/public.ts";
-import { calcMacros, deriveCalc, guideLabel, trendAdjustment, weightTrendKg } from "../domain/CalcRules.ts";
+import { calcMacros, deriveCalc, trendAdjustment, weightTrendKg } from "../domain/CalcRules.ts";
 import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
@@ -164,16 +164,12 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
         </View>
         {dirty ? <AppButton compact label="Записать" busy={busy} onPress={() => { void saveDay(); }} /> : null}
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
-        <View style={[styles.rule, { backgroundColor: colors.border }]} />
-        <View accessible accessibilityLabel={`Суточный ориентир: ${guide === null ? "нужны данные для расчёта" : `${guide} ккал`}. ${guideLabel(adjustment)}`}>
-          <Text style={[styles.hint, { color: colors.textSecondary }]}>Суточный ориентир</Text>
-          <Text style={[styles.bigNumber, { color: colors.textPrimary }]}>{guide === null ? "—" : String(guide)}<Text style={[styles.unit, { color: colors.textSecondary }]}>{guide === null ? "" : " ккал"}</Text></Text>
-        </View>
       </View>
 
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.head}>
           <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>КБЖУ</Text>
+        <View style={styles.headRight}>
           <View style={[styles.group, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
             {([["EXACT", "Точно"], ["RANGE", "Коридор"]] as const).map(([id, label]) => (
               <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: mode === id }} accessibilityLabel={`Режим цели: ${label}`} hitSlop={{ top: 8, bottom: 8 }} onPress={() => setMode(id)}
@@ -181,11 +177,12 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
                 <Text style={[styles.segmentText, { color: mode === id ? colors.onAccentFill : colors.textPrimary }]}>{label}</Text>
               </Pressable>
             ))}
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-            <Pressable accessibilityRole="button" accessibilityLabel="Открыть раздел «Питание»" hitSlop={{ top: 8, bottom: 8 }} onPress={onOpenNutrition} style={styles.segment}>
-              <Text style={[styles.segmentText, { color: colors.accentInk }]}>Питание</Text>
-            </Pressable>
           </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Открыть дневник питания" hitSlop={{ top: 8, bottom: 8 }} onPress={onOpenNutrition}
+            style={[styles.group, styles.segment, { borderColor: colors.accentInk, backgroundColor: colors.accentSoft }]}>
+            <Text style={[styles.segmentText, { color: colors.accentInk }]}>Питание</Text>
+          </Pressable>
+        </View>
         </View>
         <View style={styles.summary}>
           <View style={styles.grow} accessible accessibilityLabel={`Суточный ориентир: ${orientText === null ? "нет данных" : `${orientText} ккал`}`}>
@@ -215,6 +212,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
 const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 14, padding: 10, gap: 6 },
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  headRight: { flexDirection: "row", alignItems: "center", gap: 6 },
   group: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 12, overflow: "hidden" },
   segment: { minHeight: 28, paddingHorizontal: 8, alignItems: "center", justifyContent: "center" },
   segmentText: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 15 },
