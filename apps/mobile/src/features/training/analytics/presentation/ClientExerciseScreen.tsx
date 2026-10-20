@@ -99,6 +99,8 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
   const [filter, setFilter] = useState<HistoryFilter>({ programId: null, mesocycleId: null });
   const [period, setPeriod] = useState<PeriodValue>({ period: "all", custom: null });
   const [chosen, setChosen] = useState<ProgressMetricId | null>(null);
+  /** Точка графика, выбранная касанием; без выбора или после смены фильтров — последняя. */
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -151,6 +153,8 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
 
   const first = points[0];
   const last = points[points.length - 1];
+  const selectedPoint = points.find((point) => point.key === selectedKey) ?? last;
+  const selectedSession = selectedPoint === undefined ? undefined : inPeriod.find((session) => session.entry.key === selectedPoint.key);
   const best = points.length === 0 ? null : Math.max(...points.map((point) => point.value));
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
@@ -184,12 +188,19 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
                   : `${last!.value - first!.value >= 0 ? "+" : "−"}${formatMetric(metric, Math.abs(last!.value - first!.value))}`}</Text>
               </View>
             </View>
-            <LineChart points={points.map((point) => ({ key: point.key, label: shortDate(point.date), value: point.value }))}
+            <LineChart points={points.map((point) => ({ key: point.key, label: shortDate(point.date), caption: dateText(point.date), value: point.value }))}
               format={(value) => formatMetric(metric, value).replace(/ (кг|повт\.|м|км)$/, "")}
+              formatValue={(value) => formatMetric(metric, value)} title={metricLabels[metric]}
+              onSelect={(point) => setSelectedKey(point.key)}
               accessibilityLabel={`${metricLabels[metric]}: ${points.length} занятий, последнее ${formatMetric(metric, last!.value)}`} />
             {metric === "e1rm" ? <Text style={[styles.note, { color: colors.textMuted }]}>
               Расчёт по формуле Бжицки для подходов до 12 повторений — не поднятый вес.</Text> : null}
           </View>
+          {selectedPoint !== undefined && selectedSession !== undefined ? <View style={styles.selected}>
+            <Text style={[styles.selectedTitle, { color: colors.textPrimary }]}>
+              {`${metricLabels[metric]}: ${formatMetric(metric, selectedPoint.value)} · ${dateText(selectedPoint.date)}`}</Text>
+            <SessionCard session={selectedSession} onOpen={() => open(selectedSession)} />
+          </View> : null}
           {records.length > 0 ? <View style={[styles.card, { backgroundColor: colors.surface }]}>
             <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Рекорды по повторениям</Text>
             {records.map((record) => {
@@ -218,6 +229,8 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   header: { gap: 8, paddingTop: 4 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  selected: { gap: 6 },
+  selectedTitle: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },
   summary: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
   card: { ...shadow.card, borderRadius: 20, padding: 14, gap: 6 },
   cardHead: { flexDirection: "row", alignItems: "center", gap: 8 },
