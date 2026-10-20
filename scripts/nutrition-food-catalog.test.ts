@@ -106,7 +106,8 @@ test("P-27/P-28 ввод: штрихкод и масса штуки провер
   assert.equal(valid.barcode, "4601234567890");
   assert.equal(valid.gramsPerPieceX10, 450);
   assert.equal(validateFood({ ...OATS, barcode: "  " }).barcode, null);
-  assert.equal(validateFood(OATS).gramsPerPieceX10, null);
+  assert.equal(validateFood(OATS).gramsPerPieceX10, undefined, "не передано — правка сохранит прежнее");
+  assert.equal(validateFood({ ...OATS, gramsPerPieceX10: null }).gramsPerPieceX10, null);
   assert.throws(() => validateFood({ ...OATS, barcode: "12" }), code("FOOD_BARCODE_INVALID"));
   assert.throws(() => validateFood({ ...OATS, barcode: "ab cd" }), code("FOOD_BARCODE_INVALID"));
   assert.throws(() => validateFood({ ...OATS, gramsPerPieceX10: 0 }), code("FOOD_PIECE_MASS_INVALID"));

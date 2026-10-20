@@ -51,7 +51,9 @@ export function validateFood(input: FoodInput): FoodInput {
   if (NUTRIENT_KEYS.every((key) => input[key] === null)) fail("FOOD_NUTRIENTS_EMPTY");
   return { name, brand: brand === "" ? null : brand, unit: input.unit, amountX10: input.amountX10,
     kcalX10: input.kcalX10, proteinX10: input.proteinX10, fatX10: input.fatX10, carbsX10: input.carbsX10,
-    barcode: barcode === null || barcode === "" ? null : barcode, gramsPerPieceX10: piece };
+    // `undefined` — поле не передано (правка сохранит прежнее значение), `null` — очистить.
+    barcode: input.barcode === undefined ? undefined : barcode === null || barcode === "" ? null : barcode,
+    gramsPerPieceX10: input.gramsPerPieceX10 === undefined ? undefined : piece };
 }
 
 /**

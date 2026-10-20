@@ -111,10 +111,12 @@ export class DevFoodCatalogRepository implements FoodCatalogPort {
     const valid = validateFood(input);
     const updated = await this.ready().writer.write(async (tx) => {
       const result = await tx.run(`UPDATE dev_food_products SET name = ?, brand = ?, basis_unit = ?, basis_amount_x10 = ?, kcal_x10 = ?,
-          protein_x10 = ?, fat_x10 = ?, carbs_x10 = ?, barcode = ?, grams_per_piece_x10 = ?, revision = revision + 1, updated_at = ?
+          protein_x10 = ?, fat_x10 = ?, carbs_x10 = ?, barcode = CASE WHEN ? = 1 THEN ? ELSE barcode END,
+          grams_per_piece_x10 = CASE WHEN ? = 1 THEN ? ELSE grams_per_piece_x10 END, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ? AND archived_at IS NULL`,
       [valid.name, valid.brand, valid.unit, valid.amountX10, valid.kcalX10, valid.proteinX10, valid.fatX10, valid.carbsX10,
-        valid.barcode ?? null, valid.gramsPerPieceX10 ?? null, now.toISOString(), this.workspaceId, id, expectedRevision]);
+        valid.barcode === undefined ? 0 : 1, valid.barcode ?? null, valid.gramsPerPieceX10 === undefined ? 0 : 1, valid.gramsPerPieceX10 ?? null,
+        now.toISOString(), this.workspaceId, id, expectedRevision]);
       if (result.changes !== 1) throw new Error("FOOD_STALE");
       return byId(tx, this.workspaceId, id);
     });

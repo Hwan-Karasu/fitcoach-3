@@ -131,10 +131,23 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
   }
 
   async addEntry(clientId: string, input: DiaryEntryInput, now: Date = new Date()): Promise<DiaryEntry> {
-    assertDate(input.localDate);
-    assertSlot(input.slot);
-    const snapshot = normalizeSnapshot(input.snapshot);
+    return (await this.addEntries(clientId, [input], now))[0] as DiaryEntry;
+  }
+
+  async addEntries(clientId: string, inputs: readonly DiaryEntryInput[], now: Date = new Date()): Promise<readonly DiaryEntry[]> {
+    if (inputs.length === 0) return [];
+    const prepared = inputs.map((input) => { assertDate(input.localDate); assertSlot(input.slot); return { input, snapshot: normalizeSnapshot(input.snapshot) }; });
     const created = await this.ready().writer.write(async (tx) => {
+      const result: DiaryEntry[] = [];
+      for (const { input, snapshot } of prepared) result.push(await this.insertEntry(tx, clientId, input, snapshot, now));
+      return result;
+    });
+    for (const date of new Set(created.map((entry) => entry.localDate))) this.publish({ clientId, localDate: date });
+    return created;
+  }
+
+  private async insertEntry(tx: SqliteStatementPort, clientId: string, input: DiaryEntryInput, snapshot: FoodSnapshot, now: Date): Promise<DiaryEntry> {
+    {
       const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
       if (!id) throw new Error("DIARY_ID_UNAVAILABLE");
       const last = await tx.first<{ position: number | null }>(`SELECT max(position) AS position FROM dev_food_diary_entries
@@ -147,9 +160,7 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
         snapshot.name, snapshot.brand, snapshot.basis.unit, snapshot.basis.amountX10, snapshot.perBasis.kcalX10, snapshot.perBasis.proteinX10,
         snapshot.perBasis.fatX10, snapshot.perBasis.carbsX10, snapshot.quantityX10, JSON.stringify(snapshot.ingredients), stamp, stamp]);
       return byId(tx, this.workspaceId, clientId, id);
-    });
-    this.publish({ clientId, localDate: created.localDate });
-    return created;
+    }
   }
 
   async updateQuantity(clientId: string, id: string, expectedRevision: number, quantityX10: number, now: Date = new Date()): Promise<DiaryEntry> {

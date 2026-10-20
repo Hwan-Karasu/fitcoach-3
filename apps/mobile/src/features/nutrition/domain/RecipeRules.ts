@@ -33,7 +33,7 @@ export function validateRecipe(input: RecipeInput): RecipeInput {
       || item.quantityX10 <= 0 || item.quantityX10 > QUANTITY_MAX_X10) fail("RECIPE_INGREDIENT_INVALID");
     seen.add(item.foodId);
   }
-  return { name, servingsX10: input.servingsX10, cookedMassX10: input.cookedMassX10, description: description === "" ? null : description, ingredients: input.ingredients.map((item) => ({ ...item })) };
+  return { name, servingsX10: input.servingsX10, cookedMassX10: input.cookedMassX10, description: input.description === undefined ? undefined : description === "" ? null : description, ingredients: input.ingredients.map((item) => ({ ...item })) };
 }
 
 /**

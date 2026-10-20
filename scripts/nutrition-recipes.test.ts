@@ -169,3 +169,34 @@ test("P-32/P-30/P-34: описание, избранное и кулинарна
     await assert.rejects(recipes.setFavorite("no-such-recipe", true, NOW), code("RECIPE_STALE"));
   } finally { await close(); }
 });
+
+test("ревью S1: правка без описания не затирает его; ингредиент несёт массу штуки; повтор флага не публикует событие", async () => {
+  const { foods, recipes, oats, milk, close } = await stores();
+  try {
+    const piece = await foods.create({ ...OATS, name: "Яйцо", barcode: "4600000000012", gramsPerPieceX10: 550 }, NOW);
+    const created = await recipes.create({ name: "Омлет", servingsX10: 10, cookedMassX10: null, description: "Со сковородой",
+      ingredients: [{ foodId: piece.id, quantityX10: 1100 }] }, NOW);
+    assert.equal(created.ingredients[0]?.food.gramsPerPieceX10, 550, "состав рецепта знает массу штуки");
+    assert.equal(created.ingredients[0]?.food.barcode, "4600000000012");
+    const edited = await recipes.update(created.id, created.revision, { name: "Омлет 2", servingsX10: 20, cookedMassX10: null,
+      ingredients: [{ foodId: piece.id, quantityX10: 1100 }] }, NOW);
+    assert.equal(edited.description, "Со сковородой", "поле не передано — старое значение сохраняется");
+    const cleared = await recipes.update(created.id, edited.revision, { name: "Омлет 2", servingsX10: 20, cookedMassX10: null, description: null,
+      ingredients: [{ foodId: piece.id, quantityX10: 1100 }] }, NOW);
+    assert.equal(cleared.description, null, "явный null очищает");
+
+    const food = await foods.update(piece.id, piece.revision, { ...OATS, name: "Яйцо С1" }, NOW);
+    assert.equal(food.barcode, "4600000000012");
+    assert.equal(food.gramsPerPieceX10, 550, "поля не переданы — не затираются");
+    const wiped = await foods.update(piece.id, food.revision, { ...OATS, name: "Яйцо С1", barcode: null, gramsPerPieceX10: null }, NOW);
+    assert.deepEqual([wiped.barcode, wiped.gramsPerPieceX10], [null, null], "явный null очищает");
+
+    let events = 0;
+    const off = recipes.subscribeCommittedChanges(() => { events += 1; });
+    await recipes.setFavorite(created.id, true, NOW);
+    await recipes.setFavorite(created.id, true, NOW);
+    off();
+    assert.equal(events, 1, "повтор того же значения — не изменение");
+    void oats; void milk;
+  } finally { await close(); }
+});

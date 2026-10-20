@@ -15,6 +15,8 @@ export interface NutritionDiaryPort {
   listEntries(clientId: string, fromDate: string, toDate: string): Promise<readonly DiaryEntry[]>;
   /** Добавляет новую запись в конец приёма пищи; итог снимка пересчитывается из значений на основу и количества. */
   addEntry(clientId: string, input: DiaryEntryInput, now?: Date): Promise<DiaryEntry>;
+  /** Добавляет несколько записей (в том числе одну позицию в разные приёмы) одной транзакцией: все или ни одной. */
+  addEntries(clientId: string, inputs: readonly DiaryEntryInput[], now?: Date): Promise<readonly DiaryEntry[]>;
   /** Исправляет только количество этой записи; снимок источника не переписывается (§49.5.2). */
   updateQuantity(clientId: string, id: string, expectedRevision: number, quantityX10: number, now?: Date): Promise<DiaryEntry>;
   /** Явное удаление записи; последняя запись дня выводит дату из учёта, вода остаётся. */

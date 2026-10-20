@@ -257,3 +257,18 @@ test("P-31: недавние и частые строятся из записе�
   assert.deepEqual(rankUsage(entries, "frequent", 2).map((item) => [item.id, item.count]), [["a", 2], ["b", 1]], "частота, затем свежесть; лимит 2");
   assert.deepEqual(rankUsage([], "recent", 10), []);
 });
+
+test("P-29: одна позиция в несколько приёмов — одной транзакцией; ошибка в списке не оставляет частичной записи", async () => {
+  const { clients, diary, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticA" });
+    const snapshot = snapshotOfFood(OATS, 500);
+    const added = await diary.addEntries(client.id, [{ localDate: DAY, slot: "BREAKFAST", snapshot }, { localDate: DAY, slot: "SNACK", snapshot }], NOW);
+    assert.deepEqual(added.map((entry) => [entry.slot, entry.position, entry.snapshot.quantityX10]), [["BREAKFAST", 0, 500], ["SNACK", 0, 500]]);
+    assert.deepEqual((await diary.listEntries(client.id, DAY, DAY)).map((entry) => entry.slot), ["BREAKFAST", "SNACK"]);
+    await assert.rejects(diary.addEntries(client.id, [{ localDate: DAY, slot: "LUNCH", snapshot }, { localDate: "2026-02-31", slot: "DINNER", snapshot }], NOW),
+      code("DIARY_DATE_INVALID"));
+    assert.equal((await diary.listEntries(client.id, DAY, DAY)).length, 2, "обед не записан: операция откатилась целиком");
+    assert.deepEqual(await diary.addEntries(client.id, [], NOW), []);
+  } finally { await close(); }
+});

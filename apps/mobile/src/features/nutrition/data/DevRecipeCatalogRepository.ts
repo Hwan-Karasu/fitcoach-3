@@ -25,7 +25,7 @@ type IngredientRow = FoodProduct & { readonly recipeId: string; readonly quantit
 const recipeColumns = `id, name, servings_x10 AS servingsX10, cooked_mass_x10 AS cookedMassX10, description, favorite, in_cookbook AS inCookbook, revision, archived_at AS archivedAt`;
 const ingredientColumns = `i.recipe_id AS recipeId, i.quantity_x10 AS quantityX10, f.id AS id, f.name AS name, f.brand AS brand,
   f.basis_unit AS unit, f.basis_amount_x10 AS amountX10, f.kcal_x10 AS kcalX10, f.protein_x10 AS proteinX10, f.fat_x10 AS fatX10,
-  f.carbs_x10 AS carbsX10, f.revision AS revision, f.archived_at AS archivedAt`;
+  f.carbs_x10 AS carbsX10, f.barcode AS barcode, f.grams_per_piece_x10 AS gramsPerPieceX10, f.revision AS revision, f.archived_at AS archivedAt`;
 
 async function load(reader: SqliteStatementPort, workspaceId: string, where: string, bindings: readonly (string | number)[]): Promise<readonly Recipe[]> {
   const rows = await reader.all<RecipeRow>(`SELECT ${recipeColumns} FROM dev_recipes WHERE workspace_id = ? ${where}`, [workspaceId, ...bindings]);
@@ -37,7 +37,7 @@ async function load(reader: SqliteStatementPort, workspaceId: string, where: str
   return rows.map((row) => ({ ...row, favorite: row.favorite === 1, inCookbook: row.inCookbook === 1, ingredients: lines.filter((line) => line.recipeId === row.id).map((line) => ({
     quantityX10: line.quantityX10,
     food: { id: line.id, name: line.name, brand: line.brand, unit: line.unit, amountX10: line.amountX10, kcalX10: line.kcalX10,
-      proteinX10: line.proteinX10, fatX10: line.fatX10, carbsX10: line.carbsX10, revision: line.revision, archivedAt: line.archivedAt },
+      proteinX10: line.proteinX10, fatX10: line.fatX10, carbsX10: line.carbsX10, barcode: line.barcode, gramsPerPieceX10: line.gramsPerPieceX10, revision: line.revision, archivedAt: line.archivedAt },
   })) }));
 }
 
@@ -138,9 +138,9 @@ export class DevRecipeCatalogRepository implements RecipeCatalogPort {
   async update(id: string, expectedRevision: number, input: RecipeInput, now: Date = new Date()): Promise<Recipe> {
     const valid = validateRecipe(input);
     const updated = await this.ready().writer.write(async (tx) => {
-      const result = await tx.run(`UPDATE dev_recipes SET name = ?, servings_x10 = ?, cooked_mass_x10 = ?, description = ?, revision = revision + 1, updated_at = ?
+      const result = await tx.run(`UPDATE dev_recipes SET name = ?, servings_x10 = ?, cooked_mass_x10 = ?, description = CASE WHEN ? = 1 THEN ? ELSE description END, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ? AND archived_at IS NULL`,
-      [valid.name, valid.servingsX10, valid.cookedMassX10, valid.description ?? null, now.toISOString(), this.workspaceId, id, expectedRevision]);
+      [valid.name, valid.servingsX10, valid.cookedMassX10, valid.description === undefined ? 0 : 1, valid.description ?? null, now.toISOString(), this.workspaceId, id, expectedRevision]);
       if (result.changes !== 1) throw new Error("RECIPE_STALE");
       await this.writeIngredients(tx, id, valid);
       return (await load(tx, this.workspaceId, "AND id = ?", [id]))[0] as Recipe;
@@ -150,14 +150,15 @@ export class DevRecipeCatalogRepository implements RecipeCatalogPort {
   }
 
   private async setFlag(column: "favorite" | "in_cookbook", id: string, value: boolean, now: Date): Promise<Recipe> {
+    let unchanged = false;
     const recipe = await this.ready().writer.write(async (tx) => {
       const current = (await load(tx, this.workspaceId, "AND id = ?", [id]))[0];
       if (current === undefined || current.archivedAt !== null) throw new Error("RECIPE_STALE");
-      if ((column === "favorite" ? current.favorite : current.inCookbook) === value) return current;
+      if ((column === "favorite" ? current.favorite : current.inCookbook) === value) { unchanged = true; return current; }
       await tx.run(`UPDATE dev_recipes SET ${column} = ?, updated_at = ? WHERE workspace_id = ? AND id = ?`, [value ? 1 : 0, now.toISOString(), this.workspaceId, id]);
       return (await load(tx, this.workspaceId, "AND id = ?", [id]))[0] as Recipe;
     });
-    this.publish({ recipeId: id });
+    if (!unchanged) this.publish({ recipeId: id });
     return recipe;
   }
 
