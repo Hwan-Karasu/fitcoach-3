@@ -144,6 +144,53 @@ export function rebalanceMacros(calories: number | null, defaults: MacroGrams, m
   return { protein, fat: set(calories) && protein !== null ? rest(calories - protein * 4 - (mc as number) * 4, 9) : null, carbs: mc };
 }
 
+/** Диапазон граммов макронутриента; равные границы — точное значение. */
+export interface GramRange {
+  readonly min: number;
+  readonly max: number;
+}
+export type MacroRanges = Readonly<{ protein: GramRange | null; fat: GramRange | null; carbs: GramRange | null }>;
+
+/**
+ * Режим «Коридор»: те же правила пересчёта, что в `rebalanceMacros`, но введённые значения — диапазоны. Досчитанный показатель получает коридор, в котором калорийный ориентир достижим
+ * при любых значениях введённых диапазонов (интервальная арифметика: `[(C − верх известных) / k; (C − низ известных) / k]`, не ниже 0, k = 4 для Б/У и 9 для Ж). Значения по расчёту
+ * (белок и жир при одном введённом показателе) остаются числами. Точные числа дают тот же результат, что `rebalanceMacros`. Нет калорий или расчётных значений — `null`.
+ */
+export function rebalanceMacroRanges(calories: number | null, defaults: MacroGrams, manual: MacroRanges): MacroRanges {
+  const point = (value: number | null): GramRange | null => value === null ? null : { min: value, max: value };
+  const rest = (low: number, high: number, k: number): GramRange => {
+    const min = Math.max(0, ((calories as number) - high) / k);
+    const max = Math.max(0, ((calories as number) - low) / k);
+    return { min: Math.round(min), max: Math.round(max) };
+  };
+  const kcal = (range: GramRange | null, k: number) => range === null ? null : { low: range.min * k, high: range.max * k };
+  const { protein: mp, fat: mf, carbs: mc } = manual;
+  const count = [mp, mf, mc].filter((value) => value !== null).length;
+  if (count === 0) return { protein: point(defaults.protein), fat: point(defaults.fat), carbs: point(defaults.carbs) };
+  if (count === 3) return manual;
+  const known = (parts: readonly ({ low: number; high: number } | null)[]) => ({ low: parts.reduce((sum, part) => sum + (part?.low ?? 0), 0), high: parts.reduce((sum, part) => sum + (part?.high ?? 0), 0) });
+  const noCalories = calories === null;
+  if (count === 2) {
+    if (mc === null) { const k = known([kcal(mp, 4), kcal(mf, 9)]); return { protein: mp, fat: mf, carbs: noCalories ? null : rest(k.low, k.high, 4) }; }
+    if (mf === null) { const k = known([kcal(mp, 4), kcal(mc, 4)]); return { protein: mp, fat: noCalories ? null : rest(k.low, k.high, 9), carbs: mc }; }
+    const k = known([kcal(mf, 9), kcal(mc, 4)]);
+    return { protein: noCalories ? null : rest(k.low, k.high, 4), fat: mf, carbs: mc };
+  }
+  if (mp !== null) {
+    if (defaults.fat === null) return { protein: mp, fat: null, carbs: null };
+    const k = known([kcal(mp, 4), { low: defaults.fat * 9, high: defaults.fat * 9 }]);
+    return { protein: mp, fat: point(defaults.fat), carbs: noCalories ? null : rest(k.low, k.high, 4) };
+  }
+  if (mf !== null) {
+    if (defaults.protein === null) return { protein: null, fat: mf, carbs: null };
+    const k = known([{ low: defaults.protein * 4, high: defaults.protein * 4 }, kcal(mf, 9)]);
+    return { protein: point(defaults.protein), fat: mf, carbs: noCalories ? null : rest(k.low, k.high, 4) };
+  }
+  if (defaults.protein === null) return { protein: null, fat: null, carbs: mc };
+  const k = known([{ low: defaults.protein * 4, high: defaults.protein * 4 }, kcal(mc, 4)]);
+  return { protein: point(defaults.protein), fat: noCalories ? null : rest(k.low, k.high, 9), carbs: mc };
+}
+
 export type CalcRuleError = "CALC_PROFILE_INVALID" | "CALC_STEPS_INVALID";
 
 const isWhole = (value: number, min: number, max: number) => Number.isInteger(value) && value >= min && value <= max;

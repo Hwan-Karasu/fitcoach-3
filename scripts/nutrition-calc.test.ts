@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calcEat, calcMacros, calcNeat, calcRee, deriveCalc, goalDelta, rebalanceMacros, type CalcProfile } from "../apps/mobile/src/features/nutrition/domain/CalcRules.ts";
+import { calcEat, calcMacros, calcNeat, calcRee, deriveCalc, goalDelta, rebalanceMacroRanges, rebalanceMacros, type CalcProfile } from "../apps/mobile/src/features/nutrition/domain/CalcRules.ts";
 
 /** Профиль экрана «Расчёт» из спецификации и скриншотов Build 120: муж., 37 лет, 181 см, умеренный образ жизни, 3 тренировки по 60 мин, средняя интенсивность. */
 const PROFILE: CalcProfile = { goal: "MAINTENANCE", activity: "MODERATE", workoutsPerWeek: 3, minutes: 60, intensity: "MEDIUM", stepKcal: 100 };
@@ -87,4 +87,31 @@ test("пересчёт макро: отрицательный остаток —
   assert.deepEqual(rebalanceMacros(null, defaults, { protein: 140, fat: 70, carbs: null }), { protein: 140, fat: 70, carbs: null }, "калорийного ориентира нет — недостающее не считается");
   assert.deepEqual(rebalanceMacros(2289, none, { ...none, protein: 140 }), { protein: 140, fat: null, carbs: null }, "нет сухой массы — расчётного жира нет, углеводы не определить");
   assert.deepEqual(rebalanceMacros(2289, none, { protein: 140, fat: 70, carbs: null }), { protein: 140, fat: 70, carbs: 275 }, "две введённые не нуждаются в расчётных значениях");
+});
+
+test("пересчёт при диапазонах (режим «Коридор»): досчитанный показатель получает коридор, в котором 2289 ккал достижимы при любых значениях введённого диапазона", () => {
+  const defaults = { protein: 115, fat: 54, carbs: 336 };
+  const point = (value: number) => ({ min: value, max: value });
+  const none = { protein: null, fat: null, carbs: null };
+  assert.deepEqual(rebalanceMacroRanges(2289, defaults, { ...none, protein: { min: 130, max: 150 } }),
+    { protein: { min: 130, max: 150 }, fat: point(54), carbs: { min: 301, max: 321 } }, "углеводы: [(2289−4·150−9·54)/4; (2289−4·130−9·54)/4] = [300,75; 320,75]");
+  assert.deepEqual(rebalanceMacroRanges(2289, defaults, { ...none, fat: { min: 60, max: 80 } }),
+    { protein: point(115), fat: { min: 60, max: 80 }, carbs: { min: 277, max: 322 } }, "[(2289−460−720)/4; (2289−460−540)/4] = [277,25; 322,25]");
+  assert.deepEqual(rebalanceMacroRanges(2289, defaults, { ...none, carbs: { min: 280, max: 320 } }),
+    { protein: point(115), fat: { min: 61, max: 79 }, carbs: { min: 280, max: 320 } }, "жир: [(2289−460−1280)/9; (2289−460−1120)/9] = [61,0; 78,8]");
+  assert.deepEqual(rebalanceMacroRanges(2289, defaults, { protein: { min: 130, max: 150 }, fat: { min: 50, max: 60 }, carbs: null }),
+    { protein: { min: 130, max: 150 }, fat: { min: 50, max: 60 }, carbs: { min: 287, max: 330 } }, "углеводы: [(2289−600−540)/4; (2289−520−450)/4] = [287,25; 329,75]");
+  assert.deepEqual(rebalanceMacroRanges(2289, defaults, { protein: { min: 130, max: 150 }, fat: null, carbs: { min: 300, max: 320 } }).fat, { min: 45, max: 63 });
+  assert.deepEqual(rebalanceMacroRanges(2289, defaults, { protein: null, fat: { min: 50, max: 60 }, carbs: { min: 300, max: 320 } }).protein, { min: 117, max: 160 });
+});
+
+test("пересчёт при диапазонах: точные числа дают то же, что режим «Точное значение»; остаток не ниже 0; без калорий или расчёта — null", () => {
+  const defaults = { protein: 115, fat: 54, carbs: 336 };
+  const none = { protein: null, fat: null, carbs: null };
+  assert.deepEqual(rebalanceMacroRanges(2289, defaults, { ...none, protein: { min: 140, max: 140 } }),
+    { protein: { min: 140, max: 140 }, fat: { min: 54, max: 54 }, carbs: { min: 311, max: 311 } }, "как rebalanceMacros: Б 140 → Ж 54, У 311");
+  assert.deepEqual(rebalanceMacroRanges(2289, defaults, { ...none, protein: { min: 500, max: 600 } }).carbs, { min: 0, max: 0 }, "отрицательный остаток — 0");
+  assert.deepEqual(rebalanceMacroRanges(2289, defaults, none), { protein: { min: 115, max: 115 }, fat: { min: 54, max: 54 }, carbs: { min: 336, max: 336 } }, "ничего не введено — расчётные числа");
+  assert.deepEqual(rebalanceMacroRanges(null, defaults, { ...none, protein: { min: 130, max: 150 } }).carbs, null, "калорийного ориентира нет");
+  assert.deepEqual(rebalanceMacroRanges(2289, { protein: null, fat: null, carbs: null }, { ...none, protein: { min: 130, max: 150 } }).fat, null, "нет сухой массы — жира по расчёту нет");
 });
