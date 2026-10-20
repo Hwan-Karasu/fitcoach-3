@@ -31,7 +31,7 @@ type OpenWorkout = (slot: WorkoutSlot, options?: Readonly<{ returnToCaller?: boo
 
 type WorkspaceTabs = {
   Home: undefined;
-  Nutrition: undefined;
+  Nutrition: { screen: "NutritionTargets" } | undefined;
   Training: undefined;
   More: undefined;
 };
@@ -223,7 +223,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
         header: () => <ClientHeader client={client} subtitle={workspaceTabs.Home} onBack={onClose} onClients={onOpenClients} /> }}>
         {({ navigation }) => <HomeNavigator client={client} accounting={accounting} measurements={measurements}
           nutritionSlot={<NutritionHomeCards clientId={client.id} body={calcBody} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements}
-            onOpenNutrition={() => navigation.navigate("Nutrition")} />}
+            onOpenNutrition={() => navigation.navigate("Nutrition")} onOpenSchedule={() => navigation.navigate("Nutrition", { screen: "NutritionTargets" })} />}
           onOpenEdit={() => onOpenEdit(client.id)}
           onOpenAccounting={() => onOpenAccounting(client.id)}
           onOpenMeasurements={() => onOpenMeasurements(client.id)}

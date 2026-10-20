@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { AppButton, InlineNotice, TextField } from "../../../shared/ui/components/public.ts";
+import { AppButton, InlineNotice, ProgressRing, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import type { MeasurementRepositoryPort } from "../../measurements/public.ts";
@@ -8,9 +8,9 @@ import { calcMacros, deriveCalc } from "../domain/CalcRules.ts";
 import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
-import { TARGET_METRICS } from "../domain/TargetModel.ts";
 import { assessDay, NUTRIENT_OF } from "../domain/TargetRules.ts";
 import type { CalcClientBody } from "./NutritionCalcScreen.tsx";
+import { useMacroColors } from "./MacroGrid.tsx";
 import { NutritionTargetRows } from "./NutritionTargetRows.tsx";
 import { metricLabels, nutritionErrorText, rangeText, todayLocal, verdictLabels, wholeText } from "./nutritionFormat.ts";
 import { DEFAULT_CALC_PROFILE, useCalcData } from "./useCalcData.ts";
@@ -34,8 +34,8 @@ function useTodaySteps(clientId: string, calc: NutritionCalcPort, today: string)
  * Блоки питания на главной клиента (§49.5.4, AUD-05): «Шаги сегодня» и «КБЖУ» — факт дня рядом с действующей целью (min–max) и два ряда
  * «Расчёт» / «Вручную». Источники — Nutrition и Measurements; legacy `client_kbju_state` не используется.
  */
-export function NutritionHomeCards({ clientId, body, diary, targets, calc, measurements, onOpenNutrition }: Readonly<{ clientId: string; body: CalcClientBody; diary: NutritionDiaryPort;
-  targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; onOpenNutrition: () => void }>) {
+export function NutritionHomeCards({ clientId, body, diary, targets, calc, measurements, onOpenNutrition, onOpenSchedule }: Readonly<{ clientId: string; body: CalcClientBody; diary: NutritionDiaryPort;
+  targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; onOpenNutrition: () => void; onOpenSchedule?: () => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const today = todayLocal();
@@ -72,6 +72,17 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
 
   const verdicts = data === null ? null : assessDay(data.summary, data.target);
   const recorded = data?.summary.state === "FOOD_RECORDED";
+  const macroColors = useMacroColors();
+  const corridors = data === null || data.target.source === "NONE" ? null : data.target.corridors;
+  const kcalRange = rangeText(corridors?.kcal ?? null);
+  /** «% от цели»: съеденные ккал к середине калорийного коридора; нет еды, цели или калорий — нет данных, а не 0 %. */
+  const kcalFraction = (() => {
+    const eaten = recorded && data !== null ? data.summary.totals.kcalX10 : null;
+    const range = corridors?.kcal ?? null;
+    if (eaten === null || range === null) return null;
+    const middle = (range.minX10 + range.maxX10) / 2;
+    return middle > 0 ? eaten / middle : null;
+  })();
   return (
     <>
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -89,30 +100,39 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
 
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.head}>
-          <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>КБЖУ сегодня</Text>
+          <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>КБЖУ</Text>
           <AppButton compact variant="secondary" label="Питание" onPress={onOpenNutrition} />
         </View>
         {data === null ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Загружаем…</Text> : <>
-          <Text style={[styles.hint, { color: colors.textSecondary }]}>
-            {data.target.source === "NONE" ? "Цель не установлена" : `Суточный ориентир: ${rangeText(data.target.corridors.kcal) ?? "—"} ккал`}{recorded ? "" : " · записей о еде нет"}
-          </Text>
+          <View style={styles.summary}>
+            <View style={styles.grow} accessible accessibilityLabel={`Суточный ориентир: ${kcalRange === null ? "цель не установлена" : `${kcalRange} ккал`}`}>
+              <View style={[styles.pill, { backgroundColor: colors.accentSoft }]}><Text style={[styles.pillText, { color: colors.accentInk }]}>Суточный ориентир</Text></View>
+              <Text style={[styles.bigNumber, { color: colors.textPrimary }]}>{kcalRange ?? "—"}<Text style={[styles.unit, { color: colors.textSecondary }]}>{kcalRange === null ? "" : " ккал"}</Text></Text>
+              <Text style={[styles.hint, { color: colors.textSecondary }]}>{data.target.source === "NONE" ? "Цель не установлена" : recorded ? `Съедено: ${wholeText(data.summary.totals.kcalX10)} ккал` : "Записей о еде нет"}</Text>
+            </View>
+            <ProgressRing fraction={kcalFraction} accessibilityLabel={`От цели по калориям: ${kcalFraction === null ? "нет данных" : `${Math.round(kcalFraction * 100)} процентов`}`}>
+              <Text style={[styles.ringValue, { color: colors.textPrimary }]}>{kcalFraction === null ? "—" : `${Math.round(kcalFraction * 100)}%`}</Text>
+              <Text style={[styles.hint, { color: colors.textSecondary }]}>от цели</Text>
+            </ProgressRing>
+          </View>
+          <View style={[styles.rule, { backgroundColor: colors.border }]} />
           <View style={styles.metrics}>
-            {TARGET_METRICS.map((metric) => {
+            {(["protein", "fat", "carbs"] as const).map((metric) => {
               const value = recorded ? data.summary.totals[NUTRIENT_OF[metric]] : null;
-              const range = data.target.source === "NONE" ? null : rangeText(data.target.corridors[metric]);
-              const verdict = verdicts === null ? "UNKNOWN" : verdicts[metric];
+              const range = corridors === null ? null : rangeText(corridors[metric]);
               return (
                 <View key={metric} accessible style={styles.metric}
-                  accessibilityLabel={`${metricLabels[metric]}: ${value === null ? "нет данных" : wholeText(value)}${range === null ? "" : `, цель ${range}`}${verdictLabels[verdict] === "" ? "" : `, ${verdictLabels[verdict]}`}`}>
-                  <Text style={[styles.hint, { color: colors.textSecondary }]}>{metricLabels[metric]}</Text>
-                  <Text style={[styles.value, { color: colors.textPrimary }]}>{wholeText(value)}</Text>
-                  <Text style={[styles.hint, { color: colors.textMuted }]}>{range === null ? " " : range}</Text>
+                  accessibilityLabel={`${metricLabels[metric]}: ${value === null ? "нет данных" : `${wholeText(value)} г`}${range === null ? "" : `, цель ${range}`}${verdicts === null || verdictLabels[verdicts[metric]] === "" ? "" : `, ${verdictLabels[verdicts[metric]]}`}`}>
+                  <Text style={[styles.hint, { color: macroColors[metric] }]}>{metricLabels[metric]}</Text>
+                  <Text style={[styles.value, { color: macroColors[metric] }]}>{wholeText(value)}<Text style={[styles.unit, { color: colors.textSecondary }]}>{value === null ? "" : " г"}</Text></Text>
+                  <Text style={[styles.hint, { color: colors.textMuted }]}>{range === null ? " " : `цель ${range}`}</Text>
                 </View>
               );
             })}
           </View>
+          <View style={[styles.rule, { backgroundColor: colors.border }]} />
         </>}
-        <NutritionTargetRows key={clientId} clientId={clientId} targets={targets} result={result} macros={macros} />
+        <NutritionTargetRows key={clientId} clientId={clientId} targets={targets} result={result} macros={macros} onOpenSchedule={onOpenSchedule} />
       </View>
     </>
   );
@@ -127,5 +147,12 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   metrics: { flexDirection: "row", gap: 6 },
   metric: { flex: 1, alignItems: "center", gap: 2 },
-  value: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 23 },
+  value: { fontFamily: fonts.bold, fontSize: 22, lineHeight: 28 },
+  summary: { flexDirection: "row", alignItems: "center", gap: 12 },
+  pill: { alignSelf: "flex-start", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 4 },
+  pillText: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
+  bigNumber: { fontFamily: fonts.bold, fontSize: 32, lineHeight: 38 },
+  unit: { fontFamily: fonts.regular, fontSize: 14 },
+  ringValue: { fontFamily: fonts.bold, fontSize: 24, lineHeight: 30 },
+  rule: { height: StyleSheet.hairlineWidth },
 });

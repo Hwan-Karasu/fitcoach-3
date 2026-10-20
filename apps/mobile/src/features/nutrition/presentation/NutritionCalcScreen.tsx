@@ -5,11 +5,9 @@ import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvid
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
 import { dailyPoints, localDateOf, MeasurementsCard, navyBodyFat, type MeasurementRepositoryPort } from "../../measurements/public.ts";
-import { CALC_ACTIVITIES, CALC_GOALS, CALC_INTENSITIES, calcMacros, deriveCalc, type CalcActivity, type CalcGoal, type CalcIntensity,
+import { CALC_ACTIVITIES, CALC_GOALS, CALC_INTENSITIES, deriveCalc, type CalcActivity, type CalcGoal, type CalcIntensity,
   type CalcProfile, type CalcSex } from "../domain/CalcRules.ts";
 import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
-import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
-import { NutritionTargetRows } from "./NutritionTargetRows.tsx";
 import { DEFAULT_CALC_PROFILE, useCalcData } from "./useCalcData.ts";
 import { nutritionErrorText } from "./nutritionFormat.ts";
 
@@ -96,7 +94,7 @@ function HelpSheet({ visible, onClose }: Readonly<{ visible: boolean; onClose: (
     ["NEAT — повседневная активность", "По средним шагам за последние 30 дней и весу (0,03–0,06 ккал на шаг). Без шагов — по образу жизни: 180 / 260 / 360 / 460 ккал."],
     ["EAT — тренировки", "MET × 3,5 × вес ÷ 200 × минуты × тренировок в неделю ÷ 7. MET: лёгкая 3,5, средняя 5, тяжёлая 6."],
     ["Итоговый калораж", "Стартовый расход с поправкой на цель: «Шаг цели» вычитается при похудении и прибавляется при наборе."],
-    ["Цели", "Расчёт — справочный: он не меняет цели. Ряд «Вручную» — коридоры, которые задаёте вы; они и есть цель, сохраняются кнопкой «Сохранить цели». Дни недели, версии и исключения — в «Цели по дням недели»."],
+    ["Цели", "Расчёт — справочный и цели не меняет. Цель задаётся на главной клиента: ячейка «ручная корректировка» принимает число (22) или диапазон (22-30)."],
   ];
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -122,9 +120,9 @@ function HelpSheet({ visible, onClose }: Readonly<{ visible: boolean; onClose: (
  * Экран «Расчёт» (§49.10, UX «Расчёт»): просмотр и редактирование — состояния одного экрана; вес и % жира берутся из Measurements, шаги — из суточной активности.
  * Результат — оценка и черновик целей; действующей целью он становится только после явного «Применить как цели».
  */
-export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenSchedule, calc, targets, measurements }: Readonly<{ clientId: string; body: CalcClientBody; onOpenSchedule?: () => void;
+export function NutritionCalcScreen({ clientId, body, onUpdateBody, calc, measurements }: Readonly<{ clientId: string; body: CalcClientBody;
   /** Записывает пол и рост в карточку клиента (владелец данных — Clients). */
-  onUpdateBody: (patch: Readonly<{ sex: CalcSex | null; heightCm: number | null }>) => Promise<void>; calc: NutritionCalcPort; targets: NutritionTargetsPort; measurements: MeasurementRepositoryPort }>) {
+  onUpdateBody: (patch: Readonly<{ sex: CalcSex | null; heightCm: number | null }>) => Promise<void>; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const { loaded, failed, reload } = useCalcData(clientId, calc, measurements);
@@ -208,9 +206,6 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenSchedu
     lock.current = false;
     setBusy(false);
   };
-
-  /** Ориентиры БЖУ для справочного ряда «Расчёт»: от сухой массы, без выдуманной массы при неизвестном % жира. */
-  const macros = useMemo(() => result === null ? null : calcMacros(result.leanMassKg, result.target, profile.goal), [result, profile.goal]);
 
   if (loaded === null || result === null || live === null) {
     return failed ? <View style={styles.pad}><InlineNotice kind="error">Не удалось загрузить расчёт.</InlineNotice></View> : <LoadingState label="Загружаем расчёт…" />;
@@ -326,7 +321,6 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenSchedu
         </>}
       </Card>
 
-      {!editing ? <Card title="КБЖУ"><NutritionTargetRows key={clientId} clientId={clientId} targets={targets} result={result} macros={macros} onOpenSchedule={onOpenSchedule} /></Card> : null}
 
       <MeasurementsCard clientId={clientId} repository={measurements} />
 
@@ -340,7 +334,7 @@ const styles = StyleSheet.create({
   pad: { paddingHorizontal: 16 },
   grow: { flex: 1 },
   card: { ...shadow.card, borderRadius: 24, padding: 14, gap: 10 },
-  cardHead: { flexDirection: "row", alignItems: "center", gap: 8 },
+  cardHead: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   cardTitle: { flex: 1, fontFamily: fonts.bold, fontSize: 13, lineHeight: 18, letterSpacing: 0.6 },
   headButtons: { flexDirection: "row", gap: 8, alignItems: "center" },

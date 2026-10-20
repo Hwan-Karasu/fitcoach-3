@@ -145,7 +145,7 @@ export function NutritionNavigator({ clientId, clientName, clientEmoji, body, on
         onClients={onOpenClients} onBack={() => { if (route.name === "NutritionIndex") onExitClient(); else navigation.goBack(); }} />,
     })}>
       <NutritionStack.Screen name="NutritionIndex">
-        {({ navigation }) => <NutritionHomeScreen clientId={clientId} onOpenSchedule={() => navigation.navigate("NutritionTargets")} body={body} onUpdateBody={onUpdateBody} diary={diary} targets={targets} calc={calc} measurements={measurements}
+        {({ navigation }) => <NutritionHomeScreen clientId={clientId} body={body} onUpdateBody={onUpdateBody} diary={diary} targets={targets} calc={calc} measurements={measurements}
           onAdd={(localDate, slot, filter) => navigation.navigate("NutritionAdd", { localDate, slot, filter })} />}
       </NutritionStack.Screen>
       <NutritionStack.Screen name="NutritionAdd">
