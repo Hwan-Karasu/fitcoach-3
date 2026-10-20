@@ -4,7 +4,8 @@ import { UUID_V4_SQL } from "../../../shared/db/SqlIds.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
 import { MEAL_SLOTS, type CopyEntriesRequest, type CopyEntriesResult, type DiaryEntry, type DiaryEntryInput, type MealSlot, type WaterDay } from "../domain/DiaryModel.ts";
-import { assertDate, assertQuantity, assertSlot, assertWater, normalizeSnapshot } from "../domain/DiaryRules.ts";
+import { assertDate, assertOverride, assertQuantity, assertSlot, assertWater, effectiveNutrients, normalizeSnapshot } from "../domain/DiaryRules.ts";
+import type { Nutrients } from "../domain/FoodModel.ts";
 import type { FoodBasisUnit } from "../domain/FoodModel.ts";
 import { scaleNutrients } from "../domain/FoodRules.ts";
 import type { FoodSnapshot } from "../domain/FoodSnapshot.ts";
@@ -29,20 +30,29 @@ interface EntryRow {
   readonly carbsX10: number | null;
   readonly quantityX10: number;
   readonly ingredientsJson: string;
+  readonly overrideBase: number | null;
+  readonly overrideKcal: number | null;
+  readonly overrideProtein: number | null;
+  readonly overrideFat: number | null;
+  readonly overrideCarbs: number | null;
   readonly revision: number;
 }
 
 const columns = `id, client_id AS clientId, local_date AS localDate, slot, position, source_kind AS sourceKind, source_id AS sourceId, name, brand,
   basis_unit AS unit, basis_amount_x10 AS amountX10, per_kcal_x10 AS kcalX10, per_protein_x10 AS proteinX10, per_fat_x10 AS fatX10,
-  per_carbs_x10 AS carbsX10, quantity_x10 AS quantityX10, ingredients_json AS ingredientsJson, revision`;
+  per_carbs_x10 AS carbsX10, quantity_x10 AS quantityX10, ingredients_json AS ingredientsJson, override_base_quantity_x10 AS overrideBase,
+  override_kcal_x10 AS overrideKcal, override_protein_x10 AS overrideProtein, override_fat_x10 AS overrideFat, override_carbs_x10 AS overrideCarbs, revision`;
 
 function toEntry(row: EntryRow): DiaryEntry {
   const perBasis = { kcalX10: row.kcalX10, proteinX10: row.proteinX10, fatX10: row.fatX10, carbsX10: row.carbsX10 };
   const basis = { unit: row.unit, amountX10: row.amountX10 };
+  const catalogEaten = scaleNutrients({ ...basis, ...perBasis }, row.quantityX10);
+  const override = row.overrideBase === null ? null
+    : { baseQuantityX10: row.overrideBase, values: { kcalX10: row.overrideKcal, proteinX10: row.overrideProtein, fatX10: row.overrideFat, carbsX10: row.overrideCarbs } };
   const snapshot: FoodSnapshot = { source: { kind: row.sourceKind, id: row.sourceId }, name: row.name, brand: row.brand, basis, perBasis,
-    quantityX10: row.quantityX10, eaten: scaleNutrients({ ...basis, ...perBasis }, row.quantityX10),
+    quantityX10: row.quantityX10, eaten: effectiveNutrients(catalogEaten, override, row.quantityX10),
     ingredients: JSON.parse(row.ingredientsJson) as FoodSnapshot["ingredients"] };
-  return { id: row.id, clientId: row.clientId, localDate: row.localDate, slot: row.slot, position: row.position, snapshot, revision: row.revision };
+  return { id: row.id, clientId: row.clientId, localDate: row.localDate, slot: row.slot, position: row.position, snapshot, override, catalogEaten, revision: row.revision };
 }
 
 const slotOrder = (slot: MealSlot) => MEAL_SLOTS.indexOf(slot);
@@ -194,6 +204,33 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
     return moved;
   }
 
+  async setOverride(clientId: string, id: string, expectedRevision: number, values: Nutrients, now: Date = new Date()): Promise<DiaryEntry> {
+    assertOverride(values);
+    const updated = await this.ready().writer.write(async (tx) => {
+      const current = await byId(tx, this.workspaceId, clientId, id);
+      if (current.revision !== expectedRevision) throw new Error("DIARY_STALE");
+      const result = await tx.run(`UPDATE dev_food_diary_entries SET override_base_quantity_x10 = ?, override_kcal_x10 = ?, override_protein_x10 = ?, override_fat_x10 = ?,
+          override_carbs_x10 = ?, revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND client_id = ? AND id = ? AND revision = ?`,
+      [current.snapshot.quantityX10, values.kcalX10, values.proteinX10, values.fatX10, values.carbsX10, now.toISOString(), this.workspaceId, clientId, id, expectedRevision]);
+      if (result.changes !== 1) throw new Error("DIARY_STALE");
+      return byId(tx, this.workspaceId, clientId, id);
+    });
+    this.publish({ clientId, localDate: updated.localDate });
+    return updated;
+  }
+
+  async clearOverride(clientId: string, id: string, expectedRevision: number, now: Date = new Date()): Promise<DiaryEntry> {
+    const updated = await this.ready().writer.write(async (tx) => {
+      const result = await tx.run(`UPDATE dev_food_diary_entries SET override_base_quantity_x10 = NULL, override_kcal_x10 = NULL, override_protein_x10 = NULL, override_fat_x10 = NULL,
+          override_carbs_x10 = NULL, revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND client_id = ? AND id = ? AND revision = ?`,
+      [now.toISOString(), this.workspaceId, clientId, id, expectedRevision]);
+      if (result.changes !== 1) throw new Error("DIARY_STALE");
+      return byId(tx, this.workspaceId, clientId, id);
+    });
+    this.publish({ clientId, localDate: updated.localDate });
+    return updated;
+  }
+
   async removeEntry(clientId: string, id: string, expectedRevision: number): Promise<void> {
     let localDate = "";
     await this.ready().writer.write(async (tx) => {
@@ -249,11 +286,13 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
         const position = next.get(slot)!;
         next.set(slot, position + 1);
         await tx.run(`INSERT INTO dev_food_diary_entries (id, workspace_id, client_id, local_date, slot, position, source_kind, source_id, name, brand,
-            basis_unit, basis_amount_x10, per_kcal_x10, per_protein_x10, per_fat_x10, per_carbs_x10, quantity_x10, ingredients_json, revision,
-            created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+            basis_unit, basis_amount_x10, per_kcal_x10, per_protein_x10, per_fat_x10, per_carbs_x10, quantity_x10, ingredients_json,
+            override_base_quantity_x10, override_kcal_x10, override_protein_x10, override_fat_x10, override_carbs_x10, revision,
+            created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
         [id, this.workspaceId, clientId, request.toDate, slot, position, snapshot.source.kind, snapshot.source.id, snapshot.name, snapshot.brand,
           snapshot.basis.unit, snapshot.basis.amountX10, snapshot.perBasis.kcalX10, snapshot.perBasis.proteinX10, snapshot.perBasis.fatX10,
-          snapshot.perBasis.carbsX10, snapshot.quantityX10, JSON.stringify(snapshot.ingredients), stamp, stamp]);
+          snapshot.perBasis.carbsX10, snapshot.quantityX10, JSON.stringify(snapshot.ingredients), entry.override?.baseQuantityX10 ?? null, entry.override?.values.kcalX10 ?? null,
+          entry.override?.values.proteinX10 ?? null, entry.override?.values.fatX10 ?? null, entry.override?.values.carbsX10 ?? null, stamp, stamp]);
         copied += 1;
       }
       return { copied, replaced };

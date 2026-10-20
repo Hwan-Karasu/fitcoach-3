@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calcEat, calcMacros, calcNeat, calcRee, deriveCalc, goalDelta, type CalcProfile } from "../apps/mobile/src/features/nutrition/domain/CalcRules.ts";
+import { calcEat, calcMacros, calcNeat, calcRee, deriveCalc, goalDelta, rebalanceMacros, type CalcProfile } from "../apps/mobile/src/features/nutrition/domain/CalcRules.ts";
 
 /** Профиль экрана «Расчёт» из спецификации и скриншотов Build 120: муж., 37 лет, 181 см, умеренный образ жизни, 3 тренировки по 60 мин, средняя интенсивность. */
 const PROFILE: CalcProfile = { goal: "MAINTENANCE", activity: "MODERATE", workoutsPerWeek: 3, minutes: 60, intensity: "MEDIUM", stepKcal: 100 };
@@ -65,4 +65,26 @@ test("БЖУ при поддержании 2289 ккал и сухой масс�
   assert.deepEqual(calcMacros(null, 2289, "MAINTENANCE"), { protein: null, fat: null, carbs: null });
   assert.equal(calcMacros(67.9, 2289, "GAIN").protein, 136, "2,0 г на кг сухой массы");
   assert.equal(calcMacros(67.9, 2289, "LOSS").protein, 143, "2,1 г на кг сухой массы");
+});
+
+test("формулы 2.0 (applyManualMacros/calcCorrMacros): введённые тренером значения фиксируются, остальное пересчитывается так, чтобы попасть в 2289 ккал", () => {
+  const defaults = { protein: 115, fat: 54, carbs: 336 };
+  const none = { protein: null, fat: null, carbs: null };
+  assert.deepEqual(rebalanceMacros(2289, defaults, none), defaults, "ничего не введено — расчётные значения");
+  assert.deepEqual(rebalanceMacros(2289, defaults, { ...none, protein: 140 }), { protein: 140, fat: 54, carbs: 311 }, "белок 140: жир по расчёту, углеводы добирают: (2289−560−486)/4 = 310,75");
+  assert.deepEqual(rebalanceMacros(2289, defaults, { ...none, fat: 70 }), { protein: 115, fat: 70, carbs: 300 }, "жир 70: (2289−460−630)/4 = 299,75");
+  assert.deepEqual(rebalanceMacros(2289, defaults, { ...none, carbs: 300 }), { protein: 115, fat: 70, carbs: 300 }, "углеводы 300 остаются как введены, жир добирает: (2289−460−1200)/9 = 69,9");
+  assert.deepEqual(rebalanceMacros(2289, defaults, { protein: 140, fat: 70, carbs: null }), { protein: 140, fat: 70, carbs: 275 }, "Б и Ж введены — углеводы: (2289−560−630)/4 = 274,75");
+  assert.deepEqual(rebalanceMacros(2289, defaults, { protein: 140, fat: null, carbs: 300 }), { protein: 140, fat: 59, carbs: 300 }, "Б и У введены — жир: (2289−560−1200)/9 = 58,8");
+  assert.deepEqual(rebalanceMacros(2289, defaults, { protein: null, fat: 70, carbs: 300 }), { protein: 115, fat: 70, carbs: 300 }, "Ж и У введены — белок: (2289−630−1200)/4 = 114,75");
+  assert.deepEqual(rebalanceMacros(2289, defaults, { protein: 140, fat: 70, carbs: 300 }), { protein: 140, fat: 70, carbs: 300 }, "все три введены — ровно как введены");
+});
+
+test("пересчёт макро: отрицательный остаток — 0; без калорий или расчётных значений недостающее неизвестно (null), а не выдуманное", () => {
+  const defaults = { protein: 115, fat: 54, carbs: 336 };
+  const none = { protein: null, fat: null, carbs: null };
+  assert.deepEqual(rebalanceMacros(2289, defaults, { ...none, protein: 600 }), { protein: 600, fat: 54, carbs: 0 }, "(2289−2400−486)/4 < 0 → 0");
+  assert.deepEqual(rebalanceMacros(null, defaults, { protein: 140, fat: 70, carbs: null }), { protein: 140, fat: 70, carbs: null }, "калорийного ориентира нет — недостающее не считается");
+  assert.deepEqual(rebalanceMacros(2289, none, { ...none, protein: 140 }), { protein: 140, fat: null, carbs: null }, "нет сухой массы — расчётного жира нет, углеводы не определить");
+  assert.deepEqual(rebalanceMacros(2289, none, { protein: 140, fat: 70, carbs: null }), { protein: 140, fat: 70, carbs: 275 }, "две введённые не нуждаются в расчётных значениях");
 });

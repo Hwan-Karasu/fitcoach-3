@@ -200,4 +200,25 @@ export const devNutritionCatalog: readonly MigrationStep[] = [{
     `ALTER TABLE dev_nutrition_calc_profiles DROP COLUMN age`,
     `ALTER TABLE dev_nutrition_calc_profiles DROP COLUMN height_x10`,
   ],
+}, {
+  version: 8,
+  checksum: "n08-dev-nutrition-v8-diary-entry-nutrient-override-20261020",
+  statements: [
+    // Ручная правка К/Б/Ж/У только этой дневной записи (UX v1.1 NUT-FS-27…34, решение владельца; поправка к Product §49.5.2 готовится). Каталог и снимок продукта не меняются.
+    // NULL = показатель не правился (берётся из снимка); база — количество, на которое введены значения: при смене массы правка масштабируется пропорционально.
+    `ALTER TABLE dev_food_diary_entries ADD COLUMN override_base_quantity_x10 INTEGER CHECK (override_base_quantity_x10 IS NULL OR override_base_quantity_x10 > 0)`,
+    `ALTER TABLE dev_food_diary_entries ADD COLUMN override_kcal_x10 INTEGER CHECK (override_kcal_x10 IS NULL OR override_kcal_x10 >= 0)`,
+    `ALTER TABLE dev_food_diary_entries ADD COLUMN override_protein_x10 INTEGER CHECK (override_protein_x10 IS NULL OR override_protein_x10 >= 0)`,
+    `ALTER TABLE dev_food_diary_entries ADD COLUMN override_fat_x10 INTEGER CHECK (override_fat_x10 IS NULL OR override_fat_x10 >= 0)`,
+    `ALTER TABLE dev_food_diary_entries ADD COLUMN override_carbs_x10 INTEGER CHECK (override_carbs_x10 IS NULL OR override_carbs_x10 >= 0)`,
+    // Согласованность: база задана тогда и только тогда, когда правится хотя бы один показатель (CASE: NULL в WHEN не срабатывает).
+    `CREATE TRIGGER dev_food_diary_override_insert BEFORE INSERT ON dev_food_diary_entries
+      WHEN CASE WHEN NEW.override_base_quantity_x10 IS NULL THEN (NEW.override_kcal_x10 IS NOT NULL OR NEW.override_protein_x10 IS NOT NULL OR NEW.override_fat_x10 IS NOT NULL OR NEW.override_carbs_x10 IS NOT NULL)
+        ELSE (NEW.override_kcal_x10 IS NULL AND NEW.override_protein_x10 IS NULL AND NEW.override_fat_x10 IS NULL AND NEW.override_carbs_x10 IS NULL) END
+      BEGIN SELECT RAISE(ABORT, 'DIARY_OVERRIDE_INVALID'); END`,
+    `CREATE TRIGGER dev_food_diary_override_update BEFORE UPDATE ON dev_food_diary_entries
+      WHEN CASE WHEN NEW.override_base_quantity_x10 IS NULL THEN (NEW.override_kcal_x10 IS NOT NULL OR NEW.override_protein_x10 IS NOT NULL OR NEW.override_fat_x10 IS NOT NULL OR NEW.override_carbs_x10 IS NOT NULL)
+        ELSE (NEW.override_kcal_x10 IS NULL AND NEW.override_protein_x10 IS NULL AND NEW.override_fat_x10 IS NULL AND NEW.override_carbs_x10 IS NULL) END
+      BEGIN SELECT RAISE(ABORT, 'DIARY_OVERRIDE_INVALID'); END`,
+  ],
 }];

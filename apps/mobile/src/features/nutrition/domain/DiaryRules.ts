@@ -8,6 +8,7 @@ export type DiaryRuleError =
   | "DIARY_SLOT_INVALID"
   | "DIARY_SNAPSHOT_INVALID"
   | "DIARY_COPY_SAME_TARGET"
+  | "DIARY_OVERRIDE_INVALID"
   | "WATER_INVALID"
   | "INVALID_PORTION";
 
@@ -103,4 +104,23 @@ export function rankUsage(entries: readonly DiaryEntry[], order: "recent" | "fre
   const recency = (a: UsageItem & { seq: number }, b: UsageItem & { seq: number }) => b.lastDate.localeCompare(a.lastDate) || b.seq - a.seq;
   return [...items.values()].sort((a, b) => order === "frequent" ? b.count - a.count || recency(a, b) : recency(a, b)).slice(0, limit)
     .map((item) => ({ kind: item.kind, id: item.id, name: item.name, count: item.count, lastDate: item.lastDate }));
+}
+
+const OVERRIDE_MAX_X10 = 10_000_000;
+
+/** Проверка правки: хотя бы один показатель задан, значения — целые десятые ≥ 0 (явный 0 допустим); `null` — не правится. */
+export function assertOverride(values: Nutrients): void {
+  const parts = [values.kcalX10, values.proteinX10, values.fatX10, values.carbsX10];
+  if (parts.every((value) => value === null) || parts.some((value) => value !== null && (!Number.isInteger(value) || value < 0 || value > OVERRIDE_MAX_X10))) fail("DIARY_OVERRIDE_INVALID");
+}
+
+/**
+ * Действующие значения записи: правленный показатель — значение правки, пропорционально масштабированное к текущему количеству (`правка × количество / база`),
+ * остальные — по каталогу. Неизвестный и не правленный показатель остаётся неизвестным (`null`), а не нулём.
+ */
+export function effectiveNutrients(catalog: Nutrients, override: { readonly baseQuantityX10: number; readonly values: Nutrients } | null, quantityX10: number): Nutrients {
+  if (override === null) return catalog;
+  const scaled = (value: number | null, fallback: number | null) => value === null ? fallback : Math.round((value * quantityX10) / override.baseQuantityX10);
+  return { kcalX10: scaled(override.values.kcalX10, catalog.kcalX10), proteinX10: scaled(override.values.proteinX10, catalog.proteinX10),
+    fatX10: scaled(override.values.fatX10, catalog.fatX10), carbsX10: scaled(override.values.carbsX10, catalog.carbsX10) };
 }

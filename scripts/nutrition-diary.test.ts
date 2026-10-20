@@ -293,3 +293,72 @@ test("NUT-FS-31: запись переносится в другой приём 
     await assert.rejects(diary.moveEntry(a.id, moved.id, moved.revision, "LATE" as never, NOW), code("DIARY_SLOT_INVALID"));
   } finally { await close(); }
 });
+
+test("NUT-FS-27…30, 33: ручная правка К/Б/Ж/У только у одной записи; пропорционально масштабируется с массой; «вернуть значения каталога» снимает", async () => {
+  const { clients, diary, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const b = await clients.create({ displayName: "SyntheticB" });
+    const mine = await diary.addEntry(a.id, { localDate: DAY, slot: "BREAKFAST", snapshot: snapshotOfFood(OATS, 500) }, NOW);
+    const twin = await diary.addEntry(a.id, { localDate: DAY, slot: "LUNCH", snapshot: snapshotOfFood(OATS, 500) }, NOW);
+    const other = await diary.addEntry(b.id, { localDate: DAY, slot: "BREAKFAST", snapshot: snapshotOfFood(OATS, 500) }, NOW);
+    assert.equal(mine.override ?? null, null);
+    assert.deepEqual(mine.snapshot.eaten, { kcalX10: 1800, proteinX10: 63, fatX10: 31, carbsX10: 300 }, "50 г овсянки по каталогу");
+
+    const edited = await diary.setOverride(a.id, mine.id, mine.revision, { kcalX10: 2000, proteinX10: null, fatX10: null, carbsX10: 250 }, NOW);
+    assert.deepEqual(edited.snapshot.eaten, { kcalX10: 2000, proteinX10: 63, fatX10: 31, carbsX10: 250 }, "изменены только калории и углеводы, остальное — по каталогу");
+    assert.deepEqual(edited.catalogEaten, { kcalX10: 1800, proteinX10: 63, fatX10: 31, carbsX10: 300 }, "значения каталога доступны для «Вернуть»");
+    assert.deepEqual(edited.override, { baseQuantityX10: 500, values: { kcalX10: 2000, proteinX10: null, fatX10: null, carbsX10: 250 } });
+    assert.equal(edited.revision, mine.revision + 1);
+    assert.deepEqual(edited.snapshot.perBasis, mine.snapshot.perBasis, "снимок продукта не переписан");
+
+    const day = await diary.listEntries(a.id, DAY, DAY);
+    assert.deepEqual(day.find((entry) => entry.id === twin.id)?.snapshot.eaten, twin.snapshot.eaten, "соседняя запись того же продукта не изменилась");
+    assert.deepEqual((await diary.listEntries(b.id, DAY, DAY))[0]?.snapshot.eaten, other.snapshot.eaten, "запись другого клиента не изменилась");
+    assert.equal(summarizeDay(DAY, day).totals.kcalX10, 2000 + 1800, "итог дня считается по значениям записи");
+
+    const doubled = await diary.updateQuantity(a.id, mine.id, edited.revision, 1000, NOW);
+    assert.deepEqual(doubled.snapshot.eaten, { kcalX10: 4000, proteinX10: 125, fatX10: 62, carbsX10: 500 }, "масса ×2 — правка масштабируется пропорционально: 2000→4000, 250→500");
+    assert.deepEqual(doubled.catalogEaten, { kcalX10: 3600, proteinX10: 125, fatX10: 62, carbsX10: 600 });
+
+    const reset = await diary.clearOverride(a.id, mine.id, doubled.revision, NOW);
+    assert.equal(reset.override ?? null, null);
+    assert.deepEqual(reset.snapshot.eaten, { kcalX10: 3600, proteinX10: 125, fatX10: 62, carbsX10: 600 }, "значения каталога на текущую массу");
+    await assert.rejects(diary.clearOverride(a.id, mine.id, doubled.revision, NOW), code("DIARY_STALE"));
+  } finally { await close(); }
+});
+
+test("NUT-FS-34: правка проверяется — пустая, отрицательная и нечисловая отклоняются; явный ноль допустим; чужая запись и устаревшая revision не правятся", async () => {
+  const { clients, diary, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const b = await clients.create({ displayName: "SyntheticB" });
+    const entry = await diary.addEntry(a.id, { localDate: DAY, slot: "SNACK", snapshot: snapshotOfFood(OATS, 500) }, NOW);
+    const none = { kcalX10: null, proteinX10: null, fatX10: null, carbsX10: null };
+    await assert.rejects(diary.setOverride(a.id, entry.id, entry.revision, none, NOW), code("DIARY_OVERRIDE_INVALID"), "ничего не задано — это не правка");
+    await assert.rejects(diary.setOverride(a.id, entry.id, entry.revision, { ...none, kcalX10: -1 }, NOW), code("DIARY_OVERRIDE_INVALID"));
+    await assert.rejects(diary.setOverride(a.id, entry.id, entry.revision, { ...none, kcalX10: 1.5 }, NOW), code("DIARY_OVERRIDE_INVALID"));
+    await assert.rejects(diary.setOverride(b.id, entry.id, entry.revision, { ...none, kcalX10: 100 }, NOW), code("DIARY_STALE"), "чужая запись");
+    await assert.rejects(diary.setOverride(a.id, entry.id, entry.revision + 5, { ...none, kcalX10: 100 }, NOW), code("DIARY_STALE"));
+    const zero = await diary.setOverride(a.id, entry.id, entry.revision, { ...none, fatX10: 0 }, NOW);
+    assert.equal(zero.snapshot.eaten.fatX10, 0, "явный ноль — осознанное значение, а не «нет данных»");
+    assert.equal(zero.snapshot.eaten.kcalX10, 1800, "не тронутое остаётся по каталогу");
+    const unknown = await diary.addEntry(a.id, { localDate: DAY, slot: "SNACK", snapshot: snapshotOfFood({ ...OATS, proteinX10: null }, 500) }, NOW);
+    const patched = await diary.setOverride(a.id, unknown.id, unknown.revision, { ...none, kcalX10: 900 }, NOW);
+    assert.equal(patched.snapshot.eaten.proteinX10, null, "неизвестный белок остаётся неизвестным, не нулём");
+  } finally { await close(); }
+});
+
+test("NUT-FS-33, 41: правка записи копируется вместе с приёмом и сохраняется при переносе в другой приём", async () => {
+  const { clients, diary, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticA" });
+    const entry = await diary.addEntry(client.id, { localDate: PREV, slot: "BREAKFAST", snapshot: snapshotOfFood(OATS, 500) }, NOW);
+    const edited = await diary.setOverride(client.id, entry.id, entry.revision, { kcalX10: 2000, proteinX10: null, fatX10: null, carbsX10: null }, NOW);
+    await diary.copyEntries(client.id, { fromDate: PREV, toDate: DAY, slot: "BREAKFAST", targetSlot: null, mode: "APPEND" }, NOW);
+    const copy = (await diary.listEntries(client.id, DAY, DAY))[0]!;
+    assert.deepEqual(copy.snapshot.eaten, edited.snapshot.eaten, "копия переносит фактическое значение, а не пересчитывает по каталогу");
+    const moved = await diary.moveEntry(client.id, copy.id, copy.revision, "DINNER", NOW);
+    assert.equal(moved.snapshot.eaten.kcalX10, 2000);
+  } finally { await close(); }
+});

@@ -1,3 +1,4 @@
+import type { Nutrients } from "./FoodModel.ts";
 import type { CopyEntriesRequest, CopyEntriesResult, DiaryEntry, DiaryEntryInput, MealSlot, WaterDay } from "./DiaryModel.ts";
 
 export interface DiaryCommittedChange {
@@ -19,6 +20,13 @@ export interface NutritionDiaryPort {
   addEntries(clientId: string, inputs: readonly DiaryEntryInput[], now?: Date): Promise<readonly DiaryEntry[]>;
   /** Исправляет только количество этой записи; снимок источника не переписывается (§49.5.2). */
   updateQuantity(clientId: string, id: string, expectedRevision: number, quantityX10: number, now?: Date): Promise<DiaryEntry>;
+  /**
+   * Ручная правка К/Б/Ж/У только этой записи (на её текущее количество; `null` — показатель не правится). Каталог, снимок, другие записи и клиенты не меняются;
+   * при смене количества правка масштабируется пропорционально. Нужен хотя бы один показатель, иначе `DIARY_OVERRIDE_INVALID`.
+   */
+  setOverride(clientId: string, id: string, expectedRevision: number, values: Nutrients, now?: Date): Promise<DiaryEntry>;
+  /** «Вернуть значения каталога»: снимает правку, значения снова по снимку на текущее количество. Записи без правки — `DIARY_STALE` не бросает, но revision должна совпасть. */
+  clearOverride(clientId: string, id: string, expectedRevision: number, now?: Date): Promise<DiaryEntry>;
   /** Переносит запись в другой приём той же даты (в конец приёма): снимок и количество не меняются, дубля нет. Тот же приём — без изменений; устаревшая revision — `DIARY_STALE`. */
   moveEntry(clientId: string, id: string, expectedRevision: number, slot: MealSlot, now?: Date): Promise<DiaryEntry>;
   /** Явное удаление записи; последняя запись дня выводит дату из учёта, вода остаётся. */

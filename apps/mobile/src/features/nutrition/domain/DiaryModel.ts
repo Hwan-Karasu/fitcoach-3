@@ -5,6 +5,15 @@ import type { FoodSnapshot } from "./FoodSnapshot.ts";
 export const MEAL_SLOTS = ["BREAKFAST", "LUNCH", "DINNER", "SNACK"] as const;
 export type MealSlot = typeof MEAL_SLOTS[number];
 
+/**
+ * Ручная правка пищевой ценности только этой записи (UX v1.1): значения введены на количество `baseQuantityX10`; `null` — показатель не правился и берётся из снимка продукта.
+ * При смене количества правка масштабируется пропорционально. Каталог, снимок и другие записи не затрагиваются.
+ */
+export interface EntryOverride {
+  readonly baseQuantityX10: number;
+  readonly values: Nutrients;
+}
+
 /** Пищевая запись дня клиента: снимок продукта или рецепта на момент записи (§49.5.1) и фактическое количество. */
 export interface DiaryEntry {
   readonly id: string;
@@ -13,7 +22,12 @@ export interface DiaryEntry {
   readonly slot: MealSlot;
   /** Порядок внутри приёма пищи. */
   readonly position: number;
+  /** `snapshot.eaten` — действующие значения записи (с учётом правки); снимок продукта (`perBasis`) остаётся неизменным. */
   readonly snapshot: FoodSnapshot;
+  /** Правка пищевой ценности этой записи; `null`/нет — значения по каталогу на момент добавления. */
+  readonly override?: EntryOverride | null;
+  /** Значения по снимку продукта на текущее количество, без правки (для «Вернуть значения каталога»). */
+  readonly catalogEaten?: Nutrients;
   readonly revision: number;
 }
 

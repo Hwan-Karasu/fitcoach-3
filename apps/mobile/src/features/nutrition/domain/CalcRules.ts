@@ -111,6 +111,39 @@ export function calcMacros(leanMassKg: number | null, calories: number | null, g
   return { protein, fat, carbs: Math.max(0, Math.round((calories - protein * 4 - fat * 9) / 4)) };
 }
 
+/**
+ * Пересчёт макронутриентов вокруг калорийного ориентира `calories` при ручном вводе тренера (формулы 2.0: applyManualMacros / calcCorrMacros). Введённое фиксируется как есть;
+ * недостающее считается так, чтобы попасть в калории (1 г белка и углеводов = 4 ккал, жира = 9 ккал), остаток не меньше 0:
+ * — введено два показателя: третий — остаток калорий; — введён один: белок и жир берут расчётные значения, а добирает последний из остальных (при вводе белка или жира — углеводы,
+ *   при вводе углеводов — жир; в 2.0 здесь введённые углеводы затирались, это не переносится); — введено три: ровно как введены; — ничего: расчётные значения.
+ * Нет калорий или расчётных значений, нужных для пересчёта, — недостающее `null`, а не выдуманное.
+ */
+export function rebalanceMacros(calories: number | null, defaults: MacroGrams, manual: MacroGrams): MacroGrams {
+  const set = (value: number | null): value is number => value !== null;
+  const rest = (value: number, kcalPerG: number) => Math.max(0, Math.round(value / kcalPerG));
+  const { protein: mp, fat: mf, carbs: mc } = manual;
+  const count = [mp, mf, mc].filter(set).length;
+  if (count === 0) return defaults;
+  if (count === 3) return { protein: mp, fat: mf, carbs: mc };
+  if (count === 2) {
+    if (!set(calories)) return { protein: mp, fat: mf, carbs: mc };
+    if (!set(mc)) return { protein: mp, fat: mf, carbs: rest(calories - (mp as number) * 4 - (mf as number) * 9, 4) };
+    if (!set(mf)) return { protein: mp, fat: rest(calories - (mp as number) * 4 - mc * 4, 9), carbs: mc };
+    return { protein: rest(calories - (mf as number) * 9 - mc * 4, 4), fat: mf, carbs: mc };
+  }
+  // введён один показатель
+  if (set(mp)) {
+    const fat = defaults.fat;
+    return { protein: mp, fat, carbs: set(calories) && fat !== null ? rest(calories - mp * 4 - fat * 9, 4) : null };
+  }
+  if (set(mf)) {
+    const protein = defaults.protein;
+    return { protein, fat: mf, carbs: set(calories) && protein !== null ? rest(calories - protein * 4 - mf * 9, 4) : null };
+  }
+  const protein = defaults.protein;
+  return { protein, fat: set(calories) && protein !== null ? rest(calories - protein * 4 - (mc as number) * 4, 9) : null, carbs: mc };
+}
+
 export type CalcRuleError = "CALC_PROFILE_INVALID" | "CALC_STEPS_INVALID";
 
 const isWhole = (value: number, min: number, max: number) => Number.isInteger(value) && value >= min && value <= max;

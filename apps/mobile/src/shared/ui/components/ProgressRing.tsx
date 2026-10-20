@@ -28,5 +28,5 @@ export function ProgressRing({ fraction, size = 112, stroke = 12, accessibilityL
 
 const styles = StyleSheet.create({
   svg: { position: "absolute" },
-  center: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+  center: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
 });

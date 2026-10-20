@@ -5,7 +5,8 @@ import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvid
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import type { FoodBasisUnit, FoodProduct } from "../domain/FoodModel.ts";
 import type { FoodCatalogPort } from "../domain/FoodCatalogPort.ts";
-import { parseDecimalX10 } from "../domain/FoodRules.ts";
+import { kcalFromMacrosX10 } from "../domain/EnergyRules.ts";
+import { formatDecimalX10, parseDecimalX10 } from "../domain/FoodRules.ts";
 import { nutritionErrorText } from "./nutritionFormat.ts";
 
 const units: readonly Readonly<{ id: FoodBasisUnit; label: string; amount: string }>[] = [
@@ -32,12 +33,18 @@ export function FoodEditorScreen({ foods, initialName = "", onSaved }: Readonly<
   const [unit, setUnit] = useState<FoodBasisUnit>("G");
   const [amount, setAmount] = useState("100");
   const [values, setValues] = useState({ kcal: "", protein: "", fat: "", carbs: "" });
+  /** Калории считаются сами из Б/Ж/У (4/9/4), пока не введены вручную; очистка поля возвращает авторасчёт. */
+  const [kcalManual, setKcalManual] = useState(false);
+  const macro = (text: string) => text.trim() === "" ? null : parseDecimalX10(text);
+  const autoKcalX10 = kcalFromMacrosX10({ proteinX10: macro(values.protein), fatX10: macro(values.fat), carbsX10: macro(values.carbs) });
+  const kcalAuto = !kcalManual && autoKcalX10 !== null;
+  const kcalText = kcalAuto ? formatDecimalX10(autoKcalX10) : values.kcal;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
     const amountX10 = parseDecimalX10(amount);
-    const parsed = { kcalX10: optionalValue(values.kcal), proteinX10: optionalValue(values.protein), fatX10: optionalValue(values.fat), carbsX10: optionalValue(values.carbs) };
+    const parsed = { kcalX10: optionalValue(kcalText), proteinX10: optionalValue(values.protein), fatX10: optionalValue(values.fat), carbsX10: optionalValue(values.carbs) };
     if (amountX10 === null || amountX10 <= 0) { setError("Укажите, на какое количество даны значения, например 100."); return; }
     const pieceX10 = optionalValue(pieceMass);
     if (pieceX10 === "invalid") { setError("Масса одной штуки — число, например 45."); return; }
@@ -68,7 +75,8 @@ export function FoodEditorScreen({ foods, initialName = "", onSaved }: Readonly<
       </View>
       <TextField label={`Количество, ${unit === "G" ? "г" : unit === "ML" ? "мл" : "порц."}`} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" required />
       <Text style={[styles.hint, { color: colors.textSecondary }]}>Заполните то, что известно. Пустое значение остаётся «нет данных», а не нулём.</Text>
-      <TextField label="Калории, ккал" value={values.kcal} onChangeText={(kcal) => setValues({ ...values, kcal })} keyboardType="decimal-pad" />
+      <TextField label={kcalAuto ? "Калории, ккал (авто из Б/Ж/У)" : "Калории, ккал"} value={kcalText} onChangeText={(kcal) => { setValues({ ...values, kcal }); setKcalManual(kcal.trim() !== ""); }} keyboardType="decimal-pad"
+        hint="1 г белка = 4 ккал, жира = 9, углеводов = 4. Можно ввести своё число — оно заменит авторасчёт." />
       <TextField label="Белки, г" value={values.protein} onChangeText={(protein) => setValues({ ...values, protein })} keyboardType="decimal-pad" />
       <TextField label="Жиры, г" value={values.fat} onChangeText={(fat) => setValues({ ...values, fat })} keyboardType="decimal-pad" />
       <TextField label="Углеводы, г" value={values.carbs} onChangeText={(carbs) => setValues({ ...values, carbs })} keyboardType="decimal-pad" />
