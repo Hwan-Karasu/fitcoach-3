@@ -75,7 +75,7 @@ export function affectedPeriod(versions: readonly TargetVersion[], effectiveFrom
   return { from: effectiveFrom, to: previous.toISOString().slice(0, 10) };
 }
 
-const NUTRIENT_OF: Readonly<Record<TargetMetric, keyof Nutrients>> = { kcal: "kcalX10", protein: "proteinX10", fat: "fatX10", carbs: "carbsX10" };
+export const NUTRIENT_OF: Readonly<Record<TargetMetric, keyof Nutrients>> = { kcal: "kcalX10", protein: "proteinX10", fat: "fatX10", carbs: "carbsX10" };
 
 /** Сравнение одного показателя: нет коридора или неизвестный факт — `UNKNOWN`; границы входят в коридор (§49.8.2). */
 export function judge(range: TargetRange | null, valueX10: number | null): RangeVerdict {
