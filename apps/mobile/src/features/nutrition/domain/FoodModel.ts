@@ -22,7 +22,15 @@ export interface FoodBasis {
 }
 
 /** Собственный продукт общего локального каталога (§49.3); дневные записи будут хранить снимок, а не ссылку на эти значения. */
-export interface FoodProduct extends FoodBasis, Nutrients {
+/** Необязательные сведения карточки: штрихкод — только локальный ключ поиска (§49.6), масса штуки — для перевода г↔шт; `null` — не задано. */
+export interface FoodExtras {
+  readonly barcode?: string | null;
+  readonly gramsPerPieceX10?: number | null;
+}
+
+export interface FoodProduct extends FoodBasis, Nutrients, FoodExtras {
+  /** В избранном (флаг каталога, на историю дневника не влияет). */
+  readonly favorite?: boolean;
   readonly id: string;
   readonly name: string;
   readonly brand: string | null;
@@ -31,7 +39,7 @@ export interface FoodProduct extends FoodBasis, Nutrients {
   readonly archivedAt: string | null;
 }
 
-export interface FoodInput extends FoodBasis, Nutrients {
+export interface FoodInput extends FoodBasis, Nutrients, FoodExtras {
   readonly name: string;
   readonly brand: string | null;
 }

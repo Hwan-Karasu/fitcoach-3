@@ -1,3 +1,11 @@
+## 2026-10-20 — NUT-UX-PARITY-01, срез S1: каталог — избранное, кулинарная книга, штрихкод, граммы на штуку, описание рецепта
+
+- Решения владельца (2026-10-20): формулы Build 120 переносим; избранное, книга, мультислот, г/шт, штрихкод, описание рецепта — делаем; P-46 остаётся под gate build120.
+- Миграция `nutrition_schema_migrations` v5 (dev, не D01 production): `dev_food_products` + `barcode`, `grams_per_piece_x10` (NULL ≠ 0), `favorite`; `dev_recipes` + `description`, `favorite`, `in_cookbook`.
+- Порты: `FoodCatalogPort.setFavorite`, `search(query, filter)` (штрихкод ищется локально, §49.6); `RecipeCatalogPort.setFavorite/setInCookbook`, фильтры `FAVORITES`/`COOKBOOK`. Флаги не меняют revision и снимки дневника.
+- Правила: `gramsFromPieces`/`piecesFromGrams` (неизвестная масса штуки → `PIECE_MASS_UNKNOWN`), проверка штрихкода и массы штуки, описание ≤ 500.
+- Тесты: `nutrition-food-catalog` 10, `nutrition-recipes` 8 (новые: г↔шт 2 шт×45 г=90 г, штрихкод, избранное, книга, снимок не зависит от флагов). UI (S2) не начат.
+
 ## 2026-10-20 — NUT-UX-PARITY-01, срез A1: матрица P-01…P-48, копирование приёмов, быстрая вода
 
 - Входы: контракт паритета v1.0, Product §49 (§49.2, §49.5 п. 6), Build 120 `e116b42` (read-only). Матрица — `docs/ui/NUTRITION_PARITY_MATRIX.md`.

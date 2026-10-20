@@ -1,5 +1,7 @@
 import type { FoodInput, FoodProduct } from "./FoodModel.ts";
 
+export type FoodCatalogFilter = "ALL" | "FAVORITES";
+
 export interface FoodCatalogCommittedChange {
   readonly foodId: string;
 }
@@ -8,8 +10,10 @@ export interface FoodCatalogCommittedChange {
  * Локальный каталог собственных продуктов (§49.3). Ошибки: FoodRuleError, FOOD_STALE (нет записи или устарела revision).
  */
 export interface FoodCatalogPort {
-  /** Активные продукты; `query` — подстрока названия или марки без учёта регистра. Архивные не возвращаются. */
-  search(query?: string): Promise<readonly FoodProduct[]>;
+  /** Активные продукты; `query` — подстрока названия, марки или штрихкода без учёта регистра. Архивные не возвращаются. */
+  search(query?: string, filter?: FoodCatalogFilter): Promise<readonly FoodProduct[]>;
+  /** Флаг «избранное»: не меняет значения продукта и revision; скрытый продукт и неизвестный id — `FOOD_STALE`. */
+  setFavorite(id: string, value: boolean, now?: Date): Promise<FoodProduct>;
   /** Продукт по id, в том числе скрытый: история использования его читает. */
   get(id: string): Promise<FoodProduct | null>;
   create(input: FoodInput, now?: Date): Promise<FoodProduct>;

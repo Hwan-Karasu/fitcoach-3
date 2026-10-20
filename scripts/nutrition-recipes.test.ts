@@ -143,3 +143,29 @@ test("N01 миграции: рецепты работают на БД, где v1
     assert.equal(recipe.ingredients.length, 1);
   } finally { await recipes.close(); await foods.close(); await shared.release(); }
 });
+
+test("P-32/P-30/P-34: описание, избранное и кулинарная книга рецепта; флаги не меняют revision и не трогают снимки", async () => {
+  const { recipes, oats, milk, close } = await stores();
+  try {
+    const created = await recipes.create({ ...porridge(oats.id, milk.id), description: "  Варить 10 минут  " }, NOW);
+    assert.equal(created.description, "Варить 10 минут");
+    assert.equal(created.favorite, false);
+    assert.equal(created.inCookbook, false);
+    const snapshotBefore = snapshotOfRecipe(created, "PORTION", 10);
+
+    const inBook = await recipes.setInCookbook(created.id, true, NOW);
+    const starred = await recipes.setFavorite(created.id, true, NOW);
+    assert.deepEqual([inBook.inCookbook, starred.favorite, starred.revision], [true, true, created.revision]);
+    assert.deepEqual((await recipes.search("", "COOKBOOK")).map((recipe) => recipe.id), [created.id]);
+    assert.deepEqual((await recipes.search("", "FAVORITES")).map((recipe) => recipe.id), [created.id]);
+    assert.deepEqual(snapshotOfRecipe(starred, "PORTION", 10), snapshotBefore, "снимок для дневника не зависит от флагов");
+
+    const edited = await recipes.update(created.id, created.revision, { ...porridge(oats.id, milk.id), description: null }, NOW);
+    assert.equal(edited.description, null);
+    assert.deepEqual([edited.favorite, edited.inCookbook], [true, true], "правка состава не снимает флаги");
+    await recipes.setInCookbook(created.id, false, NOW);
+    assert.deepEqual(await recipes.search("", "COOKBOOK"), []);
+    assert.throws(() => validateRecipe({ ...porridge(oats.id, milk.id), description: "а".repeat(501) }), code("RECIPE_DESCRIPTION_INVALID"));
+    await assert.rejects(recipes.setFavorite("no-such-recipe", true, NOW), code("RECIPE_STALE"));
+  } finally { await close(); }
+});

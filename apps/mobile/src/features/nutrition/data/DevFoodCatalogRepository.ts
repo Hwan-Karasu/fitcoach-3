@@ -3,18 +3,22 @@ import { SharedSqliteDatabase } from "../../../shared/db/SharedSqliteDatabase.ts
 import { UUID_V4_SQL } from "../../../shared/db/SqlIds.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
-import type { FoodCatalogCommittedChange, FoodCatalogPort } from "../domain/FoodCatalogPort.ts";
+import type { FoodCatalogCommittedChange, FoodCatalogFilter, FoodCatalogPort } from "../domain/FoodCatalogPort.ts";
 import type { FoodInput, FoodProduct } from "../domain/FoodModel.ts";
 import { validateFood } from "../domain/FoodRules.ts";
 import { DEV_NUTRITION_LEDGER, devNutritionCatalog } from "./DevNutritionCatalog.ts";
 
 const columns = `id, name, brand, basis_unit AS unit, basis_amount_x10 AS amountX10, kcal_x10 AS kcalX10,
-  protein_x10 AS proteinX10, fat_x10 AS fatX10, carbs_x10 AS carbsX10, revision, archived_at AS archivedAt`;
+  protein_x10 AS proteinX10, fat_x10 AS fatX10, carbs_x10 AS carbsX10, barcode, grams_per_piece_x10 AS gramsPerPieceX10, favorite,
+  revision, archived_at AS archivedAt`;
+
+type FoodRow = Omit<FoodProduct, "favorite"> & { readonly favorite: number };
+const toFood = (row: FoodRow): FoodProduct => ({ ...row, favorite: row.favorite === 1 });
 
 async function byId(tx: SqliteStatementPort, workspaceId: string, id: string): Promise<FoodProduct> {
-  const row = await tx.first<FoodProduct>(`SELECT ${columns} FROM dev_food_products WHERE workspace_id = ? AND id = ?`, [workspaceId, id]);
+  const row = await tx.first<FoodRow>(`SELECT ${columns} FROM dev_food_products WHERE workspace_id = ? AND id = ?`, [workspaceId, id]);
   if (row === null) throw new Error("FOOD_STALE");
-  return row;
+  return toFood(row);
 }
 
 /** Explicitly dev-only new-install store sharing the clients dev file. */
@@ -70,19 +74,21 @@ export class DevFoodCatalogRepository implements FoodCatalogPort {
     }
   }
 
-  async search(query = ""): Promise<readonly FoodProduct[]> {
-    const rows = await this.ready().connection.all<FoodProduct>(`SELECT ${columns} FROM dev_food_products
-      WHERE workspace_id = ? AND archived_at IS NULL`, [this.workspaceId]);
+  async search(query = "", filter: FoodCatalogFilter = "ALL"): Promise<readonly FoodProduct[]> {
+    const rows = (await this.ready().connection.all<FoodRow>(`SELECT ${columns} FROM dev_food_products
+      WHERE workspace_id = ? AND archived_at IS NULL AND (? = 'ALL' OR favorite = 1)`, [this.workspaceId, filter])).map(toFood);
     // SQLite `lower` не знает кириллицу — фильтр и порядок в JS.
     const needle = query.trim().toLocaleLowerCase("ru");
     return rows
-      .filter((row) => needle === "" || row.name.toLocaleLowerCase("ru").includes(needle) || (row.brand ?? "").toLocaleLowerCase("ru").includes(needle))
+      .filter((row) => needle === "" || row.name.toLocaleLowerCase("ru").includes(needle) || (row.brand ?? "").toLocaleLowerCase("ru").includes(needle)
+        || (row.barcode ?? "").toLocaleLowerCase("ru").includes(needle))
       .sort((a, b) => a.name.localeCompare(b.name, "ru") || a.id.localeCompare(b.id));
   }
 
   async get(id: string): Promise<FoodProduct | null> {
-    return this.ready().connection.first<FoodProduct>(`SELECT ${columns} FROM dev_food_products WHERE workspace_id = ? AND id = ?`,
+    const row = await this.ready().connection.first<FoodRow>(`SELECT ${columns} FROM dev_food_products WHERE workspace_id = ? AND id = ?`,
       [this.workspaceId, id]);
+    return row === null ? null : toFood(row);
   }
 
   async create(input: FoodInput, now: Date = new Date()): Promise<FoodProduct> {
@@ -92,9 +98,9 @@ export class DevFoodCatalogRepository implements FoodCatalogPort {
       if (!id) throw new Error("FOOD_ID_UNAVAILABLE");
       const stamp = now.toISOString();
       await tx.run(`INSERT INTO dev_food_products (id, workspace_id, name, brand, basis_unit, basis_amount_x10, kcal_x10, protein_x10,
-          fat_x10, carbs_x10, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+          fat_x10, carbs_x10, barcode, grams_per_piece_x10, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
       [id, this.workspaceId, valid.name, valid.brand, valid.unit, valid.amountX10, valid.kcalX10, valid.proteinX10, valid.fatX10,
-        valid.carbsX10, stamp, stamp]);
+        valid.carbsX10, valid.barcode ?? null, valid.gramsPerPieceX10 ?? null, stamp, stamp]);
       return byId(tx, this.workspaceId, id);
     });
     this.publish({ foodId: created.id });
@@ -105,15 +111,29 @@ export class DevFoodCatalogRepository implements FoodCatalogPort {
     const valid = validateFood(input);
     const updated = await this.ready().writer.write(async (tx) => {
       const result = await tx.run(`UPDATE dev_food_products SET name = ?, brand = ?, basis_unit = ?, basis_amount_x10 = ?, kcal_x10 = ?,
-          protein_x10 = ?, fat_x10 = ?, carbs_x10 = ?, revision = revision + 1, updated_at = ?
+          protein_x10 = ?, fat_x10 = ?, carbs_x10 = ?, barcode = ?, grams_per_piece_x10 = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ? AND archived_at IS NULL`,
       [valid.name, valid.brand, valid.unit, valid.amountX10, valid.kcalX10, valid.proteinX10, valid.fatX10, valid.carbsX10,
-        now.toISOString(), this.workspaceId, id, expectedRevision]);
+        valid.barcode ?? null, valid.gramsPerPieceX10 ?? null, now.toISOString(), this.workspaceId, id, expectedRevision]);
       if (result.changes !== 1) throw new Error("FOOD_STALE");
       return byId(tx, this.workspaceId, id);
     });
     this.publish({ foodId: id });
     return updated;
+  }
+
+  async setFavorite(id: string, value: boolean, now: Date = new Date()): Promise<FoodProduct> {
+    let changed = false;
+    const food = await this.ready().writer.write(async (tx) => {
+      const current = await byId(tx, this.workspaceId, id);
+      if (current.archivedAt !== null) throw new Error("FOOD_STALE");
+      if (current.favorite === value) return current;
+      await tx.run("UPDATE dev_food_products SET favorite = ?, updated_at = ? WHERE workspace_id = ? AND id = ?", [value ? 1 : 0, now.toISOString(), this.workspaceId, id]);
+      changed = true;
+      return byId(tx, this.workspaceId, id);
+    });
+    if (changed) this.publish({ foodId: id });
+    return food;
   }
 
   async archive(id: string, expectedRevision: number, now: Date = new Date()): Promise<FoodProduct> {

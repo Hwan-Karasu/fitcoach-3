@@ -5,6 +5,9 @@ export type FoodRuleError =
   | "FOOD_BASIS_INVALID"
   | "FOOD_NUTRIENT_INVALID"
   | "FOOD_NUTRIENTS_EMPTY"
+  | "FOOD_BARCODE_INVALID"
+  | "FOOD_PIECE_MASS_INVALID"
+  | "PIECE_MASS_UNKNOWN"
   | "INVALID_PORTION";
 
 function fail(code: FoodRuleError): never { throw new Error(code); }
@@ -40,10 +43,15 @@ export function validateFood(input: FoodInput): FoodInput {
     const value = input[key];
     if (value !== null && (!Number.isInteger(value) || value < 0 || value > NUTRIENT_MAX_X10)) fail("FOOD_NUTRIENT_INVALID");
   }
+  const barcode = input.barcode === undefined || input.barcode === null ? null : input.barcode.trim();
+  if (barcode !== null && barcode !== "" && !/^[0-9A-Za-z-]{4,32}$/u.test(barcode)) fail("FOOD_BARCODE_INVALID");
+  const piece = input.gramsPerPieceX10 ?? null;
+  if (piece !== null && (!Number.isInteger(piece) || piece <= 0 || piece > AMOUNT_MAX_X10)) fail("FOOD_PIECE_MASS_INVALID");
   // Продукт без единого значения бесполезен для расчёта: не выдумываем калории (§49.3.3).
   if (NUTRIENT_KEYS.every((key) => input[key] === null)) fail("FOOD_NUTRIENTS_EMPTY");
   return { name, brand: brand === "" ? null : brand, unit: input.unit, amountX10: input.amountX10,
-    kcalX10: input.kcalX10, proteinX10: input.proteinX10, fatX10: input.fatX10, carbsX10: input.carbsX10 };
+    kcalX10: input.kcalX10, proteinX10: input.proteinX10, fatX10: input.fatX10, carbsX10: input.carbsX10,
+    barcode: barcode === null || barcode === "" ? null : barcode, gramsPerPieceX10: piece };
 }
 
 /**
@@ -55,4 +63,18 @@ export function scaleNutrients(food: FoodBasis & Nutrients, quantityX10: number)
     || !Number.isInteger(food.amountX10) || food.amountX10 <= 0) fail("INVALID_PORTION");
   const scale = (value: number | null) => value === null ? null : Math.round((value * quantityX10) / food.amountX10);
   return { kcalX10: scale(food.kcalX10), proteinX10: scale(food.proteinX10), fatX10: scale(food.fatX10), carbsX10: scale(food.carbsX10) };
+}
+
+/** Штуки → граммы (десятые доли): `2 шт × 45 г = 90 г`. Масса штуки не задана — `PIECE_MASS_UNKNOWN`, а не «0 г» и не догадка. */
+export function gramsFromPieces(piecesX10: number, gramsPerPieceX10: number | null | undefined): number {
+  if (gramsPerPieceX10 === null || gramsPerPieceX10 === undefined) fail("PIECE_MASS_UNKNOWN");
+  if (!Number.isInteger(piecesX10) || piecesX10 <= 0) fail("INVALID_PORTION");
+  return Math.round((piecesX10 * gramsPerPieceX10) / 10);
+}
+
+/** Граммы → штуки (десятые доли); обратное к `gramsFromPieces`. */
+export function piecesFromGrams(gramsX10: number, gramsPerPieceX10: number | null | undefined): number {
+  if (gramsPerPieceX10 === null || gramsPerPieceX10 === undefined) fail("PIECE_MASS_UNKNOWN");
+  if (!Number.isInteger(gramsX10) || gramsX10 <= 0) fail("INVALID_PORTION");
+  return Math.round((gramsX10 * 10) / gramsPerPieceX10);
 }

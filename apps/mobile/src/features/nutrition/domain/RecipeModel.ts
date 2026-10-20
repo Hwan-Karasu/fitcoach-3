@@ -15,6 +15,11 @@ export interface Recipe {
   /** Масса готового блюда, г×10; `null` — не указана и не выдумывается по сырому весу (§49.4.3). */
   readonly cookedMassX10: number | null;
   readonly ingredients: readonly RecipeIngredient[];
+  /** Описание, до 500 знаков; `null` — не задано. */
+  readonly description?: string | null;
+  /** Флаги каталога: не меняют значений рецепта и не поднимают revision. */
+  readonly favorite?: boolean;
+  readonly inCookbook?: boolean;
   readonly revision: number;
   readonly archivedAt: string | null;
 }
@@ -23,5 +28,6 @@ export interface RecipeInput {
   readonly name: string;
   readonly servingsX10: number;
   readonly cookedMassX10: number | null;
+  readonly description?: string | null;
   readonly ingredients: readonly Readonly<{ foodId: string; quantityX10: number }>[];
 }

@@ -6,12 +6,14 @@ export type RecipeRuleError =
   | "RECIPE_NAME_INVALID"
   | "RECIPE_SERVINGS_INVALID"
   | "RECIPE_MASS_INVALID"
+  | "RECIPE_DESCRIPTION_INVALID"
   | "RECIPE_INGREDIENT_INVALID"
   | "INVALID_PORTION";
 
 function fail(code: RecipeRuleError): never { throw new Error(code); }
 
 const NAME_MAX = 80;
+const DESCRIPTION_MAX = 500;
 const INGREDIENTS_MAX = 50;
 const QUANTITY_MAX_X10 = 10_000_000;
 
@@ -22,6 +24,8 @@ export function validateRecipe(input: RecipeInput): RecipeInput {
   if (!Number.isInteger(input.servingsX10) || input.servingsX10 <= 0 || input.servingsX10 > 100_000) fail("RECIPE_SERVINGS_INVALID");
   if (input.cookedMassX10 !== null && (!Number.isInteger(input.cookedMassX10) || input.cookedMassX10 <= 0
     || input.cookedMassX10 > QUANTITY_MAX_X10)) fail("RECIPE_MASS_INVALID");
+  const description = input.description === undefined || input.description === null ? null : input.description.trim();
+  if (description !== null && description.length > DESCRIPTION_MAX) fail("RECIPE_DESCRIPTION_INVALID");
   if (input.ingredients.length === 0 || input.ingredients.length > INGREDIENTS_MAX) fail("RECIPE_INGREDIENT_INVALID");
   const seen = new Set<string>();
   for (const item of input.ingredients) {
@@ -29,7 +33,7 @@ export function validateRecipe(input: RecipeInput): RecipeInput {
       || item.quantityX10 <= 0 || item.quantityX10 > QUANTITY_MAX_X10) fail("RECIPE_INGREDIENT_INVALID");
     seen.add(item.foodId);
   }
-  return { name, servingsX10: input.servingsX10, cookedMassX10: input.cookedMassX10, ingredients: input.ingredients.map((item) => ({ ...item })) };
+  return { name, servingsX10: input.servingsX10, cookedMassX10: input.cookedMassX10, description: description === "" ? null : description, ingredients: input.ingredients.map((item) => ({ ...item })) };
 }
 
 /**

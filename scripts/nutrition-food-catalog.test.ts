@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { DevFoodCatalogRepository } from "../apps/mobile/src/features/nutrition/data/DevFoodCatalogRepository.ts";
 import type { FoodInput } from "../apps/mobile/src/features/nutrition/domain/FoodModel.ts";
-import { parseDecimalX10, scaleNutrients, validateFood } from "../apps/mobile/src/features/nutrition/domain/FoodRules.ts";
+import { gramsFromPieces, parseDecimalX10, piecesFromGrams, scaleNutrients, validateFood } from "../apps/mobile/src/features/nutrition/domain/FoodRules.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
 
@@ -90,4 +90,57 @@ test("N01 схема: CHECK не пускает продукт без значе
     assert.throws(() => insert(-1, null), /CHECK/u);
     insert(null, 0);
   } finally { await repository.close(); }
+});
+
+test("P-28: граммы ↔ штуки только при известной массе штуки; неизвестная масса — отказ, не ноль", () => {
+  assert.equal(gramsFromPieces(20, 450), 900, "2 шт × 45 г = 90 г");
+  assert.equal(piecesFromGrams(900, 450), 20, "90 г при 45 г в штуке = 2 шт");
+  assert.equal(gramsFromPieces(15, 450), 675, "1,5 шт × 45 г = 67,5 г");
+  assert.throws(() => gramsFromPieces(20, null), code("PIECE_MASS_UNKNOWN"));
+  assert.throws(() => piecesFromGrams(900, undefined), code("PIECE_MASS_UNKNOWN"));
+  assert.throws(() => gramsFromPieces(0, 450), code("INVALID_PORTION"));
+});
+
+test("P-27/P-28 ввод: штрихкод и масса штуки проверяются; пустое — null", () => {
+  const valid = validateFood({ ...OATS, barcode: " 4601234567890 ", gramsPerPieceX10: 450 });
+  assert.equal(valid.barcode, "4601234567890");
+  assert.equal(valid.gramsPerPieceX10, 450);
+  assert.equal(validateFood({ ...OATS, barcode: "  " }).barcode, null);
+  assert.equal(validateFood(OATS).gramsPerPieceX10, null);
+  assert.throws(() => validateFood({ ...OATS, barcode: "12" }), code("FOOD_BARCODE_INVALID"));
+  assert.throws(() => validateFood({ ...OATS, barcode: "ab cd" }), code("FOOD_BARCODE_INVALID"));
+  assert.throws(() => validateFood({ ...OATS, gramsPerPieceX10: 0 }), code("FOOD_PIECE_MASS_INVALID"));
+});
+
+test("P-27/P-30: штрихкод и масса штуки сохраняются и находятся поиском; избранное — флаг без смены revision", async () => {
+  const { repository } = await store();
+  const created = await repository.create({ ...OATS, barcode: "4601234567890", gramsPerPieceX10: 450 }, NOW);
+  assert.equal(created.barcode, "4601234567890");
+  assert.equal(created.gramsPerPieceX10, 450);
+  assert.equal(created.favorite, false);
+  assert.deepEqual((await repository.search("4601234")).map((food) => food.id), [created.id], "локальный поиск по штрихкоду");
+  const plain = await repository.create({ ...OATS, name: "Рис" }, NOW);
+  assert.equal(plain.barcode, null);
+  assert.equal(plain.gramsPerPieceX10, null, "масса штуки не придумывается");
+
+  const starred = await repository.setFavorite(created.id, true, NOW);
+  assert.equal(starred.favorite, true);
+  assert.equal(starred.revision, created.revision, "флаг не меняет значения продукта");
+  assert.deepEqual((await repository.search("", "FAVORITES")).map((food) => food.id), [created.id]);
+  assert.equal((await repository.search("")).length, 2);
+  assert.equal((await repository.setFavorite(created.id, false, NOW)).favorite, false);
+  assert.deepEqual(await repository.search("", "FAVORITES"), []);
+  await assert.rejects(repository.setFavorite("no-such-food", true, NOW), code("FOOD_STALE"));
+});
+
+test("P-30: правка продукта не сбрасывает избранное; скрытый продукт из избранного исчезает, но читается по id", async () => {
+  const { repository } = await store();
+  const created = await repository.create(OATS, NOW);
+  await repository.setFavorite(created.id, true, NOW);
+  const edited = await repository.update(created.id, created.revision, { ...OATS, name: "Овсянка 2", barcode: "99999", gramsPerPieceX10: 300 }, NOW);
+  assert.equal(edited.favorite, true);
+  assert.equal(edited.barcode, "99999");
+  await repository.archive(created.id, edited.revision, NOW);
+  assert.deepEqual(await repository.search("", "FAVORITES"), []);
+  assert.equal((await repository.get(created.id))?.favorite, true, "история и карточка читают скрытый продукт");
 });

@@ -145,4 +145,16 @@ export const devNutritionCatalog: readonly MigrationStep[] = [{
       FOREIGN KEY (client_id, workspace_id) REFERENCES dev_clients(id, workspace_id) ON DELETE RESTRICT
     )`,
   ],
+}, {
+  version: 5,
+  checksum: "n05-dev-nutrition-v5-catalog-favorites-cookbook-barcode-piece-20261020",
+  statements: [
+    // Штрихкод — локальный ключ поиска (§49.6); масса штуки NULL = не задана (не 0). Избранное и книга — флаги каталога, историю дневника не затрагивают.
+    `ALTER TABLE dev_food_products ADD COLUMN barcode TEXT CHECK (barcode IS NULL OR length(barcode) BETWEEN 4 AND 32)`,
+    `ALTER TABLE dev_food_products ADD COLUMN grams_per_piece_x10 INTEGER CHECK (grams_per_piece_x10 IS NULL OR grams_per_piece_x10 > 0)`,
+    `ALTER TABLE dev_food_products ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0 CHECK (favorite IN (0, 1))`,
+    `ALTER TABLE dev_recipes ADD COLUMN description TEXT CHECK (description IS NULL OR length(description) BETWEEN 1 AND 500)`,
+    `ALTER TABLE dev_recipes ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0 CHECK (favorite IN (0, 1))`,
+    `ALTER TABLE dev_recipes ADD COLUMN in_cookbook INTEGER NOT NULL DEFAULT 0 CHECK (in_cookbook IN (0, 1))`,
+  ],
 }];
