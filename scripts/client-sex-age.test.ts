@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
-import { ageOn } from "../apps/mobile/src/features/clients/domain/ClientProfileValidation.ts";
+import { ageOn } from "../apps/mobile/src/features/clients/domain/ClientRosterPresentation.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
 
@@ -16,13 +16,12 @@ async function store() {
   return { db, clients };
 }
 
-test("возраст по дате рождения: 15.03.1989 на 20.10.2026 — 37; за день до дня рождения — на год меньше; без даты — null", () => {
+test("возраст по дате рождения: 15.03.1989 на 20.10.2026 — 37; за день до дня рождения — на год меньше; будущая или нечитаемая дата — null", () => {
   assert.equal(ageOn("1989-03-15", "2026-10-20"), 37);
   assert.equal(ageOn("1989-03-15", "2026-03-15"), 37, "в день рождения возраст уже новый");
   assert.equal(ageOn("1989-03-15", "2026-03-14"), 36);
   assert.equal(ageOn("2000-02-29", "2026-02-28"), 25, "29 февраля: до 1 марта в невисокосный год возраст ещё старый");
   assert.equal(ageOn("2000-02-29", "2026-03-01"), 26);
-  assert.equal(ageOn(null, "2026-10-20"), null, "неизвестно — не ноль");
   assert.equal(ageOn("2026-10-21", "2026-10-20"), null, "дата рождения в будущем не даёт возраста");
   assert.equal(ageOn("не дата", "2026-10-20"), null);
 });

@@ -195,7 +195,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   </View>;
 
   /** Данные карточки для расчёта КБЖУ; возраст — из даты рождения на сегодня. */
-  const calcBody = { sex: client.sex ?? null, age: ageOn(client.birthDate, localDateOf(new Date())), heightCm: client.heightCmX10 === null ? null : client.heightCmX10 / 10 };
+  const calcBody = { sex: client.sex ?? null, age: client.birthDate === null ? null : ageOn(client.birthDate, localDateOf(new Date())), heightCm: client.heightCmX10 === null ? null : client.heightCmX10 / 10 };
   /** Пол и рост пишутся в карточку клиента (владелец — Clients) с CAS по revision; остальные поля карточки сохраняются как есть. */
   const updateCalcBody = async (patch: Readonly<{ sex: "MALE" | "FEMALE" | null; heightCm: number | null }>): Promise<void> => {
     const updated = await repository.update(client.id, client.revision, { displayName: client.displayName, contactPhone: client.contactPhone ?? undefined,
