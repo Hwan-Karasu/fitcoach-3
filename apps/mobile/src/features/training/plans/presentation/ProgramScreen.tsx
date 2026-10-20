@@ -40,6 +40,8 @@ export interface ProgramWeeksView {
   readonly header?: (weekIndex: number) => ReactNode;
   /** Между карточкой и тренировками. */
   readonly afterCard?: ReactNode;
+  /** Панель сообщает, для какого `клиент:программа` загрузила свои данные (статусы): до этого экран остаётся на прежних. */
+  readonly onLoaded: (key: string) => void;
 }
 
 /**
@@ -78,7 +80,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   onTabChange?: (tab: "program" | "templates") => void;
   requestedMesocycle?: string;
   /** UI-OWN-043: полоса участников группы под шапкой; получает текущее место плана (мезоцикл и неделя). */
-  renderParticipants?: (current: () => CounterpartRef) => ReactNode;
+  /** `shown` — чьи данные сейчас на экране: состав группы читается по ним, а не по параметрам маршрута, которые меняются раньше. */
+  renderParticipants?: (current: () => CounterpartRef, shown: Readonly<{ clientId: string; programId: string }> | null) => ReactNode;
   /** §48.11, §50.3: удаление мезоцикла и программы у этого клиента; без порта пунктов нет. */
   planDelete?: MesocycleDeletePort & ProgramDeletePort;
 }>) {
@@ -105,9 +108,13 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [simpleWeeks, setSimpleWeeks] = useState<readonly SimpleWeek[]>([]);
   const [periodized, setPeriodized] = useState<PeriodizedPlan | null>(null);
   /** Чьи данные сейчас на экране (`клиент:программа`): при переключении участника до загрузки они прежние — тогда экран приглушён. */
-  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const [shown, setShown] = useState<Readonly<{ clientId: string; programId: string }> | null>(null);
+  const loadedFor = shown === null ? null : `${shown.clientId}:${shown.programId}`;
   const currentKey = `${clientId}:${programId}`;
-  const stale = loadedFor !== currentKey;
+  /** Для чьих `клиент:программа` панель недель уже загрузила статусы: смена участника ставится одним кадром вместе с ними. */
+  const [panelFor, setPanelFor] = useState<string | null>(null);
+  const usesPanel = renderWeeks !== undefined && (program?.kind === "SIMPLE" ? plan !== null : (periodized?.mesocycles.length ?? 0) > 0);
+  const stale = loadedFor !== currentKey || (usesPanel && panelFor !== currentKey);
   const [orderReset, setOrderReset] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [tab, setTab] = useState<"program" | "templates">("program");
@@ -130,7 +137,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   useEffect(() => {
     if (stale || pendingRestore.current === null) return undefined;
     // Позиция возвращается при первой смене размера страницы; если размер не изменился, прокрутка и так на месте.
-    const timer = setTimeout(() => { pendingRestore.current = null; }, 400);
+    const timer = setTimeout(() => { pendingRestore.current = null; }, 1200);
     return () => clearTimeout(timer);
   }, [stale]);
   // Неделя, показанная в карточке Расширенной программы (её выбирает панель недель): для «Копировать неделю».
@@ -138,7 +145,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const lookup = useExerciseLookup(exercises);
   const appliedContext = useRef<string | null>(null);
   useEffect(() => {
-    if (requestedWeek === undefined || program == null) return;
+    if (requestedWeek === undefined || program == null || loadedFor !== currentKey) return;
     const key = requestedMesocycle ?? (program.kind === "SIMPLE" ? "simple" : cycleKey);
     const context = `${key}:${requestedWeek}`;
     if (context === appliedContext.current || (program.kind === "PERIODIZED" && periodized === null)) return;
@@ -148,7 +155,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       setPeriodized((current) => current === null ? current : { ...current, selectedMesocycleId: key });
       void repository.selectMesocycle(clientId, programId, key).catch(() => setMessage("Не удалось выбрать мезоцикл."));
     }
-  }, [requestedWeek, requestedMesocycle, program, periodized, cycleKey, repository, clientId, programId]);
+  }, [requestedWeek, requestedMesocycle, program, periodized, cycleKey, repository, clientId, programId, loadedFor, currentKey]);
   useEffect(() => {
     // При смене участника позицию возвращает `pendingRestore`; по родству мезоцикла — только при смене мезоцикла у того же участника.
     if (pendingRestore.current !== null) return undefined;
@@ -172,8 +179,19 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       setProgram(next);
       setPlan(simple?.draft.plan ?? null);
       setSimpleWeeks(weeks);
-      setPeriodized(loaded);
-      setLoadedFor(`${clientId}:${programId}`);
+      // Мезоцикл и неделя запрошенного участника — теми же данными: иначе до загрузки экран показывает чужой мезоцикл.
+      const wanted = requestedMesocycle !== undefined && loaded?.mesocycles.some((item) => item.id === requestedMesocycle) === true
+        && loaded.selectedMesocycleId !== requestedMesocycle ? requestedMesocycle : null;
+      if (wanted !== null) void repository.selectMesocycle(clientId, programId, wanted).catch(() => setMessage("Не удалось выбрать мезоцикл."));
+      setPeriodized(loaded !== null && wanted !== null ? { ...loaded, selectedMesocycleId: wanted } : loaded);
+      if (requestedWeek !== undefined && next !== null) {
+        const key = next.kind === "SIMPLE" ? "simple" : requestedMesocycle ?? loaded?.selectedMesocycleId ?? loaded?.mesocycles[0]?.id;
+        if (key != null) {
+          appliedContext.current = `${key}:${requestedWeek}`;
+          setWeeksByCycle((current) => ({ ...current, [key]: requestedWeek }));
+        }
+      }
+      setShown({ clientId, programId });
     }).catch(() => {
       if (active) { setProgram((current) => current === undefined ? null : current); setMessage("Не удалось загрузить структуру программы."); }
     });
@@ -192,10 +210,11 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   useEffect(() => {
     if (cycleKey === "simple") return undefined;
     let active = true;
-    repository.getMesocycleGroup(clientId, programId, { mesocycleId: cycleKey })
+    // Идентичность — показанных данных: мезоцикл `cycleKey` принадлежит им, а не новому участнику, пока тот не загружен.
+    repository.getMesocycleGroup(shown?.clientId ?? clientId, shown?.programId ?? programId, { mesocycleId: cycleKey })
       .then((copies) => { if (active) setGroupSize(Math.max(1, copies.length)); }).catch(() => undefined);
     return () => { active = false; };
-  }, [clientId, cycleKey, programId, repository, version]);
+  }, [clientId, cycleKey, programId, repository, shown, version]);
 
   useEffect(() => repository.subscribeCommittedChanges((change) => {
     if (change.selectionOnly !== true && change.clientIds.includes(clientId)) setVersion((value) => value + 1);
@@ -285,7 +304,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       selectedId={tab} onSelect={(next) => { setTab(next); onTabChange?.(next); }} />
   </View> : null;
   const participants = renderParticipants?.(() => ({ mesocycleId: selectedCycle()?.id ?? null,
-    weekIndex: weeksByCycle[cycleKey] ?? shownWeek.current, workoutId: null }));
+    weekIndex: weeksByCycle[cycleKey] ?? shownWeek.current, workoutId: null }), shown);
   if (tab === "templates" && renderTemplates !== undefined) {
     return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{tabs}{participants}{renderTemplates()}</View>;
   }
@@ -293,15 +312,19 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
     {tabs}
     {participants}
-    <Animated.ScrollView ref={scrollRef} style={[{ backgroundColor: colors.canvas }, stale ? styles.switching : null]} pointerEvents={stale ? "none" : "auto"}
+    <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} pointerEvents={stale ? "none" : "auto"}
       contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
-      onContentSizeChange={() => {
+      onContentSizeChange={(_width, height) => {
         if (stale || pendingRestore.current === null) return;
         const y = pendingRestore.current;
-        pendingRestore.current = null;
         scrollRef.current?.scrollTo({ y, animated: false });
+        // Страница ещё короче цели (статусы/неделя не догрузились) — ждём следующего изменения размера.
+        if (height > y) pendingRestore.current = null;
       }}
-      onScroll={(event) => { lastY.current = event.nativeEvent.contentOffset.y; scrollByCycle.current.set(scrollKey, lastY.current); }}>
+      onScroll={(event) => {
+        // Пока позиция восстанавливается, обрезанный скролл короткой страницы не должен затирать запомненную.
+        lastY.current = event.nativeEvent.contentOffset.y; scrollByCycle.current.set(scrollKey, lastY.current);
+      }}>
       {program.kind === "PERIODIZED" && periodized !== null && periodized.mesocycles.length === 0 ? <View style={styles.row}><View style={styles.grow}>
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>{program.title}</Text>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>
@@ -415,7 +438,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
         </Text>
       ) : null}
       {program.kind === "SIMPLE" ? <>
-        {plan !== null && renderWeeks !== undefined ? renderWeeks({ key: "simple", selectedWeek: weeksByCycle.simple,
+        {plan !== null && renderWeeks !== undefined ? renderWeeks({ key: "simple", onLoaded: setPanelFor, selectedWeek: weeksByCycle.simple,
           onSelectWeek: (week) => selectWeek("simple", week), weeks: simpleWeeks.map((week) => ({ ...week, caption: null })),
           // Компоновка владельца (UI-OWN-034): название, неделя, тип; «Изменить», «В шаблоны», «⋯».
           header: (week) => <View style={styles.cardHead}>
@@ -471,7 +494,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
               }
             }} /> : selected === undefined ? (
             <InlineNotice kind="info">Мезоциклов пока нет. Создайте первый: план первой недели скопируется во все недели.</InlineNotice>
-          ) : renderWeeks?.({ key: selected.lineageId, mesocycleId: selected.id, selectedWeek: weeksByCycle[selected.id],
+          ) : renderWeeks?.({ key: selected.lineageId, onLoaded: setPanelFor, mesocycleId: selected.id, selectedWeek: weeksByCycle[selected.id],
             onSelectWeek: (week) => selectWeek(selected.id, week),
             weeks: selected.weeks.map((week) => ({ index: week.index, caption: weekTypeLabels[week.type], type: week.type, workouts: week.workouts })),
             // Компоновка 2.0 (UI-OWN-040): мезоцикл, даты и номер недели, тип цикла и недели; «Изменить», «В шаблоны», «⋯».
@@ -480,23 +503,28 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
               const planWeek = selected.weeks.find((week) => week.index === weekIndex);
               return <View style={styles.cardHead}>
                 <View>
-                  <Text accessibilityRole="header" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6} style={[styles.cardTitle, { color: colors.textPrimary }]}>{selected.title}</Text>
+                  <Text accessibilityRole="header" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6} style={[styles.cardTitle, styles.cardTitleFixed, { color: colors.textPrimary }]}>{selected.title}</Text>
                   <Text numberOfLines={1} style={[styles.meta, { color: colors.textSecondary }]}>
                     {`${program.title} · ${membersWord(groupSize)}`}
                   </Text>
                 </View>
-                <View style={styles.cardMeta}>
-                  <View style={[styles.dates, { backgroundColor: colors.surfaceRaised }]}>
-                    <CalendarDays size={15} color={colors.textPrimary} strokeWidth={2} />
-                    <Text style={[styles.tag, { color: colors.textPrimary }]}>
-                      {selected.startDate != null ? `${weekRangeLabel(selected.startDate, weekIndex)} · Неделя ${weekIndex}`
-                        : `Неделя ${weekIndex} из ${selected.weeks.length}`}
-                    </Text>
+                {/* Два ряда фиксированной высоты: у участников с разным текстом карточка не меняет размер при переключении. */}
+                <View style={styles.cardMetaRows}>
+                  <View style={styles.cardMetaRow}>
+                    <View style={[styles.dates, { backgroundColor: colors.surfaceRaised }]}>
+                      <CalendarDays size={15} color={colors.textPrimary} strokeWidth={2} />
+                      <Text numberOfLines={1} style={[styles.tag, { color: colors.textPrimary }]}>
+                        {selected.startDate != null ? `${weekRangeLabel(selected.startDate, weekIndex)} · Неделя ${weekIndex}`
+                          : `Неделя ${weekIndex} из ${selected.weeks.length}`}
+                      </Text>
+                    </View>
                   </View>
-                  {selected.cycleType != null ? <Text style={[styles.kind, { color: colors.textSecondary, backgroundColor: colors.surfaceRaised }]}>
-                    {cycleTypeLabels[selected.cycleType]}</Text> : null}
-                  {planWeek !== undefined ? <Text style={[styles.kind, styles.kindStrong, { color: colors.accentInk, backgroundColor: colors.accentSoft }]}>
-                    {weekTypeLabels[planWeek.type]}</Text> : null}
+                  <View style={styles.cardMetaRow}>
+                    {selected.cycleType != null ? <Text numberOfLines={1} style={[styles.kind, styles.kindFit, { color: colors.textSecondary, backgroundColor: colors.surfaceRaised }]}>
+                      {cycleTypeLabels[selected.cycleType]}</Text> : null}
+                    {planWeek !== undefined ? <Text numberOfLines={1} style={[styles.kind, styles.kindStrong, styles.kindFit, { color: colors.accentInk, backgroundColor: colors.accentSoft }]}>
+                      {weekTypeLabels[planWeek.type]}</Text> : null}
+                  </View>
                 </View>
                 <View style={styles.cardActions}>
                   <View style={styles.grow}><AppButton compact label="Изменить"
@@ -560,7 +588,6 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
 
 const styles = StyleSheet.create({
   /** Данные прежнего участника, пока грузится новый (как в дневнике). */
-  switching: { opacity: 0.55 },
   center: { flex: 1, padding: 16, gap: 12, justifyContent: "center" },
   content: { padding: 16, gap: 12 },
   heading: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },
@@ -568,6 +595,10 @@ const styles = StyleSheet.create({
   tabs: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 2 },
   cardHead: { gap: 12 },
   cardTitle: { fontFamily: fonts.bold, fontSize: 18, letterSpacing: -0.2 },
+  cardTitleFixed: { lineHeight: 24, height: 48 },
+  cardMetaRows: { gap: 6 },
+  cardMetaRow: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 29 },
+  kindFit: { flexShrink: 1 },
   cardMeta: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
   kind: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, overflow: "hidden" },
   kindStrong: { fontFamily: fonts.bold },

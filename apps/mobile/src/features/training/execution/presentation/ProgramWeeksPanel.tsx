@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ChartColumnIncreasing, LayoutGrid } from "lucide-react-native";
 import { WeekCards, useWeekNavigation, StatusTag, type StatusKind } from "../../../../shared/ui/components/public.ts";
@@ -35,8 +35,8 @@ const percent = (done: number, total: number) => total === 0 ? 0 : Math.round(do
  * только по нажатию; завершение не переключает неделю само (§48.10, §48.72). Компоновка UI-OWN-034: карточка
  * программы (шапка, сводка недели, сетка недель с прогрессом), под ней — тренировки с объёмом и прогрессом.
  */
-export function ProgramWeeksPanel({ clientId, programId, weeks: views, execution, onOpenWorkout, renderWeekActions,
-  selectedWeek, onSelectWeek, header, afterCard }: Readonly<{
+export function ProgramWeeksPanel({ clientId, programId, weeks: liveViews, execution, onOpenWorkout, renderWeekActions: liveActions,
+  selectedWeek: liveSelected, onSelectWeek, header: liveHeader, afterCard: liveAfter, onLoaded }: Readonly<{
   clientId: string;
   programId: string;
   weeks: readonly ProgramWeekView[];
@@ -50,11 +50,23 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: views, execution
   header?: (weekIndex: number) => ReactNode;
   /** Между карточкой и тренировками (например, «Добавить тренировку»). */
   afterCard?: ReactNode;
+  /** Статусы и выполнения загружены для `клиент:программа` (или загрузка не удалась) — экран программы может показать участника. */
+  onLoaded?: (key: string) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const [statuses, setStatuses] = useState<readonly SessionStatus[]>([]);
-  const [executions, setExecutions] = useState<ReadonlyMap<string, WorkoutExecution>>(new Map());
+  // Статусы и выполнения хранятся вместе с тем, для чьей программы загружены: пока не пришли данные нового участника,
+  // панель остаётся на прежнем виде целиком (план + статусы), а не показывает его план с чужими статусами.
+  const [data, setData] = useState<Readonly<{ key: string; statuses: readonly SessionStatus[];
+    executions: ReadonlyMap<string, WorkoutExecution> }>>({ key: "", statuses: [], executions: new Map() });
+  const { statuses, executions } = data;
+  const currentKey = `${clientId}:${programId}`;
+  // Содержимое показывается из последнего снимка, у которого есть свои статусы: при смене участника план нового не
+  // выводится, пока не пришли его статусы (иначе второй кадр — «Текущая»/«Не начата» и проценты меняются позже плана).
+  const live = { views: liveViews, renderWeekActions: liveActions, selectedWeek: liveSelected, header: liveHeader, afterCard: liveAfter };
+  const held = useRef(live);
+  if (data.key === currentKey) held.current = live;
+  const { views, renderWeekActions, selectedWeek, header, afterCard } = held.current;
   const [version, setVersion] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
 
@@ -63,11 +75,16 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: views, execution
     void Promise.all([execution.getProgramStatuses(clientId, programId), execution.listProgramExecutions(clientId, programId)])
       .then(([nextStatuses, items]) => {
         if (!active) return;
-        setStatuses(nextStatuses);
-        setExecutions(new Map(items.map((item) => [`${item.weekIndex}:${item.plannedWorkoutId}`, item.execution])));
-      }).catch(() => undefined);
+        setData({ key: `${clientId}:${programId}`, statuses: nextStatuses,
+          executions: new Map(items.map((item) => [`${item.weekIndex}:${item.plannedWorkoutId}`, item.execution])) });
+        onLoaded?.(`${clientId}:${programId}`);
+      }).catch(() => {
+        if (!active) return;
+        setData({ key: `${clientId}:${programId}`, statuses: [], executions: new Map() });
+        onLoaded?.(`${clientId}:${programId}`);
+      });
     return () => { active = false; };
-  }, [clientId, execution, programId, version]);
+  }, [clientId, execution, onLoaded, programId, version]);
 
   useEffect(() => execution.subscribeCommittedChanges((change) => {
     if (change.clientId === clientId && change.programId === programId) setVersion((value) => value + 1);

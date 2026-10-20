@@ -4,7 +4,7 @@ import test from "node:test";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant } from
   "../apps/mobile/src/features/training/plans/data/DevTrainingPlansRepository.ts";
-import { counterpartOf, participantOrder } from "../apps/mobile/src/features/training/plans/domain/ParticipantCounterpart.ts";
+import { counterpartOf, isGroupOfMesocycle, participantOrder } from "../apps/mobile/src/features/training/plans/domain/ParticipantCounterpart.ts";
 import { preferredPlacement } from "../apps/mobile/src/features/training/plans/domain/Placement.ts";
 import { addExercise, fillSets, newDraft } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
@@ -158,6 +158,33 @@ test("UI-OWN-044 схема: дата выхода копии из группы 
     assert.throws(() => env.db.prepare("UPDATE dev_training_mesocycles SET group_left_at = ''").run(), /CHECK/);
     const memberColumns = env.db.prepare("PRAGMA table_info(dev_training_program_members)").all().map((row) => String(row.name));
     assert.ok(!memberColumns.includes("group_left_at"), "колонка v15 у участия удалена миграцией v17");
+  } finally {
+    await env.close();
+  }
+});
+
+test("UI-OWN-044 переключатель определяется группой выбранного мезоцикла, а не программой", async () => {
+  const env = await setup();
+  try {
+    const { plans, a, b, ownB } = env;
+    const { programId, mesocycleId, revision } = await createGroup(env);
+    const cycles = (await plans.getPeriodizedPlan(b, ownB))!.mesocycles;
+    const own = cycles[0]!;
+    const shared = cycles[1]!;
+    const groupOf = (clientId: string, program: string, cycle: string) => plans.getMesocycleGroup(clientId, program, { mesocycleId: cycle });
+
+    const sharedGroup = await groupOf(a, programId, mesocycleId);
+    assert.equal(isGroupOfMesocycle(sharedGroup, mesocycleId), true, "общий мезоцикл — переключатель есть");
+    const ownGroup = await groupOf(b, ownB, own.id);
+    assert.equal(isGroupOfMesocycle(ownGroup, own.id), false, "мезоцикл одного участника — переключателя нет");
+    assert.equal(isGroupOfMesocycle(sharedGroup, own.id), false, "состав общего мезоцикла не относится к чужому: старый список не показывается");
+    assert.equal(isGroupOfMesocycle([], own.id), false, "состав не загружен или пуст");
+    assert.equal(isGroupOfMesocycle(await groupOf(b, ownB, shared.id), shared.id), true, "возврат к общему — снова есть, из программы другого участника");
+
+    await plans.leaveGroup(a, programId, await revision(), mesocycleId, b);
+    const afterLeave = await groupOf(b, ownB, shared.id);
+    assert.equal(isGroupOfMesocycle(afterLeave, shared.id), false, "вышедший видит только себя — переключателя нет");
+    assert.equal(isGroupOfMesocycle(await groupOf(a, programId, mesocycleId), mesocycleId), true, "у остальных он остаётся");
   } finally {
     await env.close();
   }

@@ -1,4 +1,5 @@
 import type { Mesocycle } from "./PeriodizedModel.ts";
+import type { GroupCopy } from "./Placement.ts";
 
 /**
  * Переключатель участников (UI-OWN-043, как в 2.0): порядок и соответствие планов. У каждого участника своя копия
@@ -8,6 +9,14 @@ import type { Mesocycle } from "./PeriodizedModel.ts";
 /** Порядок в переключателе: клиент, с которого открыта программа, — первым, остальные — в порядке группы. */
 export function participantOrder(members: readonly string[], anchorClientId: string): readonly string[] {
   return members.includes(anchorClientId) ? [anchorClientId, ...members.filter((id) => id !== anchorClientId)] : members;
+}
+
+/**
+ * Показывать ли переключатель для мезоцикла `mesocycleId`: состав `members` относится именно к нему (среди копий есть
+ * этот мезоцикл) и участников двое или больше. Состав, прочитанный для другого мезоцикла, не показывается.
+ */
+export function isGroupOfMesocycle(members: readonly GroupCopy[], mesocycleId: string): boolean {
+  return members.length >= 2 && members.some((copy) => copy.mesocycleId === mesocycleId);
 }
 
 export type CounterpartRef = Readonly<{ mesocycleId: string | null; weekIndex: number; workoutId: string | null }>;

@@ -233,8 +233,8 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
           repository={repository} listCandidates={listCandidates} exercises={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap} planDelete={planDelete}
           onOpenMatrix={() => navigation.navigate("TrainingMatrix", { programId: route.params.programId })}
           onTabChange={(tab) => navigation.setOptions({ title: tab === "templates" ? "Шаблоны" : trainingTitles.TrainingProgram })}
-          renderParticipants={(current) => <ParticipantSwitcher clientId={viewer} anchorClientId={clientId} programId={route.params.programId}
-            mesocycleId={current().mesocycleId}
+          renderParticipants={(current, shown) => <ParticipantSwitcher clientId={shown?.clientId ?? viewer} activeClientId={viewer}
+            anchorClientId={clientId} programId={shown?.programId ?? route.params.programId} mesocycleId={current().mesocycleId}
             repository={repository} names={names} busy={switching} onSelect={(next) => { void switchTo(next.clientId, async () => {
               const target = await participantTarget(repository, { clientId: viewer, programId: route.params.programId }, next, current());
               if (target === null) throw new Error("TARGET_NOT_FOUND");
@@ -249,7 +249,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId: createdId } }] })}
           renderWeeks={(view) => <ProgramWeeksPanel key={view.key} clientId={viewer} programId={route.params.programId} weeks={view.weeks}
             renderWeekActions={view.weekActions} execution={execution} selectedWeek={view.selectedWeek} onSelectWeek={view.onSelectWeek}
-            header={view.header} afterCard={view.afterCard}
+            header={view.header} afterCard={view.afterCard} onLoaded={view.onLoaded}
             onOpenWorkout={(weekIndex, workoutId) => navigation.navigate("TrainingWorkout", { programId: route.params.programId, weekIndex, workoutId,
               ...(view.mesocycleId === undefined ? {} : { mesocycleId: view.mesocycleId }) })} />}
           onEditStructure={() => navigation.navigate("TrainingBuilder", { programId: route.params.programId })}

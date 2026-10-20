@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ChevronLeft, ChevronRight } from "lucide-react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View, type NativeScrollEvent } from "react-native";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../../shared/ui/theme/style.ts";
-import { counterpartOf, participantOrder, type CounterpartRef } from "../domain/ParticipantCounterpart.ts";
+import { counterpartOf, isGroupOfMesocycle, participantOrder, type CounterpartRef } from "../domain/ParticipantCounterpart.ts";
 import type { GroupCopy } from "../domain/Placement.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 
@@ -13,9 +14,12 @@ import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansReposit
  * меньше двух участников. Состав — группа мезоцикла (UI-OWN-044): копии одного родства в любых программах
  * участников; вышедшие не показываются.
  */
-export function ParticipantSwitcher({ clientId, anchorClientId, programId, mesocycleId, workoutId, repository, names, busy = false,
-  onSelect }: Readonly<{
+export function ParticipantSwitcher({ clientId, activeClientId = clientId, anchorClientId, programId, mesocycleId, workoutId, repository, names,
+  busy = false, onSelect }: Readonly<{
+  /** Чьими данными читается состав группы (с `programId` и мезоцикл/тренировкой — одна идентичность). */
   clientId: string;
+  /** Чей участник выделен: меняется сразу при выборе, раньше, чем загрузятся данные (по умолчанию — `clientId`). */
+  activeClientId?: string;
   anchorClientId: string;
   programId: string;
   /** Мезоцикл, чья группа показывается (экран программы), или тренировка (дневник). */
@@ -32,6 +36,21 @@ export function ParticipantSwitcher({ clientId, anchorClientId, programId, mesoc
   const [version, setVersion] = useState(0);
   const scroll = useRef<ScrollView>(null);
   const positions = useRef(new Map<string, number>());
+  /** Сколько карточек не видно слева и справа: полоса прокручивается, и по размеру не видно, что там есть ещё участники. */
+  const [hidden, setHidden] = useState<Readonly<{ left: number; right: number }>>({ left: 0, right: 0 });
+  const viewport = useRef(0);
+  const total = useRef(0);
+  const measure = (offset: number) => {
+    const count = total.current;
+    let left = 0; let right = 0;
+    for (let index = 0; index < count; index += 1) {
+      const start = index * (CHIP_WIDTH + CHIP_GAP);
+      if (start + CHIP_WIDTH / 2 < offset) left += 1;
+      else if (start + CHIP_WIDTH / 2 > offset + viewport.current) right += 1;
+    }
+    setHidden((current) => current.left === left && current.right === right ? current : { left, right });
+  };
+  const onScroll = (event: { nativeEvent: NativeScrollEvent }) => measure(event.nativeEvent.contentOffset.x);
 
   useEffect(() => {
     let active = true;
@@ -41,19 +60,23 @@ export function ParticipantSwitcher({ clientId, anchorClientId, programId, mesoc
     return () => { active = false; };
   }, [clientId, mesocycleId, programId, repository, version, workoutId]);
   useEffect(() => repository.subscribeCommittedChanges(() => setVersion((value) => value + 1)), [repository]);
-  useEffect(() => { scroll.current?.scrollTo({ x: Math.max(0, (positions.current.get(clientId) ?? 0) - 16), animated: true }); }, [clientId]);
+  useEffect(() => { scroll.current?.scrollTo({ x: Math.max(0, (positions.current.get(activeClientId) ?? 0) - 16), animated: true }); }, [activeClientId]);
 
-  if (members.length < 2) return null;
-  const byClient = new Map(members.map((copy) => [copy.clientId, copy]));
-  const ordered = participantOrder(members.map((copy) => copy.clientId), anchorClientId);
+  // Состав, прочитанный для прежнего мезоцикла, не показывается, пока не загружен состав нового (экран программы).
+  const group = workoutId === undefined && mesocycleId != null ? (isGroupOfMesocycle(members, mesocycleId) ? members : []) : members;
+  if (group.length < 2) return null;
+  const byClient = new Map(group.map((copy) => [copy.clientId, copy]));
+  const ordered = participantOrder(group.map((copy) => copy.clientId), anchorClientId);
+  total.current = ordered.length;
   return (
     <View style={[styles.wrap, { backgroundColor: colors.canvas }]}>
       <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>Участники</Text>
       <View style={[styles.card, { backgroundColor: colors.border }]}>
         <ScrollView ref={scroll} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}
-          keyboardShouldPersistTaps="handled">
+          keyboardShouldPersistTaps="handled" scrollEventThrottle={32} onScroll={onScroll}
+          onLayout={(event) => { viewport.current = event.nativeEvent.layout.width; measure(0); }}>
           {ordered.map((id) => {
-            const current = id === clientId;
+            const current = id === activeClientId;
             const name = names.get(id) ?? "Клиент";
             return (
               <Pressable key={id} accessibilityRole="button" accessibilityLabel={current ? `${name}, открыт` : `Переключиться на ${name}`}
@@ -67,7 +90,24 @@ export function ParticipantSwitcher({ clientId, anchorClientId, programId, mesoc
             );
           })}
         </ScrollView>
+        {hidden.left > 0 ? <EdgeMark side="left" count={hidden.left} /> : null}
+        {hidden.right > 0 ? <EdgeMark side="right" count={hidden.right} /> : null}
       </View>
+    </View>
+  );
+}
+
+/** Метка у края полосы: за ним есть ещё карточки участников. Не нажимается — полоса листается жестом. */
+function EdgeMark({ side, count }: Readonly<{ side: "left" | "right"; count: number }>) {
+  const { palette } = usePrototypeTheme();
+  const colors = palette.tokens;
+  const Icon = side === "left" ? ChevronLeft : ChevronRight;
+  return (
+    <View pointerEvents="none" accessible accessibilityLabel={`Ещё участников ${side === "left" ? "слева" : "справа"}: ${count}`}
+      style={[styles.mark, side === "left" ? styles.markLeft : styles.markRight, shadow.control, { backgroundColor: colors.surface }]}>
+      {side === "left" ? <Icon size={16} color={colors.accentInk} strokeWidth={2.5} /> : null}
+      <Text style={[styles.markText, { color: colors.accentInk }]}>{`+${count}`}</Text>
+      {side === "right" ? <Icon size={16} color={colors.accentInk} strokeWidth={2.5} /> : null}
     </View>
   );
 }
@@ -81,12 +121,19 @@ export async function participantTarget(repository: TrainingPlansRepositoryPort,
   return { programId: to.programId, ...counterpartOf(source.mesocycles, target.mesocycles, to.mesocycleId, ref) };
 }
 
+const CHIP_WIDTH = 150;
+const CHIP_GAP = 4;
+
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, gap: 6 },
   card: { borderRadius: 16, padding: 4 },
   eyebrow: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16, letterSpacing: 1, textTransform: "uppercase", paddingLeft: 4 },
-  row: { gap: 4 },
-  chip: { width: 150, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  row: { gap: CHIP_GAP },
+  chip: { width: CHIP_WIDTH, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   chipText: { fontFamily: fonts.semibold, fontSize: 15, textAlign: "center" },
+  mark: { position: "absolute", top: 8, bottom: 8, flexDirection: "row", alignItems: "center", gap: 2, paddingHorizontal: 8, borderRadius: 12 },
+  markLeft: { left: 8 },
+  markRight: { right: 8 },
+  markText: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
   chipCurrent: { fontFamily: fonts.bold },
 });
