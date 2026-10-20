@@ -5,7 +5,7 @@ import { ScrollView } from "react-native-gesture-handler";
 import { captureRef } from "react-native-view-shot";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronDown, CircleHelp, ClipboardPaste, Copy, Share2, Trash2, Undo2, X } from "lucide-react-native";
-import { AppButton, AppIconButton, ConfirmDialog, InlineNotice,
+import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, LoadingState,
   TimeWheelPicker } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { Appointment, ClearWeekSummary, GuestLinkRequest, LocalDate,
@@ -19,9 +19,9 @@ import { addDays, formatMinute, localDateOf, mondayOf, templateSize,
 import { AppointmentEditorScreen } from "./AppointmentEditorScreen.tsx";
 import { calendarErrorMessage, dayTitle, useCalendarWeek, useMonthCounts,
   useParticipants, useSessionTypeColors, weekdayShort } from "./calendarPresentation.ts";
-import { MonthGrid } from "./MonthGrid.tsx";
+import { CARD_PADDING as MONTH_CARD_PADDING, MonthGrid } from "./MonthGrid.tsx";
 import { ShareWeekPoster } from "./ShareWeekPoster.tsx";
-import { TIMELINE_HEADER, type TimelineHandlers } from "./TimelineGrid.tsx";
+import { TIMELINE_GUTTER, TIMELINE_HEADER, type TimelineHandlers } from "./TimelineGrid.tsx";
 import { WeekPager } from "./WeekPager.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
@@ -82,6 +82,10 @@ function ToolButton({ label, icon, onPress, disabled = false, busy = false, dang
   );
 }
 
+/** Поля содержимого и вынос рамки недели за них: из них вычисляется ширина лент до первого измерения. */
+const CONTENT_PADDING = 16;
+const FRAME_BLEED = 8;
+
 /**
  * §13 Calendar: счётчики, рабочие дни и окно дня, месяц и плотная неделя/день на одном экране.
  * Месяц и неделя листаются только свайпом; запись открывается окном поверх календаря.
@@ -95,7 +99,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const insets = useSafeAreaInsets();
-  const { height: screenHeight } = useWindowDimensions();
+  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60_000);
@@ -118,15 +122,18 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
   const posterRef = useRef<View>(null);
   const monday = mondayOf(selected);
   const days = weekDates(monday);
-  const { data, failed, retry } = useCalendarWeek(repository, monday, selected);
-  const people = useParticipants(participants);
-  const typeColors = useSessionTypeColors(repository);
+  const { data, failed, retry } = useCalendarWeek(repository, monday);
+  const { people, loaded: peopleLoaded } = useParticipants(participants);
+  const { colors: typeColors, loaded: typesLoaded } = useSessionTypeColors(repository);
   const gridFirst = useMemo(() => monthGridWeeks(addMonths(viewMonth, -1))[0]?.[0] ?? viewMonth, [viewMonth]);
   const gridLast = useMemo(() => {
     const weeks = monthGridWeeks(addMonths(viewMonth, 1));
     return weeks[weeks.length - 1]?.[6] ?? viewMonth;
   }, [viewMonth]);
-  const monthCounts = useMonthCounts(repository, gridFirst, gridLast);
+  const { counts: monthCounts, loaded: countsLoaded } = useMonthCounts(repository, gridFirst, gridLast);
+  // Первое открытие: все источники читаются параллельно, экран строится одним кадром, когда они готовы
+  // (раньше недельные данные, участники, типы и счётчики месяца вставали отдельными коммитами).
+  const ready = data !== null && peopleLoaded && typesLoaded && countsLoaded;
   const monthTotal = [...monthCounts.entries()].filter(([date]) => date.slice(0, 7) === viewMonth.slice(0, 7))
     .reduce((sum, [, count]) => sum + count, 0);
   // Сетка целиком помещается на экране: всё, кроме шапки приложения, шапки недели и нижней панели.
@@ -320,6 +327,10 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
       <ScrollView scrollEnabled={!scrollLocked} style={{ backgroundColor: colors.canvas }}
         onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}
         contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {!ready ? (failed ? <>
+          <InlineNotice kind="error">Не удалось загрузить календарь. Данные не изменены.</InlineNotice>
+          <AppButton variant="secondary" label="Повторить" onPress={retry} />
+        </> : <LoadingState label="Открываем календарь…" />) : <>
         {/* Настройки всего календаря — одна рамка: счётчики, рабочие дни, начало и конец дня. */}
         <View style={[styles.settingsCard, shadow.card, { backgroundColor: colors.surface }]}>
         <View style={styles.stats}>
@@ -349,7 +360,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
         </> : null}
         </View>
 
-        <MonthGrid viewMonth={viewMonth} selected={selected} today={today} counts={monthCounts}
+        <MonthGrid initialWidth={screenWidth - 2 * CONTENT_PADDING - 2 * MONTH_CARD_PADDING} viewMonth={viewMonth} selected={selected} today={today} counts={monthCounts}
           onBrowse={setViewMonth} onSelect={select} onToday={goToday} />
 
         {/* Рамка второго календаря: шапка (как в 2.0) — «Сегодня» и режим, затем действия с неделей. */}
@@ -393,7 +404,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
             icon={(color) => <Trash2 size={14} color={color} strokeWidth={1.8} />} onPress={() => { void askClear(); }} />
         </View>
         {data !== null ? (
-          <WeekPager repository={repository} mode={mode} selected={selected} today={today} scrollLocked={scrollLocked}
+          <WeekPager initialWidth={screenWidth - 2 * CONTENT_PADDING + 2 * FRAME_BLEED - TIMELINE_GUTTER} repository={repository} seed={{ monday, appointments: data.appointments, intervals: data.intervals }} mode={mode} selected={selected} today={today} scrollLocked={scrollLocked}
             onSelect={select} visibleWeekdays={settings?.visibleWeekdays ?? ALL_DAYS} window={dayWindow} people={people}
             typeColors={typeColors} now={now} handlers={handlers} maxHeight={gridMaxHeight} />
         ) : null}
@@ -410,6 +421,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
           {error ?? "Не удалось обновить календарь. Показаны последние загруженные данные."}
         </InlineNotice> : null}
         {failed ? <AppButton variant="secondary" label="Повторить" onPress={retry} /> : null}
+        </>}
 
         <ConfirmDialog visible={clearPreview !== null} destructive confirmBusy={busy}
           title="Очистить неделю?"
@@ -467,7 +479,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, gap: 12, paddingBottom: 32 },
+  content: { padding: CONTENT_PADDING, gap: 12, paddingBottom: 32 },
   offscreen: { position: "absolute", left: -10000, top: 0 },
   settingsCard: { borderRadius: 20, padding: 12, gap: 10 },
   stats: { flexDirection: "row", gap: 8 },
@@ -484,7 +496,7 @@ const styles = StyleSheet.create({
   timeLabel: { flex: 1, fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
   timeValue: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
   // Рамка недели чуть шире отступов экрана: колонка часов узкая, пустого места слева меньше.
-  frame: { marginHorizontal: -8, borderRadius: 20, overflow: "hidden", paddingTop: 8, gap: 8 },
+  frame: { marginHorizontal: -FRAME_BLEED, borderRadius: 20, overflow: "hidden", paddingTop: 8, gap: 8 },
   toolbarRow: { flexDirection: "row", gap: 6, paddingHorizontal: 6 },
   todayButton: { minHeight: 44, borderRadius: 22, paddingHorizontal: 12, flexDirection: "row",
     alignItems: "center", gap: 5 },

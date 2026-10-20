@@ -33,7 +33,7 @@ export function AppointmentOutcomeDialog({ items, visible, repository, participa
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const people = useParticipants(participants);
+  const { people } = useParticipants(participants);
   const offerUndo = useOfferCancelUndo();
   const [index, setIndex] = useState(0);
   const [busy, setBusy] = useState(false);

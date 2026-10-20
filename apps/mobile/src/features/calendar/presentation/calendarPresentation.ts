@@ -3,7 +3,7 @@ import type { Appointment, CalendarInterval, CalendarSettings, LocalDate, Sessio
 import type { CalendarParticipant, CalendarParticipantDirectoryPort } from
   "../domain/CalendarParticipantDirectoryPort.ts";
 import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
-import { addDays, isPendingOutcome, monthRange, weekdayIndex } from "../domain/CalendarRules.ts";
+import { addDays, isPendingOutcome, weekdayIndex } from "../domain/CalendarRules.ts";
 
 export const weekdayShort = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"] as const;
 const weekdayLong = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота",
@@ -27,22 +27,24 @@ export const sessionTypeColorHex: Readonly<Record<SessionTypeColor, string>> = {
 };
 
 /** Session type id → block colour for the timeline; types without a colour follow the theme accent. */
-export function useSessionTypeColors(repository: CalendarRepositoryPort): ReadonlyMap<string, string> {
+export function useSessionTypeColors(repository: CalendarRepositoryPort):
+  Readonly<{ colors: ReadonlyMap<string, string>; loaded: boolean }> {
   const [map, setMap] = useState<ReadonlyMap<string, string>>(new Map());
+  const [loaded, setLoaded] = useState(false);
   const [tick, setTick] = useState(0);
   useEffect(() => {
     let active = true;
     void repository.listSessionTypes().then((types) => {
-      if (active) {
-        setMap(new Map(types.flatMap((type) => (type.color === null ? [] : [[type.id, sessionTypeColorHex[type.color]] as const]))));
-      }
-    }, () => undefined);
+      if (!active) return;
+      setMap(new Map(types.flatMap((type) => (type.color === null ? [] : [[type.id, sessionTypeColorHex[type.color]] as const]))));
+      setLoaded(true);
+    }, () => { if (active) setLoaded(true); });
     return () => { active = false; };
   }, [repository, tick]);
   useEffect(() => repository.subscribeCommittedChanges((change) => {
     if (change.dates === "ALL") setTick((value) => value + 1);
   }), [repository]);
-  return map;
+  return { colors: map, loaded };
 }
 
 export function calendarErrorMessage(error: unknown): string {
@@ -83,78 +85,76 @@ export interface CalendarWeekData {
   readonly settings: CalendarSettings;
   readonly appointments: readonly Appointment[];
   readonly intervals: readonly CalendarInterval[];
-  readonly monthCount: number;
 }
 
 /**
- * Scoped week + month counter snapshot: keeps the last valid data during refresh and reloads only
- * when a committed change touches the visible week or month (§13.21).
+ * Scoped week snapshot: keeps the last valid data during refresh and reloads only when a committed
+ * change touches the visible week (§13.21). Month counters have their own reader (`useMonthCounts`).
  */
-export function useCalendarWeek(repository: CalendarRepositoryPort, monday: LocalDate,
-  anchor: LocalDate): Readonly<{ data: CalendarWeekData | null; failed: boolean; retry: () => void }> {
+export function useCalendarWeek(repository: CalendarRepositoryPort, monday: LocalDate): Readonly<{ data: CalendarWeekData | null; failed: boolean; retry: () => void }> {
   const [data, setData] = useState<CalendarWeekData | null>(null);
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
-  const month = monthRange(anchor);
   const sunday = addDays(monday, 6);
   const generation = useRef(0);
 
   useEffect(() => {
     const request = ++generation.current;
-    void Promise.all([
-      repository.getSettings(), repository.listRange(monday, sunday),
-      repository.summarize(month.first, month.last),
-    ]).then(([settings, range, summary]) => {
+    void Promise.all([repository.getSettings(), repository.listRange(monday, sunday)]).then(([settings, range]) => {
       if (request !== generation.current) return;
-      setData({ settings, appointments: range.appointments, intervals: range.intervals,
-        monthCount: summary.reduce((sum, day) => sum + day.appointments, 0) });
+      setData({ settings, appointments: range.appointments, intervals: range.intervals });
       setFailed(false);
     }, () => { if (request === generation.current) setFailed(true); });
-  }, [repository, monday, sunday, month.first, month.last, tick]);
+  }, [repository, monday, sunday, tick]);
 
   useEffect(() => repository.subscribeCommittedChanges((change) => {
-    if (change.dates === "ALL" || change.dates.some((date) =>
-      (date >= monday && date <= sunday) || (date >= month.first && date <= month.last))) {
+    if (change.dates === "ALL" || change.dates.some((date) => date >= monday && date <= sunday)) {
       setTick((value) => value + 1);
     }
-  }), [repository, monday, sunday, month.first, month.last]);
+  }), [repository, monday, sunday]);
 
   return { data, failed, retry: () => setTick((value) => value + 1) };
 }
 
 /** Appointment counts per date of the visible month grid (§13.2 indicator); keeps old counts on refresh. */
 export function useMonthCounts(repository: CalendarRepositoryPort, first: LocalDate,
-  last: LocalDate): ReadonlyMap<LocalDate, number> {
+  last: LocalDate): Readonly<{ counts: ReadonlyMap<LocalDate, number>; loaded: boolean }> {
   const [counts, setCounts] = useState<ReadonlyMap<LocalDate, number>>(new Map());
+  const [loaded, setLoaded] = useState(false);
   const [tick, setTick] = useState(0);
   const generation = useRef(0);
   useEffect(() => {
     const request = ++generation.current;
     void repository.summarize(first, last).then((rows) => {
-      if (request === generation.current) setCounts(new Map(rows.map((row) => [row.localDate, row.appointments])));
-    }, () => undefined);
+      if (request !== generation.current) return;
+      setCounts(new Map(rows.map((row) => [row.localDate, row.appointments])));
+      setLoaded(true);
+    }, () => { if (request === generation.current) setLoaded(true); });
   }, [repository, first, last, tick]);
   useEffect(() => repository.subscribeCommittedChanges((change) => {
     if (change.dates === "ALL" || change.dates.some((date) => date >= first && date <= last)) {
       setTick((value) => value + 1);
     }
   }), [repository, first, last]);
-  return counts;
+  return { counts, loaded };
 }
 
 export function useParticipants(directory: CalendarParticipantDirectoryPort):
-  ReadonlyMap<string, CalendarParticipant> {
+  Readonly<{ people: ReadonlyMap<string, CalendarParticipant>; loaded: boolean }> {
   const [map, setMap] = useState<ReadonlyMap<string, CalendarParticipant>>(new Map());
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     let active = true;
     const load = () => {
       void directory.listParticipants().then((rows) => {
-        if (active) setMap(new Map(rows.map((row) => [row.id, row])));
-      }, () => undefined);
+        if (!active) return;
+        setMap(new Map(rows.map((row) => [row.id, row])));
+        setLoaded(true);
+      }, () => { if (active) setLoaded(true); });
     };
     load();
     const unsubscribe = directory.subscribe(load);
     return () => { active = false; unsubscribe(); };
   }, [directory]);
-  return map;
+  return { people: map, loaded };
 }

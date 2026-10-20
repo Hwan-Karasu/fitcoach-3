@@ -11,7 +11,7 @@ import { shadow } from "../../../shared/ui/theme/style.ts";
 
 /** Сколько месяцев в каждую сторону можно пролистать от текущего. */
 const SPAN = 120;
-const CARD_PADDING = 6;
+export const CARD_PADDING = 6;
 
 function monthIndex(base: LocalDate, month: LocalDate): number {
   return (Number(month.slice(0, 4)) - Number(base.slice(0, 4))) * 12
@@ -19,6 +19,8 @@ function monthIndex(base: LocalDate, month: LocalDate): number {
 }
 
 type Props = Readonly<{
+  /** Ширина области ленты, вычисленная из размера окна: лента строится сразу, а не после измерения (карточка не схлопывается). */
+  initialWidth?: number;
   viewMonth: LocalDate;
   selected: LocalDate;
   today: LocalDate;
@@ -100,10 +102,10 @@ const MonthPage = memo(function MonthPage({ month, width, selected, today, count
  * горизонтальный FlatList с постраничной прокруткой: соседние месяцы отрисованы заранее, рамка
  * остаётся на месте. Тап выбирает дату; Today, Selected Date и Selected Week — отдельные состояния.
  */
-export function MonthGrid({ viewMonth, selected, today, counts, onBrowse, onSelect, onToday }: Props) {
+export function MonthGrid({ initialWidth = 0, viewMonth, selected, today, counts, onBrowse, onSelect, onToday }: Props) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const [width, setWidth] = useState(0);
+  const [width, setWidth] = useState(initialWidth);
   const [base] = useState(() => `${today.slice(0, 7)}-01`);
   const list = useRef<FlatList<number>>(null);
   const shown = useRef(monthIndex(base, viewMonth));
@@ -125,7 +127,7 @@ export function MonthGrid({ viewMonth, selected, today, counts, onBrowse, onSele
   return (
     <View style={[styles.card, shadow.card, { backgroundColor: colors.surface }]}>
       {/* Ширина страницы = точная ширина области ленты: иначе доли пикселя копятся по страницам и месяц съезжает. */}
-      <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
+      <View onLayout={(event) => { const next = event.nativeEvent.layout.width; setWidth((current) => Math.abs(current - next) < 0.5 ? current : next); }}>
       {width > 0 ? (
         <FlatList ref={list} data={data} horizontal pagingEnabled showsHorizontalScrollIndicator={false}
           keyExtractor={(item) => String(item)} initialScrollIndex={target} windowSize={3}
