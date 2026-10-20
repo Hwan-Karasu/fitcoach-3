@@ -195,23 +195,9 @@ export const devNutritionCatalog: readonly MigrationStep[] = [{
   checksum: "n07-dev-nutrition-v7-calc-profile-without-body-fields-20261020",
   statements: [
     // Пол, возраст и рост теперь берутся из карточки клиента (единый источник); профиль расчёта хранит только параметры расчёта.
-    `CREATE TABLE dev_nutrition_calc_profiles_v7 (
-      workspace_id TEXT NOT NULL,
-      client_id TEXT NOT NULL,
-      goal TEXT NOT NULL CHECK (goal IN ('LOSS','MAINTENANCE','GAIN')),
-      activity TEXT NOT NULL CHECK (activity IN ('SEDENTARY','MODERATE','ACTIVE','VERY_ACTIVE')),
-      workouts_per_week INTEGER NOT NULL CHECK (workouts_per_week BETWEEN 0 AND 21),
-      workout_minutes INTEGER NOT NULL CHECK (workout_minutes BETWEEN 1 AND 600),
-      intensity TEXT NOT NULL CHECK (intensity IN ('LIGHT','MEDIUM','HEAVY')),
-      step_kcal INTEGER NOT NULL CHECK (step_kcal BETWEEN 0 AND 1000),
-      revision INTEGER NOT NULL CHECK (revision > 0),
-      updated_at TEXT NOT NULL,
-      PRIMARY KEY (workspace_id, client_id),
-      FOREIGN KEY (client_id, workspace_id) REFERENCES dev_clients(id, workspace_id) ON DELETE RESTRICT
-    )`,
-    `INSERT INTO dev_nutrition_calc_profiles_v7 (workspace_id, client_id, goal, activity, workouts_per_week, workout_minutes, intensity, step_kcal, revision, updated_at)
-      SELECT workspace_id, client_id, goal, activity, workouts_per_week, workout_minutes, intensity, step_kcal, revision, updated_at FROM dev_nutrition_calc_profiles`,
-    `DROP TABLE dev_nutrition_calc_profiles`,
-    `ALTER TABLE dev_nutrition_calc_profiles_v7 RENAME TO dev_nutrition_calc_profiles`,
+    // DROP COLUMN, а не пересоздание таблицы: RENAME проверяет внешние ключи на dev_clients, которой может не быть при частичной инициализации.
+    `ALTER TABLE dev_nutrition_calc_profiles DROP COLUMN sex`,
+    `ALTER TABLE dev_nutrition_calc_profiles DROP COLUMN age`,
+    `ALTER TABLE dev_nutrition_calc_profiles DROP COLUMN height_x10`,
   ],
 }];
