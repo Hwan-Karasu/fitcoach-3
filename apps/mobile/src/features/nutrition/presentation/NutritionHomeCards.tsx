@@ -85,14 +85,13 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   const defaults = useMemo(() => result === null ? null : calcMacros(result.leanMassKg, guide, profile.goal), [result, guide, profile.goal]);
 
   const trainingAuto = trainedToday === true;
-  const trainingState: boolean | null = trainingAuto ? true : mark.done;
+  const trainingState = trainingAuto || mark.done === true;
   const cycleTraining = useCallback(async () => {
     if (trainingAuto || lock.current) return;
     lock.current = true;
     try {
-      if (mark.done === null) await calc.setWorkoutMark(clientId, today, true);
-      else if (mark.done) await calc.setWorkoutMark(clientId, today, false);
-      else await calc.clearWorkoutMark(clientId, today);
+      // Два состояния: Да ↔ Нет (нет отметки показывается как «Нет»).
+      await calc.setWorkoutMark(clientId, today, mark.done !== true);
       setError(null);
     } catch (failure) { setError(nutritionErrorText(failure)); }
     lock.current = false;
@@ -156,9 +155,9 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
           <View style={styles.dayCell}>
             <Text style={[styles.cellLabel, { color: colors.textPrimary }]}>Тренировка</Text>
             <Pressable accessibilityRole="button" disabled={trainingAuto}
-              accessibilityLabel={`Тренировка сегодня: ${trainingState === null ? "не отмечена" : trainingState ? "да" : "нет"}${trainingAuto ? ", по дневнику тренировок" : ". Нажмите, чтобы изменить"}`}
-              onPress={() => { void cycleTraining(); }} style={[styles.trainingButton, { borderColor: colors.border, backgroundColor: trainingState === true ? colors.accentSoft : colors.surfaceRaised, opacity: trainingAuto ? 0.85 : 1 }]}>
-              <Text style={[styles.trainingText, { color: trainingState === true ? colors.accentInk : colors.textPrimary }]}>{trainingState === null ? "—" : trainingState ? "Да" : "Нет"}</Text>
+              accessibilityLabel={`Тренировка сегодня: ${trainingState ? "да" : "нет"}${trainingAuto ? ", по дневнику тренировок" : ". Нажмите, чтобы изменить"}`}
+              onPress={() => { void cycleTraining(); }} style={[styles.trainingButton, { borderColor: colors.border, backgroundColor: trainingState ? colors.accentSoft : colors.surfaceRaised, opacity: trainingAuto ? 0.85 : 1 }]}>
+              <Text style={[styles.trainingText, { color: trainingState ? colors.accentInk : colors.textPrimary }]}>{trainingState ? "Да" : "Нет"}</Text>
             </Pressable>
           </View>
         </View>
