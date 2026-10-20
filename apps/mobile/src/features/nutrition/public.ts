@@ -1,6 +1,7 @@
 export { AddFoodScreen } from "./presentation/AddFoodScreen.tsx";
 export { FoodEditorScreen } from "./presentation/FoodEditorScreen.tsx";
-export { NutritionDiaryScreen } from "./presentation/NutritionDiaryScreen.tsx";
+export { NutritionHomeScreen } from "./presentation/NutritionHomeScreen.tsx";
+export { RecipeEditorScreen } from "./presentation/RecipeEditorScreen.tsx";
 export type { FoodBasis, FoodBasisUnit, FoodInput, FoodProduct, Nutrients } from "./domain/FoodModel.ts";
 export type { FoodCatalogCommittedChange, FoodCatalogPort } from "./domain/FoodCatalogPort.ts";
 export { formatDecimalX10, parseDecimalX10, scaleNutrients, validateFood } from "./domain/FoodRules.ts";

@@ -23,7 +23,7 @@ function snapshotFor(item: Item, recipeUnit: "PORTION" | "G", quantityX10: numbe
   return item.kind === "FOOD" ? snapshotOfFood(item.food, quantityX10) : snapshotOfRecipe(item.recipe, recipeUnit, quantityX10);
 }
 
-function ItemCard({ item, open, onToggle, onAdd }: Readonly<{ item: Item; open: boolean; onToggle: () => void;
+function ItemCard({ item, open, onToggle, onAdd, onEditRecipe }: Readonly<{ item: Item; open: boolean; onToggle: () => void; onEditRecipe: (recipeId: string) => void;
   onAdd: (snapshot: FoodSnapshot) => Promise<string | null> }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -66,6 +66,7 @@ function ItemCard({ item, open, onToggle, onAdd }: Readonly<{ item: Item; open: 
         </View>
         <Text style={[styles.meta, { color: colors.textSecondary }]}>{preview === null ? " " : `Будет внесено: ${kcalText(preview)}`}</Text>
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
+        {item.kind === "RECIPE" ? <AppButton compact variant="ghost" label="Изменить рецепт" onPress={() => onEditRecipe(item.recipe.id)} /> : null}
       </View> : null}
     </View>
   );
@@ -75,7 +76,7 @@ function ItemCard({ item, open, onToggle, onAdd }: Readonly<{ item: Item; open: 
  * Добавление еды в приём пищи (§49.2): локальный поиск по своим продуктам и рецептам, выбор, количество, «Добавить». Можно добавить несколько позиций подряд;
  * экран остаётся открытым, пока тренер не вернётся к дневнику. Нет нужного продукта — «Создать продукт».
  */
-export function AddFoodScreen({ clientId, localDate, slot, foods, recipes, diary, onCreateFood }: Readonly<{
+export function AddFoodScreen({ clientId, localDate, slot, foods, recipes, diary, onCreateFood, onCreateRecipe, onEditRecipe }: Readonly<{
   clientId: string;
   localDate: string;
   slot: MealSlot;
@@ -83,6 +84,8 @@ export function AddFoodScreen({ clientId, localDate, slot, foods, recipes, diary
   recipes: RecipeCatalogPort;
   diary: NutritionDiaryPort;
   onCreateFood: (name: string) => void;
+  onCreateRecipe: () => void;
+  onEditRecipe: (recipeId: string) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -129,12 +132,15 @@ export function AddFoodScreen({ clientId, localDate, slot, foods, recipes, diary
         {failed ? <InlineNotice kind="error">Не удалось загрузить каталог.</InlineNotice> : null}
       </View>
       <FlatList data={items ?? []} keyExtractor={itemKey} contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled"
-        ListHeaderComponent={<AppButton compact variant="secondary" label="Создать продукт" onPress={() => onCreateFood(query.trim())} />}
+        ListHeaderComponent={<View style={styles.createRow}>
+          <View style={styles.grow}><AppButton compact variant="secondary" label="Создать продукт" onPress={() => onCreateFood(query.trim())} /></View>
+          <View style={styles.grow}><AppButton compact variant="secondary" label="Создать рецепт" onPress={onCreateRecipe} /></View>
+        </View>}
         ListEmptyComponent={items === null ? null : <EmptyState reason={query.trim() === "" ? "no-data" : "no-match"}
           title={query.trim() === "" ? "Каталог пока пуст" : "Ничего не найдено"}
           body={query.trim() === "" ? "Здесь появятся ваши продукты и рецепты. Создайте первый продукт." : "Измените запрос или создайте такой продукт."}
           action={{ label: "Создать продукт", onPress: () => onCreateFood(query.trim()) }} />}
-        renderItem={({ item }) => <ItemCard item={item} open={openKey === itemKey(item)} onToggle={() => setOpenKey(openKey === itemKey(item) ? null : itemKey(item))} onAdd={add} />} />
+        renderItem={({ item }) => <ItemCard item={item} open={openKey === itemKey(item)} onToggle={() => setOpenKey(openKey === itemKey(item) ? null : itemKey(item))} onAdd={add} onEditRecipe={onEditRecipe} />} />
     </View>
   );
 }
@@ -149,5 +155,6 @@ const styles = StyleSheet.create({
   title: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
   meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   portion: { gap: 8 },
+  createRow: { flexDirection: "row", gap: 8 },
   qtyRow: { flexDirection: "row", gap: 8, alignItems: "flex-end" },
 });
