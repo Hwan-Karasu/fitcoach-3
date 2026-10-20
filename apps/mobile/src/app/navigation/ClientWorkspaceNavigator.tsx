@@ -24,6 +24,8 @@ import { fonts } from "../../shared/ui/theme/typography.ts";
 import type { TrainingHistoryPort } from "../../read-models/trainingHistory.ts";
 import type { ClientBodyweightPort } from "../../read-models/clientBodyweight.ts";
 
+type OpenWorkout = (slot: WorkoutSlot, options?: Readonly<{ returnToCaller?: boolean }>) => void;
+
 type WorkspaceTabs = {
   Home: undefined;
   Nutrition: undefined;
@@ -45,7 +47,7 @@ const MoreStack = createNativeStackNavigator<MoreRoutes>();
 function MoreNavigator({ client, questionnaire, trainingPlans, history, bodyweight, exerciseLookup, planDelete, onClose, onOpenClients, onOpenExercise, onOpenWorkout }: Readonly<{
   client: ClientRecord; questionnaire: QuestionnaireRepositoryPort; onClose: () => void; onOpenClients: () => void;
   trainingPlans: TrainingPlansRepositoryPort; history: TrainingHistoryPort; bodyweight: ClientBodyweightPort; exerciseLookup: ExerciseLookupPort;
-  onOpenExercise: (exerciseId: string) => void; onOpenWorkout: (slot: WorkoutSlot) => void;
+  onOpenExercise: (exerciseId: string) => void; onOpenWorkout: OpenWorkout;
   planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -77,10 +79,10 @@ function MoreNavigator({ client, questionnaire, trainingPlans, history, bodyweig
       </MoreStack.Screen>
       <MoreStack.Screen name="Statistics" options={{ title: moreDestinations.Statistics }}>
         {({ navigation }) => <TrainingStatisticsScreen clientId={clientId} history={history} bodyweight={bodyweight} exercises={exerciseLookup} onOpenExercise={onOpenExercise}
-          onOpenWorkout={onOpenWorkout} onOpenMonthlyReport={() => navigation.navigate("MonthlyReport")} />}
+          onOpenWorkout={(slot) => onOpenWorkout(slot, { returnToCaller: true })} onOpenMonthlyReport={() => navigation.navigate("MonthlyReport")} />}
       </MoreStack.Screen>
       <MoreStack.Screen name="MonthlyReport" options={{ title: "Месячный отчёт" }}>
-        {() => <MonthlyReportScreen clientId={clientId} history={history} bodyweight={bodyweight} exercises={exerciseLookup} onOpenWorkout={onOpenWorkout} />}
+        {() => <MonthlyReportScreen clientId={clientId} history={history} bodyweight={bodyweight} exercises={exerciseLookup} onOpenWorkout={(slot) => onOpenWorkout(slot, { returnToCaller: true })} />}
       </MoreStack.Screen>
     </MoreStack.Navigator>
   );
@@ -101,7 +103,8 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   clientBodyweight: ClientBodyweightPort;
   restTimers: RestTimersPort;
   activeWorkouts: ActiveWorkoutsPort;
-  onOpenWorkout: (slot: WorkoutSlot) => void;
+  /** `returnToCaller` — «←» из открытой тренировки возвращает туда, откуда её открыли (история, статистика). */
+  onOpenWorkout: OpenWorkout;
   /** UI-OWN-043: «назад» с программы другого участника группы — его карточка, список программ. */
   onOpenClientPrograms: (clientId: string) => void;
   exercises: ExerciseCatalogPort;

@@ -44,7 +44,7 @@ type RootStackRoutes = {
   WorkspaceDev: undefined;
   /** `screen`/`params` — сразу открыть тренировку клиента (быстрый переход между дневниками, §48.83). */
   ClientWorkspace: { clientId: string; screen?: "Training";
-    params?: { screen: "TrainingWorkout"; params: { programId: string; weekIndex: number; workoutId: string } } };
+    params?: { screen: "TrainingWorkout"; params: { programId: string; weekIndex: number; workoutId: string; closeOnBack?: boolean } } };
   ClientAccounting: { clientId: string };
   ClientMeasurements: { clientId: string };
   ClientEditorDev: { clientId?: string; guestLink?: GuestLinkRequest } | undefined;
@@ -143,9 +143,9 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
             clientId={route.params.clientId} repository={services.clients}
             accounting={services.accounting} measurements={services.measurements} questionnaire={services.questionnaire}
             trainingPlans={services.trainingPlans} trainingExecution={services.trainingExecution} trainingHistory={services.trainingHistory} clientBodyweight={services.clientBodyweight} restTimers={services.restTimers} activeWorkouts={services.activeWorkouts}
-            onOpenWorkout={(slot) => navigation.push("ClientWorkspace", { clientId: slot.clientId, screen: "Training",
+            onOpenWorkout={(slot, options) => navigation.push("ClientWorkspace", { clientId: slot.clientId, screen: "Training",
               params: { screen: "TrainingWorkout", params: { programId: slot.programId, weekIndex: slot.weekIndex,
-                workoutId: slot.plannedWorkoutId } } })}
+                workoutId: slot.plannedWorkoutId, ...(options?.returnToCaller === true ? { closeOnBack: true } : {}) } } })}
             onOpenClientPrograms={(clientId) => navigation.replace("ClientWorkspace", { clientId, screen: "Training",
               params: { screen: "TrainingIndex" } })}
             exercises={services.exercises} exerciseLookup={services.exerciseLookup} weekCopy={services.weekCopy} weekSwap={services.weekSwap} mesocycleSave={services.mesocycleSave} planDelete={services.planDelete}
@@ -162,7 +162,7 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
               onEdit={(exerciseId) => navigation.navigate("ExerciseEditor", { exerciseId })} onArchived={() => navigation.goBack()} />}
             onOpenWorkout={(target) => navigation.push("ClientWorkspace", { clientId: route.params.clientId, screen: "Training",
               params: { screen: "TrainingWorkout", params: { programId: target.programId, weekIndex: target.weekIndex,
-                workoutId: target.plannedWorkoutId } } })} />}
+                workoutId: target.plannedWorkoutId, closeOnBack: true } } })} />}
         </Stack.Screen>
         <Stack.Screen name="ClientAccounting" options={{ title: "Абонемент и оплата" }}>
           {({ route }) => <ClientAccountingScreen clientId={route.params.clientId}

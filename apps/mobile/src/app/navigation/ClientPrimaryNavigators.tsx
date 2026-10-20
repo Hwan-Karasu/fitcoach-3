@@ -33,7 +33,8 @@ type TrainingRoutes = {
   TrainingPickExercise: { workoutId: string; replace?: string; returnTo: PickReturn };
   /** `selected` — уже отмеченные в каталоге упражнения: созданное встаёт после них (UI-OWN-029). */
   TrainingCreateExercise: { initialName: string; pick: TrainingRoutes["TrainingPickExercise"]; selected?: readonly string[] };
-  TrainingWorkout: { programId: string; weekIndex: number; workoutId: string; mesocycleId?: string; picked?: PickedExercise };
+  /** `closeOnBack` — тренировка открыта из истории упражнения или статистики: «←» закрывает клиента и возвращает туда, откуда пришли. */
+  TrainingWorkout: { programId: string; weekIndex: number; workoutId: string; mesocycleId?: string; picked?: PickedExercise; closeOnBack?: boolean };
 };
 
 type PickReturn =
@@ -166,6 +167,8 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
         onClients={onOpenClients} onBack={() => {
           if (route.name === "TrainingWorkout") {
             const params = route.params as TrainingRoutes["TrainingWorkout"];
+            // Без экрана программы в стеке «назад» создавал бы его заново и грузил весь план («Открываем мезоциклы…»).
+            if (params.closeOnBack === true) { onExitClient(); return; }
             navigation.popTo("TrainingProgram", { programId: params.programId, weekIndex: params.weekIndex, mesocycleId: params.mesocycleId });
           } else if (route.name === "TrainingProgram") {
             // Решение владельца: «назад» ведёт к программам того участника, чьи данные открыты.
