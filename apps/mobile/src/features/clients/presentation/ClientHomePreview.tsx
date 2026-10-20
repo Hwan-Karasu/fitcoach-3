@@ -1,22 +1,15 @@
 import { useState, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Pencil } from "lucide-react-native";
-import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, StatusTag } from
+import { AppButton, ConfirmDialog, InlineNotice, StatusTag } from
   "../../../shared/ui/components/public.ts";
 import { PrototypeScreen } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { ClientHomeSummary, HomePackSummary } from "../domain/ClientHomeSummary.ts";
 import type { ClientRecord } from "../domain/ClientRepositoryPort.ts";
-import { formatHeightCmX10 } from "../domain/ClientProfileValidation.ts";
-import { ageOn, formatYears, localCalendarDate } from "../domain/ClientRosterPresentation.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 const toneLabel = { active: "Активен", warning: "Подходит к концу", empty: "Закончился" } as const;
 const toneKind = { active: "success", warning: "warning", empty: "action_required" } as const;
-
-function initials(name: string): string {
-  return name.split(/\s+/u).filter(Boolean).slice(0, 2).map((part) => part[0]?.toLocaleUpperCase("ru") ?? "").join("");
-}
 
 function formatIsoDate(date: string): string {
   return `${date.slice(8, 10)}.${date.slice(5, 7)}.${date.slice(0, 4)}`;
@@ -44,13 +37,12 @@ function PackBody({ pack }: Readonly<{ pack: HomePackSummary | null }>) {
  * Client Home (UX 2.0): identity header with the edit pencil, abonement first, then the nutrition blocks (day data and КБЖУ, supplied by the shell), archive last —
  * all projections of their owners' facts; no invented dashboard blocks.
  */
-export function ClientHomePreview({ client, summary, onEdit, onOpenAccounting, nutritionSlot,
+export function ClientHomePreview({ client, summary, onOpenAccounting, nutritionSlot,
   onArchive }: Readonly<{
   /** Блоки питания (шаги, КБЖУ) — проекция Nutrition, подставляется оболочкой; Clients не знает о питании. */
   nutritionSlot?: ReactNode;
   client: ClientRecord;
   summary: ClientHomeSummary | null;
-  onEdit: () => void;
   onOpenAccounting: () => void;
   /** Resolves only after the lifecycle commit; the caller leaves the workspace. */
   onArchive: () => Promise<void>;
@@ -73,24 +65,9 @@ export function ClientHomePreview({ client, summary, onEdit, onOpenAccounting, n
     }
   };
 
-  const age = client.birthDate === null ? null : ageOn(client.birthDate, localCalendarDate(new Date()));
-  const meta = [age === null ? null : formatYears(age),
-    client.heightCmX10 === null ? null : `${formatHeightCmX10(client.heightCmX10)} см`].filter(Boolean).join(" · ");
   const pack = summary?.pack ?? null;
 
   return <PrototypeScreen>
-    <View style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={[styles.avatar, { backgroundColor: colors.accentFill }]}>
-        <Text style={[styles.avatarText, { color: colors.onAccentFill }]}>{client.emoji ?? initials(client.displayName)}</Text>
-      </View>
-      <View style={styles.heroText}>
-        <Text style={[styles.name, { color: colors.textPrimary }]}>{client.displayName}</Text>
-        <Text style={[styles.detail, { color: colors.textSecondary }]}>{meta || "Возраст и рост не указаны"}</Text>
-        {client.contactPhone ? <Text style={[styles.detail, { color: colors.textSecondary }]}>{client.contactPhone}</Text> : null}
-        {client.contactEmail ? <Text style={[styles.detail, { color: colors.textSecondary }]}>{client.contactEmail}</Text> : null}
-      </View>
-      <AppIconButton label="Редактировать карточку и анкету клиента" icon={<Pencil size={20} color={colors.textSecondary} />} onPress={onEdit} />
-    </View>
 
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.cardHead}>

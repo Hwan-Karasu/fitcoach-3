@@ -71,16 +71,16 @@ const TrainingStack = createNativeStackNavigator<TrainingRoutes>();
 
 type HomeProps = Readonly<{
   client: ClientRecord; accounting: AccountingRepositoryPort; measurements: MeasurementRepositoryPort;
-  onOpenEdit: () => void; onOpenAccounting: () => void;
+  onOpenAccounting: () => void;
   nutritionSlot?: ReactNode;
   onArchive: () => Promise<void>;
 }>;
 
 /** Home composes owners' read projections; the weight entry goes to the Measurements owner. */
-function HomeIndexRoute({ client, accounting, measurements, onOpenEdit, onOpenAccounting, nutritionSlot,
+function HomeIndexRoute({ client, accounting, measurements, onOpenAccounting, nutritionSlot,
   onArchive }: HomeProps) {
   const summary = useClientHomeSummary(client.id, accounting, measurements);
-  return <ClientHomePreview client={client} summary={summary} onEdit={onOpenEdit} onOpenAccounting={onOpenAccounting}
+  return <ClientHomePreview client={client} summary={summary} onOpenAccounting={onOpenAccounting}
     nutritionSlot={nutritionSlot} onArchive={onArchive} />;
 }
 

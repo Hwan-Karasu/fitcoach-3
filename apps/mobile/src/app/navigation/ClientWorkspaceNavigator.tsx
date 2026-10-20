@@ -223,11 +223,10 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.canvas } }}
     >
       <Tabs.Screen name="Home" options={{ tabBarLabel: workspaceTabs.Home, tabBarAccessibilityLabel: workspaceTabs.Home, headerShown: true,
-        header: () => <ClientHeader client={client} subtitle={workspaceTabs.Home} onBack={onClose} onClients={onOpenClients} /> }}>
+        header: () => <ClientHeader client={client} subtitle={workspaceTabs.Home} onBack={onClose} onClients={onOpenClients} onEdit={() => onOpenEdit(client.id)} /> }}>
         {({ navigation }) => <HomeNavigator client={client} accounting={accounting} measurements={measurements}
           nutritionSlot={<NutritionHomeCards key={client.id} clientId={client.id} body={calcBody} trainedToday={trainedToday} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements}
             onOpenNutrition={() => navigation.navigate("Nutrition")} onOpenSchedule={() => navigation.navigate("Nutrition", { screen: "NutritionTargets" })} />}
-          onOpenEdit={() => onOpenEdit(client.id)}
           onOpenAccounting={() => onOpenAccounting(client.id)}
           onArchive={async () => {
             try { await repository.setArchived(client.id, client.revision, true); }
