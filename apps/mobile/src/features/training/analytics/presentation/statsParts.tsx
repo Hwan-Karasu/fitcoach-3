@@ -13,6 +13,12 @@ import { factTonnage, isWorkingSet, type BodyOf, type PlanCompletion, type Scale
 export const number = (value: number, digits = 0) => value.toLocaleString("ru-RU", { maximumFractionDigits: digits });
 export const kg = (value: number) => `${number(value)} кг`;
 
+/** «12 сен – 20 окт 2026» — подпись выбранного своего периода. */
+export function rangeLabel(from: string, to: string): string {
+  const part = (date: string, withYear: boolean) => `${Number(date.slice(8, 10))} ${MONTHS[Number(date.slice(5, 7)) - 1] ?? ""}${withYear ? ` ${date.slice(0, 4)}` : ""}`;
+  return `${part(from, from.slice(0, 4) !== to.slice(0, 4))} – ${part(to, true)}`;
+}
+
 /** Подпись столбца: день/неделя — «5 окт», месяц — «окт 2026». */
 export function bucketLabel(key: string, scale: Scale): string {
   const [year, month, day] = key.split("-").map(Number) as [number, number, number | undefined];

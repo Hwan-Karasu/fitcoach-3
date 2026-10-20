@@ -4,6 +4,7 @@ import { bodyweightLookup, bucketKeyOf, buckets, compareMonths, delta, entriesIn
   "../src/features/training/analytics/presentation/trainingStats.ts";
 import type { SetFact, SetType, SetValues, WorkoutStatus } from "../src/features/training/execution/domain/ExecutionModel.ts";
 import type { TrainingHistoryEntry } from "../src/features/training/archive/presentation/trainingHistory.ts";
+import { periodRange } from "../src/features/training/analytics/presentation/statsFilters.ts";
 import type { ExerciseInfo } from "../src/features/training/plans/domain/ExerciseLookupPort.ts";
 
 const BENCH = "sys:bench";
@@ -207,4 +208,12 @@ test("выполнение плана: 10 из 12 = 83,33%; пропуск, от
   assert.deepEqual([result.done, result.planned, result.missed, result.cancelled], [10, 12, 1, 1]);
   assert.equal(Math.round(result.pct! * 100) / 100, 83.33);
   assert.equal(planCompletion(entries, 0).pct, null, "нет плановых тренировок — процент не считается");
+});
+
+test("границы периода: готовый — от сегодняшней даты, свой — ровно выбранные, без выбора — три месяца", () => {
+  const now = new Date(2026, 9, 30);
+  assert.deepEqual(periodRange(now, { period: "30", custom: null }), { from: "2026-10-01", to: "2026-10-30" });
+  assert.deepEqual(periodRange(now, { period: "custom", custom: { from: "2026-09-12", to: "2026-10-20" } }), { from: "2026-09-12", to: "2026-10-20" });
+  assert.deepEqual(periodRange(now, { period: "custom", custom: null }), { from: "2026-08-02", to: "2026-10-30" });
+  assert.deepEqual(periodRange(now, { period: "all", custom: { from: "2026-09-12", to: "2026-10-20" } }), { from: null, to: "2026-10-30" }, "запомненный свой период не влияет на «Всё время»");
 });
