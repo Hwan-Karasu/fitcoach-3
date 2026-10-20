@@ -7,10 +7,11 @@ import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { dateText, filterHistory, HistoryFilterBar, type HistoryFilter, type TrainingHistoryEntry } from "../../archive/public.ts";
 import type { WorkoutSlot } from "../../execution/public.ts";
 import { useExerciseLookup, type ExerciseLookupPort } from "../../plans/public.ts";
-import { ChartCard, DrillDownModal, SummaryCard, bucketLabel, kg, number, scaleCaption, statusLabels, type DrillTarget } from "./statsParts.tsx";
+import { useBodyOf } from "./useBodyOf.ts";
+import { ChartCard, DrillDownModal, PlanCompletionCard, SummaryCard, bucketLabel, kg, number, scaleCaption, statusLabels, type DrillTarget } from "./statsParts.tsx";
 import { periods, readStatsFilters, writeStatsFilters, type PeriodId } from "./statsFilters.ts";
-import { bucketKeyOf, buckets, entriesInRange, entryTonnage, exerciseActivity, isWorkingSet, muscleGroups, rangeFor, recordsInRange,
-  sanitizeFilter, statusCounts, summarize, trimToGroup } from "./trainingStats.ts";
+import { bucketKeyOf, buckets, entriesInRange, entryTonnage, exerciseActivity, isWorkingSet, muscleGroups, planCompletion, rangeFor, recordsInRange,
+  sanitizeFilter, statusCounts, summarize, trimToGroup, type BodyweightSource } from "./trainingStats.ts";
 
 type Section = "workouts" | "load" | "muscles" | "exercises";
 
@@ -26,10 +27,12 @@ const sections: readonly Readonly<{ id: Section; label: string }>[] = [
  * исходных занятий и подходов (§48.86.19). Экран только читает. Средняя длительность не считается: время начала и
  * конца не записывается.
  */
-export function TrainingStatisticsScreen({ clientId, history, exercises, onOpenExercise, onOpenWorkout, onOpenMonthlyReport, now = new Date() }: Readonly<{
+export function TrainingStatisticsScreen({ clientId, history, bodyweight, exercises, onOpenExercise, onOpenWorkout, onOpenMonthlyReport, now = new Date() }: Readonly<{
   clientId: string;
   history: Readonly<{ list: (clientId: string) => Promise<readonly TrainingHistoryEntry[]>;
+    planned: (clientId: string, filter: HistoryFilter) => Promise<number | null>;
     subscribe: (clientId: string, listener: () => void) => () => void }>;
+  bodyweight: BodyweightSource;
   exercises: ExerciseLookupPort;
   onOpenExercise: (exerciseId: string) => void;
   onOpenWorkout: (slot: WorkoutSlot) => void;
@@ -45,6 +48,8 @@ export function TrainingStatisticsScreen({ clientId, history, exercises, onOpenE
   const [stored, setStored] = useState(() => readStatsFilters(clientId));
   const [section, setSection] = useState<Section>("workouts");
   const [drill, setDrill] = useState<DrillTarget | null>(null);
+  const [planned, setPlanned] = useState<number | null>(null);
+  const bodyOf = useBodyOf(bodyweight, clientId);
 
   useEffect(() => {
     let active = true;
@@ -63,14 +68,21 @@ export function TrainingStatisticsScreen({ clientId, history, exercises, onOpenE
   const filter = useMemo(() => sanitizeFilter(all, stored.filter), [all, stored.filter]);
   const infoOf = useMemo(() => (exerciseId: string) => lookup?.get(exerciseId), [lookup]);
   const range = useMemo(() => rangeFor(now, periods.find((item) => item.id === stored.period)!.days), [now, stored.period]);
+  useEffect(() => {
+    let active = true;
+    if (filter.programId === null) { setPlanned(null); return undefined; }
+    history.planned(clientId, filter).then((next) => { if (active) setPlanned(next); }).catch(() => { if (active) setPlanned(null); });
+    return () => { active = false; };
+  }, [clientId, history, filter, version]);
   const scoped = useMemo(() => entriesInRange(filterHistory(all, filter), range), [all, filter, range]);
-  const summary = useMemo(() => summarize(scoped, infoOf), [scoped, infoOf]);
+  const summary = useMemo(() => summarize(scoped, infoOf, bodyOf), [scoped, infoOf, bodyOf]);
+  const completion = useMemo(() => planned === null ? null : planCompletion(filterHistory(all, filter), planned), [planned, all, filter]);
   const nameOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.name ?? "Упражнение", [lookup]);
 
   const workoutsChart = useMemo(() => buckets(scoped, range, (entry) => entry.status === "COMPLETED" ? 1 : 0, 0), [scoped, range]);
   const setsChart = useMemo(() => buckets(scoped, range, (entry) => entry.exercises.reduce(
     (sum, exercise) => sum + exercise.facts.filter(isWorkingSet).length, 0), 0), [scoped, range]);
-  const tonnageChart = useMemo(() => buckets(scoped, range, (entry) => entryTonnage(entry, infoOf).kg, null), [scoped, range, infoOf]);
+  const tonnageChart = useMemo(() => buckets(scoped, range, (entry) => entryTonnage(entry, infoOf, bodyOf).kg, null), [scoped, range, infoOf, bodyOf]);
   const statuses = useMemo(() => statusCounts(scoped), [scoped]);
   const groups = useMemo(() => muscleGroups(scoped, infoOf), [scoped, infoOf]);
   const activity = useMemo(() => exerciseActivity(scoped), [scoped]);
@@ -114,6 +126,7 @@ export function TrainingStatisticsScreen({ clientId, history, exercises, onOpenE
           <SummaryCard label="Средняя длительность" value="Нет данных" caption="время начала и конца не записывается" />
         </View>
         {incomplete ? <Text style={[styles.caption, { color: colors.warning }]}>{incompleteNote}</Text> : null}
+        {completion === null ? null : <PlanCompletionCard completion={completion} />}
         <AppButton variant="secondary" label="Месячный отчёт" onPress={onOpenMonthlyReport} />
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
@@ -202,7 +215,7 @@ export function TrainingStatisticsScreen({ clientId, history, exercises, onOpenE
           </ChartCard>
         </> : null}
       </ScrollView>
-      <DrillDownModal target={drill} infoOf={infoOf} nameOf={nameOf} onClose={() => setDrill(null)}
+      <DrillDownModal target={drill} infoOf={infoOf} nameOf={nameOf} bodyOf={bodyOf} onClose={() => setDrill(null)}
         onOpenWorkout={(entry) => { setDrill(null); openWorkout(entry); }} />
     </View>
   );

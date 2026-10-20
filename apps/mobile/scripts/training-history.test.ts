@@ -163,3 +163,21 @@ test("§50.2: восстановление архивной программы �
     await env.close();
   }
 });
+
+test("§48.86.9: плановых тренировок выбранной программы и мезоцикла; без явного выбора, у чужой и у удалённой — нет", async () => {
+  const env = await setup();
+  try {
+    const { a, simple, periodized, cycles, history, otherProgram, deleteProgram, plans, revision } = env;
+    assert.equal(await history.planned(a, { programId: simple, mesocycleId: null }), 4, "Простая: 4 недели по одной тренировке");
+    assert.equal(await history.planned(a, { programId: periodized, mesocycleId: null }), 4, "два мезоцикла по две недели, в каждой по одной тренировке");
+    assert.equal(await history.planned(a, { programId: periodized, mesocycleId: cycles[1]!.id }), 2);
+    assert.equal(await history.planned(a, { programId: periodized, mesocycleId: "нет-такого" }), null);
+    assert.equal(await history.planned(a, { programId: null, mesocycleId: null }), null, "программа явно не выбрана");
+    assert.equal(await history.planned(a, { programId: otherProgram, mesocycleId: null }), null, "программа другого клиента не считается");
+    await plans.archiveForClient(a, simple);
+    await deleteProgram.deleteProgram({ clientId: a, programId: simple, expectedRevision: await revision(simple) });
+    assert.equal(await history.planned(a, { programId: simple, mesocycleId: null }), null, "удалённой программы нет");
+  } finally {
+    await env.close();
+  }
+});

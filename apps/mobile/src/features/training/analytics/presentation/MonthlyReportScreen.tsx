@@ -7,10 +7,11 @@ import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { filterHistory, HistoryFilterBar, type HistoryFilter, type TrainingHistoryEntry } from "../../archive/public.ts";
 import type { WorkoutSlot } from "../../execution/public.ts";
 import { useExerciseLookup, type ExerciseLookupPort } from "../../plans/public.ts";
+import { useBodyOf } from "./useBodyOf.ts";
 import { ChartCard, DrillDownModal, bucketLabel, kg, number, scaleCaption, type DrillTarget } from "./statsParts.tsx";
 import { readStatsFilters, writeStatsFilters } from "./statsFilters.ts";
 import { bucketKeyOf, buckets, compareMonths, delta, entriesInRange, entryTonnage, isWorkingSet, monthOf, muscleGroups, sanitizeFilter, summarize,
-  trimToGroup, type Delta, type MonthRef } from "./trainingStats.ts";
+  trimToGroup, type BodyweightSource, type Delta, type MonthRef } from "./trainingStats.ts";
 
 const NOMINATIVE = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
 const GENITIVE = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -30,10 +31,11 @@ function deltaText(value: Delta, format: (amount: number) => string): string {
  * прошлому, сравнение с предыдущим календарным месяцем (неполный месяц — с такой же по длине частью), те же
  * определения и фильтры, что в общей статистике. Считается по актуальным фактам, снимок не сохраняется.
  */
-export function MonthlyReportScreen({ clientId, history, exercises, onOpenWorkout, now = new Date() }: Readonly<{
+export function MonthlyReportScreen({ clientId, history, bodyweight, exercises, onOpenWorkout, now = new Date() }: Readonly<{
   clientId: string;
   history: Readonly<{ list: (clientId: string) => Promise<readonly TrainingHistoryEntry[]>;
     subscribe: (clientId: string, listener: () => void) => () => void }>;
+  bodyweight: BodyweightSource;
   exercises: ExerciseLookupPort;
   onOpenWorkout: (slot: WorkoutSlot) => void;
   now?: Date;
@@ -49,6 +51,7 @@ export function MonthlyReportScreen({ clientId, history, exercises, onOpenWorkou
   const [stored, setStored] = useState(() => readStatsFilters(clientId));
   const [month, setMonth] = useState<MonthRef>(thisMonth);
   const [drill, setDrill] = useState<DrillTarget | null>(null);
+  const bodyOf = useBodyOf(bodyweight, clientId);
 
   useEffect(() => {
     let active = true;
@@ -66,12 +69,12 @@ export function MonthlyReportScreen({ clientId, history, exercises, onOpenWorkou
   const scopedAll = useMemo(() => filterHistory(all, filter), [all, filter]);
   const current = useMemo(() => entriesInRange(scopedAll, comparison.current), [scopedAll, comparison]);
   const previous = useMemo(() => entriesInRange(scopedAll, comparison.previous), [scopedAll, comparison]);
-  const now1 = useMemo(() => summarize(current, infoOf), [current, infoOf]);
-  const before = useMemo(() => summarize(previous, infoOf), [previous, infoOf]);
+  const now1 = useMemo(() => summarize(current, infoOf, bodyOf), [current, infoOf, bodyOf]);
+  const before = useMemo(() => summarize(previous, infoOf, bodyOf), [previous, infoOf, bodyOf]);
   const workoutsChart = useMemo(() => buckets(current, comparison.current, (entry) => entry.status === "COMPLETED" ? 1 : 0, 0), [current, comparison]);
   const setsChart = useMemo(() => buckets(current, comparison.current, (entry) => entry.exercises.reduce(
     (sum, exercise) => sum + exercise.facts.filter(isWorkingSet).length, 0), 0), [current, comparison]);
-  const tonnageChart = useMemo(() => buckets(current, comparison.current, (entry) => entryTonnage(entry, infoOf).kg, null), [current, comparison, infoOf]);
+  const tonnageChart = useMemo(() => buckets(current, comparison.current, (entry) => entryTonnage(entry, infoOf, bodyOf).kg, null), [current, comparison, infoOf, bodyOf]);
   const groups = useMemo(() => muscleGroups(current, infoOf), [current, infoOf]);
 
   const items = (result: ReturnType<typeof buckets>): readonly BarChartItem[] =>
@@ -166,7 +169,7 @@ export function MonthlyReportScreen({ clientId, history, exercises, onOpenWorkou
           </ChartCard>
         </>}
       </ScrollView>
-      <DrillDownModal target={drill} infoOf={infoOf} nameOf={nameOf} onClose={() => setDrill(null)}
+      <DrillDownModal target={drill} infoOf={infoOf} nameOf={nameOf} bodyOf={bodyOf} onClose={() => setDrill(null)}
         onOpenWorkout={(entry) => { setDrill(null); onOpenWorkout({ clientId, programId: entry.programId, weekIndex: entry.weekIndex, plannedWorkoutId: entry.plannedWorkoutId }); }} />
     </View>
   );

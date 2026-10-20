@@ -38,16 +38,49 @@ export const isWorkingSet = (fact: SetFact) => fact.confirmed && fact.setType !=
 
 const workingFacts = (entry: TrainingHistoryEntry) => entry.exercises.flatMap((exercise) => exercise.facts.filter(isWorkingSet));
 
-/** Тоннаж подхода: `null` — к упражнению не применим; `kg: null` — невычислим (§48.86.15). */
-export function factTonnage(fact: SetFact, info: ExerciseInfo | undefined): Readonly<{ kg: number | null }> | null {
+/** Достоверная масса тела клиента: значение и дата замера, который использован (§48.86.36). */
+export interface BodyWeight {
+  readonly kg: number;
+  readonly date: string;
+}
+
+export type BodyOf = (date: string) => BodyWeight | null;
+
+/** Источник ряда массы тела клиента; собирается в read-model из замеров. */
+export interface BodyweightSource {
+  list(clientId: string): Promise<readonly BodyWeight[]>;
+  subscribe(clientId: string, listener: () => void): () => void;
+}
+
+/** §48.86.36: последний достоверный замер не позже даты занятия; позднее — не подставляется. `points` — по возрастанию даты. */
+export function bodyweightLookup(points: readonly BodyWeight[]): BodyOf {
+  return (date) => {
+    let found: BodyWeight | null = null;
+    for (const point of points) { if (point.date <= date) found = point; else break; }
+    return found;
+  };
+}
+
+/**
+ * Тоннаж подхода: `null` — к упражнению не применим; `kg: null` — невычислим (§48.86.15). Обычный вес — вес × повторы;
+ * с доп. весом — (масса тела + доп. вес) × повторы; с помощью — (масса тела − помощь) × повторы (§48.86.7). Нет массы
+ * тела, пустые вес или повторы, отрицательная нагрузка — не ноль и не «исправленное» значение, а невычислимо.
+ */
+export function factTonnage(fact: SetFact, info: ExerciseInfo | undefined, body: BodyWeight | null = null): Readonly<{ kg: number | null }> | null {
   const metrics = info?.metrics ?? [];
-  // Масса тела клиента на дату занятия (§48.86.7, §48.86.36) пока не подключена — такие подходы считаются неполными.
-  if (metrics.includes("addedLoad") || metrics.includes("assistance")) return { kg: null };
-  if (!(metrics.includes("load") && metrics.includes("reps"))) return null;
+  const added = metrics.includes("addedLoad");
+  const assisted = metrics.includes("assistance");
+  const plain = metrics.includes("load") && metrics.includes("reps");
+  if (!added && !assisted && !plain) return null;
   const pieces = fact.sides === null ? [fact.values, ...fact.drops]
     : [fact.sides.left, fact.sides.right].filter((side) => side.confirmed).map((side) => side.values);
-  const known = pieces.filter((values) => values.loadGrams !== null && values.reps !== null);
-  return known.length === 0 ? { kg: null } : { kg: known.reduce((sum, values) => sum + values.loadGrams! / 1000 * values.reps!, 0) };
+  const known = pieces.flatMap((values) => {
+    if (values.reps === null || values.loadGrams === null) return [];
+    const load = values.loadGrams / 1000;
+    const base = plain ? load : body === null ? null : added ? body.kg + load : body.kg - load;
+    return base === null || base < 0 ? [] : [base * values.reps];
+  });
+  return known.length === 0 ? { kg: null } : { kg: known.reduce((sum, value) => sum + value, 0) };
 }
 
 export interface EntryTonnage {
@@ -56,13 +89,14 @@ export interface EntryTonnage {
   readonly incompleteSets: number;
 }
 
-export function entryTonnage(entry: TrainingHistoryEntry, infoOf: InfoOf): EntryTonnage {
+export function entryTonnage(entry: TrainingHistoryEntry, infoOf: InfoOf, bodyOf?: BodyOf): EntryTonnage {
+  const body = bodyOf?.(entry.actualDate) ?? null;
   let kg: number | null = null;
   let incompleteSets = 0;
   for (const exercise of entry.exercises) {
     const info = infoOf(exercise.exerciseId);
     for (const fact of exercise.facts.filter(isWorkingSet)) {
-      const tonnage = factTonnage(fact, info);
+      const tonnage = factTonnage(fact, info, body);
       if (tonnage === null) continue;
       if (tonnage.kg === null) incompleteSets += 1;
       else kg = (kg ?? 0) + tonnage.kg;
@@ -82,11 +116,11 @@ export interface StatsSummary {
   readonly incompleteSets: number;
 }
 
-export function summarize(entries: readonly TrainingHistoryEntry[], infoOf: InfoOf): StatsSummary {
+export function summarize(entries: readonly TrainingHistoryEntry[], infoOf: InfoOf, bodyOf?: BodyOf): StatsSummary {
   let tonnageKg: number | null = null;
   let incompleteSets = 0;
   for (const entry of entries) {
-    const tonnage = entryTonnage(entry, infoOf);
+    const tonnage = entryTonnage(entry, infoOf, bodyOf);
     incompleteSets += tonnage.incompleteSets;
     if (tonnage.kg !== null) tonnageKg = (tonnageKg ?? 0) + tonnage.kg;
   }
@@ -288,4 +322,23 @@ export function trimToGroup(entries: readonly TrainingHistoryEntry[], infoOf: In
       && exercise.facts.some(isWorkingSet));
     return exercises.length === 0 ? [] : [{ ...entry, exercises }];
   });
+}
+
+export interface PlanCompletion {
+  readonly done: number;
+  readonly planned: number;
+  /** `null` — в выбранных неделях нет плановых тренировок: не 0% и не 100% (§48.86.9 п. 5). */
+  readonly pct: number | null;
+  readonly missed: number;
+  readonly cancelled: number;
+}
+
+/**
+ * §48.86.9: завершённые плановые тренировки выбора / все плановые тренировки выбора. «В работе», пропущенные и
+ * отменённые в числитель не входят. `scoped` — занятия выбранной программы/мезоцикла за всё время, не по календарю.
+ */
+export function planCompletion(scoped: readonly TrainingHistoryEntry[], planned: number): PlanCompletion {
+  const count = (status: WorkoutStatus) => scoped.filter((entry) => entry.status === status).length;
+  const done = count("COMPLETED");
+  return { done, planned, pct: planned > 0 ? done / planned * 100 : null, missed: count("MISSED"), cancelled: count("CANCELLED") };
 }

@@ -11,7 +11,7 @@ import type { CalendarParticipantDirectoryPort, CalendarRepositoryPort } from
 import { DevClientRepository } from "../../features/clients/data/DevClientRepository.ts";
 import { DevMeasurementRepository, devMeasurementClientDeletionParticipant } from
   "../../features/measurements/data/DevMeasurementRepository.ts";
-import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
+import { dailyPoints, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { DevQuestionnaireRepository, devQuestionnaireClientDeletionParticipant } from
   "../../features/questionnaire/data/DevQuestionnaireRepository.ts";
 import type { QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
@@ -24,6 +24,7 @@ import type { ActiveWorkoutsPort, RestTimersPort, TrainingExecutionPort, Trainin
 import { createActiveWorkouts } from "../../read-models/activeWorkouts.ts";
 import { RestTimerService, factVolume, sortHistory, workoutStatus } from "../../features/training/public.ts";
 import { createTrainingHistory, type TrainingHistoryPort } from "../../read-models/trainingHistory.ts";
+import { createClientBodyweight, type ClientBodyweightPort } from "../../read-models/clientBodyweight.ts";
 import { expoRestSignal, preloadRestSignal } from "./expoRestSignal.ts";
 import { DevExerciseCatalogRepository } from "../../features/exercises/data/DevExerciseCatalogRepository.ts";
 import systemCatalogJson from "../../features/exercises/data/system-catalog.generated.json";
@@ -64,6 +65,8 @@ export interface DevServices {
   readonly activeWorkouts: ActiveWorkoutsPort;
   /** §48.85: хронология занятий клиента — история и прогресс упражнения (X02). */
   readonly trainingHistory: TrainingHistoryPort;
+  /** §48.86.36: ряд массы тела клиента для тоннажа упражнений с собственным весом. */
+  readonly clientBodyweight: ClientBodyweightPort;
   readonly exercises: ExerciseCatalogPort;
   /** Каталог глазами планов тренировок: название, величины подхода, миниатюра. */
   readonly exerciseLookup: ExerciseLookupPort;
@@ -126,6 +129,7 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
     restTimers,
     activeWorkouts: createActiveWorkouts(trainingExecution, trainingPlans, clients),
     trainingHistory: createTrainingHistory({ factVolume, workoutStatus, sortHistory }, trainingExecution, trainingPlans),
+    clientBodyweight: createClientBodyweight(dailyPoints, measurements),
     exercises,
     exerciseLookup: exerciseLookup(exercises),
     weekCopy,

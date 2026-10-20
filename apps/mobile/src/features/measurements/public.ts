@@ -2,5 +2,5 @@ export { ClientMeasurementsScreen } from "./presentation/ClientMeasurementsScree
 export type { ClientMeasurements, DailyPoint, DailyPrimary, Measurement, MeasurementInput, MeasurementMethod,
   MeasurementType } from "./domain/MeasurementModel.ts";
 export type { MeasurementCommittedChange, MeasurementRepositoryPort } from "./domain/MeasurementRepositoryPort.ts";
-export { formatDate, formatValue, latestPoint, localDateOf, measurementTypeInfo, parseValueX10 } from
+export { dailyPoints, formatDate, formatValue, latestPoint, localDateOf, measurementTypeInfo, parseValueX10 } from
   "./domain/MeasurementRules.ts";

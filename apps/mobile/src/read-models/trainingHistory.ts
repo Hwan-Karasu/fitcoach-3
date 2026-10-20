@@ -70,6 +70,23 @@ export function createTrainingHistory(rules: TrainingHistoryRules,
       });
       return sortHistory(entries);
     },
+    /**
+     * §48.86.9: число плановых тренировок выбранной программы или мезоцикла (знаменатель выполнения плана). `null` — программа
+     * не выбрана, её нет у клиента или у мезоцикла нет данных; один выбор — одна программа, чужих планов не берётся.
+     */
+    async planned(clientId: string, filter: Readonly<{ programId: string | null; mesocycleId: string | null }>): Promise<number | null> {
+      if (filter.programId === null) return null;
+      const library = await plans.getLibrary(clientId);
+      const card = [...library.active, ...library.archived].find((item) => item.id === filter.programId);
+      if (card === undefined) return null;
+      if (card.kind === "PERIODIZED") {
+        const cycles = (await plans.getPeriodizedPlan(clientId, card.id))?.mesocycles ?? [];
+        const chosen = filter.mesocycleId === null ? cycles : cycles.filter((cycle) => cycle.id === filter.mesocycleId);
+        if (filter.mesocycleId !== null && chosen.length === 0) return null;
+        return chosen.reduce((sum, cycle) => sum + cycle.weeks.reduce((count, week) => count + week.workouts.length, 0), 0);
+      }
+      return (await plans.getSimpleWeeks(clientId, card.id)).reduce((sum, week) => sum + week.workouts.length, 0);
+    },
     subscribe(clientId: string, listener: () => void): () => void {
       const offExecution = execution.subscribeCommittedChanges((change) => { if (change.clientId === clientId) listener(); });
       const offPlans = plans.subscribeCommittedChanges((change) => { if (change.clientIds.includes(clientId)) listener(); });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bucketKeyOf, buckets, compareMonths, delta, entriesInRange, exerciseActivity, monthRange, muscleGroups, rangeFor, recordsInRange, sanitizeFilter, scaleFor, statusCounts, summarize, trimToGroup } from
+import { bodyweightLookup, bucketKeyOf, buckets, compareMonths, delta, entriesInRange, exerciseActivity, monthRange, muscleGroups, planCompletion, rangeFor, recordsInRange, sanitizeFilter, scaleFor, statusCounts, summarize, trimToGroup } from
   "../src/features/training/analytics/presentation/trainingStats.ts";
 import type { SetFact, SetType, SetValues, WorkoutStatus } from "../src/features/training/execution/domain/ExecutionModel.ts";
 import type { TrainingHistoryEntry } from "../src/features/training/archive/presentation/trainingHistory.ts";
@@ -11,11 +11,13 @@ const PULLUP = "sys:pullup-weighted";
 const CURL = "sys:curl";
 let n = 0;
 
-const infos: Readonly<Record<string, ExerciseInfo>> = {
+const infos: Record<string, ExerciseInfo> = {
   [BENCH]: { name: "Жим", metrics: ["load", "reps"], thumbnail: null, unilateral: false, group: { id: "chest", label: "Грудь" } },
   [CURL]: { name: "Бицепс", metrics: ["load", "reps"], thumbnail: null, unilateral: false, group: { id: "upper_arms", label: "Плечи и руки" } },
   [PULLUP]: { name: "Подтягивания с весом", metrics: ["addedLoad", "reps"], thumbnail: null, unilateral: false, group: { id: "back", label: "Спина" } },
 };
+const ASSIST = "sys:assisted-pullup";
+infos[ASSIST] = { name: "Подтягивания в гравитроне", metrics: ["assistance", "reps"], thumbnail: null, unilateral: false, group: { id: "back", label: "Спина" } };
 const infoOf = (id: string) => infos[id];
 
 const values = (kg: number | null, reps: number | null): SetValues => ({ reps, loadGrams: kg === null ? null : kg * 1000, durationSec: null, distanceM: null });
@@ -165,4 +167,44 @@ test("переход от столбца: занятия попадают в т�
   const chest = trimToGroup(entries, infoOf, "chest");
   assert.deepEqual(chest.map((item) => [item.key, item.exercises.map((exercise) => exercise.exerciseId)]), [["a", [BENCH]], ["b", [BENCH]]]);
   assert.equal(entries[0]!.exercises.length, 2, "исходные данные не изменены");
+});
+
+test("масса тела на дату занятия: последний замер не позже, из будущего не берётся (§48.86.36)", () => {
+  const lookup = bodyweightLookup([{ date: "2026-09-02", kg: 82 }, { date: "2026-09-15", kg: 84 }]);
+  assert.deepEqual(lookup("2026-09-10"), { kg: 82, date: "2026-09-02" }, "10 сентября — замер 2 сентября, не 15-го");
+  assert.equal(lookup("2026-09-01"), null, "до первого замера — нет данных");
+  assert.deepEqual(lookup("2026-09-15"), { kg: 84, date: "2026-09-15" }, "замер в тот же день подходит");
+  assert.equal(bodyweightLookup([])("2026-09-10"), null);
+});
+
+test("тоннаж с массой тела: с доп. весом (80 + 10) × 8 = 720, с помощью (80 − 30) × 10 = 500 (§48.86.7)", () => {
+  const body = bodyweightLookup([{ date: "2026-09-02", kg: 80 }]);
+  const weighted = summarize([entry("a", "2026-09-10", "COMPLETED", [fact(PULLUP, values(10, 8))])], infoOf, body);
+  assert.deepEqual([weighted.tonnageKg, weighted.incompleteSets], [720, 0]);
+  const assisted = summarize([entry("a", "2026-09-10", "COMPLETED", [fact(ASSIST, values(30, 10))])], infoOf, body);
+  assert.deepEqual([assisted.tonnageKg, assisted.incompleteSets], [500, 0]);
+});
+
+test("тоннаж с массой тела: нет замера, помощь больше массы или пустой вес — невычислимо, не ноль", () => {
+  const body = bodyweightLookup([{ date: "2026-09-02", kg: 80 }]);
+  const noBody = summarize([entry("a", "2026-09-01", "COMPLETED", [fact(PULLUP, values(10, 8))])], infoOf, body);
+  assert.deepEqual([noBody.tonnageKg, noBody.incompleteSets], [null, 1], "1 сентября замеров ещё не было");
+  const negative = summarize([entry("a", "2026-09-10", "COMPLETED", [fact(ASSIST, values(90, 10))])], infoOf, body);
+  assert.deepEqual([negative.tonnageKg, negative.incompleteSets], [null, 1], "80 − 90 < 0 — не исправляется молча");
+  const emptyLoad = summarize([entry("a", "2026-09-10", "COMPLETED", [fact(PULLUP, values(null, 8))])], infoOf, body);
+  assert.deepEqual([emptyLoad.tonnageKg, emptyLoad.incompleteSets], [null, 1]);
+  const mixed = summarize([entry("a", "2026-09-10", "COMPLETED", [fact(BENCH, values(100, 8)), fact(PULLUP, values(10, 8))])], infoOf);
+  assert.deepEqual([mixed.tonnageKg, mixed.incompleteSets], [800, 1], "без ряда массы тела — 800 кг и один неполный");
+});
+
+test("выполнение плана: 10 из 12 = 83,33%; пропуск, отмена и «в работе» в числитель не входят (§48.86.9)", () => {
+  const entries = [
+    ...Array.from({ length: 10 }, (_, index) => entry("c" + index, "2026-10-0" + ((index % 9) + 1), "COMPLETED", [fact(BENCH, values(1, 1))])),
+    entry("m", "2026-10-20", "MISSED", [fact(BENCH, values(1, 1))]), entry("x", "2026-10-21", "CANCELLED", [fact(BENCH, values(1, 1))]),
+    entry("w", "2026-10-22", "IN_PROGRESS", [fact(BENCH, values(1, 1))]),
+  ];
+  const result = planCompletion(entries, 12);
+  assert.deepEqual([result.done, result.planned, result.missed, result.cancelled], [10, 12, 1, 1]);
+  assert.equal(Math.round(result.pct! * 100) / 100, 83.33);
+  assert.equal(planCompletion(entries, 0).pct, null, "нет плановых тренировок — процент не считается");
 });

@@ -22,6 +22,7 @@ import { moreDestinations, workspaceTabs } from "./routeCatalog.ts";
 import { RootTabBar } from "./RootTabBar.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 import type { TrainingHistoryPort } from "../../read-models/trainingHistory.ts";
+import type { ClientBodyweightPort } from "../../read-models/clientBodyweight.ts";
 
 type WorkspaceTabs = {
   Home: undefined;
@@ -41,9 +42,9 @@ type MoreRoutes = {
 const Tabs = createBottomTabNavigator<WorkspaceTabs>();
 const MoreStack = createNativeStackNavigator<MoreRoutes>();
 
-function MoreNavigator({ client, questionnaire, trainingPlans, history, exerciseLookup, planDelete, onClose, onOpenClients, onOpenExercise, onOpenWorkout }: Readonly<{
+function MoreNavigator({ client, questionnaire, trainingPlans, history, bodyweight, exerciseLookup, planDelete, onClose, onOpenClients, onOpenExercise, onOpenWorkout }: Readonly<{
   client: ClientRecord; questionnaire: QuestionnaireRepositoryPort; onClose: () => void; onOpenClients: () => void;
-  trainingPlans: TrainingPlansRepositoryPort; history: TrainingHistoryPort; exerciseLookup: ExerciseLookupPort;
+  trainingPlans: TrainingPlansRepositoryPort; history: TrainingHistoryPort; bodyweight: ClientBodyweightPort; exerciseLookup: ExerciseLookupPort;
   onOpenExercise: (exerciseId: string) => void; onOpenWorkout: (slot: WorkoutSlot) => void;
   planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort;
 }>) {
@@ -75,17 +76,17 @@ function MoreNavigator({ client, questionnaire, trainingPlans, history, exercise
           renderPrograms={() => <ArchivedProgramsPanel clientId={clientId} repository={trainingPlans} planDelete={planDelete} />} />}
       </MoreStack.Screen>
       <MoreStack.Screen name="Statistics" options={{ title: moreDestinations.Statistics }}>
-        {({ navigation }) => <TrainingStatisticsScreen clientId={clientId} history={history} exercises={exerciseLookup} onOpenExercise={onOpenExercise}
+        {({ navigation }) => <TrainingStatisticsScreen clientId={clientId} history={history} bodyweight={bodyweight} exercises={exerciseLookup} onOpenExercise={onOpenExercise}
           onOpenWorkout={onOpenWorkout} onOpenMonthlyReport={() => navigation.navigate("MonthlyReport")} />}
       </MoreStack.Screen>
       <MoreStack.Screen name="MonthlyReport" options={{ title: "Месячный отчёт" }}>
-        {() => <MonthlyReportScreen clientId={clientId} history={history} exercises={exerciseLookup} onOpenWorkout={onOpenWorkout} />}
+        {() => <MonthlyReportScreen clientId={clientId} history={history} bodyweight={bodyweight} exercises={exerciseLookup} onOpenWorkout={onOpenWorkout} />}
       </MoreStack.Screen>
     </MoreStack.Navigator>
   );
 }
 
-export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, questionnaire, trainingPlans, trainingExecution, trainingHistory, restTimers, activeWorkouts, onOpenWorkout, onOpenClientPrograms, exercises, exerciseLookup, weekCopy, weekSwap, mesocycleSave, planDelete, onOpenEdit, onOpenAccounting,
+export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, questionnaire, trainingPlans, trainingExecution, trainingHistory, clientBodyweight, restTimers, activeWorkouts, onOpenWorkout, onOpenClientPrograms, exercises, exerciseLookup, weekCopy, weekSwap, mesocycleSave, planDelete, onOpenEdit, onOpenAccounting,
   onOpenMeasurements, onClose, onOpenClients, onOpenExercise }: Readonly<{
   clientId: string;
   repository: ClientRepositoryPort & ClientRosterPort;
@@ -96,6 +97,8 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   trainingExecution: TrainingExecutionPort;
   /** §48.85: хронология занятий — архив, статистика, история упражнения. */
   trainingHistory: TrainingHistoryPort;
+  /** §48.86.36: масса тела клиента для тоннажа. */
+  clientBodyweight: ClientBodyweightPort;
   restTimers: RestTimersPort;
   activeWorkouts: ActiveWorkoutsPort;
   onOpenWorkout: (slot: WorkoutSlot) => void;
@@ -200,7 +203,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       </Tabs.Screen>
       <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More}}>
         {() => <MoreNavigator client={client} questionnaire={questionnaire} onClose={onClose} onOpenClients={onOpenClients}
-          trainingPlans={trainingPlans} history={trainingHistory} exerciseLookup={exerciseLookup} planDelete={planDelete}
+          trainingPlans={trainingPlans} history={trainingHistory} bodyweight={clientBodyweight} exerciseLookup={exerciseLookup} planDelete={planDelete}
           onOpenExercise={(exerciseId) => onOpenExercise?.(exerciseId)} onOpenWorkout={onOpenWorkout} />}
       </Tabs.Screen>
     </Tabs.Navigator></ScreenToneProvider></WeekNavigationProvider>
