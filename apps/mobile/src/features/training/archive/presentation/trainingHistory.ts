@@ -19,6 +19,11 @@ export interface TrainingHistoryEntry {
   readonly mesocycleTitle: string | null;
   /** `null` — тренировки больше нет в плане (факты остаются). */
   readonly workoutTitle: string | null;
+  /**
+   * Ключ группировки «та же тренировка в разных неделях»: у Расширенной — родство тренировки в её мезоцикле, у Простой и у программы
+   * с удалённым планом — id плановой тренировки. Не название (одинаковые названия не склеиваются).
+   */
+  readonly workoutKey: string;
   /** Плановый слот — переход из истории в тренировку (§37.3). */
   readonly plannedWorkoutId: string;
   readonly weekIndex: number;
@@ -27,7 +32,8 @@ export interface TrainingHistoryEntry {
   /** Рабочие подходы: засчитанные, без разминки (единое правило `isWorkingSet`). */
   readonly workingSets: number;
   /** Упражнения в порядке выполнения с их фактами. */
-  readonly exercises: readonly Readonly<{ exerciseId: string; facts: readonly SetFact[] }>[];
+  readonly exercises: readonly Readonly<{ exerciseId: string; facts: readonly SetFact[];
+    /** Заметка о выполнении упражнения в этой тренировке (§48.67); `null` — нет. */ note: string | null }>[];
 }
 
 export interface HistoryFilter {

@@ -201,3 +201,35 @@ test("UX-контракт истории: «рабочих подходов» �
     await env.close();
   }
 });
+
+test("UX-контракт истории: ключ тренировки — родство у Расширенной, id у Простой; заметка упражнения попадает в запись", async () => {
+  const env = await setup();
+  try {
+    const { a, simple, periodized, simpleWorkout, cycles, complete, execution, history } = env;
+    // Простая: одна тренировка в разных неделях — один ключ; Расширенная: родство тренировки внутри мезоцикла.
+    await complete(a, simple, 1, simpleWorkout, "2026-10-01");
+    await complete(a, simple, 2, simpleWorkout, "2026-10-08");
+    const first = cycles[1]!.weeks[0]!.workouts[0]!;
+    const second = cycles[1]!.weeks[1]!.workouts[0]!;
+    assert.equal(first.lineageId, second.lineageId, "предусловие: у недель одного мезоцикла общее родство тренировки");
+    assert.notEqual(first.id, second.id, "предусловие: плановые тренировки разных недель — разные id");
+    await complete(a, periodized, 1, first, "2026-10-02");
+    await complete(a, periodized, 2, second, "2026-10-09");
+    await complete(a, periodized, 1, cycles[0]!.weeks[0]!.workouts[0]!, "2026-10-03");
+    await execution.saveExerciseNote({ clientId: a, programId: simple, weekIndex: 1, plannedWorkoutId: simpleWorkout.id },
+      simpleWorkout.exercises[0]!.id, "Левое плечо не тянуло", new Date("2026-10-01T11:00:00Z"));
+
+    const entries = await history.list(a);
+    const simpleKeys = entries.filter((entry) => entry.programId === simple).map((entry) => entry.workoutKey);
+    assert.deepEqual(simpleKeys, [simpleWorkout.id, simpleWorkout.id], "Простая: ключ — id тренировки, повторяется по неделям");
+    const blockTwo = entries.filter((entry) => entry.mesocycleId === cycles[1]!.id).map((entry) => entry.workoutKey);
+    assert.deepEqual(blockTwo, [first.lineageId, first.lineageId], "Расширенная: ключ — родство тренировки");
+    const blockOne = entries.find((entry) => entry.mesocycleId === cycles[0]!.id)!;
+    assert.notEqual(blockOne.workoutKey, first.lineageId, "у другого мезоцикла другое родство");
+    const noted = entries.find((entry) => entry.programId === simple && entry.weekIndex === 1)!;
+    assert.equal(noted.exercises[0]!.note, "Левое плечо не тянуло");
+    assert.equal(entries.find((entry) => entry.programId === simple && entry.weekIndex === 2)!.exercises[0]!.note, null, "без заметки — null");
+  } finally {
+    await env.close();
+  }
+});

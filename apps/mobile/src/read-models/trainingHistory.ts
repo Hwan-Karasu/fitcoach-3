@@ -52,17 +52,21 @@ export function createTrainingHistory(rules: TrainingHistoryRules,
         const origin = snapshot !== null ? undefined : origins.get(item.programId)?.get(`${item.weekIndex}:${item.plannedWorkoutId}`);
         // Порядок упражнений — как в плане; убранные из плана — после, в порядке записи.
         const order = origin?.workout.exercises.map((exercise) => exercise.id) ?? [];
-        const groups = new Map<string, { exerciseId: string; facts: SetFact[] }>();
-        for (const id of order) groups.set(id, { exerciseId: origin!.workout.exercises.find((exercise) => exercise.id === id)!.exerciseId, facts: [] });
+        const groups = new Map<string, { exerciseId: string; facts: SetFact[]; note: string | null }>();
+        for (const id of order) {
+          groups.set(id, { exerciseId: origin!.workout.exercises.find((exercise) => exercise.id === id)!.exerciseId, facts: [], note: null });
+        }
         for (const fact of facts.sort((a, b) => a.position - b.position)) {
-          const group = groups.get(fact.plannedExerciseId) ?? { exerciseId: fact.exerciseId, facts: [] };
+          const group = groups.get(fact.plannedExerciseId) ?? { exerciseId: fact.exerciseId, facts: [], note: null };
           group.facts.push(fact);
           groups.set(fact.plannedExerciseId, group);
         }
+        for (const [plannedExerciseId, group] of groups) group.note = item.execution.notes.get(plannedExerciseId) ?? null;
         return [{ key: session.id, programId: item.programId, programTitle: snapshot?.programTitle ?? card!.title,
           programKind: snapshot?.programKind ?? card!.kind, archived: snapshot === null && card!.archivedAt !== null, planDeleted: snapshot !== null,
           mesocycleId: origin?.mesocycleId ?? null, mesocycleTitle: snapshot !== null ? snapshot.mesocycleTitle : origin?.mesocycleTitle ?? null,
-          workoutTitle: snapshot !== null ? snapshot.workoutTitle : origin?.workout.title ?? null, plannedWorkoutId: item.plannedWorkoutId, weekIndex: item.weekIndex, actualDate: session.actualDate,
+          workoutTitle: snapshot !== null ? snapshot.workoutTitle : origin?.workout.title ?? null,
+          workoutKey: origin?.workout.lineageId ?? item.plannedWorkoutId, plannedWorkoutId: item.plannedWorkoutId, weekIndex: item.weekIndex, actualDate: session.actualDate,
           status: workoutStatus(session.outcome, facts.length > 0),
           workingSets: facts.filter(isWorkingSet).length,
           exercises: [...groups.values()].filter((group) => group.facts.length > 0) }];

@@ -22,8 +22,8 @@ function entry(key: string, date: string, programId: string, facts: readonly Set
   const groups = new Map<string, SetFact[]>();
   for (const item of facts) groups.set(item.exerciseId, [...(groups.get(item.exerciseId) ?? []), item]);
   return { key, programId, programTitle: programId, programKind: "SIMPLE", archived: false, planDeleted: false, mesocycleId: null,
-    mesocycleTitle: null, workoutTitle: "Тренировка 1", plannedWorkoutId: "w1", weekIndex: 1, actualDate: date, status: "COMPLETED",
-    workingSets: facts.length, exercises: [...groups].map(([exerciseId, list]) => ({ exerciseId, facts: list })) };
+    mesocycleTitle: null, workoutTitle: "Тренировка 1", workoutKey: "w1", plannedWorkoutId: "w1", weekIndex: 1, actualDate: date, status: "COMPLETED",
+    workingSets: facts.length, exercises: [...groups].map(([exerciseId, list]) => ({ exerciseId, facts: list, note: null })) };
 }
 
 test("e1RM по Бжицки: 1–12 повторений, выше — не считается (§48.86.8)", () => {
