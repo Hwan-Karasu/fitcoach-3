@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react-native";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -11,6 +12,8 @@ export interface SheetAction {
   readonly detail?: string;
   readonly danger?: boolean;
   readonly disabled?: boolean;
+  /** Значок слева от названия (как в меню программы и упражнения). */
+  readonly icon?: LucideIcon;
   readonly onPress: () => void;
 }
 
@@ -39,10 +42,13 @@ export function ActionSheet({ visible, title, actions, onClose, children }: Read
               onPress={() => { onClose(); action.onPress(); }}
               style={({ pressed }) => [styles.item, { backgroundColor: pressed ? colors.surfaceRaised : "transparent",
                 opacity: action.disabled === true ? 0.45 : 1 }]}>
-              <Text style={[styles.label, { color: action.danger === true ? colors.danger : colors.textPrimary }]}>{action.label}</Text>
-              {action.detail !== undefined ? (
-                <Text style={[styles.detail, { color: colors.textMuted }]}>{action.detail}</Text>
-              ) : null}
+              {action.icon === undefined ? null : <action.icon size={18} color={action.danger === true ? colors.danger : colors.textPrimary} strokeWidth={1.9} />}
+              <View style={styles.text}>
+                <Text style={[styles.label, { color: action.danger === true ? colors.danger : colors.textPrimary }]}>{action.label}</Text>
+                {action.detail !== undefined ? (
+                  <Text style={[styles.detail, { color: colors.textMuted }]}>{action.detail}</Text>
+                ) : null}
+              </View>
             </Pressable>
           ))}
         </ScrollView>
@@ -56,7 +62,8 @@ const styles = StyleSheet.create({
   sheet: { position: "absolute", left: 0, right: 0, bottom: 0, maxHeight: "80%", borderTopLeftRadius: 16,
     borderTopRightRadius: 16, borderWidth: 1, paddingTop: 12 },
   title: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16, paddingHorizontal: 20, paddingBottom: 6 },
-  item: { minHeight: 48, paddingHorizontal: 20, paddingVertical: 12, justifyContent: "center" },
+  item: { minHeight: 48, paddingHorizontal: 20, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 14 },
+  text: { flex: 1 },
   label: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 18 },
   detail: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, marginTop: 2 },
 });

@@ -2,8 +2,9 @@ import { useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, Vibration, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
-import { ChevronDown, ChevronRight, CircleAlert, EllipsisVertical, Eye, GripVertical, Lock, PencilLine, Plus, Redo2,
-  Undo2 } from "lucide-react-native";
+import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, ChevronRight, CircleAlert, CircleDot, ClipboardList, Copy, EllipsisVertical, Eye, EyeOff,
+  FolderInput, GripVertical, Hash, History, Lock, PencilLine, Plus, Redo2, RotateCcw, Settings2, SquareCheck, TextAlignStart, ToggleLeft, Trash2,
+  Type, Undo2, type LucideIcon } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, LoadingState, StickyEditorFooter, TextField,
   type NoticeKind } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -11,6 +12,10 @@ import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { addField, addSection, duplicateField, locateField, moveField, moveFieldTo, moveFieldToSection, moveSection, publishedHasField,
   removeField, removeSection, restoreField, setFieldHidden, updateSection } from "../domain/QuestionnaireBuilder.ts";
 import { QUESTION_TYPES, type PublishSummary, type QuestionField, type QuestionSection } from "../domain/QuestionnaireModel.ts";
+
+/** Значки типов ответа в меню «Тип ответа нового вопроса». */
+const typeIcons: Readonly<Record<(typeof QUESTION_TYPES)[number], LucideIcon>> = { SHORT_TEXT: Type, LONG_TEXT: TextAlignStart, NUMBER: Hash,
+  DATE: CalendarDays, SINGLE_CHOICE: CircleDot, MULTI_CHOICE: SquareCheck, SWITCH: ToggleLeft };
 import { sameSchema, validateSchema } from "../domain/QuestionnaireRules.ts";
 import { ActionSheet, type SheetAction } from "./ActionSheet.tsx";
 import { builderRows, dropTarget, type BuilderRow } from "./builderRows.ts";
@@ -189,29 +194,29 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
   const fieldActions = (field: QuestionField, section: QuestionSection, index: number): SheetAction[] => {
     const wasPublished = publishedHasField(published.schema, field.id);
     const actions: SheetAction[] = [
-      { key: "edit", label: "Настроить", onPress: () => setEditing(field.id) },
-      { key: "copy", label: "Дублировать", onPress: () => {
+      { key: "edit", icon: Settings2, label: "Настроить", onPress: () => setEditing(field.id) },
+      { key: "copy", icon: Copy, label: "Дублировать", onPress: () => {
         const id = newBuilderId();
         builder.apply((current) => duplicateField(current, field.id, id, (at) => `${id}:o${at + 1}`));
         setEditing(id);
       } },
-      { key: "move", label: "Переместить в раздел…", disabled: schema.sections.length < 2,
+      { key: "move", icon: FolderInput, label: "Переместить в раздел…", disabled: schema.sections.length < 2,
         onPress: () => setMenu({ kind: "MOVE", id: field.id }) },
-      { key: "up", label: "Выше", disabled: index === 0, onPress: () => builder.apply((current) => moveField(current, field.id, -1)) },
-      { key: "down", label: "Ниже", disabled: index === section.fields.length - 1,
+      { key: "up", icon: ArrowUp, label: "Выше", disabled: index === 0, onPress: () => builder.apply((current) => moveField(current, field.id, -1)) },
+      { key: "down", icon: ArrowDown, label: "Ниже", disabled: index === section.fields.length - 1,
         onPress: () => builder.apply((current) => moveField(current, field.id, 1)) },
     ];
     if (field.retired) {
-      actions.push({ key: "restore", label: "Вернуть в анкету", onPress: () => builder.apply((current) => restoreField(current, field.id)) });
+      actions.push({ key: "restore", icon: Undo2, label: "Вернуть в анкету", onPress: () => builder.apply((current) => restoreField(current, field.id)) });
       return actions;
     }
-    actions.push({ key: "hide", label: field.hidden ? "Показать" : "Скрыть",
+    actions.push({ key: "hide", icon: field.hidden ? Eye : EyeOff, label: field.hidden ? "Показать" : "Скрыть",
       detail: field.hidden ? undefined : "Вопрос не виден в анкете, ответы сохраняются",
       onPress: () => builder.apply((current) => setFieldHidden(current, field.id, !field.hidden)) });
     if (field.origin === "SYSTEM") {
-      actions.push({ key: "remove", label: "Удалить", disabled: true, detail: "Системный вопрос можно только скрыть", onPress: () => undefined });
+      actions.push({ key: "remove", icon: Trash2, label: "Удалить", disabled: true, detail: "Системный вопрос можно только скрыть", onPress: () => undefined });
     } else {
-      actions.push({ key: "remove", danger: true, label: wasPublished ? "Убрать из анкеты" : "Удалить",
+      actions.push({ key: "remove", icon: Trash2, danger: true, label: wasPublished ? "Убрать из анкеты" : "Удалить",
         detail: wasPublished ? "Ответы клиентов сохранятся, вопрос можно вернуть" : undefined,
         onPress: () => {
           const result = removeField(schema, field.id, published.schema);
@@ -223,15 +228,15 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
   };
 
   const sectionActions = (section: QuestionSection, index: number): SheetAction[] => [
-    { key: "rename", label: "Переименовать", onPress: () => { setRenaming(section.id); setCollapsed((current) => {
+    { key: "rename", icon: PencilLine, label: "Переименовать", onPress: () => { setRenaming(section.id); setCollapsed((current) => {
       const next = new Set(current); next.delete(section.id); return next;
     }); } },
-    { key: "hide", label: section.hidden ? "Показать раздел" : "Скрыть раздел",
+    { key: "hide", icon: section.hidden ? Eye : EyeOff, label: section.hidden ? "Показать раздел" : "Скрыть раздел",
       onPress: () => builder.apply((current) => updateSection(current, section.id, { hidden: !section.hidden })) },
-    { key: "up", label: "Выше", disabled: index === 0, onPress: () => builder.apply((current) => moveSection(current, section.id, -1)) },
-    { key: "down", label: "Ниже", disabled: index === schema.sections.length - 1,
+    { key: "up", icon: ArrowUp, label: "Выше", disabled: index === 0, onPress: () => builder.apply((current) => moveSection(current, section.id, -1)) },
+    { key: "down", icon: ArrowDown, label: "Ниже", disabled: index === schema.sections.length - 1,
       onPress: () => builder.apply((current) => moveSection(current, section.id, 1)) },
-    { key: "remove", label: "Удалить раздел", danger: true,
+    { key: "remove", icon: Trash2, label: "Удалить раздел", danger: true,
       disabled: section.origin === "SYSTEM" || section.fields.length > 0,
       detail: section.origin === "SYSTEM" ? "Системный раздел можно только скрыть"
         : section.fields.length > 0 ? "Сначала перенесите вопросы в другой раздел" : undefined,
@@ -246,7 +251,7 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
       const label = found.field.label.trim() || "Вопрос без текста";
       if (menu.kind === "FIELD") return { title: label, actions: fieldActions(found.field, found.section, found.index) };
       return { title: `Переместить «${label}» в раздел`, actions: schema.sections.filter((section) => section.id !== found.section.id)
-        .map((section) => ({ key: section.id, label: section.title.trim() || "Раздел без названия",
+        .map((section) => ({ key: section.id, icon: FolderInput, label: section.title.trim() || "Раздел без названия",
           onPress: () => builder.apply((current) => moveFieldToSection(current, menu.id, section.id)) })) };
     }
     if (menu.kind === "SECTION") {
@@ -256,7 +261,7 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
         : { title: section.title.trim() || "Раздел без названия", actions: sectionActions(section, index) };
     }
     if (menu.kind === "ADD") {
-      return { title: "Тип ответа нового вопроса", actions: QUESTION_TYPES.map((type) => ({ key: type, label: typeLabels[type],
+      return { title: "Тип ответа нового вопроса", actions: QUESTION_TYPES.map((type) => ({ key: type, icon: typeIcons[type], label: typeLabels[type],
         onPress: () => {
           const id = newBuilderId();
           builder.apply((current) => addField(current, menu.sectionId, type, id));
@@ -266,6 +271,7 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
     if (menu.kind === "VERSIONS") {
       return { title: "Создать черновик из версии", actions: menu.versions.map((entry) => ({
         key: String(entry.version),
+        icon: History,
         label: `Версия ${entry.version}${entry.version === published.version ? " · текущая" : ""}`,
         detail: formatPublishedAt(entry.publishedAt),
         onPress: () => setConfirm({ kind: "REPLACE", source: entry.version, title: `Черновик из версии ${entry.version}?`,
@@ -274,13 +280,13 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
       })) };
     }
     return { title: "Анкета", actions: [
-      { key: "history", label: "История версий", detail: `Опубликовано версий: ${published.version}`, onPress: () => { void openVersions(); } },
-      { key: "discard", label: "Сбросить черновик", disabled: !changed,
+      { key: "history", icon: History, label: "История версий", detail: `Опубликовано версий: ${published.version}`, onPress: () => { void openVersions(); } },
+      { key: "discard", icon: RotateCcw, label: "Сбросить черновик", disabled: !changed,
         detail: changed ? "Вернуть структуру опубликованной версии" : "Черновик совпадает с опубликованной версией",
         onPress: () => setConfirm({ kind: "REPLACE", source: "PUBLISHED", title: "Сбросить черновик?",
           description: `Все неопубликованные правки пропадут, черновик станет версией ${published.version}.`,
           done: "Черновик сброшен к опубликованной версии." }) },
-      { key: "default", label: "Стандартная анкета", detail: "Черновик из стандартного набора вопросов",
+      { key: "default", icon: ClipboardList, label: "Стандартная анкета", detail: "Черновик из стандартного набора вопросов",
         onPress: () => setConfirm({ kind: "REPLACE", source: "DEFAULT", title: "Взять стандартную анкету?",
           description: "Черновик заменится стандартным набором вопросов. Опубликовать нужно будет отдельно; ответы клиентов не меняются.",
           done: "Черновик заменён стандартной анкетой. Проверьте и опубликуйте." }) },

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { Ellipsis } from "lucide-react-native";
-import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, EmptyState, FilterPill, InlineNotice, LoadingState, SearchField,
+import { Copy, Ellipsis, FilePlus2, Pencil, PencilLine, Trash2, type LucideIcon } from "lucide-react-native";
+import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, EmptyState, InlineNotice, LoadingState, SearchField, SegmentedControl,
   TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
@@ -12,6 +12,9 @@ import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
 import { ParticipantChips } from "./ParticipantChips.tsx";
 
 type Filter = TemplateKind | "ALL";
+
+/** Значок пункта меню: получает цвет пункта (UI-OWN-046). */
+const menuIcon = (Icon: LucideIcon) => (color: string) => <Icon size={18} color={color} strokeWidth={1.9} />;
 type Action = Readonly<{ kind: "rename" | "duplicate" | "create"; template: ProgramTemplate; title: string }>;
 
 const filters: readonly Filter[] = ["ALL", "SIMPLE", "PERIODIZED", "MESOCYCLE"];
@@ -93,22 +96,18 @@ export function TemplateLibraryScreen({ clientId, repository, listCandidates, on
   };
 
   const options = (template: ProgramTemplate) => [
-    ...(template.kind === "MESOCYCLE" ? [] : [{ value: "create" as const, label: "Создать программу клиенту" }]),
-    ...(onEdit === undefined ? [] : [{ value: "edit" as const, label: "Открыть и изменить" }]),
-    { value: "rename" as const, label: "Переименовать" },
-    { value: "duplicate" as const, label: "Сделать копию" },
-    { value: "delete" as const, label: "Удалить" },
+    ...(template.kind === "MESOCYCLE" ? [] : [{ value: "create" as const, label: "Создать программу клиенту", icon: menuIcon(FilePlus2) }]),
+    ...(onEdit === undefined ? [] : [{ value: "edit" as const, label: "Открыть и изменить", icon: menuIcon(Pencil) }]),
+    { value: "rename" as const, label: "Переименовать", icon: menuIcon(PencilLine) },
+    { value: "duplicate" as const, label: "Сделать копию", icon: menuIcon(Copy) },
+    { value: "delete" as const, label: "Удалить", icon: menuIcon(Trash2), danger: true },
   ];
 
   return (
     <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <SearchField query={query} onChangeQuery={setQuery} accessibilityLabel="Поиск шаблона" placeholder="Поиск по названию" />
-      <View style={styles.filters}>
-        {filters.map((item) => (
-          <FilterPill key={item} grow label={filterLabels[item]} accessibilityLabel={`Тип: ${filterLabels[item]}`}
-            selected={filter === item} onPress={() => setFilter(item)} />
-        ))}
-      </View>
+      {/* Четыре типа в одном ряду: сегменты с ужимающейся подписью — «Расширенные» не рвётся посередине слова. */}
+      <SegmentedControl compact items={filters.map((id) => ({ id, label: filterLabels[id] }))} selectedId={filter} onSelect={setFilter} />
       {message !== null ? <InlineNotice kind="error">{message}</InlineNotice> : null}
       {templates.length === 0 ? (
         <EmptyState reason="no-data" title="Шаблонов пока нет"
