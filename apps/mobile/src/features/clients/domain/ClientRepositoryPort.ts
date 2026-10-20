@@ -32,4 +32,9 @@ export interface ClientRepositoryPort {
   create(input: CreateClientInput): Promise<ClientRecord>;
   update(id: string, expectedRevision: number, input: CreateClientInput): Promise<ClientRecord>;
   setArchived(id: string, expectedRevision: number, archived: boolean): Promise<ClientRecord>;
+  /**
+   * Правка только пола и роста (расчёт КБЖУ): остальные поля карточки не затрагиваются, revision растёт, несохранённый черновик редактора карточки не удаляется.
+   * Устаревшая revision — `CLIENT_STALE_OR_WRONG_SCOPE`.
+   */
+  updateBody(id: string, expectedRevision: number, patch: Readonly<{ sex: "MALE" | "FEMALE" | null; heightCmX10: number | null }>): Promise<ClientRecord>;
 }

@@ -196,10 +196,12 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
 
   /** Данные карточки для расчёта КБЖУ; возраст — из даты рождения на сегодня. */
   const calcBody = { sex: client.sex ?? null, age: client.birthDate === null ? null : ageOn(client.birthDate, localDateOf(new Date())), heightCm: client.heightCmX10 === null ? null : client.heightCmX10 / 10 };
-  /** Пол и рост пишутся в карточку клиента (владелец — Clients) с CAS по revision; остальные поля карточки сохраняются как есть. */
+  /** Пол и рост пишутся в карточку клиента (владелец — Clients) с CAS по revision; остальные поля карточки и черновик редактора не затрагиваются. */
   const updateCalcBody = async (patch: Readonly<{ sex: "MALE" | "FEMALE" | null; heightCm: number | null }>): Promise<void> => {
-    const updated = await repository.update(client.id, client.revision, { displayName: client.displayName, contactPhone: client.contactPhone ?? undefined,
-      contactEmail: client.contactEmail ?? undefined, birthDate: client.birthDate, heightCmX10: patch.heightCm === null ? null : Math.round(patch.heightCm * 10), sex: patch.sex, emoji: client.emoji });
+    // Свежая revision и отдельный путь записи: черновик редактора карточки не удаляется (`updateBody`).
+    const fresh = await repository.get(client.id);
+    if (fresh === null) throw new Error("CLIENT_STALE_OR_WRONG_SCOPE");
+    const updated = await repository.updateBody(client.id, fresh.revision, { sex: patch.sex, heightCmX10: patch.heightCm === null ? null : Math.round(patch.heightCm * 10) });
     setSelection({ clientId, result: updated });
   };
 

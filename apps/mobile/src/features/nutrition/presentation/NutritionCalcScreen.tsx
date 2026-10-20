@@ -132,6 +132,8 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenSchedu
   const [draft, setDraft] = useState<Draft | null>(null);
   const [navyOpen, setNavyOpen] = useState(false);
   const [help, setHelp] = useState(false);
+  /** Закрытый просмотр — компактный (UX v1.1, NUT-FS-01…03); подробности по «Подробнее». */
+  const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -288,6 +290,16 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenSchedu
           <View style={styles.chips}>
             {CALC_INTENSITIES.map((id) => <SelectionChip key={id} group="Интенсивность" label={intensityLabels[id]} selected={draft.intensity === id} onPress={() => setField({ intensity: id })} />)}
           </View>
+        </> : !expanded ? <>
+          <View accessible accessibilityLabel={`Итоговый калораж: ${result.target === null ? "нет данных" : `${result.target} ккал`}, цель ${goalLabels[profile.goal]}. REE ${result.ree ?? "нет данных"}, NEAT ${result.neat}, EAT ${result.eat ?? "нет данных"}`}>
+            <Text style={[styles.compactTotal, { color: colors.textPrimary }]}>{result.target === null ? "— ккал" : `${result.target} ккал`}<Text style={[styles.hint, { color: colors.textSecondary }]}>{` · ${goalLabels[profile.goal]}`}</Text></Text>
+            <Text style={[styles.hint, { color: colors.textSecondary }]}>{`REE ${result.ree ?? "—"} · NEAT ${result.neat} · EAT ${result.eat ?? "—"}`}</Text>
+          </View>
+          <View style={styles.chips}>
+            {CALC_GOALS.map((id) => <SelectionChip key={id} group="Цель" label={goalLabels[id]} selected={profile.goal === id} disabled={busy} onPress={() => { void selectGoal(id); }} />)}
+          </View>
+          {missing ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Для расчёта нужны пол, возраст, рост и вес. Откройте «Подробнее» или «Изменить».</Text> : null}
+          <AppButton compact variant="ghost" label="Подробнее" accessibilityLabel="Показать подробности расчёта" onPress={() => setExpanded(true)} />
         </> : <>
           <View style={styles.cols}>
             <View style={styles.leftCol}>
@@ -310,10 +322,11 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenSchedu
             ))}
           </View>
           {missing ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Для расчёта нужны пол, возраст, рост и вес (или вес с процентом жира). Нажмите «Изменить», чтобы заполнить профиль.</Text> : null}
+          <AppButton compact variant="ghost" label="Свернуть" accessibilityLabel="Скрыть подробности расчёта" onPress={() => setExpanded(false)} />
         </>}
       </Card>
 
-      {!editing ? <Card title="КБЖУ"><NutritionTargetRows clientId={clientId} targets={targets} result={result} macros={macros} onOpenSchedule={onOpenSchedule} /></Card> : null}
+      {!editing ? <Card title="КБЖУ"><NutritionTargetRows key={clientId} clientId={clientId} targets={targets} result={result} macros={macros} onOpenSchedule={onOpenSchedule} /></Card> : null}
 
       <MeasurementsCard clientId={clientId} repository={measurements} />
 
@@ -335,6 +348,7 @@ const styles = StyleSheet.create({
   leftCol: { flex: 1, gap: 10 },
   stat: { borderRadius: 18, borderWidth: 1, padding: 12, gap: 2 },
   statLabel: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 15, letterSpacing: 0.5 },
+  compactTotal: { fontFamily: fonts.bold, fontSize: 20, lineHeight: 26 },
   statValue: { fontFamily: fonts.bold, fontSize: 26, lineHeight: 32 },
   goalCard: { flex: 1, borderRadius: 18, borderWidth: 1, padding: 10, gap: 8, justifyContent: "center" },
   strip: { flexDirection: "row", borderRadius: 18, borderWidth: 1 },

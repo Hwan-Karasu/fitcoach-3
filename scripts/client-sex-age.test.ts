@@ -45,3 +45,19 @@ test("пол клиента: допустимы только MALE и FEMALE", as
   const { clients } = await store();
   await assert.rejects(clients.create({ displayName: "SyntheticA", sex: "OTHER" as never }), code("CLIENT_SEX_INVALID"));
 });
+
+test("правка пола и роста из расчёта: CAS по revision, остальные поля и несохранённый черновик редактора карточки не трогаются", async () => {
+  const { clients } = await store();
+  const created = await clients.create({ displayName: "SyntheticA", contactPhone: "+70000000000", birthDate: "1989-03-15", heightCmX10: 1700, emoji: "🙂" });
+  await clients.saveDraft({ clientId: created.id, baseClientRevision: created.revision,
+    formData: { displayName: "Черновик", contactPhone: "", contactEmail: "", birthDate: "", heightDraft: "", emoji: null } });
+  const updated = await clients.updateBody(created.id, created.revision, { sex: "MALE", heightCmX10: 1815 });
+  assert.deepEqual([updated.sex, updated.heightCmX10, updated.revision], ["MALE", 1815, created.revision + 1]);
+  assert.deepEqual([updated.displayName, updated.contactPhone, updated.birthDate, updated.emoji], ["SyntheticA", "+70000000000", "1989-03-15", "🙂"]);
+  assert.notEqual(await clients.loadDraft(created.id), null, "черновик редактора на месте");
+  await assert.rejects(clients.updateBody(created.id, created.revision, { sex: null, heightCmX10: null }), code("CLIENT_STALE_OR_WRONG_SCOPE"));
+  await assert.rejects(clients.updateBody(created.id, updated.revision, { sex: "OTHER" as never, heightCmX10: null }), code("CLIENT_SEX_INVALID"));
+  await assert.rejects(clients.updateBody(created.id, updated.revision, { sex: null, heightCmX10: 0 }), code("CLIENT_HEIGHT_INVALID"));
+  const cleared = await clients.updateBody(created.id, updated.revision, { sex: null, heightCmX10: null });
+  assert.deepEqual([cleared.sex, cleared.heightCmX10], [null, null], "явный null очищает");
+});

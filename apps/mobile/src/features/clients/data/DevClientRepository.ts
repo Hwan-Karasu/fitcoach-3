@@ -420,6 +420,22 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
     return updated;
   }
 
+  async updateBody(id: string, expectedRevision: number, patch: Readonly<{ sex: "MALE" | "FEMALE" | null; heightCmX10: number | null }>): Promise<ClientRecord> {
+    if (!id.trim() || !Number.isSafeInteger(expectedRevision) || expectedRevision < 1) throw new Error("CLIENT_COMMAND_INVALID");
+    if (patch.sex !== null && patch.sex !== "MALE" && patch.sex !== "FEMALE") throw new Error("CLIENT_SEX_INVALID");
+    if (patch.heightCmX10 !== null && (!Number.isSafeInteger(patch.heightCmX10) || patch.heightCmX10 <= 0)) throw new Error("CLIENT_HEIGHT_INVALID");
+    const { writer } = this.ready();
+    const updated = await writer.write(async (tx) => {
+      const result = await tx.run(`UPDATE dev_clients SET sex = ?, height_cm_x10 = ?, updated_at = ?, revision = revision + 1
+        WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'ACTIVE'`,
+      [patch.sex, patch.heightCmX10, new Date().toISOString(), this.workspaceId, id, expectedRevision]);
+      if (result.changes !== 1) throw new Error("CLIENT_STALE_OR_WRONG_SCOPE");
+      return clientById(tx, this.workspaceId, id);
+    });
+    this.publishCommitted({ clientId: id, affectedRosters: ["ACTIVE"] });
+    return updated;
+  }
+
   async loadDraft(clientId: string | null): Promise<ClientRecoveryDraft | null> {
     const { connection } = this.ready();
     const where = clientId === null ? "mode = 'create' AND client_id IS NULL"

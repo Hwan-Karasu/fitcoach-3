@@ -6,7 +6,7 @@ import { fonts } from "../../../shared/ui/theme/typography.ts";
 import type { CalcResult, MacroGrams } from "../domain/CalcRules.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
 import { TARGET_METRICS, type TargetException, type TargetMetric, type TargetVersion } from "../domain/TargetModel.ts";
-import { differsFromUniform, energyConsistency, resolveTarget, uniformWeek } from "../domain/TargetRules.ts";
+import { differsFromUniform, energyConsistency, resolveTarget, uniformWeek, versionFor } from "../domain/TargetRules.ts";
 import { metricLabels, nutritionErrorText, todayLocal, wholeText } from "./nutritionFormat.ts";
 import { corridorsOf, draftOf, EMPTY_DRAFT, isEmptyDraft, type CorridorDraft } from "./targetDraft.ts";
 
@@ -72,7 +72,7 @@ export function NutritionTargetRows({ clientId, targets, result, macros, onOpenS
       await targets.saveVersion(clientId, { effectiveFrom: today, days: uniformWeek(parsed) }, same?.revision ?? null);
       setDirty(false);
       setError(null);
-      setNotice("Цели сохранены с сегодняшней даты на все дни недели.");
+      setNotice(resolved !== null && resolved.source === "EXCEPTION" ? "Версия целей сохранена, но сегодня действует особая цель на дату — она приоритетнее. Изменить её можно в «Целях по дням недели»." : "Цели сохранены с сегодняшней даты на все дни недели.");
     } catch (failure) {
       setError(failure instanceof Error && failure.message === "TARGET_STALE" ? "Цели уже изменились. Данные обновлены — повторите." : nutritionErrorText(failure));
       setTick((value) => value + 1);
@@ -84,9 +84,12 @@ export function NutritionTargetRows({ clientId, targets, result, macros, onOpenS
     if (data === null) return;
     if (parsed === null) { setError("Задайте границы хотя бы для одного показателя."); return; }
     if (typeof parsed === "string") { setError(parsed); return; }
-    const same = data.versions.find((version) => version.effectiveFrom === today);
-    if (same !== undefined && differsFromUniform(same, parsed)) {
-      setConfirm("На сегодняшнюю дату цели уже заданы по дням недели. Они будут заменены этими коридорами на все дни: значения по дням, которых нет в этом ряду, пропадут. Прошлые версии и особые цели на даты сохраняются.");
+    // Действующая версия (не только на сегодняшнюю дату): новая версия с сегодняшнего дня вытеснит её расписание на будущее.
+    const effective = versionFor(data.versions, today);
+    if (effective !== null && differsFromUniform(effective, parsed)) {
+      setConfirm(effective.effectiveFrom === today
+        ? "На сегодняшнюю дату цели уже заданы по дням недели. Они будут заменены этими коридорами на все дни: значения по дням, которых нет в этом ряду, пропадут. Прошлые версии и особые цели на даты сохраняются."
+        : "Сейчас действует расписание целей по дням недели. С сегодняшней даты вместо него будут действовать эти коридоры, одинаковые на все дни. Прошлая версия сохранится в истории, особые цели на даты — тоже.");
       return;
     }
     void save();

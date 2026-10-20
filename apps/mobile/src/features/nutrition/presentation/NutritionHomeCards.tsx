@@ -112,7 +112,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
             })}
           </View>
         </>}
-        <NutritionTargetRows clientId={clientId} targets={targets} result={result} macros={macros} />
+        <NutritionTargetRows key={clientId} clientId={clientId} targets={targets} result={result} macros={macros} />
       </View>
     </>
   );
