@@ -4,3 +4,4 @@ export type { ClientMeasurements, DailyPoint, DailyPrimary, Measurement, Measure
 export type { MeasurementCommittedChange, MeasurementRepositoryPort } from "./domain/MeasurementRepositoryPort.ts";
 export { dailyPoints, formatDate, formatValue, latestPoint, localDateOf, measurementTypeInfo, parseValueX10 } from
   "./domain/MeasurementRules.ts";
+export { navyBodyFat, type NavyInput } from "./domain/NavyBodyFat.ts";

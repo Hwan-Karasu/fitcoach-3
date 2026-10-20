@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { devNutritionCalcClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionCalcRepository.ts";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { DevNutritionDiaryRepository, devNutritionClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionDiaryRepository.ts";
 import { devNutritionTargetsClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionTargetsRepository.ts";
@@ -27,7 +28,7 @@ const SUGAR: FoodProduct = { id: "food-sugar", name: "Сахар", brand: null, 
 async function stores(participants = true) {
   const db = new DatabaseSync(":memory:");
   const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
-  const clients = new DevClientRepository(shared, WS, participants ? [devNutritionClientDeletionParticipant, devNutritionTargetsClientDeletionParticipant] : []);
+  const clients = new DevClientRepository(shared, WS, participants ? [devNutritionClientDeletionParticipant, devNutritionTargetsClientDeletionParticipant, devNutritionCalcClientDeletionParticipant] : []);
   await clients.initialize();
   const diary = new DevNutritionDiaryRepository(shared, WS);
   await diary.initialize();

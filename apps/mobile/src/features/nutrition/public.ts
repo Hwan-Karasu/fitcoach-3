@@ -17,4 +17,7 @@ export { TARGET_METRICS, type Corridors, type RangeVerdict, type ResolvedTarget,
   type TargetVersionInput, type WeekdayIndex } from "./domain/TargetModel.ts";
 export type { NutritionTargetsPort, TargetsCommittedChange } from "./domain/NutritionTargetsPort.ts";
 export { affectedPeriod, assessDay, energyConsistency, judge, resolveTarget, validateCorridors, validateVersion, versionFor, weekdayOf } from "./domain/TargetRules.ts";
+export type { CalcCommittedChange, NutritionCalcPort, StepsDay, StoredCalcProfile } from "./domain/NutritionCalcPort.ts";
+export { CALC_ACTIVITIES, CALC_GOALS, CALC_INTENSITIES, DEFAULT_TOLERANCE, calcMacros, deriveCalc, proposeCorridors, type CalcActivity, type CalcGoal, type CalcInputs, type CalcIntensity,
+  type CalcProfile, type CalcResult, type CalcSex, type Tolerance } from "./domain/CalcRules.ts";
 export { computeNutritionStats, type MetricStats, type NutritionDayPoint, type NutritionStats, type NutritionStatsInput } from "./domain/NutritionStats.ts";

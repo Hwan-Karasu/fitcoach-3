@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { devNutritionCalcClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionCalcRepository.ts";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { devNutritionClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionDiaryRepository.ts";
 import { DevNutritionTargetsRepository, devNutritionTargetsClientDeletionParticipant } from
@@ -35,7 +36,7 @@ function day(kcal: number | null, protein: number | null = null): DaySummary {
 async function stores(participants = true) {
   const db = new DatabaseSync(":memory:");
   const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
-  const clients = new DevClientRepository(shared, WS, participants ? [devNutritionClientDeletionParticipant, devNutritionTargetsClientDeletionParticipant] : []);
+  const clients = new DevClientRepository(shared, WS, participants ? [devNutritionClientDeletionParticipant, devNutritionTargetsClientDeletionParticipant, devNutritionCalcClientDeletionParticipant] : []);
   await clients.initialize();
   const targets = new DevNutritionTargetsRepository(shared, WS);
   await targets.initialize();

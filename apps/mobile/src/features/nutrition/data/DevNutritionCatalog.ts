@@ -157,4 +157,37 @@ export const devNutritionCatalog: readonly MigrationStep[] = [{
     `ALTER TABLE dev_recipes ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0 CHECK (favorite IN (0, 1))`,
     `ALTER TABLE dev_recipes ADD COLUMN in_cookbook INTEGER NOT NULL DEFAULT 0 CHECK (in_cookbook IN (0, 1))`,
   ],
+}, {
+  version: 6,
+  checksum: "n06-dev-nutrition-v6-calc-profile-daily-steps-20261020",
+  statements: [
+    // Профиль расчёта КБЖУ клиента (§49.10): вес и % жира не дублируются, их источник — Measurements. NULL = не введено.
+    `CREATE TABLE dev_nutrition_calc_profiles (
+      workspace_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      sex TEXT CHECK (sex IS NULL OR sex IN ('MALE','FEMALE')),
+      age INTEGER CHECK (age IS NULL OR age BETWEEN 1 AND 120),
+      height_x10 INTEGER CHECK (height_x10 IS NULL OR height_x10 BETWEEN 500 AND 3000),
+      goal TEXT NOT NULL CHECK (goal IN ('LOSS','MAINTENANCE','GAIN')),
+      activity TEXT NOT NULL CHECK (activity IN ('SEDENTARY','MODERATE','ACTIVE','VERY_ACTIVE')),
+      workouts_per_week INTEGER NOT NULL CHECK (workouts_per_week BETWEEN 0 AND 21),
+      workout_minutes INTEGER NOT NULL CHECK (workout_minutes BETWEEN 1 AND 600),
+      intensity TEXT NOT NULL CHECK (intensity IN ('LIGHT','MEDIUM','HEAVY')),
+      step_kcal INTEGER NOT NULL CHECK (step_kcal BETWEEN 0 AND 1000),
+      revision INTEGER NOT NULL CHECK (revision > 0),
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (workspace_id, client_id),
+      FOREIGN KEY (client_id, workspace_id) REFERENCES dev_clients(id, workspace_id) ON DELETE RESTRICT
+    )`,
+    // Шаги за день: одно значение на дату клиента; день без записи — неизвестно, а не 0.
+    `CREATE TABLE dev_nutrition_daily_steps (
+      workspace_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      local_date TEXT NOT NULL CHECK (date(local_date) IS local_date),
+      steps INTEGER NOT NULL CHECK (steps BETWEEN 1 AND 100000),
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (workspace_id, client_id, local_date),
+      FOREIGN KEY (client_id, workspace_id) REFERENCES dev_clients(id, workspace_id) ON DELETE RESTRICT
+    )`,
+  ],
 }];
