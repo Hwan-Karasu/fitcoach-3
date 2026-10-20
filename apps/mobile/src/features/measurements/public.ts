@@ -5,3 +5,4 @@ export type { MeasurementCommittedChange, MeasurementRepositoryPort } from "./do
 export { dailyPoints, formatDate, formatValue, latestPoint, localDateOf, measurementTypeInfo, parseValueX10 } from
   "./domain/MeasurementRules.ts";
 export { navyBodyFat, type NavyInput } from "./domain/NavyBodyFat.ts";
+export { MeasurementsCard } from "./presentation/MeasurementsCard.tsx";
