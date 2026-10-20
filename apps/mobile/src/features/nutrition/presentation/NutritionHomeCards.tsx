@@ -188,7 +188,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
             <View style={[styles.pill, { backgroundColor: colors.accentSoft }]}><Text style={[styles.pillText, { color: colors.accentInk }]}>Суточный ориентир</Text></View>
             <Text style={[styles.bigNumber, { color: colors.textPrimary }]}>{orientText ?? "—"}<Text style={[styles.unit, { color: colors.textSecondary }]}>{orientText === null ? "" : " ккал"}</Text></Text>
           </View>
-          <SegmentedRing size={84} stroke={10} fraction={fraction} segments={segments} accessibilityLabel={`От цели по калориям: ${fraction === null ? "нет данных" : `${Math.round(fraction * 100)} процентов`}`}>
+          <SegmentedRing size={72} stroke={9} fraction={fraction} segments={segments} accessibilityLabel={`От цели по калориям: ${fraction === null ? "нет данных" : `${Math.round(fraction * 100)} процентов`}`}>
             <Text style={[styles.ringValue, { color: colors.textPrimary }]}>{fraction === null ? "—" : `${Math.round(fraction * 100)}%`}</Text>
             <Text style={[styles.hint, { color: colors.textSecondary }]}>от цели</Text>
           </SegmentedRing>
@@ -209,7 +209,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 14, padding: 10, gap: 6 },
+  card: { borderWidth: 1, borderRadius: 14, padding: 8, gap: 4 },
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   headRight: { flexDirection: "row", alignItems: "center", gap: 6 },
   group: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 12, overflow: "hidden" },
@@ -227,9 +227,9 @@ const styles = StyleSheet.create({
   summary: { flexDirection: "row", alignItems: "center", gap: 10 },
   pill: { alignSelf: "flex-start", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 4 },
   pillText: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 15 },
-  bigNumber: { fontFamily: fonts.bold, fontSize: 24, lineHeight: 30 },
+  bigNumber: { fontFamily: fonts.bold, fontSize: 22, lineHeight: 27 },
   unit: { fontFamily: fonts.regular, fontSize: 14 },
-  ringValue: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 21 },
+  ringValue: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
   metrics: { flexDirection: "row", gap: 6 },
   metric: { flex: 1, alignItems: "center", gap: 2 },
   value: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },

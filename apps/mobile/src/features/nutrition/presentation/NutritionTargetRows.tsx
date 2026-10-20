@@ -147,8 +147,8 @@ export function NutritionTargetRows({ clientId, targets, calories, defaults, mod
       </View>
       {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       {notice !== null ? <InlineNotice kind="success">{notice}</InlineNotice> : null}
-      <AppButton label="Сохранить цели" busy={busy} disabled={!dirty || parsed === null} disabledReason="Измените значения в ручной корректировке." onPress={askSave} />
-      {onOpenSchedule !== undefined ? <AppButton variant="secondary" label="Цели по дням недели" onPress={onOpenSchedule} /> : null}
+      {dirty ? <AppButton compact label="Сохранить цели" busy={busy} disabled={parsed === null} disabledReason="Задайте значения в ручной корректировке." onPress={askSave} /> : null}
+      {onOpenSchedule !== undefined && !dirty ? <AppButton compact variant="ghost" label="Цели по дням недели" onPress={onOpenSchedule} /> : null}
       <ConfirmDialog visible={confirm !== null} title="Заменить цели на сегодня?" confirmLabel="Заменить" onCancel={() => setConfirm(null)} onConfirm={() => { void save(); }} description={confirm ?? ""} />
     </View>
   );

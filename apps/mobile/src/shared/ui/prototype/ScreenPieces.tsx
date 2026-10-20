@@ -7,14 +7,15 @@ import { fonts } from "../theme/typography.ts";
 export function PrototypeScreen({
   title,
   description,
+  compact = false,
   children,
-}: Readonly<{ title?: string; description?: string; children: ReactNode }>) {
+}: Readonly<{ title?: string; description?: string; children: ReactNode; /** Плотная компоновка (главная клиента): меньшие отступы, чтобы блоки помещались без прокрутки. */ compact?: boolean }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.canvas }}
-      contentContainerStyle={styles.screenContent}
+      contentContainerStyle={compact ? styles.screenContentCompact : styles.screenContent}
       keyboardShouldPersistTaps="handled"
     >
       {title ? <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>{title}</Text> : null}
@@ -69,6 +70,7 @@ export function PrototypeLink({
 
 const styles = StyleSheet.create({
   screenContent: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 36, gap: 12 },
+  screenContentCompact: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, gap: 6 },
   pageTitle: { fontSize: 18, lineHeight: 23, fontFamily: fonts.bold },
   description: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   sectionHeading: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold, marginTop: 8 },

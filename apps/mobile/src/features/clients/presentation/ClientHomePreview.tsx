@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { AppButton, ConfirmDialog, InlineNotice, StatusTag } from
   "../../../shared/ui/components/public.ts";
 import { PrototypeScreen } from "../../../shared/ui/prototype/ScreenPieces.tsx";
@@ -15,22 +15,17 @@ function formatIsoDate(date: string): string {
   return `${date.slice(8, 10)}.${date.slice(5, 7)}.${date.slice(0, 4)}`;
 }
 
-function PackBody({ pack }: Readonly<{ pack: HomePackSummary | null }>) {
+/** Компактная сводка абонемента: «доступно N/M» в строке заголовка, вторая строка — цена и срок либо состояние. */
+function PackSummaryLine({ pack }: Readonly<{ pack: HomePackSummary | null }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const line = (text: string) => <Text style={[styles.detail, { color: colors.textSecondary }]}>{text}</Text>;
   if (pack === null) return line("Загружаем…");
   if (pack.kind === "UNAVAILABLE") return line("Сводка абонемента не загрузилась. Данные учёта не изменены.");
-  if (pack.kind === "NOT_TRACKED") return line(`${pack.label}. Запись в календарь доступна без пакета.`);
-  if (pack.kind === "NO_PACK") return line("Пакетов нет. Добавьте пакет или записывайте без списания.");
+  if (pack.kind === "NOT_TRACKED") return line(pack.label);
+  if (pack.kind === "NO_PACK") return line("Пакетов нет");
   const extra = [pack.pricePerSession !== null ? `Цена: ${pack.pricePerSession}` : null, pack.expiresOn !== null ? `до ${formatIsoDate(pack.expiresOn)}` : null].filter((part) => part !== null).join(" · ");
-  return <>
-    <View style={styles.packLine}>
-      <Text accessibilityLabel={`Доступно ${pack.available} из ${pack.granted} занятий`} style={[styles.packNumber, { color: colors.textPrimary }]}>{`${pack.available}/${pack.granted}`}</Text>
-      <Text style={[styles.detail, { color: colors.textSecondary }]}>доступно</Text>
-    </View>
-    {extra !== "" ? line(extra) : null}
-  </>;
+  return extra === "" ? null : line(extra);
 }
 
 /**
@@ -67,16 +62,22 @@ export function ClientHomePreview({ client, summary, onOpenAccounting, nutrition
 
   const pack = summary?.pack ?? null;
 
-  return <PrototypeScreen>
+  return <PrototypeScreen compact>
 
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={pack?.kind === "TRACKED" ? `Абонемент: доступно ${pack.available} из ${pack.granted} занятий. Открыть абонемент и оплату` : "Абонемент. Открыть абонемент и оплату"}
+      onPress={onOpenAccounting} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.cardHead}>
         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Абонемент</Text>
-        {pack?.kind === "TRACKED" ? <StatusTag kind={toneKind[pack.tone]} label={toneLabel[pack.tone]} /> : null}
+        <View style={styles.packLine}>
+          {pack?.kind === "TRACKED" ? <>
+            <Text style={[styles.packNumber, { color: colors.textPrimary }]}>{`${pack.available}/${pack.granted}`}</Text>
+            <Text style={[styles.detail, { color: colors.textSecondary }]}>доступно</Text>
+            <StatusTag kind={toneKind[pack.tone]} label={toneLabel[pack.tone]} />
+          </> : null}
+        </View>
       </View>
-      <PackBody pack={pack} />
-      <AppButton variant="secondary" label="Абонемент и оплата" onPress={onOpenAccounting} />
-    </View>
+      <PackSummaryLine pack={pack} />
+    </Pressable>
 
     {nutritionSlot}
 
@@ -102,11 +103,11 @@ const styles = StyleSheet.create({
   detail: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   tiles: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tile: { flexGrow: 1, flexBasis: 100 },
-  card: { borderWidth: 1, borderRadius: 14, padding: 10, gap: 6 },
+  card: { borderWidth: 1, borderRadius: 14, padding: 8, gap: 4 },
   cardHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   cardTitle: { fontSize: 14, lineHeight: 19, fontFamily: fonts.bold },
   weightRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   weightField: { flex: 1 },
   packLine: { flexDirection: "row", alignItems: "baseline", gap: 8, flexWrap: "wrap" },
-  packNumber: { fontSize: 22, lineHeight: 28, fontFamily: fonts.bold },
+  packNumber: { fontSize: 18, lineHeight: 23, fontFamily: fonts.bold },
 });
