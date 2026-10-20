@@ -165,7 +165,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       </View>
 
-      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={[styles.card, styles.bigCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.head}>
           <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>КБЖУ</Text>
         <View style={styles.headRight}>
@@ -188,7 +188,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
             <View style={[styles.pill, { backgroundColor: colors.accentSoft }]}><Text style={[styles.pillText, { color: colors.accentInk }]}>Суточный ориентир</Text></View>
             <Text style={[styles.bigNumber, { color: colors.textPrimary }]}>{orientText ?? "—"}<Text style={[styles.unit, { color: colors.textSecondary }]}>{orientText === null ? "" : " ккал"}</Text></Text>
           </View>
-          <SegmentedRing size={72} stroke={9} fraction={fraction} segments={segments} accessibilityLabel={`От цели по калориям: ${fraction === null ? "нет данных" : `${Math.round(fraction * 100)} процентов`}`}>
+          <SegmentedRing size={100} stroke={12} fraction={fraction} segments={segments} accessibilityLabel={`От цели по калориям: ${fraction === null ? "нет данных" : `${Math.round(fraction * 100)} процентов`}`}>
             <Text style={[styles.ringValue, { color: colors.textPrimary }]}>{fraction === null ? "—" : `${Math.round(fraction * 100)}%`}</Text>
             <Text style={[styles.hint, { color: colors.textSecondary }]}>от цели</Text>
           </SegmentedRing>
@@ -210,6 +210,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
 
 const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 14, padding: 8, gap: 4 },
+  bigCard: { flexGrow: 1, justifyContent: "space-between" },
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   headRight: { flexDirection: "row", alignItems: "center", gap: 6 },
   group: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 12, overflow: "hidden" },
@@ -227,9 +228,9 @@ const styles = StyleSheet.create({
   summary: { flexDirection: "row", alignItems: "center", gap: 10 },
   pill: { alignSelf: "flex-start", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 4 },
   pillText: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 15 },
-  bigNumber: { fontFamily: fonts.bold, fontSize: 22, lineHeight: 27 },
+  bigNumber: { fontFamily: fonts.bold, fontSize: 26, lineHeight: 32 },
   unit: { fontFamily: fonts.regular, fontSize: 14 },
-  ringValue: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
+  ringValue: { fontFamily: fonts.bold, fontSize: 19, lineHeight: 24 },
   metrics: { flexDirection: "row", gap: 6 },
   metric: { flex: 1, alignItems: "center", gap: 2 },
   value: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },

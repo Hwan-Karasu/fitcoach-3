@@ -70,7 +70,8 @@ export function PrototypeLink({
 
 const styles = StyleSheet.create({
   screenContent: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 36, gap: 12 },
-  screenContentCompact: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, gap: 6 },
+  // flexGrow: дочерний блок может занять свободную высоту, а последний элемент прижимается к низу экрана.
+  screenContentCompact: { flexGrow: 1, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, gap: 6 },
   pageTitle: { fontSize: 18, lineHeight: 23, fontFamily: fonts.bold },
   description: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   sectionHeading: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold, marginTop: 8 },
