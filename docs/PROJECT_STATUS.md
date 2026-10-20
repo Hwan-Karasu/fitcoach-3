@@ -1,4 +1,12 @@
 
+## 2026-10-20 — N02: пищевой дневник и вода (dev, без UI)
+
+- Входы: Product §§49.1–49.5, 49.22; Feature 14. Миграция `nutrition_schema_migrations` v3: `dev_food_diary_entries` (снимок + количество, FK на клиента), `dev_water_days`.
+  `DevNutritionDiaryRepository` (запись, правка количества по revision, удаление, вода), правила `summarizeDay/accountedDates`, участник окончательного удаления клиента.
+  Питание подключено к composition root и загрузке (`services.nutrition`). Тест `nutrition-diary.test.ts` (8) в `test:foundation`.
+- Решения по умолчанию: слоты — 4 привычных; вода — одна сумма за день (1–20 000 мл); даты в будущем не запрещены; удаление пищевой записи — физическое по явной команде.
+- Не сделано: копирование приёма пищи/дня с подтверждением замены (§49.5.6), экраны (UI-gate `nutrition-diary`), недавние продукты. Дальше N03 (коридоры целей). `N02=PARTIAL / NOT DONE`.
+
 ## 2026-10-20 — N01 ч.2: рецепты и снимок порции (dev, без UI)
 
 - Миграция `nutrition_schema_migrations` v2: `dev_recipes`, `dev_recipe_ingredients` (составные FK на продукты, `ON DELETE RESTRICT`). `DevRecipeCatalogRepository`

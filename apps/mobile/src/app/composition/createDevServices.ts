@@ -9,6 +9,10 @@ import { DevCalendarRepository, devCalendarClientDeletionParticipant } from
 import type { CalendarParticipantDirectoryPort, CalendarRepositoryPort } from
   "../../features/calendar/public.ts";
 import { DevClientRepository } from "../../features/clients/data/DevClientRepository.ts";
+import { DevFoodCatalogRepository } from "../../features/nutrition/data/DevFoodCatalogRepository.ts";
+import { DevNutritionDiaryRepository, devNutritionClientDeletionParticipant } from "../../features/nutrition/data/DevNutritionDiaryRepository.ts";
+import { DevRecipeCatalogRepository } from "../../features/nutrition/data/DevRecipeCatalogRepository.ts";
+import type { FoodCatalogPort, NutritionDiaryPort, RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { DevMeasurementRepository, devMeasurementClientDeletionParticipant } from
   "../../features/measurements/data/DevMeasurementRepository.ts";
 import { dailyPoints, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
@@ -48,6 +52,13 @@ import { createPlanOnlyDeleteWorkflow } from "../../workflows/deleteTrainingPlan
 import type { MesocycleDeletePort, MesocycleSavePort, PlanOnlyDeletePort, ProgramDeletePort, WeekCopyPort, WeekSwapPort } from "../../features/training/plans/public.ts";
 import type { SqliteDatabaseLease } from "../../shared/db/SharedSqliteDatabase.ts";
 
+/** Питание: каталог продуктов и рецептов (общий) и дневник клиента (N01–N02). */
+export interface NutritionServices {
+  readonly foods: FoodCatalogPort;
+  readonly recipes: RecipeCatalogPort;
+  readonly diary: NutritionDiaryPort;
+}
+
 /** Explicit dev composition. Production boot will get separate, owner-scoped bindings. */
 export interface DevServices {
   readonly runSqliteProbe: () => Promise<F04ProbeReport>;
@@ -56,6 +67,7 @@ export interface DevServices {
   readonly calendarParticipants: CalendarParticipantDirectoryPort;
   readonly accounting: AccountingRepositoryPort;
   readonly measurements: MeasurementRepositoryPort;
+  readonly nutrition: NutritionServices;
   readonly questionnaire: QuestionnaireRepositoryPort;
   readonly trainingPlans: TrainingPlansRepositoryPort;
   readonly trainingExecution: TrainingExecutionPort;
@@ -126,7 +138,7 @@ function exerciseLookup(exercises: ExerciseCatalogPort): ExerciseLookupPort {
 }
 
 export function createDevServices(clients: DevClientServices, calendar: CalendarRepositoryPort,
-  accounting: AccountingRepositoryPort, measurements: MeasurementRepositoryPort,
+  accounting: AccountingRepositoryPort, measurements: MeasurementRepositoryPort, nutrition: NutritionServices,
   questionnaire: QuestionnaireRepositoryPort, trainingPlans: TrainingPlansRepositoryPort,
   trainingExecution: TrainingExecutionPort, restTimers: RestTimersPort, exercises: ExerciseCatalogPort,
   weekCopy: WeekCopyPort, weekSwap: WeekSwapPort, mesocycleSave: MesocycleSavePort,
@@ -138,6 +150,7 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
     calendarParticipants: participantDirectory(clients),
     accounting,
     measurements,
+    nutrition,
     questionnaire,
     trainingPlans,
     trainingExecution,
@@ -168,11 +181,13 @@ export function createDevRuntime(): DevRuntime {
   const database = new SharedSqliteDatabase(() => openExpoSqliteConnection("fitcoach_f04_clients_dev.db"));
   const clients = new DevClientRepository(database, DEV_WORKSPACE_ID,
     [devAccountingClientDeletionParticipant, devCalendarClientDeletionParticipant,
-      devMeasurementClientDeletionParticipant, devQuestionnaireClientDeletionParticipant,
+      devMeasurementClientDeletionParticipant, devNutritionClientDeletionParticipant, devQuestionnaireClientDeletionParticipant,
       devTrainingPlansClientDeletionParticipant, devTrainingExecutionClientDeletionParticipant]);
   const calendar = new DevCalendarRepository(database, DEV_WORKSPACE_ID, devAccountingCalendarHook);
   const accounting = new DevAccountingRepository(database, DEV_WORKSPACE_ID);
   const measurements = new DevMeasurementRepository(database, DEV_WORKSPACE_ID);
+  const nutrition = { foods: new DevFoodCatalogRepository(database, DEV_WORKSPACE_ID),
+    recipes: new DevRecipeCatalogRepository(database, DEV_WORKSPACE_ID), diary: new DevNutritionDiaryRepository(database, DEV_WORKSPACE_ID) };
   const questionnaire = new DevQuestionnaireRepository(database, DEV_WORKSPACE_ID);
   const trainingPlans = new DevTrainingPlansRepository(database, DEV_WORKSPACE_ID);
   const trainingExecution = new DevTrainingExecutionRepository(database, DEV_WORKSPACE_ID);
@@ -199,6 +214,10 @@ export function createDevRuntime(): DevRuntime {
         await calendar.initialize();
         await accounting.initialize();
         await measurements.initialize();
+        // Порядок важен: дневник ссылается на клиентов, рецепты — на продукты.
+        await nutrition.foods.initialize();
+        await nutrition.recipes.initialize();
+        await nutrition.diary.initialize();
         await questionnaire.initialize();
         await trainingPlans.initialize();
         await trainingExecution.initialize();
@@ -208,6 +227,6 @@ export function createDevRuntime(): DevRuntime {
         await exercises.initialize();
       },
     )),
-    services: createDevServices(clients, calendar, accounting, measurements, questionnaire, trainingPlans, trainingExecution, restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete),
+    services: createDevServices(clients, calendar, accounting, measurements, nutrition, questionnaire, trainingPlans, trainingExecution, restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete),
   };
 }

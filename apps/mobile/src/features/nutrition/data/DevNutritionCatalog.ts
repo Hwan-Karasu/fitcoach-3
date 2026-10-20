@@ -61,4 +61,45 @@ export const devNutritionCatalog: readonly MigrationStep[] = [{
       FOREIGN KEY (food_id, workspace_id) REFERENCES dev_food_products(id, workspace_id) ON DELETE RESTRICT
     )`,
   ],
+}, {
+  version: 3,
+  checksum: "n02-dev-nutrition-v3-food-diary-water-20261020",
+  statements: [
+    // Пищевая запись хранит снимок (название, основа, значения на основу, количество); «съедено» считается из них, а не хранится второй раз.
+    `CREATE TABLE dev_food_diary_entries (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      local_date TEXT NOT NULL CHECK (date(local_date) IS local_date),
+      slot TEXT NOT NULL CHECK (slot IN ('BREAKFAST','LUNCH','DINNER','SNACK')),
+      position INTEGER NOT NULL CHECK (position >= 0),
+      source_kind TEXT NOT NULL CHECK (source_kind IN ('FOOD','RECIPE')),
+      source_id TEXT NOT NULL CHECK (length(source_id) > 0),
+      name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+      brand TEXT,
+      basis_unit TEXT NOT NULL CHECK (basis_unit IN ('G','ML','PORTION')),
+      basis_amount_x10 INTEGER NOT NULL CHECK (basis_amount_x10 > 0),
+      per_kcal_x10 INTEGER CHECK (per_kcal_x10 IS NULL OR per_kcal_x10 >= 0),
+      per_protein_x10 INTEGER CHECK (per_protein_x10 IS NULL OR per_protein_x10 >= 0),
+      per_fat_x10 INTEGER CHECK (per_fat_x10 IS NULL OR per_fat_x10 >= 0),
+      per_carbs_x10 INTEGER CHECK (per_carbs_x10 IS NULL OR per_carbs_x10 >= 0),
+      quantity_x10 INTEGER NOT NULL CHECK (quantity_x10 > 0),
+      ingredients_json TEXT NOT NULL,
+      revision INTEGER NOT NULL CHECK (revision > 0),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (client_id, workspace_id) REFERENCES dev_clients(id, workspace_id) ON DELETE RESTRICT
+    )`,
+    `CREATE INDEX dev_food_diary_entries_day ON dev_food_diary_entries(workspace_id, client_id, local_date, slot, position)`,
+    // Вода — отдельный факт: одна сумма за день клиента, не пищевая запись и не критерий «дня с учётом».
+    `CREATE TABLE dev_water_days (
+      workspace_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      local_date TEXT NOT NULL CHECK (date(local_date) IS local_date),
+      ml INTEGER NOT NULL CHECK (ml > 0 AND ml <= 20000),
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (workspace_id, client_id, local_date),
+      FOREIGN KEY (client_id, workspace_id) REFERENCES dev_clients(id, workspace_id) ON DELETE RESTRICT
+    )`,
+  ],
 }];

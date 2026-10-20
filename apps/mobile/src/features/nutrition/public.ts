@@ -7,3 +7,6 @@ export type { RecipeCatalogCommittedChange, RecipeCatalogPort } from "./domain/R
 export type { FoodSnapshot } from "./domain/FoodSnapshot.ts";
 export { recipeBases, recipeTotals, validateRecipe, type RecipeBasis } from "./domain/RecipeRules.ts";
 export { snapshotOfFood, snapshotOfRecipe } from "./domain/FoodSnapshot.ts";
+export { MEAL_SLOTS, type DayState, type DaySummary, type DiaryEntry, type DiaryEntryInput, type MealSlot, type WaterDay } from "./domain/DiaryModel.ts";
+export type { DiaryCommittedChange, NutritionDiaryPort } from "./domain/NutritionDiaryPort.ts";
+export { accountedDates, isLocalDate, summarizeDay, sumNutrients } from "./domain/DiaryRules.ts";
