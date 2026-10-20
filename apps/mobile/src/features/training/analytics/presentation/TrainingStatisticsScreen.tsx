@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ChevronRight } from "lucide-react-native";
-import { AppButton, BarChart, EmptyState, InlineNotice, LoadingState, SelectionChip, pickDate, type BarChartItem } from "../../../../shared/ui/components/public.ts";
+import { AppButton, BarChart, EmptyState, InlineNotice, LoadingState, SelectionChip, type BarChartItem } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { dateText, filterHistory, HistoryFilterBar, type HistoryFilter, type TrainingHistoryEntry } from "../../archive/public.ts";
 import type { WorkoutSlot } from "../../execution/public.ts";
 import { useExerciseLookup, type ExerciseLookupPort } from "../../plans/public.ts";
 import { useBodyOf } from "./useBodyOf.ts";
-import { ChartCard, DrillDownModal, PlanCompletionCard, SummaryCard, bucketLabel, kg, number, rangeLabel, scaleCaption, statusLabels, type DrillTarget } from "./statsParts.tsx";
-import { periodRange, periods, readStatsFilters, writeStatsFilters, type CustomRange, type PeriodId } from "./statsFilters.ts";
+import { ChartCard, DrillDownModal, PlanCompletionCard, SummaryCard, bucketLabel, kg, number, scaleCaption, statusLabels, type DrillTarget } from "./statsParts.tsx";
+import { PeriodPill } from "./PeriodPill.tsx";
+import { periodRange, readStatsFilters, writeStatsFilters, type CustomRange, type PeriodId } from "./statsFilters.ts";
 import { bucketKeyOf, buckets, entriesInRange, entryTonnage, exerciseActivity, isWorkingSet, muscleGroups, planCompletion, rangeFor, recordsInRange,
   sanitizeFilter, statusCounts, summarize, trimToGroup, type BodyweightSource } from "./trainingStats.ts";
 
@@ -68,15 +69,7 @@ export function TrainingStatisticsScreen({ clientId, history, bodyweight, exerci
   const filter = useMemo(() => sanitizeFilter(all, stored.filter), [all, stored.filter]);
   const infoOf = useMemo(() => (exerciseId: string) => lookup?.get(exerciseId), [lookup]);
   const range = useMemo(() => periodRange(now, { period: stored.period, custom: stored.custom }), [now, stored.period, stored.custom]);
-  /** Свой период — два системных диалога даты: «с» и «по» (не раньше «с», не позже сегодня); отмена любого оставляет прежний выбор. */
-  const chooseCustom = useCallback(async () => {
-    const today = rangeFor(now, 1).to;
-    const from = await pickDate({ value: stored.custom?.from ?? range.from ?? today, max: today, title: "Начало периода", confirmLabel: "Далее" });
-    if (from === null) return;
-    const to = await pickDate({ value: stored.custom !== null && stored.custom.to >= from ? stored.custom.to : today, min: from, max: today, title: "Конец периода" });
-    if (to === null) return;
-    change({ period: "custom", custom: { from, to } });
-  }, [change, now, range.from, stored.custom]);
+
   useEffect(() => {
     let active = true;
     if (filter.programId === null) { setPlanned(null); return undefined; }
@@ -118,12 +111,9 @@ export function TrainingStatisticsScreen({ clientId, history, bodyweight, exerci
       <ScrollView contentContainerStyle={styles.list}>
         <View style={styles.header}>
           <HistoryFilterBar entries={all} filter={filter} onChange={(next) => change({ filter: next })} />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-            {periods.map((item) => <SelectionChip key={item.id} group="Период" label={item.label} selected={stored.period === item.id}
-              onPress={() => change({ period: item.id })} />)}
-            <SelectionChip group="Период" label={stored.custom === null ? "Свой период" : rangeLabel(stored.custom.from, stored.custom.to)}
-              selected={stored.period === "custom"} onPress={() => { void chooseCustom(); }} />
-          </ScrollView>
+          <View style={styles.pills}>
+            <PeriodPill value={{ period: stored.period, custom: stored.custom }} today={rangeFor(now, 1).to} onChange={(next) => change(next)} />
+          </View>
         </View>
 
         <View style={styles.summaryGrid}>
@@ -238,6 +228,7 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32, gap: 12 },
   header: { gap: 8 },
   chips: { gap: 8, paddingRight: 8 },
+  pills: { flexDirection: "row", gap: 8 },
   summaryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   caption: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   empty: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },

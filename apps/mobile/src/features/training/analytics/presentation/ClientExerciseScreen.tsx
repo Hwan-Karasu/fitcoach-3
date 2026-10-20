@@ -10,16 +10,13 @@ import { MONTHS, dateText, factText, filterHistory, HistoryFilterBar, type Histo
   "../../archive/public.ts";
 import type { SetFact } from "../../execution/public.ts";
 import { formatDuration, useExerciseLookup, type ExerciseLookupPort } from "../../plans/public.ts";
+import { periodRange } from "./statsFilters.ts";
+import { PeriodPill, type PeriodValue } from "./PeriodPill.tsx";
 import { exerciseSessions, progressMetrics, progressSeries, repRecords, sessionValue, type ExerciseSession,
   type ProgressMetricId } from "./exerciseProgress.ts";
 
 type Tab = "overview" | "history" | "progress";
-type Period = "3m" | "6m" | "1y" | "all";
 
-const periods: readonly Readonly<{ id: Period; label: string; months: number | null }>[] = [
-  { id: "3m", label: "3 мес", months: 3 }, { id: "6m", label: "6 мес", months: 6 }, { id: "1y", label: "Год", months: 12 },
-  { id: "all", label: "Всё время", months: null },
-];
 const metricLabels: Readonly<Record<ProgressMetricId, string>> = {
   e1rm: "Оценка 1ПМ", maxLoad: "Макс. вес", volume: "Тоннаж", maxReps: "Макс. повторы", totalReps: "Всего повторов",
   maxDuration: "Время", maxDistance: "Дистанция",
@@ -39,12 +36,6 @@ const shortDate = (date: string) => {
   const [, month, day] = date.split("-").map(Number) as [number, number, number];
   return `${day} ${MONTHS[month - 1] ?? ""}`;
 };
-/** Начало периода `YYYY-MM-DD` (включительно) от сегодняшней даты. */
-function periodStart(now: Date, months: number | null): string | null {
-  if (months === null) return null;
-  const start = new Date(now.getFullYear(), now.getMonth() - months, now.getDate());
-  return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
-}
 
 function setLabel(fact: SetFact, ordinal: number): string {
   const marks = [fact.setType === "FAILURE" ? "отказ" : null, fact.setType === "DROP" ? "дроп-сет" : null,
@@ -105,7 +96,7 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
   const [failed, setFailed] = useState(false);
   const [version, setVersion] = useState(0);
   const [filter, setFilter] = useState<HistoryFilter>({ programId: null, mesocycleId: null });
-  const [period, setPeriod] = useState<Period>("all");
+  const [period, setPeriod] = useState<PeriodValue>({ period: "all", custom: null });
   const [chosen, setChosen] = useState<ProgressMetricId | null>(null);
 
   useEffect(() => {
@@ -119,9 +110,9 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
   const own = useMemo(() => (entries ?? []).filter((entry) => entry.exercises.some((exercise) => exercise.exerciseId === exerciseId)),
     [entries, exerciseId]);
   const sessions = useMemo(() => exerciseSessions(filterHistory(own, filter), exerciseId), [own, filter, exerciseId]);
-  const start = periodStart(now, periods.find((item) => item.id === period)!.months);
-  const inPeriod = useMemo(() => start === null ? sessions : sessions.filter((session) => session.entry.actualDate >= start),
-    [sessions, start]);
+  const range = useMemo(() => periodRange(now, period), [now, period]);
+  const inPeriod = useMemo(() => sessions.filter((session) => (range.from === null || session.entry.actualDate >= range.from)
+    && session.entry.actualDate <= range.to), [sessions, range]);
   const metrics = progressMetrics(lookup?.get(exerciseId)?.metrics ?? []);
   const metric = chosen !== null && metrics.includes(chosen) ? chosen : metrics[0] ?? null;
   const points = useMemo(() => metric === null ? [] : progressSeries(inPeriod, metric), [inPeriod, metric]);
@@ -166,10 +157,7 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
       <ScrollView contentContainerStyle={styles.list}>
         <View style={styles.header}>
           {filters}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-            {periods.map((item) => <SelectionChip key={item.id} group="Период" label={item.label} selected={period === item.id}
-              onPress={() => setPeriod(item.id)} />)}
-          </ScrollView>
+          <View style={styles.pills}><PeriodPill value={period} today={range.to} onChange={setPeriod} /></View>
           {metrics.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
             {metrics.map((item) => <SelectionChip key={item} group="Показатель" label={metricLabels[item]} selected={metric === item}
               onPress={() => setChosen(item)} />)}
@@ -229,6 +217,7 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   header: { gap: 8, paddingTop: 4 },
   chips: { gap: 8, paddingRight: 8 },
+  pills: { flexDirection: "row", gap: 8 },
   summary: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
   card: { ...shadow.card, borderRadius: 20, padding: 14, gap: 6 },
   cardHead: { flexDirection: "row", alignItems: "center", gap: 8 },
