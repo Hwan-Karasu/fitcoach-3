@@ -8,7 +8,7 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import type { ClientRecord, ClientRepositoryPort, ClientRosterPort } from "../../features/clients/public.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { ClientQuestionnaireScreen, type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
-import { ArchivedProgramsPanel, TrainingArchiveScreen, TrainingStatisticsScreen, type ExerciseLookupPort,
+import { ArchivedProgramsPanel, MonthlyReportScreen, TrainingArchiveScreen, TrainingStatisticsScreen, type ExerciseLookupPort,
   type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort, type TrainingPlansRepositoryPort,
   type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort, type WorkoutSlot } from "../../features/training/public.ts";
 import type { ExerciseCatalogPort } from "../../features/exercises/public.ts";
@@ -35,15 +35,16 @@ type MoreRoutes = {
   Questionnaire: undefined;
   TrainingArchive: undefined;
   Statistics: undefined;
+  MonthlyReport: undefined;
 };
 
 const Tabs = createBottomTabNavigator<WorkspaceTabs>();
 const MoreStack = createNativeStackNavigator<MoreRoutes>();
 
-function MoreNavigator({ client, questionnaire, trainingPlans, history, exerciseLookup, planDelete, onClose, onOpenClients, onOpenExercise }: Readonly<{
+function MoreNavigator({ client, questionnaire, trainingPlans, history, exerciseLookup, planDelete, onClose, onOpenClients, onOpenExercise, onOpenWorkout }: Readonly<{
   client: ClientRecord; questionnaire: QuestionnaireRepositoryPort; onClose: () => void; onOpenClients: () => void;
   trainingPlans: TrainingPlansRepositoryPort; history: TrainingHistoryPort; exerciseLookup: ExerciseLookupPort;
-  onOpenExercise: (exerciseId: string) => void;
+  onOpenExercise: (exerciseId: string) => void; onOpenWorkout: (slot: WorkoutSlot) => void;
   planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -74,7 +75,11 @@ function MoreNavigator({ client, questionnaire, trainingPlans, history, exercise
           renderPrograms={() => <ArchivedProgramsPanel clientId={clientId} repository={trainingPlans} planDelete={planDelete} />} />}
       </MoreStack.Screen>
       <MoreStack.Screen name="Statistics" options={{ title: moreDestinations.Statistics }}>
-        {() => <TrainingStatisticsScreen clientId={clientId} history={history} exercises={exerciseLookup} onOpenExercise={onOpenExercise} />}
+        {({ navigation }) => <TrainingStatisticsScreen clientId={clientId} history={history} exercises={exerciseLookup} onOpenExercise={onOpenExercise}
+          onOpenWorkout={onOpenWorkout} onOpenMonthlyReport={() => navigation.navigate("MonthlyReport")} />}
+      </MoreStack.Screen>
+      <MoreStack.Screen name="MonthlyReport" options={{ title: "Месячный отчёт" }}>
+        {() => <MonthlyReportScreen clientId={clientId} history={history} exercises={exerciseLookup} onOpenWorkout={onOpenWorkout} />}
       </MoreStack.Screen>
     </MoreStack.Navigator>
   );
@@ -196,7 +201,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More}}>
         {() => <MoreNavigator client={client} questionnaire={questionnaire} onClose={onClose} onOpenClients={onOpenClients}
           trainingPlans={trainingPlans} history={trainingHistory} exerciseLookup={exerciseLookup} planDelete={planDelete}
-          onOpenExercise={(exerciseId) => onOpenExercise?.(exerciseId)} />}
+          onOpenExercise={(exerciseId) => onOpenExercise?.(exerciseId)} onOpenWorkout={onOpenWorkout} />}
       </Tabs.Screen>
     </Tabs.Navigator></ScreenToneProvider></WeekNavigationProvider>
     </View>

@@ -39,7 +39,7 @@ export const isWorkingSet = (fact: SetFact) => fact.confirmed && fact.setType !=
 const workingFacts = (entry: TrainingHistoryEntry) => entry.exercises.flatMap((exercise) => exercise.facts.filter(isWorkingSet));
 
 /** Тоннаж подхода: `null` — к упражнению не применим; `kg: null` — невычислим (§48.86.15). */
-function factTonnage(fact: SetFact, info: ExerciseInfo | undefined): Readonly<{ kg: number | null }> | null {
+export function factTonnage(fact: SetFact, info: ExerciseInfo | undefined): Readonly<{ kg: number | null }> | null {
   const metrics = info?.metrics ?? [];
   // Масса тела клиента на дату занятия (§48.86.7, §48.86.36) пока не подключена — такие подходы считаются неполными.
   if (metrics.includes("addedLoad") || metrics.includes("assistance")) return { kg: null };
@@ -114,7 +114,7 @@ export interface Bucket {
   readonly value: number | null;
 }
 
-const keyOf = (date: string, scale: Scale) => scale === "day" ? date : scale === "week" ? weekStart(date) : date.slice(0, 7);
+export const bucketKeyOf = (date: string, scale: Scale) => scale === "day" ? date : scale === "week" ? weekStart(date) : date.slice(0, 7);
 function nextKey(key: string, scale: Scale): string {
   if (scale === "day") return addDays(key, 1);
   if (scale === "week") return addDays(key, 7);
@@ -133,13 +133,13 @@ export function buckets(entries: readonly TrainingHistoryEntry[], range: StatsRa
   const scale = scaleFor(from, range.to);
   const sums = new Map<string, number | null>();
   for (const entry of entries) {
-    const key = keyOf(entry.actualDate, scale);
+    const key = bucketKeyOf(entry.actualDate, scale);
     const value = valueOf(entry);
     sums.set(key, value === null ? sums.get(key) ?? null : (sums.get(key) ?? 0) + value);
   }
   const items: Bucket[] = [];
-  const last = keyOf(range.to, scale);
-  for (let key = keyOf(from, scale); key <= last; key = nextKey(key, scale)) {
+  const last = bucketKeyOf(range.to, scale);
+  for (let key = bucketKeyOf(from, scale); key <= last; key = nextKey(key, scale)) {
     items.push({ key, value: sums.has(key) && sums.get(key) !== null ? sums.get(key)! : emptyAs });
   }
   return { scale, items };
@@ -218,4 +218,74 @@ export function recordsInRange(all: readonly TrainingHistoryEntry[], scoped: rea
     }
   }
   return events.sort((a, b) => b.date.localeCompare(a.date) || a.reps - b.reps);
+}
+
+/** Календарный месяц отчёта; `month` 1–12. */
+export interface MonthRef {
+  readonly year: number;
+  readonly month: number;
+}
+
+const pad = (value: number) => String(value).padStart(2, "0");
+/** Период с обеими границами. */
+export interface ClosedRange {
+  readonly from: string;
+  readonly to: string;
+}
+
+export const monthRange = ({ year, month }: MonthRef): ClosedRange =>
+  ({ from: `${year}-${pad(month)}-01`, to: iso(new Date(Date.UTC(year, month, 0))) });
+export const previousMonth = ({ year, month }: MonthRef): MonthRef => month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
+export const monthOf = (date: string): MonthRef => ({ year: Number(date.slice(0, 4)), month: Number(date.slice(5, 7)) });
+
+export interface MonthComparison {
+  readonly current: ClosedRange;
+  readonly previous: ClosedRange;
+  /** Текущий месяц ещё не закончился: сравнение — с первой такой же частью предыдущего (§48.86.18). */
+  readonly partial: boolean;
+}
+
+/**
+ * §48.86.14, §48.86.18: полный месяц сравнивается с полным предыдущим календарным; неполный — с первыми N днями
+ * предыдущего, а если тот короче, недостающие дни не достраиваются.
+ */
+export function compareMonths(ref: MonthRef, today: string): MonthComparison {
+  const full = monthRange(ref);
+  const before = monthRange(previousMonth(ref));
+  if (today >= full.from && today < full.to) {
+    const days = daysBetween(full.from, today) + 1;
+    const to = addDays(before.from, days - 1);
+    return { current: { from: full.from, to: today }, previous: { from: before.from, to: to < before.to ? to : before.to }, partial: true };
+  }
+  return { current: full, previous: before, partial: false };
+}
+
+export interface Delta {
+  /** Абсолютная разница; `null` — сравнить нельзя. */
+  readonly abs: number | null;
+  /** Процент — только при ненулевой базе (§48.86.14 п. 3). */
+  readonly pct: number | null;
+}
+
+/** §48.86.15 п. 4, §48.86.32: при неполных или отсутствующих данных динамика не выдаётся. */
+export function delta(current: number | null, previous: number | null, reliable = true): Delta {
+  if (!reliable || current === null || previous === null) return { abs: null, pct: null };
+  return { abs: current - previous, pct: previous > 0 ? (current - previous) / previous * 100 : null };
+}
+
+/** §48.86.16 п. 3: выбранной программы или мезоцикла уже нет в данных — безопасный сброс, а не чужие значения. */
+export function sanitizeFilter(entries: readonly TrainingHistoryEntry[], filter: { programId: string | null; mesocycleId: string | null }):
+  Readonly<{ programId: string | null; mesocycleId: string | null }> {
+  const inProgram = entries.filter((entry) => entry.programId === filter.programId);
+  if (filter.programId === null || inProgram.length === 0) return { programId: null, mesocycleId: null };
+  return inProgram.some((entry) => entry.mesocycleId === filter.mesocycleId) ? filter : { programId: filter.programId, mesocycleId: null };
+}
+
+/** §48.86.19: занятия, оставленные только с упражнениями выбранной категории (переход от мышечной группы). */
+export function trimToGroup(entries: readonly TrainingHistoryEntry[], infoOf: InfoOf, groupId: string): readonly TrainingHistoryEntry[] {
+  return entries.flatMap((entry) => {
+    const exercises = entry.exercises.filter((exercise) => (infoOf(exercise.exerciseId)?.group?.id ?? "none") === groupId
+      && exercise.facts.some(isWorkingSet));
+    return exercises.length === 0 ? [] : [{ ...entry, exercises }];
+  });
 }

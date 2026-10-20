@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buckets, entriesInRange, exerciseActivity, muscleGroups, rangeFor, recordsInRange, scaleFor, statusCounts, summarize } from
+import { bucketKeyOf, buckets, compareMonths, delta, entriesInRange, exerciseActivity, monthRange, muscleGroups, rangeFor, recordsInRange, sanitizeFilter, scaleFor, statusCounts, summarize, trimToGroup } from
   "../src/features/training/analytics/presentation/trainingStats.ts";
 import type { SetFact, SetType, SetValues, WorkoutStatus } from "../src/features/training/execution/domain/ExecutionModel.ts";
 import type { TrainingHistoryEntry } from "../src/features/training/archive/presentation/trainingHistory.ts";
@@ -130,4 +130,39 @@ test("статусы и активность упражнений", () => {
   assert.deepEqual([...statusCounts(entries)].sort(), [["COMPLETED", 2], ["MISSED", 1]]);
   assert.deepEqual(exerciseActivity(entries).map((row) => [row.exerciseId, row.sessions, row.workingSets, row.lastDate]),
     [[BENCH, 3, 3, "2026-10-09"], [CURL, 1, 1, "2026-10-09"]]);
+});
+
+test("сравнение месяцев: 14 октября — с 1–14 сентября; завершённый сентябрь — со всем августом (§48.86.18)", () => {
+  assert.deepEqual(compareMonths({ year: 2026, month: 10 }, "2026-10-14"), { current: { from: "2026-10-01", to: "2026-10-14" }, previous: { from: "2026-09-01", to: "2026-09-14" }, partial: true });
+  assert.deepEqual(compareMonths({ year: 2026, month: 9 }, "2026-10-14"), { current: { from: "2026-09-01", to: "2026-09-30" }, previous: { from: "2026-08-01", to: "2026-08-31" }, partial: false });
+});
+
+test("сравнение месяцев: короткий предыдущий месяц не достраивается; январь сравнивается с декабрём", () => {
+  // 31 марта — последний день, месяц ещё не закончился: 31 день против 28 дней февраля, без выдуманных 29–31.
+  assert.deepEqual(compareMonths({ year: 2026, month: 3 }, "2026-03-31").previous, { from: "2026-02-01", to: "2026-02-28" });
+  assert.deepEqual(compareMonths({ year: 2027, month: 1 }, "2027-01-20").previous, { from: "2026-12-01", to: "2026-12-20" });
+  assert.deepEqual(monthRange({ year: 2028, month: 2 }), { from: "2028-02-01", to: "2028-02-29" }, "високосный февраль");
+});
+
+test("разница: 8 → 10 даёт +2 и +25%; нулевая база — без процента; ненадёжное — без разницы (§48.86.14, §48.86.15)", () => {
+  assert.deepEqual(delta(10, 8), { abs: 2, pct: 25 });
+  assert.deepEqual(delta(5, 0), { abs: 5, pct: null });
+  assert.deepEqual(delta(0, 0), { abs: 0, pct: null });
+  assert.deepEqual(delta(800, 700, false), { abs: null, pct: null });
+  assert.deepEqual(delta(null, 700), { abs: null, pct: null });
+});
+
+test("фильтр, которого нет в данных, безопасно сбрасывается (§48.86.16 п. 3)", () => {
+  const entries = [entry("a", "2026-10-01", "COMPLETED", [fact(BENCH, values(1, 1))], "A")];
+  assert.deepEqual(sanitizeFilter(entries, { programId: "A", mesocycleId: null }), { programId: "A", mesocycleId: null });
+  assert.deepEqual(sanitizeFilter(entries, { programId: "удалена", mesocycleId: "м" }), { programId: null, mesocycleId: null });
+  assert.deepEqual(sanitizeFilter(entries, { programId: "A", mesocycleId: "удалён" }), { programId: "A", mesocycleId: null });
+});
+
+test("переход от столбца: занятия попадают в тот же интервал, что и столбец; от группы — только её упражнения (§48.86.19)", () => {
+  const entries = [entry("a", "2026-10-07", "COMPLETED", [fact(BENCH, values(100, 5)), fact(CURL, values(20, 10))]), entry("b", "2026-10-14", "COMPLETED", [fact(BENCH, values(100, 5))])];
+  assert.deepEqual(entries.filter((item) => bucketKeyOf(item.actualDate, "week") === "2026-10-05").map((item) => item.key), ["a"]);
+  const chest = trimToGroup(entries, infoOf, "chest");
+  assert.deepEqual(chest.map((item) => [item.key, item.exercises.map((exercise) => exercise.exerciseId)]), [["a", [BENCH]], ["b", [BENCH]]]);
+  assert.equal(entries[0]!.exercises.length, 2, "исходные данные не изменены");
 });

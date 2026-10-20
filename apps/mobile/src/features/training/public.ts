@@ -7,4 +7,4 @@ export { ProgramMatrixScreen, ProgramWeeksPanel, RestTimerDock, RestTimerService
   type WorkoutOutcome, type WorkoutStatus,
   factVolume, workoutStatus } from "./execution/public.ts";
 export { TrainingArchiveScreen, sortHistory, type TrainingHistoryEntry } from "./archive/public.ts";
-export { ClientExerciseScreen, TrainingStatisticsScreen } from "./analytics/public.ts";
+export { ClientExerciseScreen, MonthlyReportScreen, TrainingStatisticsScreen } from "./analytics/public.ts";
