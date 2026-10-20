@@ -1,6 +1,7 @@
 export { AddFoodScreen, type CatalogFilter } from "./presentation/AddFoodScreen.tsx";
 export { FoodEditorScreen } from "./presentation/FoodEditorScreen.tsx";
 export { NutritionHomeScreen } from "./presentation/NutritionHomeScreen.tsx";
+export { NutritionTargetsScreen } from "./presentation/NutritionTargetsScreen.tsx";
 export type { CalcClientBody } from "./presentation/NutritionCalcScreen.tsx";
 export { RecipeEditorScreen } from "./presentation/RecipeEditorScreen.tsx";
 export type { FoodBasis, FoodBasisUnit, FoodInput, FoodProduct, Nutrients } from "./domain/FoodModel.ts";
@@ -19,6 +20,6 @@ export { TARGET_METRICS, type Corridors, type RangeVerdict, type ResolvedTarget,
 export type { NutritionTargetsPort, TargetsCommittedChange } from "./domain/NutritionTargetsPort.ts";
 export { affectedPeriod, assessDay, energyConsistency, judge, resolveTarget, validateCorridors, validateVersion, versionFor, weekdayOf } from "./domain/TargetRules.ts";
 export type { CalcCommittedChange, NutritionCalcPort, StepsDay, StoredCalcProfile } from "./domain/NutritionCalcPort.ts";
-export { CALC_ACTIVITIES, CALC_GOALS, CALC_INTENSITIES, DEFAULT_TOLERANCE, calcMacros, deriveCalc, proposeCorridors, type CalcActivity, type CalcGoal, type CalcInputs, type CalcIntensity,
-  type CalcProfile, type CalcResult, type CalcSex, type Tolerance } from "./domain/CalcRules.ts";
+export { CALC_ACTIVITIES, CALC_GOALS, CALC_INTENSITIES, calcMacros, deriveCalc, type CalcActivity, type CalcGoal, type CalcInputs, type CalcIntensity,
+  type CalcProfile, type CalcResult, type CalcSex } from "./domain/CalcRules.ts";
 export { computeNutritionStats, type MetricStats, type NutritionDayPoint, type NutritionStats, type NutritionStatsInput } from "./domain/NutritionStats.ts";

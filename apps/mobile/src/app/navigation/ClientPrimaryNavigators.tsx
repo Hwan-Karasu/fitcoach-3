@@ -5,7 +5,7 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import { ClientHomePreview, type ClientRecord } from "../../features/clients/public.ts";
 import { localDateOf, parseValueX10, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
-import { AddFoodScreen, type CalcClientBody, type CatalogFilter, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
+import { AddFoodScreen, NutritionTargetsScreen, type CalcClientBody, type CatalogFilter, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
   type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ArchivedProgramsPanel, ParticipantSwitcher, participantTarget, ProgramMatrixScreen, PeriodizedBuilderScreen, ProgramLibraryScreen, ProgramModeChooserScreen, programLibraryTabTitles, ProgramScreen, SimpleProgramBuilderScreen,
   WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort,
@@ -22,8 +22,9 @@ type NutritionRoutes = {
   NutritionAdd: { localDate: string; slot: MealSlot; filter?: CatalogFilter };
   NutritionFood: { name: string };
   NutritionRecipe: { recipeId?: string } | undefined;
+  NutritionTargets: undefined;
 };
-const nutritionTitles: Readonly<Record<keyof NutritionRoutes, string>> = { NutritionIndex: "Питание", NutritionAdd: "Добавить еду", NutritionFood: "Новый продукт", NutritionRecipe: "Рецепт" };
+const nutritionTitles: Readonly<Record<keyof NutritionRoutes, string>> = { NutritionIndex: "Питание", NutritionAdd: "Добавить еду", NutritionFood: "Новый продукт", NutritionRecipe: "Рецепт", NutritionTargets: "Цели по дням недели" };
 type TrainingRoutes = {
   TrainingIndex: undefined;
   TrainingChooser: undefined;
@@ -119,7 +120,7 @@ export function NutritionNavigator({ clientId, clientName, clientEmoji, body, on
         onClients={onOpenClients} onBack={() => { if (route.name === "NutritionIndex") onExitClient(); else navigation.goBack(); }} />,
     })}>
       <NutritionStack.Screen name="NutritionIndex">
-        {({ navigation }) => <NutritionHomeScreen clientId={clientId} body={body} onUpdateBody={onUpdateBody} diary={diary} targets={targets} calc={calc} measurements={measurements}
+        {({ navigation }) => <NutritionHomeScreen clientId={clientId} onOpenSchedule={() => navigation.navigate("NutritionTargets")} body={body} onUpdateBody={onUpdateBody} diary={diary} targets={targets} calc={calc} measurements={measurements}
           onAdd={(localDate, slot, filter) => navigation.navigate("NutritionAdd", { localDate, slot, filter })} />}
       </NutritionStack.Screen>
       <NutritionStack.Screen name="NutritionAdd">
@@ -129,6 +130,9 @@ export function NutritionNavigator({ clientId, clientName, clientEmoji, body, on
       </NutritionStack.Screen>
       <NutritionStack.Screen name="NutritionFood">
         {({ navigation, route }) => <FoodEditorScreen foods={foods} initialName={route.params.name} onSaved={() => navigation.goBack()} />}
+      </NutritionStack.Screen>
+      <NutritionStack.Screen name="NutritionTargets">
+        {() => <NutritionTargetsScreen clientId={clientId} targets={targets} />}
       </NutritionStack.Screen>
       <NutritionStack.Screen name="NutritionRecipe">
         {({ navigation, route }) => <RecipeEditorScreen recipeId={route.params?.recipeId} foods={foods} recipes={recipes} onSaved={() => navigation.goBack()} />}

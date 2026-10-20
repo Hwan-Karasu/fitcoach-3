@@ -103,3 +103,15 @@ export function energyConsistency(corridors: Corridors): "OK" | "INCOMPATIBLE" |
   const high = 4 * protein.maxX10 + 9 * fat.maxX10 + 4 * carbs.maxX10;
   return kcal.maxX10 < low || kcal.minX10 > high ? "INCOMPATIBLE" : "OK";
 }
+
+/** Одна цель на все семь дней — версия из ряда «Ручная корректировка» (дни недели по отдельности настраиваются на экране целей). */
+export function uniformWeek(corridors: Corridors): readonly Corridors[] {
+  return Array.from({ length: 7 }, () => corridors);
+}
+
+const sameRange = (a: TargetRange | null, b: TargetRange | null) => a === null || b === null ? a === b : a.minX10 === b.minX10 && a.maxX10 === b.maxX10;
+
+/** Замена версии единой целью что-то меняет, если у какого-то дня было иное или не было ничего — об этом нужно предупредить. */
+export function differsFromUniform(version: TargetVersion, corridors: Corridors): boolean {
+  return version.days.some((day) => day === null || TARGET_METRICS.some((metric) => !sameRange(day[metric], corridors[metric])));
+}

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calcEat, calcMacros, calcNeat, calcRee, deriveCalc, goalDelta, proposeCorridors, type CalcProfile } from "../apps/mobile/src/features/nutrition/domain/CalcRules.ts";
+import { calcEat, calcMacros, calcNeat, calcRee, deriveCalc, goalDelta, type CalcProfile } from "../apps/mobile/src/features/nutrition/domain/CalcRules.ts";
 
 /** Профиль экрана «Расчёт» из спецификации и скриншотов Build 120: муж., 37 лет, 181 см, умеренный образ жизни, 3 тренировки по 60 мин, средняя интенсивность. */
 const PROFILE: CalcProfile = { goal: "MAINTENANCE", activity: "MODERATE", workoutsPerWeek: 3, minutes: 60, intensity: "MEDIUM", stepKcal: 100 };
@@ -65,14 +65,4 @@ test("БЖУ при поддержании 2289 ккал и сухой масс�
   assert.deepEqual(calcMacros(null, 2289, "MAINTENANCE"), { protein: null, fat: null, carbs: null });
   assert.equal(calcMacros(67.9, 2289, "GAIN").protein, 136, "2,0 г на кг сухой массы");
   assert.equal(calcMacros(67.9, 2289, "LOSS").protein, 143, "2,1 г на кг сухой массы");
-});
-
-test("§49.10: предложенные коридоры — ±5 % ккал и ±10 % Б/Ж/У вокруг расчёта, значения в десятых долях", () => {
-  const corridors = proposeCorridors(2289, { protein: 115, fat: 54, carbs: 336 }, { kcalPercent: 5, macroPercent: 10 });
-  assert.deepEqual(corridors.kcal, { minX10: 21746, maxX10: 24035 }, "2174,55 и 2403,45 → округление до десятых");
-  assert.deepEqual(corridors.protein, { minX10: 1035, maxX10: 1265 });
-  assert.deepEqual(corridors.fat, { minX10: 486, maxX10: 594 });
-  assert.deepEqual(corridors.carbs, { minX10: 3024, maxX10: 3696 });
-  const partial = proposeCorridors(null, { protein: null, fat: null, carbs: null }, { kcalPercent: 5, macroPercent: 10 });
-  assert.deepEqual(partial, { kcal: null, protein: null, fat: null, carbs: null }, "без расчёта цели не выдумываются");
 });

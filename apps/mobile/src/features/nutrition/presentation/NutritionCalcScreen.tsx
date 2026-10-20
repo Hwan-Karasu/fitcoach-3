@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
-import { AppButton, ConfirmDialog, InlineNotice, LoadingState, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
+import { AppButton, InlineNotice, LoadingState, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
 import { dailyPoints, latestPoint, localDateOf, MeasurementsCard, navyBodyFat, type MeasurementRepositoryPort } from "../../measurements/public.ts";
-import { CALC_ACTIVITIES, CALC_GOALS, CALC_INTENSITIES, DEFAULT_TOLERANCE, calcMacros, deriveCalc, proposeCorridors, type CalcActivity, type CalcGoal, type CalcIntensity,
+import { CALC_ACTIVITIES, CALC_GOALS, CALC_INTENSITIES, calcMacros, deriveCalc, type CalcActivity, type CalcGoal, type CalcIntensity,
   type CalcProfile, type CalcSex } from "../domain/CalcRules.ts";
 import type { NutritionCalcPort, StoredCalcProfile } from "../domain/NutritionCalcPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
-import { TARGET_METRICS } from "../domain/TargetModel.ts";
-import { metricLabels, nutritionErrorText, rangeText, shiftDate } from "./nutritionFormat.ts";
+import { NutritionTargetRows } from "./NutritionTargetRows.tsx";
+import { nutritionErrorText, shiftDate } from "./nutritionFormat.ts";
 
 const goalLabels: Readonly<Record<CalcGoal, string>> = { LOSS: "Похудение", MAINTENANCE: "Поддержание", GAIN: "Набор" };
 const activityLabels: Readonly<Record<CalcActivity, string>> = { SEDENTARY: "Сидячий", MODERATE: "Умеренный", ACTIVE: "Активный", VERY_ACTIVE: "Очень активный" };
@@ -98,7 +98,7 @@ function HelpSheet({ visible, onClose }: Readonly<{ visible: boolean; onClose: (
     ["NEAT — повседневная активность", "По средним шагам за последние 30 дней и весу (0,03–0,06 ккал на шаг). Без шагов — по образу жизни: 180 / 260 / 360 / 460 ккал."],
     ["EAT — тренировки", "MET × 3,5 × вес ÷ 200 × минуты × тренировок в неделю ÷ 7. MET: лёгкая 3,5, средняя 5, тяжёлая 6."],
     ["Итоговый калораж", "Стартовый расход с поправкой на цель: «Шаг цели» вычитается при похудении и прибавляется при наборе."],
-    ["Предложенные цели", "Коридоры ±5 % по калориям и ±10 % по Б/Ж/У. Это черновик: он не становится целью, пока вы не нажмёте «Применить как цели». Б и Ж считаются от сухой массы, поэтому нужны вес и % жира."],
+    ["Цели", "Расчёт — справочный: он не меняет цели. Ряд «Вручную» — коридоры, которые задаёте вы; они и есть цель, сохраняются кнопкой «Сохранить цели». Дни недели, версии и исключения — в «Цели по дням недели»."],
   ];
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -124,7 +124,7 @@ function HelpSheet({ visible, onClose }: Readonly<{ visible: boolean; onClose: (
  * Экран «Расчёт» (§49.10, UX «Расчёт»): просмотр и редактирование — состояния одного экрана; вес и % жира берутся из Measurements, шаги — из суточной активности.
  * Результат — оценка и черновик целей; действующей целью он становится только после явного «Применить как цели».
  */
-export function NutritionCalcScreen({ clientId, body, onUpdateBody, calc, targets, measurements }: Readonly<{ clientId: string; body: CalcClientBody;
+export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenSchedule, calc, targets, measurements }: Readonly<{ clientId: string; body: CalcClientBody; onOpenSchedule?: () => void;
   /** Записывает пол и рост в карточку клиента (владелец данных — Clients). */
   onUpdateBody: (patch: Readonly<{ sex: CalcSex | null; heightCm: number | null }>) => Promise<void>; calc: NutritionCalcPort; targets: NutritionTargetsPort; measurements: MeasurementRepositoryPort }>) {
   const { palette } = usePrototypeTheme();
@@ -139,8 +139,6 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, calc, target
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [tolerance, setTolerance] = useState({ kcal: String(DEFAULT_TOLERANCE.kcalPercent), macro: String(DEFAULT_TOLERANCE.macroPercent) });
-  const [confirmApply, setConfirmApply] = useState<string | null>(null);
   /** Замок от двойного нажатия: state `busy` обновляется асинхронно, ref — сразу. */
   const lock = useRef(false);
 
@@ -231,39 +229,8 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, calc, target
     setBusy(false);
   };
 
-  const tol = { kcalPercent: num(tolerance.kcal) ?? Number.NaN, macroPercent: num(tolerance.macro) ?? Number.NaN };
-  const tolValid = [tol.kcalPercent, tol.macroPercent].every((value) => Number.isFinite(value) && value >= 0 && value < 100);
-  const proposal = useMemo(() => {
-    if (result === null || !tolValid) return null;
-    const macros = calcMacros(result.leanMassKg, result.target, profile.goal);
-    return proposeCorridors(result.target, macros, tol);
-  }, [result, tolValid, tol.kcalPercent, tol.macroPercent, profile.goal]);
-  const hasProposal = proposal !== null && TARGET_METRICS.some((metric) => proposal[metric] !== null);
-
-  const askApply = async () => {
-    if (proposal === null || lock.current) return;
-    try {
-      const existing = (await targets.listVersions(clientId)).find((version) => version.effectiveFrom === localDateOf(new Date()));
-      setConfirmApply(existing === undefined
-        ? "С сегодняшней даты на все дни недели будут действовать эти коридоры. Прошлые версии целей и особые цели на даты сохраняются."
-        : "На сегодняшнюю дату цели уже заданы. Они будут заменены этими коридорами на все дни недели: прежние значения по дням, которых нет в предложении, пропадут. Прошлые версии и особые цели на даты сохраняются.");
-    } catch (failure) { setError(calcErrorText(failure)); }
-  };
-  const apply = async () => {
-    setConfirmApply(null);
-    if (proposal === null || lock.current) return;
-    lock.current = true;
-    setBusy(true);
-    try {
-      const today = localDateOf(new Date());
-      const existing = (await targets.listVersions(clientId)).find((version) => version.effectiveFrom === today);
-      await targets.saveVersion(clientId, { effectiveFrom: today, days: Array.from({ length: 7 }, () => proposal) }, existing?.revision ?? null);
-      setNotice("Цели сохранены с сегодняшней даты. Уточнить границы по дням можно на вкладке «Цели».");
-      setError(null);
-    } catch (failure) { setError(calcErrorText(failure)); }
-    lock.current = false;
-    setBusy(false);
-  };
+  /** Ориентиры БЖУ для справочного ряда «Расчёт»: от сухой массы, без выдуманной массы при неизвестном % жира. */
+  const macros = useMemo(() => result === null ? null : calcMacros(result.leanMassKg, result.target, profile.goal), [result, profile.goal]);
 
   if (loaded === null || result === null || live === null) {
     return failed ? <View style={styles.pad}><InlineNotice kind="error">Не удалось загрузить расчёт.</InlineNotice></View> : <LoadingState label="Загружаем расчёт…" />;
@@ -368,23 +335,11 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, calc, target
         </>}
       </Card>
 
-      {!editing ? <Card title="ПРЕДЛОЖЕНИЕ ЦЕЛЕЙ">
-        <View style={styles.pair}>
-          <View style={styles.grow}><TextField label="Допуск ккал, ±%" value={tolerance.kcal} onChangeText={(kcal) => setTolerance({ ...tolerance, kcal })} keyboardType="decimal-pad" /></View>
-          <View style={styles.grow}><TextField label="Допуск Б/Ж/У, ±%" value={tolerance.macro} onChangeText={(macro) => setTolerance({ ...tolerance, macro })} keyboardType="decimal-pad" /></View>
-        </View>
-        {TARGET_METRICS.map((metric) => <View key={metric} style={styles.resultRow}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>{metricLabels[metric]}</Text>
-          <Text style={[styles.resultValue, { color: colors.textPrimary }]}>{proposal === null || proposal[metric] === null ? "—" : rangeText(proposal[metric])}</Text>
-        </View>)}
-        <Text style={[styles.hint, { color: colors.textMuted }]}>Черновик по расчёту. Белки и жиры считаются от сухой массы — нужны вес и % жира; без них они остаются «—».</Text>
-        <AppButton label="Применить как цели" busy={busy} disabled={!hasProposal} disabledReason="Сначала заполните данные расчёта." onPress={() => { void askApply(); }} />
-      </Card> : null}
+      {!editing ? <Card title="КБЖУ"><NutritionTargetRows clientId={clientId} targets={targets} result={result} macros={macros} onOpenSchedule={onOpenSchedule} /></Card> : null}
 
       <MeasurementsCard clientId={clientId} repository={measurements} />
 
       <HelpSheet visible={help} onClose={() => setHelp(false)} />
-      <ConfirmDialog visible={confirmApply !== null} title="Применить как цели?" confirmLabel="Применить" onCancel={() => setConfirmApply(null)} onConfirm={() => { void apply(); }} description={confirmApply ?? ""} />
     </ScrollView>
   );
 }

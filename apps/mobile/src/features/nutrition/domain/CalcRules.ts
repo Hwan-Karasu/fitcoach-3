@@ -1,7 +1,5 @@
-import type { Corridors, TargetRange } from "./TargetModel.ts";
-
 /**
- * Расчёт КБЖУ (§49.10, П6): оценка суточного расхода и предложение коридоров. Результат — черновик, а не действующая цель; неполные
+ * Расчёт КБЖУ: справочная оценка суточного расхода и ориентиров БЖУ (UX v1.1: предложение целей убрано). Расчёт не создаёт и не меняет цели; неполные
  * исходные данные дают `null`, а не нулевые или выдуманные значения. Формулы — те же, что в FitCoach 2.0 Build 120 (решение владельца
  * 2026-10-20), переписанные заново; вес и % жира приходят из Measurements, шаги — из суточной активности.
  */
@@ -111,25 +109,6 @@ export function calcMacros(leanMassKg: number | null, calories: number | null, g
   const protein = Math.round(leanMassKg * (goal === "MAINTENANCE" ? 1.7 : goal === "GAIN" ? 2 : 2.1));
   const fat = Math.round(leanMassKg * 0.8);
   return { protein, fat, carbs: Math.max(0, Math.round((calories - protein * 4 - fat * 9) / 4)) };
-}
-
-export interface Tolerance {
-  readonly kcalPercent: number;
-  readonly macroPercent: number;
-}
-
-/** Допуск по умолчанию (решение реализации, не медицинский стандарт §49.10.6): виден и правится тренером до «Применить». */
-export const DEFAULT_TOLERANCE: Tolerance = { kcalPercent: 5, macroPercent: 10 };
-
-const around = (value: number | null, percent: number): TargetRange | null => {
-  if (value === null) return null;
-  return { minX10: Math.round((value * 10 * (100 - percent)) / 100), maxX10: Math.round((value * 10 * (100 + percent)) / 100) };
-};
-
-/** Расчётные ориентиры → коридоры `min–max` в десятых долях. Показатель без расчёта остаётся без цели (`null`), а не «0–0». */
-export function proposeCorridors(kcal: number | null, macros: MacroGrams, tolerance: Tolerance): Corridors {
-  return { kcal: around(kcal, tolerance.kcalPercent), protein: around(macros.protein, tolerance.macroPercent), fat: around(macros.fat, tolerance.macroPercent),
-    carbs: around(macros.carbs, tolerance.macroPercent) };
 }
 
 export type CalcRuleError = "CALC_PROFILE_INVALID" | "CALC_STEPS_INVALID";
