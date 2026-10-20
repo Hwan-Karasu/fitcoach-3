@@ -156,9 +156,11 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
       <ScrollView contentContainerStyle={styles.list}>
         <View style={styles.header}>
           {filters}
+          {/* Показатели — ровная сетка в два столбца одинаковой ширины (раньше пилюли по тексту переносились с рваным краем). */}
           {metrics.length > 1 ? <View style={styles.chips}>
-            {metrics.map((item) => <SelectionChip key={item} group="Показатель" label={metricLabels[item]} selected={metric === item}
-              onPress={() => setChosen(item)} />)}
+            {metrics.map((item) => <View key={item} style={styles.chipCell}>
+              <SelectionChip group="Показатель" label={metricLabels[item]} selected={metric === item} onPress={() => setChosen(item)} />
+            </View>)}
           </View> : null}
         </View>
         {metric === null ? <EmptyState reason="no-data" title="Прогресс не строится"
@@ -221,7 +223,8 @@ const styles = StyleSheet.create({
   pad: { paddingHorizontal: 16 },
   list: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   header: { gap: 8, paddingTop: 4 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chips: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 8 },
+  chipCell: { width: "48.5%" },
   selected: { gap: 6 },
   selectedTitle: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },
   summary: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
