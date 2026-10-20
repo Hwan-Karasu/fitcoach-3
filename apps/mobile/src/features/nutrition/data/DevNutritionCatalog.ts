@@ -28,13 +28,13 @@ export const devNutritionCatalog: readonly MigrationStep[] = [{
       CHECK (kcal_x10 IS NOT NULL OR protein_x10 IS NOT NULL OR fat_x10 IS NOT NULL OR carbs_x10 IS NOT NULL)
     )`,
     `CREATE INDEX dev_food_products_active ON dev_food_products(workspace_id, archived_at, name)`,
-    // Нужен составному FK ингредиентов: ингредиент другого пространства невозможен.
-    `CREATE UNIQUE INDEX dev_food_products_identity ON dev_food_products(id, workspace_id)`,
   ],
 }, {
   version: 2,
   checksum: "n01-dev-nutrition-v2-recipes-20261020",
   statements: [
+    // Нужен составному FK ингредиентов: ингредиент другого пространства невозможен. Не в v1: та миграция уже применена.
+    `CREATE UNIQUE INDEX dev_food_products_identity ON dev_food_products(id, workspace_id)`,
     `CREATE TABLE dev_recipes (
       id TEXT PRIMARY KEY NOT NULL,
       workspace_id TEXT NOT NULL,

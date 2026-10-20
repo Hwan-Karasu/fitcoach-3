@@ -29,7 +29,8 @@ async function load(reader: SqliteStatementPort, workspaceId: string, where: str
   if (rows.length === 0) return [];
   const lines = await reader.all<IngredientRow>(`SELECT ${ingredientColumns} FROM dev_recipe_ingredients i
     JOIN dev_food_products f ON f.id = i.food_id AND f.workspace_id = i.workspace_id
-    WHERE i.workspace_id = ? ORDER BY i.recipe_id, i.position`, [workspaceId]);
+    WHERE i.workspace_id = ? AND i.recipe_id IN (${rows.map(() => "?").join(", ")}) ORDER BY i.recipe_id, i.position`,
+  [workspaceId, ...rows.map((row) => row.id)]);
   return rows.map((row) => ({ ...row, ingredients: lines.filter((line) => line.recipeId === row.id).map((line) => ({
     quantityX10: line.quantityX10,
     food: { id: line.id, name: line.name, brand: line.brand, unit: line.unit, amountX10: line.amountX10, kcalX10: line.kcalX10,

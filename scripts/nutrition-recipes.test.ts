@@ -125,3 +125,21 @@ test("N01 схема: ингредиент нельзя удалить из ка
     assert.throws(() => db.prepare("DELETE FROM dev_food_products WHERE id = ?").run(oats.id), /FOREIGN KEY/u);
   } finally { await close(); }
 });
+
+test("N01 миграции: рецепты работают на БД, где v1 уже применена без индекса личности продукта", async () => {
+  const db = new DatabaseSync(":memory:");
+  const { devNutritionCatalog, DEV_NUTRITION_LEDGER } = await import("../apps/mobile/src/features/nutrition/data/DevNutritionCatalog.ts");
+  const { runMigrations } = await import("../apps/mobile/src/shared/db/MigrationRunner.ts");
+  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const { writer } = await shared.acquire();
+  await runMigrations(writer, [devNutritionCatalog[0]!], DEV_NUTRITION_LEDGER);
+  const foods = new DevFoodCatalogRepository(shared, WS);
+  const recipes = new DevRecipeCatalogRepository(shared, WS);
+  await foods.initialize();
+  await recipes.initialize();
+  try {
+    const oats = await foods.create(OATS, NOW);
+    const recipe = await recipes.create({ name: "Каша", servingsX10: 10, cookedMassX10: null, ingredients: [{ foodId: oats.id, quantityX10: 500 }] }, NOW);
+    assert.equal(recipe.ingredients.length, 1);
+  } finally { await recipes.close(); await foods.close(); await shared.release(); }
+});
