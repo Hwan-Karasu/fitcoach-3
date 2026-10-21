@@ -201,7 +201,7 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
               </View>
               {open ? <>
                 {slotEntries.map((entry) => <EntryRow key={entry.id} entry={entry} onOpen={() => setEditing(entry)} />)}
-                <View style={styles.chipStrip}>
+                <View style={[styles.chipStrip, { borderColor: colors.border }]}>
                   <QuickChip label="Сохранить еду" accessibilityLabel={`Сохранить набор: ${slotLabels[slot]}`} disabled={slotEntries.length === 0} onPress={() => setSavingMeal(slotEntries.map(savedSnapshot))} />
                   <QuickChip label="Копировать" icon={<Copy size={14} color={colors.textPrimary} />} disabled={slotEntries.length === 0} accessibilityLabel={`Копировать приём пищи: ${slotLabels[slot]}`}
                     onPress={() => { setCopied({ date: localDate, slot }); setNotice(`Скопирован приём «${slotLabels[slot]}». Откройте нужный приём и нажмите «Вставить».`); }} />
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
   gridRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6 },
   slotHeadRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   plus: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  chipStrip: { flexDirection: "row", gap: 6, paddingVertical: 4 },
+  chipStrip: { flexDirection: "row", gap: 6, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
   chip: { flex: 1, minWidth: 0, minHeight: 32, borderRadius: 16, borderWidth: 1, paddingHorizontal: 6, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 },
   chipText: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
   entryName: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
