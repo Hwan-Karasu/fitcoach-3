@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { guideLabel, trendAdjustment, weightTrendKg } from "../apps/mobile/src/features/nutrition/domain/CalcRules.ts";
+import { trendAdjustment, weightTrendKg } from "../apps/mobile/src/features/nutrition/domain/CalcRules.ts";
 
 test("динамика веса (2.0): нужно не менее 4 взвешиваний; среднее второй половины минус среднее первой, до 0,01 кг", () => {
   assert.equal(weightTrendKg([85.4, 85.3, 85.1, 85.0]), -0.3, "(85,1+85,0)/2 − (85,4+85,3)/2 = 85,05 − 85,35");
@@ -26,8 +26,3 @@ test("поправка при наборе и поддержании", () => {
   assert.equal(trendAdjustment("MAINTENANCE", weightTrendKg([70, 70, 70.1, 70.1]), 70), 0);
 });
 
-test("подпись суточного ориентира: «Без поправки по весу» или «Поправка −120 ккал»", () => {
-  assert.equal(guideLabel(0), "Без поправки по весу");
-  assert.equal(guideLabel(-120), "Поправка −120 ккал");
-  assert.equal(guideLabel(100), "Поправка +100 ккал");
-});

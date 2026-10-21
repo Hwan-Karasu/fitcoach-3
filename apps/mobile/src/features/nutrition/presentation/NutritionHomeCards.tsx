@@ -5,6 +5,7 @@ import { AppButton, AppIconButton, InlineNotice, SegmentedRing, TextField } from
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../measurements/public.ts";
+import { KCAL_PER_G } from "../domain/EnergyRules.ts";
 import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
@@ -122,7 +123,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   const eatenKcalX10 = eaten("kcal");
   const fraction = eatenKcalX10 === null || orientMiddle === null || orientMiddle <= 0 ? null : eatenKcalX10 / 10 / orientMiddle;
   /** Дуга делится по калориям съеденных белков, жиров и углеводов (4/9/4). */
-  const segments = (["protein", "fat", "carbs"] as const).map((metric) => ({ weight: (eaten(metric) ?? 0) * (metric === "fat" ? 9 : 4), color: macroColors[metric] }));
+  const segments = (["protein", "fat", "carbs"] as const).map((metric) => ({ weight: (eaten(metric) ?? 0) * KCAL_PER_G[metric], color: macroColors[metric] }));
   const effective = liveTarget;
   const targetText = (metric: "protein" | "fat" | "carbs"): string => {
     if (effective !== null) return rangeText(effective[metric]) ?? "—";
@@ -218,10 +219,8 @@ const styles = StyleSheet.create({
   group: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 12, overflow: "hidden" },
   segment: { minHeight: 28, paddingHorizontal: 8, alignItems: "center", justifyContent: "center" },
   segmentText: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 15 },
-  divider: { width: StyleSheet.hairlineWidth, alignSelf: "stretch" },
   cardTitle: { fontSize: 14, lineHeight: 19, fontFamily: fonts.bold },
   hint: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
-  grow: { flex: 1 },
   guide: { flex: 1, minWidth: 0, alignItems: "center", gap: 4 },
   guidePill: { alignSelf: "center" },
   dayRow: { flexDirection: "row", gap: 8, alignItems: "flex-start" },

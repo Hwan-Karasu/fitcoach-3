@@ -4,7 +4,7 @@ import test from "node:test";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { DevFoodCatalogRepository } from "../apps/mobile/src/features/nutrition/data/DevFoodCatalogRepository.ts";
 import type { FoodInput } from "../apps/mobile/src/features/nutrition/domain/FoodModel.ts";
-import { gramsFromPieces, parseDecimalX10, piecesFromGrams, scaleNutrients, validateFood } from "../apps/mobile/src/features/nutrition/domain/FoodRules.ts";
+import { gramsFromPieces, parseDecimalX10, scaleNutrients, validateFood } from "../apps/mobile/src/features/nutrition/domain/FoodRules.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
 
@@ -98,10 +98,8 @@ test("N01 схема: CHECK не пускает продукт без значе
 
 test("P-28: граммы ↔ штуки только при известной массе штуки; неизвестная масса — отказ, не ноль", () => {
   assert.equal(gramsFromPieces(20, 450), 900, "2 шт × 45 г = 90 г");
-  assert.equal(piecesFromGrams(900, 450), 20, "90 г при 45 г в штуке = 2 шт");
   assert.equal(gramsFromPieces(15, 450), 675, "1,5 шт × 45 г = 67,5 г");
   assert.throws(() => gramsFromPieces(20, null), code("PIECE_MASS_UNKNOWN"));
-  assert.throws(() => piecesFromGrams(900, undefined), code("PIECE_MASS_UNKNOWN"));
   assert.throws(() => gramsFromPieces(0, 450), code("INVALID_PORTION"));
 });
 

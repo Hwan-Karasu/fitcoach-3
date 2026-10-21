@@ -1,4 +1,5 @@
 import type { Recipe } from "./RecipeModel.ts";
+import { KCAL_PER_G, kcalFromMacrosX10 } from "./EnergyRules.ts";
 import { recipeBases } from "./RecipeRules.ts";
 
 export type RecipeSort = "DEFAULT" | "NEWEST" | "OLDEST" | "KCAL_ASC" | "KCAL_DESC";
@@ -35,9 +36,9 @@ export function browseRecipes(recipes: readonly Recipe[], filters: RecipeFilters
       const range = filters.macros[key];
       if (range.min === 0 && range.max === 100) continue;
       if (Object.values(values).some((value) => value === null)) return false;
-      const total = values.protein! * 4 + values.fat! * 9 + values.carbs! * 4;
+      const total = kcalFromMacrosX10({ proteinX10: values.protein, fatX10: values.fat, carbsX10: values.carbs })!;
       if (total === 0) return false;
-      const percent = values[key]! * (key === "fat" ? 9 : 4) * 100 / total;
+      const percent = values[key]! * KCAL_PER_G[key] * 100 / total;
       if (percent < range.min || percent > range.max) return false;
     }
     return true;

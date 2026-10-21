@@ -94,9 +94,3 @@ export function gramsFromPieces(piecesX10: number, gramsPerPieceX10: number | nu
   return Math.round((piecesX10 * gramsPerPieceX10) / 10);
 }
 
-/** Граммы → штуки (десятые доли); обратное к `gramsFromPieces`. */
-export function piecesFromGrams(gramsX10: number, gramsPerPieceX10: number | null | undefined): number {
-  if (gramsPerPieceX10 === null || gramsPerPieceX10 === undefined) fail("PIECE_MASS_UNKNOWN");
-  if (!Number.isInteger(gramsX10) || gramsX10 <= 0) fail("INVALID_PORTION");
-  return Math.round((gramsX10 * 10) / gramsPerPieceX10);
-}

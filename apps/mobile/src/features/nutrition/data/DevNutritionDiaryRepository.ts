@@ -259,18 +259,6 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
     }
   }
 
-  async updateQuantity(clientId: string, id: string, expectedRevision: number, quantityX10: number, now: Date = new Date()): Promise<DiaryEntry> {
-    assertQuantity(quantityX10);
-    const updated = await this.ready().writer.write(async (tx) => {
-      const result = await tx.run(`UPDATE dev_food_diary_entries SET quantity_x10 = ?, revision = revision + 1, updated_at = ?
-        WHERE workspace_id = ? AND client_id = ? AND id = ? AND revision = ?`, [quantityX10, now.toISOString(), this.workspaceId, clientId, id, expectedRevision]);
-      if (result.changes !== 1) throw new Error("DIARY_STALE");
-      return byId(tx, this.workspaceId, clientId, id);
-    });
-    this.publish({ clientId, localDate: updated.localDate });
-    return updated;
-  }
-
   async editEntry(clientId: string, id: string, expectedRevision: number, input: Readonly<{ quantityX10: number; slot: MealSlot; override: Nutrients | "CLEAR" | null; copyToSlots?: readonly MealSlot[] }>, now: Date = new Date()): Promise<DiaryEntry> {
     assertQuantity(input.quantityX10);
     assertSlot(input.slot);
@@ -299,52 +287,6 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
       // Копии — в той же транзакции: сбой любой вставки откатывает и правку самой записи.
       for (const slot of copySlots) await this.insertEntry(tx, clientId, { localDate: edited.localDate, slot, snapshot: edited.snapshot }, normalizeSnapshot({ ...edited.snapshot, quantityX10: edited.snapshot.quantityX10 }), now, edited.override ?? null);
       return edited;
-    });
-    this.publish({ clientId, localDate: updated.localDate });
-    return updated;
-  }
-
-  async moveEntry(clientId: string, id: string, expectedRevision: number, slot: MealSlot, now: Date = new Date()): Promise<DiaryEntry> {
-    assertSlot(slot);
-    let changed = false;
-    const moved = await this.ready().writer.write(async (tx) => {
-      const current = await byId(tx, this.workspaceId, clientId, id);
-      if (current.revision !== expectedRevision) throw new Error("DIARY_STALE");
-      if (current.slot === slot) return current;
-      const last = await tx.first<{ position: number | null }>(`SELECT max(position) AS position FROM dev_food_diary_entries
-        WHERE workspace_id = ? AND client_id = ? AND local_date = ? AND slot = ?`, [this.workspaceId, clientId, current.localDate, slot]);
-      const result = await tx.run(`UPDATE dev_food_diary_entries SET slot = ?, position = ?, revision = revision + 1, updated_at = ?
-        WHERE workspace_id = ? AND client_id = ? AND id = ? AND revision = ?`, [slot, (last?.position ?? -1) + 1, now.toISOString(), this.workspaceId, clientId, id, expectedRevision]);
-      if (result.changes !== 1) throw new Error("DIARY_STALE");
-      changed = true;
-      return byId(tx, this.workspaceId, clientId, id);
-    });
-    if (changed) this.publish({ clientId, localDate: moved.localDate });
-    return moved;
-  }
-
-  async setOverride(clientId: string, id: string, expectedRevision: number, values: Nutrients, now: Date = new Date()): Promise<DiaryEntry> {
-    assertOverride(values);
-    const updated = await this.ready().writer.write(async (tx) => {
-      const current = await byId(tx, this.workspaceId, clientId, id);
-      if (current.revision !== expectedRevision) throw new Error("DIARY_STALE");
-      const result = await tx.run(`UPDATE dev_food_diary_entries SET override_base_quantity_x10 = ?, override_kcal_x10 = ?, override_protein_x10 = ?, override_fat_x10 = ?,
-          override_carbs_x10 = ?, revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND client_id = ? AND id = ? AND revision = ?`,
-      [current.snapshot.quantityX10, values.kcalX10, values.proteinX10, values.fatX10, values.carbsX10, now.toISOString(), this.workspaceId, clientId, id, expectedRevision]);
-      if (result.changes !== 1) throw new Error("DIARY_STALE");
-      return byId(tx, this.workspaceId, clientId, id);
-    });
-    this.publish({ clientId, localDate: updated.localDate });
-    return updated;
-  }
-
-  async clearOverride(clientId: string, id: string, expectedRevision: number, now: Date = new Date()): Promise<DiaryEntry> {
-    const updated = await this.ready().writer.write(async (tx) => {
-      const result = await tx.run(`UPDATE dev_food_diary_entries SET override_base_quantity_x10 = NULL, override_kcal_x10 = NULL, override_protein_x10 = NULL, override_fat_x10 = NULL,
-          override_carbs_x10 = NULL, revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND client_id = ? AND id = ? AND revision = ?`,
-      [now.toISOString(), this.workspaceId, clientId, id, expectedRevision]);
-      if (result.changes !== 1) throw new Error("DIARY_STALE");
-      return byId(tx, this.workspaceId, clientId, id);
     });
     this.publish({ clientId, localDate: updated.localDate });
     return updated;

@@ -2,7 +2,7 @@ import type { Nutrients } from "./FoodModel.ts";
 import type { TargetRange } from "./TargetModel.ts";
 
 /** Энергетическая ценность макронутриентов, ккал на грамм (владелец, UX 2.0): белки 4, жиры 9, углеводы 4. */
-const KCAL_PER_G = { protein: 4, fat: 9, carbs: 4 } as const;
+export const KCAL_PER_G = { protein: 4, fat: 9, carbs: 4 } as const;
 
 /** Калории из Б/Ж/У; значения и результат — десятые доли (г×10 → ккал×10). Неизвестен любой из трёх — `null`: неполная сумма не выдаётся за итог. */
 export function kcalFromMacrosX10(macros: Readonly<{ proteinX10: number | null; fatX10: number | null; carbsX10: number | null }>): number | null {
@@ -28,18 +28,6 @@ export function kcalRangeFromMacros(ranges: Readonly<{ protein: TargetRange | nu
   const min = kcalFromMacrosX10({ proteinX10: ranges.protein.minX10, fatX10: ranges.fat.minX10, carbsX10: ranges.carbs.minX10 }) as number;
   const max = kcalFromMacrosX10({ proteinX10: ranges.protein.maxX10, fatX10: ranges.fat.maxX10, carbsX10: ranges.carbs.maxX10 }) as number;
   return { minX10: whole(min), maxX10: whole(max) };
-}
-
-/**
- * Калории по введённым макронутриентам (4/9/4): считаются сразу, даже если введён один показатель (UX 2.0, решение владельца); неведённые не учитываются. Ничего не введено — `null`.
- * Округление до целых ккал. Для полного набора совпадает с `kcalRangeFromMacros`.
- */
-export function kcalRangeFromEntered(ranges: Readonly<{ protein: TargetRange | null; fat: TargetRange | null; carbs: TargetRange | null }>): TargetRange | null {
-  const parts = [[ranges.protein, KCAL_PER_G.protein], [ranges.fat, KCAL_PER_G.fat], [ranges.carbs, KCAL_PER_G.carbs]] as const;
-  if (parts.every(([range]) => range === null)) return null;
-  const sum = (pick: (range: TargetRange) => number) => parts.reduce((total, [range, k]) => total + (range === null ? 0 : k * pick(range)), 0);
-  const whole = (valueX10: number) => Math.round(valueX10 / 10) * 10;
-  return { minX10: whole(sum((range) => range.minX10)), maxX10: whole(sum((range) => range.maxX10)) };
 }
 
 const NONE: Nutrients = { kcalX10: null, proteinX10: null, fatX10: null, carbsX10: null };

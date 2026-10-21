@@ -50,7 +50,7 @@ export interface DaySummary {
   readonly localDate: string;
   readonly state: DayState;
   readonly foodEntries: number;
-  /** Сумма внесённого за день; нутриент, неизвестный хотя бы в одной записи, — `null`, а не неполная сумма. */
+  /** Сумма внесённого за день (ADR-028): неизвестное значение записи считается нулём; `null` — только если оно неизвестно во всех записях. */
   readonly totals: Nutrients;
   readonly bySlot: Readonly<Record<MealSlot, Nutrients | null>>;
 }

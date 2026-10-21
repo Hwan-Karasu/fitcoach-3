@@ -157,10 +157,8 @@ const styles = StyleSheet.create({
   slotPill: { flex: 1, minWidth: 0, minHeight: 40, borderRadius: 20, borderWidth: 1, paddingHorizontal: 4, alignItems: "center", justifyContent: "center" },
   slotText: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
   title: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
-  heading: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
   body: { gap: 10 },
   meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   row: { flexDirection: "row", gap: 8 },
   cell: { flex: 1 },
 });

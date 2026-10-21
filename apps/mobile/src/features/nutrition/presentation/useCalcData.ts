@@ -39,8 +39,7 @@ export function useCalcData(clientId: string, calc: NutritionCalcPort, measureme
       if (!active) return;
       const point = (type: "WEIGHT" | "BODY_FAT") => { const latest = latestPoint(data.measurements, data.primaries, type); return latest !== null && latest.kind === "VALUE" ? latest.measurement.valueX10 / 10 : null; };
       const from = shiftDate(today, -TREND_WINDOW_DAYS + 1);
-      const weights = dailyPoints(data.measurements, data.primaries, "WEIGHT").filter((day) => day.localDate >= from && day.localDate <= today && day.kind === "VALUE")
-        .map((day) => (day.kind === "VALUE" ? day.measurement.valueX10 / 10 : 0));
+      const weights = dailyPoints(data.measurements, data.primaries, "WEIGHT").flatMap((day) => day.localDate >= from && day.localDate <= today && day.kind === "VALUE" ? [day.measurement.valueX10 / 10] : []);
       const todayPoint = dailyPoints(data.measurements, data.primaries, "WEIGHT").find((day) => day.localDate === today);
       const weightToday = todayPoint !== undefined && todayPoint.kind === "VALUE" ? todayPoint.measurement.valueX10 / 10 : null;
       setLoaded({ key: clientId, value: { stored, weight: point("WEIGHT"), fat: point("BODY_FAT"), steps, weightToday, weights } });

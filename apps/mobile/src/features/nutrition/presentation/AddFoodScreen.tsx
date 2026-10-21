@@ -19,7 +19,7 @@ import { SavedMealEditorDialog } from "./SavedMealEditorDialog.tsx";
 import { sumNutrients } from "../domain/DiaryRules.ts";
 import { browseRecipes, EMPTY_RECIPE_FILTERS, type RecipeFilters, type RecipeSort } from "../domain/RecipeBrowse.ts";
 import { RecipeBrowseControls } from "./RecipeBrowseControls.tsx";
-import { pickSnapshot, usageSuggestions, type CatalogItem, type PortionDraft } from "../domain/CatalogPick.ts";
+import { catalogKey, pickSnapshot, usageSuggestions, type CatalogItem, type PortionDraft } from "../domain/CatalogPick.ts";
 import { basisText, kcalText, nutritionErrorText, slotLabels, todayLocal, unitLabels } from "./nutritionFormat.ts";
 
 type Item = CatalogItem;
@@ -34,15 +34,12 @@ const emptyBodies: Readonly<Record<CatalogFilter, string>> = {
   FREQUENT: "Частые позиции появятся после нескольких записей в дневнике.", FAVORITES: "Отметьте продукт или рецепт звёздочкой — он появится здесь.",
   FOODS: "Продуктов пока нет. Создайте первый.", RECIPES: "Рецептов пока нет. Создайте первый.", COOKBOOK: "Добавьте рецепт в кулинарную книгу — он появится здесь.", SAVED: "У этого клиента ещё нет сохранённых наборов." };
 const isFavorite = (item: Item) => (item.kind === "FOOD" ? item.food.favorite : item.recipe.favorite) === true;
-const itemKey = (item: Item) => item.kind === "FOOD" ? `f:${item.food.id}` : `r:${item.recipe.id}`;
 const itemName = (item: Item) => item.kind === "FOOD" ? item.food.name : item.recipe.name;
 
 /** Снимок для позиции и количества. */
 function snapshotFor(item: Item, recipeUnit: "PORTION" | "G", quantityX10: number): FoodSnapshot {
   return item.kind === "FOOD" ? snapshotOfFood(item.food, quantityX10) : snapshotOfRecipe(item.recipe, recipeUnit, quantityX10);
 }
-
-/** Черновик редактора порции одной карточки: переживает свёртывание, поиск и смену категории, пока выбор не отправлен или не очищен (NUT-FS-23, 26). */
 
 function Checkbox({ checked, label, onPress }: Readonly<{ checked: boolean; label: string; onPress: () => void }>) {
   const { palette } = usePrototypeTheme();
@@ -295,7 +292,7 @@ export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOOD
 
   const quantityLabel = (snapshot: FoodSnapshot) => `${formatDecimalX10(snapshot.quantityX10)} ${unitLabels[snapshot.basis.unit]}`;
   const toggleSelect = useCallback((item: Item) => {
-    const key = itemKey(item);
+    const key = catalogKey(item);
     setNotice(null);
     if (picks[key] !== undefined) {
       setPicks((current) => Object.fromEntries(Object.entries(current).filter(([other]) => other !== key)));
@@ -309,7 +306,7 @@ export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOOD
     } catch (failure) { setOpenKey(key); setActionError(nutritionErrorText(failure)); }
   }, [drafts, picks]);
   const changeDraft = (item: Item, draft: PortionDraft) => {
-    const key = itemKey(item);
+    const key = catalogKey(item);
     setDrafts((current) => ({ ...current, [key]: draft }));
     if (picks[key] === undefined) return;
     try {
@@ -319,7 +316,7 @@ export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOOD
     } catch { setInvalidDrafts((current) => ({ ...current, [key]: true })); }
   };
   const savePortion = useCallback((item: Item, draft: PortionDraft, snapshot: FoodSnapshot) => {
-    const key = itemKey(item);
+    const key = catalogKey(item);
     setDrafts((current) => ({ ...current, [key]: draft }));
     setInvalidDrafts((current) => ({ ...current, [key]: false }));
     setPicks((current) => ({ ...current, [key]: { key, snapshot, label: quantityLabel(snapshot) } }));
@@ -428,7 +425,7 @@ export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOOD
             <Text style={[styles.title, { color: colors.textPrimary }]}>{meal.name}</Text><Text style={[styles.meta, { color: colors.textSecondary }]}>{`${meal.snapshots.length} позиций · ${kcalText(sumNutrients(meal.snapshots.map((snapshot) => snapshot.eaten)))}`}</Text>
           </Pressable>
           <Checkbox checked={selectedMeals[meal.id] !== undefined} label={`Выбрать набор: ${meal.name}`} onPress={() => setSelectedMeals((current) => current[meal.id] === undefined ? { ...current, [meal.id]: meal } : Object.fromEntries(Object.entries(current).filter(([id]) => id !== meal.id)))} />
-        </View>} /> : <FlatList ref={listRef} key={filter} data={visibleItems} keyExtractor={itemKey} numColumns={recipeGrid ? 2 : 1}
+        </View>} /> : <FlatList ref={listRef} key={filter} data={visibleItems} keyExtractor={catalogKey} numColumns={recipeGrid ? 2 : 1}
         columnWrapperStyle={recipeGrid ? styles.recipeColumns : undefined} contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled" extraData={`${openKey}|${Object.keys(picks).join(",")}`}
         onScroll={(event) => { if (!restoreScroll.current) scrollPositions.current[filter] = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={100}
         onContentSizeChange={() => { if (restoreScroll.current && itemsScope === filter) { listRef.current?.scrollToOffset({ offset: scrollPositions.current[filter] ?? 0, animated: false }); restoreScroll.current = false; } }}
@@ -447,7 +444,7 @@ export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOOD
           body={hasRecipeFilters ? "Измените фильтры или поисковый запрос." : query.trim() === "" ? emptyBodies[filter] : "Измените запрос или создайте свою позицию."}
           action={recipeGrid ? (hasRecipeFilters ? { label: "Сбросить фильтры", onPress: () => setRecipeFilters(EMPTY_RECIPE_FILTERS) } : filter === "COOKBOOK" ? { label: "Создать рецепт", onPress: onCreateRecipe } : undefined) : { label: "Создать продукт", onPress: () => onCreateFood(query.trim()) }} />}
         renderItem={({ item, index }) => {
-          const key = itemKey(item);
+          const key = catalogKey(item);
           if (recipeGrid && item.kind === "RECIPE") {
             const minutes = item.recipe.details?.prepMinutes != null && item.recipe.details.cookMinutes !== null ? item.recipe.details.prepMinutes + item.recipe.details.cookMinutes : null;
             return <View style={[styles.recipeTile, { backgroundColor: colors.surface }]}>
@@ -496,8 +493,8 @@ export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOOD
       </Modal>
       <Modal visible={detailItem !== null} transparent animationType="slide" onRequestClose={() => setDetailItem(null)}>
         <View style={styles.detailBackdrop}><View style={[styles.detailPanel, { backgroundColor: colors.surface }]}>
-          <ScrollView keyboardShouldPersistTaps="handled">{detailItem !== null ? <ItemCard key={itemKey(detailItem)} item={detailItem} selected={picks[itemKey(detailItem)] !== undefined}
-            selectedLabel={picks[itemKey(detailItem)]?.label ?? null} draft={drafts[itemKey(detailItem)]} open onToggleOpen={() => setDetailItem(null)}
+          <ScrollView keyboardShouldPersistTaps="handled">{detailItem !== null ? <ItemCard key={catalogKey(detailItem)} item={detailItem} selected={picks[catalogKey(detailItem)] !== undefined}
+            selectedLabel={picks[catalogKey(detailItem)]?.label ?? null} draft={drafts[catalogKey(detailItem)]} open onToggleOpen={() => setDetailItem(null)}
             onToggleSelect={() => toggleSelect(detailItem)} onDraftChange={(draft) => changeDraft(detailItem, draft)} onSavePortion={(draft, snapshot) => savePortion(detailItem, draft, snapshot)}
             onEditFood={(id) => { setDetailItem(null); onEditFood(id); }} onEditRecipe={(id) => { setDetailItem(null); onEditRecipe(id); }} onFavorite={toggleFavorite} onCookbook={toggleCookbook} /> : null}</ScrollView>
           <AppButton variant="ghost" label="Вернуться к выбору" onPress={() => setDetailItem(null)} />
@@ -551,5 +548,4 @@ const styles = StyleSheet.create({
   actions: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   createRow: { flexDirection: "row", gap: 8, paddingBottom: 4 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chipsRow: { flexDirection: "row", gap: 8, paddingVertical: 2 },
 });

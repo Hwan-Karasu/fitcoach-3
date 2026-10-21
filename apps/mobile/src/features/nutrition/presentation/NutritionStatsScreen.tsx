@@ -193,21 +193,16 @@ export function NutritionStatsScreen({ clientId, body, diary, targets, measureme
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1 },
   pad: { paddingHorizontal: 16, paddingTop: 8 },
   content: { padding: 16, gap: 12, paddingBottom: 32 },
   card: { ...shadow.card, borderRadius: 20, padding: 14, gap: 4 },
   heading: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
   big: { fontFamily: fonts.bold, fontSize: 24, lineHeight: 30 },
   meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  chips: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   header: { ...shadow.card, borderRadius: 20, padding: 10, gap: 4 },
-  divider: { height: StyleSheet.hairlineWidth, marginVertical: 8 },
   metricRow: { flexDirection: "row", gap: 10 },
   metricBody: { alignItems: "center", gap: 2 },
-  trendControl: { paddingTop: 8 },
   periodText: { textAlign: "center" },
-  metricCard: { ...shadow.card, flex: 1, minWidth: 0, borderRadius: 16, borderTopWidth: 4, paddingHorizontal: 6, paddingVertical: 10, alignItems: "center", gap: 2 },
   metricTitle: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
   metricValue: { fontFamily: fonts.bold, fontSize: 22, lineHeight: 28 },
   week: { gap: 4, paddingVertical: 6 },

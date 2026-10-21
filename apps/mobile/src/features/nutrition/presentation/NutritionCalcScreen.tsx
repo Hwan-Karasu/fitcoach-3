@@ -49,7 +49,7 @@ function profileOf(draft: Draft, goal: CalcGoal): CalcProfile {
 
 function calcErrorText(error: unknown): string {
   switch (error instanceof Error ? error.message : "") {
-    case "CALC_PROFILE_INVALID": return "Проверьте поля: возраст 1–120, рост 50–300 см, тренировок 0–21 в неделю, минут 1–600, шаг цели 0–1000 ккал.";
+    case "CALC_PROFILE_INVALID": return "Проверьте поля: тренировок 0–21 в неделю, минут 1–600, шаг цели 0–1000 ккал.";
     case "CALC_STALE": return "Профиль уже изменился. Данные обновлены — повторите действие.";
     case "MEASUREMENT_VALUE_INVALID": return "Вес и процент жира вне допустимого диапазона.";
     case "MEASUREMENT_DATE_INVALID": return "Замер не может быть в будущем.";
@@ -119,7 +119,7 @@ function HelpSheet({ visible, onClose }: Readonly<{ visible: boolean; onClose: (
 
 /**
  * Экран «Расчёт» (§49.10, UX «Расчёт»): просмотр и редактирование — состояния одного экрана; вес и % жира берутся из Measurements, шаги — из суточной активности.
- * Результат — оценка и черновик целей; действующей целью он становится только после явного «Применить как цели».
+ * Результат — справочная оценка: цели он не меняет (ADR-025/027), цель задаётся на главной клиента.
  */
 /** Профиль расчёта вместе с полом и ростом карточки клиента (`null` — карточку не менять): одна операция workflow, пол и рост принадлежат Clients. */
 export type SaveCalcProfile = (profile: CalcProfile, expectedRevision: number | null, body: Readonly<{ sex: CalcSex | null; heightCm: number | null }> | null) => Promise<void>;

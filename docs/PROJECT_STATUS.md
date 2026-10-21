@@ -1,3 +1,10 @@
+## 2026-10-21 — NUT-AUDIT этап 4: мёртвый код и дубли (NUT-014/015/017)
+
+- Удалены параллельные пути записи дневника (`updateQuantity`, `moveEntry`, `setOverride`, `clearOverride`): `editEntry` покрывает всё, тесты переведены на него (помощник `edit`). Удалены без потребителей: `guideLabel`, `kcalRangeFromEntered`, `differsFromUniform`, `piecesFromGrams`, `rebalanceMacros` (обёртка переехала в тест расчёта), `MacroHeader`, 20 неиспользуемых стилей.
+- Дубли: 4/9/4 только через `KCAL_PER_G`/`kcalFromMacrosX10` (рецепты-фильтры, коридор целей, кольцо на главной); `itemKey` в `AddFoodScreen` заменён `catalogKey`; недостижимая ветка в `useCalcData`.
+- Тексты: комментарий суммы дня, сообщение профиля расчёта, описание экрана «Расчёт», висячий комментарий.
+- 561/561 (−3 теста удалённых функций); typecheck, lint, arch, source, secrets OK. Поведение интерфейса не менялось. Не тронуто: три варианта «середины коридора», разбор числа в трёх местах (риск округлений — отдельно), `ClientRepositoryPort.updateBody`.
+
 ## 2026-10-21 — NUT-AUDIT этап 3: «Расчёт» (NUT-006)
 
 - Профиль расчёта (Nutrition) и пол/рост карточки (Clients) пишутся одной транзакцией: `workflows/saveCalcProfile.ts` + участники `DevNutritionCalcRepository.profileParticipant` и `DevClientRepository.bodyParticipant` (ревизия карточки читается внутри транзакции); уведомления после коммита. Проводка: `NutritionServices.calcProfile` → `SaveCalcProfile` → `NutritionCalcScreen`.

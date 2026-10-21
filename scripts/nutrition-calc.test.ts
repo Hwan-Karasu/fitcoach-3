@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { deriveHomeMacroTarget, homeAdjustmentFor, EMPTY_MANUAL_MACROS } from "../apps/mobile/src/features/nutrition/domain/HomeMacroTargets.ts";
 import { navyBodyFat } from "../apps/mobile/src/features/measurements/domain/NavyBodyFat.ts";
-import { calcEat, calcMacros, calcNeat, calcRee, deriveCalc, goalDelta, pointMacroRanges, rebalanceMacroRanges, rebalanceMacros, type CalcProfile } from "../apps/mobile/src/features/nutrition/domain/CalcRules.ts";
+import { calcEat, calcMacros, calcNeat, calcRee, deriveCalc, goalDelta, pointMacroRanges, rebalanceMacroRanges, type CalcProfile, type MacroGrams } from "../apps/mobile/src/features/nutrition/domain/CalcRules.ts";
 
 /** Профиль экрана «Расчёт» из спецификации и скриншотов Build 120: муж., 37 лет, 181 см, умеренный образ жизни, 3 тренировки по 60 мин, средняя интенсивность. */
 const PROFILE: CalcProfile = { goal: "MAINTENANCE", activity: "MODERATE", workoutsPerWeek: 3, minutes: 60, intensity: "MEDIUM", stepKcal: 100 };
@@ -71,6 +71,11 @@ test("БЖУ при поддержании 2289 ккал и сухой масс�
 
 const DEFAULTS = { protein: 119, fat: 56, carbs: 355 };
 const NONE = { protein: null, fat: null, carbs: null };
+/** Точные значения проходят ту же балансировку и проверки, что коридоры. */
+const rebalanceMacros = (calories: number | null, defaults: MacroGrams, manual: MacroGrams, leanMassKg: number | null) => {
+  const result = rebalanceMacroRanges(calories, pointMacroRanges(defaults), pointMacroRanges(manual), leanMassKg);
+  return { protein: result.protein?.min ?? null, fat: result.fat?.min ?? null, carbs: result.carbs?.min ?? null };
+};
 const point = (grams: number) => ({ minX10: Math.round(grams * 10), maxX10: Math.round(grams * 10) });
 const range = (min: number, max: number) => ({ minX10: min * 10, maxX10: max * 10 });
 const gramsRange = (min: number, max = min) => ({ min, max });

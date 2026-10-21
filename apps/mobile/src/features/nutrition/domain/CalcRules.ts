@@ -177,12 +177,6 @@ export function rebalanceMacroRanges(calories: number | null, defaults: MacroRan
   return out;
 }
 
-/** Точные значения используют ту же балансировку и проверки, что коридоры. */
-export function rebalanceMacros(calories: number | null, defaults: MacroGrams, manual: MacroGrams, leanMassKg: number | null): MacroGrams {
-  const result = rebalanceMacroRanges(calories, pointMacroRanges(defaults), pointMacroRanges(manual), leanMassKg);
-  return { protein: result.protein?.min ?? null, fat: result.fat?.min ?? null, carbs: result.carbs?.min ?? null };
-}
-
 /**
  * Динамика веса (формулы 2.0 `getWeightTrendKg`): не менее четырёх взвешиваний, по порядку дат; среднее второй половины минус среднее первой, с точностью 0,01 кг.
  * Меньше четырёх — `null` (нет динамики, а не «0»).
@@ -205,11 +199,6 @@ export function trendAdjustment(goal: CalcGoal, deltaKg: number | null, referenc
   if (goal === "LOSS") return deltaKg >= -0.15 ? -120 : percent !== null && percent <= -1 ? 120 : 0;
   if (goal === "GAIN") return deltaKg <= 0.05 ? 120 : percent !== null && percent >= 0.35 ? -100 : 0;
   return Math.abs(deltaKg) >= 0.35 ? (deltaKg > 0 ? -100 : 100) : 0;
-}
-
-/** Подпись под суточным ориентиром. */
-export function guideLabel(adjustment: number): string {
-  return adjustment === 0 ? "Без поправки по весу" : `Поправка ${adjustment > 0 ? "+" : "−"}${Math.abs(adjustment)} ккал`;
 }
 
 export type CalcRuleError = "CALC_PROFILE_INVALID" | "CALC_STEPS_INVALID";

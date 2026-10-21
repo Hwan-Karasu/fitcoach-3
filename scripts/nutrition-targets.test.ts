@@ -12,7 +12,7 @@ import { DevNutritionTargetsRepository, devNutritionTargetsClientDeletionPartici
   "../apps/mobile/src/features/nutrition/data/DevNutritionTargetsRepository.ts";
 import type { DaySummary } from "../apps/mobile/src/features/nutrition/domain/DiaryModel.ts";
 import type { Corridors } from "../apps/mobile/src/features/nutrition/domain/TargetModel.ts";
-import { affectedPeriod, assessDay, differsFromUniform, energyConsistency, judge, resolveTarget, uniformWeek, validateVersion, versionFor, weekdayOf } from
+import { affectedPeriod, assessDay, energyConsistency, judge, resolveTarget, uniformWeek, validateVersion, versionFor, weekdayOf } from
   "../apps/mobile/src/features/nutrition/domain/TargetRules.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
@@ -206,7 +206,6 @@ test("ряд «Ручная корректировка»: одна цель на
     assert.equal(week.length, 7);
     const saved = await targets.saveVersion(client.id, { effectiveFrom: MON, days: week }, null, NOW);
     for (const date of ["2026-10-19", "2026-10-22", "2026-10-25"]) assert.deepEqual(resolveTarget([saved], [], date), { source: "SCHEDULE", effectiveFrom: MON, corridors: manual }, date);
-    assert.equal(differsFromUniform(saved, manual), false, "та же цель на все дни — замена ничего не теряет");
     const changed = { kcal: range(2000, 2200), protein: null, fat: null, carbs: null };
     const replaced = await targets.saveVersion(client.id, { effectiveFrom: MON, days: uniformWeek(changed) }, saved.revision, NOW);
     assert.equal(replaced.revision, saved.revision + 1);
@@ -214,16 +213,6 @@ test("ряд «Ручная корректировка»: одна цель на
     await assert.rejects(targets.saveVersion(client.id, { effectiveFrom: MON, days: week }, saved.revision, NOW), code("TARGET_STALE"));
   } finally { await close(); }
 });
-
-test("замена версии на сегодня предупреждает, если по дням недели цели различались или у дня их не было", () => {
-  const mon = { kcal: range(2400, 2600), protein: null, fat: null, carbs: null };
-  const tue = { kcal: range(2100, 2300), protein: null, fat: null, carbs: null };
-  const version = { id: "v", clientId: "c", effectiveFrom: MON, revision: 1, days: [mon, tue, null, null, null, null, null] };
-  assert.equal(differsFromUniform(version, mon), true);
-  assert.equal(differsFromUniform({ ...version, days: Array.from({ length: 7 }, () => mon) }, mon), false);
-  assert.equal(differsFromUniform({ ...version, days: [mon, mon, mon, mon, mon, mon, null] }, mon), true, "у воскресенья цели не было — при замене появится");
-});
-
 
 test("главная: сохраняются только ручные поля, итог отдельно; повторная загрузка, сброс, исключения и ревизии", async () => {
   const { clients, targets, close } = await stores();

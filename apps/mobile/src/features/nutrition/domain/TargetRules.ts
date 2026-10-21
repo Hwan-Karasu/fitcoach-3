@@ -1,5 +1,6 @@
 import type { DaySummary } from "./DiaryModel.ts";
 import { assertDate } from "./DiaryRules.ts";
+import { kcalFromMacrosX10 } from "./EnergyRules.ts";
 import type { Nutrients } from "./FoodModel.ts";
 import { TARGET_METRICS, type Corridors, type RangeVerdict, type ResolvedTarget, type TargetException, type TargetMetric, type TargetRange,
   type TargetVersion, type TargetVersionInput } from "./TargetModel.ts";
@@ -104,8 +105,8 @@ export function assessDay(summary: DaySummary, target: ResolvedTarget): Readonly
 export function energyConsistency(corridors: Corridors): "OK" | "INCOMPATIBLE" | "UNKNOWN" {
   const { kcal, protein, fat, carbs } = corridors;
   if (kcal === null || protein === null || fat === null || carbs === null) return "UNKNOWN";
-  const low = 4 * protein.minX10 + 9 * fat.minX10 + 4 * carbs.minX10;
-  const high = 4 * protein.maxX10 + 9 * fat.maxX10 + 4 * carbs.maxX10;
+  const low = kcalFromMacrosX10({ proteinX10: protein.minX10, fatX10: fat.minX10, carbsX10: carbs.minX10 })!;
+  const high = kcalFromMacrosX10({ proteinX10: protein.maxX10, fatX10: fat.maxX10, carbsX10: carbs.maxX10 })!;
   return kcal.maxX10 < low || kcal.minX10 > high ? "INCOMPATIBLE" : "OK";
 }
 
@@ -114,9 +115,3 @@ export function uniformWeek(corridors: Corridors): readonly Corridors[] {
   return Array.from({ length: 7 }, () => corridors);
 }
 
-const sameRange = (a: TargetRange | null, b: TargetRange | null) => a === null || b === null ? a === b : a.minX10 === b.minX10 && a.maxX10 === b.maxX10;
-
-/** Замена версии единой целью что-то меняет, если у какого-то дня было иное или не было ничего — об этом нужно предупредить. */
-export function differsFromUniform(version: TargetVersion, corridors: Corridors): boolean {
-  return version.days.some((day) => day === null || TARGET_METRICS.some((metric) => !sameRange(day[metric], corridors[metric])));
-}
