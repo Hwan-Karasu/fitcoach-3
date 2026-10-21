@@ -225,22 +225,9 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       .then((copies) => { if (active) setGroupSize(Math.max(1, copies.length)); }).catch(() => undefined);
     return () => { active = false; };
   }, [clientId, cycleKey, programId, repository, shown, version]);
-  // Есть ли группа хотя бы у одного мезоцикла программы этого участника. Полоса участников плавает поверх прокрутки и не входит в
-  // раскладку (появляется и исчезает со сменой мезоцикла, не сдвигая экран); под неё у содержимого постоянный отступ сверху — он
-  // зависит только от программы, не от мезоцикла.
-  const [anyGroup, setAnyGroup] = useState(false);
-  const [stripHeight, setStripHeight] = useState(STRIP_HEIGHT);
-  const cycleIds = periodized?.mesocycles.map((item) => item.id).join("|") ?? "";
-  useEffect(() => {
-    if (cycleIds === "") { setAnyGroup(false); return undefined; }
-    let active = true;
-    const owner = shown?.clientId ?? clientId;
-    const program = shown?.programId ?? programId;
-    void Promise.all(cycleIds.split("|").map((mesocycleId) => repository.getMesocycleGroup(owner, program, { mesocycleId })
-      .then((copies) => copies.length > 1).catch(() => false)))
-      .then((flags) => { if (active) setAnyGroup(flags.some(Boolean)); });
-    return () => { active = false; };
-  }, [clientId, cycleIds, programId, repository, shown, version]);
+  // Полоса участников плавает поверх прокрутки и не входит в раскладку; отступ под неё сверху — только пока она показана
+  // (у мезоцикла без группы отступа нет). Смещение книги мезоциклов при этом гасит якорь прокрутки.
+  const [stripHeight, setStripHeight] = useState(0);
 
   useEffect(() => repository.subscribeCommittedChanges((change) => {
     if (change.selectionOnly !== true && change.orderOnly !== true && change.clientIds.includes(clientId)) setVersion((value) => value + 1);
@@ -339,7 +326,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     {tabs}
     <View style={styles.screen}>
     <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} pointerEvents={stale ? "none" : "auto"}
-      contentContainerStyle={[styles.content, anyGroup ? { paddingTop: stripHeight + 4 } : null]} keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
+      contentContainerStyle={[styles.content, stripHeight > 0 ? { paddingTop: stripHeight + 4 } : null]} keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
       onScrollBeginDrag={() => { anchor.current = null; }}
       onContentSizeChange={(_width, height) => {
         if (stale || pendingRestore.current === null) return;
@@ -624,15 +611,12 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     </Animated.ScrollView>
     <View style={styles.floating} onLayout={(event) => {
       const height = event.nativeEvent.layout.height;
-      if (height > 0) setStripHeight(height);
+      setStripHeight(height);
     }}>{participants}</View>
     </View>
     </View>
   );
 }
-
-/** Высота полосы участников до первого замера (подпись + карточки), чтобы отступ под неё не менялся после её появления. */
-const STRIP_HEIGHT = 82;
 
 const styles = StyleSheet.create({
   /** Данные прежнего участника, пока грузится новый (как в дневнике). */
