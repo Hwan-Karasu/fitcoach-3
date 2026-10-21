@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { AppButton, DateRangeCalendar, FilterPill, SelectionChip, type DateRange } from "../../../../shared/ui/components/public.ts";
+import { AppButton, DateRangeCalendar, FilterPill, SegmentedControl, type DateRange } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { periods, type CustomRange, type PeriodId } from "./statsFilters.ts";
@@ -51,10 +51,9 @@ export function PeriodPill({ value, onChange, today, grow = false }: Readonly<{
         <Pressable accessibilityRole="button" accessibilityLabel="Закрыть выбор периода" style={styles.backdrop} onPress={() => setOpen(false)} />
         <View style={[styles.sheet, { backgroundColor: colors.canvas }]}>
           <Text accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>Период</Text>
-          <View style={styles.presets}>
-            {periods.map((item) => <SelectionChip key={item.id} group="Период" label={item.label} selected={value.period === item.id}
-              onPress={() => { onChange({ period: item.id, custom: value.custom }); setOpen(false); }} />)}
-          </View>
+          {/* Готовые периоды — один ряд; при своих датах ни один сегмент не выбран. */}
+          <SegmentedControl compact fit items={periods.map((item) => ({ id: item.id as PeriodId, label: item.label }))} selectedId={value.period}
+            onSelect={(id) => { if (id !== "custom") { onChange({ period: id, custom: value.custom }); setOpen(false); } }} />
           <Text style={[styles.subtitle, { color: colors.textPrimary }]}>Свой период</Text>
           <Text style={[styles.caption, { color: colors.textSecondary }]}>
             {draft.from === null ? "Нажмите на первый день" : draft.to === null ? "Теперь нажмите на последний день"
@@ -74,7 +73,6 @@ const styles = StyleSheet.create({
   backdrop: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.4)" },
   sheet: { maxHeight: "90%", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 16, gap: 8 },
   title: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 24 },
-  presets: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   subtitle: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19, marginTop: 4 },
   caption: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   calendar: { flexGrow: 0 },

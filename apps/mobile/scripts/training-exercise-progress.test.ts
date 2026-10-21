@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { brzycki, exerciseSessions, progressMetrics, progressSeries, repRecords, sessionValue } from
+import { brzycki, exerciseSessions, exerciseTree, progressMetrics, progressSeries, repRecords, sessionValue } from
   "../src/features/training/analytics/presentation/exerciseProgress.ts";
 import type { SetFact, SetType, SetValues } from "../src/features/training/execution/domain/ExecutionModel.ts";
 import type { TrainingHistoryEntry } from "../src/features/training/archive/presentation/trainingHistory.ts";
@@ -79,4 +79,21 @@ test("графики зависят от профиля учёта (§37.6)", ()
   assert.deepEqual(progressMetrics(["reps"]), ["maxReps", "totalReps"]);
   assert.deepEqual(progressMetrics(["duration"]), ["maxDuration"]);
   assert.deepEqual(progressMetrics(["distance", "duration"]), ["maxDistance", "maxDuration"]);
+});
+
+test("дерево истории упражнения: программа → цикл → неделя → занятия", () => {
+  const make = (key: string, date: string, programId: string, mesocycleId: string | null, mesocycleIndex: number | null, weekIndex: number) =>
+    ({ ...entry(key, date, programId, [fact(BENCH, values(70, 5))]), mesocycleId, mesocycleIndex, mesocycleTitle: mesocycleId, weekIndex });
+  const history = [
+    make("a1", "2026-09-01", "A", "m1", 0, 1), make("a2", "2026-09-03", "A", "m1", 0, 1), make("a3", "2026-09-10", "A", "m1", 0, 2),
+    make("a4", "2026-10-01", "A", "m2", 1, 1), make("s1", "2026-10-05", "S", null, null, 3),
+  ];
+  const tree = exerciseTree(exerciseSessions(history, BENCH));
+  assert.deepEqual(tree.map((program) => program.programId), ["S", "A"]);
+  assert.deepEqual(tree[0]!.weeks.map((week) => [week.weekIndex, week.sessions.length]), [[3, 1]]);
+  assert.deepEqual(tree[0]!.cycles, []);
+  const a = tree[1]!;
+  assert.deepEqual(a.cycles.map((cycle) => [cycle.id, cycle.sessionCount]), [["m1", 3], ["m2", 1]]);
+  assert.deepEqual(a.cycles[0]!.weeks.map((week) => [week.weekIndex, week.sessions.map((session) => session.entry.key)]),
+    [[1, ["a2", "a1"]], [2, ["a3"]]]);
 });

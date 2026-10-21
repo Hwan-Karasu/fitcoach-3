@@ -120,3 +120,58 @@ export function repRecords(sessions: readonly ExerciseSession[]): readonly RepRe
   }
   return [...best.values()].sort((a, b) => a.reps - b.reps);
 }
+
+export interface ExerciseWeekNode {
+  readonly weekIndex: number;
+  /** Новые сверху. */
+  readonly sessions: readonly ExerciseSession[];
+}
+
+export interface ExerciseCycleNode {
+  readonly id: string;
+  readonly title: string;
+  readonly weeks: readonly ExerciseWeekNode[];
+  readonly sessionCount: number;
+}
+
+export interface ExerciseProgramNode {
+  readonly programId: string;
+  readonly title: string;
+  readonly archived: boolean;
+  /** Циклы в порядке плана; у Простой программы и у «план удалён» — пусто, недели лежат прямо в `weeks`. */
+  readonly cycles: readonly ExerciseCycleNode[];
+  readonly weeks: readonly ExerciseWeekNode[];
+  readonly sessionCount: number;
+  readonly lastDate: string;
+}
+
+function weekNodes(sessions: readonly ExerciseSession[]): readonly ExerciseWeekNode[] {
+  const byWeek = new Map<number, ExerciseSession[]>();
+  for (const session of sessions) byWeek.set(session.entry.weekIndex, [...(byWeek.get(session.entry.weekIndex) ?? []), session]);
+  return [...byWeek].map(([weekIndex, items]): ExerciseWeekNode => ({ weekIndex,
+    sessions: [...items].sort((a, b) => b.entry.actualDate.localeCompare(a.entry.actualDate) || a.entry.key.localeCompare(b.entry.key)) }))
+    .sort((a, b) => a.weekIndex - b.weekIndex);
+}
+
+/**
+ * Вложенная история упражнения: программа → цикл (мезоцикл) → неделя → занятия. Программы — по дате последнего занятия (новее выше),
+ * циклы и недели — в порядке плана. Группировка по id, не по названиям.
+ */
+export function exerciseTree(sessions: readonly ExerciseSession[]): readonly ExerciseProgramNode[] {
+  const byProgram = new Map<string, ExerciseSession[]>();
+  for (const session of sessions) byProgram.set(session.entry.programId, [...(byProgram.get(session.entry.programId) ?? []), session]);
+  return [...byProgram].map(([programId, items]): ExerciseProgramNode => {
+    const latest = [...items].sort((a, b) => b.entry.actualDate.localeCompare(a.entry.actualDate))[0]!.entry;
+    const byCycle = new Map<string, ExerciseSession[]>();
+    const loose: ExerciseSession[] = [];
+    for (const item of items) {
+      if (item.entry.mesocycleId === null || item.entry.mesocycleIndex === null) loose.push(item);
+      else byCycle.set(item.entry.mesocycleId, [...(byCycle.get(item.entry.mesocycleId) ?? []), item]);
+    }
+    const cycles = [...byCycle].map(([id, list]) => ({ id, index: list[0]!.entry.mesocycleIndex!,
+      node: { id, title: list[0]!.entry.mesocycleTitle ?? "Цикл", weeks: weekNodes(list), sessionCount: list.length } as ExerciseCycleNode }))
+      .sort((a, b) => a.index - b.index || a.id.localeCompare(b.id)).map((item) => item.node);
+    return { programId, title: latest.programTitle, archived: latest.archived, cycles, weeks: weekNodes(loose),
+      sessionCount: items.length, lastDate: latest.actualDate };
+  }).sort((a, b) => b.lastDate.localeCompare(a.lastDate) || a.programId.localeCompare(b.programId));
+}

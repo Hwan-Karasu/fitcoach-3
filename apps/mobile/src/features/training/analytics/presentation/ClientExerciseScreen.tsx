@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { ChevronRight } from "lucide-react-native";
-import { EmptyState, InlineNotice, LineChart, LoadingState, SegmentedControl, SelectionChip } from
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react-native";
+import { EmptyState, InlineNotice, LineChart, LoadingState, SegmentedControl } from
   "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
@@ -9,16 +9,24 @@ import { shadow } from "../../../../shared/ui/theme/style.ts";
 import { MONTHS, dateText, filterHistory, HistoryFilterBar, originText, setLabel, type HistoryFilter, type TrainingHistoryEntry } from
   "../../archive/public.ts";
 import { formatDuration, useExerciseLookup, type ExerciseLookupPort } from "../../plans/public.ts";
+import type { SetFact } from "../../execution/public.ts";
+import { isWorkingSet } from "./workingSet.ts";
 import { periodRange } from "./statsFilters.ts";
 import { rangeFor } from "./trainingStats.ts";
 import { PeriodPill, type PeriodValue } from "./PeriodPill.tsx";
-import { exerciseSessions, progressMetrics, progressSeries, repRecords, sessionValue, type ExerciseSession,
-  type ProgressMetricId } from "./exerciseProgress.ts";
+import { exerciseSessions, exerciseTree, progressMetrics, progressSeries, repRecords, sessionValue, type ExerciseProgramNode,
+  type ExerciseSession, type ExerciseWeekNode, type ProgressMetricId } from "./exerciseProgress.ts";
 
 type Tab = "overview" | "history" | "progress";
 
 const metricLabels: Readonly<Record<ProgressMetricId, string>> = {
   e1rm: "Оценка 1ПМ", maxLoad: "Макс. вес", volume: "Тоннаж", maxReps: "Макс. повторы", totalReps: "Всего повторов",
+  maxDuration: "Время", maxDistance: "Дистанция",
+};
+
+/** Короткие подписи для переключателя в один ряд; полное название — в заголовке графика. */
+const metricTabLabels: Readonly<Record<ProgressMetricId, string>> = {
+  e1rm: "Оценка 1ПМ", maxLoad: "Макс. вес", volume: "Тоннаж", maxReps: "Макс. повт.", totalReps: "Всего повт.",
   maxDuration: "Время", maxDistance: "Дистанция",
 };
 
@@ -66,6 +74,116 @@ function SessionCard({ session, onOpen }: Readonly<{ session: ExerciseSession; o
   );
 }
 
+
+const simpleRow = (fact: SetFact) => fact.sides === null && fact.drops.length === 0 && (fact.values.reps !== null || fact.values.loadGrams !== null);
+
+function SetsTable({ session }: Readonly<{ session: ExerciseSession }>) {
+  const { palette } = usePrototypeTheme();
+  const colors = palette.tokens;
+  let ordinal = 0;
+  return <View>
+    <View style={[styles.tableRow, { borderColor: colors.border }]}>
+      {["ПОДХОД", "ПОВТ", "КГ", "RPE"].map((head) => <Text key={head} style={[styles.cell, styles.cellHead, { color: colors.textSecondary }]}>{head}</Text>)}
+    </View>
+    {session.facts.map((fact) => {
+      if (fact.setType !== "WARMUP") ordinal += 1;
+      const tone = fact.confirmed ? colors.textPrimary : colors.textMuted;
+      if (!simpleRow(fact)) return <Text key={fact.id} style={[styles.set, styles.setWide, { color: tone, borderColor: colors.border }]}>
+        {setLabel(fact, ordinal)}</Text>;
+      return <View key={fact.id} style={[styles.tableRow, { borderColor: colors.border }]}>
+        <Text style={[styles.cell, { color: colors.accentInk, fontFamily: fonts.bold }]}>{fact.setType === "WARMUP" ? "Р" : ordinal}</Text>
+        <Text style={[styles.cell, { color: tone }]}>{fact.values.reps ?? "—"}</Text>
+        <Text style={[styles.cell, { color: tone }]}>{fact.values.loadGrams === null ? "—" : number(fact.values.loadGrams / 1000)}</Text>
+        <Text style={[styles.cell, { color: tone }]}>{fact.rpe === null ? "—" : number(fact.rpe)}</Text>
+      </View>;
+    })}
+  </View>;
+}
+
+/** Занятие одной строкой: «Неделя 5 — Тренировка», дата и лучший подход в шапке; раскрытие — объём и таблица подходов. */
+function SessionRow({ session, open, onToggle, onOpenWorkout }: Readonly<{ session: ExerciseSession; open: boolean; onToggle: () => void;
+  onOpenWorkout: () => void }>) {
+  const { palette } = usePrototypeTheme();
+  const colors = palette.tokens;
+  const { entry } = session;
+  const Icon = open ? ChevronUp : ChevronDown;
+  const title = `Неделя ${entry.weekIndex} — ${entry.workoutTitle ?? "Тренировка"}`;
+  const volume = sessionValue(session, "volume");
+  const sets = session.facts.filter(isWorkingSet).length;
+  return (
+    <View style={[styles.sessionBox, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }}
+        accessibilityLabel={`${title}, ${dateText(entry.actualDate)}. ${open ? "Свернуть" : "Развернуть"}`}
+        onPress={onToggle} style={styles.sessionHead}>
+        <View style={styles.sessionTitles}>
+          <Text style={[styles.treeLabelBold, { color: colors.textPrimary }]}>{title}</Text>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>{dateText(entry.actualDate)}</Text>
+        </View>
+        <Icon size={18} color={colors.textMuted} />
+      </Pressable>
+      {open ? <View style={styles.sessionBody}>
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>
+          {volume === null ? `Подходов ${sets}` : `Объём ${number(volume, 0)} кг · Подходов ${sets}`}</Text>
+        <SetsTable session={session} />
+        {entry.planDeleted ? null : <Pressable accessibilityRole="button" accessibilityLabel={`${title}. Открыть тренировку`} onPress={onOpenWorkout}
+          style={styles.openLink}>
+          <Text style={[styles.openText, { color: colors.accentInk }]}>Открыть тренировку</Text>
+          <ChevronRight size={16} color={colors.accentInk} />
+        </Pressable>}
+      </View> : null}
+    </View>
+  );
+}
+
+/** Дерево «программа → цикл → занятия»: всё внутри одной карточки программы; узлы раскрываются по нажатию, без сдвига вправо. */
+function HistoryTree({ programs, onOpen }: Readonly<{ programs: readonly ExerciseProgramNode[]; onOpen: (session: ExerciseSession) => void }>) {
+  const { palette } = usePrototypeTheme();
+  const colors = palette.tokens;
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const toggle = (id: string) => setExpanded((current) => {
+    const next = new Set(current);
+    if (!next.delete(id)) next.add(id);
+    return next;
+  });
+  const rows = (list: readonly ExerciseWeekNode[]) => list.flatMap((week) => week.sessions).map((session) => (
+    <SessionRow key={session.entry.key} session={session} open={expanded.has(session.entry.key)} onToggle={() => toggle(session.entry.key)}
+      onOpenWorkout={() => onOpen(session)} />));
+  return <View style={styles.tree}>
+    {programs.map((program) => {
+      const id = program.programId;
+      const open = expanded.has(id);
+      const title = program.archived ? `${program.title} (архив)` : program.title;
+      const Icon = open ? ChevronUp : ChevronDown;
+      return <View key={id} style={[styles.programCard, shadow.card, { backgroundColor: colors.surface }]}>
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }}
+          accessibilityLabel={`${title}, занятий ${program.sessionCount}. ${open ? "Свернуть" : "Развернуть"}`} onPress={() => toggle(id)} style={styles.programHead}>
+          <Text numberOfLines={2} style={[styles.title, styles.grow, { color: colors.textPrimary }]}>{title}</Text>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>{program.sessionCount}</Text>
+          <Icon size={18} color={colors.textMuted} />
+        </Pressable>
+        {open ? <View style={styles.programBody}>
+          {program.cycles.map((cycle) => {
+            const cycleId = `${id}/c${cycle.id}`;
+            const cycleOpen = expanded.has(cycleId);
+            const CycleIcon = cycleOpen ? ChevronUp : ChevronDown;
+            return <View key={cycle.id} style={styles.programBody}>
+              <Pressable accessibilityRole="button" accessibilityState={{ expanded: cycleOpen }}
+                accessibilityLabel={`${cycle.title}, занятий ${cycle.sessionCount}. ${cycleOpen ? "Свернуть" : "Развернуть"}`}
+                onPress={() => toggle(cycleId)} style={[styles.cycleHead, { backgroundColor: colors.surfaceRaised }]}>
+                <Text numberOfLines={1} style={[styles.treeLabelBold, styles.grow, { color: colors.textPrimary }]}>{cycle.title}</Text>
+                <Text style={[styles.meta, { color: colors.textSecondary }]}>{cycle.sessionCount}</Text>
+                <CycleIcon size={18} color={colors.textMuted} />
+              </Pressable>
+              {cycleOpen ? rows(cycle.weeks) : null}
+            </View>;
+          })}
+          {rows(program.weeks)}
+        </View> : null}
+      </View>;
+    })}
+  </View>;
+}
+
 /**
  * Упражнение глазами клиента (§37, X02): «Обзор» — карточка каталога, «История» — все занятия с упражнением из всех
  * программ клиента, «Прогресс» — графики по профилю учёта и рекорды. Фильтр программы/мезоцикла общий для истории
@@ -108,6 +226,7 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
   const range = useMemo(() => periodRange(now, period), [now, period]);
   const inPeriod = useMemo(() => sessions.filter((session) => (range.from === null || session.entry.actualDate >= range.from)
     && session.entry.actualDate <= range.to), [sessions, range]);
+  const tree = useMemo(() => exerciseTree(inPeriod), [inPeriod]);
   const metrics = progressMetrics(lookup?.get(exerciseId)?.metrics ?? []);
   const metric = chosen !== null && metrics.includes(chosen) ? chosen : metrics[0] ?? null;
   const points = useMemo(() => metric === null ? [] : progressSeries(inPeriod, metric), [inPeriod, metric]);
@@ -135,12 +254,13 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
     return (
       <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
         {tabs}
-        <FlatList data={inPeriod as ExerciseSession[]} keyExtractor={(session) => session.entry.key} contentContainerStyle={styles.list}
-          ListHeaderComponent={<View style={styles.header}>{filters}
-            <Text style={[styles.summary, { color: colors.textSecondary }]}>{`Занятий с упражнением: ${inPeriod.length}`}</Text></View>}
-          ListEmptyComponent={<EmptyState reason="no-data" title="Упражнение ещё не выполнялось"
-            body="Здесь появятся занятия с записанными подходами этого упражнения — из всех программ клиента." />}
-          renderItem={({ item }) => <SessionCard session={item} onOpen={() => open(item)} />} />
+        <ScrollView contentContainerStyle={styles.list}>
+          <View style={styles.header}>{filters}
+            <Text style={[styles.summary, { color: colors.textSecondary }]}>{`Занятий с упражнением: ${inPeriod.length}`}</Text></View>
+          {tree.length === 0 ? <EmptyState reason="no-data" title="Упражнение ещё не выполнялось"
+            body="Здесь появятся занятия с записанными подходами этого упражнения — из всех программ клиента." />
+            : <HistoryTree programs={tree} onOpen={open} />}
+        </ScrollView>
       </View>
     );
   }
@@ -156,12 +276,9 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
       <ScrollView contentContainerStyle={styles.list}>
         <View style={styles.header}>
           {filters}
-          {/* Показатели — ровная сетка в два столбца одинаковой ширины (раньше пилюли по тексту переносились с рваным краем). */}
-          {metrics.length > 1 ? <View style={styles.chips}>
-            {metrics.map((item) => <View key={item} style={styles.chipCell}>
-              <SelectionChip group="Показатель" label={metricLabels[item]} selected={metric === item} onPress={() => setChosen(item)} />
-            </View>)}
-          </View> : null}
+          {/* Показатели — один ряд: сегменты по ширине подписи, шрифт ужимается, а не переносится. */}
+          {metrics.length > 1 && metric !== null ? <SegmentedControl compact fit items={metrics.map((item) => ({ id: item, label: metricTabLabels[item] }))}
+            selectedId={metric} onSelect={setChosen} /> : null}
         </View>
         {metric === null ? <EmptyState reason="no-data" title="Прогресс не строится"
           body="У этого упражнения нет величин для графика." /> : points.length === 0 ? <EmptyState reason="no-data" title="Нет данных"
@@ -223,8 +340,22 @@ const styles = StyleSheet.create({
   pad: { paddingHorizontal: 16 },
   list: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   header: { gap: 8, paddingTop: 4 },
-  chips: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 8 },
-  chipCell: { width: "48.5%" },
+  tree: { gap: 10 },
+  programCard: { borderRadius: 20, padding: 12, gap: 8 },
+  programHead: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 48 },
+  programBody: { gap: 8 },
+  cycleHead: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44, borderRadius: 14, paddingHorizontal: 12 },
+  sessionBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14 },
+  sessionHead: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 56, paddingHorizontal: 12, paddingVertical: 6 },
+  sessionTitles: { flex: 1 },
+  sessionBody: { paddingHorizontal: 12, paddingBottom: 10, gap: 6 },
+  tableRow: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, minHeight: 32, alignItems: "center" },
+  cell: { flex: 1, fontFamily: fonts.medium, fontSize: 14, lineHeight: 19, textAlign: "center" },
+  cellHead: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 15 },
+  setWide: { borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 6 },
+  openLink: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", minHeight: 44, gap: 2 },
+  openText: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
+  treeLabelBold: { flexShrink: 1, fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },
   selected: { gap: 6 },
   selectedTitle: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },
   summary: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
