@@ -34,7 +34,7 @@ function DayNumber({ text, marked, selected, today, textStyle }: Readonly<{ text
   const colors = palette.tokens;
   const ink = selected ? colors.onAccentFill : today ? colors.accentInk : colors.textPrimary;
   return (
-    <View style={[styles.dayCircle, marked && !selected ? { backgroundColor: colors.accentSoft } : null]}>
+    <View style={[styles.dayCircle, selected ? { backgroundColor: colors.accentFill } : marked ? { backgroundColor: colors.accentSoft } : null]}>
       <Text style={[textStyle, { color: ink }]}>{text}</Text>
       <View style={[styles.marker, { backgroundColor: marked ? (selected ? colors.onAccentFill : colors.accentInk) : "transparent" }]} />
     </View>
@@ -66,7 +66,7 @@ function MonthModal({ visible, clientId, diary, selected, today, onSelect, onClo
               {row.map((date, column) => date === null ? <View key={column} style={styles.cell} /> : (
                 <Pressable key={date} accessibilityRole="button" accessibilityState={{ selected: date === selected }}
                   accessibilityLabel={`${dayTitle(date, today)}${marks.has(date) ? ", есть записи о еде" : ""}`} onPress={() => { onSelect(date); onClose(); }}
-                  style={[styles.cell, date === selected ? { backgroundColor: colors.accentFill, borderRadius: 14 } : null]}>
+                  style={styles.cell}>
                   <DayNumber text={Number(date.slice(8, 10))} marked={marks.has(date)} selected={date === selected} today={date === today} textStyle={styles.cellText} />
                 </Pressable>
               ))}
@@ -116,8 +116,8 @@ export function DiaryWeekHeader({ clientId, diary, localDate, today, onSelect }:
           const active = date === localDate;
           return (
             <Pressable key={date} accessibilityRole="button" accessibilityState={{ selected: active }} accessibilityLabel={`${dayTitle(date, today)}${marks.has(date) ? ", есть записи о еде" : ""}`}
-              onPress={() => onSelect(date)} style={[styles.day, active ? { backgroundColor: colors.accentFill, borderRadius: 16 } : null]}>
-              <Text style={[styles.dayName, { color: active ? colors.onAccentFill : colors.textMuted }]}>{weekdayShort[index]}</Text>
+              onPress={() => onSelect(date)} style={styles.day}>
+              <Text style={[styles.dayName, { color: active ? colors.accentInk : colors.textMuted }]}>{weekdayShort[index]}</Text>
               <DayNumber text={Number(date.slice(8, 10))} marked={marks.has(date)} selected={active} today={date === today} textStyle={styles.dayNumber} />
             </Pressable>
           );
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
   dayTitle: { flex: 1, textAlign: "right", fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   strip: { flexDirection: "row", alignItems: "center" },
   day: { flex: 1, minHeight: 50, alignItems: "center", justifyContent: "center", gap: 0 },
-  dayCircle: { minWidth: 34, minHeight: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
+  dayCircle: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   dayName: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14 },
   dayNumber: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
   marker: { width: 4, height: 4, borderRadius: 2 },
