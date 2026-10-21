@@ -20,12 +20,15 @@ import type { ExecutionCleanupParticipant } from "../domain/ExecutionCleanupPart
 
 const OUTCOMES: readonly WorkoutOutcome[] = ["COMPLETED", "MISSED", "CANCELLED"];
 
-/** §48.34: тренировка начата, если есть внесённое значение или засчитанный подход (сессия `s`). */
+/**
+ * §48.34: тренировка начата, если есть значение, введённое тренером, или засчитанный подход (сессия `s`). Значения,
+ * перенесённые копированием недели («Нет»), — предварительные и тренировку не начинают (§48.24, §48.34 п. 3).
+ */
 const STARTED_SQL = `EXISTS (SELECT 1 FROM dev_training_performed_sets f WHERE f.workspace_id = s.workspace_id
   AND f.session_id = s.id AND f.removed_at IS NULL AND (f.confirmed_at IS NOT NULL
-    OR COALESCE(f.reps, f.load_grams, f.duration_sec, f.distance_m) IS NOT NULL
-    OR EXISTS (SELECT 1 FROM dev_training_performed_sides d WHERE d.workspace_id = f.workspace_id AND d.set_id = f.id
-      AND COALESCE(d.reps, d.load_grams, d.duration_sec, d.distance_m) IS NOT NULL)))`;
+    OR (f.origin <> 'COPY' AND (COALESCE(f.reps, f.load_grams, f.duration_sec, f.distance_m) IS NOT NULL
+      OR EXISTS (SELECT 1 FROM dev_training_performed_sides d WHERE d.workspace_id = f.workspace_id AND d.set_id = f.id
+        AND COALESCE(d.reps, d.load_grams, d.duration_sec, d.distance_m) IS NOT NULL)))))`;
 
 const SESSION_COLUMNS = `id, client_id AS clientId, program_id AS programId, week_index AS weekIndex,
   planned_workout_id AS plannedWorkoutId, outcome, actual_date AS actualDate, started_at AS startedAt, finished_at AS finishedAt, revision`;
@@ -33,12 +36,13 @@ const SESSION_COLUMNS = `id, client_id AS clientId, program_id AS programId, wee
 const FACT_COLUMNS = `id, planned_set_id AS plannedSetId, planned_exercise_id AS plannedExerciseId,
   exercise_id AS exerciseId, position, set_type AS setType, reps, load_grams AS loadGrams,
   duration_sec AS durationSec, distance_m AS distanceM, rpe, confirmed_at AS confirmedAt, revision, extra,
-  removed_at AS removedAt, sided`;
+  removed_at AS removedAt, sided, origin`;
 
 type FactRow = Readonly<{
   id: string; plannedSetId: string; plannedExerciseId: string; exerciseId: string; position: number;
   setType: SetType; reps: number | null; loadGrams: number | null; durationSec: number | null; distanceM: number | null;
   rpe: number | null; confirmedAt: string | null; revision: number; extra: number; removedAt: string | null; sided: number;
+  origin: SetFact["origin"];
 }>;
 
 type SideRow = Readonly<{ setId: string; side: "L" | "R"; reps: number | null; loadGrams: number | null;
@@ -78,7 +82,7 @@ function valuesOf(row: SetValues): SetValues {
 function toFact(row: FactRow, drops: readonly SetValues[], sides: SetFact["sides"] = null): SetFact {
   return { id: row.id, plannedSetId: row.plannedSetId, plannedExerciseId: row.plannedExerciseId, exerciseId: row.exerciseId,
     position: row.position, setType: row.setType, values: valuesOf(row), drops, sides, rpe: row.rpe,
-    confirmed: row.confirmedAt !== null, extra: row.extra === 1, revision: row.revision };
+    confirmed: row.confirmedAt !== null, extra: row.extra === 1, origin: row.origin, revision: row.revision };
 }
 
 type DropRow = Readonly<{ setId: string; reps: number | null; loadGrams: number | null; durationSec: number | null;
@@ -377,7 +381,9 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
   private async writeFact(tx: SqliteStatementPort, identity: SetIdentity, now: Date,
     next: (existing: FactRow | null, existingDrops: readonly SetValues[], mode: ConfirmationMode, existingSides: StoredSides) =>
       Readonly<{ content: SetContent; rpe: number | null; change: ConfirmationChange;
-        sides: Readonly<{ pair: Readonly<{ left: SetValues; right: SetValues }>; change: SidesChange }> | null }>):
+        sides: Readonly<{ pair: Readonly<{ left: SetValues; right: SetValues }>; change: SidesChange }> | null }>,
+    /** Копирование недели не проводит занятие: начало ставится только вводом тренера (§48.24 п. 3). */
+    markStart = true):
     Promise<SetSaveResult> {
     const mode = await this.modeOf(tx);
     const session = await this.ensureSession(tx, identity.slot, now);
@@ -435,7 +441,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     // PC §48.86.13: первое подтверждение подхода в этой тренировке ставит предполагаемое начало занятия (правится вручную). Ревизию выполнения
     // не меняем: ввод подходов не должен конфликтовать с правкой исхода и даты.
     let started = session;
-    if (change.confirmedNow && session.startedAt === null) {
+    if (markStart && change.confirmedNow && session.startedAt === null) {
       await tx.run(`UPDATE dev_training_sessions SET started_at = ? WHERE workspace_id = ? AND id = ? AND started_at IS NULL`,
         [stamp, this.workspaceId, session.id]);
       started = { ...session, startedAt: stamp };
@@ -588,7 +594,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
             change: confirmationAfterSave(mode, false, content, exercise.metrics) };
           const change = sidesAfterSave(mode, { left: false, right: false }, pair, exercise.metrics);
           return { content, rpe: fact.rpe, sides: { pair, change }, change: mergeSides(change) };
-        });
+        }, false);
         await tx.run("UPDATE dev_training_performed_sets SET origin = 'COPY', extra = ? WHERE workspace_id = ? AND id = ?",
           [fact.extra ? 1 : 0, this.workspaceId, copied.fact.id]);
       }
@@ -600,8 +606,10 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     remove: async (tx, clientId, programId, plannedWorkoutIds) => {
       if (plannedWorkoutIds !== null && plannedWorkoutIds.length === 0) return;
       const filter = plannedWorkoutIds === null ? "" : ` AND planned_workout_id IN (${plannedWorkoutIds.map(() => "?").join(", ")})`;
+      // Выполнения со снимком «план удалён» — явно сохранённая история (§50.3): отдельное удаление программы их не трогает.
       const sessions = await tx.all<{ id: string }>(`SELECT id FROM dev_training_sessions
-        WHERE workspace_id = ? AND client_id = ? AND program_id = ?${filter}`, [this.workspaceId, clientId, programId, ...(plannedWorkoutIds ?? [])]);
+        WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND plan_deleted_at IS NULL${filter}`,
+      [this.workspaceId, clientId, programId, ...(plannedWorkoutIds ?? [])]);
       for (const session of sessions) await this.deleteSession(tx, session.id);
     },
     keepAsHistory: async (tx, clientId, programId, originOf, now) => {

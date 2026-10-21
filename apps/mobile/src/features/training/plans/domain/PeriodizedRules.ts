@@ -17,6 +17,12 @@ type SetValues = Omit<PlannedSet, "id">;
 
 export interface ExercisePatch {
   readonly sets?: readonly SetValues[];
+  /**
+   * Для каждого подхода из `sets` — номер того же подхода в исходной неделе («до»), `null` у нового. Подходы целевых недель имеют другие
+   * ID, поэтому соответствие идёт по месту в исходной неделе, а не по месту в результате: удаление или вставка подхода не сдвигает
+   * результаты соседних (§48.5.7 п. 2–3, 5).
+   */
+  readonly setSources?: readonly (number | null)[];
   readonly rir?: PlannedExercise["rir"];
   readonly instruction?: string | null;
   readonly restSec?: number | null;
@@ -75,7 +81,10 @@ function orderChanged(before: readonly string[], after: readonly string[]): bool
 
 function exercisePatch(before: PlannedExercise, after: PlannedExercise): ExercisePatch | null {
   const patch: { -readonly [K in keyof ExercisePatch]: ExercisePatch[K] } = {};
-  if (!sameJson(before.sets.map(valuesOf), after.sets.map(valuesOf))) patch.sets = after.sets.map(valuesOf);
+  if (!sameJson(before.sets.map(valuesOf), after.sets.map(valuesOf))) {
+    patch.sets = after.sets.map(valuesOf);
+    patch.setSources = after.sets.map((set) => { const at = before.sets.findIndex((item) => item.id === set.id); return at < 0 ? null : at; });
+  }
   if (!sameJson(before.rir, after.rir)) patch.rir = after.rir;
   if (before.instruction !== after.instruction) patch.instruction = after.instruction;
   if (before.restSec !== after.restSec) patch.restSec = after.restSec;
@@ -145,9 +154,20 @@ function insertAfter<T extends Readonly<{ id: string; lineageId?: string }>>(ite
   return index < 0 ? [...items, item] : [...items.slice(0, index + 1), item, ...items.slice(index + 1)];
 }
 
-/** Подходы по образцу; ID имеющихся подходов сохраняются по позиции — факты остаются при них (§48.5.7 п. 2–3). */
-function patchSets(sets: readonly PlannedSet[], values: readonly SetValues[], newId: NewId): readonly PlannedSet[] {
-  return values.map((value, index) => ({ ...value, id: sets[index]?.id ?? newId() }));
+/**
+ * Подходы по образцу; ID имеющихся подходов сохраняются за тем же подходом исходной недели — факты остаются при них
+ * (§48.5.7 п. 2–3, 5). Без `sources` (старый вид операции) соответствие по месту.
+ */
+function patchSets(sets: readonly PlannedSet[], values: readonly SetValues[], sources: readonly (number | null)[] | undefined,
+  newId: NewId): readonly PlannedSet[] {
+  const used = new Set<string>();
+  return values.map((value, index) => {
+    const from = sources === undefined ? index : sources[index] ?? null;
+    const kept = from === null ? undefined : sets[from];
+    const id = kept !== undefined && !used.has(kept.id) ? kept.id : newId();
+    used.add(id);
+    return { ...value, id };
+  });
 }
 
 export interface ApplyResult {
@@ -203,7 +223,7 @@ export function applyWeekOps(week: readonly PlannedWorkout[], ops: readonly Week
         break;
       case "updateExercise":
         mapExercises(op.lineageId, (exercise) => ({ ...exercise,
-          ...(op.patch.sets === undefined ? {} : { sets: patchSets(exercise.sets, op.patch.sets, newId) }),
+          ...(op.patch.sets === undefined ? {} : { sets: patchSets(exercise.sets, op.patch.sets, op.patch.setSources, newId) }),
           ...(op.patch.rir === undefined ? {} : { rir: op.patch.rir }),
           ...(op.patch.instruction === undefined ? {} : { instruction: op.patch.instruction }),
           ...(op.patch.restSec === undefined ? {} : { restSec: op.patch.restSec }) }));

@@ -26,7 +26,7 @@ const values = (kg: number | null, reps: number | null): SetValues => ({ reps, l
 function fact(exerciseId: string, value: SetValues, options: Partial<Readonly<{ setType: SetType; confirmed: boolean }>> = {}): SetFact {
   n += 1;
   return { id: `f${n}`, plannedSetId: `p${n}`, plannedExerciseId: `pe${n}`, exerciseId, position: n, setType: options.setType ?? "NORMAL", values: value,
-    drops: [], rpe: null, confirmed: options.confirmed ?? true, sides: null, extra: false, revision: 1 };
+    drops: [], rpe: null, confirmed: options.confirmed ?? true, sides: null, extra: false, origin: "INPUT", revision: 1 };
 }
 function entry(key: string, date: string, status: WorkoutStatus, facts: readonly SetFact[], programId = "A"): TrainingHistoryEntry {
   const groups = new Map<string, SetFact[]>();

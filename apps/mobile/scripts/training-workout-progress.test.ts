@@ -16,7 +16,7 @@ const workout: PlannedWorkout = { id: "w", title: "Т", exercises: [
 
 function fact(plannedSetId: string, confirmed: boolean, v: SetValues, extra = false): SetFact {
   return { id: `f-${plannedSetId}`, plannedSetId, plannedExerciseId: plannedSetId === "s4" ? "e2" : "e1", exerciseId: "sys:a",
-    position: 0, setType: "NORMAL", values: v, drops: [], rpe: null, confirmed, sides: null, extra, revision: 1 };
+    position: 0, setType: "NORMAL", values: v, drops: [], rpe: null, confirmed, sides: null, extra, origin: "INPUT", revision: 1 };
 }
 
 test("Сводка тренировки на экране программы: упражнения, засчитанные подходы из плановых, объём только засчитанных", () => {

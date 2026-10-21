@@ -96,6 +96,8 @@ export interface SetFact {
   readonly sides: SetSides | null;
   /** Дополнительный разминочный подход дневника сверх плана (как в 2.0); у плановых — false. */
   readonly extra: boolean;
+  /** Происхождение значений (§48.44 п. 6): ввод тренера, копирование недели (предварительные значения), импорт. */
+  readonly origin: "INPUT" | "COPY" | "IMPORT";
   readonly revision: number;
 }
 

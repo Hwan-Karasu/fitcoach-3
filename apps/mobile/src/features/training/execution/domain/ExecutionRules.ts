@@ -142,12 +142,17 @@ export function dropsForType(setType: SetType, current: readonly SetValues[]): r
   return current.length > 0 ? current : [EMPTY_VALUES];
 }
 
-/** Начата ли тренировка (§48.34): есть внесённое значение или подтверждённый подход; просмотр — не начало. */
-export function hasEnteredData(facts: Iterable<Readonly<{ values: SetValues; confirmed: boolean;
+/**
+ * Начата ли тренировка (§48.34): есть значение, введённое тренером, или подтверждённый подход; просмотр — не начало.
+ * Предварительные значения после копирования недели (`origin = "COPY"`) без подтверждения тренировку не начинают.
+ */
+export function hasEnteredData(facts: Iterable<Readonly<{ values: SetValues; confirmed: boolean; origin?: "INPUT" | "COPY" | "IMPORT";
   sides?: Readonly<{ left: Readonly<{ values: SetValues }>; right: Readonly<{ values: SetValues }> }> | null }>>): boolean {
   const filled = (values: SetValues) => ALL_FIELDS.some((field) => values[field] !== null);
   for (const fact of facts) {
-    if (fact.confirmed || filled(fact.values)) return true;
+    if (fact.confirmed) return true;
+    if (fact.origin === "COPY") continue;
+    if (filled(fact.values)) return true;
     if (fact.sides && (filled(fact.sides.left.values) || filled(fact.sides.right.values))) return true;
   }
   return false;

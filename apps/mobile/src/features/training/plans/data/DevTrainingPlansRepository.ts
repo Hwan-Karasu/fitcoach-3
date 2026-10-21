@@ -742,8 +742,13 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     removedWorkouts: async (tx, request) => {
       if (request.mesocycleId === null) return [];
       const cycle = await this.ownMesocycle(tx, request);
-      return cycle.weeks.filter((week) => week.index > request.mesocycle.weeks.length)
-        .flatMap((week) => week.workouts.map((workout) => ({ weekIndex: week.index, plannedWorkoutId: workout.id })));
+      // Тренировка, которой нет в новой структуре своей недели (убранная неделя, замена копией, пустая неделя, удалённая тренировка),
+      // исчезнет из плана: её результаты нельзя оставлять без привязки (§48.21.1 п. 7, §48.5.7).
+      return cycle.weeks.flatMap((week) => {
+        const kept = new Set(request.mesocycle.weeks[week.index - 1]?.workouts.map((workout) => workout.id) ?? []);
+        return week.workouts.filter((workout) => !kept.has(workout.id))
+          .map((workout) => ({ weekIndex: week.index, plannedWorkoutId: workout.id }));
+      });
     },
     save: async (tx, request, now) => {
       const { clientId, programId, expectedRevision } = request;
@@ -752,9 +757,9 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       if (request.clientIds[0] !== clientId || new Set(request.clientIds).size !== request.clientIds.length) throw new Error("DRAFT_INVALID");
       await this.assertTargets(tx, clientId, programId, [clientId]);
       const weeks = await this.builderWeeks(tx, request.mesocycle);
-      await this.bumpRevision(tx, programId, expectedRevision, now);
       const settings = { cycleType: request.mesocycle.cycleType, repRange: request.mesocycle.repRange, startDate: request.mesocycle.startDate };
       if (request.mesocycleId === null) {
+        await this.bumpRevision(tx, programId, expectedRevision, now);
         const rows = weekRowCount(weeks);
         const take = await this.idPool(tx, 1 + 2 * rows + request.clientIds.length * (1 + rows));
         const lineageId = take();
@@ -772,10 +777,26 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         return { program: await programById(tx, this.workspaceId, programId), mesocycleId: ownId };
       }
       const cycle = await this.ownMesocycle(tx, request);
-      await preserveMesocycle(tx, this.workspaceId, clientId, programId, cycle, now);
+      // Правка существующего мезоцикла применяется к нему же: историческая версия — только при реальной структурной разнице (§48.9.1 п. 4),
+      // название и настройки версию не создают, а без единого изменения ничего не пишется и ревизия не растёт.
+      const structureChanged = weeks.length !== cycle.weeks.length || weeks.some((week) => {
+        const existing = cycle.weeks[week.index - 1];
+        return existing === undefined || existing.type !== week.type
+          || existing.workouts.length !== week.workouts.length || existing.workouts.some((workout, at) => workout.id !== week.workouts[at]?.id)
+          || diffWeek(existing.workouts, week.workouts).length > 0;
+      });
+      const settingsChanged = title !== cycle.title || settings.cycleType !== (cycle.cycleType ?? null)
+        || JSON.stringify(settings.repRange) !== JSON.stringify(cycle.repRange ?? null) || settings.startDate !== (cycle.startDate ?? null);
+      if (!structureChanged && !settingsChanged) {
+        if ((await programById(tx, this.workspaceId, programId)).revision !== expectedRevision) throw new Error("PROGRAM_REVISION_CONFLICT");
+        return { program: await programById(tx, this.workspaceId, programId), mesocycleId: cycle.id };
+      }
+      await this.bumpRevision(tx, programId, expectedRevision, now);
+      if (structureChanged) await preserveMesocycle(tx, this.workspaceId, clientId, programId, cycle, now);
       await tx.run(`UPDATE dev_training_mesocycles SET title = ?, cycle_type = ?, rep_min = ?, rep_max = ?, start_date = ?
         WHERE workspace_id = ? AND id = ? AND client_id = ?`, [title, settings.cycleType, settings.repRange?.min ?? null,
         settings.repRange?.max ?? null, settings.startDate, this.workspaceId, cycle.id, clientId]);
+      if (!structureChanged) return { program: await programById(tx, this.workspaceId, programId), mesocycleId: cycle.id };
       const take = await this.idPool(tx, Math.max(0, weeks.length - cycle.weeks.length));
       for (const week of weeks) {
         const existing = cycle.weeks.find((item) => item.index === week.index);

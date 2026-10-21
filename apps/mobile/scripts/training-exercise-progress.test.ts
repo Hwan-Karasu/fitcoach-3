@@ -16,7 +16,7 @@ function fact(exerciseId: string, value: SetValues, options: Partial<Readonly<{ 
   n += 1;
   return { id: `f${n}`, plannedSetId: `p${n}`, plannedExerciseId: `pe-${exerciseId}`, exerciseId, position: n,
     setType: options.setType ?? "NORMAL", values: value, drops: [], rpe: null, confirmed: options.confirmed ?? true,
-    sides: null, extra: false, revision: 1 };
+    sides: null, extra: false, origin: "INPUT", revision: 1 };
 }
 function entry(key: string, date: string, programId: string, facts: readonly SetFact[]): TrainingHistoryEntry {
   const groups = new Map<string, SetFact[]>();
