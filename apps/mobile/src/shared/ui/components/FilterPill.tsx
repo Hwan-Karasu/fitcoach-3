@@ -40,13 +40,13 @@ export function FilterPill({ label, accessibilityLabel, onPress, selected = fals
       onPress={onPress} hitSlop={compact ? { top: 5, bottom: 5 } : undefined}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
-      style={({ pressed }) => [styles.pill, compact ? styles.pillCompact : null, selected ? null : shadow.control, grow ? styles.grow : null, {
+      style={({ pressed }) => [styles.pill, compact ? styles.pillCompact : null, selected ? null : shadow.control, grow ? (compact ? styles.growCompact : styles.grow) : null, {
         backgroundColor: selected ? colors.accentFill : pressed ? colors.surfaceRaised : colors.surface,
         borderColor: focused ? colors.focusRing : "transparent",
       }]}
     >
       {icon?.(ink) ?? null}
-      <Text numberOfLines={grow ? 2 : 1} style={[styles.label, compact ? styles.labelCompact : null, grow ? styles.labelFull : null, { color: ink }]}>{label}</Text>
+      <Text numberOfLines={compact ? 1 : grow ? 2 : 1} adjustsFontSizeToFit={compact} minimumFontScale={0.85} style={[styles.label, compact ? styles.labelCompact : null, grow ? styles.labelFull : null, { color: ink }]}>{label}</Text>
       {menu ? <ChevronDown size={compact ? 14 : 16} color={ink} strokeWidth={2.4}
         style={expanded ? { transform: [{ rotate: "180deg" }] } : undefined} /> : null}
     </Pressable>
@@ -56,6 +56,8 @@ export function FilterPill({ label, accessibilityLabel, onPress, selected = fals
 const styles = StyleSheet.create({
   pill: { minHeight: TOUCH_TARGET, borderRadius: radius.pill, borderWidth: 2, flexDirection: "row", alignItems: "center",
     justifyContent: "center", gap: 2, paddingHorizontal: 8 },
+  // Компактная пилюля: ширина по тексту плюс равная доля свободного места; слово не переносится, при нехватке места шрифт ужимается.
+  growCompact: { flexGrow: 1, flexShrink: 1, flexBasis: "auto", minWidth: 0 },
   pillCompact: { minHeight: 34, paddingHorizontal: 6 },
   labelCompact: { fontSize: 13, lineHeight: 16 },
   // Растягивается на свободное место ряда и сжимается первой, если места мало.
