@@ -8,20 +8,23 @@ import { shadow } from "../theme/style.ts";
  * Плавающая кнопка главного действия экрана (UI-OWN-017; «Зефирка»: 60×60, радиус 20, тень акцента), справа внизу. С `text` — широкая,
  * значок и подпись (каталог: «Своё упражнение», UI-OWN-030).
  */
-export function FloatingActionButton({ label, icon, onPress, text }: Readonly<{
+export function FloatingActionButton({ label, icon, onPress, text, compact = false }: Readonly<{
   label: string;
   icon: (color: string) => ReactNode;
   onPress: () => void;
   text?: string;
+  /** Вдвое меньше: видимая высота 28 (только с `text`), зона нажатия 44 через hitSlop (ADR-014). */
+  compact?: boolean;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
-      style={({ pressed }) => [styles.fab, shadow.fab, text !== undefined ? styles.extended : null,
+      hitSlop={compact && text !== undefined ? { top: 8, bottom: 8, left: 6, right: 6 } : undefined}
+      style={({ pressed }) => [styles.fab, shadow.fab, text !== undefined ? styles.extended : null, compact && text !== undefined ? styles.compact : null,
         { backgroundColor: colors.accentFill, opacity: pressed ? 0.85 : 1 }]}>
       {icon(colors.onAccentFill)}
-      {text !== undefined ? <Text numberOfLines={1} style={[styles.text, { color: colors.onAccentFill }]}>{text}</Text> : null}
+      {text !== undefined ? <Text numberOfLines={1} style={[styles.text, compact ? styles.textCompact : null, { color: colors.onAccentFill }]}>{text}</Text> : null}
     </Pressable>
   );
 }
@@ -31,5 +34,7 @@ const styles = StyleSheet.create({
     position: "absolute", right: 20, bottom: 16, width: 60, height: 60, borderRadius: 20, alignItems: "center", justifyContent: "center",
   },
   extended: { width: undefined, height: 52, borderRadius: 18, flexDirection: "row", gap: 8, paddingLeft: 16, paddingRight: 20 },
+  compact: { height: 28, borderRadius: 10, gap: 4, paddingLeft: 9, paddingRight: 11, bottom: 12 },
   text: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 18 },
+  textCompact: { fontSize: 12, lineHeight: 15 },
 });
