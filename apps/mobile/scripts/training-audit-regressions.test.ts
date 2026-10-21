@@ -56,7 +56,7 @@ async function setup() {
     return { programId: program.id, mesocycleId: created.mesocycleId };
   };
   const cycleOf = async (clientId: string, programId: string) => (await plans.getPeriodizedPlan(clientId, programId))!;
-  return { plans, execution, a, b, tx, fill, periodized, cycleOf, shared,
+  return { db, plans, execution, a, b, tx, fill, periodized, cycleOf, shared,
     close: async () => { await shared.release(); await execution.close(); await plans.close(); await clients.close(); } };
 }
 
@@ -317,5 +317,40 @@ test("TRN-003 черновик конструктора мезоцикла: хр
     await env.plans.saveMesocycleBuilderDraft(env.a, { programId: null, mesocycleId: null }, { ...draft, baseRevision: null, baseWeeks: null });
     assert.equal((await env.plans.getMesocycleBuilderDraft(env.a, { programId: null, mesocycleId: null }))?.title, "Правка");
     assert.equal(await env.plans.getMesocycleBuilderDraft(env.b, { programId: null, mesocycleId: null }), null, "у другого клиента своего нет");
+  } finally { await env.close(); }
+});
+
+test("TRN-019 скопированная разминка получает тот же вид ID, что добавленная в дневнике", async () => {
+  const env = await setup();
+  try {
+    const { programId, mesocycleId } = await env.periodized(2, 2);
+    const plan = await env.cycleOf(env.a, programId);
+    const w1 = plan.mesocycles[0]!.weeks[0]!.workouts[0]!;
+    const slot1 = { clientId: env.a, programId, weekIndex: 1, plannedWorkoutId: w1.id };
+    const warmup = await env.execution.addWarmupSet(slot1, { plannedExerciseId: w1.exercises[0]!.id, exerciseId: BENCH });
+    await env.execution.saveSet({ slot: slot1, plannedExerciseId: w1.exercises[0]!.id, exerciseId: BENCH, plannedSetId: warmup.fact.plannedSetId,
+      position: warmup.fact.position, metrics: METRICS, values: { loadGrams: 20_000, reps: 10, durationSec: null, distanceM: null },
+      setType: "WARMUP", drops: [], rpe: null, expectedRevision: warmup.fact.revision });
+    const lookup = { lookup: async () => new Map([[BENCH, { name: "bench", metrics: METRICS, thumbnail: null, unilateral: false }]]), subscribe: () => () => undefined };
+    const copy = createWeekCopyWorkflow(env.tx, env.plans.weekCopyParticipant, env.execution.weekCopyParticipant, lookup as never);
+    const request = { clientId: env.a, programId, mesocycleId, sourceWeek: 1, targetWeek: 2, expectedRevision: plan.program.revision };
+    await copy.copy(request, (await copy.preview(request)).revisionToken, "PREFILL", false);
+    const target = (await env.cycleOf(env.a, programId)).mesocycles[0]!.weeks[1]!.workouts[0]!;
+    const facts = [...(await env.execution.getWorkout({ ...slot1, weekIndex: 2, plannedWorkoutId: target.id })).facts.values()];
+    assert.ok(facts.filter((fact) => fact.extra).every((fact) => fact.plannedSetId.startsWith("extra-")) && facts.some((fact) => fact.extra));
+  } finally { await env.close(); }
+});
+
+test("TRN-018 нечитаемое недельное отличие Простой программы не ломает чтение: неделя показывает базовый план", async () => {
+  const env = await setup();
+  try {
+    const draft = { ...workoutWith(2), title: "Простая" };
+    const program = await env.plans.createSimpleProgram(env.a, { ...draft, plan: { ...draft.plan, weeks: 3 } });
+    const plan = (await env.plans.getSimplePlan(env.a, program.id))!;
+    const workout = plan.draft.plan.workouts[0]!;
+    env.db.prepare("INSERT INTO dev_training_simple_overrides (workspace_id, client_id, program_id, week_index, workout_id, workout_json) VALUES (?, ?, ?, 2, ?, ?)").run(WS, env.a, program.id, workout.id, JSON.stringify({ id: workout.id }));
+    const weeks = await env.plans.getSimpleWeeks(env.a, program.id);
+    assert.equal(weeks.length, 3);
+    assert.deepEqual(weeks[1]!.workouts[0], workout, "повреждённая неделя 2 показывает базовый план");
   } finally { await env.close(); }
 });

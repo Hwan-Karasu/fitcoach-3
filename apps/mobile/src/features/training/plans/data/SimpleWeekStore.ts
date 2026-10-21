@@ -3,12 +3,20 @@ import { UUID_V4_SQL } from "../../../../shared/db/SqlIds.ts";
 import type { PlannedWorkout, SimplePlan } from "../domain/SimplePlanModel.ts";
 import type { SimplePlanVersion, SimpleWeek } from "../domain/SimpleWorkoutEdit.ts";
 
+/** Недельное отличие из JSON-снимка; нечитаемое (не тренировка) — `null`: неделя показывает базовый план, а не ломает всю программу. */
+export function parseOverride(json: string, workoutId: string): PlannedWorkout | null {
+  try {
+    const value = JSON.parse(json) as Partial<PlannedWorkout> | null;
+    return value !== null && typeof value === "object" && value.id === workoutId && Array.isArray(value.exercises) ? value as PlannedWorkout : null;
+  } catch { return null; }
+}
+
 export async function readSimpleWeeks(tx: SqliteStatementPort, workspaceId: string, clientId: string, programId: string,
   base: SimplePlan): Promise<readonly SimpleWeek[]> {
   const rows = await tx.all<{ week: number; workoutId: string; json: string }>(`SELECT week_index AS week,
     workout_id AS workoutId, workout_json AS json FROM dev_training_simple_overrides
     WHERE workspace_id = ? AND client_id = ? AND program_id = ?`, [workspaceId, clientId, programId]);
-  const overrides = new Map(rows.map((row) => [`${row.week}:${row.workoutId}`, JSON.parse(row.json) as PlannedWorkout]));
+  const overrides = new Map(rows.flatMap((row) => { const workout = parseOverride(row.json, row.workoutId); return workout === null ? [] : [[`${row.week}:${row.workoutId}`, workout] as const]; }));
   return Array.from({ length: base.weeks }, (_, index) => ({ index: index + 1,
     workouts: base.workouts.map((workout) => overrides.get(`${index + 1}:${workout.id}`) ?? workout) }));
 }

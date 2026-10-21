@@ -28,7 +28,7 @@ import { mesocycleBuilderDraftKey, periodizedDraftKey, type MesocycleBuilderDraf
 import { mesocycleCreatedAt, preserveMesocycle, readMesocycleHistory } from "./StructureVersionStore.ts";
 import type { MesocycleVersion } from "../domain/StructureVersion.ts";
 import { simpleWorkoutDraftKey, type SimpleWorkoutDraft, type SimpleWorkoutEdit } from "../domain/SimpleWorkoutEdit.ts";
-import { assertSimpleIdentities, preserveSimple, readSimpleHistory, readSimpleWeeks, writeSimpleOverride } from "./SimpleWeekStore.ts";
+import { assertSimpleIdentities, parseOverride, preserveSimple, readSimpleHistory, readSimpleWeeks, writeSimpleOverride } from "./SimpleWeekStore.ts";
 import { independentWeeks, weekRowCount, type CopyMesocycleInput } from "../domain/PlanCopy.ts";
 import type { WeekPlansParticipant, WeekCopyRequest } from "../domain/WeekCopy.ts";
 import type { WeekSwapPlansParticipant } from "../domain/WeekSwap.ts";
@@ -501,12 +501,12 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
             (w.week_id IS NULL OR EXISTS (SELECT 1 FROM dev_training_weeks k JOIN dev_training_mesocycles m
               ON m.id = k.mesocycle_id AND m.workspace_id = k.workspace_id WHERE k.id = w.week_id AND m.client_id = ?)))`,
       [restSec, this.workspaceId, plannedExerciseId, this.workspaceId, programId, clientId]);
-      const overrides = await tx.all<{ week: number; json: string }>(`SELECT week_index AS week, workout_json AS json
+      const overrides = await tx.all<{ week: number; workoutId: string; json: string }>(`SELECT week_index AS week, workout_id AS workoutId, workout_json AS json
         FROM dev_training_simple_overrides WHERE workspace_id = ? AND client_id = ? AND program_id = ?`, [this.workspaceId, clientId, programId]);
       let changed = result.changes;
       for (const row of overrides) {
-        const workout = JSON.parse(row.json) as PlannedWorkout;
-        if (!workout.exercises.some((exercise) => exercise.id === plannedExerciseId)) continue;
+        const workout = parseOverride(row.json, row.workoutId);
+        if (workout === null || !workout.exercises.some((exercise) => exercise.id === plannedExerciseId)) continue;
         await writeSimpleOverride(tx, this.workspaceId, clientId, programId, row.week,
           { ...workout, exercises: workout.exercises.map((exercise) => exercise.id === plannedExerciseId ? { ...exercise, restSec } : exercise) });
         changed += 1;

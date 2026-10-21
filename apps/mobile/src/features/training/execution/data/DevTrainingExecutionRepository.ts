@@ -579,7 +579,9 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       const sourceFacts = [...source.facts.values()].filter((fact) => fact.plannedExerciseId === exercise.sourceId
         && (fact.extra || exercise.sets.some((set) => set.sourceId === fact.plannedSetId)));
       for (const fact of sourceFacts) {
-        const plannedSetId = fact.extra ? (await tx.first<{ id: string }>(UUID_V4_SQL))?.id
+        const newExtra = fact.extra ? (await tx.first<{ id: string }>(UUID_V4_SQL))?.id : undefined;
+        // Тот же вид ID, что у добавленной в дневнике разминки (`extra-<uuid>`).
+        const plannedSetId = fact.extra ? (newExtra ? `extra-${newExtra}` : undefined)
           : exercise.sets.find((set) => set.sourceId === fact.plannedSetId)?.targetId;
         if (!plannedSetId || fact.exerciseId !== exercise.exerciseId) throw new Error("WRONG_CLIENT_SCOPE");
         const content = { setType: fact.setType, values: fact.values, drops: fact.drops };
