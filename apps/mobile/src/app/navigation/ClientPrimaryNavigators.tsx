@@ -21,7 +21,7 @@ type HomeRoutes = { HomeIndex: undefined };
 type NutritionRoutes = {
   NutritionIndex: { section: "calc"; requestKey: number } | undefined;
   NutritionAdd: { localDate: string; slot: MealSlot; filter?: CatalogFilter };
-  NutritionFood: { name?: string; foodId?: string };
+  NutritionFood: { name?: string; foodId?: string; detailsRequest?: number };
   NutritionRecipe: { recipeId?: string } | undefined;
 };
 const nutritionTitles: Readonly<Record<keyof NutritionRoutes, string>> = { NutritionIndex: "Питание", NutritionAdd: "Добавить еду", NutritionFood: "Продукт", NutritionRecipe: "Рецепт" };
@@ -128,7 +128,9 @@ export function NutritionNavigator({ clientId, clientName, clientEmoji, body, on
     <NutritionStack.Navigator screenOptions={({ navigation, route }) => ({
       contentStyle: { backgroundColor: palette.tokens.canvas },
       header: () => <ClientHeader subtitle={nutritionTitles[route.name]} client={{ displayName: clientName, emoji: clientEmoji }}
-        onClients={onOpenClients} onBack={() => { if (route.name === "NutritionIndex") onExitClient(); else navigation.goBack(); }} />,
+        onClients={onOpenClients} onBack={() => { if (route.name === "NutritionIndex") onExitClient(); else navigation.goBack(); }}
+        trailingAction={route.name === "NutritionFood" && route.params?.foodId !== undefined
+          ? { label: "Изменить название, бренд и штрихкод", onPress: () => navigation.setParams({ detailsRequest: (route.params.detailsRequest ?? 0) + 1 }) } : undefined} />,
     })}>
       <NutritionStack.Screen name="NutritionIndex">
         {({ navigation, route }) => <NutritionHomeScreen requestedSection={route.params?.section} sectionRequestKey={route.params?.requestKey} clientId={clientId} onOpenJournal={onOpenJournal} body={body} onUpdateBody={onUpdateBody} diary={diary} targets={targets} calc={calc} measurements={measurements}
@@ -143,7 +145,7 @@ export function NutritionNavigator({ clientId, clientName, clientEmoji, body, on
       </NutritionStack.Screen>
       <NutritionStack.Screen name="NutritionFood">
         {({ navigation, route }) => <NutritionAddRoute navigation={navigation} food>{(onDirtyChange) =>
-          <FoodEditorScreen key={route.params.foodId ?? "new"} foods={foods} foodId={route.params.foodId} initialName={route.params.name} onDirtyChange={onDirtyChange} onSaved={() => navigation.goBack()} />
+          <FoodEditorScreen key={route.params.foodId ?? "new"} foods={foods} foodId={route.params.foodId} initialName={route.params.name} detailsRequest={route.params.detailsRequest} onDirtyChange={onDirtyChange} onSaved={() => navigation.goBack()} />
         }</NutritionAddRoute>}
       </NutritionStack.Screen>
       <NutritionStack.Screen name="NutritionRecipe">

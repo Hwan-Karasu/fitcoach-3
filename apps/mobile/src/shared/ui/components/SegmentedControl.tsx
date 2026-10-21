@@ -33,7 +33,7 @@ export function SegmentedControl<Id extends string>({ items, selectedId, onSelec
     );
   });
   return (
-    <View accessibilityRole="tablist" style={[styles.track, compact ? styles.trackCompact : null, { backgroundColor: colors.border }]}>
+    <View accessibilityRole="tablist" style={[styles.track, compact ? styles.trackCompact : null, scroll ? styles.trackScroll : null, { backgroundColor: colors.border }]}>
       {scroll ? <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scrollContent}>{segments}</ScrollView> : segments}
     </View>
   );
@@ -45,8 +45,9 @@ const styles = StyleSheet.create({
   segmentFit: { flexGrow: 1, flexShrink: 1, flexBasis: "auto", paddingHorizontal: 6 },
   label: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 19 },
   selected: { fontFamily: fonts.bold },
-  segmentScroll: { flex: 0, paddingHorizontal: 12 },
+  segmentScroll: { flex: 0, paddingHorizontal: 8 },
   scrollContent: { gap: 2 },
+  trackScroll: { height: 40 },
   trackCompact: { height: 44, borderRadius: 14, padding: 3, gap: 2 },
   segmentCompact: { borderRadius: 11, paddingHorizontal: 2 },
   labelCompact: { fontSize: 13, lineHeight: 17 },

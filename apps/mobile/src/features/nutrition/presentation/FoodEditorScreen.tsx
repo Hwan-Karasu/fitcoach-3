@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
 import { X } from "lucide-react-native";
 import { AppButton, AppIconButton, ChoiceSegments, ConfirmDialog, InlineNotice, LoadingState, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -11,7 +11,7 @@ import { formatDecimalX10, parseDecimalX10 } from "../domain/FoodRules.ts";
 import { nutritionErrorText } from "./nutritionFormat.ts";
 
 const units: readonly Readonly<{ id: FoodBasisUnit; label: string; amount: string }>[] = [
-  { id: "G", label: "г", amount: "100" }, { id: "ML", label: "мл", amount: "100" }, { id: "PIECE", label: "шт.", amount: "1" }, { id: "PORTION", label: "порц.", amount: "1" },
+  { id: "G", label: "г", amount: "100" }, { id: "ML", label: "мл", amount: "100" }, { id: "PIECE", label: "шт.", amount: "1" }, { id: "PORTION", label: "порция", amount: "1" },
 ];
 const extraUnits: readonly Readonly<{ id: ExtraNutrientUnit; label: string }>[] = [{ id: "G", label: "г" }, { id: "MG", label: "мг" }];
 const extraUnitText: Readonly<Record<ExtraNutrientUnit, string>> = { G: "г", MG: "мг" };
@@ -30,7 +30,9 @@ function optionalValue(text: string): number | null | "invalid" {
  * Собственный продукт (§49.3): название, на какое количество даны значения (г, мл, шт., порц.), БЖУ 2×2 и дополнительные нутриенты. Значения, которые
  * тренер не знает, остаются пустыми и не превращаются в ноль. «Добавить» при правке сохраняет тот же продукт, а не создаёт копию. Каталог общий для всех клиентов.
  */
-export function FoodEditorScreen({ foods, foodId, initialName = "", onSaved, onDirtyChange }: Readonly<{ foods: FoodCatalogPort; foodId?: string; initialName?: string; onSaved: (food: FoodProduct) => void; onDirtyChange?: (dirty: boolean) => void }>) {
+export function FoodEditorScreen({ foods, foodId, initialName = "", detailsRequest = 0, onSaved, onDirtyChange }: Readonly<{ foods: FoodCatalogPort; foodId?: string; initialName?: string;
+  /** Растёт при нажатии на карандаш в шапке: открывает окно с названием, маркой, штрихкодом и «Удалить из базы». */
+  detailsRequest?: number; onSaved: (food: FoodProduct) => void; onDirtyChange?: (dirty: boolean) => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const [name, setName] = useState(initialName);
@@ -55,12 +57,23 @@ export function FoodEditorScreen({ foods, foodId, initialName = "", onSaved, onD
   const [loaded, setLoaded] = useState(foodId === undefined);
   const [revision, setRevision] = useState(0);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsDraft, setDetailsDraft] = useState({ name: "", brand: "", barcode: "", pieceMass: "" });
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const handledRequest = useRef(detailsRequest);
   const [initialSignature, setInitialSignature] = useState<string | null>(null);
   const signature = JSON.stringify({ name, brand, barcode, pieceMass, unit, amount, values, kcalManual, extra, custom });
   useEffect(() => {
     if (loaded && initialSignature === null) setInitialSignature(signature);
     if (initialSignature !== null) onDirtyChange?.(signature !== initialSignature);
   }, [loaded, initialSignature, signature, onDirtyChange]);
+  useEffect(() => {
+    if (!loaded || detailsRequest === handledRequest.current) return;
+    handledRequest.current = detailsRequest;
+    setDetailsDraft({ name, brand, barcode, pieceMass });
+    setDetailsError(null);
+    setDetailsOpen(true);
+  }, [detailsRequest, loaded, name, brand, barcode, pieceMass]);
   useEffect(() => {
     if (foodId === undefined) return;
     let active = true;
@@ -117,13 +130,22 @@ export function FoodEditorScreen({ foods, foodId, initialName = "", onSaved, onD
   };
 
   if (!loaded) return <LoadingState label="Загружаем продукт…" />;
+  const applyDetails = () => {
+    if (detailsDraft.name.trim() === "") { setDetailsError("Укажите название продукта."); return; }
+    if (detailsDraft.pieceMass.trim() !== "" && parseDecimalX10(detailsDraft.pieceMass) === null) { setDetailsError("Масса одной штуки — число, например 45."); return; }
+    setName(detailsDraft.name); setBrand(detailsDraft.brand); setBarcode(detailsDraft.barcode); setPieceMass(detailsDraft.pieceMass);
+    setDetailsOpen(false);
+  };
   const updateCustom = (id: number, patch: Partial<CustomRow>) => setCustom(custom.map((item) => item.id === id ? { ...item, ...patch } : item));
   return (
-    <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
+      {foodId === undefined ? <>
       <TextField label="Название" value={name} onChangeText={setName} required autoCapitalize="sentences" />
       <AppButton compact variant="ghost" label={details ? "Скрыть дополнительные поля" : "Марка, штрихкод и масса штуки"} onPress={() => setDetails(!details)} />
-      {details ? <>
+      </> : null}
+      {foodId === undefined && details ? <>
       <TextField label="Марка или описание" value={brand} onChangeText={setBrand} hint="Необязательно" />
       <TextField label="Штрихкод" value={barcode} onChangeText={setBarcode} hint="Необязательно. Только для локального поиска: сетевого справочника нет." />
       <TextField label="Масса одной штуки, г" value={pieceMass} onChangeText={setPieceMass} keyboardType="decimal-pad"
@@ -133,10 +155,6 @@ export function FoodEditorScreen({ foods, foodId, initialName = "", onSaved, onD
       <View style={styles.unitRow}>
         <View style={styles.amountCell}><TextField label="Количество" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" required /></View>
         <View style={styles.unitCell}><ChoiceSegments label="Единица" items={units} value={unit} onChange={(next) => { setUnit(next); setAmount(units.find((item) => item.id === next)?.amount ?? "1"); }} /></View>
-      </View>
-      <View style={styles.buttonRow}>
-        <View style={styles.cell}><AppButton label="Добавить" accessibilityLabel={foodId === undefined ? "Добавить продукт" : "Сохранить изменения продукта"} onPress={() => { void save(); }} busy={busy} /></View>
-        {foodId !== undefined ? <View style={styles.cell}><AppButton variant="destructive" label="Удалить" accessibilityLabel="Убрать продукт из каталога" disabled={busy} onPress={() => setConfirmArchive(true)} /></View> : null}
       </View>
       <Text style={[styles.hint, { color: colors.textSecondary }]}>Заполните то, что известно. Пустое значение остаётся «нет данных», а не нулём.</Text>
       <View style={styles.macroRow}>
@@ -149,12 +167,17 @@ export function FoodEditorScreen({ foods, foodId, initialName = "", onSaved, onD
       </View>
       <Text style={[styles.hint, { color: colors.textSecondary }]}>1 г белка = 4 ккал, жира = 9, углеводов = 4. Своё число калорий заменит авторасчёт.</Text>
       {GROUPS.map((group) => <View key={group.id} style={styles.group}>
-        <Text style={[styles.label, { color: colors.textPrimary }]}>{group.title}</Text>
-        <View style={styles.extraGrid}>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>{group.id === "fat" ? "Жир, г" : group.title}</Text>
+        {group.id === "fat" ? <View style={styles.macroRow}>
+          {STANDARD_EXTRA_NUTRIENTS.filter((item) => item.group === "fat").map((item) => <View key={item.key} style={styles.cell}>
+            <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.fatLabel, { color: colors.textSecondary }]}>{item.label.replace(" жиры", "")}</Text>
+            <TextField label={`${item.label}, г`} hideLabel value={extra[item.key] ?? ""} onChangeText={(text) => setExtra({ ...extra, [item.key]: text })} keyboardType="decimal-pad" />
+          </View>)}
+        </View> : <View style={styles.extraGrid}>
           {STANDARD_EXTRA_NUTRIENTS.filter((item) => item.group === group.id).map((item) => <View key={item.key} style={styles.extraCell}>
             <TextField label={`${item.label}, ${extraUnitText[item.unit]}`} value={extra[item.key] ?? ""} onChangeText={(text) => setExtra({ ...extra, [item.key]: text })} keyboardType="decimal-pad" />
           </View>)}
-        </View>
+        </View>}
       </View>)}
       {custom.map((row) => <View key={row.id} style={styles.customRow}>
         <View style={styles.cell}><TextField label="Название" value={row.label} onChangeText={(label) => updateCustom(row.id, { label })} autoCapitalize="sentences" /></View>
@@ -163,25 +186,47 @@ export function FoodEditorScreen({ foods, foodId, initialName = "", onSaved, onD
         <AppIconButton compact label={`Убрать строку: ${row.label || "без названия"}`} icon={<X size={18} color={colors.textSecondary} />} onPress={() => setCustom(custom.filter((item) => item.id !== row.id))} />
       </View>)}
       <AppButton compact variant="secondary" label="+ Добавить" accessibilityLabel="Добавить свой нутриент" onPress={() => setCustom([...custom, { id: Math.max(0, ...custom.map((item) => item.id)) + 1, label: "", unit: "G", value: "" }])} />
-      <ConfirmDialog visible={confirmArchive} title="Убрать продукт из каталога?" description="Продукт перестанет предлагаться. Дневники и состав существующих рецептов сохранятся." confirmLabel="Убрать" destructive confirmBusy={busy}
+    </ScrollView>
+    <View style={[styles.bottomBar, { backgroundColor: colors.canvas, borderColor: colors.border }]}>
+      <AppButton label={foodId === undefined ? "Добавить" : "Сохранить"} accessibilityLabel={foodId === undefined ? "Добавить продукт" : "Сохранить изменения продукта"} onPress={() => { void save(); }} busy={busy} />
+    </View>
+    <Modal visible={detailsOpen} transparent animationType="fade" onRequestClose={() => setDetailsOpen(false)}>
+      <View style={styles.backdrop}><View style={[styles.dialog, { backgroundColor: colors.surface }]}>
+        <Text accessibilityRole="header" style={[styles.dialogTitle, { color: colors.textPrimary }]}>Карточка продукта</Text>
+        {detailsError !== null ? <InlineNotice kind="error">{detailsError}</InlineNotice> : null}
+        <TextField label="Название" value={detailsDraft.name} onChangeText={(next) => setDetailsDraft({ ...detailsDraft, name: next })} required autoCapitalize="sentences" />
+        <TextField label="Марка или описание" value={detailsDraft.brand} onChangeText={(next) => setDetailsDraft({ ...detailsDraft, brand: next })} />
+        <TextField label="Штрихкод" value={detailsDraft.barcode} onChangeText={(next) => setDetailsDraft({ ...detailsDraft, barcode: next })} />
+        <TextField label="Масса одной штуки, г" value={detailsDraft.pieceMass} onChangeText={(next) => setDetailsDraft({ ...detailsDraft, pieceMass: next })} keyboardType="decimal-pad" />
+        <AppButton label="Готово" onPress={applyDetails} />
+        <AppButton variant="ghost" label="Отмена" onPress={() => setDetailsOpen(false)} />
+        {foodId !== undefined ? <AppButton variant="destructive" label="Удалить из базы" disabled={busy} onPress={() => { setDetailsOpen(false); setConfirmArchive(true); }} /> : null}
+      </View></View>
+    </Modal>
+    <ConfirmDialog visible={confirmArchive} title="Убрать продукт из каталога?" description="Продукт перестанет предлагаться. Дневники и состав существующих рецептов сохранятся." confirmLabel="Убрать" destructive confirmBusy={busy}
         onCancel={() => setConfirmArchive(false)} onConfirm={() => {
           if (foodId === undefined || lock.current) return;
           lock.current = true; setBusy(true);
           void foods.archive(foodId, revision).then((food) => { onDirtyChange?.(false); onSaved(food); }, (failure: unknown) => setError(nutritionErrorText(failure)))
             .finally(() => { lock.current = false; setBusy(false); setConfirmArchive(false); });
         }} />
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, gap: 12, paddingBottom: 32 },
+  screen: { flex: 1 },
+  content: { padding: 16, gap: 12, paddingBottom: 24 },
+  bottomBar: { paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
+  fatLabel: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14, minHeight: 28 },
+  backdrop: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "rgba(0,0,0,0.4)" },
+  dialog: { borderRadius: 24, padding: 18, gap: 10 },
+  dialogTitle: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
   macroRow: { flexDirection: "row", gap: 8 },
   cell: { flex: 1, minWidth: 0 },
   unitRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   amountCell: { width: 110 },
   unitCell: { flex: 1, minWidth: 0, paddingTop: 22 },
-  buttonRow: { flexDirection: "row", gap: 8 },
   group: { gap: 6 },
   extraGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   extraCell: { width: "48%", flexGrow: 1 },
