@@ -13,6 +13,7 @@ import { DEV_TRAINING_PLANS_LEDGER, devTrainingPlansCatalog } from "./DevTrainin
 import { deleteStructure, readStructure, readWorkouts, writeStructure, writeWorkouts } from "./SimplePlanStore.ts";
 import type { MesocycleSavePlansParticipant, MesocycleSaveRequest } from "../domain/MesocycleSave.ts";
 import type { SimplePlanSavePlansParticipant } from "../domain/SimplePlanSave.ts";
+import type { WeekEditSavePlansParticipant } from "../domain/WeekEditSave.ts";
 import type { MesocycleDeleteRequest, PlanDeletePlansParticipant } from "../domain/PlanDeletion.ts";
 import { preferredPlacement, type ClientPlacementOptions, type GroupCopy, type Placement, type PlacementProgram,
   type PlacementTarget } from "../domain/Placement.ts";
@@ -1005,7 +1006,30 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   async saveWeek(clientId: string, programId: string, expectedRevision: number, input: WeekEditInput,
     now: Date = new Date()): Promise<WeekEditResult> {
-    const saved = await this.ready().writer.write(async (tx) => {
+    const saved = await this.ready().writer.write((tx) => this.saveWeekIn(tx, clientId, programId, expectedRevision, input, now));
+    this.publish({ clientIds: input.clientIds });
+    return saved;
+  }
+
+  /** Правка недели в чужой транзакции (workflow вместе с проверкой результатов убираемых тренировок, ADR-031). */
+  readonly weekEditSaveParticipant: WeekEditSavePlansParticipant<SqliteStatementPort> = {
+    removedWorkouts: async (tx, request) => {
+      let next = 0;
+      const prepared = await this.prepareWeekEdit(tx, request.clientId, request.programId, request.expectedRevision, request.input,
+        async () => () => `preview:${next++}`);
+      return prepared.changes.flatMap((change) => change.weeks.flatMap((week) => {
+        const kept = new Set(week.workouts.map((workout) => workout.id));
+        return (change.mesocycle.weeks.find((item) => item.index === week.index)?.workouts ?? []).filter((workout) => !kept.has(workout.id))
+          .map((workout) => ({ clientId: change.clientId, programId: change.programId, weekIndex: week.index, plannedWorkoutId: workout.id }));
+      }));
+    },
+    save: (tx, request, now) => this.saveWeekIn(tx, request.clientId, request.programId, request.expectedRevision, request.input, now),
+    notify: (clientIds) => this.publish({ clientIds }),
+  };
+
+  private async saveWeekIn(tx: SqliteStatementPort, clientId: string, programId: string, expectedRevision: number, input: WeekEditInput,
+    now: Date): Promise<WeekEditResult> {
+    {
       const prepared = await this.prepareWeekEdit(tx, clientId, programId, expectedRevision, input, (count) => this.idPool(tx, count));
       await this.bumpRevision(tx, programId, expectedRevision, now);
       for (const change of prepared.changes) {
@@ -1016,9 +1040,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       await tx.run("DELETE FROM dev_training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key = ?",
         [this.workspaceId, clientId, programId, `week:${input.mesocycleId}:${input.weekIndex}`]);
       return { program: await programById(tx, this.workspaceId, programId), skipped: prepared.skipped };
-    });
-    this.publish({ clientIds: input.clientIds });
-    return saved;
+    }
   }
 
   async listTemplates(): Promise<readonly ProgramTemplate[]> {

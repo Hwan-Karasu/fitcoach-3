@@ -9,7 +9,7 @@ import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts"
 import { AddFoodScreen, type CalcClientBody, type CatalogFilter, type SaveCalcProfile, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
   type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ArchivedProgramsPanel, ParticipantSwitcher, participantTarget, ProgramMatrixScreen, PeriodizedBuilderScreen, ProgramLibraryScreen, ProgramModeChooserScreen, programLibraryTabTitles, ProgramScreen, SimpleProgramBuilderScreen,
-  WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type SimplePlanSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort,
+  WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type SimplePlanSavePort, type WeekEditSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort,
   type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
   type TrainingPlansRepositoryPort, ProgramWeeksPanel, WorkoutScreen, type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort,
   type WorkoutSlot } from "../../features/training/public.ts";
@@ -180,7 +180,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
   exerciseLookup: ExerciseLookupPort;
   weekCopy: WeekCopyPort;
   weekSwap: WeekSwapPort;
-  mesocycleSave: MesocycleSavePort & SimplePlanSavePort;
+  mesocycleSave: MesocycleSavePort & SimplePlanSavePort & WeekEditSavePort;
   planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort;
   onExitClient: () => void;
   onOpenClients: () => void;
@@ -358,7 +358,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
         {({ navigation, route }) => <WeekEditorScreen clientId={viewer} programId={route.params.programId}
           onCancel={() => navigation.goBack()}
           mesocycleId={route.params.mesocycleId} weekIndex={route.params.weekIndex}
-          repository={repository} exercises={exerciseLookup} listCandidates={listCandidates} picked={route.params.picked ?? null}
+          repository={repository} weekEdit={mesocycleSave} exercises={exerciseLookup} listCandidates={listCandidates} picked={route.params.picked ?? null}
           onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId,
             ...(replace === undefined ? {} : { replace }),
             returnTo: { name: "TrainingWeek", params: { programId: route.params.programId, mesocycleId: route.params.mesocycleId,

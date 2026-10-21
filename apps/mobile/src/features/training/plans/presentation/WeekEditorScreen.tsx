@@ -12,6 +12,7 @@ import type { SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
 import { validateDraft } from "../domain/SimplePlanRules.ts";
 import { StructureEditPreview } from "./StructureEditPreview.tsx";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
+import type { WeekEditSavePort } from "../domain/WeekEditSave.ts";
 import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidate.ts";
 import { ParticipantChips } from "./ParticipantChips.tsx";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
@@ -28,6 +29,7 @@ const errors: Readonly<Record<string, string>> = {
   PROGRAM_REVISION_CONFLICT: "Программа изменилась в другом месте. Откройте неделю заново.",
   PROGRAM_ARCHIVED: "У кого-то из выбранных участников программа в архиве — снимите отметку.",
   TARGET_NOT_FOUND: "Неделя или участник не найдены.",
+  WEEK_HAS_RESULTS: "В убираемой тренировке есть результаты — такая правка не сохраняется. Верните тренировку или сначала удалите результаты в дневнике.",
 };
 
 /**
@@ -35,13 +37,15 @@ const errors: Readonly<Record<string, string>> = {
  * конструкторе; тип недели; перед сохранением — область применения (4 варианта) и участники. Открытая
  * неделя сохраняется как есть, остальным неделям и участникам — та же правка по родству; факты не копируются.
  */
-export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, repository, exercises, listCandidates, picked,
+export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, repository, weekEdit, exercises, listCandidates, picked,
   onPickExercise, onSaved, onCancel }: Readonly<{
   clientId: string;
   programId: string;
   mesocycleId: string;
   weekIndex: number;
   repository: TrainingPlansRepositoryPort;
+  /** Сохранение с проверкой результатов в убираемых тренировках (ADR-031); без порта — прямая запись. */
+  weekEdit?: WeekEditSavePort;
   exercises: ExerciseLookupPort;
   listCandidates: () => Promise<readonly TrainingParticipantCandidate[]>;
   picked: PickedExercise | null;
@@ -147,8 +151,9 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
     setMessage(null);
     try {
       await recovery.beforePublish();
-      await repository.saveWeek(clientId, programId, revision, { mesocycleId, weekIndex, workouts: draft.plan.workouts,
-        type, scope, clientIds: selected, replaceConflicts });
+      const input = { mesocycleId, weekIndex, workouts: draft.plan.workouts, type, scope, clientIds: selected, replaceConflicts };
+      if (weekEdit === undefined) await repository.saveWeek(clientId, programId, revision, input);
+      else await weekEdit.saveWeek({ clientId, programId, expectedRevision: revision, input });
       onSaved();
     } catch (error) {
       recovery.resume();

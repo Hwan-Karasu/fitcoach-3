@@ -354,3 +354,27 @@ test("TRN-018 нечитаемое недельное отличие Прост�
     assert.deepEqual(weeks[1]!.workouts[0], workout, "повреждённая неделя 2 показывает базовый план");
   } finally { await env.close(); }
 });
+
+test("TRN-009 правка недели: тренировка с результатами не убирается из плана молча (ADR-031)", async () => {
+  const { addWorkout } = await import("../src/features/training/plans/domain/SimplePlanEdits.ts");
+  const env = await setup();
+  try {
+    let t = 0;
+    const two = addExercise(addWorkout(workoutWith(2), "w2"), "w2", "e2", BENCH, () => `u${t++}`).plan.workouts;
+    const program = await env.plans.createProgram({ kind: "PERIODIZED", title: "Две", clientIds: [env.a] });
+    const created = await env.plans.createMesocycle(env.a, program.id, program.revision, { title: "Блок", weeks: 2, firstWeek: two, clientIds: [env.a] });
+    const plan = await env.cycleOf(env.a, program.id);
+    const week2 = plan.mesocycles[0]!.weeks[1]!;
+    const second = week2.workouts[1]!;
+    await env.fill({ clientId: env.a, programId: program.id, weekIndex: 2, plannedWorkoutId: second.id } as never, second.exercises[0]!, 0, 7);
+    const { createWeekEditWorkflow } = await import("../src/workflows/saveTrainingWeek.ts");
+    const save = createWeekEditWorkflow(env.tx, env.plans.weekEditSaveParticipant, env.execution.weekCopyParticipant);
+    const input = { mesocycleId: created.mesocycleId, weekIndex: 2, type: "base" as const, scope: "CURRENT" as const, clientIds: [env.a] };
+    const request = (workouts: typeof week2.workouts) => ({ clientId: env.a, programId: program.id, expectedRevision: plan.program.revision, input: { ...input, workouts } });
+    await assert.rejects(save.saveWeek(request([week2.workouts[0]!])), message("WEEK_HAS_RESULTS"));
+    assert.equal((await env.cycleOf(env.a, program.id)).mesocycles[0]!.weeks[1]!.workouts.length, 2, "план не изменён");
+    // Тренировка без результатов убирается как раньше.
+    await save.saveWeek(request([second]));
+    assert.deepEqual((await env.cycleOf(env.a, program.id)).mesocycles[0]!.weeks[1]!.workouts.map((workout) => workout.id), [second.id]);
+  } finally { await env.close(); }
+});
