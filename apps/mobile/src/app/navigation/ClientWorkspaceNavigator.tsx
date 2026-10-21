@@ -15,7 +15,7 @@ import { ClientQuestionnaireScreen, type QuestionnaireRepositoryPort } from "../
 import { ExecutionDetailsScreen, ExerciseHistoryList, HistoryProgramScreen, MonthlyReportScreen, TrainingArchiveScreen, TrainingStatisticsScreen, retainHistoryView,
   retainStatsFilters, type ExerciseLookupPort,
   type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort, type TrainingPlansRepositoryPort,
-  type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort, type WorkoutSlot } from "../../features/training/public.ts";
+  type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type SimplePlanSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort, type WorkoutSlot } from "../../features/training/public.ts";
 import type { ExerciseCatalogPort } from "../../features/exercises/public.ts";
 import { AppButton, LoadingState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -132,7 +132,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   exerciseLookup: ExerciseLookupPort;
   weekCopy: WeekCopyPort;
   weekSwap: WeekSwapPort;
-  mesocycleSave: MesocycleSavePort;
+  mesocycleSave: MesocycleSavePort & SimplePlanSavePort;
   planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort;
   onOpenEdit: (clientId: string) => void;
   onOpenAccounting: (clientId: string) => void;

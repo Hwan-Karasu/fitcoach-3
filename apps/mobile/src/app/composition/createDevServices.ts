@@ -49,10 +49,11 @@ import { createCalcProfileWorkflow, type CalcProfileWithBodyPort } from "../../w
 import { createWeekCopyWorkflow, type TrainingTransaction } from "../../workflows/copyTrainingWeek.ts";
 import { createWeekSwapWorkflow } from "../../workflows/swapTrainingWeeks.ts";
 import { createMesocycleSaveWorkflow } from "../../workflows/saveTrainingMesocycle.ts";
+import { createSimplePlanSaveWorkflow } from "../../workflows/saveTrainingSimplePlan.ts";
 import { createMesocycleDeleteWorkflow } from "../../workflows/deleteTrainingMesocycle.ts";
 import { createProgramDeleteWorkflow } from "../../workflows/deleteTrainingProgram.ts";
 import { createPlanOnlyDeleteWorkflow } from "../../workflows/deleteTrainingPlanOnly.ts";
-import type { MesocycleDeletePort, MesocycleSavePort, PlanOnlyDeletePort, ProgramDeletePort, WeekCopyPort, WeekSwapPort } from "../../features/training/plans/public.ts";
+import type { MesocycleDeletePort, MesocycleSavePort, SimplePlanSavePort, PlanOnlyDeletePort, ProgramDeletePort, WeekCopyPort, WeekSwapPort } from "../../features/training/plans/public.ts";
 import type { SqliteDatabaseLease } from "../../shared/db/SharedSqliteDatabase.ts";
 
 /** Питание: каталог продуктов и рецептов (общий) и дневник клиента (N01–N02). */
@@ -94,7 +95,7 @@ export interface DevServices {
   /** §48.21 п. 5: перестановка недель — позиции в плане и номера у выполнений в одной транзакции. */
   readonly weekSwap: WeekSwapPort;
   /** UI-OWN-041: мезоцикл из конструктора — план и проверка результатов удаляемых недель в одной транзакции. */
-  readonly mesocycleSave: MesocycleSavePort;
+  readonly mesocycleSave: MesocycleSavePort & SimplePlanSavePort;
   /** §48.11, §50.3: удаление мезоцикла и программы у клиента — план и результаты одной транзакцией. */
   readonly planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort;
   /** Active session types that can consume a credit, for SESSION_TYPE packs. */
@@ -148,7 +149,7 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
   accounting: AccountingRepositoryPort, measurements: MeasurementRepositoryPort, nutrition: NutritionServices,
   questionnaire: QuestionnaireRepositoryPort, trainingPlans: TrainingPlansRepositoryPort,
   trainingExecution: TrainingExecutionPort, restTimers: RestTimersPort, exercises: ExerciseCatalogPort,
-  weekCopy: WeekCopyPort, weekSwap: WeekSwapPort, mesocycleSave: MesocycleSavePort,
+  weekCopy: WeekCopyPort, weekSwap: WeekSwapPort, mesocycleSave: MesocycleSavePort & SimplePlanSavePort,
   planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort): DevServices {
   return {
     runSqliteProbe: () => runF04Probe(() => openExpoSqliteConnection("fitcoach_f04_probe.db")),
@@ -211,7 +212,8 @@ export function createDevRuntime(): DevRuntime {
   const weekCopy = createWeekCopyWorkflow(transaction, trainingPlans.weekCopyParticipant, trainingExecution.weekCopyParticipant,
     exerciseLookup(exercises));
   const weekSwap = createWeekSwapWorkflow(transaction, trainingPlans.weekSwapParticipant, trainingExecution.weekRenumberParticipant);
-  const mesocycleSave = createMesocycleSaveWorkflow(transaction, trainingPlans.mesocycleSaveParticipant, trainingExecution.weekCopyParticipant);
+  const mesocycleSave = { ...createMesocycleSaveWorkflow(transaction, trainingPlans.mesocycleSaveParticipant, trainingExecution.weekCopyParticipant),
+    ...createSimplePlanSaveWorkflow(transaction, trainingPlans.simplePlanSaveParticipant, trainingExecution.weekCopyParticipant) };
   const planDelete = { ...createMesocycleDeleteWorkflow(transaction, trainingPlans.deleteParticipant, trainingExecution.cleanupParticipant),
     ...createProgramDeleteWorkflow(transaction, trainingPlans.deleteParticipant, trainingExecution.cleanupParticipant),
     ...createPlanOnlyDeleteWorkflow(transaction, trainingPlans.deleteParticipant, trainingExecution.cleanupParticipant) };

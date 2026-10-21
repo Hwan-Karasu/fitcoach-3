@@ -199,3 +199,77 @@ test("TRN-007 «Удалить программу полностью» не ст
     assert.equal((await env.execution.listClientExecutions(env.a)).filter((item) => item.origin !== null).length, 1);
   } finally { await env.close(); }
 });
+
+test("TRN-014 сокращение недель Простой программы с результатами: сначала вопрос, после подтверждения результаты остаются в истории", async () => {
+  const { createSimplePlanSaveWorkflow } = await import("../src/workflows/saveTrainingSimplePlan.ts");
+  const env = await setup();
+  try {
+    const draft = { ...workoutWith(2), title: "Простая" };
+    const program = await env.plans.createSimpleProgram(env.a, { ...draft, plan: { ...draft.plan, weeks: 4 } });
+    const plan = (await env.plans.getSimplePlan(env.a, program.id))!;
+    const workout = plan.draft.plan.workouts[0]!;
+    const slot4 = { clientId: env.a, programId: program.id, weekIndex: 3, plannedWorkoutId: workout.id } as never;
+    await env.fill(slot4, workout.exercises[0]!, 0, 6);
+    const save = createSimplePlanSaveWorkflow(env.tx, env.plans.simplePlanSaveParticipant, env.execution.weekCopyParticipant);
+    const request = (weeks: number, confirmRemovedResults: boolean) => ({ clientId: env.a, programId: program.id,
+      expectedRevision: plan.program.revision, draft: { ...plan.draft, plan: { ...plan.draft.plan, weeks } }, confirmRemovedResults });
+    await assert.rejects(save.saveSimplePlan(request(2, false)), message("WEEKS_HAVE_RESULTS"));
+    assert.equal((await env.plans.getSimpleWeeks(env.a, program.id)).length, 4, "без подтверждения ничего не изменилось");
+    await save.saveSimplePlan(request(3, false));
+    assert.equal((await env.plans.getSimpleWeeks(env.a, program.id)).length, 3, "убираемая неделя без результатов — без вопроса");
+    const fresh = (await env.plans.getSimplePlan(env.a, program.id))!;
+    const shorter = { clientId: env.a, programId: program.id, expectedRevision: fresh.program.revision,
+      draft: { ...fresh.draft, plan: { ...fresh.draft.plan, weeks: 2 } } };
+    await assert.rejects(save.saveSimplePlan({ ...shorter, confirmRemovedResults: false }), message("WEEKS_HAVE_RESULTS"));
+    await save.saveSimplePlan({ ...shorter, confirmRemovedResults: true });
+    assert.equal((await env.plans.getSimpleWeeks(env.a, program.id)).length, 2);
+    assert.equal((await env.execution.getWorkout(slot4)).facts.size, 1, "результат недели 4 сохранён в базе (история)");
+  } finally { await env.close(); }
+});
+
+test("TRN-014 тренировка с результатами, убранная из базового плана Простой программы, тоже требует подтверждения", async () => {
+  const { createSimplePlanSaveWorkflow } = await import("../src/workflows/saveTrainingSimplePlan.ts");
+  const { addWorkout } = await import("../src/features/training/plans/domain/SimplePlanEdits.ts");
+  const env = await setup();
+  try {
+    let draft = workoutWith(2);
+    let t = 0;
+    draft = addExercise(addWorkout(draft, "w2"), "w2", "e2", BENCH, () => `t${t++}`);
+    const program = await env.plans.createSimpleProgram(env.a, { ...draft, title: "Простая", plan: { ...draft.plan, weeks: 2 } });
+    const plan = (await env.plans.getSimplePlan(env.a, program.id))!;
+    const second = plan.draft.plan.workouts[1]!;
+    await env.fill({ clientId: env.a, programId: program.id, weekIndex: 1, plannedWorkoutId: second.id } as never, second.exercises[0]!, 0, 5);
+    const save = createSimplePlanSaveWorkflow(env.tx, env.plans.simplePlanSaveParticipant, env.execution.weekCopyParticipant);
+    const without = { ...plan.draft, plan: { ...plan.draft.plan, workouts: [plan.draft.plan.workouts[0]!] } };
+    await assert.rejects(save.saveSimplePlan({ clientId: env.a, programId: program.id, expectedRevision: plan.program.revision,
+      draft: without, confirmRemovedResults: false }), message("WEEKS_HAVE_RESULTS"));
+    await save.saveSimplePlan({ clientId: env.a, programId: program.id, expectedRevision: plan.program.revision, draft: without,
+      confirmRemovedResults: true });
+    assert.equal((await env.plans.getSimplePlan(env.a, program.id))!.draft.plan.workouts.length, 1);
+  } finally { await env.close(); }
+});
+
+test("TRN-002 черновик Простого конструктора переносится на изменившуюся программу: отдых из дневника не теряется", async () => {
+  const { rebaseSimpleProgram } = await import("../src/features/training/plans/domain/DraftRebase.ts");
+  const { setTitle } = await import("../src/features/training/plans/domain/SimplePlanEdits.ts");
+  const env = await setup();
+  try {
+    const base = { ...workoutWith(3), title: "Исходная" };
+    const program = await env.plans.createSimpleProgram(env.a, { ...base, plan: { ...base.plan, weeks: 4 } });
+    const plan = (await env.plans.getSimplePlan(env.a, program.id))!;
+    const draft = fillSets(setTitle(plan.draft, "Новое название"), plan.draft.plan.workouts[0]!.exercises[0]!.id, "reps", 6);
+    await env.plans.saveBuilderDraft(env.a, program.id, plan.program.revision, draft, plan.draft);
+    // Пока черновик лежит, отдых упражнения меняется из дневника — ревизия программы растёт.
+    await env.plans.setExerciseRest(env.a, program.id, plan.draft.plan.workouts[0]!.exercises[0]!.id, 180);
+    const current = (await env.plans.getSimplePlan(env.a, program.id))!;
+    assert.notEqual(current.program.revision, plan.program.revision);
+    const stored = (await env.plans.getBuilderDraft(env.a, program.id))!;
+    assert.deepEqual(stored.base, plan.draft, "база черновика восстановлена");
+    const rebased = rebaseSimpleProgram(stored.base!, stored.draft, current.draft, (() => { let n = 0; return () => `r${n++}`; })());
+    assert.equal(rebased.title, "Новое название");
+    assert.equal(rebased.plan.workouts[0]!.exercises[0]!.restSec, 180, "отдых из дневника сохранён");
+    assert.deepEqual(rebased.plan.workouts[0]!.exercises[0]!.sets.map((set) => set.reps), [6, 6, 6], "правка тренера перенесена");
+    await env.plans.saveSimplePlan(env.a, program.id, current.program.revision, rebased);
+    assert.equal((await env.plans.getSimplePlan(env.a, program.id))!.draft.plan.workouts[0]!.exercises[0]!.restSec, 180);
+  } finally { await env.close(); }
+});

@@ -18,6 +18,19 @@ export const VALUE_LIMITS: Readonly<Record<SetField, Readonly<{ min: number; max
 
 const ALL_FIELDS = Object.keys(VALUE_LIMITS) as readonly SetField[];
 
+/** Значение ячейки в допустимых пределах поля (ноль килограммов допустим, ноль повторов — нет). */
+export function inLimits(field: SetField, value: number): boolean {
+  const { min, max } = VALUE_LIMITS[field];
+  return Number.isInteger(value) && value >= min && value <= max;
+}
+
+/** Подсказка под невалидной ячейкой. */
+export function limitHint(field: SetField): string {
+  const { min, max } = VALUE_LIMITS[field];
+  return field === "loadGrams" ? `Вес от ${min / 1000} до ${max / 1000} кг`
+    : field === "durationSec" ? "Время от 1 секунды до 24 часов" : `От ${min} до ${max}`;
+}
+
 /** Содержимое подхода, от которого зависит подтверждение: тип, основной сет и мини-сеты дроп-сета. */
 export interface SetContent {
   readonly setType: SetType;

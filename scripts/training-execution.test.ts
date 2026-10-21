@@ -578,3 +578,18 @@ test("PC §48.84 + §48.86.13: смена даты занятия перенос
     assert.deepEqual([noTimes.startedAt, noTimes.finishedAt], [null, null], "без отметок — переносить нечего");
   } finally { await close(); }
 });
+
+test("TRN-015 пределы ячейки: «0 повторов» не допускается, ноль килограммов — значение", async () => {
+  const { inLimits, limitHint } = await import("../apps/mobile/src/features/training/execution/domain/ExecutionRules.ts");
+  assert.equal(inLimits("reps", 0), false);
+  assert.equal(inLimits("reps", 1), true);
+  assert.equal(inLimits("reps", 999), true);
+  assert.equal(inLimits("reps", 1000), false);
+  assert.equal(inLimits("loadGrams", 0), true);
+  assert.equal(inLimits("loadGrams", 1_000_001), false);
+  assert.equal(inLimits("durationSec", 0), false);
+  assert.equal(inLimits("distanceM", 0), false);
+  assert.equal(inLimits("reps", 2.5), false);
+  assert.equal(limitHint("reps"), "От 1 до 999");
+  assert.equal(limitHint("loadGrams"), "Вес от 0 до 1000 кг");
+});

@@ -12,6 +12,7 @@ import { withRestDefaults } from "../domain/SimplePlanEdits.ts";
 import { DEV_TRAINING_PLANS_LEDGER, devTrainingPlansCatalog } from "./DevTrainingPlansCatalog.ts";
 import { deleteStructure, readStructure, readWorkouts, writeStructure, writeWorkouts } from "./SimplePlanStore.ts";
 import type { MesocycleSavePlansParticipant, MesocycleSaveRequest } from "../domain/MesocycleSave.ts";
+import type { SimplePlanSavePlansParticipant } from "../domain/SimplePlanSave.ts";
 import type { MesocycleDeleteRequest, PlanDeletePlansParticipant } from "../domain/PlanDeletion.ts";
 import { preferredPlacement, type ClientPlacementOptions, type GroupCopy, type Placement, type PlacementProgram,
   type PlacementTarget } from "../domain/Placement.ts";
@@ -43,6 +44,9 @@ function templateOf(row: TemplateRow): ProgramTemplate {
   const { payloadJson, ...rest } = row;
   return { ...rest, payload: JSON.parse(payloadJson) as TemplatePayload };
 }
+
+/** Черновик Простого конструктора с базой для перебазирования (без базы хранится как есть — прежний вид). */
+type BuilderDraftEnvelope = Readonly<{ envelope: 2; draft: SimpleProgramDraft; base: SimpleProgramDraft | null }>;
 
 /** Ключ черновика ещё не созданной Простой программы (§48.29 п. 4: черновик привязан к объекту правки). */
 export const NEW_SIMPLE_DRAFT_KEY = "new:SIMPLE";
@@ -416,9 +420,17 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   async saveSimplePlan(clientId: string, programId: string, expectedRevision: number, draft: SimpleProgramDraft,
     now: Date = new Date()): Promise<TrainingProgram> {
+    const saved = await this.ready().writer.write((tx) => this.saveSimplePlanIn(tx, clientId, programId, expectedRevision, draft, now));
+    this.publish({ clientIds: saved.memberClientIds });
+    return saved;
+  }
+
+  /** Сохранение структуры Простой программы в чужой транзакции (workflow вместе с проверкой результатов убираемых недель). */
+  private async saveSimplePlanIn(tx: SqliteStatementPort, clientId: string, programId: string, expectedRevision: number,
+    draft: SimpleProgramDraft, now: Date): Promise<TrainingProgram> {
     const title = normalizeTitle(draft.title);
     assertStructure(draft);
-    const saved = await this.ready().writer.write(async (tx) => {
+    {
       if ((await membership(tx, this.workspaceId, clientId, programId)).archivedAt !== null) throw new Error("PROGRAM_ARCHIVED");
       const current = await programById(tx, this.workspaceId, programId);
       if (current.kind !== "SIMPLE") throw new Error("DRAFT_INVALID");
@@ -454,10 +466,27 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       await tx.run("DELETE FROM dev_training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND draft_key = ?",
         [this.workspaceId, clientId, programId]);
       return programById(tx, this.workspaceId, programId);
-    });
-    this.publish({ clientIds: saved.memberClientIds });
-    return saved;
+    }
   }
+
+  /** Сохранение структуры Простой программы из конструктора (вызывает workflow вместе с дневником). */
+  readonly simplePlanSaveParticipant: SimplePlanSavePlansParticipant<SqliteStatementPort> = {
+    removedWorkouts: async (tx, request) => {
+      if ((await membership(tx, this.workspaceId, request.clientId, request.programId)).archivedAt !== null) throw new Error("PROGRAM_ARCHIVED");
+      const program = await programById(tx, this.workspaceId, request.programId);
+      if (program.kind !== "SIMPLE") throw new Error("DRAFT_INVALID");
+      const row = await tx.first<{ weeks: number }>("SELECT weeks FROM dev_training_programs WHERE workspace_id = ? AND id = ?",
+        [this.workspaceId, request.programId]);
+      const current = await readStructure(tx, this.workspaceId, request.programId, row!.weeks);
+      const kept = new Set(request.draft.plan.workouts.map((workout) => workout.id));
+      // Исчезнут: все недели, которых больше нет, и тренировки, убранные из базового плана (во всех неделях).
+      return Array.from({ length: current.weeks }, (_, at) => at + 1).flatMap((weekIndex) => current.workouts
+        .filter((workout) => weekIndex > request.draft.plan.weeks || !kept.has(workout.id))
+        .map((workout) => ({ weekIndex, plannedWorkoutId: workout.id })));
+    },
+    save: (tx, request, now) => this.saveSimplePlanIn(tx, request.clientId, request.programId, request.expectedRevision, request.draft, now),
+    notify: (clientIds) => this.publish({ clientIds }),
+  };
 
   async setExerciseRest(clientId: string, programId: string, plannedExerciseId: string, restSec: number | null,
     now: Date = new Date()): Promise<TrainingProgram> {
@@ -1242,7 +1271,10 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     if (row === null) return null;
     // Черновик удалённой программы не воскрешает её (§48.29 п. 7).
     if (key !== NEW_SIMPLE_DRAFT_KEY && (await this.getProgram(clientId, key)) === null) return null;
-    return { baseRevision: row.baseRevision, draft: withRestDefaults(JSON.parse(row.draftJson) as SimpleProgramDraft) };
+    const stored = JSON.parse(row.draftJson) as SimpleProgramDraft | BuilderDraftEnvelope;
+    const envelope = "envelope" in stored && stored.envelope === 2 ? stored : null;
+    return { baseRevision: row.baseRevision, draft: withRestDefaults(envelope === null ? stored as SimpleProgramDraft : envelope.draft),
+      base: envelope?.base == null ? null : withRestDefaults(envelope.base) };
   }
 
   async getPeriodizedDraft(clientId: string, programId: string, key: string): Promise<PeriodizedDraft | null> {
@@ -1275,12 +1307,14 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     });
   }
 
-  async saveBuilderDraft(clientId: string, key: string, baseRevision: number | null, draft: SimpleProgramDraft): Promise<void> {
+  async saveBuilderDraft(clientId: string, key: string, baseRevision: number | null, draft: SimpleProgramDraft,
+    base: SimpleProgramDraft | null = null): Promise<void> {
     await this.ready().writer.write(async (tx) => {
       await tx.run(`INSERT INTO dev_training_builder_drafts (workspace_id, client_id, draft_key, base_revision, draft_json, updated_at)
         VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(workspace_id, client_id, draft_key) DO UPDATE SET
         base_revision = excluded.base_revision, draft_json = excluded.draft_json, updated_at = excluded.updated_at`,
-      [this.workspaceId, clientId, key, baseRevision, JSON.stringify(draft), new Date().toISOString()]);
+      [this.workspaceId, clientId, key, baseRevision, JSON.stringify(base === null ? draft : { envelope: 2, draft, base } satisfies BuilderDraftEnvelope),
+        new Date().toISOString()]);
     });
   }
 

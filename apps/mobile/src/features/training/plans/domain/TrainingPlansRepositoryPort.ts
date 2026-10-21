@@ -163,8 +163,9 @@ export interface TrainingPlansRepositoryPort {
   /** §48.10: ручной выбор мезоцикла — только у этого клиента, хранится в базе; не правка плана. */
   selectMesocycle(clientId: string, programId: string, mesocycleId: string): Promise<void>;
   /** §48.29 Recovery Draft: ключ — `new:SIMPLE` или ID программы. Не публикует изменения в план. */
-  getBuilderDraft(clientId: string, key: string): Promise<Readonly<{ baseRevision: number | null; draft: SimpleProgramDraft }> | null>;
-  saveBuilderDraft(clientId: string, key: string, baseRevision: number | null, draft: SimpleProgramDraft): Promise<void>;
+  /** `base` — план, на основе которого сделан черновик (для перебазирования, если программа изменилась); `null` — новый или старый черновик без базы. */
+  getBuilderDraft(clientId: string, key: string): Promise<Readonly<{ baseRevision: number | null; draft: SimpleProgramDraft; base: SimpleProgramDraft | null }> | null>;
+  saveBuilderDraft(clientId: string, key: string, baseRevision: number | null, draft: SimpleProgramDraft, base?: SimpleProgramDraft | null): Promise<void>;
   clearBuilderDraft(clientId: string, key: string): Promise<void>;
   getPeriodizedDraft(clientId: string, programId: string, key: string): Promise<PeriodizedDraft | null>;
   savePeriodizedDraft(clientId: string, programId: string, draft: PeriodizedDraft): Promise<void>;

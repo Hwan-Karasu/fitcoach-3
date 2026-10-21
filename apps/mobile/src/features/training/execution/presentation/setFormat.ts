@@ -1,7 +1,7 @@
 import type { PaletteTokens } from "../../../../shared/ui/theme/resolver.ts";
 import { formatDuration, formatRange, parseDuration, parseLoad, type PlannedSet } from "../../plans/public.ts";
 import type { SetType, SetValues, TrackingMetric, WeekStatus, WorkoutStatus } from "../domain/ExecutionModel.ts";
-import { fieldsOf, type SetField } from "../domain/ExecutionRules.ts";
+import { fieldsOf, inLimits, type SetField } from "../domain/ExecutionRules.ts";
 
 /** Порядок колонок дневника (§48.65 п. 1): повторы, затем вес; дистанция перед временем. */
 const FIELD_ORDER: readonly SetField[] = ["reps", "loadGrams", "distanceM", "durationSec"];
@@ -23,7 +23,14 @@ export function rawOf(values: SetValues, field: SetField): string {
   return String(value);
 }
 
+/** Разбор ячейки дневника; значения вне допустимых пределов (`VALUE_LIMITS`, например «0 повторов») — `"invalid"`, а не молчаливый отказ записи. */
 export function parseField(field: SetField, text: string): number | null | "invalid" {
+  const parsed = parseRaw(field, text);
+  if (parsed === null || parsed === "invalid") return parsed;
+  return inLimits(field, parsed) ? parsed : "invalid";
+}
+
+function parseRaw(field: SetField, text: string): number | null | "invalid" {
   if (field === "loadGrams") return parseLoad(text);
   if (field === "durationSec") return parseDuration(text);
   const value = text.trim();

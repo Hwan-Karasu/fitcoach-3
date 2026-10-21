@@ -24,7 +24,7 @@ import { weekTypeTone, DiaryEditDialog, formatDuration, formatRange, supersetNum
   type WorkoutWeekNavigation } from "../../plans/public.ts";
 import { DROPS_MAX, EMPTY_VALUES, NOTE_MAX, type ActiveWorkoutCard, type ActiveWorkoutsPort, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type Side,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
-import { displayOrder, endInstantAfter, instantFromLocal, localDateOf, localMinuteOfDay, nextOutcome, sessionDurationSec, type SetField } from "../domain/ExecutionRules.ts";
+import { displayOrder, endInstantAfter, instantFromLocal, limitHint, localDateOf, localMinuteOfDay, nextOutcome, sessionDurationSec, type SetField } from "../domain/ExecutionRules.ts";
 import { durationText, timeText } from "../../../../shared/format/clockText.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
@@ -100,7 +100,7 @@ const ValueCell = forwardRef(function ValueCell({ cellKey, field, value, pending
   return (
     <TextInput ref={ref} value={text} placeholder="—" placeholderTextColor={colors.textMuted} selectTextOnFocus
       keyboardType={field === "durationSec" ? "numbers-and-punctuation" : field === "loadGrams" ? "decimal-pad" : "number-pad"}
-      accessibilityLabel={fieldNames[field]}
+      accessibilityLabel={fieldNames[field]} accessibilityHint={invalid ? limitHint(field) : undefined}
       returnKeyType={onNext === null ? "done" : "next"} submitBehavior={onNext === null ? "blurAndSubmit" : "submit"}
       onSubmitEditing={() => onNext?.()}
       onFocus={() => { focused.current = true; }}
