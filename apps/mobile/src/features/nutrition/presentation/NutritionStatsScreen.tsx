@@ -99,9 +99,8 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
         onSelect={(id) => { if (id === "range") { setDraftRange(range); setCalendar(true); } else { setPeriod(id); setSelectedDate(null); } }} />
       <Text style={[styles.meta, styles.periodText, { color: colors.textSecondary }]}>{`${period === "all" && stats === null ? "Всё время" : from} — ${to}`}</Text>
       <View style={[styles.divider, { backgroundColor: colors.border }]} />
-      <SegmentedControl compact items={TARGET_METRICS.map((metric) => ({ id: metric, label: metricLabels[metric] }))} selectedId={chartMetric} onSelect={setChartMetric} />
+      <SegmentedControl compact items={[{ id: "weight", label: "Вес" }, { id: "fat", label: "% жира" }, { id: "steps", label: "Шаги" }] as const} selectedId={trend} onSelect={(id) => { setTrend(id); setSelectedDate(null); }} />
     </View>
-    <SegmentedControl compact items={[{ id: "weight", label: "Вес" }, { id: "fat", label: "% жира" }, { id: "steps", label: "Шаги" }] as const} selectedId={trend} onSelect={(id) => { setTrend(id); setSelectedDate(null); }} />
     <Modal visible={calendar} transparent animationType="fade" onRequestClose={() => setCalendar(false)}><View style={styles.backdrop}><View style={[styles.dialog, { backgroundColor: colors.surface }]}>
       <Text style={[styles.heading, { color: colors.textPrimary }]}>Выберите период</Text><DateRangeCalendar value={draftRange} max={today} onChange={setDraftRange} />
       {rangeDays > 1830 ? <Text style={[styles.meta, { color: colors.danger }]}>Диапазон — до пяти лет. Для полной истории выберите «Всё время».</Text> : null}
@@ -139,6 +138,7 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
           </View>
           <View style={[styles.card, { backgroundColor: colors.surface }]}>
             <Text style={[styles.heading, { color: colors.textPrimary }]}>{`${metricLabels[chartMetric]} по дням`}</Text>
+            <SegmentedControl compact items={TARGET_METRICS.map((metric) => ({ id: metric, label: metricLabels[metric] }))} selectedId={chartMetric} onSelect={setChartMetric} />
             <BarChart color={macroColors[chartMetric]} items={stats.days.map((day) => ({ key: day.localDate, label: shortDate(day.localDate), value: day.valuesX10[chartMetric] === null ? null : Math.round(day.valuesX10[chartMetric]! / 10) }))}
               format={(value) => `${Math.round(value)} ${unitOf[chartMetric]}`} accessibilityLabel={`${metricLabels[chartMetric]} по дням, ${stats.accountedDays} дней с записями`} onPressItem={(item) => onOpenDay(item.key)} />
           </View>
