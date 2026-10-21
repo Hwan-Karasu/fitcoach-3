@@ -57,6 +57,22 @@ function eatenOf(row: NarrowRow) {
   return { perBasis, basis, catalogEaten, override, eaten: effectiveNutrients(catalogEaten, override, row.quantityX10) };
 }
 
+/** Состав рецепта в записи — справка, а не слагаемое дня: нечитаемый состав даёт пустой список, а не отказ читать весь день. Для продуктов `[]` не разбирается. */
+function parseIngredients(json: string): FoodSnapshot["ingredients"] {
+  if (json === "[]") return [];
+  try {
+    const value: unknown = JSON.parse(json);
+    return Array.isArray(value) ? value as FoodSnapshot["ingredients"] : [];
+  } catch { return []; }
+}
+
+function readReceiptIds(resultJson: string): readonly string[] {
+  try {
+    const value: unknown = JSON.parse(resultJson);
+    return Array.isArray(value) ? value.flatMap((item) => typeof item === "object" && item !== null && typeof (item as { id?: unknown }).id === "string" ? [(item as { id: string }).id] : []) : [];
+  } catch { return []; }
+}
+
 /** Порядок приёмов в SQL — как `MEAL_SLOTS`. */
 const SLOT_RANK_SQL = "CASE slot WHEN 'BREAKFAST' THEN 0 WHEN 'LUNCH' THEN 1 WHEN 'DINNER' THEN 2 ELSE 3 END";
 
@@ -65,7 +81,7 @@ function toEntry(row: EntryRow): DiaryEntry {
   // Состав есть только у рецептов: для продуктов `[]` не разбирается.
   const snapshot: FoodSnapshot = { source: { kind: row.sourceKind, id: row.sourceId }, name: row.name, brand: row.brand, basis, perBasis,
     quantityX10: row.quantityX10, eaten,
-    ingredients: row.ingredientsJson === "[]" ? [] : JSON.parse(row.ingredientsJson) as FoodSnapshot["ingredients"] };
+    ingredients: parseIngredients(row.ingredientsJson) };
   return { id: row.id, clientId: row.clientId, localDate: row.localDate, slot: row.slot, position: row.position, snapshot, override, catalogEaten, revision: row.revision };
 }
 
@@ -276,7 +292,14 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
         if (receipt !== null) {
           if (receipt.payload !== payload) throw new Error("DIARY_COMMAND_REUSED");
           replay = true;
-          return JSON.parse(receipt.result) as readonly DiaryEntry[];
+          // Повтор возвращает текущие версии созданных записей; изменённые и удалённые после команды не подменяются сохранённой копией.
+          const ids = readReceiptIds(receipt.result);
+          const current: DiaryEntry[] = [];
+          for (const id of ids) {
+            const row = await tx.first<EntryRow>(`SELECT ${columns} FROM dev_food_diary_entries WHERE workspace_id = ? AND client_id = ? AND id = ?`, [this.workspaceId, clientId, id]);
+            if (row !== null) current.push(toEntry(row));
+          }
+          return current;
         }
       }
       const result: DiaryEntry[] = [];

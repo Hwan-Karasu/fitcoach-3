@@ -60,7 +60,7 @@ test("batch receipt: одновременное/повторное подтве�
     await diary.addEntries(b.id, inputs, NOW, "synthetic-command");
     assert.equal((await diary.listEntries(b.id, DAY, DAY)).length, 2);
     await diary.removeEntry(a.id, first[0]!.id, first[0]!.revision);
-    assert.deepEqual(await diary.addEntries(a.id, inputs, NOW, "synthetic-command"), first);
+    assert.deepEqual(await diary.addEntries(a.id, inputs, NOW, "synthetic-command"), [first[1]], "повтор возвращает оставшиеся записи команды (NUT-023), удалённая не возвращается");
     assert.equal((await diary.listEntries(a.id, DAY, DAY)).length, 1, "повтор команды не восстанавливает удалённый факт");
     const archived = await clients.setArchived(a.id, a.revision, true);
     await clients.deleteArchivedPermanently(a.id, archived.revision);
@@ -618,5 +618,35 @@ test("аудит NUT-010: вода не считается изменением 
     await diary.clearWater(client.id, DAY);
     await diary.addEntry(client.id, { localDate: DAY, slot: "LUNCH", snapshot: snapshotOfFood(OATS, 500) }, NOW);
     assert.deepEqual(scopes, ["WATER", "WATER", undefined]);
+  } finally { await close(); }
+});
+
+test("аудит NUT-018: повреждённый состав в одной записи не ломает чтение дня — остальные записи читаются, суммы дня те же", async () => {
+  const { db, clients, diary, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticCorrupt" });
+    const first = await diary.addEntry(client.id, { localDate: DAY, slot: "BREAKFAST", snapshot: snapshotOfFood(OATS, 500) }, NOW);
+    const second = await diary.addEntry(client.id, { localDate: DAY, slot: "LUNCH", snapshot: snapshotOfFood(MILK, 2000) }, NOW);
+    const third = await diary.addEntry(client.id, { localDate: DAY, slot: "DINNER", snapshot: snapshotOfFood(OATS, 300) }, NOW);
+    db.prepare("UPDATE dev_food_diary_entries SET ingredients_json = ? WHERE id = ?").run("{", second.id);
+    db.prepare("UPDATE dev_food_diary_entries SET ingredients_json = ? WHERE id = ?").run("{\"not\":\"a list\"}", third.id);
+    const rows = await diary.listEntries(client.id, DAY, DAY);
+    assert.deepEqual(rows.map((row) => row.id), [first.id, second.id, third.id]);
+    assert.deepEqual(rows.map((row) => row.snapshot.ingredients), [[], [], []], "состав — справка, не слагаемое дня: нечитаемый состав пуст");
+    assert.deepEqual(summarizeDay(DAY, rows).totals, summarizeDay(DAY, [first, second, third]).totals, "значения «съедено» не зависят от состава");
+  } finally { await close(); }
+});
+
+test("аудит NUT-023: повтор команды с тем же id возвращает текущие записи, а не сохранённую копию; удалённые не воскресают", async () => {
+  const { clients, diary, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticReplay" });
+    const input = [{ localDate: DAY, slot: "SNACK" as const, snapshot: snapshotOfFood(OATS, 500) }, { localDate: DAY, slot: "LUNCH" as const, snapshot: snapshotOfFood(MILK, 1000) }];
+    const created = await diary.addEntries(client.id, input, NOW, "cmd-replay");
+    const edited = await edit(diary, client.id, created[0]!, created[0]!.revision, { quantityX10: 1500 });
+    await diary.removeEntry(client.id, created[1]!.id, created[1]!.revision);
+    const replay = await diary.addEntries(client.id, input, NOW, "cmd-replay");
+    assert.deepEqual(replay, [edited], "актуальная версия оставшейся записи; удалённая не возвращается и не создаётся заново");
+    assert.equal((await diary.listEntries(client.id, DAY, DAY)).length, 1);
   } finally { await close(); }
 });
