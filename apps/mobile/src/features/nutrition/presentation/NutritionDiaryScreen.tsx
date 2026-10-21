@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ChevronDown, ChevronRight, ClipboardPaste, Copy, Droplets, Plus, Repeat2 } from "lucide-react-native";
 import { AppButton, ConfirmDialog, EmptyState, InlineNotice, LoadingState } from "../../../shared/ui/components/public.ts";
@@ -83,7 +83,10 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
   const today = todayLocal();
   const [localDate, setLocalDate] = useState(today);
   useEffect(() => { if (requestedDay !== undefined) setLocalDate(requestedDay.date); }, [requestedDay]);
-  const { data, stale, failed, reload } = useNutritionDay(clientId, localDate, diary, targets);
+  // Лента дат реагирует на нажатие сразу, а содержимое дня обновляется следующим, менее срочным рендером.
+  const deferredDate = useDeferredValue(localDate);
+  const { data, stale: loading, failed, reload } = useNutritionDay(clientId, deferredDate, diary, targets);
+  const stale = loading || deferredDate !== localDate;
   const { guide, defaults, leanMassKg } = useNutritionGuide(clientId, body, calc, measurements);
   const macroColors = useMacroColors();
   const [slow, setSlow] = useState(false);

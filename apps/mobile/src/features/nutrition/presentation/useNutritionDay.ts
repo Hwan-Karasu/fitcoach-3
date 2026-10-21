@@ -41,12 +41,14 @@ export function useNutritionDay(clientId: string, localDate: string, diary: Nutr
   useEffect(() => {
     let active = true;
     const dates = Array.from({ length: PREFETCH_DAYS * 2 + 1 }, (_, index) => shiftDate(localDate, index - PREFETCH_DAYS));
-    if (dates.every((date) => cache.current.get(date)?.generation === tick)) return;
-    const from = dates[0] as string;
-    const to = dates[dates.length - 1] as string;
+    // Читаются только недостающие даты окна (при шаге на соседний день — один день у края), а не всё окно заново.
+    const missing = dates.filter((date) => cache.current.get(date)?.generation !== tick);
+    if (missing.length === 0) return;
+    const from = missing[0] as string;
+    const to = missing[missing.length - 1] as string;
     void Promise.all([diary.listEntries(clientId, from, to), diary.listWater(clientId, from, to)]).then(([entries, water]) => {
       if (!active) return;
-      for (const date of dates) {
+      for (const date of missing) {
         cache.current.set(date, { entries: entries.filter((entry) => entry.localDate === date), waterMl: water.find((day) => day.localDate === date)?.ml ?? null, generation: tick });
       }
       if (cache.current.size > CACHE_LIMIT) {
@@ -54,7 +56,8 @@ export function useNutritionDay(clientId: string, localDate: string, diary: Nutr
         for (const date of [...cache.current.keys()]) if (!keep.has(date) && cache.current.size > CACHE_LIMIT) cache.current.delete(date);
       }
       setFailed(false);
-      bump();
+      // Перерисовка нужна, только если изменились данные показанного дня; предзагрузка краёв окна экран не трогает.
+      if (missing.includes(localDate)) bump();
     }, () => { if (active) setFailed(true); });
     return () => { active = false; };
   }, [clientId, localDate, diary, tick]);
