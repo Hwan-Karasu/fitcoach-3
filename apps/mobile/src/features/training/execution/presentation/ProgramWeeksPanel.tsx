@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useIsFocused } from "@react-navigation/native";
 import { ChartColumnIncreasing, LayoutGrid } from "lucide-react-native";
 import { WeekCards, useWeekNavigation, StatusTag, type StatusKind } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -86,8 +87,15 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: liveViews, execu
     return () => { active = false; };
   }, [clientId, execution, onLoaded, programId, version]);
 
+  // Пока поверх открыт дневник или матрица, статусы не перечитываются на каждую запись: один раз при возврате на экран.
+  const focused = useIsFocused();
+  const focusedRef = useRef(focused);
+  focusedRef.current = focused;
+  const staleWhileHidden = useRef(false);
+  useEffect(() => { if (focused && staleWhileHidden.current) { staleWhileHidden.current = false; setVersion((value) => value + 1); } }, [focused]);
   useEffect(() => execution.subscribeCommittedChanges((change) => {
-    if (change.clientId === clientId && change.programId === programId) setVersion((value) => value + 1);
+    if (change.clientId !== clientId || change.programId !== programId) return;
+    if (focusedRef.current) setVersion((value) => value + 1); else staleWhileHidden.current = true;
   }), [clientId, execution, programId]);
 
   const statusOf = useMemo(() => {

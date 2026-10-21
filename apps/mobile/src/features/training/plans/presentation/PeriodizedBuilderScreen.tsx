@@ -22,7 +22,7 @@ import { formatRange, parseRange, setFieldsOf, validateDraft } from "../domain/S
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
 import { ParticipantChips } from "./ParticipantChips.tsx";
-import { useExerciseLookup } from "./useExerciseLookup.ts";
+import { useExerciseLookupState } from "./useExerciseLookup.ts";
 import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
 import { weekTypeTone } from "./weekTypeTone.ts";
 import { newPlanId, WorkoutsEditor } from "./WorkoutsEditor.tsx";
@@ -82,7 +82,8 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const lookup = useExerciseLookup(exercises);
+  const lookupState = useExerciseLookupState(exercises);
+  const lookup = lookupState.lookup;
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const [tab, setTab] = useState<"program" | "templates">("program");
   const [programTitle, setProgramTitle] = useState("");
@@ -246,6 +247,10 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
       <InlineNotice kind="error">Не удалось открыть мезоцикл. Вернитесь к программе и повторите.</InlineNotice>
     </View>;
   }
+  if (lookup === null && lookupState.failed) return <View style={[styles.center, { backgroundColor: colors.canvas }]}>
+      <InlineNotice kind="error">Справочник упражнений не загрузился. Данные не изменены.</InlineNotice>
+      <AppButton variant="secondary" label="Повторить" onPress={lookupState.retry} />
+    </View>;
   if (lookup === null || (mode !== "create" && program === null)) {
     return <View style={[styles.center, { backgroundColor: colors.canvas }]}><LoadingState label="Открываем конструктор…" /></View>;
   }

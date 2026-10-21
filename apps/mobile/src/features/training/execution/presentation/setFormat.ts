@@ -6,9 +6,16 @@ import { fieldsOf, inLimits, type SetField } from "../domain/ExecutionRules.ts";
 /** Порядок колонок дневника (§48.65 п. 1): повторы, затем вес; дистанция перед временем. */
 const FIELD_ORDER: readonly SetField[] = ["reps", "loadGrams", "distanceM", "durationSec"];
 
+const fieldsCache = new WeakMap<readonly TrackingMetric[], readonly SetField[]>();
+
+/** Колонки дневника по величинам упражнения; для одного и того же массива величин — один и тот же результат (стабильные пропсы строк). */
 export function diaryFields(metrics: readonly TrackingMetric[]): readonly SetField[] {
+  const cached = fieldsCache.get(metrics);
+  if (cached !== undefined) return cached;
   const own = new Set(fieldsOf(metrics));
-  return FIELD_ORDER.filter((field) => own.has(field));
+  const fields = FIELD_ORDER.filter((field) => own.has(field));
+  fieldsCache.set(metrics, fields);
+  return fields;
 }
 
 export const fieldHeaders: Readonly<Record<SetField, string>> = { reps: "повт.", loadGrams: "кг", distanceM: "м", durationSec: "время" };

@@ -1253,7 +1253,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         if (result.changes !== 1) throw new Error("TARGET_NOT_FOUND");
       }
     });
-    this.publish({ clientIds: [clientId] });
+    this.publish({ clientIds: [clientId], orderOnly: true });
   }
 
   async selectMesocycle(clientId: string, programId: string, mesocycleId: string): Promise<void> {

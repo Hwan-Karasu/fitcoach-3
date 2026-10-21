@@ -29,7 +29,8 @@ export function MesocycleBook({ mesocycles, selectedId, resetKey, onSelect, onRe
   const bookRef = useAnimatedRef<Animated.ScrollView>();
   // Sortable.Flex не растягивает элементы по высоте ряда — высоту самой высокой карточки замеряем сами.
   // Замер привязан к набору названий: сброс эффектом опаздывал бы — onLayout приходит раньше эффекта.
-  const signature = mesocycles.map((item) => `${item.id}:${item.title}`).join("|");
+  // Порядок в подписи не участвует: перестановка не меняет высоту карточек, а сброс замера на кадр сжимал бы их (мерцание).
+  const signature = mesocycles.map((item) => `${item.id}:${item.title}`).sort().join("|");
   const [measured, setMeasured] = useState({ signature, height: 0 });
   const height = measured.signature === signature ? measured.height : 0;
   const measure = (value: number) => setMeasured((current) => {

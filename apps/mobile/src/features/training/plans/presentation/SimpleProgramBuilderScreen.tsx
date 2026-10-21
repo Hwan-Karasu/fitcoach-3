@@ -13,7 +13,7 @@ import { validateDraft } from "../domain/SimplePlanRules.ts";
 import { REBASED_NOTICE, rebaseSimpleProgram } from "../domain/DraftRebase.ts";
 import type { SimplePlanSavePort } from "../domain/SimplePlanSave.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
-import { useExerciseLookup } from "./useExerciseLookup.ts";
+import { useExerciseLookupState } from "./useExerciseLookup.ts";
 import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
 import { newPlanId, WorkoutsEditor } from "./WorkoutsEditor.tsx";
 import { useRecoveryDraftSave } from "./useRecoveryDraftSave.ts";
@@ -53,7 +53,8 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, si
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const lookup = useExerciseLookup(exercises);
+  const lookupState = useExerciseLookupState(exercises);
+  const lookup = lookupState.lookup;
   const key = programId ?? NEW_KEY;
   const [draft, setDraft] = useState<SimpleProgramDraft | null>(null);
   const [revision, setRevision] = useState<number | null>(null);
@@ -108,6 +109,10 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, si
   const metricsOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.metrics ?? null, [lookup]);
   const issues = useMemo(() => draft === null || lookup === null ? [] : validateDraft(draft, metricsOf), [draft, lookup, metricsOf]);
 
+  if (lookup === null && lookupState.failed) return <View style={[styles.center, { backgroundColor: colors.canvas }]}>
+      <InlineNotice kind="error">Справочник упражнений не загрузился. Данные не изменены.</InlineNotice>
+      <AppButton variant="secondary" label="Повторить" onPress={lookupState.retry} />
+    </View>;
   if (draft === null || lookup === null) {
     return <View style={[styles.center, { backgroundColor: colors.canvas }]}>
       {message !== null ? <InlineNotice kind="error">{message}</InlineNotice> : <LoadingState label="Открываем конструктор…" />}

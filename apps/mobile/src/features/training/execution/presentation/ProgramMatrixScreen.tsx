@@ -9,7 +9,7 @@ import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { parseLoad, useExerciseLookup, weekTypeLabels, weekTypeTone, type ExerciseLookupPort, type Mesocycle,
   type TrainingPlansRepositoryPort, type TrainingProgram, type WeekType } from "../../plans/public.ts";
-import type { SetValues } from "../domain/ExecutionModel.ts";
+import type { SetFact, SetValues } from "../domain/ExecutionModel.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import { diaryFields, compactWithDrops, planText } from "./setFormat.ts";
 import { buildProgramMatrix, type MatrixCell, type MatrixTarget, type MatrixWeek, type ProgramMatrix } from "./programMatrix.ts";
@@ -178,15 +178,21 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
   ], [lookup, matrix]);
 
   // Правка факта прямо в ячейке: тот же порт, что дневник; остальные значения подхода сохраняются.
+  // Записи идут по очереди, каждая берёт ревизию факта из ответа предыдущей (как в дневнике): повторы и вес подряд не дают STALE_SESSION.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const acked = useRef(new Map<string, SetFact>());
   const save = useCallback((weekIndex: number, workoutId: string, target: MatrixTarget, patch: Partial<SetValues>) => {
-    const fact = target.fact;
     setSaveError(null);
-    void execution.saveSet({ slot: { clientId, programId, weekIndex, plannedWorkoutId: workoutId },
-      plannedExerciseId: target.plannedExerciseId, exerciseId: target.exerciseId, plannedSetId: target.plannedSetId,
-      position: target.position, metrics: lookup?.get(target.exerciseId)?.metrics ?? [],
-      values: { ...(fact?.values ?? EMPTY), ...patch }, drops: fact?.drops ?? [], rpe: fact?.rpe ?? null,
-      setType: fact?.setType ?? "NORMAL", expectedRevision: fact?.revision ?? null })
-      .catch(() => { setSaveError("Не удалось сохранить значение — матрица обновлена, повторите ввод."); setRevision((value) => value + 1); });
+    queue.current = queue.current.then(async () => {
+      const latest = acked.current.get(target.plannedSetId);
+      const fact = latest !== undefined && (target.fact === null || latest.revision >= target.fact.revision) ? latest : target.fact;
+      const result = await execution.saveSet({ slot: { clientId, programId, weekIndex, plannedWorkoutId: workoutId },
+        plannedExerciseId: target.plannedExerciseId, exerciseId: target.exerciseId, plannedSetId: target.plannedSetId,
+        position: target.position, metrics: lookup?.get(target.exerciseId)?.metrics ?? [],
+        values: { ...(fact?.values ?? EMPTY), ...patch }, drops: fact?.drops ?? [], rpe: fact?.rpe ?? null,
+        setType: fact?.setType ?? "NORMAL", expectedRevision: fact?.revision ?? null });
+      acked.current.set(target.plannedSetId, result.fact);
+    }).catch(() => { setSaveError("Не удалось сохранить значение — матрица обновлена, повторите ввод."); setRevision((value) => value + 1); });
   }, [clientId, execution, lookup, programId]);
 
   // Горизонтальная прокрутка — общий сдвиг для шапки и всех строк.

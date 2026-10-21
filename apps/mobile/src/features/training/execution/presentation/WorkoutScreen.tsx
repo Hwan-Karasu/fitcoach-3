@@ -19,10 +19,10 @@ import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemePro
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../../shared/ui/theme/style.ts";
 import { useReportScreenTone } from "../../../../shared/ui/theme/ScreenTone.tsx";
-import { weekTypeTone, DiaryEditDialog, formatDuration, formatRange, supersetNumber, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookup,
+import { weekTypeTone, DiaryEditDialog, formatDuration, formatRange, supersetNumber, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookupState,
   type DiaryEdit, type ExerciseLookupPort, type PickedExercise, type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort,
   type WorkoutWeekNavigation } from "../../plans/public.ts";
-import { DROPS_MAX, EMPTY_VALUES, NOTE_MAX, type ActiveWorkoutCard, type ActiveWorkoutsPort, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type Side,
+import { DROPS_MAX, EMPTY_VALUES, NOTE_MAX, type ActiveWorkoutCard, type ActiveWorkoutsPort, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type Side, type TrackingMetric,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
 import { displayOrder, endInstantAfter, instantFromLocal, limitHint, localDateOf, localMinuteOfDay, nextOutcome, sessionDurationSec, type SetField } from "../domain/ExecutionRules.ts";
 import { durationText, timeText } from "../../../../shared/format/clockText.ts";
@@ -54,6 +54,20 @@ type PendingRegistry = PendingInputWrites;
 type SetTarget = Readonly<{ exercise: PlannedExercise; set: PlannedSet; position: number }>;
 
 const hasValues = (values: SetValues) => Object.values(values).some((value) => value !== null);
+
+/** Величины упражнения, которого нет в справочнике: один и тот же массив, чтобы колонки не пересоздавались. */
+const NO_METRICS: readonly TrackingMetric[] = [];
+
+const extraSets = new WeakMap<SetFact, PlannedSet>();
+/** Плановая строка добавленной разминки; для одного факта — один и тот же объект (стабильные пропсы строки). */
+function extraSetOf(fact: SetFact): PlannedSet {
+  let set = extraSets.get(fact);
+  if (set === undefined) {
+    set = { id: fact.plannedSetId, reps: null, repsMax: null, loadGrams: null, durationSec: null, distanceM: null };
+    extraSets.set(fact, set);
+  }
+  return set;
+}
 
 /** Заголовок колонки в одну строку: при нехватке места шрифт ужимается. */
 const oneLine = { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.7 } as const;
@@ -185,9 +199,9 @@ function NoteField({ noteKey, value, pending, onCommit }: Readonly<{
  * Строка подхода. Тип красит строку (разминка — жёлтым, отказ — красным, дроп — синим), номер у рабочих
  * подходов не меняется; под дроп-сетом — строки мини-сетов (§48.60), их состав заморожен, пока подход выполнен.
  */
-const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mode, sided, pending,
+const SetRow = memo(function SetRow({ exercise, set, position, number, fact, previous, fields, mode, sided, pending,
   onSave, onToggle, onPickType, onPickRpe }: Readonly<{
-  target: SetTarget; number: number | null; fact: SetFact | undefined; previous: PreviousSet | undefined;
+  exercise: PlannedExercise; set: PlannedSet; position: number; number: number | null; fact: SetFact | undefined; previous: PreviousSet | undefined;
   fields: readonly SetField[]; mode: ConfirmationMode;
   /** Одностороннее упражнение: две строки «Л» / «П» со своими значениями и отметками (§48.66, §48.70). */
   sided: boolean;
@@ -199,7 +213,8 @@ const SetRow = memo(function SetRow({ target, number, fact, previous, fields, mo
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const { set } = target;
+  // Цель строки собирается из примитивов и неизменных объектов: пропсы строки стабильны, memo срабатывает.
+  const target = useMemo<SetTarget>(() => ({ exercise, set, position }), [exercise, set, position]);
   const confirmed = fact?.confirmed === true;
   const type: SetType = fact?.setType ?? "NORMAL";
   const tone = setTypeTone(type, colors);
@@ -366,7 +381,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const navigation = useNavigation();
-  const lookup = useExerciseLookup(exercises);
+  const lookupState = useExerciseLookupState(exercises);
+  const lookup = lookupState.lookup;
   const metricsOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.metrics ?? null, [lookup]);
   // §48.56: таймер упражнения со своей длительностью; выключенный в плане — не запускается.
   const startRest = useCallback((exercise: PlannedExercise) => {
@@ -529,6 +545,10 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     void applyOutcome(next);
   };
 
+  if (lookup === null && lookupState.failed) return <View style={[styles.center, { backgroundColor: colors.canvas }]}>
+      <InlineNotice kind="error">Справочник упражнений не загрузился. Данные не изменены.</InlineNotice>
+      <AppButton variant="secondary" label="Повторить" onPress={lookupState.retry} />
+    </View>;
   if (diary.workout === undefined || diary.state === null || diary.mode === null || lookup === null) {
     return <View style={[styles.center, { backgroundColor: colors.canvas }]}><LoadingState label="Открываем тренировку…" /></View>;
   }
@@ -726,9 +746,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         {workout.exercises.map((exercise) => {
           const info = lookup.get(exercise.exerciseId);
           const group = supersetNumber(workout, exercise);
-          const fields = diaryFields(info?.metrics ?? []);
-          const extras = extraWarmups(state, exercise.id).map((fact) => ({ set: { id: fact.plannedSetId, reps: null, repsMax: null,
-            loadGrams: null, durationSec: null, distanceM: null }, position: fact.position, setType: fact.setType }));
+          const fields = diaryFields(info?.metrics ?? NO_METRICS);
+          const extras = extraWarmups(state, exercise.id).map((fact) => ({ set: extraSetOf(fact), position: fact.position, setType: fact.setType }));
           const rows = displayOrder([...extras, ...exercise.sets.map((set, position) => ({ set, position,
             setType: state.facts.get(set.id)?.setType ?? "NORMAL" }))]);
           const done = rows.filter(({ item }) => state.facts.get(item.set.id)?.confirmed === true).length;
@@ -788,7 +807,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                 {mode === "MANUAL" ? <View style={styles.side} /> : null}
               </View>
               {rows.map(({ item, number }) => (
-                <SetRow key={extraIds.has(item.set.id) ? item.set.id : `p:${item.position}`} target={{ exercise, set: item.set, position: item.position }} number={number}
+                <SetRow key={extraIds.has(item.set.id) ? item.set.id : `p:${item.position}`} exercise={exercise} set={item.set} position={item.position} number={number}
                   fact={state.facts.get(item.set.id)} previous={previous.get(item.set.id)} fields={fields} mode={mode}
                   sided={info?.unilateral === true}
                   pending={pending} onSave={onSave} onToggle={onToggle} onPickType={onPickType} onPickRpe={onPickRpe} />

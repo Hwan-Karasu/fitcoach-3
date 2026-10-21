@@ -16,7 +16,7 @@ export { SimpleWorkoutEditorScreen } from "./presentation/SimpleWorkoutEditorScr
 export { DiaryEditDialog } from "./presentation/DiaryEditDialog.tsx";
 export type { DiaryEdit } from "./domain/DiaryEdit.ts";
 export type { PickedExercise } from "./presentation/usePickedExercise.ts";
-export { useExerciseLookup } from "./presentation/useExerciseLookup.ts";
+export { useExerciseLookup, useExerciseLookupState } from "./presentation/useExerciseLookup.ts";
 export type { ExerciseInfo, ExerciseLookupPort } from "./domain/ExerciseLookupPort.ts";
 export type { PlannedExercise, PlannedSet, PlannedWorkout } from "./domain/SimplePlanModel.ts";
 export type { MesocycleVersion } from "./domain/StructureVersion.ts";

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
 import type { PlannedExercise, PlannedSet, PlannedWorkout, TrainingPlansRepositoryPort } from "../../plans/public.ts";
 import type { ConfirmationMode, PreviousSet, SetFact, SetType, SetValues, Side, TrackingMetric, WorkoutExecution,
@@ -63,6 +63,13 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   const unilateralRef = useRef(unilateralOf);
   unilateralRef.current = unilateralOf;
   const queue = useRef<Promise<unknown>>(Promise.resolve());
+  /** Сколько собственных команд сейчас в очереди: их коммиты уже применены к состоянию через ACK и не требуют перечитывания. */
+  const ownWrites = useRef(0);
+  const focused = useIsFocused();
+  const focusedRef = useRef(focused);
+  focusedRef.current = focused;
+  /** Изменение пришло, пока экран был скрыт (поверх него матрица): перечитать при возврате. */
+  const staleWhileHidden = useRef(false);
   const writeFailed = useRef(false);
   stateRef.current = state;
   // Неделя меняется без пересоздания экрана: пока данные новой недели не пришли, на экране прежние значения,
@@ -106,13 +113,23 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
     return () => { active = false; };
   }, [execution]));
 
-  useEffect(() => execution.subscribeCommittedChanges((change) => {
-    if (change.clientId === clientId && change.programId === programId) setVersion((value) => value + 1);
-  }), [clientId, execution, programId]);
+  const refresh = useCallback(() => {
+    if (!focusedRef.current) { staleWhileHidden.current = true; return; }
+    setVersion((value) => value + 1);
+  }, []);
+  useEffect(() => { if (focused && staleWhileHidden.current) { staleWhileHidden.current = false; setVersion((value) => value + 1); } }, [focused]);
 
+  // Собственная запись возвращает результат (ACK) и применяется сразу; перечитывание нужно только для чужих изменений (матрица, другой экран).
+  useEffect(() => execution.subscribeCommittedChanges((change) => {
+    if (ownWrites.current > 0) return;
+    if (change.clientId === clientId && change.programId === programId) refresh();
+  }), [clientId, execution, programId, refresh]);
+
+  // Выбор программы или порядок мезоциклов на дневник не влияют.
   useEffect(() => plans.subscribeCommittedChanges((change) => {
-    if (change.clientIds.includes(clientId)) setVersion((value) => value + 1);
-  }), [clientId, plans]);
+    if (change.selectionOnly === true || change.orderOnly === true) return;
+    if (change.clientIds.includes(clientId)) refresh();
+  }), [clientId, plans, refresh]);
 
   const applyFact = useCallback((fact: SetFact, sessionState: WorkoutExecution["session"]) => {
     // Очередная команда читает ACK немедленно, не ждёт отложенного React-render с новой revision.
@@ -125,12 +142,13 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
 
   const enqueue = useCallback(<T,>(task: () => Promise<T>): Promise<T | null> => {
     if (loadedKeyRef.current !== slotKeyRef.current) return Promise.resolve(null);
+    ownWrites.current += 1;
     const run = queue.current.then(task).then((value) => { setMessage(null); return value; }, (error: unknown) => {
       writeFailed.current = true;
       setMessage(errorText(error));
       setVersion((value) => value + 1);
       return null;
-    });
+    }).finally(() => { ownWrites.current -= 1; });
     queue.current = run;
     return run;
   }, []);

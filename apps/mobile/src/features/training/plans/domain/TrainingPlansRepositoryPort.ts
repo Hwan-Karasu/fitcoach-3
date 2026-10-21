@@ -16,6 +16,8 @@ export interface TrainingPlansCommittedChange {
    * иначе переключение участника запускало лишние полные чтения.
    */
   readonly selectionOnly?: boolean;
+  /** Изменился только порядок мезоцикла, и экран программы уже показывает его (оптимистично): ему перезагружаться не нужно; остальные читатели (история, участники) обновляются. */
+  readonly orderOnly?: boolean;
 }
 
 export interface WorkoutWeekNavigation {

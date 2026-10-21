@@ -217,7 +217,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   }, [clientId, cycleKey, programId, repository, shown, version]);
 
   useEffect(() => repository.subscribeCommittedChanges((change) => {
-    if (change.selectionOnly !== true && change.clientIds.includes(clientId)) setVersion((value) => value + 1);
+    if (change.selectionOnly !== true && change.orderOnly !== true && change.clientIds.includes(clientId)) setVersion((value) => value + 1);
   }), [clientId, repository]);
 
   if (program === undefined) return <View style={[styles.center, { backgroundColor: colors.canvas }]}><LoadingState label="Открываем программу…" /></View>;
@@ -548,6 +548,9 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
             }}
             onReorder={(ids) => {
               setMessage(null);
+              // Порядок показывается сразу, не дожидаясь записи и перечитывания: без прыжка назад при быстром повторном перетаскивании.
+              setPeriodized((current) => current === null ? current : { ...current,
+                mesocycles: ids.flatMap((id) => current.mesocycles.find((item) => item.id === id) ?? []) });
               void repository.reorderMesocycles(clientId, programId, ids).catch(() => {
                 setMessage("Не удалось сохранить порядок мезоциклов. Повторите перетаскивание.");
                 setOrderReset((value) => value + 1);
