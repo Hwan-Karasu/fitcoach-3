@@ -130,6 +130,8 @@ export async function participantTarget(repository: TrainingPlansRepositoryPort,
 }
 
 const CHIP_WIDTH = 150;
+/** Полная высота полосы (отступы 8 + 8, рамка 4 + 4, карточка 40): экран программы оставляет под неё место у верха страницы. */
+export const PARTICIPANT_STRIP_HEIGHT = 64;
 const CHIP_GAP = 4;
 
 const styles = StyleSheet.create({

@@ -20,6 +20,7 @@ import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidat
 import { useExerciseLookup } from "./useExerciseLookup.ts";
 import { useParticipantScrollRestore } from "./useParticipantScrollRestore.ts";
 import { useProgramData } from "./useProgramData.ts";
+import { PARTICIPANT_STRIP_HEIGHT } from "./ParticipantSwitcher.tsx";
 import type { GroupCopy } from "../domain/Placement.ts";
 import { MesocycleBook } from "./MesocycleBook.tsx";
 import { cycleTypeLabels, weekRangeLabel } from "../domain/MesocycleBuilder.ts";
@@ -224,6 +225,9 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   };
 
   const others = program.memberClientIds.filter((id) => id !== clientId);
+  // Место под полосу участников у верха страницы: постоянное для программы с несколькими участниками, а не для мезоцикла —
+  // смена мезоцикла (с группой и без) не сдвигает содержимое; при прокрутке полоса уходит поверх него.
+  const hasGroup = renderParticipants !== undefined && program.kind === "PERIODIZED" && others.length > 0;
   const selectedCycle = () => periodized?.mesocycles.find((item) => item.id === periodized.selectedMesocycleId) ?? periodized?.mesocycles[0];
   const menuButton = <View ref={menuAnchor} collapsable={false} style={[styles.more, { backgroundColor: colors.surfaceRaised }]}>
     <AppIconButton compact label="Действия программы"
@@ -244,7 +248,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     {tabs}
     <View style={styles.screen}>
     <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} pointerEvents={stale ? "none" : "auto"}
-      contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
+      contentContainerStyle={[styles.content, hasGroup ? { paddingTop: PARTICIPANT_STRIP_HEIGHT + 8 } : null]} keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
       onContentSizeChange={(_width, height) => restore.onContentSizeChange(height)}
       onScroll={(event) => restore.onScroll(event.nativeEvent.contentOffset.y)}>
       {program.kind === "PERIODIZED" && periodized !== null && periodized.mesocycles.length === 0 ? <View style={styles.row}><View style={styles.grow}>
