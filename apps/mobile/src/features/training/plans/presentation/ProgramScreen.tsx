@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { forwardRef, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Animated as NativeAnimated, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import { Archive, ArrowLeftRight, Bookmark, CalendarDays, Copy, Ellipsis, LayoutGrid, Pencil, Plus, Trash2, TrendingUp } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, InlineNotice, LoadingState, SegmentedControl, TextField } from "../../../../shared/ui/components/public.ts";
@@ -123,19 +123,9 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [tab, setTab] = useState<"program" | "templates">("program");
   const menuAnchor = useRef<View>(null);
   const [weeksByCycle, setWeeksByCycle] = useState<Readonly<Record<string, number>>>({});
-  const scrollByCycle = useRef(new Map<string, number>());
   const cycleKey = periodized?.selectedMesocycleId ?? periodized?.mesocycles[0]?.id ?? "simple";
-  // Прокрутка — по родству мезоцикла: при смене участника (своя копия того же мезоцикла) экран остаётся на месте.
-  const scrollKey = periodized?.mesocycles.find((item) => item.id === cycleKey)?.lineageId ?? cycleKey;
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const lastY = useRef(0);
-  /**
-   * Переключение мезоцикла в книге: карточки книги остаются на том же месте экрана, а не прыгают из-за разной высоты страниц циклов.
-   * Запоминаются прокрутка и положение книги на странице; пока страница нового цикла достраивается (недели, статусы), положение
-   * книги удерживается при каждом изменении раскладки; жест пользователя или 1,5 с снимают удержание.
-   */
-  const bookY = useRef(0);
-  const anchor = useRef<Readonly<{ scrollY: number; bookY: number; at: number }> | null>(null);
   /** Позиция, которую вернуть после смены участника: страница нового участника может быть короче (меньше мезоциклов). */
   const pendingRestore = useRef<number | null>(null);
   const shownKey = useRef(currentKey);
@@ -166,12 +156,6 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       void repository.selectMesocycle(clientId, programId, key).catch(() => setMessage("Не удалось выбрать мезоцикл."));
     }
   }, [requestedWeek, requestedMesocycle, program, periodized, cycleKey, repository, clientId, programId, loadedFor, currentKey]);
-  useEffect(() => {
-    // При смене участника позицию возвращает `pendingRestore`; по родству мезоцикла — только при смене мезоцикла у того же участника.
-    if (pendingRestore.current !== null || anchor.current !== null) return undefined;
-    const frame = requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: scrollByCycle.current.get(scrollKey) ?? 0, animated: false }));
-    return () => cancelAnimationFrame(frame);
-  }, [scrollKey, scrollRef]);
   const selectWeek = (key: string, week: number) => setWeeksByCycle((current) => ({ ...current, [key]: week }));
 
   useEffect(() => { setMessage(null); setNotice(null); }, [clientId, programId]);
@@ -225,9 +209,6 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       .then((copies) => { if (active) setGroupSize(Math.max(1, copies.length)); }).catch(() => undefined);
     return () => { active = false; };
   }, [clientId, cycleKey, programId, repository, shown, version]);
-  // Полоса участников плавает поверх прокрутки и не входит в раскладку; отступ под неё сверху — только пока она показана
-  // (у мезоцикла без группы отступа нет). Смещение книги мезоциклов при этом гасит якорь прокрутки.
-  const [stripHeight, setStripHeight] = useState(0);
 
   useEffect(() => repository.subscribeCommittedChanges((change) => {
     if (change.selectionOnly !== true && change.orderOnly !== true && change.clientIds.includes(clientId)) setVersion((value) => value + 1);
@@ -326,8 +307,13 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     {tabs}
     <View style={styles.screen}>
     <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} pointerEvents={stale ? "none" : "auto"}
-      contentContainerStyle={[styles.content, stripHeight > 0 ? { paddingTop: stripHeight + 4 } : null]} keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
-      onScrollBeginDrag={() => { anchor.current = null; }}
+      contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
+      // Полоса участников — первый элемент прокрутки, закреплённый у верха (как в 2.0): у начала страницы стоит под «Программа |
+      // Шаблоны», при прокрутке вниз остаётся у верхнего края. У мезоцикла без группы она пустая (нулевой высоты).
+      // Смена мезоцикла меняет высоту элементов над видимой областью (полоса, недели); положение удерживает сама нативная
+      // прокрутка в том же кадре раскладки: верхний видимый элемент остаётся на месте экрана (как scroll anchoring в браузерах).
+      // Пока видно место полосы (начало страницы), опорой служит она сама — содержимое под ней сдвигается естественно.
+      stickyHeaderIndices={[0]} StickyHeaderComponent={StickyStrip} maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
       onContentSizeChange={(_width, height) => {
         if (stale || pendingRestore.current === null) return;
         const y = pendingRestore.current;
@@ -337,8 +323,10 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       }}
       onScroll={(event) => {
         // Пока позиция восстанавливается, обрезанный скролл короткой страницы не должен затирать запомненную.
-        lastY.current = event.nativeEvent.contentOffset.y; scrollByCycle.current.set(scrollKey, lastY.current);
+        lastY.current = event.nativeEvent.contentOffset.y;
       }}>
+      {/* Обёртка держит индекс 0 и без группы: ScrollView отбрасывает null, и закрепилась бы следующая карточка. */}
+      <View>{participants}</View>
       {program.kind === "PERIODIZED" && periodized !== null && periodized.mesocycles.length === 0 ? <View style={styles.row}><View style={styles.grow}>
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>{program.title}</Text>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>
@@ -554,18 +542,9 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
             weeks={selected?.weeks.map((week) => ({ index: week.index, caption: weekTypeLabels[week.type] })) ?? []}
             onClose={() => setCopyRequest(null)}
             onDone={(result) => { if (result.ok) setNotice(result.text); else setMessage(result.text); }} /> : null}
-          <View onLayout={(event) => {
-            const y = event.nativeEvent.layout.y;
-            bookY.current = y;
-            const held = anchor.current;
-            if (held === null) return;
-            if (Date.now() - held.at > 1500) { anchor.current = null; return; }
-            scrollRef.current?.scrollTo({ y: Math.max(0, held.scrollY + (y - held.bookY)), animated: false });
-          }}>
           <MesocycleBook mesocycles={periodized.mesocycles} selectedId={selected?.id} resetKey={orderReset} onAdd={onAddMesocycle}
             onDelete={planDelete === undefined ? undefined : setDeletingCycle}
             onSelect={(id) => {
-              anchor.current = { scrollY: lastY.current, bookY: bookY.current, at: Date.now() };
               setPeriodized((current) => current === null ? current : { ...current, selectedMesocycleId: id });
               void repository.selectMesocycle(clientId, programId, id).catch(() => setVersion((value) => value + 1));
             }}
@@ -580,7 +559,6 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
                 setVersion((value) => value + 1);
               });
             }} />
-          </View>
         </>;
       })()}
       {renaming !== null ? (
@@ -609,14 +587,26 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           : "Программа уйдёт в архив клиента. Вернуть можно из списка программ."}
         confirmLabel="В архив" onCancel={() => setConfirmArchive(false)} onConfirm={() => { void archive(); }} />
     </Animated.ScrollView>
-    <View style={styles.floating} onLayout={(event) => {
-      const height = event.nativeEvent.layout.height;
-      setStripHeight(height);
-    }}>{participants}</View>
     </View>
     </View>
   );
 }
+
+/**
+ * Закреплённый заголовок прокрутки для одной полосы участников. Штатный заголовок RN 0.86 (Fabric) меняет состояние при
+ * подключении ref и при перерисовке экрана может уйти в бесконечный цикл обновлений; здесь — только сдвиг вслед за прокруткой,
+ * когда страница прокручена ниже места полосы. Выходит за отступы содержимого по краям — во всю ширину экрана.
+ */
+const StickyStrip = forwardRef<View, Readonly<{ children: ReactNode; nativeID?: string;
+  onLayout: (event: LayoutChangeEvent) => void; scrollAnimatedValue: NativeAnimated.Value }>>(
+  function StickyStrip({ children, nativeID, onLayout, scrollAnimatedValue }, ref) {
+    const [top, setTop] = useState(0);
+    const translateY = useMemo(() => scrollAnimatedValue.interpolate({
+      inputRange: [-1, 0, top, top + 1], outputRange: [0, 0, 0, 1], extrapolateLeft: "clamp" }), [scrollAnimatedValue, top]);
+    return <NativeAnimated.View ref={ref} nativeID={nativeID} collapsable={false}
+      onLayout={(event) => { const y = event.nativeEvent.layout.y; setTop((current) => current === y ? current : y); onLayout(event); }}
+      style={[styles.sticky, { transform: [{ translateY }] }]}>{children}</NativeAnimated.View>;
+  });
 
 const styles = StyleSheet.create({
   /** Данные прежнего участника, пока грузится новый (как в дневнике). */
@@ -624,7 +614,8 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
   heading: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },
   screen: { flex: 1 },
-  floating: { position: "absolute", top: 0, left: 0, right: 0 },
+  /** Полоса во всю ширину над отступом содержимого; пустая — нулевой высоты, и отступ сверху как без неё (16). */
+  sticky: { zIndex: 10, marginHorizontal: -16, marginTop: -12 },
   tabs: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 2 },
   cardHead: { gap: 12 },
   cardTitle: { fontFamily: fonts.bold, fontSize: 18, letterSpacing: -0.2 },

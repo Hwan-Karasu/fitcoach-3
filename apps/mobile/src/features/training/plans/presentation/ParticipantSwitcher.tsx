@@ -9,7 +9,7 @@ import type { GroupCopy } from "../domain/Placement.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 
 /**
- * Переключатель участников групповой программы (UI-OWN-043, как в 2.0): закреплённая полоса под шапкой с карточками
+ * Переключатель участников групповой программы (UI-OWN-043, как в 2.0): плавающая полоса с карточками
  * ФИО; первый — клиент, с которого открыта программа; при 3+ — прокрутка по горизонтали. Скрыт, если в группе
  * меньше двух участников. Состав — группа мезоцикла (UI-OWN-044): копии одного родства в любых программах
  * участников; вышедшие не показываются.
@@ -59,7 +59,10 @@ export function ParticipantSwitcher({ clientId, activeClientId = clientId, ancho
     repository.getMesocycleGroup(clientId, programId, ref).then((copies) => { if (active) setMembers(copies); }).catch(() => undefined);
     return () => { active = false; };
   }, [clientId, mesocycleId, programId, repository, version, workoutId]);
-  useEffect(() => repository.subscribeCommittedChanges(() => setVersion((value) => value + 1)), [repository]);
+  // Выбор и порядок мезоциклов состав группы не меняют: без лишнего перечитывания на каждую смену мезоцикла.
+  useEffect(() => repository.subscribeCommittedChanges((change) => {
+    if (change.selectionOnly !== true && change.orderOnly !== true) setVersion((value) => value + 1);
+  }), [repository]);
   useEffect(() => { scroll.current?.scrollTo({ x: Math.max(0, (positions.current.get(activeClientId) ?? 0) - 16), animated: true }); }, [activeClientId]);
 
   // Пока загружается состав нового мезоцикла, полоса показывает прежний и не нажимается: исчезни она на это время, весь экран под
@@ -72,7 +75,6 @@ export function ParticipantSwitcher({ clientId, activeClientId = clientId, ancho
   total.current = ordered.length;
   return (
     <View style={[styles.wrap, { backgroundColor: colors.canvas }]}>
-      <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>Участники</Text>
       <View style={[styles.card, { backgroundColor: colors.border }]}>
         <ScrollView ref={scroll} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}
           keyboardShouldPersistTaps="handled" scrollEventThrottle={32} onScroll={onScroll}
@@ -127,9 +129,8 @@ const CHIP_WIDTH = 150;
 const CHIP_GAP = 4;
 
 const styles = StyleSheet.create({
-  wrap: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, gap: 6 },
+  wrap: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 },
   card: { borderRadius: 16, padding: 4 },
-  eyebrow: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16, letterSpacing: 1, textTransform: "uppercase", paddingLeft: 4 },
   row: { gap: CHIP_GAP },
   chip: { width: CHIP_WIDTH, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   chipText: { fontFamily: fonts.semibold, fontSize: 15, textAlign: "center" },
