@@ -5,7 +5,7 @@ import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts"
 import type { AnswerValue, Answers, ClientAnswers, CompletionStatus, PublishedQuestionnaire, PublishSummary,
   QuestionnaireDraft, QuestionnaireSchema } from "../domain/QuestionnaireModel.ts";
 import type { QuestionnaireCommittedChange, QuestionnaireRepositoryPort } from "../domain/QuestionnaireRepositoryPort.ts";
-import { allFields, completionStatus, defaultQuestionnaireSchema, normalizeAnswer, publishSummary, sameSchema,
+import { allFields, completionStatus, defaultQuestionnaireSchema, normalizeAnswer, withMissingSystemOptions, publishSummary, sameSchema,
   validateSchema } from "../domain/QuestionnaireRules.ts";
 import { DEV_QUESTIONNAIRE_LEDGER, devQuestionnaireCatalog } from "./DevQuestionnaireCatalog.ts";
 
@@ -68,7 +68,10 @@ export class DevQuestionnaireRepository implements QuestionnaireRepositoryPort {
       await writer.write(async (tx) => {
         const existing = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM dev_questionnaire_versions
           WHERE workspace_id = ?`, [this.workspaceId]);
-        if ((existing?.n ?? 0) > 0) return;
+        if ((existing?.n ?? 0) > 0) {
+          await this.topUpSystemOptions(tx);
+          return;
+        }
         const json = JSON.stringify(defaultQuestionnaireSchema());
         const now = new Date().toISOString();
         await tx.run(`INSERT INTO dev_questionnaire_versions (workspace_id, version, format_version, schema_json,
@@ -82,6 +85,20 @@ export class DevQuestionnaireRepository implements QuestionnaireRepositoryPort {
       await this.database.release();
       throw error;
     }
+  }
+
+  /** Новые пункты стандартных вопросов (например, группы мышц) попадают в установленную анкету новой версией; правки тренера в черновике не затираются. */
+  private async topUpSystemOptions(tx: SqliteStatementPort): Promise<void> {
+    const current = await this.current(tx);
+    const next = withMissingSystemOptions(current.schema, defaultQuestionnaireSchema());
+    if (next === null) return;
+    const draft = await this.draft(tx);
+    if (draft.baseVersion !== current.version || !sameSchema(draft.schema, current.schema)) return;
+    const version = current.version + 1;
+    const now = new Date().toISOString();
+    await tx.run(`INSERT INTO dev_questionnaire_versions (workspace_id, version, format_version, schema_json,
+      base_version, published_at) VALUES (?, ?, 1, ?, ?, ?)`, [this.workspaceId, version, JSON.stringify(next), current.version, now]);
+    await this.replaceDraft(tx, draft.revision, version, next);
   }
 
   private ready(): { connection: SqliteConnectionPort; writer: WriterCoordinator } {

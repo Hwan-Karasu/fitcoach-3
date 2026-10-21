@@ -31,7 +31,7 @@ export function defaultQuestionnaireSchema(): QuestionnaireSchema {
       field("goals.other", "LONG_TEXT", "Другая цель"),
       field("goals.muscles", "MULTI_CHOICE", "Какие группы мышц в приоритете?", {
         options: choices("sys:goals.muscles", ["Грудь", "Спина", "Бицепс", "Трицепс", "Ягодицы", "Бёдра",
-          "Икроножные", "Плечи", "Пресс"]) }),
+          "Икроножные", "Плечи", "Пресс", "Квадрицепсы", "Бицепс бедра", "Широчайшие", "Трапеции", "Предплечья", "Поясница", "Кор"]) }),
       field("goals.success", "MULTI_CHOICE", "Как поймёт, что результат достигнут?", {
         options: choices("sys:goals.success", ["Изменение веса", "Комфорт в одежде", "Улучшение самочувствия",
           "Визуальные изменения тела"]) }),
@@ -78,6 +78,24 @@ export function defaultQuestionnaireSchema(): QuestionnaireSchema {
       field("extra.trainerExperience", "LONG_TEXT", "Опыт работы с тренером"),
     ]),
   ] };
+}
+
+/**
+ * Выбор у системных вопросов, добавленный в стандартную анкету позже (новые пункты — только в конец списка, id по порядку):
+ * опубликованная версия получает недостающие пункты новой версией. Остальное в схеме не трогается; null — добавлять нечего.
+ */
+export function withMissingSystemOptions(current: QuestionnaireSchema, defaults: QuestionnaireSchema): QuestionnaireSchema | null {
+  const known = new Map(allFields(defaults).filter((item) => item.field.origin === "SYSTEM").map((item) => [item.field.id, item.field]));
+  let changed = false;
+  const sections = current.sections.map((item) => ({ ...item, fields: item.fields.map((entry) => {
+    const source = known.get(entry.id);
+    if (source === undefined || entry.origin !== "SYSTEM" || (entry.type !== "MULTI_CHOICE" && entry.type !== "SINGLE_CHOICE")) return entry;
+    const missing = source.options.filter((option) => !entry.options.some((existing) => existing.id === option.id));
+    if (missing.length === 0) return entry;
+    changed = true;
+    return { ...entry, options: [...entry.options, ...missing] };
+  }) }));
+  return changed ? { ...current, sections } : null;
 }
 
 export function allFields(schema: QuestionnaireSchema): readonly Readonly<{ field: QuestionField; section: QuestionSection }>[] {

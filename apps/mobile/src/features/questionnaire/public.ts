@@ -1,5 +1,4 @@
 export { QuestionnairePreview } from "./presentation/QuestionnairePreview.tsx";
-export { ClientQuestionnaireScreen } from "./presentation/ClientQuestionnaireScreen.tsx";
 export { QuestionnaireForm } from "./presentation/QuestionnaireForm.tsx";
 export { QuestionnaireBuilderScreen } from "./presentation/QuestionnaireBuilderScreen.tsx";
 export type { AnswerValue, Answers, ChoiceOption, ClientAnswers, CompletionStatus, FieldConstraints, PublishedQuestionnaire,

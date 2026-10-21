@@ -36,3 +36,5 @@ export { BarChart, type BarChartItem } from "./BarChart.tsx";
 export { DateRangeCalendar, type DateRange } from "./DateRangeCalendar.tsx";
 export { SegmentedRing, type RingSegment } from "./SegmentedRing.tsx";
 export { ChoiceSegments } from "./ChoiceSegments.tsx";
+export { ChoiceGrid } from "./ChoiceGrid.tsx";
+export { DateField, dateLabel } from "./DateField.tsx";

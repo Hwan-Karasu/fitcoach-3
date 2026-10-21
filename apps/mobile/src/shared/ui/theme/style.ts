@@ -16,6 +16,8 @@ export const TOUCH_TARGET = 44;
 /** Тени макета (цвет — тёплый текст «Зефирки» с прозрачностью); `boxShadow` RN, без `elevation`. */
 export const shadow = {
   card: { boxShadow: "0 1px 2px rgba(31,26,20,0.06)" },
+  /** Неактивные пилюли и вкладки: белое на белом читается только по тени и рамке. */
+  chip: { boxShadow: "0 1px 3px rgba(31,26,20,0.20)" },
   control: { boxShadow: "0 1px 2px rgba(31,26,20,0.08)" },
   floating: { boxShadow: "0 6px 24px rgba(31,26,20,0.10)" },
   fab: { boxShadow: "0 8px 20px rgba(122,66,16,0.35)" },

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { addField, addOption, addSection, canChangeType, duplicateField, locateField, moveField, moveFieldTo, moveFieldToSection,
+import { addField, addOption, addSection, canChangeType, discardIfBlank, duplicateField, locateField, moveField, moveFieldTo, moveFieldToSection,
   moveOption, moveSection, removeField, removeOption, removeSection, restoreField, updateField } from
   "../apps/mobile/src/features/questionnaire/domain/QuestionnaireBuilder.ts";
 import { defaultQuestionnaireSchema, validateSchema } from "../apps/mobile/src/features/questionnaire/domain/QuestionnaireRules.ts";
@@ -99,4 +99,15 @@ test("Q02 варианты: новый удаляется, опубликова�
   assert.equal(removeOption(added, choice.id, "c:opt", published).outcome, "DELETED");
   const reordered = moveOption(published, choice.id, second!.id, -1);
   assert.equal(locateField(reordered, choice.id)?.field.options[0]?.id, second!.id);
+});
+
+test("новый вопрос, закрытый пустым, не остаётся; заполненный и системный — остаются", () => {
+  const added = addField(published, firstSection.id, "SINGLE_CHOICE", "c:blank");
+  assert.equal(locateField(discardIfBlank(added, "c:blank"), "c:blank"), null);
+  assert.deepEqual(discardIfBlank(added, "c:blank"), published);
+  const withOption = addOption(added, "c:blank", "c:blank:o1", "Утро");
+  assert.notEqual(locateField(discardIfBlank(withOption, "c:blank"), "c:blank"), null, "заполнен только вариант — вопрос остаётся");
+  const titled = updateField(added, "c:blank", { label: "Любимое время" });
+  assert.notEqual(locateField(discardIfBlank(titled, "c:blank"), "c:blank"), null);
+  assert.equal(discardIfBlank(published, systemField.id), published, "системный вопрос не удаляется");
 });

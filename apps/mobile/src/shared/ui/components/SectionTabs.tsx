@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text } from "react-native";
+import type { LucideIcon } from "lucide-react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../theme/typography.ts";
+import { shadow } from "../theme/style.ts";
 
 interface SectionTabItem<Id extends string> {
   readonly id: Id;
   readonly label: string;
+  /** Значок слева от подписи (lucide). */
+  readonly icon?: LucideIcon;
 }
 
 interface SectionTabsProps<Id extends string> {
@@ -50,6 +54,7 @@ export function SectionTabs<Id extends string>({ tabs, selectedId, onSelect }: R
             }}
             style={({ pressed }) => [
               styles.tab,
+              selected ? null : shadow.chip,
               {
                 backgroundColor: selected ? colors.accentFill : colors.surface,
                 borderColor: focusedId === tab.id ? colors.focusRing : selected ? colors.accentFill : colors.border,
@@ -57,8 +62,9 @@ export function SectionTabs<Id extends string>({ tabs, selectedId, onSelect }: R
               },
             ]}
           >
+            {tab.icon === undefined ? null : <tab.icon size={16} color={selected ? colors.onAccentFill : colors.textSecondary} />}
             <Text style={[styles.label, { color: selected ? colors.onAccentFill : colors.textPrimary }]}>
-              {selected ? `✓ ${tab.label}` : tab.label}
+              {tab.label}
             </Text>
           </Pressable>
         );
@@ -68,8 +74,8 @@ export function SectionTabs<Id extends string>({ tabs, selectedId, onSelect }: R
 }
 
 const styles = StyleSheet.create({
-  scroll: { flexGrow: 0 },
+  scroll: { flexGrow: 0, flexShrink: 0 },
   content: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  tab: { minHeight: 48, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 2, borderRadius: 24, justifyContent: "center" },
+  tab: { minHeight: 48, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 2, borderRadius: 24, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   label: { fontSize: 13, lineHeight: 18, fontFamily: fonts.bold, textAlign: "center" },
 });

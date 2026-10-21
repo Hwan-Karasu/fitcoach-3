@@ -11,7 +11,6 @@ import { useTrainedOn } from "../../read-models/useTrainedOn.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import type { CalcProfileWithBodyPort } from "../../workflows/saveCalcProfile.ts";
 import { NutritionHomeCards, type SaveCalcProfile, type FoodCatalogPort, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort, type RecipeCatalogPort } from "../../features/nutrition/public.ts";
-import { ClientQuestionnaireScreen, type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
 import { ExecutionDetailsScreen, ExerciseHistoryList, HistoryProgramScreen, MonthlyReportScreen, TrainingArchiveScreen, TrainingStatisticsScreen, retainHistoryView,
   retainStatsFilters, type ExerciseLookupPort,
   type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort, type TrainingPlansRepositoryPort,
@@ -40,7 +39,6 @@ type WorkspaceTabs = {
 
 type MoreRoutes = {
   MoreIndex: undefined;
-  Questionnaire: undefined;
   TrainingArchive: undefined;
   HistoryProgram: { programId: string };
   HistoryExecution: { sessionKey: string };
@@ -51,8 +49,8 @@ type MoreRoutes = {
 const Tabs = createBottomTabNavigator<WorkspaceTabs>();
 const MoreStack = createNativeStackNavigator<MoreRoutes>();
 
-function MoreNavigator({ client, questionnaire, history, bodyweight, exerciseLookup, onClose, onOpenClients, onOpenExercise, onOpenWorkout }: Readonly<{
-  client: ClientRecord; questionnaire: QuestionnaireRepositoryPort; onClose: () => void; onOpenClients: () => void;
+function MoreNavigator({ client, history, bodyweight, exerciseLookup, onClose, onOpenClients, onOpenEdit, onOpenExercise, onOpenWorkout }: Readonly<{
+  client: ClientRecord; onClose: () => void; onOpenClients: () => void; onOpenEdit: () => void;
   history: TrainingHistoryPort; bodyweight: ClientBodyweightPort; exerciseLookup: ExerciseLookupPort;
   onOpenExercise: (exerciseId: string) => void; onOpenWorkout: OpenWorkout;
 }>) {
@@ -70,14 +68,11 @@ function MoreNavigator({ client, questionnaire, history, bodyweight, exerciseLoo
       <MoreStack.Screen name="MoreIndex" options={{ title: workspaceTabs.More }}>
         {({ navigation }) => (
           <MoreMenuScreen
-            onOpenQuestionnaire={() => navigation.navigate("Questionnaire")}
+            onOpenQuestionnaire={onOpenEdit}
             onOpenArchive={() => navigation.navigate("TrainingArchive")}
             onOpenStatistics={() => navigation.navigate("Statistics")}
           />
         )}
-      </MoreStack.Screen>
-      <MoreStack.Screen name="Questionnaire" options={{ title: moreDestinations.Questionnaire }}>
-        {() => <ClientQuestionnaireScreen clientId={clientId} repository={questionnaire} />}
       </MoreStack.Screen>
       <MoreStack.Screen name="TrainingArchive" options={{ title: moreDestinations.TrainingArchive }}>
         {({ navigation }) => <TrainingArchiveScreen clientId={clientId} history={history}
@@ -108,14 +103,13 @@ function MoreNavigator({ client, questionnaire, history, bodyweight, exerciseLoo
   );
 }
 
-export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, nutrition, questionnaire, trainingPlans, trainingExecution, trainingHistory, clientBodyweight, restTimers, activeWorkouts, onOpenWorkout, onOpenClientPrograms, exercises, exerciseLookup, weekCopy, weekSwap, mesocycleSave, planDelete, onOpenEdit, onOpenAccounting,
+export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, nutrition, trainingPlans, trainingExecution, trainingHistory, clientBodyweight, restTimers, activeWorkouts, onOpenWorkout, onOpenClientPrograms, exercises, exerciseLookup, weekCopy, weekSwap, mesocycleSave, planDelete, onOpenEdit, onOpenAccounting,
   onOpenMeasurements, onClose, onOpenClients, onOpenExercise }: Readonly<{
   clientId: string;
   repository: ClientRepositoryPort & ClientRosterPort;
   accounting: AccountingRepositoryPort;
   measurements: MeasurementRepositoryPort;
   nutrition: Readonly<{ foods: FoodCatalogPort; recipes: RecipeCatalogPort; diary: NutritionDiaryPort; targets: NutritionTargetsPort; calc: NutritionCalcPort; calcProfile: CalcProfileWithBodyPort }>;
-  questionnaire: QuestionnaireRepositoryPort;
   trainingPlans: TrainingPlansRepositoryPort;
   trainingExecution: TrainingExecutionPort;
   /** §48.85: хронология занятий — архив, статистика, история упражнения. */
@@ -245,7 +239,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
           exercises={exercises} exerciseLookup={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap} mesocycleSave={mesocycleSave} planDelete={planDelete} onOpenExercise={onOpenExercise} />}
       </Tabs.Screen>
       <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More}}>
-        {() => <MoreNavigator client={client} questionnaire={questionnaire} onClose={onClose} onOpenClients={onOpenClients}
+        {() => <MoreNavigator client={client} onClose={onClose} onOpenClients={onOpenClients} onOpenEdit={() => onOpenEdit(client.id)}
           history={trainingHistory} bodyweight={clientBodyweight} exerciseLookup={exerciseLookup}
           onOpenExercise={(exerciseId) => onOpenExercise?.(exerciseId)} onOpenWorkout={onOpenWorkout} />}
       </Tabs.Screen>

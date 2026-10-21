@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AppState, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ConfirmDialog, InlineNotice, SectionTabs, SelectionChip, StickyEditorFooter, TextField } from "../../../shared/ui/components/public.ts";
+import { UserRound, type LucideIcon } from "lucide-react-native";
+import { ChoiceGrid, ConfirmDialog, DateField, InlineNotice, SectionTabs, StickyEditorFooter, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { ClientRecord, CreateClientInput } from "../domain/ClientRepositoryPort.ts";
 import type { ClientFormDraft } from "../domain/ClientRecoveryDraftPort.ts";
@@ -9,14 +10,24 @@ import { formatHeightCmX10, parseHeightCmX10, validPastBirthDate } from
   "../domain/ClientProfileValidation.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 
-const emojiChoices = ["🏋️", "🏃", "🚴", "🧘", "💪", "🔥"] as const;
+/** Вчерашняя локальная дата `ГГГГ-ММ-ДД`: дата рождения — только в прошлом. */
+function yesterday(): string {
+  const day = new Date();
+  day.setDate(day.getDate() - 1);
+  return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+}
+
+/** Плавная прокрутка к разделу: 300–700 мс с замедлением в конце, вместо мгновенного системного скролла. */
+const SCROLL_MIN_MS = 300;
+const SCROLL_MAX_MS = 700;
+const easeInOut = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
 /**
  * Анкета внутри карточки клиента (единая форма): разделы для вкладок, содержимое и проверка.
  * Собирается снаружи (композиция владельцев), сама форма клиента анкету не хранит.
  */
 export interface ClientEditorAppendix {
-  readonly sections: readonly Readonly<{ id: string; title: string }>[];
+  readonly sections: readonly Readonly<{ id: string; title: string; icon?: LucideIcon }>[];
   /** Содержимое; `onSectionLayout` сообщает положение раздела внутри содержимого для вкладок. */
   readonly render: (onSectionLayout: (sectionId: string, y: number) => void) => ReactNode;
   /** Есть несохранённые ответы — выход спросит подтверждение. */
@@ -49,11 +60,14 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
   const nameRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
-  const birthDateRef = useRef<TextInput>(null);
   const heightRef = useRef<TextInput>(null);
   const basicOffset = useRef(0);
   const appendixOffset = useRef(0);
   const appendixSections = useRef<Record<string, number>>({});
+  const scrollY = useRef(0);
+  /** Идёт программная прокрутка к разделу: вкладки не переключаются по пути через промежуточные разделы. */
+  const autoScrolling = useRef(false);
+  const scrollFrame = useRef<number | null>(null);
   const [displayName, setDisplayName] = useState(initialDraft?.displayName ?? initial?.displayName ?? "");
   const [phone, setPhone] = useState(initialDraft?.contactPhone ?? initial?.contactPhone ?? "");
   const [email, setEmail] = useState(initialDraft?.contactEmail ?? initial?.contactEmail ?? "");
@@ -62,7 +76,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
     ?? formatHeightCmX10(initial?.heightCmX10 ?? null));
   const [weightText, setWeightText] = useState(initialWeight ?? "");
   const [sex, setSex] = useState<"MALE" | "FEMALE" | null>(initialDraft?.sex ?? initial?.sex ?? null);
-  const [emoji, setEmoji] = useState<string | null>(initialDraft?.emoji ?? initial?.emoji ?? null);
+  const [emoji] = useState<string | null>(initialDraft?.emoji ?? initial?.emoji ?? null);
   const [nameError, setNameError] = useState(false);
   const [birthDateError, setBirthDateError] = useState(false);
   const [heightError, setHeightError] = useState(false);
@@ -135,20 +149,42 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
     return () => subscription.remove();
   }, [close]);
 
-  const tabs = [{ id: BASIC, label: "Основное" }, ...(appendix?.sections ?? []).map((section) => ({ id: section.id, label: section.title }))];
+  const tabs = [{ id: BASIC, label: "Основное", icon: UserRound }, ...(appendix?.sections ?? []).map((section) => ({ id: section.id, label: section.title, icon: section.icon }))];
   const offsetOf = (id: string) => id === BASIC ? basicOffset.current
     : appendixOffset.current + (appendixSections.current[id] ?? 0);
 
+  const stopAutoScroll = useCallback(() => {
+    if (scrollFrame.current !== null) cancelAnimationFrame(scrollFrame.current);
+    scrollFrame.current = null;
+    autoScrolling.current = false;
+  }, []);
+  useEffect(() => stopAutoScroll, [stopAutoScroll]);
+
   const scrollToSection = (id: string) => {
     setActiveSection(id);
-    scrollRef.current?.scrollTo({ y: offsetOf(id), animated: true });
+    stopAutoScroll();
+    const from = scrollY.current;
+    const distance = offsetOf(id) - from;
+    if (Math.abs(distance) < 2) return;
+    const duration = Math.min(SCROLL_MAX_MS, SCROLL_MIN_MS + Math.abs(distance) * 0.2);
+    const started = Date.now();
+    autoScrolling.current = true;
+    const step = () => {
+      const progress = Math.min(1, (Date.now() - started) / duration);
+      scrollRef.current?.scrollTo({ y: from + distance * easeInOut(progress), animated: false });
+      if (progress < 1) scrollFrame.current = requestAnimationFrame(step);
+      else stopAutoScroll();
+    };
+    scrollFrame.current = requestAnimationFrame(step);
   };
 
-  const syncSectionWithScroll = (scrollY: number) => {
+  const syncSectionWithScroll = (offsetY: number) => {
+    scrollY.current = offsetY;
+    if (autoScrolling.current) return;
     let visibleSection = BASIC;
     for (const tab of tabs) {
       if (tab.id === BASIC || appendixSections.current[tab.id] !== undefined) {
-        if (offsetOf(tab.id) <= scrollY + 40) visibleSection = tab.id;
+        if (offsetOf(tab.id) <= offsetY + 40) visibleSection = tab.id;
       }
     }
     setActiveSection((current) => current === visibleSection ? current : visibleSection);
@@ -166,9 +202,8 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
     const normalizedBirthDate = birthDate.trim() || null;
     if (!validPastBirthDate(normalizedBirthDate)) {
       setBirthDateError(true);
-      setMessage("Введите действительную дату рождения в прошлом в формате ГГГГ-ММ-ДД.");
+      setMessage("Выберите дату рождения в прошлом.");
       scrollToSection(BASIC);
-      birthDateRef.current?.focus();
       return;
     }
     const heightCmX10 = parseHeightCmX10(heightDraft);
@@ -265,7 +300,8 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
       <ScrollView
         ref={scrollRef}
         keyboardShouldPersistTaps="handled"
-        scrollEventThrottle={32}
+        scrollEventThrottle={16}
+        onScrollBeginDrag={stopAutoScroll}
         onScroll={(event) => syncSectionWithScroll(event.nativeEvent.contentOffset.y)}
         contentContainerStyle={styles.formContent}
       >
@@ -310,47 +346,44 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
             value={email}
             onChangeText={(value) => { setEmail(value); setMessage(null); }}
           />
-          <TextField
-            inputRef={birthDateRef}
+          <DateField
             label="Дата рождения · необязательно"
-            placeholder="ГГГГ-ММ-ДД"
-            hint="Возраст вычисляется из даты; сегодняшняя и будущая дата не подходят."
+            placeholder="Выберите дату"
+            hint="Возраст вычисляется из даты."
             error={birthDateError ? "Проверьте дату рождения" : undefined}
             value={birthDate}
-            onChangeText={(value) => { setBirthDate(value); setBirthDateError(false); setMessage(null); }}
+            max={yesterday()}
+            startAt="1990-01-01"
+            pickerTitle="Дата рождения"
+            onChange={(value) => { setBirthDate(value); setBirthDateError(false); setMessage(null); }}
           />
-          <TextField
-            inputRef={heightRef}
-            label="Рост, см · необязательно"
-            placeholder="Например, 172,5"
-            keyboardType="decimal-pad"
-            error={heightError ? "Положительное число, не более одного десятичного знака" : undefined}
-            value={heightDraft}
-            onChangeText={(value) => { setHeightDraft(value); setHeightError(false); setMessage(null); }}
-          />
-          <TextField
-            label="Вес, кг · необязательно"
-            placeholder="Например, 85,4"
-            keyboardType="decimal-pad"
-            value={weightText}
-            onChangeText={(value) => { setWeightText(value); setMessage(null); }}
-          />
-          <Text style={[styles.sectionDescription, { color: colors.textSecondary }]}>Пол · нужен для расчёта КБЖУ, необязательно</Text>
-          <View style={styles.emojiChoices}>
-            <SelectionChip group="Пол" label="Не указан" selected={sex === null} onPress={() => setSex(null)} />
-            <SelectionChip group="Пол" label="Мужской" selected={sex === "MALE"} onPress={() => setSex("MALE")} />
-            <SelectionChip group="Пол" label="Женский" selected={sex === "FEMALE"} onPress={() => setSex("FEMALE")} />
+          <View style={styles.pair}>
+            <View style={styles.pairCell}>
+              <TextField
+                inputRef={heightRef}
+                label="Рост, см"
+                placeholder="172,5"
+                keyboardType="decimal-pad"
+                error={heightError ? "Число, один знак после запятой" : undefined}
+                value={heightDraft}
+                onChangeText={(value) => { setHeightDraft(value); setHeightError(false); setMessage(null); }}
+              />
+            </View>
+            <View style={styles.pairCell}>
+              <TextField
+                label="Вес, кг"
+                placeholder="85,4"
+                keyboardType="decimal-pad"
+                value={weightText}
+                onChangeText={(value) => { setWeightText(value); setMessage(null); }}
+              />
+            </View>
           </View>
-          <Text style={[styles.sectionDescription, { color: colors.textSecondary }]}>Идентификатор карточки</Text>
-          <View style={styles.emojiChoices}>
-            <SelectionChip group="Идентификатор" label="Инициалы" selected={emoji === null}
-              onPress={() => setEmoji(null)} />
-            {emojiChoices.map((choice) => (
-              <SelectionChip key={choice} group="Идентификатор" label={choice}
-                selected={emoji === choice} onPress={() => setEmoji(choice)} />
-            ))}
-          </View>
-          <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>Пол добавится после фиксации набора значений. Вес будет отдельным измерением.</Text>
+          <Text style={[styles.fieldLabel, { color: colors.textPrimary }]}>Пол · нужен для расчёта КБЖУ</Text>
+          <ChoiceGrid group="Пол" columns={3}
+            items={[{ id: "NONE", label: "Не указан" }, { id: "MALE", label: "Мужской" }, { id: "FEMALE", label: "Женский" }]}
+            selected={[sex ?? "NONE"]}
+            onPress={(id) => setSex(id === "MALE" ? "MALE" : id === "FEMALE" ? "FEMALE" : null)} />
         </View>
         {appendix !== undefined ? (
           <View onLayout={(event) => { appendixOffset.current = event.nativeEvent.layout.y; }}>
@@ -396,5 +429,7 @@ const styles = StyleSheet.create({
   sectionCard: { borderWidth: 1, borderRadius: 12, padding: 16, gap: 10 },
   sectionTitle: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
   sectionDescription: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
-  emojiChoices: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  pair: { flexDirection: "row", gap: 12 },
+  pairCell: { flex: 1 },
+  fieldLabel: { fontSize: 13, lineHeight: 18, fontFamily: fonts.bold },
 });

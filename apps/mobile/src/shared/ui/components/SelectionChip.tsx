@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text } from "react-native";
+import type { LucideIcon } from "lucide-react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../theme/typography.ts";
 import { radius, shadow, TOUCH_TARGET } from "../theme/style.ts";
@@ -11,9 +12,15 @@ interface SelectionChipProps {
   readonly onPress: () => void;
   readonly disabled?: boolean;
   readonly disabledReason?: string;
+  /** Ячейка сетки: занимает свою долю ряда, подпись переносится до двух строк, без «✓» (выбор виден по заливке). */
+  readonly fill?: boolean;
+  /** Узкая ячейка (шкала 1–10 в один ряд): без боковых полей. */
+  readonly dense?: boolean;
+  /** Значок слева от подписи (lucide). */
+  readonly icon?: LucideIcon;
 }
 
-export function SelectionChip({ group, label, selected, onPress, disabled = false, disabledReason }: Readonly<SelectionChipProps>) {
+export function SelectionChip({ group, label, selected, onPress, disabled = false, disabledReason, fill = false, dense = false, icon: Icon }: Readonly<SelectionChipProps>) {
   const [focused, setFocused] = useState(false);
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -29,22 +36,28 @@ export function SelectionChip({ group, label, selected, onPress, disabled = fals
       onBlur={() => setFocused(false)}
       style={({ pressed }) => [
         styles.chip,
-        selected ? null : shadow.control,
+        fill ? styles.fill : null,
+        dense ? styles.dense : null,
+        selected ? null : shadow.chip,
         {
           backgroundColor: selected ? colors.accentFill : colors.surface,
-          borderColor: focused ? colors.focusRing : "transparent",
+          borderColor: focused ? colors.focusRing : selected ? "transparent" : colors.border,
           opacity: disabled ? 0.5 : pressed ? 0.8 : 1,
         },
       ]}
     >
-      <Text style={[styles.label, { color: selected ? colors.onAccentFill : colors.textPrimary }]}>
-        {selected ? `✓ ${label}` : label}
+      {Icon === undefined ? null : <Icon size={16} color={selected ? colors.onAccentFill : colors.textPrimary} />}
+      <Text style={[styles.label, styles.labelFlex, { color: selected ? colors.onAccentFill : colors.textPrimary }]}>
+        {selected && !fill ? `✓ ${label}` : label}
       </Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  chip: { minHeight: TOUCH_TARGET, borderRadius: radius.pill, borderWidth: 2, paddingHorizontal: 14, justifyContent: "center" },
+  chip: { minHeight: TOUCH_TARGET, borderRadius: radius.pill, borderWidth: 2, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  fill: { flex: 1, minWidth: 0, paddingHorizontal: 6, paddingVertical: 4 },
+  labelFlex: { flexShrink: 1 },
+  dense: { paddingHorizontal: 0 },
   label: { fontSize: 14, lineHeight: 18, fontFamily: fonts.semibold, textAlign: "center" },
 });

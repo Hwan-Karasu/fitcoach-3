@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowDown, ArrowUp, Plus, RotateCcw, X } from "lucide-react-native";
-import { AppIconButton, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
+import { AppIconButton, ChoiceGrid, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { addOption, canChangeType, CHOICE_TYPES, locateField, moveOption, removeOption, renameOption, restoreOption,
@@ -10,6 +10,8 @@ import { addOption, canChangeType, CHOICE_TYPES, locateField, moveOption, remove
 import { QUESTION_TYPES, type FieldConstraints, type QuestionField, type QuestionnaireSchema,
   type QuestionType, type VisibilityRule } from "../domain/QuestionnaireModel.ts";
 import { allFields, validateSchema } from "../domain/QuestionnaireRules.ts";
+import { choiceColumns } from "./choiceLayout.ts";
+import { typeIcons } from "./typeIcons.ts";
 
 export const typeLabels: Readonly<Record<QuestionType, string>> = {
   SHORT_TEXT: "Короткий текст", LONG_TEXT: "Длинный текст", NUMBER: "Число", DATE: "Дата",
@@ -85,20 +87,16 @@ export function FieldEditorSheet({ schema, published, fieldId, showIssues, apply
             <TextField label="Подсказка · необязательно" value={field.help ?? ""}
               onChangeText={(help) => patch({ help: help.trim() === "" ? null : help })} />
 
-            <Text style={[styles.group, { color: colors.textPrimary }]}>Обязательный для завершения анкеты</Text>
-            <View style={styles.chips}>
-              <SelectionChip group="Обязательный" label="Да" selected={field.required} onPress={() => patch({ required: true })} />
-              <SelectionChip group="Обязательный" label="Нет" selected={!field.required} onPress={() => patch({ required: false })} />
-            </View>
+            <Text style={[styles.group, { color: colors.textPrimary }]}>Обязательный вопрос</Text>
+            <ChoiceGrid group="Обязательный" columns={2} items={[{ id: "yes", label: "Да" }, { id: "no", label: "Нет" }]}
+              selected={[field.required ? "yes" : "no"]} onPress={(id) => patch({ required: id === "yes" })} />
+            <Text style={[styles.note, { color: colors.textSecondary }]}>Без ответа на обязательный вопрос анкета не считается заполненной полностью.</Text>
 
             <Text style={[styles.group, { color: colors.textPrimary }]}>Тип ответа</Text>
             {canChangeType(field, published) ? (
-              <View style={styles.chips}>
-                {QUESTION_TYPES.map((type) => (
-                  <SelectionChip key={type} group="Тип ответа" label={typeLabels[type]} selected={field.type === type}
-                    onPress={() => patch({ type })} />
-                ))}
-              </View>
+              <ChoiceGrid group="Тип ответа" columns={choiceColumns(QUESTION_TYPES.map((type) => typeLabels[type]))} selected={[field.type]}
+                items={QUESTION_TYPES.map((type) => ({ id: type, label: typeLabels[type], icon: typeIcons[type] }))}
+                onPress={(id) => patch({ type: id as QuestionType })} />
             ) : (
               <Text style={[styles.note, { color: colors.textSecondary }]}>
                 {`${typeLabels[field.type]}. Тип не меняется: ${field.origin === "SYSTEM" ? "системный вопрос" : "вопрос уже опубликован, ответы привязаны к типу"}.`}
@@ -137,36 +135,48 @@ export function FieldEditorSheet({ schema, published, fieldId, showIssues, apply
               </Pressable>
             </> : null}
 
-            <Text style={[styles.group, { color: colors.textPrimary }]}>Показывать вопрос</Text>
-            <View style={styles.chips}>
-              <SelectionChip group="Показывать" label="Всегда" selected={rule === null} onPress={() => patch({ visibleIf: null })} />
-              {sources.map((entry) => (
-                <SelectionChip key={entry.id} group="Показывать, если" label={entry.label.trim() || "Без текста"}
-                  selected={rule?.sourceFieldId === entry.id}
-                  onPress={() => patch({ visibleIf: { sourceFieldId: entry.id, operator: "EQUALS",
-                    value: entry.type === "SWITCH" ? "true" : entry.options.find((option) => !option.retired)?.id ?? "" } })} />
-              ))}
-            </View>
+            <Text style={[styles.group, { color: colors.textPrimary }]}>Когда показывать вопрос</Text>
+            <ChoiceGrid group="Когда показывать" columns={2}
+              items={[{ id: "always", label: "Всегда" }, { id: "conditional", label: "Только при условии" }]}
+              selected={[rule === null ? "always" : "conditional"]}
+              onPress={(id) => {
+                if (id === "always") { patch({ visibleIf: null }); return; }
+                const first = sources[0];
+                if (rule !== null || first === undefined) return;
+                patch({ visibleIf: { sourceFieldId: first.id, operator: "EQUALS",
+                  value: first.type === "SWITCH" ? "true" : first.options.find((option) => !option.retired)?.id ?? "" } });
+              }} />
+            <Text style={[styles.note, { color: colors.textSecondary }]}>
+              {rule === null ? "Вопрос виден в анкете всегда. «Только при условии» — вопрос появится, когда в другом вопросе выбран нужный ответ (например, жалобы на здоровье — только если «Противопоказаний нет» = Нет)."
+                : "Вопрос появится в анкете, только когда выполнено условие ниже. Пока оно не выполнено, вопрос скрыт, а сохранённые ответы не теряются."}
+            </Text>
             {rule !== null && source !== null ? <>
-              <View style={styles.chips}>
-                {operatorsFor(source.type).map((operator) => (
-                  <SelectionChip key={operator} group="Условие" label={operatorLabels[operator]} selected={rule.operator === operator}
-                    onPress={() => patch({ visibleIf: { ...rule, operator } })} />
-                ))}
-              </View>
-              {CHOICE_TYPES.includes(source.type) ? (
-                <View style={styles.chips}>
-                  {source.options.filter((option) => !option.retired).map((option) => (
-                    <SelectionChip key={option.id} group="Значение" label={option.label || "Без текста"} selected={rule.value === option.id}
-                      onPress={() => patch({ visibleIf: { ...rule, value: option.id } })} />
-                  ))}
-                </View>
-              ) : source.type === "SWITCH" ? (
-                <View style={styles.chips}>
-                  <SelectionChip group="Значение" label="Да" selected={rule.value === "true"} onPress={() => patch({ visibleIf: { ...rule, value: "true" } })} />
-                  <SelectionChip group="Значение" label="Нет" selected={rule.value === "false"} onPress={() => patch({ visibleIf: { ...rule, value: "false" } })} />
-                </View>
-              ) : (
+              <Text style={[styles.group, { color: colors.textPrimary }]}>Если ответ на вопрос</Text>
+              <ChoiceGrid group="Вопрос-условие" columns={1}
+                items={sources.map((entry) => ({ id: entry.id, label: entry.label.trim() || "Вопрос без текста" }))}
+                selected={[source.id]}
+                onPress={(id) => {
+                  const entry = sources.find((item) => item.id === id);
+                  if (entry === undefined || entry.id === rule.sourceFieldId) return;
+                  patch({ visibleIf: { sourceFieldId: entry.id, operator: "EQUALS",
+                    value: entry.type === "SWITCH" ? "true" : entry.options.find((option) => !option.retired)?.id ?? "" } });
+                }} />
+              <Text style={[styles.group, { color: colors.textPrimary }]}>Условие</Text>
+              <ChoiceGrid group="Условие" columns={operatorsFor(source.type).length}
+                items={operatorsFor(source.type).map((operator) => ({ id: operator, label: operatorLabels[operator] }))}
+                selected={[rule.operator]}
+                onPress={(id) => patch({ visibleIf: { ...rule, operator: id as VisibilityRule["operator"] } })} />
+              {CHOICE_TYPES.includes(source.type) ? <>
+                <Text style={[styles.group, { color: colors.textPrimary }]}>Значение</Text>
+                <ChoiceGrid group="Значение" disabled={false}
+                  columns={choiceColumns(source.options.filter((option) => !option.retired).map((option) => option.label))}
+                  items={source.options.filter((option) => !option.retired).map((option) => ({ id: option.id, label: option.label || "Без текста" }))}
+                  selected={[rule.value]} onPress={(id) => patch({ visibleIf: { ...rule, value: id } })} />
+              </> : source.type === "SWITCH" ? <>
+                <Text style={[styles.group, { color: colors.textPrimary }]}>Значение</Text>
+                <ChoiceGrid group="Значение" columns={2} items={[{ id: "true", label: "Да" }, { id: "false", label: "Нет" }]}
+                  selected={[rule.value]} onPress={(id) => patch({ visibleIf: { ...rule, value: id } })} />
+              </> : (
                 <TextField label="Значение" value={rule.value} onChangeText={(value) => patch({ visibleIf: { ...rule, value } })} />
               )}
             </> : null}
@@ -183,10 +193,9 @@ export function FieldEditorSheet({ schema, published, fieldId, showIssues, apply
                     onChangeText={(text) => setLimits({ ...limits, max: numberOrUndefined(text) })} />
                 </View>
               </View>
-              <View style={styles.chips}>
-                <SelectionChip group="Целое число" label="Только целое" selected={limits.integer === true}
-                  onPress={() => setLimits({ ...limits, integer: limits.integer === true ? undefined : true })} />
-              </View>
+              <ChoiceGrid group="Целое число" columns={1} items={[{ id: "integer", label: "Только целое" }]}
+                selected={limits.integer === true ? ["integer"] : []}
+                onPress={() => setLimits({ ...limits, integer: limits.integer === true ? undefined : true })} />
             </> : null}
             {field.type === "SHORT_TEXT" || field.type === "LONG_TEXT" ? <>
               <Text style={[styles.group, { color: colors.textPrimary }]}>Ограничения ответа</Text>
@@ -196,10 +205,9 @@ export function FieldEditorSheet({ schema, published, fieldId, showIssues, apply
             </> : null}
             {field.type === "DATE" ? <>
               <Text style={[styles.group, { color: colors.textPrimary }]}>Ограничения ответа</Text>
-              <View style={styles.chips}>
-                <SelectionChip group="Дата" label="Не в будущем" selected={limits.notFuture === true}
-                  onPress={() => setLimits({ ...limits, notFuture: limits.notFuture === true ? undefined : true })} />
-              </View>
+              <ChoiceGrid group="Дата" columns={1} items={[{ id: "notFuture", label: "Не в будущем" }]}
+                selected={limits.notFuture === true ? ["notFuture"] : []}
+                onPress={() => setLimits({ ...limits, notFuture: limits.notFuture === true ? undefined : true })} />
             </> : null}
           </ScrollView>
         ) : null}
@@ -218,7 +226,6 @@ const styles = StyleSheet.create({
   issue: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 17 },
   group: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, marginTop: 6 },
   note: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   optionRow: { flexDirection: "row", alignItems: "flex-end", gap: 2 },
   optionInput: { flex: 1 },
   pair: { flexDirection: "row", gap: 8 },

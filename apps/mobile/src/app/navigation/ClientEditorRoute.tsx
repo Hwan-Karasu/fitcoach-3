@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { Activity, Apple, Flame, HeartPulse, ListPlus, Tag, Target, type LucideIcon } from "lucide-react-native";
 import { ClientEditorPreview, type ClientEditorAppendix, type ClientRecord, type ClientRecoveryDraft,
   type ClientRecoveryDraftPort, type ClientRepositoryPort } from
   "../../features/clients/public.ts";
@@ -9,6 +10,11 @@ import { latestPoint, localDateOf, parseValueX10, upsertDailyMeasurement, type M
 import { AppButton, ConfirmDialog, LoadingState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
+
+/** Значки вкладок стандартных разделов анкеты; свои разделы тренера получают нейтральный значок. */
+const sectionIcons: Readonly<Record<string, LucideIcon>> = {
+  "sys:goals": Target, "sys:health": HeartPulse, "sys:lifestyle": Activity, "sys:nutrition": Apple, "sys:motivation": Flame, "sys:extra": ListPlus,
+};
 
 type Loaded = Readonly<{ client: ClientRecord | null; draft: ClientRecoveryDraft | null }>;
 
@@ -123,7 +129,7 @@ export function ClientEditorRoute({ clientId, repository, questionnaire, measure
   const published = answers.published;
   const appendix: ClientEditorAppendix | undefined = published === null ? undefined : {
     sections: published.schema.sections.filter((section) => !section.hidden)
-      .map((section) => ({ id: section.id, title: section.title })),
+      .map((section) => ({ id: section.id, title: section.title, icon: sectionIcons[section.id] ?? Tag })),
     dirty: answers.dirtyIds.length > 0,
     validate: () => {
       const prepared = answers.prepare();

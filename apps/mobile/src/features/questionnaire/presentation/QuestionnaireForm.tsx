@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
-import { SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
+import { ChoiceGrid, DateField, TextField } from "../../../shared/ui/components/public.ts";
+import { choiceColumns } from "./choiceLayout.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { AnswerValue, Answers, QuestionField, QuestionnaireSchema } from "../domain/QuestionnaireModel.ts";
 import { formatDateInput, isFieldVisible, parseDateInput, parseNumberInput } from "../domain/QuestionnaireRules.ts";
@@ -69,13 +70,23 @@ export function QuestionnaireForm({ schema, inputs, errors, onChange, disabled =
     const error = errors[entry.id];
     const help = entry.help === null ? null : <Text style={[styles.help, { color: colors.textSecondary }]}>{entry.help}</Text>;
     const problem = error === undefined ? null : <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>;
-    if (entry.type === "SHORT_TEXT" || entry.type === "LONG_TEXT" || entry.type === "NUMBER" || entry.type === "DATE") {
+    if (entry.type === "DATE") {
+      const parsed = typeof value === "string" ? parseDateInput(value) : null;
+      return (
+        <View key={entry.id} style={styles.field}>
+          <DateField label={label} value={typeof parsed === "string" ? parsed : ""} disabled={disabled} hint={entry.help ?? undefined}
+            max={entry.constraints?.notFuture === true ? new Date().toISOString().slice(0, 10) : undefined}
+            error={error} onChange={(iso) => onChange(entry.id, iso === "" ? undefined : formatDateInput(iso))} />
+        </View>
+      );
+    }
+    if (entry.type === "SHORT_TEXT" || entry.type === "LONG_TEXT" || entry.type === "NUMBER") {
       return (
         <View key={entry.id} style={styles.field}>
           <TextField label={label} value={typeof value === "string" ? value : ""} disabled={disabled}
-            keyboardType={entry.type === "NUMBER" ? "decimal-pad" : entry.type === "DATE" ? "numbers-and-punctuation" : undefined}
-            placeholder={entry.type === "DATE" ? "ДД.ММ.ГГГГ" : entry.type === "NUMBER" ? "Число" : entry.help ?? undefined}
-            hint={entry.type === "DATE" || entry.type === "NUMBER" ? entry.help ?? undefined : undefined}
+            keyboardType={entry.type === "NUMBER" ? "decimal-pad" : undefined}
+            placeholder={entry.type === "NUMBER" ? "Число" : entry.help ?? undefined}
+            hint={entry.type === "NUMBER" ? entry.help ?? undefined : undefined}
             error={error} onChangeText={(text) => onChange(entry.id, text)} />
         </View>
       );
@@ -85,12 +96,10 @@ export function QuestionnaireForm({ schema, inputs, errors, onChange, disabled =
         <View key={entry.id} style={styles.field}>
           <Text style={[styles.label, { color: colors.textPrimary }]}>{label}</Text>
           {help}
-          <View style={styles.chips}>
-            <SelectionChip group={entry.label} label="Да" selected={value === true} disabled={disabled}
-              onPress={() => onChange(entry.id, value === true ? undefined : true)} />
-            <SelectionChip group={entry.label} label="Нет" selected={value === false} disabled={disabled}
-              onPress={() => onChange(entry.id, value === false ? undefined : false)} />
-          </View>
+          <ChoiceGrid group={entry.label} columns={2} disabled={disabled}
+            items={[{ id: "yes", label: "Да" }, { id: "no", label: "Нет" }]}
+            selected={value === true ? ["yes"] : value === false ? ["no"] : []}
+            onPress={(id) => onChange(entry.id, id === "yes" ? (value === true ? undefined : true) : (value === false ? undefined : false))} />
           {problem}
         </View>
       );
@@ -103,20 +112,16 @@ export function QuestionnaireForm({ schema, inputs, errors, onChange, disabled =
         <Text style={[styles.label, { color: colors.textPrimary }]}>{label}</Text>
         {help}
         {entry.type === "MULTI_CHOICE" ? <Text style={[styles.help, { color: colors.textMuted }]}>Можно выбрать несколько</Text> : null}
-        <View style={styles.chips}>
-          {options.map((option) => (
-            <SelectionChip key={option.id} group={entry.label} disabled={disabled}
-              label={option.retired ? `${option.label} (больше не предлагается)` : option.label}
-              selected={selected.includes(option.id)}
-              onPress={() => {
-                if (entry.type === "SINGLE_CHOICE") onChange(entry.id, selected.includes(option.id) ? undefined : option.id);
-                else {
-                  const next = selected.includes(option.id) ? selected.filter((id) => id !== option.id) : [...selected, option.id];
-                  onChange(entry.id, next.length === 0 ? undefined : next);
-                }
-              }} />
-          ))}
-        </View>
+        <ChoiceGrid group={entry.label} disabled={disabled} selected={selected}
+          columns={choiceColumns(options.map((option) => option.label))}
+          items={options.map((option) => ({ id: option.id, label: option.retired ? `${option.label} (больше не предлагается)` : option.label }))}
+          onPress={(id) => {
+            if (entry.type === "SINGLE_CHOICE") onChange(entry.id, selected.includes(id) ? undefined : id);
+            else {
+              const next = selected.includes(id) ? selected.filter((item) => item !== id) : [...selected, id];
+              onChange(entry.id, next.length === 0 ? undefined : next);
+            }
+          }} />
         {problem}
       </View>
     );
@@ -149,5 +154,4 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, lineHeight: 19, fontFamily: fonts.semibold },
   help: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   error: { fontSize: 12, lineHeight: 16, fontFamily: fonts.semibold },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 });

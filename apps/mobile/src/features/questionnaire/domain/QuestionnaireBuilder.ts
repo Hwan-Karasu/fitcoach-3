@@ -52,6 +52,19 @@ export function addField(schema: QuestionnaireSchema, sectionId: string, type: Q
   return mapSection(schema, sectionId, (section) => ({ ...section, fields: [...section.fields, field] }));
 }
 
+/**
+ * Новый вопрос, закрытый без единого заполненного поля (нет текста, подсказки и текстов вариантов), в анкете не остаётся:
+ * возвращает схему без него. Свой вопрос из опубликованной версии и вопрос с любым заполнением не трогаются.
+ */
+export function discardIfBlank(schema: QuestionnaireSchema, fieldId: string): QuestionnaireSchema {
+  const found = locateField(schema, fieldId);
+  if (found === null || found.field.origin !== "CUSTOM") return schema;
+  const { field } = found;
+  const blank = field.label.trim() === "" && (field.help ?? "").trim() === "" && field.options.every((option) => option.label.trim() === "");
+  if (!blank) return schema;
+  return mapSection(schema, found.section.id, (section) => ({ ...section, fields: section.fields.filter((entry) => entry.id !== fieldId) }));
+}
+
 /** Тип системного поля и поля из опубликованной версии не меняется (ответы привязаны к типу, §25.11). */
 export function canChangeType(field: QuestionField, published: QuestionnaireSchema): boolean {
   return field.origin === "CUSTOM" && !publishedHasField(published, field.id);

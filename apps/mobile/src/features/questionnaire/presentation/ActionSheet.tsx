@@ -33,7 +33,7 @@ export function ActionSheet({ visible, title, actions, onClose, children }: Read
     <Modal visible={visible} transparent animationType="slide" statusBarTranslucent onRequestClose={onClose}>
       <Pressable accessibilityLabel="Закрыть меню" style={[StyleSheet.absoluteFill, styles.scrim]} onPress={onClose} />
       <View style={[styles.sheet, { paddingBottom: 8 + insets.bottom, backgroundColor: colors.canvas, borderColor: colors.border }]}>
-        <Text accessibilityRole="header" numberOfLines={2} style={[styles.title, { color: colors.textSecondary }]}>{title}</Text>
+        <Text accessibilityRole="header" style={[styles.title, { color: colors.textSecondary }]}>{title}</Text>
         {children}
         <ScrollView>
           {actions.map((action) => (

@@ -2,24 +2,21 @@ import { useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, Vibration, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
-import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, ChevronRight, CircleAlert, CircleDot, ClipboardList, Copy, EllipsisVertical, Eye, EyeOff,
-  FolderInput, GripVertical, Hash, History, Lock, PencilLine, Plus, Redo2, RotateCcw, Settings2, SquareCheck, TextAlignStart, ToggleLeft, Trash2,
-  Type, Undo2, type LucideIcon } from "lucide-react-native";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, CircleAlert, ClipboardList, Copy, EllipsisVertical, Eye, EyeOff,
+  FolderInput, GripVertical, History, Lock, PencilLine, Plus, Redo2, RotateCcw, Settings2, Trash2, Undo2 } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, LoadingState, StickyEditorFooter, TextField,
   type NoticeKind } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
-import { addField, addSection, duplicateField, locateField, moveField, moveFieldTo, moveFieldToSection, moveSection, publishedHasField,
+import { addField, addSection, discardIfBlank, duplicateField, locateField, moveField, moveFieldTo, moveFieldToSection, moveSection, publishedHasField,
   removeField, removeSection, restoreField, setFieldHidden, updateSection } from "../domain/QuestionnaireBuilder.ts";
 import { QUESTION_TYPES, type PublishSummary, type QuestionField, type QuestionSection } from "../domain/QuestionnaireModel.ts";
 
-/** Значки типов ответа в меню «Тип ответа нового вопроса». */
-const typeIcons: Readonly<Record<(typeof QUESTION_TYPES)[number], LucideIcon>> = { SHORT_TEXT: Type, LONG_TEXT: TextAlignStart, NUMBER: Hash,
-  DATE: CalendarDays, SINGLE_CHOICE: CircleDot, MULTI_CHOICE: SquareCheck, SWITCH: ToggleLeft };
 import { sameSchema, validateSchema } from "../domain/QuestionnaireRules.ts";
 import { ActionSheet, type SheetAction } from "./ActionSheet.tsx";
 import { builderRows, dropTarget, type BuilderRow } from "./builderRows.ts";
 import { FieldEditorSheet, typeLabels } from "./FieldEditorSheet.tsx";
+import { typeIcons } from "./typeIcons.ts";
 import { QuestionnaireForm, type FormInputs } from "./QuestionnaireForm.tsx";
 import { errorCode, newBuilderId, useQuestionnaireBuilder } from "./useQuestionnaireBuilder.ts";
 import type { QuestionnaireRepositoryPort } from "../domain/QuestionnaireRepositoryPort.ts";
@@ -86,6 +83,8 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
   const builder = useQuestionnaireBuilder(repository);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [editing, setEditing] = useState<string | null>(null);
+  /** Вопрос, созданный в этом сеансе правки: если его закрыли пустым — он не остаётся в анкете. */
+  const [fresh, setFresh] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
@@ -265,6 +264,7 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
         onPress: () => {
           const id = newBuilderId();
           builder.apply((current) => addField(current, menu.sectionId, type, id));
+          setFresh(id);
           setEditing(id);
         } })) };
     }
@@ -322,8 +322,8 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
           style={({ pressed }) => [styles.fieldPress, { opacity: faded ? 0.6 : 1,
             backgroundColor: pressed ? colors.surfaceRaised : "transparent" }]}>
           <View style={styles.grow}>
-            <Text numberOfLines={2} style={[styles.fieldLabel, { color: field.label.trim() ? colors.textPrimary : colors.textMuted }]}>{label}</Text>
-            <Text numberOfLines={1} style={[styles.meta, { color: colors.textSecondary }]}>{markers}</Text>
+            <Text style={[styles.fieldLabel, { color: field.label.trim() ? colors.textPrimary : colors.textMuted }]}>{label}</Text>
+            <Text style={[styles.meta, { color: colors.textSecondary }]}>{markers}</Text>
           </View>
           {broken ? <CircleAlert size={18} color={colors.danger} strokeWidth={2} /> : null}
           <AppIconButton compact label={`Действия: ${label}`} icon={<EllipsisVertical size={18} color={colors.textSecondary} strokeWidth={1.8} />}
@@ -343,7 +343,7 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
           {open ? <ChevronDown size={18} color={colors.textSecondary} strokeWidth={2} />
             : <ChevronRight size={18} color={colors.textSecondary} strokeWidth={2} />}
           <View style={styles.grow}>
-            <Text numberOfLines={1} style={[styles.sectionTitle, { color: colors.textPrimary, opacity: section.hidden ? 0.6 : 1 }]}>{title}</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary, opacity: section.hidden ? 0.6 : 1 }]}>{title}</Text>
             <Text style={[styles.meta, { color: colors.textSecondary }]}>
               {[questionsWord(count), section.hidden ? "Скрыт" : null].filter((item) => item !== null).join(" · ")}
             </Text>
@@ -396,13 +396,13 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
     <View style={[styles.root, { backgroundColor: colors.canvas }]}>
       <View style={[styles.toolbar, { borderBottomColor: colors.border, backgroundColor: colors.canvas }]}>
         <View style={styles.grow}>
-          <Text numberOfLines={1} style={[styles.status, { color: colors.textPrimary }]}>{`Опубликована версия ${published.version}`}</Text>
+          <Text style={[styles.status, { color: colors.textPrimary }]}>{`Опубликована версия ${published.version}`}</Text>
           {builder.saveState === "failed" ? (
             <Pressable accessibilityRole="button" accessibilityLabel="Черновик не сохранился. Повторить сохранение"
               onPress={() => { void builder.flush(); }}>
               <Text style={[styles.meta, { color: colors.danger }]}>Черновик не сохранился · Повторить</Text>
             </Pressable>
-          ) : <Text numberOfLines={1} style={[styles.meta, { color: colors.textSecondary }]}>{saveLabel}</Text>}
+          ) : <Text style={[styles.meta, { color: colors.textSecondary }]}>{saveLabel}</Text>}
         </View>
         <AppIconButton compact label="Отменить" disabled={!builder.canUndo || preview}
           icon={<Undo2 size={20} color={colors.textPrimary} strokeWidth={1.8} />} onPress={builder.undo} />
@@ -455,7 +455,11 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
       <ActionSheet visible={menu !== null} title={sheet.title} actions={sheet.actions} onClose={() => setMenu(null)} />
       <FieldEditorSheet schema={schema} published={published.schema} fieldId={editing} showIssues={showIssues}
         apply={(change) => builder.apply(change, `field:${editing ?? ""}`)} newId={newBuilderId}
-        onClose={() => setEditing(null)} />
+        onClose={() => {
+          if (editing !== null && editing === fresh) builder.apply((current) => discardIfBlank(current, editing));
+          setFresh(null);
+          setEditing(null);
+        }} />
       <ConfirmDialog visible={confirm !== null} confirmBusy={busy}
         title={confirm === null ? "" : confirm.kind === "PUBLISH" ? "Опубликовать анкету?" : confirm.title}
         description={confirm === null ? "" : confirm.kind === "PUBLISH" ? summaryText(confirm.summary, published.version + 1) : confirm.description}
