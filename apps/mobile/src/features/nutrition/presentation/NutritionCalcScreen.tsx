@@ -121,9 +121,11 @@ function HelpSheet({ visible, onClose }: Readonly<{ visible: boolean; onClose: (
  * Экран «Расчёт» (§49.10, UX «Расчёт»): просмотр и редактирование — состояния одного экрана; вес и % жира берутся из Measurements, шаги — из суточной активности.
  * Результат — оценка и черновик целей; действующей целью он становится только после явного «Применить как цели».
  */
-export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenJournal, calc, measurements }: Readonly<{ clientId: string; body: CalcClientBody; onOpenJournal: () => void;
-  /** Записывает пол и рост в карточку клиента (владелец данных — Clients). */
-  onUpdateBody: (patch: Readonly<{ sex: CalcSex | null; heightCm: number | null }>) => Promise<void>; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort }>) {
+/** Профиль расчёта вместе с полом и ростом карточки клиента (`null` — карточку не менять): одна операция workflow, пол и рост принадлежат Clients. */
+export type SaveCalcProfile = (profile: CalcProfile, expectedRevision: number | null, body: Readonly<{ sex: CalcSex | null; heightCm: number | null }> | null) => Promise<void>;
+
+export function NutritionCalcScreen({ clientId, body, onSaveProfile, onOpenJournal, calc, measurements }: Readonly<{ clientId: string; body: CalcClientBody; onOpenJournal: () => void;
+  onSaveProfile: SaveCalcProfile; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const { loaded, failed, reload } = useCalcData(clientId, calc, measurements);
@@ -181,17 +183,21 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenJourna
     if ((weight !== null && (weight < 20 || weight > 400)) || (fat !== null && (fat < 2 || fat > 75))) { setError("Вес — от 20 до 400 кг, процент жира — от 2 до 75."); return; }
     lock.current = true;
     setBusy(true);
-    try {
-      await calc.saveProfile(clientId, next, loaded.stored?.revision ?? null);
-      const heightCm = draft.height.trim() === "" ? null : num(draft.height);
-      if (draft.sex !== body.sex || heightCm !== body.heightCm) await onUpdateBody({ sex: draft.sex, heightCm });
-      // Вес и % жира — факты Measurements: новая запись только при изменённом значении, без параллельного хранилища.
-      const today = localDateOf(new Date());
-      if (weight !== null && weight !== loaded.weight) await upsertDailyMeasurement(measurements, clientId, { type: "WEIGHT", valueX10: Math.round(weight * 10), localDate: today, localMinute: null });
-      if (fat !== null && fat !== loaded.fat) await upsertDailyMeasurement(measurements, clientId, { type: "BODY_FAT", valueX10: Math.round(fat * 10), localDate: today, localMinute: null });
-      setEditing(false);
-      setError(null);
-    } catch (failure) { setError(calcErrorText(failure)); reload(); }
+    // Профиль с полом и ростом — одна операция; вес и % жира — отдельные факты Measurements (новая запись только при изменении): сбой одного не мешает остальным.
+    const failures: string[] = [];
+    const heightCm = draft.height.trim() === "" ? null : num(draft.height);
+    try { await onSaveProfile(next, loaded.stored?.revision ?? null, draft.sex !== body.sex || heightCm !== body.heightCm ? { sex: draft.sex, heightCm } : null); }
+    catch (failure) { failures.push(calcErrorText(failure)); }
+    const today = localDateOf(new Date());
+    if (weight !== null && weight !== loaded.weight) {
+      try { await upsertDailyMeasurement(measurements, clientId, { type: "WEIGHT", valueX10: Math.round(weight * 10), localDate: today, localMinute: null }); }
+      catch (failure) { failures.push(`Вес: ${calcErrorText(failure)}`); }
+    }
+    if (fat !== null && fat !== loaded.fat) {
+      try { await upsertDailyMeasurement(measurements, clientId, { type: "BODY_FAT", valueX10: Math.round(fat * 10), localDate: today, localMinute: null }); }
+      catch (failure) { failures.push(`% жира: ${calcErrorText(failure)}`); }
+    }
+    if (failures.length === 0) { setEditing(false); setError(null); } else { setError(failures.join(" ")); reload(); }
     lock.current = false;
     setBusy(false);
   };

@@ -45,6 +45,7 @@ import { createDevBootDependencies, DEV_WORKSPACE_ID } from "../bootstrap/DevBoo
 type DevClientServices = ClientRepositoryPort & ClientRecoveryDraftPort & ClientRosterPort
   & ClientChangePort & ClientArchivePort;
 
+import { createCalcProfileWorkflow, type CalcProfileWithBodyPort } from "../../workflows/saveCalcProfile.ts";
 import { createWeekCopyWorkflow, type TrainingTransaction } from "../../workflows/copyTrainingWeek.ts";
 import { createWeekSwapWorkflow } from "../../workflows/swapTrainingWeeks.ts";
 import { createMesocycleSaveWorkflow } from "../../workflows/saveTrainingMesocycle.ts";
@@ -61,6 +62,8 @@ export interface NutritionServices {
   readonly diary: NutritionDiaryPort;
   readonly targets: NutritionTargetsPort;
   readonly calc: NutritionCalcPort;
+  /** Профиль расчёта вместе с полом и ростом карточки клиента — одной транзакцией. */
+  readonly calcProfile: CalcProfileWithBodyPort;
 }
 
 /** Explicit dev composition. Production boot will get separate, owner-scoped bindings. */
@@ -204,6 +207,7 @@ export function createDevRuntime(): DevRuntime {
   // Общая транзакция для workflow: база открыта на всё время работы приложения, как у репозиториев.
   let lease: Promise<SqliteDatabaseLease> | null = null;
   const transaction: TrainingTransaction = async (task) => (await (lease ??= database.acquire())).writer.write(task);
+  const calcProfile = createCalcProfileWorkflow(transaction, nutrition.calc.profileParticipant, clients.bodyParticipant);
   const weekCopy = createWeekCopyWorkflow(transaction, trainingPlans.weekCopyParticipant, trainingExecution.weekCopyParticipant,
     exerciseLookup(exercises));
   const weekSwap = createWeekSwapWorkflow(transaction, trainingPlans.weekSwapParticipant, trainingExecution.weekRenumberParticipant);
@@ -234,6 +238,6 @@ export function createDevRuntime(): DevRuntime {
         await exercises.initialize();
       },
     )),
-    services: createDevServices(clients, calendar, accounting, measurements, nutrition, questionnaire, trainingPlans, trainingExecution, restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete),
+    services: createDevServices(clients, calendar, accounting, measurements, { ...nutrition, calcProfile }, questionnaire, trainingPlans, trainingExecution, restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete),
   };
 }

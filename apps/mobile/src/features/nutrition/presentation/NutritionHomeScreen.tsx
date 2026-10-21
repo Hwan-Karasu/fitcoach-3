@@ -8,8 +8,7 @@ import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
 import type { CatalogFilter } from "./AddFoodScreen.tsx";
-import { NutritionCalcScreen, type CalcClientBody } from "./NutritionCalcScreen.tsx";
-import type { CalcSex } from "../domain/CalcRules.ts";
+import { NutritionCalcScreen, type CalcClientBody, type SaveCalcProfile } from "./NutritionCalcScreen.tsx";
 import { NutritionDiaryScreen } from "./NutritionDiaryScreen.tsx";
 import { NutritionStatsScreen } from "./NutritionStatsScreen.tsx";
 
@@ -17,9 +16,9 @@ type Section = "calc" | "diary" | "stats";
 const sections = [{ id: "calc", label: "Расчёт" }, { id: "diary", label: "Дневник" }, { id: "stats", label: "Статистика" }] as const;
 
 /** Главный экран «Питания»: Расчёт / Дневник / Статистика; корректировка БЖУ находится на главной клиента. */
-export function NutritionHomeScreen({ clientId, body, onUpdateBody, onOpenJournal, diary, targets, calc, measurements, onAdd, onEditSource, requestedSection, sectionRequestKey }: Readonly<{
+export function NutritionHomeScreen({ clientId, body, onSaveProfile, onOpenJournal, diary, targets, calc, measurements, onAdd, onEditSource, requestedSection, sectionRequestKey }: Readonly<{
   requestedSection?: Section; sectionRequestKey?: number;
-  clientId: string; onOpenJournal: () => void; body: CalcClientBody; onUpdateBody: (patch: Readonly<{ sex: CalcSex | null; heightCm: number | null }>) => Promise<void>; diary: NutritionDiaryPort; targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; onAdd: (localDate: string, slot: MealSlot, filter?: CatalogFilter) => void;
+  clientId: string; onOpenJournal: () => void; body: CalcClientBody; onSaveProfile: SaveCalcProfile; diary: NutritionDiaryPort; targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; onAdd: (localDate: string, slot: MealSlot, filter?: CatalogFilter) => void;
   onEditSource?: (source: Readonly<{ kind: "FOOD" | "RECIPE"; id: string }>) => void;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -34,7 +33,7 @@ export function NutritionHomeScreen({ clientId, body, onUpdateBody, onOpenJourna
     <View style={{ flex: 1, backgroundColor: palette.tokens.canvas }}>
       <View style={{ paddingHorizontal: 16, paddingTop: 8 }}><SegmentedControl compact items={sections} selectedId={section} onSelect={selectSection} /></View>
       {visited.calc ? <View style={{ flex: 1, display: section === "calc" ? "flex" : "none" }}>
-        <NutritionCalcScreen key={clientId} clientId={clientId} onOpenJournal={onOpenJournal} body={body} onUpdateBody={onUpdateBody} calc={calc} measurements={measurements} />
+        <NutritionCalcScreen key={clientId} clientId={clientId} onOpenJournal={onOpenJournal} body={body} onSaveProfile={onSaveProfile} calc={calc} measurements={measurements} />
       </View> : null}
       {visited.diary ? <View style={{ flex: 1, display: section === "diary" ? "flex" : "none" }}>
         <NutritionDiaryScreen key={clientId} clientId={clientId} diary={diary} targets={targets} body={body} calc={calc} measurements={measurements} onAdd={onAdd} onEditSource={onEditSource} requestedDay={requestedDay} />

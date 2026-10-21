@@ -9,7 +9,8 @@ import { ageOn, type ClientRecord, type ClientRepositoryPort, type ClientRosterP
 import { localDateOf } from "../../features/measurements/public.ts";
 import { useTrainedOn } from "../../read-models/useTrainedOn.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
-import { NutritionHomeCards, type FoodCatalogPort, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort, type RecipeCatalogPort } from "../../features/nutrition/public.ts";
+import type { CalcProfileWithBodyPort } from "../../workflows/saveCalcProfile.ts";
+import { NutritionHomeCards, type SaveCalcProfile, type FoodCatalogPort, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort, type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ClientQuestionnaireScreen, type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
 import { ExecutionDetailsScreen, ExerciseHistoryList, HistoryProgramScreen, MonthlyReportScreen, TrainingArchiveScreen, TrainingStatisticsScreen, retainHistoryView,
   retainStatsFilters, type ExerciseLookupPort,
@@ -113,7 +114,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   repository: ClientRepositoryPort & ClientRosterPort;
   accounting: AccountingRepositoryPort;
   measurements: MeasurementRepositoryPort;
-  nutrition: Readonly<{ foods: FoodCatalogPort; recipes: RecipeCatalogPort; diary: NutritionDiaryPort; targets: NutritionTargetsPort; calc: NutritionCalcPort }>;
+  nutrition: Readonly<{ foods: FoodCatalogPort; recipes: RecipeCatalogPort; diary: NutritionDiaryPort; targets: NutritionTargetsPort; calc: NutritionCalcPort; calcProfile: CalcProfileWithBodyPort }>;
   questionnaire: QuestionnaireRepositoryPort;
   trainingPlans: TrainingPlansRepositoryPort;
   trainingExecution: TrainingExecutionPort;
@@ -200,12 +201,11 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   /** Данные карточки для расчёта КБЖУ; возраст — из даты рождения на сегодня. */
   const calcBody = { sex: client.sex ?? null, age: client.birthDate === null ? null : ageOn(client.birthDate, localDateOf(new Date())), heightCm: client.heightCmX10 === null ? null : client.heightCmX10 / 10 };
   /** Пол и рост пишутся в карточку клиента (владелец — Clients) с CAS по revision; остальные поля карточки и черновик редактора не затрагиваются. */
-  const updateCalcBody = async (patch: Readonly<{ sex: "MALE" | "FEMALE" | null; heightCm: number | null }>): Promise<void> => {
-    // Свежая revision и отдельный путь записи: черновик редактора карточки не удаляется (`updateBody`).
-    const fresh = await repository.get(client.id);
-    if (fresh === null) throw new Error("CLIENT_STALE_OR_WRONG_SCOPE");
-    const updated = await repository.updateBody(client.id, fresh.revision, { sex: patch.sex, heightCmX10: patch.heightCm === null ? null : Math.round(patch.heightCm * 10) });
-    setSelection({ clientId, result: updated });
+  const saveCalcProfile: SaveCalcProfile = async (profile, expectedRevision, bodyPatch) => {
+    // Профиль расчёта и пол/рост — одна транзакция (workflow); текущая revision карточки читается внутри неё, черновик редактора карточки не удаляется.
+    const saved = await nutrition.calcProfile.save(client.id, profile, expectedRevision,
+      bodyPatch === null ? null : { sex: bodyPatch.sex, heightCmX10: bodyPatch.heightCm === null ? null : Math.round(bodyPatch.heightCm * 10) });
+    if (saved.client !== null) setSelection({ clientId, result: saved.client });
   };
 
   return (
@@ -235,7 +235,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
           }} />}
       </Tabs.Screen>
       <Tabs.Screen name="Nutrition" options={{ tabBarLabel: workspaceTabs.Nutrition, tabBarAccessibilityLabel: workspaceTabs.Nutrition }}>
-        {() => <NutritionNavigator clientId={client.id} clientName={client.displayName} clientEmoji={client.emoji} body={calcBody} onUpdateBody={updateCalcBody} foods={nutrition.foods} recipes={nutrition.recipes}
+        {() => <NutritionNavigator clientId={client.id} clientName={client.displayName} clientEmoji={client.emoji} body={calcBody} onSaveProfile={saveCalcProfile} foods={nutrition.foods} recipes={nutrition.recipes}
           diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements} onOpenJournal={() => onOpenMeasurements(client.id)} onExitClient={onClose} onOpenClients={onOpenClients} />}
       </Tabs.Screen>
       <Tabs.Screen name="Training" options={{ tabBarLabel: workspaceTabs.Training, tabBarAccessibilityLabel: workspaceTabs.Training}}>

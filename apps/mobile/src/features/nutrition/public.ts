@@ -2,7 +2,7 @@ export { AddFoodScreen, type CatalogFilter } from "./presentation/AddFoodScreen.
 export { FoodEditorScreen } from "./presentation/FoodEditorScreen.tsx";
 export { NutritionHomeScreen } from "./presentation/NutritionHomeScreen.tsx";
 export { NutritionHomeCards } from "./presentation/NutritionHomeCards.tsx";
-export type { CalcClientBody } from "./presentation/NutritionCalcScreen.tsx";
+export type { CalcClientBody, SaveCalcProfile } from "./presentation/NutritionCalcScreen.tsx";
 export { RecipeEditorScreen } from "./presentation/RecipeEditorScreen.tsx";
 export type { FoodBasis, FoodBasisUnit, FoodInput, FoodProduct, Nutrients } from "./domain/FoodModel.ts";
 export type { FoodCatalogCommittedChange, FoodCatalogPort } from "./domain/FoodCatalogPort.ts";
@@ -20,7 +20,7 @@ export { TARGET_METRICS, type Corridors, type RangeVerdict, type ResolvedTarget,
   type TargetVersionInput, type WeekdayIndex } from "./domain/TargetModel.ts";
 export type { NutritionTargetsPort, TargetsCommittedChange } from "./domain/NutritionTargetsPort.ts";
 export { affectedPeriod, assessDay, energyConsistency, judge, resolveTarget, validateCorridors, validateVersion, versionFor, weekdayOf } from "./domain/TargetRules.ts";
-export type { CalcCommittedChange, NutritionCalcPort, StepsDay, StoredCalcProfile, WorkoutMark } from "./domain/NutritionCalcPort.ts";
+export type { CalcCommittedChange, CalcProfileParticipant, NutritionCalcPort, StepsDay, StoredCalcProfile, WorkoutMark } from "./domain/NutritionCalcPort.ts";
 export { CALC_ACTIVITIES, CALC_GOALS, CALC_INTENSITIES, calcMacros, deriveCalc, type CalcActivity, type CalcGoal, type CalcInputs, type CalcIntensity,
   type CalcProfile, type CalcResult, type CalcSex } from "./domain/CalcRules.ts";
 export { computeNutritionStats, type MetricStats, type NutritionDayPoint, type NutritionStats, type NutritionStatsInput } from "./domain/NutritionStats.ts";

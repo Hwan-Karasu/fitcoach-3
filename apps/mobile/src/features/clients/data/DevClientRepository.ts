@@ -3,7 +3,7 @@ import { SharedSqliteDatabase } from "../../../shared/db/SharedSqliteDatabase.ts
 import { UUID_V4_SQL } from "../../../shared/db/SqlIds.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
-import type { ClientRecord, CreateClientInput, ClientRepositoryPort } from
+import type { ClientBodyParticipant, ClientRecord, CreateClientInput, ClientRepositoryPort } from
   "../domain/ClientRepositoryPort.ts";
 import type { ArchiveSortMode, ClientArchivePort, ClientDeletionManifest,
   ClientLifecycleCounts } from "../domain/ClientArchivePort.ts";
@@ -92,6 +92,18 @@ function normalizedEmoji(value: string | null | undefined): string | null {
   const emoji = value?.trim() || null;
   if (emoji !== null && Array.from(emoji).length > 8) throw new Error("CLIENT_EMOJI_INVALID");
   return emoji;
+}
+
+async function writeBody(tx: SqliteStatementPort, workspaceId: string, id: string, expectedRevision: number,
+  patch: Readonly<{ sex: "MALE" | "FEMALE" | null; heightCmX10: number | null }>): Promise<ClientRecord> {
+  if (!id.trim() || !Number.isSafeInteger(expectedRevision) || expectedRevision < 1) throw new Error("CLIENT_COMMAND_INVALID");
+  if (patch.sex !== null && patch.sex !== "MALE" && patch.sex !== "FEMALE") throw new Error("CLIENT_SEX_INVALID");
+  if (patch.heightCmX10 !== null && (!Number.isSafeInteger(patch.heightCmX10) || patch.heightCmX10 <= 0)) throw new Error("CLIENT_HEIGHT_INVALID");
+  const result = await tx.run(`UPDATE dev_clients SET sex = ?, height_cm_x10 = ?, updated_at = ?, revision = revision + 1
+    WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'ACTIVE'`,
+  [patch.sex, patch.heightCmX10, new Date().toISOString(), workspaceId, id, expectedRevision]);
+  if (result.changes !== 1) throw new Error("CLIENT_STALE_OR_WRONG_SCOPE");
+  return clientById(tx, workspaceId, id);
 }
 
 async function clientById(tx: SqliteStatementPort, workspaceId: string, id: string): Promise<ClientRecord> {
@@ -421,20 +433,21 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
   }
 
   async updateBody(id: string, expectedRevision: number, patch: Readonly<{ sex: "MALE" | "FEMALE" | null; heightCmX10: number | null }>): Promise<ClientRecord> {
-    if (!id.trim() || !Number.isSafeInteger(expectedRevision) || expectedRevision < 1) throw new Error("CLIENT_COMMAND_INVALID");
-    if (patch.sex !== null && patch.sex !== "MALE" && patch.sex !== "FEMALE") throw new Error("CLIENT_SEX_INVALID");
-    if (patch.heightCmX10 !== null && (!Number.isSafeInteger(patch.heightCmX10) || patch.heightCmX10 <= 0)) throw new Error("CLIENT_HEIGHT_INVALID");
     const { writer } = this.ready();
-    const updated = await writer.write(async (tx) => {
-      const result = await tx.run(`UPDATE dev_clients SET sex = ?, height_cm_x10 = ?, updated_at = ?, revision = revision + 1
-        WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'ACTIVE'`,
-      [patch.sex, patch.heightCmX10, new Date().toISOString(), this.workspaceId, id, expectedRevision]);
-      if (result.changes !== 1) throw new Error("CLIENT_STALE_OR_WRONG_SCOPE");
-      return clientById(tx, this.workspaceId, id);
-    });
+    const updated = await writer.write((tx) => writeBody(tx, this.workspaceId, id, expectedRevision, patch));
     this.publishCommitted({ clientId: id, affectedRosters: ["ACTIVE"] });
     return updated;
   }
+
+  /** Для workflow «профиль расчёта + пол и рост»: та же запись внутри общей транзакции; текущая ревизия читается в ней же. */
+  readonly bodyParticipant: ClientBodyParticipant<SqliteStatementPort> = {
+    update: async (tx, id, patch) => {
+      const row = await tx.first<{ revision: number }>("SELECT revision FROM dev_clients WHERE workspace_id = ? AND id = ? AND lifecycle = 'ACTIVE'", [this.workspaceId, id]);
+      if (row === null) throw new Error("CLIENT_STALE_OR_WRONG_SCOPE");
+      return writeBody(tx, this.workspaceId, id, row.revision, patch);
+    },
+    notify: (id) => this.publishCommitted({ clientId: id, affectedRosters: ["ACTIVE"] }),
+  };
 
   async loadDraft(clientId: string | null): Promise<ClientRecoveryDraft | null> {
     const { connection } = this.ready();

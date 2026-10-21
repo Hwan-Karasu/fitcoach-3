@@ -16,6 +16,12 @@ export interface WorkoutMark {
   readonly done: boolean;
 }
 
+/** Запись профиля расчёта внутри чужой транзакции (workflow «профиль расчёта + карточка клиента»); уведомление — после коммита. */
+export interface CalcProfileParticipant<Tx> {
+  save(tx: Tx, clientId: string, profile: CalcProfile, expectedRevision: number | null, now: Date): Promise<StoredCalcProfile>;
+  notify(clientId: string): void;
+}
+
 export interface CalcCommittedChange {
   readonly clientId: string;
 }

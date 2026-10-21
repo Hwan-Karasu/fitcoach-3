@@ -4,7 +4,7 @@ import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/
 import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
 import { assertSteps, validateCalcProfile, type CalcActivity, type CalcGoal, type CalcIntensity, type CalcProfile } from "../domain/CalcRules.ts";
 import { assertDate } from "../domain/DiaryRules.ts";
-import type { CalcCommittedChange, NutritionCalcPort, StepsDay, StoredCalcProfile, WorkoutMark } from "../domain/NutritionCalcPort.ts";
+import type { CalcCommittedChange, CalcProfileParticipant, NutritionCalcPort, StepsDay, StoredCalcProfile, WorkoutMark } from "../domain/NutritionCalcPort.ts";
 import { DEV_NUTRITION_LEDGER, devNutritionCatalog } from "./DevNutritionCatalog.ts";
 
 interface ProfileRow {
@@ -25,6 +25,23 @@ const toStored = (row: ProfileRow): StoredCalcProfile => ({ revision: row.revisi
 async function load(reader: SqliteStatementPort, workspaceId: string, clientId: string): Promise<StoredCalcProfile | null> {
   const row = await reader.first<ProfileRow>(`SELECT ${columns} FROM dev_nutrition_calc_profiles WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
   return row === null ? null : toStored(row);
+}
+
+/** Создание (`expectedRevision: null`) или правка по revision; та же запись для порта и для участника workflow. */
+async function writeProfile(tx: SqliteStatementPort, workspaceId: string, clientId: string, valid: CalcProfile, expectedRevision: number | null, stamp: string): Promise<StoredCalcProfile> {
+  if (expectedRevision === null) {
+    const exists = await tx.first<{ n: number }>("SELECT count(*) AS n FROM dev_nutrition_calc_profiles WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    if ((exists?.n ?? 0) > 0) throw new Error("CALC_STALE");
+    await tx.run(`INSERT INTO dev_nutrition_calc_profiles (workspace_id, client_id, goal, activity, workouts_per_week, workout_minutes,
+        intensity, step_kcal, revision, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+    [workspaceId, clientId, valid.goal, valid.activity, valid.workoutsPerWeek, valid.minutes, valid.intensity, valid.stepKcal, stamp]);
+  } else {
+    const result = await tx.run(`UPDATE dev_nutrition_calc_profiles SET goal = ?, activity = ?, workouts_per_week = ?, workout_minutes = ?,
+        intensity = ?, step_kcal = ?, revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND client_id = ? AND revision = ?`,
+    [valid.goal, valid.activity, valid.workoutsPerWeek, valid.minutes, valid.intensity, valid.stepKcal, stamp, workspaceId, clientId, expectedRevision]);
+    if (result.changes !== 1) throw new Error("CALC_STALE");
+  }
+  return (await load(tx, workspaceId, clientId)) as StoredCalcProfile;
 }
 
 /** Nutrition side of PermanentlyDeleteArchivedClient (§15.7): профиль расчёта и шаги. */
@@ -103,25 +120,16 @@ export class DevNutritionCalcRepository implements NutritionCalcPort {
 
   async saveProfile(clientId: string, profile: CalcProfile, expectedRevision: number | null, now: Date = new Date()): Promise<StoredCalcProfile> {
     const valid = validateCalcProfile(profile);
-    const saved = await this.ready().writer.write(async (tx) => {
-      const stamp = now.toISOString();
-      if (expectedRevision === null) {
-        const exists = await tx.first<{ n: number }>("SELECT count(*) AS n FROM dev_nutrition_calc_profiles WHERE workspace_id = ? AND client_id = ?", [this.workspaceId, clientId]);
-        if ((exists?.n ?? 0) > 0) throw new Error("CALC_STALE");
-        await tx.run(`INSERT INTO dev_nutrition_calc_profiles (workspace_id, client_id, goal, activity, workouts_per_week, workout_minutes,
-            intensity, step_kcal, revision, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
-        [this.workspaceId, clientId, valid.goal, valid.activity, valid.workoutsPerWeek, valid.minutes, valid.intensity, valid.stepKcal, stamp]);
-      } else {
-        const result = await tx.run(`UPDATE dev_nutrition_calc_profiles SET goal = ?, activity = ?, workouts_per_week = ?, workout_minutes = ?,
-            intensity = ?, step_kcal = ?, revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND client_id = ? AND revision = ?`,
-        [valid.goal, valid.activity, valid.workoutsPerWeek, valid.minutes, valid.intensity, valid.stepKcal, stamp, this.workspaceId, clientId, expectedRevision]);
-        if (result.changes !== 1) throw new Error("CALC_STALE");
-      }
-      return (await load(tx, this.workspaceId, clientId)) as StoredCalcProfile;
-    });
+    const saved = await this.ready().writer.write((tx) => writeProfile(tx, this.workspaceId, clientId, valid, expectedRevision, now.toISOString()));
     this.publish({ clientId });
     return saved;
   }
+
+  /** Для workflow «профиль расчёта + пол и рост»: та же запись внутри общей транзакции. */
+  readonly profileParticipant: CalcProfileParticipant<SqliteStatementPort> = {
+    save: (tx, clientId, profile, expectedRevision, now) => writeProfile(tx, this.workspaceId, clientId, validateCalcProfile(profile), expectedRevision, now.toISOString()),
+    notify: (clientId) => this.publish({ clientId }),
+  };
 
   async listSteps(clientId: string, fromDate: string, toDate: string): Promise<readonly StepsDay[]> {
     assertDate(fromDate);

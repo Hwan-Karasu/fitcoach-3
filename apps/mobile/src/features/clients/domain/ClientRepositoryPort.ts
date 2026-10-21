@@ -26,6 +26,12 @@ export interface CreateClientInput {
   readonly emoji?: string | null;
 }
 
+/** Запись пола и роста внутри чужой транзакции (workflow «профиль расчёта + карточка»); уведомление — после коммита. Ревизия читается внутри транзакции. */
+export interface ClientBodyParticipant<Tx> {
+  update(tx: Tx, id: string, patch: Readonly<{ sex: "MALE" | "FEMALE" | null; heightCmX10: number | null }>): Promise<ClientRecord>;
+  notify(id: string): void;
+}
+
 export interface ClientRepositoryPort {
   list(lifecycle: ClientRecord["lifecycle"]): Promise<readonly ClientRecord[]>;
   get(id: string): Promise<ClientRecord | null>;
