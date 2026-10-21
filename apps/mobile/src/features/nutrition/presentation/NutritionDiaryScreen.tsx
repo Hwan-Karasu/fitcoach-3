@@ -138,14 +138,6 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
       `В этом дне уже есть записи. Скопировать день ${dayTitle(from, today)} только в пустые приёмы пищи? Существующие записи не изменятся.`);
     } catch (failure) { setError(nutritionErrorText(failure)); }
   };
-  const repeatSlot = async (slot: MealSlot) => {
-    try {
-    const from = await diary.previousFoodDate(clientId, localDate, slot);
-    if (from === null) { setNotice(`Прежних записей в приёме «${slotLabels[slot]}» нет.`); return; }
-    askCopy({ fromDate: from, toDate: localDate, slot, targetSlot: null, mode: "APPEND" }, data !== null && data.entries.some((entry) => entry.slot === slot),
-      `В приёме «${slotLabels[slot]}» уже есть записи. Добавить к ним приём из дня ${dayTitle(from, today)}?`);
-    } catch (failure) { setError(nutritionErrorText(failure)); }
-  };
   const pasteSlot = (slot: MealSlot) => {
     if (copied === null) return;
     askCopy({ fromDate: copied.date, toDate: localDate, slot: copied.slot, targetSlot: slot, mode: "APPEND" }, data !== null && data.entries.some((entry) => entry.slot === slot),
@@ -210,11 +202,7 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
               {open ? <>
                 {slotEntries.map((entry) => <EntryRow key={entry.id} entry={entry} onOpen={() => setEditing(entry)} />)}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipStrip} keyboardShouldPersistTaps="handled">
-                  <QuickChip label="Из избранного" accessibilityLabel={`Добавить из избранного в: ${slotLabels[slot]}`} onPress={() => onAdd(localDate, slot, "FAVORITES")} />
-                  <QuickChip label="Из недавних" accessibilityLabel={`Добавить из недавних в: ${slotLabels[slot]}`} onPress={() => onAdd(localDate, slot, "RECENT")} />
-                  <QuickChip label="Сохранённая еда" accessibilityLabel={`Добавить сохранённую еду в: ${slotLabels[slot]}`} onPress={() => onAdd(localDate, slot, "SAVED")} />
                   <QuickChip label="Сохранить еду" accessibilityLabel={`Сохранить набор: ${slotLabels[slot]}`} disabled={slotEntries.length === 0} onPress={() => setSavingMeal(slotEntries.map(savedSnapshot))} />
-                  <QuickChip label="Повторить" icon={<Repeat2 size={14} color={colors.textPrimary} />} disabled={copying} accessibilityLabel={`Повторить приём пищи: ${slotLabels[slot]}`} onPress={() => { void repeatSlot(slot); }} />
                   <QuickChip label="Копировать" icon={<Copy size={14} color={colors.textPrimary} />} disabled={slotEntries.length === 0} accessibilityLabel={`Копировать приём пищи: ${slotLabels[slot]}`}
                     onPress={() => { setCopied({ date: localDate, slot }); setNotice(`Скопирован приём «${slotLabels[slot]}». Откройте нужный приём и нажмите «Вставить».`); }} />
                   <QuickChip label="Вставить" icon={<ClipboardPaste size={14} color={colors.textPrimary} />} disabled={copying || copied === null || (copied.date === localDate && copied.slot === slot)}
