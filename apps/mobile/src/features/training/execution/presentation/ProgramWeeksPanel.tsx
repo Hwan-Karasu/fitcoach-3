@@ -166,7 +166,7 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: liveViews, execu
           <WeekCards weeks={views.map((view) => ({ index: view.index, caption: view.caption,
             tone: view.type === undefined ? null : toneOf(view.type) ?? colors.textMuted,
             status: view.workouts.length === 0 ? "Пусто" : view.index === firstOpen ? "Текущая" : weekStatusLabels[weekOf(view.index)] }))}
-            selected={week} onSelect={chooseWeek} compact />
+            selected={week} onSelect={chooseWeek} />
           {renderWeekActions?.(week)}
       </View> : null}
       {afterCard}
@@ -209,30 +209,30 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: liveViews, execu
 }
 
 const styles = StyleSheet.create({
-  panel: { gap: 8 },
-  card: { borderRadius: 18, padding: 12, gap: 8 },
+  panel: { gap: 10 },
+  card: { borderRadius: 22, padding: 16, gap: 12 },
   divider: { height: 1 },
   sectionHead: { flexDirection: "row", alignItems: "center", gap: 6 },
-  sectionTitle: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 15, textTransform: "uppercase", letterSpacing: 1 },
+  sectionTitle: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16, textTransform: "uppercase", letterSpacing: 1 },
   tiles: { flexDirection: "row", gap: 6 },
-  tile: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 4, borderRadius: 12,
-    paddingHorizontal: 8, minHeight: 34 },
-  tileLabel: { flexShrink: 1, fontFamily: fonts.semibold, fontSize: 11, lineHeight: 15 },
-  tileValue: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
-  meta: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
+  tile: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 4, borderRadius: 14,
+    paddingHorizontal: 10, minHeight: 48 },
+  tileLabel: { flexShrink: 1, fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
+  tileValue: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 22 },
+  meta: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 17 },
   strong: { fontFamily: fonts.bold },
-  workout: { flexDirection: "row", borderRadius: 16, minHeight: 48 },
-  stripe: { width: 3, marginVertical: 9, marginLeft: 8, borderRadius: 2 },
-  workoutBody: { flex: 1, paddingVertical: 10, paddingRight: 12, paddingLeft: 10, gap: 6 },
+  workout: { flexDirection: "row", borderRadius: 22, minHeight: 64 },
+  stripe: { width: 4, marginVertical: 12, marginLeft: 10, borderRadius: 2 },
+  workoutBody: { flex: 1, padding: 16, paddingLeft: 12, gap: 10 },
   workoutHead: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   grow: { flex: 1 },
-  title: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
+  title: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 23 },
   volume: { alignItems: "flex-end" },
-  volumeLabel: { fontFamily: fonts.bold, fontSize: 10, lineHeight: 13, textTransform: "uppercase", letterSpacing: 1 },
-  volumeValue: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 18 },
-  workoutMeta: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 },
-  barRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  track: { flex: 1, height: 5, borderRadius: 3, overflow: "hidden" },
-  fill: { height: 5, borderRadius: 3 },
+  volumeLabel: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, textTransform: "uppercase", letterSpacing: 1 },
+  volumeValue: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
+  workoutMeta: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
+  barRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  track: { flex: 1, height: 6, borderRadius: 3, overflow: "hidden" },
+  fill: { height: 6, borderRadius: 3 },
   percent: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16, minWidth: 32, textAlign: "right" },
 });

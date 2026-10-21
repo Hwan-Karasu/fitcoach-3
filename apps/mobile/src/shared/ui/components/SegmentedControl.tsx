@@ -9,7 +9,7 @@ interface SegmentItem<Id extends string> {
 }
 
 /** Переключатель из 2–3 равных сегментов во всю ширину (UI-OWN-026); «Зефирка»: дорожка, выбранный — белый с тенью. */
-export function SegmentedControl<Id extends string>({ items, selectedId, onSelect, compact = false, fit = false, scroll = false, dense = false }: Readonly<{
+export function SegmentedControl<Id extends string>({ items, selectedId, onSelect, compact = false, fit = false, scroll = false }: Readonly<{
   items: readonly SegmentItem<Id>[];
   selectedId: Id;
   onSelect: (id: Id) => void;
@@ -19,8 +19,6 @@ export function SegmentedControl<Id extends string>({ items, selectedId, onSelec
   fit?: boolean;
   /** Много пунктов: один контейнер с горизонтальной прокруткой, сегменты по ширине подписи. */
   scroll?: boolean;
-  /** Плотный: высота 36, шрифт 14 (шапки экранов с вложенными переключателями). */
-  dense?: boolean;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -29,13 +27,13 @@ export function SegmentedControl<Id extends string>({ items, selectedId, onSelec
     return (
       <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected }} accessibilityLabel={item.label}
         onPress={() => onSelect(item.id)}
-        style={[styles.segment, fit ? styles.segmentFit : null, scroll ? styles.segmentScroll : null, compact ? styles.segmentCompact : null, dense ? styles.segmentDense : null, selected ? [shadow.control, { backgroundColor: colors.surface }] : null]}>
-        <Text numberOfLines={1} adjustsFontSizeToFit={(compact || fit) && !scroll} minimumFontScale={0.85} style={[styles.label, compact ? styles.labelCompact : null, dense ? styles.labelDense : null, selected ? styles.selected : null, { color: selected ? colors.accentInk : colors.textSecondary }]}>{item.label}</Text>
+        style={[styles.segment, fit ? styles.segmentFit : null, scroll ? styles.segmentScroll : null, compact ? styles.segmentCompact : null, selected ? [shadow.control, { backgroundColor: colors.surface }] : null]}>
+        <Text numberOfLines={1} adjustsFontSizeToFit={(compact || fit) && !scroll} minimumFontScale={0.85} style={[styles.label, compact ? styles.labelCompact : null, selected ? styles.selected : null, { color: selected ? colors.accentInk : colors.textSecondary }]}>{item.label}</Text>
       </Pressable>
     );
   });
   return (
-    <View accessibilityRole="tablist" style={[styles.track, compact ? styles.trackCompact : null, dense ? styles.trackDense : null, scroll ? styles.trackScroll : null, { backgroundColor: colors.border }]}>
+    <View accessibilityRole="tablist" style={[styles.track, compact ? styles.trackCompact : null, scroll ? styles.trackScroll : null, { backgroundColor: colors.border }]}>
       {scroll ? <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scrollContent}>{segments}</ScrollView> : segments}
     </View>
   );
@@ -53,7 +51,4 @@ const styles = StyleSheet.create({
   trackCompact: { height: 44, borderRadius: 14, padding: 3, gap: 2 },
   segmentCompact: { borderRadius: 11, paddingHorizontal: 2 },
   labelCompact: { fontSize: 13, lineHeight: 17 },
-  trackDense: { height: 36, borderRadius: 12, padding: 3, gap: 3 },
-  segmentDense: { borderRadius: 9 },
-  labelDense: { fontSize: 14, lineHeight: 18 },
 });
