@@ -283,7 +283,7 @@ export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, pi
         } />
       {/* Своё упражнение — и при выборе для тренировки; кнопка над панелью «Добавить (N)» (UI-OWN-030). */}
       <FloatingActionButton compact label="Создать своё упражнение" text="Своё упражнение"
-        icon={(color) => <Plus size={14} color={color} strokeWidth={2.4} />} onPress={() => onCreate(query.trim(), selected)} />
+        icon={(color) => <Plus size={16} color={color} strokeWidth={2.4} />} onPress={() => onCreate(query.trim(), selected)} />
       </View>
       {multiPick && selected.length > 0 ? (
         <View style={[styles.pickBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>

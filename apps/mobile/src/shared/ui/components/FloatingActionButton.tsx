@@ -13,14 +13,14 @@ export function FloatingActionButton({ label, icon, onPress, text, compact = fal
   icon: (color: string) => ReactNode;
   onPress: () => void;
   text?: string;
-  /** Вдвое меньше: видимая высота 28 (только с `text`), зона нажатия 44 через hitSlop (ADR-014). */
+  /** Меньше обычной: видимая высота 38 (только с `text`), зона нажатия 44 через hitSlop (ADR-014). */
   compact?: boolean;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
-      hitSlop={compact && text !== undefined ? { top: 8, bottom: 8, left: 6, right: 6 } : undefined}
+      hitSlop={compact && text !== undefined ? { top: 5, bottom: 5, left: 4, right: 4 } : undefined}
       style={({ pressed }) => [styles.fab, shadow.fab, text !== undefined ? styles.extended : null, compact && text !== undefined ? styles.compact : null,
         { backgroundColor: colors.accentFill, opacity: pressed ? 0.85 : 1 }]}>
       {icon(colors.onAccentFill)}
@@ -34,7 +34,7 @@ const styles = StyleSheet.create({
     position: "absolute", right: 20, bottom: 16, width: 60, height: 60, borderRadius: 20, alignItems: "center", justifyContent: "center",
   },
   extended: { width: undefined, height: 52, borderRadius: 18, flexDirection: "row", gap: 8, paddingLeft: 16, paddingRight: 20 },
-  compact: { height: 28, borderRadius: 10, gap: 4, paddingLeft: 9, paddingRight: 11, bottom: 12 },
+  compact: { height: 38, borderRadius: 13, gap: 5, paddingLeft: 12, paddingRight: 14, bottom: 14 },
   text: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 18 },
-  textCompact: { fontSize: 12, lineHeight: 15 },
+  textCompact: { fontSize: 13, lineHeight: 16 },
 });
