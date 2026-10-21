@@ -90,6 +90,34 @@ function ItemCard({ item, selected, selectedLabel, draft, open, onToggleOpen, on
     if (quantity === null || quantity <= 0) { setError("Введите количество, например 150 или 1,5."); return; }
     try { onSavePortion({ mode, recipeUnit, text }, snapshotFor(item, recipeUnit, quantity)); setError(null); } catch (failure) { setError(nutritionErrorText(failure)); }
   };
+  const star = <AppIconButton compact label={isFavorite(item) ? `Убрать из избранного: ${name}` : `В избранное: ${name}`}
+    icon={<Star size={20} color={colors.accentInk} fill={isFavorite(item) ? colors.accentInk : "transparent"} />} onPress={() => onFavorite(item)} />;
+  if (item.kind === "FOOD") {
+    const unitText = mode === "PIECES" ? unitLabels.PIECE : unitLabels[basis.unit];
+    return (
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: selected ? colors.accentFill : "transparent" }]}>
+        <View style={styles.cardRow}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${name}. ${sub}. Изменить продукт`} onPress={() => onEditFood(item.food.id)} style={styles.cardHead}>
+            <Text numberOfLines={2} style={[styles.title, { color: colors.textPrimary }]}>{name}</Text>
+            <Text numberOfLines={1} style={[styles.meta, { color: colors.textSecondary }]}>{sub}</Text>
+            {selected && selectedLabel !== null ? <Text style={[styles.meta, { color: colors.accentInk }]}>{`В выборе: ${selectedLabel}`}</Text> : null}
+          </Pressable>
+          <View style={styles.qtyBox}>
+            <TextField compact hideLabel label={`Количество, ${unitText}`} value={text} keyboardType="decimal-pad"
+              onChangeText={(next) => { setText(next); setError(null); onDraftChange({ mode, recipeUnit, text: next }); }} />
+          </View>
+          {pieceMass !== null ? <Pressable accessibilityRole="button" accessibilityLabel={mode === "PIECES" ? "Единица: штуки. Переключить на граммы" : "Единица: граммы. Переключить на штуки"} hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
+            onPress={() => { const next = mode === "PIECES" ? "BASIS" : "PIECES"; const value = next === "PIECES" ? "1" : formatDecimalX10(basis.amountX10); setMode(next); setText(value); setError(null); onDraftChange({ mode: next, recipeUnit, text: value }); }}>
+            <Text style={[styles.unitToggle, { color: colors.accentInk }]}>{unitText}</Text>
+          </Pressable> : <Text style={[styles.unitToggle, { color: colors.textSecondary }]}>{unitText}</Text>}
+          {star}
+          <Checkbox checked={selected} label={selected ? `Убрать из выбора: ${name}` : `Выбрать: ${name}`} onPress={onToggleSelect} />
+        </View>
+        {error !== null ? <Text style={[styles.meta, { color: colors.danger }]}>{error}</Text> : null}
+        {preview === null && text.trim() !== "" ? <Text style={[styles.meta, { color: colors.danger }]}>Введите количество, например 150 или 1,5.</Text> : null}
+      </View>
+    );
+  }
   return (
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: selected ? colors.accentFill : "transparent" }]}>
       <View style={styles.cardRow}>
@@ -99,6 +127,7 @@ function ItemCard({ item, selected, selectedLabel, draft, open, onToggleOpen, on
           <Text style={[styles.meta, { color: colors.textSecondary }]}>{sub}</Text>
           {selected && selectedLabel !== null ? <Text style={[styles.meta, { color: colors.accentInk }]}>{`В выборе: ${selectedLabel}`}</Text> : null}
         </Pressable>
+        {star}
         <Checkbox checked={selected} label={selected ? `Убрать из выбора: ${name}` : `Выбрать: ${name}`} onPress={onToggleSelect} />
       </View>
       {open ? <View style={styles.portion}>
@@ -120,9 +149,6 @@ function ItemCard({ item, selected, selectedLabel, draft, open, onToggleOpen, on
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
         <AppButton compact label={selected ? "Сохранить порцию" : "Выбрать с этой порцией"} onPress={save} />
         <View style={styles.actions}>
-          <AppIconButton label={isFavorite(item) ? `Убрать из избранного: ${name}` : `В избранное: ${name}`}
-            icon={<Star size={20} color={colors.accentInk} fill={isFavorite(item) ? colors.accentInk : "transparent"} />} onPress={() => onFavorite(item)} />
-          {item.kind === "FOOD" ? <AppButton compact variant="ghost" label="Изменить продукт" onPress={() => onEditFood(item.food.id)} /> : null}
           {item.kind === "RECIPE" ? <>
             <AppButton compact variant="ghost" label="Изменить рецепт" onPress={() => onEditRecipe(item.recipe.id)} />
             <AppButton compact variant="ghost" label={item.recipe.inCookbook === true ? "Убрать из книги" : "В кулинарную книгу"} onPress={() => onCookbook(item.recipe)} />
@@ -505,6 +531,8 @@ const styles = StyleSheet.create({
   card: { ...shadow.card, borderRadius: 10, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8, gap: 6 },
   historyRow: { minHeight: 44, justifyContent: "center" },
   cardRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  qtyBox: { width: 64 },
+  unitToggle: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16, minWidth: 22 },
   cardHead: { flex: 1, gap: 2, minHeight: 48, justifyContent: "center" },
   checkHit: { width: 48, height: 48, alignItems: "center", justifyContent: "center" },
   checkBox: { width: 26, height: 26, borderRadius: 8, borderWidth: 2, alignItems: "center", justifyContent: "center" },

@@ -134,7 +134,8 @@ export function NutritionNavigator({ clientId, clientName, clientEmoji, body, on
     })}>
       <NutritionStack.Screen name="NutritionIndex">
         {({ navigation, route }) => <NutritionHomeScreen requestedSection={route.params?.section} sectionRequestKey={route.params?.requestKey} clientId={clientId} onOpenJournal={onOpenJournal} body={body} onUpdateBody={onUpdateBody} diary={diary} targets={targets} calc={calc} measurements={measurements}
-          onAdd={(localDate, slot, filter) => navigation.navigate("NutritionAdd", { localDate, slot, filter })} />}
+          onAdd={(localDate, slot, filter) => navigation.navigate("NutritionAdd", { localDate, slot, filter })}
+          onEditSource={(source) => source.kind === "FOOD" ? navigation.navigate("NutritionFood", { foodId: source.id }) : navigation.navigate("NutritionRecipe", { recipeId: source.id })} />}
       </NutritionStack.Screen>
       <NutritionStack.Screen name="NutritionAdd" options={{ headerShown: false }}>
         {({ navigation, route }) => <NutritionAddRoute navigation={navigation}>

@@ -15,6 +15,7 @@ const units: readonly Readonly<{ id: FoodBasisUnit; label: string; amount: strin
 ];
 const extraUnits: readonly Readonly<{ id: ExtraNutrientUnit; label: string }>[] = [{ id: "G", label: "г" }, { id: "MG", label: "мг" }];
 const extraUnitText: Readonly<Record<ExtraNutrientUnit, string>> = { G: "г", MG: "мг" };
+const FAT_SHORT: Readonly<Record<string, string>> = { saturatedFat: "Насыщ.", polyunsaturatedFat: "Полиненас.", monounsaturatedFat: "Мононенас." };
 const GROUPS = [{ id: "fat", title: "Жир" }, { id: "carbs", title: "Углеводы" }, { id: "other", title: "Другое" }] as const;
 
 interface CustomRow { readonly id: number; readonly label: string; readonly unit: ExtraNutrientUnit; readonly value: string }
@@ -170,7 +171,7 @@ export function FoodEditorScreen({ foods, foodId, initialName = "", detailsReque
         <Text style={[styles.label, { color: colors.textPrimary }]}>{group.id === "fat" ? "Жир, г" : group.title}</Text>
         {group.id === "fat" ? <View style={styles.macroRow}>
           {STANDARD_EXTRA_NUTRIENTS.filter((item) => item.group === "fat").map((item) => <View key={item.key} style={styles.cell}>
-            <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.fatLabel, { color: colors.textSecondary }]}>{item.label.replace(" жиры", "")}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.fatLabel, { color: colors.textSecondary }]}>{FAT_SHORT[item.key] ?? item.label}</Text>
             <TextField label={`${item.label}, г`} hideLabel value={extra[item.key] ?? ""} onChangeText={(text) => setExtra({ ...extra, [item.key]: text })} keyboardType="decimal-pad" />
           </View>)}
         </View> : <View style={styles.extraGrid}>
@@ -218,7 +219,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: 16, gap: 12, paddingBottom: 24 },
   bottomBar: { paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
-  fatLabel: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14, minHeight: 28 },
+  fatLabel: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
   backdrop: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "rgba(0,0,0,0.4)" },
   dialog: { borderRadius: 24, padding: 18, gap: 10 },
   dialogTitle: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },

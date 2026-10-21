@@ -66,7 +66,7 @@ function QuickChip({ label, icon, onPress, disabled = false, accessibilityLabel 
  * «Дневник» питания клиента (§49.2): день, итоги и коридоры цели, приёмы пищи, вода. Итог — сумма внесённых записей; пустой день и день только с водой
  * не оцениваются (§49.22). Экран пишет через порты дневника и читает цель на дату (исключение → версия → «не установлена»).
  */
-export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, measurements, onAdd, requestedDay }: Readonly<{
+export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, measurements, onAdd, onEditSource, requestedDay }: Readonly<{
   requestedDay?: Readonly<{ date: string; token: number }>;
   clientId: string;
   diary: NutritionDiaryPort;
@@ -75,6 +75,8 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
   calc: NutritionCalcPort;
   measurements: MeasurementRepositoryPort;
   onAdd: (localDate: string, slot: MealSlot, filter?: CatalogFilter) => void;
+  /** Открыть продукт или рецепт записи в каталоге (карандаш окна записи). */
+  onEditSource?: (source: Readonly<{ kind: "FOOD" | "RECIPE"; id: string }>) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -233,8 +235,15 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
         onConfirm={() => { if (pending !== null) void runCopy(pending.request); }} />
       {savingMeal !== null ? <SavedMealEditorDialog snapshots={savingMeal} onClose={() => setSavingMeal(null)} onSave={async (input) => { await diary.createSavedMeal(clientId, input); setNotice("Набор сохранён для этого клиента."); }} /> : null}
       <EntryEditorDialog entry={editing} onClose={() => setEditing(null)}
-        onSave={async (entry, quantityX10, slot, override) => {
-          return guard(() => diary.editEntry(clientId, entry.id, entry.revision, { quantityX10, slot, override }));
+        onEditSource={onEditSource === undefined ? undefined : (entry) => { setEditing(null); onEditSource(entry.snapshot.source); }}
+        onSave={async (entry, quantityX10, slot, override, extraSlots) => {
+          return guard(async () => {
+            const edited = await diary.editEntry(clientId, entry.id, entry.revision, { quantityX10, slot, override });
+            if (extraSlots.length === 0) return;
+            // Копии в другие приёмы того же дня: те же количество и значения (правка пищевой ценности переносится).
+            const copies = await diary.addEntries(clientId, extraSlots.map((extra) => ({ localDate: edited.localDate, slot: extra, snapshot: edited.snapshot })));
+            if (edited.override != null) for (const copy of copies) await diary.setOverride(clientId, copy.id, copy.revision, edited.snapshot.eaten);
+          });
         }}
         onRemove={(entry) => guard(() => diary.removeEntry(clientId, entry.id, entry.revision))} />
     </View>

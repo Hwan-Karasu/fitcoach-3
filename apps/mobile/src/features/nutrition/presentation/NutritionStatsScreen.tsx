@@ -13,6 +13,7 @@ import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
 import { TARGET_METRICS, type TargetException, type TargetVersion } from "../domain/TargetModel.ts";
 import { metricLabels, shiftDate, todayLocal, wholeText } from "./nutritionFormat.ts";
+import { useMacroColors } from "./MacroGrid.tsx";
 
 type PeriodId = "week" | "month" | "quarter" | "all" | "range";
 const periods: readonly Readonly<{ id: PeriodId; label: string; days: number }>[] = [
@@ -21,7 +22,6 @@ const periods: readonly Readonly<{ id: PeriodId; label: string; days: number }>[
 ];
 const unitOf = { kcal: "ккал", protein: "г", fat: "г", carbs: "г" } as const;
 
-const percentText = (x10: number | null) => x10 === null ? "—" : `${String(x10 / 10).replace(".", ",")} %`;
 const shortDate = (date: string) => `${date.slice(8, 10)}.${date.slice(5, 7)}`;
 
 /**
@@ -32,6 +32,7 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
   measurements: MeasurementRepositoryPort; calc: NutritionCalcPort; onOpenDay: (date: string) => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
+  const macroColors = useMacroColors();
   const today = todayLocal();
   const [period, setPeriod] = useState<PeriodId>("week");
   const [data, setData] = useState<Readonly<{ entries: readonly DiaryEntry[]; versions: readonly TargetVersion[]; exceptions: readonly TargetException[]; key: string;
@@ -110,21 +111,21 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
       </View>
       {stats.accountedDays === 0 ? <EmptyState reason="no-data" title="Нет данных" body="За выбранный период нет пищевых записей. Статистика появится после добавления еды в дневник." /> : (
         <>
-          {TARGET_METRICS.map((metric) => {
-            const item = stats.metrics[metric];
-            return (
-              <View key={metric} accessible style={[styles.card, { backgroundColor: colors.surface }]}
-                accessibilityLabel={`${metricLabels[metric]}: в среднем ${item.averageX10 === null ? "нет данных" : `${wholeText(item.averageX10)} ${unitOf[metric]}`}, попаданий в коридор ${item.compared === 0 ? "нет оценки" : `${item.inRange} из ${item.compared}`}`}>
-                <Text style={[styles.heading, { color: colors.textPrimary }]}>{metricLabels[metric]}</Text>
-                <Text style={[styles.big, { color: colors.textPrimary }]}>{item.averageX10 === null ? "—" : `${wholeText(item.averageX10)} ${unitOf[metric]}`}</Text>
-                <Text style={[styles.meta, { color: colors.textSecondary }]}>
-                  {item.averageX10 === null ? "Среднее: нет данных" : `Среднее за ${item.daysWithValue} дн. с записями`}</Text>
-                <Text style={[styles.meta, { color: colors.textSecondary }]}>
-                  {item.compared === 0 ? "В коридоре: — (нет целей или данных для сравнения)"
-                    : `В коридоре: ${item.inRange} из ${item.compared} (${percentText(item.hitPercentX10)}) · ниже ${item.below} · выше ${item.above}`}</Text>
-              </View>
-            );
-          })}
+          <View style={styles.metricRow}>
+            {TARGET_METRICS.map((metric) => {
+              const item = stats.metrics[metric];
+              return (
+                <View key={metric} accessible style={[styles.metricCard, { backgroundColor: colors.surface, borderTopColor: macroColors[metric] }]}
+                  accessibilityLabel={`${metricLabels[metric]}: в среднем ${item.averageX10 === null ? "нет данных" : `${wholeText(item.averageX10)} ${unitOf[metric]}`}, за ${item.daysWithValue} дней с записями, в коридоре ${item.compared === 0 ? "нет оценки" : `${item.inRange} из ${item.compared}, ниже ${item.below}, выше ${item.above}`}`}>
+                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.metricTitle, { color: macroColors[metric] }]}>{metricLabels[metric]}</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.metricValue, { color: macroColors[metric] }]}>{item.averageX10 === null ? "—" : wholeText(item.averageX10)}</Text>
+                  <Text style={[styles.meta, { color: colors.textSecondary }]}>{unitOf[metric]}</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.meta, { color: colors.textSecondary }]}>{item.compared === 0 ? "цели нет" : `${item.inRange} из ${item.compared}`}</Text>
+                </View>
+              );
+            })}
+          </View>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>Среднее за дни с записями; ниже — сколько дней попало в коридор цели.</Text>
           <View style={[styles.card, { backgroundColor: colors.surface }]}>
             <Text style={[styles.heading, { color: colors.textPrimary }]}>Калории по дням</Text>
             <BarChart items={stats.days.map((day) => ({ key: day.localDate, label: shortDate(day.localDate), value: day.valuesX10.kcal === null ? null : Math.round(day.valuesX10.kcal / 10) }))}
@@ -164,6 +165,10 @@ const styles = StyleSheet.create({
   big: { fontFamily: fonts.bold, fontSize: 24, lineHeight: 30 },
   meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   chips: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  metricRow: { flexDirection: "row", gap: 8 },
+  metricCard: { ...shadow.card, flex: 1, minWidth: 0, borderRadius: 16, borderTopWidth: 4, paddingHorizontal: 6, paddingVertical: 10, alignItems: "center", gap: 2 },
+  metricTitle: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
+  metricValue: { fontFamily: fonts.bold, fontSize: 22, lineHeight: 28 },
   week: { gap: 4, paddingVertical: 6 },
   backdrop: { flex: 1, padding: 16, justifyContent: "center", backgroundColor: "rgba(0,0,0,0.45)" },
   dialog: { padding: 12, borderRadius: 20, gap: 8 },

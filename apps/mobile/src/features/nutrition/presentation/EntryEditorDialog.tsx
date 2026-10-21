@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
-import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
-import { AppButton, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pencil } from "lucide-react-native";
+import { AppButton, AppIconButton, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { MEAL_SLOTS, type DiaryEntry, type MealSlot } from "../domain/DiaryModel.ts";
@@ -23,13 +24,17 @@ const show = (value: number | null) => value === null ? "" : formatDecimalX10(va
  * каталог, снимок продукта, соседние записи и другие клиенты не меняются; при смене массы правка масштабируется пропорционально. Калории считаются сами из Б/Ж/У (1 г = 4 / 9 / 4 ккал),
  * пока не введены вручную. «Вернуть значения каталога» снимает правку.
  */
-export function EntryEditorDialog({ entry, onClose, onSave, onRemove }: Readonly<{ entry: DiaryEntry | null; onClose: () => void;
-  onSave: (entry: DiaryEntry, quantityX10: number, slot: MealSlot, override: Nutrients | "CLEAR" | null) => Promise<string | null>; onRemove: (entry: DiaryEntry) => Promise<string | null> }>) {
+export function EntryEditorDialog({ entry, onClose, onSave, onRemove, onEditSource }: Readonly<{ entry: DiaryEntry | null; onClose: () => void;
+  /** `extraSlots` — приёмы того же дня, куда дополнительно сохраняются копии записи. */
+  onSave: (entry: DiaryEntry, quantityX10: number, slot: MealSlot, override: Nutrients | "CLEAR" | null, extraSlots: readonly MealSlot[]) => Promise<string | null>;
+  onRemove: (entry: DiaryEntry) => Promise<string | null>;
+  /** Карандаш в шапке: открыть продукт или рецепт в каталоге. */
+  onEditSource?: (entry: DiaryEntry) => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const [shownId, setShownId] = useState<string | null>(null);
   const [text, setText] = useState("");
-  const [slot, setSlot] = useState<MealSlot>("BREAKFAST");
+  const [slots, setSlots] = useState<readonly MealSlot[]>(["BREAKFAST"]);
   const [fields, setFields] = useState<Texts>(EMPTY_TEXTS);
   const [touched, setTouched] = useState<Touched>(NONE_TOUCHED);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -38,7 +43,7 @@ export function EntryEditorDialog({ entry, onClose, onSave, onRemove }: Readonly
   const lock = useRef(false);
   if (entry === null && shownId !== null) setShownId(null);
   if (entry !== null && shownId !== entry.id) {
-    setShownId(entry.id); setText(formatDecimalX10(entry.snapshot.quantityX10)); setSlot(entry.slot); setFields(EMPTY_TEXTS); setTouched(NONE_TOUCHED); setConfirmRemove(false); setError(null);
+    setShownId(entry.id); setText(formatDecimalX10(entry.snapshot.quantityX10)); setSlots([entry.slot]); setFields(EMPTY_TEXTS); setTouched(NONE_TOUCHED); setConfirmRemove(false); setError(null);
   }
 
   const parsedQuantity = parseDecimalX10(text);
@@ -58,6 +63,7 @@ export function EntryEditorDialog({ entry, onClose, onSave, onRemove }: Readonly
   const shownText = (key: NutrientKey) => key === "kcalX10" && autoKcal !== null ? show(autoKcal) : valueOf(key);
   const changed = entry !== null && (macrosTouched || touched.kcalX10 || entry.override != null);
 
+  const toggleSlot = (id: MealSlot) => setSlots((current) => current.includes(id) ? (current.length === 1 ? current : current.filter((value) => value !== id)) : [...current, id]);
   const edit = (key: NutrientKey, value: string) => { setFields({ ...fields, [key]: value }); setTouched({ ...touched, [key]: true }); setError(null); };
   const revertToCatalog = () => {
     if (entry === null) return;
@@ -86,26 +92,35 @@ export function EntryEditorDialog({ entry, onClose, onSave, onRemove }: Readonly
     }
     let override: Nutrients | "CLEAR" | null;
     try { override = planOverride(entry, parsedQuantity, edits as FieldEdits); } catch { setError("Не удалось разобрать значения."); return; }
-    void run(() => onSave(entry, parsedQuantity, slot, override));
+    // Запись остаётся в своём приёме, если он выбран; иначе переезжает в первый выбранный. Остальные выбранные приёмы получают копии.
+    const target = slots.includes(entry.slot) ? entry.slot : (MEAL_SLOTS.find((id) => slots.includes(id)) ?? entry.slot);
+    void run(() => onSave(entry, parsedQuantity, target, override, MEAL_SLOTS.filter((id) => slots.includes(id) && id !== target)));
   };
   return (
     <Modal visible={entry !== null} transparent animationType="fade" onRequestClose={() => { if (!lock.current) onClose(); }}>
       <View style={styles.backdrop}>
         <View style={[styles.dialog, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>{entry?.snapshot.name ?? ""}</Text>
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>{entry === null ? "" : entry.localDate}</Text>
+          <View style={styles.head}>
+            <View style={styles.headText}>
+              <Text numberOfLines={2} style={[styles.title, { color: colors.textPrimary }]}>{entry?.snapshot.name ?? ""}</Text>
+              <Text style={[styles.meta, { color: colors.textSecondary }]}>{entry === null ? "" : entry.localDate}</Text>
+            </View>
+            {onEditSource !== undefined && entry !== null ? <AppIconButton compact label={entry.snapshot.source.kind === "FOOD" ? "Изменить продукт в каталоге" : "Изменить рецепт в каталоге"}
+              icon={<Pencil size={20} color={colors.textPrimary} />} onPress={() => onEditSource(entry)} /> : null}
+          </View>
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
             <TextField label={`Количество, ${entry === null ? "" : unitLabels[entry.snapshot.basis.unit]}`} value={text} onChangeText={(next) => { setText(next); setError(null); }} keyboardType="decimal-pad"
               error={error ?? undefined} />
-            <Text style={[styles.meta, { color: colors.textSecondary }]}>Приём пищи</Text>
-            <View style={styles.chips}>
-              {MEAL_SLOTS.map((id) => <SelectionChip key={id} group="Приём пищи" label={slotLabels[id]} selected={slot === id} disabled={busy} onPress={() => setSlot(id)} />)}
+            <View accessibilityLabel="Приём пищи" style={styles.slotRow}>
+              {MEAL_SLOTS.map((id) => {
+                const selected = slots.includes(id);
+                return <Pressable key={id} accessibilityRole="checkbox" accessibilityState={{ checked: selected, disabled: busy }} accessibilityLabel={slotLabels[id]} disabled={busy} onPress={() => toggleSlot(id)}
+                  style={[styles.slotPill, { backgroundColor: selected ? colors.accentFill : colors.surfaceRaised, borderColor: selected ? colors.accentFill : colors.border }]}>
+                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.slotText, { color: selected ? colors.onAccentFill : colors.textPrimary }]}>{slotLabels[id]}</Text>
+                </Pressable>;
+              })}
             </View>
-            <Text style={[styles.heading, { color: colors.textPrimary }]}>Пищевая ценность этой порции</Text>
-            <Text style={[styles.meta, { color: colors.textSecondary }]}>Меняется только эта запись: каталог, другие записи и клиенты не затрагиваются. При смене массы правка масштабируется пропорционально.</Text>
             {changed ? <Text style={[styles.meta, { color: colors.accentInk }]}>Питательность изменена для этой записи</Text> : null}
-            <TextField label={autoKcal !== null ? "Калории, ккал (авто из Б/Ж/У)" : labels.kcalX10} value={shownText("kcalX10")} keyboardType="decimal-pad" disabled={busy}
-              hint="1 г белка = 4 ккал, жира = 9, углеводов = 4. Можно ввести своё число — оно заменит авторасчёт." onChangeText={(value) => edit("kcalX10", value)} />
             <View style={styles.row}>
               {(["proteinX10", "fatX10", "carbsX10"] as const).map((key) => (
                 <View key={key} style={styles.cell}>
@@ -113,14 +128,20 @@ export function EntryEditorDialog({ entry, onClose, onSave, onRemove }: Readonly
                 </View>
               ))}
             </View>
+            <TextField label={autoKcal !== null ? "Калории, ккал (авто)" : labels.kcalX10} value={shownText("kcalX10")} keyboardType="decimal-pad" disabled={busy} onChangeText={(value) => edit("kcalX10", value)} />
             {entry?.override != null ? <AppButton compact variant="secondary" label="Вернуть значения каталога" disabled={busy} onPress={revertToCatalog} /> : null}
           </ScrollView>
-          <AppButton label="Сохранить" onPress={save} busy={busy} />
           {confirmRemove ? <>
             <Text style={[styles.meta, { color: colors.danger }]}>Запись будет удалена из дневника. Итоги дня пересчитаются.</Text>
-            <AppButton variant="destructive" label="Подтвердить удаление" disabled={busy} onPress={() => { if (entry !== null) void run(() => onRemove(entry)); }} />
-          </> : <AppButton variant="destructive" label="Удалить запись" disabled={busy} onPress={() => setConfirmRemove(true)} />}
-          <AppButton variant="ghost" label="Отмена" disabled={busy} onPress={onClose} />
+            <View style={styles.row}>
+              <View style={styles.cell}><AppButton variant="destructive" label="Подтвердить" accessibilityLabel="Подтвердить удаление записи" disabled={busy} onPress={() => { if (entry !== null) void run(() => onRemove(entry)); }} /></View>
+              <View style={styles.cell}><AppButton variant="secondary" label="Не удалять" disabled={busy} onPress={() => setConfirmRemove(false)} /></View>
+            </View>
+          </> : <View style={styles.row}>
+            <View style={styles.cell}><AppButton label="Сохранить" onPress={save} busy={busy} /></View>
+            <View style={styles.cell}><AppButton variant="destructive" label="Удалить" accessibilityLabel="Удалить запись" disabled={busy} onPress={() => setConfirmRemove(true)} /></View>
+          </View>}
+          <AppButton compact variant="ghost" label="Отмена" disabled={busy} onPress={onClose} />
         </View>
       </View>
     </Modal>
@@ -130,6 +151,11 @@ export function EntryEditorDialog({ entry, onClose, onSave, onRemove }: Readonly
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.4)" },
   dialog: { borderRadius: 24, padding: 18, gap: 10, maxHeight: "94%" },
+  head: { flexDirection: "row", alignItems: "center", gap: 8 },
+  headText: { flex: 1, minWidth: 0 },
+  slotRow: { flexDirection: "row", gap: 6 },
+  slotPill: { flex: 1, minWidth: 0, minHeight: 40, borderRadius: 20, borderWidth: 1, paddingHorizontal: 4, alignItems: "center", justifyContent: "center" },
+  slotText: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
   title: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
   heading: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
   body: { gap: 10 },

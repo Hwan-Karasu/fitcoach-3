@@ -17,9 +17,10 @@ type Section = "calc" | "diary" | "stats";
 const sections = [{ id: "calc", label: "Расчёт" }, { id: "diary", label: "Дневник" }, { id: "stats", label: "Статистика" }] as const;
 
 /** Главный экран «Питания»: Расчёт / Дневник / Статистика; корректировка БЖУ находится на главной клиента. */
-export function NutritionHomeScreen({ clientId, body, onUpdateBody, onOpenJournal, diary, targets, calc, measurements, onAdd, requestedSection, sectionRequestKey }: Readonly<{
+export function NutritionHomeScreen({ clientId, body, onUpdateBody, onOpenJournal, diary, targets, calc, measurements, onAdd, onEditSource, requestedSection, sectionRequestKey }: Readonly<{
   requestedSection?: Section; sectionRequestKey?: number;
   clientId: string; onOpenJournal: () => void; body: CalcClientBody; onUpdateBody: (patch: Readonly<{ sex: CalcSex | null; heightCm: number | null }>) => Promise<void>; diary: NutritionDiaryPort; targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; onAdd: (localDate: string, slot: MealSlot, filter?: CatalogFilter) => void;
+  onEditSource?: (source: Readonly<{ kind: "FOOD" | "RECIPE"; id: string }>) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const [section, setSection] = useState<Section>(requestedSection ?? "diary");
@@ -36,7 +37,7 @@ export function NutritionHomeScreen({ clientId, body, onUpdateBody, onOpenJourna
         <NutritionCalcScreen key={clientId} clientId={clientId} onOpenJournal={onOpenJournal} body={body} onUpdateBody={onUpdateBody} calc={calc} measurements={measurements} />
       </View> : null}
       {visited.diary ? <View style={{ flex: 1, display: section === "diary" ? "flex" : "none" }}>
-        <NutritionDiaryScreen key={clientId} clientId={clientId} diary={diary} targets={targets} body={body} calc={calc} measurements={measurements} onAdd={onAdd} requestedDay={requestedDay} />
+        <NutritionDiaryScreen key={clientId} clientId={clientId} diary={diary} targets={targets} body={body} calc={calc} measurements={measurements} onAdd={onAdd} onEditSource={onEditSource} requestedDay={requestedDay} />
       </View> : null}
       {visited.stats ? <View style={{ flex: 1, display: section === "stats" ? "flex" : "none" }}>
         <NutritionStatsScreen key={clientId} clientId={clientId} diary={diary} targets={targets} calc={calc} measurements={measurements}
