@@ -7,6 +7,7 @@ import type { ConfirmationMode, PreviousSet, SetFact, SetType, SetValues, Side, 
 import { EMPTY_VALUES } from "../domain/ExecutionModel.ts";
 import { dropsForType, hasEnteredData, workoutStatus } from "../domain/ExecutionRules.ts";
 import type { SaveSetInput, TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
+import { SerialWriteQueue } from "../application/SerialWriteQueue.ts";
 
 /** Добавленные разминочные подходы упражнения по порядку добавления. */
 export function extraWarmups(state: WorkoutExecution | null, plannedExerciseId: string): readonly SetFact[] {
@@ -62,15 +63,13 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   confirmedRef.current = onConfirmedNow;
   const unilateralRef = useRef(unilateralOf);
   unilateralRef.current = unilateralOf;
-  const queue = useRef<Promise<unknown>>(Promise.resolve());
-  /** Сколько собственных команд сейчас в очереди: их коммиты уже применены к состоянию через ACK и не требуют перечитывания. */
-  const ownWrites = useRef(0);
+  /** Собственные команды идут по очереди; пока они выполняются, их коммиты уже применены через ACK и перечитывания не требуют. */
+  const queue = useRef(new SerialWriteQueue()).current;
   const focused = useIsFocused();
   const focusedRef = useRef(focused);
   focusedRef.current = focused;
   /** Изменение пришло, пока экран был скрыт (поверх него матрица): перечитать при возврате. */
   const staleWhileHidden = useRef(false);
-  const writeFailed = useRef(false);
   stateRef.current = state;
   // Неделя меняется без пересоздания экрана: пока данные новой недели не пришли, на экране прежние значения,
   // и запись с ними недопустима (в Простой программе ID подходов во всех неделях одни и те же).
@@ -121,7 +120,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
 
   // Собственная запись возвращает результат (ACK) и применяется сразу; перечитывание нужно только для чужих изменений (матрица, другой экран).
   useEffect(() => execution.subscribeCommittedChanges((change) => {
-    if (ownWrites.current > 0) return;
+    if (queue.busy) return;
     if (change.clientId === clientId && change.programId === programId) refresh();
   }), [clientId, execution, programId, refresh]);
 
@@ -142,24 +141,13 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
 
   const enqueue = useCallback(<T,>(task: () => Promise<T>): Promise<T | null> => {
     if (loadedKeyRef.current !== slotKeyRef.current) return Promise.resolve(null);
-    ownWrites.current += 1;
-    const run = queue.current.then(task).then((value) => { setMessage(null); return value; }, (error: unknown) => {
-      writeFailed.current = true;
+    return queue.run(task, { onSuccess: () => setMessage(null), onError: (error) => {
       setMessage(errorText(error));
       setVersion((value) => value + 1);
-      return null;
-    }).finally(() => { ownWrites.current -= 1; });
-    queue.current = run;
-    return run;
-  }, []);
+    } });
+  }, [queue]);
 
-  const finishSaving = useCallback(async (): Promise<boolean> => {
-    let waiting: Promise<unknown>;
-    do { waiting = queue.current; await waiting; } while (waiting !== queue.current);
-    const saved = !writeFailed.current;
-    writeFailed.current = false;
-    return saved;
-  }, []);
+  const finishSaving = useCallback((): Promise<boolean> => queue.settle(), [queue]);
 
   const identityOf = useCallback((exercise: PlannedExercise, set: PlannedSet, position: number) => {
     const fact = stateRef.current?.facts.get(set.id) ?? null;

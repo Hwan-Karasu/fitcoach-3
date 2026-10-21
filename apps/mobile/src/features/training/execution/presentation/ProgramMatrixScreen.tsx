@@ -11,6 +11,7 @@ import { parseLoad, useExerciseLookup, weekTypeLabels, weekTypeTone, type Exerci
   type TrainingPlansRepositoryPort, type TrainingProgram, type WeekType } from "../../plans/public.ts";
 import type { SetFact, SetValues } from "../domain/ExecutionModel.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
+import { SerialWriteQueue } from "../application/SerialWriteQueue.ts";
 import { diaryFields, compactWithDrops, planText } from "./setFormat.ts";
 import { buildProgramMatrix, type MatrixCell, type MatrixTarget, type MatrixWeek, type ProgramMatrix } from "./programMatrix.ts";
 
@@ -179,11 +180,11 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
 
   // Правка факта прямо в ячейке: тот же порт, что дневник; остальные значения подхода сохраняются.
   // Записи идут по очереди, каждая берёт ревизию факта из ответа предыдущей (как в дневнике): повторы и вес подряд не дают STALE_SESSION.
-  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const queue = useRef(new SerialWriteQueue()).current;
   const acked = useRef(new Map<string, SetFact>());
   const save = useCallback((weekIndex: number, workoutId: string, target: MatrixTarget, patch: Partial<SetValues>) => {
     setSaveError(null);
-    queue.current = queue.current.then(async () => {
+    void queue.run(async () => {
       const latest = acked.current.get(target.plannedSetId);
       const fact = latest !== undefined && (target.fact === null || latest.revision >= target.fact.revision) ? latest : target.fact;
       const result = await execution.saveSet({ slot: { clientId, programId, weekIndex, plannedWorkoutId: workoutId },
@@ -192,8 +193,8 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
         values: { ...(fact?.values ?? EMPTY), ...patch }, drops: fact?.drops ?? [], rpe: fact?.rpe ?? null,
         setType: fact?.setType ?? "NORMAL", expectedRevision: fact?.revision ?? null });
       acked.current.set(target.plannedSetId, result.fact);
-    }).catch(() => { setSaveError("Не удалось сохранить значение — матрица обновлена, повторите ввод."); setRevision((value) => value + 1); });
-  }, [clientId, execution, lookup, programId]);
+    }, { onError: () => { setSaveError("Не удалось сохранить значение — матрица обновлена, повторите ввод."); setRevision((value) => value + 1); } });
+  }, [clientId, execution, lookup, programId, queue]);
 
   // Горизонтальная прокрутка — общий сдвиг для шапки и всех строк.
   const windowWidth = screenWidth - SIDE_PADDING * 2 - LABEL_WIDTH;
