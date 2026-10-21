@@ -86,6 +86,13 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
   const { data, stale, failed, reload } = useNutritionDay(clientId, localDate, diary, targets);
   const { guide, defaults, leanMassKg } = useNutritionGuide(clientId, body, calc, measurements);
   const macroColors = useMacroColors();
+  const [slow, setSlow] = useState(false);
+  // Индикатор только если новый день читается дольше ~200 мс; экран при этом не затемняется.
+  useEffect(() => {
+    if (!stale) { setSlow(false); return; }
+    const timer = setTimeout(() => setSlow(true), 200);
+    return () => clearTimeout(timer);
+  }, [stale]);
   const [editing, setEditing] = useState<DiaryEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<Readonly<{ date: string; slot: MealSlot }> | null>(null);
@@ -174,7 +181,8 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
           </View>
         ))}
       </View>
-      <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled" style={stale ? styles.stale : undefined} pointerEvents={stale ? "none" : "auto"}>
+      {slow ? <View accessible accessibilityLabel="Загружаем день" style={[styles.slowBar, { backgroundColor: colors.accentFill }]} /> : null}
+      <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled" pointerEvents={stale ? "none" : "auto"}>
         <View style={styles.waterRow}>
           <View style={styles.grow}><AppButton compact variant="secondary" label="Сегодня" disabled={localDate === today} onPress={() => setLocalDate(today)} /></View>
           <View style={styles.grow}><AppButton compact variant="secondary" icon={(color) => <Repeat2 size={16} color={color} />} label="С прошлого дня" busy={copying} onPress={() => { void copyPreviousDay(); }} /></View>
@@ -252,7 +260,7 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  stale: { opacity: 0.55 },
+  slowBar: { height: 2, marginHorizontal: 16, borderRadius: 1 },
   pad: { paddingHorizontal: 16 },
   grow: { flex: 1 },
   dateBar: { paddingHorizontal: 16, paddingTop: 2 },

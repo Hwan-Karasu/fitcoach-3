@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppButton, BarChart, DateRangeCalendar, EmptyState, InlineNotice, LineChart, LoadingState, SegmentedControl } from "../../../shared/ui/components/public.ts";
 import type { DateRange } from "../../../shared/ui/components/DateRangeCalendar.tsx";
@@ -38,8 +38,10 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
   const macroColors = useMacroColors();
   const today = todayLocal();
   const [period, setPeriod] = useState<PeriodId>("week");
-  const [data, setData] = useState<Readonly<{ entries: readonly DiaryEntry[]; versions: readonly TargetVersion[]; exceptions: readonly TargetException[]; key: string;
+  const [latest, setLatest] = useState<Readonly<{ entries: readonly DiaryEntry[]; versions: readonly TargetVersion[]; exceptions: readonly TargetException[]; key: string;
     body: ClientMeasurements; steps: readonly StepsDay[]; workouts: readonly WorkoutMark[] }> | null>(null);
+  /** Уже прочитанные периоды: возврат к ним открывается сразу; при изменении данных клиента очищается, `latest` остаётся на экране до прихода новых. */
+  const store = useRef(new Map<string, NonNullable<typeof latest>>());
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
   const [range, setRange] = useState({ from: shiftDate(today, -29), to: today });
@@ -52,18 +54,24 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
   const queryFrom = period === "all" ? "0001-01-01" : period === "range" ? range.from : shiftDate(today, -(days - 1));
   const to = period === "range" ? range.to : today;
   const key = `${clientId}|${queryFrom}|${to}`;
+  const data = store.current.get(key) ?? latest;
   const from = period === "all" && data?.key === key ? [...data.entries.map((entry) => entry.localDate), ...data.body.measurements.filter((row) => row.localDate <= to).map((row) => row.localDate), ...data.steps.map((row) => row.localDate)].sort()[0] ?? to : queryFrom;
 
   useEffect(() => {
     let active = true;
     void Promise.all([diary.listEntries(clientId, queryFrom, to), targets.listVersions(clientId), targets.listExceptions(clientId), measurements.listForClient(clientId),
       calc.listSteps(clientId, queryFrom, to), calc.listWorkoutMarks(clientId, queryFrom, to)]).then(([entries, versions, exceptions, body, steps, workouts]) => {
-      if (active) { setData({ entries, versions, exceptions, body, steps, workouts, key }); setFailed(false); }
+      if (active) {
+        const payload = { entries, versions, exceptions, body, steps, workouts, key };
+        store.current.set(key, payload);
+        setLatest(payload);
+        setFailed(false);
+      }
     }, () => { if (active) setFailed(true); });
     return () => { active = false; };
   }, [clientId, diary, targets, measurements, calc, queryFrom, to, key, tick]);
   useEffect(() => {
-    const refresh = () => setTick((value) => value + 1);
+    const refresh = () => { store.current.clear(); setTick((value) => value + 1); };
     const offDiary = diary.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });
     const offTargets = targets.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });
     const offBody = measurements.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });
@@ -77,7 +85,6 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
   const [shown, setShown] = useState<typeof fresh>(null);
   if (fresh !== null && shown !== fresh) setShown(fresh);
   const stats = fresh ?? shown;
-  const stale = fresh === null && shown !== null;
   const graph = useMemo(() => {
     if (data === null) return [];
     if (trend === "steps") return data.steps.map((row) => ({ key: row.localDate, label: shortDate(row.localDate), caption: row.localDate, value: row.steps }));
@@ -112,7 +119,7 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
     </View></View></Modal>
   </>;
   return (
-    <ScrollView style={{ backgroundColor: colors.canvas, opacity: stale ? 0.55 : 1 }} contentContainerStyle={styles.content}>
+    <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content}>
       {control}
       {stats === null ? failed ? <View style={styles.pad}><InlineNotice kind="error">Не удалось загрузить статистику питания.</InlineNotice><AppButton label="Повторить" onPress={() => setTick((value) => value + 1)} /></View> : <LoadingState label="Считаем статистику…" /> : <>
       {failed ? <InlineNotice kind="error">Не удалось обновить статистику. Показаны последние загруженные данные.</InlineNotice> : null}
