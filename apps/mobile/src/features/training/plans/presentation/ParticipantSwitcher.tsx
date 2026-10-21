@@ -15,7 +15,7 @@ import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansReposit
  * участников; вышедшие не показываются.
  */
 export function ParticipantSwitcher({ clientId, activeClientId = clientId, anchorClientId, programId, mesocycleId, workoutId, repository, names,
-  busy = false, onSelect }: Readonly<{
+  busy = false, onSelect, members: given }: Readonly<{
   /** Чьими данными читается состав группы (с `programId` и мезоцикл/тренировкой — одна идентичность). */
   clientId: string;
   /** Чей участник выделен: меняется сразу при выборе, раньше, чем загрузятся данные (по умолчанию — `clientId`). */
@@ -29,11 +29,14 @@ export function ParticipantSwitcher({ clientId, activeClientId = clientId, ancho
   names: ReadonlyMap<string, string>;
   busy?: boolean;
   onSelect: (copy: GroupCopy) => void;
+  /** Готовая группа: экран программы читает её сам и отдаёт сюда — переключатель не читает базу и не подписывается второй раз. */
+  members?: readonly GroupCopy[];
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const [members, setMembers] = useState<readonly GroupCopy[]>([]);
+  const [read, setRead] = useState<readonly GroupCopy[]>([]);
   const [version, setVersion] = useState(0);
+  const members = given ?? read;
   const scroll = useRef<ScrollView>(null);
   const positions = useRef(new Map<string, number>());
   /** Сколько карточек не видно слева и справа: полоса прокручивается, и по размеру не видно, что там есть ещё участники. */
@@ -53,16 +56,17 @@ export function ParticipantSwitcher({ clientId, activeClientId = clientId, ancho
   const onScroll = (event: { nativeEvent: NativeScrollEvent }) => measure(event.nativeEvent.contentOffset.x);
 
   useEffect(() => {
+    if (given !== undefined) return undefined;
     let active = true;
     const ref = workoutId !== undefined ? { workoutId } : mesocycleId != null ? { mesocycleId } : null;
-    if (ref === null) { setMembers([]); return () => { active = false; }; }
-    repository.getMesocycleGroup(clientId, programId, ref).then((copies) => { if (active) setMembers(copies); }).catch(() => undefined);
+    if (ref === null) { setRead([]); return () => { active = false; }; }
+    repository.getMesocycleGroup(clientId, programId, ref).then((copies) => { if (active) setRead(copies); }).catch(() => undefined);
     return () => { active = false; };
-  }, [clientId, mesocycleId, programId, repository, version, workoutId]);
+  }, [clientId, given, mesocycleId, programId, repository, version, workoutId]);
   // Выбор и порядок мезоциклов состав группы не меняют: без лишнего перечитывания на каждую смену мезоцикла.
-  useEffect(() => repository.subscribeCommittedChanges((change) => {
+  useEffect(() => given !== undefined ? undefined : repository.subscribeCommittedChanges((change) => {
     if (change.selectionOnly !== true && change.orderOnly !== true) setVersion((value) => value + 1);
-  }), [repository]);
+  }), [given, repository]);
   useEffect(() => { scroll.current?.scrollTo({ x: Math.max(0, (positions.current.get(activeClientId) ?? 0) - 16), animated: true }); }, [activeClientId]);
 
   // Пока загружается состав нового мезоцикла, полоса показывает прежний и не нажимается: исчезни она на это время, весь экран под

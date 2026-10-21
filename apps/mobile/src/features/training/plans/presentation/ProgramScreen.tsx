@@ -5,22 +5,22 @@ import { Archive, ArrowLeftRight, Bookmark, CalendarDays, Copy, Ellipsis, Layout
 import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, InlineNotice, LoadingState, SegmentedControl, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
-import type { TrainingProgram } from "../domain/ProgramModel.ts";
 import { membersWord, PROGRAM_TITLE_MAX, programKindLabels } from "../domain/ProgramRules.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
-import type { PlannedWorkout, SimplePlan } from "../domain/SimplePlanModel.ts";
-import type { SimpleWeek } from "../domain/SimpleWorkoutEdit.ts";
+import type { PlannedWorkout } from "../domain/SimplePlanModel.ts";
 import type { WeekCopyPort, WeekCopyRequest } from "../domain/WeekCopy.ts";
 import { WeekCopyFlow } from "./WeekCopyFlow.tsx";
 import type { WeekSwapPort } from "../domain/WeekSwap.ts";
 import { WeekSwapPanel } from "./WeekSwapPanel.tsx";
 import { ParticipantChips } from "./ParticipantChips.tsx";
-import { weekTypeLabels, type PeriodizedPlan, type WeekType } from "../domain/PeriodizedModel.ts";
+import { weekTypeLabels, type WeekType } from "../domain/PeriodizedModel.ts";
 import { setsSummary } from "../domain/SimplePlanRules.ts";
 import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidate.ts";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
 import { useParticipantScrollRestore } from "./useParticipantScrollRestore.ts";
+import { useProgramData } from "./useProgramData.ts";
+import type { GroupCopy } from "../domain/Placement.ts";
 import { MesocycleBook } from "./MesocycleBook.tsx";
 import { cycleTypeLabels, weekRangeLabel } from "../domain/MesocycleBuilder.ts";
 import type { CounterpartRef } from "../domain/ParticipantCounterpart.ts";
@@ -85,13 +85,13 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   requestedMesocycle?: string;
   /** UI-OWN-043: полоса участников группы под шапкой; получает текущее место плана (мезоцикл и неделя). */
   /** `shown` — чьи данные сейчас на экране: состав группы читается по ним, а не по параметрам маршрута, которые меняются раньше. */
-  renderParticipants?: (current: () => CounterpartRef, shown: Readonly<{ clientId: string; programId: string }> | null) => ReactNode;
+  renderParticipants?: (current: () => CounterpartRef, shown: Readonly<{ clientId: string; programId: string }> | null,
+    group: readonly GroupCopy[]) => ReactNode;
   /** §48.11, §50.3: удаление мезоцикла и программы у этого клиента; без порта пунктов нет. */
   planDelete?: MesocycleDeletePort & ProgramDeletePort;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const [program, setProgram] = useState<TrainingProgram | null | undefined>(undefined);
   const [names, setNames] = useState<ReadonlyMap<string, string>>(new Map());
   const [renaming, setRenaming] = useState<string | null>(null);
   const [confirmArchive, setConfirmArchive] = useState(false);
@@ -107,12 +107,12 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [templateForm, setTemplateForm] = useState<Readonly<{ kind: "program" | "mesocycle"; mesocycleId: string | null;
     title: string }> | null>(null);
   const [copyRequest, setCopyRequest] = useState<Omit<WeekCopyRequest, "sourceWeek"> | null>(null);
-  const [version, setVersion] = useState(0);
-  const [plan, setPlan] = useState<SimplePlan | null>(null);
-  const [simpleWeeks, setSimpleWeeks] = useState<readonly SimpleWeek[]>([]);
-  const [periodized, setPeriodized] = useState<PeriodizedPlan | null>(null);
-  /** Чьи данные сейчас на экране (`клиент:программа`): при переключении участника до загрузки они прежние — тогда экран приглушён. */
-  const [shown, setShown] = useState<Readonly<{ clientId: string; programId: string }> | null>(null);
+  // Неделя запрошенного места (из дневника/матрицы), применённая данными загрузки: повторно её не применяет эффект ниже.
+  const appliedContext = useRef<string | null>(null);
+  const [weeksByCycle, setWeeksByCycle] = useState<Readonly<Record<string, number>>>({});
+  const { program, setProgram, plan, simpleWeeks, periodized, setPeriodized, shown, group, cycleKey, refresh } = useProgramData({
+    clientId, programId, repository, requestedMesocycle, requestedWeek, onMessage: setMessage,
+    onRequestedWeek: (key, week) => { appliedContext.current = `${key}:${week}`; setWeeksByCycle((current) => ({ ...current, [key]: week })); } });
   const loadedFor = shown === null ? null : `${shown.clientId}:${shown.programId}`;
   const currentKey = `${clientId}:${programId}`;
   /** Для чьих `клиент:программа` панель недель уже загрузила статусы: смена участника ставится одним кадром вместе с ними. */
@@ -123,14 +123,11 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [menuOpen, setMenuOpen] = useState(false);
   const [tab, setTab] = useState<"program" | "templates">("program");
   const menuAnchor = useRef<View>(null);
-  const [weeksByCycle, setWeeksByCycle] = useState<Readonly<Record<string, number>>>({});
-  const cycleKey = periodized?.selectedMesocycleId ?? periodized?.mesocycles[0]?.id ?? "simple";
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const restore = useParticipantScrollRestore({ currentKey, stale, scrollTo: (y) => scrollRef.current?.scrollTo({ y, animated: false }) });
   // Неделя, показанная в карточке Расширенной программы (её выбирает панель недель): для «Копировать неделю».
   const shownWeek = useRef(1);
   const lookup = useExerciseLookup(exercises);
-  const appliedContext = useRef<string | null>(null);
   useEffect(() => {
     if (requestedWeek === undefined || program == null || loadedFor !== currentKey) return;
     const key = requestedMesocycle ?? (program.kind === "SIMPLE" ? "simple" : cycleKey);
@@ -149,57 +146,10 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
 
   useEffect(() => {
     let active = true;
-    repository.getProgram(clientId, programId).then(async (next) => {
-      if (!active) return;
-      if (next !== null) void repository.selectProgram(clientId, programId).catch(() => undefined);
-      // Всё читается до отрисовки и ставится одним обновлением: экран не показывает смесь данных двух участников.
-      const simple = next?.kind === "SIMPLE" ? await repository.getSimplePlan(clientId, programId) : null;
-      const weeks = next?.kind === "SIMPLE" ? await repository.getSimpleWeeks(clientId, programId) : [];
-      const loaded = next?.kind === "PERIODIZED" ? await repository.getPeriodizedPlan(clientId, programId) : null;
-      if (!active) return;
-      setProgram(next);
-      setPlan(simple?.draft.plan ?? null);
-      setSimpleWeeks(weeks);
-      // Мезоцикл и неделя запрошенного участника — теми же данными: иначе до загрузки экран показывает чужой мезоцикл.
-      const wanted = requestedMesocycle !== undefined && loaded?.mesocycles.some((item) => item.id === requestedMesocycle) === true
-        && loaded.selectedMesocycleId !== requestedMesocycle ? requestedMesocycle : null;
-      if (wanted !== null) void repository.selectMesocycle(clientId, programId, wanted).catch(() => setMessage("Не удалось выбрать мезоцикл."));
-      setPeriodized(loaded !== null && wanted !== null ? { ...loaded, selectedMesocycleId: wanted } : loaded);
-      if (requestedWeek !== undefined && next !== null) {
-        const key = next.kind === "SIMPLE" ? "simple" : requestedMesocycle ?? loaded?.selectedMesocycleId ?? loaded?.mesocycles[0]?.id;
-        if (key != null) {
-          appliedContext.current = `${key}:${requestedWeek}`;
-          setWeeksByCycle((current) => ({ ...current, [key]: requestedWeek }));
-        }
-      }
-      setShown({ clientId, programId });
-    }).catch(() => {
-      if (active) { setProgram((current) => current === undefined ? null : current); setMessage("Не удалось загрузить структуру программы."); }
-    });
-    return () => { active = false; };
-  }, [clientId, programId, repository, version]);
-
-  useEffect(() => {
-    let active = true;
     listCandidates().then((rows) => { if (active) setNames(new Map(rows.map((row) => [row.id, row.displayName]))); })
       .catch(() => undefined);
     return () => { active = false; };
   }, [listCandidates]);
-
-  // UI-OWN-044: участники — группа выбранного мезоцикла (копии в любых программах), а не участники программы.
-  const [groupSize, setGroupSize] = useState(1);
-  useEffect(() => {
-    if (cycleKey === "simple") return undefined;
-    let active = true;
-    // Идентичность — показанных данных: мезоцикл `cycleKey` принадлежит им, а не новому участнику, пока тот не загружен.
-    repository.getMesocycleGroup(shown?.clientId ?? clientId, shown?.programId ?? programId, { mesocycleId: cycleKey })
-      .then((copies) => { if (active) setGroupSize(Math.max(1, copies.length)); }).catch(() => undefined);
-    return () => { active = false; };
-  }, [clientId, cycleKey, programId, repository, shown, version]);
-
-  useEffect(() => repository.subscribeCommittedChanges((change) => {
-    if (change.selectionOnly !== true && change.orderOnly !== true && change.clientIds.includes(clientId)) setVersion((value) => value + 1);
-  }), [clientId, repository]);
 
   if (program === undefined) return <View style={[styles.center, { backgroundColor: colors.canvas }]}><LoadingState label="Открываем программу…" /></View>;
   if (program === null) {
@@ -223,7 +173,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       setMessage(code === "DRAFT_INVALID" ? `Введите название (до ${PROGRAM_TITLE_MAX} символов).`
         : code === "PROGRAM_REVISION_CONFLICT" ? "Программа изменилась. Показана новая версия — повторите правку."
           : "Не удалось переименовать.");
-      if (code === "PROGRAM_REVISION_CONFLICT") setVersion((value) => value + 1);
+      if (code === "PROGRAM_REVISION_CONFLICT") refresh();
     } finally {
       setBusy(false);
     }
@@ -256,7 +206,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       setNotice(`Мезоцикл «${cycle.title}» удалён.`);
     } catch (error) {
       setMessage(deleteErrors[error instanceof Error ? error.message : ""] ?? "Не удалось удалить мезоцикл. Ничего не изменено.");
-      setVersion((value) => value + 1);
+      refresh();
     } finally { setBusy(false); setDeletingCycle(null); }
   };
   const deleteProgram = async () => {
@@ -269,7 +219,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     } catch (error) {
       setMessage(deleteErrors[error instanceof Error ? error.message : ""] ?? "Не удалось удалить программу. Ничего не изменено.");
       setConfirmDelete(false);
-      setVersion((value) => value + 1);
+      refresh();
     } finally { setBusy(false); }
   };
 
@@ -285,7 +235,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       selectedId={tab} onSelect={(next) => { setTab(next); onTabChange?.(next); }} />
   </View> : null;
   const participants = renderParticipants?.(() => ({ mesocycleId: selectedCycle()?.id ?? null,
-    weekIndex: weeksByCycle[cycleKey] ?? shownWeek.current, workoutId: null }), shown);
+    weekIndex: weeksByCycle[cycleKey] ?? shownWeek.current, workoutId: null }), shown, group);
   if (tab === "templates" && renderTemplates !== undefined) {
     return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{tabs}{participants}{renderTemplates()}</View>;
   }
@@ -403,7 +353,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
         </View>
       ) : null}
       {message !== null && plan === null && periodized === null ? <AppButton label="Повторить загрузку" variant="secondary"
-        onPress={() => { setMessage(null); setVersion((value) => value + 1); }} /> : null}
+        onPress={() => { setMessage(null); refresh(); }} /> : null}
       {others.length > 0 && renderParticipants === undefined ? (
         <Text style={[styles.body, { color: colors.textSecondary }]}>
           {`Также у: ${others.map((id) => names.get(id) ?? "клиент в архиве").join(", ")}`}
@@ -461,7 +411,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
                 setMessage(code === "PROGRAM_REVISION_CONFLICT" ? "Программа изменилась — показан новый порядок, повторите."
                   : code === "WEEK_SWAP_NO_SLOT" ? "В мезоцикле 52 недели — перестановка недоступна."
                     : "Не удалось поменять недели местами. Порядок прежний.");
-                setVersion((value) => value + 1);
+                refresh();
                 return false;
               }
             }} /> : selected === undefined ? (
@@ -477,7 +427,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
                 <View>
                   <Text accessibilityRole="header" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6} style={[styles.cardTitle, styles.cardTitleFixed, { color: colors.textPrimary }]}>{selected.title}</Text>
                   <Text numberOfLines={1} style={[styles.meta, { color: colors.textSecondary }]}>
-                    {`${program.title} · ${membersWord(groupSize)}`}
+                    {`${program.title} · ${membersWord(Math.max(1, group.length))}`}
                   </Text>
                 </View>
                 {/* Два ряда фиксированной высоты: у участников с разным текстом карточка не меняет размер при переключении. */}
@@ -516,7 +466,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
             onDelete={planDelete === undefined ? undefined : setDeletingCycle}
             onSelect={(id) => {
               setPeriodized((current) => current === null ? current : { ...current, selectedMesocycleId: id });
-              void repository.selectMesocycle(clientId, programId, id).catch(() => setVersion((value) => value + 1));
+              void repository.selectMesocycle(clientId, programId, id).catch(() => refresh());
             }}
             onReorder={(ids) => {
               setMessage(null);
@@ -526,7 +476,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
               void repository.reorderMesocycles(clientId, programId, ids).catch(() => {
                 setMessage("Не удалось сохранить порядок мезоциклов. Повторите перетаскивание.");
                 setOrderReset((value) => value + 1);
-                setVersion((value) => value + 1);
+                refresh();
               });
             }} />
         </>;
