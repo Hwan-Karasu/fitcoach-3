@@ -34,7 +34,7 @@ function DayNumber({ text, marked, selected, today, textStyle }: Readonly<{ text
   const colors = palette.tokens;
   const ink = selected ? colors.onAccentFill : today ? colors.accentInk : colors.textPrimary;
   return (
-    <View style={[styles.dayCircle, marked && !selected ? { backgroundColor: colors.accentSoft } : null]}>
+    <View style={styles.dayCircle}>
       <Text style={[textStyle, { color: ink }]}>{text}</Text>
       <View style={[styles.marker, { backgroundColor: marked ? (selected ? colors.onAccentFill : colors.accentInk) : "transparent" }]} />
     </View>
