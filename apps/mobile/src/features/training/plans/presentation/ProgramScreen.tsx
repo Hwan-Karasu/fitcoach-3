@@ -20,7 +20,6 @@ import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidat
 import { useExerciseLookup } from "./useExerciseLookup.ts";
 import { useParticipantScrollRestore } from "./useParticipantScrollRestore.ts";
 import { useProgramData } from "./useProgramData.ts";
-import { PARTICIPANT_STRIP_HEIGHT } from "./ParticipantSwitcher.tsx";
 import type { GroupCopy } from "../domain/Placement.ts";
 import { MesocycleBook } from "./MesocycleBook.tsx";
 import { cycleTypeLabels, weekRangeLabel } from "../domain/MesocycleBuilder.ts";
@@ -225,9 +224,6 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   };
 
   const others = program.memberClientIds.filter((id) => id !== clientId);
-  // Место под полосу участников у верха страницы: постоянное для программы с несколькими участниками, а не для мезоцикла —
-  // смена мезоцикла (с группой и без) не сдвигает содержимое; при прокрутке полоса уходит поверх него.
-  const hasGroup = renderParticipants !== undefined && program.kind === "PERIODIZED" && others.length > 0;
   const selectedCycle = () => periodized?.mesocycles.find((item) => item.id === periodized.selectedMesocycleId) ?? periodized?.mesocycles[0];
   const menuButton = <View ref={menuAnchor} collapsable={false} style={[styles.more, { backgroundColor: colors.surfaceRaised }]}>
     <AppIconButton compact label="Действия программы"
@@ -248,7 +244,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     {tabs}
     <View style={styles.screen}>
     <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} pointerEvents={stale ? "none" : "auto"}
-      contentContainerStyle={[styles.content, hasGroup ? { paddingTop: PARTICIPANT_STRIP_HEIGHT + 8 } : null]} keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
+      contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
       onContentSizeChange={(_width, height) => restore.onContentSizeChange(height)}
       onScroll={(event) => restore.onScroll(event.nativeEvent.contentOffset.y)}>
       {program.kind === "PERIODIZED" && periodized !== null && periodized.mesocycles.length === 0 ? <View style={styles.row}><View style={styles.grow}>
@@ -511,8 +507,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           : "Программа уйдёт в архив клиента. Вернуть можно из списка программ."}
         confirmLabel="В архив" onCancel={() => setConfirmArchive(false)} onConfirm={() => { void archive(); }} />
     </Animated.ScrollView>
-    {/* Полоса участников — слой поверх прокрутки (UI-OWN-043): в раскладку содержимого не входит, поэтому её появление и
-        исчезновение со сменой мезоцикла не двигает и не перестраивает экран; высота постоянная, может перекрывать верх страницы. */}
+    {/* Полоса участников — слой над нижней панелью навигации (UI-OWN-043): в раскладку содержимого не входит, поэтому её появление и
+        исчезновение со сменой мезоцикла ничего не сдвигает; места под неё нет — она перекрывает низ страницы. */}
     <View style={styles.floating} pointerEvents="box-none">{participants}</View>
     </View>
     </View>
@@ -525,8 +521,8 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
   heading: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },
   screen: { flex: 1 },
-  /** Полоса участников поверх прокрутки, во всю ширину под переключателем «Программа | Шаблоны». */
-  floating: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 10 },
+  /** Полоса участников над нижней панелью навигации, во всю ширину. */
+  floating: { position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 10 },
   tabs: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 2 },
   cardHead: { gap: 12 },
   cardTitle: { fontFamily: fonts.bold, fontSize: 18, letterSpacing: -0.2 },

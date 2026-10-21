@@ -130,15 +130,13 @@ export async function participantTarget(repository: TrainingPlansRepositoryPort,
 }
 
 const CHIP_WIDTH = 150;
-/** Полная высота полосы (отступы 8 + 8, рамка 4 + 4, карточка 40): экран программы оставляет под неё место у верха страницы. */
-export const PARTICIPANT_STRIP_HEIGHT = 64;
 const CHIP_GAP = 4;
 
 const styles = StyleSheet.create({
-  wrap: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 },
-  card: { borderRadius: 16, padding: 4 },
+  wrap: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 6 },
+  card: { borderRadius: 14, padding: 3 },
   row: { gap: CHIP_GAP },
-  chip: { width: CHIP_WIDTH, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  chip: { width: CHIP_WIDTH, height: 36, borderRadius: 11, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   chipText: { fontFamily: fonts.semibold, fontSize: 15, textAlign: "center" },
   mark: { position: "absolute", top: 8, bottom: 8, flexDirection: "row", alignItems: "center", gap: 2, paddingHorizontal: 8, borderRadius: 12 },
   markLeft: { left: 8 },
