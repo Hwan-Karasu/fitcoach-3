@@ -31,8 +31,11 @@ export function useNutritionDay(clientId: string, localDate: string, diary: Nutr
   targets: NutritionTargetsPort): Readonly<{ data: NutritionDayData | null; stale: boolean; failed: boolean; reload: () => void }> {
   const cache = useRef(new Map<string, DayRows>());
   const lastShown = useRef<Readonly<{ localDate: string; rows: DayRows }> | null>(null);
+  // Кэш и «прежний день» принадлежат одному клиенту: при смене клиента они сбрасываются, чтобы данные прежнего не показывались как новые.
+  const owner = useRef(clientId);
+  if (owner.current !== clientId) { owner.current = clientId; cache.current = new Map(); lastShown.current = null; }
   const [, bump] = useReducer((value: number) => value + 1, 0);
-  const [goals, setGoals] = useState<Readonly<{ versions: readonly TargetVersion[]; exceptions: readonly TargetException[] }> | null>(null);
+  const [goals, setGoals] = useState<Readonly<{ clientId: string; versions: readonly TargetVersion[]; exceptions: readonly TargetException[] }> | null>(null);
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
   const [goalsTick, setGoalsTick] = useState(0);
@@ -65,7 +68,7 @@ export function useNutritionDay(clientId: string, localDate: string, diary: Nutr
   useEffect(() => {
     let active = true;
     void Promise.all([targets.listVersions(clientId), targets.listExceptions(clientId)]).then(([versions, exceptions]) => {
-      if (active) { setGoals({ versions, exceptions }); setFailed(false); }
+      if (active) { setGoals({ clientId, versions, exceptions }); setFailed(false); }
     }, () => { if (active) setFailed(true); });
     return () => { active = false; };
   }, [clientId, targets, goalsTick]);
@@ -82,9 +85,9 @@ export function useNutritionDay(clientId: string, localDate: string, diary: Nutr
   const shownDate = current !== undefined ? localDate : (lastShown.current?.localDate ?? localDate);
   const stale = shownRows !== null && current === undefined;
   const data = useMemo<NutritionDayData | null>(() => {
-    if (shownRows === null || goals === null) return null;
+    if (shownRows === null || goals === null || goals.clientId !== clientId) return null;
     return { entries: shownRows.entries, waterMl: shownRows.waterMl, summary: summarizeDay(shownDate, shownRows.entries),
       target: resolveTarget(goals.versions, goals.exceptions, shownDate), versions: goals.versions };
-  }, [shownRows, shownDate, goals]);
+  }, [shownRows, shownDate, goals, clientId]);
   return { data, stale, failed, reload };
 }

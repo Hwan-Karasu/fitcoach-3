@@ -9,7 +9,8 @@ import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
 import { TARGET_METRICS, type Corridors, type HomeMacroAdjustment, type TargetVersion } from "../domain/TargetModel.ts";
 import { uniformWeek } from "../domain/TargetRules.ts";
 import { formatTargetText, parseTargetText } from "../domain/TargetText.ts";
-import { metricLabels, nutritionErrorText, todayLocal } from "./nutritionFormat.ts";
+import { metricLabels, nutritionErrorText } from "./nutritionFormat.ts";
+import { useToday } from "./useToday.ts";
 
 export type TargetMode = "EXACT" | "RANGE";
 type MacroMetric = "protein" | "fat" | "carbs";
@@ -43,7 +44,7 @@ export function NutritionTargetRows({ clientId, targets, calories, defaults, lea
   onLiveTarget?: (target: Corridors | null) => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const today = todayLocal();
+  const today = useToday();
   const [data, setData] = useState<Readonly<{ versions: readonly TargetVersion[] }> | null>(null);
   const [tick, setTick] = useState(0);
   const [drafts, setDrafts] = useState<Drafts>(EMPTY);

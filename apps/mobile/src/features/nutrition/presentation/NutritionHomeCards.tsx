@@ -14,11 +14,12 @@ import { NUTRIENT_OF } from "../domain/TargetRules.ts";
 import type { CalcClientBody } from "./NutritionCalcScreen.tsx";
 import { useMacroColors } from "./MacroGrid.tsx";
 import { NutritionTargetRows, type TargetMode } from "./NutritionTargetRows.tsx";
-import { metricLabels, nutritionErrorText, rangeText, todayLocal, wholeText } from "./nutritionFormat.ts";
+import { metricLabels, nutritionErrorText, rangeText, wholeText } from "./nutritionFormat.ts";
 import { DayDataJournal } from "./DayDataJournal.tsx";
 import { saveDayData } from "./dayData.ts";
 import { useNutritionGuide } from "./useNutritionGuide.ts";
 import { useNutritionDay } from "./useNutritionDay.ts";
+import { useToday } from "./useToday.ts";
 
 /** Шаги за сегодня: одно значение на дату; пусто — «нет данных», а не 0 (§49.5). Подписка снимается в cleanup. */
 function useTodaySteps(clientId: string, calc: NutritionCalcPort, today: string): Readonly<{ steps: number | null; loaded: boolean }> {
@@ -60,7 +61,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const macroColors = useMacroColors();
-  const today = todayLocal();
+  const today = useToday();
   const { loaded, guide, defaults, leanMassKg } = useNutritionGuide(clientId, body, calc, measurements);
   const { data } = useNutritionDay(clientId, today, diary, targets);
   const stepsToday = useTodaySteps(clientId, calc, today);

@@ -16,12 +16,13 @@ import { TARGET_METRICS, type TargetMetric } from "../domain/TargetModel.ts";
 import { NUTRIENT_OF } from "../domain/TargetRules.ts";
 import { EntryEditorDialog } from "./EntryEditorDialog.tsx";
 import { MacroCells, useMacroColors } from "./MacroGrid.tsx";
-import { dayTitle, kcalText, metricLabels, nutritionErrorText, quantityText, slotLabels, todayLocal, wholeText } from "./nutritionFormat.ts";
+import { dayTitle, kcalText, metricLabels, nutritionErrorText, quantityText, slotLabels, wholeText } from "./nutritionFormat.ts";
 import { useNutritionGuide } from "./useNutritionGuide.ts";
 import type { CalcClientBody } from "./NutritionCalcScreen.tsx";
 import type { CatalogFilter } from "./AddFoodScreen.tsx";
 import { DiaryWeekHeader } from "./DiaryWeekHeader.tsx";
 import { useNutritionDay } from "./useNutritionDay.ts";
+import { useToday } from "./useToday.ts";
 import { SavedMealEditorDialog } from "./SavedMealEditorDialog.tsx";
 import { savedSnapshot } from "../domain/SavedMeal.ts";
 import type { FoodSnapshot } from "../domain/FoodSnapshot.ts";
@@ -80,7 +81,7 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const today = todayLocal();
+  const today = useToday();
   const [localDate, setLocalDate] = useState(today);
   useEffect(() => { if (requestedDay !== undefined) setLocalDate(requestedDay.date); }, [requestedDay]);
   const { data, stale, failed, reload } = useNutritionDay(clientId, localDate, diary, targets);

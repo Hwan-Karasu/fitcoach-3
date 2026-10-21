@@ -15,7 +15,8 @@ import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
 import { TARGET_METRICS, type Corridors, type ResolvedTarget, type TargetException, type TargetMetric, type TargetVersion } from "../domain/TargetModel.ts";
 import type { CalcClientBody } from "./NutritionCalcScreen.tsx";
 import { useNutritionGuide } from "./useNutritionGuide.ts";
-import { metricLabels, shiftDate, todayLocal, wholeText } from "./nutritionFormat.ts";
+import { useToday } from "./useToday.ts";
+import { metricLabels, shiftDate, wholeText } from "./nutritionFormat.ts";
 import { useMacroColors } from "./MacroGrid.tsx";
 import { MacroGlass } from "./MacroGlass.tsx";
 
@@ -41,7 +42,7 @@ export function NutritionStatsScreen({ clientId, body, diary, targets, measureme
   const macroColors = useMacroColors();
   // Цель дня — та же, что в дневнике и на главной: расчёт с ручной корректировкой на дату (ADR-029).
   const { loaded: guideLoaded, guide, defaults, leanMassKg } = useNutritionGuide(clientId, body, calc, measurements);
-  const today = todayLocal();
+  const today = useToday();
   const [period, setPeriod] = useState<PeriodId>("week");
   const [latest, setLatest] = useState<Readonly<{ entries: readonly EatenEntry[]; versions: readonly TargetVersion[]; exceptions: readonly TargetException[]; key: string;
     body: ClientMeasurements; steps: readonly StepsDay[]; workouts: readonly WorkoutMark[] }> | null>(null);

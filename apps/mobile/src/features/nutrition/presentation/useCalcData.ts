@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { dailyPoints, latestPoint, localDateOf, type MeasurementRepositoryPort } from "../../measurements/public.ts";
+import { dailyPoints, latestPoint, type MeasurementRepositoryPort } from "../../measurements/public.ts";
 import type { CalcProfile } from "../domain/CalcRules.ts";
 import type { NutritionCalcPort, StoredCalcProfile } from "../domain/NutritionCalcPort.ts";
 import { shiftDate } from "./nutritionFormat.ts";
+import { useToday } from "./useToday.ts";
 
 /** Окно динамики веса и средних шагов: последние 7 дней (решение владельца); шаги усредняются только по дням с записью (неизвестно ≠ 0). */
 export const TREND_WINDOW_DAYS = 7;
@@ -31,10 +32,10 @@ export function useCalcData(clientId: string, calc: NutritionCalcPort, measureme
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
   const reload = useCallback(() => setTick((value) => value + 1), []);
+  const today = useToday();
 
   useEffect(() => {
     let active = true;
-    const today = localDateOf(new Date());
     void Promise.all([calc.getProfile(clientId), measurements.listForClient(clientId), calc.averageSteps(clientId, shiftDate(today, -TREND_WINDOW_DAYS + 1), today)]).then(([stored, data, steps]) => {
       if (!active) return;
       const point = (type: "WEIGHT" | "BODY_FAT") => { const latest = latestPoint(data.measurements, data.primaries, type); return latest !== null && latest.kind === "VALUE" ? latest.measurement.valueX10 / 10 : null; };
@@ -46,7 +47,7 @@ export function useCalcData(clientId: string, calc: NutritionCalcPort, measureme
       setFailed(false);
     }, () => { if (active) setFailed(true); });
     return () => { active = false; };
-  }, [calc, measurements, clientId, tick]);
+  }, [calc, measurements, clientId, tick, today]);
   useEffect(() => {
     const offCalc = calc.subscribeCommittedChanges((change) => { if (change.clientId === clientId) reload(); });
     const offMeasurements = measurements.subscribeCommittedChanges((change) => { if (change.clientId === clientId) reload(); });

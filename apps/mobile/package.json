@@ -53,6 +53,7 @@
     "babel-preset-expo": "~57.0.12",
     "expo-doctor": "1.20.4",
     "node": "24.3.0",
+    "react-test-renderer": "19.2.3",
     "typescript": "6.0.3"
   }
 }
