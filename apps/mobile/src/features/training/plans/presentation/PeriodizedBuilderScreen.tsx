@@ -402,6 +402,9 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
           {mode === "create" ? <TextField label="Название программы" required value={programTitle} placeholder="Например, «Подготовка к лету»"
             onChangeText={(value) => { setProgramTitle(value); touch(); }} />
             : <Text style={[styles.hint, { color: colors.textSecondary }]}>{`Программа «${program?.title ?? ""}»`}</Text>}
+          {mode === "edit" ? <Text style={[styles.hint, { color: colors.textSecondary }]}>
+            Правка меняет только мезоцикл этого клиента. Чтобы изменить неделю у всей группы, откройте «Изменить неделю» в дневнике тренировки.
+          </Text> : null}
           <TextField label="Название мезоцикла" required value={title} onChangeText={(value) => { setTitle(value); touch(); }} />
           <Text style={[styles.label, { color: colors.textPrimary }]}>Тип цикла</Text>
           <View style={styles.grid}>
