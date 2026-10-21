@@ -1,5 +1,5 @@
-import { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
-import { Image, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Image, Keyboard, Pressable, Text, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useKeepAwake } from "expo-keep-awake";
 import * as Haptics from "expo-haptics";
@@ -10,21 +10,18 @@ import { scheduleOnRN } from "react-native-worklets";
 import { captureRef } from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
 import Sortable from "react-native-sortables";
-import { CalendarDays, Check, ChevronRight, Clock, EllipsisVertical, Gauge, GripVertical, LayoutGrid, NotebookPen, Plus, Share2, Timer, Trash2,
-  Users, X } from "lucide-react-native";
+import { CalendarDays, ChevronRight, Clock, EllipsisVertical, GripVertical, LayoutGrid, Plus, Share2, Timer, Trash2,
+  Users } from "lucide-react-native";
 import { AppButton, ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, StatusTag, TimeWheelPicker, WeekCards, useWeekNavigation,
   type StatusKind } from "../../../../shared/ui/components/public.ts";
-import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
-import { fonts } from "../../../../shared/ui/theme/typography.ts";
-import { shadow } from "../../../../shared/ui/theme/style.ts";
 import { useReportScreenTone } from "../../../../shared/ui/theme/ScreenTone.tsx";
 import { weekTypeTone, DiaryEditDialog, formatDuration, formatRange, supersetNumber, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookupState,
   type DiaryEdit, type ExerciseLookupPort, type PickedExercise, type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort,
   type WorkoutWeekNavigation } from "../../plans/public.ts";
-import { DROPS_MAX, EMPTY_VALUES, NOTE_MAX, type ActiveWorkoutCard, type ActiveWorkoutsPort, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type Side, type TrackingMetric,
+import { type ActiveWorkoutCard, type ActiveWorkoutsPort, type SetFact, type SetType, type SetValues, type Side, type TrackingMetric,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
-import { displayOrder, endInstantAfter, instantFromLocal, limitHint, localDateOf, localMinuteOfDay, nextOutcome, sessionDurationSec, type SetField } from "../domain/ExecutionRules.ts";
+import { displayOrder, endInstantAfter, instantFromLocal, localDateOf, localMinuteOfDay, nextOutcome, sessionDurationSec } from "../domain/ExecutionRules.ts";
 import { durationText, timeText } from "../../../../shared/format/clockText.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
@@ -32,13 +29,11 @@ import { ActiveWorkoutsSheet, ExerciseMenuSheet, RpeSheet, SetTypeSheet, Superse
 import { factVolume } from "./programMatrix.ts";
 import { WorkoutSharePoster } from "./WorkoutSharePoster.tsx";
 import { labeledPlan, labeledWithDrops } from "./shareFormat.ts";
-import { compactValues, compactWithDrops, diaryFields, fieldHeaders, fieldNames, parseField, planText, rawOf, rpeTone, sanitizeField,
-  setTypeLabels, setTypeTone, shortDate, workoutStatusLabels } from "./setFormat.ts";
+import { diaryFields, fieldHeaders, planText, rawOf, shortDate, workoutStatusLabels } from "./setFormat.ts";
 import { extraWarmups, useWorkoutDiary, type SetPatch } from "./useWorkoutDiary.ts";
 import { PendingInputWrites } from "../domain/PendingInputWrites.ts";
-
-/** Пауза после последнего нажатия, после которой значение ячейки записывается. */
-const SAVE_DELAY_MS = 700;
+import { NoteField, SetRow, type SetTarget } from "./WorkoutSetRow.tsx";
+import { styles } from "./workoutStyles.ts";
 
 const statusKinds: Readonly<Record<WorkoutStatus, StatusKind>> = {
   NOT_STARTED: "neutral", IN_PROGRESS: "info", COMPLETED: "success", MISSED: "warning", CANCELLED: "warning",
@@ -49,9 +44,6 @@ const outcomeLabels: Readonly<Record<WorkoutOutcome, readonly [string, string]>>
   MISSED: ["Пропущена", "Отменить пропуск"],
   CANCELLED: ["Отменена", "Отменить отмену"],
 };
-
-type PendingRegistry = PendingInputWrites;
-type SetTarget = Readonly<{ exercise: PlannedExercise; set: PlannedSet; position: number }>;
 
 const hasValues = (values: SetValues) => Object.values(values).some((value) => value !== null);
 
@@ -71,282 +63,6 @@ function extraSetOf(fact: SetFact): PlannedSet {
 
 /** Заголовок колонки в одну строку: при нехватке места шрифт ужимается. */
 const oneLine = { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.7 } as const;
-
-/**
- * Ячейка фактического значения: свой текст ввода; запись — через паузу после ввода или при уходе фокуса.
- * Отложенная запись регистрируется, чтобы смена исхода сначала дописала последнее значение (§48.23 п. 5).
- * Кнопка клавиатуры: «Далее» — в соседнюю ячейку строки (повторы → кг), на последней — «Готово».
- */
-const ValueCell = forwardRef(function ValueCell({ cellKey, field, value, pending, onNext, onCommit }: Readonly<{
-  cellKey: string; field: SetField; value: number | null; pending: PendingRegistry;
-  /** Следующая ячейка строки; нет — ячейка последняя. */
-  onNext: (() => void) | null;
-  onCommit: (value: number | null) => Promise<unknown>;
-}>, ref: Ref<TextInput>) {
-  const { palette } = usePrototypeTheme();
-  const colors = palette.tokens;
-  const raw = rawOf({ ...EMPTY_VALUES, [field]: value }, field);
-  const [text, setText] = useState(raw);
-  const [invalid, setInvalid] = useState(false);
-  const focused = useRef(false);
-  const textRef = useRef(raw);
-  const valueRef = useRef(value);
-  const commitRef = useRef(onCommit);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  valueRef.current = value;
-  commitRef.current = onCommit;
-
-  useEffect(() => {
-    if (focused.current || pending.has(cellKey)) return;
-    textRef.current = raw;
-    setText(raw);
-    setInvalid(false);
-  }, [raw, pending, cellKey]);
-
-  const flush = useCallback(() => {
-    if (timer.current !== null) clearTimeout(timer.current);
-    timer.current = null;
-    return pending.flush(cellKey);
-  }, [cellKey, pending]);
-
-  useEffect(() => () => { if (pending.has(cellKey)) flush(); }, [cellKey, flush, pending]);
-
-  return (
-    <TextInput ref={ref} value={text} placeholder="—" placeholderTextColor={colors.textMuted} selectTextOnFocus
-      keyboardType={field === "durationSec" ? "numbers-and-punctuation" : field === "loadGrams" ? "decimal-pad" : "number-pad"}
-      accessibilityLabel={fieldNames[field]} accessibilityHint={invalid ? limitHint(field) : undefined}
-      returnKeyType={onNext === null ? "done" : "next"} submitBehavior={onNext === null ? "blurAndSubmit" : "submit"}
-      onSubmitEditing={() => onNext?.()}
-      onFocus={() => { focused.current = true; }}
-      onBlur={() => { focused.current = false; flush(); }}
-      onChangeText={(typed) => {
-        const next = sanitizeField(field, typed);
-        textRef.current = next;
-        setText(next);
-        if (timer.current !== null) clearTimeout(timer.current);
-        timer.current = null;
-        const parsed = parseField(field, next);
-        setInvalid(parsed === "invalid");
-        pending.set(cellKey, async () => {
-          if (parsed === "invalid") return false;
-          if (parsed === valueRef.current) return true;
-          return await commitRef.current(parsed) !== null;
-        });
-        timer.current = setTimeout(flush, SAVE_DELAY_MS);
-      }}
-      style={[styles.input, { color: colors.textPrimary, backgroundColor: colors.surface,
-        borderColor: invalid ? colors.danger : colors.border }]} />
-  );
-});
-
-/**
- * Заметка о выполнении упражнения (§48.67): запись через паузу после ввода или при уходе фокуса; отложенная
- * запись дописывается перед сменой исхода, как у значений подходов.
- */
-function NoteField({ noteKey, value, pending, onCommit }: Readonly<{
-  noteKey: string; value: string; pending: PendingRegistry; onCommit: (text: string) => Promise<unknown>;
-}>) {
-  const { palette } = usePrototypeTheme();
-  const colors = palette.tokens;
-  const [text, setText] = useState(value);
-  const [open, setOpen] = useState(value !== "");
-  const focused = useRef(false);
-  const textRef = useRef(value);
-  const valueRef = useRef(value);
-  const commitRef = useRef(onCommit);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  valueRef.current = value;
-  commitRef.current = onCommit;
-  useEffect(() => {
-    if (focused.current || pending.has(noteKey)) return;
-    textRef.current = value;
-    setText(value);
-    if (value !== "") setOpen(true);
-  }, [value, pending, noteKey]);
-  const flush = useCallback(() => {
-    if (timer.current !== null) clearTimeout(timer.current);
-    timer.current = null;
-    return pending.flush(noteKey);
-  }, [noteKey, pending]);
-  useEffect(() => () => { if (pending.has(noteKey)) flush(); }, [flush, noteKey, pending]);
-  if (!open) {
-    return (
-      <Pressable accessibilityRole="button" accessibilityLabel="Добавить заметку о выполнении" hitSlop={6}
-        onPress={() => setOpen(true)} style={styles.noteAdd}>
-        <NotebookPen size={15} color={colors.textSecondary} strokeWidth={1.8} />
-        <Text style={[styles.noteAddText, { color: colors.textSecondary }]}>Заметка о выполнении</Text>
-      </Pressable>
-    );
-  }
-  return (
-    <TextInput value={text} multiline maxLength={NOTE_MAX} placeholder="Как прошло: самочувствие, техника, замены…"
-      placeholderTextColor={colors.textMuted} accessibilityLabel="Заметка о выполнении"
-      autoFocus={value === "" && text === ""}
-      onFocus={() => { focused.current = true; }}
-      onBlur={() => { focused.current = false; flush(); if (textRef.current.trim() === "") setOpen(false); }}
-      onChangeText={(next) => {
-        textRef.current = next;
-        setText(next);
-        if (timer.current !== null) clearTimeout(timer.current);
-        pending.set(noteKey, async () => next.trim() === valueRef.current.trim() || await commitRef.current(next) !== null);
-        timer.current = setTimeout(flush, SAVE_DELAY_MS);
-      }}
-      style={[styles.note, { color: colors.textPrimary, backgroundColor: colors.input, borderColor: colors.border }]} />
-  );
-}
-
-/**
- * Строка подхода. Тип красит строку (разминка — жёлтым, отказ — красным, дроп — синим), номер у рабочих
- * подходов не меняется; под дроп-сетом — строки мини-сетов (§48.60), их состав заморожен, пока подход выполнен.
- */
-const SetRow = memo(function SetRow({ exercise, set, position, number, fact, previous, fields, mode, sided, pending,
-  onSave, onToggle, onPickType, onPickRpe }: Readonly<{
-  exercise: PlannedExercise; set: PlannedSet; position: number; number: number | null; fact: SetFact | undefined; previous: PreviousSet | undefined;
-  fields: readonly SetField[]; mode: ConfirmationMode;
-  /** Одностороннее упражнение: две строки «Л» / «П» со своими значениями и отметками (§48.66, §48.70). */
-  sided: boolean;
-  pending: PendingRegistry;
-  onSave: (target: SetTarget, patch: SetPatch) => Promise<unknown>;
-  onToggle: (target: SetTarget, side?: Side) => void;
-  onPickType: (target: SetTarget) => void;
-  onPickRpe: (target: SetTarget) => void;
-}>) {
-  const { palette } = usePrototypeTheme();
-  const colors = palette.tokens;
-  // Цель строки собирается из примитивов и неизменных объектов: пропсы строки стабильны, memo срабатывает.
-  const target = useMemo<SetTarget>(() => ({ exercise, set, position }), [exercise, set, position]);
-  const confirmed = fact?.confirmed === true;
-  const type: SetType = fact?.setType ?? "NORMAL";
-  const tone = setTypeTone(type, colors);
-  const drops = fact?.drops ?? [];
-  const marker = number === null ? "Р" : String(number);
-  const background = tone !== null ? withAlpha(tone, confirmed ? 0.3 : 0.14)
-    : confirmed ? withAlpha(colors.success, 0.14) : colors.surfaceRaised;
-  const manualSpacer = mode === "MANUAL" ? <View style={styles.side} /> : null;
-  const inputs = useRef(new Map<string, TextInput | null>()).current;
-  /** Ячейки одной строки (подход, сторона или мини-сет) с переходом «Далее» слева направо. */
-  const cells = (prefix: string, valueOf: (field: SetField) => number | null, commit: (field: SetField, value: number | null) => Promise<unknown>) =>
-    fields.map((field, index) => {
-      const next = fields[index + 1];
-      return (
-        <ValueCell key={field} ref={(node) => { inputs.set(`${prefix}:${field}`, node); }} cellKey={`${prefix}:${field}`}
-          field={field} value={valueOf(field)} pending={pending}
-          onNext={next === undefined ? null : () => inputs.get(`${prefix}:${next}`)?.focus()}
-          onCommit={(value) => commit(field, value)} />
-      );
-    });
-  // §48.80: одна засчитанная сторона — подход частично выполнен (номер подсвечен наполовину).
-  const partial = sided && confirmed && fact?.sides?.left.confirmed !== fact?.sides?.right.confirmed;
-  const full = confirmed && !partial;
-  const sideRow = (side: Side) => {
-    const sideFact = side === "L" ? fact?.sides?.left : fact?.sides?.right;
-    const done = sideFact?.confirmed === true;
-    return <>
-      <Text accessibilityLabel={`${side === "L" ? "Левая" : "Правая"} сторона${done ? ", выполнена" : ""}`}
-        style={[styles.sideLabel, { color: done ? colors.success : colors.textSecondary }]}>{side === "L" ? "Л" : "П"}</Text>
-      {cells(`${set.id}:${side}`, (field) => sideFact?.values[field] ?? null,
-        (field, value) => onSave(target, { side: { side, fields: { [field]: value } } }))}
-    </>;
-  };
-  const sideCheck = (side: Side) => {
-    const done = (side === "L" ? fact?.sides?.left.confirmed : fact?.sides?.right.confirmed) === true;
-    return (
-      <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: done }} hitSlop={6}
-        accessibilityLabel={`${side === "L" ? "Левая" : "Правая"} сторона: ${done ? "снять отметку" : "отметить выполненной"}`}
-        onPress={() => onToggle(target, side)}
-        style={[styles.check, { borderColor: done ? colors.success : colors.border, backgroundColor: done ? colors.success : colors.surface }]}>
-        <Check size={18} color={done ? colors.canvas : colors.border} strokeWidth={2.4} />
-      </Pressable>
-    );
-  };
-  const previousText = previous === undefined ? "—" : previous.sides !== null
-    ? `Л ${previous.sides.left === null ? "—" : compactValues(previous.sides.left, fields)}\nП ${previous.sides.right === null ? "—"
-      : compactValues(previous.sides.right, fields)}`
-    : compactWithDrops(previous.values, previous.drops, fields);
-  return (
-    <View style={[styles.block, { backgroundColor: background }]}>
-      <View style={styles.row}>
-        <Pressable accessibilityRole="button" hitSlop={6} onPress={() => onPickType(target)}
-          accessibilityLabel={`Подход ${marker}, ${setTypeLabels[type].toLowerCase()}${full ? ", выполнен" : partial ? ", выполнен частично" : ""}. Сменить тип`}
-          style={[styles.marker, { borderColor: confirmed ? colors.success : tone ?? colors.border,
-            backgroundColor: full ? colors.success : partial ? withAlpha(colors.success, 0.35) : colors.surface }]}>
-          <Text style={[styles.markerText, { color: full ? colors.canvas : tone ?? colors.textPrimary }]}>{marker}</Text>
-        </Pressable>
-        <Text style={[styles.plan, { color: colors.textSecondary }]} numberOfLines={1}>{number === null ? "—" : planText(set, fields)}</Text>
-        {/* «Пред.» — кнопка-плашка (UI-OWN-037): нажатие переносит прошлый результат в подход. */}
-        <Pressable accessibilityRole="button" disabled={previous === undefined} hitSlop={6}
-          style={({ pressed }) => [styles.previous, previous === undefined ? null : [styles.previousChip, {
-            borderColor: withAlpha(colors.accentInk, 0.45), backgroundColor: withAlpha(colors.accentInk, pressed ? 0.22 : 0.1) }]]}
-          accessibilityLabel={previous === undefined ? "Прошлого результата нет" : `Перенести прошлый результат ${previousText}`}
-          onPress={() => {
-            if (previous === undefined) return;
-            if (previous.sides !== null) { onSave(target, { sidesFrom: previous.sides }); return; }
-            onSave(target, type === "DROP" ? { fields: previous.values, drops: previous.drops } : { fields: previous.values });
-          }}>
-          <Text style={[styles.previousText, { color: previous === undefined ? colors.textMuted : colors.accentInk }]} numberOfLines={1}
-            adjustsFontSizeToFit minimumFontScale={0.85}>
-            {previousText}
-          </Text>
-        </Pressable>
-        {sided ? sideRow("L") : cells(set.id, (field) => fact?.values[field] ?? null,
-          (field, value) => onSave(target, { fields: { [field]: value } }))}
-        <Pressable accessibilityRole="button" accessibilityLabel={fact?.rpe ? `RPE ${fact.rpe}. Изменить` : "Указать RPE"} hitSlop={6}
-          onPress={() => onPickRpe(target)} style={styles.side}>
-          {fact?.rpe ? <Text style={[styles.rpeText, { color: rpeTone(fact.rpe, colors) }]}>{fact.rpe}</Text>
-            : <Gauge size={20} color={colors.textMuted} strokeWidth={1.8} />}
-        </Pressable>
-        {mode === "MANUAL" && sided ? sideCheck("L") : null}
-        {mode === "MANUAL" && !sided ? (
-          <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: confirmed }}
-            accessibilityLabel={confirmed ? "Снять отметку выполнения" : "Отметить подход выполненным"} hitSlop={6}
-            onPress={() => onToggle(target)}
-            style={[styles.check, { borderColor: confirmed ? colors.success : colors.border,
-              backgroundColor: confirmed ? colors.success : colors.surface }]}>
-            <Check size={18} color={confirmed ? colors.canvas : colors.border} strokeWidth={2.4} />
-          </Pressable>
-        ) : null}
-      </View>
-      {sided ? (
-        <View style={styles.row}>
-          <View style={styles.markerSpace} />
-          <View style={styles.plan} />
-          <View style={styles.grow} />
-          {sideRow("R")}
-          <View style={styles.side} />
-          {mode === "MANUAL" ? sideCheck("R") : null}
-        </View>
-      ) : null}
-      {type === "DROP" ? <>
-        {drops.map((drop, index) => (
-          <View key={`drop-${index}`} style={styles.row}>
-            <View style={styles.markerSpace} />
-            <View style={styles.plan} />
-            <Text style={[styles.dropLabel, { color: colors.textSecondary }]}>{`↳ ${index + 2}`}</Text>
-            {cells(`${set.id}:d${index}`, (field) => drop[field],
-              (field, value) => onSave(target, { drop: { index, fields: { [field]: value } } }))}
-            <Pressable accessibilityRole="button" accessibilityLabel={`Убрать мини-сет ${index + 2}`} hitSlop={6}
-              disabled={confirmed || drops.length <= 1} style={[styles.side, (confirmed || drops.length <= 1) && styles.dim]}
-              onPress={() => onSave(target, { drops: drops.filter((_, item) => item !== index) })}>
-              <X size={18} color={colors.danger} strokeWidth={2} />
-            </Pressable>
-            {manualSpacer}
-          </View>
-        ))}
-        <View style={styles.row}>
-          <View style={styles.markerSpace} />
-          <Pressable accessibilityRole="button" disabled={confirmed || drops.length >= DROPS_MAX}
-            accessibilityLabel="Добавить мини-сет"
-            accessibilityHint={confirmed ? "Подход выполнен — сначала снимите выполнение" : undefined}
-            onPress={() => onSave(target, { drops: [...drops, EMPTY_VALUES] })}
-            style={[styles.addDrop, { borderColor: tone ?? colors.border }, (confirmed || drops.length >= DROPS_MAX) && styles.dim]}>
-            <Plus size={16} color={colors.accentInk} strokeWidth={2.2} />
-            <Text style={[styles.addDropText, { color: colors.accentInk }]}>Мини-сет</Text>
-          </Pressable>
-        </View>
-      </> : null}
-    </View>
-  );
-});
 
 /**
  * Дневник тренировки (Feature 10): план, «Пред.», факт по профилю упражнения, RPE; три исхода под последним
@@ -962,84 +678,3 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   );
 }
 
-const styles = StyleSheet.create({
-  center: { flex: 1, padding: 16, gap: 12, justifyContent: "center" },
-  content: { padding: 16, gap: 12 },
-  heading: { flex: 1, fontFamily: fonts.bold, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
-  topCard: { ...shadow.card, borderRadius: 22, padding: 16, gap: 12 },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  stripe: { width: 4, alignSelf: "stretch", minHeight: 26, borderRadius: 2 },
-  volume: { alignItems: "flex-end" },
-  cardVolume: { marginLeft: "auto" },
-  volumeLabel: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, textTransform: "uppercase", letterSpacing: 1 },
-  volumeValue: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 23 },
-  actions: { flexDirection: "row", gap: 6 },
-  action: { flex: 1, minHeight: 56, borderRadius: 14, alignItems: "center", justifyContent: "center", gap: 3,
-    paddingHorizontal: 4, paddingVertical: 6 },
-  actionText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 14, textAlign: "center" },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 2 },
-  nameText: { flexShrink: 1 },
-  more: { width: 32, height: 40, alignItems: "center", justifyContent: "center" },
-  addSet: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 44, borderWidth: 1.5,
-    borderStyle: "dashed", borderRadius: 14, marginTop: 4 },
-  addSetText: { fontFamily: fonts.bold, fontSize: 14 },
-  orderRow: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: 12, paddingRight: 12, minHeight: 52 },
-  handle: { width: 44, minHeight: 48, alignItems: "center", justifyContent: "center" },
-  orderActions: { flexDirection: "row", gap: 8 },
-  offscreen: { position: "absolute", left: -10000, top: 0 },
-  metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  dateRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  timeRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
-  dateButton: { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 28, borderRadius: 10, paddingHorizontal: 9 },
-  dateText: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
-  meta: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
-  card: { ...shadow.card, borderRadius: 22, padding: 14, gap: 6 },
-  cardHead: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 2, paddingHorizontal: 2 },
-  thumb: { width: 40, height: 40, borderRadius: 12 },
-  exerciseText: { flex: 1, gap: 0 },
-  exercise: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
-  subRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  rest: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", minHeight: 28 },
-  restText: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
-  block: { borderRadius: 12, paddingVertical: 3, paddingHorizontal: 4, gap: 4 },
-  row: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 44 },
-  headRow: { minHeight: 20, paddingHorizontal: 2 },
-  head: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, textAlign: "center", textTransform: "uppercase", letterSpacing: 0.6 },
-  grow: { flex: 1 },
-  markerSpace: { width: 40 },
-  marker: { width: 40, height: 44, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  markerText: { fontFamily: fonts.bold, fontSize: 15 },
-  plan: { flex: 1, fontFamily: fonts.semibold, fontSize: 12, textAlign: "center" },
-  previous: { flex: 1, minHeight: 34, justifyContent: "center" },
-  previousChip: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 2 },
-  previousText: { fontFamily: fonts.semibold, fontSize: 12, textAlign: "center" },
-  instructionText: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, borderLeftWidth: 2, paddingLeft: 8,
-    marginHorizontal: 2, marginBottom: 2 },
-  noteAdd: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 40, alignSelf: "flex-start", paddingHorizontal: 2 },
-  noteAddText: { fontFamily: fonts.semibold, fontSize: 14 },
-  note: { minHeight: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, textAlignVertical: "top",
-    fontFamily: fonts.medium, fontSize: 14, lineHeight: 19, marginTop: 4 },
-  othersButton: { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 28, borderRadius: 10, paddingHorizontal: 9 },
-  othersText: { fontFamily: fonts.bold, fontSize: 12 },
-  deleteRun: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 48, marginTop: 4 },
-  deleteRunText: { fontFamily: fonts.medium, fontSize: 13 },
-  sideLabel: { width: 14, textAlign: "center", fontFamily: fonts.semibold, fontSize: 12 },
-  dropLabel: { flex: 1, fontFamily: fonts.medium, fontSize: 12, textAlign: "right", paddingRight: 4 },
-  inputHead: { width: 46 },
-  input: { width: 46, height: 44, borderWidth: 1.5, borderRadius: 12, textAlign: "center", fontFamily: fonts.bold,
-    fontSize: 15, paddingHorizontal: 2, paddingVertical: 0 },
-  side: { width: 34, minHeight: 40, alignItems: "center", justifyContent: "center" },
-  sideHead: { width: 34 },
-  rpeText: { fontFamily: fonts.semibold, fontSize: 13, textAlign: "center" },
-  check: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  addDrop: { flex: 1, minHeight: 40, borderRadius: 8, borderWidth: 1, borderStyle: "dashed", flexDirection: "row",
-    alignItems: "center", justifyContent: "center", gap: 6 },
-  addDropText: { fontFamily: fonts.medium, fontSize: 12 },
-  dim: { opacity: 0.4 },
-  body: { gap: 12 },
-  switching: { opacity: 0.55 },
-  outcomes: { flexDirection: "row", gap: 8, marginTop: 4 },
-  outcome: { flex: 1, minHeight: 56, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center",
-    paddingHorizontal: 6 },
-  outcomeText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 15, textAlign: "center" },
-});
