@@ -20,11 +20,13 @@ const PAD = 8;
  * Столбчатая диаграмма (react-native-gifted-charts) от нуля до округлённого максимума; подписаны крайние периоды.
  * `onPressItem` — переход к исходным данным столбца (§48.86.19).
  */
-export function BarChart({ items, format, accessibilityLabel, onPressItem }: Readonly<{
+export function BarChart({ items, format, accessibilityLabel, onPressItem, color }: Readonly<{
   items: readonly BarChartItem[];
   format: (value: number) => string;
   accessibilityLabel: string;
   onPressItem?: (item: BarChartItem) => void;
+  /** Цвет столбцов; по умолчанию акцент темы. */
+  color?: string;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -34,7 +36,7 @@ export function BarChart({ items, format, accessibilityLabel, onPressItem }: Rea
   return (
     <View accessible accessibilityLabel={accessibilityLabel} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
       {width > 0 ? <GiftedBarChart
-        data={items.map((item) => ({ value: item.value ?? 0, frontColor: colors.accentInk, onPress: onPressItem === undefined || item.value === null
+        data={items.map((item) => ({ value: item.value ?? 0, frontColor: color ?? colors.accentInk, onPress: onPressItem === undefined || item.value === null
           ? undefined : () => onPressItem(item) }))}
         height={HEIGHT - PAD} noOfSections={3} maxValue={step * 3} stepValue={step}
         barWidth={layout.barWidth} spacing={layout.spacing} initialSpacing={layout.spacing / 2} endSpacing={0} barBorderRadius={4}

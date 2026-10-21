@@ -11,7 +11,7 @@ import type { DiaryEntry } from "../domain/DiaryModel.ts";
 import { averageTargetX10, computeNutritionStats } from "../domain/NutritionStats.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
-import { TARGET_METRICS, type TargetException, type TargetVersion } from "../domain/TargetModel.ts";
+import { TARGET_METRICS, type TargetException, type TargetMetric, type TargetVersion } from "../domain/TargetModel.ts";
 import { metricLabels, shiftDate, todayLocal, wholeText } from "./nutritionFormat.ts";
 import { useMacroColors } from "./MacroGrid.tsx";
 import { MacroGlass } from "./MacroGlass.tsx";
@@ -43,6 +43,7 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
   const [range, setRange] = useState({ from: shiftDate(today, -29), to: today });
   const [draftRange, setDraftRange] = useState<DateRange>(range);
   const [calendar, setCalendar] = useState(false);
+  const [chartMetric, setChartMetric] = useState<TargetMetric>("kcal");
   const [trend, setTrend] = useState<"weight" | "fat" | "steps">("weight");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const days = periods.find((item) => item.id === period)!.days;
@@ -132,9 +133,10 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
             })}
           </View>
           <View style={[styles.card, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.heading, { color: colors.textPrimary }]}>Калории по дням</Text>
-            <BarChart items={stats.days.map((day) => ({ key: day.localDate, label: shortDate(day.localDate), value: day.valuesX10.kcal === null ? null : Math.round(day.valuesX10.kcal / 10) }))}
-              format={(value) => `${Math.round(value)} ккал`} accessibilityLabel={`Калории по дням, ${stats.accountedDays} дней с записями`} onPressItem={(item) => onOpenDay(item.key)} />
+            <Text style={[styles.heading, { color: colors.textPrimary }]}>{`${metricLabels[chartMetric]} по дням`}</Text>
+            <SegmentedControl compact items={TARGET_METRICS.map((metric) => ({ id: metric, label: metricLabels[metric] }))} selectedId={chartMetric} onSelect={setChartMetric} />
+            <BarChart color={macroColors[chartMetric]} items={stats.days.map((day) => ({ key: day.localDate, label: shortDate(day.localDate), value: day.valuesX10[chartMetric] === null ? null : Math.round(day.valuesX10[chartMetric]! / 10) }))}
+              format={(value) => `${Math.round(value)} ${unitOf[chartMetric]}`} accessibilityLabel={`${metricLabels[chartMetric]} по дням, ${stats.accountedDays} дней с записями`} onPressItem={(item) => onOpenDay(item.key)} />
           </View>
         </>
       )}
