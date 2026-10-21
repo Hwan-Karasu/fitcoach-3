@@ -1,5 +1,5 @@
-import { forwardRef, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Animated as NativeAnimated, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import { Archive, ArrowLeftRight, Bookmark, CalendarDays, Copy, Ellipsis, LayoutGrid, Pencil, Plus, Trash2, TrendingUp } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, InlineNotice, LoadingState, SegmentedControl, TextField } from "../../../../shared/ui/components/public.ts";
@@ -308,12 +308,6 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     <View style={styles.screen}>
     <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} pointerEvents={stale ? "none" : "auto"}
       contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
-      // Полоса участников — первый элемент прокрутки, закреплённый у верха (как в 2.0): у начала страницы стоит под «Программа |
-      // Шаблоны», при прокрутке вниз остаётся у верхнего края. У мезоцикла без группы она пустая (нулевой высоты).
-      // Смена мезоцикла меняет высоту элементов над видимой областью (полоса, недели); положение удерживает сама нативная
-      // прокрутка в том же кадре раскладки: верхний видимый элемент остаётся на месте экрана (как scroll anchoring в браузерах).
-      // Пока видно место полосы (начало страницы), опорой служит она сама — содержимое под ней сдвигается естественно.
-      stickyHeaderIndices={[0]} StickyHeaderComponent={StickyStrip} maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
       onContentSizeChange={(_width, height) => {
         if (stale || pendingRestore.current === null) return;
         const y = pendingRestore.current;
@@ -326,7 +320,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
         lastY.current = event.nativeEvent.contentOffset.y;
       }}>
       {/* Обёртка держит индекс 0 и без группы: ScrollView отбрасывает null, и закрепилась бы следующая карточка. */}
-      <View>{participants}</View>
+
       {program.kind === "PERIODIZED" && periodized !== null && periodized.mesocycles.length === 0 ? <View style={styles.row}><View style={styles.grow}>
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>{program.title}</Text>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>
@@ -587,44 +581,13 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           : "Программа уйдёт в архив клиента. Вернуть можно из списка программ."}
         confirmLabel="В архив" onCancel={() => setConfirmArchive(false)} onConfirm={() => { void archive(); }} />
     </Animated.ScrollView>
+    {/* Полоса участников — слой поверх прокрутки (UI-OWN-043): в раскладку содержимого не входит, поэтому её появление и
+        исчезновение со сменой мезоцикла не двигает и не перестраивает экран; высота постоянная, может перекрывать верх страницы. */}
+    <View style={styles.floating} pointerEvents="box-none">{participants}</View>
     </View>
     </View>
   );
 }
-
-/**
- * Закреплённый заголовок прокрутки для одной полосы участников. Штатный заголовок RN 0.86 (Fabric) меняет состояние при
- * подключении ref и при перерисовке экрана может уйти в бесконечный цикл обновлений (опыт 2.0); здесь — только то, что нужно
- * одной полосе. Выходит за отступы содержимого по краям — во всю ширину экрана.
- *
- * Сдвигается внутренний слой, а не элемент прокрутки: нативное удержание позиции выбирает опору по `View.getY()`, куда входит
- * сдвиг, — закреплённая полоса сама становилась опорой, и её исчезновение не компенсировалось (экран уезжал на её высоту).
- */
-const StickyStrip = forwardRef<View, Readonly<{ children: ReactNode; nativeID?: string;
-  onLayout: (event: LayoutChangeEvent) => void; scrollAnimatedValue: NativeAnimated.Value }>>(
-  function StickyStrip({ children, nativeID, onLayout, scrollAnimatedValue }, ref) {
-    const [top, setTop] = useState(0);
-    const translateY = useMemo(() => scrollAnimatedValue.interpolate({
-      inputRange: [-1, 0, top, top + 1], outputRange: [0, 0, 0, 1], extrapolateLeft: "clamp" }), [scrollAnimatedValue, top]);
-    // Сдвиг ведёт нативный драйвер, а область нажатия (`Pressable` при движении пальца, границы касания Android) Fabric считает по
-    // дереву разметки — без этого карточки участников «нажимаются» там, где полоса стоит без закрепления. Как в штатном заголовке
-    // RN: последнее значение сдвига после остановки (значения приходят несколько раз за кадр; 15 мс — порог RN для Android).
-    const [settled, setSettled] = useState<number | null>(null);
-    useEffect(() => {
-      let timer: ReturnType<typeof setTimeout> | null = null;
-      const id = translateY.addListener(({ value }) => {
-        if (timer !== null) clearTimeout(timer);
-        timer = setTimeout(() => setSettled(value), 15);
-      });
-      return () => { translateY.removeListener(id); if (timer !== null) clearTimeout(timer); };
-    }, [translateY]);
-    // Свойство есть у Animated.View (createAnimatedComponent), но не в типах RN.
-    const explicit = { passthroughAnimatedPropExplicitValues: settled === null ? null : { style: { transform: [{ translateY: settled }] } } };
-    return <View ref={ref} nativeID={nativeID} collapsable={false} style={styles.sticky}
-      onLayout={(event) => { const y = event.nativeEvent.layout.y; setTop((current) => current === y ? current : y); onLayout(event); }}>
-      <NativeAnimated.View style={{ transform: [{ translateY }] }} {...explicit}>{children}</NativeAnimated.View>
-    </View>;
-  });
 
 const styles = StyleSheet.create({
   /** Данные прежнего участника, пока грузится новый (как в дневнике). */
@@ -632,8 +595,8 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
   heading: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },
   screen: { flex: 1 },
-  /** Полоса во всю ширину над отступом содержимого; пустая — нулевой высоты, и отступ сверху как без неё (16). */
-  sticky: { zIndex: 10, marginHorizontal: -16, marginTop: -12 },
+  /** Полоса участников поверх прокрутки, во всю ширину под переключателем «Программа | Шаблоны». */
+  floating: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 10 },
   tabs: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 2 },
   cardHead: { gap: 12 },
   cardTitle: { fontFamily: fonts.bold, fontSize: 18, letterSpacing: -0.2 },
