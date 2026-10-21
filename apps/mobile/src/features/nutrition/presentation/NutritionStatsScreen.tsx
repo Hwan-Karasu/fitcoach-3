@@ -21,6 +21,8 @@ const periods: readonly Readonly<{ id: PeriodId; label: string; days: number }>[
   { id: "week", label: "Неделя", days: 7 }, { id: "month", label: "Месяц", days: 30 }, { id: "quarter", label: "3 мес.", days: 90 },
   { id: "all", label: "Всё", days: 0 }, { id: "range", label: "Период", days: 0 },
 ];
+/** Без цели заливка декоративная (произвольный уровень): на уровень не нужно опираться. */
+const NO_TARGET_LEVEL = { kcal: 0.6, protein: 0.45, fat: 0.3, carbs: 0.7 } as const;
 const unitOf = { kcal: "ккал", protein: "г", fat: "г", carbs: "г" } as const;
 
 const shortDate = (date: string) => `${date.slice(8, 10)}.${date.slice(5, 7)}`;
@@ -122,7 +124,7 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
               const target = averageTargetX10(stats.days, metric);
               const ratio = item.averageX10 === null || target === null || target <= 0 ? null : item.averageX10 / target;
               return (
-                <MacroGlass key={metric} color={macroColors[metric]} ratio={ratio}>
+                <MacroGlass key={metric} color={macroColors[metric]} ratio={ratio ?? NO_TARGET_LEVEL[metric]}>
                   <View accessible accessibilityLabel={`${metricLabels[metric]}: в среднем ${item.averageX10 === null ? "нет данных" : `${wholeText(item.averageX10)} ${unitOf[metric]}`}, ${target === null ? "цели нет" : `цель ${wholeText(target)}${ratio !== null && ratio > 1 ? ", выше цели" : ""}`}`} style={styles.metricBody}>
                     <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.metricTitle, { color: macroColors[metric] }]}>{metricLabels[metric]}</Text>
                     <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.metricValue, { color: macroColors[metric] }]}>{item.averageX10 === null ? "—" : wholeText(item.averageX10)}</Text>
