@@ -594,8 +594,11 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
 
 /**
  * Закреплённый заголовок прокрутки для одной полосы участников. Штатный заголовок RN 0.86 (Fabric) меняет состояние при
- * подключении ref и при перерисовке экрана может уйти в бесконечный цикл обновлений; здесь — только сдвиг вслед за прокруткой,
- * когда страница прокручена ниже места полосы. Выходит за отступы содержимого по краям — во всю ширину экрана.
+ * подключении ref и при перерисовке экрана может уйти в бесконечный цикл обновлений (опыт 2.0); здесь — только то, что нужно
+ * одной полосе. Выходит за отступы содержимого по краям — во всю ширину экрана.
+ *
+ * Сдвигается внутренний слой, а не элемент прокрутки: нативное удержание позиции выбирает опору по `View.getY()`, куда входит
+ * сдвиг, — закреплённая полоса сама становилась опорой, и её исчезновение не компенсировалось (экран уезжал на её высоту).
  */
 const StickyStrip = forwardRef<View, Readonly<{ children: ReactNode; nativeID?: string;
   onLayout: (event: LayoutChangeEvent) => void; scrollAnimatedValue: NativeAnimated.Value }>>(
@@ -603,9 +606,24 @@ const StickyStrip = forwardRef<View, Readonly<{ children: ReactNode; nativeID?: 
     const [top, setTop] = useState(0);
     const translateY = useMemo(() => scrollAnimatedValue.interpolate({
       inputRange: [-1, 0, top, top + 1], outputRange: [0, 0, 0, 1], extrapolateLeft: "clamp" }), [scrollAnimatedValue, top]);
-    return <NativeAnimated.View ref={ref} nativeID={nativeID} collapsable={false}
-      onLayout={(event) => { const y = event.nativeEvent.layout.y; setTop((current) => current === y ? current : y); onLayout(event); }}
-      style={[styles.sticky, { transform: [{ translateY }] }]}>{children}</NativeAnimated.View>;
+    // Сдвиг ведёт нативный драйвер, а область нажатия (`Pressable` при движении пальца, границы касания Android) Fabric считает по
+    // дереву разметки — без этого карточки участников «нажимаются» там, где полоса стоит без закрепления. Как в штатном заголовке
+    // RN: последнее значение сдвига после остановки (значения приходят несколько раз за кадр; 15 мс — порог RN для Android).
+    const [settled, setSettled] = useState<number | null>(null);
+    useEffect(() => {
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const id = translateY.addListener(({ value }) => {
+        if (timer !== null) clearTimeout(timer);
+        timer = setTimeout(() => setSettled(value), 15);
+      });
+      return () => { translateY.removeListener(id); if (timer !== null) clearTimeout(timer); };
+    }, [translateY]);
+    // Свойство есть у Animated.View (createAnimatedComponent), но не в типах RN.
+    const explicit = { passthroughAnimatedPropExplicitValues: settled === null ? null : { style: { transform: [{ translateY: settled }] } } };
+    return <View ref={ref} nativeID={nativeID} collapsable={false} style={styles.sticky}
+      onLayout={(event) => { const y = event.nativeEvent.layout.y; setTop((current) => current === y ? current : y); onLayout(event); }}>
+      <NativeAnimated.View style={{ transform: [{ translateY }] }} {...explicit}>{children}</NativeAnimated.View>
+    </View>;
   });
 
 const styles = StyleSheet.create({
