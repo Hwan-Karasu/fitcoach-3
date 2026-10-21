@@ -41,7 +41,7 @@ export function MacroGlass({ color, ratio, children }: Readonly<{ color: string;
 const styles = StyleSheet.create({
   wrap: { flex: 1, minWidth: 0, height: 132 },
   glass: { ...shadow.card, flex: 1, borderTopWidth: 4, borderRadius: 16 },
-  clip: { ...StyleSheet.absoluteFillObject, borderBottomLeftRadius: 14, borderBottomRightRadius: 14, overflow: "hidden" },
+  clip: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderBottomLeftRadius: 14, borderBottomRightRadius: 14, overflow: "hidden" },
   fill: { position: "absolute", left: 0, right: 0, bottom: 0, opacity: 0.28 },
   content: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, paddingVertical: 10, gap: 2 },
   stream: { position: "absolute", top: 0, width: 4, borderBottomLeftRadius: 2, borderBottomRightRadius: 2 },
