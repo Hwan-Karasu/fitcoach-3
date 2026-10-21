@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
   title: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 20 },
   dayTitle: { flex: 1, textAlign: "right", fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   strip: { flexDirection: "row", alignItems: "center" },
-  day: { flex: 1, minHeight: 50, alignItems: "center", justifyContent: "center", gap: 0 },
+  day: { flex: 1, minHeight: 56, paddingTop: 5, paddingBottom: 3, alignItems: "center", justifyContent: "center", gap: 0 },
   dayCircle: { minWidth: 34, minHeight: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   dayName: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14 },
   dayNumber: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
