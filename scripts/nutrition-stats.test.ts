@@ -1,3 +1,4 @@
+import { averageTargetX10 } from "../apps/mobile/src/features/nutrition/domain/NutritionStats.ts";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
@@ -112,4 +113,15 @@ test("Всё время: sparse-обзор длиннее пяти лет сох
   const empty = computeNutritionStats({ ...input, entries: [] });
   assert.equal(empty.days.length, 0); assert.equal(empty.metrics.kcal.averageX10, null);
   assert.equal(empty.periodDays, stats.periodDays);
+});
+
+test("NUT-UX-PARITY-01: средняя цель периода — середина коридоров учтённых дней с целью; без целей — null", () => {
+  const verdicts = { kcal: "UNKNOWN", protein: "UNKNOWN", fat: "UNKNOWN", carbs: "UNKNOWN" } as const;
+  const values = { kcal: null, protein: null, fat: null, carbs: null };
+  const none = { kcal: null, protein: null, fat: null, carbs: null };
+  const day = (localDate: string, accounted: boolean, kcal: { minX10: number; maxX10: number } | null) =>
+    ({ localDate, accounted, valuesX10: values, verdicts, targetSource: "SCHEDULE" as const, ranges: { ...none, kcal } });
+  const days = [day("2026-10-19", true, { minX10: 18000, maxX10: 22000 }), day("2026-10-20", true, { minX10: 24000, maxX10: 24000 }), day("2026-10-21", false, { minX10: 99000, maxX10: 99000 }), day("2026-10-22", true, null)];
+  assert.equal(averageTargetX10(days, "kcal"), 22000, "(20000 + 24000) / 2; не учтённый день и день без цели не входят");
+  assert.equal(averageTargetX10(days, "protein"), null);
 });

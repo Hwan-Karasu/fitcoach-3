@@ -105,3 +105,9 @@ export function computeNutritionStats(input: NutritionStatsInput): NutritionStat
   const periodDays = Math.round((Date.parse(`${input.to}T00:00:00Z`) - Date.parse(`${input.from}T00:00:00Z`)) / 86400000) + 1;
   return { from: input.from, to: input.to, periodDays, accountedDays: accounted.size, metrics, days };
 }
+
+/** Средняя цель по показателю за период: середина коридора, усреднённая по учтённым дням с целью. Нет целей — `null`. Десятые доли. */
+export function averageTargetX10(days: readonly NutritionDayPoint[], metric: TargetMetric): number | null {
+  const middles = days.flatMap((day) => day.accounted && day.ranges[metric] !== null ? [(day.ranges[metric]!.minX10 + day.ranges[metric]!.maxX10) / 2] : []);
+  return middles.length === 0 ? null : Math.round(middles.reduce((sum, value) => sum + value, 0) / middles.length);
+}
