@@ -98,8 +98,6 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
       <SegmentedControl compact fit items={periods} selectedId={period}
         onSelect={(id) => { if (id === "range") { setDraftRange(range); setCalendar(true); } else { setPeriod(id); setSelectedDate(null); } }} />
       <Text style={[styles.meta, styles.periodText, { color: colors.textSecondary }]}>{`${period === "all" && stats === null ? "Всё время" : from} — ${to}`}</Text>
-      <View style={[styles.divider, { backgroundColor: colors.border }]} />
-      <SegmentedControl compact items={[{ id: "weight", label: "Вес" }, { id: "fat", label: "% жира" }, { id: "steps", label: "Шаги" }] as const} selectedId={trend} onSelect={(id) => { setTrend(id); setSelectedDate(null); }} />
     </View>
     <Modal visible={calendar} transparent animationType="fade" onRequestClose={() => setCalendar(false)}><View style={styles.backdrop}><View style={[styles.dialog, { backgroundColor: colors.surface }]}>
       <Text style={[styles.heading, { color: colors.textPrimary }]}>Выберите период</Text><DateRangeCalendar value={draftRange} max={today} onChange={setDraftRange} />
@@ -145,6 +143,8 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
         </>
       )}
       <View style={[styles.card, { backgroundColor: colors.surface }]}>
+        <Text style={[styles.heading, { color: colors.textPrimary }]}>{trend === "weight" ? "Вес" : trend === "fat" ? "% жира" : "Шаги"}</Text>
+        <SegmentedControl compact items={[{ id: "weight", label: "Вес" }, { id: "fat", label: "% жира" }, { id: "steps", label: "Шаги" }] as const} selectedId={trend} onSelect={(id) => { setTrend(id); setSelectedDate(null); }} />
         {graph.length === 0 ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Нет данных за период.</Text> :
           <LineChart points={graph} format={(value) => String(Math.round(value * 10) / 10)} formatValue={(value) => `${Math.round(value * 10) / 10} ${trend === "weight" ? "кг" : trend === "fat" ? "%" : "шагов"}`} accessibilityLabel="Динамика по известным значениям" onSelect={(point) => setSelectedDate(point.key)} />}
         <Text style={[styles.heading, { color: colors.textPrimary }]}>{selected}</Text>
