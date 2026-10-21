@@ -21,10 +21,12 @@ interface FilterPillProps {
   readonly icon?: (color: string) => ReactNode;
   /** Растянуться: ширина по тексту плюс равная доля свободного места ряда; текст не обрезается раньше времени. */
   readonly grow?: boolean;
+  /** Компактная: видимая высота 34, зона нажатия остаётся 44 через hitSlop (ADR-014). */
+  readonly compact?: boolean;
 }
 
 /** Фильтр-пилюля списков (UI-OWN-017; «Зефирка»: белая, высота 44, радиус 20, тень, без рамки). */
-export function FilterPill({ label, accessibilityLabel, onPress, selected = false, menu = false, expanded = false, anchorRef, icon, grow = false }: Readonly<FilterPillProps>) {
+export function FilterPill({ label, accessibilityLabel, onPress, selected = false, menu = false, expanded = false, anchorRef, icon, grow = false, compact = false }: Readonly<FilterPillProps>) {
   const [focused, setFocused] = useState(false);
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -35,17 +37,17 @@ export function FilterPill({ label, accessibilityLabel, onPress, selected = fals
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={menu ? { expanded } : { selected }}
-      onPress={onPress}
+      onPress={onPress} hitSlop={compact ? { top: 5, bottom: 5 } : undefined}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
-      style={({ pressed }) => [styles.pill, selected ? null : shadow.control, grow ? styles.grow : null, {
+      style={({ pressed }) => [styles.pill, compact ? styles.pillCompact : null, selected ? null : shadow.control, grow ? styles.grow : null, {
         backgroundColor: selected ? colors.accentFill : pressed ? colors.surfaceRaised : colors.surface,
         borderColor: focused ? colors.focusRing : "transparent",
       }]}
     >
       {icon?.(ink) ?? null}
-      <Text numberOfLines={grow ? 2 : 1} style={[styles.label, grow ? styles.labelFull : null, { color: ink }]}>{label}</Text>
-      {menu ? <ChevronDown size={16} color={ink} strokeWidth={2.4}
+      <Text numberOfLines={grow ? 2 : 1} style={[styles.label, compact ? styles.labelCompact : null, grow ? styles.labelFull : null, { color: ink }]}>{label}</Text>
+      {menu ? <ChevronDown size={compact ? 14 : 16} color={ink} strokeWidth={2.4}
         style={expanded ? { transform: [{ rotate: "180deg" }] } : undefined} /> : null}
     </Pressable>
   );
@@ -54,6 +56,8 @@ export function FilterPill({ label, accessibilityLabel, onPress, selected = fals
 const styles = StyleSheet.create({
   pill: { minHeight: TOUCH_TARGET, borderRadius: radius.pill, borderWidth: 2, flexDirection: "row", alignItems: "center",
     justifyContent: "center", gap: 2, paddingHorizontal: 8 },
+  pillCompact: { minHeight: 34, paddingHorizontal: 6 },
+  labelCompact: { fontSize: 13, lineHeight: 16 },
   // Растягивается на свободное место ряда и сжимается первой, если места мало.
   grow: { flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0 },
   labelFull: { flexShrink: 1, textAlign: "center" },

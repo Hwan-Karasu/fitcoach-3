@@ -192,6 +192,8 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
   const [participant, setParticipant] = useState<string | null>(null);
   const [names, setNames] = useState<ReadonlyMap<string, string>>(new Map());
   const [switching, setSwitching] = useState(false);
+  // Поиск экрана выбора упражнения живёт в шапке (вместо имени клиента) и общий для шапки и списка; сбрасывается при выходе с экрана.
+  const [pickQuery, setPickQuery] = useState("");
   useEffect(() => {
     let active = true;
     listCandidates().then((rows) => { if (active) setNames(new Map(rows.map((row) => [row.id, row.displayName]))); }).catch(() => undefined);
@@ -215,6 +217,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
       contentStyle: { backgroundColor: palette.tokens.canvas },
       // Подзаголовок — заголовок экрана; экран может его сменить (вкладка «Шаблоны» программы).
       header: ({ options }) => <ClientHeader subtitle={options.title ?? trainingTitles[route.name]} client={{ displayName: viewerName, emoji: participant === null ? clientEmoji : null }}
+        search={route.name === "TrainingPickExercise" ? { query: pickQuery, onChangeQuery: setPickQuery, placeholder: "Поиск упражнения", accessibilityLabel: "Поиск упражнения" } : undefined}
         onClients={onOpenClients} onBack={() => {
           if (route.name === "TrainingWorkout") {
             const params = route.params as TrainingRoutes["TrainingWorkout"];
@@ -324,8 +327,8 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
           onSaved={(programId) => navigation.reset({ index: 1,
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId } }] })} />}
       </TrainingStack.Screen>
-      <TrainingStack.Screen name="TrainingPickExercise">
-        {({ navigation, route }) => <ExerciseLibraryScreen repository={exercises} picking
+      <TrainingStack.Screen name="TrainingPickExercise" listeners={{ beforeRemove: () => setPickQuery("") }}>
+        {({ navigation, route }) => <ExerciseLibraryScreen repository={exercises} picking query={pickQuery} onQueryChange={setPickQuery}
           multiPick={route.params.replace === undefined}
           onCreate={(initialName, selected) => navigation.navigate("TrainingCreateExercise", { initialName, pick: route.params, selected })}
           onPick={(exerciseIds) => {

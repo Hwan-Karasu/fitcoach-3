@@ -126,6 +126,13 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const scrollKey = periodized?.mesocycles.find((item) => item.id === cycleKey)?.lineageId ?? cycleKey;
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const lastY = useRef(0);
+  /**
+   * Переключение мезоцикла в книге: карточки книги остаются на том же месте экрана, а не прыгают из-за разной высоты страниц циклов.
+   * Запоминаются прокрутка и положение книги на странице; пока страница нового цикла достраивается (недели, статусы), положение
+   * книги удерживается при каждом изменении раскладки; жест пользователя или 1,5 с снимают удержание.
+   */
+  const bookY = useRef(0);
+  const anchor = useRef<Readonly<{ scrollY: number; bookY: number; at: number }> | null>(null);
   /** Позиция, которую вернуть после смены участника: страница нового участника может быть короче (меньше мезоциклов). */
   const pendingRestore = useRef<number | null>(null);
   const shownKey = useRef(currentKey);
@@ -158,7 +165,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   }, [requestedWeek, requestedMesocycle, program, periodized, cycleKey, repository, clientId, programId, loadedFor, currentKey]);
   useEffect(() => {
     // При смене участника позицию возвращает `pendingRestore`; по родству мезоцикла — только при смене мезоцикла у того же участника.
-    if (pendingRestore.current !== null) return undefined;
+    if (pendingRestore.current !== null || anchor.current !== null) return undefined;
     const frame = requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: scrollByCycle.current.get(scrollKey) ?? 0, animated: false }));
     return () => cancelAnimationFrame(frame);
   }, [scrollKey, scrollRef]);
@@ -314,6 +321,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     {participants}
     <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} pointerEvents={stale ? "none" : "auto"}
       contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
+      onScrollBeginDrag={() => { anchor.current = null; }}
       onContentSizeChange={(_width, height) => {
         if (stale || pendingRestore.current === null) return;
         const y = pendingRestore.current;
@@ -540,9 +548,18 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
             weeks={selected?.weeks.map((week) => ({ index: week.index, caption: weekTypeLabels[week.type] })) ?? []}
             onClose={() => setCopyRequest(null)}
             onDone={(result) => { if (result.ok) setNotice(result.text); else setMessage(result.text); }} /> : null}
+          <View onLayout={(event) => {
+            const y = event.nativeEvent.layout.y;
+            bookY.current = y;
+            const held = anchor.current;
+            if (held === null) return;
+            if (Date.now() - held.at > 1500) { anchor.current = null; return; }
+            scrollRef.current?.scrollTo({ y: Math.max(0, held.scrollY + (y - held.bookY)), animated: false });
+          }}>
           <MesocycleBook mesocycles={periodized.mesocycles} selectedId={selected?.id} resetKey={orderReset} onAdd={onAddMesocycle}
             onDelete={planDelete === undefined ? undefined : setDeletingCycle}
             onSelect={(id) => {
+              anchor.current = { scrollY: lastY.current, bookY: bookY.current, at: Date.now() };
               setPeriodized((current) => current === null ? current : { ...current, selectedMesocycleId: id });
               void repository.selectMesocycle(clientId, programId, id).catch(() => setVersion((value) => value + 1));
             }}
@@ -557,6 +574,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
                 setVersion((value) => value + 1);
               });
             }} />
+          </View>
         </>;
       })()}
       {renaming !== null ? (

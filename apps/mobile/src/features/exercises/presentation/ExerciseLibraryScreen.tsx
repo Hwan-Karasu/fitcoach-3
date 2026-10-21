@@ -126,7 +126,8 @@ function CatalogSheet({ visible, title, onClose, onReset, children }: Readonly<{
  * активных фильтров, плотный список. Нет совпадений — «Создать «запрос»». В выборе для тренировки можно
  * отметить несколько упражнений: номер на строке — порядок добавления (UI-OWN-029).
  */
-export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, picking = false, multiPick = false }: Readonly<{
+export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, picking = false, multiPick = false, query: externalQuery,
+  onQueryChange }: Readonly<{
   repository: ExerciseCatalogPort;
   /** Каталог: открыть карточку (§31.9 один каталог, разные режимы). */
   onOpen?: (exerciseId: string) => void;
@@ -136,11 +137,17 @@ export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, pi
   onCreate: (name: string, selected: readonly string[]) => void;
   picking?: boolean;
   multiPick?: boolean;
+  /** Поиск живёт в шапке экрана (выбор упражнения для тренировки): строка поиска на самом экране не показывается. */
+  query?: string;
+  onQueryChange?: (query: string) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const { entries, failed, reload } = useExerciseCatalog(repository);
-  const [query, setQuery] = useState("");
+  const [ownQuery, setOwnQuery] = useState("");
+  const headerSearch = externalQuery !== undefined && onQueryChange !== undefined;
+  const query = headerSearch ? externalQuery : ownQuery;
+  const setQuery = headerSearch ? onQueryChange : setOwnQuery;
   const [mode, setMode] = useState<CatalogMode>("ALL");
   const [filters, setFilters] = useState<CatalogFilters>(NO_FILTERS);
   const [sheet, setSheet] = useState<SheetKind | null>(null);
@@ -221,20 +228,20 @@ export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, pi
   return (
     <View style={[styles.root, { backgroundColor: colors.canvas }]}>
       <View style={styles.top}>
-        <SearchField query={query} onChangeQuery={setQuery} accessibilityLabel="Поиск упражнения"
-          placeholder="Название или синоним" />
+        {headerSearch ? null : <SearchField query={query} onChangeQuery={setQuery} accessibilityLabel="Поиск упражнения"
+          placeholder="Название или синоним" />}
         {/* Два главных фильтра — во всю ширину (как в Hevy); режимы и редкие фильтры — строкой ниже (UI-OWN-030). */}
         <View style={styles.pills}>
-          <FilterPill grow menu expanded={sheet === "muscles"} selected={filters.bodyParts.size > 0} label={muscleLabel}
+          <FilterPill grow compact menu expanded={sheet === "muscles"} selected={filters.bodyParts.size > 0} label={muscleLabel}
             accessibilityLabel={`Группа мышц: ${muscleLabel}`} onPress={() => setSheet("muscles")} />
-          <FilterPill grow menu expanded={sheet === "equipment"} selected={filters.equipment.size > 0} label={equipmentPicked}
+          <FilterPill grow compact menu expanded={sheet === "equipment"} selected={filters.equipment.size > 0} label={equipmentPicked}
             accessibilityLabel={`Оборудование: ${equipmentPicked}`} onPress={() => setSheet("equipment")} />
         </View>
         <View style={styles.pills}>
-          {modes.map((item) => <FilterPill key={item.id} grow label={item.label} accessibilityLabel={`Показать: ${item.label}`}
+          {modes.map((item) => <FilterPill key={item.id} grow compact label={item.label} accessibilityLabel={`Показать: ${item.label}`}
             selected={mode === item.id} onPress={() => setMode(item.id)}
             icon={item.id === "FAVORITES" ? (color) => <Star size={14} color={color} strokeWidth={2} /> : undefined} />)}
-          <FilterPill grow label={moreCount > 0 ? `Ещё · ${moreCount}` : "Ещё"} accessibilityLabel="Ещё фильтры" selected={moreCount > 0}
+          <FilterPill grow compact label={moreCount > 0 ? `Ещё · ${moreCount}` : "Ещё"} accessibilityLabel="Ещё фильтры" selected={moreCount > 0}
             icon={(color) => <SlidersHorizontal size={14} color={color} strokeWidth={1.8} />} onPress={() => setSheet("more")} />
         </View>
         {chips.length > 0 ? (
@@ -328,8 +335,8 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   listArea: { flex: 1 },
   center: { flex: 1, padding: 16, gap: 12, justifyContent: "center" },
-  top: { paddingHorizontal: 16, paddingTop: 12, gap: 10 },
-  pills: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  top: { paddingHorizontal: 16, paddingTop: 4, gap: 6 },
+  pills: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   chipScroll: { flexGrow: 0, marginHorizontal: -16 },
   chipRow: { flexDirection: "row", gap: 6, paddingHorizontal: 16 },
   activeChip: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderRadius: 15, paddingHorizontal: 10, height: 30 },
