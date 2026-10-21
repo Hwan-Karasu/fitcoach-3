@@ -1,6 +1,7 @@
 import type { BuilderMesocycleInput } from "./PeriodizedModel.ts";
 import type { TrainingProgram } from "./ProgramModel.ts";
 import type { Placement } from "./Placement.ts";
+import type { RemovedResultsAction } from "./WeekEditSave.ts";
 
 /**
  * Сохранение мезоцикла из конструктора (UI-OWN-041): новый мезоцикл («+ Мезоцикл», у выбранных участников) или
@@ -18,6 +19,8 @@ export interface MesocycleSaveRequest {
   readonly mesocycle: BuilderMesocycleInput;
   /** «+ Мезоцикл»: куда ляжет копия у клиентов вне этой программы (UI-OWN-044). */
   readonly placements?: readonly Placement[];
+  /** Что сделать с результатами тренировок, которые правка убирает из плана; без выбора — `WEEK_HAS_RESULTS` (ADR-031). */
+  readonly resultsAction?: RemovedResultsAction;
 }
 
 export type MesocycleSaveResult = Readonly<{ program: TrainingProgram; mesocycleId: string }>;
@@ -29,7 +32,8 @@ export interface MesocycleSavePort {
 /** Сторона планов в общей транзакции. */
 export interface MesocycleSavePlansParticipant<Tx> {
   /** Тренировки недель, которые правка удалит: у них не должно быть результатов. */
-  removedWorkouts(tx: Tx, request: MesocycleSaveRequest): Promise<readonly Readonly<{ weekIndex: number; plannedWorkoutId: string }>[]>;
+  removedWorkouts(tx: Tx, request: MesocycleSaveRequest): Promise<readonly Readonly<{ weekIndex: number; plannedWorkoutId: string;
+    programTitle: string; mesocycleTitle: string; workoutTitle: string }>[]>;
   save(tx: Tx, request: MesocycleSaveRequest, now: Date): Promise<MesocycleSaveResult>;
   notify(clientIds: readonly string[]): void;
 }

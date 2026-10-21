@@ -1,3 +1,7 @@
+## 2026-10-21 — TRN-AUDIT-7: выбор «удалить с результатами / сохранить в истории» при правке недели и мезоцикла
+
+- Решение владельца: убираемая тренировка с результатами — не запрет, а выбор. `resultsAction` (`DELETE` | `KEEP_HISTORY`) в `WeekEditSaveRequest` и `MesocycleSaveRequest`; `keepAsHistory` дневника принимает список тренировок; диалог из трёх кнопок в `WeekEditorScreen` и `PeriodizedBuilderScreen`. Тесты `training-audit-regressions`; 596/596.
+
 ## 2026-10-21 — TRN-AUDIT-6: ADR-031, проверка результатов при правке недели (TRN-009)
 
 - Два пути правки Расширенной программы остаются (ADR-031) с общим контрактом инвариантов. Найден дефект: `saveWeek` убирал тренировку с результатами молча — теперь workflow `saveTrainingWeek` (`WEEK_HAS_RESULTS`), порт передан в `WeekEditorScreen`. Тест в `training-audit-regressions`; 596/596.

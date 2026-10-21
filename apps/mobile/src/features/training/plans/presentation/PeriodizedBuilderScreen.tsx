@@ -14,6 +14,7 @@ import { diffWeek, targetWeeks } from "../domain/PeriodizedRules.ts";
 import { ScopeMenu } from "./ScopeMenu.tsx";
 import { useRecoveryDraftSave } from "./useRecoveryDraftSave.ts";
 import type { MesocycleBuilderDraft } from "../domain/PeriodizedDraft.ts";
+import type { RemovedResultsAction } from "../domain/WeekEditSave.ts";
 import { REBASED_NOTICE, rebaseBuilderWeeks } from "../domain/DraftRebase.ts";
 import { PlacementRows } from "./PlacementRows.tsx";
 import type { ClientPlacementOptions, Placement, PlacementTarget } from "../domain/Placement.ts";
@@ -33,7 +34,6 @@ import { newPlanId, WorkoutsEditor } from "./WorkoutsEditor.tsx";
 const errors: Readonly<Record<string, string>> = {
   DRAFT_INVALID: `Проверьте названия (до ${PROGRAM_TITLE_MAX} символов), повторения и тренировки — хотя бы одна неделя с упражнениями.`,
   TARGET_NOT_FOUND: "Клиент не найден или в архиве. Обновите список участников.",
-  WEEK_HAS_RESULTS: "В убираемых или заменяемых тренировках есть результаты — такой план не сохраняется. Верните тренировки или сначала удалите результаты в дневнике.",
   PROGRAM_REVISION_CONFLICT: "Программа изменилась в другом месте. Откройте конструктор ещё раз.",
   PROGRAM_ARCHIVED: "У одного из участников программа в архиве.",
 };
@@ -132,6 +132,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
   weeksRef.current = weeks;
   const [restored, setRestored] = useState(false);
   const [rebased, setRebased] = useState(false);
+  const [confirmResults, setConfirmResults] = useState(false);
   const restoreDone = useRef(false);
   const loadedRevision = program !== null && program !== "ERROR" ? program.revision : null;
   useEffect(() => {
@@ -313,20 +314,22 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
       setLeaving(null);
     } finally { setMemberBusy(false); }
   };
-  const saveMesocycle = async () => {
+  const saveMesocycle = async (resultsAction?: RemovedResultsAction) => {
     if (!check() || programId === undefined || program === null || mesocycleSave === undefined) return;
     setBusy("create"); setMessage(null);
     try {
       await recovery.beforePublish();
       const result = await mesocycleSave.save({ clientId, programId, expectedRevision: program.revision,
         mesocycleId: mesocycleId ?? null, clientIds: mode === "edit" ? [clientId] : [clientId, ...members.filter((id) => id !== clientId)],
-        mesocycle: input(), placements: mode === "edit" ? [] : placementsFor(outsiders) });
+        mesocycle: input(), placements: mode === "edit" ? [] : placementsFor(outsiders), ...(resultsAction === undefined ? {} : { resultsAction }) });
       setDirty(false);
       await repository.clearMesocycleBuilderDraft(clientId, scope).catch(() => undefined);
       onSaved?.(result.mesocycleId);
     } catch (error) {
       recovery.resume();
-      setMessage(errors[error instanceof Error ? error.message : ""] ?? "Не удалось сохранить мезоцикл. Изменения на экране.");
+      // В убираемой или заменяемой тренировке есть результаты: тренер выбирает — удалить окончательно или оставить в истории.
+      if (error instanceof Error && error.message === "WEEK_HAS_RESULTS") setConfirmResults(true);
+      else setMessage(errors[error instanceof Error ? error.message : ""] ?? "Не удалось сохранить мезоцикл. Изменения на экране.");
     } finally { setBusy(null); }
   };
   const create = async () => {
@@ -537,6 +540,12 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
         description="Программа, план и результаты у него останутся. Из переключателя участников и групповых правок он пропадёт; вернуть можно, добавив снова."
         confirmLabel="Убрать" onCancel={() => setLeaving(null)}
         onConfirm={() => { const id = leaving; if (id !== null) void changeMembers((revision) => repository.leaveGroup(clientId, programId!, revision, mesocycleId!, id)); }} />
+      <ConfirmDialog visible={confirmResults} destructive confirmBusy={busy !== null} title="В убираемых тренировках есть результаты"
+        description="Тренировки с выполненными подходами исчезнут из плана. Удалить результаты окончательно или сохранить их в истории (в программе они будут недоступны, останутся в истории и статистике)?"
+        confirmLabel="Удалить с результатами" tertiaryLabel="Сохранить в истории" cancelLabel="Отмена"
+        onCancel={() => setConfirmResults(false)}
+        onConfirm={() => { setConfirmResults(false); void saveMesocycle("DELETE"); }}
+        onTertiary={() => { setConfirmResults(false); void saveMesocycle("KEEP_HISTORY"); }} />
       <ScopeMenu visible={scopeFor !== null} weekIndex={(scopeFor ?? 0) + 1} onPick={pickScope}
         weeksOf={(scope) => targetWeeks(weeks.map((item, index) => ({ index: index + 1, type: item.type })), (scopeFor ?? 0) + 1, scope)} />
       <StickyEditorFooter actionLabel={mode === "edit" ? "Сохранить" : mode === "add" ? "Добавить" : "Создать"} busy={busy === "create"} onCancel={onCancel}

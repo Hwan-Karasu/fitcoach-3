@@ -36,7 +36,7 @@ async function setup() {
   await plans.createMesocycle(a.id, program.id, program.revision, { title: "Блок", weeks: 4, firstWeek: firstWeek(), clientIds: [a.id, b.id] });
   const lease = await shared.acquire();
   const save = createMesocycleSaveWorkflow((task) => lease.writer.write(task), plans.mesocycleSaveParticipant,
-    execution.weekCopyParticipant, () => new Date("2026-10-19T10:00:00Z"));
+    execution.weekCopyParticipant, execution.cleanupParticipant, () => new Date("2026-10-19T10:00:00Z"));
   const cycleOf = async (clientId: string) => (await plans.getPeriodizedPlan(clientId, program.id))!.mesocycles[0]!;
   const revision = async () => (await plans.getProgram(a.id, program.id))!.revision;
   return { plans, execution, a, b, programId: program.id, save, cycleOf, revision,

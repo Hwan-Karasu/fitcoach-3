@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
-import { AppButton, InlineNotice, LoadingState, SelectionChip, StickyEditorFooter, TrainingEditorLayout } from "../../../../shared/ui/components/public.ts";
+import { AppButton, ConfirmDialog, InlineNotice, LoadingState, SelectionChip, StickyEditorFooter, TrainingEditorLayout } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
@@ -12,7 +12,7 @@ import type { SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
 import { validateDraft } from "../domain/SimplePlanRules.ts";
 import { StructureEditPreview } from "./StructureEditPreview.tsx";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
-import type { WeekEditSavePort } from "../domain/WeekEditSave.ts";
+import type { RemovedResultsAction, WeekEditSavePort } from "../domain/WeekEditSave.ts";
 import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidate.ts";
 import { ParticipantChips } from "./ParticipantChips.tsx";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
@@ -29,8 +29,7 @@ const errors: Readonly<Record<string, string>> = {
   PROGRAM_REVISION_CONFLICT: "Программа изменилась в другом месте. Откройте неделю заново.",
   PROGRAM_ARCHIVED: "У кого-то из выбранных участников программа в архиве — снимите отметку.",
   TARGET_NOT_FOUND: "Неделя или участник не найдены.",
-  WEEK_HAS_RESULTS: "В убираемой тренировке есть результаты — такая правка не сохраняется. Верните тренировку или сначала удалите результаты в дневнике.",
-};
+  };
 
 /**
  * Правка недели мезоцикла (§48.6): тренировки, упражнения и подходы — тем же редактором, что в Простом
@@ -76,6 +75,7 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
   const [replaceConflicts, setReplaceConflicts] = useState<readonly string[]>([]);
   const [baseWorkouts, setBaseWorkouts] = useState<readonly PlannedWorkout[]>([]);
   const [rebased, setRebased] = useState(false);
+  const [confirmResults, setConfirmResults] = useState(false);
   const recovery = useRecoveryDraftSave<PeriodizedDraft>((value) => repository.savePeriodizedDraft(clientId, programId, value));
   const { schedule } = recovery;
   useEffect(() => {
@@ -143,7 +143,7 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
     </View>;
   }
 
-  const save = async () => {
+  const save = async (resultsAction?: RemovedResultsAction) => {
     setShowIssues(true);
     if (issues.length > 0) { setMessage(issues[0]?.message ?? "Проверьте неделю."); return; }
     if (preview === null) return;
@@ -153,11 +153,13 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
       await recovery.beforePublish();
       const input = { mesocycleId, weekIndex, workouts: draft.plan.workouts, type, scope, clientIds: selected, replaceConflicts };
       if (weekEdit === undefined) await repository.saveWeek(clientId, programId, revision, input);
-      else await weekEdit.saveWeek({ clientId, programId, expectedRevision: revision, input });
+      else await weekEdit.saveWeek({ clientId, programId, expectedRevision: revision, input, ...(resultsAction === undefined ? {} : { resultsAction }) });
       onSaved();
     } catch (error) {
       recovery.resume();
-      setMessage(errors[error instanceof Error ? error.message : ""] ?? "Не удалось сохранить. Неделя не изменена.");
+      // В убираемой тренировке есть результаты: тренер выбирает — удалить окончательно или оставить в истории.
+      if (error instanceof Error && error.message === "WEEK_HAS_RESULTS") setConfirmResults(true);
+      else setMessage(errors[error instanceof Error ? error.message : ""] ?? "Не удалось сохранить. Неделя не изменена.");
     }
     setBusy(false);
   };
@@ -216,6 +218,12 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
           onPickExercise={(workoutId) => onPickExercise(workoutId)}
           onReplaceExercise={(workoutId, plannedId) => onPickExercise(workoutId, plannedId)} />
       </Animated.ScrollView>
+      <ConfirmDialog visible={confirmResults} destructive confirmBusy={busy} title="В убираемой тренировке есть результаты"
+        description="Тренировка с выполненными подходами исчезнет из плана. Удалить результаты окончательно или сохранить их в истории (в программе они будут недоступны, останутся в истории и статистике)?"
+        confirmLabel="Удалить с результатами" tertiaryLabel="Сохранить в истории" cancelLabel="Отмена"
+        onCancel={() => setConfirmResults(false)}
+        onConfirm={() => { setConfirmResults(false); void save("DELETE"); }}
+        onTertiary={() => { setConfirmResults(false); void save("KEEP_HISTORY"); }} />
       <StickyEditorFooter actionLabel="Сохранить неделю" busy={busy} disabled={preview === null} onAction={() => { void save(); }}
         onCancel={onCancel}
         message={recovery.error ?? message} messageKind={message?.startsWith("Сохранено") === true ? "info" : "error"}

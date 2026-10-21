@@ -614,10 +614,13 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       [this.workspaceId, clientId, programId, ...(plannedWorkoutIds ?? [])]);
       for (const session of sessions) await this.deleteSession(tx, session.id);
     },
-    keepAsHistory: async (tx, clientId, programId, originOf, now) => {
+    keepAsHistory: async (tx, clientId, programId, originOf, now, plannedWorkoutIds = null) => {
+      if (plannedWorkoutIds !== null && plannedWorkoutIds.length === 0) return;
+      const filter = plannedWorkoutIds === null ? "" : ` AND planned_workout_id IN (${plannedWorkoutIds.map(() => "?").join(", ")})`;
       const sessions = await tx.all<{ id: string; weekIndex: number; plannedWorkoutId: string }>(`SELECT id, week_index AS weekIndex,
         planned_workout_id AS plannedWorkoutId FROM dev_training_sessions
-        WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND plan_deleted_at IS NULL`, [this.workspaceId, clientId, programId]);
+        WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND plan_deleted_at IS NULL${filter}`,
+      [this.workspaceId, clientId, programId, ...(plannedWorkoutIds ?? [])]);
       for (const session of sessions) {
         await tx.run("UPDATE dev_training_sessions SET origin_json = ?, plan_deleted_at = ? WHERE workspace_id = ? AND id = ?",
           [JSON.stringify(originOf(session.weekIndex, session.plannedWorkoutId)), now.toISOString(), this.workspaceId, session.id]);

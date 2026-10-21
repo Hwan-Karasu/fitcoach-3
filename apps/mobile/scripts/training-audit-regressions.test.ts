@@ -102,7 +102,7 @@ test("TRN-005 сохранение мезоцикла без структурн�
   const env = await setup();
   try {
     const { programId, mesocycleId } = await env.periodized(3, 3);
-    const save = createMesocycleSaveWorkflow(env.tx, env.plans.mesocycleSaveParticipant, env.execution.weekCopyParticipant);
+    const save = createMesocycleSaveWorkflow(env.tx, env.plans.mesocycleSaveParticipant, env.execution.weekCopyParticipant, env.execution.cleanupParticipant);
     const plan = await env.cycleOf(env.a, programId);
     const cycle = plan.mesocycles[0]!;
     const request = (title: string) => ({ clientId: env.a, programId, expectedRevision: plan.program.revision, mesocycleId, clientIds: [env.a],
@@ -175,10 +175,18 @@ test("TRN-004 сохранение мезоцикла не заменяет тр
     let n = 0;
     const weeks = cycle.weeks.map((week) => ({ type: week.type, workouts: week.workouts }));
     weeks[1] = copyWeekPlan(weeks[0]!, () => `copy-${n++}`);
-    const save = createMesocycleSaveWorkflow(env.tx, env.plans.mesocycleSaveParticipant, env.execution.weekCopyParticipant);
+    const save = createMesocycleSaveWorkflow(env.tx, env.plans.mesocycleSaveParticipant, env.execution.weekCopyParticipant, env.execution.cleanupParticipant);
     await assert.rejects(save.save({ clientId: env.a, programId, expectedRevision: plan.program.revision, mesocycleId, clientIds: [env.a],
       mesocycle: { title: cycle.title, cycleType: null, repRange: null, startDate: null, weeks } }), message("WEEK_HAS_RESULTS"));
     assert.equal((await env.cycleOf(env.a, programId)).mesocycles[0]!.weeks[1]!.workouts[0]!.id, w2.id, "план не изменён");
+    // С явным выбором: результаты остаются в истории, план заменён.
+    const mesocycle = { title: cycle.title, cycleType: null, repRange: null, startDate: null, weeks };
+    await save.save({ clientId: env.a, programId, expectedRevision: plan.program.revision, mesocycleId, clientIds: [env.a], mesocycle,
+      resultsAction: "KEEP_HISTORY" });
+    assert.notEqual((await env.cycleOf(env.a, programId)).mesocycles[0]!.weeks[1]!.workouts[0]!.id, w2.id, "план заменён");
+    const kept = (await env.execution.listClientExecutions(env.a)).filter((item) => item.plannedWorkoutId === w2.id);
+    assert.equal(kept.length, 1, "результаты недели 2 остались в истории");
+    assert.equal(kept[0]!.origin?.workoutTitle, w2.title);
   } finally { await env.close(); }
 });
 
@@ -355,26 +363,38 @@ test("TRN-018 нечитаемое недельное отличие Прост�
   } finally { await env.close(); }
 });
 
-test("TRN-009 правка недели: тренировка с результатами не убирается из плана молча (ADR-031)", async () => {
+test("TRN-009 правка недели: тренировка с результатами убирается только по явному выбору — удалить или сохранить в истории (ADR-031)", async () => {
   const { addWorkout } = await import("../src/features/training/plans/domain/SimplePlanEdits.ts");
-  const env = await setup();
-  try {
-    let t = 0;
-    const two = addExercise(addWorkout(workoutWith(2), "w2"), "w2", "e2", BENCH, () => `u${t++}`).plan.workouts;
-    const program = await env.plans.createProgram({ kind: "PERIODIZED", title: "Две", clientIds: [env.a] });
-    const created = await env.plans.createMesocycle(env.a, program.id, program.revision, { title: "Блок", weeks: 2, firstWeek: two, clientIds: [env.a] });
-    const plan = await env.cycleOf(env.a, program.id);
-    const week2 = plan.mesocycles[0]!.weeks[1]!;
-    const second = week2.workouts[1]!;
-    await env.fill({ clientId: env.a, programId: program.id, weekIndex: 2, plannedWorkoutId: second.id } as never, second.exercises[0]!, 0, 7);
-    const { createWeekEditWorkflow } = await import("../src/workflows/saveTrainingWeek.ts");
-    const save = createWeekEditWorkflow(env.tx, env.plans.weekEditSaveParticipant, env.execution.weekCopyParticipant);
-    const input = { mesocycleId: created.mesocycleId, weekIndex: 2, type: "base" as const, scope: "CURRENT" as const, clientIds: [env.a] };
-    const request = (workouts: typeof week2.workouts) => ({ clientId: env.a, programId: program.id, expectedRevision: plan.program.revision, input: { ...input, workouts } });
-    await assert.rejects(save.saveWeek(request([week2.workouts[0]!])), message("WEEK_HAS_RESULTS"));
-    assert.equal((await env.cycleOf(env.a, program.id)).mesocycles[0]!.weeks[1]!.workouts.length, 2, "план не изменён");
-    // Тренировка без результатов убирается как раньше.
-    await save.saveWeek(request([second]));
-    assert.deepEqual((await env.cycleOf(env.a, program.id)).mesocycles[0]!.weeks[1]!.workouts.map((workout) => workout.id), [second.id]);
-  } finally { await env.close(); }
+  const { createWeekEditWorkflow } = await import("../src/workflows/saveTrainingWeek.ts");
+  for (const action of ["DELETE", "KEEP_HISTORY"] as const) {
+    const env = await setup();
+    try {
+      let t = 0;
+      const two = addExercise(addWorkout(workoutWith(2), "w2"), "w2", "e2", BENCH, () => `u${t++}`).plan.workouts;
+      const program = await env.plans.createProgram({ kind: "PERIODIZED", title: "Две", clientIds: [env.a] });
+      const created = await env.plans.createMesocycle(env.a, program.id, program.revision, { title: "Блок", weeks: 2, firstWeek: two, clientIds: [env.a] });
+      const plan = await env.cycleOf(env.a, program.id);
+      const week2 = plan.mesocycles[0]!.weeks[1]!;
+      const second = week2.workouts[1]!;
+      const slot = { clientId: env.a, programId: program.id, weekIndex: 2, plannedWorkoutId: second.id };
+      await env.fill(slot as never, second.exercises[0]!, 0, 7);
+      const save = createWeekEditWorkflow(env.tx, env.plans.weekEditSaveParticipant, env.execution.weekCopyParticipant, env.execution.cleanupParticipant);
+      const input = { mesocycleId: created.mesocycleId, weekIndex: 2, type: "base" as const, scope: "CURRENT" as const, clientIds: [env.a] };
+      const request = (resultsAction?: "DELETE" | "KEEP_HISTORY") => ({ clientId: env.a, programId: program.id, expectedRevision: plan.program.revision,
+        input: { ...input, workouts: [week2.workouts[0]!] }, ...(resultsAction === undefined ? {} : { resultsAction }) });
+      await assert.rejects(save.saveWeek(request()), message("WEEK_HAS_RESULTS"));
+      assert.equal((await env.cycleOf(env.a, program.id)).mesocycles[0]!.weeks[1]!.workouts.length, 2, "без выбора план не изменён");
+      await save.saveWeek(request(action));
+      assert.deepEqual((await env.cycleOf(env.a, program.id)).mesocycles[0]!.weeks[1]!.workouts.map((workout) => workout.id), [week2.workouts[0]!.id]);
+      const history = (await env.execution.listClientExecutions(env.a)).filter((item) => item.plannedWorkoutId === second.id);
+      if (action === "DELETE") assert.equal(history.length, 0, "результаты удалены окончательно");
+      else {
+        assert.equal(history.length, 1, "результаты остались в истории");
+        assert.deepEqual(history[0]!.origin, { programTitle: "Две", programKind: "PERIODIZED", mesocycleTitle: "Блок", workoutTitle: second.title });
+        assert.equal(history[0]!.execution.facts.size, 1);
+        assert.equal((await env.execution.listProgramExecutions(env.a, program.id)).some((item) => item.plannedWorkoutId === second.id), false,
+          "из экранов программы выпала");
+      }
+    } finally { await env.close(); }
+  }
 });

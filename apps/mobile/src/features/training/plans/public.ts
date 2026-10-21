@@ -29,7 +29,7 @@ export type { ClientProgramLibrary, CreateProgramInput, ProgramCard, ProgramKind
 export type { TrainingPlansCommittedChange, TrainingPlansRepositoryPort, WorkoutWeekNavigation } from "./domain/TrainingPlansRepositoryPort.ts";
 export type { WeekSwapPlansParticipant, WeekSwapPort, WeekSwapRequest } from "./domain/WeekSwap.ts";
 export type { MesocycleSavePlansParticipant, MesocycleSavePort, MesocycleSaveRequest, MesocycleSaveResult } from "./domain/MesocycleSave.ts";
-export type { WeekEditSavePlansParticipant, WeekEditSavePort, WeekEditSaveRequest, WeekEditSlot } from "./domain/WeekEditSave.ts";
+export type { RemovedResultsAction, WeekEditSavePlansParticipant, WeekEditSavePort, WeekEditSaveRequest, WeekEditSlot } from "./domain/WeekEditSave.ts";
 export type { SimplePlanSavePlansParticipant, SimplePlanSavePort, SimplePlanSaveRequest } from "./domain/SimplePlanSave.ts";
 export type { MesocycleDeletePort, MesocycleDeleteRequest, PlanDeletePlansParticipant, PlanOnlyDeletePort, PlanOrigins, ProgramDeletePort,
   ProgramDeleteRequest } from "./domain/PlanDeletion.ts";

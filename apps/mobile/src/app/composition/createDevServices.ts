@@ -213,9 +213,9 @@ export function createDevRuntime(): DevRuntime {
   const weekCopy = createWeekCopyWorkflow(transaction, trainingPlans.weekCopyParticipant, trainingExecution.weekCopyParticipant,
     exerciseLookup(exercises));
   const weekSwap = createWeekSwapWorkflow(transaction, trainingPlans.weekSwapParticipant, trainingExecution.weekRenumberParticipant);
-  const mesocycleSave = { ...createMesocycleSaveWorkflow(transaction, trainingPlans.mesocycleSaveParticipant, trainingExecution.weekCopyParticipant),
+  const mesocycleSave = { ...createMesocycleSaveWorkflow(transaction, trainingPlans.mesocycleSaveParticipant, trainingExecution.weekCopyParticipant, trainingExecution.cleanupParticipant),
     ...createSimplePlanSaveWorkflow(transaction, trainingPlans.simplePlanSaveParticipant, trainingExecution.weekCopyParticipant),
-    ...createWeekEditWorkflow(transaction, trainingPlans.weekEditSaveParticipant, trainingExecution.weekCopyParticipant) };
+    ...createWeekEditWorkflow(transaction, trainingPlans.weekEditSaveParticipant, trainingExecution.weekCopyParticipant, trainingExecution.cleanupParticipant) };
   const planDelete = { ...createMesocycleDeleteWorkflow(transaction, trainingPlans.deleteParticipant, trainingExecution.cleanupParticipant),
     ...createProgramDeleteWorkflow(transaction, trainingPlans.deleteParticipant, trainingExecution.cleanupParticipant),
     ...createPlanOnlyDeleteWorkflow(transaction, trainingPlans.deleteParticipant, trainingExecution.cleanupParticipant) };

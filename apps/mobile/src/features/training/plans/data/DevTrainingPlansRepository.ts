@@ -774,10 +774,12 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       const cycle = await this.ownMesocycle(tx, request);
       // Тренировка, которой нет в новой структуре своей недели (убранная неделя, замена копией, пустая неделя, удалённая тренировка),
       // исчезнет из плана: её результаты нельзя оставлять без привязки (§48.21.1 п. 7, §48.5.7).
+      const programTitle = (await programById(tx, this.workspaceId, request.programId)).title;
       return cycle.weeks.flatMap((week) => {
         const kept = new Set(request.mesocycle.weeks[week.index - 1]?.workouts.map((workout) => workout.id) ?? []);
         return week.workouts.filter((workout) => !kept.has(workout.id))
-          .map((workout) => ({ weekIndex: week.index, plannedWorkoutId: workout.id }));
+          .map((workout) => ({ weekIndex: week.index, plannedWorkoutId: workout.id, programTitle, mesocycleTitle: cycle.title,
+            workoutTitle: workout.title }));
       });
     },
     save: async (tx, request, now) => {
@@ -1017,10 +1019,13 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       let next = 0;
       const prepared = await this.prepareWeekEdit(tx, request.clientId, request.programId, request.expectedRevision, request.input,
         async () => () => `preview:${next++}`);
+      const titles = new Map<string, string>();
+      for (const change of prepared.changes) titles.set(change.programId, (await programById(tx, this.workspaceId, change.programId)).title);
       return prepared.changes.flatMap((change) => change.weeks.flatMap((week) => {
         const kept = new Set(week.workouts.map((workout) => workout.id));
         return (change.mesocycle.weeks.find((item) => item.index === week.index)?.workouts ?? []).filter((workout) => !kept.has(workout.id))
-          .map((workout) => ({ clientId: change.clientId, programId: change.programId, weekIndex: week.index, plannedWorkoutId: workout.id }));
+          .map((workout) => ({ clientId: change.clientId, programId: change.programId, weekIndex: week.index, plannedWorkoutId: workout.id,
+            programTitle: titles.get(change.programId) ?? "", mesocycleTitle: change.mesocycle.title, workoutTitle: workout.title }));
       }));
     },
     save: (tx, request, now) => this.saveWeekIn(tx, request.clientId, request.programId, request.expectedRevision, request.input, now),

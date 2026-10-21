@@ -11,6 +11,6 @@ export interface ExecutionCleanupParticipant<Tx> {
    * снимок происхождения по слоту (неделя + тренировка) и выпадают из экранов программы.
    */
   keepAsHistory(tx: Tx, clientId: string, programId: string, originOf: (weekIndex: number, plannedWorkoutId: string) => SessionOrigin,
-    now: Date): Promise<void>;
+    now: Date, plannedWorkoutIds?: readonly string[] | null): Promise<void>;
   notify(clientId: string, programId: string): void;
 }
