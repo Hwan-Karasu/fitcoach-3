@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import { Archive, ArrowLeftRight, Bookmark, CalendarDays, Copy, Ellipsis, LayoutGrid, Pencil, Plus, Trash2, TrendingUp } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, InlineNotice, LoadingState, SegmentedControl, TextField } from "../../../../shared/ui/components/public.ts";
@@ -302,12 +302,13 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const others = program.memberClientIds.filter((id) => id !== clientId);
   const selectedCycle = () => periodized?.mesocycles.find((item) => item.id === periodized.selectedMesocycleId) ?? periodized?.mesocycles[0];
   const menuButton = <View ref={menuAnchor} collapsable={false} style={[styles.more, { backgroundColor: colors.surfaceRaised }]}>
-    <AppIconButton compact label="Действия программы"
-      icon={<Ellipsis size={20} color={colors.textPrimary} />} onPress={() => setMenuOpen(true)} />
+    <Pressable accessibilityRole="button" accessibilityLabel="Действия программы" hitSlop={5} onPress={() => setMenuOpen(true)} style={styles.moreTap}>
+      <Ellipsis size={18} color={colors.textPrimary} />
+    </Pressable>
   </View>;
   // Переключатель «Программа | Шаблоны» (макет владельца, UI-OWN-036): над содержимым, не прокручивается.
   const tabs = renderTemplates !== undefined ? <View style={[styles.tabs, { backgroundColor: colors.canvas }]}>
-    <SegmentedControl items={[{ id: "program", label: "Программа" }, { id: "templates", label: "Шаблоны" }]}
+    <SegmentedControl dense items={[{ id: "program", label: "Программа" }, { id: "templates", label: "Шаблоны" }]}
       selectedId={tab} onSelect={(next) => { setTab(next); onTabChange?.(next); }} />
   </View> : null;
   const participants = renderParticipants?.(() => ({ mesocycleId: selectedCycle()?.id ?? null,
@@ -450,15 +451,15 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           onSelectWeek: (week) => selectWeek("simple", week), weeks: simpleWeeks.map((week) => ({ ...week, caption: null })),
           // Компоновка владельца (UI-OWN-034): название, неделя, тип; «Изменить», «В шаблоны», «⋯».
           header: (week) => <View style={styles.cardHead}>
-            <Text accessibilityRole="header" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6} style={[styles.cardTitle, { color: colors.textPrimary }]}>{program.title}</Text>
+            <Text accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.cardTitle, { color: colors.textPrimary }]}>{program.title}</Text>
             <View style={styles.cardMeta}>
               <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Неделя ${week} из ${plan.weeks}`}</Text>
               <Text style={[styles.kind, { color: colors.accentInk, backgroundColor: colors.accentSoft }]}>{programKindLabels[program.kind]}</Text>
             </View>
             <View style={styles.cardActions}>
-              <View style={styles.grow}><AppButton compact label="Изменить"
+              <View style={styles.grow}><AppButton compact size="small" label="Изменить"
                 icon={(color) => <Pencil size={16} color={color} strokeWidth={2} />} onPress={onEditStructure} /></View>
-              <View style={styles.grow}><AppButton compact variant="secondary" label="В шаблоны"
+              <View style={styles.grow}><AppButton compact size="small" variant="secondary" label="В шаблоны"
                 icon={(color) => <Bookmark size={16} color={color} strokeWidth={2} />}
                 onPress={() => { setNotice(null); setTemplateForm({ kind: "program", mesocycleId: null, title: program.title }); }} /></View>
               {menuButton}
@@ -511,7 +512,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
               const planWeek = selected.weeks.find((week) => week.index === weekIndex);
               return <View style={styles.cardHead}>
                 <View>
-                  <Text accessibilityRole="header" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6} style={[styles.cardTitle, styles.cardTitleFixed, { color: colors.textPrimary }]}>{selected.title}</Text>
+                  <Text accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.cardTitle, styles.cardTitleFixed, { color: colors.textPrimary }]}>{selected.title}</Text>
                   <Text numberOfLines={1} style={[styles.meta, { color: colors.textSecondary }]}>
                     {`${program.title} · ${membersWord(groupSize)}`}
                   </Text>
@@ -520,7 +521,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
                 <View style={styles.cardMetaRows}>
                   <View style={styles.cardMetaRow}>
                     <View style={[styles.dates, { backgroundColor: colors.surfaceRaised }]}>
-                      <CalendarDays size={15} color={colors.textPrimary} strokeWidth={2} />
+                      <CalendarDays size={13} color={colors.textPrimary} strokeWidth={2} />
                       <Text numberOfLines={1} style={[styles.tag, { color: colors.textPrimary }]}>
                         {selected.startDate != null ? `${weekRangeLabel(selected.startDate, weekIndex)} · Неделя ${weekIndex}`
                           : `Неделя ${weekIndex} из ${selected.weeks.length}`}
@@ -535,9 +536,9 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
                   </View>
                 </View>
                 <View style={styles.cardActions}>
-                  <View style={styles.grow}><AppButton compact label="Изменить"
+                  <View style={styles.grow}><AppButton compact size="small" label="Изменить"
                     icon={(color) => <Pencil size={16} color={color} strokeWidth={2} />} onPress={() => onEditWeek(selected.id, weekIndex)} /></View>
-                  <View style={styles.grow}><AppButton compact variant="secondary" label="В шаблоны"
+                  <View style={styles.grow}><AppButton compact size="small" variant="secondary" label="В шаблоны"
                     icon={(color) => <Bookmark size={16} color={color} strokeWidth={2} />}
                     onPress={() => { setNotice(null); setTemplateForm({ kind: "mesocycle", mesocycleId: selected.id, title: selected.title }); }} /></View>
                   {menuButton}
@@ -613,21 +614,23 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
   heading: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },
   screen: { flex: 1 },
-  tabs: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 2 },
-  cardHead: { gap: 12 },
-  cardTitle: { fontFamily: fonts.bold, fontSize: 18, letterSpacing: -0.2 },
-  cardTitleFixed: { lineHeight: 24, height: 48 },
-  cardMetaRows: { gap: 6 },
-  cardMetaRow: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 29 },
+  tabs: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 0 },
+  cardHead: { gap: 8 },
+  cardTitle: { fontFamily: fonts.bold, fontSize: 16, letterSpacing: -0.2 },
+  cardTitleFixed: { lineHeight: 21, height: 21 },
+  // Метки (даты, тип цикла и недели) — в одну строку, если помещаются, иначе переносятся.
+  cardMetaRows: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
+  cardMetaRow: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 24, flexShrink: 1 },
   kindFit: { flexShrink: 1 },
   cardMeta: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
-  kind: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, overflow: "hidden" },
+  kind: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 15, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, overflow: "hidden" },
   kindStrong: { fontFamily: fonts.bold },
-  tag: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
-  dates: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
+  tag: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 15 },
+  dates: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   cardActions: { flexDirection: "row", alignItems: "center", gap: 8 },
-  more: { borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  meta: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 17 },
+  more: { width: 34, height: 34, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  moreTap: { width: 34, height: 34, alignItems: "center", justifyContent: "center" },
+  meta: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
   body: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   rename: { gap: 10 },
   workout: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 4 },

@@ -70,8 +70,7 @@ export function ParticipantSwitcher({ clientId, activeClientId = clientId, ancho
   total.current = ordered.length;
   return (
     <View style={[styles.wrap, { backgroundColor: colors.canvas }]}>
-      <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>Участники</Text>
-      <View style={[styles.card, { backgroundColor: colors.border }]}>
+      <View accessibilityLabel="Участники" style={[styles.card, { backgroundColor: colors.border }]}>
         <ScrollView ref={scroll} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}
           keyboardShouldPersistTaps="handled" scrollEventThrottle={32} onScroll={onScroll}
           onLayout={(event) => { viewport.current = event.nativeEvent.layout.width; measure(0); }}>
@@ -125,15 +124,14 @@ const CHIP_WIDTH = 150;
 const CHIP_GAP = 4;
 
 const styles = StyleSheet.create({
-  wrap: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, gap: 6 },
-  card: { borderRadius: 16, padding: 4 },
-  eyebrow: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16, letterSpacing: 1, textTransform: "uppercase", paddingLeft: 4 },
+  wrap: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 2, gap: 4 },
+  card: { borderRadius: 14, padding: 3 },
   row: { gap: CHIP_GAP },
-  chip: { width: CHIP_WIDTH, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
-  chipText: { fontFamily: fonts.semibold, fontSize: 15, textAlign: "center" },
-  mark: { position: "absolute", top: 8, bottom: 8, flexDirection: "row", alignItems: "center", gap: 2, paddingHorizontal: 8, borderRadius: 12 },
-  markLeft: { left: 8 },
-  markRight: { right: 8 },
+  chip: { width: CHIP_WIDTH, height: 32, borderRadius: 11, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  chipText: { fontFamily: fonts.semibold, fontSize: 14, textAlign: "center" },
+  mark: { position: "absolute", top: 5, bottom: 5, flexDirection: "row", alignItems: "center", gap: 2, paddingHorizontal: 8, borderRadius: 12 },
+  markLeft: { left: 6 },
+  markRight: { right: 6 },
   markText: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
   chipCurrent: { fontFamily: fonts.bold },
 });
