@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Animated, Easing, StyleSheet, View } from "react-native";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
+import { shadow } from "../../../shared/ui/theme/style.ts";
 
 const SPILL_MAX = 44;
 
@@ -39,7 +40,7 @@ export function MacroGlass({ color, ratio, children }: Readonly<{ color: string;
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, minWidth: 0, height: 132 },
-  glass: { flex: 1, borderWidth: StyleSheet.hairlineWidth, borderRadius: 16 },
+  glass: { ...shadow.card, flex: 1, borderWidth: StyleSheet.hairlineWidth, borderRadius: 16 },
   clip: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 16, overflow: "hidden" },
   fill: { position: "absolute", left: 0, right: 0, bottom: 0, opacity: 0.28 },
   content: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, paddingVertical: 10, gap: 2 },
