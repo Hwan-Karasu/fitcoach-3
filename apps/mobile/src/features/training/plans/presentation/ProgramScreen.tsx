@@ -20,6 +20,7 @@ import { weekTypeLabels, type PeriodizedPlan, type WeekType } from "../domain/Pe
 import { setsSummary } from "../domain/SimplePlanRules.ts";
 import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidate.ts";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
+import { useParticipantScrollRestore } from "./useParticipantScrollRestore.ts";
 import { MesocycleBook } from "./MesocycleBook.tsx";
 import { cycleTypeLabels, weekRangeLabel } from "../domain/MesocycleBuilder.ts";
 import type { CounterpartRef } from "../domain/ParticipantCounterpart.ts";
@@ -125,21 +126,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [weeksByCycle, setWeeksByCycle] = useState<Readonly<Record<string, number>>>({});
   const cycleKey = periodized?.selectedMesocycleId ?? periodized?.mesocycles[0]?.id ?? "simple";
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
-  const lastY = useRef(0);
-  /** Позиция, которую вернуть после смены участника: страница нового участника может быть короче (меньше мезоциклов). */
-  const pendingRestore = useRef<number | null>(null);
-  const shownKey = useRef(currentKey);
-  useEffect(() => {
-    if (shownKey.current === currentKey) return;
-    shownKey.current = currentKey;
-    pendingRestore.current = lastY.current;
-  }, [currentKey]);
-  useEffect(() => {
-    if (stale || pendingRestore.current === null) return undefined;
-    // Позиция возвращается при первой смене размера страницы; если размер не изменился, прокрутка и так на месте.
-    const timer = setTimeout(() => { pendingRestore.current = null; }, 1200);
-    return () => clearTimeout(timer);
-  }, [stale]);
+  const restore = useParticipantScrollRestore({ currentKey, stale, scrollTo: (y) => scrollRef.current?.scrollTo({ y, animated: false }) });
   // Неделя, показанная в карточке Расширенной программы (её выбирает панель недель): для «Копировать неделю».
   const shownWeek = useRef(1);
   const lookup = useExerciseLookup(exercises);
@@ -308,19 +295,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     <View style={styles.screen}>
     <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} pointerEvents={stale ? "none" : "auto"}
       contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
-      onContentSizeChange={(_width, height) => {
-        if (stale || pendingRestore.current === null) return;
-        const y = pendingRestore.current;
-        scrollRef.current?.scrollTo({ y, animated: false });
-        // Страница ещё короче цели (статусы/неделя не догрузились) — ждём следующего изменения размера.
-        if (height > y) pendingRestore.current = null;
-      }}
-      onScroll={(event) => {
-        // Пока позиция восстанавливается, обрезанный скролл короткой страницы не должен затирать запомненную.
-        lastY.current = event.nativeEvent.contentOffset.y;
-      }}>
-      {/* Обёртка держит индекс 0 и без группы: ScrollView отбрасывает null, и закрепилась бы следующая карточка. */}
-
+      onContentSizeChange={(_width, height) => restore.onContentSizeChange(height)}
+      onScroll={(event) => restore.onScroll(event.nativeEvent.contentOffset.y)}>
       {program.kind === "PERIODIZED" && periodized !== null && periodized.mesocycles.length === 0 ? <View style={styles.row}><View style={styles.grow}>
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>{program.title}</Text>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>
