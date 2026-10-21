@@ -49,6 +49,12 @@ async function modeOf(tx: SqliteStatementPort, workspaceId: string,
   return { mode: fallback?.default_mode ?? "UNTRACKED", inherited: true };
 }
 
+async function preferredPackOf(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<string | null> {
+  const row = await tx.first<{ packId: string }>(`SELECT pack_id AS packId FROM dev_client_preferred_packs
+    WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
+  return row?.packId ?? null;
+}
+
 async function packRows(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<readonly PackRow[]> {
   return tx.all<PackRow>(`SELECT p.id, p.title, p.credit_scope AS creditScope,
       p.session_type_id AS sessionTypeId, p.session_type_name AS sessionTypeName,
@@ -100,7 +106,7 @@ export const devAccountingCalendarHook = {
     if ((await modeOf(tx, workspaceId, booking.clientId)).mode !== "FITCOACH") return null;
     const packs = await packRows(tx, workspaceId, booking.clientId);
     const chosen = choosePack(packs.map((pack) => ({ ...pack, available: pack.ledgerBalance - pack.reserved })),
-      booking.sessionTypeId, localParts(new Date()).today);
+      booking.sessionTypeId, localParts(new Date()).today, await preferredPackOf(tx, workspaceId, booking.clientId));
     if (chosen === null) throw new Error("ACCOUNTING_INSUFFICIENT_CREDIT");
     return chosen.id;
   },
@@ -165,7 +171,7 @@ export const devAccountingCalendarHook = {
   },
 };
 
-const ownedTables = ["dev_credit_reservations", "dev_payment_records", "dev_credit_ledger",
+const ownedTables = ["dev_client_preferred_packs", "dev_credit_reservations", "dev_payment_records", "dev_credit_ledger",
   "dev_session_packs", "dev_client_accounting"] as const;
 
 /** Accounting side of PermanentlyDeleteArchivedClient (§15.7): packs, ledger, reservations, payments. */
@@ -255,7 +261,7 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
 
   async getClientSnapshot(clientId: string): Promise<ClientAccountingSnapshot> {
     const { connection } = this.ready();
-    const [mode, rows, ledger, payments] = await Promise.all([
+    const [mode, rows, ledger, payments, preferredPackId] = await Promise.all([
       modeOf(connection, this.workspaceId, clientId),
       packRows(connection, this.workspaceId, clientId),
       connection.all<LedgerEntry>(`SELECT id, pack_id AS packId, appointment_id AS appointmentId,
@@ -266,6 +272,7 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
         paid_on AS paidOn, method, note, created_at AS createdAt FROM dev_payment_records
         WHERE workspace_id = ? AND client_id = ? ORDER BY paid_on DESC, created_at DESC`,
       [this.workspaceId, clientId]),
+      preferredPackOf(connection, this.workspaceId, clientId),
     ]);
     const packs: PackBalance[] = rows.map((row) => ({
       pack: { id: row.id, title: row.title, creditScope: row.creditScope, sessionTypeId: row.sessionTypeId,
@@ -275,11 +282,27 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
       available: row.ledgerBalance - row.reserved, paidKopeks: row.paidKopeks,
     }));
     return {
-      mode: mode.mode, inheritedMode: mode.inherited, packs,
+      mode: mode.mode, inheritedMode: mode.inherited, preferredPackId, packs,
       available: packs.reduce((sum, pack) => sum + Math.max(pack.available, 0), 0),
       reserved: packs.reduce((sum, pack) => sum + pack.reserved, 0),
       ledger, payments,
     };
+  }
+
+  async setPreferredPack(clientId: string, packId: string | null): Promise<void> {
+    await this.ready().writer.write(async (tx) => {
+      if (packId === null) {
+        await tx.run("DELETE FROM dev_client_preferred_packs WHERE workspace_id = ? AND client_id = ?", [this.workspaceId, clientId]);
+        return;
+      }
+      const pack = (await packRows(tx, this.workspaceId, clientId)).find((row) => row.id === packId);
+      if (pack === undefined || pack.ledgerBalance - pack.reserved < 1 || (pack.expiresOn !== null && pack.expiresOn < localParts(new Date()).today)) {
+        throw new Error("ACCOUNTING_PREFERRED_PACK_INVALID");
+      }
+      await tx.run(`INSERT INTO dev_client_preferred_packs (workspace_id, client_id, pack_id) VALUES (?, ?, ?)
+        ON CONFLICT(workspace_id, client_id) DO UPDATE SET pack_id = excluded.pack_id`, [this.workspaceId, clientId, packId]);
+    });
+    this.publish({ clientIds: [clientId] });
   }
 
   async setClientMode(clientId: string, mode: AccountingMode | null): Promise<void> {
@@ -306,6 +329,8 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
 
   async createPack(clientId: string, input: NewPackInput): Promise<SessionPack> {
     const valid = validatePack(input);
+    const payment = valid.payment === undefined ? null : validatePayment({ packId: null, amountKopeks: valid.totalKopeks,
+      paidOn: valid.payment.paidOn, method: valid.payment.method, note: null });
     const created = await this.ready().writer.write(async (tx) => {
       if (valid.sessionTypeId !== null) {
         const type = await tx.first<{ requiresCredit: number }>(`SELECT requires_credit AS requiresCredit
@@ -324,6 +349,11 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
           source_entry_id, entry_type, delta, reason, operation_key, created_at)
         VALUES (?, ?, ?, ?, NULL, NULL, 'ISSUED', ?, NULL, ?, ?)`,
       [await newId(tx), this.workspaceId, clientId, id, valid.grantedCount, `issued:${id}`, now]);
+      if (payment !== null) {
+        await tx.run(`INSERT INTO dev_payment_records (id, workspace_id, client_id, pack_id, amount_kopeks,
+          paid_on, method, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+        [await newId(tx), this.workspaceId, clientId, id, payment.amountKopeks, payment.paidOn, payment.method, now]);
+      }
       return { id, title: valid.title, creditScope: valid.creditScope, sessionTypeId: valid.sessionTypeId,
         sessionTypeName: valid.sessionTypeName, grantedCount: valid.grantedCount,
         totalKopeks: valid.totalKopeks, expiresOn: valid.expiresOn, createdAt: now };
@@ -367,8 +397,14 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
     const { mode } = await modeOf(connection, this.workspaceId, clientId);
     if (mode !== "FITCOACH") return { kind: "NOT_TRACKED", mode };
     const today = localParts(new Date()).today;
-    const available = (await packRows(connection, this.workspaceId, clientId))
-      .filter((pack) => (pack.expiresOn === null || pack.expiresOn >= today)
+    const packs = await packRows(connection, this.workspaceId, clientId);
+    const preferredPackId = await preferredPackOf(connection, this.workspaceId, clientId);
+    if (preferredPackId !== null) {
+      const chosen = choosePack(packs.map((pack) => ({ ...pack, available: pack.ledgerBalance - pack.reserved })), sessionTypeId, today, preferredPackId);
+      return chosen === null ? { kind: "PREFERRED_UNAVAILABLE" }
+        : { kind: "AVAILABLE", available: chosen.available, preferredPackTitle: packs.find((pack) => pack.id === chosen.id)!.title };
+    }
+    const available = packs.filter((pack) => (pack.expiresOn === null || pack.expiresOn >= today)
         && (pack.creditScope === "GENERAL" || pack.sessionTypeId === sessionTypeId))
       .reduce((sum, pack) => sum + Math.max(pack.ledgerBalance - pack.reserved, 0), 0);
     return available > 0 ? { kind: "AVAILABLE", available } : { kind: "NONE_AVAILABLE" };

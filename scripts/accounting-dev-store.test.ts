@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { derivePackPricing } from "../apps/mobile/src/features/accounting/domain/PackPricing.ts";
+import { devAccountingCatalog, DEV_ACCOUNTING_LEDGER } from "../apps/mobile/src/features/accounting/data/DevAccountingCatalog.ts";
+import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
+import { WriterCoordinator } from "../apps/mobile/src/shared/db/WriterCoordinator.ts";
+import { accountingHistoryDate, shiftAccountingMonth } from "../apps/mobile/src/features/accounting/presentation/accountingHistoryPeriod.ts";
 import { DevAccountingRepository, devAccountingCalendarHook, devAccountingClientDeletionParticipant } from
   "../apps/mobile/src/features/accounting/data/DevAccountingRepository.ts";
 import { choosePack, formatKopeks, parseRublesToKopeks, pricePerSessionKopeks } from
@@ -488,4 +493,202 @@ test("L02 guest becomes a client: same-name records move, past visits stay free,
     assert.equal(veraRow?.creditBypass, true);
     assert.equal(await accounting.appointmentCredit(booked.id), "NONE");
   } finally { await close(); }
+});
+
+
+test("стоимость пакета: количество × цена занятия, точные копейки и пересчёт при изменении количества", () => {
+  assert.deepEqual(derivePackPricing("10", "", "1500", "SESSION"),
+    { count: 10, totalKopeks: 1500000, totalText: "15000", sessionText: "1500" });
+  assert.deepEqual(derivePackPricing("12", "", "1 700,50", "SESSION"),
+    { count: 12, totalKopeks: 2040600, totalText: "20406", sessionText: "1 700,50" });
+  assert.equal(derivePackPricing("3", "", "0,10", "SESSION").totalKopeks, 30, "не использовать float рубли");
+  assert.equal(derivePackPricing("4", "", "3333,33", "SESSION").totalText, "13333,32");
+});
+
+test("стоимость пакета: при вводе общей суммы цена занятия справочная, её округление не меняет сумму", () => {
+  const three = derivePackPricing("3", "10000", "", "TOTAL");
+  assert.equal(three.totalKopeks, 1000000);
+  assert.equal(three.sessionText, "3333,33");
+  const four = derivePackPricing("4", three.totalText, three.sessionText, "TOTAL");
+  assert.equal(four.totalKopeks, 1000000);
+  assert.equal(four.sessionText, "2500");
+  assert.equal(derivePackPricing("10", "15 000,50", "999", "TOTAL").sessionText, "1500,05", "последнее изменённое поле задаёт второе");
+});
+
+test("стоимость пакета: неполный/невалидный ввод не выдаётся за ноль, явный ноль допустим", () => {
+  for (const count of ["", "0", "-1", "1001", "1,5", "abc"]) {
+    const result = derivePackPricing(count, "", "1500", "SESSION");
+    assert.equal(result.count, null);
+    assert.equal(result.totalKopeks, "invalid");
+    assert.equal(result.totalText, "");
+  }
+  for (const amount of ["-1", "1,234", "abc"]) {
+    assert.equal(derivePackPricing("10", "", amount, "SESSION").totalKopeks, "invalid");
+    assert.equal(derivePackPricing("10", amount, "", "TOTAL").totalKopeks, "invalid");
+  }
+  assert.equal(derivePackPricing("10", "", "", "SESSION").totalKopeks, "empty");
+  assert.equal(derivePackPricing("10", "", "", "TOTAL").sessionText, "");
+  assert.equal(derivePackPricing("10", "", "0", "SESSION").totalKopeks, 0);
+});
+
+test("пакет из цены занятия: сохраняется вычисленная общая стоимость, оплата не начисляет повторно занятия", async () => {
+  const { clients, accounting, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticPackPrice" });
+    const pricing = derivePackPricing("10", "", "1700,50", "SESSION");
+    assert.equal(typeof pricing.totalKopeks, "number");
+    const created = await accounting.createPack(client.id, pack(pricing.count!, { totalKopeks: pricing.totalKopeks }));
+    const before = await accounting.getClientSnapshot(client.id);
+    assert.equal(before.packs[0]?.pack.totalKopeks, 1700500);
+    assert.equal(before.packs[0]?.pack.grantedCount, 10);
+    await accounting.recordPayment(client.id, { packId: created.id, amountKopeks: 1700500, paidOn: "2026-10-20", method: "transfer", note: null });
+    const after = await accounting.getClientSnapshot(client.id);
+    assert.equal(after.ledger.length, before.ledger.length);
+    assert.equal(after.packs[0]?.paidKopeks, 1700500);
+  } finally { await close(); }
+});
+
+
+test("основной пакет: новые записи берут выбранный; старые резервы, перенос и списания не меняются", async () => {
+  const { clients, calendar, accounting, personal, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "PreferredSynthetic" });
+    await accounting.setClientMode(client.id, "FITCOACH");
+    const general = await accounting.createPack(client.id, pack(3));
+    const typed = await accounting.createPack(client.id, pack(3, { title: "Typed", creditScope: "SESSION_TYPE", sessionTypeId: personal.id, sessionTypeName: personal.name }));
+    const first = await calendar.createAppointment(slot(client.id, personal.id));
+    assert.equal((await accounting.getClientSnapshot(client.id)).packs.find((p) => p.pack.id === typed.id)?.reserved, 1);
+    await accounting.setPreferredPack(client.id, general.id);
+    const second = await calendar.createAppointment(slot(client.id, personal.id, { startMinute: 660 }));
+    const selected = await accounting.getClientSnapshot(client.id);
+    assert.equal(selected.preferredPackId, general.id);
+    assert.equal(selected.packs.find((p) => p.pack.id === general.id)?.reserved, 1);
+    assert.equal(selected.packs.find((p) => p.pack.id === typed.id)?.reserved, 1);
+    assert.deepEqual(await accounting.bookingContext(client.id, personal.id, true), { kind: "AVAILABLE", available: 2, preferredPackTitle: general.title });
+    await accounting.setPreferredPack(client.id, typed.id);
+    await calendar.updateAppointment(second.id, second.revision, slot(client.id, personal.id, { localDate: "2099-03-03", startMinute: 660 }));
+    await accounting.reconcileDue(new Date(2099, 2, 4));
+    const done = await accounting.getClientSnapshot(client.id);
+    assert.equal(done.ledger.find((row) => row.appointmentId === first.id && row.entryType === "USED")?.packId, typed.id);
+    assert.equal(done.ledger.find((row) => row.appointmentId === second.id && row.entryType === "USED")?.packId, general.id);
+    await accounting.setPreferredPack(client.id, null);
+    assert.equal((await accounting.getClientSnapshot(client.id)).preferredPackId, null);
+  } finally { await close(); }
+});
+
+test("основной пакет: исчерпание и несовпадение типа не приводят к тихому списанию из другого пакета", async () => {
+  const { clients, calendar, accounting, personal, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "PreferredEmpty" });
+    await accounting.setClientMode(client.id, "FITCOACH");
+    const chosen = await accounting.createPack(client.id, pack(1, { creditScope: "SESSION_TYPE", sessionTypeId: personal.id, sessionTypeName: personal.name }));
+    const fallback = await accounting.createPack(client.id, pack(5));
+    await accounting.setPreferredPack(client.id, chosen.id);
+    const other = await calendar.createSessionType({ name: "Other paid", category: "TRAINING", defaultDurationMinutes: 60, requiresCredit: true, color: null });
+    assert.deepEqual(await accounting.bookingContext(client.id, other.id, true), { kind: "PREFERRED_UNAVAILABLE" });
+    await assert.rejects(calendar.createAppointment(slot(client.id, other.id)), { message: "ACCOUNTING_INSUFFICIENT_CREDIT" });
+    await calendar.createAppointment(slot(client.id, personal.id));
+    assert.deepEqual(await accounting.bookingContext(client.id, personal.id, true), { kind: "PREFERRED_UNAVAILABLE" });
+    await assert.rejects(calendar.createAppointment(slot(client.id, personal.id, { startMinute: 660 })), { message: "ACCOUNTING_INSUFFICIENT_CREDIT" });
+    assert.equal((await accounting.getClientSnapshot(client.id)).packs.find((p) => p.pack.id === fallback.id)?.reserved, 0);
+    await accounting.setPreferredPack(client.id, null);
+    await calendar.createAppointment(slot(client.id, personal.id, { startMinute: 660 }));
+    assert.equal((await accounting.getClientSnapshot(client.id)).packs.find((p) => p.pack.id === fallback.id)?.reserved, 1);
+  } finally { await close(); }
+});
+
+test("основной пакет: срок действия, изоляция клиентов, повторное чтение и удаление клиента", async () => {
+  const { db, clients, accounting, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "PreferredA" });
+    const b = await clients.create({ displayName: "PreferredB" });
+    const own = await accounting.createPack(a.id, pack(2));
+    const expired = await accounting.createPack(a.id, pack(2, { expiresOn: PAST }));
+    const foreign = await accounting.createPack(b.id, pack(2));
+    await accounting.setPreferredPack(a.id, own.id);
+    await assert.rejects(accounting.setPreferredPack(a.id, foreign.id), { message: "ACCOUNTING_PREFERRED_PACK_INVALID" });
+    await assert.rejects(accounting.setPreferredPack(a.id, expired.id), { message: "ACCOUNTING_PREFERRED_PACK_INVALID" });
+    assert.throws(() => db.prepare("UPDATE dev_client_preferred_packs SET pack_id = ? WHERE workspace_id = ? AND client_id = ?").run(foreign.id, WS, a.id), /FOREIGN KEY/u);
+    assert.equal((await accounting.getClientSnapshot(a.id)).preferredPackId, own.id);
+    assert.equal((await accounting.getClientSnapshot(b.id)).preferredPackId, null);
+    const archived = await clients.setArchived(a.id, a.revision, true);
+    await clients.deleteArchivedPermanently(a.id, archived.revision);
+    assert.equal((await accounting.getClientSnapshot(a.id)).preferredPackId, null);
+    assert.equal((await accounting.getClientSnapshot(b.id)).packs[0]?.pack.id, foreign.id);
+  } finally { await close(); }
+});
+
+test("пакет с оплатой: сумма и дата сохраняются вместе, дата создания пакета остаётся фактической", async () => {
+  const { clients, accounting, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "PackAndPayment" });
+    const created = await accounting.createPack(client.id, pack(10, { payment: { paidOn: "2026-10-15", method: "cash" } }));
+    const snapshot = await accounting.getClientSnapshot(client.id);
+    assert.equal(snapshot.packs.length, 1);
+    assert.equal(snapshot.ledger.filter((r) => r.entryType === "ISSUED").length, 1);
+    assert.equal(snapshot.payments.length, 1);
+    assert.equal(snapshot.payments[0]?.packId, created.id);
+    assert.equal(snapshot.payments[0]?.amountKopeks, created.totalKopeks);
+    assert.equal(snapshot.payments[0]?.paidOn, "2026-10-15");
+    assert.equal(snapshot.payments[0]?.method, "cash");
+    assert.equal(snapshot.payments[0]?.createdAt, created.createdAt);
+    assert.equal(snapshot.packs[0]?.paidKopeks, created.totalKopeks);
+    assert.equal(snapshot.packs[0]?.ledgerBalance, 10);
+    await accounting.createPack(client.id, pack(3));
+    assert.equal((await accounting.getClientSnapshot(client.id)).payments.length, 1, "пакет без оплаты её не создаёт");
+  } finally { await close(); }
+});
+
+test("пакет с оплатой: неверная дата и ошибка записи оплаты не оставляют частичный пакет или начисление", async () => {
+  const { db, clients, accounting, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "AtomicPackPayment" });
+    const seen: unknown[] = [];
+    accounting.subscribeCommittedChanges((change) => seen.push(change));
+    await assert.rejects(accounting.createPack(client.id, pack(10, { payment: { paidOn: "2026-02-30", method: "cash" } })), { message: "ACCOUNTING_PAYMENT_INVALID" });
+    db.exec("CREATE TRIGGER synthetic_payment_failure BEFORE INSERT ON dev_payment_records BEGIN SELECT RAISE(ABORT, 'synthetic payment failure'); END");
+    await assert.rejects(accounting.createPack(client.id, pack(10, { payment: { paidOn: "2026-10-20", method: "transfer" } })), /synthetic payment failure/u);
+    const snapshot = await accounting.getClientSnapshot(client.id);
+    assert.deepEqual([snapshot.packs.length, snapshot.ledger.length, snapshot.payments.length], [0, 0, 0]);
+    assert.deepEqual(seen, []);
+  } finally { await close(); }
+});
+
+test("миграция основного пакета v1→v2 сохраняет прежние пакеты/оплаты и автоматический режим", async () => {
+  const db = new DatabaseSync(":memory:");
+  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const clients = new DevClientRepository(shared, WS, []);
+  await clients.initialize();
+  const calendar = new DevCalendarRepository(shared, WS);
+  await calendar.initialize();
+  const client = await clients.create({ displayName: "AccountingV1" });
+  await runMigrations(new WriterCoordinator(nodeSqlitePort(db)), devAccountingCatalog.filter((m) => m.version === 1), DEV_ACCOUNTING_LEDGER);
+  db.prepare("INSERT INTO dev_client_accounting (workspace_id, client_id, mode) VALUES (?, ?, 'FITCOACH')").run(WS, client.id);
+  db.prepare("INSERT INTO dev_session_packs (id, workspace_id, client_id, title, credit_scope, granted_count, total_kopeks, created_at) VALUES ('old-pack', ?, ?, 'Old', 'GENERAL', 10, 1000000, '2026-10-01T12:00:00Z')").run(WS, client.id);
+  db.prepare("INSERT INTO dev_credit_ledger (id, workspace_id, client_id, pack_id, entry_type, delta, operation_key, created_at) VALUES ('old-issued', ?, ?, 'old-pack', 'ISSUED', 10, 'issued:old-pack', '2026-10-01T12:00:00Z')").run(WS, client.id);
+  db.prepare("INSERT INTO dev_payment_records (id, workspace_id, client_id, pack_id, amount_kopeks, paid_on, method, created_at) VALUES ('old-payment', ?, ?, 'old-pack', 1000000, '2026-10-01', 'cash', '2026-10-01T12:00:00Z')").run(WS, client.id);
+  const accounting = new DevAccountingRepository(shared, WS);
+  await accounting.initialize();
+  try {
+    const snapshot = await accounting.getClientSnapshot(client.id);
+    assert.equal(snapshot.preferredPackId, null);
+    assert.equal(snapshot.available, 10);
+    assert.equal(snapshot.packs[0]?.paidKopeks, 1000000);
+    await accounting.setPreferredPack(client.id, "old-pack");
+    assert.equal((await accounting.getClientSnapshot(client.id)).preferredPackId, "old-pack");
+  } finally { await accounting.close(); await calendar.close(); await clients.close(); }
+});
+
+test("история: навигация по месяцам переносит год вперёд и назад", () => {
+  assert.equal(shiftAccountingMonth("2026-12", 1), "2027-01");
+  assert.equal(shiftAccountingMonth("2026-01", -1), "2025-12");
+  assert.equal(shiftAccountingMonth("2026-10", -12), "2025-10");
+  assert.equal(shiftAccountingMonth("2026-10", 1), "2026-11");
+});
+
+test("история: месяц оплаты определяется указанной датой оплаты, месяц занятий — локальной датой записи", () => {
+  const at = new Date(2026, 9, 20, 12).toISOString();
+  assert.equal(accountingHistoryDate(at), "2026-10-20");
+  assert.equal(accountingHistoryDate(at, "2025-12-31"), "2025-12-31");
+  assert.equal(accountingHistoryDate(at, "2026-09-30").slice(0, 7), "2026-09");
 });

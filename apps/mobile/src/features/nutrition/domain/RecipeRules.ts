@@ -7,6 +7,7 @@ export type RecipeRuleError =
   | "RECIPE_SERVINGS_INVALID"
   | "RECIPE_MASS_INVALID"
   | "RECIPE_DESCRIPTION_INVALID"
+  | "RECIPE_DETAILS_INVALID"
   | "RECIPE_INGREDIENT_INVALID"
   | "INVALID_PORTION";
 
@@ -26,6 +27,14 @@ export function validateRecipe(input: RecipeInput): RecipeInput {
     || input.cookedMassX10 > QUANTITY_MAX_X10)) fail("RECIPE_MASS_INVALID");
   const description = input.description === undefined || input.description === null ? null : input.description.trim();
   if (description !== null && description.length > DESCRIPTION_MAX) fail("RECIPE_DESCRIPTION_INVALID");
+  const details = input.details;
+  if (details != null) {
+    if ([details.prepMinutes, details.cookMinutes].some((value) => value !== null && (!Number.isInteger(value) || value < 0 || value > 10080))
+      || details.categories.length > 20 || details.steps.length > 50
+      || details.categories.some((text) => text.trim() === "" || text.length > 80)
+      || details.steps.some((text) => text.trim() === "" || text.length > 2000)
+      || (details.photoUri !== null && (!details.photoUri.startsWith("file://") || details.photoUri.length > 2000))) fail("RECIPE_DETAILS_INVALID");
+  }
   if (input.ingredients.length === 0 || input.ingredients.length > INGREDIENTS_MAX) fail("RECIPE_INGREDIENT_INVALID");
   const seen = new Set<string>();
   for (const item of input.ingredients) {
@@ -33,7 +42,8 @@ export function validateRecipe(input: RecipeInput): RecipeInput {
       || item.quantityX10 <= 0 || item.quantityX10 > QUANTITY_MAX_X10) fail("RECIPE_INGREDIENT_INVALID");
     seen.add(item.foodId);
   }
-  return { name, servingsX10: input.servingsX10, cookedMassX10: input.cookedMassX10, description: input.description === undefined ? undefined : description === "" ? null : description, ingredients: input.ingredients.map((item) => ({ ...item })) };
+  return { name, servingsX10: input.servingsX10, cookedMassX10: input.cookedMassX10, details,
+    description: input.description === undefined ? undefined : description === "" ? null : description, ingredients: input.ingredients.map((item) => ({ ...item })) };
 }
 
 /**

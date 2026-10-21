@@ -4,7 +4,7 @@ import { LineChart as GiftedLineChart } from "react-native-gifted-charts";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../theme/typography.ts";
 import { shadow } from "../theme/style.ts";
-import { niceStep } from "./chartScale.ts";
+import { lineChartLayout, niceStep } from "./chartScale.ts";
 
 export interface LineChartPoint {
   readonly key: string;
@@ -45,10 +45,10 @@ export function LineChart({ points, format, formatValue, title, accessibilityLab
   const [width, setWidth] = useState(0);
   const lastIndex = useRef(-1);
   const values = points.map((point) => point.value);
-  const low = Math.min(...values);
+  const low = values.length === 0 ? 0 : Math.min(...values);
   // Данные передаются от минимума, подписи шкалы возвращают смещение: график не прижат к нулю.
   const step = niceStep((Math.max(...values) - low) / 3);
-  const spacing = points.length > 1 ? Math.max((width - AXIS - PAD * 2) / (points.length - 1), 0) : 0;
+  const layout = lineChartLayout(width, points.length, AXIS, PAD);
   const last = points.length - 1;
   const shown = formatValue ?? format;
   // Данные элемента приходят в подсказку как есть — подпись и значение кладутся в сам элемент.
@@ -56,10 +56,11 @@ export function LineChart({ points, format, formatValue, title, accessibilityLab
     dataPointColor: index === last ? colors.accentInk : colors.surface })) as unknown as GiftedData;
   return (
     <View accessible accessibilityLabel={accessibilityLabel} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
-      {width > 0 ? <GiftedLineChart
+      {width > 0 && points.length > 0 ? <GiftedLineChart
         data={data}
+        width={layout.width}
         height={HEIGHT - PAD} noOfSections={3} maxValue={step * 3} stepValue={step}
-        spacing={spacing} initialSpacing={PAD} endSpacing={PAD}
+        spacing={layout.spacing} initialSpacing={layout.initialSpacing} endSpacing={layout.endSpacing}
         color={colors.accentInk} thickness={2.5} dataPointsColor={colors.surface} dataPointsRadius={4}
         yAxisLabelWidth={AXIS} yAxisThickness={0} xAxisThickness={1} xAxisColor={colors.border} rulesColor={colors.border}
         yAxisTextStyle={{ color: colors.textMuted, fontSize: 11, fontFamily: fonts.medium }}
@@ -86,7 +87,7 @@ export function LineChart({ points, format, formatValue, title, accessibilityLab
           const point = points[pointerIndex];
           if (point !== undefined) onSelect?.(point);
         }} /> : <View style={{ height: HEIGHT }} />}
-      <View style={[styles.dates, { paddingLeft: AXIS }]}>
+      <View style={[styles.dates, { paddingLeft: AXIS }, points.length === 1 ? { justifyContent: "center" } : null]}>
         <Text style={[styles.date, { color: colors.textMuted }]}>{points[0]?.label ?? ""}</Text>
         {points.length > 1 ? <Text style={[styles.date, { color: colors.textMuted }]}>{points[last]!.label}</Text> : null}
       </View>

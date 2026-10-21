@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { devNutritionCatalog, DEV_NUTRITION_LEDGER } from "../apps/mobile/src/features/nutrition/data/DevNutritionCatalog.ts";
+import { deriveHomeMacroTarget, EMPTY_MANUAL_MACROS } from "../apps/mobile/src/features/nutrition/domain/HomeMacroTargets.ts";
+import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
+import { WriterCoordinator } from "../apps/mobile/src/shared/db/WriterCoordinator.ts";
 import { devNutritionCalcClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionCalcRepository.ts";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { devNutritionClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionDiaryRepository.ts";
@@ -218,4 +222,76 @@ test("замена версии на сегодня предупреждает, 
   assert.equal(differsFromUniform(version, mon), true);
   assert.equal(differsFromUniform({ ...version, days: Array.from({ length: 7 }, () => mon) }, mon), false);
   assert.equal(differsFromUniform({ ...version, days: [mon, mon, mon, mon, mon, mon, null] }, mon), true, "у воскресенья цели не было — при замене появится");
+});
+
+
+test("главная: сохраняются только ручные поля, итог отдельно; повторная загрузка, сброс, исключения и ревизии", async () => {
+  const { clients, targets, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const b = await clients.create({ displayName: "SyntheticB" });
+    const manual = { ...EMPTY_MANUAL_MACROS, protein: range(140, 150) };
+    const balanced = deriveHomeMacroTarget(2400, { protein: 119, fat: 56, carbs: 355 }, 70, manual, "RANGE");
+    assert.equal(balanced.problem, null);
+    const adjustment = { mode: "RANGE" as const, manual };
+    const saved = await targets.saveVersion(a.id, { effectiveFrom: TUE, days: uniformWeek(balanced.corridors), homeAdjustment: adjustment }, null, NOW);
+    const [loaded] = await targets.listVersions(a.id);
+    assert.deepEqual(loaded?.homeAdjustment, adjustment);
+    assert.equal(loaded?.homeAdjustment?.manual.fat, null, "автоматический жир не становится ручным");
+    assert.equal(loaded?.homeAdjustment?.manual.carbs, null);
+    assert.deepEqual(loaded?.days[1]?.fat, range(56, 70), "итоговый коридор жира сохранён в снимке цели");
+    assert.deepEqual(await targets.listVersions(b.id), []);
+    await targets.setException(a.id, TUE, kcalOnly(2700, 2700), NOW);
+    assert.equal(resolveTarget(await targets.listVersions(a.id), await targets.listExceptions(a.id), TUE).source, "EXCEPTION");
+    const resetTarget = deriveHomeMacroTarget(2400, { protein: 119, fat: 56, carbs: 355 }, 70, EMPTY_MANUAL_MACROS);
+    const reset = await targets.saveVersion(a.id, { effectiveFrom: TUE, days: uniformWeek(resetTarget.corridors), homeAdjustment: { mode: "EXACT", manual: EMPTY_MANUAL_MACROS } }, saved.revision, NOW);
+    assert.deepEqual(reset.homeAdjustment?.manual, EMPTY_MANUAL_MACROS);
+    await assert.rejects(targets.saveVersion(a.id, { effectiveFrom: TUE, days: uniformWeek(balanced.corridors), homeAdjustment: adjustment }, saved.revision, NOW), code("TARGET_STALE"));
+    assert.deepEqual((await targets.listVersions(a.id))[0]?.homeAdjustment, reset.homeAdjustment, "устаревшая запись не меняет метаданные");
+    const scheduled = await targets.saveVersion(a.id, { effectiveFrom: TUE, days: uniformWeek(kcalOnly(2200, 2300)) }, reset.revision, NOW);
+    assert.equal(scheduled.homeAdjustment, null, "редактирование расписания снимает метаданные главной");
+    assert.equal((await targets.listExceptions(a.id)).length, 1);
+  } finally { await close(); }
+});
+
+test("главная: ошибка записи итогового дня откатывает и ревизию, и ручные поля; подписка не вызывается", async () => {
+  const { db, clients, targets, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticRollback" });
+    const initial = await targets.saveVersion(client.id, { effectiveFrom: TUE, days: uniformWeek(kcalOnly(2400, 2400)) }, null, NOW);
+    const before = await targets.listVersions(client.id);
+    const seen: string[] = [];
+    targets.subscribeCommittedChanges((event) => seen.push(event.clientId));
+    db.exec("CREATE TRIGGER fail_target_day BEFORE INSERT ON dev_nutrition_target_days BEGIN SELECT RAISE(ABORT, 'synthetic write failure'); END");
+    await assert.rejects(targets.saveVersion(client.id, { effectiveFrom: TUE, days: uniformWeek(kcalOnly(2000, 2000)), homeAdjustment: { mode: "EXACT", manual: { ...EMPTY_MANUAL_MACROS, protein: range(150, 150) } } }, initial.revision, NOW), /synthetic write failure/u);
+    assert.deepEqual(await targets.listVersions(client.id), before);
+    assert.deepEqual(seen, []);
+  } finally { await close(); }
+});
+
+test("главная: метаданные проверяют диапазоны и точный режим", () => {
+  const valid = { effectiveFrom: TUE, days: uniformWeek(kcalOnly(2400, 2400)) };
+  assert.throws(() => validateVersion({ ...valid, homeAdjustment: { mode: "EXACT", manual: { ...EMPTY_MANUAL_MACROS, protein: range(140, 150) } } }), code("TARGET_RANGE_INVALID"));
+  assert.throws(() => validateVersion({ ...valid, homeAdjustment: { mode: "RANGE", manual: { ...EMPTY_MANUAL_MACROS, protein: range(150, 140) } } }), code("TARGET_RANGE_INVALID"));
+});
+
+test("миграция v10: старые цели v9 сохраняют значения, revision и исключение; происхождение не угадывается", async () => {
+  const db = new DatabaseSync(":memory:");
+  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const clients = new DevClientRepository(shared, WS, []);
+  await clients.initialize();
+  const client = await clients.create({ displayName: "SyntheticV9" });
+  await runMigrations(new WriterCoordinator(nodeSqlitePort(db)), devNutritionCatalog.filter((migration) => migration.version < 10), DEV_NUTRITION_LEDGER);
+  db.prepare("INSERT INTO dev_nutrition_target_versions (id, workspace_id, client_id, effective_from, revision, created_at, updated_at) VALUES ('old-version', ?, ?, '2026-10-01', 3, 'x', 'x')").run(WS, client.id);
+  db.prepare("INSERT INTO dev_nutrition_target_days (version_id, weekday, kcal_min_x10, kcal_max_x10, protein_min_x10, protein_max_x10) VALUES ('old-version', 1, 24000, 24000, 1500, 1500)").run();
+  db.prepare("INSERT INTO dev_nutrition_target_exceptions (workspace_id, client_id, local_date, kcal_min_x10, kcal_max_x10, updated_at) VALUES (?, ?, ?, 27000, 27000, 'x')").run(WS, client.id, SAT);
+  const targets = new DevNutritionTargetsRepository(shared, WS);
+  await targets.initialize();
+  try {
+    const [old] = await targets.listVersions(client.id);
+    assert.equal(old?.revision, 3);
+    assert.equal(old?.homeAdjustment, null);
+    assert.deepEqual(old?.days[1], { kcal: range(2400, 2400), protein: range(150, 150), fat: null, carbs: null });
+    assert.equal(resolveTarget(await targets.listVersions(client.id), await targets.listExceptions(client.id), SAT).source, "EXCEPTION");
+  } finally { await targets.close(); await clients.close(); }
 });

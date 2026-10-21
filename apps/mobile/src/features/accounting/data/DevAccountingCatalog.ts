@@ -101,4 +101,18 @@ export const devAccountingCatalog: readonly MigrationStep[] = [{
     )`,
     "CREATE INDEX dev_payment_records_client ON dev_payment_records(workspace_id, client_id, paid_on)",
   ],
+}, {
+  version: 2,
+  checksum: "l01-dev-accounting-v2-preferred-pack-20261020",
+  statements: [
+    // Только dev-схема: настройка клиента отдельно от режима учёта и фактов Ledger.
+    `CREATE TABLE dev_client_preferred_packs (
+      workspace_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      pack_id TEXT NOT NULL,
+      PRIMARY KEY (workspace_id, client_id),
+      FOREIGN KEY (client_id, workspace_id) REFERENCES dev_clients(id, workspace_id) ON DELETE RESTRICT,
+      FOREIGN KEY (pack_id, workspace_id, client_id) REFERENCES dev_session_packs(id, workspace_id, client_id) ON DELETE RESTRICT
+    )`,
+  ],
 }];

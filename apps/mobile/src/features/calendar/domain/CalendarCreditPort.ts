@@ -2,7 +2,8 @@
 export type CalendarBookingCredit =
   | Readonly<{ kind: "NOT_TRACKED" }>
   | Readonly<{ kind: "NOT_REQUIRED" }>
-  | Readonly<{ kind: "AVAILABLE"; available: number }>
+  | Readonly<{ kind: "AVAILABLE"; available: number; preferredPackTitle?: string }>
+  | Readonly<{ kind: "PREFERRED_UNAVAILABLE" }>
   | Readonly<{ kind: "NONE_AVAILABLE" }>;
 
 export type CalendarAppointmentCredit = "NONE" | "RESERVED" | "USED" | "RETURNED";

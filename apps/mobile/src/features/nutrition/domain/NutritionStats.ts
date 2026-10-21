@@ -42,6 +42,8 @@ export interface NutritionStats {
 }
 
 export interface NutritionStatsInput {
+  /** All-time query: keep only accounted dates in days; the denominator still covers the full interval. */
+  readonly sparse?: boolean;
   readonly from: string;
   readonly to: string;
   readonly entries: readonly DiaryEntry[];
@@ -71,12 +73,19 @@ function datesBetween(from: string, to: string): readonly string[] {
  * Показатель с неизвестным значением исключается из своего среднего и сравнения, но не из других показателей дня.
  */
 export function computeNutritionStats(input: NutritionStatsInput): NutritionStats {
-  const dates = datesBetween(input.from, input.to);
+  assertDate(input.from); assertDate(input.to);
+  if (input.to < input.from) throw new Error("STATS_PERIOD_INVALID");
   const inPeriod = input.entries.filter((entry) => entry.localDate >= input.from && entry.localDate <= input.to);
+  const dates = input.sparse ? accountedDates(inPeriod) : datesBetween(input.from, input.to);
+  const byDate = new Map<string, DiaryEntry[]>();
+  for (const entry of inPeriod) {
+    const rows = byDate.get(entry.localDate);
+    if (rows === undefined) byDate.set(entry.localDate, [entry]); else rows.push(entry);
+  }
   const accounted = new Set(accountedDates(inPeriod));
   const days: NutritionDayPoint[] = dates.map((localDate) => {
     const target = resolveTarget(input.versions, input.exceptions, localDate);
-    const summary = summarizeDay(localDate, inPeriod);
+    const summary = summarizeDay(localDate, byDate.get(localDate) ?? []);
     const isAccounted = accounted.has(localDate);
     const verdicts = isAccounted ? assessDay(summary, target)
       : { kcal: "UNKNOWN", protein: "UNKNOWN", fat: "UNKNOWN", carbs: "UNKNOWN" } as const;
@@ -93,5 +102,6 @@ export function computeNutritionStats(input: NutritionStatsInput): NutritionStat
     return [metric, { averageX10: values.length === 0 ? null : Math.round(values.reduce((sum, value) => sum + value, 0) / values.length),
       daysWithValue: values.length, below, inRange, above, compared, hitPercentX10: compared === 0 ? null : Math.round((inRange * 1000) / compared) } satisfies MetricStats];
   })) as Record<TargetMetric, MetricStats>;
-  return { from: input.from, to: input.to, periodDays: dates.length, accountedDays: accounted.size, metrics, days };
+  const periodDays = Math.round((Date.parse(`${input.to}T00:00:00Z`) - Date.parse(`${input.from}T00:00:00Z`)) / 86400000) + 1;
+  return { from: input.from, to: input.to, periodDays, accountedDays: accounted.size, metrics, days };
 }

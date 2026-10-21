@@ -36,7 +36,7 @@ export interface CalcInputs {
 
 export interface CalcResult {
   readonly leanMassKg: number | null;
-  /** Масса для расчёта белка и жира: сухая масса, а без % жира — 80 % веса (как в 2.0); без веса — `null`. */
+  /** Масса для расчёта БЖУ: только известная сухая масса; без % жира — `null`. */
   readonly macroMassKg: number | null;
   readonly ree: number | null;
   readonly neat: number | null;
@@ -96,7 +96,7 @@ export function deriveCalc(profile: CalcProfile, inputs: CalcInputs): CalcResult
   const eat = calcEat(inputs.weightKg, profile.workoutsPerWeek, profile.minutes, profile.intensity);
   const startTdee = ree !== null && eat !== null ? Math.round(ree + neat + eat) : null;
   const delta = goalDelta(profile.goal, profile.stepKcal);
-  const macroMassKg = lean !== null ? lean : positive(inputs.weightKg) ? Math.round(inputs.weightKg * 0.8 * 10) / 10 : null;
+  const macroMassKg = lean;
   return { leanMassKg: lean, macroMassKg, ree, neat, neatSource: fromSteps ? "STEPS" : "ACTIVITY", eat, startTdee, goalDelta: delta, target: startTdee === null ? null : startTdee + delta };
 }
 
@@ -110,88 +110,77 @@ export interface MacroGrams {
 export function calcMacros(leanMassKg: number | null, calories: number | null, goal: CalcGoal): MacroGrams {
   if (!positive(leanMassKg) || !positive(calories)) return { protein: null, fat: null, carbs: null };
   const protein = Math.round(leanMassKg * (goal === "MAINTENANCE" ? 1.7 : goal === "GAIN" ? 2 : 2.1));
-  const fat = Math.round(leanMassKg * 0.8);
-  return { protein, fat, carbs: Math.max(0, Math.round((calories - protein * 4 - fat * 9) / 4)) };
+  // Десятые грамма: округление вверх удерживает жир не ниже 0,8 г/кг.
+  const fat = Math.ceil((leanMassKg * 0.8 - 1e-9) * 10) / 10;
+  const rest = (calories - protein * 4 - fat * 9) / 4;
+  return { protein, fat, carbs: rest < 0 ? null : Math.round(rest * 10) / 10 };
 }
 
-/**
- * Пересчёт макронутриентов вокруг калорийного ориентира `calories` при ручном вводе тренера (формулы 2.0: applyManualMacros / calcCorrMacros). Введённое фиксируется как есть;
- * недостающее считается так, чтобы попасть в калории (1 г белка и углеводов = 4 ккал, жира = 9 ккал), остаток не меньше 0:
- * — введено два показателя: третий — остаток калорий; — введён один: белок и жир берут расчётные значения, а добирает последний из остальных (при вводе белка или жира — углеводы,
- *   при вводе углеводов — жир; в 2.0 здесь введённые углеводы затирались, это не переносится); — введено три: ровно как введены; — ничего: расчётные значения.
- * Нет калорий или расчётных значений, нужных для пересчёта, — недостающее `null`, а не выдуманное.
- */
-export function rebalanceMacros(calories: number | null, defaults: MacroGrams, manual: MacroGrams): MacroGrams {
-  const set = (value: number | null): value is number => value !== null;
-  const rest = (value: number, kcalPerG: number) => Math.max(0, Math.round(value / kcalPerG));
-  const { protein: mp, fat: mf, carbs: mc } = manual;
-  const count = [mp, mf, mc].filter(set).length;
-  if (count === 0) return defaults;
-  if (count === 3) return { protein: mp, fat: mf, carbs: mc };
-  if (count === 2) {
-    if (!set(calories)) return { protein: mp, fat: mf, carbs: mc };
-    if (!set(mc)) return { protein: mp, fat: mf, carbs: rest(calories - (mp as number) * 4 - (mf as number) * 9, 4) };
-    if (!set(mf)) return { protein: mp, fat: rest(calories - (mp as number) * 4 - mc * 4, 9), carbs: mc };
-    return { protein: rest(calories - (mf as number) * 9 - mc * 4, 4), fat: mf, carbs: mc };
-  }
-  // введён один показатель
-  if (set(mp)) {
-    const fat = defaults.fat;
-    return { protein: mp, fat, carbs: set(calories) && fat !== null ? rest(calories - mp * 4 - fat * 9, 4) : null };
-  }
-  if (set(mf)) {
-    const protein = defaults.protein;
-    return { protein, fat: mf, carbs: set(calories) && protein !== null ? rest(calories - protein * 4 - mf * 9, 4) : null };
-  }
-  const protein = defaults.protein;
-  return { protein, fat: set(calories) && protein !== null ? rest(calories - protein * 4 - (mc as number) * 4, 9) : null, carbs: mc };
-}
-
-/** Диапазон граммов макронутриента; равные границы — точное значение. */
-export interface GramRange {
-  readonly min: number;
-  readonly max: number;
-}
+/** Диапазон граммов; равные границы — точное значение. */
+export interface GramRange { readonly min: number; readonly max: number }
 export type MacroRanges = Readonly<{ protein: GramRange | null; fat: GramRange | null; carbs: GramRange | null }>;
+export type MacroBalanceError = "MACRO_NEGATIVE_REMAINDER" | "MACRO_FAT_RANGE" | "MACRO_MASS_REQUIRED";
+
+export function pointMacroRanges(macros: MacroGrams): MacroRanges {
+  const point = (value: number | null): GramRange | null => value === null ? null : { min: value, max: value };
+  return { protein: point(macros.protein), fat: point(macros.fat), carbs: point(macros.carbs) };
+}
+
+/** Автоматические коридоры: белок ±10 %, жир 0,8–1 г/кг сухой массы, углеводы — остаток по противоположным границам. */
+export function automaticMacroRanges(calories: number | null, defaults: MacroGrams, leanMassKg: number | null): MacroRanges {
+  if (!positive(calories) || !positive(leanMassKg) || defaults.protein === null) return { protein: null, fat: null, carbs: null };
+  const tenth = (value: number) => Math.round(value * 10) / 10;
+  const protein = { min: tenth(defaults.protein * 0.9), max: tenth(defaults.protein * 1.1) };
+  const fat = { min: Math.ceil((leanMassKg * 0.8 - 1e-9) * 10) / 10, max: Math.floor((leanMassKg + 1e-9) * 10) / 10 };
+  const low = (calories - protein.max * 4 - fat.max * 9) / 4;
+  const high = (calories - protein.min * 4 - fat.min * 9) / 4;
+  return { protein, fat, carbs: low < -1e-9 ? null : { min: tenth(Math.max(0, low)), max: tenth(high) } };
+}
 
 /**
- * Режим «Коридор»: те же правила пересчёта, что в `rebalanceMacros`, но введённые значения — диапазоны. Досчитанный показатель получает коридор, в котором калорийный ориентир достижим
- * при любых значениях введённых диапазонов (интервальная арифметика: `[(C − верх известных) / k; (C − низ известных) / k]`, не ниже 0, k = 4 для Б/У и 9 для Ж). Значения по расчёту
- * (белок и жир при одном введённом показателе) остаются числами. Точные числа дают тот же результат, что `rebalanceMacros`. Нет калорий или расчётных значений — `null`.
+ * Ручной ввод не меняется. Жир сохраняется до последнего: при одних углеводах пересчитывается белок.
+ * Проверяем весь интервал до округления. Отрицательный остаток и жир вне 0,8–1 г/кг — конфликт.
+ * Без необходимых исходных данных недостающие показатели остаются null.
  */
-export function rebalanceMacroRanges(calories: number | null, defaults: MacroGrams, manual: MacroRanges): MacroRanges {
-  const point = (value: number | null): GramRange | null => value === null ? null : { min: value, max: value };
-  const rest = (low: number, high: number, k: number): GramRange => {
-    const min = Math.max(0, ((calories as number) - high) / k);
-    const max = Math.max(0, ((calories as number) - low) / k);
-    return { min: Math.round(min), max: Math.round(max) };
-  };
-  const kcal = (range: GramRange | null, k: number) => range === null ? null : { low: range.min * k, high: range.max * k };
-  const { protein: mp, fat: mf, carbs: mc } = manual;
-  const count = [mp, mf, mc].filter((value) => value !== null).length;
-  if (count === 0) return { protein: point(defaults.protein), fat: point(defaults.fat), carbs: point(defaults.carbs) };
+export function rebalanceMacroRanges(calories: number | null, defaults: MacroRanges, manual: MacroRanges, leanMassKg: number | null): MacroRanges {
+  const count = Object.values(manual).filter((value) => value !== null).length;
+  if (count === 0) return defaults;
   if (count === 3) return manual;
-  const known = (parts: readonly ({ low: number; high: number } | null)[]) => ({ low: parts.reduce((sum, part) => sum + (part?.low ?? 0), 0), high: parts.reduce((sum, part) => sum + (part?.high ?? 0), 0) });
-  const noCalories = calories === null;
-  if (count === 2) {
-    if (mc === null) { const k = known([kcal(mp, 4), kcal(mf, 9)]); return { protein: mp, fat: mf, carbs: noCalories ? null : rest(k.low, k.high, 4) }; }
-    if (mf === null) { const k = known([kcal(mp, 4), kcal(mc, 4)]); return { protein: mp, fat: noCalories ? null : rest(k.low, k.high, 9), carbs: mc }; }
-    const k = known([kcal(mf, 9), kcal(mc, 4)]);
-    return { protein: noCalories ? null : rest(k.low, k.high, 4), fat: mf, carbs: mc };
+  const out = { ...manual };
+  let missing: "protein" | "fat" | "carbs";
+  if (count === 1) {
+    if (manual.protein !== null) { out.fat = defaults.fat; missing = "carbs"; }
+    else if (manual.fat !== null) { out.protein = defaults.protein; missing = "carbs"; }
+    else { out.fat = defaults.fat; missing = "protein"; }
+  } else missing = manual.protein === null ? "protein" : manual.fat === null ? "fat" : "carbs";
+  if (calories === null || Object.entries(out).some(([key, value]) => key !== missing && value === null)) return out;
+  if (missing === "fat" && !positive(leanMassKg)) throw new Error("MACRO_MASS_REQUIRED" satisfies MacroBalanceError);
+  const factors = { protein: 4, fat: 9, carbs: 4 };
+  let low = calories;
+  let high = calories;
+  for (const key of ["protein", "fat", "carbs"] as const) {
+    if (key === missing) continue;
+    low -= out[key]!.max * factors[key];
+    high -= out[key]!.min * factors[key];
   }
-  if (mp !== null) {
-    if (defaults.fat === null) return { protein: mp, fat: null, carbs: null };
-    const k = known([kcal(mp, 4), { low: defaults.fat * 9, high: defaults.fat * 9 }]);
-    return { protein: mp, fat: point(defaults.fat), carbs: noCalories ? null : rest(k.low, k.high, 4) };
-  }
-  if (mf !== null) {
-    if (defaults.protein === null) return { protein: null, fat: mf, carbs: null };
-    const k = known([{ low: defaults.protein * 4, high: defaults.protein * 4 }, kcal(mf, 9)]);
-    return { protein: point(defaults.protein), fat: mf, carbs: noCalories ? null : rest(k.low, k.high, 4) };
-  }
-  if (defaults.protein === null) return { protein: null, fat: null, carbs: mc };
-  const k = known([{ low: defaults.protein * 4, high: defaults.protein * 4 }, kcal(mc, 4)]);
-  return { protein: point(defaults.protein), fat: noCalories ? null : rest(k.low, k.high, 9), carbs: mc };
+  const min = low / factors[missing];
+  const max = high / factors[missing];
+  if (min < -1e-9) throw new Error("MACRO_NEGATIVE_REMAINDER" satisfies MacroBalanceError);
+  if (missing === "fat" && (min < leanMassKg! * 0.8 - 1e-9 || max > leanMassKg! + 1e-9)) throw new Error("MACRO_FAT_RANGE" satisfies MacroBalanceError);
+  const roundedMin = Math.round(Math.max(0, min) * 10) / 10;
+  const roundedMax = Math.round(max * 10) / 10;
+  const fatMin = leanMassKg === null ? 0 : Math.ceil((leanMassKg * 0.8 - 1e-9) * 10) / 10;
+  const fatMax = leanMassKg === null ? 0 : Math.floor((leanMassKg + 1e-9) * 10) / 10;
+  out[missing] = missing === "fat"
+    ? { min: Math.min(fatMax, Math.max(roundedMin, fatMin)), max: Math.min(fatMax, Math.max(roundedMax, fatMin)) }
+    : { min: roundedMin, max: roundedMax };
+  return out;
+}
+
+/** Точные значения используют ту же балансировку и проверки, что коридоры. */
+export function rebalanceMacros(calories: number | null, defaults: MacroGrams, manual: MacroGrams, leanMassKg: number | null): MacroGrams {
+  const result = rebalanceMacroRanges(calories, pointMacroRanges(defaults), pointMacroRanges(manual), leanMassKg);
+  return { protein: result.protein?.min ?? null, fat: result.fat?.min ?? null, carbs: result.carbs?.min ?? null };
 }
 
 /**

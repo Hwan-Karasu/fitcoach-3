@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DaySummary, DiaryEntry } from "../domain/DiaryModel.ts";
 import { summarizeDay } from "../domain/DiaryRules.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
@@ -18,11 +18,12 @@ export interface NutritionDayData {
  * при фиксации изменений этого клиента (дневник — этой даты). Подписки отдаются в cleanup.
  */
 export function useNutritionDay(clientId: string, localDate: string, diary: NutritionDiaryPort,
-  targets: NutritionTargetsPort): Readonly<{ data: NutritionDayData | null; failed: boolean }> {
+  targets: NutritionTargetsPort): Readonly<{ data: NutritionDayData | null; failed: boolean; reload: () => void }> {
   const [loaded, setLoaded] = useState<Readonly<{ key: string; entries: readonly DiaryEntry[]; waterMl: number | null;
     versions: readonly TargetVersion[]; exceptions: readonly TargetException[] }> | null>(null);
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
+  const reload = useCallback(() => { setFailed(false); setTick((value) => value + 1); }, []);
 
   useEffect(() => {
     let active = true;
@@ -45,5 +46,5 @@ export function useNutritionDay(clientId: string, localDate: string, diary: Nutr
     return { entries: loaded.entries, waterMl: loaded.waterMl, summary: summarizeDay(localDate, loaded.entries),
       target: resolveTarget(loaded.versions, loaded.exceptions, localDate) };
   }, [loaded, clientId, localDate]);
-  return { data, failed };
+  return { data, failed, reload };
 }

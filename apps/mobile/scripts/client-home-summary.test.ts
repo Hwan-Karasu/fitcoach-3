@@ -20,7 +20,7 @@ const balance = (overrides: Partial<PackBalance["pack"]>, available: number, res
 });
 
 const snapshot = (mode: ClientAccountingSnapshot["mode"], packs: readonly PackBalance[]): ClientAccountingSnapshot =>
-  ({ mode, inheritedMode: false, packs, available: 0, reserved: 0, ledger: [], payments: [] });
+  ({ mode, inheritedMode: false, preferredPackId: null, packs, available: 0, reserved: 0, ledger: [], payments: [] });
 
 test("C05 Home tiles project measurements: latest daily point, ambiguity, never a zero", () => {
   const empty = buildClientHomeSummary(rules, null, null, TODAY);
@@ -59,6 +59,21 @@ test("C05 abonement summary comes from ledger balances, with modes, expiry and t
   assert.ok(low.kind === "TRACKED" && low.tone === "warning");
   const none = buildClientHomeSummary(rules, snapshot("FITCOACH", [balance({}, 0, 0)]), null, TODAY).pack;
   assert.ok(none.kind === "TRACKED" && none.tone === "empty" && none.pricePerSession === null);
+});
+
+test("C05 Home shows only the preferred pack, including its own price, expiry and empty balance", () => {
+  const packs = [balance({ id: "other" }, 8),
+    balance({ id: "chosen", grantedCount: 4, totalKopeks: 800_000, expiresOn: "2026-11-01" }, 1, 2)];
+  const chosen = { ...snapshot("FITCOACH", packs), preferredPackId: "chosen" };
+  const result = buildClientHomeSummary(rules, chosen, null, TODAY).pack;
+  assert.deepEqual(result, { kind: "TRACKED", available: 1, granted: 4, reserved: 2,
+    tone: "warning", pricePerSession: "2\u00a0000\u00a0₽", expiresOn: "2026-11-01" });
+  const empty = buildClientHomeSummary(rules, { ...chosen, packs: [packs[0]!, balance(packs[1]!.pack, 0)] }, null, TODAY).pack;
+  assert.ok(empty.kind === "TRACKED" && empty.available === 0 && empty.granted === 4 && empty.tone === "empty");
+  const expired = buildClientHomeSummary(rules, chosen, null, "2026-11-02").pack;
+  assert.ok(expired.kind === "TRACKED" && expired.available === 0 && expired.granted === 4);
+  const automatic = buildClientHomeSummary(rules, { ...chosen, preferredPackId: null }, null, TODAY).pack;
+  assert.ok(automatic.kind === "TRACKED" && automatic.available === 9 && automatic.granted === 14);
 });
 
 test("C05 age is full years on the local date; Russian plural", () => {

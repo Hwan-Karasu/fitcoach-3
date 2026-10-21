@@ -60,7 +60,7 @@ export function calendarErrorMessage(error: unknown): string {
     case "CALENDAR_STALE_APPOINTMENT": return "Запись уже изменилась. Откройте её заново.";
     case "CALENDAR_TIME_INVALID": return "Проверьте время: шаг — 30 минут, запись не переходит через полночь.";
     case "ACCOUNTING_INSUFFICIENT_CREDIT":
-      return "У клиента нет доступных тренировок. Добавьте пакет или включите «Записать без списания».";
+      return "Нет доступных тренировок для списания. Проверьте остаток и основной пакет в «Абонементе и оплате» или включите «Записать без списания».";
     case "CALENDAR_SESSION_TYPE_INVALID": return "Проверьте тип: название до 60 символов, длительность от 30 до 240 минут с шагом 30.";
     case "CALENDAR_SESSION_TYPE_CREDIT_LOCKED": return "Тип уже используется в записях: списание не меняется задним числом. Создайте новый тип.";
     case "CALENDAR_DEFAULT_TYPE_ARCHIVE": return "Сначала выберите другой тип по умолчанию, затем убирайте этот в архив.";

@@ -24,6 +24,8 @@ interface TextFieldProps {
   readonly hideLabel?: boolean;
   /** Многострочное поле (описание): минимальная высота — три строки, текст сверху. */
   readonly multiline?: boolean;
+  readonly textAlign?: "left" | "center" | "right";
+  readonly compact?: boolean;
 }
 
 export function TextField({
@@ -45,6 +47,8 @@ export function TextField({
   testID,
   hideLabel = false,
   multiline = false,
+  textAlign = "left",
+  compact = false,
 }: Readonly<TextFieldProps>) {
   const [focused, setFocused] = useState(false);
   const { palette } = usePrototypeTheme();
@@ -52,8 +56,8 @@ export function TextField({
   const borderColor = error ? colors.danger : focused ? colors.focusRing : colors.border;
   const helpText = error ?? (disabled ? disabledReason : hint);
   return (
-    <View style={styles.field}>
-      {hideLabel ? null : <Text style={[styles.label, { color: colors.textPrimary }]}>{label}{required ? " *" : ""}</Text>}
+    <View style={[styles.field, compact && styles.compactField]}>
+      {hideLabel ? null : <Text style={[styles.label, compact && styles.compactLabel, { color: colors.textPrimary }]}>{label}{required ? " *" : ""}</Text>}
       <TextInput
         ref={inputRef}
         accessibilityLabel={required ? `${label}, обязательное поле` : label}
@@ -75,7 +79,7 @@ export function TextField({
         testID={testID}
         multiline={multiline}
         textAlignVertical={multiline ? "top" : "center"}
-        style={[styles.input, multiline ? styles.multiline : null, { backgroundColor: colors.input, borderColor, color: colors.textPrimary, opacity: disabled ? 0.6 : 1 }]}
+        style={[styles.input, compact && styles.compactInput, multiline ? styles.multiline : null, { textAlign, backgroundColor: colors.input, borderColor, color: colors.textPrimary, opacity: disabled ? 0.6 : 1 }]}
       />
       {error ? <Text accessibilityLiveRegion="polite" style={[styles.helper, { color: colors.danger }]}>{error}</Text> : null}
       {!error && helpText ? <Text style={[styles.helper, { color: colors.textSecondary }]}>{helpText}</Text> : null}
@@ -84,6 +88,9 @@ export function TextField({
 }
 
 const styles = StyleSheet.create({
+  compactField: { gap: 3 },
+  compactLabel: { fontSize: 11, lineHeight: 15 },
+  compactInput: { minHeight: 34, paddingHorizontal: 8, paddingVertical: 4, fontSize: 13, lineHeight: 18 },
   multiline: { minHeight: 96, paddingTop: 12 },
   field: { gap: 6 },
   label: { fontSize: 13, lineHeight: 18, fontFamily: fonts.bold },

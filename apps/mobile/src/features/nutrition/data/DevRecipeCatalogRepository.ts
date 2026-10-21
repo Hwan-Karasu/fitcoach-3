@@ -4,12 +4,14 @@ import { UUID_V4_SQL } from "../../../shared/db/SqlIds.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
 import type { FoodProduct } from "../domain/FoodModel.ts";
-import type { Recipe, RecipeInput } from "../domain/RecipeModel.ts";
+import type { Recipe, RecipeDetails, RecipeInput } from "../domain/RecipeModel.ts";
 import type { RecipeCatalogCommittedChange, RecipeCatalogFilter, RecipeCatalogPort } from "../domain/RecipeCatalogPort.ts";
 import { validateRecipe } from "../domain/RecipeRules.ts";
 import { DEV_NUTRITION_LEDGER, devNutritionCatalog } from "./DevNutritionCatalog.ts";
 
 interface RecipeRow {
+  readonly createdAt: string;
+  readonly detailsJson: string | null;
   readonly id: string;
   readonly name: string;
   readonly servingsX10: number;
@@ -22,7 +24,7 @@ interface RecipeRow {
 }
 type IngredientRow = FoodProduct & { readonly recipeId: string; readonly quantityX10: number };
 
-const recipeColumns = `id, name, servings_x10 AS servingsX10, cooked_mass_x10 AS cookedMassX10, description, favorite, in_cookbook AS inCookbook, revision, archived_at AS archivedAt`;
+const recipeColumns = `id, name, details_json AS detailsJson, created_at AS createdAt, servings_x10 AS servingsX10, cooked_mass_x10 AS cookedMassX10, description, favorite, in_cookbook AS inCookbook, revision, archived_at AS archivedAt`;
 const ingredientColumns = `i.recipe_id AS recipeId, i.quantity_x10 AS quantityX10, f.id AS id, f.name AS name, f.brand AS brand,
   f.basis_unit AS unit, f.basis_amount_x10 AS amountX10, f.kcal_x10 AS kcalX10, f.protein_x10 AS proteinX10, f.fat_x10 AS fatX10,
   f.carbs_x10 AS carbsX10, f.barcode AS barcode, f.grams_per_piece_x10 AS gramsPerPieceX10, f.revision AS revision, f.archived_at AS archivedAt`;
@@ -34,7 +36,7 @@ async function load(reader: SqliteStatementPort, workspaceId: string, where: str
     JOIN dev_food_products f ON f.id = i.food_id AND f.workspace_id = i.workspace_id
     WHERE i.workspace_id = ? AND i.recipe_id IN (${rows.map(() => "?").join(", ")}) ORDER BY i.recipe_id, i.position`,
   [workspaceId, ...rows.map((row) => row.id)]);
-  return rows.map((row) => ({ ...row, favorite: row.favorite === 1, inCookbook: row.inCookbook === 1, ingredients: lines.filter((line) => line.recipeId === row.id).map((line) => ({
+  return rows.map((row) => ({ ...row, details: row.detailsJson === null ? null : JSON.parse(row.detailsJson) as RecipeDetails, favorite: row.favorite === 1, inCookbook: row.inCookbook === 1, ingredients: lines.filter((line) => line.recipeId === row.id).map((line) => ({
     quantityX10: line.quantityX10,
     food: { id: line.id, name: line.name, brand: line.brand, unit: line.unit, amountX10: line.amountX10, kcalX10: line.kcalX10,
       proteinX10: line.proteinX10, fatX10: line.fatX10, carbsX10: line.carbsX10, barcode: line.barcode, gramsPerPieceX10: line.gramsPerPieceX10, revision: line.revision, archivedAt: line.archivedAt },
@@ -126,8 +128,8 @@ export class DevRecipeCatalogRepository implements RecipeCatalogPort {
       const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
       if (!id) throw new Error("RECIPE_ID_UNAVAILABLE");
       const stamp = now.toISOString();
-      await tx.run(`INSERT INTO dev_recipes (id, workspace_id, name, servings_x10, cooked_mass_x10, description, revision, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`, [id, this.workspaceId, valid.name, valid.servingsX10, valid.cookedMassX10, valid.description ?? null, stamp, stamp]);
+      await tx.run(`INSERT INTO dev_recipes (id, workspace_id, name, servings_x10, cooked_mass_x10, description, details_json, revision, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`, [id, this.workspaceId, valid.name, valid.servingsX10, valid.cookedMassX10, valid.description ?? null, valid.details == null ? null : JSON.stringify(valid.details), stamp, stamp]);
       await this.writeIngredients(tx, id, valid);
       return (await load(tx, this.workspaceId, "AND id = ?", [id]))[0] as Recipe;
     });
@@ -138,9 +140,11 @@ export class DevRecipeCatalogRepository implements RecipeCatalogPort {
   async update(id: string, expectedRevision: number, input: RecipeInput, now: Date = new Date()): Promise<Recipe> {
     const valid = validateRecipe(input);
     const updated = await this.ready().writer.write(async (tx) => {
-      const result = await tx.run(`UPDATE dev_recipes SET name = ?, servings_x10 = ?, cooked_mass_x10 = ?, description = CASE WHEN ? = 1 THEN ? ELSE description END, revision = revision + 1, updated_at = ?
+      const result = await tx.run(`UPDATE dev_recipes SET name = ?, servings_x10 = ?, cooked_mass_x10 = ?, description = CASE WHEN ? = 1 THEN ? ELSE description END,
+        details_json = CASE WHEN ? = 1 THEN ? ELSE details_json END, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ? AND archived_at IS NULL`,
-      [valid.name, valid.servingsX10, valid.cookedMassX10, valid.description === undefined ? 0 : 1, valid.description ?? null, now.toISOString(), this.workspaceId, id, expectedRevision]);
+      [valid.name, valid.servingsX10, valid.cookedMassX10, valid.description === undefined ? 0 : 1, valid.description ?? null,
+        valid.details === undefined ? 0 : 1, valid.details == null ? null : JSON.stringify(valid.details), now.toISOString(), this.workspaceId, id, expectedRevision]);
       if (result.changes !== 1) throw new Error("RECIPE_STALE");
       await this.writeIngredients(tx, id, valid);
       return (await load(tx, this.workspaceId, "AND id = ?", [id]))[0] as Recipe;

@@ -1,5 +1,13 @@
 import type { FoodProduct } from "./FoodModel.ts";
 
+export interface RecipeDetails {
+  readonly prepMinutes: number | null;
+  readonly cookMinutes: number | null;
+  readonly categories: readonly string[];
+  readonly steps: readonly string[];
+  readonly photoUri: string | null;
+}
+
 /** Ингредиент рецепта: продукт каталога (в том числе скрытый) и количество в его эталонных единицах, десятые доли. */
 export interface RecipeIngredient {
   readonly food: FoodProduct;
@@ -8,6 +16,8 @@ export interface RecipeIngredient {
 
 /** Рецепт из собственных продуктов (§49.4); пищевая ценность — только сумма ингредиентов, отдельного ввода БЖУ нет. */
 export interface Recipe {
+  readonly createdAt?: string;
+  readonly details?: RecipeDetails | null;
   readonly id: string;
   readonly name: string;
   /** Число порций блюда, десятые доли: `4 порции` → 40. */
@@ -25,6 +35,7 @@ export interface Recipe {
 }
 
 export interface RecipeInput {
+  readonly details?: RecipeDetails | null;
   readonly name: string;
   readonly servingsX10: number;
   readonly cookedMassX10: number | null;

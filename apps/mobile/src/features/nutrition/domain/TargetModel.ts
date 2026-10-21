@@ -11,6 +11,12 @@ export interface TargetRange {
 /** Коридоры одного дня. `null` по показателю — цель по нему не задана (это не «0–0»). */
 export type Corridors = Readonly<Record<TargetMetric, TargetRange | null>>;
 
+/** Только явно введённые поля главной; null/отсутствие метаданных — прежняя сохранённая цель. */
+export interface HomeMacroAdjustment {
+  readonly mode: "EXACT" | "RANGE";
+  readonly manual: Readonly<Pick<Corridors, "protein" | "fat" | "carbs">>;
+}
+
 /** Понедельник = 0 … воскресенье = 6. */
 export type WeekdayIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -22,11 +28,13 @@ export interface TargetVersion {
   /** Ровно 7 элементов, понедельник первым. */
   readonly days: readonly (Corridors | null)[];
   readonly revision: number;
+  readonly homeAdjustment?: HomeMacroAdjustment | null;
 }
 
 export interface TargetVersionInput {
   readonly effectiveFrom: string;
   readonly days: readonly (Corridors | null)[];
+  readonly homeAdjustment?: HomeMacroAdjustment | null;
 }
 
 /** Разовое исключение на конкретную дату клиента (§49.12). */

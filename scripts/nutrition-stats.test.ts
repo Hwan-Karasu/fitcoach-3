@@ -100,3 +100,16 @@ test("N04 период: обратный или слишком длинный д
   assert.throws(() => computeNutritionStats({ ...base, from: "2026-10-20", to: "2026-10-19" }), { message: "STATS_PERIOD_INVALID" });
   assert.throws(() => computeNutritionStats({ ...base, from: "2000-01-01", to: "2026-10-19" }), { message: "STATS_PERIOD_INVALID" });
 });
+
+test("Всё время: sparse-обзор длиннее пяти лет сохраняет полный знаменатель и средние по фактам", () => {
+  const input = { from: "2000-01-01", to: "2026-10-21", versions: [], exceptions: [], sparse: true,
+    entries: [entry("2000-01-01", 0), entry("2026-10-21", 100), entry("2026-10-21", 100)] };
+  const stats = computeNutritionStats(input);
+  assert.equal(stats.days.length, 2);
+  assert.equal(stats.accountedDays, 2);
+  assert.equal(stats.metrics.kcal.averageX10, 1000);
+  assert.ok(stats.periodDays > 9000);
+  const empty = computeNutritionStats({ ...input, entries: [] });
+  assert.equal(empty.days.length, 0); assert.equal(empty.metrics.kcal.averageX10, null);
+  assert.equal(empty.periodDays, stats.periodDays);
+});

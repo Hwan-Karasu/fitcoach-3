@@ -9,12 +9,13 @@ interface SearchFieldProps {
   readonly onChangeQuery: (value: string) => void;
   readonly accessibilityLabel: string;
   readonly placeholder?: string;
+  readonly onSubmitSearch?: () => void;
   /** Кнопка справа от поля той же высоты, например фильтры (UI-OWN-008). */
   readonly accessory?: ReactNode;
 }
 
 export function SearchField({ query, onChangeQuery, accessibilityLabel, placeholder = "Поиск по имени",
-  accessory }: Readonly<SearchFieldProps>) {
+  accessory, onSubmitSearch }: Readonly<SearchFieldProps>) {
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const { palette } = usePrototypeTheme();
@@ -38,7 +39,7 @@ export function SearchField({ query, onChangeQuery, accessibilityLabel, placehol
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           returnKeyType="search"
-          onSubmitEditing={() => Keyboard.dismiss()}
+          onSubmitEditing={() => { Keyboard.dismiss(); onSubmitSearch?.(); }}
           style={[styles.input, { color: colors.textPrimary }]}
         />
         {query ? (

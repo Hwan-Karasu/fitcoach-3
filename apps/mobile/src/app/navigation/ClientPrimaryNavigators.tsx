@@ -6,7 +6,7 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import { ClientHomePreview, type ClientRecord } from "../../features/clients/public.ts";
 import { type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
-import { AddFoodScreen, NutritionTargetsScreen, type CalcClientBody, type CatalogFilter, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
+import { AddFoodScreen, type CalcClientBody, type CatalogFilter, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
   type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ArchivedProgramsPanel, ParticipantSwitcher, participantTarget, ProgramMatrixScreen, PeriodizedBuilderScreen, ProgramLibraryScreen, ProgramModeChooserScreen, programLibraryTabTitles, ProgramScreen, SimpleProgramBuilderScreen,
   WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort,
@@ -19,13 +19,12 @@ import { ClientHeader } from "./ClientHeader.tsx";
 
 type HomeRoutes = { HomeIndex: undefined };
 type NutritionRoutes = {
-  NutritionIndex: undefined;
+  NutritionIndex: { section: "calc"; requestKey: number } | undefined;
   NutritionAdd: { localDate: string; slot: MealSlot; filter?: CatalogFilter };
-  NutritionFood: { name: string };
+  NutritionFood: { name?: string; foodId?: string };
   NutritionRecipe: { recipeId?: string } | undefined;
-  NutritionTargets: undefined;
 };
-const nutritionTitles: Readonly<Record<keyof NutritionRoutes, string>> = { NutritionIndex: "Питание", NutritionAdd: "Добавить еду", NutritionFood: "Новый продукт", NutritionRecipe: "Рецепт", NutritionTargets: "Цели по дням недели" };
+const nutritionTitles: Readonly<Record<keyof NutritionRoutes, string>> = { NutritionIndex: "Питание", NutritionAdd: "Добавить еду", NutritionFood: "Продукт", NutritionRecipe: "Рецепт" };
 type TrainingRoutes = {
   TrainingIndex: undefined;
   TrainingChooser: undefined;
@@ -100,8 +99,8 @@ export function HomeNavigator(props: HomeProps) {
  * Маршрут «Добавить еду»: пока в выборе есть позиции, выход (кнопка «назад», жест, системная кнопка) спрашивает «Отменить выбор?» (NUT-FS-26).
  * После успешной записи выбор пуст — выход свободный.
  */
-function NutritionAddRoute({ navigation, children }: Readonly<{ navigation: { addListener: (event: "beforeRemove", listener: (event: { preventDefault: () => void; data: { action: never } }) => void) => () => void;
-  dispatch: (action: never) => void }; children: (onDirtyChange: (dirty: boolean) => void) => ReactNode }>) {
+function NutritionAddRoute({ navigation, children, recipe = false, food = false }: Readonly<{ navigation: { addListener: (event: "beforeRemove", listener: (event: { preventDefault: () => void; data: { action: never } }) => void) => () => void;
+  dispatch: (action: never) => void }; recipe?: boolean; food?: boolean; children: (onDirtyChange: (dirty: boolean) => void) => ReactNode }>) {
   const dirty = useRef(false);
   const [pending, setPending] = useState<never | null>(null);
   useEffect(() => navigation.addListener("beforeRemove", (event) => {
@@ -112,8 +111,8 @@ function NutritionAddRoute({ navigation, children }: Readonly<{ navigation: { ad
   return (
     <>
       {children((value) => { dirty.current = value; })}
-      <ConfirmDialog visible={pending !== null} destructive title="Отменить выбор?" confirmLabel="Отменить выбор" cancelLabel="Продолжить выбор"
-        description="Выбранные позиции не записаны в дневник и будут потеряны." onCancel={() => setPending(null)}
+      <ConfirmDialog visible={pending !== null} destructive title={food ? "Отменить изменения продукта?" : recipe ? "Отменить изменения рецепта?" : "Отменить выбор?"} confirmLabel={recipe || food ? "Отменить изменения" : "Отменить выбор"} cancelLabel="Продолжить"
+        description={recipe || food ? "Изменения ещё не сохранены и будут потеряны." : "Выбранные позиции не записаны в дневник и будут потеряны."} onCancel={() => setPending(null)}
         onConfirm={() => { const action = pending; setPending(null); dirty.current = false; if (action !== null) navigation.dispatch(action); }} />
     </>
   );
@@ -132,24 +131,25 @@ export function NutritionNavigator({ clientId, clientName, clientEmoji, body, on
         onClients={onOpenClients} onBack={() => { if (route.name === "NutritionIndex") onExitClient(); else navigation.goBack(); }} />,
     })}>
       <NutritionStack.Screen name="NutritionIndex">
-        {({ navigation }) => <NutritionHomeScreen clientId={clientId} onOpenJournal={onOpenJournal} body={body} onUpdateBody={onUpdateBody} diary={diary} targets={targets} calc={calc} measurements={measurements}
+        {({ navigation, route }) => <NutritionHomeScreen requestedSection={route.params?.section} sectionRequestKey={route.params?.requestKey} clientId={clientId} onOpenJournal={onOpenJournal} body={body} onUpdateBody={onUpdateBody} diary={diary} targets={targets} calc={calc} measurements={measurements}
           onAdd={(localDate, slot, filter) => navigation.navigate("NutritionAdd", { localDate, slot, filter })} />}
       </NutritionStack.Screen>
       <NutritionStack.Screen name="NutritionAdd">
         {({ navigation, route }) => <NutritionAddRoute navigation={navigation}>
-          {(onDirtyChange) => <AddFoodScreen clientId={clientId} localDate={route.params.localDate} slot={route.params.slot} initialFilter={route.params.filter}
+          {(onDirtyChange) => <AddFoodScreen key={`${clientId}:${route.params.localDate}:${route.params.slot}`} clientId={clientId} localDate={route.params.localDate} slot={route.params.slot} initialFilter={route.params.filter}
             foods={foods} recipes={recipes} diary={diary} onCreateFood={(name) => navigation.navigate("NutritionFood", { name })} onDirtyChange={onDirtyChange} onAdded={() => navigation.goBack()}
-            onCreateRecipe={() => navigation.navigate("NutritionRecipe")} onEditRecipe={(recipeId) => navigation.navigate("NutritionRecipe", { recipeId })} />}
+            onCreateRecipe={() => navigation.navigate("NutritionRecipe")} onEditFood={(foodId) => navigation.navigate("NutritionFood", { foodId })} onEditRecipe={(recipeId) => navigation.navigate("NutritionRecipe", { recipeId })} />}
         </NutritionAddRoute>}
       </NutritionStack.Screen>
       <NutritionStack.Screen name="NutritionFood">
-        {({ navigation, route }) => <FoodEditorScreen foods={foods} initialName={route.params.name} onSaved={() => navigation.goBack()} />}
-      </NutritionStack.Screen>
-      <NutritionStack.Screen name="NutritionTargets">
-        {() => <NutritionTargetsScreen clientId={clientId} targets={targets} />}
+        {({ navigation, route }) => <NutritionAddRoute navigation={navigation} food>{(onDirtyChange) =>
+          <FoodEditorScreen key={route.params.foodId ?? "new"} foods={foods} foodId={route.params.foodId} initialName={route.params.name} onDirtyChange={onDirtyChange} onSaved={() => navigation.goBack()} />
+        }</NutritionAddRoute>}
       </NutritionStack.Screen>
       <NutritionStack.Screen name="NutritionRecipe">
-        {({ navigation, route }) => <RecipeEditorScreen recipeId={route.params?.recipeId} foods={foods} recipes={recipes} onSaved={() => navigation.goBack()} />}
+        {({ navigation, route }) => <NutritionAddRoute navigation={navigation} recipe>{(onDirtyChange) =>
+          <RecipeEditorScreen recipeId={route.params?.recipeId} foods={foods} recipes={recipes} onDirtyChange={onDirtyChange} onSaved={() => navigation.goBack()} />
+        }</NutritionAddRoute>}
       </NutritionStack.Screen>
     </NutritionStack.Navigator>
   );

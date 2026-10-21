@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
-import { AppButton, InlineNotice, LoadingState, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { AppButton, InlineNotice, LoadingState, ChoiceSegments, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
+import { plural } from "../../../shared/format/clockText.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
 import { localDateOf, MeasurementsCard, navyBodyFat, upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../measurements/public.ts";
@@ -80,7 +81,7 @@ function Stat({ label, value, caption, accent }: Readonly<{ label: string; value
       style={[styles.stat, { borderColor: colors.border, backgroundColor: accent === true ? colors.accentSoft : colors.surfaceRaised }]}>
       <Text style={[styles.statLabel, { color: accent === true ? colors.accentInk : colors.textSecondary }]}>{label}</Text>
       <Text style={[styles.statValue, { color: colors.textPrimary }]}>{value === null ? "—" : String(value)}</Text>
-      <Text style={[styles.hint, { color: colors.textMuted }]}>{caption}</Text>
+      {caption !== "" ? <Text style={[styles.statCaption, { color: colors.textMuted }]}>{caption}</Text> : null}
     </View>
   );
 }
@@ -130,8 +131,6 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenJourna
   const [draft, setDraft] = useState<Draft | null>(null);
   const [navyOpen, setNavyOpen] = useState(false);
   const [help, setHelp] = useState(false);
-  /** Закрытый просмотр — компактный (UX v1.1, NUT-FS-01…03); подробности по «Подробнее». */
-  const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -205,9 +204,9 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenJourna
 
   const headerButtons = (
     <View style={styles.headButtons}>
-      <AppButton compact variant="secondary" label="?" accessibilityLabel="Справка по расчёту" onPress={() => setHelp(true)} />
-      {editing ? <AppButton compact label="Готово" busy={busy} onPress={() => { void done(); }} />
-        : <AppButton compact variant="secondary" label="Изменить" disabled={busy} onPress={startEdit} />}
+      <AppButton compact size="small" variant="secondary" label="?" accessibilityLabel="Справка по расчёту" onPress={() => setHelp(true)} />
+      {editing ? <AppButton compact size="small" label="Готово" busy={busy} onPress={() => { void done(); }} />
+        : <AppButton compact size="small" variant="secondary" label="Изменить" disabled={busy} onPress={startEdit} />}
     </View>
   );
 
@@ -217,30 +216,23 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenJourna
       {notice !== null ? <InlineNotice kind="info">{notice}</InlineNotice> : null}
       <Card title={editing ? "ПРОФИЛЬ И АКТИВНОСТЬ" : "РАСЧЁТ"} right={headerButtons}>
         {editing && draft !== null ? <>
-          <Stat label="СТАРТОВЫЙ РАСХОД" value={result.startTdee} caption="REE + NEAT + EAT" />
-          <Stat label="ИТОГОВЫЙ КАЛОРАЖ" value={result.target} caption={goalLabels[profile.goal]} accent />
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Пол</Text>
-          <View style={styles.chips}>
-            {(["MALE", "FEMALE"] as const).map((id) => <SelectionChip key={id} group="Пол" label={id === "MALE" ? "Мужской" : "Женский"} selected={draft.sex === id} onPress={() => setField({ sex: id })} />)}
-          </View>
           <View style={styles.pair}>
-            <View style={styles.grow} accessible accessibilityLabel={`Возраст: ${body.age === null ? "не указан" : `${body.age} лет`}`}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Возраст</Text>
-              <Text style={[styles.resultValue, { color: colors.textPrimary }]}>{body.age === null ? "—" : `${body.age} лет`}</Text>
-              <Text style={[styles.hint, { color: colors.textMuted }]}>{body.age === null ? "Укажите дату рождения в карточке клиента." : "Из даты рождения в карточке клиента."}</Text>
-            </View>
-            <View style={styles.grow}><TextField label="Рост, см" value={draft.height} onChangeText={(height) => setField({ height })} keyboardType="decimal-pad" placeholder="0" /></View>
+            <View style={styles.grow}><Stat label="СТАРТОВЫЙ РАСХОД" value={result.startTdee} caption="REE + NEAT + EAT" /></View>
+            <View style={styles.grow}><Stat label="ИТОГОВЫЙ КАЛОРАЖ" value={result.target} caption={goalLabels[profile.goal]} accent /></View>
           </View>
+          <ChoiceSegments label="Пол" items={[{ id: "MALE", label: "Мужской" }, { id: "FEMALE", label: "Женский" }]}
+            value={draft.sex ?? ""} disabled={busy} onChange={(sex) => { if (sex === "MALE" || sex === "FEMALE") setField({ sex }); }} />
           <View style={styles.pair}>
-            <View style={styles.grow}><TextField label="Вес, кг" value={draft.weight} onChangeText={(weight) => setField({ weight })} keyboardType="decimal-pad" placeholder="0" /></View>
-            <View style={styles.grow}><TextField label="% жира" value={draft.fat} onChangeText={(fat) => setField({ fat })} keyboardType="decimal-pad" placeholder="0" /></View>
+            <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Рост, см" value={draft.height} onChangeText={(height) => setField({ height })} keyboardType="decimal-pad" placeholder="—" /></View>
+            <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Вес, кг" value={draft.weight} onChangeText={(weight) => setField({ weight })} keyboardType="decimal-pad" placeholder="—" /></View>
+            <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Жир, %" value={draft.fat} onChangeText={(fat) => setField({ fat })} keyboardType="decimal-pad" placeholder="—" /></View>
           </View>
-          <Text style={[styles.hint, { color: colors.textMuted }]}>Вес и % жира сохраняются как замеры; значения с одним знаком после запятой.</Text>
+          <Text style={[styles.hint, { color: colors.textMuted }]}>{body.age === null ? "Возраст: укажите дату рождения в карточке." : `Возраст: ${body.age} ${plural(body.age, "год", "года", "лет")} · из карточки клиента.`} Вес и жир сохраняются в замеры.</Text>
 
           <View style={[styles.nested, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
             <View style={styles.nestedHead}>
-              <Text style={[styles.nestedTitle, { color: colors.textPrimary }]}>Калькулятор % жира (ВМС США)</Text>
-              <AppButton compact variant={navyOpen ? "secondary" : "ghost"} label={navyOpen ? "Свернуть" : "Развернуть"} accessibilityLabel={navyOpen ? "Свернуть калькулятор процента жира" : "Развернуть калькулятор процента жира"}
+              <Text style={[styles.nestedTitle, { color: colors.textPrimary }]}>Жир по обхватам · ВМС</Text>
+              <AppButton compact size="small" disabled={busy} variant={navyOpen ? "secondary" : "ghost"} label={navyOpen ? "Свернуть" : "Развернуть"} accessibilityLabel={navyOpen ? "Свернуть калькулятор процента жира" : "Развернуть калькулятор процента жира"}
                 onPress={() => setNavyOpen(!navyOpen)} />
             </View>
             {navyOpen ? <>
@@ -248,71 +240,64 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenJourna
               {draft.sex === null ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Выберите пол — формула для мужчин и женщин разная.</Text> : null}
               {num(draft.height) === null ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Рост берётся из поля «Рост» профиля выше.</Text> : null}
               <View style={styles.pair}>
-                <View style={styles.grow}><TextField label="Шея, см" value={draft.neck} onChangeText={(neck) => setField({ neck })} keyboardType="decimal-pad" placeholder="0" /></View>
-                <View style={styles.grow}><TextField label="Талия, см" value={draft.waist} onChangeText={(waist) => setField({ waist })} keyboardType="decimal-pad" placeholder="0" /></View>
-                {draft.sex === "FEMALE" ? <View style={styles.grow}><TextField label="Бёдра, см" value={draft.hips} onChangeText={(hips) => setField({ hips })} keyboardType="decimal-pad" placeholder="0" /></View> : null}
+                <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Шея, см" value={draft.neck} onChangeText={(neck) => setField({ neck })} keyboardType="decimal-pad" placeholder="0" /></View>
+                <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Талия, см" value={draft.waist} onChangeText={(waist) => setField({ waist })} keyboardType="decimal-pad" placeholder="0" /></View>
+                {draft.sex === "FEMALE" ? <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Бёдра, см" value={draft.hips} onChangeText={(hips) => setField({ hips })} keyboardType="decimal-pad" placeholder="0" /></View> : null}
               </View>
-              <View style={styles.resultRow} accessible accessibilityLabel={`Результат: ${navy === null ? "нет данных" : `${navy} процентов`}`}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>Результат</Text>
-                <Text style={[styles.resultValue, { color: colors.textPrimary }]}>{navy === null ? "—" : `${String(navy).replace(".", ",")} %`}</Text>
+              <View style={styles.resultRow}>
+                <View accessible accessibilityLabel={`Оценка жира: ${navy === null ? "нет данных" : `${navy} процентов`}`}>
+                  <Text style={[styles.resultValue, { color: colors.textPrimary }]}>{navy === null ? "— %" : `${String(navy).replace(".", ",")} %`}</Text>
+                  <Text style={[styles.hint, { color: colors.textMuted }]}>Оценка по окружностям</Text>
+                </View>
+                <AppButton compact size="small" label="Подставить" accessibilityLabel="Подставить процент жира в профиль" disabled={navy === null || busy}
+                  disabledReason="Введите пол, рост, шею и талию (женщинам — и бёдра)." onPress={() => { if (navy !== null) setField({ fat: show(navy) }); }} />
               </View>
-              <Text style={[styles.hint, { color: colors.textMuted }]}>Оценка по окружностям, а не точное измерение состава тела.</Text>
-              <AppButton label="Подставить в профиль" disabled={navy === null} disabledReason="Введите пол, рост, шею и талию (женщинам — и бёдра)." onPress={() => { if (navy !== null) setField({ fat: show(navy) }); }} />
             </> : null}
           </View>
 
           <Text style={[styles.label, { color: colors.textSecondary }]}>Образ жизни</Text>
-          <View style={styles.chips}>
-            {CALC_ACTIVITIES.map((id) => <SelectionChip key={id} group="Образ жизни" label={activityLabels[id]} selected={draft.activity === id} onPress={() => setField({ activity: id })} />)}
-          </View>
+          <ChoiceSegments label="Образ жизни" items={CALC_ACTIVITIES.map((id) => ({ id, label: activityLabels[id] }))}
+            value={draft.activity} disabled={busy} onChange={(activity) => setField({ activity })} />
           <View style={styles.pair}>
-            <View style={styles.grow}><TextField label="Тренировок в неделю" value={draft.workouts} onChangeText={(workouts) => setField({ workouts })} keyboardType="decimal-pad" placeholder="0" /></View>
-            <View style={styles.grow}><TextField label="Минут в тренировке" value={draft.minutes} onChangeText={(minutes) => setField({ minutes })} keyboardType="decimal-pad" placeholder="0" /></View>
+            <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Трен./нед." value={draft.workouts} onChangeText={(workouts) => setField({ workouts })} keyboardType="decimal-pad" placeholder="0" /></View>
+            <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Мин./трен." value={draft.minutes} onChangeText={(minutes) => setField({ minutes })} keyboardType="decimal-pad" placeholder="60" /></View>
+            <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Шаг цели, ккал" value={draft.step} onChangeText={(step) => setField({ step })} keyboardType="decimal-pad" placeholder="100" /></View>
           </View>
-          <TextField label="Шаг цели, ккал" value={draft.step} onChangeText={(step) => setField({ step })} keyboardType="decimal-pad" placeholder="0"
-            hint="Поправка калорий для похудения и набора — это не количество шагов." />
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Интенсивность</Text>
-          <View style={styles.chips}>
-            {CALC_INTENSITIES.map((id) => <SelectionChip key={id} group="Интенсивность" label={intensityLabels[id]} selected={draft.intensity === id} onPress={() => setField({ intensity: id })} />)}
-          </View>
-        </> : !expanded ? <>
-          <View accessible accessibilityLabel={`Итоговый калораж: ${result.target === null ? "нет данных" : `${result.target} ккал`}, цель ${goalLabels[profile.goal]}. REE ${result.ree ?? "нет данных"}, NEAT ${result.neat}, EAT ${result.eat ?? "нет данных"}`}>
-            <Text style={[styles.compactTotal, { color: colors.textPrimary }]}>{result.target === null ? "— ккал" : `${result.target} ккал`}<Text style={[styles.hint, { color: colors.textSecondary }]}>{` · ${goalLabels[profile.goal]}`}</Text></Text>
-            <Text style={[styles.hint, { color: colors.textSecondary }]}>{`REE ${result.ree ?? "—"} · NEAT ${result.neat} · EAT ${result.eat ?? "—"}`}</Text>
-          </View>
-          <View style={styles.chips}>
-            {CALC_GOALS.map((id) => <SelectionChip key={id} group="Цель" label={goalLabels[id]} selected={profile.goal === id} disabled={busy} onPress={() => { void selectGoal(id); }} />)}
-          </View>
-          {missing ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Для расчёта нужны пол, возраст, рост и вес. Откройте «Подробнее» или «Изменить».</Text> : null}
-          <AppButton compact variant="ghost" label="Подробнее" accessibilityLabel="Показать подробности расчёта" onPress={() => setExpanded(true)} />
+          <Text style={[styles.hint, { color: colors.textMuted }]}>Шаг цели — поправка калорий для похудения и набора.</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Интенсивность тренировок</Text>
+          <ChoiceSegments label="Интенсивность тренировок" items={CALC_INTENSITIES.map((id) => ({ id, label: intensityLabels[id] }))}
+            value={draft.intensity} disabled={busy} onChange={(intensity) => setField({ intensity })} />
         </> : <>
           <View style={styles.cols}>
             <View style={styles.leftCol}>
               <Stat label="СТАРТОВЫЙ РАСХОД" value={result.startTdee} caption="REE + NEAT + EAT" />
-              <Stat label="ИТОГОВЫЙ КАЛОРАЖ" value={result.target} caption={goalLabels[profile.goal]} accent />
+              <Stat label="ИТОГОВЫЙ КАЛОРАЖ" value={result.target} caption="" accent />
             </View>
             <View style={[styles.goalCard, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>ЦЕЛЬ</Text>
-              {CALC_GOALS.map((id) => <AppButton key={id} compact variant={profile.goal === id ? "primary" : "secondary"} label={goalLabels[id]} disabled={busy} accessibilityLabel={`Цель: ${goalLabels[id]}${profile.goal === id ? ", выбрано" : ""}`}
-                onPress={() => { void selectGoal(id); }} />)}
+              {CALC_GOALS.map((id) => <Pressable key={id} accessibilityRole="radio" accessibilityState={{ checked: profile.goal === id, disabled: busy }}
+                accessibilityLabel={`Цель: ${goalLabels[id]}`} disabled={busy} onPress={() => { void selectGoal(id); }}
+                style={({ pressed }) => [styles.goalButton, { backgroundColor: profile.goal === id ? colors.accentFill : colors.surface,
+                  borderColor: profile.goal === id ? colors.accentFill : colors.border, opacity: busy ? 0.5 : pressed ? 0.75 : 1 }]}>
+                <Text style={[styles.goalText, { color: profile.goal === id ? colors.onAccentFill : colors.textSecondary }]}>{goalLabels[id]}</Text>
+              </Pressable>)}
             </View>
           </View>
           <View style={[styles.strip, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
             {([["REE", result.ree, "базовый обмен"], ["NEAT", result.neat, result.neatSource === "STEPS" ? "по шагам" : "по образу жизни"], ["EAT", result.eat, "по тренировкам"]] as const).map(([title, value, caption], index) => (
               <View key={title} accessible accessibilityLabel={`${title}: ${value === null ? "нет данных" : value}, ${caption}`} style={[styles.stripCell, index > 0 ? { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border } : null]}>
-                <Text style={[styles.statLabel, { color: colors.accentInk }]}>{title}</Text>
+                <Text style={[styles.statLabel, { color: colors.charts[index]! }]}>{title}</Text>
                 <Text style={[styles.stripValue, { color: colors.textPrimary }]}>{value === null ? "—" : String(value)}</Text>
-                <Text style={[styles.hint, { color: colors.textMuted }]}>{caption}</Text>
+                <Text style={[styles.statCaption, { color: colors.textMuted }]}>{caption}</Text>
               </View>
             ))}
           </View>
           {missing ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Для расчёта нужны пол, возраст, рост и вес (или вес с процентом жира). Нажмите «Изменить», чтобы заполнить профиль.</Text> : null}
-          <AppButton compact variant="ghost" label="Свернуть" accessibilityLabel="Скрыть подробности расчёта" onPress={() => setExpanded(false)} />
         </>}
       </Card>
 
 
-      <MeasurementsCard clientId={clientId} repository={measurements} onOpenJournal={onOpenJournal} />
+      <MeasurementsCard compact clientId={clientId} repository={measurements} onOpenJournal={onOpenJournal} />
 
       <HelpSheet visible={help} onClose={() => setHelp(false)} />
     </ScrollView>
@@ -320,32 +305,34 @@ export function NutritionCalcScreen({ clientId, body, onUpdateBody, onOpenJourna
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32, gap: 12 },
+  content: { paddingHorizontal: 12, paddingTop: 4, paddingBottom: 6, gap: 8 },
   pad: { paddingHorizontal: 16 },
-  grow: { flex: 1 },
-  card: { ...shadow.card, borderRadius: 24, padding: 14, gap: 10 },
+  grow: { flex: 1, minWidth: 0 },
+  card: { ...shadow.card, borderRadius: 20, padding: 8, gap: 6 },
   cardHead: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   cardTitle: { flex: 1, fontFamily: fonts.bold, fontSize: 13, lineHeight: 18, letterSpacing: 0.6 },
   headButtons: { flexDirection: "row", gap: 8, alignItems: "center" },
-  cols: { flexDirection: "row", gap: 10, alignItems: "stretch" },
-  leftCol: { flex: 1, gap: 10 },
-  stat: { borderRadius: 18, borderWidth: 1, padding: 12, gap: 2 },
-  statLabel: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 15, letterSpacing: 0.5 },
-  compactTotal: { fontFamily: fonts.bold, fontSize: 20, lineHeight: 26 },
-  statValue: { fontFamily: fonts.bold, fontSize: 26, lineHeight: 32 },
-  goalCard: { flex: 1, borderRadius: 18, borderWidth: 1, padding: 10, gap: 8, justifyContent: "center" },
+  cols: { flexDirection: "row", gap: 6, alignItems: "stretch" },
+  leftCol: { flex: 1.2, minWidth: 0, gap: 6 },
+  stat: { borderRadius: 14, borderWidth: 1, padding: 8, gap: 1 },
+  statLabel: { fontFamily: fonts.bold, fontSize: 10, lineHeight: 13, letterSpacing: 0.2 },
+  statValue: { fontFamily: fonts.bold, fontSize: 23, lineHeight: 28 },
+  goalCard: { flex: 1, minWidth: 0, borderRadius: 14, borderWidth: 1, padding: 6, gap: 4, justifyContent: "center" },
+  goalButton: { minHeight: 32, borderRadius: 12, borderWidth: 1, paddingHorizontal: 4, justifyContent: "center", alignItems: "center" },
+  goalText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16, textAlign: "center" },
   strip: { flexDirection: "row", borderRadius: 18, borderWidth: 1 },
-  stripCell: { flex: 1, alignItems: "center", paddingVertical: 12, paddingHorizontal: 4, gap: 2 },
-  stripValue: { fontFamily: fonts.bold, fontSize: 20, lineHeight: 26 },
-  label: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
-  hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  stripCell: { flex: 1, alignItems: "center", paddingVertical: 6, paddingHorizontal: 2, gap: 1 },
+  stripValue: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 21 },
+  label: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 15 },
+  statCaption: { fontFamily: fonts.regular, fontSize: 10, lineHeight: 13, textAlign: "center" },
+  hint: { fontFamily: fonts.regular, fontSize: 10, lineHeight: 14 },
   hintBody: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  pair: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  nested: { borderRadius: 18, borderWidth: 1, padding: 12, gap: 10 },
+  pair: { flexDirection: "row", gap: 6 },
+  nested: { borderRadius: 14, borderWidth: 1, padding: 8, gap: 6 },
   nestedHead: { flexDirection: "row", alignItems: "center", gap: 8 },
-  nestedTitle: { flex: 1, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
+  nestedTitle: { flex: 1, fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
   rule: { height: StyleSheet.hairlineWidth },
   resultRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   resultValue: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },

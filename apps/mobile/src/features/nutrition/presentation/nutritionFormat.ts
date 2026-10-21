@@ -59,6 +59,9 @@ export function dayTitle(localDate: string, today: string): string {
 /** Ошибки хранилищ питания → понятный текст, без технических кодов. */
 export function nutritionErrorText(error: unknown): string {
   switch (error instanceof Error ? error.message : "") {
+    case "SAVED_MEAL_NAME_INVALID": return "Введите название набора (до 80 символов).";
+    case "SAVED_MEAL_ITEMS_INVALID": return "В наборе должно быть от 1 до 50 позиций.";
+    case "SAVED_MEAL_STALE": return "Набор уже изменён или удалён. Закройте редактор и откройте его заново.";
     case "FOOD_NAME_INVALID": return "Введите название (до 80 символов).";
     case "FOOD_BASIS_INVALID": return "Укажите, на какое количество даны значения: больше нуля.";
     case "FOOD_NUTRIENT_INVALID": return "Проверьте значения: они не могут быть отрицательными или слишком большими.";
@@ -69,6 +72,8 @@ export function nutritionErrorText(error: unknown): string {
     case "INVALID_PORTION": return "Количество должно быть больше нуля.";
     case "WATER_INVALID": return "Вода — от 1 до 20 000 мл.";
     case "DIARY_STALE": return "Запись уже изменилась. Дневник обновлён, повторите действие.";
+    case "FOOD_STALE": return "Продукт уже изменён или скрыт. Откройте его заново.";
+    case "DIARY_COMMAND_REUSED": return "Выбор изменился. Закройте подтверждение и попробуйте снова.";
     default: return "Не удалось сохранить. Данные не изменены.";
   }
 }

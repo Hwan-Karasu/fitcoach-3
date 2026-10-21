@@ -27,15 +27,16 @@ function toCorridors(row: CorridorRow): Corridors {
 const corridorValues = (corridors: Corridors): SqlValue[] =>
   TARGET_METRICS.flatMap((metric) => [corridors[metric]?.minX10 ?? null, corridors[metric]?.maxX10 ?? null]);
 
-interface VersionRow { readonly id: string; readonly clientId: string; readonly effectiveFrom: string; readonly revision: number }
+interface VersionRow { readonly id: string; readonly clientId: string; readonly effectiveFrom: string; readonly revision: number; readonly homeAdjustmentJson: string | null }
 
 async function loadVersions(reader: SqliteStatementPort, workspaceId: string, clientId: string): Promise<readonly TargetVersion[]> {
-  const versions = await reader.all<VersionRow>(`SELECT id, client_id AS clientId, effective_from AS effectiveFrom, revision FROM dev_nutrition_target_versions
+  const versions = await reader.all<VersionRow>(`SELECT id, client_id AS clientId, effective_from AS effectiveFrom, revision, home_adjustment_json AS homeAdjustmentJson FROM dev_nutrition_target_versions
     WHERE workspace_id = ? AND client_id = ? ORDER BY effective_from`, [workspaceId, clientId]);
   if (versions.length === 0) return [];
   const days = await reader.all<CorridorRow & { readonly version_id: string; readonly weekday: number }>(`SELECT d.version_id, d.weekday, ${corridorSelect.replace(/(\w+_(?:min|max)_x10)/gu, "d.$1")}
     FROM dev_nutrition_target_days d JOIN dev_nutrition_target_versions v ON v.id = d.version_id WHERE v.workspace_id = ? AND v.client_id = ?`, [workspaceId, clientId]);
-  return versions.map((version) => ({ ...version, days: Array.from({ length: 7 }, (_, weekday) => {
+  return versions.map(({ homeAdjustmentJson, ...version }) => ({ ...version,
+    homeAdjustment: homeAdjustmentJson === null ? null : (JSON.parse(homeAdjustmentJson) as NonNullable<TargetVersion["homeAdjustment"]>), days: Array.from({ length: 7 }, (_, weekday) => {
     const row = days.find((item) => item.version_id === version.id && item.weekday === weekday);
     return row === undefined ? null : toCorridors(row);
   }) }));
@@ -138,6 +139,8 @@ export class DevNutritionTargetsRepository implements NutritionTargetsPort {
         id = existing.id;
         await tx.run("DELETE FROM dev_nutrition_target_days WHERE version_id = ?", [id]);
       }
+      await tx.run("UPDATE dev_nutrition_target_versions SET home_adjustment_json = ? WHERE id = ? AND workspace_id = ?",
+        [valid.homeAdjustment == null ? null : JSON.stringify(valid.homeAdjustment), id, this.workspaceId]);
       for (const [weekday, day] of valid.days.entries()) {
         if (day === null) continue;
         await tx.run(`INSERT INTO dev_nutrition_target_days (version_id, weekday, ${corridorColumnNames.join(", ")})

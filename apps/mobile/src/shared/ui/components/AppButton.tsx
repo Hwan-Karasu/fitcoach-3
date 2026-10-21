@@ -21,6 +21,8 @@ interface AppButtonProps {
   readonly testID?: string;
   /** Компактная: меньше отступы и текст 13; высота та же — 44 (UI-OWN-048). */
   readonly compact?: boolean;
+  /** Плотные панели: 34 dp вместо стандартных 44, без масштабирования всего экрана. */
+  readonly size?: "default" | "small";
 }
 
 /** Стиль «Зефирка» (UI-OWN-048): главная — заливка акцентом, второстепенная — мягкий фон акцента, без рамок. */
@@ -36,6 +38,7 @@ export function AppButton({
   accessibilityLabel,
   testID,
   compact = false,
+  size = "default",
 }: Readonly<AppButtonProps>) {
   const [focused, setFocused] = useState(false);
   const { palette } = usePrototypeTheme();
@@ -60,6 +63,7 @@ export function AppButton({
       style={({ pressed }) => [
         styles.button,
         compact ? styles.compact : null,
+        size === "small" ? styles.small : null,
         {
           backgroundColor: pressed && variant === "ghost" ? colors.surfaceRaised : backgroundColor,
           borderColor,
@@ -69,7 +73,7 @@ export function AppButton({
     >
       <View style={styles.content}>
         {busy ? <ActivityIndicator size="small" color={foregroundColor} /> : icon?.(foregroundColor) ?? null}
-        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.label, compact ? styles.compactLabel : null, { color: foregroundColor }]}>{busy ? busyLabel : label}</Text>
+        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.label, compact ? styles.compactLabel : null, size === "small" ? styles.smallLabel : null, { color: foregroundColor }]}>{busy ? busyLabel : label}</Text>
       </View>
     </Pressable>
   );
@@ -77,6 +81,8 @@ export function AppButton({
 
 const styles = StyleSheet.create({
   button: { minHeight: TOUCH_TARGET, borderRadius: radius.md, borderWidth: 2, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
+  small: { minHeight: 34, paddingHorizontal: 8 },
+  smallLabel: { fontSize: 12, lineHeight: 16 },
   compact: { paddingHorizontal: 10 },
   compactLabel: { fontSize: 13, lineHeight: 17 },
   content: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },

@@ -1,6 +1,7 @@
 import { runMigrations } from "../../../shared/db/MigrationRunner.ts";
 import { SharedSqliteDatabase } from "../../../shared/db/SharedSqliteDatabase.ts";
 import { UUID_V4_SQL } from "../../../shared/db/SqlIds.ts";
+import { validateSavedMeal, type SavedMeal, type SavedMealInput } from "../domain/SavedMeal.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
 import { MEAL_SLOTS, type CopyEntriesRequest, type CopyEntriesResult, type DiaryEntry, type DiaryEntryInput, type MealSlot, type WaterDay } from "../domain/DiaryModel.ts";
@@ -67,15 +68,21 @@ async function byId(tx: SqliteStatementPort, workspaceId: string, clientId: stri
 /** Nutrition side of PermanentlyDeleteArchivedClient (§15.7): diary entries and water. */
 export const devNutritionClientDeletionParticipant = {
   owner: "nutrition.diary",
-  tables: ["dev_food_diary_entries", "dev_water_days"] as const,
+  tables: ["dev_food_diary_entries", "dev_water_days", "dev_nutrition_saved_meals", "dev_nutrition_search_queries", "dev_nutrition_batch_commands"] as const,
   async count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number> {
     const entries = await tx.first<{ n: number }>("SELECT count(*) AS n FROM dev_food_diary_entries WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
     const water = await tx.first<{ n: number }>("SELECT count(*) AS n FROM dev_water_days WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
-    return (entries?.n ?? 0) + (water?.n ?? 0);
+    const meals = await tx.first<{ n: number }>("SELECT count(*) AS n FROM dev_nutrition_saved_meals WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    const queries = await tx.first<{ n: number }>("SELECT count(*) AS n FROM dev_nutrition_search_queries WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    const commands = await tx.first<{ n: number }>("SELECT count(*) AS n FROM dev_nutrition_batch_commands WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    return (entries?.n ?? 0) + (water?.n ?? 0) + (meals?.n ?? 0) + (queries?.n ?? 0) + (commands?.n ?? 0);
   },
   async detach(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<void> {
     await tx.run("DELETE FROM dev_food_diary_entries WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
     await tx.run("DELETE FROM dev_water_days WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run("DELETE FROM dev_nutrition_saved_meals WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run("DELETE FROM dev_nutrition_search_queries WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run("DELETE FROM dev_nutrition_batch_commands WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
   },
 };
 
@@ -87,6 +94,69 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
   private readonly database: SharedSqliteDatabase;
   private readonly workspaceId: string;
   private readonly listeners = new Set<(change: DiaryCommittedChange) => void>();
+  private readonly mealListeners = new Set<(clientId: string) => void>();
+
+  async listSearchQueries(clientId: string): Promise<readonly string[]> {
+    const rows = await this.ready().connection.all<{ query: string }>(`SELECT query FROM dev_nutrition_search_queries
+      WHERE workspace_id = ? AND client_id = ? ORDER BY last_used DESC LIMIT 12`, [this.workspaceId, clientId]);
+    return rows.map((row) => row.query);
+  }
+  async rememberSearchQuery(clientId: string, query: string): Promise<void> {
+    const text = query.trim().replace(/\s+/gu, " ").slice(0, 120);
+    if (text === "") return;
+    await this.ready().writer.write(async (tx) => {
+      const last = await tx.first<{ value: number | null }>("SELECT max(last_used) AS value FROM dev_nutrition_search_queries WHERE workspace_id = ? AND client_id = ?", [this.workspaceId, clientId]);
+      await tx.run(`INSERT INTO dev_nutrition_search_queries (workspace_id, client_id, normalized_query, query, last_used) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(workspace_id, client_id, normalized_query) DO UPDATE SET query = excluded.query, last_used = excluded.last_used`,
+      [this.workspaceId, clientId, text.toLocaleLowerCase("ru"), text, (last?.value ?? 0) + 1]);
+      await tx.run(`DELETE FROM dev_nutrition_search_queries WHERE workspace_id = ? AND client_id = ? AND normalized_query NOT IN
+        (SELECT normalized_query FROM dev_nutrition_search_queries WHERE workspace_id = ? AND client_id = ? ORDER BY last_used DESC LIMIT 12)`, [this.workspaceId, clientId, this.workspaceId, clientId]);
+    });
+  }
+
+  subscribeSavedMealChanges(listener: (clientId: string) => void): () => void {
+    this.mealListeners.add(listener);
+    return () => { this.mealListeners.delete(listener); };
+  }
+  private publishMeals(clientId: string): void {
+    for (const listener of this.mealListeners) { try { listener(clientId); } catch { /* Commit is final. */ } }
+  }
+  async listSavedMeals(clientId: string): Promise<readonly SavedMeal[]> {
+    const rows = await this.ready().connection.all<{ id: string; name: string; snapshots: string; revision: number }>(
+      `SELECT id, name, snapshots_json AS snapshots, revision FROM dev_nutrition_saved_meals WHERE workspace_id = ? AND client_id = ? ORDER BY name, id`, [this.workspaceId, clientId]);
+    return rows.map((row) => ({ ...row, snapshots: (JSON.parse(row.snapshots) as FoodSnapshot[]).map(normalizeSnapshot) }));
+  }
+  async createSavedMeal(clientId: string, input: SavedMealInput): Promise<SavedMeal> {
+    const valid = validateSavedMeal(input);
+    const meal = await this.ready().writer.write(async (tx) => {
+      const client = await tx.first<{ id: string }>("SELECT id FROM dev_clients WHERE workspace_id = ? AND id = ?", [this.workspaceId, clientId]);
+      if (client === null) throw new Error("DIARY_STALE");
+      const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
+      if (!id) throw new Error("DIARY_ID_UNAVAILABLE");
+      await tx.run("INSERT INTO dev_nutrition_saved_meals (id, workspace_id, client_id, name, snapshots_json, revision) VALUES (?, ?, ?, ?, ?, 1)",
+        [id, this.workspaceId, clientId, valid.name, JSON.stringify(valid.snapshots)]);
+      return { id, ...valid, revision: 1 };
+    });
+    this.publishMeals(clientId);
+    return meal;
+  }
+  async updateSavedMeal(clientId: string, id: string, expectedRevision: number, input: SavedMealInput): Promise<SavedMeal> {
+    const valid = validateSavedMeal(input);
+    await this.ready().writer.write(async (tx) => {
+      const result = await tx.run(`UPDATE dev_nutrition_saved_meals SET name = ?, snapshots_json = ?, revision = revision + 1
+        WHERE workspace_id = ? AND client_id = ? AND id = ? AND revision = ?`, [valid.name, JSON.stringify(valid.snapshots), this.workspaceId, clientId, id, expectedRevision]);
+      if (result.changes !== 1) throw new Error("SAVED_MEAL_STALE");
+    });
+    this.publishMeals(clientId);
+    return { id, ...valid, revision: expectedRevision + 1 };
+  }
+  async removeSavedMeal(clientId: string, id: string, expectedRevision: number): Promise<void> {
+    await this.ready().writer.write(async (tx) => {
+      const result = await tx.run("DELETE FROM dev_nutrition_saved_meals WHERE workspace_id = ? AND client_id = ? AND id = ? AND revision = ?", [this.workspaceId, clientId, id, expectedRevision]);
+      if (result.changes !== 1) throw new Error("SAVED_MEAL_STALE");
+    });
+    this.publishMeals(clientId);
+  }
 
   constructor(database: SharedSqliteDatabase | (() => Promise<SqliteConnectionPort>), workspaceId: string) {
     this.database = database instanceof SharedSqliteDatabase ? database : new SharedSqliteDatabase(database);
@@ -144,15 +214,29 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
     return (await this.addEntries(clientId, [input], now))[0] as DiaryEntry;
   }
 
-  async addEntries(clientId: string, inputs: readonly DiaryEntryInput[], now: Date = new Date()): Promise<readonly DiaryEntry[]> {
+  async addEntries(clientId: string, inputs: readonly DiaryEntryInput[], now: Date = new Date(), commandId?: string): Promise<readonly DiaryEntry[]> {
     if (inputs.length === 0) return [];
     const prepared = inputs.map((input) => { assertDate(input.localDate); assertSlot(input.slot); return { input, snapshot: normalizeSnapshot(input.snapshot) }; });
+    if (commandId !== undefined && !/^[a-zA-Z0-9:_-]{1,120}$/u.test(commandId)) throw new Error("DIARY_COMMAND_INVALID");
+    const payload = JSON.stringify(prepared.map(({ input, snapshot }) => ({ localDate: input.localDate, slot: input.slot, snapshot })));
+    let replay = false;
     const created = await this.ready().writer.write(async (tx) => {
+      if (commandId !== undefined) {
+        const receipt = await tx.first<{ payload: string; result: string }>(`SELECT payload_json AS payload, result_json AS result FROM dev_nutrition_batch_commands
+          WHERE workspace_id = ? AND client_id = ? AND command_id = ?`, [this.workspaceId, clientId, commandId]);
+        if (receipt !== null) {
+          if (receipt.payload !== payload) throw new Error("DIARY_COMMAND_REUSED");
+          replay = true;
+          return JSON.parse(receipt.result) as readonly DiaryEntry[];
+        }
+      }
       const result: DiaryEntry[] = [];
       for (const { input, snapshot } of prepared) result.push(await this.insertEntry(tx, clientId, input, snapshot, now));
+      if (commandId !== undefined) await tx.run(`INSERT INTO dev_nutrition_batch_commands (workspace_id, client_id, command_id, payload_json, result_json)
+        VALUES (?, ?, ?, ?, ?)`, [this.workspaceId, clientId, commandId, payload, JSON.stringify(result)]);
       return result;
     });
-    for (const date of new Set(created.map((entry) => entry.localDate))) this.publish({ clientId, localDate: date });
+    if (!replay) for (const date of new Set(created.map((entry) => entry.localDate))) this.publish({ clientId, localDate: date });
     return created;
   }
 
@@ -178,6 +262,34 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
     const updated = await this.ready().writer.write(async (tx) => {
       const result = await tx.run(`UPDATE dev_food_diary_entries SET quantity_x10 = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND client_id = ? AND id = ? AND revision = ?`, [quantityX10, now.toISOString(), this.workspaceId, clientId, id, expectedRevision]);
+      if (result.changes !== 1) throw new Error("DIARY_STALE");
+      return byId(tx, this.workspaceId, clientId, id);
+    });
+    this.publish({ clientId, localDate: updated.localDate });
+    return updated;
+  }
+
+  async editEntry(clientId: string, id: string, expectedRevision: number, input: Readonly<{ quantityX10: number; slot: MealSlot; override: Nutrients | "CLEAR" | null }>, now: Date = new Date()): Promise<DiaryEntry> {
+    assertQuantity(input.quantityX10);
+    assertSlot(input.slot);
+    if (input.override !== null && input.override !== "CLEAR") assertOverride(input.override);
+    const updated = await this.ready().writer.write(async (tx) => {
+      const current = await byId(tx, this.workspaceId, clientId, id);
+      if (current.revision !== expectedRevision) throw new Error("DIARY_STALE");
+      let position = current.position;
+      if (current.slot !== input.slot) {
+        const last = await tx.first<{ position: number | null }>(`SELECT max(position) AS position FROM dev_food_diary_entries
+          WHERE workspace_id = ? AND client_id = ? AND local_date = ? AND slot = ?`, [this.workspaceId, clientId, current.localDate, input.slot]);
+        position = (last?.position ?? -1) + 1;
+      }
+      const override = input.override === "CLEAR" ? null : input.override === null ? current.override ?? null
+        : { baseQuantityX10: input.quantityX10, values: input.override };
+      const result = await tx.run(`UPDATE dev_food_diary_entries SET quantity_x10 = ?, slot = ?, position = ?,
+        override_base_quantity_x10 = ?, override_kcal_x10 = ?, override_protein_x10 = ?, override_fat_x10 = ?, override_carbs_x10 = ?,
+        revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND client_id = ? AND id = ? AND revision = ?`,
+      [input.quantityX10, input.slot, position, override?.baseQuantityX10 ?? null, override?.values.kcalX10 ?? null,
+        override?.values.proteinX10 ?? null, override?.values.fatX10 ?? null, override?.values.carbsX10 ?? null,
+        now.toISOString(), this.workspaceId, clientId, id, expectedRevision]);
       if (result.changes !== 1) throw new Error("DIARY_STALE");
       return byId(tx, this.workspaceId, clientId, id);
     });

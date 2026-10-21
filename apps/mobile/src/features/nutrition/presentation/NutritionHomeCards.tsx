@@ -52,8 +52,8 @@ const midpoint = (range: Readonly<{ minX10: number; maxX10: number }>) => (range
  * «съедено от цели» из трёх цветов Б/Ж/У, «съедено / цель» по каждому макро, ручная корректировка). Источники — Nutrition, Measurements и дневник тренировок; legacy `client_kbju_state` не используется.
  * `trainedToday` — факт тренировки из дневника тренировок (авто «Да»), `null` — неизвестно.
  */
-export function NutritionHomeCards({ clientId, body, diary, targets, calc, measurements, trainedToday, onOpenNutrition, onOpenSchedule }: Readonly<{ clientId: string; body: CalcClientBody; diary: NutritionDiaryPort;
-  targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; trainedToday: boolean | null; onOpenNutrition: () => void; onOpenSchedule?: () => void }>) {
+export function NutritionHomeCards({ clientId, body, diary, targets, calc, measurements, trainedToday, onOpenNutrition, onOpenCalculation }: Readonly<{ clientId: string; body: CalcClientBody; diary: NutritionDiaryPort;
+  targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; trainedToday: boolean | null; onOpenNutrition: () => void; onOpenCalculation: () => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const macroColors = useMacroColors();
@@ -124,21 +124,20 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   }, [weightText, stepsText, measurements, clientId, calc, today, loaded]);
 
   const recorded = data?.summary.state === "FOOD_RECORDED";
-  const corridors = data === null || data.target.source === "NONE" ? null : data.target.corridors;
   /** Ориентир по калориям: цель тренера (коридор Б/Ж/У → ккал), иначе суточный ориентир расчёта. */
   const liveKcal = liveTarget?.kcal ?? null;
   const kcalRange = rangeText(liveKcal);
-  const orientText = kcalRange ?? (guide === null ? null : String(guide));
-  const orientMiddle = liveKcal !== null ? midpoint(liveKcal) / 10 : guide;
+  const orientText = liveTarget !== null ? kcalRange : (guide === null ? null : String(guide));
+  const orientMiddle = liveTarget !== null ? (liveKcal === null ? null : midpoint(liveKcal) / 10) : guide;
   const eaten = (metric: "kcal" | "protein" | "fat" | "carbs"): number | null => (recorded && data !== null ? data.summary.totals[NUTRIENT_OF[metric]] : null);
   const eatenKcalX10 = eaten("kcal");
   const fraction = eatenKcalX10 === null || orientMiddle === null || orientMiddle <= 0 ? null : eatenKcalX10 / 10 / orientMiddle;
   /** Дуга делится по калориям съеденных белков, жиров и углеводов (4/9/4). */
   const segments = (["protein", "fat", "carbs"] as const).map((metric) => ({ weight: (eaten(metric) ?? 0) * (metric === "fat" ? 9 : 4), color: macroColors[metric] }));
+  const effective = liveTarget;
   const targetText = (metric: "protein" | "fat" | "carbs"): string => {
-    const range = rangeText(liveTarget?.[metric] ?? corridors?.[metric] ?? null);
-    if (range !== null) return range;
-    return defaults === null || defaults[metric] === null ? "—" : String(defaults[metric]);
+    if (effective !== null) return rangeText(effective[metric]) ?? "—";
+    return defaults === null || defaults[metric] === null ? "—" : String(defaults[metric]).replace(".", ",");
   };
   const eatenText = (metric: "protein" | "fat" | "carbs"): string => (data === null ? "—" : !recorded ? "0" : wholeText(eaten(metric)));
 
@@ -151,10 +150,10 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
         </View>
         <View style={styles.dayRow}>
           <View style={styles.dayCell}>
-            <TextField label="Вес, кг" value={weightText} keyboardType="decimal-pad" placeholder="85,4" disabled={busy} onChangeText={(value) => { setWeightText(value); setDirty(true); setError(null); }} />
+            <TextField label="Вес, кг" value={weightText} textAlign="center" keyboardType="decimal-pad" placeholder="85,4" disabled={busy} onChangeText={(value) => { setWeightText(value); setDirty(true); setError(null); }} />
           </View>
           <View style={styles.dayCell}>
-            <TextField label="Шаги" value={stepsText} keyboardType="number-pad" placeholder="8000" disabled={busy} onChangeText={(value) => { setStepsText(value); setDirty(true); setError(null); }} />
+            <TextField label="Шаги" value={stepsText} textAlign="center" keyboardType="number-pad" placeholder="8000" disabled={busy} onChangeText={(value) => { setStepsText(value); setDirty(true); setError(null); }} />
           </View>
           <View style={styles.dayCell}>
             <Text style={[styles.cellLabel, { color: colors.textPrimary }]}>Тренировка</Text>
@@ -188,8 +187,8 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
         </View>
         </View>
         <View style={styles.summary}>
-          <View style={styles.grow} accessible accessibilityLabel={`Суточный ориентир: ${orientText === null ? "нет данных" : `${orientText} ккал`}`}>
-            <View style={[styles.pill, { backgroundColor: colors.accentSoft }]}><Text style={[styles.pillText, { color: colors.accentInk }]}>Суточный ориентир</Text></View>
+          <View style={styles.guide} accessible accessibilityLabel={`Суточный ориентир: ${orientText === null ? "нет данных" : `${orientText} ккал`}`}>
+            <View style={[styles.pill, styles.guidePill, { backgroundColor: colors.accentSoft }]}><Text style={[styles.pillText, { color: colors.accentInk }]}>Суточный ориентир</Text></View>
             <Text style={[styles.bigNumber, { color: colors.textPrimary }]}>{orientText ?? "—"}<Text style={[styles.unit, { color: colors.textSecondary }]}>{orientText === null ? "" : " ккал"}</Text></Text>
           </View>
           <SegmentedRing size={100} stroke={12} fraction={fraction} segments={segments} accessibilityLabel={`От цели по калориям: ${fraction === null ? "нет данных" : `${Math.round(fraction * 100)} процентов`}`}>
@@ -206,7 +205,13 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
           ))}
         </View>
         <View style={[styles.rule, { backgroundColor: colors.border }]} />
-        <NutritionTargetRows key={clientId} clientId={clientId} targets={targets} calories={guide} defaults={defaults} mode={mode} onModeAutoChange={setMode} onLiveTarget={setLiveTarget} onOpenSchedule={onOpenSchedule} />
+        {loaded !== null && loaded.fat === null ? (
+          <Pressable accessibilityRole="link" accessibilityLabel="Рассчитать процент жира в разделе Питание" onPress={onOpenCalculation}
+            style={{ minHeight: 44, justifyContent: "center" }}>
+            <Text style={[styles.hint, { color: colors.textSecondary }]}>Для расчёта БЖУ нужен процент жира. Его можно рассчитать в разделе «Питание».</Text>
+          </Pressable>
+        ) : null}
+        <NutritionTargetRows key={clientId} clientId={clientId} targets={targets} calories={guide} defaults={defaults} leanMassKg={result?.leanMassKg ?? null} mode={mode} onModeAutoChange={setMode} onLiveTarget={setLiveTarget} />
       </View>
     </>
   );
@@ -224,6 +229,8 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 14, lineHeight: 19, fontFamily: fonts.bold },
   hint: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
   grow: { flex: 1 },
+  guide: { flex: 1, minWidth: 0, alignItems: "center", gap: 4 },
+  guidePill: { alignSelf: "center" },
   dayRow: { flexDirection: "row", gap: 8, alignItems: "flex-start" },
   dayCell: { flex: 1, gap: 6 },
   cellLabel: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 18 },
@@ -232,7 +239,7 @@ const styles = StyleSheet.create({
   summary: { flexDirection: "row", alignItems: "center", gap: 10 },
   pill: { alignSelf: "flex-start", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 4 },
   pillText: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 15 },
-  bigNumber: { fontFamily: fonts.bold, fontSize: 26, lineHeight: 32 },
+  bigNumber: { fontFamily: fonts.bold, fontSize: 26, lineHeight: 32, textAlign: "center", fontVariant: ["tabular-nums"] },
   unit: { fontFamily: fonts.regular, fontSize: 14 },
   ringValue: { fontFamily: fonts.bold, fontSize: 19, lineHeight: 24 },
   metrics: { flexDirection: "row", gap: 6 },

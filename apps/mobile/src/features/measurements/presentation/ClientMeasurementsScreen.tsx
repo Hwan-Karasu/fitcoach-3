@@ -1,22 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { AppButton, ConfirmDialog, InlineNotice, LoadingState, SelectionChip, StatusTag,
-  TextField } from "../../../shared/ui/components/public.ts";
-import { PrototypeScreen, SectionHeading } from "../../../shared/ui/prototype/ScreenPieces.tsx";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { MoreHorizontal } from "lucide-react-native";
+import { AppButton, AppIconButton, ChoiceSegments, ConfirmDialog, DropdownMenu, InlineNotice, LineChart,
+  LoadingState, SearchableSelect, TextField, pickDate } from "../../../shared/ui/components/public.ts";
+import { PrototypeScreen } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
-import { MEASUREMENT_TYPES, type ClientMeasurements, type Measurement, type MeasurementType } from
-  "../domain/MeasurementModel.ts";
+import { MEASUREMENT_TYPES, type ClientMeasurements, type Measurement, type MeasurementType } from "../domain/MeasurementModel.ts";
 import type { MeasurementRepositoryPort } from "../domain/MeasurementRepositoryPort.ts";
-import { addDays, dailyPoints, formatDate, formatTime, formatValue, latestPoint, localDateOf,
-  measurementTypeInfo, parseTime, parseValueX10 } from "../domain/MeasurementRules.ts";
+import { dailyPoints, formatDate, formatTime, formatValue, localDateOf, measurementTypeInfo, parseTime, parseValueX10 } from "../domain/MeasurementRules.ts";
+import { measurementJournalView, type JournalPeriod } from "./measurementJournalView.ts";
+import { plural } from "../../../shared/format/clockText.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 
-function entries(count: number): string {
-  const tail = count % 100;
-  if (tail >= 11 && tail <= 14) return `${count} замеров`;
-  if (count % 10 === 1) return `${count} замер`;
-  return count % 10 >= 2 && count % 10 <= 4 ? `${count} замера` : `${count} замеров`;
-}
+const PERIODS: readonly Readonly<{ id: JournalPeriod; label: string }>[] = [
+  { id: "30", label: "30 дней" }, { id: "90", label: "90 дней" }, { id: "365", label: "Год" }, { id: "ALL", label: "Всё" },
+];
+const typeOptions = MEASUREMENT_TYPES.map((type) => ({ value: type, label: measurementTypeInfo[type].label }));
+const isType = (value: string): value is MeasurementType => MEASUREMENT_TYPES.some((type) => type === value);
+const numberText = (value: number) => String(value / 10).replace(".", ",");
 
 function errorMessage(error: unknown): string {
   switch (error instanceof Error ? error.message : "") {
@@ -27,208 +28,187 @@ function errorMessage(error: unknown): string {
     default: return "Не удалось сохранить. Замеры не изменены.";
   }
 }
-
-interface Draft {
-  readonly editing: Measurement | null;
-  readonly type: MeasurementType;
-  readonly value: string;
-  readonly date: string;
-  readonly time: string;
-}
-
-function freshDraft(type: MeasurementType = "WEIGHT"): Draft {
+interface Draft { readonly editing: Measurement | null; readonly type: MeasurementType; readonly value: string; readonly date: string; readonly time: string }
+function freshDraft(type: MeasurementType): Draft {
   const now = new Date();
   return { editing: null, type, value: "", date: localDateOf(now), time: formatTime(now.getHours() * 60 + now.getMinutes()) };
 }
 
-/**
- * §§49.14–49.18: one journal of facts per client. Several entries a day are kept; the daily graph
- * value is the chosen primary or the only entry, otherwise the trainer is asked to choose one.
- */
-export function ClientMeasurementsScreen({ clientId, repository }: Readonly<{
-  clientId: string; repository: MeasurementRepositoryPort;
+function JournalEntry({ row, primary, canChoose, busy, onEdit, onDelete, onPrimary }: Readonly<{
+  row: Measurement; primary: boolean; canChoose: boolean; busy: boolean; onEdit: () => void; onDelete: () => void; onPrimary: () => void;
 }>) {
-  const { palette } = usePrototypeTheme();
-  const colors = palette.tokens;
+  const { palette: { tokens: colors } } = usePrototypeTheme();
+  const anchor = useRef<View>(null);
+  const [open, setOpen] = useState(false);
+  return <View style={[styles.entry, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+    <Pressable disabled={busy} accessibilityRole="button" accessibilityLabel={`Исправить: ${measurementTypeInfo[row.type].label}, ${formatValue(row.valueX10, row.type)}, ${formatTime(row.localMinute)}`}
+      onPress={onEdit} style={styles.entryBody}>
+      <View style={styles.row}>
+        <Text style={[styles.entryLabel, { color: colors.textSecondary }]}>{measurementTypeInfo[row.type].label}</Text>
+        <Text style={[styles.entryValue, { color: colors.textPrimary }]}>{formatValue(row.valueX10, row.type)}</Text>
+      </View>
+      <Text style={[styles.hint, { color: primary ? colors.accentInk : colors.textMuted }]}>{formatTime(row.localMinute)}{primary ? " · основной" : ""}{row.method === "NAVY_ESTIMATE" ? " · оценка ВМС" : ""}</Text>
+    </Pressable>
+    <View ref={anchor} collapsable={false}>
+      <AppIconButton label={`Действия: ${measurementTypeInfo[row.type].label}, ${formatValue(row.valueX10, row.type)}`}
+        disabled={busy} icon={<MoreHorizontal size={19} color={colors.textSecondary} />} onPress={() => setOpen(true)} />
+    </View>
+    <DropdownMenu visible={open} anchor={anchor} title="Действия с замером" selected="" onClose={() => setOpen(false)}
+      options={[...(canChoose ? [{ value: "PRIMARY", label: "Сделать основным за день" }] : []),
+        { value: "EDIT", label: "Исправить" }, { value: "DELETE", label: "Удалить", danger: true }]}
+      onSelect={(action) => { setOpen(false); if (busy) return; if (action === "PRIMARY") onPrimary(); else if (action === "EDIT") onEdit(); else if (action === "DELETE") onDelete(); }} />
+  </View>;
+}
+
+/** §§49.14–49.18: one fact journal, explicit primary selection and no invented daily averages. */
+export function ClientMeasurementsScreen({ clientId, repository }: Readonly<{ clientId: string; repository: MeasurementRepositoryPort }>) {
+  const { palette: { tokens: colors } } = usePrototypeTheme();
   const [data, setData] = useState<ClientMeasurements | null>(null);
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
+  const [type, setType] = useState<MeasurementType | "ALL">("WEIGHT");
+  const [period, setPeriod] = useState<JournalPeriod>("90");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
+  const lock = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Measurement | null>(null);
-
+  useEffect(() => { setData(null); setDraft(null); setDeleting(null); setError(null); setType("WEIGHT"); }, [clientId]);
   useEffect(() => {
     let active = true;
-    void Promise.resolve().then(() => repository.listForClient(clientId)).then((next) => {
-      if (active) { setData(next); setFailed(false); }
-    }, () => { if (active) setFailed(true); });
+    void repository.listForClient(clientId).then((next) => { if (active) { setData(next); setFailed(false); } }, () => { if (active) setFailed(true); });
     return () => { active = false; };
   }, [clientId, repository, tick]);
-
   useEffect(() => repository.subscribeCommittedChanges((change) => {
     if (change.clientId === clientId) setTick((value) => value + 1);
   }), [clientId, repository]);
-
-  const days = useMemo(() => {
-    const groups = new Map<string, Measurement[]>();
-    for (const row of data?.measurements ?? []) groups.set(row.localDate, [...(groups.get(row.localDate) ?? []), row]);
-    return [...groups.entries()];
-  }, [data]);
-
-  if (data === null) {
-    return <PrototypeScreen>
-      {failed ? <InlineNotice kind="error">Замеры не загрузились.</InlineNotice> : <LoadingState label="Загружаем замеры…" />}
-      {failed ? <AppButton label="Повторить" onPress={() => setTick((value) => value + 1)} /> : null}
-    </PrototypeScreen>;
-  }
-
-  const primaryIds = new Set(data.primaries.map((entry) => entry.measurementId));
+  const today = localDateOf(new Date());
+  const view = useMemo(() => data === null ? null : measurementJournalView(data, type, period, today), [data, type, period, today]);
+  const graph = useMemo(() => view?.points.flatMap((point) => point.kind === "VALUE" ? [{ key: point.localDate,
+    label: `${point.localDate.slice(8)}.${point.localDate.slice(5, 7)}`, caption: formatDate(point.localDate), value: point.measurement.valueX10 / 10 }] : []) ?? [], [view]);
   const run = async (work: () => Promise<unknown>, after?: () => void) => {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await work();
-      after?.();
-    } catch (failure) {
-      setError(errorMessage(failure));
-      setTick((value) => value + 1);
-    } finally {
-      setBusy(false);
-    }
+    if (lock.current) return;
+    lock.current = true; setBusy(true); setError(null);
+    try { await work(); after?.(); } catch (failure) { setError(errorMessage(failure)); setTick((value) => value + 1); }
+    finally { lock.current = false; setBusy(false); }
   };
-
+  const edit = (row: Measurement) => {
+    setError(null); setDraft({ editing: row, type: row.type, value: numberText(row.valueX10), date: row.localDate,
+      time: row.localMinute === null ? "" : formatTime(row.localMinute) });
+  };
   const save = () => {
-    if (draft === null) return;
-    const valueX10 = parseValueX10(draft.value);
-    const minute = parseTime(draft.time);
+    if (draft === null || lock.current) return;
+    const valueX10 = parseValueX10(draft.value), minute = parseTime(draft.time);
     if (valueX10 === null) { setError("Введите значение, например 80,1."); return; }
     if (minute === "invalid") { setError(errorMessage(new Error("MEASUREMENT_TIME_INVALID"))); return; }
     const input = { type: draft.type, valueX10, localDate: draft.date, localMinute: minute };
     const editing = draft.editing;
-    void run(() => editing === null ? repository.record(clientId, input)
-      : repository.correct(editing.id, editing.revision, input), () => setDraft(null));
+    void run(() => editing === null ? repository.record(clientId, input) : repository.correct(editing.id, editing.revision, input), () => { setDraft(null); setType(draft.type); });
   };
-
-  return (
-    <PrototypeScreen description="Масса, процент жира и обхваты. Отсутствующий замер — «нет данных», не ноль.">
-      <SectionHeading>Последние значения</SectionHeading>
-      <View style={styles.summary}>
-        {MEASUREMENT_TYPES.map((type) => {
-          const point = latestPoint(data.measurements, data.primaries, type);
-          return (
-            <View key={type} style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>{measurementTypeInfo[type].label}</Text>
-              <Text style={[styles.summaryValue, { color: point === null ? colors.textSecondary : colors.textPrimary }]}>
-                {point === null ? "нет данных" : point.kind === "VALUE"
-                  ? `${formatValue(point.measurement.valueX10, type)} · ${formatDate(point.localDate)}`
-                  : `${entries(point.candidates.length)} ${formatDate(point.localDate)} — выберите основной`}
-              </Text>
-            </View>
-          );
-        })}
+  if (data === null || view === null) return <PrototypeScreen compact>
+    {failed ? <InlineNotice kind="error">Замеры не загрузились.</InlineNotice> : <LoadingState label="Загружаем замеры…" />}
+    {failed ? <AppButton label="Повторить" onPress={() => setTick((value) => value + 1)} /> : null}
+  </PrototypeScreen>;
+  const primaryIds = new Set(data.primaries.map((entry) => entry.measurementId));
+  const info = type === "ALL" ? null : measurementTypeInfo[type];
+  const deltaUnit = type === "BODY_FAT" ? "п.п." : info?.unit;
+  return <>
+    <FlatList style={{ flex: 1, backgroundColor: colors.canvas }} contentContainerStyle={styles.listContent}
+      data={view.days} keyExtractor={([date]) => date} initialNumToRender={10} windowSize={7}
+      keyboardShouldPersistTaps="handled" ListHeaderComponent={<View style={styles.listHeader}>
+      <View style={styles.row}>
+        <Text style={[styles.title, styles.grow, { color: colors.textPrimary }]}>Замеры и динамика</Text>
+        <AppButton compact size="small" label="+ Замер" disabled={busy} onPress={() => { setError(null); setDraft(freshDraft(type === "ALL" ? "WEIGHT" : type)); }} />
       </View>
-
-      {draft === null ? (
-        <AppButton label="Добавить замер" onPress={() => { setError(null); setDraft(freshDraft()); }} />
-      ) : (
-        <View style={[styles.form, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-          <SectionHeading>{draft.editing === null ? "Новый замер" : "Исправить замер"}</SectionHeading>
-          <View style={styles.chips}>
-            {MEASUREMENT_TYPES.map((type) => (
-              <SelectionChip key={type} group="Показатель" label={measurementTypeInfo[type].label}
-                selected={draft.type === type} onPress={() => setDraft({ ...draft, type })} />
-            ))}
+      <SearchableSelect title="Показатель" value={type} options={[{ value: "ALL", label: "Все показатели" }, ...typeOptions]}
+        onSelect={(value) => { if (value === "ALL" || isType(value)) setType(value); }} />
+      <ChoiceSegments label="Период замеров" items={PERIODS} value={period} onChange={setPeriod} />
+      {error !== null && draft === null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
+      {info !== null ? <>
+        <View style={styles.row}>
+          <View style={[styles.stat, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.hint, { color: colors.textSecondary }]}>Последний замер</Text>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{view.latest?.kind === "VALUE" ? `${numberText(view.latest.measurement.valueX10)} ${info.unit}` : "—"}</Text>
+            <Text style={[styles.hint, { color: colors.textMuted }]}>{view.latest === null ? "Нет данных за период" : view.latest.kind === "AMBIGUOUS" ? "Выберите основной за день" : formatDate(view.latest.localDate)}</Text>
           </View>
-          <TextField label={`Значение, ${measurementTypeInfo[draft.type].unit}`} value={draft.value} required
-            keyboardType="decimal-pad" placeholder="Например, 80,1"
-            onChangeText={(value) => setDraft({ ...draft, value })} />
-          <View style={styles.stepper}>
-            <AppButton variant="ghost" label="‹" accessibilityLabel="Предыдущий день"
-              onPress={() => setDraft({ ...draft, date: addDays(draft.date, -1) })} />
-            <Text style={[styles.stepperValue, { color: colors.textPrimary }]}>{formatDate(draft.date)}</Text>
-            <AppButton variant="ghost" label="›" accessibilityLabel="Следующий день"
-              disabled={draft.date >= localDateOf(new Date())}
-              onPress={() => setDraft({ ...draft, date: addDays(draft.date, 1) })} />
+          <View style={[styles.stat, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.hint, { color: colors.textSecondary }]}>Изменение за период</Text>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{view.changeX10 === null ? "—" : `${view.changeX10 > 0 ? "+" : ""}${numberText(view.changeX10)} ${deltaUnit}`}</Text>
+            <Text style={[styles.hint, { color: colors.textMuted }]}>От первого к последнему</Text>
           </View>
-          <TextField label="Время" value={draft.time} placeholder="ЧЧ:ММ"
-            hint="Оставьте пустым, если известна только дата."
-            onChangeText={(time) => setDraft({ ...draft, time })} />
-          <AppButton label={draft.editing === null ? "Сохранить замер" : "Сохранить исправление"} busy={busy}
-            onPress={save} />
-          <AppButton variant="ghost" label="Отмена" disabled={busy} onPress={() => { setDraft(null); setError(null); }} />
         </View>
-      )}
-      {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
-
-      <SectionHeading>Журнал замеров</SectionHeading>
-      {days.length === 0 ? (
-        <Text style={[styles.hint, { color: colors.textSecondary }]}>Замеров пока нет.</Text>
-      ) : days.map(([date, rows]) => (
-        <View key={date} style={styles.day}>
-          <Text style={[styles.dayTitle, { color: colors.textPrimary }]}>{formatDate(date)}</Text>
-          {MEASUREMENT_TYPES.filter((type) => dailyPoints(rows, data.primaries, type)[0]?.kind === "AMBIGUOUS").map((type) => (
-            <Text key={type} style={[styles.hint, { color: colors.warning }]}>
-              {measurementTypeInfo[type].label}: несколько замеров за день — выберите основной для графика.
-            </Text>
-          ))}
-          {rows.map((row) => {
-            const sameDay = rows.filter((other) => other.type === row.type).length;
-            return (
-              <View key={row.id} style={[styles.entry, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-                <View style={styles.entryHead}>
-                  <Text style={[styles.entryText, { color: colors.textPrimary }]}>
-                    {measurementTypeInfo[row.type].label} · {formatValue(row.valueX10, row.type)}
-                  </Text>
-                  {primaryIds.has(row.id) ? <StatusTag kind="success" label="Основной" /> : null}
-                </View>
-                <Text style={[styles.hint, { color: colors.textSecondary }]}>
-                  {formatTime(row.localMinute)}{row.method === "NAVY_ESTIMATE" ? " · оценка по окружностям (ВМС США)" : ""}
-                </Text>
-                <View style={styles.actions}>
-                  {sameDay > 1 && !primaryIds.has(row.id) ? (
-                    <AppButton variant="secondary" label="Сделать основным" disabled={busy}
-                      onPress={() => { void run(() => repository.setPrimary(row.id)); }} />
-                  ) : null}
-                  <AppButton variant="ghost" label="Исправить" disabled={busy} onPress={() => {
-                    setError(null);
-                    setDraft({ editing: row, type: row.type, value: formatValue(row.valueX10, row.type).split(" ")[0] ?? "",
-                      date: row.localDate, time: row.localMinute === null ? "" : formatTime(row.localMinute) });
-                  }} />
-                  <AppButton variant="ghost" label="Удалить" disabled={busy} onPress={() => setDeleting(row)} />
-                </View>
-              </View>
-            );
-          })}
+        {graph.length > 0 ? <LineChart key={`${clientId}:${type}:${period}`} points={graph} title={info.label}
+          format={(value) => String(Math.round(value * 10) / 10).replace(".", ",")}
+          formatValue={(value) => `${String(Math.round(value * 10) / 10).replace(".", ",")} ${info.unit}`}
+          accessibilityLabel={`Динамика: ${info.label}. Дневных значений: ${graph.length}.`} /> : null}
+        {view.ambiguousCount > 0 ? <InlineNotice kind="info">Есть дни с несколькими замерами. Выберите основной через «⋯» у записи; до выбора эти дни не показываются на графике.</InlineNotice> : null}
+      </> : null}
+      <View style={styles.row}><Text style={[styles.title, styles.grow, { color: colors.textPrimary }]}>История</Text>
+        <Text style={[styles.hint, { color: colors.textSecondary }]}>{view.rows.length} {plural(view.rows.length, "запись", "записи", "записей")}</Text></View>
+      </View>}
+      ListEmptyComponent={<View style={[styles.empty, { backgroundColor: colors.surface }]}>
+        <Text style={[styles.entryValue, { color: colors.textPrimary }]}>За этот период замеров нет</Text>
+        <Text style={[styles.hint, { color: colors.textSecondary }]}>Выберите другой период или добавьте замер.</Text>
+      </View>}
+      renderItem={({ item: [date, rows] }) => <View style={styles.day}>
+        <Text style={[styles.dayTitle, { color: colors.textSecondary }]}>{formatDate(date)}</Text>
+        {MEASUREMENT_TYPES.filter((id) => dailyPoints(rows, data.primaries, id)[0]?.kind === "AMBIGUOUS").map((id) => <Text key={id}
+          style={[styles.hint, { color: colors.warning }]}>{measurementTypeInfo[id].label}: выберите основной замер.</Text>)}
+        {rows.map((row) => <JournalEntry key={row.id} row={row} primary={primaryIds.has(row.id)} busy={busy}
+          canChoose={rows.filter((other) => other.type === row.type).length > 1 && !primaryIds.has(row.id)}
+          onEdit={() => edit(row)} onDelete={() => setDeleting(row)} onPrimary={() => { void run(() => repository.setPrimary(row.id)); }} />)}
+      </View>}
+    />
+    <Modal visible={draft !== null} transparent animationType="fade" onRequestClose={() => { if (!busy) { setDraft(null); setError(null); } }}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.backdrop}>
+        <View style={[styles.dialog, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{draft?.editing === null ? "Новый замер" : "Исправить замер"}</Text>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.dialogBody}>
+            {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
+            <SearchableSelect title="Показатель" value={draft?.type ?? "WEIGHT"} options={typeOptions} disabled={busy}
+              onSelect={(value) => { if (draft !== null && isType(value)) setDraft({ ...draft, type: value }); }} />
+            <View style={styles.row}>
+              <View style={styles.grow}><TextField compact label={`Значение, ${measurementTypeInfo[draft?.type ?? "WEIGHT"].unit}`} value={draft?.value ?? ""} required disabled={busy} keyboardType="decimal-pad"
+                onChangeText={(value) => { if (draft !== null) setDraft({ ...draft, value }); }} /></View>
+              <View style={styles.grow}><TextField compact label="Время, ЧЧ:ММ" value={draft?.time ?? ""} disabled={busy} placeholder="Не указано" keyboardType="numbers-and-punctuation"
+                onChangeText={(time) => { if (draft !== null) setDraft({ ...draft, time }); }} /></View>
+            </View>
+            <AppButton compact size="small" variant="secondary" label={formatDate(draft?.date ?? today)} accessibilityLabel="Дата замера" disabled={busy}
+              onPress={() => { if (draft === null) return; void pickDate({ value: draft.date, max: today, title: "Дата замера" }).then((picked) => {
+                if (picked !== null) setDraft((current) => current === null ? null : { ...current, date: picked }); }); }} />
+            <Text style={[styles.hint, { color: colors.textMuted }]}>Если время неизвестно, оставьте поле пустым.</Text>
+          </ScrollView>
+          <View style={styles.row}>
+            <View style={styles.grow}><AppButton compact size="small" variant="secondary" label="Отмена" disabled={busy} onPress={() => { setDraft(null); setError(null); }} /></View>
+            <View style={styles.grow}><AppButton compact size="small" label="Сохранить" busy={busy} onPress={save} /></View>
+          </View>
         </View>
-      ))}
-      <ConfirmDialog visible={deleting !== null} destructive confirmBusy={busy} title="Удалить замер?"
-        description={deleting === null ? "" : `${measurementTypeInfo[deleting.type].label} ${formatValue(deleting.valueX10,
-          deleting.type)}, ${formatDate(deleting.localDate)}, ${formatTime(deleting.localMinute)}. Другие замеры этого дня останутся.`}
-        confirmLabel="Удалить" onCancel={() => setDeleting(null)}
-        onConfirm={() => {
-          const row = deleting;
-          if (row !== null) void run(() => repository.remove(row.id, row.revision), () => setDeleting(null));
-        }} />
-    </PrototypeScreen>
-  );
+      </KeyboardAvoidingView>
+    </Modal>
+    <ConfirmDialog visible={deleting !== null} destructive confirmBusy={busy} title="Удалить замер?"
+      description={deleting === null ? "" : `${measurementTypeInfo[deleting.type].label}: ${formatValue(deleting.valueX10, deleting.type)}, ${formatDate(deleting.localDate)}. Остальные записи сохранятся.`}
+      confirmLabel="Удалить" onCancel={() => setDeleting(null)} onConfirm={() => {
+        const row = deleting; if (row !== null) void run(() => repository.remove(row.id, row.revision), () => setDeleting(null));
+      }} />
+  </>;
 }
-
 const styles = StyleSheet.create({
-  summary: { gap: 6 },
-  summaryRow: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
-  summaryLabel: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
-  summaryValue: { flexShrink: 1, textAlign: "right", fontSize: 13, lineHeight: 18, fontFamily: fonts.bold },
-  form: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 10 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  stepperValue: { flex: 1, textAlign: "center", fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
-  day: { gap: 8 },
-  dayTitle: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
-  entry: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 4 },
-  entryHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  entryText: { flex: 1, fontSize: 14, lineHeight: 19, fontFamily: fonts.bold },
-  actions: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
-  hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  listContent: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 20, gap: 8 },
+  listHeader: { gap: 8 },
+  row: { flexDirection: "row", alignItems: "center", gap: 8 },
+  grow: { flex: 1, minWidth: 0 },
+  title: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 20 },
+  stat: { flex: 1, alignSelf: "stretch", borderRadius: 14, padding: 10, gap: 3 },
+  statValue: { fontFamily: fonts.bold, fontSize: 21, lineHeight: 27 },
+  day: { gap: 4, marginTop: 6 },
+  dayTitle: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 17, marginBottom: 2 },
+  entry: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 12, paddingLeft: 10, paddingRight: 2 },
+  entryBody: { flex: 1, minWidth: 0, paddingVertical: 8, gap: 3 },
+  entryLabel: { flex: 1, fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
+  entryValue: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },
+  hint: { fontFamily: fonts.regular, fontSize: 10, lineHeight: 14 },
+  empty: { padding: 16, borderRadius: 14, gap: 4 },
+  backdrop: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.4)" },
+  dialog: { width: "100%", maxWidth: 520, alignSelf: "center", maxHeight: "90%", borderRadius: 20, padding: 12, gap: 10 },
+  dialogBody: { gap: 8 },
 });

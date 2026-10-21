@@ -1,4 +1,5 @@
 import type { Nutrients } from "./FoodModel.ts";
+import type { SavedMeal, SavedMealInput } from "./SavedMeal.ts";
 import type { CopyEntriesRequest, CopyEntriesResult, DiaryEntry, DiaryEntryInput, MealSlot, WaterDay } from "./DiaryModel.ts";
 
 export interface DiaryCommittedChange {
@@ -12,14 +13,23 @@ export interface DiaryCommittedChange {
  * Все чтения и записи ограничены `clientId`.
  */
 export interface NutritionDiaryPort {
+  listSearchQueries(clientId: string): Promise<readonly string[]>;
+  rememberSearchQuery(clientId: string, query: string): Promise<void>;
+  listSavedMeals(clientId: string): Promise<readonly SavedMeal[]>;
+  createSavedMeal(clientId: string, input: SavedMealInput): Promise<SavedMeal>;
+  updateSavedMeal(clientId: string, id: string, expectedRevision: number, input: SavedMealInput): Promise<SavedMeal>;
+  removeSavedMeal(clientId: string, id: string, expectedRevision: number): Promise<void>;
+  subscribeSavedMealChanges(listener: (clientId: string) => void): () => void;
   /** Записи клиента за закрытый диапазон дат, по дате, приёму пищи и порядку. */
   listEntries(clientId: string, fromDate: string, toDate: string): Promise<readonly DiaryEntry[]>;
   /** Добавляет новую запись в конец приёма пищи; итог снимка пересчитывается из значений на основу и количества. */
   addEntry(clientId: string, input: DiaryEntryInput, now?: Date): Promise<DiaryEntry>;
   /** Добавляет несколько записей (в том числе одну позицию в разные приёмы) одной транзакцией: все или ни одной. */
-  addEntries(clientId: string, inputs: readonly DiaryEntryInput[], now?: Date): Promise<readonly DiaryEntry[]>;
+  addEntries(clientId: string, inputs: readonly DiaryEntryInput[], now?: Date, commandId?: string): Promise<readonly DiaryEntry[]>;
   /** Исправляет только количество этой записи; снимок источника не переписывается (§49.5.2). */
   updateQuantity(clientId: string, id: string, expectedRevision: number, quantityX10: number, now?: Date): Promise<DiaryEntry>;
+  /** Сохранить редактор целиком одним CAS и одной транзакцией; null сохраняет прежний override, CLEAR снимает его. */
+  editEntry(clientId: string, id: string, expectedRevision: number, input: Readonly<{ quantityX10: number; slot: MealSlot; override: Nutrients | "CLEAR" | null }>, now?: Date): Promise<DiaryEntry>;
   /**
    * Ручная правка К/Б/Ж/У только этой записи (на её текущее количество; `null` — показатель не правится). Каталог, снимок, другие записи и клиенты не меняются;
    * при смене количества правка масштабируется пропорционально. Нужен хотя бы один показатель, иначе `DIARY_OVERRIDE_INVALID`.

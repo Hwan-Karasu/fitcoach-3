@@ -69,10 +69,12 @@ export interface AllocationCandidate {
  * expiration, then the oldest pack without expiry. Expired or empty packs never qualify.
  */
 export function choosePack(candidates: readonly AllocationCandidate[], sessionTypeId: string,
-  today: string): AllocationCandidate | null {
+  today: string, preferredPackId: string | null = null): AllocationCandidate | null {
   const usable = candidates.filter((pack) => pack.available >= 1
     && (pack.expiresOn === null || pack.expiresOn >= today)
     && (pack.creditScope === "GENERAL" || pack.sessionTypeId === sessionTypeId));
+  // Явно выбранный пакет не заменяется другим при исчерпании, истечении или несовпадении типа.
+  if (preferredPackId !== null) return usable.find((pack) => pack.id === preferredPackId) ?? null;
   const rank = (pack: AllocationCandidate) => pack.creditScope === "SESSION_TYPE" ? 0 : 1;
   return [...usable].sort((a, b) => rank(a) - rank(b)
     || (a.expiresOn === null ? 1 : 0) - (b.expiresOn === null ? 1 : 0)

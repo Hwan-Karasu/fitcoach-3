@@ -34,12 +34,15 @@ export function packSummary(rules: HomeSummaryRules, snapshot: ClientAccountingS
   if (snapshot.mode === "UNTRACKED") return { kind: "NOT_TRACKED", label: "Учёт тренировок не ведётся" };
   if (snapshot.mode === "EXTERNAL") return { kind: "NOT_TRACKED", label: "Учёт ведётся вне FitCoach" };
   if (snapshot.packs.length === 0) return { kind: "NO_PACK" };
-  const usable = snapshot.packs.filter((row) => row.pack.expiresOn === null || row.pack.expiresOn >= today);
+  const selected = snapshot.preferredPackId === null ? undefined
+    : snapshot.packs.find((row) => row.pack.id === snapshot.preferredPackId);
+  const scoped = snapshot.preferredPackId === null ? snapshot.packs : selected === undefined ? [] : [selected];
+  const usable = scoped.filter((row) => row.pack.expiresOn === null || row.pack.expiresOn >= today);
   const available = usable.reduce((sum, row) => sum + Math.max(row.available, 0), 0);
-  const reserved = usable.reduce((sum, row) => sum + row.reserved, 0);
-  const granted = usable.reduce((sum, row) => sum + row.pack.grantedCount, 0);
+  const reserved = (selected === undefined ? usable : [selected]).reduce((sum, row) => sum + row.reserved, 0);
+  const granted = (selected === undefined ? usable : [selected]).reduce((sum, row) => sum + row.pack.grantedCount, 0);
   // The pack that serves next: the nearest expiry, then the oldest (§22.1.2 order without the type split).
-  const next = usable.filter((row) => row.available > 0).sort((a, b) =>
+  const next = selected ?? usable.filter((row) => row.available > 0).sort((a, b) =>
     (a.pack.expiresOn ?? "9999-12-31").localeCompare(b.pack.expiresOn ?? "9999-12-31")
       || a.pack.createdAt.localeCompare(b.pack.createdAt))[0];
   const price = next !== undefined && next.pack.totalKopeks > 0

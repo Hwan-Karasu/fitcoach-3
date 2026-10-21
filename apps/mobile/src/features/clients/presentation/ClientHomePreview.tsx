@@ -72,11 +72,13 @@ export function ClientHomePreview({ client, summary, onOpenAccounting, nutrition
           {pack?.kind === "TRACKED" ? <>
             <Text style={[styles.packNumber, { color: colors.textPrimary }]}>{`${pack.available}/${pack.granted}`}</Text>
             <Text style={[styles.detail, { color: colors.textSecondary }]}>доступно</Text>
-            <StatusTag kind={toneKind[pack.tone]} label={toneLabel[pack.tone]} />
           </> : null}
         </View>
       </View>
-      <PackSummaryLine pack={pack} />
+      <View style={styles.packFooter}>
+        <View style={styles.packDetails}><PackSummaryLine pack={pack} /></View>
+        {pack?.kind === "TRACKED" ? <StatusTag kind={toneKind[pack.tone]} label={toneLabel[pack.tone]} /> : null}
+      </View>
     </Pressable>
 
     {nutritionSlot}
@@ -108,6 +110,8 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 14, lineHeight: 19, fontFamily: fonts.bold },
   weightRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   weightField: { flex: 1 },
-  packLine: { flexDirection: "row", alignItems: "baseline", gap: 8, flexWrap: "wrap" },
+  packLine: { flexDirection: "row", alignItems: "baseline", justifyContent: "flex-end", gap: 6, flexShrink: 1 },
+  packFooter: { flexDirection: "row", alignItems: "center", gap: 8 },
+  packDetails: { flex: 1, minWidth: 0 },
   packNumber: { fontSize: 18, lineHeight: 23, fontFamily: fonts.bold },
 });

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { BarChart, EmptyState, InlineNotice, LoadingState, SegmentedControl } from "../../../shared/ui/components/public.ts";
+import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
+import { AppButton, BarChart, DateRangeCalendar, EmptyState, InlineNotice, LineChart, LoadingState, SelectionChip } from "../../../shared/ui/components/public.ts";
+import type { DateRange } from "../../../shared/ui/components/DateRangeCalendar.tsx";
+import { dailyPoints, type ClientMeasurements, type MeasurementRepositoryPort } from "../../measurements/public.ts";
+import type { NutritionCalcPort, StepsDay, WorkoutMark } from "../domain/NutritionCalcPort.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
@@ -11,9 +14,10 @@ import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
 import { TARGET_METRICS, type TargetException, type TargetVersion } from "../domain/TargetModel.ts";
 import { metricLabels, shiftDate, todayLocal, wholeText } from "./nutritionFormat.ts";
 
-type PeriodId = "week" | "month" | "quarter";
+type PeriodId = "week" | "month" | "quarter" | "all" | "range";
 const periods: readonly Readonly<{ id: PeriodId; label: string; days: number }>[] = [
   { id: "week", label: "Неделя", days: 7 }, { id: "month", label: "Месяц", days: 30 }, { id: "quarter", label: "3 месяца", days: 90 },
+  { id: "all", label: "Всё время", days: 0 }, { id: "range", label: "За период", days: 0 },
 ];
 const unitOf = { kcal: "ккал", protein: "г", fat: "г", carbs: "г" } as const;
 
@@ -24,42 +28,81 @@ const shortDate = (date: string) => `${date.slice(8, 10)}.${date.slice(5, 7)}`;
  * «Статистика» питания клиента (§§49.22–49.23): среднее и доля попаданий в коридор по дням с учётом — это дни, где есть хотя бы одна пищевая запись.
  * Дни без еды и только с водой не входят; неизвестные значения не заменяются нулём. Всегда «по внесённым записям», не как доказанное полное потребление.
  */
-export function NutritionStatsScreen({ clientId, diary, targets }: Readonly<{ clientId: string; diary: NutritionDiaryPort; targets: NutritionTargetsPort }>) {
+export function NutritionStatsScreen({ clientId, diary, targets, measurements, calc, onOpenDay }: Readonly<{ clientId: string; diary: NutritionDiaryPort; targets: NutritionTargetsPort;
+  measurements: MeasurementRepositoryPort; calc: NutritionCalcPort; onOpenDay: (date: string) => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const today = todayLocal();
   const [period, setPeriod] = useState<PeriodId>("week");
-  const [data, setData] = useState<Readonly<{ entries: readonly DiaryEntry[]; versions: readonly TargetVersion[]; exceptions: readonly TargetException[]; key: string }> | null>(null);
+  const [data, setData] = useState<Readonly<{ entries: readonly DiaryEntry[]; versions: readonly TargetVersion[]; exceptions: readonly TargetException[]; key: string;
+    body: ClientMeasurements; steps: readonly StepsDay[]; workouts: readonly WorkoutMark[] }> | null>(null);
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
+  const [range, setRange] = useState({ from: shiftDate(today, -29), to: today });
+  const [draftRange, setDraftRange] = useState<DateRange>(range);
+  const [calendar, setCalendar] = useState(false);
+  const [trend, setTrend] = useState<"weight" | "fat" | "steps">("weight");
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const days = periods.find((item) => item.id === period)!.days;
-  const from = shiftDate(today, -(days - 1));
+  const queryFrom = period === "all" ? "0001-01-01" : period === "range" ? range.from : shiftDate(today, -(days - 1));
+  const to = period === "range" ? range.to : today;
+  const key = `${clientId}|${queryFrom}|${to}`;
+  const from = period === "all" && data?.key === key ? [...data.entries.map((entry) => entry.localDate), ...data.body.measurements.filter((row) => row.localDate <= to).map((row) => row.localDate), ...data.steps.map((row) => row.localDate)].sort()[0] ?? to : queryFrom;
 
   useEffect(() => {
     let active = true;
-    void Promise.all([diary.listEntries(clientId, from, today), targets.listVersions(clientId), targets.listExceptions(clientId)]).then(([entries, versions, exceptions]) => {
-      if (active) { setData({ entries, versions, exceptions, key: `${clientId}|${from}` }); setFailed(false); }
+    void Promise.all([diary.listEntries(clientId, queryFrom, to), targets.listVersions(clientId), targets.listExceptions(clientId), measurements.listForClient(clientId),
+      calc.listSteps(clientId, queryFrom, to), calc.listWorkoutMarks(clientId, queryFrom, to)]).then(([entries, versions, exceptions, body, steps, workouts]) => {
+      if (active) { setData({ entries, versions, exceptions, body, steps, workouts, key }); setFailed(false); }
     }, () => { if (active) setFailed(true); });
     return () => { active = false; };
-  }, [clientId, diary, targets, from, today, tick]);
+  }, [clientId, diary, targets, measurements, calc, queryFrom, to, key, tick]);
   useEffect(() => {
     const refresh = () => setTick((value) => value + 1);
     const offDiary = diary.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });
     const offTargets = targets.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });
-    return () => { offDiary(); offTargets(); };
-  }, [clientId, diary, targets]);
+    const offBody = measurements.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });
+    const offCalc = calc.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });
+    return () => { offDiary(); offTargets(); offBody(); offCalc(); };
+  }, [clientId, diary, targets, measurements, calc]);
 
-  const stats = useMemo(() => data === null || data.key !== `${clientId}|${from}` ? null
-    : computeNutritionStats({ from, to: today, entries: data.entries, versions: data.versions, exceptions: data.exceptions }), [data, clientId, from, today]);
+  const stats = useMemo(() => data === null || data.key !== key ? null
+    : computeNutritionStats({ from, to, entries: data.entries, versions: data.versions, exceptions: data.exceptions, sparse: period === "all" }), [data, key, from, to, period]);
+  const graph = useMemo(() => {
+    if (data === null || data.key !== key) return [];
+    if (trend === "steps") return data.steps.map((row) => ({ key: row.localDate, label: shortDate(row.localDate), caption: row.localDate, value: row.steps }));
+    return dailyPoints(data.body.measurements, data.body.primaries, trend === "weight" ? "WEIGHT" : "BODY_FAT").filter((row) => row.localDate >= from && row.localDate <= to)
+      .flatMap((row) => row.kind !== "VALUE" ? [] : [{ key: row.localDate, label: shortDate(row.localDate), caption: row.localDate, value: row.measurement.valueX10 / 10 }]);
+  }, [data, key, trend, from, to]);
+  const weekGroups = useMemo(() => {
+    const weeks = new Map<string, NonNullable<typeof stats>["days"][number][]>();
+    for (const day of stats?.days ?? []) {
+      if (!day.accounted) continue;
+      const weekday = new Date(`${day.localDate}T00:00:00Z`).getUTCDay();
+      const monday = shiftDate(day.localDate, -((weekday + 6) % 7));
+      weeks.set(monday, [...(weeks.get(monday) ?? []), day]);
+    }
+    return [...weeks.entries()].reverse();
+  }, [stats]);
+  const selected = selectedDate ?? graph.at(-1)?.key ?? to;
+  const selectedDay = stats?.days.find((day) => day.localDate === selected);
+  const rangeDays = draftRange.from === null || draftRange.to === null ? 0 : Math.round((Date.parse(draftRange.to) - Date.parse(draftRange.from)) / 86400000) + 1;
 
-  const control = <View style={styles.pad}><SegmentedControl items={periods} selectedId={period} onSelect={setPeriod} /></View>;
-  if (stats === null) {
-    return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{control}
-      {failed ? <View style={styles.pad}><InlineNotice kind="error">Не удалось загрузить статистику питания.</InlineNotice></View> : <LoadingState label="Считаем статистику…" />}</View>;
-  }
+  const control = <View style={styles.pad}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>{periods.map((item) => <SelectionChip key={item.id} group="Период статистики" label={item.label} selected={period === item.id}
+    onPress={() => { if (item.id === "range") { setDraftRange(range); setCalendar(true); } else { setPeriod(item.id); setSelectedDate(null); } }} />)}</ScrollView>
+    <Text style={[styles.meta, { color: colors.textSecondary }]}>{`${period === "all" && stats === null ? "Всё время" : from} — ${to}`}</Text>
+    <Modal visible={calendar} transparent animationType="fade" onRequestClose={() => setCalendar(false)}><View style={styles.backdrop}><View style={[styles.dialog, { backgroundColor: colors.surface }]}>
+      <Text style={[styles.heading, { color: colors.textPrimary }]}>Выберите период</Text><DateRangeCalendar value={draftRange} max={today} onChange={setDraftRange} />
+      {rangeDays > 1830 ? <Text style={[styles.meta, { color: colors.danger }]}>Диапазон — до пяти лет. Для полной истории выберите «Всё время».</Text> : null}
+      <AppButton label="Показать период" disabled={rangeDays <= 0 || rangeDays > 1830} onPress={() => { if (draftRange.from !== null && draftRange.to !== null) { setRange({ from: draftRange.from, to: draftRange.to }); setPeriod("range"); setSelectedDate(null); setCalendar(false); } }} />
+      <AppButton variant="ghost" label="Отмена" onPress={() => setCalendar(false)} />
+    </View></View></Modal>
+  </View>;
   return (
     <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content}>
       {control}
+      {stats === null ? failed ? <View style={styles.pad}><InlineNotice kind="error">Не удалось загрузить статистику питания.</InlineNotice><AppButton label="Повторить" onPress={() => setTick((value) => value + 1)} /></View> : <LoadingState label="Считаем статистику…" /> : <>
+      {failed ? <InlineNotice kind="error">Не удалось обновить статистику. Показаны последние загруженные данные.</InlineNotice> : null}
       <View style={[styles.card, { backgroundColor: colors.surface }]}>
         <Text style={[styles.meta, { color: colors.textSecondary }]}>Дней с записями о еде</Text>
         <Text style={[styles.big, { color: colors.textPrimary }]}>{`${stats.accountedDays} из ${stats.periodDays}`}</Text>
@@ -85,11 +128,29 @@ export function NutritionStatsScreen({ clientId, diary, targets }: Readonly<{ cl
           <View style={[styles.card, { backgroundColor: colors.surface }]}>
             <Text style={[styles.heading, { color: colors.textPrimary }]}>Калории по дням</Text>
             <BarChart items={stats.days.map((day) => ({ key: day.localDate, label: shortDate(day.localDate), value: day.valuesX10.kcal === null ? null : Math.round(day.valuesX10.kcal / 10) }))}
-              format={(value) => `${Math.round(value)} ккал`} accessibilityLabel={`Калории по дням, ${stats.accountedDays} дней с записями`} />
+              format={(value) => `${Math.round(value)} ккал`} accessibilityLabel={`Калории по дням, ${stats.accountedDays} дней с записями`} onPressItem={(item) => onOpenDay(item.key)} />
             <Text style={[styles.meta, { color: colors.textMuted }]}>Дни без записей — без столбца, а не ноль.</Text>
           </View>
         </>
       )}
+      <View style={[styles.card, { backgroundColor: colors.surface }]}>
+        <View style={styles.chips}>{([{ id: "weight", label: "Вес" }, { id: "fat", label: "% жира" }, { id: "steps", label: "Шаги" }] as const).map((item) => <SelectionChip key={item.id} group="Динамика" label={item.label} selected={trend === item.id} onPress={() => { setTrend(item.id); setSelectedDate(null); }} />)}</View>
+        {graph.length === 0 ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Нет известных значений. Неоднозначные замеры требуют выбора основного в журнале.</Text> :
+          <LineChart points={graph} format={(value) => String(Math.round(value * 10) / 10)} formatValue={(value) => `${Math.round(value * 10) / 10} ${trend === "weight" ? "кг" : trend === "fat" ? "%" : "шагов"}`} accessibilityLabel="Динамика по известным значениям" onSelect={(point) => setSelectedDate(point.key)} />}
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>Вес и % жира — основные замеры дня; пропуски не подменяются нулём.</Text>
+        <Text style={[styles.heading, { color: colors.textPrimary }]}>{selected}</Text>
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>{`К ${wholeText(selectedDay?.valuesX10.kcal ?? null)} · Б ${wholeText(selectedDay?.valuesX10.protein ?? null)} · Ж ${wholeText(selectedDay?.valuesX10.fat ?? null)} · У ${wholeText(selectedDay?.valuesX10.carbs ?? null)}`}</Text>
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Шаги: ${data?.steps.find((row) => row.localDate === selected)?.steps ?? "—"} · Отметка тренировки: ${data?.workouts.find((row) => row.localDate === selected)?.done === true ? "Да" : data?.workouts.find((row) => row.localDate === selected)?.done === false ? "Нет" : "—"}`}</Text>
+        <AppButton label="Открыть день в дневнике" compact onPress={() => onOpenDay(selected)} />
+      </View>
+      {weekGroups.length > 0 ? <View style={[styles.card, { backgroundColor: colors.surface }]}><Text style={[styles.heading, { color: colors.textPrimary }]}>Недельные средние</Text>
+        {weekGroups.map(([monday, points]) => <View key={monday} style={styles.week}><Text style={[styles.meta, { color: colors.textPrimary }]}>{`${shortDate(monday)} — ${shortDate(shiftDate(monday, 6))} · ${points.length} дн. с едой`}</Text>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>{TARGET_METRICS.map((metric) => {
+            const values = points.flatMap((day) => day.valuesX10[metric] === null ? [] : [day.valuesX10[metric]!]);
+            return `${metricLabels[metric]} ${values.length === 0 ? "—" : wholeText(Math.round(values.reduce((sum, value) => sum + value, 0) / values.length))} (${values.length} дн.)`;
+          }).join(" · ")}</Text></View>)}
+      </View> : null}
+      </>}
     </ScrollView>
   );
 }
@@ -102,4 +163,8 @@ const styles = StyleSheet.create({
   heading: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
   big: { fontFamily: fonts.bold, fontSize: 24, lineHeight: 30 },
   meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  chips: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  week: { gap: 4, paddingVertical: 6 },
+  backdrop: { flex: 1, padding: 16, justifyContent: "center", backgroundColor: "rgba(0,0,0,0.45)" },
+  dialog: { padding: 12, borderRadius: 20, gap: 8 },
 });

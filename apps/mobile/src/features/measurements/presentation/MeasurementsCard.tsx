@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react-native";
-import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, LoadingState, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Check, ChevronLeft, ChevronRight, Plus } from "lucide-react-native";
+import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, LoadingState, TextField } from "../../../shared/ui/components/public.ts";
 import { pickDate } from "../../../shared/ui/components/pickDate.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
@@ -21,6 +21,8 @@ type Cell = Readonly<{ kind: "EMPTY" }> | Readonly<{ kind: "VALUE"; measurement:
 /** `ДД.ММ` для ленты дат. */
 const shortDate = (localDate: string) => `${localDate.slice(8, 10)}.${localDate.slice(5, 7)}`;
 const fullDate = (localDate: string) => `${localDate.slice(8, 10)}.${localDate.slice(5, 7)}.${localDate.slice(0, 4)}`;
+const sideLabels = (group: MeasurementGroup): readonly [string, string] => group.id === "THIGH"
+  ? ["Левое", "Правое"] : group.id === "CALF" ? ["Левая", "Правая"] : ["Левый", "Правый"];
 const valueText = (valueX10: number) => (valueX10 % 10 === 0 ? String(valueX10 / 10) : String(valueX10 / 10).replace(".", ","));
 
 function errorText(error: unknown): string {
@@ -48,7 +50,7 @@ const cellSpeech = (cell: Cell): string => cell.kind === "VALUE" ? `${valueText(
 
 interface EditorState { readonly editingDate: string | null; readonly date: string; readonly values: Readonly<Record<MeasurementType, string>> }
 
-function Tile({ group, cells }: Readonly<{ group: MeasurementGroup; cells: Readonly<Record<MeasurementType, Cell>> }>) {
+function Tile({ group, cells, compact }: Readonly<{ group: MeasurementGroup; cells: Readonly<Record<MeasurementType, Cell>>; compact: boolean }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const sided = group.left !== undefined && group.right !== undefined;
@@ -59,15 +61,15 @@ function Tile({ group, cells }: Readonly<{ group: MeasurementGroup; cells: Reado
     : `${group.label}: ${cellSpeech(cells[group.single as MeasurementType])}`;
   const muted = (cell: Cell) => cell.kind === "VALUE" ? colors.textPrimary : colors.textMuted;
   return (
-    <View accessible accessibilityLabel={speech} style={[styles.tile, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
-      <Text style={[styles.tileLabel, { color: colors.textSecondary }]}>{group.label}</Text>
+    <View accessible accessibilityLabel={speech} style={[styles.tile, compact && styles.compactTile, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
+      <Text style={[styles.tileLabel, compact && styles.compactTileLabel, { color: colors.textSecondary }]}>{group.label}</Text>
       {sided ? <>
         <View style={styles.sides}>
-          <Text style={[styles.tileValue, { color: muted(cells[group.left as MeasurementType]) }]}>{`Л ${cellText(cells[group.left as MeasurementType])}`}</Text>
-          <Text style={[styles.tileValue, { color: muted(cells[group.right as MeasurementType]) }]}>{`П ${cellText(cells[group.right as MeasurementType])}`}</Text>
+          <Text style={[styles.tileValue, compact && styles.compactTileValue, { color: muted(cells[group.left as MeasurementType]) }]}>{`Л ${cellText(cells[group.left as MeasurementType])}`}</Text>
+          <Text style={[styles.tileValue, compact && styles.compactTileValue, { color: muted(cells[group.right as MeasurementType]) }]}>{`П ${cellText(cells[group.right as MeasurementType])}`}</Text>
         </View>
-        {hasLegacy ? <Text style={[styles.tileLabel, { color: colors.textMuted }]}>{`без стороны ${cellText(legacy)}`}</Text> : null}
-      </> : <Text style={[styles.tileValue, { color: muted(cells[group.single as MeasurementType]) }]}>{cellText(cells[group.single as MeasurementType])}{cells[group.single as MeasurementType].kind === "VALUE" ? " см" : ""}</Text>}
+        {hasLegacy ? <Text style={[styles.tileLabel, compact && styles.compactTileLabel, { color: colors.textMuted }]}>{`без стороны ${cellText(legacy)}`}</Text> : null}
+      </> : <Text style={[styles.tileValue, compact && styles.compactTileValue, { color: muted(cells[group.single as MeasurementType]) }]}>{cellText(cells[group.single as MeasurementType])}{cells[group.single as MeasurementType].kind === "VALUE" ? " см" : ""}</Text>}
     </View>
   );
 }
@@ -77,7 +79,7 @@ function Tile({ group, cells }: Readonly<{ group: MeasurementGroup; cells: Reado
  * «Удалить» и «Настроить замеры». Источник — единственный журнал Measurements; пусто — «—», не ноль; старые односторонние значения остаются «без стороны». Видимость полей — настройка
  * экрана на время работы: скрытое поле не удаляет факты, а группа с данными за выбранную дату показывается всегда.
  */
-export function MeasurementsCard({ clientId, repository, onOpenJournal }: Readonly<{ clientId: string; repository: MeasurementRepositoryPort;
+export function MeasurementsCard({ clientId, repository, onOpenJournal, compact = false }: Readonly<{ compact?: boolean; clientId: string; repository: MeasurementRepositoryPort;
   /** Полный журнал замеров: несколько значений за день, выбор основного, масса и % жира. */
   onOpenJournal?: () => void }>) {
   const { palette } = usePrototypeTheme();
@@ -176,23 +178,30 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal }: Readon
   };
   const toggleGroup = (id: string) => setVisible((currentSet) => { const next = new Set(currentSet); if (next.has(id)) next.delete(id); else next.add(id); return next; });
 
-  /** Группы одной строкой: одиночные по три, парные (Л/П) по две. */
+  /** Плотный просмотр — три группы в ряд; обычный — одиночные по три, парные по две. */
   const rows = (groups: readonly MeasurementGroup[]): readonly (readonly MeasurementGroup[])[] => {
     const singles = groups.filter((group) => group.single !== undefined);
     const sided = groups.filter((group) => group.single === undefined);
     const chunk = (list: readonly MeasurementGroup[], size: number) => Array.from({ length: Math.ceil(list.length / size) }, (_, row) => list.slice(row * size, row * size + size));
-    return [...chunk(singles, 3), ...chunk(sided, 2)];
+    return compact ? chunk(groups, 3) : [...chunk(singles, 3), ...chunk(sided, 2)];
   };
   const editorGroups = groupsFor(editor !== null && editor.editingDate !== null ? cells : null);
+  const editorField = (type: MeasurementType, label: string) => {
+    if (editor === null) return null;
+    const locked = editor.editingDate !== null && editor.editingDate === current && cells !== null && cells[type].kind === "MANY";
+    return <View key={type} style={styles.grow}><TextField compact textAlign="center" label={label} value={editor.values[type]}
+      keyboardType="decimal-pad" disabled={locked || busy} disabledReason="Несколько записей: выберите основную в журнале."
+      onChangeText={(text) => setEditor({ ...editor, values: { ...editor.values, [type]: text } })} /></View>;
+  };
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface }]}>
+    <View style={[styles.card, compact && styles.compactCard, { backgroundColor: colors.surface }]}>
       <View style={styles.head}>
         <View style={[styles.dot, { backgroundColor: colors.accentInk }]} />
-        <Text style={[styles.title, { color: colors.accentInk }]}>ЗАМЕРЫ</Text>
+        <Text style={[styles.title, { color: colors.accentInk }]}>ЗАМЕРЫ{compact && current !== null ? <Text style={styles.compactDateTitle}>{`\n${fullDate(current)}`}</Text> : null}</Text>
         {current !== null ? <>
-          <AppButton compact variant="secondary" label="Изменить" disabled={busy} onPress={openEdit} />
-          <AppButton compact variant="ghost" label="Удалить" disabled={busy} accessibilityLabel={`Удалить замеры за ${fullDate(current)}`} onPress={() => setConfirmDelete(true)} />
+          <AppButton compact size={compact ? "small" : "default"} variant="secondary" label="Изменить" disabled={busy} onPress={openEdit} />
+          <AppButton compact size={compact ? "small" : "default"} variant="ghost" label="Удалить" disabled={busy} accessibilityLabel={`Удалить замеры за ${fullDate(current)}`} onPress={() => setConfirmDelete(true)} />
         </> : null}
       </View>
       {error !== null && editor === null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
@@ -203,11 +212,11 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal }: Readon
             onContentSizeChange={() => stripRef.current?.scrollToEnd({ animated: false })}>
             {dates.map((date) => (
               <Pressable key={date} accessibilityRole="button" accessibilityState={{ selected: date === current }} accessibilityLabel={`Замер от ${fullDate(date)}`} onPress={() => setSelected(date)}
-                style={[styles.dateChip, { borderColor: date === current ? colors.accentInk : colors.border, backgroundColor: date === current ? colors.accentFill : colors.surfaceRaised }]}>
+                style={[styles.dateChip, compact && styles.compactDateChip, { borderColor: date === current ? colors.accentInk : colors.border, backgroundColor: date === current ? colors.accentFill : colors.surfaceRaised }]}>
                 <Text style={[styles.dateText, { color: date === current ? colors.onAccentFill : colors.textPrimary }]}>{shortDate(date)}</Text>
               </Pressable>
             ))}
-            <Pressable accessibilityRole="button" accessibilityLabel="Новая запись замеров" onPress={openNew} style={[styles.dateChip, styles.plus, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Новая запись замеров" onPress={openNew} style={[styles.dateChip, styles.plus, compact && styles.compactDateChip, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
               <Plus size={20} color={colors.accentInk} />
             </Pressable>
           </ScrollView>
@@ -215,64 +224,65 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal }: Readon
         </View>
         {current === null || cells === null ? <>
           <Text style={[styles.empty, { color: colors.textSecondary }]}>Замеров пока нет. Нажмите «+», чтобы добавить первую запись.</Text>
-          <AppButton variant="secondary" label="Новая запись" onPress={openNew} />
+          {!compact ? <AppButton variant="secondary" label="Новая запись" onPress={openNew} /> : null}
         </> : <>
-          <Text style={[styles.fullDate, { color: colors.textPrimary }]}>{fullDate(current)}</Text>
+          {!compact ? <Text style={[styles.fullDate, { color: colors.textPrimary }]}>{fullDate(current)}</Text> : null}
           {rows(shownGroups).map((row) => (
             <View key={row.map((group) => group.id).join()} style={styles.tiles}>
-              {row.map((group) => <Tile key={group.id} group={group} cells={cells} />)}
+              {row.map((group) => <Tile key={group.id} group={group} cells={cells} compact={compact} />)}
             </View>
           ))}
         </>}
         <View style={styles.tiles}>
-          <View style={styles.grow}><AppButton compact variant="ghost" label={configuring ? "Готово" : "Настроить замеры"} onPress={() => setConfiguring(!configuring)} /></View>
-          {onOpenJournal !== undefined ? <View style={styles.grow}><AppButton compact variant="ghost" label="Журнал замеров" onPress={onOpenJournal} /></View> : null}
+          <View style={styles.grow}><AppButton compact size={compact ? "small" : "default"} variant="ghost" label={configuring ? "Готово" : "Настроить замеры"} onPress={() => setConfiguring(!configuring)} /></View>
+          {onOpenJournal !== undefined ? <View style={styles.grow}><AppButton compact size={compact ? "small" : "default"} variant="ghost" label="Журнал замеров" onPress={onOpenJournal} /></View> : null}
         </View>
         {configuring ? <>
           <Text style={[styles.hint, { color: colors.textSecondary }]}>Выберите показатели, которые показывать. Скрытие не удаляет внесённые значения; группа с данными за дату видна всегда. Настройка действует, пока открыто приложение.</Text>
-          <View style={styles.chips}>
-            {MEASUREMENT_GROUPS.map((group) => <SelectionChip key={group.id} group="Показать замер" label={group.label} selected={visible.has(group.id)} onPress={() => toggleGroup(group.id)} />)}
+          <View style={styles.settingsGrid}>
+            {MEASUREMENT_GROUPS.map((group) => <Pressable key={group.id} accessibilityRole="checkbox" accessibilityLabel={`Показать замер: ${group.label}`}
+              accessibilityState={{ checked: visible.has(group.id) }} onPress={() => toggleGroup(group.id)}
+              style={({ pressed }) => [styles.settingChip, { backgroundColor: visible.has(group.id) ? colors.accentFill : colors.surfaceRaised,
+                borderColor: visible.has(group.id) ? colors.accentFill : colors.border, opacity: pressed ? 0.75 : 1 }]}>
+              <View style={styles.checkSpace}>{visible.has(group.id) ? <Check size={14} color={colors.onAccentFill} /> : null}</View>
+              <Text style={[styles.settingLabel, { color: visible.has(group.id) ? colors.onAccentFill : colors.textSecondary }]}>{group.label}</Text>
+              <View style={styles.checkSpace} />
+            </Pressable>)}
           </View>
         </> : null}
       </>}
 
       <Modal visible={editor !== null} transparent animationType="fade" onRequestClose={() => { if (!busy) setEditor(null); }}>
-        <View style={styles.backdrop}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.backdrop}>
           <View style={[styles.dialog, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.dialogTitle, { color: colors.textPrimary }]}>{editor?.editingDate === null ? "Новая запись" : "Изменить замеры"}</Text>
+            <View style={styles.head}>
+              <Text style={[styles.dialogTitle, styles.grow, { color: colors.textPrimary }]}>{editor?.editingDate === null ? "Новые замеры" : "Изменить замеры"}</Text>
+              <AppButton compact size="small" variant="secondary" label={editor === null ? "Дата" : shortDate(editor.date)} accessibilityLabel={editor === null ? "Дата замеров" : `Дата замеров: ${formatDate(editor.date)}`} disabled={busy}
+                onPress={() => { void pickDate({ value: editor?.date ?? localDateOf(new Date()), title: "Дата замеров" }).then((picked) => { if (picked !== null && editor !== null) setEditor({ ...editor, date: picked }); }); }} />
+            </View>
             <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.dialogBody}>
               {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
-              <AppButton variant="secondary" label={editor === null ? "" : formatDate(editor.date)} accessibilityLabel="Дата замера" disabled={busy}
-                onPress={() => { void pickDate({ value: editor?.date ?? localDateOf(new Date()), title: "Дата замера" }).then((picked) => { if (picked !== null && editor !== null) setEditor({ ...editor, date: picked }); }); }} />
-              <Text style={[styles.hint, { color: colors.textSecondary }]}>Заполните то, что измерено. Пустое поле остаётся «нет данных»; у существующей записи пустое поле удаляет это значение. Левую и правую сторону можно вносить по отдельности.</Text>
-              {editor === null ? null : editorGroups.map((group) => {
-                const manyLocked = (type: MeasurementType) => editor.editingDate !== null && editor.editingDate === current && cells !== null && cells[type].kind === "MANY";
-                const field = (type: MeasurementType, label: string) => (
-                  <View key={type} style={styles.grow}>
-                    <TextField label={label} value={editor.values[type]} keyboardType="decimal-pad" disabled={manyLocked(type) || busy}
-                      disabledReason="За эту дату несколько записей: выберите основную в журнале замеров." onChangeText={(text) => setEditor({ ...editor, values: { ...editor.values, [type]: text } })} />
-                  </View>
-                );
-                const sided = group.left !== undefined && group.right !== undefined;
-                const legacyHasValue = group.legacy !== undefined && editor.values[group.legacy] !== "";
-                return (
-                  <View key={group.id} style={styles.editorGroup}>
-                    {sided ? <>
-                      <Text style={[styles.groupLabel, { color: colors.textPrimary }]}>{group.label}, см</Text>
-                      <View style={styles.tiles}>
-                        {field(group.left as MeasurementType, "Левый")}
-                        {field(group.right as MeasurementType, "Правый")}
-                      </View>
-                      {legacyHasValue ? <View style={styles.tiles}>{field(group.legacy as MeasurementType, "Без указания стороны")}</View> : null}
-                    </> : field(group.single as MeasurementType, `${group.label}, см`)}
-                  </View>
-                );
-              })}
+              <Text style={[styles.editorHint, { color: colors.textSecondary }]}>Все обхваты — в см. Пустое поле при исправлении удаляет значение. Левую и правую сторону можно вносить отдельно.</Text>
+              <View style={styles.editorGrid}>
+                {editorGroups.filter((group) => group.single !== undefined).map((group) => <View key={group.id} style={styles.singleEditor}>
+                  {editorField(group.single as MeasurementType, group.label)}
+                </View>)}
+              </View>
+              <View style={styles.editorGrid}>
+                {editorGroups.filter((group) => group.left !== undefined && group.right !== undefined).map((group) => <View key={group.id}
+                  style={[styles.pairedEditor, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
+                  <Text style={[styles.groupLabel, { color: colors.textPrimary }]}>{group.label}</Text>
+                  <View style={styles.tiles}>{editorField(group.left as MeasurementType, sideLabels(group)[0])}{editorField(group.right as MeasurementType, sideLabels(group)[1])}</View>
+                  {group.legacy !== undefined && editor !== null && editor.values[group.legacy] !== "" ? editorField(group.legacy, "Без стороны") : null}
+                </View>)}
+              </View>
             </ScrollView>
-            <AppButton label="Сохранить" busy={busy} onPress={() => { void save(); }} />
-            <AppButton variant="ghost" label="Отмена" disabled={busy} onPress={() => { setEditor(null); setError(null); }} />
+            <View style={styles.tiles}>
+              <View style={styles.grow}><AppButton compact size="small" variant="secondary" label="Отмена" disabled={busy} onPress={() => { setEditor(null); setError(null); }} /></View>
+              <View style={styles.grow}><AppButton compact size="small" label="Сохранить" busy={busy} onPress={() => { void save(); }} /></View>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
       <ConfirmDialog visible={confirmDelete} destructive title="Удалить замеры за день?" confirmLabel="Удалить" onCancel={() => setConfirmDelete(false)} onConfirm={() => { void removeDate(); }}
         description={current === null ? "" : `Будут удалены все окружности за ${fullDate(current)}. Масса тела и процент жира не затрагиваются.`} />
@@ -282,6 +292,12 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal }: Readon
 
 const styles = StyleSheet.create({
   card: { ...shadow.card, borderRadius: 24, padding: 14, gap: 10 },
+  compactCard: { padding: 8, gap: 4, borderRadius: 20 },
+  compactTile: { minHeight: 40, paddingHorizontal: 5, paddingVertical: 4, borderRadius: 10, gap: 0 },
+  compactTileLabel: { fontSize: 10, lineHeight: 13 },
+  compactTileValue: { fontSize: 11, lineHeight: 15 },
+  compactDateTitle: { fontFamily: fonts.regular, fontSize: 10, lineHeight: 13, letterSpacing: 0 },
+  compactDateChip: { minHeight: 40 },
   head: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   title: { flex: 1, fontFamily: fonts.bold, fontSize: 13, lineHeight: 18, letterSpacing: 0.6 },
@@ -298,12 +314,18 @@ const styles = StyleSheet.create({
   sides: { flexDirection: "row", justifyContent: "space-between", gap: 6 },
   tileLabel: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   tileValue: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 20 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  settingsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  settingChip: { width: "47%", flexGrow: 1, minHeight: 38, borderRadius: 19, borderWidth: 1, paddingHorizontal: 8, flexDirection: "row", alignItems: "center" },
+  checkSpace: { width: 16 },
+  settingLabel: { flex: 1, fontFamily: fonts.bold, fontSize: 12, lineHeight: 16, textAlign: "center" },
   backdrop: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.4)" },
-  dialog: { borderRadius: 24, padding: 18, gap: 10, maxHeight: "92%" },
-  dialogTitle: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
+  dialog: { width: "100%", maxWidth: 520, alignSelf: "center", borderRadius: 20, padding: 12, gap: 8, maxHeight: "92%" },
+  dialogTitle: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },
   dialogBody: { gap: 10, paddingBottom: 4 },
-  editorGroup: { gap: 4 },
-  groupLabel: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
+  editorHint: { fontFamily: fonts.regular, fontSize: 10, lineHeight: 14 },
+  editorGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  singleEditor: { width: "30%", flexGrow: 1 },
+  pairedEditor: { width: "47%", flexGrow: 1, borderWidth: 1, borderRadius: 12, padding: 6, gap: 4 },
+  groupLabel: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 15 },
   hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
 });

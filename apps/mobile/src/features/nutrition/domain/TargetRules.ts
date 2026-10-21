@@ -38,7 +38,12 @@ export function validateVersion(input: TargetVersionInput): TargetVersionInput {
   if (input.days.length !== 7) fail("TARGET_DAYS_INVALID");
   const days = input.days.map((day) => day === null || !hasAnyRange(day) ? null : validateCorridors(day));
   if (days.every((day) => day === null)) fail("TARGET_EMPTY");
-  return { effectiveFrom: input.effectiveFrom, days };
+  const adjustment = input.homeAdjustment;
+  if (adjustment == null) return { effectiveFrom: input.effectiveFrom, days };
+  if (adjustment.mode !== "EXACT" && adjustment.mode !== "RANGE") fail("TARGET_RANGE_INVALID");
+  const { protein, fat, carbs } = validateCorridors({ kcal: null, ...adjustment.manual });
+  if (adjustment.mode === "EXACT" && [protein, fat, carbs].some((range) => range !== null && range.minX10 !== range.maxX10)) fail("TARGET_RANGE_INVALID");
+  return { effectiveFrom: input.effectiveFrom, days, homeAdjustment: { mode: adjustment.mode, manual: { protein, fat, carbs } } };
 }
 
 /** Понедельник = 0 … воскресенье = 6 для даты `YYYY-MM-DD`. */

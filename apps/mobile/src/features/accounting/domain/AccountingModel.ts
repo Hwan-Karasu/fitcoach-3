@@ -52,6 +52,8 @@ export interface ClientAccountingSnapshot {
   readonly mode: AccountingMode;
   /** True when the client has no own override and follows the workspace default. */
   readonly inheritedMode: boolean;
+  /** null — автоматический выбор; применяется только к новым резервам. */
+  readonly preferredPackId: string | null;
   readonly packs: readonly PackBalance[];
   readonly available: number;
   readonly reserved: number;
@@ -67,6 +69,8 @@ export interface NewPackInput {
   readonly grantedCount: number;
   readonly totalKopeks: number;
   readonly expiresOn: string | null;
+  /** Необязательная полная оплата: сумма равна стоимости пакета, запись в одной транзакции. */
+  readonly payment?: Readonly<{ paidOn: string; method: PaymentMethod }>;
 }
 
 export interface NewPaymentInput {
@@ -81,7 +85,8 @@ export interface NewPaymentInput {
 export type BookingCreditContext =
   | Readonly<{ kind: "NOT_TRACKED"; mode: AccountingMode }>
   | Readonly<{ kind: "NOT_REQUIRED" }>
-  | Readonly<{ kind: "AVAILABLE"; available: number }>
+  | Readonly<{ kind: "AVAILABLE"; available: number; preferredPackTitle?: string }>
+  | Readonly<{ kind: "PREFERRED_UNAVAILABLE" }>
   | Readonly<{ kind: "NONE_AVAILABLE" }>;
 
 export interface ReconcileResult {

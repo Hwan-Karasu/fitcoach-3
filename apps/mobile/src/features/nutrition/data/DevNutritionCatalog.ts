@@ -236,4 +236,49 @@ export const devNutritionCatalog: readonly MigrationStep[] = [{
       FOREIGN KEY (client_id, workspace_id) REFERENCES dev_clients(id, workspace_id) ON DELETE RESTRICT
     )`,
   ],
+}, {
+  version: 10,
+  checksum: "n10-dev-nutrition-v10-home-manual-macros-20261020",
+  statements: [
+    // NULL у прежних версий: происхождение чисел неизвестно. Только dev-схема, не production DDL.
+    `ALTER TABLE dev_nutrition_target_versions ADD COLUMN home_adjustment_json TEXT
+      CHECK (home_adjustment_json IS NULL OR json_valid(home_adjustment_json))`,
+  ],
+}, {
+  version: 11,
+  checksum: "n01-dev-nutrition-v11-client-saved-meals-20261020",
+  statements: [
+    `CREATE TABLE dev_nutrition_saved_meals (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 80),
+      snapshots_json TEXT NOT NULL CHECK (json_valid(snapshots_json)),
+      revision INTEGER NOT NULL CHECK (revision > 0),
+      FOREIGN KEY (client_id, workspace_id) REFERENCES dev_clients(id, workspace_id) ON DELETE RESTRICT
+    )`,
+    `CREATE INDEX dev_nutrition_saved_meals_client ON dev_nutrition_saved_meals(workspace_id, client_id)`,
+  ],
+}, {
+  version: 12,
+  checksum: "n01-dev-nutrition-v12-optional-recipe-details-20261020",
+  statements: [`ALTER TABLE dev_recipes ADD COLUMN details_json TEXT CHECK (details_json IS NULL OR json_valid(details_json))`],
+}, {
+  version: 13,
+  checksum: "n01-dev-nutrition-v13-client-search-history-20261021",
+  statements: [`CREATE TABLE dev_nutrition_search_queries (
+    workspace_id TEXT NOT NULL, client_id TEXT NOT NULL, normalized_query TEXT NOT NULL,
+    query TEXT NOT NULL CHECK (length(query) BETWEEN 1 AND 120), last_used INTEGER NOT NULL,
+    PRIMARY KEY (workspace_id, client_id, normalized_query),
+    FOREIGN KEY (client_id, workspace_id) REFERENCES dev_clients(id, workspace_id) ON DELETE RESTRICT
+  )`],
+}, {
+  version: 14,
+  checksum: "n02-dev-nutrition-v14-batch-idempotency-20261021",
+  statements: [`CREATE TABLE dev_nutrition_batch_commands (
+    workspace_id TEXT NOT NULL, client_id TEXT NOT NULL, command_id TEXT NOT NULL,
+    payload_json TEXT NOT NULL, result_json TEXT NOT NULL CHECK (json_valid(result_json)),
+    PRIMARY KEY (workspace_id, client_id, command_id),
+    FOREIGN KEY (client_id, workspace_id) REFERENCES dev_clients(id, workspace_id) ON DELETE RESTRICT
+  )`],
 }];

@@ -31,6 +31,26 @@ async function stores() {
 }
 const code = (name: string) => (error: unknown) => error instanceof Error && error.message === name;
 
+test("рецепт: optional details сохраняются/читаются, не меняют snapshot; omission сохраняет, null очищает", async () => {
+  const { recipes, oats, milk, close } = await stores();
+  try {
+    const input = porridge(oats.id, milk.id);
+    const details = { prepMinutes: 0, cookMinutes: 15, categories: ["Завтрак"], steps: ["Смешать", "Сварить"], photoUri: "file:///synthetic/photo.jpg" };
+    const created = await recipes.create({ ...input, details }, NOW);
+    assert.deepEqual((await recipes.get(created.id))?.details, details);
+    assert.equal(created.createdAt, NOW.toISOString());
+    const snapshot = snapshotOfRecipe(created, "PORTION", 10);
+    const edited = await recipes.update(created.id, 1, { ...input, name: "Другое название" }, NOW);
+    assert.deepEqual(edited.details, details);
+    const cleared = await recipes.update(created.id, 2, { ...input, details: null }, NOW);
+    assert.equal(cleared.details, null);
+    assert.deepEqual(snapshotOfRecipe(cleared, "PORTION", 10), snapshot);
+    for (const patch of [{ prepMinutes: -1 }, { cookMinutes: 1.5 }, { categories: [""] }, { steps: [""] }, { photoUri: "https://example.org/image.jpg" }]) {
+      await assert.rejects(recipes.create({ ...input, details: { ...details, ...patch } }), code("RECIPE_DETAILS_INVALID"));
+    }
+  } finally { await close(); }
+});
+
 /** Каша: овсянка 50 г + молоко 200 мл; 2 порции; готовое блюдо 400 г. */
 const porridge = (oatsId: string, milkId: string) => ({ name: "Каша", servingsX10: 20, cookedMassX10: 4000,
   ingredients: [{ foodId: oatsId, quantityX10: 500 }, { foodId: milkId, quantityX10: 2000 }] });

@@ -2,7 +2,6 @@ export { AddFoodScreen, type CatalogFilter } from "./presentation/AddFoodScreen.
 export { FoodEditorScreen } from "./presentation/FoodEditorScreen.tsx";
 export { NutritionHomeScreen } from "./presentation/NutritionHomeScreen.tsx";
 export { NutritionHomeCards } from "./presentation/NutritionHomeCards.tsx";
-export { NutritionTargetsScreen } from "./presentation/NutritionTargetsScreen.tsx";
 export type { CalcClientBody } from "./presentation/NutritionCalcScreen.tsx";
 export { RecipeEditorScreen } from "./presentation/RecipeEditorScreen.tsx";
 export type { FoodBasis, FoodBasisUnit, FoodInput, FoodProduct, Nutrients } from "./domain/FoodModel.ts";
@@ -15,6 +14,7 @@ export { recipeBases, recipeTotals, validateRecipe, type RecipeBasis } from "./d
 export { snapshotOfFood, snapshotOfRecipe } from "./domain/FoodSnapshot.ts";
 export { MEAL_SLOTS, type DayState, type DaySummary, type DiaryEntry, type DiaryEntryInput, type MealSlot, type WaterDay } from "./domain/DiaryModel.ts";
 export type { DiaryCommittedChange, NutritionDiaryPort } from "./domain/NutritionDiaryPort.ts";
+export type { SavedMeal, SavedMealInput } from "./domain/SavedMeal.ts";
 export { accountedDates, isLocalDate, summarizeDay, sumNutrients } from "./domain/DiaryRules.ts";
 export { TARGET_METRICS, type Corridors, type RangeVerdict, type ResolvedTarget, type TargetException, type TargetMetric, type TargetRange, type TargetVersion,
   type TargetVersionInput, type WeekdayIndex } from "./domain/TargetModel.ts";

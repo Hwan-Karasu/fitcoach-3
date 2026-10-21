@@ -35,3 +35,4 @@ export { LineChart, type LineChartPoint } from "./LineChart.tsx";
 export { BarChart, type BarChartItem } from "./BarChart.tsx";
 export { DateRangeCalendar, type DateRange } from "./DateRangeCalendar.tsx";
 export { SegmentedRing, type RingSegment } from "./SegmentedRing.tsx";
+export { ChoiceSegments } from "./ChoiceSegments.tsx";

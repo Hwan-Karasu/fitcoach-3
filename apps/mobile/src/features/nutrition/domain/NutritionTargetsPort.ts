@@ -14,7 +14,8 @@ export interface NutritionTargetsPort {
   listVersions(clientId: string): Promise<readonly TargetVersion[]>;
   /**
    * Новая версия с `effectiveFrom`; если на эту дату версия уже есть, правится только с её `expectedRevision` (две версии на одну дату невозможны).
-   * Прошлые версии не удаляются и не переписываются.
+   * Прошлые версии не удаляются и не переписываются. homeAdjustment сохраняется атомарно с итоговыми коридорами;
+   * отсутствие метаданных при правке расписания снимает режим ручной корректировки главной.
    */
   saveVersion(clientId: string, input: TargetVersionInput, expectedRevision: number | null, now?: Date): Promise<TargetVersion>;
   listExceptions(clientId: string): Promise<readonly TargetException[]>;

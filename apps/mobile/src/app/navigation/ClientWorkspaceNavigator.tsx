@@ -32,7 +32,7 @@ type OpenWorkout = (slot: WorkoutSlot, options?: Readonly<{ returnToCaller?: boo
 
 type WorkspaceTabs = {
   Home: undefined;
-  Nutrition: { screen: "NutritionTargets" } | undefined;
+  Nutrition: { screen: "NutritionIndex"; params: { section: "calc"; requestKey: number } } | undefined;
   Training: undefined;
   More: undefined;
 };
@@ -226,7 +226,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
         header: () => <ClientHeader client={client} subtitle={workspaceTabs.Home} onBack={onClose} onClients={onOpenClients} onEdit={() => onOpenEdit(client.id)} /> }}>
         {({ navigation }) => <HomeNavigator client={client} accounting={accounting} measurements={measurements}
           nutritionSlot={<NutritionHomeCards key={client.id} clientId={client.id} body={calcBody} trainedToday={trainedToday} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements}
-            onOpenNutrition={() => navigation.navigate("Nutrition")} onOpenSchedule={() => navigation.navigate("Nutrition", { screen: "NutritionTargets" })} />}
+            onOpenNutrition={() => navigation.navigate("Nutrition")} onOpenCalculation={() => navigation.navigate("Nutrition", { screen: "NutritionIndex", params: { section: "calc", requestKey: Date.now() } })} />}
           onOpenAccounting={() => onOpenAccounting(client.id)}
           onArchive={async () => {
             try { await repository.setArchived(client.id, client.revision, true); }

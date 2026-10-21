@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppButton, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -35,6 +35,8 @@ export function EntryEditorDialog({ entry, onClose, onSave, onRemove }: Readonly
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const lock = useRef(false);
+  if (entry === null && shownId !== null) setShownId(null);
   if (entry !== null && shownId !== entry.id) {
     setShownId(entry.id); setText(formatDecimalX10(entry.snapshot.quantityX10)); setSlot(entry.slot); setFields(EMPTY_TEXTS); setTouched(NONE_TOUCHED); setConfirmRemove(false); setError(null);
   }
@@ -66,10 +68,11 @@ export function EntryEditorDialog({ entry, onClose, onSave, onRemove }: Readonly
   };
 
   const run = async (work: () => Promise<string | null>) => {
-    setBusy(true);
-    const message = await work();
-    setBusy(false);
-    if (message === null) onClose(); else setError(message);
+    if (lock.current) return;
+    lock.current = true; setBusy(true);
+    try { const message = await work(); if (message === null) onClose(); else setError(message); }
+    catch { setError("Не удалось сохранить запись. Повторите действие."); }
+    finally { lock.current = false; setBusy(false); }
   };
   const save = () => {
     if (entry === null) return;
@@ -86,10 +89,11 @@ export function EntryEditorDialog({ entry, onClose, onSave, onRemove }: Readonly
     void run(() => onSave(entry, parsedQuantity, slot, override));
   };
   return (
-    <Modal visible={entry !== null} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={entry !== null} transparent animationType="fade" onRequestClose={() => { if (!lock.current) onClose(); }}>
       <View style={styles.backdrop}>
         <View style={[styles.dialog, { backgroundColor: colors.surface }]}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>{entry?.snapshot.name ?? ""}</Text>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>{entry === null ? "" : entry.localDate}</Text>
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
             <TextField label={`Количество, ${entry === null ? "" : unitLabels[entry.snapshot.basis.unit]}`} value={text} onChangeText={(next) => { setText(next); setError(null); }} keyboardType="decimal-pad"
               error={error ?? undefined} />

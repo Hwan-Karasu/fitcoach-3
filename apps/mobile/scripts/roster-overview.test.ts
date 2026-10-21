@@ -20,7 +20,7 @@ function appointment(id: string, clientId: string, localDate: string, startMinut
 }
 
 const tracked = (available: number): ClientAccountingSnapshot => ({
-  mode: "FITCOACH", inheritedMode: false, available, reserved: 0, ledger: [], payments: [],
+  mode: "FITCOACH", inheritedMode: false, preferredPackId: null, available, reserved: 0, ledger: [], payments: [],
   packs: [{ pack: { id: "p", title: "8", grantedCount: 8, totalKopeks: 800_000, expiresOn: null,
     createdAt: "2026-10-01T00:00:00Z" }, available, reserved: 0 }],
 } as unknown as ClientAccountingSnapshot);

@@ -10,6 +10,9 @@ import type { FoodProduct } from "../apps/mobile/src/features/nutrition/domain/F
 import { snapshotOfFood } from "../apps/mobile/src/features/nutrition/domain/FoodSnapshot.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
+import { devNutritionCatalog, DEV_NUTRITION_LEDGER } from "../apps/mobile/src/features/nutrition/data/DevNutritionCatalog.ts";
+import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
+import { WriterCoordinator } from "../apps/mobile/src/shared/db/WriterCoordinator.ts";
 
 const WS = "synthetic-workspace-a";
 const NOW = new Date("2026-10-20T10:00:00.000Z");
@@ -36,6 +39,134 @@ async function stores(participants = true) {
   return { db, clients, diary, close };
 }
 const code = (name: string) => (error: unknown) => error instanceof Error && error.message === name;
+
+test("batch receipt: одновременное/повторное подтверждение идемпотентно, чужой клиент независим, иной payload отклонён", async () => {
+  const { clients, diary, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticBatchA" });
+    const b = await clients.create({ displayName: "SyntheticBatchB" });
+    const inputs = [{ localDate: DAY, slot: "BREAKFAST" as const, snapshot: snapshotOfFood(OATS, 500) }, { localDate: DAY, slot: "LUNCH" as const, snapshot: snapshotOfFood(MILK, 700) }];
+    let events = 0; diary.subscribeCommittedChanges(() => { events += 1; });
+    const [first, replay] = await Promise.all([diary.addEntries(a.id, inputs, NOW, "synthetic-command"), diary.addEntries(a.id, inputs, NOW, "synthetic-command")]);
+    assert.deepEqual(replay, first); assert.equal(events, 1);
+    assert.equal((await diary.listEntries(a.id, DAY, DAY)).length, 2);
+    await assert.rejects(diary.addEntries(a.id, inputs.slice(0, 1), NOW, "synthetic-command"), code("DIARY_COMMAND_REUSED"));
+    await diary.addEntries(b.id, inputs, NOW, "synthetic-command");
+    assert.equal((await diary.listEntries(b.id, DAY, DAY)).length, 2);
+    await diary.removeEntry(a.id, first[0]!.id, first[0]!.revision);
+    assert.deepEqual(await diary.addEntries(a.id, inputs, NOW, "synthetic-command"), first);
+    assert.equal((await diary.listEntries(a.id, DAY, DAY)).length, 1, "повтор команды не восстанавливает удалённый факт");
+    const archived = await clients.setArchived(a.id, a.revision, true);
+    await clients.deleteArchivedPermanently(a.id, archived.revision);
+  } finally { await close(); }
+});
+
+test("миграции v10→v14: старый ноль/null и override сохраняются, повторный запуск не меняет данные", async () => {
+  const db = new DatabaseSync(":memory:");
+  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const clients = new DevClientRepository(shared, WS, []);
+  await clients.initialize();
+  const client = await clients.create({ displayName: "SyntheticV10" });
+  const writer = new WriterCoordinator(nodeSqlitePort(db));
+  await runMigrations(writer, devNutritionCatalog.filter((migration) => migration.version <= 10), DEV_NUTRITION_LEDGER);
+  db.prepare(`INSERT INTO dev_food_diary_entries (id,workspace_id,client_id,local_date,slot,position,source_kind,source_id,name,brand,basis_unit,basis_amount_x10,
+    per_kcal_x10,per_protein_x10,per_fat_x10,per_carbs_x10,quantity_x10,ingredients_json,revision,created_at,updated_at,override_base_quantity_x10,override_kcal_x10)
+    VALUES ('old-entry',?,?,'2026-10-20','BREAKFAST',0,'FOOD','old-food','Old',NULL,'G',1000,0,NULL,0,100,500,'[]',3,'x','x',500,10)`).run(WS, client.id);
+  const diary = new DevNutritionDiaryRepository(shared, WS);
+  await diary.initialize();
+  try {
+    const [old] = await diary.listEntries(client.id, DAY, DAY);
+    assert.equal(old?.revision, 3); assert.equal(old?.snapshot.perBasis.kcalX10, 0); assert.equal(old?.snapshot.eaten.kcalX10, 10);
+    assert.equal(old?.snapshot.eaten.proteinX10, null);
+    const meal = await diary.createSavedMeal(client.id, { name: "Old copy", snapshots: [old!.snapshot] });
+    await diary.rememberSearchQuery(client.id, "Old");
+    await runMigrations(writer, devNutritionCatalog, DEV_NUTRITION_LEDGER);
+    assert.deepEqual(await diary.listEntries(client.id, DAY, DAY), [old]);
+    assert.deepEqual(await diary.listSavedMeals(client.id), [meal]);
+    assert.deepEqual(await diary.listSearchQueries(client.id), ["Old"]);
+    assert.equal(db.prepare("PRAGMA integrity_check").get()?.integrity_check, "ok");
+  } finally { await diary.close(); await clients.close(); }
+});
+
+test("история запросов: клиентская изоляция, dedup, последнее использование, предел 12, отдельно от еды", async () => {
+  const { clients, diary, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticQueries" });
+    const b = await clients.create({ displayName: "SyntheticQueriesOther" });
+    await diary.rememberSearchQuery(a.id, " Творог   нежный ");
+    await diary.rememberSearchQuery(a.id, "творог нежный");
+    assert.deepEqual(await diary.listSearchQueries(a.id), ["творог нежный"]);
+    assert.deepEqual(await diary.listSearchQueries(b.id), []);
+    for (let i = 0; i < 15; i += 1) await diary.rememberSearchQuery(a.id, `Продукт ${i}`);
+    const history = await diary.listSearchQueries(a.id);
+    assert.equal(history.length, 12); assert.equal(history[0], "Продукт 14");
+    assert.deepEqual(await diary.listEntries(a.id, DAY, DAY), []);
+    const archived = await clients.setArchived(a.id, 1, true);
+    await clients.deleteArchivedPermanently(a.id, archived.revision);
+    assert.deepEqual(await diary.listSearchQueries(a.id), []);
+  } finally { await close(); }
+});
+
+test("N02: редактор атомарен: масса + override + перенос, один event; отказ SQLite оставляет прежнюю запись", async () => {
+  const { db, clients, diary, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticAtomic" });
+    const other = await clients.create({ displayName: "SyntheticOther" });
+    const entry = await diary.addEntry(client.id, { localDate: DAY, slot: "BREAKFAST", snapshot: snapshotOfFood(OATS, 500) });
+    let events = 0;
+    diary.subscribeCommittedChanges(() => { events += 1; });
+    const input = { quantityX10: 1500, slot: "DINNER" as const, override: { kcalX10: 1230, proteinX10: 0, fatX10: null, carbsX10: null } };
+    db.exec("CREATE TRIGGER synthetic_fail BEFORE UPDATE ON dev_food_diary_entries WHEN NEW.slot = 'DINNER' BEGIN SELECT RAISE(ABORT, 'synthetic-failure'); END");
+    await assert.rejects(diary.editEntry(client.id, entry.id, entry.revision, input), /synthetic-failure/u);
+    assert.deepEqual((await diary.listEntries(client.id, DAY, DAY))[0], entry);
+    assert.equal(events, 0);
+    db.exec("DROP TRIGGER synthetic_fail");
+    await assert.rejects(diary.editEntry(other.id, entry.id, entry.revision, input), code("DIARY_STALE"));
+    const updated = await diary.editEntry(client.id, entry.id, entry.revision, input);
+    assert.equal(updated.revision, entry.revision + 1);
+    assert.equal(updated.slot, "DINNER");
+    assert.equal(updated.snapshot.quantityX10, 1500);
+    assert.equal(updated.snapshot.eaten.kcalX10, 1230);
+    assert.equal(updated.snapshot.eaten.proteinX10, 0);
+    assert.equal(events, 1);
+    await assert.rejects(diary.editEntry(client.id, entry.id, entry.revision, input), code("DIARY_STALE"));
+    const cleared = await diary.editEntry(client.id, entry.id, updated.revision, { ...input, override: "CLEAR" });
+    assert.equal(cleared.override, null);
+    assert.equal(cleared.snapshot.eaten.kcalX10, 5400);
+  } finally { await close(); }
+});
+
+test("N01: сохранённая еда изолирована по клиенту, CAS, batch, повторное чтение и удаление клиента", async () => {
+  const { clients, diary, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticMealA" });
+    const b = await clients.create({ displayName: "SyntheticMealB" });
+    const snapshots = [snapshotOfFood(OATS, 500), snapshotOfFood(SUGAR, 100)];
+    let notifications = 0;
+    diary.subscribeSavedMealChanges(() => { notifications += 1; });
+    const meal = await diary.createSavedMeal(a.id, { name: "  Завтрак   дома ", snapshots });
+    assert.equal(meal.name, "Завтрак дома");
+    assert.deepEqual(await diary.listSavedMeals(b.id), []);
+    await assert.rejects(diary.updateSavedMeal(b.id, meal.id, 1, meal), code("SAVED_MEAL_STALE"));
+    await assert.rejects(diary.removeSavedMeal(b.id, meal.id, 1), code("SAVED_MEAL_STALE"));
+    const edited = await diary.updateSavedMeal(a.id, meal.id, 1, { name: "Обед", snapshots: snapshots.slice(0, 1) });
+    assert.equal(edited.revision, 2);
+    await assert.rejects(diary.updateSavedMeal(a.id, meal.id, 1, meal), code("SAVED_MEAL_STALE"));
+    assert.deepEqual(await diary.listSavedMeals(a.id), [edited]);
+    await diary.addEntries(a.id, edited.snapshots.map((snapshot) => ({ localDate: DAY, slot: "LUNCH", snapshot })));
+    await diary.removeSavedMeal(a.id, edited.id, 2);
+    assert.equal((await diary.listEntries(a.id, DAY, DAY)).length, 1, "удаление набора не меняет историю");
+    assert.equal(notifications, 3);
+    await diary.createSavedMeal(b.id, { name: "Чужой", snapshots });
+    await diary.createSavedMeal(a.id, { name: "Удаляемый", snapshots });
+    const archived = await clients.setArchived(a.id, a.revision, true);
+    await clients.deleteArchivedPermanently(a.id, archived.revision);
+    assert.deepEqual(await diary.listSavedMeals(a.id), []);
+    assert.equal((await diary.listSavedMeals(b.id)).length, 1);
+    await assert.rejects(diary.createSavedMeal(b.id, { name: "", snapshots }), code("SAVED_MEAL_NAME_INVALID"));
+    await assert.rejects(diary.createSavedMeal(b.id, { name: "Пусто", snapshots: [] }), code("SAVED_MEAL_ITEMS_INVALID"));
+  } finally { await close(); }
+});
 
 test("N02 §49.22: сумма дня — по записям; завтрак и обед считаются отдельно", async () => {
   const { clients, diary, close } = await stores();

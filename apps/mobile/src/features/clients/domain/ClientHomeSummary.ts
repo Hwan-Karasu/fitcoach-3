@@ -13,7 +13,7 @@ export type HomePackSummary =
   | Readonly<{ kind: "UNAVAILABLE" }>
   | Readonly<{ kind: "NOT_TRACKED"; label: string }>
   | Readonly<{ kind: "NO_PACK" }>
-  | Readonly<{ kind: "TRACKED"; available: number; /** Начислено по действующим пакетам — знаменатель «доступно 8/10». */ granted: number; reserved: number; tone: HomePackTone;
+  | Readonly<{ kind: "TRACKED"; available: number; /** Начислено по выбранному пакету; без выбора — по действующим пакетам. */ granted: number; reserved: number; tone: HomePackTone;
     pricePerSession: string | null; expiresOn: string | null }>;
 
 /** Read-only projection of other owners' facts for the client Home (§§51, 53.4). */

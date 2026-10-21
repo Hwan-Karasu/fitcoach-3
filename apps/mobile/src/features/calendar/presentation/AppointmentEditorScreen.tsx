@@ -30,7 +30,8 @@ function creditLine(info: CalendarBookingCredit | null, existing: CalendarAppoin
   if (existing === "RETURNED") return "Списание по записи компенсировано возвратом.";
   if (info === null || info.kind === "NOT_REQUIRED") return null;
   if (info.kind === "NOT_TRACKED") return "Учёт занятий для клиента ведётся вне FitCoach или не ведётся.";
-  if (info.kind === "AVAILABLE") return `Доступно тренировок: ${info.available} · будет зарезервирована 1.`;
+  if (info.kind === "AVAILABLE") return `${info.preferredPackTitle === undefined ? "" : `Пакет «${info.preferredPackTitle}»: `}Доступно тренировок: ${info.available} · будет зарезервирована 1.`;
+  if (info.kind === "PREFERRED_UNAVAILABLE") return "Основной пакет закончился, истёк или не подходит для этого занятия. Выберите другой в «Абонементе и оплате» или запишите без списания.";
   return "Нет доступных тренировок. Добавьте пакет в карточке клиента или запишите без списания.";
 }
 

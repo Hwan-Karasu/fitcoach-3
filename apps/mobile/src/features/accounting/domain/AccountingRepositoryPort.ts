@@ -13,7 +13,9 @@ export interface AccountingRepositoryPort {
   getClientSnapshot(clientId: string): Promise<ClientAccountingSnapshot>;
   /** null clears the override so the client follows the workspace default. */
   setClientMode(clientId: string, mode: AccountingMode | null): Promise<void>;
-  /** Pack creation and its ISSUED +N entry commit together. */
+  /** null возвращает автоматический выбор. Существующие резервы и списания не меняются. */
+  setPreferredPack(clientId: string, packId: string | null): Promise<void>;
+  /** Pack, ISSUED +N и необязательная полная оплата коммитятся атомарно. */
   createPack(clientId: string, input: NewPackInput): Promise<SessionPack>;
   recordPayment(clientId: string, input: NewPaymentInput): Promise<void>;
   /** Explicit manual correction with a reason; never edits an existing entry. */
