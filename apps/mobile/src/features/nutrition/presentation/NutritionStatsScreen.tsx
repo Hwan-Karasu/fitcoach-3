@@ -125,8 +125,9 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
                 <MacroGlass key={metric} color={macroColors[metric]} ratio={ratio}>
                   <View accessible accessibilityLabel={`${metricLabels[metric]}: в среднем ${item.averageX10 === null ? "нет данных" : `${wholeText(item.averageX10)} ${unitOf[metric]}`}, ${target === null ? "цели нет" : `цель ${wholeText(target)}${ratio !== null && ratio > 1 ? ", выше цели" : ""}`}`} style={styles.metricBody}>
                     <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.metricTitle, { color: macroColors[metric] }]}>{metricLabels[metric]}</Text>
-                    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.metricValue, { color: colors.textPrimary }]}>{item.averageX10 === null ? "—" : wholeText(item.averageX10)}</Text>
-                    <Text numberOfLines={1} style={[styles.meta, { color: colors.textSecondary }]}>{target === null ? "цели нет" : `из ${wholeText(target)}`}</Text>
+                    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.metricValue, { color: macroColors[metric] }]}>{item.averageX10 === null ? "—" : wholeText(item.averageX10)}</Text>
+                    <Text style={[styles.meta, { color: colors.textSecondary }]}>{unitOf[metric]}</Text>
+                    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.meta, { color: colors.textSecondary }]}>{item.compared === 0 ? "цели нет" : `${item.inRange} из ${item.compared}`}</Text>
                   </View>
                 </MacroGlass>
               );

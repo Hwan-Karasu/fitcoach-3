@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Animated, Easing, StyleSheet, View } from "react-native";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
+import { shadow } from "../../../shared/ui/theme/style.ts";
 
 const SPILL_MAX = 44;
 
@@ -27,8 +28,8 @@ export function MacroGlass({ color, ratio, children }: Readonly<{ color: string;
   const streamHeight = spill.interpolate({ inputRange: [0, 1], outputRange: [0, SPILL_MAX] });
   return (
     <View style={styles.wrap}>
-      <View style={[styles.glass, { borderColor: color, backgroundColor: colors.surface }]}>
-        <Animated.View style={[styles.fill, { height, backgroundColor: color }]} />
+      <View style={[styles.glass, { borderTopColor: color, backgroundColor: colors.surface }]}>
+        <View style={styles.clip}><Animated.View style={[styles.fill, { height, backgroundColor: color }]} /></View>
         <View style={styles.content}>{children}</View>
       </View>
       <Animated.View style={[styles.stream, styles.streamLeft, { height: streamHeight, backgroundColor: color }]} />
@@ -39,9 +40,10 @@ export function MacroGlass({ color, ratio, children }: Readonly<{ color: string;
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, minWidth: 0, height: 132 },
-  glass: { flex: 1, borderWidth: 2, borderTopWidth: 2, borderRadius: 16, borderTopLeftRadius: 6, borderTopRightRadius: 6, overflow: "hidden" },
+  glass: { ...shadow.card, flex: 1, borderTopWidth: 4, borderRadius: 16 },
+  clip: { ...StyleSheet.absoluteFillObject, borderBottomLeftRadius: 14, borderBottomRightRadius: 14, overflow: "hidden" },
   fill: { position: "absolute", left: 0, right: 0, bottom: 0, opacity: 0.28 },
-  content: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 4, gap: 2 },
+  content: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, paddingVertical: 10, gap: 2 },
   stream: { position: "absolute", top: 0, width: 4, borderBottomLeftRadius: 2, borderBottomRightRadius: 2 },
   streamLeft: { left: -4 },
   streamRight: { right: -4 },
