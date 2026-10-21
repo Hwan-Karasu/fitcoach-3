@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { AppButton, InlineNotice, SegmentedRing, TextField } from "../../../shared/ui/components/public.ts";
+import { CalendarDays } from "lucide-react-native";
+import { AppButton, AppIconButton, InlineNotice, SegmentedRing, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
-import { localDateOf, upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../measurements/public.ts";
+import { upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../measurements/public.ts";
 import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
@@ -13,6 +14,8 @@ import type { CalcClientBody } from "./NutritionCalcScreen.tsx";
 import { useMacroColors } from "./MacroGrid.tsx";
 import { NutritionTargetRows, type TargetMode } from "./NutritionTargetRows.tsx";
 import { metricLabels, nutritionErrorText, rangeText, todayLocal, wholeText } from "./nutritionFormat.ts";
+import { DayDataJournal } from "./DayDataJournal.tsx";
+import { saveDayData } from "./dayData.ts";
 import { useNutritionGuide } from "./useNutritionGuide.ts";
 import { useNutritionDay } from "./useNutritionDay.ts";
 
@@ -69,7 +72,9 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [journal, setJournal] = useState(false);
   const lock = useRef(false);
+  const recordWeight = useCallback((valueX10: number, localDate: string) => upsertDailyMeasurement(measurements, clientId, { type: "WEIGHT", valueX10, localDate, localMinute: null }), [measurements, clientId]);
 
   // Поля показывают сегодняшние значения, пока тренер их не правил; правка не затирается обновлением данных.
   useEffect(() => {
@@ -93,26 +98,19 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
 
   const saveDay = useCallback(async () => {
     if (lock.current) return;
-    const weight = weightText.trim().replace(",", ".");
-    const steps = stepsText.trim();
-    if (weight !== "" && !/^\d{1,3}(\.\d)?$/u.test(weight)) { setError("Вес — число с одним знаком после запятой, например 85,4."); return; }
-    if (steps !== "" && !/^\d{1,6}$/u.test(steps)) { setError("Шаги — целое число, например 8000."); return; }
     lock.current = true;
     setBusy(true);
-    try {
-      // Вес записывается только при изменении: без правки не растёт ревизия факта.
-      if (weight !== "" && Number(weight) !== loaded?.weightToday) await upsertDailyMeasurement(measurements, clientId, { type: "WEIGHT", valueX10: Math.round(Number(weight) * 10), localDate: localDateOf(new Date()), localMinute: null });
-      if (steps === "") await calc.clearSteps(clientId, today); else await calc.setSteps(clientId, today, Number(steps));
-      setDirty(false);
-      setError(null);
-    } catch (failure) {
-      const code = failure instanceof Error ? failure.message : "";
-      setError(code === "MEASUREMENT_VALUE_INVALID" ? "Вес вне допустимого диапазона (20–400 кг)." : code === "MEASUREMENT_AMBIGUOUS_DAY" ? "За сегодня несколько записей веса. Выберите основную в журнале замеров."
-        : code === "CALC_STEPS_INVALID" ? "Шаги — от 1 до 100 000." : nutritionErrorText(failure));
-    }
+    // Вес, шаги — отдельные записи: сбой или неверный ввод одного не мешает другому; пишется только изменённое.
+    const weight = weightText.trim().replace(",", ".");
+    const result = await saveDayData({ clientId, calc, recordWeight }, { localDate: today,
+      weight: weight !== "" && Number(weight) !== loaded?.weightToday ? weightText : null,
+      steps: stepsText.trim() !== (stepsToday.steps === null ? "" : String(stepsToday.steps)) ? stepsText : null, workout: null });
+    const messages = Object.values(result);
+    setError(messages.length === 0 ? null : messages.join(" "));
+    if (messages.length === 0) setDirty(false);
     lock.current = false;
     setBusy(false);
-  }, [weightText, stepsText, measurements, clientId, calc, today, loaded]);
+  }, [weightText, stepsText, recordWeight, clientId, calc, today, loaded, stepsToday.steps]);
 
   const recorded = data?.summary.state === "FOOD_RECORDED";
   /** Ориентир по калориям: цель тренера (коридор Б/Ж/У → ккал), иначе суточный ориентир расчёта. */
@@ -137,7 +135,10 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.head}>
           <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Данные дня</Text>
-          <View style={[styles.pill, { backgroundColor: colors.accentSoft }]}><Text style={[styles.pillText, { color: colors.accentInk }]}>Сегодня</Text></View>
+          <View style={styles.headRight}>
+            <View style={[styles.pill, { backgroundColor: colors.accentSoft }]}><Text style={[styles.pillText, { color: colors.accentInk }]}>Сегодня</Text></View>
+            <AppIconButton compact label="Журнал данных дня: вес, шаги, тренировка по датам" icon={<CalendarDays size={20} color={colors.textPrimary} />} onPress={() => setJournal(true)} />
+          </View>
         </View>
         <View style={styles.dayRow}>
           <View style={styles.dayCell}>
@@ -157,6 +158,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
         </View>
         {dirty ? <AppButton compact label="Записать" busy={busy} onPress={() => { void saveDay(); }} /> : null}
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
+        <DayDataJournal visible={journal} clientId={clientId} today={today} calc={calc} measurements={measurements} recordWeight={recordWeight} onClose={() => setJournal(false)} />
       </View>
 
       <View style={[styles.card, styles.bigCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
