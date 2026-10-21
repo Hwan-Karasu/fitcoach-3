@@ -93,20 +93,43 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
   const selectedDay = stats?.days.find((day) => day.localDate === selected);
   const rangeDays = draftRange.from === null || draftRange.to === null ? 0 : Math.round((Date.parse(draftRange.to) - Date.parse(draftRange.from)) / 86400000) + 1;
 
-  const control = <View style={styles.pad}>
-    <SegmentedControl compact fit items={periods} selectedId={period}
-      onSelect={(id) => { if (id === "range") { setDraftRange(range); setCalendar(true); } else { setPeriod(id); setSelectedDate(null); } }} />
-    <View style={styles.trendControl}>
-      <SegmentedControl compact items={[{ id: "weight", label: "Вес" }, { id: "fat", label: "% жира" }, { id: "steps", label: "Шаги" }] as const} selectedId={trend} onSelect={(id) => { setTrend(id); setSelectedDate(null); }} />
+  const metricsRow = stats !== null && stats.accountedDays > 0 ? (
+  <View style={styles.metricRow}>
+    {TARGET_METRICS.map((metric) => {
+      const item = stats.metrics[metric];
+      const target = averageTargetX10(stats.days, metric);
+      const ratio = item.averageX10 === null || target === null || target <= 0 ? null : item.averageX10 / target;
+      return (
+        <MacroGlass key={metric} color={macroColors[metric]} ratio={ratio ?? NO_TARGET_LEVEL[metric]}>
+          <View accessible accessibilityLabel={`${metricLabels[metric]}: в среднем ${item.averageX10 === null ? "нет данных" : `${wholeText(item.averageX10)} ${unitOf[metric]}`}, ${target === null ? "цели нет" : `цель ${wholeText(target)}${ratio !== null && ratio > 1 ? ", выше цели" : ""}`}`} style={styles.metricBody}>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.metricTitle, { color: macroColors[metric] }]}>{metricLabels[metric]}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.metricValue, { color: macroColors[metric] }]}>{item.averageX10 === null ? "—" : wholeText(item.averageX10)}</Text>
+            <Text style={[styles.meta, { color: colors.textSecondary }]}>{unitOf[metric]}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.meta, { color: colors.textSecondary }]}>{item.compared === 0 ? "цели нет" : `${item.inRange} из ${item.compared}`}</Text>
+          </View>
+        </MacroGlass>
+      );
+    })}
+  </View>
+  ) : null;
+  const control = <>
+    <View style={[styles.header, { backgroundColor: colors.surface }]}>
+      <SegmentedControl compact fit items={periods} selectedId={period}
+        onSelect={(id) => { if (id === "range") { setDraftRange(range); setCalendar(true); } else { setPeriod(id); setSelectedDate(null); } }} />
+      <Text style={[styles.meta, styles.periodText, { color: colors.textSecondary }]}>{`${period === "all" && stats === null ? "Всё время" : from} — ${to}`}</Text>
+      {metricsRow !== null ? <>
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        {metricsRow}
+      </> : null}
     </View>
-    <Text style={[styles.meta, styles.periodText, { color: colors.textSecondary }]}>{`${period === "all" && stats === null ? "Всё время" : from} — ${to}`}</Text>
+    <SegmentedControl compact items={[{ id: "weight", label: "Вес" }, { id: "fat", label: "% жира" }, { id: "steps", label: "Шаги" }] as const} selectedId={trend} onSelect={(id) => { setTrend(id); setSelectedDate(null); }} />
     <Modal visible={calendar} transparent animationType="fade" onRequestClose={() => setCalendar(false)}><View style={styles.backdrop}><View style={[styles.dialog, { backgroundColor: colors.surface }]}>
       <Text style={[styles.heading, { color: colors.textPrimary }]}>Выберите период</Text><DateRangeCalendar value={draftRange} max={today} onChange={setDraftRange} />
       {rangeDays > 1830 ? <Text style={[styles.meta, { color: colors.danger }]}>Диапазон — до пяти лет. Для полной истории выберите «Всё время».</Text> : null}
       <AppButton label="Показать период" disabled={rangeDays <= 0 || rangeDays > 1830} onPress={() => { if (draftRange.from !== null && draftRange.to !== null) { setRange({ from: draftRange.from, to: draftRange.to }); setPeriod("range"); setSelectedDate(null); setCalendar(false); } }} />
       <AppButton variant="ghost" label="Отмена" onPress={() => setCalendar(false)} />
     </View></View></Modal>
-  </View>;
+  </>;
   return (
     <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content}>
       {control}
@@ -118,23 +141,6 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
       </View>
       {stats.accountedDays === 0 ? <EmptyState reason="no-data" title="Нет данных" body="За выбранный период нет пищевых записей. Статистика появится после добавления еды в дневник." /> : (
         <>
-          <View style={styles.metricRow}>
-            {TARGET_METRICS.map((metric) => {
-              const item = stats.metrics[metric];
-              const target = averageTargetX10(stats.days, metric);
-              const ratio = item.averageX10 === null || target === null || target <= 0 ? null : item.averageX10 / target;
-              return (
-                <MacroGlass key={metric} color={macroColors[metric]} ratio={ratio ?? NO_TARGET_LEVEL[metric]}>
-                  <View accessible accessibilityLabel={`${metricLabels[metric]}: в среднем ${item.averageX10 === null ? "нет данных" : `${wholeText(item.averageX10)} ${unitOf[metric]}`}, ${target === null ? "цели нет" : `цель ${wholeText(target)}${ratio !== null && ratio > 1 ? ", выше цели" : ""}`}`} style={styles.metricBody}>
-                    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.metricTitle, { color: macroColors[metric] }]}>{metricLabels[metric]}</Text>
-                    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.metricValue, { color: macroColors[metric] }]}>{item.averageX10 === null ? "—" : wholeText(item.averageX10)}</Text>
-                    <Text style={[styles.meta, { color: colors.textSecondary }]}>{unitOf[metric]}</Text>
-                    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.meta, { color: colors.textSecondary }]}>{item.compared === 0 ? "цели нет" : `${item.inRange} из ${item.compared}`}</Text>
-                  </View>
-                </MacroGlass>
-              );
-            })}
-          </View>
           <View style={[styles.card, { backgroundColor: colors.surface }]}>
             <Text style={[styles.heading, { color: colors.textPrimary }]}>{`${metricLabels[chartMetric]} по дням`}</Text>
             <SegmentedControl compact items={TARGET_METRICS.map((metric) => ({ id: metric, label: metricLabels[metric] }))} selectedId={chartMetric} onSelect={setChartMetric} />
@@ -172,10 +178,12 @@ const styles = StyleSheet.create({
   big: { fontFamily: fonts.bold, fontSize: 24, lineHeight: 30 },
   meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   chips: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  header: { ...shadow.card, borderRadius: 20, padding: 10, gap: 4 },
+  divider: { height: StyleSheet.hairlineWidth, marginVertical: 8 },
   metricRow: { flexDirection: "row", gap: 10, paddingHorizontal: 4 },
   metricBody: { alignItems: "center", gap: 2 },
   trendControl: { paddingTop: 8 },
-  periodText: { paddingTop: 6 },
+  periodText: { textAlign: "center" },
   metricCard: { ...shadow.card, flex: 1, minWidth: 0, borderRadius: 16, borderTopWidth: 4, paddingHorizontal: 6, paddingVertical: 10, alignItems: "center", gap: 2 },
   metricTitle: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
   metricValue: { fontFamily: fonts.bold, fontSize: 22, lineHeight: 28 },
