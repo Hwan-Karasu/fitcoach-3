@@ -56,6 +56,9 @@ function toEntry(row: EntryRow): DiaryEntry {
   return { id: row.id, clientId: row.clientId, localDate: row.localDate, slot: row.slot, position: row.position, snapshot, override, catalogEaten, revision: row.revision };
 }
 
+/** Сколько последних квитанций пакетной записи хранится на клиента. */
+const RECEIPTS_KEPT = 50;
+
 const slotOrder = (slot: MealSlot) => MEAL_SLOTS.indexOf(slot);
 
 async function byId(tx: SqliteStatementPort, workspaceId: string, clientId: string, id: string): Promise<DiaryEntry> {
@@ -210,6 +213,28 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
     return rows.map(toEntry).sort((a, b) => a.localDate.localeCompare(b.localDate) || slotOrder(a.slot) - slotOrder(b.slot) || a.position - b.position);
   }
 
+  async listUsageEntries(clientId: string, order: "recent" | "frequent", limit: number, toDate: string): Promise<readonly DiaryEntry[]> {
+    assertDate(toDate);
+    const { connection } = this.ready();
+    // Одна строка на позицию (десятки-сотни), а не на запись дневника: выбор позиций по порядку «Недавних/Частых», затем только их записи.
+    const groups = await connection.all<{ kind: string; id: string; n: number; last: string }>(`SELECT source_kind AS kind, source_id AS id, count(*) AS n, max(local_date) AS last
+      FROM dev_food_diary_entries WHERE workspace_id = ? AND client_id = ? AND local_date <= ? GROUP BY source_kind, source_id`, [this.workspaceId, clientId, toDate]);
+    const better = (a: { n: number; last: string }, b: { n: number; last: string }) => order === "frequent" ? b.n - a.n || b.last.localeCompare(a.last) : b.last.localeCompare(a.last);
+    const ranked = [...groups].sort(better);
+    const edge = ranked[Math.max(0, limit) - 1];
+    // Позиции, равные последней по ключу порядка, остаются: их взаимный порядок решают записи, а не агрегат.
+    const kept = limit <= 0 ? [] : edge === undefined ? ranked : ranked.filter((group) => better(group, edge) <= 0);
+    const keys = kept.map((group) => `${group.kind}:${group.id}`);
+    const entries: DiaryEntry[] = [];
+    for (let from = 0; from < keys.length; from += 400) {
+      const chunk = keys.slice(from, from + 400);
+      const rows = await connection.all<EntryRow>(`SELECT ${columns} FROM dev_food_diary_entries WHERE workspace_id = ? AND client_id = ? AND local_date <= ?
+        AND source_kind || ':' || source_id IN (${chunk.map(() => "?").join(", ")})`, [this.workspaceId, clientId, toDate, ...chunk]);
+      entries.push(...rows.map(toEntry));
+    }
+    return entries.sort((a, b) => a.localDate.localeCompare(b.localDate) || slotOrder(a.slot) - slotOrder(b.slot) || a.position - b.position);
+  }
+
   async addEntry(clientId: string, input: DiaryEntryInput, now: Date = new Date()): Promise<DiaryEntry> {
     return (await this.addEntries(clientId, [input], now))[0] as DiaryEntry;
   }
@@ -232,8 +257,14 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
       }
       const result: DiaryEntry[] = [];
       for (const { input, snapshot } of prepared) result.push(await this.insertEntry(tx, clientId, input, snapshot, now));
-      if (commandId !== undefined) await tx.run(`INSERT INTO dev_nutrition_batch_commands (workspace_id, client_id, command_id, payload_json, result_json)
-        VALUES (?, ?, ?, ?, ?)`, [this.workspaceId, clientId, commandId, payload, JSON.stringify(result)]);
+      if (commandId !== undefined) {
+        await tx.run(`INSERT INTO dev_nutrition_batch_commands (workspace_id, client_id, command_id, payload_json, result_json)
+          VALUES (?, ?, ?, ?, ?)`, [this.workspaceId, clientId, commandId, payload, JSON.stringify(result)]);
+        // Повтор нужен в пределах нескольких секунд: хранятся только последние квитанции клиента (по порядку вставки), иначе JSON росли бы вечно.
+        await tx.run(`DELETE FROM dev_nutrition_batch_commands WHERE workspace_id = ? AND client_id = ? AND rowid NOT IN
+          (SELECT rowid FROM dev_nutrition_batch_commands WHERE workspace_id = ? AND client_id = ? ORDER BY rowid DESC LIMIT ${RECEIPTS_KEPT})`,
+        [this.workspaceId, clientId, this.workspaceId, clientId]);
+      }
       return result;
     });
     if (!replay) for (const date of new Set(created.map((entry) => entry.localDate))) this.publish({ clientId, localDate: date });

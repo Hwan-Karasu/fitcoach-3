@@ -129,7 +129,7 @@ export function DiaryWeekHeader({ clientId, diary, localDate, today, onSelect: o
         })}
         <AppIconButton label="Следующая неделя" icon={<ChevronRight size={20} color={colors.textSecondary} />} onPress={() => onSelect(shiftDate(shown, 7))} />
       </View>
-      <MonthModal visible={calendar} clientId={clientId} diary={diary} selected={shown} today={today} onSelect={onSelect} onClose={() => setCalendar(false)} />
+      {calendar ? <MonthModal visible clientId={clientId} diary={diary} selected={shown} today={today} onSelect={onSelect} onClose={() => setCalendar(false)} /> : null}
     </View>
   );
 }

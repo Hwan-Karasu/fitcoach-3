@@ -5,6 +5,7 @@ import { devNutritionCalcClientDeletionParticipant } from "../apps/mobile/src/fe
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { DevNutritionDiaryRepository, devNutritionClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionDiaryRepository.ts";
 import { devNutritionTargetsClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionTargetsRepository.ts";
+import { usageSuggestions } from "../apps/mobile/src/features/nutrition/domain/CatalogPick.ts";
 import { accountedDates, isLocalDate, rankUsage, summarizeDay, sumNutrients } from "../apps/mobile/src/features/nutrition/domain/DiaryRules.ts";
 import type { DiaryEntry, MealSlot } from "../apps/mobile/src/features/nutrition/domain/DiaryModel.ts";
 import type { FoodProduct, Nutrients } from "../apps/mobile/src/features/nutrition/domain/FoodModel.ts";
@@ -528,5 +529,47 @@ test("NUT-003: правка записи с копиями в другие пр�
       assert.equal(copy.snapshot.eaten.proteinX10, 500);
       assert.equal(copy.snapshot.eaten.kcalX10, 3600, "калории по каталогу, не зафиксированы правкой");
     }
+  } finally { await close(); }
+});
+
+test("аудит NUT-009: чтение «Недавних/Частых» берёт только записи нужных позиций, а результат тот же, что по всему дневнику", async () => {
+  const { db, clients, diary, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticUsage" });
+    const foods = Array.from({ length: 8 }, (_, index) => ({ ...OATS, id: `food-${index}`, name: `Еда ${index}` }));
+    // Повторы разной частоты и даты, в том числе совпадающие по последней дате и по числу использований (границы среза).
+    const plan: [number, string, "BREAKFAST" | "LUNCH"][] = [[0, "2026-10-01", "BREAKFAST"], [1, "2026-10-02", "LUNCH"], [1, "2026-10-03", "BREAKFAST"], [2, "2026-10-03", "LUNCH"],
+      [3, "2026-10-04", "BREAKFAST"], [3, "2026-10-04", "LUNCH"], [4, "2026-10-04", "LUNCH"], [5, "2026-10-05", "BREAKFAST"], [6, "2026-10-05", "LUNCH"],
+      [6, "2026-10-06", "LUNCH"], [7, "2026-10-06", "BREAKFAST"], [0, "2026-10-07", "BREAKFAST"], [2, "2026-10-08", "LUNCH"]];
+    for (const [index, date, slot] of plan) await diary.addEntry(client.id, { localDate: date, slot, snapshot: snapshotOfFood(foods[index]!, 500) }, NOW);
+    await diary.addEntry(client.id, { localDate: "2026-12-31", slot: "LUNCH", snapshot: snapshotOfFood(foods[7]!, 500) }, NOW);
+    const all = await diary.listEntries(client.id, "0001-01-01", "2026-10-20");
+    for (const order of ["recent", "frequent"] as const) {
+      for (const limit of [1, 3, 5, 50]) {
+        const reduced = await diary.listUsageEntries(client.id, order, limit, "2026-10-20");
+        const expected = usageSuggestions(all, "BREAKFAST", order, limit).map((item) => [item.kind, item.id, item.count, item.slot, item.sameSlot]);
+        assert.deepEqual(usageSuggestions(reduced, "BREAKFAST", order, limit).map((item) => [item.kind, item.id, item.count, item.slot, item.sameSlot]), expected, `${order} ×${limit}`);
+        if (limit <= 3) assert.ok(reduced.length < all.length, `${order} ×${limit}: прочитано меньше записей, чем в дневнике`);
+      }
+    }
+    assert.equal((await diary.listUsageEntries(client.id, "recent", 50, "2026-10-20")).some((entry) => entry.localDate === "2026-12-31"), false, "будущие даты не входят");
+    void db;
+  } finally { await close(); }
+});
+
+test("аудит NUT-008: квитанции пакетной записи ограничены последними 50 на клиента; повтор свежей команды идемпотентен", async () => {
+  const { db, clients, diary, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticReceipts" });
+    const other = await clients.create({ displayName: "SyntheticOtherReceipts" });
+    const input = (index: number) => [{ localDate: DAY, slot: "SNACK" as const, snapshot: snapshotOfFood(OATS, 100 + index) }];
+    await diary.addEntries(other.id, input(0), NOW, "other-1");
+    for (let index = 0; index < 60; index += 1) await diary.addEntries(client.id, input(index), NOW, `cmd-${index}`);
+    const count = (id: string) => (db.prepare("SELECT count(*) AS n FROM dev_nutrition_batch_commands WHERE client_id = ?").get(id) as { n: number }).n;
+    assert.equal(count(client.id), 50);
+    assert.equal(count(other.id), 1, "квитанции другого клиента не затронуты");
+    const before = (await diary.listEntries(client.id, DAY, DAY)).length;
+    await diary.addEntries(client.id, input(59), NOW, "cmd-59");
+    assert.equal((await diary.listEntries(client.id, DAY, DAY)).length, before, "повтор свежей команды не дублирует записи");
   } finally { await close(); }
 });

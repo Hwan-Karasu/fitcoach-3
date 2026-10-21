@@ -22,6 +22,11 @@ export interface NutritionDiaryPort {
   subscribeSavedMealChanges(listener: (clientId: string) => void): () => void;
   /** Записи клиента за закрытый диапазон дат, по дате, приёму пищи и порядку. */
   listEntries(clientId: string, fromDate: string, toDate: string): Promise<readonly DiaryEntry[]>;
+  /**
+   * Записи, достаточные для «Недавних» и «Частых» (`usageSuggestions`): все записи `limit` лучших позиций по этому порядку (и позиций, равных последней по ключу порядка)
+   * до даты `toDate` включительно — не весь дневник. Результат применения `usageSuggestions` совпадает с расчётом по всем записям.
+   */
+  listUsageEntries(clientId: string, order: "recent" | "frequent", limit: number, toDate: string): Promise<readonly DiaryEntry[]>;
   /** Добавляет новую запись в конец приёма пищи; итог снимка пересчитывается из значений на основу и количества. */
   addEntry(clientId: string, input: DiaryEntryInput, now?: Date): Promise<DiaryEntry>;
   /** Добавляет несколько записей (в том числе одну позицию в разные приёмы) одной транзакцией: все или ни одной. */

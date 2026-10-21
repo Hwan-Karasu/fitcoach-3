@@ -261,7 +261,7 @@ export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOOD
     const load = async (): Promise<readonly Item[]> => {
       if (filter === "RECENT" || filter === "FREQUENT") {
         const today = todayLocal();
-        const usage = usageSuggestions(await diary.listEntries(clientId, "0001-01-01", today), primarySlot, filter === "RECENT" ? "recent" : "frequent", USAGE_LIMIT);
+        const usage = usageSuggestions(await diary.listUsageEntries(clientId, filter === "RECENT" ? "recent" : "frequent", USAGE_LIMIT, today), primarySlot, filter === "RECENT" ? "recent" : "frequent", USAGE_LIMIT);
         const needle = searchQuery.trim().toLocaleLowerCase("ru");
         const resolved = await Promise.all(usage.map(async (used): Promise<Item | null> => {
           if (needle !== "" && !used.name.toLocaleLowerCase("ru").includes(needle)) return null;
