@@ -223,3 +223,19 @@ test("ревью S1: правка без описания не затирает 
     void oats; void milk;
   } finally { await close(); }
 });
+
+test("NUT-002: единицу продукта из рецепта сменить нельзя, значения рецепта не меняются; без рецепта — можно", async () => {
+  const { foods, recipes, oats, milk, close } = await stores();
+  try {
+    const recipe = await recipes.create({ name: "Каша", servingsX10: 10, cookedMassX10: null, ingredients: [{ foodId: oats.id, quantityX10: 500 }] }, NOW);
+    const before = recipeBases(recipe)[0]!.nutrients;
+    await assert.rejects(foods.update(oats.id, oats.revision, { ...OATS, unit: "PIECE", amountX10: 10 }, NOW), code("FOOD_UNIT_LOCKED"));
+    assert.equal((await foods.get(oats.id))?.unit, "G");
+    assert.deepEqual(recipeBases((await recipes.get(recipe.id))!)[0]!.nutrients, before);
+    // Количество основы и значения менять можно: пропорция сохраняется.
+    const renamed = await foods.update(oats.id, oats.revision, { ...OATS, name: "Овсянка 2", amountX10: 2000, kcalX10: 7200 }, NOW);
+    assert.equal(renamed.amountX10, 2000);
+    // Продукт вне рецептов меняет единицу свободно.
+    assert.equal((await foods.update(milk.id, milk.revision, { ...MILK, unit: "G" }, NOW)).unit, "G");
+  } finally { await close(); }
+});

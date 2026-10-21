@@ -501,3 +501,29 @@ test("NUT-FS-33, 41: правка записи копируется вместе
     assert.equal(moved.snapshot.eaten.kcalX10, 2000);
   } finally { await close(); }
 });
+
+test("NUT-003: правка записи с копиями в другие приёмы — одна транзакция и одно событие; копия наследует правку как есть", async () => {
+  const { db, clients, diary, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticCopies" });
+    const entry = await diary.addEntry(client.id, { localDate: DAY, slot: "BREAKFAST", snapshot: snapshotOfFood(OATS, 500) });
+    let events = 0;
+    diary.subscribeCommittedChanges(() => { events += 1; });
+    const input = { quantityX10: 1000, slot: "BREAKFAST" as const, override: { kcalX10: null, proteinX10: 500, fatX10: null, carbsX10: null }, copyToSlots: ["LUNCH", "DINNER"] as const };
+    db.exec("CREATE TRIGGER synthetic_fail BEFORE INSERT ON dev_food_diary_entries WHEN NEW.slot = 'DINNER' BEGIN SELECT RAISE(ABORT, 'synthetic-failure'); END");
+    await assert.rejects(diary.editEntry(client.id, entry.id, entry.revision, input), /synthetic-failure/u);
+    assert.deepEqual(await diary.listEntries(client.id, DAY, DAY), [entry], "правки и копий нет");
+    assert.equal(events, 0);
+    db.exec("DROP TRIGGER synthetic_fail");
+    const updated = await diary.editEntry(client.id, entry.id, entry.revision, input);
+    assert.equal(events, 1);
+    const rows = await diary.listEntries(client.id, DAY, DAY);
+    assert.deepEqual(rows.map((row) => row.slot), ["BREAKFAST", "LUNCH", "DINNER"]);
+    for (const copy of rows.slice(1)) {
+      assert.equal(copy.snapshot.quantityX10, 1000);
+      assert.deepEqual(copy.override, updated.override, "правлен только белок, как у оригинала");
+      assert.equal(copy.snapshot.eaten.proteinX10, 500);
+      assert.equal(copy.snapshot.eaten.kcalX10, 3600, "калории по каталогу, не зафиксированы правкой");
+    }
+  } finally { await close(); }
+});

@@ -112,6 +112,10 @@ export class DevFoodCatalogRepository implements FoodCatalogPort {
   async update(id: string, expectedRevision: number, input: FoodInput, now: Date = new Date()): Promise<FoodProduct> {
     const valid = validateFood(input);
     const updated = await this.ready().writer.write(async (tx) => {
+      // Количество ингредиента хранится в единицах продукта: смена единицы молча исказила бы все рецепты с ним (аудит NUT-002).
+      const current = await tx.first<{ unit: string; inRecipe: number }>(`SELECT basis_unit AS unit, EXISTS(SELECT 1 FROM dev_recipe_ingredients
+        WHERE workspace_id = ? AND food_id = ?) AS inRecipe FROM dev_food_products WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id, this.workspaceId, id]);
+      if (current !== null && current.unit !== valid.unit && current.inRecipe === 1) throw new Error("FOOD_UNIT_LOCKED");
       const result = await tx.run(`UPDATE dev_food_products SET name = ?, brand = ?, basis_unit = ?, basis_amount_x10 = ?, kcal_x10 = ?,
           protein_x10 = ?, fat_x10 = ?, carbs_x10 = ?, barcode = CASE WHEN ? = 1 THEN ? ELSE barcode END,
           grams_per_piece_x10 = CASE WHEN ? = 1 THEN ? ELSE grams_per_piece_x10 END,

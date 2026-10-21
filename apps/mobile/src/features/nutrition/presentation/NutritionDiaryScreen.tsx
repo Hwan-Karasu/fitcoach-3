@@ -245,13 +245,14 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
       <EntryEditorDialog entry={editing} onClose={() => setEditing(null)}
         onEditSource={onEditSource === undefined ? undefined : (entry) => { setEditing(null); onEditSource(entry.snapshot.source); }}
         onSave={async (entry, quantityX10, slot, override, extraSlots) => {
-          return guard(async () => {
-            const edited = await diary.editEntry(clientId, entry.id, entry.revision, { quantityX10, slot, override });
-            if (extraSlots.length === 0) return;
-            // Копии в другие приёмы того же дня: те же количество и значения (правка пищевой ценности переносится).
-            const copies = await diary.addEntries(clientId, extraSlots.map((extra) => ({ localDate: edited.localDate, slot: extra, snapshot: edited.snapshot })));
-            if (edited.override != null) for (const copy of copies) await diary.setOverride(clientId, copy.id, copy.revision, edited.snapshot.eaten);
+          // Правка и копии в другие приёмы — одна транзакция порта. Устаревшая запись: окно закрывается, иначе повтор с прежней revision невозможен.
+          let stale = false;
+          const message = await guard(async () => {
+            try { await diary.editEntry(clientId, entry.id, entry.revision, { quantityX10, slot, override, copyToSlots: extraSlots }); }
+            catch (failure) { stale = failure instanceof Error && failure.message === "DIARY_STALE"; throw failure; }
           });
+          if (stale) setEditing(null);
+          return message;
         }}
         onRemove={(entry) => guard(() => diary.removeEntry(clientId, entry.id, entry.revision))} />
     </View>

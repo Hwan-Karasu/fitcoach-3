@@ -72,6 +72,7 @@ export function nutritionErrorText(error: unknown): string {
     case "INVALID_PORTION": return "Количество должно быть больше нуля.";
     case "WATER_INVALID": return "Вода — от 1 до 20 000 мл.";
     case "DIARY_STALE": return "Запись уже изменилась. Дневник обновлён, повторите действие.";
+    case "FOOD_UNIT_LOCKED": return "Продукт входит в рецепты, поэтому единицу менять нельзя. Создайте новый продукт с нужной единицей.";
     case "FOOD_STALE": return "Продукт уже изменён или скрыт. Откройте его заново.";
     case "DIARY_COMMAND_REUSED": return "Выбор изменился. Закройте подтверждение и попробуйте снова.";
     default: return "Не удалось сохранить. Данные не изменены.";

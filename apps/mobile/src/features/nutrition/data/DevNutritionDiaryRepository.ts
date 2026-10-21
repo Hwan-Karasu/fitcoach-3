@@ -240,7 +240,7 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
     return created;
   }
 
-  private async insertEntry(tx: SqliteStatementPort, clientId: string, input: DiaryEntryInput, snapshot: FoodSnapshot, now: Date): Promise<DiaryEntry> {
+  private async insertEntry(tx: SqliteStatementPort, clientId: string, input: DiaryEntryInput, snapshot: FoodSnapshot, now: Date, override: DiaryEntry["override"] = null): Promise<DiaryEntry> {
     {
       const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
       if (!id) throw new Error("DIARY_ID_UNAVAILABLE");
@@ -249,10 +249,12 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
       const stamp = now.toISOString();
       await tx.run(`INSERT INTO dev_food_diary_entries (id, workspace_id, client_id, local_date, slot, position, source_kind, source_id, name, brand,
           basis_unit, basis_amount_x10, per_kcal_x10, per_protein_x10, per_fat_x10, per_carbs_x10, quantity_x10, ingredients_json, revision,
-          created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+          override_base_quantity_x10, override_kcal_x10, override_protein_x10, override_fat_x10, override_carbs_x10, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`,
       [id, this.workspaceId, clientId, input.localDate, input.slot, (last?.position ?? -1) + 1, snapshot.source.kind, snapshot.source.id,
         snapshot.name, snapshot.brand, snapshot.basis.unit, snapshot.basis.amountX10, snapshot.perBasis.kcalX10, snapshot.perBasis.proteinX10,
-        snapshot.perBasis.fatX10, snapshot.perBasis.carbsX10, snapshot.quantityX10, JSON.stringify(snapshot.ingredients), stamp, stamp]);
+        snapshot.perBasis.fatX10, snapshot.perBasis.carbsX10, snapshot.quantityX10, JSON.stringify(snapshot.ingredients),
+        override?.baseQuantityX10 ?? null, override?.values.kcalX10 ?? null, override?.values.proteinX10 ?? null, override?.values.fatX10 ?? null, override?.values.carbsX10 ?? null, stamp, stamp]);
       return byId(tx, this.workspaceId, clientId, id);
     }
   }
@@ -269,9 +271,11 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
     return updated;
   }
 
-  async editEntry(clientId: string, id: string, expectedRevision: number, input: Readonly<{ quantityX10: number; slot: MealSlot; override: Nutrients | "CLEAR" | null }>, now: Date = new Date()): Promise<DiaryEntry> {
+  async editEntry(clientId: string, id: string, expectedRevision: number, input: Readonly<{ quantityX10: number; slot: MealSlot; override: Nutrients | "CLEAR" | null; copyToSlots?: readonly MealSlot[] }>, now: Date = new Date()): Promise<DiaryEntry> {
     assertQuantity(input.quantityX10);
     assertSlot(input.slot);
+    const copySlots = [...new Set(input.copyToSlots ?? [])].filter((slot) => slot !== input.slot);
+    for (const slot of copySlots) assertSlot(slot);
     if (input.override !== null && input.override !== "CLEAR") assertOverride(input.override);
     const updated = await this.ready().writer.write(async (tx) => {
       const current = await byId(tx, this.workspaceId, clientId, id);
@@ -291,7 +295,10 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
         override?.values.proteinX10 ?? null, override?.values.fatX10 ?? null, override?.values.carbsX10 ?? null,
         now.toISOString(), this.workspaceId, clientId, id, expectedRevision]);
       if (result.changes !== 1) throw new Error("DIARY_STALE");
-      return byId(tx, this.workspaceId, clientId, id);
+      const edited = await byId(tx, this.workspaceId, clientId, id);
+      // Копии — в той же транзакции: сбой любой вставки откатывает и правку самой записи.
+      for (const slot of copySlots) await this.insertEntry(tx, clientId, { localDate: edited.localDate, slot, snapshot: edited.snapshot }, normalizeSnapshot({ ...edited.snapshot, quantityX10: edited.snapshot.quantityX10 }), now, edited.override ?? null);
+      return edited;
     });
     this.publish({ clientId, localDate: updated.localDate });
     return updated;

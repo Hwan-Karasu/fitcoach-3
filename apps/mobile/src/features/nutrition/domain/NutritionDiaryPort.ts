@@ -28,8 +28,12 @@ export interface NutritionDiaryPort {
   addEntries(clientId: string, inputs: readonly DiaryEntryInput[], now?: Date, commandId?: string): Promise<readonly DiaryEntry[]>;
   /** Исправляет только количество этой записи; снимок источника не переписывается (§49.5.2). */
   updateQuantity(clientId: string, id: string, expectedRevision: number, quantityX10: number, now?: Date): Promise<DiaryEntry>;
-  /** Сохранить редактор целиком одним CAS и одной транзакцией; null сохраняет прежний override, CLEAR снимает его. */
-  editEntry(clientId: string, id: string, expectedRevision: number, input: Readonly<{ quantityX10: number; slot: MealSlot; override: Nutrients | "CLEAR" | null }>, now?: Date): Promise<DiaryEntry>;
+  /**
+   * Сохранить редактор целиком одним CAS и одной транзакцией; null сохраняет прежний override, CLEAR снимает его.
+   * `copyToSlots` — приёмы той же даты, куда в той же транзакции добавляются копии с тем же количеством и той же правкой; повторы и приём записи пропускаются.
+   */
+  editEntry(clientId: string, id: string, expectedRevision: number, input: Readonly<{ quantityX10: number; slot: MealSlot; override: Nutrients | "CLEAR" | null;
+    copyToSlots?: readonly MealSlot[] }>, now?: Date): Promise<DiaryEntry>;
   /**
    * Ручная правка К/Б/Ж/У только этой записи (на её текущее количество; `null` — показатель не правится). Каталог, снимок, другие записи и клиенты не меняются;
    * при смене количества правка масштабируется пропорционально. Нужен хотя бы один показатель, иначе `DIARY_OVERRIDE_INVALID`.
