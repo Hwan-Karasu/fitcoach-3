@@ -1,4 +1,4 @@
-import type { DiaryEntry } from "./DiaryModel.ts";
+import type { EatenEntry } from "./DiaryModel.ts";
 import { accountedDates, assertDate, summarizeDay } from "./DiaryRules.ts";
 import { TARGET_METRICS, type Corridors, type RangeVerdict, type ResolvedTarget, type TargetException, type TargetMetric, type TargetRange, type TargetVersion } from "./TargetModel.ts";
 import { assessDay, hasAnyRange, NUTRIENT_OF, resolveTarget } from "./TargetRules.ts";
@@ -48,7 +48,7 @@ export interface NutritionStatsInput {
   readonly sparse?: boolean;
   readonly from: string;
   readonly to: string;
-  readonly entries: readonly DiaryEntry[];
+  readonly entries: readonly EatenEntry[];
   readonly versions: readonly TargetVersion[];
   readonly exceptions: readonly TargetException[];
 }
@@ -84,7 +84,7 @@ export function computeNutritionStats(input: NutritionStatsInput): NutritionStat
   if (input.to < input.from) throw new Error("STATS_PERIOD_INVALID");
   const inPeriod = input.entries.filter((entry) => entry.localDate >= input.from && entry.localDate <= input.to);
   const dates = input.sparse ? accountedDates(inPeriod) : datesBetween(input.from, input.to);
-  const byDate = new Map<string, DiaryEntry[]>();
+  const byDate = new Map<string, EatenEntry[]>();
   for (const entry of inPeriod) {
     const rows = byDate.get(entry.localDate);
     if (rows === undefined) byDate.set(entry.localDate, [entry]); else rows.push(entry);

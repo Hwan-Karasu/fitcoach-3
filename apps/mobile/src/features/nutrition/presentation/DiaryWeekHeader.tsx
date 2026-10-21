@@ -5,7 +5,6 @@ import { AppButton, AppIconButton } from "../../../shared/ui/components/public.t
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
-import { accountedDates } from "../domain/DiaryRules.ts";
 import { monthGrid, monthRange, monthStart, shiftMonth, weekOf } from "../domain/DiaryCalendar.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import { dayTitle, shiftDate } from "./nutritionFormat.ts";
@@ -15,15 +14,16 @@ const monthNames = ["Январь", "Февраль", "Март", "Апрель"
 const SWIPE_PX = 48;
 
 /** Даты диапазона, где у клиента есть пищевые записи (критерий «дня с учётом», §49.22); обновляется при фиксации изменений клиента, подписка снимается в cleanup. */
-function useAccountedRange(clientId: string, diary: NutritionDiaryPort, from: string, to: string): ReadonlySet<string> {
+function useAccountedRange(clientId: string, diary: NutritionDiaryPort, from: string, to: string, enabled = true): ReadonlySet<string> {
   const [dates, setDates] = useState<Readonly<{ key: string; set: ReadonlySet<string> }>>({ key: "", set: new Set() });
   const [tick, setTick] = useState(0);
   useEffect(() => {
+    if (!enabled) return undefined;
     let active = true;
-    void diary.listEntries(clientId, from, to).then((entries) => { if (active) setDates({ key: `${clientId}|${from}|${to}`, set: new Set(accountedDates(entries)) }); }, () => undefined);
+    void diary.listAccountedDates(clientId, from, to).then((found) => { if (active) setDates({ key: `${clientId}|${from}|${to}`, set: new Set(found) }); }, () => undefined);
     return () => { active = false; };
-  }, [clientId, diary, from, to, tick]);
-  useEffect(() => diary.subscribeCommittedChanges((change) => { if (change.clientId === clientId) setTick((value) => value + 1); }), [clientId, diary]);
+  }, [clientId, diary, from, to, tick, enabled]);
+  useEffect(() => enabled ? diary.subscribeCommittedChanges((change) => { if (change.clientId === clientId && change.scope !== "WATER") setTick((value) => value + 1); }) : undefined, [clientId, diary, enabled]);
   // Пока грузится другая неделя/месяц, отметки остаются прежними: без мигания.
   return dates.set;
 }
@@ -48,7 +48,8 @@ function MonthModal({ visible, clientId, diary, selected, today, onSelect, onClo
   const colors = palette.tokens;
   const [month, setMonth] = useState(monthStart(selected));
   const range = monthRange(month);
-  const marks = useAccountedRange(clientId, diary, range.from, range.to);
+  // Закрытый календарь не читает дневник и не держит подписку; сам Modal остаётся смонтированным ради плавного закрытия.
+  const marks = useAccountedRange(clientId, diary, range.from, range.to, visible);
   const grid = useMemo(() => monthGrid(month), [month]);
   const [year, number] = month.split("-").map(Number) as [number, number];
   return (
@@ -129,7 +130,7 @@ export function DiaryWeekHeader({ clientId, diary, localDate, today, onSelect: o
         })}
         <AppIconButton label="Следующая неделя" icon={<ChevronRight size={20} color={colors.textSecondary} />} onPress={() => onSelect(shiftDate(shown, 7))} />
       </View>
-      {calendar ? <MonthModal visible clientId={clientId} diary={diary} selected={shown} today={today} onSelect={onSelect} onClose={() => setCalendar(false)} /> : null}
+      <MonthModal visible={calendar} clientId={clientId} diary={diary} selected={shown} today={today} onSelect={onSelect} onClose={() => setCalendar(false)} />
     </View>
   );
 }

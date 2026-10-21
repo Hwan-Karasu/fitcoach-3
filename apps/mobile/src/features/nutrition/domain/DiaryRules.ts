@@ -2,7 +2,7 @@ import { FOOD_BASIS_UNITS, type Nutrients } from "./FoodModel.ts";
 import { entryNutrients, sumNutrients } from "./EnergyRules.ts";
 import { scaleNutrients } from "./FoodRules.ts";
 import type { FoodSnapshot } from "./FoodSnapshot.ts";
-import { MEAL_SLOTS, type DaySummary, type DiaryEntry, type MealSlot } from "./DiaryModel.ts";
+import { MEAL_SLOTS, type DaySummary, type EatenEntry, type MealSlot } from "./DiaryModel.ts";
 
 export type DiaryRuleError =
   | "DIARY_DATE_INVALID"
@@ -58,7 +58,7 @@ export function normalizeSnapshot(snapshot: FoodSnapshot): FoodSnapshot {
 export { entryNutrients, sumNutrients };
 
 /** Итоги одного дня по записям этой даты. Без пищевых записей день `NO_FOOD` и без чисел; вода сюда не входит. */
-export function summarizeDay(localDate: string, entries: readonly DiaryEntry[]): DaySummary {
+export function summarizeDay(localDate: string, entries: readonly EatenEntry[]): DaySummary {
   const day = entries.filter((entry) => entry.localDate === localDate);
   const bySlot = Object.fromEntries(MEAL_SLOTS.map((slot) => {
     const slotEntries = day.filter((entry) => entry.slot === slot);
@@ -69,36 +69,8 @@ export function summarizeDay(localDate: string, entries: readonly DiaryEntry[]):
 }
 
 /** Даты «с учётом» (П15=B): есть хотя бы одна пищевая запись. По возрастанию. */
-export function accountedDates(entries: readonly DiaryEntry[]): readonly string[] {
+export function accountedDates(entries: readonly Pick<EatenEntry, "localDate">[]): readonly string[] {
   return [...new Set(entries.map((entry) => entry.localDate))].sort();
-}
-
-export interface UsageItem {
-  readonly kind: "FOOD" | "RECIPE";
-  readonly id: string;
-  readonly name: string;
-  readonly count: number;
-  /** Последняя дата использования. */
-  readonly lastDate: string;
-}
-
-/**
- * «Недавние» и «Частые» (§49.2) — производное чтение по записям дневника, отдельного хранилища нет. Недавние: по последней дате, при равенстве позже внесённая
- * запись выше; частые: по числу использований, затем по свежести.
- */
-export function rankUsage(entries: readonly DiaryEntry[], order: "recent" | "frequent", limit: number): readonly UsageItem[] {
-  const items = new Map<string, UsageItem & { seq: number }>();
-  entries.forEach((entry, seq) => {
-    const { source, name } = entry.snapshot;
-    const key = `${source.kind}:${source.id}`;
-    const before = items.get(key);
-    const newer = before === undefined || entry.localDate > before.lastDate || (entry.localDate === before.lastDate && seq > before.seq);
-    items.set(key, { kind: source.kind, id: source.id, name: newer ? name : before.name, count: (before?.count ?? 0) + 1,
-      lastDate: newer ? entry.localDate : before.lastDate, seq: newer ? seq : before.seq });
-  });
-  const recency = (a: UsageItem & { seq: number }, b: UsageItem & { seq: number }) => b.lastDate.localeCompare(a.lastDate) || b.seq - a.seq;
-  return [...items.values()].sort((a, b) => order === "frequent" ? b.count - a.count || recency(a, b) : recency(a, b)).slice(0, limit)
-    .map((item) => ({ kind: item.kind, id: item.id, name: item.name, count: item.count, lastDate: item.lastDate }));
 }
 
 const OVERRIDE_MAX_X10 = 10_000_000;

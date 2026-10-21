@@ -5,8 +5,8 @@ import { devNutritionCalcClientDeletionParticipant } from "../apps/mobile/src/fe
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { DevNutritionDiaryRepository, devNutritionClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionDiaryRepository.ts";
 import { devNutritionTargetsClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionTargetsRepository.ts";
-import { usageSuggestions } from "../apps/mobile/src/features/nutrition/domain/CatalogPick.ts";
-import { accountedDates, isLocalDate, rankUsage, summarizeDay, sumNutrients } from "../apps/mobile/src/features/nutrition/domain/DiaryRules.ts";
+import { usageFromSummaries, usageSuggestions } from "../apps/mobile/src/features/nutrition/domain/CatalogPick.ts";
+import { accountedDates, isLocalDate, summarizeDay, sumNutrients } from "../apps/mobile/src/features/nutrition/domain/DiaryRules.ts";
 import type { DiaryEntry, MealSlot } from "../apps/mobile/src/features/nutrition/domain/DiaryModel.ts";
 import type { FoodProduct, Nutrients } from "../apps/mobile/src/features/nutrition/domain/FoodModel.ts";
 import { snapshotOfFood } from "../apps/mobile/src/features/nutrition/domain/FoodSnapshot.ts";
@@ -399,9 +399,9 @@ test("P-31: недавние и частые строятся из записе�
   const entry = (id: string, localDate: string, sourceId: string, kind: "FOOD" | "RECIPE" = "FOOD") => ({ id, clientId: "c", localDate, slot: "LUNCH" as const, position: 0, revision: 1,
     snapshot: { ...snapshotOfFood(OATS, 500), source: { kind, id: sourceId } } });
   const entries = [entry("1", "2026-10-10", "a"), entry("2", "2026-10-11", "b"), entry("3", "2026-10-12", "a"), entry("4", "2026-10-12", "c"), entry("5", "2026-10-13", "b", "RECIPE")];
-  assert.deepEqual(rankUsage(entries, "recent", 10).map((item) => `${item.kind}:${item.id}`), ["RECIPE:b", "FOOD:c", "FOOD:a", "FOOD:b"], "по последней дате, при равной — по порядку записи");
-  assert.deepEqual(rankUsage(entries, "frequent", 2).map((item) => [item.id, item.count]), [["a", 2], ["b", 1]], "частота, затем свежесть; лимит 2");
-  assert.deepEqual(rankUsage([], "recent", 10), []);
+  assert.deepEqual(usageSuggestions(entries, "DINNER", "recent", 10).map((item) => `${item.kind}:${item.id}`), ["RECIPE:b", "FOOD:c", "FOOD:a", "FOOD:b"], "по последней дате, при равной — по порядку записи");
+  assert.deepEqual(usageSuggestions(entries, "DINNER", "frequent", 2).map((item) => [item.id, item.count]), [["a", 2], ["b", 1]], "частота, затем свежесть; лимит 2");
+  assert.deepEqual(usageSuggestions([], "DINNER", "recent", 10), []);
 });
 
 test("P-29: одна позиция в несколько приёмов — одной транзакцией; ошибка в списке не оставляет частичной записи", async () => {
@@ -532,28 +532,46 @@ test("NUT-003: правка записи с копиями в другие пр�
   } finally { await close(); }
 });
 
-test("аудит NUT-009: чтение «Недавних/Частых» берёт только записи нужных позиций, а результат тот же, что по всему дневнику", async () => {
-  const { db, clients, diary, close } = await stores();
+test("аудит NUT-009: сводки «Недавних/Частых» из SQL дают тот же результат, что расчёт по всему дневнику; прочитано по записи на позицию", async () => {
+  const { clients, diary, close } = await stores();
   try {
     const client = await clients.create({ displayName: "SyntheticUsage" });
     const foods = Array.from({ length: 8 }, (_, index) => ({ ...OATS, id: `food-${index}`, name: `Еда ${index}` }));
-    // Повторы разной частоты и даты, в том числе совпадающие по последней дате и по числу использований (границы среза).
-    const plan: [number, string, "BREAKFAST" | "LUNCH"][] = [[0, "2026-10-01", "BREAKFAST"], [1, "2026-10-02", "LUNCH"], [1, "2026-10-03", "BREAKFAST"], [2, "2026-10-03", "LUNCH"],
+    // Повторы разной частоты и даты, совпадения по последней дате и по числу использований, разные приёмы.
+    const plan: [number, string, MealSlot][] = [[0, "2026-10-01", "BREAKFAST"], [1, "2026-10-02", "LUNCH"], [1, "2026-10-03", "BREAKFAST"], [2, "2026-10-03", "LUNCH"],
       [3, "2026-10-04", "BREAKFAST"], [3, "2026-10-04", "LUNCH"], [4, "2026-10-04", "LUNCH"], [5, "2026-10-05", "BREAKFAST"], [6, "2026-10-05", "LUNCH"],
-      [6, "2026-10-06", "LUNCH"], [7, "2026-10-06", "BREAKFAST"], [0, "2026-10-07", "BREAKFAST"], [2, "2026-10-08", "LUNCH"]];
-    for (const [index, date, slot] of plan) await diary.addEntry(client.id, { localDate: date, slot, snapshot: snapshotOfFood(foods[index]!, 500) }, NOW);
+      [6, "2026-10-06", "LUNCH"], [7, "2026-10-06", "BREAKFAST"], [0, "2026-10-07", "BREAKFAST"], [2, "2026-10-08", "LUNCH"], [2, "2026-10-08", "DINNER"]];
+    for (const [index, date, slot] of plan) await diary.addEntry(client.id, { localDate: date, slot, snapshot: snapshotOfFood(foods[index]!, 500 + index * 10) }, NOW);
     await diary.addEntry(client.id, { localDate: "2026-12-31", slot: "LUNCH", snapshot: snapshotOfFood(foods[7]!, 500) }, NOW);
-    const all = await diary.listEntries(client.id, "0001-01-01", "2026-10-20");
-    for (const order of ["recent", "frequent"] as const) {
-      for (const limit of [1, 3, 5, 50]) {
-        const reduced = await diary.listUsageEntries(client.id, order, limit, "2026-10-20");
-        const expected = usageSuggestions(all, "BREAKFAST", order, limit).map((item) => [item.kind, item.id, item.count, item.slot, item.sameSlot]);
-        assert.deepEqual(usageSuggestions(reduced, "BREAKFAST", order, limit).map((item) => [item.kind, item.id, item.count, item.slot, item.sameSlot]), expected, `${order} ×${limit}`);
-        if (limit <= 3) assert.ok(reduced.length < all.length, `${order} ×${limit}: прочитано меньше записей, чем в дневнике`);
+    const all = (await diary.listEntries(client.id, "0001-01-01", "2026-10-20"));
+    const shape = (items: ReturnType<typeof usageSuggestions>) => items.map((item) => [item.kind, item.id, item.name, item.count, item.lastDate, item.slot, item.sameSlot, item.snapshot.quantityX10]);
+    for (const slot of ["BREAKFAST", "LUNCH", "DINNER", "SNACK"] as const) {
+      const summaries = await diary.listUsageSummaries(client.id, slot, "2026-10-20");
+      assert.equal(summaries.length, 8, "одна сводка на позицию; запись из будущего не входит");
+      for (const order of ["recent", "frequent"] as const) for (const limit of [1, 3, 5, 50]) {
+        assert.deepEqual(shape(usageFromSummaries(summaries, order, limit)), shape(usageSuggestions(all, slot, order, limit)), `${slot} ${order} ×${limit}`);
       }
     }
-    assert.equal((await diary.listUsageEntries(client.id, "recent", 50, "2026-10-20")).some((entry) => entry.localDate === "2026-12-31"), false, "будущие даты не входят");
-    void db;
+  } finally { await close(); }
+});
+
+test("аудит NUT-009: узкое чтение для статистики даёт те же «съедено», что полное чтение записей (правка, неизвестное, рецепт)", async () => {
+  const { clients, diary, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticEatenA" });
+    const b = await clients.create({ displayName: "SyntheticEatenB" });
+    const plain = await diary.addEntry(a.id, { localDate: DAY, slot: "BREAKFAST", snapshot: snapshotOfFood(OATS, 750) }, NOW);
+    const edited = await diary.addEntry(a.id, { localDate: DAY, slot: "LUNCH", snapshot: snapshotOfFood(SUGAR, 333) }, NOW);
+    await edit(diary, a.id, edited, edited.revision, { quantityX10: 500, override: { kcalX10: 2000, proteinX10: 7, fatX10: null, carbsX10: null } });
+    await diary.addEntry(a.id, { localDate: "2026-10-19", slot: "SNACK", snapshot: snapshotOfFood(MILK, 2500) }, NOW);
+    await diary.addEntry(a.id, { localDate: "2026-10-25", slot: "SNACK", snapshot: snapshotOfFood(MILK, 2500) }, NOW);
+    await diary.addEntry(b.id, { localDate: DAY, slot: "LUNCH", snapshot: snapshotOfFood(MILK, 2500) }, NOW);
+    const full = await diary.listEntries(a.id, "2026-10-19", "2026-10-24");
+    const light = await diary.listEatenEntries(a.id, "2026-10-19", "2026-10-24");
+    assert.equal(light.length, 3, "граница диапазона и чужой клиент не входят");
+    const key = (item: { localDate: string; slot: string }) => `${item.localDate}|${item.slot}`;
+    assert.deepEqual(light.map((item) => [key(item), item.snapshot.eaten]).sort(), full.map((item) => [key(item), item.snapshot.eaten]).sort());
+    assert.equal(plain.snapshot.eaten.kcalX10, 2700);
   } finally { await close(); }
 });
 
@@ -571,5 +589,34 @@ test("аудит NUT-008: квитанции пакетной записи ог�
     const before = (await diary.listEntries(client.id, DAY, DAY)).length;
     await diary.addEntries(client.id, input(59), NOW, "cmd-59");
     assert.equal((await diary.listEntries(client.id, DAY, DAY)).length, before, "повтор свежей команды не дублирует записи");
+  } finally { await close(); }
+});
+
+test("аудит NUT-010: отметки дней по диапазону — одни даты записей, вода их не создаёт, чужой клиент и границы не входят", async () => {
+  const { clients, diary, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticDatesA" });
+    const b = await clients.create({ displayName: "SyntheticDatesB" });
+    for (const [date, slot] of [["2026-10-05", "BREAKFAST"], ["2026-10-05", "LUNCH"], ["2026-10-07", "DINNER"], ["2026-10-12", "SNACK"]] as const) {
+      await diary.addEntry(a.id, { localDate: date, slot, snapshot: snapshotOfFood(OATS, 500) }, NOW);
+    }
+    await diary.addEntry(b.id, { localDate: "2026-10-06", slot: "LUNCH", snapshot: snapshotOfFood(OATS, 500) }, NOW);
+    await diary.setWater(a.id, "2026-10-06", 500, NOW);
+    assert.deepEqual(await diary.listAccountedDates(a.id, "2026-10-05", "2026-10-11"), ["2026-10-05", "2026-10-07"]);
+    assert.deepEqual(await diary.listAccountedDates(a.id, "2026-10-12", "2026-10-12"), ["2026-10-12"], "границы включены");
+    assert.deepEqual(await diary.listAccountedDates(a.id, "2026-10-13", "2026-10-20"), []);
+  } finally { await close(); }
+});
+
+test("аудит NUT-010: вода не считается изменением еды (scope WATER), еда — считается", async () => {
+  const { clients, diary, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticScope" });
+    const scopes: (string | undefined)[] = [];
+    diary.subscribeCommittedChanges((change) => scopes.push(change.scope));
+    await diary.setWater(client.id, DAY, 250, NOW);
+    await diary.clearWater(client.id, DAY);
+    await diary.addEntry(client.id, { localDate: DAY, slot: "LUNCH", snapshot: snapshotOfFood(OATS, 500) }, NOW);
+    assert.deepEqual(scopes, ["WATER", "WATER", undefined]);
   } finally { await close(); }
 });

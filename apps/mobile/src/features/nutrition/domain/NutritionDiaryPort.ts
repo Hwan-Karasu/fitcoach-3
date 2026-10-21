@@ -1,11 +1,13 @@
 import type { Nutrients } from "./FoodModel.ts";
 import type { SavedMeal, SavedMealInput } from "./SavedMeal.ts";
-import type { CopyEntriesRequest, CopyEntriesResult, DiaryEntry, DiaryEntryInput, MealSlot, WaterDay } from "./DiaryModel.ts";
+import type { CopyEntriesRequest, CopyEntriesResult, DiaryEntry, DiaryEntryInput, EatenEntry, MealSlot, UsageSummary, WaterDay } from "./DiaryModel.ts";
 
 export interface DiaryCommittedChange {
   readonly clientId: string;
   /** Затронутая дата — для адресного обновления дня. */
   readonly localDate: string;
+  /** `WATER` — менялась только вода: итоги еды, отметки дней и статистика питания не затронуты. */
+  readonly scope?: "WATER";
 }
 
 /**
@@ -23,10 +25,14 @@ export interface NutritionDiaryPort {
   /** Записи клиента за закрытый диапазон дат, по дате, приёму пищи и порядку. */
   listEntries(clientId: string, fromDate: string, toDate: string): Promise<readonly DiaryEntry[]>;
   /**
-   * Записи, достаточные для «Недавних» и «Частых» (`usageSuggestions`): все записи `limit` лучших позиций по этому порядку (и позиций, равных последней по ключу порядка)
-   * до даты `toDate` включительно — не весь дневник. Результат применения `usageSuggestions` совпадает с расчётом по всем записям.
+   * Сводки позиций для «Недавних/Частых» до даты `toDate` включительно: одна на позицию, без чтения всего дневника. Ранжирует `usageFromSummaries`;
+   * результат совпадает с расчётом `usageSuggestions` по всем записям.
    */
-  listUsageEntries(clientId: string, order: "recent" | "frequent", limit: number, toDate: string): Promise<readonly DiaryEntry[]>;
+  listUsageSummaries(clientId: string, slot: MealSlot, toDate: string): Promise<readonly UsageSummary[]>;
+  /** «Съедено» по записям диапазона без остального содержимого записи (для статистики): те же значения, что в `listEntries`, но дешевле. */
+  listEatenEntries(clientId: string, fromDate: string, toDate: string): Promise<readonly EatenEntry[]>;
+  /** Даты диапазона, где есть пищевые записи (по возрастанию): отметки календаря. Вода дат не создаёт. */
+  listAccountedDates(clientId: string, fromDate: string, toDate: string): Promise<readonly string[]>;
   /** Добавляет новую запись в конец приёма пищи; итог снимка пересчитывается из значений на основу и количества. */
   addEntry(clientId: string, input: DiaryEntryInput, now?: Date): Promise<DiaryEntry>;
   /** Добавляет несколько записей (в том числе одну позицию в разные приёмы) одной транзакцией: все или ни одной. */

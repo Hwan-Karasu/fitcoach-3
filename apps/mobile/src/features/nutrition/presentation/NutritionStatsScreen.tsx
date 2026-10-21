@@ -7,7 +7,7 @@ import type { NutritionCalcPort, StepsDay, WorkoutMark } from "../domain/Nutriti
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
-import type { DiaryEntry } from "../domain/DiaryModel.ts";
+import type { EatenEntry } from "../domain/DiaryModel.ts";
 import { corridorsForDate, homeAdjustmentFor } from "../domain/HomeMacroTargets.ts";
 import { averageTargetX10, computeNutritionStats } from "../domain/NutritionStats.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
@@ -43,7 +43,7 @@ export function NutritionStatsScreen({ clientId, body, diary, targets, measureme
   const { loaded: guideLoaded, guide, defaults, leanMassKg } = useNutritionGuide(clientId, body, calc, measurements);
   const today = todayLocal();
   const [period, setPeriod] = useState<PeriodId>("week");
-  const [latest, setLatest] = useState<Readonly<{ entries: readonly DiaryEntry[]; versions: readonly TargetVersion[]; exceptions: readonly TargetException[]; key: string;
+  const [latest, setLatest] = useState<Readonly<{ entries: readonly EatenEntry[]; versions: readonly TargetVersion[]; exceptions: readonly TargetException[]; key: string;
     body: ClientMeasurements; steps: readonly StepsDay[]; workouts: readonly WorkoutMark[] }> | null>(null);
   /** Уже прочитанные периоды: возврат к ним открывается сразу; при изменении данных клиента очищается, `latest` остаётся на экране до прихода новых. */
   const store = useRef(new Map<string, NonNullable<typeof latest>>());
@@ -64,7 +64,7 @@ export function NutritionStatsScreen({ clientId, body, diary, targets, measureme
 
   useEffect(() => {
     let active = true;
-    void Promise.all([diary.listEntries(clientId, queryFrom, to), targets.listVersions(clientId), targets.listExceptions(clientId), measurements.listForClient(clientId),
+    void Promise.all([diary.listEatenEntries(clientId, queryFrom, to), targets.listVersions(clientId), targets.listExceptions(clientId), measurements.listForClient(clientId),
       calc.listSteps(clientId, queryFrom, to), calc.listWorkoutMarks(clientId, queryFrom, to)]).then(([entries, versions, exceptions, body, steps, workouts]) => {
       if (active) {
         const payload = { entries, versions, exceptions, body, steps, workouts, key };
@@ -77,7 +77,7 @@ export function NutritionStatsScreen({ clientId, body, diary, targets, measureme
   }, [clientId, diary, targets, measurements, calc, queryFrom, to, key, tick]);
   useEffect(() => {
     const refresh = () => { store.current.clear(); setTick((value) => value + 1); };
-    const offDiary = diary.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });
+    const offDiary = diary.subscribeCommittedChanges((change) => { if (change.clientId === clientId && change.scope !== "WATER") refresh(); });
     const offTargets = targets.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });
     const offBody = measurements.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });
     const offCalc = calc.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });

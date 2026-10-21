@@ -19,7 +19,7 @@ import { SavedMealEditorDialog } from "./SavedMealEditorDialog.tsx";
 import { sumNutrients } from "../domain/DiaryRules.ts";
 import { browseRecipes, EMPTY_RECIPE_FILTERS, type RecipeFilters, type RecipeSort } from "../domain/RecipeBrowse.ts";
 import { RecipeBrowseControls } from "./RecipeBrowseControls.tsx";
-import { catalogKey, pickSnapshot, usageSuggestions, type CatalogItem, type PortionDraft } from "../domain/CatalogPick.ts";
+import { catalogKey, pickSnapshot, usageFromSummaries, type CatalogItem, type PortionDraft } from "../domain/CatalogPick.ts";
 import { basisText, kcalText, nutritionErrorText, slotLabels, todayLocal, unitLabels } from "./nutritionFormat.ts";
 
 type Item = CatalogItem;
@@ -245,8 +245,12 @@ export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOOD
     void diary.listSearchQueries(clientId).then((history) => { if (active) setSearchHistory(history); }, () => undefined);
     return () => { active = false; };
   }, [clientId, diary]);
+  const rememberedQuery = useRef("");
   const rememberQuery = (text = query) => {
-    if (text.trim() === "") return;
+    const normalized = text.trim().replace(/\s+/gu, " ").toLocaleLowerCase("ru");
+    // Один запрос — одна запись истории: повторные отметки позиций в том же поиске не пишут в БД.
+    if (normalized === "" || normalized === rememberedQuery.current) return;
+    rememberedQuery.current = normalized;
     void diary.rememberSearchQuery(clientId, text).then(() => diary.listSearchQueries(clientId)).then(setSearchHistory,
       () => setActionError("Не удалось сохранить историю поиска. Выбор еды сохранён."));
   };
@@ -261,7 +265,7 @@ export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOOD
     const load = async (): Promise<readonly Item[]> => {
       if (filter === "RECENT" || filter === "FREQUENT") {
         const today = todayLocal();
-        const usage = usageSuggestions(await diary.listUsageEntries(clientId, filter === "RECENT" ? "recent" : "frequent", USAGE_LIMIT, today), primarySlot, filter === "RECENT" ? "recent" : "frequent", USAGE_LIMIT);
+        const usage = usageFromSummaries(await diary.listUsageSummaries(clientId, primarySlot, today), filter === "RECENT" ? "recent" : "frequent", USAGE_LIMIT);
         const needle = searchQuery.trim().toLocaleLowerCase("ru");
         const resolved = await Promise.all(usage.map(async (used): Promise<Item | null> => {
           if (needle !== "" && !used.name.toLocaleLowerCase("ru").includes(needle)) return null;
@@ -285,7 +289,7 @@ export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOOD
     const refresh = () => setTick((value) => value + 1);
     const offFoods = foods.subscribeCommittedChanges(refresh);
     const offRecipes = recipes.subscribeCommittedChanges(refresh);
-    const offDiary = diary.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });
+    const offDiary = diary.subscribeCommittedChanges((change) => { if (change.clientId === clientId && change.scope !== "WATER") refresh(); });
     const offMeals = diary.subscribeSavedMealChanges((id) => { if (id === clientId) refresh(); });
     return () => { offFoods(); offRecipes(); offDiary(); offMeals(); };
   }, [foods, recipes, diary, clientId]);

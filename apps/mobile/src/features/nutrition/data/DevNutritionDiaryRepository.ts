@@ -4,7 +4,7 @@ import { UUID_V4_SQL } from "../../../shared/db/SqlIds.ts";
 import { validateSavedMeal, type SavedMeal, type SavedMealInput } from "../domain/SavedMeal.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
-import { MEAL_SLOTS, type CopyEntriesRequest, type CopyEntriesResult, type DiaryEntry, type DiaryEntryInput, type MealSlot, type WaterDay } from "../domain/DiaryModel.ts";
+import { MEAL_SLOTS, type CopyEntriesRequest, type CopyEntriesResult, type DiaryEntry, type DiaryEntryInput, type EatenEntry, type MealSlot, type UsageSummary, type WaterDay } from "../domain/DiaryModel.ts";
 import { assertDate, assertOverride, assertQuantity, assertSlot, assertWater, effectiveNutrients, normalizeSnapshot } from "../domain/DiaryRules.ts";
 import type { Nutrients } from "../domain/FoodModel.ts";
 import type { FoodBasisUnit } from "../domain/FoodModel.ts";
@@ -44,15 +44,28 @@ const columns = `id, client_id AS clientId, local_date AS localDate, slot, posit
   per_carbs_x10 AS carbsX10, quantity_x10 AS quantityX10, ingredients_json AS ingredientsJson, override_base_quantity_x10 AS overrideBase,
   override_kcal_x10 AS overrideKcal, override_protein_x10 AS overrideProtein, override_fat_x10 AS overrideFat, override_carbs_x10 AS overrideCarbs, revision`;
 
-function toEntry(row: EntryRow): DiaryEntry {
+type NarrowRow = Pick<EntryRow, "localDate" | "slot" | "unit" | "amountX10" | "kcalX10" | "proteinX10" | "fatX10" | "carbsX10" | "quantityX10" | "overrideBase" | "overrideKcal"
+  | "overrideProtein" | "overrideFat" | "overrideCarbs">;
+
+/** Единственный расчёт «съедено» записи: по значениям на основу и количеству, с ручной правкой — для полного и узкого чтения. */
+function eatenOf(row: NarrowRow) {
   const perBasis = { kcalX10: row.kcalX10, proteinX10: row.proteinX10, fatX10: row.fatX10, carbsX10: row.carbsX10 };
   const basis = { unit: row.unit, amountX10: row.amountX10 };
   const catalogEaten = scaleNutrients({ ...basis, ...perBasis }, row.quantityX10);
   const override = row.overrideBase === null ? null
     : { baseQuantityX10: row.overrideBase, values: { kcalX10: row.overrideKcal, proteinX10: row.overrideProtein, fatX10: row.overrideFat, carbsX10: row.overrideCarbs } };
+  return { perBasis, basis, catalogEaten, override, eaten: effectiveNutrients(catalogEaten, override, row.quantityX10) };
+}
+
+/** Порядок приёмов в SQL — как `MEAL_SLOTS`. */
+const SLOT_RANK_SQL = "CASE slot WHEN 'BREAKFAST' THEN 0 WHEN 'LUNCH' THEN 1 WHEN 'DINNER' THEN 2 ELSE 3 END";
+
+function toEntry(row: EntryRow): DiaryEntry {
+  const { perBasis, basis, catalogEaten, override, eaten } = eatenOf(row);
+  // Состав есть только у рецептов: для продуктов `[]` не разбирается.
   const snapshot: FoodSnapshot = { source: { kind: row.sourceKind, id: row.sourceId }, name: row.name, brand: row.brand, basis, perBasis,
-    quantityX10: row.quantityX10, eaten: effectiveNutrients(catalogEaten, override, row.quantityX10),
-    ingredients: JSON.parse(row.ingredientsJson) as FoodSnapshot["ingredients"] };
+    quantityX10: row.quantityX10, eaten,
+    ingredients: row.ingredientsJson === "[]" ? [] : JSON.parse(row.ingredientsJson) as FoodSnapshot["ingredients"] };
   return { id: row.id, clientId: row.clientId, localDate: row.localDate, slot: row.slot, position: row.position, snapshot, override, catalogEaten, revision: row.revision };
 }
 
@@ -213,26 +226,37 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
     return rows.map(toEntry).sort((a, b) => a.localDate.localeCompare(b.localDate) || slotOrder(a.slot) - slotOrder(b.slot) || a.position - b.position);
   }
 
-  async listUsageEntries(clientId: string, order: "recent" | "frequent", limit: number, toDate: string): Promise<readonly DiaryEntry[]> {
+  async listUsageSummaries(clientId: string, slot: MealSlot, toDate: string): Promise<readonly UsageSummary[]> {
     assertDate(toDate);
+    assertSlot(slot);
     const { connection } = this.ready();
-    // Одна строка на позицию (десятки-сотни), а не на запись дневника: выбор позиций по порядку «Недавних/Частых», затем только их записи.
-    const groups = await connection.all<{ kind: string; id: string; n: number; last: string }>(`SELECT source_kind AS kind, source_id AS id, count(*) AS n, max(local_date) AS last
-      FROM dev_food_diary_entries WHERE workspace_id = ? AND client_id = ? AND local_date <= ? GROUP BY source_kind, source_id`, [this.workspaceId, clientId, toDate]);
-    const better = (a: { n: number; last: string }, b: { n: number; last: string }) => order === "frequent" ? b.n - a.n || b.last.localeCompare(a.last) : b.last.localeCompare(a.last);
-    const ranked = [...groups].sort(better);
-    const edge = ranked[Math.max(0, limit) - 1];
-    // Позиции, равные последней по ключу порядка, остаются: их взаимный порядок решают записи, а не агрегат.
-    const kept = limit <= 0 ? [] : edge === undefined ? ranked : ranked.filter((group) => better(group, edge) <= 0);
-    const keys = kept.map((group) => `${group.kind}:${group.id}`);
-    const entries: DiaryEntry[] = [];
-    for (let from = 0; from < keys.length; from += 400) {
-      const chunk = keys.slice(from, from + 400);
-      const rows = await connection.all<EntryRow>(`SELECT ${columns} FROM dev_food_diary_entries WHERE workspace_id = ? AND client_id = ? AND local_date <= ?
-        AND source_kind || ':' || source_id IN (${chunk.map(() => "?").join(", ")})`, [this.workspaceId, clientId, toDate, ...chunk]);
-      entries.push(...rows.map(toEntry));
-    }
-    return entries.sort((a, b) => a.localDate.localeCompare(b.localDate) || slotOrder(a.slot) - slotOrder(b.slot) || a.position - b.position);
+    // По одной строке на позицию (десятки-сотни), а не на запись дневника: число использований и последняя запись — окном по позиции.
+    const latest = await connection.all<EntryRow & { n: number }>(`SELECT * FROM (SELECT ${columns}, COUNT(*) OVER (PARTITION BY source_kind, source_id) AS n,
+        ROW_NUMBER() OVER (PARTITION BY source_kind, source_id ORDER BY local_date DESC, ${SLOT_RANK_SQL} DESC, position DESC) AS rn
+      FROM dev_food_diary_entries WHERE workspace_id = ? AND client_id = ? AND local_date <= ?) WHERE rn = 1`, [this.workspaceId, clientId, toDate]);
+    const inSlot = await connection.all<EntryRow>(`SELECT * FROM (SELECT ${columns},
+        ROW_NUMBER() OVER (PARTITION BY source_kind, source_id ORDER BY local_date DESC, position DESC) AS rn
+      FROM dev_food_diary_entries WHERE workspace_id = ? AND client_id = ? AND local_date <= ? AND slot = ?) WHERE rn = 1`, [this.workspaceId, clientId, toDate, slot]);
+    const slotEntries = new Map(inSlot.map((row) => [`${row.sourceKind}:${row.sourceId}`, toEntry(row)]));
+    return latest.map((row) => ({ kind: row.sourceKind, id: row.sourceId, count: row.n, latest: toEntry(row), latestInSlot: slotEntries.get(`${row.sourceKind}:${row.sourceId}`) ?? null }));
+  }
+
+  async listEatenEntries(clientId: string, fromDate: string, toDate: string): Promise<readonly EatenEntry[]> {
+    assertDate(fromDate);
+    assertDate(toDate);
+    const rows = await this.ready().connection.all<NarrowRow>(`SELECT local_date AS localDate, slot, basis_unit AS unit, basis_amount_x10 AS amountX10, per_kcal_x10 AS kcalX10,
+        per_protein_x10 AS proteinX10, per_fat_x10 AS fatX10, per_carbs_x10 AS carbsX10, quantity_x10 AS quantityX10, override_base_quantity_x10 AS overrideBase,
+        override_kcal_x10 AS overrideKcal, override_protein_x10 AS overrideProtein, override_fat_x10 AS overrideFat, override_carbs_x10 AS overrideCarbs
+      FROM dev_food_diary_entries WHERE workspace_id = ? AND client_id = ? AND local_date BETWEEN ? AND ?`, [this.workspaceId, clientId, fromDate, toDate]);
+    return rows.map((row) => ({ localDate: row.localDate, slot: row.slot, snapshot: { eaten: eatenOf(row).eaten } }));
+  }
+
+  async listAccountedDates(clientId: string, fromDate: string, toDate: string): Promise<readonly string[]> {
+    assertDate(fromDate);
+    assertDate(toDate);
+    const rows = await this.ready().connection.all<{ localDate: string }>(`SELECT DISTINCT local_date AS localDate FROM dev_food_diary_entries
+      WHERE workspace_id = ? AND client_id = ? AND local_date BETWEEN ? AND ? ORDER BY local_date`, [this.workspaceId, clientId, fromDate, toDate]);
+    return rows.map((row) => row.localDate);
   }
 
   async addEntry(clientId: string, input: DiaryEntryInput, now: Date = new Date()): Promise<DiaryEntry> {
@@ -417,7 +441,7 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
         ON CONFLICT(workspace_id, client_id, local_date) DO UPDATE SET ml = excluded.ml, updated_at = excluded.updated_at`,
       [this.workspaceId, clientId, localDate, ml, now.toISOString()]);
     });
-    this.publish({ clientId, localDate });
+    this.publish({ clientId, localDate, scope: "WATER" });
     return { localDate, ml };
   }
 
@@ -426,7 +450,7 @@ export class DevNutritionDiaryRepository implements NutritionDiaryPort {
     await this.ready().writer.write(async (tx) => {
       await tx.run("DELETE FROM dev_water_days WHERE workspace_id = ? AND client_id = ? AND local_date = ?", [this.workspaceId, clientId, localDate]);
     });
-    this.publish({ clientId, localDate });
+    this.publish({ clientId, localDate, scope: "WATER" });
   }
 
   async close(): Promise<void> {

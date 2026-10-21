@@ -31,6 +31,22 @@ export interface DiaryEntry {
   readonly revision: number;
 }
 
+/** Достаточно для итогов дня и статистики: дата, приём и действующие «съедено» (полная запись `DiaryEntry` подходит). */
+export interface EatenEntry {
+  readonly localDate: string;
+  readonly slot: MealSlot;
+  readonly snapshot: Readonly<{ eaten: Nutrients }>;
+}
+
+/** Сводка одной позиции для «Недавних/Частых»: сколько раз использована, последняя запись и последняя запись в запрошенном приёме. */
+export interface UsageSummary {
+  readonly kind: "FOOD" | "RECIPE";
+  readonly id: string;
+  readonly count: number;
+  readonly latest: DiaryEntry;
+  readonly latestInSlot: DiaryEntry | null;
+}
+
 export interface DiaryEntryInput {
   readonly localDate: string;
   readonly slot: MealSlot;
