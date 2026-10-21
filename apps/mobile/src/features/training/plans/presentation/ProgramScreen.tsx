@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import { Archive, ArrowLeftRight, Bookmark, CalendarDays, Copy, Ellipsis, LayoutGrid, Pencil, Plus, Trash2, TrendingUp } from "lucide-react-native";
-import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, InlineNotice, LoadingState, SegmentedControl, TextField } from "../../../../shared/ui/components/public.ts";
+import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, InlineNotice, LoadingState, SegmentedControl, TabBarDock, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { membersWord, PROGRAM_TITLE_MAX, programKindLabels } from "../domain/ProgramRules.ts";
@@ -237,7 +237,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const participants = renderParticipants?.(() => ({ mesocycleId: selectedCycle()?.id ?? null,
     weekIndex: weeksByCycle[cycleKey] ?? shownWeek.current, workoutId: null }), shown, group);
   if (tab === "templates" && renderTemplates !== undefined) {
-    return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{tabs}{participants}{renderTemplates()}</View>;
+    return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{tabs}{renderTemplates()}</View>;
   }
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
@@ -507,9 +507,9 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           : "Программа уйдёт в архив клиента. Вернуть можно из списка программ."}
         confirmLabel="В архив" onCancel={() => setConfirmArchive(false)} onConfirm={() => { void archive(); }} />
     </Animated.ScrollView>
-    {/* Полоса участников — слой над нижней панелью навигации (UI-OWN-043): в раскладку содержимого не входит, поэтому её появление и
-        исчезновение со сменой мезоцикла ничего не сдвигает; места под неё нет — она перекрывает низ страницы. */}
-    <View style={styles.floating} pointerEvents="box-none">{participants}</View>
+    {/* Переключатель участников — строка внутри нижней панели навигации (UI-OWN-043): в раскладку экрана не входит, его высоту
+        забирает сама панель — верх страницы и прокрутка при смене мезоцикла не меняются. */}
+    <TabBarDock>{participants}</TabBarDock>
     </View>
     </View>
   );
@@ -521,8 +521,6 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
   heading: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },
   screen: { flex: 1 },
-  /** Полоса участников над нижней панелью навигации, во всю ширину. */
-  floating: { position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 10 },
   tabs: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 2 },
   cardHead: { gap: 12 },
   cardTitle: { fontFamily: fonts.bold, fontSize: 18, letterSpacing: -0.2 },

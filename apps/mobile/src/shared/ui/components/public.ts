@@ -11,6 +11,7 @@ export { BottomDockLayoutProvider, useEditorDockHeight } from "./BottomDockLayou
 export { TrainingEditorLayout } from "./TrainingEditorLayout.tsx";
 export { WeekCards, type WeekCardItem } from "./WeekCards.tsx";
 export { WeekNavigationProvider, useWeekNavigation, useWeekNavigationState } from "./WeekNavigation.tsx";
+export { TabBarDock, TabBarDockProvider, useTabBarDockContent } from "./TabBarDock.tsx";
 export { TextField } from "./TextField.tsx";
 export { NumericField } from "./NumericField.tsx";
 export { parseNumericDraft, type DecimalPolicy, type NumericDraft } from "./numeric-draft.ts";

@@ -1,7 +1,7 @@
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Archive, CalendarDays, ChevronLeft, ChevronRight, Dumbbell, Ellipsis, House, Users, Utensils, type LucideIcon } from "lucide-react-native";
-import { AppIconButton, useWeekNavigationState } from "../../shared/ui/components/public.ts";
+import { AppIconButton, useTabBarDockContent, useWeekNavigationState } from "../../shared/ui/components/public.ts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
@@ -20,9 +20,12 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
   const colors = palette.tokens;
   const insets = useSafeAreaInsets();
   const weeks = useWeekNavigationState();
+  const dock = useTabBarDockContent();
   return (
     <View style={[styles.dock, { backgroundColor: colors.canvas, paddingBottom: insets.bottom + 12 }]}>
       <View style={[styles.bar, shadow.floating, { backgroundColor: colors.surface }]}>
+        {dock !== null && dock !== undefined ? <View style={styles.dockRow}>{dock}</View> : null}
+        <View style={styles.tabsRow}>
         {weeks ? <View style={styles.arrow}><AppIconButton label={`Предыдущая неделя. Сейчас неделя ${weeks.week}`}
           disabled={weeks.previous === null || weeks.busy} onPress={() => weeks.previous?.()}
           icon={<ChevronLeft size={24} color={colors.accentInk} />} /></View> : null}
@@ -61,6 +64,7 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
         {weeks ? <View style={styles.arrow}><AppIconButton label={`Следующая неделя. Сейчас неделя ${weeks.week}`}
           disabled={weeks.next === null || weeks.busy} onPress={() => weeks.next?.()}
           icon={<ChevronRight size={24} color={colors.accentInk} />} /></View> : null}
+        </View>
       </View>
     </View>
   );
@@ -69,7 +73,10 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
 const styles = StyleSheet.create({
   arrow: { justifyContent: "center" },
   dock: { paddingHorizontal: 12, paddingTop: 4 },
-  bar: { flexDirection: "row", borderRadius: 26, padding: 8, gap: 6, minHeight: 76 },
+  bar: { borderRadius: 26, padding: 8, gap: 6 },
+  /** Строка экрана над вкладками (переключатель участников): внутри той же плашки. */
+  dockRow: {},
+  tabsRow: { flexDirection: "row", gap: 6, minHeight: 60 },
   tab: { flex: 1, borderRadius: 18, alignItems: "center", justifyContent: "center", gap: 3 },
   focused: { flex: 1.25 },
   label: { fontSize: 12, lineHeight: 15 },

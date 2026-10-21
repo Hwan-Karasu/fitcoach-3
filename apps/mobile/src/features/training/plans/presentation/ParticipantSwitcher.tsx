@@ -15,7 +15,7 @@ import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansReposit
  * участников; вышедшие не показываются.
  */
 export function ParticipantSwitcher({ clientId, activeClientId = clientId, anchorClientId, programId, mesocycleId, workoutId, repository, names,
-  busy = false, onSelect, members: given }: Readonly<{
+  busy = false, onSelect, members: given, docked = false }: Readonly<{
   /** Чьими данными читается состав группы (с `programId` и мезоцикл/тренировкой — одна идентичность). */
   clientId: string;
   /** Чей участник выделен: меняется сразу при выборе, раньше, чем загрузятся данные (по умолчанию — `clientId`). */
@@ -31,6 +31,8 @@ export function ParticipantSwitcher({ clientId, activeClientId = clientId, ancho
   onSelect: (copy: GroupCopy) => void;
   /** Готовая группа: экран программы читает её сам и отдаёт сюда — переключатель не читает базу и не подписывается второй раз. */
   members?: readonly GroupCopy[];
+  /** Строка внутри нижней панели навигации: без собственных отступов и фона. */
+  docked?: boolean;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -78,7 +80,7 @@ export function ParticipantSwitcher({ clientId, activeClientId = clientId, ancho
   const ordered = participantOrder(group.map((copy) => copy.clientId), anchorClientId);
   total.current = ordered.length;
   return (
-    <View style={[styles.wrap, { backgroundColor: colors.canvas }]}>
+    <View style={docked ? null : [styles.wrap, { backgroundColor: colors.canvas }]}>
       <View style={[styles.card, { backgroundColor: colors.border }]}>
         <ScrollView ref={scroll} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}
           keyboardShouldPersistTaps="handled" scrollEventThrottle={32} onScroll={onScroll}

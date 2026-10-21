@@ -292,7 +292,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
           repository={repository} listCandidates={listCandidates} exercises={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap} planDelete={planDelete}
           onOpenMatrix={() => navigation.navigate("TrainingMatrix", { programId: route.params.programId })}
           onTabChange={(tab) => navigation.setOptions({ title: tab === "templates" ? "Шаблоны" : trainingTitles.TrainingProgram })}
-          renderParticipants={(current, shown, group) => <ParticipantSwitcher members={group} clientId={shown?.clientId ?? viewer} activeClientId={viewer}
+          renderParticipants={(current, shown, group) => <ParticipantSwitcher docked members={group} clientId={shown?.clientId ?? viewer} activeClientId={viewer}
             anchorClientId={clientId} programId={shown?.programId ?? route.params.programId} mesocycleId={current().mesocycleId}
             repository={repository} names={names} busy={switching} onSelect={(next) => { void switchTo(next.clientId, async () => {
               const target = await participantTarget(repository, { clientId: viewer, programId: route.params.programId }, next, current());
