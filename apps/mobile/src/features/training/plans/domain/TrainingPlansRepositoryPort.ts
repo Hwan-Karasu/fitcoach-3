@@ -2,7 +2,7 @@ import type { ClientProgramLibrary, CreateProgramInput, TrainingProgram } from "
 import type { ProgramTemplate, TemplatePayload } from "./TemplateModel.ts";
 import type { WeekType, BuilderMesocycleInput, NewMesocycleInput, NewPeriodizedProgramInput, PeriodizedPlan, WeekEditInput, WeekEditPreview, WeekEditResult } from "./PeriodizedModel.ts";
 import type { PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
-import type { PeriodizedDraft } from "./PeriodizedDraft.ts";
+import type { MesocycleBuilderDraft, MesocycleBuilderScope, PeriodizedDraft } from "./PeriodizedDraft.ts";
 import type { MesocycleVersion } from "./StructureVersion.ts";
 import type { SimplePlanVersion, SimpleWeek, SimpleWorkoutDraft, SimpleWorkoutEdit } from "./SimpleWorkoutEdit.ts";
 import type { CopyMesocycleInput } from "./PlanCopy.ts";
@@ -172,5 +172,9 @@ export interface TrainingPlansRepositoryPort {
   getPeriodizedDraft(clientId: string, programId: string, key: string): Promise<PeriodizedDraft | null>;
   savePeriodizedDraft(clientId: string, programId: string, draft: PeriodizedDraft): Promise<void>;
   clearPeriodizedDraft(clientId: string, programId: string, key: string): Promise<void>;
+  /** §48.29: Recovery Draft конструктора мезоцикла; черновик удалённой программы не воскрешает её (возвращает `null`). */
+  getMesocycleBuilderDraft(clientId: string, scope: MesocycleBuilderScope): Promise<MesocycleBuilderDraft | null>;
+  saveMesocycleBuilderDraft(clientId: string, scope: MesocycleBuilderScope, draft: MesocycleBuilderDraft): Promise<void>;
+  clearMesocycleBuilderDraft(clientId: string, scope: MesocycleBuilderScope): Promise<void>;
   subscribeCommittedChanges(listener: (change: TrainingPlansCommittedChange) => void): () => void;
 }

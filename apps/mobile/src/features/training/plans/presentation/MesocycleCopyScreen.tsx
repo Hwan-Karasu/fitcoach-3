@@ -13,7 +13,7 @@ import { templateKindLabels, type ProgramTemplate, type TemplateMesocycle } from
 /** §48.13.1 п. 2: два источника копии в одном мастере. */
 type Source = "CLIENT" | "TEMPLATE";
 import { PROGRAM_TITLE_MAX } from "../domain/ProgramRules.ts";
-import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
+import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidate.ts";
 import { ParticipantChips } from "./ParticipantChips.tsx";
 
 export function MesocycleCopyScreen({ clientId, programId, repository, listCandidates, onCreated, onCancel }: Readonly<{

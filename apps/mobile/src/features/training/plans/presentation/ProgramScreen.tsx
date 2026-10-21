@@ -18,7 +18,7 @@ import { WeekSwapPanel } from "./WeekSwapPanel.tsx";
 import { ParticipantChips } from "./ParticipantChips.tsx";
 import { weekTypeLabels, type PeriodizedPlan, type WeekType } from "../domain/PeriodizedModel.ts";
 import { setsSummary } from "../domain/SimplePlanRules.ts";
-import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
+import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidate.ts";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
 import { MesocycleBook } from "./MesocycleBook.tsx";
 import { cycleTypeLabels, weekRangeLabel } from "../domain/MesocycleBuilder.ts";

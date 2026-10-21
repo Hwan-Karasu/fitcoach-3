@@ -12,6 +12,9 @@ import { applyBuilderScope, copyWeekPlan, CYCLE_TYPES, resizeBuilderWeeks, type 
 import type { MesocycleSavePort } from "../domain/MesocycleSave.ts";
 import { diffWeek, targetWeeks } from "../domain/PeriodizedRules.ts";
 import { ScopeMenu } from "./ScopeMenu.tsx";
+import { useRecoveryDraftSave } from "./useRecoveryDraftSave.ts";
+import type { MesocycleBuilderDraft } from "../domain/PeriodizedDraft.ts";
+import { REBASED_NOTICE, rebaseBuilderWeeks } from "../domain/DraftRebase.ts";
 import { PlacementRows } from "./PlacementRows.tsx";
 import type { ClientPlacementOptions, Placement, PlacementTarget } from "../domain/Placement.ts";
 import { MESOCYCLE_WEEKS_MAX, WEEK_TYPES, weekTypeLabels, type WeekType } from "../domain/PeriodizedModel.ts";
@@ -20,7 +23,7 @@ import { setRepsRange } from "../domain/SimplePlanEdits.ts";
 import type { PlannedWorkout, PlanRange, SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
 import { formatRange, parseRange, setFieldsOf, validateDraft } from "../domain/SimplePlanRules.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
-import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
+import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidate.ts";
 import { ParticipantChips } from "./ParticipantChips.tsx";
 import { useExerciseLookupState } from "./useExerciseLookup.ts";
 import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
@@ -120,6 +123,38 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
     setGroup(copies.map((copy) => copy.clientId));
   }, [clientId, mesocycleId, programId, repository]);
 
+  // Recovery Draft (§48.29): несохранённая работа переживает «Назад», выгрузку экрана и смерть процесса; публикация — только «Сохранить».
+  const scope = useMemo(() => ({ programId: programId ?? null, mesocycleId: mesocycleId ?? null }), [programId, mesocycleId]);
+  const recovery = useRecoveryDraftSave<MesocycleBuilderDraft>((value) => repository.saveMesocycleBuilderDraft(clientId, scope, value));
+  const { schedule } = recovery;
+  const baseWeeks = useRef<readonly BuilderWeek[] | null>(null);
+  const weeksRef = useRef(weeks);
+  weeksRef.current = weeks;
+  const [restored, setRestored] = useState(false);
+  const [rebased, setRebased] = useState(false);
+  const restoreDone = useRef(false);
+  const loadedRevision = program !== null && program !== "ERROR" ? program.revision : null;
+  useEffect(() => {
+    if (dirty) schedule({ baseRevision: loadedRevision, programTitle, title, cycleType, repsText, startDate, weeks, editing, members,
+      baseWeeks: baseWeeks.current });
+  }, [dirty, schedule, loadedRevision, programTitle, title, cycleType, repsText, startDate, weeks, editing, members]);
+  useEffect(() => {
+    if (restoreDone.current || (mode !== "create" && (program === null || program === "ERROR"))) return;
+    restoreDone.current = true;
+    repository.getMesocycleBuilderDraft(clientId, scope).then((saved) => {
+      if (saved === null) return;
+      // Мезоцикл изменился после черновика: правки тренера переносятся на текущий план, а не затирают его.
+      const stale = mode === "edit" && saved.baseWeeks !== null && saved.baseRevision !== loadedRevision;
+      const nextWeeks = stale ? rebaseBuilderWeeks(saved.baseWeeks!, saved.weeks, weeksRef.current, () => newPlanId("r")) : saved.weeks;
+      setProgramTitle(saved.programTitle); setTitle(saved.title); setCycleType(saved.cycleType); setRepsText(saved.repsText);
+      setStartDate(saved.startDate); setWeeks(nextWeeks); setEditing(Math.min(saved.editing, nextWeeks.length - 1));
+      setMembers(saved.members.includes(clientId) ? saved.members : [clientId, ...saved.members]);
+      // Восстановленное считается уже выбранной областью: меню области не всплывает само.
+      baselines.current = new Map(nextWeeks.map((week, index) => [index, week.workouts]));
+      setDirty(true); setRestored(true); setRebased(stale);
+    }).catch(() => undefined);
+  }, [clientId, loadedRevision, mode, program, repository, scope]);
+
   useEffect(() => {
     if (programId === undefined) return undefined;
     let active = true;
@@ -138,6 +173,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
       if (cycle.startDate != null) setStartDate(cycle.startDate);
       setWeeks(cycle.weeks.map((week) => ({ type: week.type, workouts: week.workouts })));
       baselines.current = new Map(cycle.weeks.map((week, index) => [index, week.workouts]));
+      baseWeeks.current = cycle.weeks.map((week) => ({ type: week.type, workouts: week.workouts }));
       if (initialWeek !== undefined) setEditing(Math.min(Math.max(initialWeek - 1, 0), cycle.weeks.length - 1));
     }).catch(() => { if (active) setProgram("ERROR"); });
     return () => { active = false; };
@@ -281,12 +317,15 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
     if (!check() || programId === undefined || program === null || mesocycleSave === undefined) return;
     setBusy("create"); setMessage(null);
     try {
+      await recovery.beforePublish();
       const result = await mesocycleSave.save({ clientId, programId, expectedRevision: program.revision,
         mesocycleId: mesocycleId ?? null, clientIds: mode === "edit" ? [clientId] : [clientId, ...members.filter((id) => id !== clientId)],
         mesocycle: input(), placements: mode === "edit" ? [] : placementsFor(outsiders) });
       setDirty(false);
+      await repository.clearMesocycleBuilderDraft(clientId, scope).catch(() => undefined);
       onSaved?.(result.mesocycleId);
     } catch (error) {
+      recovery.resume();
       setMessage(errors[error instanceof Error ? error.message : ""] ?? "Не удалось сохранить мезоцикл. Изменения на экране.");
     } finally { setBusy(null); }
   };
@@ -296,12 +335,28 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
     if (programTitle.trim().length === 0) { setMessage("Введите название программы."); return; }
     setBusy("create"); setMessage(null);
     try {
+      await recovery.beforePublish();
       const program = await repository.createPeriodizedProgram({ title: programTitle, clientIds: [clientId, ...members.filter((id) => id !== clientId)],
         mesocycle: input(), placements: placementsFor(outsiders) });
       setDirty(false);
+      await repository.clearMesocycleBuilderDraft(clientId, scope).catch(() => undefined);
       onCreated(program.id);
     } catch (error) {
+      recovery.resume();
       setMessage(errors[error instanceof Error ? error.message : ""] ?? "Не удалось создать программу. Черновик на месте.");
+    } finally { setBusy(null); }
+  };
+  /** Отбросить черновик и выйти: на экране остаётся сохранённый план. */
+  const discard = async () => {
+    setBusy("create"); setMessage(null);
+    try {
+      await recovery.beforePublish();
+      await repository.clearMesocycleBuilderDraft(clientId, scope);
+      setDirty(false);
+      onCancel();
+    } catch {
+      recovery.resume();
+      setMessage("Не удалось отбросить черновик. Изменения остаются на экране.");
     } finally { setBusy(null); }
   };
   const saveTemplate = async () => {
@@ -340,6 +395,8 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
             </View>
           ))}
         </View>
+        {restored ? <InlineNotice kind="info">{rebased ? REBASED_NOTICE : "Восстановлен несохранённый черновик."}</InlineNotice> : null}
+        {restored ? <AppButton compact variant="secondary" label="Отбросить черновик и выйти" disabled={busy !== null} onPress={() => { void discard(); }} /> : null}
         {dirty ? <Text style={[styles.dirty, { color: colors.warning }]}>Есть несохранённые изменения</Text> : null}
         <Section title="Настройки мезоцикла">
           {mode === "create" ? <TextField label="Название программы" required value={programTitle} placeholder="Например, «Подготовка к лету»"
@@ -481,7 +538,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
         weeksOf={(scope) => targetWeeks(weeks.map((item, index) => ({ index: index + 1, type: item.type })), (scopeFor ?? 0) + 1, scope)} />
       <StickyEditorFooter actionLabel={mode === "edit" ? "Сохранить" : mode === "add" ? "Добавить" : "Создать"} busy={busy === "create"} onCancel={onCancel}
         secondaryAction={{ label: "В шаблон", busy: busy === "template", onPress: () => { void saveTemplate(); } }}
-        onAction={() => { void create(); }} message={message ?? saved} messageKind={message !== null ? "error" : "success"} />
+        onAction={() => { void create(); }} message={recovery.error ?? message ?? saved} messageKind={recovery.error !== null || message !== null ? "error" : "success"} />
     </TrainingEditorLayout>
   );
 }

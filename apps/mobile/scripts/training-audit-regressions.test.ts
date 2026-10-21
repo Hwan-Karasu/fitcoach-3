@@ -273,3 +273,49 @@ test("TRN-002 черновик Простого конструктора пер�
     assert.equal((await env.plans.getSimplePlan(env.a, program.id))!.draft.plan.workouts[0]!.exercises[0]!.restSec, 180);
   } finally { await env.close(); }
 });
+
+test("TRN-003 черновик конструктора мезоцикла: хранится по объекту правки, переносится на изменившийся мезоцикл, чистится при удалении", async () => {
+  const { rebaseBuilderWeeks } = await import("../src/features/training/plans/domain/DraftRebase.ts");
+  const { createMesocycleDeleteWorkflow } = await import("../src/workflows/deleteTrainingMesocycle.ts");
+  const env = await setup();
+  try {
+    const { programId, mesocycleId } = await env.periodized(2, 2);
+    const plan = await env.cycleOf(env.a, programId);
+    const cycle = plan.mesocycles[0]!;
+    const base = cycle.weeks.map((week) => ({ type: week.type, workouts: week.workouts }));
+    const scope = { programId, mesocycleId };
+    const draftOf = (weeks: typeof base) => ({ baseRevision: plan.program.revision, programTitle: "", title: "Правка", cycleType: "strength" as const,
+      repsText: "3-5", startDate: "2026-10-19", weeks, editing: 1, members: [env.a], baseWeeks: base });
+    // Тренер меняет повторы в неделе 2.
+    const w2 = base[1]!.workouts[0]!;
+    const edited = fillSets({ title: "x", plan: { weeks: 1, workouts: [w2] } }, w2.exercises[0]!.id, "reps", 5).plan.workouts;
+    const draft = draftOf([base[0]!, { type: base[1]!.type, workouts: edited }]);
+    await env.plans.saveMesocycleBuilderDraft(env.a, scope, draft);
+    assert.deepEqual(await env.plans.getMesocycleBuilderDraft(env.a, scope), draft, "черновик восстановлен как был");
+    assert.equal(await env.plans.getMesocycleBuilderDraft(env.a, { programId, mesocycleId: null }), null, "другой объект правки — другой черновик");
+    // Пока он лежит, отдых упражнения недели 1 меняется (например, из дневника) — правки тренера переносятся на текущий план.
+    const w1 = cycle.weeks[0]!.workouts[0]!;
+    await env.plans.setExerciseRest(env.a, programId, w1.exercises[0]!.id, 180);
+    const current = (await env.cycleOf(env.a, programId)).mesocycles[0]!.weeks.map((week) => ({ type: week.type, workouts: week.workouts }));
+    const rebased = rebaseBuilderWeeks(draft.baseWeeks, draft.weeks, current, (() => { let n = 0; return () => `r${n++}`; })());
+    assert.equal(rebased[0]!.workouts[0]!.exercises[0]!.restSec, 180, "отдых из дневника сохранён");
+    assert.deepEqual(rebased[1]!.workouts[0]!.exercises[0]!.sets.map((set) => set.reps), [5, 5, 5], "правка тренера перенесена");
+    // Удаление мезоцикла чистит его черновик, удаление программы — все её черновики.
+    const second = await env.plans.createMesocycle(env.a, programId, (await env.plans.getProgram(env.a, programId))!.revision,
+      { title: "Второй", weeks: 1, firstWeek: workoutWith(1).plan.workouts.map((workout) => ({ ...workout, id: "q-w",
+        exercises: workout.exercises.map((exercise) => ({ ...exercise, id: "q-e", sets: exercise.sets.map((set, at) => ({ ...set, id: `q-s${at}` })) })) })),
+      clientIds: [env.a] });
+    await env.plans.saveMesocycleBuilderDraft(env.a, { programId, mesocycleId: second.mesocycleId }, draft);
+    await env.plans.saveMesocycleBuilderDraft(env.a, { programId, mesocycleId: null }, draft);
+    await createMesocycleDeleteWorkflow(env.tx, env.plans.deleteParticipant, env.execution.cleanupParticipant).deleteMesocycle({
+      clientId: env.a, programId, mesocycleId: second.mesocycleId, expectedRevision: (await env.plans.getProgram(env.a, programId))!.revision });
+    assert.equal(await env.plans.getMesocycleBuilderDraft(env.a, { programId, mesocycleId: second.mesocycleId }), null);
+    await createProgramDeleteWorkflow(env.tx, env.plans.deleteParticipant, env.execution.cleanupParticipant)
+      .deleteProgram({ clientId: env.a, programId, expectedRevision: (await env.plans.getProgram(env.a, programId))!.revision });
+    assert.equal(await env.plans.getMesocycleBuilderDraft(env.a, { programId, mesocycleId: null }), null, "черновик удалённой программы не воскрешает её");
+    // Новая программа: черновик без программы, по клиенту.
+    await env.plans.saveMesocycleBuilderDraft(env.a, { programId: null, mesocycleId: null }, { ...draft, baseRevision: null, baseWeeks: null });
+    assert.equal((await env.plans.getMesocycleBuilderDraft(env.a, { programId: null, mesocycleId: null }))?.title, "Правка");
+    assert.equal(await env.plans.getMesocycleBuilderDraft(env.b, { programId: null, mesocycleId: null }), null, "у другого клиента своего нет");
+  } finally { await env.close(); }
+});

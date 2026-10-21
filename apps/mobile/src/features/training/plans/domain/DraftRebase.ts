@@ -1,4 +1,5 @@
 import { applyWeekOps, diffWeek } from "./PeriodizedRules.ts";
+import type { BuilderWeek } from "./PeriodizedModel.ts";
 import type { PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
 
 /**
@@ -26,4 +27,18 @@ export function rebaseSimpleProgram(base: SimpleProgramDraft, draft: SimpleProgr
       workouts: rebaseDraft(base.plan.workouts, draft.plan.workouts, current.plan.workouts, newId),
     },
   };
+}
+
+/**
+ * Мезоцикл изменился после черновика конструктора: правки тренера по каждой неделе («база → черновик») переносятся на текущую
+ * неделю; тип недели берётся из черновика, только если тренер его менял. Недели, которых нет в базе или в текущем плане, остаются как в черновике.
+ */
+export function rebaseBuilderWeeks(base: readonly BuilderWeek[], draft: readonly BuilderWeek[], current: readonly BuilderWeek[],
+  newId: () => string): readonly BuilderWeek[] {
+  return draft.map((week, at) => {
+    const was = base[at];
+    const now = current[at];
+    if (was === undefined || now === undefined) return week;
+    return { type: week.type !== was.type ? week.type : now.type, workouts: rebaseDraft(was.workouts, week.workouts, now.workouts, newId) };
+  });
 }

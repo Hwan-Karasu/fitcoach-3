@@ -8,7 +8,7 @@ import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemePro
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { templateKindLabels, templateSummary, type ProgramTemplate, type TemplateKind } from "../domain/TemplateModel.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
-import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
+import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidate.ts";
 import { ParticipantChips } from "./ParticipantChips.tsx";
 
 type Filter = TemplateKind | "ALL";

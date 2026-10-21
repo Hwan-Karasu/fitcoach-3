@@ -24,7 +24,7 @@ import { copyWeeks, diffWeek, newMesocycleWeeks, targetWeeks, withLineage } from
 import { fillEmptyWeeks, type MesocycleSettings } from "../domain/MesocycleBuilder.ts";
 import { applyWithConflicts } from "../domain/WeekConflicts.ts";
 import type { PlannedWorkout } from "../domain/SimplePlanModel.ts";
-import { periodizedDraftKey, type PeriodizedDraft } from "../domain/PeriodizedDraft.ts";
+import { mesocycleBuilderDraftKey, periodizedDraftKey, type MesocycleBuilderDraft, type MesocycleBuilderScope, type PeriodizedDraft } from "../domain/PeriodizedDraft.ts";
 import { mesocycleCreatedAt, preserveMesocycle, readMesocycleHistory } from "./StructureVersionStore.ts";
 import type { MesocycleVersion } from "../domain/StructureVersion.ts";
 import { simpleWorkoutDraftKey, type SimpleWorkoutDraft, type SimpleWorkoutEdit } from "../domain/SimpleWorkoutEdit.ts";
@@ -873,6 +873,8 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         [this.workspaceId, clientId, programId, cycle.id]);
       await tx.run("DELETE FROM dev_training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key LIKE ?",
         [this.workspaceId, clientId, programId, `week:${cycle.id}:%`]);
+      await tx.run("DELETE FROM dev_training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND draft_key = ?",
+        [this.workspaceId, clientId, mesocycleBuilderDraftKey({ programId, mesocycleId: cycle.id })]);
       for (const week of cycle.weeks) {
         await writeWorkouts(tx, this.workspaceId, programId, week.id, []);
         await tx.run("DELETE FROM dev_training_weeks WHERE workspace_id = ? AND id = ?", [this.workspaceId, week.id]);
@@ -911,8 +913,8 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         "dev_training_simple_versions", "dev_training_client_selection"]) {
         await tx.run(`DELETE FROM ${table} WHERE workspace_id = ? AND client_id = ? AND program_id = ?`, scoped);
       }
-      await tx.run("DELETE FROM dev_training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND (draft_key = ? OR draft_key LIKE ?)",
-        [this.workspaceId, clientId, programId, `workout:${programId}:%`]);
+      await tx.run("DELETE FROM dev_training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND (draft_key = ? OR draft_key LIKE ? OR draft_key LIKE ?)",
+        [this.workspaceId, clientId, programId, `workout:${programId}:%`, `builder:${programId}:%`]);
       await deleteMemberMesocycles(tx, this.workspaceId, programId, clientId);
       await tx.run("DELETE FROM dev_training_program_members WHERE workspace_id = ? AND program_id = ? AND client_id = ?",
         [this.workspaceId, programId, clientId]);
@@ -1298,6 +1300,30 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         DO UPDATE SET draft_json = excluded.draft_json, updated_at = excluded.updated_at`,
       [this.workspaceId, clientId, programId, periodizedDraftKey(draft), JSON.stringify(draft), new Date().toISOString()]);
     });
+  }
+
+  async getMesocycleBuilderDraft(clientId: string, scope: MesocycleBuilderScope): Promise<MesocycleBuilderDraft | null> {
+    if (scope.programId !== null && await this.getProgram(clientId, scope.programId) === null) return null;
+    const row = await this.ready().connection.first<{ json: string }>(`SELECT draft_json AS json FROM dev_training_builder_drafts
+      WHERE workspace_id = ? AND client_id = ? AND draft_key = ?`, [this.workspaceId, clientId, mesocycleBuilderDraftKey(scope)]);
+    return row === null ? null : JSON.parse(row.json) as MesocycleBuilderDraft;
+  }
+
+  async saveMesocycleBuilderDraft(clientId: string, scope: MesocycleBuilderScope, draft: MesocycleBuilderDraft): Promise<void> {
+    await this.ready().writer.write(async (tx) => {
+      if (scope.programId !== null) {
+        if ((await membership(tx, this.workspaceId, clientId, scope.programId)).archivedAt !== null) throw new Error("PROGRAM_ARCHIVED");
+        if ((await programById(tx, this.workspaceId, scope.programId)).kind !== "PERIODIZED") throw new Error("DRAFT_INVALID");
+      }
+      await tx.run(`INSERT INTO dev_training_builder_drafts (workspace_id, client_id, draft_key, base_revision, draft_json, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(workspace_id, client_id, draft_key) DO UPDATE SET
+        base_revision = excluded.base_revision, draft_json = excluded.draft_json, updated_at = excluded.updated_at`,
+      [this.workspaceId, clientId, mesocycleBuilderDraftKey(scope), draft.baseRevision, JSON.stringify(draft), new Date().toISOString()]);
+    });
+  }
+
+  async clearMesocycleBuilderDraft(clientId: string, scope: MesocycleBuilderScope): Promise<void> {
+    await this.clearBuilderDraft(clientId, mesocycleBuilderDraftKey(scope));
   }
 
   async clearPeriodizedDraft(clientId: string, programId: string, key: string): Promise<void> {

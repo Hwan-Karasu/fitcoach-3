@@ -12,7 +12,7 @@ import type { SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
 import { validateDraft } from "../domain/SimplePlanRules.ts";
 import { StructureEditPreview } from "./StructureEditPreview.tsx";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
-import type { TrainingParticipantCandidate } from "./CreateProgramScreen.tsx";
+import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidate.ts";
 import { ParticipantChips } from "./ParticipantChips.tsx";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
 import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
