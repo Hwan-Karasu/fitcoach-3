@@ -306,7 +306,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
               routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId: createdId } }] })} />}
           onOpenProgram={(createdId) => navigation.reset({ index: 1,
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId: createdId } }] })}
-          renderWeeks={(view) => <ProgramWeeksPanel key={view.key} clientId={viewer} programId={route.params.programId} weeks={view.weeks}
+          renderWeeks={(view) => <ProgramWeeksPanel resetKey={view.key} clientId={viewer} programId={route.params.programId} weeks={view.weeks}
             renderWeekActions={view.weekActions} execution={execution} selectedWeek={view.selectedWeek} onSelectWeek={view.onSelectWeek}
             header={view.header} afterCard={view.afterCard} onLoaded={view.onLoaded}
             onOpenWorkout={(weekIndex, workoutId) => navigation.navigate("TrainingWorkout", { programId: route.params.programId, weekIndex, workoutId,

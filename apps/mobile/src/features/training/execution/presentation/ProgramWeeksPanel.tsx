@@ -37,7 +37,7 @@ const percent = (done: number, total: number) => total === 0 ? 0 : Math.round(do
  * программы (шапка, сводка недели, сетка недель с прогрессом), под ней — тренировки с объёмом и прогрессом.
  */
 export function ProgramWeeksPanel({ clientId, programId, weeks: liveViews, execution, onOpenWorkout, renderWeekActions: liveActions,
-  selectedWeek: liveSelected, onSelectWeek, header: liveHeader, afterCard: liveAfter, onLoaded }: Readonly<{
+  selectedWeek: liveSelected, onSelectWeek, header: liveHeader, afterCard: liveAfter, onLoaded, resetKey = "" }: Readonly<{
   clientId: string;
   programId: string;
   weeks: readonly ProgramWeekView[];
@@ -53,6 +53,8 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: liveViews, execu
   afterCard?: ReactNode;
   /** Статусы и выполнения загружены для `клиент:программа` (или загрузка не удалась) — экран программы может показать участника. */
   onLoaded?: (key: string) => void;
+  /** Какой план показан (мезоцикл): выбор недели действует только для него, новый начинается с первой незакрытой недели. */
+  resetKey?: string;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -69,7 +71,8 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: liveViews, execu
   if (data.key === currentKey) held.current = live;
   const { views, renderWeekActions, selectedWeek, header, afterCard } = held.current;
   const [version, setVersion] = useState(0);
-  const [selected, setSelected] = useState<number | null>(null);
+  const [chosen, setChosen] = useState<Readonly<{ key: string; week: number }> | null>(null);
+  const selected = chosen !== null && chosen.key === resetKey ? chosen.week : null;
 
   useEffect(() => {
     let active = true;
@@ -111,7 +114,7 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: liveViews, execu
   const requested = selectedWeek ?? selected ?? firstOpen;
   const week = viewOf(requested) ? requested : views[0]?.index ?? 1;
   const workouts = viewOf(week)?.workouts ?? [];
-  const chooseWeek = (value: number) => { setSelected(value); onSelectWeek?.(value); };
+  const chooseWeek = (value: number) => { setChosen({ key: resetKey, week: value }); onSelectWeek?.(value); };
   const currentPosition = views.findIndex((view) => view.index === week);
   const previousWeek = views[currentPosition - 1];
   const nextWeek = views[currentPosition + 1];

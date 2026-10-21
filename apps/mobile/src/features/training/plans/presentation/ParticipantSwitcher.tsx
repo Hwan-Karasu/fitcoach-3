@@ -62,8 +62,10 @@ export function ParticipantSwitcher({ clientId, activeClientId = clientId, ancho
   useEffect(() => repository.subscribeCommittedChanges(() => setVersion((value) => value + 1)), [repository]);
   useEffect(() => { scroll.current?.scrollTo({ x: Math.max(0, (positions.current.get(activeClientId) ?? 0) - 16), animated: true }); }, [activeClientId]);
 
-  // Состав, прочитанный для прежнего мезоцикла, не показывается, пока не загружен состав нового (экран программы).
-  const group = workoutId === undefined && mesocycleId != null ? (isGroupOfMesocycle(members, mesocycleId) ? members : []) : members;
+  // Пока загружается состав нового мезоцикла, полоса показывает прежний и не нажимается: исчезни она на это время, весь экран под
+  // ней сдвинулся бы вверх и вернулся вниз. Нажимать нельзя, чтобы не перейти к участнику прежнего мезоцикла.
+  const fresh = workoutId !== undefined || mesocycleId == null || isGroupOfMesocycle(members, mesocycleId);
+  const group = members;
   if (group.length < 2) return null;
   const byClient = new Map(group.map((copy) => [copy.clientId, copy]));
   const ordered = participantOrder(group.map((copy) => copy.clientId), anchorClientId);
@@ -80,7 +82,7 @@ export function ParticipantSwitcher({ clientId, activeClientId = clientId, ancho
             const name = names.get(id) ?? "Клиент";
             return (
               <Pressable key={id} accessibilityRole="button" accessibilityLabel={current ? `${name}, открыт` : `Переключиться на ${name}`}
-                accessibilityState={{ selected: current, disabled: current || busy }} disabled={current || busy}
+                accessibilityState={{ selected: current, disabled: current || busy || !fresh }} disabled={current || busy || !fresh}
                 onLayout={(event) => positions.current.set(id, event.nativeEvent.layout.x)} onPress={() => onSelect(byClient.get(id)!)}
                 style={({ pressed }) => [styles.chip, current ? shadow.control : null, {
                   backgroundColor: current ? colors.surface : pressed ? colors.surfaceRaised : "transparent", opacity: busy && !current ? 0.6 : 1 }]}>

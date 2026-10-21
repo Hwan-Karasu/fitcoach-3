@@ -28,7 +28,10 @@ import type { Mesocycle } from "../domain/PeriodizedModel.ts";
 
 /** Неделя программы для панели недель (её рисует дневник — другой модуль). */
 export interface ProgramWeeksView {
-  /** Меняется при смене мезоцикла: панель начинает с его первой незакрытой недели. */
+  /**
+   * План, который показан (мезоцикл): панель не пересоздаётся, а выбор недели действует только для этого плана — новый мезоцикл
+   * начинается с первой незакрытой недели. Статусы панели — по всей программе, поэтому смена мезоцикла их не перечитывает.
+   */
   readonly key: string;
   /** Мезоцикл Расширенной программы (ключ — его родство: у участников группы копии одного мезоцикла). */
   readonly mesocycleId?: string;
@@ -222,6 +225,22 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       .then((copies) => { if (active) setGroupSize(Math.max(1, copies.length)); }).catch(() => undefined);
     return () => { active = false; };
   }, [clientId, cycleKey, programId, repository, shown, version]);
+  // Есть ли группа хотя бы у одного мезоцикла программы этого участника. Полоса участников плавает поверх прокрутки и не входит в
+  // раскладку (появляется и исчезает со сменой мезоцикла, не сдвигая экран); под неё у содержимого постоянный отступ сверху — он
+  // зависит только от программы, не от мезоцикла.
+  const [anyGroup, setAnyGroup] = useState(false);
+  const [stripHeight, setStripHeight] = useState(STRIP_HEIGHT);
+  const cycleIds = periodized?.mesocycles.map((item) => item.id).join("|") ?? "";
+  useEffect(() => {
+    if (cycleIds === "") { setAnyGroup(false); return undefined; }
+    let active = true;
+    const owner = shown?.clientId ?? clientId;
+    const program = shown?.programId ?? programId;
+    void Promise.all(cycleIds.split("|").map((mesocycleId) => repository.getMesocycleGroup(owner, program, { mesocycleId })
+      .then((copies) => copies.length > 1).catch(() => false)))
+      .then((flags) => { if (active) setAnyGroup(flags.some(Boolean)); });
+    return () => { active = false; };
+  }, [clientId, cycleIds, programId, repository, shown, version]);
 
   useEffect(() => repository.subscribeCommittedChanges((change) => {
     if (change.selectionOnly !== true && change.orderOnly !== true && change.clientIds.includes(clientId)) setVersion((value) => value + 1);
@@ -318,9 +337,9 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
     {tabs}
-    {participants}
+    <View style={styles.screen}>
     <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} pointerEvents={stale ? "none" : "auto"}
-      contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
+      contentContainerStyle={[styles.content, anyGroup ? { paddingTop: stripHeight + 4 } : null]} keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
       onScrollBeginDrag={() => { anchor.current = null; }}
       onContentSizeChange={(_width, height) => {
         if (stale || pendingRestore.current === null) return;
@@ -603,9 +622,17 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
           : "Программа уйдёт в архив клиента. Вернуть можно из списка программ."}
         confirmLabel="В архив" onCancel={() => setConfirmArchive(false)} onConfirm={() => { void archive(); }} />
     </Animated.ScrollView>
+    <View style={styles.floating} onLayout={(event) => {
+      const height = event.nativeEvent.layout.height;
+      if (height > 0) setStripHeight(height);
+    }}>{participants}</View>
+    </View>
     </View>
   );
 }
+
+/** Высота полосы участников до первого замера (подпись + карточки), чтобы отступ под неё не менялся после её появления. */
+const STRIP_HEIGHT = 82;
 
 const styles = StyleSheet.create({
   /** Данные прежнего участника, пока грузится новый (как в дневнике). */
@@ -613,6 +640,7 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
   heading: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },
   screen: { flex: 1 },
+  floating: { position: "absolute", top: 0, left: 0, right: 0 },
   tabs: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 2 },
   cardHead: { gap: 12 },
   cardTitle: { fontFamily: fonts.bold, fontSize: 18, letterSpacing: -0.2 },
