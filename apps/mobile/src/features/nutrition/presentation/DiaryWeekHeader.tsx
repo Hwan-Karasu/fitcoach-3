@@ -24,9 +24,9 @@ function useAccountedRange(clientId: string, diary: NutritionDiaryPort, from: st
     return () => { active = false; };
   }, [clientId, diary, from, to, tick]);
   useEffect(() => diary.subscribeCommittedChanges((change) => { if (change.clientId === clientId) setTick((value) => value + 1); }), [clientId, diary]);
-  return dates.key === `${clientId}|${from}|${to}` ? dates.set : EMPTY;
+  // Пока грузится другая неделя/месяц, отметки остаются прежними: без мигания.
+  return dates.set;
 }
-const EMPTY: ReadonlySet<string> = new Set();
 
 /** Число дня: день с записями о еде отмечен галочкой; выбранный день заливается акцентом (`selected`). */
 function DayNumber({ text, marked, selected, today, textStyle }: Readonly<{ text: number; marked: boolean; selected: boolean; today: boolean; textStyle: object }>) {

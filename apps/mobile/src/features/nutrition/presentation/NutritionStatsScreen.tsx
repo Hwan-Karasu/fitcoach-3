@@ -71,14 +71,19 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
     return () => { offDiary(); offTargets(); offBody(); offCalc(); };
   }, [clientId, diary, targets, measurements, calc]);
 
-  const stats = useMemo(() => data === null || data.key !== key ? null
+  const fresh = useMemo(() => data === null || data.key !== key ? null
     : computeNutritionStats({ from, to, entries: data.entries, versions: data.versions, exceptions: data.exceptions, sparse: period === "all" }), [data, key, from, to, period]);
+  // Пока грузится новый период, остаётся прежняя статистика (приглушённая): экран не пересоздаётся.
+  const [shown, setShown] = useState<typeof fresh>(null);
+  if (fresh !== null && shown !== fresh) setShown(fresh);
+  const stats = fresh ?? shown;
+  const stale = fresh === null && shown !== null;
   const graph = useMemo(() => {
-    if (data === null || data.key !== key) return [];
+    if (data === null) return [];
     if (trend === "steps") return data.steps.map((row) => ({ key: row.localDate, label: shortDate(row.localDate), caption: row.localDate, value: row.steps }));
     return dailyPoints(data.body.measurements, data.body.primaries, trend === "weight" ? "WEIGHT" : "BODY_FAT").filter((row) => row.localDate >= from && row.localDate <= to)
       .flatMap((row) => row.kind !== "VALUE" ? [] : [{ key: row.localDate, label: shortDate(row.localDate), caption: row.localDate, value: row.measurement.valueX10 / 10 }]);
-  }, [data, key, trend, from, to]);
+  }, [data, trend, from, to]);
   const weekGroups = useMemo(() => {
     const weeks = new Map<string, NonNullable<typeof stats>["days"][number][]>();
     for (const day of stats?.days ?? []) {
@@ -107,7 +112,7 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
     </View></View></Modal>
   </>;
   return (
-    <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content}>
+    <ScrollView style={{ backgroundColor: colors.canvas, opacity: stale ? 0.55 : 1 }} contentContainerStyle={styles.content}>
       {control}
       {stats === null ? failed ? <View style={styles.pad}><InlineNotice kind="error">Не удалось загрузить статистику питания.</InlineNotice><AppButton label="Повторить" onPress={() => setTick((value) => value + 1)} /></View> : <LoadingState label="Считаем статистику…" /> : <>
       {failed ? <InlineNotice kind="error">Не удалось обновить статистику. Показаны последние загруженные данные.</InlineNotice> : null}

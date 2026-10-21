@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
@@ -10,6 +11,9 @@ import { formatDecimalX10 } from "../domain/FoodRules.ts";
 const COLUMN_WIDTH: Readonly<Record<TargetMetric, number>> = { kcal: 46, protein: 36, fat: 36, carbs: 36 };
 const LETTERS: Readonly<Record<TargetMetric, string>> = { kcal: "К", protein: "Б", fat: "Ж", carbs: "У" };
 const KEY_OF: Readonly<Record<TargetMetric, keyof Nutrients>> = { kcal: "kcalX10", protein: "proteinX10", fat: "fatX10", carbs: "carbsX10" };
+
+/** Значения К/Б/Ж/У совпадают: ячейки не перерисовываются при пересоздании объекта с теми же числами. */
+const KEYS_EQUAL = (a: Nutrients | null, b: Nutrients | null) => a === b || (a !== null && b !== null && a.kcalX10 === b.kcalX10 && a.proteinX10 === b.proteinX10 && a.fatX10 === b.fatX10 && a.carbsX10 === b.carbsX10);
 
 /** Цвета колонок берутся из графических токенов темы и акцента; цвет не единственный признак — есть буква, позиция и подпись для чтения с экрана (NUT-FS-17). */
 export function useMacroColors(): Readonly<Record<TargetMetric, string>> {
@@ -29,7 +33,7 @@ export function MacroHeader() {
 }
 
 /** Значения К/Б/Ж/У в тех же колонках; `null` — «—» (нет данных, а не ноль). */
-export function MacroCells({ values, bold = false }: Readonly<{ values: Nutrients | null; bold?: boolean }>) {
+export const MacroCells = memo(function MacroCells({ values, bold = false }: Readonly<{ values: Nutrients | null; bold?: boolean }>) {
   const colors = useMacroColors();
   const { width, fontScale } = useWindowDimensions();
   const display = (metric: TargetMetric) => {
@@ -46,7 +50,7 @@ export function MacroCells({ values, bold = false }: Readonly<{ values: Nutrient
       ))}
     </View>
   );
-}
+}, (before, after) => before.bold === after.bold && KEYS_EQUAL(before.values, after.values));
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center" },

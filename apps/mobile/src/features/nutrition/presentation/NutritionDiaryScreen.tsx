@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ChevronDown, ChevronRight, ClipboardPaste, Copy, Droplets, Plus, Repeat2 } from "lucide-react-native";
 import { AppButton, ConfirmDialog, EmptyState, InlineNotice, LoadingState } from "../../../shared/ui/components/public.ts";
@@ -32,13 +32,13 @@ const WATER_QUICK_ML = [250, 500, 750, 1000] as const;
 
 interface PendingCopy { readonly request: CopyEntriesRequest; readonly text: string }
 
-function EntryRow({ entry, onOpen }: Readonly<{ entry: DiaryEntry; onOpen: () => void }>) {
+const EntryRow = memo(function EntryRow({ entry, onOpen }: Readonly<{ entry: DiaryEntry; onOpen: (entry: DiaryEntry) => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const { snapshot } = entry;
   const detail = [quantityText(snapshot.basis, snapshot.quantityX10), snapshot.source.kind === "RECIPE" ? "рецепт" : null].filter((part) => part !== null).join(" · ");
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${snapshot.name}, ${detail}, ${kcalText(entryNutrients(snapshot.eaten))}. Изменить`} onPress={onOpen}
+    <Pressable accessibilityRole="button" accessibilityLabel={`${snapshot.name}, ${detail}, ${kcalText(entryNutrients(snapshot.eaten))}. Изменить`} onPress={() => onOpen(entry)}
       style={({ pressed }) => [styles.entry, { borderColor: colors.border, backgroundColor: pressed ? colors.surfaceRaised : "transparent" }]}>
       <View style={styles.entryText}>
         <Text numberOfLines={2} style={[styles.entryName, { color: colors.textPrimary }]}>{snapshot.name}</Text>
@@ -47,7 +47,7 @@ function EntryRow({ entry, onOpen }: Readonly<{ entry: DiaryEntry; onOpen: () =>
       <MacroCells values={entryNutrients(snapshot.eaten)} />
     </Pressable>
   );
-}
+}, (before, after) => before.entry.id === after.entry.id && before.entry.revision === after.entry.revision && before.entry.slot === after.entry.slot && before.onOpen === after.onOpen);
 
 /** Малая кнопка-чип полосы быстрых действий: видимая высота 32, область касания не меньше 48 за счёт hitSlop (NUT-FS-19). */
 function QuickChip({ label, icon, onPress, disabled = false, accessibilityLabel }: Readonly<{ label: string; icon?: React.ReactNode; onPress: () => void; disabled?: boolean; accessibilityLabel: string }>) {
@@ -83,7 +83,7 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
   const today = todayLocal();
   const [localDate, setLocalDate] = useState(today);
   useEffect(() => { if (requestedDay !== undefined) setLocalDate(requestedDay.date); }, [requestedDay]);
-  const { data, failed, reload } = useNutritionDay(clientId, localDate, diary, targets);
+  const { data, stale, failed, reload } = useNutritionDay(clientId, localDate, diary, targets);
   const { guide, defaults, leanMassKg } = useNutritionGuide(clientId, body, calc, measurements);
   const macroColors = useMacroColors();
   const [editing, setEditing] = useState<DiaryEntry | null>(null);
@@ -157,7 +157,7 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
       {failed ? <View style={styles.pad}><InlineNotice kind="error">Не удалось загрузить дневник питания.</InlineNotice><AppButton label="Повторить загрузку" onPress={reload} /></View> : <LoadingState label="Загружаем день…" />}</View>;
   }
   const recorded = data.summary.state === "FOOD_RECORDED";
-  const orientation = dayOrientation(data.target, data.versions, localDate, guide, defaults, leanMassKg);
+  const orientation = dayOrientation(data.target, data.versions, data.summary.localDate, guide, defaults, leanMassKg);
   const eatenText = (metric: TargetMetric) => !recorded ? "0" : wholeText(data.summary.totals[NUTRIENT_OF[metric]]);
   const orientText = (metric: TargetMetric) => orientation[metric] === null ? "—" : String(orientation[metric]);
 
@@ -174,7 +174,7 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
           </View>
         ))}
       </View>
-      <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled" style={stale ? styles.stale : undefined} pointerEvents={stale ? "none" : "auto"}>
         <View style={styles.waterRow}>
           <View style={styles.grow}><AppButton compact variant="secondary" label="Сегодня" disabled={localDate === today} onPress={() => setLocalDate(today)} /></View>
           <View style={styles.grow}><AppButton compact variant="secondary" icon={(color) => <Repeat2 size={16} color={color} />} label="С прошлого дня" busy={copying} onPress={() => { void copyPreviousDay(); }} /></View>
@@ -202,7 +202,7 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
                 <MacroCells values={total} bold />
               </View>
               {open ? <>
-                {slotEntries.map((entry) => <EntryRow key={entry.id} entry={entry} onOpen={() => setEditing(entry)} />)}
+                {slotEntries.map((entry) => <EntryRow key={entry.id} entry={entry} onOpen={setEditing} />)}
                 <View style={[styles.chipStrip, { borderColor: colors.border }]}>
                   <QuickChip label="Сохранить еду" accessibilityLabel={`Сохранить набор: ${slotLabels[slot]}`} disabled={slotEntries.length === 0} onPress={() => setSavingMeal(slotEntries.map(savedSnapshot))} />
                   <QuickChip label="Копировать" icon={<Copy size={14} color={colors.textPrimary} />} disabled={slotEntries.length === 0} accessibilityLabel={`Копировать приём пищи: ${slotLabels[slot]}`}
@@ -252,6 +252,7 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  stale: { opacity: 0.55 },
   pad: { paddingHorizontal: 16 },
   grow: { flex: 1 },
   dateBar: { paddingHorizontal: 16, paddingTop: 2 },

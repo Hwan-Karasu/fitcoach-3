@@ -20,8 +20,8 @@ export interface NutritionDayData {
  * при фиксации изменений этого клиента (дневник — этой даты). Подписки отдаются в cleanup.
  */
 export function useNutritionDay(clientId: string, localDate: string, diary: NutritionDiaryPort,
-  targets: NutritionTargetsPort): Readonly<{ data: NutritionDayData | null; failed: boolean; reload: () => void }> {
-  const [loaded, setLoaded] = useState<Readonly<{ key: string; entries: readonly DiaryEntry[]; waterMl: number | null;
+  targets: NutritionTargetsPort): Readonly<{ data: NutritionDayData | null; stale: boolean; failed: boolean; reload: () => void }> {
+  const [loaded, setLoaded] = useState<Readonly<{ key: string; localDate: string; entries: readonly DiaryEntry[]; waterMl: number | null;
     versions: readonly TargetVersion[]; exceptions: readonly TargetException[] }> | null>(null);
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
@@ -31,7 +31,7 @@ export function useNutritionDay(clientId: string, localDate: string, diary: Nutr
     let active = true;
     void Promise.all([diary.listEntries(clientId, localDate, localDate), diary.listWater(clientId, localDate, localDate),
       targets.listVersions(clientId), targets.listExceptions(clientId)]).then(([entries, water, versions, exceptions]) => {
-      if (active) { setLoaded({ key: `${clientId}|${localDate}`, entries, waterMl: water[0]?.ml ?? null, versions, exceptions }); setFailed(false); }
+      if (active) { setLoaded({ key: `${clientId}|${localDate}`, localDate, entries, waterMl: water[0]?.ml ?? null, versions, exceptions }); setFailed(false); }
     }, () => { if (active) setFailed(true); });
     return () => { active = false; };
   }, [clientId, localDate, diary, targets, tick]);
@@ -43,10 +43,12 @@ export function useNutritionDay(clientId: string, localDate: string, diary: Nutr
     return () => { offDiary(); offTargets(); };
   }, [clientId, localDate, diary, targets]);
 
+  // Пока грузится новая дата, остаётся прежний день (`stale`): экран не пересоздаётся, а обновляются только изменившиеся значения.
   const data = useMemo<NutritionDayData | null>(() => {
-    if (loaded === null || loaded.key !== `${clientId}|${localDate}`) return null;
-    return { entries: loaded.entries, waterMl: loaded.waterMl, summary: summarizeDay(localDate, loaded.entries),
-      target: resolveTarget(loaded.versions, loaded.exceptions, localDate), versions: loaded.versions };
-  }, [loaded, clientId, localDate]);
-  return { data, failed, reload };
+    if (loaded === null || !loaded.key.startsWith(`${clientId}|`)) return null;
+    return { entries: loaded.entries, waterMl: loaded.waterMl, summary: summarizeDay(loaded.localDate, loaded.entries),
+      target: resolveTarget(loaded.versions, loaded.exceptions, loaded.localDate), versions: loaded.versions };
+  }, [loaded, clientId]);
+  const stale = loaded !== null && loaded.key !== `${clientId}|${localDate}`;
+  return { data, stale, failed, reload };
 }
