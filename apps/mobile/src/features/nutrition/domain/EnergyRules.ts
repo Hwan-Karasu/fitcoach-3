@@ -9,6 +9,12 @@ export function kcalFromMacrosX10(macros: Readonly<{ proteinX10: number | null; 
   return KCAL_PER_G.protein * macros.proteinX10 + KCAL_PER_G.fat * macros.fatX10 + KCAL_PER_G.carbs * macros.carbsX10;
 }
 
+/** Калории по известным Б/Ж/У (4/9/4): неизвестный нутриент не учитывается; не известен ни один — `null`. Десятые доли, как у `kcalFromMacrosX10`. */
+export function kcalFromKnownMacrosX10(macros: Readonly<{ proteinX10: number | null; fatX10: number | null; carbsX10: number | null }>): number | null {
+  if (macros.proteinX10 === null && macros.fatX10 === null && macros.carbsX10 === null) return null;
+  return KCAL_PER_G.protein * (macros.proteinX10 ?? 0) + KCAL_PER_G.fat * (macros.fatX10 ?? 0) + KCAL_PER_G.carbs * (macros.carbsX10 ?? 0);
+}
+
 /** Диапазон калорий из диапазонов Б/Ж/У (нижняя из нижних, верхняя из верхних), округлён до целых ккал. Нет цели хотя бы по одному макро — `null`. */
 export function kcalRangeFromMacros(ranges: Readonly<{ protein: TargetRange | null; fat: TargetRange | null; carbs: TargetRange | null }>): TargetRange | null {
   if (ranges.protein === null || ranges.fat === null || ranges.carbs === null) return null;

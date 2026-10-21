@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { DevFoodCatalogRepository } from "../apps/mobile/src/features/nutrition/data/DevFoodCatalogRepository.ts";
 import type { FoodInput } from "../apps/mobile/src/features/nutrition/domain/FoodModel.ts";
 import { gramsFromPieces, parseDecimalX10, piecesFromGrams, scaleNutrients, validateFood } from "../apps/mobile/src/features/nutrition/domain/FoodRules.ts";
@@ -15,7 +16,10 @@ const OATS: FoodInput = { name: "Овсянка", brand: null, unit: "G", amount
 
 async function store() {
   const db = new DatabaseSync(":memory:");
-  const repository = new DevFoodCatalogRepository(new SharedSqliteDatabase(async () => nodeSqlitePort(db)), WS);
+  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  // Схема питания ссылается на клиентов (пересборка таблицы дневника в v15): таблица клиентов существует, как в приложении.
+  await new DevClientRepository(shared, WS, []).initialize();
+  const repository = new DevFoodCatalogRepository(shared, WS);
   await repository.initialize();
   return { db, repository };
 }
@@ -144,4 +148,68 @@ test("P-30: правка продукта не сбрасывает избран
   await repository.archive(created.id, edited.revision, NOW);
   assert.deepEqual(await repository.search("", "FAVORITES"), []);
   assert.equal((await repository.get(created.id))?.favorite, true, "история и карточка читают скрытый продукт");
+});
+
+test("NUT-UX-PARITY-01: единица «шт.» и дополнительные нутриенты сохраняются; правка меняет тот же продукт", async () => {
+  const { repository } = await store();
+  try {
+    const egg = await repository.create({ name: "Яйцо", brand: null, unit: "PIECE", amountX10: 10, kcalX10: 700, proteinX10: 63, fatX10: 52, carbsX10: 5,
+      gramsPerPieceX10: 550, extraNutrients: [{ key: "saturatedFat", label: "Насыщенные жиры", unit: "G", valueX10: 16 }, { key: "cholesterol", label: "Холестерин", unit: "MG", valueX10: 1860 }] }, NOW);
+    assert.equal(egg.unit, "PIECE");
+    assert.deepEqual(egg.extraNutrients, [{ key: "saturatedFat", label: "Насыщенные жиры", unit: "G", valueX10: 16 }, { key: "cholesterol", label: "Холестерин", unit: "MG", valueX10: 1860 }]);
+    const edited = await repository.update(egg.id, egg.revision, { name: "Яйцо С1", brand: null, unit: "PIECE", amountX10: 10, kcalX10: 700, proteinX10: 63, fatX10: 52, carbsX10: 5 }, NOW);
+    assert.equal(edited.id, egg.id);
+    assert.equal(edited.revision, egg.revision + 1);
+    assert.equal((await repository.search("")).length, 1, "правка не создаёт копию");
+    assert.deepEqual(edited.extraNutrients, egg.extraNutrients, "поле не передано — прежние нутриенты сохранены");
+    const cleared = await repository.update(egg.id, edited.revision, { name: "Яйцо С1", brand: null, unit: "PIECE", amountX10: 10, kcalX10: 700, proteinX10: 63, fatX10: 52, carbsX10: 5, extraNutrients: [] }, NOW);
+    assert.deepEqual(cleared.extraNutrients, []);
+  } finally { await repository.close(); }
+});
+
+test("NUT-UX-PARITY-01: проверка дополнительных нутриентов — дубль ключа, пустое название, отрицательное значение, чужая единица", () => {
+  const extra = { key: "sugar", label: "Сахар", unit: "G" as const, valueX10: 50 };
+  assert.deepEqual(validateFood({ ...OATS, extraNutrients: [{ ...extra, label: "  Сахар  " }] }).extraNutrients, [extra]);
+  assert.equal(validateFood({ ...OATS, extraNutrients: [] }).extraNutrients, null);
+  assert.equal(validateFood({ ...OATS }).extraNutrients, undefined);
+  for (const bad of [[extra, extra], [{ ...extra, label: " " }], [{ ...extra, valueX10: -1 }], [{ ...extra, unit: "KG" as never }]]) {
+    assert.throws(() => validateFood({ ...OATS, extraNutrients: bad }), code("FOOD_EXTRA_INVALID"));
+  }
+  assert.throws(() => validateFood({ ...OATS, unit: "BOX" as never }), code("FOOD_BASIS_INVALID"));
+});
+
+test("NUT-UX-PARITY-01 миграция v14→v15: продукты, состав рецептов и записи дневника сохраняются, «шт.» принимается, FK работает", async () => {
+  const db = new DatabaseSync(":memory:");
+  const { devNutritionCatalog, DEV_NUTRITION_LEDGER } = await import("../apps/mobile/src/features/nutrition/data/DevNutritionCatalog.ts");
+  const { runMigrations } = await import("../apps/mobile/src/shared/db/MigrationRunner.ts");
+  const { WriterCoordinator } = await import("../apps/mobile/src/shared/db/WriterCoordinator.ts");
+  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const clients = new DevClientRepository(shared, WS, []);
+  await clients.initialize();
+  const client = await clients.create({ displayName: "SyntheticV14" });
+  const writer = new WriterCoordinator(nodeSqlitePort(db));
+  await runMigrations(writer, devNutritionCatalog.filter((step) => step.version <= 14), DEV_NUTRITION_LEDGER);
+  db.prepare(`INSERT INTO dev_food_products (id,workspace_id,name,brand,basis_unit,basis_amount_x10,kcal_x10,protein_x10,fat_x10,carbs_x10,revision,created_at,updated_at,barcode,grams_per_piece_x10,favorite)
+    VALUES ('old-food',?,'Старый',NULL,'G',1000,3600,125,62,600,4,'x','x','12345678',450,1)`).run(WS);
+  db.prepare(`INSERT INTO dev_recipes (id,workspace_id,name,servings_x10,revision,created_at,updated_at) VALUES ('old-recipe',?,'Каша',10,2,'x','x')`).run(WS);
+  db.prepare(`INSERT INTO dev_recipe_ingredients (recipe_id,workspace_id,position,food_id,quantity_x10) VALUES ('old-recipe',?,0,'old-food',500)`).run(WS);
+  db.prepare(`INSERT INTO dev_food_diary_entries (id,workspace_id,client_id,local_date,slot,position,source_kind,source_id,name,brand,basis_unit,basis_amount_x10,
+    per_kcal_x10,per_protein_x10,per_fat_x10,per_carbs_x10,quantity_x10,ingredients_json,revision,created_at,updated_at,override_base_quantity_x10,override_kcal_x10)
+    VALUES ('old-entry',?,?,'2026-10-20','BREAKFAST',0,'FOOD','old-food','Старый',NULL,'G',1000,3600,125,62,600,500,'[]',3,'x','x',500,10)`).run(WS, client.id);
+  const foods = new DevFoodCatalogRepository(shared, WS);
+  try {
+    await foods.initialize();
+    const old = await foods.get("old-food");
+    assert.deepEqual([old?.name, old?.unit, old?.amountX10, old?.kcalX10, old?.barcode, old?.gramsPerPieceX10, old?.favorite, old?.revision],
+      ["Старый", "G", 1000, 3600, "12345678", 450, true, 4]);
+    assert.deepEqual(old?.extraNutrients, []);
+    assert.deepEqual(db.prepare("SELECT food_id, quantity_x10 FROM dev_recipe_ingredients WHERE recipe_id = 'old-recipe'").all().map((row) => ({ ...row })), [{ food_id: "old-food", quantity_x10: 500 }]);
+    assert.equal(db.prepare("SELECT override_kcal_x10 AS v FROM dev_food_diary_entries WHERE id = 'old-entry'").get()?.v, 10);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'dev_food_diary_override_%'").get()?.n, 2);
+    assert.throws(() => db.prepare("DELETE FROM dev_food_products WHERE id = 'old-food'").run(), /FOREIGN KEY/u, "RESTRICT на составе рецептов восстановлен");
+    const egg = await foods.create({ name: "Яйцо", brand: null, unit: "PIECE", amountX10: 10, kcalX10: 700, proteinX10: 63, fatX10: 52, carbsX10: 5 }, NOW);
+    assert.equal(egg.unit, "PIECE");
+    assert.throws(() => db.prepare("UPDATE dev_food_products SET basis_unit = 'BOX' WHERE id = 'old-food'").run(), /CHECK/u);
+    assert.equal(db.prepare("PRAGMA integrity_check").get()?.integrity_check, "ok");
+  } finally { await foods.close(); await clients.close(); }
 });

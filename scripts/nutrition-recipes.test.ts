@@ -1,3 +1,4 @@
+import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
@@ -20,6 +21,7 @@ const MILK: FoodInput = { name: "Молоко", brand: null, unit: "ML", amountX
 async function stores() {
   const db = new DatabaseSync(":memory:");
   const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  await new DevClientRepository(shared, WS, []).initialize();
   const foods = new DevFoodCatalogRepository(shared, WS);
   const recipes = new DevRecipeCatalogRepository(shared, WS);
   await foods.initialize();
@@ -151,6 +153,7 @@ test("N01 миграции: рецепты работают на БД, где v1
   const { devNutritionCatalog, DEV_NUTRITION_LEDGER } = await import("../apps/mobile/src/features/nutrition/data/DevNutritionCatalog.ts");
   const { runMigrations } = await import("../apps/mobile/src/shared/db/MigrationRunner.ts");
   const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  await new DevClientRepository(shared, WS, []).initialize();
   const { writer } = await shared.acquire();
   await runMigrations(writer, [devNutritionCatalog[0]!], DEV_NUTRITION_LEDGER);
   const foods = new DevFoodCatalogRepository(shared, WS);

@@ -1,6 +1,6 @@
 import { automaticMacroRanges, pointMacroRanges, rebalanceMacroRanges, type MacroGrams, type MacroRanges } from "./CalcRules.ts";
 import { kcalRangeFromMacros } from "./EnergyRules.ts";
-import type { Corridors, HomeMacroAdjustment, TargetRange, TargetVersion } from "./TargetModel.ts";
+import { TARGET_METRICS, type Corridors, type HomeMacroAdjustment, type ResolvedTarget, type TargetMetric, type TargetRange, type TargetVersion } from "./TargetModel.ts";
 import { versionFor } from "./TargetRules.ts";
 
 export const EMPTY_MANUAL_MACROS: HomeMacroAdjustment["manual"] = { protein: null, fat: null, carbs: null };
@@ -38,4 +38,17 @@ export function deriveHomeMacroTarget(calories: number | null, defaults: MacroGr
       : "Введённые значения превышают суточный ориентир по калориям. Уменьшите их либо задайте все три нутриента вручную.";
     return { corridors: { kcal, ...manual }, problem };
   }
+}
+
+/**
+ * Ориентир дня одним числом на показатель (ккал, г): особая цель на дату, иначе тот же расчёт, что на главной клиента (суточный ориентир, расчётные Б/Ж/У и
+ * сохранённая ручная корректировка). Коридор даёт середину, округлённую до целых; нет данных — `null`.
+ */
+export function dayOrientation(target: ResolvedTarget, versions: readonly TargetVersion[], localDate: string, guide: number | null, defaults: MacroGrams | null,
+  leanMassKg: number | null): Readonly<Record<TargetMetric, number | null>> {
+  const adjustment = homeAdjustmentFor(versions, localDate);
+  const corridors = target.source === "EXCEPTION" ? target.corridors
+    : deriveHomeMacroTarget(guide, defaults ?? { protein: null, fat: null, carbs: null }, leanMassKg, adjustment?.manual ?? EMPTY_MANUAL_MACROS, adjustment?.mode ?? "EXACT").corridors;
+  const middle = (range: TargetRange | null) => range === null ? null : Math.round((range.minX10 + range.maxX10) / 20);
+  return Object.fromEntries(TARGET_METRICS.map((metric) => [metric, middle(corridors[metric])])) as Record<TargetMetric, number | null>;
 }

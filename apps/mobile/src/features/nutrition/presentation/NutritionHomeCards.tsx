@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { AppButton, InlineNotice, SegmentedRing, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { localDateOf, upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../measurements/public.ts";
-import { calcMacros, deriveCalc, trendAdjustment, weightTrendKg } from "../domain/CalcRules.ts";
 import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
@@ -14,7 +13,7 @@ import type { CalcClientBody } from "./NutritionCalcScreen.tsx";
 import { useMacroColors } from "./MacroGrid.tsx";
 import { NutritionTargetRows, type TargetMode } from "./NutritionTargetRows.tsx";
 import { metricLabels, nutritionErrorText, rangeText, todayLocal, wholeText } from "./nutritionFormat.ts";
-import { DEFAULT_CALC_PROFILE, useCalcData } from "./useCalcData.ts";
+import { useNutritionGuide } from "./useNutritionGuide.ts";
 import { useNutritionDay } from "./useNutritionDay.ts";
 
 /** Шаги за сегодня: одно значение на дату; пусто — «нет данных», а не 0 (§49.5). Подписка снимается в cleanup. */
@@ -58,7 +57,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   const colors = palette.tokens;
   const macroColors = useMacroColors();
   const today = todayLocal();
-  const { loaded } = useCalcData(clientId, calc, measurements);
+  const { loaded, guide, defaults, leanMassKg } = useNutritionGuide(clientId, body, calc, measurements);
   const { data } = useNutritionDay(clientId, today, diary, targets);
   const stepsToday = useTodaySteps(clientId, calc, today);
   const mark = useTodayWorkoutMark(clientId, calc, today);
@@ -78,14 +77,6 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
     setWeightText(loaded.weightToday === null ? "" : String(loaded.weightToday).replace(".", ","));
     setStepsText(stepsToday.steps === null ? "" : String(stepsToday.steps));
   }, [dirty, loaded, stepsToday]);
-
-  const profile = loaded?.stored?.profile ?? DEFAULT_CALC_PROFILE;
-  const result = useMemo(() => loaded === null ? null : deriveCalc(profile, { sex: body.sex, age: body.age, heightCm: body.heightCm, weightKg: loaded.weight, fatPercent: loaded.fat, avgSteps: loaded.steps }), [loaded, profile, body]);
-  /** Суточный ориентир = расчёт (с целью) + поправка по динамике веса за 7 дней. */
-  const adjustment = loaded === null ? 0 : trendAdjustment(profile.goal, weightTrendKg(loaded.weights), loaded.weight);
-  // Ориентир не бывает неположительным: поправка не должна обнулять расчёт.
-  const guide = result === null || result.target === null || result.target + adjustment <= 0 ? null : result.target + adjustment;
-  const defaults = useMemo(() => result === null ? null : calcMacros(result.macroMassKg, guide, profile.goal), [result, guide, profile.goal]);
 
   const trainingAuto = trainedToday === true;
   const trainingState = trainingAuto || mark.done === true;
@@ -211,7 +202,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
             <Text style={[styles.hint, { color: colors.textSecondary }]}>Для расчёта БЖУ нужен процент жира. Его можно рассчитать в разделе «Питание».</Text>
           </Pressable>
         ) : null}
-        <NutritionTargetRows key={clientId} clientId={clientId} targets={targets} calories={guide} defaults={defaults} leanMassKg={result?.leanMassKg ?? null} mode={mode} onModeAutoChange={setMode} onLiveTarget={setLiveTarget} />
+        <NutritionTargetRows key={clientId} clientId={clientId} targets={targets} calories={guide} defaults={defaults} leanMassKg={leanMassKg} mode={mode} onModeAutoChange={setMode} onLiveTarget={setLiveTarget} />
       </View>
     </>
   );

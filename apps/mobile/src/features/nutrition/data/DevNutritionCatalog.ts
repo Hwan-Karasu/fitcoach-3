@@ -281,4 +281,104 @@ export const devNutritionCatalog: readonly MigrationStep[] = [{
     PRIMARY KEY (workspace_id, client_id, command_id),
     FOREIGN KEY (client_id, workspace_id) REFERENCES dev_clients(id, workspace_id) ON DELETE RESTRICT
   )`],
+}, {
+  version: 15,
+  checksum: "n01-dev-nutrition-v15-piece-unit-extra-nutrients-20261021",
+  // CHECK единицы нельзя изменить на месте: таблицы продуктов и записей дневника пересобираются через временные копии (без RENAME — он проверяет
+  // внешние ключи на dev_clients). Сначала снимается дочерняя таблица ингредиентов: RESTRICT на продуктах иначе не даст их пересоздать. Данные копируются как есть.
+  statements: [
+    `CREATE TABLE dev_migrate_ingredients AS SELECT recipe_id, workspace_id, position, food_id, quantity_x10 FROM dev_recipe_ingredients`,
+    `DROP TABLE dev_recipe_ingredients`,
+    `CREATE TABLE dev_migrate_foods AS SELECT * FROM dev_food_products`,
+    `DROP TABLE dev_food_products`,
+    `CREATE TABLE dev_food_products (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 80),
+      brand TEXT CHECK (brand IS NULL OR length(trim(brand)) BETWEEN 1 AND 80),
+      basis_unit TEXT NOT NULL CHECK (basis_unit IN ('G','ML','PIECE','PORTION')),
+      basis_amount_x10 INTEGER NOT NULL CHECK (basis_amount_x10 > 0),
+      kcal_x10 INTEGER CHECK (kcal_x10 IS NULL OR kcal_x10 >= 0),
+      protein_x10 INTEGER CHECK (protein_x10 IS NULL OR protein_x10 >= 0),
+      fat_x10 INTEGER CHECK (fat_x10 IS NULL OR fat_x10 >= 0),
+      carbs_x10 INTEGER CHECK (carbs_x10 IS NULL OR carbs_x10 >= 0),
+      revision INTEGER NOT NULL CHECK (revision > 0),
+      archived_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      barcode TEXT CHECK (barcode IS NULL OR length(barcode) BETWEEN 4 AND 32),
+      grams_per_piece_x10 INTEGER CHECK (grams_per_piece_x10 IS NULL OR grams_per_piece_x10 > 0),
+      favorite INTEGER NOT NULL DEFAULT 0 CHECK (favorite IN (0, 1)),
+      extra_nutrients_json TEXT CHECK (extra_nutrients_json IS NULL OR json_valid(extra_nutrients_json)),
+      CHECK (kcal_x10 IS NOT NULL OR protein_x10 IS NOT NULL OR fat_x10 IS NOT NULL OR carbs_x10 IS NOT NULL)
+    )`,
+    `INSERT INTO dev_food_products (id, workspace_id, name, brand, basis_unit, basis_amount_x10, kcal_x10, protein_x10, fat_x10, carbs_x10, revision,
+      archived_at, created_at, updated_at, barcode, grams_per_piece_x10, favorite)
+      SELECT id, workspace_id, name, brand, basis_unit, basis_amount_x10, kcal_x10, protein_x10, fat_x10, carbs_x10, revision,
+      archived_at, created_at, updated_at, barcode, grams_per_piece_x10, favorite FROM dev_migrate_foods`,
+    `DROP TABLE dev_migrate_foods`,
+    `CREATE INDEX dev_food_products_active ON dev_food_products(workspace_id, archived_at, name)`,
+    `CREATE UNIQUE INDEX dev_food_products_identity ON dev_food_products(id, workspace_id)`,
+    `CREATE TABLE dev_recipe_ingredients (
+      recipe_id TEXT NOT NULL,
+      workspace_id TEXT NOT NULL,
+      position INTEGER NOT NULL CHECK (position >= 0),
+      food_id TEXT NOT NULL,
+      quantity_x10 INTEGER NOT NULL CHECK (quantity_x10 > 0),
+      PRIMARY KEY (recipe_id, position),
+      UNIQUE (recipe_id, food_id),
+      FOREIGN KEY (recipe_id, workspace_id) REFERENCES dev_recipes(id, workspace_id) ON DELETE CASCADE,
+      FOREIGN KEY (food_id, workspace_id) REFERENCES dev_food_products(id, workspace_id) ON DELETE RESTRICT
+    )`,
+    `INSERT INTO dev_recipe_ingredients (recipe_id, workspace_id, position, food_id, quantity_x10)
+      SELECT recipe_id, workspace_id, position, food_id, quantity_x10 FROM dev_migrate_ingredients`,
+    `DROP TABLE dev_migrate_ingredients`,
+    `CREATE TABLE dev_migrate_entries AS SELECT * FROM dev_food_diary_entries`,
+    `DROP TABLE dev_food_diary_entries`,
+    `CREATE TABLE dev_food_diary_entries (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      local_date TEXT NOT NULL CHECK (date(local_date) IS local_date),
+      slot TEXT NOT NULL CHECK (slot IN ('BREAKFAST','LUNCH','DINNER','SNACK')),
+      position INTEGER NOT NULL CHECK (position >= 0),
+      source_kind TEXT NOT NULL CHECK (source_kind IN ('FOOD','RECIPE')),
+      source_id TEXT NOT NULL CHECK (length(source_id) > 0),
+      name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+      brand TEXT,
+      basis_unit TEXT NOT NULL CHECK (basis_unit IN ('G','ML','PIECE','PORTION')),
+      basis_amount_x10 INTEGER NOT NULL CHECK (basis_amount_x10 > 0),
+      per_kcal_x10 INTEGER CHECK (per_kcal_x10 IS NULL OR per_kcal_x10 >= 0),
+      per_protein_x10 INTEGER CHECK (per_protein_x10 IS NULL OR per_protein_x10 >= 0),
+      per_fat_x10 INTEGER CHECK (per_fat_x10 IS NULL OR per_fat_x10 >= 0),
+      per_carbs_x10 INTEGER CHECK (per_carbs_x10 IS NULL OR per_carbs_x10 >= 0),
+      quantity_x10 INTEGER NOT NULL CHECK (quantity_x10 > 0),
+      ingredients_json TEXT NOT NULL,
+      revision INTEGER NOT NULL CHECK (revision > 0),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      override_base_quantity_x10 INTEGER CHECK (override_base_quantity_x10 IS NULL OR override_base_quantity_x10 > 0),
+      override_kcal_x10 INTEGER CHECK (override_kcal_x10 IS NULL OR override_kcal_x10 >= 0),
+      override_protein_x10 INTEGER CHECK (override_protein_x10 IS NULL OR override_protein_x10 >= 0),
+      override_fat_x10 INTEGER CHECK (override_fat_x10 IS NULL OR override_fat_x10 >= 0),
+      override_carbs_x10 INTEGER CHECK (override_carbs_x10 IS NULL OR override_carbs_x10 >= 0),
+      FOREIGN KEY (client_id, workspace_id) REFERENCES dev_clients(id, workspace_id) ON DELETE RESTRICT
+    )`,
+    `INSERT INTO dev_food_diary_entries (id, workspace_id, client_id, local_date, slot, position, source_kind, source_id, name, brand, basis_unit, basis_amount_x10,
+      per_kcal_x10, per_protein_x10, per_fat_x10, per_carbs_x10, quantity_x10, ingredients_json, revision, created_at, updated_at,
+      override_base_quantity_x10, override_kcal_x10, override_protein_x10, override_fat_x10, override_carbs_x10)
+      SELECT id, workspace_id, client_id, local_date, slot, position, source_kind, source_id, name, brand, basis_unit, basis_amount_x10,
+      per_kcal_x10, per_protein_x10, per_fat_x10, per_carbs_x10, quantity_x10, ingredients_json, revision, created_at, updated_at,
+      override_base_quantity_x10, override_kcal_x10, override_protein_x10, override_fat_x10, override_carbs_x10 FROM dev_migrate_entries`,
+    `DROP TABLE dev_migrate_entries`,
+    `CREATE INDEX dev_food_diary_entries_day ON dev_food_diary_entries(workspace_id, client_id, local_date, slot, position)`,
+    `CREATE TRIGGER dev_food_diary_override_insert BEFORE INSERT ON dev_food_diary_entries
+      WHEN CASE WHEN NEW.override_base_quantity_x10 IS NULL THEN (NEW.override_kcal_x10 IS NOT NULL OR NEW.override_protein_x10 IS NOT NULL OR NEW.override_fat_x10 IS NOT NULL OR NEW.override_carbs_x10 IS NOT NULL)
+        ELSE (NEW.override_kcal_x10 IS NULL AND NEW.override_protein_x10 IS NULL AND NEW.override_fat_x10 IS NULL AND NEW.override_carbs_x10 IS NULL) END
+      BEGIN SELECT RAISE(ABORT, 'DIARY_OVERRIDE_INVALID'); END`,
+    `CREATE TRIGGER dev_food_diary_override_update BEFORE UPDATE ON dev_food_diary_entries
+      WHEN CASE WHEN NEW.override_base_quantity_x10 IS NULL THEN (NEW.override_kcal_x10 IS NOT NULL OR NEW.override_protein_x10 IS NOT NULL OR NEW.override_fat_x10 IS NOT NULL OR NEW.override_carbs_x10 IS NOT NULL)
+        ELSE (NEW.override_kcal_x10 IS NULL AND NEW.override_protein_x10 IS NULL AND NEW.override_fat_x10 IS NULL AND NEW.override_carbs_x10 IS NULL) END
+      BEGIN SELECT RAISE(ABORT, 'DIARY_OVERRIDE_INVALID'); END`,
+  ],
 }];

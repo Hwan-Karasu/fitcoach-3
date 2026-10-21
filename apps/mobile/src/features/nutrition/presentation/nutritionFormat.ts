@@ -8,7 +8,7 @@ export const slotLabels: Readonly<Record<MealSlot, string>> = { BREAKFAST: "За
 
 export const metricLabels: Readonly<Record<TargetMetric, string>> = { kcal: "Ккал", protein: "Белки", fat: "Жиры", carbs: "Углеводы" };
 
-export const unitLabels: Readonly<Record<FoodBasisUnit, string>> = { G: "г", ML: "мл", PORTION: "порц." };
+export const unitLabels: Readonly<Record<FoodBasisUnit, string>> = { G: "г", ML: "мл", PIECE: "шт.", PORTION: "порц." };
 
 /** Единицы в десятых → «1 800»; неизвестное — «—» (не ноль). Калории и граммы показываются целыми. */
 export function wholeText(valueX10: number | null): string {

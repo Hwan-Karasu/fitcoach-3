@@ -6,15 +6,19 @@ import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvid
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
 import { MEAL_SLOTS, type CopyEntriesRequest, type DiaryEntry, type MealSlot } from "../domain/DiaryModel.ts";
-import { sumNutrients } from "../domain/DiaryRules.ts";
+import { entryNutrients, sumNutrients } from "../domain/DiaryRules.ts";
+import { dayOrientation } from "../domain/HomeMacroTargets.ts";
+import type { MeasurementRepositoryPort } from "../../measurements/public.ts";
+import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
 import { TARGET_METRICS, type TargetMetric } from "../domain/TargetModel.ts";
-import { assessDay, NUTRIENT_OF } from "../domain/TargetRules.ts";
+import { NUTRIENT_OF } from "../domain/TargetRules.ts";
 import { EntryEditorDialog } from "./EntryEditorDialog.tsx";
-import { MacroCells, MacroHeader } from "./MacroGrid.tsx";
-import { dayTitle, kcalText, metricLabels, nutritionErrorText, quantityText, rangeText, slotLabels, todayLocal, verdictLabels,
-  wholeText } from "./nutritionFormat.ts";
+import { MacroCells, useMacroColors } from "./MacroGrid.tsx";
+import { dayTitle, kcalText, metricLabels, nutritionErrorText, quantityText, slotLabels, todayLocal, wholeText } from "./nutritionFormat.ts";
+import { useNutritionGuide } from "./useNutritionGuide.ts";
+import type { CalcClientBody } from "./NutritionCalcScreen.tsx";
 import type { CatalogFilter } from "./AddFoodScreen.tsx";
 import { DiaryWeekHeader } from "./DiaryWeekHeader.tsx";
 import { useNutritionDay } from "./useNutritionDay.ts";
@@ -22,6 +26,7 @@ import { SavedMealEditorDialog } from "./SavedMealEditorDialog.tsx";
 import { savedSnapshot } from "../domain/SavedMeal.ts";
 import type { FoodSnapshot } from "../domain/FoodSnapshot.ts";
 
+const metricLetters: Readonly<Record<TargetMetric, string>> = { kcal: "К", protein: "Б", fat: "Ж", carbs: "У" };
 const WATER_STEP_ML = 250;
 const WATER_QUICK_ML = [250, 500, 750, 1000] as const;
 
@@ -33,13 +38,13 @@ function EntryRow({ entry, onOpen }: Readonly<{ entry: DiaryEntry; onOpen: () =>
   const { snapshot } = entry;
   const detail = [quantityText(snapshot.basis, snapshot.quantityX10), snapshot.source.kind === "RECIPE" ? "рецепт" : null].filter((part) => part !== null).join(" · ");
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${snapshot.name}, ${detail}, ${kcalText(snapshot.eaten)}. Изменить`} onPress={onOpen}
+    <Pressable accessibilityRole="button" accessibilityLabel={`${snapshot.name}, ${detail}, ${kcalText(entryNutrients(snapshot.eaten))}. Изменить`} onPress={onOpen}
       style={({ pressed }) => [styles.entry, { borderColor: colors.border, backgroundColor: pressed ? colors.surfaceRaised : "transparent" }]}>
       <View style={styles.entryText}>
         <Text numberOfLines={2} style={[styles.entryName, { color: colors.textPrimary }]}>{snapshot.name}</Text>
         <Text style={[styles.meta, { color: colors.textSecondary }]}>{detail}</Text>
       </View>
-      <MacroCells values={snapshot.eaten} />
+      <MacroCells values={entryNutrients(snapshot.eaten)} />
     </Pressable>
   );
 }
@@ -61,11 +66,14 @@ function QuickChip({ label, icon, onPress, disabled = false, accessibilityLabel 
  * «Дневник» питания клиента (§49.2): день, итоги и коридоры цели, приёмы пищи, вода. Итог — сумма внесённых записей; пустой день и день только с водой
  * не оцениваются (§49.22). Экран пишет через порты дневника и читает цель на дату (исключение → версия → «не установлена»).
  */
-export function NutritionDiaryScreen({ clientId, diary, targets, onAdd, requestedDay }: Readonly<{
+export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, measurements, onAdd, requestedDay }: Readonly<{
   requestedDay?: Readonly<{ date: string; token: number }>;
   clientId: string;
   diary: NutritionDiaryPort;
   targets: NutritionTargetsPort;
+  body: CalcClientBody;
+  calc: NutritionCalcPort;
+  measurements: MeasurementRepositoryPort;
   onAdd: (localDate: string, slot: MealSlot, filter?: CatalogFilter) => void;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -74,6 +82,8 @@ export function NutritionDiaryScreen({ clientId, diary, targets, onAdd, requeste
   const [localDate, setLocalDate] = useState(today);
   useEffect(() => { if (requestedDay !== undefined) setLocalDate(requestedDay.date); }, [requestedDay]);
   const { data, failed, reload } = useNutritionDay(clientId, localDate, diary, targets);
+  const { guide, defaults, leanMassKg } = useNutritionGuide(clientId, body, calc, measurements);
+  const macroColors = useMacroColors();
   const [editing, setEditing] = useState<DiaryEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<Readonly<{ date: string; slot: MealSlot }> | null>(null);
@@ -152,29 +162,23 @@ export function NutritionDiaryScreen({ clientId, diary, targets, onAdd, requeste
     return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{header}
       {failed ? <View style={styles.pad}><InlineNotice kind="error">Не удалось загрузить дневник питания.</InlineNotice><AppButton label="Повторить загрузку" onPress={reload} /></View> : <LoadingState label="Загружаем день…" />}</View>;
   }
-  const verdicts = assessDay(data.summary, data.target);
   const recorded = data.summary.state === "FOOD_RECORDED";
-  const corridors = data.target.source === "NONE" ? null : data.target.corridors;
-  const targetNote = data.target.source === "NONE" ? "Цель не установлена" : data.target.source === "EXCEPTION" ? "Особая цель на дату" : null;
+  const orientation = dayOrientation(data.target, data.versions, localDate, guide, defaults, leanMassKg);
+  const eatenText = (metric: TargetMetric) => !recorded ? "0" : wholeText(data.summary.totals[NUTRIENT_OF[metric]]);
+  const orientText = (metric: TargetMetric) => orientation[metric] === null ? "—" : String(orientation[metric]);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
       {header}
-      <View style={[styles.totalsBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={styles.gridRow}>
-          <Text style={[styles.slotTitle, { color: colors.textPrimary }]}>{recorded ? "Итого за день" : "Итого: записей нет"}</Text>
-          <MacroHeader />
-        </View>
-        <View style={styles.gridRow} accessible accessibilityLabel={`Итоги дня: ${TARGET_METRICS.map((metric: TargetMetric) => `${metricLabels[metric]} ${recorded ? wholeText(data.summary.totals[NUTRIENT_OF[metric]]) : "нет данных"}`).join(", ")}`}>
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>{recorded ? "по внесённым записям" : ""}</Text>
-          <MacroCells values={recorded ? data.summary.totals : null} bold />
-        </View>
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>
-          {corridors === null ? "Цель не установлена" : [targetNote, ...TARGET_METRICS.flatMap((metric: TargetMetric) => {
-            const range = rangeText(corridors[metric]);
-            return range === null ? [] : [`${metricLabels[metric]} ${range}${verdictLabels[verdicts[metric]] === "" ? "" : ` (${verdictLabels[verdicts[metric]].toLocaleLowerCase("ru")})`}`];
-          })].filter((part) => part !== null).join(" · ")}
-        </Text>
+      <View style={[styles.totalsBar, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        accessible accessibilityLabel={`Итоги дня, съедено из ориентира: ${TARGET_METRICS.map((metric) => `${metricLabels[metric]} ${eatenText(metric)} из ${orientText(metric)}`).join(", ")}`}>
+        <Text style={[styles.totalsTitle, { color: colors.textPrimary }]}>Итого</Text>
+        {TARGET_METRICS.map((metric) => (
+          <View key={metric} style={styles.totalsCell}>
+            <Text style={[styles.totalsLetter, { color: macroColors[metric] }]}>{metricLetters[metric]}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.totalsValue, { color: macroColors[metric] }]}>{`${eatenText(metric)}/${orientText(metric)}`}</Text>
+          </View>
+        ))}
       </View>
       <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
         <View style={styles.waterRow}>
@@ -253,7 +257,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   pad: { paddingHorizontal: 16 },
   grow: { flex: 1 },
-  dateBar: { paddingHorizontal: 16, paddingTop: 4 },
+  dateBar: { paddingHorizontal: 16, paddingTop: 2 },
   dateTitle: { flex: 1, minHeight: 48, alignItems: "center", justifyContent: "center" },
   dateText: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
   list: { paddingHorizontal: 16, paddingBottom: 24, paddingTop: 8, gap: 10 },
@@ -265,7 +269,11 @@ const styles = StyleSheet.create({
   slotTitle: { flex: 1, fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
   entry: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 8, minHeight: 48, flexDirection: "row", alignItems: "center", gap: 6 },
   entryText: { flex: 1, gap: 2 },
-  totalsBar: { marginHorizontal: 16, marginTop: 6, borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, gap: 2 },
+  totalsBar: { marginHorizontal: 16, marginTop: 4, borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 6 },
+  totalsTitle: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 18 },
+  totalsCell: { flex: 1, minWidth: 0, alignItems: "center" },
+  totalsLetter: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 15 },
+  totalsValue: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, fontVariant: ["tabular-nums"] },
   gridRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6 },
   slotHeadRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   plus: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },

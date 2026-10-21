@@ -10,10 +10,12 @@ import { DEV_NUTRITION_LEDGER, devNutritionCatalog } from "./DevNutritionCatalog
 
 const columns = `id, name, brand, basis_unit AS unit, basis_amount_x10 AS amountX10, kcal_x10 AS kcalX10,
   protein_x10 AS proteinX10, fat_x10 AS fatX10, carbs_x10 AS carbsX10, barcode, grams_per_piece_x10 AS gramsPerPieceX10, favorite,
-  revision, archived_at AS archivedAt`;
+  extra_nutrients_json AS extraJson, revision, archived_at AS archivedAt`;
 
-type FoodRow = Omit<FoodProduct, "favorite"> & { readonly favorite: number };
-const toFood = (row: FoodRow): FoodProduct => ({ ...row, favorite: row.favorite === 1 });
+type FoodRow = Omit<FoodProduct, "favorite" | "extraNutrients"> & { readonly favorite: number; readonly extraJson: string | null };
+const toFood = ({ extraJson, ...row }: FoodRow): FoodProduct => ({ ...row, favorite: row.favorite === 1, extraNutrients: extraJson === null ? [] : JSON.parse(extraJson) as FoodProduct["extraNutrients"] });
+
+const extraJson = (extras: FoodInput["extraNutrients"]): string | null => extras === undefined || extras === null ? null : JSON.stringify(extras);
 
 async function byId(tx: SqliteStatementPort, workspaceId: string, id: string): Promise<FoodProduct> {
   const row = await tx.first<FoodRow>(`SELECT ${columns} FROM dev_food_products WHERE workspace_id = ? AND id = ?`, [workspaceId, id]);
@@ -98,9 +100,9 @@ export class DevFoodCatalogRepository implements FoodCatalogPort {
       if (!id) throw new Error("FOOD_ID_UNAVAILABLE");
       const stamp = now.toISOString();
       await tx.run(`INSERT INTO dev_food_products (id, workspace_id, name, brand, basis_unit, basis_amount_x10, kcal_x10, protein_x10,
-          fat_x10, carbs_x10, barcode, grams_per_piece_x10, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+          fat_x10, carbs_x10, barcode, grams_per_piece_x10, extra_nutrients_json, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
       [id, this.workspaceId, valid.name, valid.brand, valid.unit, valid.amountX10, valid.kcalX10, valid.proteinX10, valid.fatX10,
-        valid.carbsX10, valid.barcode ?? null, valid.gramsPerPieceX10 ?? null, stamp, stamp]);
+        valid.carbsX10, valid.barcode ?? null, valid.gramsPerPieceX10 ?? null, extraJson(valid.extraNutrients), stamp, stamp]);
       return byId(tx, this.workspaceId, id);
     });
     this.publish({ foodId: created.id });
@@ -112,11 +114,12 @@ export class DevFoodCatalogRepository implements FoodCatalogPort {
     const updated = await this.ready().writer.write(async (tx) => {
       const result = await tx.run(`UPDATE dev_food_products SET name = ?, brand = ?, basis_unit = ?, basis_amount_x10 = ?, kcal_x10 = ?,
           protein_x10 = ?, fat_x10 = ?, carbs_x10 = ?, barcode = CASE WHEN ? = 1 THEN ? ELSE barcode END,
-          grams_per_piece_x10 = CASE WHEN ? = 1 THEN ? ELSE grams_per_piece_x10 END, revision = revision + 1, updated_at = ?
+          grams_per_piece_x10 = CASE WHEN ? = 1 THEN ? ELSE grams_per_piece_x10 END,
+          extra_nutrients_json = CASE WHEN ? = 1 THEN ? ELSE extra_nutrients_json END, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ? AND archived_at IS NULL`,
       [valid.name, valid.brand, valid.unit, valid.amountX10, valid.kcalX10, valid.proteinX10, valid.fatX10, valid.carbsX10,
         valid.barcode === undefined ? 0 : 1, valid.barcode ?? null, valid.gramsPerPieceX10 === undefined ? 0 : 1, valid.gramsPerPieceX10 ?? null,
-        now.toISOString(), this.workspaceId, id, expectedRevision]);
+        valid.extraNutrients === undefined ? 0 : 1, extraJson(valid.extraNutrients), now.toISOString(), this.workspaceId, id, expectedRevision]);
       if (result.changes !== 1) throw new Error("FOOD_STALE");
       return byId(tx, this.workspaceId, id);
     });

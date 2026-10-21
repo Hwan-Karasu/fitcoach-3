@@ -10,6 +10,8 @@ export interface NutritionDayData {
   readonly entries: readonly DiaryEntry[];
   readonly summary: DaySummary;
   readonly target: ResolvedTarget;
+  /** Версии целей клиента — для ориентира дня (расчёт главной + ручная корректировка на дату). */
+  readonly versions: readonly TargetVersion[];
   readonly waterMl: number | null;
 }
 
@@ -44,7 +46,7 @@ export function useNutritionDay(clientId: string, localDate: string, diary: Nutr
   const data = useMemo<NutritionDayData | null>(() => {
     if (loaded === null || loaded.key !== `${clientId}|${localDate}`) return null;
     return { entries: loaded.entries, waterMl: loaded.waterMl, summary: summarizeDay(localDate, loaded.entries),
-      target: resolveTarget(loaded.versions, loaded.exceptions, localDate) };
+      target: resolveTarget(loaded.versions, loaded.exceptions, localDate), versions: loaded.versions };
   }, [loaded, clientId, localDate]);
   return { data, failed, reload };
 }

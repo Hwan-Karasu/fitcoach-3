@@ -1,4 +1,5 @@
-import type { Nutrients } from "./FoodModel.ts";
+import { FOOD_BASIS_UNITS, type Nutrients } from "./FoodModel.ts";
+import { kcalFromKnownMacrosX10 } from "./EnergyRules.ts";
 import { scaleNutrients } from "./FoodRules.ts";
 import type { FoodSnapshot } from "./FoodSnapshot.ts";
 import { MEAL_SLOTS, type DaySummary, type DiaryEntry, type MealSlot } from "./DiaryModel.ts";
@@ -47,7 +48,7 @@ export function assertWater(ml: number): void {
 export function normalizeSnapshot(snapshot: FoodSnapshot): FoodSnapshot {
   const name = snapshot.name.trim();
   if (name === "" || (snapshot.source.kind !== "FOOD" && snapshot.source.kind !== "RECIPE") || snapshot.source.id === ""
-    || !["G", "ML", "PORTION"].includes(snapshot.basis.unit)) fail("DIARY_SNAPSHOT_INVALID");
+    || !FOOD_BASIS_UNITS.includes(snapshot.basis.unit)) fail("DIARY_SNAPSHOT_INVALID");
   assertQuantity(snapshot.quantityX10);
   const eaten = scaleNutrients({ ...snapshot.basis, ...snapshot.perBasis }, snapshot.quantityX10);
   return { ...snapshot, name, eaten };
@@ -55,10 +56,17 @@ export function normalizeSnapshot(snapshot: FoodSnapshot): FoodSnapshot {
 
 const NONE: Nutrients = { kcalX10: null, proteinX10: null, fatX10: null, carbsX10: null };
 
-/** Сумма записей: неизвестный нутриент в любой записи делает итог по нему неизвестным (§49.22 п. 4, сценарий про белок). */
+/** Значения записи для показа и сумм: калории без числа досчитываются из известных Б/Ж/У (4/9/4); сам снимок не меняется. */
+export function entryNutrients(eaten: Nutrients): Nutrients {
+  if (eaten.kcalX10 !== null) return eaten;
+  return { ...eaten, kcalX10: kcalFromKnownMacrosX10(eaten) };
+}
+
+/** Сумма записей (как в 2.0, решение владельца 2026-10-21): неизвестный нутриент считается нулём; итог неизвестен, только если он неизвестен во всех записях. */
 export function sumNutrients(parts: readonly Nutrients[]): Nutrients {
   if (parts.length === 0) return NONE;
-  const total = (key: keyof Nutrients) => parts.some((part) => part[key] === null) ? null : parts.reduce((sum, part) => sum + (part[key] as number), 0);
+  const full = parts.map(entryNutrients);
+  const total = (key: keyof Nutrients) => full.every((part) => part[key] === null) ? null : full.reduce((sum, part) => sum + (part[key] ?? 0), 0);
   return { kcalX10: total("kcalX10"), proteinX10: total("proteinX10"), fatX10: total("fatX10"), carbsX10: total("carbsX10") };
 }
 

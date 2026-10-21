@@ -5,7 +5,7 @@ import { devNutritionCalcClientDeletionParticipant } from "../apps/mobile/src/fe
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { DevNutritionDiaryRepository, devNutritionClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionDiaryRepository.ts";
 import { devNutritionTargetsClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionTargetsRepository.ts";
-import { accountedDates, isLocalDate, rankUsage, summarizeDay } from "../apps/mobile/src/features/nutrition/domain/DiaryRules.ts";
+import { accountedDates, isLocalDate, rankUsage, summarizeDay, sumNutrients } from "../apps/mobile/src/features/nutrition/domain/DiaryRules.ts";
 import type { FoodProduct } from "../apps/mobile/src/features/nutrition/domain/FoodModel.ts";
 import { snapshotOfFood } from "../apps/mobile/src/features/nutrition/domain/FoodSnapshot.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
@@ -184,16 +184,24 @@ test("N02 §49.22: сумма дня — по записям; завтрак и 
   } finally { await close(); }
 });
 
-test("N02 §49.22.2: неизвестный белок в одной записи — белок дня неизвестен, калории считаются", async () => {
+test("NUT-UX-PARITY-01: неизвестный белок в одной записи считается нулём (как в 2.0), калории суммируются", async () => {
   const { clients, diary, close } = await stores();
   try {
     const client = await clients.create({ displayName: "SyntheticA" });
     await diary.addEntry(client.id, { localDate: DAY, slot: "SNACK", snapshot: snapshotOfFood(OATS, 500) }, NOW);
     await diary.addEntry(client.id, { localDate: DAY, slot: "SNACK", snapshot: snapshotOfFood(SUGAR, 100) }, NOW);
     const totals = summarizeDay(DAY, await diary.listEntries(client.id, DAY, DAY)).totals;
-    assert.equal(totals.proteinX10, null);
+    assert.equal(totals.proteinX10, 63, "белок только от овсянки: 50 г × 12,5 г/100 г");
     assert.equal(totals.kcalX10, 1800 + 387);
   } finally { await close(); }
+});
+
+test("NUT-UX-PARITY-01: продукт без калорий, но с Б/Ж/У — калории досчитываются 4/9/4 в приёме и дне", () => {
+  const eaten = { kcalX10: null, proteinX10: 100, fatX10: 50, carbsX10: 200 };
+  assert.equal(sumNutrients([eaten]).kcalX10, 1650, "10 г Б, 5 г Ж, 20 г У → 165 ккал");
+  assert.equal(sumNutrients([eaten, { kcalX10: 1000, proteinX10: null, fatX10: null, carbsX10: null }]).kcalX10, 2650);
+  assert.equal(sumNutrients([eaten, { kcalX10: 1000, proteinX10: null, fatX10: null, carbsX10: null }]).fatX10, 50, "неизвестные жиры второй записи — ноль");
+  assert.deepEqual(sumNutrients([{ kcalX10: null, proteinX10: null, fatX10: null, carbsX10: null }]), { kcalX10: null, proteinX10: null, fatX10: null, carbsX10: null });
 });
 
 test("N02 §49.22.1: вода — отдельный факт; день только с водой не «с учётом», удаление последней еды оставляет воду", async () => {

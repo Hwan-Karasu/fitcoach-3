@@ -1,4 +1,4 @@
-import { NUTRIENT_KEYS, type FoodBasis, type FoodInput, type Nutrients } from "./FoodModel.ts";
+import { FOOD_BASIS_UNITS, NUTRIENT_KEYS, type ExtraNutrient, type FoodBasis, type FoodInput, type Nutrients } from "./FoodModel.ts";
 
 export type FoodRuleError =
   | "FOOD_NAME_INVALID"
@@ -7,6 +7,7 @@ export type FoodRuleError =
   | "FOOD_NUTRIENTS_EMPTY"
   | "FOOD_BARCODE_INVALID"
   | "FOOD_PIECE_MASS_INVALID"
+  | "FOOD_EXTRA_INVALID"
   | "PIECE_MASS_UNKNOWN"
   | "INVALID_PORTION";
 
@@ -37,7 +38,7 @@ export function validateFood(input: FoodInput): FoodInput {
   if (name === "" || name.length > NAME_MAX) fail("FOOD_NAME_INVALID");
   const brand = input.brand === null ? null : input.brand.trim().replace(/\s+/gu, " ");
   if (brand !== null && brand.length > NAME_MAX) fail("FOOD_NAME_INVALID");
-  if (!["G", "ML", "PORTION"].includes(input.unit) || !Number.isInteger(input.amountX10)
+  if (!FOOD_BASIS_UNITS.includes(input.unit) || !Number.isInteger(input.amountX10)
     || input.amountX10 <= 0 || input.amountX10 > AMOUNT_MAX_X10) fail("FOOD_BASIS_INVALID");
   for (const key of NUTRIENT_KEYS) {
     const value = input[key];
@@ -53,7 +54,26 @@ export function validateFood(input: FoodInput): FoodInput {
     kcalX10: input.kcalX10, proteinX10: input.proteinX10, fatX10: input.fatX10, carbsX10: input.carbsX10,
     // `undefined` — поле не передано (правка сохранит прежнее значение), `null` — очистить.
     barcode: input.barcode === undefined ? undefined : barcode === null || barcode === "" ? null : barcode,
-    gramsPerPieceX10: input.gramsPerPieceX10 === undefined ? undefined : piece };
+    gramsPerPieceX10: input.gramsPerPieceX10 === undefined ? undefined : piece,
+    extraNutrients: input.extraNutrients === undefined ? undefined : validateExtras(input.extraNutrients) };
+}
+
+const EXTRA_MAX = 20;
+const EXTRA_LABEL_MAX = 40;
+
+/** Дополнительные нутриенты: пустой список — `null`; ключи уникальны, значения — целые десятые ≥ 0. */
+function validateExtras(extras: readonly ExtraNutrient[] | null): readonly ExtraNutrient[] | null {
+  if (extras === null || extras.length === 0) return null;
+  if (extras.length > EXTRA_MAX) fail("FOOD_EXTRA_INVALID");
+  const keys = new Set<string>();
+  const clean = extras.map((item): ExtraNutrient => {
+    const label = item.label.trim().replace(/\s+/gu, " ");
+    if (label === "" || label.length > EXTRA_LABEL_MAX || item.key.trim() === "" || keys.has(item.key) || !["G", "MG"].includes(item.unit)
+      || !Number.isInteger(item.valueX10) || item.valueX10 < 0 || item.valueX10 > NUTRIENT_MAX_X10) fail("FOOD_EXTRA_INVALID");
+    keys.add(item.key);
+    return { key: item.key, label, unit: item.unit, valueX10: item.valueX10 };
+  });
+  return clean;
 }
 
 /**

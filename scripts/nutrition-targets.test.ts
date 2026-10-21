@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { devNutritionCatalog, DEV_NUTRITION_LEDGER } from "../apps/mobile/src/features/nutrition/data/DevNutritionCatalog.ts";
-import { deriveHomeMacroTarget, EMPTY_MANUAL_MACROS } from "../apps/mobile/src/features/nutrition/domain/HomeMacroTargets.ts";
+import { dayOrientation, deriveHomeMacroTarget, EMPTY_MANUAL_MACROS } from "../apps/mobile/src/features/nutrition/domain/HomeMacroTargets.ts";
 import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
 import { WriterCoordinator } from "../apps/mobile/src/shared/db/WriterCoordinator.ts";
 import { devNutritionCalcClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionCalcRepository.ts";
@@ -294,4 +294,12 @@ test("миграция v10: старые цели v9 сохраняют знач
     assert.deepEqual(old?.days[1], { kcal: range(2400, 2400), protein: range(150, 150), fat: null, carbs: null });
     assert.equal(resolveTarget(await targets.listVersions(client.id), await targets.listExceptions(client.id), SAT).source, "EXCEPTION");
   } finally { await targets.close(); await clients.close(); }
+});
+
+test("NUT-UX-PARITY-01: ориентир дня — расчёт главной без цели; особая цель на дату даёт середину коридора", () => {
+  const defaults = { protein: 150, fat: 60, carbs: 200 };
+  assert.deepEqual(dayOrientation({ source: "NONE" }, [], "2026-10-21", 2000, defaults, 70), { kcal: 2000, protein: 150, fat: 60, carbs: 200 });
+  assert.deepEqual(dayOrientation({ source: "NONE" }, [], "2026-10-21", null, null, null), { kcal: null, protein: null, fat: null, carbs: null });
+  const exception = { source: "EXCEPTION" as const, corridors: { kcal: { minX10: 18000, maxX10: 22000 }, protein: { minX10: 1400, maxX10: 1600 }, fat: null, carbs: { minX10: 2000, maxX10: 2000 } } };
+  assert.deepEqual(dayOrientation(exception, [], "2026-10-21", 2500, defaults, 70), { kcal: 2000, protein: 150, fat: null, carbs: 200 });
 });

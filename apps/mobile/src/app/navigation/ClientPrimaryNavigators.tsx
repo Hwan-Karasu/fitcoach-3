@@ -134,10 +134,10 @@ export function NutritionNavigator({ clientId, clientName, clientEmoji, body, on
         {({ navigation, route }) => <NutritionHomeScreen requestedSection={route.params?.section} sectionRequestKey={route.params?.requestKey} clientId={clientId} onOpenJournal={onOpenJournal} body={body} onUpdateBody={onUpdateBody} diary={diary} targets={targets} calc={calc} measurements={measurements}
           onAdd={(localDate, slot, filter) => navigation.navigate("NutritionAdd", { localDate, slot, filter })} />}
       </NutritionStack.Screen>
-      <NutritionStack.Screen name="NutritionAdd">
+      <NutritionStack.Screen name="NutritionAdd" options={{ headerShown: false }}>
         {({ navigation, route }) => <NutritionAddRoute navigation={navigation}>
           {(onDirtyChange) => <AddFoodScreen key={`${clientId}:${route.params.localDate}:${route.params.slot}`} clientId={clientId} localDate={route.params.localDate} slot={route.params.slot} initialFilter={route.params.filter}
-            foods={foods} recipes={recipes} diary={diary} onCreateFood={(name) => navigation.navigate("NutritionFood", { name })} onDirtyChange={onDirtyChange} onAdded={() => navigation.goBack()}
+            foods={foods} recipes={recipes} diary={diary} onCreateFood={(name) => navigation.navigate("NutritionFood", { name })} onDirtyChange={onDirtyChange} onAdded={() => navigation.goBack()} onBack={() => navigation.goBack()}
             onCreateRecipe={() => navigation.navigate("NutritionRecipe")} onEditFood={(foodId) => navigation.navigate("NutritionFood", { foodId })} onEditRecipe={(recipeId) => navigation.navigate("NutritionRecipe", { recipeId })} />}
         </NutritionAddRoute>}
       </NutritionStack.Screen>

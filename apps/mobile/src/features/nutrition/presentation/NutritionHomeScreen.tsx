@@ -36,7 +36,7 @@ export function NutritionHomeScreen({ clientId, body, onUpdateBody, onOpenJourna
         <NutritionCalcScreen key={clientId} clientId={clientId} onOpenJournal={onOpenJournal} body={body} onUpdateBody={onUpdateBody} calc={calc} measurements={measurements} />
       </View> : null}
       {visited.diary ? <View style={{ flex: 1, display: section === "diary" ? "flex" : "none" }}>
-        <NutritionDiaryScreen key={clientId} clientId={clientId} diary={diary} targets={targets} onAdd={onAdd} requestedDay={requestedDay} />
+        <NutritionDiaryScreen key={clientId} clientId={clientId} diary={diary} targets={targets} body={body} calc={calc} measurements={measurements} onAdd={onAdd} requestedDay={requestedDay} />
       </View> : null}
       {visited.stats ? <View style={{ flex: 1, display: section === "stats" ? "flex" : "none" }}>
         <NutritionStatsScreen key={clientId} clientId={clientId} diary={diary} targets={targets} calc={calc} measurements={measurements}

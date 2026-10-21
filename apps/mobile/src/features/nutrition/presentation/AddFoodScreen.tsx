@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Check, Star } from "lucide-react-native";
-import { AppButton, AppIconButton, ConfirmDialog, EmptyState, InlineNotice, LoadingState, SearchField, SegmentedControl, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
+import { Check, ChevronDown, Star } from "lucide-react-native";
+import { AppButton, AppIconButton, ConfirmDialog, EmptyState, InlineNotice, LoadingState, ScreenHeader, SearchField, SegmentedControl, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
@@ -137,7 +137,7 @@ function ItemCard({ item, selected, selectedLabel, draft, open, onToggleOpen, on
  * Добавление еды в приём пищи (§49.2, UX v1.1 NUT-FS-20…26): поиск и категории, чекбокс справа у каждой карточки, нажатие на карточку открывает порцию (запись в дневник
  * не создаётся), `Добавить (N)` записывает все выбранные позиции в выбранные приёмы одной транзакцией. Несколько приёмов дублируют позиции и требуют подтверждения `N × M`.
  */
-export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOODS", foods, recipes, diary, onCreateFood, onCreateRecipe, onEditFood, onEditRecipe, onDirtyChange, onAdded }: Readonly<{
+export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOODS", foods, recipes, diary, onCreateFood, onCreateRecipe, onEditFood, onEditRecipe, onDirtyChange, onAdded, onBack }: Readonly<{
   clientId: string;
   localDate: string;
   slot: MealSlot;
@@ -153,6 +153,8 @@ export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOOD
   onDirtyChange?: (dirty: boolean) => void;
   /** Запись выполнена: вернуться в дневник. */
   onAdded?: () => void;
+  /** Стрелка «назад» собственной шапки экрана. */
+  onBack: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -366,21 +368,21 @@ export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOOD
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
+      <ScreenHeader onBack={onBack} right={selectedList.length > 0 ? <View style={styles.topRow}>
+        <AppButton compact variant="ghost" label="Очистить" disabled={busy} onPress={clearSelection} />
+        <AppButton compact label={`✓ (${selectedCount})`} busy={busy} disabled={buildingMeal || Object.values(invalidDrafts).some(Boolean)} onPress={askCommit} accessibilityLabel={`Добавить выбранные позиции: ${selectedCount}, записей: ${plan.total}`} />
+      </View> : undefined}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Приём пищи: ${slots.length > 1 ? `${slots.length} приёма` : slotLabels[slots[0] ?? slot]}. Выбрать целевой приём пищи`} style={[styles.grow, styles.mealSelector]} onPress={() => setSelectingSlots(true)}>
+          <View style={styles.mealTitleRow}>
+            <Text numberOfLines={1} style={[styles.title, { color: colors.textPrimary }]}>{slots.length > 1 ? `${slots.length} приёма пищи` : slotLabels[slots[0] ?? slot]}</Text>
+            <ChevronDown size={18} color={colors.textPrimary} />
+          </View>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>{localDate}</Text>
+        </Pressable>
+      </ScreenHeader>
       <View style={styles.header}>
-        <View style={styles.topRow}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Выбрать целевой приём пищи" style={[styles.grow, styles.mealSelector]} onPress={() => setSelectingSlots(true)}>
-            <Text style={[styles.title, { color: colors.textPrimary }]}>{`${slots.length > 1 ? `${slots.length} приёма пищи` : slotLabels[slots[0] ?? slot]} ▾`}</Text>
-            <Text style={[styles.meta, { color: colors.textSecondary }]}>{localDate}</Text>
-          </Pressable>
-          {selectedList.length > 0 ? <>
-            <AppButton compact variant="ghost" label="Очистить" disabled={busy} onPress={clearSelection} />
-            <AppButton compact label={`Добавить (${selectedCount})`} busy={busy} disabled={buildingMeal || Object.values(invalidDrafts).some(Boolean)} onPress={askCommit} accessibilityLabel={`Добавить выбранные позиции: ${selectedCount}, записей: ${plan.total}`} />
-          </> : null}
-        </View>
+        <SegmentedControl scroll compact items={filters} selectedId={filter} onSelect={(id) => { restoreScroll.current = true; setFilter(id); setOpenKey(null); }} />
         <SearchField query={query} onChangeQuery={(text) => { restoreScroll.current = false; setQuery(text); }} onSubmitSearch={() => rememberQuery()} accessibilityLabel="Поиск продукта или рецепта" placeholder="Поиск продукта или рецепта" />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow} keyboardShouldPersistTaps="handled">
-          {filters.map((item) => <SelectionChip key={item.id} group="Категория" label={item.label} selected={filter === item.id} onPress={() => { restoreScroll.current = true; setFilter(item.id); setOpenKey(null); }} />)}
-        </ScrollView>
         {filter === "RECIPES" || filter === "COOKBOOK" ? <RecipeBrowseControls filters={recipeFilters} sort={recipeSort} onFilters={setRecipeFilters} onSort={setRecipeSort} /> : null}
         {notice !== null ? <InlineNotice kind="success">{notice}</InlineNotice> : null}
         {actionError !== null ? <InlineNotice kind="error">{actionError}</InlineNotice> : null}
@@ -404,10 +406,10 @@ export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOOD
         columnWrapperStyle={recipeGrid ? styles.recipeColumns : undefined} contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled" extraData={`${openKey}|${Object.keys(picks).join(",")}`}
         onScroll={(event) => { if (!restoreScroll.current) scrollPositions.current[filter] = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={100}
         onContentSizeChange={() => { if (restoreScroll.current && itemsScope === filter) { listRef.current?.scrollToOffset({ offset: scrollPositions.current[filter] ?? 0, animated: false }); restoreScroll.current = false; } }}
-        ListHeaderComponent={<><View style={styles.createRow}>
-          <View style={styles.grow}><AppButton compact variant="secondary" label="Создать продукт" onPress={() => onCreateFood(query.trim())} /></View>
-          <View style={styles.grow}><AppButton compact variant="secondary" label="Создать рецепт" onPress={onCreateRecipe} /></View>
-        </View>{filter === "RECENT" ? <View style={styles.portion}><Text style={[styles.title, { color: colors.textPrimary }]}>{`Недавние · ${slotLabels[primarySlot]}`}</Text>
+        ListHeaderComponent={<>{filter === "COOKBOOK" || !recipeGrid ? <View style={styles.createRow}>
+          {filter === "COOKBOOK" ? <View style={styles.grow}><AppButton compact variant="secondary" label="Создать рецепт" onPress={onCreateRecipe} /></View>
+            : <View style={styles.grow}><AppButton compact variant="secondary" label="Создать продукт" onPress={() => onCreateFood(query.trim())} /></View>}
+        </View> : null}{filter === "RECENT" ? <View style={styles.portion}><Text style={[styles.title, { color: colors.textPrimary }]}>{`Недавние · ${slotLabels[primarySlot]}`}</Text>
           <AppButton compact variant="ghost" label={recentExpanded ? `Свернуть ${slotLabels[primarySlot]}` : `Развернуть ${slotLabels[primarySlot]}`} onPress={() => setRecentExpanded(!recentExpanded)} />
         </View> : null}{query.trim() === "" && filter === "FOODS" && searchHistory.length > 0 ? <View>
           <Text style={[styles.meta, { color: colors.textSecondary }]}>История поиска</Text>
@@ -417,7 +419,7 @@ export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOOD
         ListEmptyComponent={itemsScope !== filter ? <LoadingState label="Загружаем каталог…" /> : failed ? <AppButton variant="secondary" label="Повторить загрузку" onPress={() => setTick((value) => value + 1)} /> : <EmptyState reason={query.trim() === "" && !hasRecipeFilters ? "no-data" : "no-match"}
           title={hasRecipeFilters ? "Нет рецептов по этим условиям" : query.trim() === "" ? (filter === "ALL" ? "Каталог пока пуст" : "Здесь пока пусто") : "Ничего не найдено"}
           body={hasRecipeFilters ? "Измените фильтры или поисковый запрос." : query.trim() === "" ? emptyBodies[filter] : "Измените запрос или создайте свою позицию."}
-          action={recipeGrid ? { label: hasRecipeFilters ? "Сбросить фильтры" : "Создать рецепт", onPress: () => { if (hasRecipeFilters) setRecipeFilters(EMPTY_RECIPE_FILTERS); else onCreateRecipe(); } } : { label: "Создать продукт", onPress: () => onCreateFood(query.trim()) }} />}
+          action={recipeGrid ? (hasRecipeFilters ? { label: "Сбросить фильтры", onPress: () => setRecipeFilters(EMPTY_RECIPE_FILTERS) } : filter === "COOKBOOK" ? { label: "Создать рецепт", onPress: onCreateRecipe } : undefined) : { label: "Создать продукт", onPress: () => onCreateFood(query.trim()) }} />}
         renderItem={({ item, index }) => {
           const key = itemKey(item);
           if (recipeGrid && item.kind === "RECIPE") {
@@ -496,7 +498,8 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   grow: { flex: 1 },
   header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, gap: 8 },
-  topRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  topRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  mealTitleRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   mealSelector: { minHeight: 44, justifyContent: "center" },
   list: { paddingHorizontal: 12, paddingBottom: 24, gap: 2 },
   card: { ...shadow.card, borderRadius: 10, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8, gap: 6 },

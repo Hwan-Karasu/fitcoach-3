@@ -1,5 +1,6 @@
-/** Единица, к которой относятся пищевые значения продукта (§49.3.2): `100 г`, `100 мл` или документированная порция. */
-export type FoodBasisUnit = "G" | "ML" | "PORTION";
+/** Единица, к которой относятся пищевые значения продукта (§49.3.2): `100 г`, `100 мл`, штука (яйцо) или документированная порция. */
+export type FoodBasisUnit = "G" | "ML" | "PIECE" | "PORTION";
+export const FOOD_BASIS_UNITS: readonly FoodBasisUnit[] = ["G", "ML", "PIECE", "PORTION"];
 
 /**
  * Пищевые значения на эталонное количество, десятые доли (калории — ккал×10, остальное — г×10).
@@ -26,7 +27,31 @@ export interface FoodBasis {
 export interface FoodExtras {
   readonly barcode?: string | null;
   readonly gramsPerPieceX10?: number | null;
+  /** Дополнительные нутриенты карточки (насыщенные жиры, сахар, клетчатка…): только справка продукта, в дневник, итоги и рецепты не входят. `undefined` при правке — не менять. */
+  readonly extraNutrients?: readonly ExtraNutrient[] | null;
 }
+
+export type ExtraNutrientUnit = "G" | "MG";
+
+/** Значение дополнительного нутриента на ту же основу, что и К/Б/Ж/У; десятые доли единицы. */
+export interface ExtraNutrient {
+  readonly key: string;
+  readonly label: string;
+  readonly unit: ExtraNutrientUnit;
+  readonly valueX10: number;
+}
+
+/** Стандартные строки редактора продукта; свои строки получают ключ `custom:<номер>`. */
+export const STANDARD_EXTRA_NUTRIENTS: readonly Readonly<{ key: string; label: string; unit: ExtraNutrientUnit; group: "fat" | "carbs" | "other" }>[] = [
+  { key: "saturatedFat", label: "Насыщенные жиры", unit: "G", group: "fat" },
+  { key: "polyunsaturatedFat", label: "Полиненасыщенные жиры", unit: "G", group: "fat" },
+  { key: "monounsaturatedFat", label: "Мононенасыщенные жиры", unit: "G", group: "fat" },
+  { key: "sugar", label: "Сахар", unit: "G", group: "carbs" },
+  { key: "fiber", label: "Клетчатка", unit: "G", group: "carbs" },
+  { key: "sodium", label: "Натрий", unit: "MG", group: "other" },
+  { key: "cholesterol", label: "Холестерин", unit: "MG", group: "other" },
+  { key: "potassium", label: "Калий", unit: "MG", group: "other" },
+];
 
 export interface FoodProduct extends FoodBasis, Nutrients, FoodExtras {
   /** В избранном (флаг каталога, на историю дневника не влияет). */
