@@ -204,7 +204,7 @@ test("T02 хранилище: создание со структурой, сох
     await assert.rejects(plans.saveSimplePlan(a.id, program.id, program.revision, edited), message("PROGRAM_REVISION_CONFLICT"));
 
     // Вторая программа не может «перехватить» строки первой по ID.
-    const other = await plans.createSimpleProgram(a.id, { ...newDraft("w9"), title: "Другая" });
+    const other = await plans.createSimpleProgram(a.id, { ...addExercise(newDraft("w9"), "w9", "o1", BENCH, seq("o1s")), title: "Другая" });
     const thief = addExercise({ ...newDraft("w9"), title: "Другая" }, "w9", "e1", BENCH, seq("x"));
     await assert.rejects(plans.saveSimplePlan(a.id, other.id, other.revision, thief), message("DRAFT_INVALID"));
     assert.equal((await plans.getSimplePlan(a.id, program.id))!.draft.plan.workouts[0]!.exercises[0]!.id, "e1");
@@ -260,7 +260,7 @@ test("T03 отдых упражнения из дневника: меняетс�
     const a = await clients.create({ displayName: "SyntheticA" });
     const b = await clients.create({ displayName: "SyntheticB" });
     const program = await plans.createSimpleProgram(a.id, sampleDraft());
-    const other = await plans.createSimpleProgram(b.id, { ...newDraft("w9"), title: "Чужая" });
+    const other = await plans.createSimpleProgram(b.id, { ...addExercise(newDraft("w9"), "w9", "o2", BENCH, seq("o2s")), title: "Чужая" });
     const changed = await plans.setExerciseRest(a.id, program.id, "e1", 135);
     assert.equal(changed.revision, program.revision + 1, "правка плана повышает ревизию (конструктор получит конфликт)");
     const loaded = (await plans.getSimplePlan(a.id, program.id))!.draft.plan;
@@ -395,4 +395,17 @@ test("T02 порядок тренировок перетаскиванием: н
   assert.deepEqual(swapped.plan.workouts[1]!.exercises.map((item) => item.id), ["e1"], "упражнения едут вместе с тренировкой");
   assert.deepEqual(reorderWorkouts(draft, ["w2"]).plan.workouts.map((workout) => workout.id), ["w1", "w2"]);
   assert.deepEqual(draft.plan.workouts.map((workout) => workout.id), ["w1", "w2"], "исходник не меняется");
+});
+
+test("тренировка без упражнений недопустима: валидация и хранилище отклоняют пустую тренировку", async () => {
+  const empty = newDraft("w-empty");
+  assert.ok(validateDraft(empty, () => ["reps"]).some((issue) => issue.workoutId === "w-empty" && issue.message.includes("хотя бы одно упражнение")));
+  const filled = addExercise(empty, "w-empty", "e-ok", BENCH, seq("ok"));
+  assert.equal(validateDraft(filled, () => ["reps"]).some((issue) => issue.message.includes("хотя бы одно упражнение")), false);
+  const { clients, plans, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticEmpty" });
+    await assert.rejects(plans.createSimpleProgram(a.id, { ...empty, title: "Пустая" }), message("DRAFT_INVALID"));
+    assert.deepEqual((await plans.getLibrary(a.id)).active, [], "программа с пустой тренировкой не создана");
+  } finally { await close(); }
 });

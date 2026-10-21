@@ -220,7 +220,7 @@ test("T03 недели дневника: lineage только своего ме�
     assert.equal(navigation.weeks[2]!.workoutId, cycle.weeks[2]!.workouts[0]!.id);
     assert.equal(await plans.getWorkoutWeekNavigation(b.id, programId, source.id), null);
     await plans.saveWeek(a.id, programId, plan.program.revision, { mesocycleId, weekIndex: 2,
-      workouts: newDraft("replacement-workout").plan.workouts, type: "base", scope: "CURRENT", clientIds: [a.id] });
+      workouts: addExercise(newDraft("replacement-workout"), "replacement-workout", "replacement-e", BENCH, ids("replacement-s")).plan.workouts, type: "base", scope: "CURRENT", clientIds: [a.id] });
     const changed = (await plans.getWorkoutWeekNavigation(a.id, programId, source.id))!;
     assert.equal(changed.weeks[1]!.workoutId, null, "нельзя молча открыть тренировку по позиции");
     assert.equal(changed.weeks[2]!.workoutId, cycle.weeks[2]!.workouts[0]!.id);
@@ -595,7 +595,7 @@ test("T04 перетаскивание: порядок программ и ме�
     assert.deepEqual(await titlesOf(a.id), ["Просто", "Сила"], "без порядка — новые сверху");
     await plans.reorderPrograms(a.id, [programId, simple.id]);
     assert.deepEqual(await titlesOf(a.id), ["Сила", "Просто"]);
-    await plans.createSimpleProgram(a.id, { title: "Новая", plan: { weeks: 1, workouts: newDraft("w-new").plan.workouts } });
+    await plans.createSimpleProgram(a.id, { title: "Новая", plan: { weeks: 1, workouts: addExercise(newDraft("w-new"), "w-new", "w-new-e", BENCH, ids("w-new-s")).plan.workouts } });
     assert.deepEqual(await titlesOf(a.id), ["Новая", "Сила", "Просто"], "новая программа — сверху");
     await assert.rejects(plans.reorderPrograms(b.id, [simple.id]), message("TARGET_NOT_FOUND"), "чужую программу не упорядочить");
 

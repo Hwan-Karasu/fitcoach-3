@@ -56,6 +56,7 @@ export function validateDraft(draft: SimpleProgramDraft,
     }
     unique(workout.id);
     if (!workout.title.trim()) issues.push({ workoutId: workout.id, exerciseId: null, message: "У тренировки нет названия." });
+    if (workout.exercises.length === 0) issues.push({ workoutId: workout.id, exerciseId: null, message: "В тренировке должно быть хотя бы одно упражнение." });
     for (const exercise of workout.exercises) {
       unique(exercise.id);
       const metrics = metricsOf(exercise.exerciseId);
