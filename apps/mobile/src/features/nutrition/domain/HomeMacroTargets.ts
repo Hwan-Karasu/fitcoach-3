@@ -41,14 +41,23 @@ export function deriveHomeMacroTarget(calories: number | null, defaults: MacroGr
 }
 
 /**
+ * Цель дня (ADR-029): особая цель на дату, иначе расчёт главной с ручной корректировкой, действовавшей на дату. Единственный источник цели для дневника,
+ * главной и статистики. Нет данных расчёта и корректировки — все коридоры `null`.
+ */
+export function corridorsForDate(target: ResolvedTarget, versions: readonly TargetVersion[], localDate: string, guide: number | null, defaults: MacroGrams | null,
+  leanMassKg: number | null): Corridors {
+  if (target.source === "EXCEPTION") return target.corridors;
+  const adjustment = homeAdjustmentFor(versions, localDate);
+  return deriveHomeMacroTarget(guide, defaults ?? { protein: null, fat: null, carbs: null }, leanMassKg, adjustment?.manual ?? EMPTY_MANUAL_MACROS, adjustment?.mode ?? "EXACT").corridors;
+}
+
+/**
  * Ориентир дня одним числом на показатель (ккал, г): особая цель на дату, иначе тот же расчёт, что на главной клиента (суточный ориентир, расчётные Б/Ж/У и
  * сохранённая ручная корректировка). Коридор даёт середину, округлённую до целых; нет данных — `null`.
  */
 export function dayOrientation(target: ResolvedTarget, versions: readonly TargetVersion[], localDate: string, guide: number | null, defaults: MacroGrams | null,
   leanMassKg: number | null): Readonly<Record<TargetMetric, number | null>> {
-  const adjustment = homeAdjustmentFor(versions, localDate);
-  const corridors = target.source === "EXCEPTION" ? target.corridors
-    : deriveHomeMacroTarget(guide, defaults ?? { protein: null, fat: null, carbs: null }, leanMassKg, adjustment?.manual ?? EMPTY_MANUAL_MACROS, adjustment?.mode ?? "EXACT").corridors;
+  const corridors = corridorsForDate(target, versions, localDate, guide, defaults, leanMassKg);
   const middle = (range: TargetRange | null) => range === null ? null : Math.round((range.minX10 + range.maxX10) / 20);
   return Object.fromEntries(TARGET_METRICS.map((metric) => [metric, middle(corridors[metric])])) as Record<TargetMetric, number | null>;
 }

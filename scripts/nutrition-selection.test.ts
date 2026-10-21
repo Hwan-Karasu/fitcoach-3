@@ -34,7 +34,8 @@ test("недавние сгруппированы по целевому слот
 });
 
 const recipe = (id: string, kcalX10: number | null, minutes: number | null, day: number): Recipe => ({ id, name: id, revision: 1, archivedAt: null, servingsX10: 10, cookedMassX10: 1000,
-  createdAt: `2026-10-${day}T00:00:00Z`, ingredients: [{ food: { ...food(id, id), kcalX10 }, quantityX10: 1000 }],
+  createdAt: `2026-10-${day}T00:00:00Z`, // Калории неизвестны полностью: без Б/Ж/У их нечем досчитать (ADR-029).
+  ingredients: [{ food: { ...food(id, id), kcalX10, ...(kcalX10 === null ? { proteinX10: null, fatX10: null, carbsX10: null } : {}) }, quantityX10: 1000 }],
   details: { prepMinutes: minutes, cookMinutes: 0, categories: [], steps: [], photoUri: null } });
 test("рецепты: границы калорий/времени, unknown и явный ноль, сортировка без мутации", () => {
   const rows = [recipe("c", 2500, 30, 21), recipe("b", 1000, 15, 20), recipe("a", 0, 0, 19), recipe("z", null, null, 18)];

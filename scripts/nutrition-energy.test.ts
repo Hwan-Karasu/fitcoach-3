@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { kcalFromMacrosX10, kcalRangeFromEntered, kcalRangeFromMacros } from "../apps/mobile/src/features/nutrition/domain/EnergyRules.ts";
+import { kcalFromMacrosX10, kcalIsDerived, kcalRangeFromEntered, kcalRangeFromMacros } from "../apps/mobile/src/features/nutrition/domain/EnergyRules.ts";
 
 test("калории считаются сами: 1 г белка = 4 ккал, жира = 9 ккал, углеводов = 4 ккал (значения в десятых долях)", () => {
   assert.equal(kcalFromMacrosX10({ proteinX10: 1400, fatX10: 550, carbsX10: 1800 }), 17750, "4·140 + 9·55 + 4·180 = 1775 ккал");
@@ -30,4 +30,11 @@ test("калории от введённого: даже один белок д�
   assert.deepEqual(kcalRangeFromEntered({ protein: range(100, 100), fat: range(60, 60), carbs: range(200, 200) }), { minX10: 17400, maxX10: 17400 }, "400 + 540 + 800 = 1740 ккал");
   assert.deepEqual(kcalRangeFromEntered({ protein: range(90, 110), fat: null, carbs: null }), { minX10: 3600, maxX10: 4400 }, "диапазон белка 90–110 г = 360–440 ккал");
   assert.equal(kcalRangeFromEntered({ protein: null, fat: null, carbs: null }), null);
+});
+
+test("NUT-005: калории продукта, совпавшие с 4/9/4 по Б/Ж/У, считаются авто; свои и неполные — нет", () => {
+  assert.equal(kcalIsDerived({ kcalX10: 17750, proteinX10: 1400, fatX10: 550, carbsX10: 1800 }), true, "4·140 + 9·55 + 4·180 = 1775 ккал");
+  assert.equal(kcalIsDerived({ kcalX10: 17000, proteinX10: 1400, fatX10: 550, carbsX10: 1800 }), false, "введены вручную");
+  assert.equal(kcalIsDerived({ kcalX10: 3600, proteinX10: 125, fatX10: null, carbsX10: 600 }), false, "жир неизвестен — авторасчёта нет");
+  assert.equal(kcalIsDerived({ kcalX10: null, proteinX10: 125, fatX10: 62, carbsX10: 600 }), false, "калорий нет");
 });

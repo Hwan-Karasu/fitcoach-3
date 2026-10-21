@@ -7,6 +7,7 @@ import { DevNutritionDiaryRepository } from "../apps/mobile/src/features/nutriti
 import type { DiaryEntry } from "../apps/mobile/src/features/nutrition/domain/DiaryModel.ts";
 import type { FoodProduct, Nutrients } from "../apps/mobile/src/features/nutrition/domain/FoodModel.ts";
 import { snapshotOfFood } from "../apps/mobile/src/features/nutrition/domain/FoodSnapshot.ts";
+import { corridorsForDate, dayOrientation } from "../apps/mobile/src/features/nutrition/domain/HomeMacroTargets.ts";
 import { computeNutritionStats } from "../apps/mobile/src/features/nutrition/domain/NutritionStats.ts";
 import type { Corridors, TargetVersion } from "../apps/mobile/src/features/nutrition/domain/TargetModel.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
@@ -124,4 +125,30 @@ test("NUT-UX-PARITY-01: средняя цель периода — середи�
   const days = [day("2026-10-19", true, { minX10: 18000, maxX10: 22000 }), day("2026-10-20", true, { minX10: 24000, maxX10: 24000 }), day("2026-10-21", false, { minX10: 99000, maxX10: 99000 }), day("2026-10-22", true, null)];
   assert.equal(averageTargetX10(days, "kcal"), 22000, "(20000 + 24000) / 2; не учтённый день и день без цели не входят");
   assert.equal(averageTargetX10(days, "protein"), null);
+});
+
+test("ADR-029 NUT-001: цель дня одна для дневника и статистики — расчёт или ручная корректировка на дату", () => {
+  const defaults = { protein: 150, fat: 60, carbs: 300 };
+  const days = (from: string, to: string, versions: TargetVersion[], entries: DiaryEntry[]) => computeNutritionStats({ from, to, versions, exceptions: [], entries,
+    corridorsFor: (localDate, resolved) => corridorsForDate(resolved, versions, localDate, 2400, defaults, 75) });
+  // Сохранённых версий нет: цель — расчёт (2400 ккал, белок 150), прошлые дни не «без цели».
+  const plain = days("2026-10-05", "2026-10-05", [], [entry("2026-10-05", 2400, 150)]);
+  assert.deepEqual(plain.days[0]?.ranges.kcal, { minX10: 24000, maxX10: 24000 });
+  assert.equal(plain.days[0]?.verdicts.kcal, "IN");
+  assert.equal(dayOrientation({ source: "NONE" }, [], "2026-10-05", 2400, defaults, 75).kcal, 2400, "дневник показывает ту же цель");
+  // Ручной белок 140 действует с 10.10: до этой даты — расчётный 150, после — 140.
+  const manual: TargetVersion = { ...everyDay("2026-10-10", corridors(null)), homeAdjustment: { mode: "EXACT", manual: { protein: range(140, 140), fat: null, carbs: null } } };
+  const both = days("2026-10-05", "2026-10-15", [manual], [entry("2026-10-05", 2400, 150), entry("2026-10-15", 2400, 140)]);
+  assert.deepEqual([both.days[0]?.ranges.protein, both.days[10]?.ranges.protein], [range(150, 150), range(140, 140)]);
+  assert.deepEqual([both.days[0]?.verdicts.protein, both.days[10]?.verdicts.protein], ["IN", "IN"]);
+  // Режим «Коридор»: белок ±10 % от 150 — 135–165; 140 г внутри.
+  const corridor: TargetVersion = { ...everyDay("2026-10-01", corridors(null)), homeAdjustment: { mode: "RANGE", manual: { protein: null, fat: null, carbs: null } } };
+  const wide = days("2026-10-05", "2026-10-05", [corridor], [entry("2026-10-05", 2400, 140)]);
+  assert.deepEqual(wide.days[0]?.ranges.protein, range(135, 165));
+  assert.equal(wide.days[0]?.verdicts.protein, "IN");
+  // Нет данных расчёта и корректировки — цели нет, а не нулевой коридор.
+  const noCalc = computeNutritionStats({ from: "2026-10-05", to: "2026-10-05", versions: [], exceptions: [], entries: [entry("2026-10-05", 2400)],
+    corridorsFor: (localDate, resolved) => corridorsForDate(resolved, [], localDate, null, null, null) });
+  assert.equal(noCalc.days[0]?.targetSource, "NONE");
+  assert.equal(noCalc.metrics.kcal.compared, 0);
 });

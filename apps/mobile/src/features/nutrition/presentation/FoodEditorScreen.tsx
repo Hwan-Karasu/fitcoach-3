@@ -6,7 +6,7 @@ import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvid
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { STANDARD_EXTRA_NUTRIENTS, type ExtraNutrient, type ExtraNutrientUnit, type FoodBasisUnit, type FoodProduct } from "../domain/FoodModel.ts";
 import type { FoodCatalogPort } from "../domain/FoodCatalogPort.ts";
-import { kcalFromMacrosX10 } from "../domain/EnergyRules.ts";
+import { kcalFromMacrosX10, kcalIsDerived } from "../domain/EnergyRules.ts";
 import { formatDecimalX10, parseDecimalX10 } from "../domain/FoodRules.ts";
 import { nutritionErrorText } from "./nutritionFormat.ts";
 
@@ -84,7 +84,7 @@ export function FoodEditorScreen({ foods, foodId, initialName = "", detailsReque
       setUnit(food.unit); setAmount(formatDecimalX10(food.amountX10));
       const show = (value: number | null) => value === null ? "" : formatDecimalX10(value);
       setValues({ kcal: show(food.kcalX10), protein: show(food.proteinX10), fat: show(food.fatX10), carbs: show(food.carbsX10) });
-      setKcalManual(food.kcalX10 !== null); setRevision(food.revision);
+      setKcalManual(food.kcalX10 !== null && !kcalIsDerived(food)); setRevision(food.revision);
       const standard = new Set(STANDARD_EXTRA_NUTRIENTS.map((item) => item.key));
       const saved = food.extraNutrients ?? [];
       setExtra(Object.fromEntries(saved.filter((item) => standard.has(item.key)).map((item) => [item.key, formatDecimalX10(item.valueX10)])));

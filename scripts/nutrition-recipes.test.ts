@@ -78,15 +78,20 @@ test("N01 §49.4.3: без массы готового блюда граммов
   } finally { await close(); }
 });
 
-test("N01 §49.3.2: ингредиент без белка делает белок рецепта неизвестным, а не 0", async () => {
+test("ADR-029: рецепт считается как сумма дня — неизвестное = 0, неизвестно только если неизвестно у всех; калории без числа из известных Б/Ж/У", async () => {
   const { foods, recipes, oats, close } = await stores();
   try {
     const sugar = await foods.create({ name: "Сахар", brand: null, unit: "G", amountX10: 1000, kcalX10: 3870, proteinX10: null, fatX10: null, carbsX10: 998 }, NOW);
     const recipe = await recipes.create({ name: "Сладкая каша", servingsX10: 10, cookedMassX10: null,
       ingredients: [{ foodId: oats.id, quantityX10: 1000 }, { foodId: sugar.id, quantityX10: 100 }] }, NOW);
     const totals = recipeTotals(recipe);
-    assert.equal(totals.proteinX10, null);
+    assert.equal(totals.proteinX10, 125, "белок только у овсянки: 12,5 г, сахар не обнуляет итог");
+    assert.equal(totals.fatX10, 62, "жир только у овсянки");
     assert.equal(totals.kcalX10, 3600 + 387, "калории известны у обоих — сумма есть");
+    // Продукт без калорий: они досчитываются из известных Б/Ж/У (углеводы 9,98 г → 39,92 ккал).
+    const noKcal = await foods.create({ name: "Сироп", brand: null, unit: "G", amountX10: 1000, kcalX10: null, proteinX10: null, fatX10: null, carbsX10: 500 }, NOW);
+    const syrup = await recipes.create({ name: "Сироп отдельно", servingsX10: 10, cookedMassX10: null, ingredients: [{ foodId: noKcal.id, quantityX10: 1000 }] }, NOW);
+    assert.deepEqual(recipeTotals(syrup), { kcalX10: 2000, proteinX10: null, fatX10: null, carbsX10: 500 }, "100 г с 50 г углеводов = 200 ккал; белок и жир неизвестны");
   } finally { await close(); }
 });
 

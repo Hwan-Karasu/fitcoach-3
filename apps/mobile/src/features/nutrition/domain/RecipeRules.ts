@@ -1,4 +1,5 @@
 import type { FoodBasis, Nutrients } from "./FoodModel.ts";
+import { sumNutrients } from "./EnergyRules.ts";
 import { scaleNutrients } from "./FoodRules.ts";
 import type { Recipe, RecipeInput } from "./RecipeModel.ts";
 
@@ -47,13 +48,11 @@ export function validateRecipe(input: RecipeInput): RecipeInput {
 }
 
 /**
- * Сумма по ингредиентам (§49.4.2). Если у какого-то ингредиента нутриент не введён, итог по нему неизвестен (`null`):
- * неполная сумма не выдаётся за полную.
+ * Сумма по ингредиентам (§49.4.2) по правилу суммы дня (ADR-028/029): неизвестное значение ингредиента считается нулём, итог неизвестен (`null`),
+ * только если неизвестен у всех; калории ингредиента без числа досчитываются из его известных Б/Ж/У.
  */
 export function recipeTotals(recipe: Pick<Recipe, "ingredients">): Nutrients {
-  const parts = recipe.ingredients.map((item) => scaleNutrients(item.food, item.quantityX10));
-  const total = (key: keyof Nutrients) => parts.some((part) => part[key] === null) ? null : parts.reduce((sum, part) => sum + (part[key] as number), 0);
-  return { kcalX10: total("kcalX10"), proteinX10: total("proteinX10"), fatX10: total("fatX10"), carbsX10: total("carbsX10") };
+  return sumNutrients(recipe.ingredients.map((item) => scaleNutrients(item.food, item.quantityX10)));
 }
 
 export interface RecipeBasis {

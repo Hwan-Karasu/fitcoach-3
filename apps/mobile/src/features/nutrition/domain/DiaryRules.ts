@@ -1,5 +1,5 @@
 import { FOOD_BASIS_UNITS, type Nutrients } from "./FoodModel.ts";
-import { kcalFromKnownMacrosX10 } from "./EnergyRules.ts";
+import { entryNutrients, sumNutrients } from "./EnergyRules.ts";
 import { scaleNutrients } from "./FoodRules.ts";
 import type { FoodSnapshot } from "./FoodSnapshot.ts";
 import { MEAL_SLOTS, type DaySummary, type DiaryEntry, type MealSlot } from "./DiaryModel.ts";
@@ -54,21 +54,8 @@ export function normalizeSnapshot(snapshot: FoodSnapshot): FoodSnapshot {
   return { ...snapshot, name, eaten };
 }
 
-const NONE: Nutrients = { kcalX10: null, proteinX10: null, fatX10: null, carbsX10: null };
-
-/** Значения записи для показа и сумм: калории без числа досчитываются из известных Б/Ж/У (4/9/4); сам снимок не меняется. */
-export function entryNutrients(eaten: Nutrients): Nutrients {
-  if (eaten.kcalX10 !== null) return eaten;
-  return { ...eaten, kcalX10: kcalFromKnownMacrosX10(eaten) };
-}
-
-/** Сумма записей (как в 2.0, решение владельца 2026-10-21): неизвестный нутриент считается нулём; итог неизвестен, только если он неизвестен во всех записях. */
-export function sumNutrients(parts: readonly Nutrients[]): Nutrients {
-  if (parts.length === 0) return NONE;
-  const full = parts.map(entryNutrients);
-  const total = (key: keyof Nutrients) => full.every((part) => part[key] === null) ? null : full.reduce((sum, part) => sum + (part[key] ?? 0), 0);
-  return { kcalX10: total("kcalX10"), proteinX10: total("proteinX10"), fatX10: total("fatX10"), carbsX10: total("carbsX10") };
-}
+// Суммирование живёт в EnergyRules (общее с рецептами, без цикла импортов); здесь — прежнее место импорта.
+export { entryNutrients, sumNutrients };
 
 /** Итоги одного дня по записям этой даты. Без пищевых записей день `NO_FOOD` и без чисел; вода сюда не входит. */
 export function summarizeDay(localDate: string, entries: readonly DiaryEntry[]): DaySummary {

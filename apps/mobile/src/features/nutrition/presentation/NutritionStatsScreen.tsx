@@ -8,10 +8,13 @@ import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvid
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
 import type { DiaryEntry } from "../domain/DiaryModel.ts";
+import { corridorsForDate, homeAdjustmentFor } from "../domain/HomeMacroTargets.ts";
 import { averageTargetX10, computeNutritionStats } from "../domain/NutritionStats.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
-import { TARGET_METRICS, type TargetException, type TargetMetric, type TargetVersion } from "../domain/TargetModel.ts";
+import { TARGET_METRICS, type Corridors, type ResolvedTarget, type TargetException, type TargetMetric, type TargetVersion } from "../domain/TargetModel.ts";
+import type { CalcClientBody } from "./NutritionCalcScreen.tsx";
+import { useNutritionGuide } from "./useNutritionGuide.ts";
 import { metricLabels, shiftDate, todayLocal, wholeText } from "./nutritionFormat.ts";
 import { useMacroColors } from "./MacroGrid.tsx";
 import { MacroGlass } from "./MacroGlass.tsx";
@@ -31,11 +34,13 @@ const shortDate = (date: string) => `${date.slice(8, 10)}.${date.slice(5, 7)}`;
  * «Статистика» питания клиента (§§49.22–49.23): среднее и доля попаданий в коридор по дням с учётом — это дни, где есть хотя бы одна пищевая запись.
  * Дни без еды и только с водой не входят; неизвестные значения не заменяются нулём. Всегда «по внесённым записям», не как доказанное полное потребление.
  */
-export function NutritionStatsScreen({ clientId, diary, targets, measurements, calc, onOpenDay }: Readonly<{ clientId: string; diary: NutritionDiaryPort; targets: NutritionTargetsPort;
+export function NutritionStatsScreen({ clientId, body, diary, targets, measurements, calc, onOpenDay }: Readonly<{ clientId: string; body: CalcClientBody; diary: NutritionDiaryPort; targets: NutritionTargetsPort;
   measurements: MeasurementRepositoryPort; calc: NutritionCalcPort; onOpenDay: (date: string) => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const macroColors = useMacroColors();
+  // Цель дня — та же, что в дневнике и на главной: расчёт с ручной корректировкой на дату (ADR-029).
+  const { loaded: guideLoaded, guide, defaults, leanMassKg } = useNutritionGuide(clientId, body, calc, measurements);
   const today = todayLocal();
   const [period, setPeriod] = useState<PeriodId>("week");
   const [latest, setLatest] = useState<Readonly<{ entries: readonly DiaryEntry[]; versions: readonly TargetVersion[]; exceptions: readonly TargetException[]; key: string;
@@ -79,8 +84,19 @@ export function NutritionStatsScreen({ clientId, diary, targets, measurements, c
     return () => { offDiary(); offTargets(); offBody(); offCalc(); };
   }, [clientId, diary, targets, measurements, calc]);
 
-  const fresh = useMemo(() => data === null || data.key !== key ? null
-    : computeNutritionStats({ from, to, entries: data.entries, versions: data.versions, exceptions: data.exceptions, sparse: period === "all" }), [data, key, from, to, period]);
+  const fresh = useMemo(() => {
+    if (data === null || data.key !== key || guideLoaded === null) return null;
+    // Корректировка действует по версии на дату: расчёт коридоров один на версию, а не на каждый из тысяч дней периода.
+    const byAdjustment = new Map<unknown, Corridors>();
+    const corridorsFor = (localDate: string, resolved: ResolvedTarget): Corridors => {
+      if (resolved.source === "EXCEPTION") return resolved.corridors;
+      const adjustment = homeAdjustmentFor(data.versions, localDate);
+      let corridors = byAdjustment.get(adjustment);
+      if (corridors === undefined) { corridors = corridorsForDate(resolved, data.versions, localDate, guide, defaults, leanMassKg); byAdjustment.set(adjustment, corridors); }
+      return corridors;
+    };
+    return computeNutritionStats({ from, to, entries: data.entries, versions: data.versions, exceptions: data.exceptions, sparse: period === "all", corridorsFor });
+  }, [data, key, from, to, period, guideLoaded, guide, defaults, leanMassKg]);
   // Пока грузится новый период, остаётся прежняя статистика (приглушённая): экран не пересоздаётся.
   const [shown, setShown] = useState<typeof fresh>(null);
   if (fresh !== null && shown !== fresh) setShown(fresh);

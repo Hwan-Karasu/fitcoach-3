@@ -1,3 +1,10 @@
+## 2026-10-21 — NUT-AUDIT этап 2: расчёты (NUT-001, NUT-004, NUT-005)
+
+- NUT-001: `corridorsForDate` (HomeMacroTargets) — единая цель дня; `dayOrientation` и статистика (`NutritionStatsScreen` + `computeNutritionStats({ corridorsFor })`) используют её. Расчёт коридоров один на версию корректировки, не на день периода. Статистика ждёт загрузки расчёта.
+- NUT-004: `recipeTotals` = `sumNutrients` (сумма вынесена в `EnergyRules`, `DiaryRules` реэкспортирует; иначе цикл импортов). Подпись в редакторе рецепта обновлена.
+- NUT-005: `kcalIsDerived` — калории, совпавшие с 4/9/4, при открытии продукта снова авто.
+- Тесты +2 (559/559); typecheck, lint, arch, source, secrets OK. На телефоне не проверено.
+
 ## 2026-10-21 — NUT-AUDIT этап 1: целостность данных (NUT-002, NUT-003)
 
 - Аудит «Питания»: `docs/NUTRITION_AUDIT.md`; решения владельца — ADR-029.

@@ -40,7 +40,7 @@ export function NutritionHomeScreen({ clientId, body, onUpdateBody, onOpenJourna
         <NutritionDiaryScreen key={clientId} clientId={clientId} diary={diary} targets={targets} body={body} calc={calc} measurements={measurements} onAdd={onAdd} onEditSource={onEditSource} requestedDay={requestedDay} />
       </View> : null}
       {visited.stats ? <View style={{ flex: 1, display: section === "stats" ? "flex" : "none" }}>
-        <NutritionStatsScreen key={clientId} clientId={clientId} diary={diary} targets={targets} calc={calc} measurements={measurements}
+        <NutritionStatsScreen key={clientId} clientId={clientId} body={body} diary={diary} targets={targets} calc={calc} measurements={measurements}
           onOpenDay={(date) => { setRequestedDay((current) => ({ date, token: (current?.token ?? 0) + 1 })); selectSection("diary"); }} />
       </View> : null}
     </View>

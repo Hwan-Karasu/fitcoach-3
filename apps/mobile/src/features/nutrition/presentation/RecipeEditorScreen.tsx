@@ -181,7 +181,7 @@ export function RecipeEditorScreen({ recipeId, foods, recipes, onSaved, onDirtyC
         <Text style={[styles.heading, { color: colors.textPrimary }]}>Пищевая ценность</Text>
         {preview === null ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Появится, когда заполнены порции и количества.</Text>
           : preview.map((item) => <BasisLine key={item.basis.unit} title={item.basis.unit === "PORTION" ? "На порцию" : "На 100 г готового блюда"} nutrients={item.nutrients} />)}
-        <Text style={[styles.meta, { color: colors.textMuted }]}>Сумма ингредиентов. «—» — у какого-то ингредиента нет этого значения.</Text>
+        <Text style={[styles.meta, { color: colors.textMuted }]}>Сумма ингредиентов; значение, которого нет у ингредиента, считается нулём. «—» — его нет ни у одного.</Text>
       </View>
       <TextField label="Способ приготовления" value={instructions} onChangeText={setInstructions} multiline hint="Каждый шаг — с новой строки. Необязательно." />
       {photoUri !== null ? <><Image accessibilityLabel="Фотография рецепта" source={{ uri: photoUri }} style={{ width: "100%", height: 180, borderRadius: 16 }} />

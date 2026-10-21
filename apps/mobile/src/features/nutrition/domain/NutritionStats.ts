@@ -1,7 +1,7 @@
 import type { DiaryEntry } from "./DiaryModel.ts";
 import { accountedDates, assertDate, summarizeDay } from "./DiaryRules.ts";
-import { TARGET_METRICS, type RangeVerdict, type TargetException, type TargetMetric, type TargetRange, type TargetVersion } from "./TargetModel.ts";
-import { assessDay, NUTRIENT_OF, resolveTarget } from "./TargetRules.ts";
+import { TARGET_METRICS, type Corridors, type RangeVerdict, type ResolvedTarget, type TargetException, type TargetMetric, type TargetRange, type TargetVersion } from "./TargetModel.ts";
+import { assessDay, hasAnyRange, NUTRIENT_OF, resolveTarget } from "./TargetRules.ts";
 
 /** Один день периода: учтён ли он (есть пищевая запись), значения по записям и оценка по коридору этой даты. */
 export interface NutritionDayPoint {
@@ -42,6 +42,8 @@ export interface NutritionStats {
 }
 
 export interface NutritionStatsInput {
+  /** Цель дня из расчёта и ручной корректировки (ADR-029); без неё действует только сохранённое расписание версий. Пустые коридоры — «цели нет». */
+  readonly corridorsFor?: (localDate: string, resolved: ResolvedTarget) => Corridors;
   /** All-time query: keep only accounted dates in days; the denominator still covers the full interval. */
   readonly sparse?: boolean;
   readonly from: string;
@@ -49,6 +51,11 @@ export interface NutritionStatsInput {
   readonly entries: readonly DiaryEntry[];
   readonly versions: readonly TargetVersion[];
   readonly exceptions: readonly TargetException[];
+}
+
+function withCorridors(resolved: ResolvedTarget, localDate: string, corridors: Corridors): ResolvedTarget {
+  if (!hasAnyRange(corridors)) return { source: "NONE" };
+  return resolved.source === "EXCEPTION" ? resolved : { source: "SCHEDULE", effectiveFrom: resolved.source === "SCHEDULE" ? resolved.effectiveFrom : localDate, corridors };
 }
 
 /** Не больше пяти лет: защита от случайного бесконечного периода. */
@@ -84,7 +91,8 @@ export function computeNutritionStats(input: NutritionStatsInput): NutritionStat
   }
   const accounted = new Set(accountedDates(inPeriod));
   const days: NutritionDayPoint[] = dates.map((localDate) => {
-    const target = resolveTarget(input.versions, input.exceptions, localDate);
+    const resolved = resolveTarget(input.versions, input.exceptions, localDate);
+    const target = input.corridorsFor === undefined ? resolved : withCorridors(resolved, localDate, input.corridorsFor(localDate, resolved));
     const summary = summarizeDay(localDate, byDate.get(localDate) ?? []);
     const isAccounted = accounted.has(localDate);
     const verdicts = isAccounted ? assessDay(summary, target)
