@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { Modal, PanResponder, Pressable, StyleSheet, Text, View } from "react-native";
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react-native";
 import { AppButton, AppIconButton } from "../../../shared/ui/components/public.ts";
@@ -86,11 +86,16 @@ function MonthModal({ visible, clientId, diary, selected, today, onSelect, onClo
  * Шапка дневника (P-10, P-11): «Календарь ▾», неделя из семи дней с выбранным днём и отметками дней с питанием, листание недель стрелками и свайпом.
  * Дата принадлежит экрану дневника, шапка только сообщает выбор.
  */
-export function DiaryWeekHeader({ clientId, diary, localDate, today, onSelect }: Readonly<{ clientId: string; diary: NutritionDiaryPort; localDate: string; today: string; onSelect: (localDate: string) => void }>) {
+export function DiaryWeekHeader({ clientId, diary, localDate, today, onSelect: onSelectDate }: Readonly<{ clientId: string; diary: NutritionDiaryPort; localDate: string; today: string; onSelect: (localDate: string) => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const [calendar, setCalendar] = useState(false);
-  const week = useMemo(() => weekOf(localDate), [localDate]);
+  // Выбор дня подсвечивается сразу (локальное состояние), а тяжёлое обновление содержимого родителя идёт переходом: тап не ждёт перерисовки экрана.
+  const [shown, setShown] = useState(localDate);
+  const [seen, setSeen] = useState(localDate);
+  if (localDate !== seen) { setSeen(localDate); setShown(localDate); }
+  const onSelect = (date: string) => { setShown(date); startTransition(() => onSelectDate(date)); };
+  const week = useMemo(() => weekOf(shown), [shown]);
   const marks = useAccountedRange(clientId, diary, week[0] as string, week[6] as string);
   const pan = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dx) > 16 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.5,
@@ -100,20 +105,20 @@ export function DiaryWeekHeader({ clientId, diary, localDate, today, onSelect }:
     },
   }), []);
   const onSelectRef = useLatest(onSelect);
-  const dateRef = useLatest(localDate);
+  const dateRef = useLatest(shown);
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
       <View style={styles.head}>
-        <Pressable accessibilityRole="button" accessibilityLabel={`${dayTitle(localDate, today)}. Открыть календарь`} style={styles.calendarButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => setCalendar(true)}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`${dayTitle(shown, today)}. Открыть календарь`} style={styles.calendarButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => setCalendar(true)}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Календарь</Text>
           <ChevronDown size={18} color={colors.textPrimary} />
         </Pressable>
-        <Text numberOfLines={1} style={[styles.dayTitle, { color: colors.textSecondary }]}>{dayTitle(localDate, today)}</Text>
+        <Text numberOfLines={1} style={[styles.dayTitle, { color: colors.textSecondary }]}>{dayTitle(shown, today)}</Text>
       </View>
       <View style={styles.strip} {...pan.panHandlers}>
-        <AppIconButton label="Предыдущая неделя" icon={<ChevronLeft size={20} color={colors.textSecondary} />} onPress={() => onSelect(shiftDate(localDate, -7))} />
+        <AppIconButton label="Предыдущая неделя" icon={<ChevronLeft size={20} color={colors.textSecondary} />} onPress={() => onSelect(shiftDate(shown, -7))} />
         {week.map((date, index) => {
-          const active = date === localDate;
+          const active = date === shown;
           return (
             <Pressable key={date} accessibilityRole="button" accessibilityState={{ selected: active }} accessibilityLabel={`${dayTitle(date, today)}${marks.has(date) ? ", есть записи о еде" : ""}`}
               onPress={() => onSelect(date)} style={[styles.day, active ? { backgroundColor: colors.accentFill, borderRadius: 16 } : null]}>
@@ -122,9 +127,9 @@ export function DiaryWeekHeader({ clientId, diary, localDate, today, onSelect }:
             </Pressable>
           );
         })}
-        <AppIconButton label="Следующая неделя" icon={<ChevronRight size={20} color={colors.textSecondary} />} onPress={() => onSelect(shiftDate(localDate, 7))} />
+        <AppIconButton label="Следующая неделя" icon={<ChevronRight size={20} color={colors.textSecondary} />} onPress={() => onSelect(shiftDate(shown, 7))} />
       </View>
-      <MonthModal visible={calendar} clientId={clientId} diary={diary} selected={localDate} today={today} onSelect={onSelect} onClose={() => setCalendar(false)} />
+      <MonthModal visible={calendar} clientId={clientId} diary={diary} selected={shown} today={today} onSelect={onSelect} onClose={() => setCalendar(false)} />
     </View>
   );
 }
