@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Modal, PanResponder, Pressable, StyleSheet, Text, View } from "react-native";
-import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react-native";
+import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react-native";
 import { AppButton, AppIconButton } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
@@ -28,7 +28,7 @@ function useAccountedRange(clientId: string, diary: NutritionDiaryPort, from: st
 }
 const EMPTY: ReadonlySet<string> = new Set();
 
-/** Число дня: день с записями о еде отмечен кружком-подложкой и точкой; выбранный день заливается акцентом (`selected`). */
+/** Число дня: день с записями о еде отмечен галочкой; выбранный день заливается акцентом (`selected`). */
 function DayNumber({ text, marked, selected, today, textStyle }: Readonly<{ text: number; marked: boolean; selected: boolean; today: boolean; textStyle: object }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -36,7 +36,7 @@ function DayNumber({ text, marked, selected, today, textStyle }: Readonly<{ text
   return (
     <View style={styles.dayCircle}>
       <Text style={[textStyle, { color: ink }]}>{text}</Text>
-      <View style={[styles.marker, { backgroundColor: marked ? (selected ? colors.onAccentFill : colors.accentInk) : "transparent" }]} />
+      <View style={styles.marker}>{marked ? <Check size={10} strokeWidth={3} color={selected ? colors.onAccentFill : colors.accentInk} /> : null}</View>
     </View>
   );
 }
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
   dayCircle: { minWidth: 34, minHeight: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   dayName: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14 },
   dayNumber: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
-  marker: { width: 4, height: 4, borderRadius: 2 },
+  marker: { height: 10, alignItems: "center", justifyContent: "center" },
   backdrop: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.4)" },
   dialog: { borderRadius: 24, padding: 14, gap: 4 },
   monthHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
