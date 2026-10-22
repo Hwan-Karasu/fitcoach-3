@@ -86,3 +86,12 @@ D01-4 (composition release), D01-5 (EXPLAIN + интеграционный на�
 ## 6. Что не входит
 
 Бэкап и восстановление (D05/B01), миграция 2.0 (D03/D04/I01), release-сборка (R01).
+
+## 7. Ход работ
+
+- **D01-1 (2026-10-22) — сделано.** `scripts/d01/BaselineSchema.ts` и `generate-baseline.ts` собирают итоговую схему всей dev-цепочки (64 таблицы, 38 индексов, 31 триггер) и пишут
+  по одной базовой миграции на владельца (`apps/mobile/src/features/**/data/*Baseline.generated.ts`, без префикса `dev_`, 133 объекта). Начальных строк у dev-цепочки нет,
+  поэтому baseline — только DDL. Тест `scripts/d01-baseline.test.ts`: схема из baseline равна схеме из цепочки (с точностью до префикса), `foreign_key_check` = 0,
+  файлы не отстают от цепочки (перегенерация даёт тот же текст). **В приложение не подключено.** Перегенерация: `node --experimental-strip-types --experimental-sqlite scripts/d01/generate-baseline.ts`
+  (с Node 24 из devDependencies флаг `--experimental-sqlite` не нужен).
+- Следующий срез D01-2: переименование в коде и тестах, переход репозиториев на baseline, импорт данных старой dev-базы.
