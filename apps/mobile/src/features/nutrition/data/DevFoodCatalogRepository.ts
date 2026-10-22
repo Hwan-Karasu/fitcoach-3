@@ -18,7 +18,7 @@ const toFood = ({ extraJson, ...row }: FoodRow): FoodProduct => ({ ...row, favor
 const extraJson = (extras: FoodInput["extraNutrients"]): string | null => extras === undefined || extras === null ? null : JSON.stringify(extras);
 
 async function byId(tx: SqliteStatementPort, workspaceId: string, id: string): Promise<FoodProduct> {
-  const row = await tx.first<FoodRow>(`SELECT ${columns} FROM dev_food_products WHERE workspace_id = ? AND id = ?`, [workspaceId, id]);
+  const row = await tx.first<FoodRow>(`SELECT ${columns} FROM food_products WHERE workspace_id = ? AND id = ?`, [workspaceId, id]);
   if (row === null) throw new Error("FOOD_STALE");
   return toFood(row);
 }
@@ -77,7 +77,7 @@ export class DevFoodCatalogRepository implements FoodCatalogPort {
   }
 
   async search(query = "", filter: FoodCatalogFilter = "ALL"): Promise<readonly FoodProduct[]> {
-    const rows = (await this.ready().connection.all<FoodRow>(`SELECT ${columns} FROM dev_food_products
+    const rows = (await this.ready().connection.all<FoodRow>(`SELECT ${columns} FROM food_products
       WHERE workspace_id = ? AND archived_at IS NULL AND (? = 'ALL' OR favorite = 1)`, [this.workspaceId, filter])).map(toFood);
     // SQLite `lower` не знает кириллицу — фильтр и порядок в JS.
     const needle = query.trim().toLocaleLowerCase("ru");
@@ -88,7 +88,7 @@ export class DevFoodCatalogRepository implements FoodCatalogPort {
   }
 
   async get(id: string): Promise<FoodProduct | null> {
-    const row = await this.ready().connection.first<FoodRow>(`SELECT ${columns} FROM dev_food_products WHERE workspace_id = ? AND id = ?`,
+    const row = await this.ready().connection.first<FoodRow>(`SELECT ${columns} FROM food_products WHERE workspace_id = ? AND id = ?`,
       [this.workspaceId, id]);
     return row === null ? null : toFood(row);
   }
@@ -99,7 +99,7 @@ export class DevFoodCatalogRepository implements FoodCatalogPort {
       const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
       if (!id) throw new Error("FOOD_ID_UNAVAILABLE");
       const stamp = now.toISOString();
-      await tx.run(`INSERT INTO dev_food_products (id, workspace_id, name, brand, basis_unit, basis_amount_x10, kcal_x10, protein_x10,
+      await tx.run(`INSERT INTO food_products (id, workspace_id, name, brand, basis_unit, basis_amount_x10, kcal_x10, protein_x10,
           fat_x10, carbs_x10, barcode, grams_per_piece_x10, extra_nutrients_json, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
       [id, this.workspaceId, valid.name, valid.brand, valid.unit, valid.amountX10, valid.kcalX10, valid.proteinX10, valid.fatX10,
         valid.carbsX10, valid.barcode ?? null, valid.gramsPerPieceX10 ?? null, extraJson(valid.extraNutrients), stamp, stamp]);
@@ -113,10 +113,10 @@ export class DevFoodCatalogRepository implements FoodCatalogPort {
     const valid = validateFood(input);
     const updated = await this.ready().writer.write(async (tx) => {
       // Количество ингредиента хранится в единицах продукта: смена единицы молча исказила бы все рецепты с ним (аудит NUT-002).
-      const current = await tx.first<{ unit: string; inRecipe: number }>(`SELECT basis_unit AS unit, EXISTS(SELECT 1 FROM dev_recipe_ingredients
-        WHERE workspace_id = ? AND food_id = ?) AS inRecipe FROM dev_food_products WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id, this.workspaceId, id]);
+      const current = await tx.first<{ unit: string; inRecipe: number }>(`SELECT basis_unit AS unit, EXISTS(SELECT 1 FROM recipe_ingredients
+        WHERE workspace_id = ? AND food_id = ?) AS inRecipe FROM food_products WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id, this.workspaceId, id]);
       if (current !== null && current.unit !== valid.unit && current.inRecipe === 1) throw new Error("FOOD_UNIT_LOCKED");
-      const result = await tx.run(`UPDATE dev_food_products SET name = ?, brand = ?, basis_unit = ?, basis_amount_x10 = ?, kcal_x10 = ?,
+      const result = await tx.run(`UPDATE food_products SET name = ?, brand = ?, basis_unit = ?, basis_amount_x10 = ?, kcal_x10 = ?,
           protein_x10 = ?, fat_x10 = ?, carbs_x10 = ?, barcode = CASE WHEN ? = 1 THEN ? ELSE barcode END,
           grams_per_piece_x10 = CASE WHEN ? = 1 THEN ? ELSE grams_per_piece_x10 END,
           extra_nutrients_json = CASE WHEN ? = 1 THEN ? ELSE extra_nutrients_json END, revision = revision + 1, updated_at = ?
@@ -137,7 +137,7 @@ export class DevFoodCatalogRepository implements FoodCatalogPort {
       const current = await byId(tx, this.workspaceId, id);
       if (current.archivedAt !== null) throw new Error("FOOD_STALE");
       if (current.favorite === value) return current;
-      await tx.run("UPDATE dev_food_products SET favorite = ?, updated_at = ? WHERE workspace_id = ? AND id = ?", [value ? 1 : 0, now.toISOString(), this.workspaceId, id]);
+      await tx.run("UPDATE food_products SET favorite = ?, updated_at = ? WHERE workspace_id = ? AND id = ?", [value ? 1 : 0, now.toISOString(), this.workspaceId, id]);
       changed = true;
       return byId(tx, this.workspaceId, id);
     });
@@ -150,7 +150,7 @@ export class DevFoodCatalogRepository implements FoodCatalogPort {
     const archived = await this.ready().writer.write(async (tx) => {
       const current = await byId(tx, this.workspaceId, id);
       if (current.archivedAt !== null) return current;
-      const result = await tx.run(`UPDATE dev_food_products SET archived_at = ?, revision = revision + 1, updated_at = ?
+      const result = await tx.run(`UPDATE food_products SET archived_at = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ?`, [now.toISOString(), now.toISOString(), this.workspaceId, id, expectedRevision]);
       if (result.changes !== 1) throw new Error("FOOD_STALE");
       changed = true;

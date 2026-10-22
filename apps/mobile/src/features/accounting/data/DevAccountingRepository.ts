@@ -41,16 +41,16 @@ async function newId(tx: SqliteStatementPort): Promise<string> {
 
 async function modeOf(tx: SqliteStatementPort, workspaceId: string,
   clientId: string): Promise<Readonly<{ mode: AccountingMode; inherited: boolean }>> {
-  const own = await tx.first<{ mode: AccountingMode }>(`SELECT mode FROM dev_client_accounting
+  const own = await tx.first<{ mode: AccountingMode }>(`SELECT mode FROM client_accounting
     WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
   if (own !== null) return { mode: own.mode, inherited: false };
   const fallback = await tx.first<{ default_mode: AccountingMode }>(`SELECT default_mode
-    FROM dev_accounting_settings WHERE workspace_id = ?`, [workspaceId]);
+    FROM accounting_settings WHERE workspace_id = ?`, [workspaceId]);
   return { mode: fallback?.default_mode ?? "UNTRACKED", inherited: true };
 }
 
 async function preferredPackOf(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<string | null> {
-  const row = await tx.first<{ packId: string }>(`SELECT pack_id AS packId FROM dev_client_preferred_packs
+  const row = await tx.first<{ packId: string }>(`SELECT pack_id AS packId FROM client_preferred_packs
     WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
   return row?.packId ?? null;
 }
@@ -60,18 +60,18 @@ async function packRows(tx: SqliteStatementPort, workspaceId: string, clientId: 
       p.session_type_id AS sessionTypeId, p.session_type_name AS sessionTypeName,
       p.granted_count AS grantedCount, p.total_kopeks AS totalKopeks, p.expires_on AS expiresOn,
       p.created_at AS createdAt,
-      COALESCE((SELECT sum(l.delta) FROM dev_credit_ledger AS l WHERE l.pack_id = p.id), 0) AS ledgerBalance,
-      (SELECT count(*) FROM dev_credit_reservations AS r WHERE r.pack_id = p.id) AS reserved,
-      COALESCE((SELECT sum(m.amount_kopeks) FROM dev_payment_records AS m WHERE m.pack_id = p.id), 0) AS paidKopeks
-    FROM dev_session_packs AS p WHERE p.workspace_id = ? AND p.client_id = ?
+      COALESCE((SELECT sum(l.delta) FROM credit_ledger AS l WHERE l.pack_id = p.id), 0) AS ledgerBalance,
+      (SELECT count(*) FROM credit_reservations AS r WHERE r.pack_id = p.id) AS reserved,
+      COALESCE((SELECT sum(m.amount_kopeks) FROM payment_records AS m WHERE m.pack_id = p.id), 0) AS paidKopeks
+    FROM session_packs AS p WHERE p.workspace_id = ? AND p.client_id = ?
     ORDER BY p.created_at, p.id`, [workspaceId, clientId]);
 }
 
 async function unreturnedUsed(tx: SqliteStatementPort,
   appointmentId: string): Promise<{ id: string; clientId: string; packId: string } | null> {
-  return tx.first(`SELECT u.id, u.client_id AS clientId, u.pack_id AS packId FROM dev_credit_ledger AS u
+  return tx.first(`SELECT u.id, u.client_id AS clientId, u.pack_id AS packId FROM credit_ledger AS u
     WHERE u.appointment_id = ? AND u.entry_type = 'USED' AND NOT EXISTS (
-      SELECT 1 FROM dev_credit_ledger AS r WHERE r.source_entry_id = u.id AND r.entry_type = 'RETURNED')`,
+      SELECT 1 FROM credit_ledger AS r WHERE r.source_entry_id = u.id AND r.entry_type = 'RETURNED')`,
   [appointmentId]);
 }
 
@@ -79,7 +79,7 @@ async function unreturnedUsed(tx: SqliteStatementPort,
 async function ledgerOf(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<readonly LedgerEntry[]> {
   return tx.all<LedgerEntry>(`SELECT id, pack_id AS packId, appointment_id AS appointmentId,
     source_entry_id AS sourceEntryId, entry_type AS entryType, delta, reason, created_at AS createdAt
-    FROM dev_credit_ledger WHERE workspace_id = ? AND client_id = ?
+    FROM credit_ledger WHERE workspace_id = ? AND client_id = ?
     ORDER BY created_at DESC, rowid DESC`, [workspaceId, clientId]);
 }
 
@@ -87,9 +87,9 @@ async function ledgerOf(tx: SqliteStatementPort, workspaceId: string, clientId: 
 async function insertUsed(tx: SqliteStatementPort, workspaceId: string, clientId: string, packId: string,
   appointmentId: string, now: string): Promise<void> {
   if (await unreturnedUsed(tx, appointmentId) !== null) throw new Error("ACCOUNTING_ALREADY_SETTLED");
-  const generation = (await tx.first<{ n: number }>(`SELECT count(*) AS n FROM dev_credit_ledger
+  const generation = (await tx.first<{ n: number }>(`SELECT count(*) AS n FROM credit_ledger
     WHERE appointment_id = ? AND entry_type = 'USED'`, [appointmentId]))?.n ?? 0;
-  await tx.run(`INSERT INTO dev_credit_ledger (id, workspace_id, client_id, pack_id, appointment_id,
+  await tx.run(`INSERT INTO credit_ledger (id, workspace_id, client_id, pack_id, appointment_id,
       source_entry_id, entry_type, delta, reason, operation_key, created_at)
     VALUES (?, ?, ?, ?, ?, NULL, 'USED', -1, NULL, ?, ?)`,
   [await newId(tx), workspaceId, clientId, packId, appointmentId, `used:${appointmentId}:${generation}`, now]);
@@ -97,7 +97,7 @@ async function insertUsed(tx: SqliteStatementPort, workspaceId: string, clientId
 
 async function insertReturned(tx: SqliteStatementPort, workspaceId: string,
   used: { id: string; clientId: string; packId: string }, appointmentId: string | null, now: string): Promise<void> {
-  await tx.run(`INSERT INTO dev_credit_ledger (id, workspace_id, client_id, pack_id, appointment_id,
+  await tx.run(`INSERT INTO credit_ledger (id, workspace_id, client_id, pack_id, appointment_id,
       source_entry_id, entry_type, delta, reason, operation_key, created_at)
     VALUES (?, ?, ?, ?, ?, ?, 'RETURNED', 1, NULL, ?, ?)`,
   [await newId(tx), workspaceId, used.clientId, used.packId, appointmentId, used.id,
@@ -121,7 +121,7 @@ export const devAccountingCalendarHook = {
   async reserve(tx: SqliteStatementPort, workspaceId: string, appointmentId: string, booking: Booking,
     packId: string): Promise<void> {
     if (booking.clientId === null) throw new Error("ACCOUNTING_RESERVATION_INVALID");
-    await tx.run(`INSERT INTO dev_credit_reservations
+    await tx.run(`INSERT INTO credit_reservations
       (appointment_id, workspace_id, client_id, pack_id, ends_on, ends_minute, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [appointmentId, workspaceId, booking.clientId, packId, booking.localDate, booking.endMinute,
@@ -129,24 +129,24 @@ export const devAccountingCalendarHook = {
   },
   async release(tx: SqliteStatementPort, workspaceId: string, appointmentId: string): Promise<void> {
     if (await unreturnedUsed(tx, appointmentId) !== null) throw new Error("ACCOUNTING_ALREADY_SETTLED");
-    await tx.run("DELETE FROM dev_credit_reservations WHERE workspace_id = ? AND appointment_id = ?",
+    await tx.run("DELETE FROM credit_reservations WHERE workspace_id = ? AND appointment_id = ?",
       [workspaceId, appointmentId]);
   },
   async move(tx: SqliteStatementPort, workspaceId: string, appointmentId: string, booking: Booking): Promise<void> {
-    await tx.run(`UPDATE dev_credit_reservations SET ends_on = ?, ends_minute = ?
+    await tx.run(`UPDATE credit_reservations SET ends_on = ?, ends_minute = ?
       WHERE workspace_id = ? AND appointment_id = ?`,
     [booking.localDate, booking.endMinute, workspaceId, appointmentId]);
   },
   async cancel(tx: SqliteStatementPort, workspaceId: string, appointmentId: string,
     settlement: "RETURN" | "CHARGE", now: string): Promise<void> {
     const reservation = await tx.first<{ clientId: string; packId: string }>(`SELECT client_id AS clientId,
-      pack_id AS packId FROM dev_credit_reservations WHERE workspace_id = ? AND appointment_id = ?`,
+      pack_id AS packId FROM credit_reservations WHERE workspace_id = ? AND appointment_id = ?`,
     [workspaceId, appointmentId]);
     if (reservation !== null) {
       if (settlement === "CHARGE") {
         await insertUsed(tx, workspaceId, reservation.clientId, reservation.packId, appointmentId, now);
       }
-      await tx.run("DELETE FROM dev_credit_reservations WHERE workspace_id = ? AND appointment_id = ?",
+      await tx.run("DELETE FROM credit_reservations WHERE workspace_id = ? AND appointment_id = ?",
         [workspaceId, appointmentId]);
       return;
     }
@@ -159,7 +159,7 @@ export const devAccountingCalendarHook = {
   },
   async correct(tx: SqliteStatementPort, workspaceId: string, appointmentId: string, booking: Booking,
     now: string): Promise<void> {
-    await tx.run("DELETE FROM dev_credit_reservations WHERE workspace_id = ? AND appointment_id = ?",
+    await tx.run("DELETE FROM credit_reservations WHERE workspace_id = ? AND appointment_id = ?",
       [workspaceId, appointmentId]);
     // The original USED is never edited; a linked RETURNED compensates it (§22.1.4).
     const used = await unreturnedUsed(tx, appointmentId);
@@ -179,13 +179,13 @@ export const devAccountingCalendarHook = {
   },
 };
 
-const ownedTables = ["dev_client_preferred_packs", "dev_credit_reservations", "dev_payment_records", "dev_credit_ledger",
-  "dev_session_packs", "dev_client_accounting"] as const;
+const ownedTables = ["client_preferred_packs", "credit_reservations", "payment_records", "credit_ledger",
+  "session_packs", "client_accounting"] as const;
 
 /** Accounting side of PermanentlyDeleteArchivedClient (§15.7): packs, ledger, reservations, payments. */
 export const devAccountingClientDeletionParticipant = {
   owner: "accounting.client",
-  tables: [...ownedTables, "dev_accounting_purge"] as const,
+  tables: [...ownedTables, "accounting_purge"] as const,
   async count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number> {
     let total = 0;
     for (const table of ownedTables) {
@@ -195,14 +195,14 @@ export const devAccountingClientDeletionParticipant = {
     return total;
   },
   async detach(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<void> {
-    await tx.run("INSERT INTO dev_accounting_purge (client_id) VALUES (?)", [clientId]);
+    await tx.run("INSERT INTO accounting_purge (client_id) VALUES (?)", [clientId]);
     // RETURNED rows reference USED rows of the same client, so they go first.
-    await tx.run(`DELETE FROM dev_credit_ledger WHERE workspace_id = ? AND client_id = ?
+    await tx.run(`DELETE FROM credit_ledger WHERE workspace_id = ? AND client_id = ?
       AND source_entry_id IS NOT NULL`, [workspaceId, clientId]);
     for (const table of ownedTables) {
       await tx.run(`DELETE FROM ${table} WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
     }
-    await tx.run("DELETE FROM dev_accounting_purge WHERE client_id = ?", [clientId]);
+    await tx.run("DELETE FROM accounting_purge WHERE client_id = ?", [clientId]);
   },
 };
 
@@ -237,8 +237,8 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
     try {
       await runMigrations(writer, devAccountingCatalog, DEV_ACCOUNTING_LEDGER);
       await writer.write(async (tx) => {
-        await tx.run("INSERT OR IGNORE INTO dev_accounting_settings (workspace_id) VALUES (?)", [this.workspaceId]);
-        await tx.run("DELETE FROM dev_accounting_purge");
+        await tx.run("INSERT OR IGNORE INTO accounting_settings (workspace_id) VALUES (?)", [this.workspaceId]);
+        await tx.run("DELETE FROM accounting_purge");
       });
       this.connection = connection;
       this.writer = writer;
@@ -274,7 +274,7 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
       packRows(connection, this.workspaceId, clientId),
       ledgerOf(connection, this.workspaceId, clientId),
       connection.all<PaymentRecord>(`SELECT id, pack_id AS packId, amount_kopeks AS amountKopeks,
-        paid_on AS paidOn, method, note, created_at AS createdAt FROM dev_payment_records
+        paid_on AS paidOn, method, note, created_at AS createdAt FROM payment_records
         WHERE workspace_id = ? AND client_id = ? ORDER BY paid_on DESC, created_at DESC`,
       [this.workspaceId, clientId]),
       preferredPackOf(connection, this.workspaceId, clientId),
@@ -297,14 +297,14 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
   async setPreferredPack(clientId: string, packId: string | null): Promise<void> {
     await this.ready().writer.write(async (tx) => {
       if (packId === null) {
-        await tx.run("DELETE FROM dev_client_preferred_packs WHERE workspace_id = ? AND client_id = ?", [this.workspaceId, clientId]);
+        await tx.run("DELETE FROM client_preferred_packs WHERE workspace_id = ? AND client_id = ?", [this.workspaceId, clientId]);
         return;
       }
       const pack = (await packRows(tx, this.workspaceId, clientId)).find((row) => row.id === packId);
       if (pack === undefined || pack.ledgerBalance - pack.reserved < 1 || (pack.expiresOn !== null && pack.expiresOn < localParts(new Date()).today)) {
         throw new Error("ACCOUNTING_PREFERRED_PACK_INVALID");
       }
-      await tx.run(`INSERT INTO dev_client_preferred_packs (workspace_id, client_id, pack_id) VALUES (?, ?, ?)
+      await tx.run(`INSERT INTO client_preferred_packs (workspace_id, client_id, pack_id) VALUES (?, ?, ?)
         ON CONFLICT(workspace_id, client_id) DO UPDATE SET pack_id = excluded.pack_id`, [this.workspaceId, clientId, packId]);
     });
     this.publish({ clientIds: [clientId] });
@@ -316,16 +316,16 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
     }
     await this.ready().writer.write(async (tx) => {
       if (mode === null) {
-        await tx.run("DELETE FROM dev_client_accounting WHERE workspace_id = ? AND client_id = ?",
+        await tx.run("DELETE FROM client_accounting WHERE workspace_id = ? AND client_id = ?",
           [this.workspaceId, clientId]);
       } else {
-        await tx.run(`INSERT INTO dev_client_accounting (workspace_id, client_id, mode) VALUES (?, ?, ?)
+        await tx.run(`INSERT INTO client_accounting (workspace_id, client_id, mode) VALUES (?, ?, ?)
           ON CONFLICT(workspace_id, client_id) DO UPDATE SET mode = excluded.mode`,
         [this.workspaceId, clientId, mode]);
       }
       // Leaving FITCOACH releases open reservations; past USED facts stay in the ledger.
       if ((await modeOf(tx, this.workspaceId, clientId)).mode !== "FITCOACH") {
-        await tx.run("DELETE FROM dev_credit_reservations WHERE workspace_id = ? AND client_id = ?",
+        await tx.run("DELETE FROM credit_reservations WHERE workspace_id = ? AND client_id = ?",
           [this.workspaceId, clientId]);
       }
     });
@@ -339,23 +339,23 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
     const created = await this.ready().writer.write(async (tx) => {
       if (valid.sessionTypeId !== null) {
         const type = await tx.first<{ requiresCredit: number }>(`SELECT requires_credit AS requiresCredit
-          FROM dev_session_types WHERE workspace_id = ? AND id = ? AND archived_at IS NULL`,
+          FROM session_types WHERE workspace_id = ? AND id = ? AND archived_at IS NULL`,
         [this.workspaceId, valid.sessionTypeId]);
         if (type?.requiresCredit !== 1) throw new Error("ACCOUNTING_PACK_SCOPE_INVALID");
       }
       const id = await newId(tx);
       const now = new Date().toISOString();
-      await tx.run(`INSERT INTO dev_session_packs (id, workspace_id, client_id, title, credit_scope,
+      await tx.run(`INSERT INTO session_packs (id, workspace_id, client_id, title, credit_scope,
           session_type_id, session_type_name, granted_count, total_kopeks, expires_on, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [id, this.workspaceId, clientId, valid.title, valid.creditScope, valid.sessionTypeId,
         valid.sessionTypeName, valid.grantedCount, valid.totalKopeks, valid.expiresOn, now]);
-      await tx.run(`INSERT INTO dev_credit_ledger (id, workspace_id, client_id, pack_id, appointment_id,
+      await tx.run(`INSERT INTO credit_ledger (id, workspace_id, client_id, pack_id, appointment_id,
           source_entry_id, entry_type, delta, reason, operation_key, created_at)
         VALUES (?, ?, ?, ?, NULL, NULL, 'ISSUED', ?, NULL, ?, ?)`,
       [await newId(tx), this.workspaceId, clientId, id, valid.grantedCount, `issued:${id}`, now]);
       if (payment !== null) {
-        await tx.run(`INSERT INTO dev_payment_records (id, workspace_id, client_id, pack_id, amount_kopeks,
+        await tx.run(`INSERT INTO payment_records (id, workspace_id, client_id, pack_id, amount_kopeks,
           paid_on, method, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
         [await newId(tx), this.workspaceId, clientId, id, payment.amountKopeks, payment.paidOn, payment.method, now]);
       }
@@ -370,7 +370,7 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
   async recordPayment(clientId: string, input: NewPaymentInput): Promise<void> {
     const valid = validatePayment(input);
     await this.ready().writer.write(async (tx) => {
-      await tx.run(`INSERT INTO dev_payment_records (id, workspace_id, client_id, pack_id, amount_kopeks,
+      await tx.run(`INSERT INTO payment_records (id, workspace_id, client_id, pack_id, amount_kopeks,
           paid_on, method, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [await newId(tx), this.workspaceId, clientId, valid.packId, valid.amountKopeks, valid.paidOn,
         valid.method, valid.note, new Date().toISOString()]);
@@ -387,7 +387,7 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
       // A correction never hides a negative balance or an already reserved credit.
       if (pack.ledgerBalance - pack.reserved + delta < 0) throw new Error("ACCOUNTING_INSUFFICIENT_CREDIT");
       const id = await newId(tx);
-      await tx.run(`INSERT INTO dev_credit_ledger (id, workspace_id, client_id, pack_id, appointment_id,
+      await tx.run(`INSERT INTO credit_ledger (id, workspace_id, client_id, pack_id, appointment_id,
           source_entry_id, entry_type, delta, reason, operation_key, created_at)
         VALUES (?, ?, ?, ?, NULL, NULL, 'ADJUSTMENT', ?, ?, ?, ?)`,
       [id, this.workspaceId, clientId, packId, delta, why, `adjustment:${id}`, new Date().toISOString()]);
@@ -403,7 +403,7 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
         localParts(new Date()).today, await preferredPackOf(tx, this.workspaceId, clientId));
       if (chosen === null) throw new Error("ACCOUNTING_INSUFFICIENT_CREDIT");
       const id = await newId(tx);
-      await tx.run(`INSERT INTO dev_credit_ledger (id, workspace_id, client_id, pack_id, appointment_id,
+      await tx.run(`INSERT INTO credit_ledger (id, workspace_id, client_id, pack_id, appointment_id,
           source_entry_id, entry_type, delta, reason, operation_key, created_at)
         VALUES (?, ?, ?, ?, NULL, NULL, 'ADJUSTMENT', -1, ?, ?, ?)`,
       [id, this.workspaceId, clientId, chosen.id, MANUAL_WRITE_OFF_REASON, `adjustment:${id}`, new Date().toISOString()]);
@@ -447,11 +447,11 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
 
   async appointmentCredit(appointmentId: string): Promise<AppointmentCreditState> {
     const { connection } = this.ready();
-    const reserved = await connection.first<{ x: number }>(`SELECT 1 AS x FROM dev_credit_reservations
+    const reserved = await connection.first<{ x: number }>(`SELECT 1 AS x FROM credit_reservations
       WHERE workspace_id = ? AND appointment_id = ?`, [this.workspaceId, appointmentId]);
     if (reserved !== null) return "RESERVED";
     if (await unreturnedUsed(connection, appointmentId) !== null) return "USED";
-    const any = await connection.first<{ x: number }>(`SELECT 1 AS x FROM dev_credit_ledger
+    const any = await connection.first<{ x: number }>(`SELECT 1 AS x FROM credit_ledger
       WHERE appointment_id = ? LIMIT 1`, [appointmentId]);
     return any === null ? "NONE" : "RETURNED";
   }
@@ -462,7 +462,7 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
     const settled = await this.ready().writer.write(async (tx) => {
       const due = await tx.all<{ appointmentId: string; clientId: string; packId: string }>(`SELECT
           appointment_id AS appointmentId, client_id AS clientId, pack_id AS packId
-        FROM dev_credit_reservations WHERE workspace_id = ?
+        FROM credit_reservations WHERE workspace_id = ?
           AND (ends_on < ? OR (ends_on = ? AND ends_minute <= ?))
         ORDER BY ends_on, ends_minute, appointment_id`, [this.workspaceId, today, today, minute]);
       let count = 0;
@@ -471,7 +471,7 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
           await insertUsed(tx, this.workspaceId, row.clientId, row.packId, row.appointmentId, stamp);
           count += 1;
         }
-        await tx.run("DELETE FROM dev_credit_reservations WHERE workspace_id = ? AND appointment_id = ?",
+        await tx.run("DELETE FROM credit_reservations WHERE workspace_id = ? AND appointment_id = ?",
           [this.workspaceId, row.appointmentId]);
       }
       return count;

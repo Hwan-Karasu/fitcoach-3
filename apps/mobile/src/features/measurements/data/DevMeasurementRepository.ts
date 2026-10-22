@@ -12,7 +12,7 @@ const columns = `id, client_id AS clientId, type, value_x10 AS valueX10, local_d
   local_minute AS localMinute, method, revision`;
 
 async function byId(tx: SqliteStatementPort, workspaceId: string, id: string): Promise<Measurement> {
-  const row = await tx.first<Measurement>(`SELECT ${columns} FROM dev_body_measurements
+  const row = await tx.first<Measurement>(`SELECT ${columns} FROM body_measurements
     WHERE workspace_id = ? AND id = ?`, [workspaceId, id]);
   if (row === null) throw new Error("MEASUREMENT_STALE");
   return row;
@@ -24,7 +24,7 @@ async function recordIn(tx: SqliteStatementPort, workspaceId: string, clientId: 
   const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
   if (!id) throw new Error("MEASUREMENT_ID_UNAVAILABLE");
   const stamp = now.toISOString();
-  await tx.run(`INSERT INTO dev_body_measurements (id, workspace_id, client_id, type, value_x10,
+  await tx.run(`INSERT INTO body_measurements (id, workspace_id, client_id, type, value_x10,
       local_date, local_minute, method, revision, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'MANUAL', 1, ?, ?)`,
   [id, workspaceId, clientId, valid.type, valid.valueX10, valid.localDate, valid.localMinute, stamp, stamp]);
@@ -36,9 +36,9 @@ async function correctIn(tx: SqliteStatementPort, workspaceId: string, id: strin
   if (current.revision !== expectedRevision) throw new Error("MEASUREMENT_STALE");
   // A primary mark belongs to one `type + date`; moving the fact elsewhere releases it.
   if (current.type !== valid.type || current.localDate !== valid.localDate) {
-    await tx.run("DELETE FROM dev_measurement_daily_primary WHERE workspace_id = ? AND measurement_id = ?", [workspaceId, id]);
+    await tx.run("DELETE FROM measurement_daily_primary WHERE workspace_id = ? AND measurement_id = ?", [workspaceId, id]);
   }
-  const result = await tx.run(`UPDATE dev_body_measurements SET type = ?, value_x10 = ?, local_date = ?,
+  const result = await tx.run(`UPDATE body_measurements SET type = ?, value_x10 = ?, local_date = ?,
       local_minute = ?, revision = revision + 1, updated_at = ?
     WHERE workspace_id = ? AND id = ? AND revision = ?`,
   [valid.type, valid.valueX10, valid.localDate, valid.localMinute, now.toISOString(), workspaceId, id, expectedRevision]);
@@ -50,24 +50,24 @@ async function removeIn(tx: SqliteStatementPort, workspaceId: string, id: string
   const current = await byId(tx, workspaceId, id);
   if (current.revision !== expectedRevision) throw new Error("MEASUREMENT_STALE");
   // Unlink only; another entry of that day is never promoted automatically (§49.18.4).
-  await tx.run("DELETE FROM dev_measurement_daily_primary WHERE workspace_id = ? AND measurement_id = ?", [workspaceId, id]);
-  await tx.run("DELETE FROM dev_body_measurements WHERE workspace_id = ? AND id = ?", [workspaceId, id]);
+  await tx.run("DELETE FROM measurement_daily_primary WHERE workspace_id = ? AND measurement_id = ?", [workspaceId, id]);
+  await tx.run("DELETE FROM body_measurements WHERE workspace_id = ? AND id = ?", [workspaceId, id]);
   return current;
 }
 
 /** Measurements side of PermanentlyDeleteArchivedClient (§15.7): the journal and primary marks. */
 export const devMeasurementClientDeletionParticipant = {
   owner: "measurements.body",
-  tables: ["dev_body_measurements", "dev_measurement_daily_primary"] as const,
+  tables: ["body_measurements", "measurement_daily_primary"] as const,
   async count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number> {
-    const row = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM dev_body_measurements
+    const row = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM body_measurements
       WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
     return row?.n ?? 0;
   },
   async detach(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<void> {
-    await tx.run("DELETE FROM dev_measurement_daily_primary WHERE workspace_id = ? AND client_id = ?",
+    await tx.run("DELETE FROM measurement_daily_primary WHERE workspace_id = ? AND client_id = ?",
       [workspaceId, clientId]);
-    await tx.run("DELETE FROM dev_body_measurements WHERE workspace_id = ? AND client_id = ?",
+    await tx.run("DELETE FROM body_measurements WHERE workspace_id = ? AND client_id = ?",
       [workspaceId, clientId]);
   },
 };
@@ -129,10 +129,10 @@ export class DevMeasurementRepository implements MeasurementRepositoryPort {
   async listForClient(clientId: string): Promise<ClientMeasurements> {
     const { connection } = this.ready();
     const [measurements, primaries] = await Promise.all([
-      connection.all<Measurement>(`SELECT ${columns} FROM dev_body_measurements
+      connection.all<Measurement>(`SELECT ${columns} FROM body_measurements
         WHERE workspace_id = ? AND client_id = ?`, [this.workspaceId, clientId]),
       connection.all<DailyPrimary>(`SELECT type, local_date AS localDate, measurement_id AS measurementId
-        FROM dev_measurement_daily_primary WHERE workspace_id = ? AND client_id = ?`,
+        FROM measurement_daily_primary WHERE workspace_id = ? AND client_id = ?`,
       [this.workspaceId, clientId]),
     ]);
     return { measurements: [...measurements].sort(compareJournal), primaries };
@@ -183,7 +183,7 @@ export class DevMeasurementRepository implements MeasurementRepositoryPort {
     await this.ready().writer.write(async (tx) => {
       const current = await byId(tx, this.workspaceId, id);
       clientId = current.clientId;
-      await tx.run(`INSERT INTO dev_measurement_daily_primary (workspace_id, client_id, type, local_date, measurement_id)
+      await tx.run(`INSERT INTO measurement_daily_primary (workspace_id, client_id, type, local_date, measurement_id)
         VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(workspace_id, client_id, type, local_date) DO UPDATE SET measurement_id = excluded.measurement_id`,
       [this.workspaceId, current.clientId, current.type, current.localDate, id]);

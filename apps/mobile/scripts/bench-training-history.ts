@@ -53,9 +53,9 @@ await execution.initialize();
 const client = (await clients.create({ displayName: "SyntheticBench" })).id;
 
 // Данные: программы — через репозиторий планов, занятия и подходы — прямой вставкой (генератор нагрузки, не путь продукта).
-const insertSession = db.prepare(`INSERT INTO dev_training_sessions (id, workspace_id, client_id, program_id, week_index, planned_workout_id, outcome, actual_date,
+const insertSession = db.prepare(`INSERT INTO training_sessions (id, workspace_id, client_id, program_id, week_index, planned_workout_id, outcome, actual_date,
   revision, created_at, updated_at, started_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, 'COMPLETED', ?, 1, 'x', 'x', ?, ?)`);
-const insertSet = db.prepare(`INSERT INTO dev_training_performed_sets (id, workspace_id, session_id, planned_set_id, planned_exercise_id, exercise_id, position,
+const insertSet = db.prepare(`INSERT INTO training_performed_sets (id, workspace_id, session_id, planned_set_id, planned_exercise_id, exercise_id, position,
   set_type, reps, load_grams, confirmed_at, origin, revision, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'NORMAL', 10, 50000, 'x', 'INPUT', 1, 'x')`);
 let sessions = 0;
 let sets = 0;

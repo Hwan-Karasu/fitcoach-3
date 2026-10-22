@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { devNutritionCatalog, DEV_NUTRITION_LEDGER } from "../apps/mobile/src/features/nutrition/data/DevNutritionCatalog.ts";
+import { devNutritionCatalog, DEV_NUTRITION_LEDGER } from "./d01/history/DevNutritionCatalog.ts";
+import { importHistoricalFixture } from "./support/import-historical-fixture.ts";
 import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
 import { WriterCoordinator } from "../apps/mobile/src/shared/db/WriterCoordinator.ts";
 import { devNutritionClientDeletionParticipant } from "../apps/mobile/src/features/nutrition/data/DevNutritionDiaryRepository.ts";
@@ -110,14 +111,15 @@ test("миграция v7: профиль расчёта из v6 пережив�
   await clients.initialize();
   const client = await clients.create({ displayName: "Legacy" });
   await runMigrations(new WriterCoordinator(nodeSqlitePort(db)), devNutritionCatalog.slice(0, 6), DEV_NUTRITION_LEDGER);
-  db.prepare(`INSERT INTO dev_nutrition_calc_profiles (workspace_id, client_id, sex, age, height_x10, goal, activity, workouts_per_week, workout_minutes, intensity, step_kcal, revision, updated_at)
+  db.prepare(`INSERT INTO nutrition_calc_profiles (workspace_id, client_id, sex, age, height_x10, goal, activity, workouts_per_week, workout_minutes, intensity, step_kcal, revision, updated_at)
     VALUES (?, ?, 'MALE', 37, 1810, 'GAIN', 'ACTIVE', 4, 50, 'HEAVY', 200, 3, '2026-10-20T10:00:00.000Z')`).run(WS, client.id);
-  const calc = new DevNutritionCalcRepository(shared, WS);
+  const imported = await importHistoricalFixture(db, devNutritionCatalog, DEV_NUTRITION_LEDGER);
+  const calc = new DevNutritionCalcRepository(imported.shared, WS);
   await calc.initialize();
   try {
     const stored = await calc.getProfile(client.id);
     assert.deepEqual(stored, { revision: 3, profile: { goal: "GAIN", activity: "ACTIVE", workoutsPerWeek: 4, minutes: 50, intensity: "HEAVY", stepKcal: 200 } });
-    assert.equal(db.prepare("SELECT count(*) AS n FROM pragma_table_info('dev_nutrition_calc_profiles') WHERE name IN ('sex','age','height_x10')").get()?.n, 0);
+    assert.equal(imported.db.prepare("SELECT count(*) AS n FROM pragma_table_info('nutrition_calc_profiles') WHERE name IN ('sex','age','height_x10')").get()?.n, 0);
   } finally { await calc.close(); await clients.close(); }
 });
 

@@ -155,8 +155,8 @@ test("UI-OWN-043/044 переключатель: открывший первым
 test("UI-OWN-044 схема: дата выхода копии из группы не бывает пустой строкой", async () => {
   const env = await setup();
   try {
-    assert.throws(() => env.db.prepare("UPDATE dev_training_mesocycles SET group_left_at = ''").run(), /CHECK/);
-    const memberColumns = env.db.prepare("PRAGMA table_info(dev_training_program_members)").all().map((row) => String(row.name));
+    assert.throws(() => env.db.prepare("UPDATE training_mesocycles SET group_left_at = ''").run(), /CHECK/);
+    const memberColumns = env.db.prepare("PRAGMA table_info(training_program_members)").all().map((row) => String(row.name));
     assert.ok(!memberColumns.includes("group_left_at"), "колонка v15 у участия удалена миграцией v17");
   } finally {
     await env.close();

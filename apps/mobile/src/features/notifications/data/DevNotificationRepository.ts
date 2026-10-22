@@ -21,19 +21,19 @@ function parseSettings(json: string): NotificationSettings {
 }
 
 async function settingsOf(tx: SqliteStatementPort, workspaceId: string): Promise<NotificationSettings> {
-  const row = await tx.first<{ json: string }>("SELECT settings_json AS json FROM dev_notification_settings WHERE workspace_id = ?", [workspaceId]);
+  const row = await tx.first<{ json: string }>("SELECT settings_json AS json FROM notification_settings WHERE workspace_id = ?", [workspaceId]);
   return row === null ? DEFAULT_NOTIFICATION_SETTINGS : parseSettings(row.json);
 }
 
 /** Участник окончательного удаления клиента (§15.7): события центра, привязанные к нему. */
 export const devNotificationClientDeletionParticipant = {
   owner: "notifications.center",
-  tables: ["dev_notification_events"] as const,
+  tables: ["notification_events"] as const,
   async count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number> {
-    return (await tx.first<{ n: number }>("SELECT count(*) AS n FROM dev_notification_events WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]))?.n ?? 0;
+    return (await tx.first<{ n: number }>("SELECT count(*) AS n FROM notification_events WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]))?.n ?? 0;
   },
   async detach(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<void> {
-    await tx.run("DELETE FROM dev_notification_events WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run("DELETE FROM notification_events WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
   },
 };
 
@@ -95,7 +95,7 @@ export class DevNotificationRepository implements NotificationCenterPort {
   async saveSettings(settings: NotificationSettings): Promise<NotificationSettings> {
     const valid = validateNotificationSettings(settings);
     await this.ready().writer.write(async (tx) => {
-      await tx.run(`INSERT INTO dev_notification_settings (workspace_id, settings_json, revision, updated_at) VALUES (?, ?, 1, ?)
+      await tx.run(`INSERT INTO notification_settings (workspace_id, settings_json, revision, updated_at) VALUES (?, ?, 1, ?)
         ON CONFLICT(workspace_id) DO UPDATE SET settings_json = excluded.settings_json, revision = revision + 1, updated_at = excluded.updated_at`,
       [this.workspaceId, JSON.stringify(valid), new Date().toISOString()]);
     });
@@ -106,13 +106,13 @@ export class DevNotificationRepository implements NotificationCenterPort {
   async materialize(candidates: readonly CenterCandidate[], now: Date): Promise<number> {
     const created = await this.ready().writer.write(async (tx) => {
       const cutoff = retentionCutoff((await settingsOf(tx, this.workspaceId)).retentionDays, now).toISOString();
-      const removed = await tx.run("DELETE FROM dev_notification_events WHERE workspace_id = ? AND occurs_at < ?", [this.workspaceId, cutoff]);
+      const removed = await tx.run("DELETE FROM notification_events WHERE workspace_id = ? AND occurs_at < ?", [this.workspaceId, cutoff]);
       let added = 0;
       for (const item of candidates) {
         if (item.occursAt < cutoff) continue;
         const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
         if (!id) throw new Error("NOTIFICATIONS_ID_UNAVAILABLE");
-        const result = await tx.run(`INSERT OR IGNORE INTO dev_notification_events (id, workspace_id, source_type, source_id, event_kind,
+        const result = await tx.run(`INSERT OR IGNORE INTO notification_events (id, workspace_id, source_type, source_id, event_kind,
             event_version, client_id, title, body, occurs_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, this.workspaceId, item.sourceType, item.sourceId, item.eventKind, item.eventVersion, item.clientId, item.title, item.body,
           item.occursAt, now.toISOString()]);
@@ -125,12 +125,12 @@ export class DevNotificationRepository implements NotificationCenterPort {
   }
 
   listFeed(): Promise<readonly CenterEvent[]> {
-    return this.ready().connection.all<CenterEvent>(`SELECT ${columns} FROM dev_notification_events
+    return this.ready().connection.all<CenterEvent>(`SELECT ${columns} FROM notification_events
       WHERE workspace_id = ? AND dismissed_at IS NULL ORDER BY occurs_at DESC, rowid DESC`, [this.workspaceId]);
   }
 
   async unreadCount(): Promise<number> {
-    return (await this.ready().connection.first<{ n: number }>(`SELECT count(*) AS n FROM dev_notification_events
+    return (await this.ready().connection.first<{ n: number }>(`SELECT count(*) AS n FROM notification_events
       WHERE workspace_id = ? AND dismissed_at IS NULL AND read_at IS NULL`, [this.workspaceId]))?.n ?? 0;
   }
 
@@ -142,30 +142,30 @@ export class DevNotificationRepository implements NotificationCenterPort {
   }
 
   async markRead(id: string, now: Date = new Date()): Promise<void> {
-    const exists = await this.ready().connection.first<{ x: number }>("SELECT 1 AS x FROM dev_notification_events WHERE workspace_id = ? AND id = ?", [this.workspaceId, id]);
+    const exists = await this.ready().connection.first<{ x: number }>("SELECT 1 AS x FROM notification_events WHERE workspace_id = ? AND id = ?", [this.workspaceId, id]);
     if (exists === null) throw new Error("NOTIFICATION_EVENT_NOT_FOUND");
     // Уже прочитанное остаётся прочитанным с прежней отметкой времени.
-    await this.changeStatus("UPDATE dev_notification_events SET read_at = ? WHERE workspace_id = ? AND id = ? AND read_at IS NULL",
+    await this.changeStatus("UPDATE notification_events SET read_at = ? WHERE workspace_id = ? AND id = ? AND read_at IS NULL",
       [now.toISOString(), this.workspaceId, id], false);
   }
 
   async markAllRead(now: Date = new Date()): Promise<void> {
-    await this.changeStatus(`UPDATE dev_notification_events SET read_at = ? WHERE workspace_id = ? AND dismissed_at IS NULL AND read_at IS NULL`,
+    await this.changeStatus(`UPDATE notification_events SET read_at = ? WHERE workspace_id = ? AND dismissed_at IS NULL AND read_at IS NULL`,
       [now.toISOString(), this.workspaceId], false);
   }
 
   async dismiss(id: string, now: Date = new Date()): Promise<void> {
-    await this.changeStatus("UPDATE dev_notification_events SET dismissed_at = ? WHERE workspace_id = ? AND id = ? AND dismissed_at IS NULL",
+    await this.changeStatus("UPDATE notification_events SET dismissed_at = ? WHERE workspace_id = ? AND id = ? AND dismissed_at IS NULL",
       [now.toISOString(), this.workspaceId, id], true);
   }
 
   async undoDismiss(id: string): Promise<void> {
-    await this.changeStatus("UPDATE dev_notification_events SET dismissed_at = NULL WHERE workspace_id = ? AND id = ? AND dismissed_at IS NOT NULL",
+    await this.changeStatus("UPDATE notification_events SET dismissed_at = NULL WHERE workspace_id = ? AND id = ? AND dismissed_at IS NOT NULL",
       [this.workspaceId, id], true);
   }
 
   async clearRead(now: Date = new Date()): Promise<number> {
-    return this.changeStatus(`UPDATE dev_notification_events SET dismissed_at = ? WHERE workspace_id = ? AND dismissed_at IS NULL AND read_at IS NOT NULL`,
+    return this.changeStatus(`UPDATE notification_events SET dismissed_at = ? WHERE workspace_id = ? AND dismissed_at IS NULL AND read_at IS NOT NULL`,
       [now.toISOString(), this.workspaceId], false);
   }
 

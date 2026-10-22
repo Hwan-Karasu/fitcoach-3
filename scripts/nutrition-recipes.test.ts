@@ -2,6 +2,7 @@ import { DevClientRepository } from "../apps/mobile/src/features/clients/data/De
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { importHistoricalFixture } from "./support/import-historical-fixture.ts";
 import { DevFoodCatalogRepository } from "../apps/mobile/src/features/nutrition/data/DevFoodCatalogRepository.ts";
 import { DevRecipeCatalogRepository } from "../apps/mobile/src/features/nutrition/data/DevRecipeCatalogRepository.ts";
 import type { FoodInput } from "../apps/mobile/src/features/nutrition/domain/FoodModel.ts";
@@ -149,20 +150,21 @@ test("N01 схема: ингредиент нельзя удалить из ка
   const { db, recipes, oats, milk, close } = await stores();
   try {
     await recipes.create(porridge(oats.id, milk.id), NOW);
-    assert.throws(() => db.prepare("DELETE FROM dev_food_products WHERE id = ?").run(oats.id), /FOREIGN KEY/u);
+    assert.throws(() => db.prepare("DELETE FROM food_products WHERE id = ?").run(oats.id), /FOREIGN KEY/u);
   } finally { await close(); }
 });
 
 test("N01 миграции: рецепты работают на БД, где v1 уже применена без индекса личности продукта", async () => {
   const db = new DatabaseSync(":memory:");
-  const { devNutritionCatalog, DEV_NUTRITION_LEDGER } = await import("../apps/mobile/src/features/nutrition/data/DevNutritionCatalog.ts");
+  const { devNutritionCatalog, DEV_NUTRITION_LEDGER } = await import("./d01/history/DevNutritionCatalog.ts");
   const { runMigrations } = await import("../apps/mobile/src/shared/db/MigrationRunner.ts");
   const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
   await new DevClientRepository(shared, WS, []).initialize();
   const { writer } = await shared.acquire();
   await runMigrations(writer, [devNutritionCatalog[0]!], DEV_NUTRITION_LEDGER);
-  const foods = new DevFoodCatalogRepository(shared, WS);
-  const recipes = new DevRecipeCatalogRepository(shared, WS);
+  const imported = await importHistoricalFixture(db, devNutritionCatalog, DEV_NUTRITION_LEDGER);
+  const foods = new DevFoodCatalogRepository(imported.shared, WS);
+  const recipes = new DevRecipeCatalogRepository(imported.shared, WS);
   await foods.initialize();
   await recipes.initialize();
   try {

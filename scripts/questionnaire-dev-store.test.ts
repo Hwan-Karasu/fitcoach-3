@@ -118,7 +118,7 @@ test("Q-01/Q-03 answers live apart from the client card; hide and rename keep th
     assert.equal(v2.version, 2);
     assert.deepEqual((await questionnaire.getAnswers(client.id)).answers["sys:goals.main"], ["sys:goals.main:o2"]);
     assert.equal((await questionnaire.getVersion(1)).schema.sections[0]?.fields[0]?.hidden, false);
-    assert.throws(() => db.exec("UPDATE dev_questionnaire_versions SET published_at = 'x'"), /QUESTIONNAIRE_VERSION_IMMUTABLE/u);
+    assert.throws(() => db.exec("UPDATE questionnaire_versions SET published_at = 'x'"), /QUESTIONNAIRE_VERSION_IMMUTABLE/u);
     draft = await questionnaire.getDraft();
     await assert.rejects(questionnaire.publishDraft(draft.revision), { message: "QUESTIONNAIRE_NOTHING_TO_PUBLISH" });
     const removed: QuestionnaireSchema = { ...draft.schema, sections: draft.schema.sections.map((item) => ({ ...item,

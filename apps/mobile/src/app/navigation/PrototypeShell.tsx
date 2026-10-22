@@ -30,6 +30,7 @@ import type { RosterOverviewPort } from "../../features/clients/public.ts";
 import { RootTabs } from "./RootTabs.tsx";
 import { SqliteDiagnosticsScreen } from "./SqliteDiagnosticsScreen.tsx";
 import { BottomDockLayoutProvider, ScreenHeader } from "../../shared/ui/components/public.ts";
+import { DataReadNotice } from "../../shared/ui/components/DataReadNotice.tsx";
 
 type RootStackRoutes = {
   Root: undefined;
@@ -260,6 +261,7 @@ export function PrototypeShell({ services, workspaceId }: Readonly<{
     <SafeAreaProvider>
       <KeyboardProvider>
       <SettingsBinding settings={services.settings}>
+        <DataReadNotice />
         <BottomDockLayoutProvider>
         <BottomSheetModalProvider>
         <CalendarUndoProvider repository={services.calendar}>

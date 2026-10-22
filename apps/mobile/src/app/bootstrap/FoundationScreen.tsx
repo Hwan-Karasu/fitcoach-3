@@ -9,7 +9,7 @@ export default function FoundationScreen() {
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="dark-content" />
         <View style={styles.content}>
-          <Text style={styles.label}>FITCOACH 3.0 · DEVELOPMENT</Text>
+          <Text style={styles.label}>ДНЕВНИК АТЛЕТА · РАЗРАБОТКА</Text>
           <Text style={styles.title}>Основной проект запущен</Text>
           <Text style={styles.body}>
             Это TypeScript-каркас нового offline-приложения. Здесь пока нет

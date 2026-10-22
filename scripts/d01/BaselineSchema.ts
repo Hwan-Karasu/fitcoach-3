@@ -2,17 +2,18 @@ import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { runMigrations, type MigrationStep } from "../../apps/mobile/src/shared/db/MigrationRunner.ts";
 import { WriterCoordinator } from "../../apps/mobile/src/shared/db/WriterCoordinator.ts";
-import { devAccountingCatalog } from "../../apps/mobile/src/features/accounting/data/DevAccountingCatalog.ts";
-import { devCalendarCatalog } from "../../apps/mobile/src/features/calendar/data/DevCalendarCatalog.ts";
-import { devClientCatalog } from "../../apps/mobile/src/features/clients/data/DevClientCatalog.ts";
-import { devExerciseCatalog } from "../../apps/mobile/src/features/exercises/data/DevExerciseCatalogRepository.ts";
-import { devMeasurementCatalog } from "../../apps/mobile/src/features/measurements/data/DevMeasurementCatalog.ts";
-import { devNotificationCatalog } from "../../apps/mobile/src/features/notifications/data/DevNotificationCatalog.ts";
-import { devNutritionCatalog } from "../../apps/mobile/src/features/nutrition/data/DevNutritionCatalog.ts";
-import { devQuestionnaireCatalog } from "../../apps/mobile/src/features/questionnaire/data/DevQuestionnaireCatalog.ts";
-import { devSettingsCatalog } from "../../apps/mobile/src/features/settings/data/DevSettingsCatalog.ts";
-import { devTrainingExecutionCatalog } from "../../apps/mobile/src/features/training/execution/data/DevTrainingExecutionCatalog.ts";
-import { devTrainingPlansCatalog } from "../../apps/mobile/src/features/training/plans/data/DevTrainingPlansCatalog.ts";
+import { DEV_SCHEMA_OWNERS } from "../../apps/mobile/src/app/composition/devSchema.ts";
+import { devClientCatalog } from "./history/DevClientCatalog.ts";
+import { devCalendarCatalog } from "./history/DevCalendarCatalog.ts";
+import { devAccountingCatalog } from "./history/DevAccountingCatalog.ts";
+import { devMeasurementCatalog } from "./history/DevMeasurementCatalog.ts";
+import { devNutritionCatalog } from "./history/DevNutritionCatalog.ts";
+import { devQuestionnaireCatalog } from "./history/DevQuestionnaireCatalog.ts";
+import { devTrainingPlansCatalog } from "./history/DevTrainingPlansCatalog.ts";
+import { devTrainingExecutionCatalog } from "./history/DevTrainingExecutionCatalog.ts";
+import { devExerciseCatalog } from "./history/DevExerciseCatalogRepository.ts";
+import { devSettingsCatalog } from "./history/DevSettingsCatalog.ts";
+import { devNotificationCatalog } from "./history/DevNotificationCatalog.ts";
 import { nodeSqlitePort } from "../support/node-sqlite-port.ts";
 
 /**
@@ -27,19 +28,36 @@ export interface SchemaOwner {
   readonly exportName: string;
 }
 
-export const SCHEMA_OWNERS: readonly SchemaOwner[] = [
-  { owner: "clients", ledger: "clients_schema_migrations", chain: devClientCatalog, file: "features/clients/data/ClientsBaseline.generated.ts", exportName: "clientsBaseline" },
-  { owner: "calendar", ledger: "calendar_schema_migrations", chain: devCalendarCatalog, file: "features/calendar/data/CalendarBaseline.generated.ts", exportName: "calendarBaseline" },
-  { owner: "accounting", ledger: "accounting_schema_migrations", chain: devAccountingCatalog, file: "features/accounting/data/AccountingBaseline.generated.ts", exportName: "accountingBaseline" },
-  { owner: "measurements", ledger: "measurement_schema_migrations", chain: devMeasurementCatalog, file: "features/measurements/data/MeasurementsBaseline.generated.ts", exportName: "measurementsBaseline" },
-  { owner: "nutrition", ledger: "nutrition_schema_migrations", chain: devNutritionCatalog, file: "features/nutrition/data/NutritionBaseline.generated.ts", exportName: "nutritionBaseline" },
-  { owner: "questionnaire", ledger: "questionnaire_schema_migrations", chain: devQuestionnaireCatalog, file: "features/questionnaire/data/QuestionnaireBaseline.generated.ts", exportName: "questionnaireBaseline" },
-  { owner: "training_plans", ledger: "training_plans_schema_migrations", chain: devTrainingPlansCatalog, file: "features/training/plans/data/TrainingPlansBaseline.generated.ts", exportName: "trainingPlansBaseline" },
-  { owner: "training_execution", ledger: "training_execution_schema_migrations", chain: devTrainingExecutionCatalog, file: "features/training/execution/data/TrainingExecutionBaseline.generated.ts", exportName: "trainingExecutionBaseline" },
-  { owner: "exercises", ledger: "exercises_schema_migrations", chain: devExerciseCatalog, file: "features/exercises/data/ExercisesBaseline.generated.ts", exportName: "exercisesBaseline" },
-  { owner: "settings", ledger: "settings_schema_migrations", chain: devSettingsCatalog, file: "features/settings/data/SettingsBaseline.generated.ts", exportName: "settingsBaseline" },
-  { owner: "notifications", ledger: "notifications_schema_migrations", chain: devNotificationCatalog, file: "features/notifications/data/NotificationsBaseline.generated.ts", exportName: "notificationsBaseline" },
-];
+const FILES: Readonly<Record<string, Readonly<{ file: string; exportName: string }>>> = {
+  clients: { file: "features/clients/data/ClientsBaseline.generated.ts", exportName: "clientsBaseline" },
+  calendar: { file: "features/calendar/data/CalendarBaseline.generated.ts", exportName: "calendarBaseline" },
+  accounting: { file: "features/accounting/data/AccountingBaseline.generated.ts", exportName: "accountingBaseline" },
+  measurements: { file: "features/measurements/data/MeasurementsBaseline.generated.ts", exportName: "measurementsBaseline" },
+  nutrition: { file: "features/nutrition/data/NutritionBaseline.generated.ts", exportName: "nutritionBaseline" },
+  questionnaire: { file: "features/questionnaire/data/QuestionnaireBaseline.generated.ts", exportName: "questionnaireBaseline" },
+  training_plans: { file: "features/training/plans/data/TrainingPlansBaseline.generated.ts", exportName: "trainingPlansBaseline" },
+  training_execution: { file: "features/training/execution/data/TrainingExecutionBaseline.generated.ts", exportName: "trainingExecutionBaseline" },
+  exercises: { file: "features/exercises/data/ExercisesBaseline.generated.ts", exportName: "exercisesBaseline" },
+  settings: { file: "features/settings/data/SettingsBaseline.generated.ts", exportName: "settingsBaseline" },
+  notifications: { file: "features/notifications/data/NotificationsBaseline.generated.ts", exportName: "notificationsBaseline" },
+};
+
+const HISTORY: Readonly<Record<string, readonly MigrationStep[]>> = {
+  clients: devClientCatalog,
+  calendar: devCalendarCatalog,
+  accounting: devAccountingCatalog,
+  measurements: devMeasurementCatalog,
+  nutrition: devNutritionCatalog,
+  questionnaire: devQuestionnaireCatalog,
+  training_plans: devTrainingPlansCatalog,
+  training_execution: devTrainingExecutionCatalog,
+  exercises: devExerciseCatalog,
+  settings: devSettingsCatalog,
+  notifications: devNotificationCatalog,
+};
+
+/** Runtime owner registry plus the archived chains used to verify baseline equivalence. */
+export const SCHEMA_OWNERS: readonly SchemaOwner[] = DEV_SCHEMA_OWNERS.map((owner) => ({ ...owner, chain: HISTORY[owner.owner]!, ...FILES[owner.owner]! }));
 
 export interface SchemaObject {
   readonly type: "table" | "index" | "trigger";

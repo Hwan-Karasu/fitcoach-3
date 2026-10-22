@@ -140,7 +140,7 @@ test("§50.3 действие 1: удалить план архивной про
     assert.deepEqual(entries.map((entry) => [entry.programTitle, entry.mesocycleTitle, entry.workoutTitle, entry.planDeleted, entry.workingSets]),
       [["Сила", "Блок 2", "Тренировка 1", true, 1]], "факт с неизменяемым происхождением");
     assert.equal(completedCount(entries), 1, "проведённое занятие не потеряно");
-    assert.throws(() => db.prepare("UPDATE dev_training_sessions SET origin_json = '{}'").run(), /ORIGIN_IMMUTABLE/, "снимок неизменяем");
+    assert.throws(() => db.prepare("UPDATE training_sessions SET origin_json = json_set(origin_json, '$.programTitle', 'Изменено')").run(), /ORIGIN_IMMUTABLE/, "даже корректный снимок неизменяем");
     assert.equal((await history.list(a)).length, 1, "повторное чтение — без дублей");
   } finally {
     await env.close();

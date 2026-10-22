@@ -11,7 +11,7 @@ import { formatRange, parseDuration, parseLoad, parseRange, sanitizeRange, setsS
   "../apps/mobile/src/features/training/plans/domain/SimplePlanRules.ts";
 import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
 import { DEV_TRAINING_PLANS_LEDGER, devTrainingPlansCatalog } from
-  "../apps/mobile/src/features/training/plans/data/DevTrainingPlansCatalog.ts";
+  "./d01/history/DevTrainingPlansCatalog.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
 import { DevTrainingExecutionRepository } from "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionRepository.ts";
@@ -288,23 +288,23 @@ test("T03 миграция v4 планов: отдых до 60 мин в схе�
   try {
     const a = await clients.create({ displayName: "SyntheticA" });
     await runMigrations(writer, devTrainingPlansCatalog.slice(0, 3), DEV_TRAINING_PLANS_LEDGER);
-    db.prepare(`INSERT INTO dev_training_programs (id, workspace_id, kind, title, revision, created_at, updated_at, weeks)
+    db.prepare(`INSERT INTO training_programs (id, workspace_id, kind, title, revision, created_at, updated_at, weeks)
       VALUES ('p', ?, 'SIMPLE', 'База', 1, 'x', 'x', 4)`).run(WS);
-    db.prepare("INSERT INTO dev_training_program_members (workspace_id, program_id, client_id, joined_at) VALUES (?, 'p', ?, 'x')").run(WS, a.id);
-    db.prepare("INSERT INTO dev_training_workouts (id, workspace_id, program_id, position, title) VALUES ('w', ?, 'p', 0, 'Т1')").run(WS);
-    db.prepare(`INSERT INTO dev_training_planned_exercises (id, workspace_id, workout_id, position, exercise_id, rest_sec)
+    db.prepare("INSERT INTO training_program_members (workspace_id, program_id, client_id, joined_at) VALUES (?, 'p', ?, 'x')").run(WS, a.id);
+    db.prepare("INSERT INTO training_workouts (id, workspace_id, program_id, position, title) VALUES ('w', ?, 'p', 0, 'Т1')").run(WS);
+    db.prepare(`INSERT INTO training_planned_exercises (id, workspace_id, workout_id, position, exercise_id, rest_sec)
       VALUES ('e', ?, 'w', 0, ?, 120)`).run(WS, BENCH);
-    db.prepare(`INSERT INTO dev_training_planned_sets (id, workspace_id, planned_exercise_id, position, reps)
+    db.prepare(`INSERT INTO training_planned_sets (id, workspace_id, planned_exercise_id, position, reps)
       VALUES ('s', ?, 'e', 0, 8)`).run(WS);
-    assert.throws(() => db.prepare("UPDATE dev_training_planned_exercises SET rest_sec = 3600 WHERE id = 'e'").run(), /CHECK/);
+    assert.throws(() => db.prepare("UPDATE training_planned_exercises SET rest_sec = 3600 WHERE id = 'e'").run(), /CHECK/);
     await runMigrations(writer, devTrainingPlansCatalog, DEV_TRAINING_PLANS_LEDGER);
-    assert.deepEqual({ ...db.prepare("SELECT rest_sec AS rest FROM dev_training_planned_exercises WHERE id = 'e'").get() }, { rest: 120 });
-    assert.deepEqual({ ...db.prepare("SELECT reps FROM dev_training_planned_sets WHERE id = 's'").get() }, { reps: 8 });
-    db.prepare("UPDATE dev_training_planned_exercises SET rest_sec = 3600 WHERE id = 'e'").run();
-    assert.throws(() => db.prepare("UPDATE dev_training_planned_exercises SET rest_sec = 3601 WHERE id = 'e'").run(), /CHECK/);
-    assert.throws(() => db.prepare(`INSERT INTO dev_training_planned_sets (id, workspace_id, planned_exercise_id, position)
+    assert.deepEqual({ ...db.prepare("SELECT rest_sec AS rest FROM training_planned_exercises WHERE id = 'e'").get() }, { rest: 120 });
+    assert.deepEqual({ ...db.prepare("SELECT reps FROM training_planned_sets WHERE id = 's'").get() }, { reps: 8 });
+    db.prepare("UPDATE training_planned_exercises SET rest_sec = 3600 WHERE id = 'e'").run();
+    assert.throws(() => db.prepare("UPDATE training_planned_exercises SET rest_sec = 3601 WHERE id = 'e'").run(), /CHECK/);
+    assert.throws(() => db.prepare(`INSERT INTO training_planned_sets (id, workspace_id, planned_exercise_id, position)
       VALUES ('s2', ?, 'missing', 1)`).run(WS), /FOREIGN KEY/, "подход без упражнения — по-прежнему ошибка связи");
-    assert.throws(() => db.prepare("DELETE FROM dev_training_planned_exercises WHERE id = 'e'").run(), /FOREIGN KEY/,
+    assert.throws(() => db.prepare("DELETE FROM training_planned_exercises WHERE id = 'e'").run(), /FOREIGN KEY/,
       "упражнение с подходами не удаляется молча");
   } finally {
     await shared.release();

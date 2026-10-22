@@ -52,6 +52,8 @@ import { expoNotificationAdapter } from "../../features/notifications/data/ExpoN
 import { SCHEDULE_HORIZON_DAYS, candidateFromReminder, diffSchedule, dueReminders, outcomeDueCandidates, planReminders, reminderIdentifier, withinHorizon,
   type NotificationCenterPort, type PlatformNotificationPort } from "../../features/notifications/public.ts";
 import { createNotificationSync, type NotificationSync } from "../../workflows/syncNotifications.ts";
+import { importLegacyDevDatabase } from "./legacyDevImport.ts";
+import { prepareDevSchema } from "./devSchema.ts";
 import { createClientCardWorkflow, type ClientCardWithAnswersPort } from "../../workflows/saveClientCard.ts";
 import { createCalcProfileWorkflow, type CalcProfileWithBodyPort } from "../../workflows/saveCalcProfile.ts";
 import { createWeekCopyWorkflow, type TrainingTransaction } from "../../workflows/copyTrainingWeek.ts";
@@ -75,6 +77,9 @@ export interface NutritionServices {
   /** Профиль расчёта вместе с полом и ростом карточки клиента — одной транзакцией. */
   readonly calcProfile: CalcProfileWithBodyPort;
 }
+
+/** Новая dev-база (D01): таблицы без префикса `dev_`; прежний файл `fitcoach_f04_clients_dev.db` читается только для одноразового переноса. */
+const DEV_DATABASE = "fitcoach_dev_v3.db";
 
 /** Explicit dev composition. Production boot will get separate, owner-scoped bindings. */
 export interface DevServices {
@@ -210,7 +215,7 @@ export interface DevRuntime {
 export function createDevRuntime(): DevRuntime {
   // Clients, Calendar and Accounting share one dev file: a client delete, a booking and its
   // reservation each commit as one transaction across owners.
-  const database = new SharedSqliteDatabase(() => openExpoSqliteConnection("fitcoach_f04_clients_dev.db"));
+  const database = new SharedSqliteDatabase(() => openExpoSqliteConnection(DEV_DATABASE));
   const clients = new DevClientRepository(database, DEV_WORKSPACE_ID,
     [devAccountingClientDeletionParticipant, devCalendarClientDeletionParticipant, devNotificationClientDeletionParticipant,
       devMeasurementClientDeletionParticipant, devNutritionCalcClientDeletionParticipant, devNutritionClientDeletionParticipant, devNutritionTargetsClientDeletionParticipant, devQuestionnaireClientDeletionParticipant,
@@ -249,6 +254,9 @@ export function createDevRuntime(): DevRuntime {
     boot: new BootCoordinator(createDevBootDependencies(
       () => openExpoSqliteConnection("fitcoach_f03_dev_gate.db"),
       async () => {
+        // D01: импорт должен завершиться до засева; ошибка останавливает boot и позволяет повторить перенос в пустую базу.
+        await prepareDevSchema(database);
+        await importLegacyDevDatabase(database);
         await clients.initialize();
         await calendar.initialize();
         await accounting.initialize();

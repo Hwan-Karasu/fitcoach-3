@@ -107,10 +107,10 @@ test("schema refuses a primary for another type or date and keeps foreign keys",
   try {
     const client = await clients.create({ displayName: "Delta" });
     const row = await measurements.record(client.id, weight(801, 480), NOW);
-    assert.throws(() => db.prepare(`INSERT INTO dev_measurement_daily_primary
+    assert.throws(() => db.prepare(`INSERT INTO measurement_daily_primary
       (workspace_id, client_id, type, local_date, measurement_id) VALUES (?, ?, 'WAIST', ?, ?)`)
       .run(WS, client.id, "2026-10-14", row.id), /FOREIGN KEY/u);
-    assert.throws(() => db.prepare(`INSERT INTO dev_body_measurements (id, workspace_id, client_id, type, value_x10,
+    assert.throws(() => db.prepare(`INSERT INTO body_measurements (id, workspace_id, client_id, type, value_x10,
       local_date, local_minute, method, revision, created_at, updated_at)
       VALUES ('x', ?, 'missing', 'WEIGHT', 800, '2026-10-14', NULL, 'MANUAL', 1, 'n', 'n')`).run(WS), /FOREIGN KEY/u);
   } finally { await close(); }

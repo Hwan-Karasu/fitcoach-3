@@ -12,7 +12,8 @@ import type { FoodProduct, Nutrients } from "../apps/mobile/src/features/nutriti
 import { snapshotOfFood } from "../apps/mobile/src/features/nutrition/domain/FoodSnapshot.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
-import { devNutritionCatalog, DEV_NUTRITION_LEDGER } from "../apps/mobile/src/features/nutrition/data/DevNutritionCatalog.ts";
+import { devNutritionCatalog, DEV_NUTRITION_LEDGER } from "./d01/history/DevNutritionCatalog.ts";
+import { importHistoricalFixture } from "./support/import-historical-fixture.ts";
 import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
 import { WriterCoordinator } from "../apps/mobile/src/shared/db/WriterCoordinator.ts";
 
@@ -75,10 +76,11 @@ test("миграции v10→v14: старый ноль/null и override сох�
   const client = await clients.create({ displayName: "SyntheticV10" });
   const writer = new WriterCoordinator(nodeSqlitePort(db));
   await runMigrations(writer, devNutritionCatalog.filter((migration) => migration.version <= 10), DEV_NUTRITION_LEDGER);
-  db.prepare(`INSERT INTO dev_food_diary_entries (id,workspace_id,client_id,local_date,slot,position,source_kind,source_id,name,brand,basis_unit,basis_amount_x10,
+  db.prepare(`INSERT INTO food_diary_entries (id,workspace_id,client_id,local_date,slot,position,source_kind,source_id,name,brand,basis_unit,basis_amount_x10,
     per_kcal_x10,per_protein_x10,per_fat_x10,per_carbs_x10,quantity_x10,ingredients_json,revision,created_at,updated_at,override_base_quantity_x10,override_kcal_x10)
     VALUES ('old-entry',?,?,'2026-10-20','BREAKFAST',0,'FOOD','old-food','Old',NULL,'G',1000,0,NULL,0,100,500,'[]',3,'x','x',500,10)`).run(WS, client.id);
-  const diary = new DevNutritionDiaryRepository(shared, WS);
+  const imported = await importHistoricalFixture(db, devNutritionCatalog, DEV_NUTRITION_LEDGER);
+  const diary = new DevNutritionDiaryRepository(imported.shared, WS);
   await diary.initialize();
   try {
     const [old] = await diary.listEntries(client.id, DAY, DAY);
@@ -86,11 +88,11 @@ test("миграции v10→v14: старый ноль/null и override сох�
     assert.equal(old?.snapshot.eaten.proteinX10, null);
     const meal = await diary.createSavedMeal(client.id, { name: "Old copy", snapshots: [old!.snapshot] });
     await diary.rememberSearchQuery(client.id, "Old");
-    await runMigrations(writer, devNutritionCatalog, DEV_NUTRITION_LEDGER);
+    await diary.initialize();
     assert.deepEqual(await diary.listEntries(client.id, DAY, DAY), [old]);
     assert.deepEqual(await diary.listSavedMeals(client.id), [meal]);
     assert.deepEqual(await diary.listSearchQueries(client.id), ["Old"]);
-    assert.equal(db.prepare("PRAGMA integrity_check").get()?.integrity_check, "ok");
+    assert.equal(imported.db.prepare("PRAGMA integrity_check").get()?.integrity_check, "ok");
   } finally { await diary.close(); await clients.close(); }
 });
 
@@ -122,7 +124,7 @@ test("N02: редактор атомарен: масса + override + перен
     let events = 0;
     diary.subscribeCommittedChanges(() => { events += 1; });
     const input = { quantityX10: 1500, slot: "DINNER" as const, override: { kcalX10: 1230, proteinX10: 0, fatX10: null, carbsX10: null } };
-    db.exec("CREATE TRIGGER synthetic_fail BEFORE UPDATE ON dev_food_diary_entries WHEN NEW.slot = 'DINNER' BEGIN SELECT RAISE(ABORT, 'synthetic-failure'); END");
+    db.exec("CREATE TRIGGER synthetic_fail BEFORE UPDATE ON food_diary_entries WHEN NEW.slot = 'DINNER' BEGIN SELECT RAISE(ABORT, 'synthetic-failure'); END");
     await assert.rejects(diary.editEntry(client.id, entry.id, entry.revision, input), /synthetic-failure/u);
     assert.deepEqual((await diary.listEntries(client.id, DAY, DAY))[0], entry);
     assert.equal(events, 0);
@@ -514,7 +516,7 @@ test("NUT-003: правка записи с копиями в другие пр�
     let events = 0;
     diary.subscribeCommittedChanges(() => { events += 1; });
     const input = { quantityX10: 1000, slot: "BREAKFAST" as const, override: { kcalX10: null, proteinX10: 500, fatX10: null, carbsX10: null }, copyToSlots: ["LUNCH", "DINNER"] as const };
-    db.exec("CREATE TRIGGER synthetic_fail BEFORE INSERT ON dev_food_diary_entries WHEN NEW.slot = 'DINNER' BEGIN SELECT RAISE(ABORT, 'synthetic-failure'); END");
+    db.exec("CREATE TRIGGER synthetic_fail BEFORE INSERT ON food_diary_entries WHEN NEW.slot = 'DINNER' BEGIN SELECT RAISE(ABORT, 'synthetic-failure'); END");
     await assert.rejects(diary.editEntry(client.id, entry.id, entry.revision, input), /synthetic-failure/u);
     assert.deepEqual(await diary.listEntries(client.id, DAY, DAY), [entry], "правки и копий нет");
     assert.equal(events, 0);
@@ -583,7 +585,7 @@ test("аудит NUT-008: квитанции пакетной записи ог�
     const input = (index: number) => [{ localDate: DAY, slot: "SNACK" as const, snapshot: snapshotOfFood(OATS, 100 + index) }];
     await diary.addEntries(other.id, input(0), NOW, "other-1");
     for (let index = 0; index < 60; index += 1) await diary.addEntries(client.id, input(index), NOW, `cmd-${index}`);
-    const count = (id: string) => (db.prepare("SELECT count(*) AS n FROM dev_nutrition_batch_commands WHERE client_id = ?").get(id) as { n: number }).n;
+    const count = (id: string) => (db.prepare("SELECT count(*) AS n FROM nutrition_batch_commands WHERE client_id = ?").get(id) as { n: number }).n;
     assert.equal(count(client.id), 50);
     assert.equal(count(other.id), 1, "квитанции другого клиента не затронуты");
     const before = (await diary.listEntries(client.id, DAY, DAY)).length;
@@ -621,19 +623,21 @@ test("аудит NUT-010: вода не считается изменением 
   } finally { await close(); }
 });
 
-test("аудит NUT-018: повреждённый состав в одной записи не ломает чтение дня — остальные записи читаются, суммы дня те же", async () => {
+test("D01/NUT-018: запись повреждённого состава запрещена; внешне повреждённые строки пропускаются, остальные читаются", async () => {
   const { db, clients, diary, close } = await stores();
   try {
     const client = await clients.create({ displayName: "SyntheticCorrupt" });
     const first = await diary.addEntry(client.id, { localDate: DAY, slot: "BREAKFAST", snapshot: snapshotOfFood(OATS, 500) }, NOW);
     const second = await diary.addEntry(client.id, { localDate: DAY, slot: "LUNCH", snapshot: snapshotOfFood(MILK, 2000) }, NOW);
     const third = await diary.addEntry(client.id, { localDate: DAY, slot: "DINNER", snapshot: snapshotOfFood(OATS, 300) }, NOW);
-    db.prepare("UPDATE dev_food_diary_entries SET ingredients_json = ? WHERE id = ?").run("{", second.id);
-    db.prepare("UPDATE dev_food_diary_entries SET ingredients_json = ? WHERE id = ?").run("{\"not\":\"a list\"}", third.id);
+    assert.throws(() => db.prepare("UPDATE food_diary_entries SET ingredients_json = ? WHERE id = ?").run("{", second.id), /NUTRITION_JSON_INVALID/);
+    db.exec("DROP TRIGGER diary_ingredients_json_update");
+    db.prepare("UPDATE food_diary_entries SET ingredients_json = ? WHERE id = ?").run("{", second.id);
+    db.prepare("UPDATE food_diary_entries SET ingredients_json = ? WHERE id = ?").run("{\"not\":\"a list\"}", third.id);
     const rows = await diary.listEntries(client.id, DAY, DAY);
-    assert.deepEqual(rows.map((row) => row.id), [first.id, second.id, third.id]);
-    assert.deepEqual(rows.map((row) => row.snapshot.ingredients), [[], [], []], "состав — справка, не слагаемое дня: нечитаемый состав пуст");
-    assert.deepEqual(summarizeDay(DAY, rows).totals, summarizeDay(DAY, [first, second, third]).totals, "значения «съедено» не зависят от состава");
+    assert.deepEqual(rows.map((row) => row.id), [first.id]);
+    assert.deepEqual(summarizeDay(DAY, rows).totals, summarizeDay(DAY, [first]).totals);
+    assert.equal((await diary.listEatenEntries(client.id, DAY, DAY)).length, 1, "статистика не включает пропущенные строки");
   } finally { await close(); }
 });
 

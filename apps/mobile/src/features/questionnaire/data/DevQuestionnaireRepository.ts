@@ -24,14 +24,14 @@ function parseSchema(json: string): QuestionnaireSchema {
 /** Questionnaire side of PermanentlyDeleteArchivedClient (§15.7): only that client's answers. */
 export const devQuestionnaireClientDeletionParticipant = {
   owner: "questionnaire.answers",
-  tables: ["dev_questionnaire_answers"] as const,
+  tables: ["questionnaire_answers"] as const,
   async count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number> {
-    const row = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM dev_questionnaire_answers
+    const row = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM questionnaire_answers
       WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
     return row?.n ?? 0;
   },
   async detach(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<void> {
-    await tx.run("DELETE FROM dev_questionnaire_answers WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run("DELETE FROM questionnaire_answers WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
   },
 };
 
@@ -66,7 +66,7 @@ export class DevQuestionnaireRepository implements QuestionnaireRepositoryPort {
     try {
       await runMigrations(writer, devQuestionnaireCatalog, DEV_QUESTIONNAIRE_LEDGER);
       await writer.write(async (tx) => {
-        const existing = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM dev_questionnaire_versions
+        const existing = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM questionnaire_versions
           WHERE workspace_id = ?`, [this.workspaceId]);
         if ((existing?.n ?? 0) > 0) {
           await this.topUpSystemOptions(tx);
@@ -74,9 +74,9 @@ export class DevQuestionnaireRepository implements QuestionnaireRepositoryPort {
         }
         const json = JSON.stringify(defaultQuestionnaireSchema());
         const now = new Date().toISOString();
-        await tx.run(`INSERT INTO dev_questionnaire_versions (workspace_id, version, format_version, schema_json,
+        await tx.run(`INSERT INTO questionnaire_versions (workspace_id, version, format_version, schema_json,
           base_version, published_at) VALUES (?, 1, 1, ?, NULL, ?)`, [this.workspaceId, json, now]);
-        await tx.run(`INSERT INTO dev_questionnaire_drafts (workspace_id, base_version, revision, schema_json, updated_at)
+        await tx.run(`INSERT INTO questionnaire_drafts (workspace_id, base_version, revision, schema_json, updated_at)
           VALUES (?, 1, 1, ?, ?)`, [this.workspaceId, json, now]);
       });
       this.connection = connection;
@@ -96,7 +96,7 @@ export class DevQuestionnaireRepository implements QuestionnaireRepositoryPort {
     if (draft.baseVersion !== current.version || !sameSchema(draft.schema, current.schema)) return;
     const version = current.version + 1;
     const now = new Date().toISOString();
-    await tx.run(`INSERT INTO dev_questionnaire_versions (workspace_id, version, format_version, schema_json,
+    await tx.run(`INSERT INTO questionnaire_versions (workspace_id, version, format_version, schema_json,
       base_version, published_at) VALUES (?, ?, 1, ?, ?, ?)`, [this.workspaceId, version, JSON.stringify(next), current.version, now]);
     await this.replaceDraft(tx, draft.revision, version, next);
   }
@@ -119,14 +119,14 @@ export class DevQuestionnaireRepository implements QuestionnaireRepositoryPort {
 
   private async current(tx: SqliteStatementPort): Promise<PublishedQuestionnaire> {
     const row = await tx.first<VersionRow>(`SELECT version, published_at AS publishedAt, schema_json AS schemaJson
-      FROM dev_questionnaire_versions WHERE workspace_id = ? ORDER BY version DESC LIMIT 1`, [this.workspaceId]);
+      FROM questionnaire_versions WHERE workspace_id = ? ORDER BY version DESC LIMIT 1`, [this.workspaceId]);
     if (row === null) throw new Error("QUESTIONNAIRE_STORE_NOT_READY");
     return { version: row.version, publishedAt: row.publishedAt, schema: parseSchema(row.schemaJson) };
   }
 
   private async draft(tx: SqliteStatementPort): Promise<QuestionnaireDraft> {
     const row = await tx.first<DraftRow>(`SELECT base_version AS baseVersion, revision, schema_json AS schemaJson
-      FROM dev_questionnaire_drafts WHERE workspace_id = ?`, [this.workspaceId]);
+      FROM questionnaire_drafts WHERE workspace_id = ?`, [this.workspaceId]);
     if (row === null) throw new Error("QUESTIONNAIRE_STORE_NOT_READY");
     return { baseVersion: row.baseVersion, revision: row.revision, schema: parseSchema(row.schemaJson) };
   }
@@ -134,13 +134,13 @@ export class DevQuestionnaireRepository implements QuestionnaireRepositoryPort {
   getPublished(): Promise<PublishedQuestionnaire> { return this.current(this.ready().connection); }
 
   async listVersions(): Promise<readonly Readonly<{ version: number; publishedAt: string }>[]> {
-    return this.ready().connection.all(`SELECT version, published_at AS publishedAt FROM dev_questionnaire_versions
+    return this.ready().connection.all(`SELECT version, published_at AS publishedAt FROM questionnaire_versions
       WHERE workspace_id = ? ORDER BY version DESC`, [this.workspaceId]);
   }
 
   async getVersion(version: number): Promise<PublishedQuestionnaire> {
     const row = await this.ready().connection.first<VersionRow>(`SELECT version, published_at AS publishedAt,
-      schema_json AS schemaJson FROM dev_questionnaire_versions WHERE workspace_id = ? AND version = ?`,
+      schema_json AS schemaJson FROM questionnaire_versions WHERE workspace_id = ? AND version = ?`,
     [this.workspaceId, version]);
     if (row === null) throw new Error("QUESTIONNAIRE_VERSION_NOT_FOUND");
     return { version: row.version, publishedAt: row.publishedAt, schema: parseSchema(row.schemaJson) };
@@ -150,7 +150,7 @@ export class DevQuestionnaireRepository implements QuestionnaireRepositoryPort {
 
   private async replaceDraft(tx: SqliteStatementPort, expectedRevision: number | null, baseVersion: number,
     schema: QuestionnaireSchema): Promise<QuestionnaireDraft> {
-    const result = await tx.run(`UPDATE dev_questionnaire_drafts SET base_version = ?, revision = revision + 1,
+    const result = await tx.run(`UPDATE questionnaire_drafts SET base_version = ?, revision = revision + 1,
         schema_json = ?, updated_at = ? WHERE workspace_id = ? AND (? IS NULL OR revision = ?)`,
     [baseVersion, JSON.stringify(schema), new Date().toISOString(), this.workspaceId, expectedRevision, expectedRevision]);
     if (result.changes !== 1) throw new Error("QUESTIONNAIRE_DRAFT_STALE");
@@ -178,7 +178,7 @@ export class DevQuestionnaireRepository implements QuestionnaireRepositoryPort {
   private async assertAnswersKept(tx: SqliteStatementPort, published: QuestionnaireSchema,
     next: QuestionnaireSchema): Promise<void> {
     const rows = await tx.all<{ fieldId: string; valueJson: string }>(`SELECT field_id AS fieldId, value_json AS valueJson
-      FROM dev_questionnaire_answers WHERE workspace_id = ?`, [this.workspaceId]);
+      FROM questionnaire_answers WHERE workspace_id = ?`, [this.workspaceId]);
     const before = new Map(allFields(published).map((item) => [item.field.id, item.field]));
     const after = new Map(allFields(next).map((item) => [item.field.id, item.field]));
     for (const row of rows) {
@@ -212,7 +212,7 @@ export class DevQuestionnaireRepository implements QuestionnaireRepositoryPort {
       const version = current.version + 1;
       const json = JSON.stringify(draft.schema);
       const now = new Date().toISOString();
-      await tx.run(`INSERT INTO dev_questionnaire_versions (workspace_id, version, format_version, schema_json,
+      await tx.run(`INSERT INTO questionnaire_versions (workspace_id, version, format_version, schema_json,
         base_version, published_at) VALUES (?, ?, 1, ?, ?, ?)`, [this.workspaceId, version, json, current.version, now]);
       await this.replaceDraft(tx, expectedRevision, version, draft.schema);
       return { version, publishedAt: now, schema: draft.schema };
@@ -236,7 +236,7 @@ export class DevQuestionnaireRepository implements QuestionnaireRepositoryPort {
       let schema = defaultQuestionnaireSchema();
       if (version !== "DEFAULT") {
         const row = await tx.first<VersionRow>(`SELECT version, published_at AS publishedAt, schema_json AS schemaJson
-          FROM dev_questionnaire_versions WHERE workspace_id = ? AND version = ?`, [this.workspaceId, version]);
+          FROM questionnaire_versions WHERE workspace_id = ? AND version = ?`, [this.workspaceId, version]);
         if (row === null) throw new Error("QUESTIONNAIRE_VERSION_NOT_FOUND");
         schema = parseSchema(row.schemaJson);
       }
@@ -249,7 +249,7 @@ export class DevQuestionnaireRepository implements QuestionnaireRepositoryPort {
 
   private async answers(tx: SqliteStatementPort, clientId: string): Promise<ClientAnswers> {
     const rows = await tx.all<{ fieldId: string; valueJson: string; schemaVersion: number }>(`SELECT field_id AS fieldId,
-      value_json AS valueJson, schema_version AS schemaVersion FROM dev_questionnaire_answers
+      value_json AS valueJson, schema_version AS schemaVersion FROM questionnaire_answers
       WHERE workspace_id = ? AND client_id = ?`, [this.workspaceId, clientId]);
     const answers: Record<string, AnswerValue> = {};
     for (const row of rows) answers[row.fieldId] = JSON.parse(row.valueJson) as AnswerValue;
@@ -283,10 +283,10 @@ export class DevQuestionnaireRepository implements QuestionnaireRepositoryPort {
       if (target === undefined) throw new Error("QUESTIONNAIRE_ANSWER_INVALID");
       const value = normalizeAnswer(target, raw, before[fieldId], today);
       if (value === null) {
-        await tx.run("DELETE FROM dev_questionnaire_answers WHERE workspace_id = ? AND client_id = ? AND field_id = ?",
+        await tx.run("DELETE FROM questionnaire_answers WHERE workspace_id = ? AND client_id = ? AND field_id = ?",
           [this.workspaceId, clientId, fieldId]);
       } else {
-        await tx.run(`INSERT INTO dev_questionnaire_answers (workspace_id, client_id, field_id, value_json,
+        await tx.run(`INSERT INTO questionnaire_answers (workspace_id, client_id, field_id, value_json,
             schema_version, updated_at) VALUES (?, ?, ?, ?, ?, ?)
           ON CONFLICT(workspace_id, client_id, field_id) DO UPDATE SET value_json = excluded.value_json,
             schema_version = excluded.schema_version, updated_at = excluded.updated_at`,

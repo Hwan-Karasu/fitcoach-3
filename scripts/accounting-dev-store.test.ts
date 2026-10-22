@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { derivePackPricing } from "../apps/mobile/src/features/accounting/domain/PackPricing.ts";
-import { devAccountingCatalog, DEV_ACCOUNTING_LEDGER } from "../apps/mobile/src/features/accounting/data/DevAccountingCatalog.ts";
+import { devAccountingCatalog, DEV_ACCOUNTING_LEDGER } from "./d01/history/DevAccountingCatalog.ts";
+import { importHistoricalFixture } from "./support/import-historical-fixture.ts";
 import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
 import { WriterCoordinator } from "../apps/mobile/src/shared/db/WriterCoordinator.ts";
 import { accountingHistoryDate, shiftAccountingMonth } from "../apps/mobile/src/features/accounting/presentation/accountingHistoryPeriod.ts";
@@ -103,8 +104,8 @@ test("ACC-01/02/04 reservation is not USED; two reconciles give exactly one USED
     assert.equal(await accounting.appointmentCredit(booked.id), "USED");
     assert.equal((await calendar.getAppointment(booked.id))?.lifecycle, "SCHEDULED");
     assert.equal((await accounting.getClientSnapshot(ext.id)).ledger.length, 0);
-    assert.throws(() => db.exec("UPDATE dev_credit_ledger SET delta = -2"), /ACCOUNTING_LEDGER_APPEND_ONLY/u);
-    assert.throws(() => db.exec("DELETE FROM dev_credit_ledger"), /ACCOUNTING_LEDGER_APPEND_ONLY/u);
+    assert.throws(() => db.exec("UPDATE credit_ledger SET delta = -2"), /ACCOUNTING_LEDGER_APPEND_ONLY/u);
+    assert.throws(() => db.exec("DELETE FROM credit_ledger"), /ACCOUNTING_LEDGER_APPEND_ONLY/u);
   } finally { await close(); }
 });
 
@@ -364,7 +365,7 @@ test("ACC-05 Исправить клиента: RETURNED for A and USED for B in
     row = await calendar.correctClient(row.id, row.revision, a.id, at(12));
     assert.equal(await usedCount(accounting, a.id), 2);
     assert.equal((await accounting.getClientSnapshot(a.id)).available, 0);
-    const effective = db.prepare("SELECT sum(delta) AS n FROM dev_credit_ledger WHERE appointment_id = ?")
+    const effective = db.prepare("SELECT sum(delta) AS n FROM credit_ledger WHERE appointment_id = ?")
       .get(row.id) as { n: number };
     assert.equal(effective.n, -1);
   } finally { await close(); }
@@ -407,7 +408,7 @@ test("L02 «Вернуть» after Отменена restores the outcome with on
     const fit = await clients.create({ displayName: "Undo" });
     await accounting.setClientMode(fit.id, "FITCOACH");
     await accounting.createPack(fit.id, pack(6));
-    const effective = (id: string) => (db.prepare("SELECT COALESCE(sum(delta), 0) AS n FROM dev_credit_ledger WHERE appointment_id = ?")
+    const effective = (id: string) => (db.prepare("SELECT COALESCE(sum(delta), 0) AS n FROM credit_ledger WHERE appointment_id = ?")
       .get(id) as { n: number }).n;
     const done = await calendar.createAppointment(slot(fit.id, personal.id));
     await accounting.reconcileDue(at(11));
@@ -608,7 +609,7 @@ test("основной пакет: срок действия, изоляция �
     await accounting.setPreferredPack(a.id, own.id);
     await assert.rejects(accounting.setPreferredPack(a.id, foreign.id), { message: "ACCOUNTING_PREFERRED_PACK_INVALID" });
     await assert.rejects(accounting.setPreferredPack(a.id, expired.id), { message: "ACCOUNTING_PREFERRED_PACK_INVALID" });
-    assert.throws(() => db.prepare("UPDATE dev_client_preferred_packs SET pack_id = ? WHERE workspace_id = ? AND client_id = ?").run(foreign.id, WS, a.id), /FOREIGN KEY/u);
+    assert.throws(() => db.prepare("UPDATE client_preferred_packs SET pack_id = ? WHERE workspace_id = ? AND client_id = ?").run(foreign.id, WS, a.id), /FOREIGN KEY/u);
     assert.equal((await accounting.getClientSnapshot(a.id)).preferredPackId, own.id);
     assert.equal((await accounting.getClientSnapshot(b.id)).preferredPackId, null);
     const archived = await clients.setArchived(a.id, a.revision, true);
@@ -646,7 +647,7 @@ test("пакет с оплатой: неверная дата и ошибка з
     const seen: unknown[] = [];
     accounting.subscribeCommittedChanges((change) => seen.push(change));
     await assert.rejects(accounting.createPack(client.id, pack(10, { payment: { paidOn: "2026-02-30", method: "cash" } })), { message: "ACCOUNTING_PAYMENT_INVALID" });
-    db.exec("CREATE TRIGGER synthetic_payment_failure BEFORE INSERT ON dev_payment_records BEGIN SELECT RAISE(ABORT, 'synthetic payment failure'); END");
+    db.exec("CREATE TRIGGER synthetic_payment_failure BEFORE INSERT ON payment_records BEGIN SELECT RAISE(ABORT, 'synthetic payment failure'); END");
     await assert.rejects(accounting.createPack(client.id, pack(10, { payment: { paidOn: "2026-10-20", method: "transfer" } })), /synthetic payment failure/u);
     const snapshot = await accounting.getClientSnapshot(client.id);
     assert.deepEqual([snapshot.packs.length, snapshot.ledger.length, snapshot.payments.length], [0, 0, 0]);
@@ -663,11 +664,12 @@ test("миграция основного пакета v1→v2 сохраняе�
   await calendar.initialize();
   const client = await clients.create({ displayName: "AccountingV1" });
   await runMigrations(new WriterCoordinator(nodeSqlitePort(db)), devAccountingCatalog.filter((m) => m.version === 1), DEV_ACCOUNTING_LEDGER);
-  db.prepare("INSERT INTO dev_client_accounting (workspace_id, client_id, mode) VALUES (?, ?, 'FITCOACH')").run(WS, client.id);
-  db.prepare("INSERT INTO dev_session_packs (id, workspace_id, client_id, title, credit_scope, granted_count, total_kopeks, created_at) VALUES ('old-pack', ?, ?, 'Old', 'GENERAL', 10, 1000000, '2026-10-01T12:00:00Z')").run(WS, client.id);
-  db.prepare("INSERT INTO dev_credit_ledger (id, workspace_id, client_id, pack_id, entry_type, delta, operation_key, created_at) VALUES ('old-issued', ?, ?, 'old-pack', 'ISSUED', 10, 'issued:old-pack', '2026-10-01T12:00:00Z')").run(WS, client.id);
-  db.prepare("INSERT INTO dev_payment_records (id, workspace_id, client_id, pack_id, amount_kopeks, paid_on, method, created_at) VALUES ('old-payment', ?, ?, 'old-pack', 1000000, '2026-10-01', 'cash', '2026-10-01T12:00:00Z')").run(WS, client.id);
-  const accounting = new DevAccountingRepository(shared, WS);
+  db.prepare("INSERT INTO client_accounting (workspace_id, client_id, mode) VALUES (?, ?, 'FITCOACH')").run(WS, client.id);
+  db.prepare("INSERT INTO session_packs (id, workspace_id, client_id, title, credit_scope, granted_count, total_kopeks, created_at) VALUES ('old-pack', ?, ?, 'Old', 'GENERAL', 10, 1000000, '2026-10-01T12:00:00Z')").run(WS, client.id);
+  db.prepare("INSERT INTO credit_ledger (id, workspace_id, client_id, pack_id, entry_type, delta, operation_key, created_at) VALUES ('old-issued', ?, ?, 'old-pack', 'ISSUED', 10, 'issued:old-pack', '2026-10-01T12:00:00Z')").run(WS, client.id);
+  db.prepare("INSERT INTO payment_records (id, workspace_id, client_id, pack_id, amount_kopeks, paid_on, method, created_at) VALUES ('old-payment', ?, ?, 'old-pack', 1000000, '2026-10-01', 'cash', '2026-10-01T12:00:00Z')").run(WS, client.id);
+  const imported = await importHistoricalFixture(db, devAccountingCatalog, DEV_ACCOUNTING_LEDGER);
+  const accounting = new DevAccountingRepository(imported.shared, WS);
   await accounting.initialize();
   try {
     const snapshot = await accounting.getClientSnapshot(client.id);
@@ -807,11 +809,11 @@ test("A02 схема: второй возврат того же списания
     const issued = snapshot.ledger.find((row) => row.entryType === "ISSUED")!;
     const packId = issued.packId;
     const insert = (id: string, source: string, packOf: string, owner: string) => db.prepare(
-      "INSERT INTO dev_credit_ledger (id, workspace_id, client_id, pack_id, source_entry_id, entry_type, delta, operation_key, created_at) VALUES (?, ?, ?, ?, ?, 'RETURNED', 1, ?, 'x')")
+      "INSERT INTO credit_ledger (id, workspace_id, client_id, pack_id, source_entry_id, entry_type, delta, operation_key, created_at) VALUES (?, ?, ?, ?, ?, 'RETURNED', 1, ?, 'x')")
       .run(id, WS, owner, packOf, source, id);
     assert.throws(() => insert("bad-issued", issued.id, packId, client.id), /ACCOUNTING_RETURN_SOURCE_INVALID/u);
     const otherPack = (await accounting.getClientSnapshot(other.id)).packs[0]!.pack.id;
-    assert.throws(() => insert("bad-owner", debit, otherPack, other.id), /ACCOUNTING_RETURN_SOURCE_INVALID/u);
+    assert.throws(() => insert("bad-owner", debit, otherPack, other.id), /ACCOUNTING_RETURN_SOURCE_INVALID|OWNER_ACCOUNTING_REFERENCE/u);
     insert("good", debit, packId, client.id);
     assert.throws(() => insert("twice", debit, packId, client.id), /UNIQUE/u);
   } finally { await close(); }

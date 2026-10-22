@@ -10,6 +10,9 @@ import { DEFAULT_WEEKS, REST_MAX_SEC, REST_MIN_SEC, type SimpleProgramDraft } fr
 import { validateDraft } from "../domain/SimplePlanRules.ts";
 import { withRestDefaults } from "../domain/SimplePlanEdits.ts";
 import { DEV_TRAINING_PLANS_LEDGER, devTrainingPlansCatalog } from "./DevTrainingPlansCatalog.ts";
+import { readStoredJson } from "../../../../shared/db/StoredJson.ts";
+import { reportReadIssue } from "../../../../shared/diagnostics/ReadIssues.ts";
+import { storedBuilderDraft, storedMesocycleBuilder, storedPeriodizedDraft, storedTemplate, storedWorkoutDraft } from "../domain/StoredPlanShape.ts";
 import { deleteStructure, readStructure, readWorkouts, writeStructure, writeWorkouts } from "./SimplePlanStore.ts";
 import type { MesocycleSavePlansParticipant, MesocycleSaveRequest } from "../domain/MesocycleSave.ts";
 import type { SimplePlanSavePlansParticipant } from "../domain/SimplePlanSave.ts";
@@ -41,9 +44,12 @@ type TemplateRow = Readonly<{ id: string; kind: TemplateKind; title: string; rev
 
 const TEMPLATE_COLUMNS = `id, kind, title, revision, created_at AS createdAt, updated_at AS updatedAt, payload_json AS payloadJson`;
 
-function templateOf(row: TemplateRow): ProgramTemplate {
+function templateOf(row: TemplateRow): ProgramTemplate | null {
   const { payloadJson, ...rest } = row;
-  return { ...rest, payload: JSON.parse(payloadJson) as TemplatePayload };
+  const payload = readStoredJson(payloadJson, storedTemplate, `training_templates:${row.id}`);
+  if (payload === null) return null;
+  if (payload.kind !== row.kind) { reportReadIssue(`training_templates:${row.id}`); return null; }
+  return { ...rest, payload };
 }
 
 /** Черновик Простого конструктора с базой для перебазирования (без базы хранится как есть — прежний вид). */
@@ -77,9 +83,9 @@ type ProgramRow = Readonly<{ id: string; kind: TrainingProgram["kind"]; title: s
 
 async function programById(tx: SqliteStatementPort, workspaceId: string, id: string): Promise<TrainingProgram> {
   const row = await tx.first<ProgramRow>(`SELECT id, kind, title, revision, created_at AS createdAt
-    FROM dev_training_programs WHERE workspace_id = ? AND id = ?`, [workspaceId, id]);
+    FROM training_programs WHERE workspace_id = ? AND id = ?`, [workspaceId, id]);
   if (row === null) throw new Error("TARGET_NOT_FOUND");
-  const members = await tx.all<{ clientId: string }>(`SELECT client_id AS clientId FROM dev_training_program_members
+  const members = await tx.all<{ clientId: string }>(`SELECT client_id AS clientId FROM training_program_members
     WHERE workspace_id = ? AND program_id = ? ORDER BY joined_at, rowid`, [workspaceId, id]);
   return { ...row, memberClientIds: members.map((member) => member.clientId) };
 }
@@ -87,7 +93,7 @@ async function programById(tx: SqliteStatementPort, workspaceId: string, id: str
 async function membership(tx: SqliteStatementPort, workspaceId: string, clientId: string, programId: string):
   Promise<Readonly<{ archivedAt: string | null }>> {
   const row = await tx.first<{ archivedAt: string | null }>(`SELECT archived_at AS archivedAt
-    FROM dev_training_program_members WHERE workspace_id = ? AND program_id = ? AND client_id = ?`,
+    FROM training_program_members WHERE workspace_id = ? AND program_id = ? AND client_id = ?`,
   [workspaceId, programId, clientId]);
   if (row === null) throw new Error("TARGET_NOT_FOUND");
   return row;
@@ -99,34 +105,34 @@ async function membership(tx: SqliteStatementPort, workspaceId: string, clientId
  */
 export const devTrainingPlansClientDeletionParticipant = {
   owner: "training.plans",
-  tables: ["dev_training_client_selection", "dev_training_program_members", "dev_training_programs",
-    "dev_training_workouts", "dev_training_planned_exercises", "dev_training_planned_sets", "dev_training_builder_drafts",
-    "dev_training_mesocycles", "dev_training_weeks", "dev_training_mesocycle_selection", "dev_training_periodized_drafts",
-    "dev_training_structure_versions", "dev_training_simple_overrides", "dev_training_simple_versions"] as const,
+  tables: ["training_client_selection", "training_program_members", "training_programs",
+    "training_workouts", "training_planned_exercises", "training_planned_sets", "training_builder_drafts",
+    "training_mesocycles", "training_weeks", "training_mesocycle_selection", "training_periodized_drafts",
+    "training_structure_versions", "training_simple_overrides", "training_simple_versions"] as const,
   async count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number> {
-    const row = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM dev_training_program_members
+    const row = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM training_program_members
       WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
     return row?.n ?? 0;
   },
   async detach(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<void> {
-    const owned = await tx.all<{ id: string }>(`SELECT program_id AS id FROM dev_training_program_members m
-      WHERE workspace_id = ? AND client_id = ? AND NOT EXISTS (SELECT 1 FROM dev_training_program_members o
+    const owned = await tx.all<{ id: string }>(`SELECT program_id AS id FROM training_program_members m
+      WHERE workspace_id = ? AND client_id = ? AND NOT EXISTS (SELECT 1 FROM training_program_members o
         WHERE o.workspace_id = m.workspace_id AND o.program_id = m.program_id AND o.client_id <> m.client_id)`,
     [workspaceId, clientId]);
     // Свои мезоциклы клиента уходят и из общих программ: у остальных участников — их собственные копии.
-    await tx.run("DELETE FROM dev_training_periodized_drafts WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
-    await tx.run("DELETE FROM dev_training_structure_versions WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
-    await tx.run("DELETE FROM dev_training_simple_overrides WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
-    await tx.run("DELETE FROM dev_training_simple_versions WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
-    const programs = await tx.all<{ id: string }>(`SELECT program_id AS id FROM dev_training_program_members
+    await tx.run("DELETE FROM training_periodized_drafts WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run("DELETE FROM training_structure_versions WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run("DELETE FROM training_simple_overrides WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run("DELETE FROM training_simple_versions WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    const programs = await tx.all<{ id: string }>(`SELECT program_id AS id FROM training_program_members
       WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
     for (const program of programs) await deleteMemberMesocycles(tx, workspaceId, program.id, clientId);
-    await tx.run("DELETE FROM dev_training_client_selection WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
-    await tx.run("DELETE FROM dev_training_program_members WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
-    await tx.run("DELETE FROM dev_training_builder_drafts WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run("DELETE FROM training_client_selection WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run("DELETE FROM training_program_members WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run("DELETE FROM training_builder_drafts WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
     for (const program of owned) {
       await deleteStructure(tx, workspaceId, program.id);
-      await tx.run("DELETE FROM dev_training_programs WHERE workspace_id = ? AND id = ?", [workspaceId, program.id]);
+      await tx.run("DELETE FROM training_programs WHERE workspace_id = ? AND id = ?", [workspaceId, program.id]);
     }
   },
 };
@@ -193,12 +199,12 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     const [cards, selection] = await Promise.all([
       connection.all<ProgramCard>(`SELECT p.id, p.kind, p.title, p.revision, p.created_at AS createdAt,
           m.archived_at AS archivedAt, m.sort_position AS sortPosition,
-          (SELECT count(*) FROM dev_training_program_members o WHERE o.workspace_id = p.workspace_id
+          (SELECT count(*) FROM training_program_members o WHERE o.workspace_id = p.workspace_id
             AND o.program_id = p.id AND o.archived_at IS NULL) AS memberCount
-        FROM dev_training_program_members m
-        JOIN dev_training_programs p ON p.id = m.program_id AND p.workspace_id = m.workspace_id
+        FROM training_program_members m
+        JOIN training_programs p ON p.id = m.program_id AND p.workspace_id = m.workspace_id
         WHERE m.workspace_id = ? AND m.client_id = ?`, [this.workspaceId, clientId]),
-      connection.first<{ programId: string }>(`SELECT program_id AS programId FROM dev_training_client_selection
+      connection.first<{ programId: string }>(`SELECT program_id AS programId FROM training_client_selection
         WHERE workspace_id = ? AND client_id = ?`, [this.workspaceId, clientId]),
     ]);
     return {
@@ -276,17 +282,17 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     {
       // Назначить можно только действующему клиенту этого рабочего пространства.
       for (const clientId of valid.clientIds) {
-        const client = await tx.first<{ lifecycle: string }>(`SELECT lifecycle FROM dev_clients
+        const client = await tx.first<{ lifecycle: string }>(`SELECT lifecycle FROM clients
           WHERE workspace_id = ? AND id = ?`, [this.workspaceId, clientId]);
         if (client?.lifecycle !== "ACTIVE") throw new Error("TARGET_NOT_FOUND");
       }
       const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
       if (!id) throw new Error("PROGRAM_ID_UNAVAILABLE");
       const stamp = now.toISOString();
-      await tx.run(`INSERT INTO dev_training_programs (id, workspace_id, kind, title, revision, created_at, updated_at, weeks)
+      await tx.run(`INSERT INTO training_programs (id, workspace_id, kind, title, revision, created_at, updated_at, weeks)
         VALUES (?, ?, ?, ?, 1, ?, ?, ?)`, [id, this.workspaceId, valid.kind, valid.title, stamp, stamp, weeks]);
       for (const clientId of valid.clientIds) {
-        await tx.run(`INSERT INTO dev_training_program_members (workspace_id, program_id, client_id, joined_at)
+        await tx.run(`INSERT INTO training_program_members (workspace_id, program_id, client_id, joined_at)
           VALUES (?, ?, ?, ?)`, [this.workspaceId, id, clientId, stamp]);
       }
       return programById(tx, this.workspaceId, id);
@@ -297,7 +303,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     const { connection } = this.ready();
     const program = await this.getProgram(clientId, programId);
     if (program === null || program.kind !== "SIMPLE") return null;
-    const row = await connection.first<{ weeks: number | null }>("SELECT weeks FROM dev_training_programs WHERE workspace_id = ? AND id = ?",
+    const row = await connection.first<{ weeks: number | null }>("SELECT weeks FROM training_programs WHERE workspace_id = ? AND id = ?",
       [this.workspaceId, programId]);
     const plan = await readStructure(connection, this.workspaceId, programId, row?.weeks ?? DEFAULT_WEEKS);
     return { program, draft: { title: program.title, plan } };
@@ -326,7 +332,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     if (program.kind !== "SIMPLE" || !["CURRENT", "FOLLOWING", "ALL"].includes(input.scope)
       || input.workoutId !== input.workout.id) throw new Error("DRAFT_INVALID");
     assertWeek(program.title, [input.workout]);
-    const row = await tx.first<{ weeks: number }>("SELECT weeks FROM dev_training_programs WHERE workspace_id = ? AND id = ?",
+    const row = await tx.first<{ weeks: number }>("SELECT weeks FROM training_programs WHERE workspace_id = ? AND id = ?",
       [this.workspaceId, programId]);
     const base = await readStructure(tx, this.workspaceId, programId, row!.weeks);
     const before = await readSimpleWeeks(tx, this.workspaceId, clientId, programId, base);
@@ -375,7 +381,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
           if (output.changed || input.scope === "ALL") await writeSimpleOverride(tx, this.workspaceId, clientId, programId, output.index, output.workout);
         }
       }
-      await tx.run("DELETE FROM dev_training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND draft_key = ?",
+      await tx.run("DELETE FROM training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND draft_key = ?",
         [this.workspaceId, clientId, simpleWorkoutDraftKey(programId, input.weekIndex, input.workoutId)]);
       return programById(tx, this.workspaceId, programId);
     });
@@ -385,9 +391,9 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   async getSimpleWorkoutDraft(clientId: string, programId: string, weekIndex: number, workoutId: string): Promise<SimpleWorkoutDraft | null> {
     if ((await this.getProgram(clientId, programId))?.kind !== "SIMPLE") return null;
-    const row = await this.ready().connection.first<{ json: string }>(`SELECT draft_json AS json FROM dev_training_builder_drafts
+    const row = await this.ready().connection.first<{ json: string }>(`SELECT draft_json AS json FROM training_builder_drafts
       WHERE workspace_id = ? AND client_id = ? AND draft_key = ?`, [this.workspaceId, clientId, simpleWorkoutDraftKey(programId, weekIndex, workoutId)]);
-    return row === null ? null : JSON.parse(row.json) as SimpleWorkoutDraft;
+    return row === null ? null : readStoredJson(row.json, storedWorkoutDraft, `training_workout_draft:${clientId}:${workoutId}`);
   }
 
   async saveSimpleWorkoutDraft(clientId: string, programId: string, draft: SimpleWorkoutDraft): Promise<void> {
@@ -397,7 +403,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       const program = await programById(tx, this.workspaceId, programId);
       if (program.kind !== "SIMPLE") throw new Error("DRAFT_INVALID");
       const key = simpleWorkoutDraftKey(programId, draft.input.weekIndex, draft.input.workoutId);
-      await tx.run(`INSERT INTO dev_training_builder_drafts(workspace_id, client_id, draft_key, base_revision, draft_json, updated_at)
+      await tx.run(`INSERT INTO training_builder_drafts(workspace_id, client_id, draft_key, base_revision, draft_json, updated_at)
         VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(workspace_id, client_id, draft_key) DO UPDATE SET
         base_revision = excluded.base_revision, draft_json = excluded.draft_json, updated_at = excluded.updated_at`,
       [this.workspaceId, clientId, key, draft.baseRevision, JSON.stringify(draft), new Date().toISOString()]);
@@ -411,7 +417,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       const program = await this.insertProgram(tx, valid, now, draft.plan.weeks);
       for (const workout of draft.plan.workouts) await assertSimpleIdentities(tx, this.workspaceId, clientId, program.id, workout, []);
       await writeStructure(tx, this.workspaceId, program.id, draft.plan);
-      await tx.run("DELETE FROM dev_training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND draft_key = ?",
+      await tx.run("DELETE FROM training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND draft_key = ?",
         [this.workspaceId, clientId, NEW_SIMPLE_DRAFT_KEY]);
       return program;
     });
@@ -435,13 +441,13 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       if ((await membership(tx, this.workspaceId, clientId, programId)).archivedAt !== null) throw new Error("PROGRAM_ARCHIVED");
       const current = await programById(tx, this.workspaceId, programId);
       if (current.kind !== "SIMPLE") throw new Error("DRAFT_INVALID");
-      const oldCount = await tx.first<{ weeks: number }>("SELECT weeks FROM dev_training_programs WHERE workspace_id = ? AND id = ?",
+      const oldCount = await tx.first<{ weeks: number }>("SELECT weeks FROM training_programs WHERE workspace_id = ? AND id = ?",
         [this.workspaceId, programId]);
       const previous = await readStructure(tx, this.workspaceId, programId, oldCount!.weeks);
       const weeks = await readSimpleWeeks(tx, this.workspaceId, clientId, programId, previous);
       for (const workout of draft.plan.workouts) await assertSimpleIdentities(tx, this.workspaceId, clientId, programId, workout,
         [...previous.workouts, ...weeks.flatMap((week) => week.workouts)].filter((item) => item.id === workout.id));
-      const result = await tx.run(`UPDATE dev_training_programs SET title = ?, weeks = ?, revision = revision + 1, updated_at = ?
+      const result = await tx.run(`UPDATE training_programs SET title = ?, weeks = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ?`,
       [title, draft.plan.weeks, now.toISOString(), this.workspaceId, programId, expectedRevision]);
       if (result.changes !== 1) throw new Error("PROGRAM_REVISION_CONFLICT");
@@ -450,13 +456,13 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       }
       await writeStructure(tx, this.workspaceId, programId, draft.plan);
       const overrides = await tx.all<{ week: number; workoutId: string }>(`SELECT week_index AS week, workout_id AS workoutId
-        FROM dev_training_simple_overrides WHERE workspace_id = ? AND client_id = ? AND program_id = ?`, [this.workspaceId, clientId, programId]);
+        FROM training_simple_overrides WHERE workspace_id = ? AND client_id = ? AND program_id = ?`, [this.workspaceId, clientId, programId]);
       for (const override of overrides) {
         const old = previous.workouts.find((workout) => workout.id === override.workoutId);
         const next = draft.plan.workouts.find((workout) => workout.id === override.workoutId);
         const personal = weeks.find((week) => week.index === override.week)?.workouts.find((workout) => workout.id === override.workoutId);
         if (!next || !old || !personal || override.week > draft.plan.weeks) {
-          await tx.run(`DELETE FROM dev_training_simple_overrides WHERE workspace_id = ? AND client_id = ? AND program_id = ?
+          await tx.run(`DELETE FROM training_simple_overrides WHERE workspace_id = ? AND client_id = ? AND program_id = ?
             AND week_index = ? AND workout_id = ?`, [this.workspaceId, clientId, programId, override.week, override.workoutId]);
           continue;
         }
@@ -464,7 +470,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         const applied = applyWithConflicts([old], [next], [personal], clientId, override.week, [], await this.idPool(tx, rows * 2));
         await writeSimpleOverride(tx, this.workspaceId, clientId, programId, override.week, applied.workouts[0]!);
       }
-      await tx.run("DELETE FROM dev_training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND draft_key = ?",
+      await tx.run("DELETE FROM training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND draft_key = ?",
         [this.workspaceId, clientId, programId]);
       return programById(tx, this.workspaceId, programId);
     }
@@ -476,7 +482,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       if ((await membership(tx, this.workspaceId, request.clientId, request.programId)).archivedAt !== null) throw new Error("PROGRAM_ARCHIVED");
       const program = await programById(tx, this.workspaceId, request.programId);
       if (program.kind !== "SIMPLE") throw new Error("DRAFT_INVALID");
-      const row = await tx.first<{ weeks: number }>("SELECT weeks FROM dev_training_programs WHERE workspace_id = ? AND id = ?",
+      const row = await tx.first<{ weeks: number }>("SELECT weeks FROM training_programs WHERE workspace_id = ? AND id = ?",
         [this.workspaceId, request.programId]);
       const current = await readStructure(tx, this.workspaceId, request.programId, row!.weeks);
       const kept = new Set(request.draft.plan.workouts.map((workout) => workout.id));
@@ -496,14 +502,14 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     }
     const saved = await this.ready().writer.write(async (tx) => {
       if ((await membership(tx, this.workspaceId, clientId, programId)).archivedAt !== null) throw new Error("PROGRAM_ARCHIVED");
-      const result = await tx.run(`UPDATE dev_training_planned_exercises SET rest_sec = ?
+      const result = await tx.run(`UPDATE training_planned_exercises SET rest_sec = ?
         WHERE workspace_id = ? AND id = ? AND workout_id IN
-          (SELECT w.id FROM dev_training_workouts w WHERE w.workspace_id = ? AND w.program_id = ? AND
-            (w.week_id IS NULL OR EXISTS (SELECT 1 FROM dev_training_weeks k JOIN dev_training_mesocycles m
+          (SELECT w.id FROM training_workouts w WHERE w.workspace_id = ? AND w.program_id = ? AND
+            (w.week_id IS NULL OR EXISTS (SELECT 1 FROM training_weeks k JOIN training_mesocycles m
               ON m.id = k.mesocycle_id AND m.workspace_id = k.workspace_id WHERE k.id = w.week_id AND m.client_id = ?)))`,
       [restSec, this.workspaceId, plannedExerciseId, this.workspaceId, programId, clientId]);
       const overrides = await tx.all<{ week: number; workoutId: string; json: string }>(`SELECT week_index AS week, workout_id AS workoutId, workout_json AS json
-        FROM dev_training_simple_overrides WHERE workspace_id = ? AND client_id = ? AND program_id = ?`, [this.workspaceId, clientId, programId]);
+        FROM training_simple_overrides WHERE workspace_id = ? AND client_id = ? AND program_id = ?`, [this.workspaceId, clientId, programId]);
       let changed = result.changes;
       for (const row of overrides) {
         const workout = parseOverride(row.json, row.workoutId);
@@ -513,7 +519,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         changed += 1;
       }
       if (changed === 0) throw new Error("TARGET_NOT_FOUND");
-      await tx.run("UPDATE dev_training_programs SET revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND id = ?",
+      await tx.run("UPDATE training_programs SET revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND id = ?",
         [now.toISOString(), this.workspaceId, programId]);
       return programById(tx, this.workspaceId, programId);
     });
@@ -531,9 +537,9 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       return workout ? { program, workout } : null;
     }
     // Расширенная: только тренировки своих мезоциклов этого клиента.
-    const row = await connection.first<{ weekId: string | null }>(`SELECT w.week_id AS weekId FROM dev_training_workouts w
+    const row = await connection.first<{ weekId: string | null }>(`SELECT w.week_id AS weekId FROM training_workouts w
       WHERE w.workspace_id = ? AND w.program_id = ? AND w.id = ? AND (w.week_id IS NULL OR EXISTS (SELECT 1
-        FROM dev_training_weeks k JOIN dev_training_mesocycles m ON m.id = k.mesocycle_id AND m.workspace_id = k.workspace_id
+        FROM training_weeks k JOIN training_mesocycles m ON m.id = k.mesocycle_id AND m.workspace_id = k.workspace_id
         WHERE k.id = w.week_id AND k.workspace_id = w.workspace_id AND m.client_id = ?))`,
     [this.workspaceId, programId, plannedWorkoutId, clientId]);
     if (row === null) return null;
@@ -551,7 +557,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     const key = `${clientId}:${programId}`;
     const cached = this.planCache.get(key);
     if (cached !== undefined) {
-      const member = await this.ready().connection.first<{ present: number }>(`SELECT 1 AS present FROM dev_training_program_members
+      const member = await this.ready().connection.first<{ present: number }>(`SELECT 1 AS present FROM training_program_members
         WHERE workspace_id = ? AND program_id = ? AND client_id = ?`, [this.workspaceId, programId, clientId]);
       if (member !== null) return cached;
       this.planCache.delete(key);
@@ -604,7 +610,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   /** CAS по ревизии программы: структурная правка любого участника меняет ревизию общей программы. */
   private async bumpRevision(tx: SqliteStatementPort, programId: string, expectedRevision: number, now: Date): Promise<void> {
-    const result = await tx.run(`UPDATE dev_training_programs SET revision = revision + 1, updated_at = ?
+    const result = await tx.run(`UPDATE training_programs SET revision = revision + 1, updated_at = ?
       WHERE workspace_id = ? AND id = ? AND revision = ?`, [now.toISOString(), this.workspaceId, programId, expectedRevision]);
     if (result.changes !== 1) throw new Error("PROGRAM_REVISION_CONFLICT");
   }
@@ -653,7 +659,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         if (memberId === clientId) ownId = mesocycle.id;
       }
       await saveSelection(tx, this.workspaceId, programId, clientId, ownId);
-      await tx.run("DELETE FROM dev_training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key = ?",
+      await tx.run("DELETE FROM training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key = ?",
         [this.workspaceId, clientId, programId, "new:MESOCYCLE"]);
       return { program: await programById(tx, this.workspaceId, programId), mesocycleId: ownId };
     });
@@ -722,7 +728,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       const used = new Set(cycle.weeks.map((week) => week.index - 1));
       const free = Array.from({ length: MESOCYCLE_WEEKS_MAX }, (_, index) => index).find((position) => !used.has(position));
       if (free === undefined) throw new Error("WEEK_SWAP_NO_SLOT");
-      const move = (id: string, position: number) => tx.run("UPDATE dev_training_weeks SET position = ? WHERE workspace_id = ? AND id = ?",
+      const move = (id: string, position: number) => tx.run("UPDATE training_weeks SET position = ? WHERE workspace_id = ? AND id = ?",
         [position, this.workspaceId, id]);
       await move(a.id, free);
       await move(b.id, first - 1);
@@ -800,7 +806,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         await insertMesocycle(tx, this.workspaceId, programId, clientId, { id: ownId, lineageId, title, ...settings, weeks: template }, now);
         const placements = new Map((request.placements ?? []).map((item) => [item.clientId, item.target]));
         for (const memberId of request.clientIds.slice(1)) {
-          const member = await tx.first<{ archivedAt: string | null }>(`SELECT archived_at AS archivedAt FROM dev_training_program_members
+          const member = await tx.first<{ archivedAt: string | null }>(`SELECT archived_at AS archivedAt FROM training_program_members
             WHERE workspace_id = ? AND program_id = ? AND client_id = ?`, [this.workspaceId, programId, memberId]);
           await this.placeCopy(tx, memberId, member !== null && member.archivedAt === null ? { kind: "join" } : placements.get(memberId) ?? { kind: "join" },
             programId, { id: take(), lineageId, title, ...settings, weeks: copyWeeks(template, take) }, now);
@@ -825,7 +831,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       }
       await this.bumpRevision(tx, programId, expectedRevision, now);
       if (structureChanged) await preserveMesocycle(tx, this.workspaceId, clientId, programId, cycle, now);
-      await tx.run(`UPDATE dev_training_mesocycles SET title = ?, cycle_type = ?, rep_min = ?, rep_max = ?, start_date = ?
+      await tx.run(`UPDATE training_mesocycles SET title = ?, cycle_type = ?, rep_min = ?, rep_max = ?, start_date = ?
         WHERE workspace_id = ? AND id = ? AND client_id = ?`, [title, settings.cycleType, settings.repRange?.min ?? null,
         settings.repRange?.max ?? null, settings.startDate, this.workspaceId, cycle.id, clientId]);
       if (!structureChanged) return { program: await programById(tx, this.workspaceId, programId), mesocycleId: cycle.id };
@@ -834,13 +840,13 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         const existing = cycle.weeks.find((item) => item.index === week.index);
         if (existing !== undefined) { await writeWeek(tx, this.workspaceId, programId, { ...week, id: existing.id }); continue; }
         const id = take();
-        await tx.run(`INSERT INTO dev_training_weeks (id, workspace_id, mesocycle_id, position, week_type) VALUES (?, ?, ?, ?, ?)`,
+        await tx.run(`INSERT INTO training_weeks (id, workspace_id, mesocycle_id, position, week_type) VALUES (?, ?, ?, ?, ?)`,
           [id, this.workspaceId, cycle.id, week.index - 1, week.type]);
         await writeWeek(tx, this.workspaceId, programId, { ...week, id });
       }
       for (const week of cycle.weeks.filter((item) => item.index > weeks.length)) {
         await writeWorkouts(tx, this.workspaceId, programId, week.id, []);
-        await tx.run("DELETE FROM dev_training_weeks WHERE workspace_id = ? AND id = ?", [this.workspaceId, week.id]);
+        await tx.run("DELETE FROM training_weeks WHERE workspace_id = ? AND id = ?", [this.workspaceId, week.id]);
       }
       return { program: await programById(tx, this.workspaceId, programId), mesocycleId: cycle.id };
     },
@@ -872,17 +878,17 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       const selected = await selectedMesocycle(tx, this.workspaceId, programId, clientId);
       const next = selected === null || selected === cycle.id ? nearest.id : selected;
       await saveSelection(tx, this.workspaceId, programId, clientId, next);
-      await tx.run("DELETE FROM dev_training_structure_versions WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND mesocycle_id = ?",
+      await tx.run("DELETE FROM training_structure_versions WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND mesocycle_id = ?",
         [this.workspaceId, clientId, programId, cycle.id]);
-      await tx.run("DELETE FROM dev_training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key LIKE ?",
+      await tx.run("DELETE FROM training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key LIKE ?",
         [this.workspaceId, clientId, programId, `week:${cycle.id}:%`]);
-      await tx.run("DELETE FROM dev_training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND draft_key = ?",
+      await tx.run("DELETE FROM training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND draft_key = ?",
         [this.workspaceId, clientId, mesocycleBuilderDraftKey({ programId, mesocycleId: cycle.id })]);
       for (const week of cycle.weeks) {
         await writeWorkouts(tx, this.workspaceId, programId, week.id, []);
-        await tx.run("DELETE FROM dev_training_weeks WHERE workspace_id = ? AND id = ?", [this.workspaceId, week.id]);
+        await tx.run("DELETE FROM training_weeks WHERE workspace_id = ? AND id = ?", [this.workspaceId, week.id]);
       }
-      await tx.run("DELETE FROM dev_training_mesocycles WHERE workspace_id = ? AND id = ?", [this.workspaceId, cycle.id]);
+      await tx.run("DELETE FROM training_mesocycles WHERE workspace_id = ? AND id = ?", [this.workspaceId, cycle.id]);
       return next;
     },
     planOrigins: async (tx, request) => {
@@ -898,7 +904,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
           }
         }
       } else {
-        const row = await tx.first<{ weeks: number | null }>("SELECT weeks FROM dev_training_programs WHERE workspace_id = ? AND id = ?",
+        const row = await tx.first<{ weeks: number | null }>("SELECT weeks FROM training_programs WHERE workspace_id = ? AND id = ?",
           [this.workspaceId, programId]);
         const base = await readStructure(tx, this.workspaceId, programId, row?.weeks ?? DEFAULT_WEEKS);
         for (const week of await readSimpleWeeks(tx, this.workspaceId, clientId, programId, base)) {
@@ -912,21 +918,21 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       await membership(tx, this.workspaceId, clientId, programId);
       await this.bumpRevision(tx, programId, request.expectedRevision, now);
       const scoped = [this.workspaceId, clientId, programId];
-      for (const table of ["dev_training_periodized_drafts", "dev_training_structure_versions", "dev_training_simple_overrides",
-        "dev_training_simple_versions", "dev_training_client_selection"]) {
+      for (const table of ["training_periodized_drafts", "training_structure_versions", "training_simple_overrides",
+        "training_simple_versions", "training_client_selection"]) {
         await tx.run(`DELETE FROM ${table} WHERE workspace_id = ? AND client_id = ? AND program_id = ?`, scoped);
       }
-      await tx.run("DELETE FROM dev_training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND (draft_key = ? OR draft_key LIKE ? OR draft_key LIKE ?)",
+      await tx.run("DELETE FROM training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND (draft_key = ? OR draft_key LIKE ? OR draft_key LIKE ?)",
         [this.workspaceId, clientId, programId, `workout:${programId}:%`, `builder:${programId}:%`]);
       await deleteMemberMesocycles(tx, this.workspaceId, programId, clientId);
-      await tx.run("DELETE FROM dev_training_program_members WHERE workspace_id = ? AND program_id = ? AND client_id = ?",
+      await tx.run("DELETE FROM training_program_members WHERE workspace_id = ? AND program_id = ? AND client_id = ?",
         [this.workspaceId, programId, clientId]);
-      const left = await tx.first<{ n: number }>("SELECT count(*) AS n FROM dev_training_program_members WHERE workspace_id = ? AND program_id = ?",
+      const left = await tx.first<{ n: number }>("SELECT count(*) AS n FROM training_program_members WHERE workspace_id = ? AND program_id = ?",
         [this.workspaceId, programId]);
       if ((left?.n ?? 0) === 0) {
         // Последний участник — программа удаляется целиком.
         await deleteStructure(tx, this.workspaceId, programId);
-        await tx.run("DELETE FROM dev_training_programs WHERE workspace_id = ? AND id = ?", [this.workspaceId, programId]);
+        await tx.run("DELETE FROM training_programs WHERE workspace_id = ? AND id = ?", [this.workspaceId, programId]);
       }
     },
     notify: (clientIds) => this.publish({ clientIds }),
@@ -1042,30 +1048,32 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         for (const week of change.weeks) await writeWeek(tx, this.workspaceId, change.programId, week);
         if (change.programId !== programId) await this.touchRevision(tx, change.programId, now);
       }
-      await tx.run("DELETE FROM dev_training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key = ?",
+      await tx.run("DELETE FROM training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key = ?",
         [this.workspaceId, clientId, programId, `week:${input.mesocycleId}:${input.weekIndex}`]);
       return { program: await programById(tx, this.workspaceId, programId), skipped: prepared.skipped };
     }
   }
 
   async listTemplates(): Promise<readonly ProgramTemplate[]> {
-    const rows = await this.ready().connection.all<TemplateRow>(`SELECT ${TEMPLATE_COLUMNS} FROM dev_training_templates
+    const rows = await this.ready().connection.all<TemplateRow>(`SELECT ${TEMPLATE_COLUMNS} FROM training_templates
       WHERE workspace_id = ? ORDER BY updated_at DESC, title`, [this.workspaceId]);
-    return rows.map(templateOf);
+    return rows.flatMap((row) => { const template = templateOf(row); return template === null ? [] : [template]; });
   }
 
   private async templateById(tx: SqliteStatementPort, templateId: string): Promise<ProgramTemplate> {
-    const row = await tx.first<TemplateRow>(`SELECT ${TEMPLATE_COLUMNS} FROM dev_training_templates
+    const row = await tx.first<TemplateRow>(`SELECT ${TEMPLATE_COLUMNS} FROM training_templates
       WHERE workspace_id = ? AND id = ?`, [this.workspaceId, templateId]);
     if (row === null) throw new Error("TARGET_NOT_FOUND");
-    return templateOf(row);
+    const template = templateOf(row);
+    if (template === null) throw new Error("TRAINING_JSON_INVALID");
+    return template;
   }
 
   private async insertTemplate(tx: SqliteStatementPort, title: string, payload: TemplatePayload, now: Date): Promise<ProgramTemplate> {
     const take = await this.idPool(tx, 1);
     const id = take();
     const stamp = now.toISOString();
-    await tx.run(`INSERT INTO dev_training_templates (id, workspace_id, kind, title, payload_json, revision, created_at, updated_at)
+    await tx.run(`INSERT INTO training_templates (id, workspace_id, kind, title, payload_json, revision, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, 1, ?, ?)`, [id, this.workspaceId, payload.kind, normalizeTitle(title), JSON.stringify(payload), stamp, stamp]);
     return this.templateById(tx, id);
   }
@@ -1075,7 +1083,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       await membership(tx, this.workspaceId, clientId, programId);
       const program = await programById(tx, this.workspaceId, programId);
       if (program.kind === "SIMPLE") {
-        const row = await tx.first<{ weeks: number }>("SELECT weeks FROM dev_training_programs WHERE workspace_id = ? AND id = ?",
+        const row = await tx.first<{ weeks: number }>("SELECT weeks FROM training_programs WHERE workspace_id = ? AND id = ?",
           [this.workspaceId, programId]);
         // §48.14.1 п. 3: повторяющийся план Простой программы; разовые отличия недель в шаблон не входят.
         const plan = await readStructure(tx, this.workspaceId, programId, row?.weeks ?? DEFAULT_WEEKS);
@@ -1107,7 +1115,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   async renameTemplate(templateId: string, expectedRevision: number, title: string, now: Date = new Date()): Promise<ProgramTemplate> {
     const value = normalizeTitle(title);
     return this.ready().writer.write(async (tx) => {
-      const result = await tx.run(`UPDATE dev_training_templates SET title = ?, revision = revision + 1, updated_at = ?
+      const result = await tx.run(`UPDATE training_templates SET title = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ?`, [value, now.toISOString(), this.workspaceId, templateId, expectedRevision]);
       if (result.changes !== 1) {
         await this.templateById(tx, templateId);
@@ -1137,7 +1145,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     return this.ready().writer.write(async (tx) => {
       const current = await this.templateById(tx, templateId);
       if (current.kind !== payload.kind) throw new Error("DRAFT_INVALID");
-      const result = await tx.run(`UPDATE dev_training_templates SET title = ?, payload_json = ?, revision = revision + 1, updated_at = ?
+      const result = await tx.run(`UPDATE training_templates SET title = ?, payload_json = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ?`,
       [value, JSON.stringify(payload), now.toISOString(), this.workspaceId, templateId, expectedRevision]);
       if (result.changes !== 1) throw new Error("TEMPLATE_REVISION_CONFLICT");
@@ -1151,7 +1159,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   async deleteTemplate(templateId: string): Promise<void> {
     await this.ready().writer.write(async (tx) => {
-      await tx.run("DELETE FROM dev_training_templates WHERE workspace_id = ? AND id = ?", [this.workspaceId, templateId]);
+      await tx.run("DELETE FROM training_templates WHERE workspace_id = ? AND id = ?", [this.workspaceId, templateId]);
     });
   }
 
@@ -1195,7 +1203,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       const source = await programById(tx, this.workspaceId, simpleProgramId);
       if (source.kind !== "SIMPLE") throw new Error("DRAFT_INVALID");
       const valid = validateCreate({ kind: "PERIODIZED", title: input.title, clientIds: input.clientIds });
-      const row = await tx.first<{ weeks: number }>("SELECT weeks FROM dev_training_programs WHERE workspace_id = ? AND id = ?",
+      const row = await tx.first<{ weeks: number }>("SELECT weeks FROM training_programs WHERE workspace_id = ? AND id = ?",
         [this.workspaceId, simpleProgramId]);
       // Действующий план по неделям (с разовыми отличиями); история версий новыми мезоциклами не становится (§48.17.1 п. 7).
       const weeks = await readSimpleWeeks(tx, this.workspaceId, clientId, simpleProgramId,
@@ -1256,11 +1264,11 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   async reorderPrograms(clientId: string, programIds: readonly string[]): Promise<void> {
     await this.ready().writer.write(async (tx) => {
-      const current = await tx.all<{ id: string }>(`SELECT program_id AS id FROM dev_training_program_members
+      const current = await tx.all<{ id: string }>(`SELECT program_id AS id FROM training_program_members
         WHERE workspace_id = ? AND client_id = ? AND archived_at IS NULL`, [this.workspaceId, clientId]);
       validateOrder(current.map((item) => item.id), programIds);
       for (const [index, programId] of programIds.entries()) {
-        const result = await tx.run(`UPDATE dev_training_program_members SET sort_position = ?
+        const result = await tx.run(`UPDATE training_program_members SET sort_position = ?
           WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND archived_at IS NULL`,
         [index, this.workspaceId, clientId, programId]);
         if (result.changes !== 1) throw new Error("TARGET_NOT_FOUND");
@@ -1272,11 +1280,11 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   async reorderMesocycles(clientId: string, programId: string, mesocycleIds: readonly string[]): Promise<void> {
     await this.ready().writer.write(async (tx) => {
       if ((await membership(tx, this.workspaceId, clientId, programId)).archivedAt !== null) throw new Error("PROGRAM_ARCHIVED");
-      const current = await tx.all<{ id: string }>(`SELECT id FROM dev_training_mesocycles
+      const current = await tx.all<{ id: string }>(`SELECT id FROM training_mesocycles
         WHERE workspace_id = ? AND program_id = ? AND client_id = ?`, [this.workspaceId, programId, clientId]);
       validateOrder(current.map((item) => item.id), mesocycleIds);
       for (const [index, mesocycleId] of mesocycleIds.entries()) {
-        const result = await tx.run(`UPDATE dev_training_mesocycles SET position = ?
+        const result = await tx.run(`UPDATE training_mesocycles SET position = ?
           WHERE workspace_id = ? AND program_id = ? AND client_id = ? AND id = ?`,
         [index, this.workspaceId, programId, clientId, mesocycleId]);
         if (result.changes !== 1) throw new Error("TARGET_NOT_FOUND");
@@ -1295,12 +1303,13 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   async getBuilderDraft(clientId: string, key: string) {
     const row = await this.ready().connection.first<{ baseRevision: number | null; draftJson: string }>(`SELECT
-      base_revision AS baseRevision, draft_json AS draftJson FROM dev_training_builder_drafts
+      base_revision AS baseRevision, draft_json AS draftJson FROM training_builder_drafts
       WHERE workspace_id = ? AND client_id = ? AND draft_key = ?`, [this.workspaceId, clientId, key]);
     if (row === null) return null;
     // Черновик удалённой программы не воскрешает её (§48.29 п. 7).
     if (key !== NEW_SIMPLE_DRAFT_KEY && (await this.getProgram(clientId, key)) === null) return null;
-    const stored = JSON.parse(row.draftJson) as SimpleProgramDraft | BuilderDraftEnvelope;
+    const stored = readStoredJson(row.draftJson, storedBuilderDraft, `training_builder_drafts:${clientId}:${key}`);
+    if (stored === null) return null;
     const envelope = "envelope" in stored && stored.envelope === 2 ? stored : null;
     return { baseRevision: row.baseRevision, draft: withRestDefaults(envelope === null ? stored as SimpleProgramDraft : envelope.draft),
       base: envelope?.base == null ? null : withRestDefaults(envelope.base) };
@@ -1308,9 +1317,9 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   async getPeriodizedDraft(clientId: string, programId: string, key: string): Promise<PeriodizedDraft | null> {
     if (await this.getProgram(clientId, programId) === null) return null;
-    const row = await this.ready().connection.first<{ json: string }>(`SELECT draft_json AS json FROM dev_training_periodized_drafts
+    const row = await this.ready().connection.first<{ json: string }>(`SELECT draft_json AS json FROM training_periodized_drafts
       WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key = ?`, [this.workspaceId, clientId, programId, key]);
-    return row === null ? null : JSON.parse(row.json) as PeriodizedDraft;
+    return row === null ? null : readStoredJson(row.json, storedPeriodizedDraft, `training_periodized_drafts:${clientId}:${key}`);
   }
 
   async savePeriodizedDraft(clientId: string, programId: string, draft: PeriodizedDraft): Promise<void> {
@@ -1322,7 +1331,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         const cycle = (await readMesocycles(tx, this.workspaceId, programId, clientId)).find((item) => item.id === draft.mesocycleId);
         if (!cycle?.weeks.some((week) => week.index === draft.weekIndex)) throw new Error("TARGET_NOT_FOUND");
       }
-      await tx.run(`INSERT INTO dev_training_periodized_drafts(workspace_id, client_id, program_id, draft_key, draft_json, updated_at)
+      await tx.run(`INSERT INTO training_periodized_drafts(workspace_id, client_id, program_id, draft_key, draft_json, updated_at)
         VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(workspace_id, client_id, program_id, draft_key)
         DO UPDATE SET draft_json = excluded.draft_json, updated_at = excluded.updated_at`,
       [this.workspaceId, clientId, programId, periodizedDraftKey(draft), JSON.stringify(draft), new Date().toISOString()]);
@@ -1331,9 +1340,9 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   async getMesocycleBuilderDraft(clientId: string, scope: MesocycleBuilderScope): Promise<MesocycleBuilderDraft | null> {
     if (scope.programId !== null && await this.getProgram(clientId, scope.programId) === null) return null;
-    const row = await this.ready().connection.first<{ json: string }>(`SELECT draft_json AS json FROM dev_training_builder_drafts
+    const row = await this.ready().connection.first<{ json: string }>(`SELECT draft_json AS json FROM training_builder_drafts
       WHERE workspace_id = ? AND client_id = ? AND draft_key = ?`, [this.workspaceId, clientId, mesocycleBuilderDraftKey(scope)]);
-    return row === null ? null : JSON.parse(row.json) as MesocycleBuilderDraft;
+    return row === null ? null : readStoredJson(row.json, storedMesocycleBuilder, `training_mesocycle_draft:${clientId}`);
   }
 
   async saveMesocycleBuilderDraft(clientId: string, scope: MesocycleBuilderScope, draft: MesocycleBuilderDraft): Promise<void> {
@@ -1342,7 +1351,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         if ((await membership(tx, this.workspaceId, clientId, scope.programId)).archivedAt !== null) throw new Error("PROGRAM_ARCHIVED");
         if ((await programById(tx, this.workspaceId, scope.programId)).kind !== "PERIODIZED") throw new Error("DRAFT_INVALID");
       }
-      await tx.run(`INSERT INTO dev_training_builder_drafts (workspace_id, client_id, draft_key, base_revision, draft_json, updated_at)
+      await tx.run(`INSERT INTO training_builder_drafts (workspace_id, client_id, draft_key, base_revision, draft_json, updated_at)
         VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(workspace_id, client_id, draft_key) DO UPDATE SET
         base_revision = excluded.base_revision, draft_json = excluded.draft_json, updated_at = excluded.updated_at`,
       [this.workspaceId, clientId, mesocycleBuilderDraftKey(scope), draft.baseRevision, JSON.stringify(draft), new Date().toISOString()]);
@@ -1355,7 +1364,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   async clearPeriodizedDraft(clientId: string, programId: string, key: string): Promise<void> {
     await this.ready().writer.write(async (tx) => {
-      await tx.run("DELETE FROM dev_training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key = ?",
+      await tx.run("DELETE FROM training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key = ?",
         [this.workspaceId, clientId, programId, key]);
     });
   }
@@ -1363,7 +1372,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   async saveBuilderDraft(clientId: string, key: string, baseRevision: number | null, draft: SimpleProgramDraft,
     base: SimpleProgramDraft | null = null): Promise<void> {
     await this.ready().writer.write(async (tx) => {
-      await tx.run(`INSERT INTO dev_training_builder_drafts (workspace_id, client_id, draft_key, base_revision, draft_json, updated_at)
+      await tx.run(`INSERT INTO training_builder_drafts (workspace_id, client_id, draft_key, base_revision, draft_json, updated_at)
         VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(workspace_id, client_id, draft_key) DO UPDATE SET
         base_revision = excluded.base_revision, draft_json = excluded.draft_json, updated_at = excluded.updated_at`,
       [this.workspaceId, clientId, key, baseRevision, JSON.stringify(base === null ? draft : { envelope: 2, draft, base } satisfies BuilderDraftEnvelope),
@@ -1373,7 +1382,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   async clearBuilderDraft(clientId: string, key: string): Promise<void> {
     await this.ready().writer.write(async (tx) => {
-      await tx.run("DELETE FROM dev_training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND draft_key = ?",
+      await tx.run("DELETE FROM training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND draft_key = ?",
         [this.workspaceId, clientId, key]);
     });
   }
@@ -1381,7 +1390,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   async renameProgram(programId: string, expectedRevision: number, title: string, now: Date = new Date()): Promise<TrainingProgram> {
     const value = normalizeTitle(title);
     const renamed = await this.ready().writer.write(async (tx) => {
-      const result = await tx.run(`UPDATE dev_training_programs SET title = ?, revision = revision + 1, updated_at = ?
+      const result = await tx.run(`UPDATE training_programs SET title = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ?`,
       [value, now.toISOString(), this.workspaceId, programId, expectedRevision]);
       if (result.changes !== 1) {
@@ -1398,7 +1407,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     const changed = await this.ready().writer.write(async (tx) => {
       const current = await membership(tx, this.workspaceId, clientId, programId);
       if (current.archivedAt !== null) throw new Error("PROGRAM_ARCHIVED");
-      const result = await tx.run(`INSERT INTO dev_training_client_selection (workspace_id, client_id, program_id) VALUES (?, ?, ?)
+      const result = await tx.run(`INSERT INTO training_client_selection (workspace_id, client_id, program_id) VALUES (?, ?, ?)
         ON CONFLICT(workspace_id, client_id) DO UPDATE SET program_id = excluded.program_id
           WHERE program_id IS NOT excluded.program_id`,
       [this.workspaceId, clientId, programId]);
@@ -1412,9 +1421,9 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     await this.ready().writer.write(async (tx) => {
       const current = await membership(tx, this.workspaceId, clientId, programId);
       if (current.archivedAt !== null) return;
-      await tx.run("DELETE FROM dev_training_client_selection WHERE workspace_id = ? AND client_id = ? AND program_id = ?",
+      await tx.run("DELETE FROM training_client_selection WHERE workspace_id = ? AND client_id = ? AND program_id = ?",
         [this.workspaceId, clientId, programId]);
-      await tx.run(`UPDATE dev_training_program_members SET archived_at = ?
+      await tx.run(`UPDATE training_program_members SET archived_at = ?
         WHERE workspace_id = ? AND program_id = ? AND client_id = ?`, [now.toISOString(), this.workspaceId, programId, clientId]);
     });
     this.publish({ clientIds: [clientId] });
@@ -1422,7 +1431,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   /** Ревизия программы, которую задела правка из другой программы (копия участника группы), без CAS. */
   private async touchRevision(tx: SqliteStatementPort, programId: string, now: Date): Promise<void> {
-    await tx.run("UPDATE dev_training_programs SET revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND id = ?",
+    await tx.run("UPDATE training_programs SET revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND id = ?",
       [now.toISOString(), this.workspaceId, programId]);
   }
 
@@ -1432,7 +1441,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
    */
   private async placeCopy(tx: SqliteStatementPort, memberId: string, target: PlacementTarget, hostProgramId: string,
     cycle: Mesocycle, now: Date): Promise<void> {
-    const client = await tx.first<{ lifecycle: string }>("SELECT lifecycle FROM dev_clients WHERE workspace_id = ? AND id = ?",
+    const client = await tx.first<{ lifecycle: string }>("SELECT lifecycle FROM clients WHERE workspace_id = ? AND id = ?",
       [this.workspaceId, memberId]);
     if (client?.lifecycle !== "ACTIVE") throw new Error("TARGET_NOT_FOUND");
     if ((await findCopy(tx, this.workspaceId, memberId, cycle.lineageId)) !== null) throw new Error("DRAFT_INVALID");
@@ -1448,11 +1457,11 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       const host = await programById(tx, this.workspaceId, hostProgramId);
       programId = (await this.insertProgram(tx, { kind: "PERIODIZED", title: host.title, clientIds: [memberId] }, now, null)).id;
     } else {
-      const member = await tx.first<{ archivedAt: string | null }>(`SELECT archived_at AS archivedAt FROM dev_training_program_members
+      const member = await tx.first<{ archivedAt: string | null }>(`SELECT archived_at AS archivedAt FROM training_program_members
         WHERE workspace_id = ? AND program_id = ? AND client_id = ?`, [this.workspaceId, hostProgramId, memberId]);
       if (member?.archivedAt != null) throw new Error("PROGRAM_ARCHIVED");
       if (member === null) {
-        await tx.run(`INSERT INTO dev_training_program_members (workspace_id, program_id, client_id, joined_at) VALUES (?, ?, ?, ?)`,
+        await tx.run(`INSERT INTO training_program_members (workspace_id, program_id, client_id, joined_at) VALUES (?, ?, ?, ?)`,
           [this.workspaceId, hostProgramId, memberId, now.toISOString()]);
       }
     }
@@ -1464,7 +1473,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   private async viewerCopy(tx: SqliteStatementPort, clientId: string, programId: string,
     ref: Readonly<{ mesocycleId: string } | { workoutId: string }>) {
     const mesocycleId = "mesocycleId" in ref ? ref.mesocycleId : (await tx.first<{ id: string }>(`SELECT w.mesocycle_id AS id
-      FROM dev_training_workouts o JOIN dev_training_weeks w ON w.workspace_id = o.workspace_id AND w.id = o.week_id
+      FROM training_workouts o JOIN training_weeks w ON w.workspace_id = o.workspace_id AND w.id = o.week_id
       WHERE o.workspace_id = ? AND o.id = ? AND o.program_id = ?`, [this.workspaceId, ref.workoutId, programId]))?.id;
     const copy = mesocycleId === undefined ? null : await readCopy(tx, this.workspaceId, mesocycleId);
     return copy !== null && copy.clientId === clientId && copy.programId === programId ? copy : null;
@@ -1482,9 +1491,9 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     const result: ClientPlacementOptions[] = [];
     for (const clientId of clientIds) {
       const programs = await connection.all<PlacementProgram>(`SELECT p.id, p.kind, p.title, p.created_at AS createdAt
-        FROM dev_training_program_members m JOIN dev_training_programs p ON p.workspace_id = m.workspace_id AND p.id = m.program_id
+        FROM training_program_members m JOIN training_programs p ON p.workspace_id = m.workspace_id AND p.id = m.program_id
         WHERE m.workspace_id = ? AND m.client_id = ? AND m.archived_at IS NULL`, [this.workspaceId, clientId]);
-      const selected = (await connection.first<{ id: string }>(`SELECT program_id AS id FROM dev_training_client_selection
+      const selected = (await connection.first<{ id: string }>(`SELECT program_id AS id FROM training_client_selection
         WHERE workspace_id = ? AND client_id = ?`, [this.workspaceId, clientId]))?.id ?? null;
       result.push({ clientId, preferred: preferredPlacement(programs, selected, hostProgramId),
         programs: programs.filter((program) => program.kind === "PERIODIZED" && program.id !== hostProgramId)
@@ -1502,7 +1511,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         .find((item) => item.clientId === memberId);
       if (own === null || own.leftAt !== null || member === undefined || memberId === clientId) throw new Error("DRAFT_INVALID");
       await this.bumpRevision(tx, programId, expectedRevision, now);
-      await tx.run("UPDATE dev_training_mesocycles SET group_left_at = ? WHERE workspace_id = ? AND id = ?",
+      await tx.run("UPDATE training_mesocycles SET group_left_at = ? WHERE workspace_id = ? AND id = ?",
         [now.toISOString(), this.workspaceId, member.mesocycleId]);
       return programById(tx, this.workspaceId, programId);
     });
@@ -1527,7 +1536,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
         if (existing !== null) {
           // Вышедший ранее участник возвращается со своим планом; план источника его не перезаписывает.
           if (existing.leftAt === null) throw new Error("DRAFT_INVALID");
-          await tx.run("UPDATE dev_training_mesocycles SET group_left_at = NULL WHERE workspace_id = ? AND id = ?",
+          await tx.run("UPDATE training_mesocycles SET group_left_at = NULL WHERE workspace_id = ? AND id = ?",
             [this.workspaceId, existing.mesocycleId]);
           continue;
         }
@@ -1544,7 +1553,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   async restoreForClient(clientId: string, programId: string): Promise<void> {
     await this.ready().writer.write(async (tx) => {
       await membership(tx, this.workspaceId, clientId, programId);
-      await tx.run(`UPDATE dev_training_program_members SET archived_at = NULL
+      await tx.run(`UPDATE training_program_members SET archived_at = NULL
         WHERE workspace_id = ? AND program_id = ? AND client_id = ?`, [this.workspaceId, programId, clientId]);
     });
     this.publish({ clientIds: [clientId] });

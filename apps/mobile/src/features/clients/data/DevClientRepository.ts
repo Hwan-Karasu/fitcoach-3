@@ -15,7 +15,7 @@ import type { BirthdayDismissal, ClientRosterPort, ClientRosterRow,
   "../domain/ClientRosterPort.ts";
 import { birthdayOccurrenceForYear } from "../domain/ClientRosterPresentation.ts";
 import { validPastBirthDate } from "../domain/ClientProfileValidation.ts";
-import { devClientCatalog } from "./DevClientCatalog.ts";
+import { DEV_CLIENTS_LEDGER, devClientCatalog } from "./DevClientCatalog.ts";
 
 interface ClientRow {
   id: string;
@@ -99,13 +99,13 @@ async function createIn(tx: SqliteStatementPort, workspaceId: string, input: Cre
   const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
   if (!id) throw new Error("CLIENT_ID_UNAVAILABLE");
   const now = new Date().toISOString();
-  await tx.run(`INSERT INTO dev_clients
+  await tx.run(`INSERT INTO clients
     (id, workspace_id, display_name, contact_phone, contact_email,
      birth_date, height_cm_x10, sex, emoji, lifecycle,
      revision, created_at, updated_at, archived_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 1, ?, ?, NULL)`,
   [id, workspaceId, name, phone, email, birthDate, heightCmX10, sex ?? null, emoji, now, now]);
-  await tx.run(`DELETE FROM dev_client_recovery_drafts
+  await tx.run(`DELETE FROM client_recovery_drafts
     WHERE workspace_id = ? AND mode = 'create'`, [workspaceId]);
   return clientById(tx, workspaceId, id);
 }
@@ -114,7 +114,7 @@ async function updateIn(tx: SqliteStatementPort, workspaceId: string, id: string
   input: CreateClientInput): Promise<ClientRecord> {
   if (!id.trim() || !Number.isSafeInteger(expectedRevision) || expectedRevision < 1) throw new Error("CLIENT_COMMAND_INVALID");
   const { name, phone, email, birthDate, heightCmX10, emoji, sex } = validatedInput(input);
-  const result = await tx.run(`UPDATE dev_clients SET display_name = ?, contact_phone = ?,
+  const result = await tx.run(`UPDATE clients SET display_name = ?, contact_phone = ?,
     contact_email = ?, birth_date = ?, height_cm_x10 = ?, emoji = ?,
     sex = CASE WHEN ? = 1 THEN ? ELSE sex END,
     updated_at = ?, revision = revision + 1
@@ -122,7 +122,7 @@ async function updateIn(tx: SqliteStatementPort, workspaceId: string, id: string
   [name, phone, email, birthDate, heightCmX10, emoji, sex === undefined ? 0 : 1, sex ?? null,
     new Date().toISOString(), workspaceId, id, expectedRevision]);
   if (result.changes !== 1) throw new Error("CLIENT_STALE_OR_WRONG_SCOPE");
-  await tx.run(`DELETE FROM dev_client_recovery_drafts
+  await tx.run(`DELETE FROM client_recovery_drafts
     WHERE workspace_id = ? AND mode = 'edit' AND client_id = ?`, [workspaceId, id]);
   return clientById(tx, workspaceId, id);
 }
@@ -132,7 +132,7 @@ async function writeBody(tx: SqliteStatementPort, workspaceId: string, id: strin
   if (!id.trim() || !Number.isSafeInteger(expectedRevision) || expectedRevision < 1) throw new Error("CLIENT_COMMAND_INVALID");
   if (patch.sex !== null && patch.sex !== "MALE" && patch.sex !== "FEMALE") throw new Error("CLIENT_SEX_INVALID");
   if (patch.heightCmX10 !== null && (!Number.isSafeInteger(patch.heightCmX10) || patch.heightCmX10 <= 0)) throw new Error("CLIENT_HEIGHT_INVALID");
-  const result = await tx.run(`UPDATE dev_clients SET sex = ?, height_cm_x10 = ?, updated_at = ?, revision = revision + 1
+  const result = await tx.run(`UPDATE clients SET sex = ?, height_cm_x10 = ?, updated_at = ?, revision = revision + 1
     WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'ACTIVE'`,
   [patch.sex, patch.heightCmX10, new Date().toISOString(), workspaceId, id, expectedRevision]);
   if (result.changes !== 1) throw new Error("CLIENT_STALE_OR_WRONG_SCOPE");
@@ -141,16 +141,16 @@ async function writeBody(tx: SqliteStatementPort, workspaceId: string, id: strin
 
 async function clientById(tx: SqliteStatementPort, workspaceId: string, id: string): Promise<ClientRecord> {
   const row = await tx.first<ClientRow>(
-    `SELECT ${columns} FROM dev_clients WHERE workspace_id = ? AND id = ?`, [workspaceId, id]);
+    `SELECT ${columns} FROM clients WHERE workspace_id = ? AND id = ?`, [workspaceId, id]);
   if (row === null) throw new Error("CLIENT_NOT_FOUND");
   return row;
 }
 
 /** Every table that may hold rows of one client; deletion order respects the FKs. */
 const clientOwnedTables = [
-  { owner: "clients.recoveryDrafts", table: "dev_client_recovery_drafts" },
-  { owner: "clients.activity", table: "dev_client_activity" },
-  { owner: "clients.birthdayDismissals", table: "dev_birthday_dismissals" },
+  { owner: "clients.recoveryDrafts", table: "client_recovery_drafts" },
+  { owner: "clients.activity", table: "client_activity" },
+  { owner: "clients.birthdayDismissals", table: "birthday_dismissals" },
 ] as const;
 
 /**
@@ -185,8 +185,8 @@ async function deletionManifest(tx: SqliteStatementPort, workspaceId: string, cl
 async function assertManifestCoversSchema(tx: SqliteStatementPort,
   participants: readonly DevClientDeletionParticipant[]): Promise<void> {
   const referencing = await tx.all<{ name: string }>(`SELECT DISTINCT m.name FROM sqlite_master AS m
-    WHERE m.type = 'table' AND m.name NOT IN ('dev_clients', 'sqlite_sequence') AND (
-      EXISTS (SELECT 1 FROM pragma_foreign_key_list(m.name) AS f WHERE f."table" = 'dev_clients')
+    WHERE m.type = 'table' AND m.name NOT IN ('clients', 'sqlite_sequence') AND (
+      EXISTS (SELECT 1 FROM pragma_foreign_key_list(m.name) AS f WHERE f."table" = 'clients')
       OR EXISTS (SELECT 1 FROM pragma_table_info(m.name) AS c WHERE c.name = 'client_id'))`);
   const known = new Set<string>([...clientOwnedTables.map((entry) => entry.table),
     ...participants.flatMap((participant) => participant.tables)]);
@@ -251,14 +251,14 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
     if (!this.workspaceId.trim()) throw new Error("CLIENT_WORKSPACE_REQUIRED");
     const { connection, writer } = await this.database.acquire();
     try {
-      await runMigrations(writer, devClientCatalog);
+      await runMigrations(writer, devClientCatalog, DEV_CLIENTS_LEDGER);
       await writer.write(async (tx) => {
-        await tx.run(`INSERT OR IGNORE INTO dev_workspaces (id, display_name, created_at)
+        await tx.run(`INSERT OR IGNORE INTO workspaces (id, display_name, created_at)
           VALUES (?, ?, ?)`, [this.workspaceId, "Локальное рабочее пространство", new Date().toISOString()]);
         const workspace = await tx.first<{ id: string }>(
-          "SELECT id FROM dev_workspaces WHERE id = ?", [this.workspaceId]);
+          "SELECT id FROM workspaces WHERE id = ?", [this.workspaceId]);
         if (workspace?.id !== this.workspaceId) throw new Error("CLIENT_WORKSPACE_UNAVAILABLE");
-        await tx.run("DELETE FROM dev_client_recovery_drafts WHERE updated_at < ?",
+        await tx.run("DELETE FROM client_recovery_drafts WHERE updated_at < ?",
           [new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()]);
       });
       this.connection = connection;
@@ -288,7 +288,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
 
   async list(lifecycle: ClientRecord["lifecycle"]): Promise<readonly ClientRecord[]> {
     const { connection } = this.ready();
-    return connection.all<ClientRow>(`SELECT ${columns} FROM dev_clients
+    return connection.all<ClientRow>(`SELECT ${columns} FROM clients
       WHERE workspace_id = ? AND lifecycle = ? ORDER BY display_name COLLATE NOCASE, id`,
     [this.workspaceId, lifecycle]);
   }
@@ -296,17 +296,17 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
   async listRoster(lifecycle: ClientRecord["lifecycle"]): Promise<readonly ClientRosterRow[]> {
     const { connection } = this.ready();
     return connection.all<RosterRow>(`SELECT ${columns}, activity.last_opened_at AS lastOpenedAt
-      FROM dev_clients LEFT JOIN dev_client_activity AS activity
-        ON activity.workspace_id = dev_clients.workspace_id AND activity.client_id = dev_clients.id
-      WHERE dev_clients.workspace_id = ? AND lifecycle = ?
-      ORDER BY display_name COLLATE NOCASE, dev_clients.id`,
+      FROM clients LEFT JOIN client_activity AS activity
+        ON activity.workspace_id = clients.workspace_id AND activity.client_id = clients.id
+      WHERE clients.workspace_id = ? AND lifecycle = ?
+      ORDER BY display_name COLLATE NOCASE, clients.id`,
     [this.workspaceId, lifecycle]);
   }
 
   async getRosterSort(): Promise<RosterSortMode> {
     const { connection } = this.ready();
     const row = await connection.first<{ sort_mode: RosterSortMode }>(
-      "SELECT sort_mode FROM dev_roster_preferences WHERE workspace_id = ?", [this.workspaceId]);
+      "SELECT sort_mode FROM roster_preferences WHERE workspace_id = ?", [this.workspaceId]);
     return row?.sort_mode ?? "NAME";
   }
 
@@ -314,7 +314,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
     if (mode !== "NAME" && mode !== "RECENT") throw new Error("CLIENT_ROSTER_SORT_INVALID");
     const { writer } = this.ready();
     await writer.write(async (tx) => {
-      await tx.run(`INSERT INTO dev_roster_preferences (workspace_id, sort_mode) VALUES (?, ?)
+      await tx.run(`INSERT INTO roster_preferences (workspace_id, sort_mode) VALUES (?, ?)
         ON CONFLICT(workspace_id) DO UPDATE SET sort_mode = excluded.sort_mode`,
       [this.workspaceId, mode]);
     });
@@ -327,7 +327,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
       birthday_pin_enabled: number; birthday_pin_lead_days: number;
       show_birthday_badge: number;
     }>(`SELECT birthday_pin_enabled, birthday_pin_lead_days, show_birthday_badge
-      FROM dev_roster_preferences WHERE workspace_id = ?`, [this.workspaceId]);
+      FROM roster_preferences WHERE workspace_id = ?`, [this.workspaceId]);
     return {
       birthdayPinEnabled: row?.birthday_pin_enabled !== 0,
       birthdayPinLeadDays: row?.birthday_pin_lead_days ?? 14,
@@ -344,9 +344,9 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
     }
     const { writer } = this.ready();
     await writer.write(async (tx) => {
-      await tx.run(`INSERT OR IGNORE INTO dev_roster_preferences (workspace_id, sort_mode)
+      await tx.run(`INSERT OR IGNORE INTO roster_preferences (workspace_id, sort_mode)
         VALUES (?, 'NAME')`, [this.workspaceId]);
-      await tx.run(`UPDATE dev_roster_preferences SET birthday_pin_enabled = ?,
+      await tx.run(`UPDATE roster_preferences SET birthday_pin_enabled = ?,
         birthday_pin_lead_days = ?, show_birthday_badge = ? WHERE workspace_id = ?`,
       [settings.birthdayPinEnabled ? 1 : 0, settings.birthdayPinLeadDays,
         settings.showBirthdayBadge ? 1 : 0, this.workspaceId]);
@@ -357,7 +357,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
   async listBirthdayDismissals(): Promise<readonly BirthdayDismissal[]> {
     const { connection } = this.ready();
     return connection.all<BirthdayDismissal>(`SELECT client_id AS clientId,
-      occurrence_date AS occurrenceDate FROM dev_birthday_dismissals WHERE workspace_id = ?`,
+      occurrence_date AS occurrenceDate FROM birthday_dismissals WHERE workspace_id = ?`,
     [this.workspaceId]);
   }
 
@@ -368,12 +368,12 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
     const { writer } = this.ready();
     await writer.write(async (tx) => {
       const client = await tx.first<{ birth_date: string | null }>(
-        `SELECT birth_date FROM dev_clients WHERE workspace_id = ? AND id = ? AND lifecycle = 'ACTIVE'`,
+        `SELECT birth_date FROM clients WHERE workspace_id = ? AND id = ? AND lifecycle = 'ACTIVE'`,
         [this.workspaceId, clientId]);
       if (client === null || client.birth_date === null
         || birthdayOccurrenceForYear(client.birth_date, Number(occurrenceDate.slice(0, 4)))
           !== occurrenceDate) throw new Error("CLIENT_BIRTHDAY_DISMISSAL_INVALID");
-      await tx.run(`INSERT OR IGNORE INTO dev_birthday_dismissals
+      await tx.run(`INSERT OR IGNORE INTO birthday_dismissals
         (workspace_id, client_id, occurrence_date) VALUES (?, ?, ?)`,
       [this.workspaceId, clientId, occurrenceDate]);
     });
@@ -387,7 +387,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
     const value = normalizedEmoji(emoji);
     const { writer } = this.ready();
     const updated = await writer.write(async (tx) => {
-      const result = await tx.run(`UPDATE dev_clients SET emoji = ?, updated_at = ?, revision = revision + 1
+      const result = await tx.run(`UPDATE clients SET emoji = ?, updated_at = ?, revision = revision + 1
         WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'ACTIVE'`,
       [value, new Date().toISOString(), this.workspaceId, clientId, expectedRevision]);
       if (result.changes !== 1) throw new Error("CLIENT_STALE_OR_WRONG_SCOPE");
@@ -401,9 +401,9 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
     if (!clientId.trim() || Number.isNaN(Date.parse(at))) throw new Error("CLIENT_OPEN_INVALID");
     const { writer } = this.ready();
     await writer.write(async (tx) => {
-      const result = await tx.run(`INSERT INTO dev_client_activity
+      const result = await tx.run(`INSERT INTO client_activity
         (workspace_id, client_id, last_opened_at)
-        SELECT workspace_id, id, ? FROM dev_clients
+        SELECT workspace_id, id, ? FROM clients
         WHERE workspace_id = ? AND id = ? AND lifecycle = 'ACTIVE'
         ON CONFLICT(workspace_id, client_id)
         DO UPDATE SET last_opened_at = excluded.last_opened_at`,
@@ -417,7 +417,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
     if (!id.trim()) return null;
     const { connection } = this.ready();
     return connection.first<ClientRow>(
-      `SELECT ${columns} FROM dev_clients WHERE workspace_id = ? AND id = ?`,
+      `SELECT ${columns} FROM clients WHERE workspace_id = ? AND id = ?`,
       [this.workspaceId, id]);
   }
 
@@ -452,7 +452,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
   /** Для workflow «профиль расчёта + пол и рост»: та же запись внутри общей транзакции; текущая ревизия читается в ней же. */
   readonly bodyParticipant: ClientBodyParticipant<SqliteStatementPort> = {
     update: async (tx, id, patch) => {
-      const row = await tx.first<{ revision: number }>("SELECT revision FROM dev_clients WHERE workspace_id = ? AND id = ? AND lifecycle = 'ACTIVE'", [this.workspaceId, id]);
+      const row = await tx.first<{ revision: number }>("SELECT revision FROM clients WHERE workspace_id = ? AND id = ? AND lifecycle = 'ACTIVE'", [this.workspaceId, id]);
       if (row === null) throw new Error("CLIENT_STALE_OR_WRONG_SCOPE");
       return writeBody(tx, this.workspaceId, id, row.revision, patch);
     },
@@ -465,7 +465,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
       : "mode = 'edit' AND client_id = ?";
     const bindings = clientId === null ? [this.workspaceId] : [this.workspaceId, clientId];
     const row = await connection.first<DraftRow>(`SELECT ${draftColumns}
-      FROM dev_client_recovery_drafts WHERE workspace_id = ? AND ${where}
+      FROM client_recovery_drafts WHERE workspace_id = ? AND ${where}
       AND updated_at >= ?`,
     [...bindings, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()]);
     return row === null ? null : parseDraft(row);
@@ -494,17 +494,17 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
         : "mode = 'edit' AND client_id = ?";
       const lookupBindings = input.clientId === null ? [this.workspaceId]
         : [this.workspaceId, input.clientId];
-      const existing = await tx.first<{ id: string }>(`SELECT id FROM dev_client_recovery_drafts
+      const existing = await tx.first<{ id: string }>(`SELECT id FROM client_recovery_drafts
         WHERE workspace_id = ? AND ${where}`, lookupBindings);
       const id = existing?.id ?? (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
       if (!id) throw new Error("CLIENT_DRAFT_ID_UNAVAILABLE");
       const now = new Date().toISOString();
       if (existing) {
-        await tx.run(`UPDATE dev_client_recovery_drafts SET base_client_revision = ?,
+        await tx.run(`UPDATE client_recovery_drafts SET base_client_revision = ?,
           form_data_json = ?, updated_at = ? WHERE id = ? AND workspace_id = ?`,
         [input.baseClientRevision, JSON.stringify(form), now, id, this.workspaceId]);
       } else {
-        await tx.run(`INSERT INTO dev_client_recovery_drafts
+        await tx.run(`INSERT INTO client_recovery_drafts
           (id, workspace_id, client_id, mode, base_client_revision,
            questionnaire_revision, draft_schema_version, form_data_json,
            questionnaire_answers_json, updated_at)
@@ -513,7 +513,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
           JSON.stringify(form), now]);
       }
       const row = await tx.first<DraftRow>(`SELECT ${draftColumns}
-        FROM dev_client_recovery_drafts WHERE workspace_id = ? AND id = ?`,
+        FROM client_recovery_drafts WHERE workspace_id = ? AND id = ?`,
       [this.workspaceId, id]);
       if (row === null) throw new Error("CLIENT_DRAFT_NOT_FOUND");
       return parseDraft(row);
@@ -524,10 +524,10 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
     const { writer } = this.ready();
     await writer.write(async (tx) => {
       if (clientId === null) {
-        await tx.run(`DELETE FROM dev_client_recovery_drafts
+        await tx.run(`DELETE FROM client_recovery_drafts
           WHERE workspace_id = ? AND mode = 'create'`, [this.workspaceId]);
       } else {
-        await tx.run(`DELETE FROM dev_client_recovery_drafts
+        await tx.run(`DELETE FROM client_recovery_drafts
           WHERE workspace_id = ? AND mode = 'edit' AND client_id = ?`,
         [this.workspaceId, clientId]);
       }
@@ -541,14 +541,14 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
     const { writer } = this.ready();
     const changed = await writer.write(async (tx) => {
       const now = new Date().toISOString();
-      const result = await tx.run(`UPDATE dev_clients SET lifecycle = ?, archived_at = ?,
+      const result = await tx.run(`UPDATE clients SET lifecycle = ?, archived_at = ?,
         updated_at = ?, revision = revision + 1
         WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = ?`,
       [archived ? "ARCHIVED" : "ACTIVE", archived ? now : null,
         now, this.workspaceId, id, expectedRevision, archived ? "ACTIVE" : "ARCHIVED"]);
       if (result.changes !== 1) throw new Error("CLIENT_STALE_OR_WRONG_SCOPE");
       if (archived) {
-        await tx.run(`DELETE FROM dev_client_activity
+        await tx.run(`DELETE FROM client_activity
           WHERE workspace_id = ? AND client_id = ?`, [this.workspaceId, id]);
       }
       return clientById(tx, this.workspaceId, id);
@@ -560,7 +560,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
   async getArchiveSort(): Promise<ArchiveSortMode> {
     const { connection } = this.ready();
     const row = await connection.first<{ archive_sort_mode: ArchiveSortMode }>(
-      "SELECT archive_sort_mode FROM dev_roster_preferences WHERE workspace_id = ?", [this.workspaceId]);
+      "SELECT archive_sort_mode FROM roster_preferences WHERE workspace_id = ?", [this.workspaceId]);
     return row?.archive_sort_mode ?? "ARCHIVED_AT";
   }
 
@@ -568,9 +568,9 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
     if (mode !== "ARCHIVED_AT" && mode !== "NAME") throw new Error("CLIENT_ARCHIVE_SORT_INVALID");
     const { writer } = this.ready();
     await writer.write(async (tx) => {
-      await tx.run(`INSERT OR IGNORE INTO dev_roster_preferences (workspace_id, sort_mode)
+      await tx.run(`INSERT OR IGNORE INTO roster_preferences (workspace_id, sort_mode)
         VALUES (?, 'NAME')`, [this.workspaceId]);
-      await tx.run("UPDATE dev_roster_preferences SET archive_sort_mode = ? WHERE workspace_id = ?",
+      await tx.run("UPDATE roster_preferences SET archive_sort_mode = ? WHERE workspace_id = ?",
         [mode, this.workspaceId]);
     });
     this.publishCommitted({ clientId: null, affectedRosters: ["ARCHIVED"] });
@@ -579,7 +579,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
   async countByLifecycle(): Promise<ClientLifecycleCounts> {
     const { connection } = this.ready();
     const rows = await connection.all<{ lifecycle: ClientRecord["lifecycle"]; n: number }>(
-      `SELECT lifecycle, count(*) AS n FROM dev_clients WHERE workspace_id = ? GROUP BY lifecycle`,
+      `SELECT lifecycle, count(*) AS n FROM clients WHERE workspace_id = ? GROUP BY lifecycle`,
       [this.workspaceId]);
     return {
       active: rows.find((row) => row.lifecycle === "ACTIVE")?.n ?? 0,
@@ -613,7 +613,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
         await tx.run(`DELETE FROM ${table} WHERE workspace_id = ? AND client_id = ?`,
           [this.workspaceId, clientId]);
       }
-      const result = await tx.run(`DELETE FROM dev_clients
+      const result = await tx.run(`DELETE FROM clients
         WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'ARCHIVED'`,
       [this.workspaceId, clientId, expectedRevision]);
       if (result.changes !== 1) throw new Error("CLIENT_STALE_OR_WRONG_SCOPE");

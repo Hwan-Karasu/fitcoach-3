@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { importHistoricalFixture } from "./support/import-historical-fixture.ts";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { RestTimerService } from "../apps/mobile/src/features/training/execution/application/RestTimerService.ts";
 import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParticipant } from
@@ -9,7 +10,7 @@ import type { RestSignalPort } from "../apps/mobile/src/features/training/execut
 import { adjustTimer, isFinished, pauseTimer, remainingSec, resumeTimer, runningTimers, startTimer } from
   "../apps/mobile/src/features/training/execution/domain/RestTimerRules.ts";
 import { DEV_TRAINING_EXECUTION_LEDGER, devTrainingExecutionCatalog } from
-  "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionCatalog.ts";
+  "./d01/history/DevTrainingExecutionCatalog.ts";
 import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
 import { WriterCoordinator } from "../apps/mobile/src/shared/db/WriterCoordinator.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
@@ -209,10 +210,11 @@ test("миграция v10: прежние таймеры сохраняются
   const clients = new DevClientRepository(shared, WS, []);
   await clients.initialize();
   await runMigrations(new WriterCoordinator(nodeSqlitePort(db)), devTrainingExecutionCatalog.filter((step) => step.version <= 9), DEV_TRAINING_EXECUTION_LEDGER);
-  const insert = db.prepare("INSERT INTO dev_training_rest_timers (id, workspace_id, client_id, client_name, exercise_key, exercise_name, started_at, end_at, signal_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)");
+  const insert = db.prepare("INSERT INTO training_rest_timers (id, workspace_id, client_id, client_name, exercise_key, exercise_name, started_at, end_at, signal_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)");
   insert.run("old-1", WS, "a", "SyntheticA", "pe-1", "Жим", T0, T0 + 600_000);
   insert.run("old-2", WS, "a", "SyntheticA", "pe-2", "Тяга", T0 + 5_000, T0 + 700_000);
-  const execution = new DevTrainingExecutionRepository(shared, WS);
+  const imported = await importHistoricalFixture(db, devTrainingExecutionCatalog, DEV_TRAINING_EXECUTION_LEDGER);
+  const execution = new DevTrainingExecutionRepository(imported.shared, WS);
   await execution.initialize();
   try {
     const rows = await execution.listTimers();

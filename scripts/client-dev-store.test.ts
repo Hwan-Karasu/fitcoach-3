@@ -5,13 +5,14 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
-import { devClientCatalog } from "../apps/mobile/src/features/clients/data/DevClientCatalog.ts";
+import { DEV_CLIENTS_LEDGER, devClientCatalog } from "./d01/history/DevClientCatalog.ts";
 import { formatHeightCmX10, parseHeightCmX10, validPastBirthDate } from
   "../apps/mobile/src/features/clients/domain/ClientProfileValidation.ts";
 import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
 import type { SqliteConnectionPort, SqliteStatementPort, SqlValue } from
   "../apps/mobile/src/shared/db/SqlitePort.ts";
 import { WriterCoordinator } from "../apps/mobile/src/shared/db/WriterCoordinator.ts";
+import { importHistoricalFixture } from "./support/import-historical-fixture.ts";
 
 function sqlitePort(db: DatabaseSync): SqliteConnectionPort {
   db.exec("PRAGMA foreign_keys = ON");
@@ -136,14 +137,15 @@ test("C03 basic profile validates dates and exact comma/dot height without inven
 test("F04 dev schema v7 upgrades an existing v1 client row in place", async () => {
   const db = new DatabaseSync(":memory:");
   const port = sqlitePort(db);
-  await runMigrations(new WriterCoordinator(port), [devClientCatalog[0]!]);
-  db.exec(`INSERT INTO dev_workspaces VALUES ('synthetic-workspace-a','Synthetic','2026-01-01T00:00:00Z');
-    INSERT INTO dev_clients
+  await runMigrations(new WriterCoordinator(port), [devClientCatalog[0]!], DEV_CLIENTS_LEDGER);
+  db.exec(`INSERT INTO workspaces VALUES ('synthetic-workspace-a','Synthetic','2026-01-01T00:00:00Z');
+    INSERT INTO clients
       (id,workspace_id,display_name,contact_phone,contact_email,lifecycle,revision,
        created_at,updated_at,archived_at)
     VALUES ('synthetic-client','synthetic-workspace-a','Before',NULL,NULL,'ACTIVE',1,
       '2026-01-01T00:00:00Z','2026-01-01T00:00:00Z',NULL);`);
-  const store = new DevClientRepository(async () => port, "synthetic-workspace-a");
+  const imported = await importHistoricalFixture(db, devClientCatalog, DEV_CLIENTS_LEDGER);
+  const store = new DevClientRepository(imported.shared, "synthetic-workspace-a");
   await store.initialize();
   try {
     const row = await store.get("synthetic-client");
@@ -151,8 +153,8 @@ test("F04 dev schema v7 upgrades an existing v1 client row in place", async () =
     assert.equal(row?.birthDate, null);
     assert.equal(row?.heightCmX10, null);
     assert.equal(row?.sex, null, "пол у старой карточки не угадывается");
-    assert.equal((db.prepare("SELECT count(*) AS n FROM schema_migrations").get() as { n: number }).n, 7);
-  } finally { await store.close(); }
+    assert.equal((imported.db.prepare("SELECT count(*) AS n FROM clients_schema_migrations").get() as { n: number }).n, 2);
+  } finally { await store.close(); await port.close(); }
 });
 
 test("C01 recent is a scoped activity fact, not Client.updatedAt, and sort persists", async () => {
@@ -262,7 +264,7 @@ test("C03 recovery draft survives reopen and is cleared only by a committed clie
     await second.close();
     const ageDraft = new DatabaseSync(file);
     try {
-      ageDraft.prepare("UPDATE dev_client_recovery_drafts SET updated_at = ?")
+      ageDraft.prepare("UPDATE client_recovery_drafts SET updated_at = ?")
         .run("2020-01-01T00:00:00.000Z");
     } finally { ageDraft.close(); }
     const third = new DevClientRepository(open, "synthetic-workspace-a");
@@ -315,14 +317,14 @@ test("C04 permanent delete: archived only, explicit owner manifest, other client
       { owner: "clients.birthdayDismissals", rows: 1 },
     ]);
     assert.equal((await store.get(a.id))?.revision, archived.revision);
-    assert.equal(rowCount(db, "dev_client_recovery_drafts", a.id), 1);
+    assert.equal(rowCount(db, "client_recovery_drafts", a.id), 1);
     await assert.rejects(store.deleteArchivedPermanently(a.id, archived.revision - 1),
       { message: "CLIENT_STALE_OR_WRONG_SCOPE" });
     assert.equal((await store.get(a.id))?.lifecycle, "ARCHIVED");
     await store.deleteArchivedPermanently(a.id, archived.revision);
     // CA-04: A is fully gone, B keeps every owned row.
     assert.equal(await store.get(a.id), null);
-    for (const table of ["dev_client_recovery_drafts", "dev_client_activity", "dev_birthday_dismissals"]) {
+    for (const table of ["client_recovery_drafts", "client_activity", "birthday_dismissals"]) {
       assert.equal(rowCount(db, table, a.id), 0, table);
       assert.equal(rowCount(db, table, b.id), 1, table);
     }
@@ -346,7 +348,7 @@ test("C04 permanent delete fails closed on an unknown client-owned table", async
     await assert.rejects(store.deleteArchivedPermanently(client.id, archived.revision),
       { message: "CLIENT_DELETION_BLOCKED" });
     assert.equal((await store.get(client.id))?.lifecycle, "ARCHIVED");
-    assert.equal(rowCount(db, "dev_client_recovery_drafts", client.id), 1);
+    assert.equal(rowCount(db, "client_recovery_drafts", client.id), 1);
   } finally { await store.close(); }
 });
 

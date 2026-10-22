@@ -10,10 +10,12 @@ import { assertDropStructure, confirmationAfterSave, isInstant, isLocalDate, loc
   toggleSide, validateContent, validateSides, workoutStatus, type ConfirmationChange, type SetContent,
   type SidesChange } from "../domain/ExecutionRules.ts";
 import type { SaveSetInput, SetIdentity, SetSaveResult, TrainingExecutionCommittedChange,
-  TrainingExecutionPort, SessionOrigin } from "../domain/TrainingExecutionPort.ts";
+  TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import type { RestTimerStorePort } from "../domain/RestTimerPorts.ts";
 import type { RestTimer } from "../domain/RestTimerRules.ts";
 import { DEV_TRAINING_EXECUTION_LEDGER, devTrainingExecutionCatalog } from "./DevTrainingExecutionCatalog.ts";
+import { readStoredJson } from "../../../../shared/db/StoredJson.ts";
+import { storedOrigin } from "../domain/StoredOriginShape.ts";
 import type { WeekExecutionParticipant, WorkoutCopyMapping } from "../domain/WeekCopyParticipant.ts";
 import type { WeekRenumberParticipant } from "../domain/WeekRenumberParticipant.ts";
 import type { ExecutionCleanupParticipant } from "../domain/ExecutionCleanupParticipant.ts";
@@ -24,10 +26,10 @@ const OUTCOMES: readonly WorkoutOutcome[] = ["COMPLETED", "MISSED", "CANCELLED"]
  * §48.34: тренировка начата, если есть значение, введённое тренером, или засчитанный подход (сессия `s`). Значения,
  * перенесённые копированием недели («Нет»), — предварительные и тренировку не начинают (§48.24, §48.34 п. 3).
  */
-const STARTED_SQL = `EXISTS (SELECT 1 FROM dev_training_performed_sets f WHERE f.workspace_id = s.workspace_id
+const STARTED_SQL = `EXISTS (SELECT 1 FROM training_performed_sets f WHERE f.workspace_id = s.workspace_id
   AND f.session_id = s.id AND f.removed_at IS NULL AND (f.confirmed_at IS NOT NULL
     OR (f.origin <> 'COPY' AND (COALESCE(f.reps, f.load_grams, f.duration_sec, f.distance_m) IS NOT NULL
-      OR EXISTS (SELECT 1 FROM dev_training_performed_sides d WHERE d.workspace_id = f.workspace_id AND d.set_id = f.id
+      OR EXISTS (SELECT 1 FROM training_performed_sides d WHERE d.workspace_id = f.workspace_id AND d.set_id = f.id
         AND COALESCE(d.reps, d.load_grams, d.duration_sec, d.distance_m) IS NOT NULL)))))`;
 
 const SESSION_COLUMNS = `id, client_id AS clientId, program_id AS programId, week_index AS weekIndex,
@@ -54,7 +56,7 @@ async function sidesWhere(port: SqliteStatementPort, workspaceId: string, condit
   Promise<ReadonlyMap<string, StoredSides>> {
   const result = new Map<string, { L?: SideRow; R?: SideRow }>();
   const rows = await port.all<SideRow>(`SELECT set_id AS setId, side, reps, load_grams AS loadGrams, duration_sec AS durationSec,
-    distance_m AS distanceM, confirmed_at AS confirmedAt FROM dev_training_performed_sides
+    distance_m AS distanceM, confirmed_at AS confirmedAt FROM training_performed_sides
     WHERE workspace_id = ? AND ${condition}`, [workspaceId, ...params]);
   for (const row of rows) result.set(row.setId, { ...result.get(row.setId), [row.side]: row });
   return result;
@@ -93,7 +95,7 @@ async function dropsWhere(port: SqliteStatementPort, workspaceId: string, condit
   Promise<ReadonlyMap<string, readonly SetValues[]>> {
   const result = new Map<string, SetValues[]>();
   const rows = await port.all<DropRow>(`SELECT set_id AS setId, reps, load_grams AS loadGrams, duration_sec AS durationSec,
-    distance_m AS distanceM FROM dev_training_performed_drops
+    distance_m AS distanceM FROM training_performed_drops
     WHERE workspace_id = ? AND ${condition} ORDER BY set_id, position`, [workspaceId, ...params]);
   for (const row of rows) result.set(row.setId, [...(result.get(row.setId) ?? []), valuesOf(row)]);
   return result;
@@ -126,26 +128,26 @@ function mergeSides(change: SidesChange): ConfirmationChange {
 /** Сторона дневника в PermanentlyDeleteArchivedClient (§15.7): выполнения и факты подходов клиента. */
 export const devTrainingExecutionClientDeletionParticipant = {
   owner: "training.execution",
-  tables: ["dev_training_exercise_notes", "dev_training_performed_sides", "dev_training_performed_drops", "dev_training_performed_sets", "dev_training_sessions",
-    "dev_training_rest_timers"] as const,
+  tables: ["training_exercise_notes", "training_performed_sides", "training_performed_drops", "training_performed_sets", "training_sessions",
+    "training_rest_timers"] as const,
   async count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number> {
-    const row = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM dev_training_sessions
+    const row = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM training_sessions
       WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
     return row?.n ?? 0;
   },
   async detach(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<void> {
-    await tx.run(`DELETE FROM dev_training_exercise_notes WHERE workspace_id = ? AND session_id IN
-      (SELECT id FROM dev_training_sessions WHERE workspace_id = ? AND client_id = ?)`, [workspaceId, workspaceId, clientId]);
-    await tx.run(`DELETE FROM dev_training_performed_sides WHERE workspace_id = ? AND set_id IN
-      (SELECT f.id FROM dev_training_performed_sets f JOIN dev_training_sessions s ON s.id = f.session_id
+    await tx.run(`DELETE FROM training_exercise_notes WHERE workspace_id = ? AND session_id IN
+      (SELECT id FROM training_sessions WHERE workspace_id = ? AND client_id = ?)`, [workspaceId, workspaceId, clientId]);
+    await tx.run(`DELETE FROM training_performed_sides WHERE workspace_id = ? AND set_id IN
+      (SELECT f.id FROM training_performed_sets f JOIN training_sessions s ON s.id = f.session_id
         WHERE s.workspace_id = ? AND s.client_id = ?)`, [workspaceId, workspaceId, clientId]);
-    await tx.run(`DELETE FROM dev_training_performed_drops WHERE workspace_id = ? AND set_id IN
-      (SELECT f.id FROM dev_training_performed_sets f JOIN dev_training_sessions s ON s.id = f.session_id
+    await tx.run(`DELETE FROM training_performed_drops WHERE workspace_id = ? AND set_id IN
+      (SELECT f.id FROM training_performed_sets f JOIN training_sessions s ON s.id = f.session_id
         WHERE s.workspace_id = ? AND s.client_id = ?)`, [workspaceId, workspaceId, clientId]);
-    await tx.run(`DELETE FROM dev_training_performed_sets WHERE workspace_id = ? AND session_id IN
-      (SELECT id FROM dev_training_sessions WHERE workspace_id = ? AND client_id = ?)`, [workspaceId, workspaceId, clientId]);
-    await tx.run("DELETE FROM dev_training_sessions WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
-    await tx.run("DELETE FROM dev_training_rest_timers WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run(`DELETE FROM training_performed_sets WHERE workspace_id = ? AND session_id IN
+      (SELECT id FROM training_sessions WHERE workspace_id = ? AND client_id = ?)`, [workspaceId, workspaceId, clientId]);
+    await tx.run("DELETE FROM training_sessions WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run("DELETE FROM training_rest_timers WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
   },
 };
 
@@ -205,7 +207,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
 
   private async modeOf(port: SqliteStatementPort): Promise<ConfirmationMode> {
     const row = await port.first<{ mode: ConfirmationMode }>(`SELECT confirmation_mode AS mode
-      FROM dev_training_execution_settings WHERE workspace_id = ?`, [this.workspaceId]);
+      FROM training_execution_settings WHERE workspace_id = ?`, [this.workspaceId]);
     return row?.mode ?? DEFAULT_CONFIRMATION_MODE;
   }
 
@@ -215,13 +217,13 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
 
   async setConfirmationMode(mode: ConfirmationMode): Promise<void> {
     if (mode !== "AUTO" && mode !== "MANUAL") throw new Error("INVALID_METRIC");
-    await this.ready().writer.write((tx) => tx.run(`INSERT INTO dev_training_execution_settings (workspace_id, confirmation_mode)
+    await this.ready().writer.write((tx) => tx.run(`INSERT INTO training_execution_settings (workspace_id, confirmation_mode)
       VALUES (?, ?) ON CONFLICT (workspace_id) DO UPDATE SET confirmation_mode = excluded.confirmation_mode`,
     [this.workspaceId, mode]));
   }
 
   private sessionOf(port: SqliteStatementPort, slot: WorkoutSlot): Promise<WorkoutSession | null> {
-    return port.first<WorkoutSession>(`SELECT ${SESSION_COLUMNS} FROM dev_training_sessions
+    return port.first<WorkoutSession>(`SELECT ${SESSION_COLUMNS} FROM training_sessions
       WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND week_index = ? AND planned_workout_id = ?`,
     [this.workspaceId, slot.clientId, slot.programId, slot.weekIndex, slot.plannedWorkoutId]);
   }
@@ -233,14 +235,14 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
     if (!id) throw new Error("SESSION_ID_UNAVAILABLE");
     const stamp = now.toISOString();
-    await tx.run(`INSERT INTO dev_training_sessions (id, workspace_id, client_id, program_id, week_index, planned_workout_id,
+    await tx.run(`INSERT INTO training_sessions (id, workspace_id, client_id, program_id, week_index, planned_workout_id,
       actual_date, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
     [id, this.workspaceId, slot.clientId, slot.programId, slot.weekIndex, slot.plannedWorkoutId, localDateOf(now), stamp, stamp]);
     return { ...slot, id, outcome: null, actualDate: localDateOf(now), startedAt: null, finishedAt: null, revision: 1 };
   }
 
   private factOf(port: SqliteStatementPort, sessionId: string, plannedSetId: string): Promise<FactRow | null> {
-    return port.first<FactRow>(`SELECT ${FACT_COLUMNS} FROM dev_training_performed_sets
+    return port.first<FactRow>(`SELECT ${FACT_COLUMNS} FROM training_performed_sets
       WHERE workspace_id = ? AND session_id = ? AND planned_set_id = ?`, [this.workspaceId, sessionId, plannedSetId]);
   }
 
@@ -251,12 +253,12 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
   private async readWorkout(connection: SqliteStatementPort, slot: WorkoutSlot): Promise<WorkoutExecution> {
     const session = await this.sessionOf(connection, slot);
     if (session === null) return { session: null, facts: new Map(), notes: new Map() };
-    const rows = await connection.all<FactRow>(`SELECT ${FACT_COLUMNS} FROM dev_training_performed_sets
+    const rows = await connection.all<FactRow>(`SELECT ${FACT_COLUMNS} FROM training_performed_sets
       WHERE workspace_id = ? AND session_id = ? AND removed_at IS NULL`, [this.workspaceId, session.id]);
     const drops = await dropsOf(connection, this.workspaceId, rows.filter((row) => row.setType === "DROP").map((row) => row.id));
     const sides = await sidesOf(connection, this.workspaceId, rows.filter((row) => row.sided === 1).map((row) => row.id));
     const notes = await connection.all<{ plannedExerciseId: string; note: string }>(`SELECT planned_exercise_id AS plannedExerciseId,
-      note FROM dev_training_exercise_notes WHERE workspace_id = ? AND session_id = ?`, [this.workspaceId, session.id]);
+      note FROM training_exercise_notes WHERE workspace_id = ? AND session_id = ?`, [this.workspaceId, session.id]);
     return { session, facts: new Map(rows.map((row) => [row.plannedSetId,
       toFact(row, drops.get(row.id) ?? [], factSides(row, sides.get(row.id)))])),
     notes: new Map(notes.map((item) => [item.plannedExerciseId, item.note])) };
@@ -265,9 +267,9 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
   listActiveWorkouts(): Promise<readonly ActiveWorkout[]> {
     return this.ready().connection.all<ActiveWorkout>(`SELECT s.client_id AS clientId, s.program_id AS programId,
         s.week_index AS weekIndex, s.planned_workout_id AS plannedWorkoutId, s.actual_date AS actualDate
-      FROM dev_training_sessions s
+      FROM training_sessions s
       WHERE s.workspace_id = ? AND s.outcome IS NULL AND ${STARTED_SQL}
-      ORDER BY (SELECT max(f.updated_at) FROM dev_training_performed_sets f WHERE f.workspace_id = s.workspace_id
+      ORDER BY (SELECT max(f.updated_at) FROM training_performed_sets f WHERE f.workspace_id = s.workspace_id
         AND f.session_id = s.id AND f.removed_at IS NULL) DESC`, [this.workspaceId]);
   }
 
@@ -278,16 +280,16 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
   private async readExecutions(connection: SqliteStatementPort, sessionsWhere: string, params: readonly SqlValue[]) {
     const ws = this.workspaceId;
     const sessions = await connection.all<WorkoutSession & { originJson: string | null }>(
-      `SELECT ${SESSION_COLUMNS}, origin_json AS originJson FROM dev_training_sessions s WHERE s.workspace_id = ? AND ${sessionsWhere}`, [ws, ...params]);
+      `SELECT ${SESSION_COLUMNS}, origin_json AS originJson FROM training_sessions s WHERE s.workspace_id = ? AND ${sessionsWhere}`, [ws, ...params]);
     if (sessions.length === 0) return [];
-    const inSessions = `SELECT s.id FROM dev_training_sessions s WHERE s.workspace_id = ? AND ${sessionsWhere}`;
-    const setIds = `SELECT id FROM dev_training_performed_sets WHERE workspace_id = ? AND removed_at IS NULL AND session_id IN (${inSessions})`;
+    const inSessions = `SELECT s.id FROM training_sessions s WHERE s.workspace_id = ? AND ${sessionsWhere}`;
+    const setIds = `SELECT id FROM training_performed_sets WHERE workspace_id = ? AND removed_at IS NULL AND session_id IN (${inSessions})`;
     const facts = await connection.all<FactRow & { sessionId: string }>(`SELECT ${FACT_COLUMNS}, session_id AS sessionId
-      FROM dev_training_performed_sets WHERE workspace_id = ? AND removed_at IS NULL AND session_id IN (${inSessions})`, [ws, ws, ...params]);
+      FROM training_performed_sets WHERE workspace_id = ? AND removed_at IS NULL AND session_id IN (${inSessions})`, [ws, ws, ...params]);
     const drops = await dropsWhere(connection, ws, `set_id IN (${setIds})`, [ws, ws, ...params]);
     const sides = await sidesWhere(connection, ws, `set_id IN (${setIds})`, [ws, ws, ...params]);
     const notes = await connection.all<{ sessionId: string; plannedExerciseId: string; note: string }>(`SELECT session_id AS sessionId,
-      planned_exercise_id AS plannedExerciseId, note FROM dev_training_exercise_notes
+      planned_exercise_id AS plannedExerciseId, note FROM training_exercise_notes
       WHERE workspace_id = ? AND session_id IN (${inSessions})`, [ws, ws, ...params]);
     const factsBySession = new Map<string, FactRow[]>();
     for (const { sessionId, ...row } of facts) factsBySession.set(sessionId, [...(factsBySession.get(sessionId) ?? []), row]);
@@ -306,8 +308,11 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
 
   async listClientExecutions(clientId: string) {
     const rows = await this.readExecutions(this.ready().connection, "s.client_id = ?", [clientId]);
-    return rows.map(({ session, originJson, execution }) => ({ programId: session.programId, weekIndex: session.weekIndex,
-      plannedWorkoutId: session.plannedWorkoutId, origin: originJson === null ? null : JSON.parse(originJson) as SessionOrigin, execution }));
+    return rows.flatMap(({ session, originJson, execution }) => {
+      const origin = originJson === null ? null : readStoredJson(originJson, storedOrigin, `training_sessions:${session.id}`);
+      if (originJson !== null && origin === null) return [];
+      return [{ programId: session.programId, weekIndex: session.weekIndex, plannedWorkoutId: session.plannedWorkoutId, origin, execution }];
+    });
   }
 
   async getProgramStatuses(clientId: string, programId: string): Promise<readonly SessionStatus[]> {
@@ -315,7 +320,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       outcome: WorkoutOutcome | null; started: number }>(`SELECT s.week_index AS weekIndex,
         s.planned_workout_id AS plannedWorkoutId, s.outcome,
         ${STARTED_SQL} AS started
-      FROM dev_training_sessions s WHERE s.workspace_id = ? AND s.client_id = ? AND s.program_id = ? AND s.plan_deleted_at IS NULL`,
+      FROM training_sessions s WHERE s.workspace_id = ? AND s.client_id = ? AND s.program_id = ? AND s.plan_deleted_at IS NULL`,
     [this.workspaceId, clientId, programId]);
     return rows.map((row) => ({ weekIndex: row.weekIndex, plannedWorkoutId: row.plannedWorkoutId,
       status: workoutStatus(row.outcome, row.started === 1) }));
@@ -329,16 +334,16 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     column: "planned_exercise_id" | "exercise_id", value: string):
     Promise<Readonly<{ date: string; sets: readonly Readonly<{ setType: SetType; value: PreviousSet }>[] }> | null> {
     const session = await port.first<{ id: string; date: string }>(`SELECT s.id, s.actual_date AS date
-      FROM dev_training_sessions s
+      FROM training_sessions s
       WHERE s.workspace_id = ? AND s.client_id = ? AND s.program_id = ?
         AND (s.actual_date < ? OR (s.actual_date = ? AND s.created_at < ?))
         AND NOT (s.week_index = ? AND s.planned_workout_id = ?)
-        AND EXISTS (SELECT 1 FROM dev_training_performed_sets f WHERE f.workspace_id = s.workspace_id
+        AND EXISTS (SELECT 1 FROM training_performed_sets f WHERE f.workspace_id = s.workspace_id
           AND f.session_id = s.id AND f.confirmed_at IS NOT NULL AND f.removed_at IS NULL AND f.${column} = ?)
       ORDER BY s.actual_date DESC, s.week_index DESC, s.created_at DESC LIMIT 1`,
     [this.workspaceId, slot.clientId, slot.programId, date, date, startedBefore, slot.weekIndex, slot.plannedWorkoutId, value]);
     if (session === null) return null;
-    const rows = await port.all<FactRow>(`SELECT ${FACT_COLUMNS} FROM dev_training_performed_sets
+    const rows = await port.all<FactRow>(`SELECT ${FACT_COLUMNS} FROM training_performed_sets
       WHERE workspace_id = ? AND session_id = ? AND confirmed_at IS NOT NULL AND removed_at IS NULL AND ${column} = ?
       ORDER BY rowid`,
     [this.workspaceId, session.id, value]);
@@ -363,7 +368,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     const date = current.session?.actualDate ?? localDateOf(now);
     // В тот же день «прошлое» — только начатое раньше текущего выполнения (ещё не начатое начнётся сейчас).
     const startedBefore = current.session === null ? now.toISOString()
-      : (await connection.first<{ createdAt: string }>(`SELECT created_at AS createdAt FROM dev_training_sessions
+      : (await connection.first<{ createdAt: string }>(`SELECT created_at AS createdAt FROM training_sessions
         WHERE workspace_id = ? AND id = ?`, [this.workspaceId, current.session.id]))?.createdAt ?? now.toISOString();
     const result = new Map<string, PreviousSet>();
     for (const query of queries) {
@@ -407,32 +412,32 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     if (existing === null) {
       const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
       if (!id) throw new Error("FACT_ID_UNAVAILABLE");
-      await tx.run(`INSERT INTO dev_training_performed_sets (planned_exercise_id, position, set_type, reps, load_grams,
+      await tx.run(`INSERT INTO training_performed_sets (planned_exercise_id, position, set_type, reps, load_grams,
         duration_sec, distance_m, rpe, confirmed_at, updated_at, sided, id, workspace_id, session_id, planned_set_id, exercise_id,
         origin, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'INPUT', 1)`,
       [...params, id, this.workspaceId, session.id, identity.plannedSetId, identity.exerciseId]);
     } else {
-      await tx.run(`UPDATE dev_training_performed_sets SET planned_exercise_id = ?, position = ?, set_type = ?, reps = ?,
+      await tx.run(`UPDATE training_performed_sets SET planned_exercise_id = ?, position = ?, set_type = ?, reps = ?,
         load_grams = ?, duration_sec = ?, distance_m = ?, rpe = ?, confirmed_at = ?, updated_at = ?, sided = ?, origin = 'INPUT',
         revision = revision + 1 WHERE workspace_id = ? AND id = ?`, [...params, this.workspaceId, existing.id]);
     }
     const saved = await this.factOf(tx, session.id, identity.plannedSetId);
     if (saved === null) throw new Error("FACT_NOT_FOUND");
     // Мини-сеты — часть того же факта: переписываются целиком после строки подхода (триггер проверяет тип).
-    await tx.run("DELETE FROM dev_training_performed_drops WHERE workspace_id = ? AND set_id = ?", [this.workspaceId, saved.id]);
+    await tx.run("DELETE FROM training_performed_drops WHERE workspace_id = ? AND set_id = ?", [this.workspaceId, saved.id]);
     for (const [index, drop] of content.drops.entries()) {
-      await tx.run(`INSERT INTO dev_training_performed_drops (workspace_id, set_id, position, reps, load_grams, duration_sec,
+      await tx.run(`INSERT INTO training_performed_drops (workspace_id, set_id, position, reps, load_grams, duration_sec,
         distance_m) VALUES (?, ?, ?, ?, ?, ?, ?)`, [this.workspaceId, saved.id, index + 2, drop.reps, drop.loadGrams,
         drop.durationSec, drop.distanceM]);
     }
     // Стороны — тоже часть того же факта: у каждой своя отметка выполнения (§48.76).
-    await tx.run("DELETE FROM dev_training_performed_sides WHERE workspace_id = ? AND set_id = ?", [this.workspaceId, saved.id]);
+    await tx.run("DELETE FROM training_performed_sides WHERE workspace_id = ? AND set_id = ?", [this.workspaceId, saved.id]);
     if (sides !== null) {
       const sideStamp = (sideChange: ConfirmationChange, before: SideRow | undefined) =>
         !sideChange.confirmed ? null : sideChange.confirmedNow ? stamp : before?.confirmedAt ?? stamp;
       for (const [side, sideValues, sideChange, before] of [["L", sides.pair.left, sides.change.left, existingSides.L],
         ["R", sides.pair.right, sides.change.right, existingSides.R]] as const) {
-        await tx.run(`INSERT INTO dev_training_performed_sides (workspace_id, set_id, side, reps, load_grams, duration_sec,
+        await tx.run(`INSERT INTO training_performed_sides (workspace_id, set_id, side, reps, load_grams, duration_sec,
           distance_m, confirmed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [this.workspaceId, saved.id, side, sideValues.reps,
           sideValues.loadGrams, sideValues.durationSec, sideValues.distanceM, sideStamp(sideChange, before)]);
       }
@@ -442,7 +447,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     // не меняем: ввод подходов не должен конфликтовать с правкой исхода и даты.
     let started = session;
     if (markStart && change.confirmedNow && session.startedAt === null) {
-      await tx.run(`UPDATE dev_training_sessions SET started_at = ? WHERE workspace_id = ? AND id = ? AND started_at IS NULL`,
+      await tx.run(`UPDATE training_sessions SET started_at = ? WHERE workspace_id = ? AND id = ? AND started_at IS NULL`,
         [stamp, this.workspaceId, session.id]);
       started = { ...session, startedAt: stamp };
     }
@@ -501,11 +506,11 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       const session = await this.ensureSession(tx, slot, now);
       const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
       if (!id) throw new Error("FACT_ID_UNAVAILABLE");
-      const count = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM dev_training_performed_sets
+      const count = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM training_performed_sets
         WHERE workspace_id = ? AND session_id = ? AND planned_exercise_id = ? AND extra = 1`,
       [this.workspaceId, session.id, where.plannedExerciseId]);
       const plannedSetId = `extra-${id}`;
-      await tx.run(`INSERT INTO dev_training_performed_sets (id, workspace_id, session_id, planned_set_id, planned_exercise_id,
+      await tx.run(`INSERT INTO training_performed_sets (id, workspace_id, session_id, planned_set_id, planned_exercise_id,
         exercise_id, position, set_type, origin, revision, updated_at, extra) VALUES (?, ?, ?, ?, ?, ?, ?, 'WARMUP', 'INPUT', 1, ?, 1)`,
       [id, this.workspaceId, session.id, plannedSetId, where.plannedExerciseId, where.exerciseId, count?.n ?? 0,
         now.toISOString()]);
@@ -525,7 +530,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       if (fact === null || fact.removedAt !== null) throw new Error("FACT_NOT_FOUND");
       if (fact.extra !== 1) throw new Error("INVALID_METRIC");
       if (fact.revision !== expectedRevision) throw new Error("STALE_SESSION");
-      await tx.run(`UPDATE dev_training_performed_sets SET removed_at = ?, revision = revision + 1, updated_at = ?
+      await tx.run(`UPDATE training_performed_sets SET removed_at = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ?`, [now.toISOString(), now.toISOString(), this.workspaceId, fact.id]);
     });
     this.publish(slot);
@@ -538,12 +543,12 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     await this.ready().writer.write(async (tx) => {
       if (note === "") {
         const session = await this.sessionOf(tx, slot);
-        if (session !== null) await tx.run(`DELETE FROM dev_training_exercise_notes WHERE workspace_id = ? AND session_id = ?
+        if (session !== null) await tx.run(`DELETE FROM training_exercise_notes WHERE workspace_id = ? AND session_id = ?
           AND planned_exercise_id = ?`, [this.workspaceId, session.id, plannedExerciseId]);
         return;
       }
       const session = await this.ensureSession(tx, slot, now);
-      await tx.run(`INSERT INTO dev_training_exercise_notes (workspace_id, session_id, planned_exercise_id, note, updated_at)
+      await tx.run(`INSERT INTO training_exercise_notes (workspace_id, session_id, planned_exercise_id, note, updated_at)
         VALUES (?, ?, ?, ?, ?) ON CONFLICT (workspace_id, session_id, planned_exercise_id)
         DO UPDATE SET note = excluded.note, updated_at = excluded.updated_at`,
       [this.workspaceId, session.id, plannedExerciseId, note, now.toISOString()]);
@@ -563,14 +568,14 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
   }
 
   private async deleteSession(tx: SqliteStatementPort, sessionId: string): Promise<void> {
-      const facts = `SELECT id FROM dev_training_performed_sets WHERE workspace_id = ? AND session_id = ?`;
-      await tx.run(`DELETE FROM dev_training_performed_sides WHERE workspace_id = ? AND set_id IN (${facts})`,
+      const facts = `SELECT id FROM training_performed_sets WHERE workspace_id = ? AND session_id = ?`;
+      await tx.run(`DELETE FROM training_performed_sides WHERE workspace_id = ? AND set_id IN (${facts})`,
         [this.workspaceId, this.workspaceId, sessionId]);
-      await tx.run(`DELETE FROM dev_training_performed_drops WHERE workspace_id = ? AND set_id IN (${facts})`,
+      await tx.run(`DELETE FROM training_performed_drops WHERE workspace_id = ? AND set_id IN (${facts})`,
         [this.workspaceId, this.workspaceId, sessionId]);
-      await tx.run("DELETE FROM dev_training_performed_sets WHERE workspace_id = ? AND session_id = ?", [this.workspaceId, sessionId]);
-      await tx.run("DELETE FROM dev_training_exercise_notes WHERE workspace_id = ? AND session_id = ?", [this.workspaceId, sessionId]);
-      await tx.run("DELETE FROM dev_training_sessions WHERE workspace_id = ? AND id = ?", [this.workspaceId, sessionId]);
+      await tx.run("DELETE FROM training_performed_sets WHERE workspace_id = ? AND session_id = ?", [this.workspaceId, sessionId]);
+      await tx.run("DELETE FROM training_exercise_notes WHERE workspace_id = ? AND session_id = ?", [this.workspaceId, sessionId]);
+      await tx.run("DELETE FROM training_sessions WHERE workspace_id = ? AND id = ?", [this.workspaceId, sessionId]);
   }
 
   private async copyWorkoutFacts(tx: SqliteStatementPort, mapping: WorkoutCopyMapping, confirm: boolean, now: Date) {
@@ -597,7 +602,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
           const change = sidesAfterSave(mode, { left: false, right: false }, pair, exercise.metrics);
           return { content, rpe: fact.rpe, sides: { pair, change }, change: mergeSides(change) };
         }, false);
-        await tx.run("UPDATE dev_training_performed_sets SET origin = 'COPY', extra = ? WHERE workspace_id = ? AND id = ?",
+        await tx.run("UPDATE training_performed_sets SET origin = 'COPY', extra = ? WHERE workspace_id = ? AND id = ?",
           [fact.extra ? 1 : 0, this.workspaceId, copied.fact.id]);
       }
     }
@@ -609,7 +614,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       if (plannedWorkoutIds !== null && plannedWorkoutIds.length === 0) return;
       const filter = plannedWorkoutIds === null ? "" : ` AND planned_workout_id IN (${plannedWorkoutIds.map(() => "?").join(", ")})`;
       // Выполнения со снимком «план удалён» — явно сохранённая история (§50.3): отдельное удаление программы их не трогает.
-      const sessions = await tx.all<{ id: string }>(`SELECT id FROM dev_training_sessions
+      const sessions = await tx.all<{ id: string }>(`SELECT id FROM training_sessions
         WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND plan_deleted_at IS NULL${filter}`,
       [this.workspaceId, clientId, programId, ...(plannedWorkoutIds ?? [])]);
       for (const session of sessions) await this.deleteSession(tx, session.id);
@@ -618,11 +623,11 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       if (plannedWorkoutIds !== null && plannedWorkoutIds.length === 0) return;
       const filter = plannedWorkoutIds === null ? "" : ` AND planned_workout_id IN (${plannedWorkoutIds.map(() => "?").join(", ")})`;
       const sessions = await tx.all<{ id: string; weekIndex: number; plannedWorkoutId: string }>(`SELECT id, week_index AS weekIndex,
-        planned_workout_id AS plannedWorkoutId FROM dev_training_sessions
+        planned_workout_id AS plannedWorkoutId FROM training_sessions
         WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND plan_deleted_at IS NULL${filter}`,
       [this.workspaceId, clientId, programId, ...(plannedWorkoutIds ?? [])]);
       for (const session of sessions) {
-        await tx.run("UPDATE dev_training_sessions SET origin_json = ?, plan_deleted_at = ? WHERE workspace_id = ? AND id = ?",
+        await tx.run("UPDATE training_sessions SET origin_json = ?, plan_deleted_at = ? WHERE workspace_id = ? AND id = ?",
           [JSON.stringify(originOf(session.weekIndex, session.plannedWorkoutId)), now.toISOString(), this.workspaceId, session.id]);
       }
     },
@@ -635,7 +640,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       for (const [ids, from, to] of [[input.toSecond, input.first, input.second], [input.toFirst, input.second, input.first]] as const) {
         if (ids.length === 0) continue;
         // Ревизия растёт: открытый дневник с прежним номером недели получит конфликт, а не запишет в чужую неделю.
-        await tx.run(`UPDATE dev_training_sessions SET week_index = ?, revision = revision + 1, updated_at = ?
+        await tx.run(`UPDATE training_sessions SET week_index = ?, revision = revision + 1, updated_at = ?
           WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND week_index = ?
             AND planned_workout_id IN (${ids.map(() => "?").join(", ")})`,
         [to, now.toISOString(), this.workspaceId, input.clientId, input.programId, from, ...ids]);
@@ -671,7 +676,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       // Исход у ещё не начатой тренировки (например, «Пропущена») создаёт выполнение без фактов.
       const session = existing ?? await this.ensureSession(tx, slot, now);
       // PC §48.86.13: «Завершить» записывает окончание, если его ещё нет; отмена завершения и повторное завершение отметки не стирают и не переписывают.
-      await tx.run(`UPDATE dev_training_sessions SET outcome = ?, finished_at = CASE WHEN ? = 'COMPLETED' THEN COALESCE(finished_at, ?) ELSE finished_at END,
+      await tx.run(`UPDATE training_sessions SET outcome = ?, finished_at = CASE WHEN ? = 'COMPLETED' THEN COALESCE(finished_at, ?) ELSE finished_at END,
         revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND id = ?`,
       [outcome, outcome, now.toISOString(), now.toISOString(), this.workspaceId, session.id]);
       return await this.sessionOf(tx, slot) as WorkoutSession;
@@ -687,7 +692,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     const shifted = (column: string) => `CASE WHEN ${column} IS NULL OR actual_date IS NULL THEN ${column}
       ELSE strftime('%Y-%m-%dT%H:%M:%fZ', ${column}, CAST(round(julianday(?) - julianday(actual_date)) AS INTEGER) || ' days') END`;
     const saved = await this.ready().writer.write(async (tx) => {
-      const result = await tx.run(`UPDATE dev_training_sessions SET started_at = ${shifted("started_at")}, finished_at = ${shifted("finished_at")},
+      const result = await tx.run(`UPDATE training_sessions SET started_at = ${shifted("started_at")}, finished_at = ${shifted("finished_at")},
         actual_date = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND week_index = ? AND planned_workout_id = ?
           AND revision = ?`, [date, date, date, now.toISOString(), this.workspaceId, slot.clientId, slot.programId, slot.weekIndex,
@@ -704,7 +709,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     assertSlot(slot);
     for (const value of [times.startedAt, times.finishedAt]) if (value !== null && !isInstant(value)) throw new Error("INVALID_METRIC");
     const saved = await this.ready().writer.write(async (tx) => {
-      const result = await tx.run(`UPDATE dev_training_sessions SET started_at = ?, finished_at = ?, revision = revision + 1, updated_at = ?
+      const result = await tx.run(`UPDATE training_sessions SET started_at = ?, finished_at = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND week_index = ? AND planned_workout_id = ? AND revision = ?`,
       [times.startedAt, times.finishedAt, now.toISOString(), this.workspaceId, slot.clientId, slot.programId, slot.weekIndex,
         slot.plannedWorkoutId, expectedRevision]);
@@ -719,15 +724,15 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     return this.ready().connection.all<RestTimer>(`SELECT id, client_id AS clientId, client_name AS clientName,
       exercise_key AS exerciseKey, exercise_name AS exerciseName, started_at AS startedAt, end_at AS endAt,
       signal_id AS signalId, program_id AS programId, week_index AS weekIndex, planned_workout_id AS plannedWorkoutId,
-      paused_left_ms AS pausedLeftMs FROM dev_training_rest_timers WHERE workspace_id = ? ORDER BY end_at`, [this.workspaceId]);
+      paused_left_ms AS pausedLeftMs FROM training_rest_timers WHERE workspace_id = ? ORDER BY end_at`, [this.workspaceId]);
   }
 
   async putTimer(timer: RestTimer, replacedIds: readonly string[]): Promise<void> {
     await this.ready().writer.write(async (tx) => {
       for (const replacedId of replacedIds) {
-        await tx.run("DELETE FROM dev_training_rest_timers WHERE workspace_id = ? AND id = ?", [this.workspaceId, replacedId]);
+        await tx.run("DELETE FROM training_rest_timers WHERE workspace_id = ? AND id = ?", [this.workspaceId, replacedId]);
       }
-      await tx.run(`INSERT INTO dev_training_rest_timers (id, workspace_id, client_id, client_name, exercise_key, exercise_name,
+      await tx.run(`INSERT INTO training_rest_timers (id, workspace_id, client_id, client_name, exercise_key, exercise_name,
         started_at, end_at, signal_id, program_id, week_index, planned_workout_id, paused_left_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (id) DO UPDATE SET end_at = excluded.end_at, signal_id = excluded.signal_id, paused_left_ms = excluded.paused_left_ms`,
       [timer.id, this.workspaceId, timer.clientId, timer.clientName, timer.exerciseKey, timer.exerciseName, timer.startedAt,
@@ -736,7 +741,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
   }
 
   async removeTimer(id: string): Promise<void> {
-    await this.ready().writer.write((tx) => tx.run("DELETE FROM dev_training_rest_timers WHERE workspace_id = ? AND id = ?",
+    await this.ready().writer.write((tx) => tx.run("DELETE FROM training_rest_timers WHERE workspace_id = ? AND id = ?",
       [this.workspaceId, id]));
   }
 

@@ -30,10 +30,10 @@ const ingredientColumns = `i.recipe_id AS recipeId, i.quantity_x10 AS quantityX1
   f.carbs_x10 AS carbsX10, f.barcode AS barcode, f.grams_per_piece_x10 AS gramsPerPieceX10, f.revision AS revision, f.archived_at AS archivedAt`;
 
 async function load(reader: SqliteStatementPort, workspaceId: string, where: string, bindings: readonly (string | number)[]): Promise<readonly Recipe[]> {
-  const rows = await reader.all<RecipeRow>(`SELECT ${recipeColumns} FROM dev_recipes WHERE workspace_id = ? ${where}`, [workspaceId, ...bindings]);
+  const rows = await reader.all<RecipeRow>(`SELECT ${recipeColumns} FROM recipes WHERE workspace_id = ? ${where}`, [workspaceId, ...bindings]);
   if (rows.length === 0) return [];
-  const lines = await reader.all<IngredientRow>(`SELECT ${ingredientColumns} FROM dev_recipe_ingredients i
-    JOIN dev_food_products f ON f.id = i.food_id AND f.workspace_id = i.workspace_id
+  const lines = await reader.all<IngredientRow>(`SELECT ${ingredientColumns} FROM recipe_ingredients i
+    JOIN food_products f ON f.id = i.food_id AND f.workspace_id = i.workspace_id
     WHERE i.workspace_id = ? AND i.recipe_id IN (${rows.map(() => "?").join(", ")}) ORDER BY i.recipe_id, i.position`,
   [workspaceId, ...rows.map((row) => row.id)]);
   return rows.map((row) => ({ ...row, details: row.detailsJson === null ? null : JSON.parse(row.detailsJson) as RecipeDetails, favorite: row.favorite === 1, inCookbook: row.inCookbook === 1, ingredients: lines.filter((line) => line.recipeId === row.id).map((line) => ({
@@ -110,14 +110,14 @@ export class DevRecipeCatalogRepository implements RecipeCatalogPort {
 
   /** Состав пишется целиком в той же транзакции; скрытый продукт допустим, только если он уже был в рецепте. */
   private async writeIngredients(tx: SqliteStatementPort, recipeId: string, input: RecipeInput): Promise<void> {
-    const previous = new Set((await tx.all<{ foodId: string }>("SELECT food_id AS foodId FROM dev_recipe_ingredients WHERE recipe_id = ?", [recipeId]))
+    const previous = new Set((await tx.all<{ foodId: string }>("SELECT food_id AS foodId FROM recipe_ingredients WHERE recipe_id = ?", [recipeId]))
       .map((row) => row.foodId));
-    await tx.run("DELETE FROM dev_recipe_ingredients WHERE recipe_id = ? AND workspace_id = ?", [recipeId, this.workspaceId]);
+    await tx.run("DELETE FROM recipe_ingredients WHERE recipe_id = ? AND workspace_id = ?", [recipeId, this.workspaceId]);
     for (const [position, item] of input.ingredients.entries()) {
-      const food = await tx.first<{ archivedAt: string | null }>("SELECT archived_at AS archivedAt FROM dev_food_products WHERE workspace_id = ? AND id = ?",
+      const food = await tx.first<{ archivedAt: string | null }>("SELECT archived_at AS archivedAt FROM food_products WHERE workspace_id = ? AND id = ?",
         [this.workspaceId, item.foodId]);
       if (food === null || (food.archivedAt !== null && !previous.has(item.foodId))) throw new Error("FOOD_SOURCE_UNAVAILABLE");
-      await tx.run("INSERT INTO dev_recipe_ingredients (recipe_id, workspace_id, position, food_id, quantity_x10) VALUES (?, ?, ?, ?, ?)",
+      await tx.run("INSERT INTO recipe_ingredients (recipe_id, workspace_id, position, food_id, quantity_x10) VALUES (?, ?, ?, ?, ?)",
         [recipeId, this.workspaceId, position, item.foodId, item.quantityX10]);
     }
   }
@@ -128,7 +128,7 @@ export class DevRecipeCatalogRepository implements RecipeCatalogPort {
       const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
       if (!id) throw new Error("RECIPE_ID_UNAVAILABLE");
       const stamp = now.toISOString();
-      await tx.run(`INSERT INTO dev_recipes (id, workspace_id, name, servings_x10, cooked_mass_x10, description, details_json, revision, created_at, updated_at)
+      await tx.run(`INSERT INTO recipes (id, workspace_id, name, servings_x10, cooked_mass_x10, description, details_json, revision, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`, [id, this.workspaceId, valid.name, valid.servingsX10, valid.cookedMassX10, valid.description ?? null, valid.details == null ? null : JSON.stringify(valid.details), stamp, stamp]);
       await this.writeIngredients(tx, id, valid);
       return (await load(tx, this.workspaceId, "AND id = ?", [id]))[0] as Recipe;
@@ -140,7 +140,7 @@ export class DevRecipeCatalogRepository implements RecipeCatalogPort {
   async update(id: string, expectedRevision: number, input: RecipeInput, now: Date = new Date()): Promise<Recipe> {
     const valid = validateRecipe(input);
     const updated = await this.ready().writer.write(async (tx) => {
-      const result = await tx.run(`UPDATE dev_recipes SET name = ?, servings_x10 = ?, cooked_mass_x10 = ?, description = CASE WHEN ? = 1 THEN ? ELSE description END,
+      const result = await tx.run(`UPDATE recipes SET name = ?, servings_x10 = ?, cooked_mass_x10 = ?, description = CASE WHEN ? = 1 THEN ? ELSE description END,
         details_json = CASE WHEN ? = 1 THEN ? ELSE details_json END, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ? AND archived_at IS NULL`,
       [valid.name, valid.servingsX10, valid.cookedMassX10, valid.description === undefined ? 0 : 1, valid.description ?? null,
@@ -159,7 +159,7 @@ export class DevRecipeCatalogRepository implements RecipeCatalogPort {
       const current = (await load(tx, this.workspaceId, "AND id = ?", [id]))[0];
       if (current === undefined || current.archivedAt !== null) throw new Error("RECIPE_STALE");
       if ((column === "favorite" ? current.favorite : current.inCookbook) === value) { unchanged = true; return current; }
-      await tx.run(`UPDATE dev_recipes SET ${column} = ?, updated_at = ? WHERE workspace_id = ? AND id = ?`, [value ? 1 : 0, now.toISOString(), this.workspaceId, id]);
+      await tx.run(`UPDATE recipes SET ${column} = ?, updated_at = ? WHERE workspace_id = ? AND id = ?`, [value ? 1 : 0, now.toISOString(), this.workspaceId, id]);
       return (await load(tx, this.workspaceId, "AND id = ?", [id]))[0] as Recipe;
     });
     if (!unchanged) this.publish({ recipeId: id });
@@ -176,7 +176,7 @@ export class DevRecipeCatalogRepository implements RecipeCatalogPort {
       const current = (await load(tx, this.workspaceId, "AND id = ?", [id]))[0];
       if (current === undefined) throw new Error("RECIPE_STALE");
       if (current.archivedAt !== null) return current;
-      const result = await tx.run(`UPDATE dev_recipes SET archived_at = ?, revision = revision + 1, updated_at = ?
+      const result = await tx.run(`UPDATE recipes SET archived_at = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ?`, [now.toISOString(), now.toISOString(), this.workspaceId, id, expectedRevision]);
       if (result.changes !== 1) throw new Error("RECIPE_STALE");
       changed = true;

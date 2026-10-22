@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { devNutritionCatalog, DEV_NUTRITION_LEDGER } from "../apps/mobile/src/features/nutrition/data/DevNutritionCatalog.ts";
+import { devNutritionCatalog, DEV_NUTRITION_LEDGER } from "./d01/history/DevNutritionCatalog.ts";
+import { importHistoricalFixture } from "./support/import-historical-fixture.ts";
 import { dayOrientation, deriveHomeMacroTarget, EMPTY_MANUAL_MACROS } from "../apps/mobile/src/features/nutrition/domain/HomeMacroTargets.ts";
 import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
 import { WriterCoordinator } from "../apps/mobile/src/shared/db/WriterCoordinator.ts";
@@ -165,7 +166,7 @@ test("N03 подписка и схема: публикация после ком
     off();
     await targets.clearException(client.id, SAT);
     assert.deepEqual(seen, [client.id]);
-    const insert = (min: number | null, max: number | null) => db.prepare(`INSERT INTO dev_nutrition_target_exceptions (workspace_id, client_id, local_date,
+    const insert = (min: number | null, max: number | null) => db.prepare(`INSERT INTO nutrition_target_exceptions (workspace_id, client_id, local_date,
       kcal_min_x10, kcal_max_x10, updated_at) VALUES (?, ?, '2026-10-24', ?, ?, 'x')`).run(WS, client.id, min, max);
     assert.throws(() => insert(2100, 1900), /CHECK/u);
     assert.throws(() => insert(2100, null), /CHECK/u);
@@ -251,7 +252,7 @@ test("главная: ошибка записи итогового дня отк
     const before = await targets.listVersions(client.id);
     const seen: string[] = [];
     targets.subscribeCommittedChanges((event) => seen.push(event.clientId));
-    db.exec("CREATE TRIGGER fail_target_day BEFORE INSERT ON dev_nutrition_target_days BEGIN SELECT RAISE(ABORT, 'synthetic write failure'); END");
+    db.exec("CREATE TRIGGER fail_target_day BEFORE INSERT ON nutrition_target_days BEGIN SELECT RAISE(ABORT, 'synthetic write failure'); END");
     await assert.rejects(targets.saveVersion(client.id, { effectiveFrom: TUE, days: uniformWeek(kcalOnly(2000, 2000)), homeAdjustment: { mode: "EXACT", manual: { ...EMPTY_MANUAL_MACROS, protein: range(150, 150) } } }, initial.revision, NOW), /synthetic write failure/u);
     assert.deepEqual(await targets.listVersions(client.id), before);
     assert.deepEqual(seen, []);
@@ -271,10 +272,11 @@ test("миграция v10: старые цели v9 сохраняют знач
   await clients.initialize();
   const client = await clients.create({ displayName: "SyntheticV9" });
   await runMigrations(new WriterCoordinator(nodeSqlitePort(db)), devNutritionCatalog.filter((migration) => migration.version < 10), DEV_NUTRITION_LEDGER);
-  db.prepare("INSERT INTO dev_nutrition_target_versions (id, workspace_id, client_id, effective_from, revision, created_at, updated_at) VALUES ('old-version', ?, ?, '2026-10-01', 3, 'x', 'x')").run(WS, client.id);
-  db.prepare("INSERT INTO dev_nutrition_target_days (version_id, weekday, kcal_min_x10, kcal_max_x10, protein_min_x10, protein_max_x10) VALUES ('old-version', 1, 24000, 24000, 1500, 1500)").run();
-  db.prepare("INSERT INTO dev_nutrition_target_exceptions (workspace_id, client_id, local_date, kcal_min_x10, kcal_max_x10, updated_at) VALUES (?, ?, ?, 27000, 27000, 'x')").run(WS, client.id, SAT);
-  const targets = new DevNutritionTargetsRepository(shared, WS);
+  db.prepare("INSERT INTO nutrition_target_versions (id, workspace_id, client_id, effective_from, revision, created_at, updated_at) VALUES ('old-version', ?, ?, '2026-10-01', 3, 'x', 'x')").run(WS, client.id);
+  db.prepare("INSERT INTO nutrition_target_days (version_id, weekday, kcal_min_x10, kcal_max_x10, protein_min_x10, protein_max_x10) VALUES ('old-version', 1, 24000, 24000, 1500, 1500)").run();
+  db.prepare("INSERT INTO nutrition_target_exceptions (workspace_id, client_id, local_date, kcal_min_x10, kcal_max_x10, updated_at) VALUES (?, ?, ?, 27000, 27000, 'x')").run(WS, client.id, SAT);
+  const imported = await importHistoricalFixture(db, devNutritionCatalog, DEV_NUTRITION_LEDGER);
+  const targets = new DevNutritionTargetsRepository(imported.shared, WS);
   await targets.initialize();
   try {
     const [old] = await targets.listVersions(client.id);

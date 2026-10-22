@@ -56,13 +56,13 @@ export class DevSettingsRepository implements SettingsPort {
 
   private async read(key: SettingKey): Promise<string | null> {
     const row = await this.ready().connection.first<{ json: string }>(
-      "SELECT value_json AS json FROM dev_settings WHERE workspace_id = ? AND key = ?", [this.workspaceId, key]);
+      "SELECT value_json AS json FROM settings WHERE workspace_id = ? AND key = ?", [this.workspaceId, key]);
     return row?.json ?? null;
   }
 
   private async write(key: SettingKey, json: string, now: Date = new Date()): Promise<void> {
     await this.ready().writer.write(async (tx) => {
-      await tx.run(`INSERT INTO dev_settings (workspace_id, key, value_json, revision, updated_at)
+      await tx.run(`INSERT INTO settings (workspace_id, key, value_json, revision, updated_at)
         VALUES (?, ?, ?, 1, ?)
         ON CONFLICT(workspace_id, key) DO UPDATE SET value_json = excluded.value_json,
           revision = revision + 1, updated_at = excluded.updated_at`,

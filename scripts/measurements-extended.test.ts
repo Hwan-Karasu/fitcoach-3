@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
-import { devMeasurementCatalog, DEV_MEASUREMENT_LEDGER } from "../apps/mobile/src/features/measurements/data/DevMeasurementCatalog.ts";
+import { devMeasurementCatalog, DEV_MEASUREMENT_LEDGER } from "./d01/history/DevMeasurementCatalog.ts";
 import { DevMeasurementRepository } from "../apps/mobile/src/features/measurements/data/DevMeasurementRepository.ts";
 import { MEASUREMENT_GROUPS, MEASUREMENT_TYPES } from "../apps/mobile/src/features/measurements/domain/MeasurementModel.ts";
 import { upsertDailyMeasurement } from "../apps/mobile/src/features/measurements/domain/DailyMeasurement.ts";
@@ -11,6 +11,7 @@ import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { WriterCoordinator } from "../apps/mobile/src/shared/db/WriterCoordinator.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
+import { importHistoricalFixture } from "./support/import-historical-fixture.ts";
 
 const WS = "synthetic-workspace-a";
 const NOW = new Date(2026, 9, 20, 21, 0);
@@ -69,25 +70,27 @@ test("миграция замеров v2: данные, основные зна�
   await clients.initialize();
   const client = await clients.create({ displayName: "Legacy" });
   await runMigrations(new WriterCoordinator(nodeSqlitePort(db)), devMeasurementCatalog.slice(0, 1), DEV_MEASUREMENT_LEDGER);
-  const insert = db.prepare(`INSERT INTO dev_body_measurements (id, workspace_id, client_id, type, value_x10, local_date, local_minute, method, revision, created_at, updated_at)
+  const insert = db.prepare(`INSERT INTO body_measurements (id, workspace_id, client_id, type, value_x10, local_date, local_minute, method, revision, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'MANUAL', 1, '2026-10-01T00:00:00Z', '2026-10-01T00:00:00Z')`);
   insert.run("m1", WS, client.id, "WEIGHT", 801, "2026-10-14", 480);
   insert.run("m2", WS, client.id, "WEIGHT", 808, "2026-10-14", 1200);
   insert.run("m3", WS, client.id, "ARM", 330, "2026-10-14", null);
-  db.prepare("INSERT INTO dev_measurement_daily_primary (workspace_id, client_id, type, local_date, measurement_id) VALUES (?, ?, 'WEIGHT', '2026-10-14', 'm2')").run(WS, client.id);
+  db.prepare("INSERT INTO measurement_daily_primary (workspace_id, client_id, type, local_date, measurement_id) VALUES (?, ?, 'WEIGHT', '2026-10-14', 'm2')").run(WS, client.id);
 
-  const measurements = new DevMeasurementRepository(shared, WS);
+  const imported = await importHistoricalFixture(db, devMeasurementCatalog, DEV_MEASUREMENT_LEDGER);
+  const measurements = new DevMeasurementRepository(imported.shared, WS);
   await measurements.initialize();
   try {
     const data = await measurements.listForClient(client.id);
     assert.deepEqual(data.measurements.map((row) => [row.id, row.type, row.valueX10]).sort(), [["m1", "WEIGHT", 801], ["m2", "WEIGHT", 808], ["m3", "ARM", 330]]);
     assert.deepEqual(data.primaries.map((row) => [row.type, row.localDate, row.measurementId]), [["WEIGHT", "2026-10-14", "m2"]], "основное значение дня сохранено");
-    assert.equal((db.prepare(`SELECT count(*) AS n FROM ${DEV_MEASUREMENT_LEDGER}`).get() as { n: number }).n, 2, "миграции v1 и v2 применены");
+    assert.equal((db.prepare(`SELECT count(*) AS n FROM ${DEV_MEASUREMENT_LEDGER}`).get() as { n: number }).n, 2, "исторические миграции v1 и v2 применены");
+    assert.equal((imported.db.prepare(`SELECT count(*) AS n FROM ${DEV_MEASUREMENT_LEDGER}`).get() as { n: number }).n, 1, "новый файл использует baseline");
     const added = await measurements.record(client.id, { type: "CALF_R", valueX10: 380, localDate: "2026-10-15", localMinute: null }, NOW);
     assert.equal(added.type, "CALF_R");
-    assert.throws(() => db.prepare(`INSERT INTO dev_body_measurements (id, workspace_id, client_id, type, value_x10, local_date, method, revision, created_at, updated_at)
+    assert.throws(() => imported.db.prepare(`INSERT INTO body_measurements (id, workspace_id, client_id, type, value_x10, local_date, method, revision, created_at, updated_at)
       VALUES ('x', ?, ?, 'FOOT', 100, '2026-10-15', 'MANUAL', 1, 'a', 'a')`).run(WS, client.id), /CHECK|constraint/iu, "схема отклоняет неизвестный тип");
-    assert.throws(() => db.prepare("INSERT INTO dev_measurement_daily_primary (workspace_id, client_id, type, local_date, measurement_id) VALUES (?, ?, 'ARM', '2026-10-14', 'm2')").run(WS, client.id),
+    assert.throws(() => imported.db.prepare("INSERT INTO measurement_daily_primary (workspace_id, client_id, type, local_date, measurement_id) VALUES (?, ?, 'ARM', '2026-10-14', 'm2')").run(WS, client.id),
       /FOREIGN|constraint/iu, "связь основного значения с типом и датой не потеряна");
   } finally { await measurements.close(); await clients.close(); }
 });

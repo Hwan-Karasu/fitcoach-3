@@ -70,9 +70,9 @@ test("Z01 повреждённое значение читается как «н
   const db = new DatabaseSync(":memory:");
   const store = open(db);
   await store.initialize();
-  db.prepare("INSERT INTO dev_settings VALUES (?, 'appearance', '{\"themeId\":5}', 1, 'x')").run(WS);
+  db.prepare("INSERT INTO settings VALUES (?, 'appearance', '{\"themeId\":5}', 1, 'x')").run(WS);
   assert.equal(await store.readAppearance(), null);
-  assert.throws(() => db.prepare("INSERT INTO dev_settings VALUES (?, 'other', '1', 1, 'x')").run(WS));
-  assert.throws(() => db.prepare("INSERT INTO dev_settings VALUES (?, 'measurement.visibleGroups', 'не json', 1, 'x')").run(WS));
+  assert.throws(() => db.prepare("INSERT INTO settings VALUES (?, 'other', '1', 1, 'x')").run(WS));
+  assert.throws(() => db.prepare("INSERT INTO settings VALUES (?, 'measurement.visibleGroups', 'не json', 1, 'x')").run(WS));
   await store.close();
 });

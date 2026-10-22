@@ -106,7 +106,7 @@ test("X01 личный слой: избранное и скрытое у сис�
       "скрытое не показывается без фильтра «Скрытые»");
     assert.equal(filterCatalog(entries, "", "ALL", { ...NO_FILTERS, showHidden: true }).length, 2);
     await assert.rejects(repository.setFavorite("sys:repdb:missing", true), message("EXERCISE_NOT_FOUND"));
-    assert.throws(() => db.prepare(`INSERT INTO dev_custom_exercises (id, workspace_id, name, body_part, tracking_profile,
+    assert.throws(() => db.prepare(`INSERT INTO custom_exercises (id, workspace_id, name, body_part, tracking_profile,
       revision, created_at, updated_at) VALUES ('usr:x', ?, 'Без группы', 'tail', 'REPS', 1, 'now', 'now')`).run(WS), /CHECK/);
     assert.deepEqual(normalizeAliases(["a", "A ", "б"]), ["a", "б"]);
   } finally {

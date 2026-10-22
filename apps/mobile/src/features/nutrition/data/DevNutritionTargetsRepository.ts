@@ -30,11 +30,11 @@ const corridorValues = (corridors: Corridors): SqlValue[] =>
 interface VersionRow { readonly id: string; readonly clientId: string; readonly effectiveFrom: string; readonly revision: number; readonly homeAdjustmentJson: string | null }
 
 async function loadVersions(reader: SqliteStatementPort, workspaceId: string, clientId: string): Promise<readonly TargetVersion[]> {
-  const versions = await reader.all<VersionRow>(`SELECT id, client_id AS clientId, effective_from AS effectiveFrom, revision, home_adjustment_json AS homeAdjustmentJson FROM dev_nutrition_target_versions
+  const versions = await reader.all<VersionRow>(`SELECT id, client_id AS clientId, effective_from AS effectiveFrom, revision, home_adjustment_json AS homeAdjustmentJson FROM nutrition_target_versions
     WHERE workspace_id = ? AND client_id = ? ORDER BY effective_from`, [workspaceId, clientId]);
   if (versions.length === 0) return [];
   const days = await reader.all<CorridorRow & { readonly version_id: string; readonly weekday: number }>(`SELECT d.version_id, d.weekday, ${corridorSelect.replace(/(\w+_(?:min|max)_x10)/gu, "d.$1")}
-    FROM dev_nutrition_target_days d JOIN dev_nutrition_target_versions v ON v.id = d.version_id WHERE v.workspace_id = ? AND v.client_id = ?`, [workspaceId, clientId]);
+    FROM nutrition_target_days d JOIN nutrition_target_versions v ON v.id = d.version_id WHERE v.workspace_id = ? AND v.client_id = ?`, [workspaceId, clientId]);
   return versions.map(({ homeAdjustmentJson, ...version }) => ({ ...version,
     homeAdjustment: homeAdjustmentJson === null ? null : (JSON.parse(homeAdjustmentJson) as NonNullable<TargetVersion["homeAdjustment"]>), days: Array.from({ length: 7 }, (_, weekday) => {
     const row = days.find((item) => item.version_id === version.id && item.weekday === weekday);
@@ -45,17 +45,17 @@ async function loadVersions(reader: SqliteStatementPort, workspaceId: string, cl
 /** Nutrition side of PermanentlyDeleteArchivedClient (§15.7): versions (with days) and exceptions. */
 export const devNutritionTargetsClientDeletionParticipant = {
   owner: "nutrition.targets",
-  tables: ["dev_nutrition_target_days", "dev_nutrition_target_versions", "dev_nutrition_target_exceptions"] as const,
+  tables: ["nutrition_target_days", "nutrition_target_versions", "nutrition_target_exceptions"] as const,
   async count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number> {
-    const versions = await tx.first<{ n: number }>("SELECT count(*) AS n FROM dev_nutrition_target_versions WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
-    const exceptions = await tx.first<{ n: number }>("SELECT count(*) AS n FROM dev_nutrition_target_exceptions WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    const versions = await tx.first<{ n: number }>("SELECT count(*) AS n FROM nutrition_target_versions WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    const exceptions = await tx.first<{ n: number }>("SELECT count(*) AS n FROM nutrition_target_exceptions WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
     return (versions?.n ?? 0) + (exceptions?.n ?? 0);
   },
   async detach(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<void> {
-    await tx.run(`DELETE FROM dev_nutrition_target_days WHERE version_id IN
-      (SELECT id FROM dev_nutrition_target_versions WHERE workspace_id = ? AND client_id = ?)`, [workspaceId, clientId]);
-    await tx.run("DELETE FROM dev_nutrition_target_versions WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
-    await tx.run("DELETE FROM dev_nutrition_target_exceptions WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run(`DELETE FROM nutrition_target_days WHERE version_id IN
+      (SELECT id FROM nutrition_target_versions WHERE workspace_id = ? AND client_id = ?)`, [workspaceId, clientId]);
+    await tx.run("DELETE FROM nutrition_target_versions WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
+    await tx.run("DELETE FROM nutrition_target_exceptions WHERE workspace_id = ? AND client_id = ?", [workspaceId, clientId]);
   },
 };
 
@@ -120,7 +120,7 @@ export class DevNutritionTargetsRepository implements NutritionTargetsPort {
     const valid = validateVersion(input);
     const saved = await this.ready().writer.write(async (tx) => {
       const stamp = now.toISOString();
-      const existing = await tx.first<{ id: string; revision: number }>(`SELECT id, revision FROM dev_nutrition_target_versions
+      const existing = await tx.first<{ id: string; revision: number }>(`SELECT id, revision FROM nutrition_target_versions
         WHERE workspace_id = ? AND client_id = ? AND effective_from = ?`, [this.workspaceId, clientId, valid.effectiveFrom]);
       let id: string;
       if (existing === null) {
@@ -128,22 +128,22 @@ export class DevNutritionTargetsRepository implements NutritionTargetsPort {
         const generated = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
         if (!generated) throw new Error("TARGET_ID_UNAVAILABLE");
         id = generated;
-        await tx.run(`INSERT INTO dev_nutrition_target_versions (id, workspace_id, client_id, effective_from, revision, created_at, updated_at)
+        await tx.run(`INSERT INTO nutrition_target_versions (id, workspace_id, client_id, effective_from, revision, created_at, updated_at)
           VALUES (?, ?, ?, ?, 1, ?, ?)`, [id, this.workspaceId, clientId, valid.effectiveFrom, stamp, stamp]);
       } else {
         // Версия на эту дату уже есть: молча не заменяем (§49.11.5), правка — только с её revision.
         if (expectedRevision === null) throw new Error("TARGET_VERSION_EXISTS");
-        const result = await tx.run(`UPDATE dev_nutrition_target_versions SET revision = revision + 1, updated_at = ?
+        const result = await tx.run(`UPDATE nutrition_target_versions SET revision = revision + 1, updated_at = ?
           WHERE id = ? AND workspace_id = ? AND revision = ?`, [stamp, existing.id, this.workspaceId, expectedRevision]);
         if (result.changes !== 1) throw new Error("TARGET_STALE");
         id = existing.id;
-        await tx.run("DELETE FROM dev_nutrition_target_days WHERE version_id = ?", [id]);
+        await tx.run("DELETE FROM nutrition_target_days WHERE version_id = ?", [id]);
       }
-      await tx.run("UPDATE dev_nutrition_target_versions SET home_adjustment_json = ? WHERE id = ? AND workspace_id = ?",
+      await tx.run("UPDATE nutrition_target_versions SET home_adjustment_json = ? WHERE id = ? AND workspace_id = ?",
         [valid.homeAdjustment == null ? null : JSON.stringify(valid.homeAdjustment), id, this.workspaceId]);
       for (const [weekday, day] of valid.days.entries()) {
         if (day === null) continue;
-        await tx.run(`INSERT INTO dev_nutrition_target_days (version_id, weekday, ${corridorColumnNames.join(", ")})
+        await tx.run(`INSERT INTO nutrition_target_days (version_id, weekday, ${corridorColumnNames.join(", ")})
           VALUES (?, ?, ${corridorColumnNames.map(() => "?").join(", ")})`, [id, weekday, ...corridorValues(day)]);
       }
       return (await loadVersions(tx, this.workspaceId, clientId)).find((version) => version.id === id) as TargetVersion;
@@ -154,7 +154,7 @@ export class DevNutritionTargetsRepository implements NutritionTargetsPort {
 
   async listExceptions(clientId: string): Promise<readonly TargetException[]> {
     const rows = await this.ready().connection.all<CorridorRow & { readonly local_date: string }>(`SELECT local_date, ${corridorSelect}
-      FROM dev_nutrition_target_exceptions WHERE workspace_id = ? AND client_id = ? ORDER BY local_date`, [this.workspaceId, clientId]);
+      FROM nutrition_target_exceptions WHERE workspace_id = ? AND client_id = ? ORDER BY local_date`, [this.workspaceId, clientId]);
     return rows.map((row) => ({ clientId, localDate: row.local_date, corridors: toCorridors(row) }));
   }
 
@@ -163,7 +163,7 @@ export class DevNutritionTargetsRepository implements NutritionTargetsPort {
     const valid = validateCorridors(corridors);
     if (!hasAnyRange(valid)) throw new Error("TARGET_EMPTY");
     await this.ready().writer.write(async (tx) => {
-      await tx.run(`INSERT INTO dev_nutrition_target_exceptions (workspace_id, client_id, local_date, ${corridorColumnNames.join(", ")}, updated_at)
+      await tx.run(`INSERT INTO nutrition_target_exceptions (workspace_id, client_id, local_date, ${corridorColumnNames.join(", ")}, updated_at)
         VALUES (?, ?, ?, ${corridorColumnNames.map(() => "?").join(", ")}, ?)
         ON CONFLICT(workspace_id, client_id, local_date) DO UPDATE SET ${corridorColumnNames.map((name) => `${name} = excluded.${name}`).join(", ")},
           updated_at = excluded.updated_at`, [this.workspaceId, clientId, localDate, ...corridorValues(valid), now.toISOString()]);
@@ -175,7 +175,7 @@ export class DevNutritionTargetsRepository implements NutritionTargetsPort {
   async clearException(clientId: string, localDate: string): Promise<void> {
     assertDate(localDate);
     await this.ready().writer.write(async (tx) => {
-      await tx.run("DELETE FROM dev_nutrition_target_exceptions WHERE workspace_id = ? AND client_id = ? AND local_date = ?", [this.workspaceId, clientId, localDate]);
+      await tx.run("DELETE FROM nutrition_target_exceptions WHERE workspace_id = ? AND client_id = ? AND local_date = ?", [this.workspaceId, clientId, localDate]);
     });
     this.publish({ clientId });
   }

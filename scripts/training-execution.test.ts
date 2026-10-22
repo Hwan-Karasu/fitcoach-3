@@ -11,7 +11,7 @@ import { assertDropStructure, confirmationAfterSave, displayOrder, dropsForType,
 import type { SaveSetInput } from "../apps/mobile/src/features/training/execution/domain/TrainingExecutionPort.ts";
 import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
 import { devTrainingExecutionCatalog, DEV_TRAINING_EXECUTION_LEDGER } from
-  "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionCatalog.ts";
+  "./d01/history/DevTrainingExecutionCatalog.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
 
@@ -186,9 +186,9 @@ test("T03 схема и удаление клиента: подтвержден�
     const slot = (clientId: string): WorkoutSlot => ({ clientId, programId: "program-a", weekIndex: 1, plannedWorkoutId: "w1" });
     const saved = await execution.saveSet(bench(slot(gone.id), "s1", 0, values(100_000, 8), null), DAY1);
     await execution.saveSet(bench(slot(kept.id), "s1", 0, values(90_000, 8), null), DAY1);
-    assert.throws(() => db.prepare(`UPDATE dev_training_performed_sets SET reps = NULL, load_grams = NULL
+    assert.throws(() => db.prepare(`UPDATE training_performed_sets SET reps = NULL, load_grams = NULL
       WHERE id = ?`).run(saved.fact.id), /CHECK/);
-    assert.throws(() => db.prepare("UPDATE dev_training_performed_sets SET planned_set_id = 'other' WHERE id = ?")
+    assert.throws(() => db.prepare("UPDATE training_performed_sets SET planned_set_id = 'other' WHERE id = ?")
       .run(saved.fact.id), /FACT_IDENTITY_FIXED/);
     const archived = await clients.setArchived(gone.id, gone.revision, true);
     await clients.deleteArchivedPermanently(gone.id, archived.revision);
@@ -256,16 +256,16 @@ test("T03 миграция v2 сохраняет факты v1 и разреша
   try {
     const client = await clients.create({ displayName: "SyntheticA" });
     await runMigrations(writer, devTrainingExecutionCatalog.slice(0, 1), DEV_TRAINING_EXECUTION_LEDGER);
-    db.prepare(`INSERT INTO dev_training_sessions (id, workspace_id, client_id, program_id, week_index, planned_workout_id,
+    db.prepare(`INSERT INTO training_sessions (id, workspace_id, client_id, program_id, week_index, planned_workout_id,
       actual_date, revision, created_at, updated_at) VALUES ('ses', ?, ?, 'p', 1, 'w', '2026-10-17', 1, 'x', 'x')`).run(WS, client.id);
-    db.prepare(`INSERT INTO dev_training_performed_sets (id, workspace_id, session_id, planned_set_id, planned_exercise_id,
+    db.prepare(`INSERT INTO training_performed_sets (id, workspace_id, session_id, planned_set_id, planned_exercise_id,
       exercise_id, position, set_type, reps, load_grams, confirmed_at, origin, revision, updated_at)
       VALUES ('f1', ?, 'ses', 's1', 'pe', ?, 0, 'NORMAL', 8, 100000, 'x', 'INPUT', 1, 'x')`).run(WS, BENCH);
     await runMigrations(writer, devTrainingExecutionCatalog, DEV_TRAINING_EXECUTION_LEDGER);
-    const row = db.prepare("SELECT reps, load_grams AS load, confirmed_at AS at FROM dev_training_performed_sets WHERE id = 'f1'").get();
+    const row = db.prepare("SELECT reps, load_grams AS load, confirmed_at AS at FROM training_performed_sets WHERE id = 'f1'").get();
     assert.deepEqual({ ...row }, { reps: 8, load: 100000, at: "x" });
-    db.prepare("UPDATE dev_training_performed_sets SET set_type = 'DROP' WHERE id = 'f1'").run();
-    assert.throws(() => db.prepare("UPDATE dev_training_performed_sets SET planned_set_id = 'z' WHERE id = 'f1'").run(),
+    db.prepare("UPDATE training_performed_sets SET set_type = 'DROP' WHERE id = 'f1'").run();
+    assert.throws(() => db.prepare("UPDATE training_performed_sets SET planned_set_id = 'z' WHERE id = 'f1'").run(),
       /FACT_IDENTITY_FIXED/, "триггер неизменности восстановлен");
   } finally {
     await shared.release();
@@ -391,21 +391,21 @@ test("T03 миграция v5 дневника: стороны, прежние �
   try {
     const client = await clients.create({ displayName: "SyntheticA" });
     await runMigrations(writer, devTrainingExecutionCatalog.slice(0, 4), DEV_TRAINING_EXECUTION_LEDGER);
-    db.prepare(`INSERT INTO dev_training_sessions (id, workspace_id, client_id, program_id, week_index, planned_workout_id,
+    db.prepare(`INSERT INTO training_sessions (id, workspace_id, client_id, program_id, week_index, planned_workout_id,
       actual_date, revision, created_at, updated_at) VALUES ('ses', ?, ?, 'p', 1, 'w', '2026-10-17', 1, 'x', 'x')`).run(WS, client.id);
-    db.prepare(`INSERT INTO dev_training_performed_sets (id, workspace_id, session_id, planned_set_id, planned_exercise_id,
+    db.prepare(`INSERT INTO training_performed_sets (id, workspace_id, session_id, planned_set_id, planned_exercise_id,
       exercise_id, position, set_type, reps, load_grams, confirmed_at, origin, revision, updated_at)
       VALUES ('f1', ?, 'ses', 's1', 'pe', ?, 0, 'DROP', 8, 100000, 'x', 'INPUT', 1, 'x')`).run(WS, BENCH);
-    db.prepare("INSERT INTO dev_training_performed_drops (workspace_id, set_id, position, reps, load_grams) VALUES (?, 'f1', 2, 6, 80000)").run(WS);
+    db.prepare("INSERT INTO training_performed_drops (workspace_id, set_id, position, reps, load_grams) VALUES (?, 'f1', 2, 6, 80000)").run(WS);
     await runMigrations(writer, devTrainingExecutionCatalog, DEV_TRAINING_EXECUTION_LEDGER);
-    assert.deepEqual({ ...db.prepare("SELECT reps, set_type AS type FROM dev_training_performed_sets WHERE id = 'f1'").get() },
+    assert.deepEqual({ ...db.prepare("SELECT reps, set_type AS type FROM training_performed_sets WHERE id = 'f1'").get() },
       { reps: 8, type: "DROP" });
-    assert.deepEqual({ ...db.prepare("SELECT reps FROM dev_training_performed_drops WHERE set_id = 'f1'").get() }, { reps: 6 });
-    assert.throws(() => db.prepare("INSERT INTO dev_training_performed_drops (workspace_id, set_id, position) VALUES (?, 'nope', 3)")
+    assert.deepEqual({ ...db.prepare("SELECT reps FROM training_performed_drops WHERE set_id = 'f1'").get() }, { reps: 6 });
+    assert.throws(() => db.prepare("INSERT INTO training_performed_drops (workspace_id, set_id, position) VALUES (?, 'nope', 3)")
       .run(WS), /FOREIGN KEY|INVALID_METRIC/, "мини-сет без подхода — ошибка");
-    assert.throws(() => db.prepare("UPDATE dev_training_performed_sets SET planned_set_id = 'z' WHERE id = 'f1'").run(),
+    assert.throws(() => db.prepare("UPDATE training_performed_sets SET planned_set_id = 'z' WHERE id = 'f1'").run(),
       /FACT_IDENTITY_FIXED/, "триггеры восстановлены");
-    assert.throws(() => db.prepare(`INSERT INTO dev_training_performed_sides (workspace_id, set_id, side, confirmed_at)
+    assert.throws(() => db.prepare(`INSERT INTO training_performed_sides (workspace_id, set_id, side, confirmed_at)
       VALUES (?, 'f1', 'L', 'x')`).run(WS), /CHECK/, "засчитанная сторона без значения невозможна");
   } finally {
     await shared.release();
@@ -538,13 +538,13 @@ test("PC §48.86.13 миграция v9: существующие выполне
   try {
     const client = await clients.create({ displayName: "SyntheticA" });
     await runMigrations(writer, devTrainingExecutionCatalog.slice(0, 8), DEV_TRAINING_EXECUTION_LEDGER);
-    db.prepare(`INSERT INTO dev_training_sessions (id, workspace_id, client_id, program_id, week_index, planned_workout_id,
+    db.prepare(`INSERT INTO training_sessions (id, workspace_id, client_id, program_id, week_index, planned_workout_id,
       actual_date, revision, created_at, updated_at) VALUES ('ses', ?, ?, 'p', 1, 'w', '2026-10-17', 1, 'x', 'x')`).run(WS, client.id);
     await runMigrations(writer, devTrainingExecutionCatalog, DEV_TRAINING_EXECUTION_LEDGER);
-    assert.deepEqual({ ...db.prepare("SELECT started_at AS s, finished_at AS f, actual_date AS d FROM dev_training_sessions WHERE id = 'ses'").get() },
+    assert.deepEqual({ ...db.prepare("SELECT started_at AS s, finished_at AS f, actual_date AS d FROM training_sessions WHERE id = 'ses'").get() },
       { s: null, f: null, d: "2026-10-17" }, "старая запись цела, времени нет");
-    assert.throws(() => db.prepare("UPDATE dev_training_sessions SET started_at = 'вчера' WHERE id = 'ses'").run(), /CHECK/, "не момент времени");
-    db.prepare("UPDATE dev_training_sessions SET started_at = '2026-10-17T07:00:00.000Z' WHERE id = 'ses'").run();
+    assert.throws(() => db.prepare("UPDATE training_sessions SET started_at = 'вчера' WHERE id = 'ses'").run(), /CHECK/, "не момент времени");
+    db.prepare("UPDATE training_sessions SET started_at = '2026-10-17T07:00:00.000Z' WHERE id = 'ses'").run();
   } finally {
     await shared.release();
     await clients.close();

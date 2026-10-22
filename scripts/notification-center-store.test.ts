@@ -122,9 +122,9 @@ test("U02 настройки: неверное значение отклонен
     const wanted = { ...DEFAULT_NOTIFICATION_SETTINGS, appointment: { enabled: true, minutesBefore: 15 }, quietHours: { enabled: true, startMinute: 1380, endMinute: 420 } };
     await center.saveSettings(wanted);
     assert.deepEqual(await center.getSettings(), wanted);
-    db.prepare("UPDATE dev_notification_settings SET settings_json = '{\"retentionDays\":45}'").run();
+    db.prepare("UPDATE notification_settings SET settings_json = '{\"retentionDays\":45}'").run();
     assert.deepEqual(await center.getSettings(), DEFAULT_NOTIFICATION_SETTINGS);
-    assert.throws(() => db.prepare("UPDATE dev_notification_settings SET settings_json = 'не json'").run());
+    assert.throws(() => db.prepare("UPDATE notification_settings SET settings_json = 'не json'").run());
   } finally { await close(); }
 });
 
@@ -134,10 +134,10 @@ test("U02 схема: прочитанное нельзя сделать неп�
     await center.materialize([event("a", minutesAgo(10))], NOW);
     const [row] = await center.listFeed();
     await center.markRead(row!.id, NOW);
-    assert.throws(() => db.prepare("UPDATE dev_notification_events SET read_at = NULL").run(), /NOTIFICATION_EVENT_IMMUTABLE/u);
-    assert.throws(() => db.prepare("UPDATE dev_notification_events SET title = 'другое'").run(), /NOTIFICATION_EVENT_IMMUTABLE/u);
-    assert.throws(() => db.prepare("INSERT INTO dev_notification_events (id, workspace_id, source_type, source_id, event_kind, event_version, title, body, occurs_at, created_at) VALUES ('x', ?, 'APPOINTMENT', 'a', 'REMINDER', 'v1', 't', '', 'x', 'x')").run(WS), /UNIQUE/u);
-    assert.throws(() => db.prepare("INSERT INTO dev_notification_events (id, workspace_id, source_type, source_id, event_kind, event_version, title, body, occurs_at, created_at) VALUES ('y', ?, 'WATER', 'a', 'REMINDER', 'v1', 't', '', 'x', 'x')").run(WS));
+    assert.throws(() => db.prepare("UPDATE notification_events SET read_at = NULL").run(), /NOTIFICATION_EVENT_IMMUTABLE/u);
+    assert.throws(() => db.prepare("UPDATE notification_events SET title = 'другое'").run(), /NOTIFICATION_EVENT_IMMUTABLE/u);
+    assert.throws(() => db.prepare("INSERT INTO notification_events (id, workspace_id, source_type, source_id, event_kind, event_version, title, body, occurs_at, created_at) VALUES ('x', ?, 'APPOINTMENT', 'a', 'REMINDER', 'v1', 't', '', 'x', 'x')").run(WS), /UNIQUE/u);
+    assert.throws(() => db.prepare("INSERT INTO notification_events (id, workspace_id, source_type, source_id, event_kind, event_version, title, body, occurs_at, created_at) VALUES ('y', ?, 'WATER', 'a', 'REMINDER', 'v1', 't', '', 'x', 'x')").run(WS));
   } finally { await close(); }
 });
 

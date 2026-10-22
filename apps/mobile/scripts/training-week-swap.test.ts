@@ -89,9 +89,9 @@ test("T04 схема дневника: номер недели меняется,
     await execution.saveSet({ slot, plannedExerciseId: exercise.id, exerciseId: BENCH, plannedSetId: exercise.sets[0]!.id,
       position: 0, metrics: ["load", "reps"], values: { loadGrams: 100_000, reps: 8, durationSec: null, distanceM: null },
       setType: "NORMAL", drops: [], rpe: null, expectedRevision: null });
-    assert.throws(() => db.prepare("UPDATE dev_training_sessions SET planned_workout_id = 'other'").run(), /WRONG_CLIENT_SCOPE/);
-    assert.throws(() => db.prepare("UPDATE dev_training_sessions SET program_id = 'other'").run(), /WRONG_CLIENT_SCOPE/);
-    db.prepare("UPDATE dev_training_sessions SET week_index = 2").run();
+    assert.throws(() => db.prepare("UPDATE training_sessions SET planned_workout_id = 'other'").run(), /WRONG_CLIENT_SCOPE/);
+    assert.throws(() => db.prepare("UPDATE training_sessions SET program_id = 'other'").run(), /WRONG_CLIENT_SCOPE/);
+    db.prepare("UPDATE training_sessions SET week_index = 2").run();
   } finally {
     await close();
   }

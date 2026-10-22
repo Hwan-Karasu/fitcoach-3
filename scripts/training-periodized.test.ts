@@ -246,7 +246,7 @@ test("T04 копия мезоцикла: сбой SQLite после записи
   let armed = false;
   let inserted = 0;
   const { plans, a, b, programId, mesocycleId, close } = await sharedProgram((sql) => {
-    if (armed && sql.startsWith("INSERT INTO dev_training_mesocycles") && ++inserted === 2) throw new Error("SQLITE_IOERR");
+    if (armed && sql.startsWith("INSERT INTO training_mesocycles") && ++inserted === 2) throw new Error("SQLITE_IOERR");
   });
   try {
     const beforeA = (await plans.getPeriodizedPlan(a.id, programId))!;
@@ -468,7 +468,7 @@ test("T04 версии: одна на реальное сохранение уч
     assert.equal(all[1]!.validFrom, at.toISOString());
     assert.equal(all[1]!.validTo, all[0]!.validFrom);
     assert.deepEqual(all[2], versions[1], "самая ранняя версия неизменна");
-    assert.throws(() => db.prepare("UPDATE dev_training_structure_versions SET valid_from = valid_to WHERE id = ?")
+    assert.throws(() => db.prepare("UPDATE training_structure_versions SET valid_from = valid_to WHERE id = ?")
       .run(all[1]!.id), /STRUCTURE_VERSION_IMMUTABLE/u);
     const latest = (await plans.getPeriodizedPlan(a.id, programId))!;
     const illegal = edit(latest.mesocycles[0]!.weeks[0]!.workouts, (draft) =>
@@ -562,7 +562,7 @@ test("T04 схема: мезоцикл только у Расширенной п
   const { db, clients, plans, a, b, programId, close } = await sharedProgram();
   try {
     const simple = await plans.createSimpleProgram(a.id, { title: "Просто", plan: { weeks: 2, workouts: firstWeek() } });
-    assert.throws(() => db.prepare(`INSERT INTO dev_training_mesocycles (id, workspace_id, program_id, client_id, lineage_id,
+    assert.throws(() => db.prepare(`INSERT INTO training_mesocycles (id, workspace_id, program_id, client_id, lineage_id,
       position, title, created_at) VALUES ('m-x', ?, ?, ?, 'l', 0, 'М', 'now')`).run(WS, simple.id, a.id), /DRAFT_INVALID/);
     const own = (await plans.getPeriodizedPlan(b.id, programId))!.mesocycles[0]!.id;
     await assert.rejects(plans.selectMesocycle(a.id, programId, own), message("TARGET_NOT_FOUND"), "чужой мезоцикл не выбрать");

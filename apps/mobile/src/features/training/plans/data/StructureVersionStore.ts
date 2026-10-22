@@ -2,19 +2,24 @@ import type { SqliteStatementPort } from "../../../../shared/db/SqlitePort.ts";
 import { UUID_V4_SQL } from "../../../../shared/db/SqlIds.ts";
 import type { Mesocycle } from "../domain/PeriodizedModel.ts";
 import type { MesocycleVersion } from "../domain/StructureVersion.ts";
+import { readStoredJson } from "../../../../shared/db/StoredJson.ts";
+import { storedMesocycle } from "../domain/StoredPlanShape.ts";
 
 export async function readMesocycleHistory(tx: SqliteStatementPort, workspaceId: string, clientId: string,
   programId: string, mesocycleId: string): Promise<readonly MesocycleVersion[]> {
   const rows = await tx.all<{ id: string; validFrom: string; validTo: string; json: string }>(`SELECT
-    id, valid_from AS validFrom, valid_to AS validTo, structure_json AS json FROM dev_training_structure_versions
+    id, valid_from AS validFrom, valid_to AS validTo, structure_json AS json FROM training_structure_versions
     WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND mesocycle_id = ? ORDER BY rowid DESC`,
   [workspaceId, clientId, programId, mesocycleId]);
-  return rows.map(({ json, ...row }) => ({ ...row, structure: JSON.parse(json) as Mesocycle }));
+  return rows.flatMap(({ json, ...row }) => {
+    const structure = readStoredJson(json, storedMesocycle, `training_structure_versions:${row.id}`);
+    return structure === null ? [] : [{ ...row, structure }];
+  });
 }
 
 export async function mesocycleCreatedAt(tx: SqliteStatementPort, workspaceId: string, clientId: string,
   programId: string, mesocycleId: string): Promise<string> {
-  const row = await tx.first<{ at: string }>(`SELECT created_at AS at FROM dev_training_mesocycles
+  const row = await tx.first<{ at: string }>(`SELECT created_at AS at FROM training_mesocycles
     WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND id = ?`, [workspaceId, clientId, programId, mesocycleId]);
   if (row === null) throw new Error("TARGET_NOT_FOUND");
   return row.at;
@@ -23,7 +28,7 @@ export async function mesocycleCreatedAt(tx: SqliteStatementPort, workspaceId: s
 /** Вызывается в той же транзакции, что и структурная запись, — один раз на изменённого участника и мезоцикл. */
 export async function preserveMesocycle(tx: SqliteStatementPort, workspaceId: string, clientId: string,
   programId: string, structure: Mesocycle, now: Date): Promise<void> {
-  const previous = await tx.first<{ at: string }>(`SELECT valid_to AS at FROM dev_training_structure_versions
+  const previous = await tx.first<{ at: string }>(`SELECT valid_to AS at FROM training_structure_versions
     WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND mesocycle_id = ? ORDER BY rowid DESC LIMIT 1`,
   [workspaceId, clientId, programId, structure.id]);
   const from = previous?.at ?? await mesocycleCreatedAt(tx, workspaceId, clientId, programId, structure.id);
@@ -31,7 +36,7 @@ export async function preserveMesocycle(tx: SqliteStatementPort, workspaceId: st
   const to = new Date(Math.max(new Date(from).getTime(), now.getTime())).toISOString();
   const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
   if (!id) throw new Error("PROGRAM_ID_UNAVAILABLE");
-  await tx.run(`INSERT INTO dev_training_structure_versions
+  await tx.run(`INSERT INTO training_structure_versions
     (id, workspace_id, client_id, program_id, mesocycle_id, valid_from, valid_to, structure_json)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [id, workspaceId, clientId, programId, structure.id, from, to, JSON.stringify(structure)]);
 }

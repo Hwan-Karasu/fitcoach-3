@@ -356,7 +356,11 @@ test("TRN-018 нечитаемое недельное отличие Прост�
     const program = await env.plans.createSimpleProgram(env.a, { ...draft, plan: { ...draft.plan, weeks: 3 } });
     const plan = (await env.plans.getSimplePlan(env.a, program.id))!;
     const workout = plan.draft.plan.workouts[0]!;
-    env.db.prepare("INSERT INTO dev_training_simple_overrides (workspace_id, client_id, program_id, week_index, workout_id, workout_json) VALUES (?, ?, ?, 2, ?, ?)").run(WS, env.a, program.id, workout.id, JSON.stringify({ id: workout.id }));
+    assert.throws(() => env.db.prepare("INSERT INTO training_simple_overrides (workspace_id, client_id, program_id, week_index, workout_id, workout_json) VALUES (?, ?, ?, 2, ?, ?)")
+      .run(WS, env.a, program.id, workout.id, JSON.stringify({ id: workout.id })), /TRAINING_JSON_INVALID/);
+    // Simulate damage outside the normal write path; application writes cannot create this row.
+    env.db.exec("DROP TRIGGER training_simple_overrides_json_shape_insert");
+    env.db.prepare("INSERT INTO training_simple_overrides (workspace_id, client_id, program_id, week_index, workout_id, workout_json) VALUES (?, ?, ?, 2, ?, ?)").run(WS, env.a, program.id, workout.id, JSON.stringify({ id: workout.id }));
     const weeks = await env.plans.getSimpleWeeks(env.a, program.id);
     assert.equal(weeks.length, 3);
     assert.deepEqual(weeks[1]!.workouts[0], workout, "повреждённая неделя 2 показывает базовый план");

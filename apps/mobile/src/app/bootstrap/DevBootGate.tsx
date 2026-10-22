@@ -32,7 +32,7 @@ export function DevBootGate({ boot, services }: Readonly<DevRuntime>) {
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="dark-content" />
         <View style={styles.content}>
-          <Text style={styles.label}>FITCOACH 3.0 · DEVELOPMENT</Text>
+          <Text style={styles.label}>ДНЕВНИК АТЛЕТА · РАЗРАБОТКА</Text>
           <Text accessibilityRole="header" style={styles.title}>
             {failed ? "Запуск не завершён" : "Подготовка приложения"}
           </Text>

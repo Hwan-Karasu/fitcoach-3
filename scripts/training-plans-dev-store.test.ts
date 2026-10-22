@@ -106,10 +106,10 @@ test("T01 схема: простая не получает второго уча
     const a = await clients.create({ displayName: "SyntheticA" });
     const b = await clients.create({ displayName: "SyntheticB" });
     const simple = await plans.createProgram({ kind: "SIMPLE", title: "База", clientIds: [a.id] }, DAY1);
-    assert.throws(() => db.prepare(`INSERT INTO dev_training_program_members (workspace_id, program_id, client_id, joined_at)
+    assert.throws(() => db.prepare(`INSERT INTO training_program_members (workspace_id, program_id, client_id, joined_at)
       VALUES (?, ?, ?, ?)`).run(WS, simple.id, b.id, DAY1.toISOString()), /PARTICIPANT_CONFLICT/);
     await assert.rejects(plans.selectProgram(b.id, simple.id), message("TARGET_NOT_FOUND"));
-    assert.throws(() => db.prepare("UPDATE dev_training_programs SET kind = 'PERIODIZED' WHERE id = ?").run(simple.id),
+    assert.throws(() => db.prepare("UPDATE training_programs SET kind = 'PERIODIZED' WHERE id = ?").run(simple.id),
       /DRAFT_INVALID/);
     const renamed = await plans.renameProgram(simple.id, simple.revision, "База 2");
     assert.equal(renamed.title, "База 2");

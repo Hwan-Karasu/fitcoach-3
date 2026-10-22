@@ -63,9 +63,9 @@ test("установленная анкета со старым списком �
   await first.close();
   // Состояние старой установки: версия 1 и черновик с девятью группами (журнал версий неизменяем — снимаем защиту только в этом тесте).
   const old = JSON.stringify(legacyWithNineMuscles());
-  db.exec("DROP TRIGGER dev_questionnaire_versions_no_update");
-  db.prepare("UPDATE dev_questionnaire_versions SET schema_json = ?").run(old);
-  db.prepare("UPDATE dev_questionnaire_drafts SET schema_json = ?").run(old);
+  db.exec("DROP TRIGGER questionnaire_versions_no_update");
+  db.prepare("UPDATE questionnaire_versions SET schema_json = ?").run(old);
+  db.prepare("UPDATE questionnaire_drafts SET schema_json = ?").run(old);
   const second = new DevQuestionnaireRepository(shared, "ws");
   await second.initialize();
   const published = await second.getPublished();

@@ -42,7 +42,7 @@ const intervalColumns = `id, kind, local_date AS localDate, start_minute AS star
 
 const sessionTypeColumns = `id, name, category, default_duration_minutes AS defaultDurationMinutes,
   requires_credit AS requiresCredit, archived_at AS archivedAt, color,
-  EXISTS (SELECT 1 FROM dev_calendar_appointments AS used WHERE used.session_type_id = dev_session_types.id) AS inUse`;
+  EXISTS (SELECT 1 FROM calendar_appointments AS used WHERE used.session_type_id = session_types.id) AS inUse`;
 
 /** Seed templates of §13.8; trainers may later rename or archive them. */
 const seedSessionTypes = [
@@ -94,18 +94,18 @@ async function newId(tx: SqliteStatementPort): Promise<string> {
 
 async function activeSessionType(tx: SqliteStatementPort, workspaceId: string,
   id: string): Promise<SessionTypeRow | null> {
-  return tx.first<SessionTypeRow>(`SELECT ${sessionTypeColumns} FROM dev_session_types
+  return tx.first<SessionTypeRow>(`SELECT ${sessionTypeColumns} FROM session_types
     WHERE workspace_id = ? AND id = ? AND archived_at IS NULL`, [workspaceId, id]);
 }
 
 async function appointmentConflict(tx: SqliteStatementPort, workspaceId: string, date: LocalDate,
   start: number, end: number, exceptId: string | null): Promise<"CALENDAR_TIME_OVERLAP" | "CALENDAR_BLOCKED_TIME" | null> {
-  const busy = await tx.first<{ id: string }>(`SELECT id FROM dev_calendar_appointments
+  const busy = await tx.first<{ id: string }>(`SELECT id FROM calendar_appointments
     WHERE workspace_id = ? AND local_date = ? AND lifecycle <> 'CANCELLED' AND id IS NOT ?
       AND start_minute < ? AND start_minute + duration_minutes > ? LIMIT 1`,
   [workspaceId, date, exceptId, end, start]);
   if (busy !== null) return "CALENDAR_TIME_OVERLAP";
-  const blocked = await tx.first<{ id: string }>(`SELECT id FROM dev_calendar_intervals
+  const blocked = await tx.first<{ id: string }>(`SELECT id FROM calendar_intervals
     WHERE workspace_id = ? AND local_date = ? AND kind = 'BLOCKED'
       AND start_minute < ? AND end_minute > ? LIMIT 1`, [workspaceId, date, end, start]);
   return blocked === null ? null : "CALENDAR_BLOCKED_TIME";
@@ -113,12 +113,12 @@ async function appointmentConflict(tx: SqliteStatementPort, workspaceId: string,
 
 async function intervalConflict(tx: SqliteStatementPort, workspaceId: string,
   input: IntervalInput): Promise<"CALENDAR_TIME_OVERLAP" | "CALENDAR_BLOCKED_OVER_APPOINTMENT" | null> {
-  const sameKind = await tx.first<{ id: string }>(`SELECT id FROM dev_calendar_intervals
+  const sameKind = await tx.first<{ id: string }>(`SELECT id FROM calendar_intervals
     WHERE workspace_id = ? AND local_date = ? AND kind = ? AND start_minute < ? AND end_minute > ?
     LIMIT 1`, [workspaceId, input.localDate, input.kind, input.endMinute, input.startMinute]);
   if (sameKind !== null) return "CALENDAR_TIME_OVERLAP";
   if (input.kind === "DUTY") return null;
-  const appointment = await tx.first<{ id: string }>(`SELECT id FROM dev_calendar_appointments
+  const appointment = await tx.first<{ id: string }>(`SELECT id FROM calendar_appointments
     WHERE workspace_id = ? AND local_date = ? AND lifecycle <> 'CANCELLED'
       AND start_minute < ? AND start_minute + duration_minutes > ? LIMIT 1`,
   [workspaceId, input.localDate, input.endMinute, input.startMinute]);
@@ -129,7 +129,7 @@ async function insertAppointment(tx: SqliteStatementPort, workspaceId: string,
   input: AppointmentInput, type: SessionTypeRow): Promise<string> {
   const id = await newId(tx);
   const now = new Date().toISOString();
-  await tx.run(`INSERT INTO dev_calendar_appointments
+  await tx.run(`INSERT INTO calendar_appointments
     (id, workspace_id, local_date, start_minute, duration_minutes, client_id, guest_name,
      participant_deleted, session_type_id, session_type_name, session_type_category,
      session_type_requires_credit, note, credit_bypass, lifecycle, revision, created_at, updated_at,
@@ -144,7 +144,7 @@ async function insertAppointment(tx: SqliteStatementPort, workspaceId: string,
 async function insertInterval(tx: SqliteStatementPort, workspaceId: string,
   input: IntervalInput): Promise<string> {
   const id = await newId(tx);
-  await tx.run(`INSERT INTO dev_calendar_intervals
+  await tx.run(`INSERT INTO calendar_intervals
     (id, workspace_id, kind, local_date, start_minute, end_minute, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)`,
   [id, workspaceId, input.kind, input.localDate, input.startMinute, input.endMinute,
@@ -165,10 +165,10 @@ async function countClearWeek(tx: SqliteStatementPort, workspaceId: string, mond
   const sunday = addDays(monday, 6);
   const appointments = await tx.first<{ future: number | null; total: number }>(`SELECT
       sum(lifecycle = 'SCHEDULED' AND ${NOT_STARTED_SQL}) AS future, count(*) AS total
-    FROM dev_calendar_appointments WHERE workspace_id = ? AND local_date BETWEEN ? AND ?
+    FROM calendar_appointments WHERE workspace_id = ? AND local_date BETWEEN ? AND ?
       AND lifecycle <> 'CANCELLED'`, [...notStartedParams(now), workspaceId, monday, sunday]);
   const intervals = await tx.all<{ kind: string; n: number }>(`SELECT kind, count(*) AS n
-    FROM dev_calendar_intervals WHERE workspace_id = ? AND local_date BETWEEN ? AND ?
+    FROM calendar_intervals WHERE workspace_id = ? AND local_date BETWEEN ? AND ?
       AND ${NOT_STARTED_SQL} GROUP BY kind`, [workspaceId, monday, sunday, ...notStartedParams(now)]);
   const policy = settings.clearPolicy;
   const cleared = policy.appointments ? appointments?.future ?? 0 : 0;
@@ -186,9 +186,9 @@ async function countClearWeek(tx: SqliteStatementPort, workspaceId: string, mond
  */
 export const devCalendarClientDeletionParticipant = {
   owner: "calendar.appointments",
-  tables: ["dev_calendar_appointments"] as const,
+  tables: ["calendar_appointments"] as const,
   async count(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<number> {
-    const row = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM dev_calendar_appointments
+    const row = await tx.first<{ n: number }>(`SELECT count(*) AS n FROM calendar_appointments
       WHERE workspace_id = ? AND client_id = ?`, [workspaceId, clientId]);
     return row?.n ?? 0;
   },
@@ -196,11 +196,11 @@ export const devCalendarClientDeletionParticipant = {
     now: string): Promise<void> {
     const at = new Date(now);
     const today = localDateOf(at);
-    await tx.run(`UPDATE dev_calendar_appointments SET lifecycle = 'CANCELLED', cancelled_at = ?
+    await tx.run(`UPDATE calendar_appointments SET lifecycle = 'CANCELLED', cancelled_at = ?
       WHERE workspace_id = ? AND client_id = ? AND lifecycle = 'SCHEDULED'
         AND (local_date > ? OR (local_date = ? AND start_minute >= ?))`,
     [now, workspaceId, clientId, today, today, minuteOfDay(at)]);
-    await tx.run(`UPDATE dev_calendar_appointments SET client_id = NULL, guest_name = NULL,
+    await tx.run(`UPDATE calendar_appointments SET client_id = NULL, guest_name = NULL,
       participant_deleted = 1, note = NULL, revision = revision + 1, updated_at = ?
       WHERE workspace_id = ? AND client_id = ?`, [now, workspaceId, clientId]);
   },
@@ -241,21 +241,21 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       await runMigrations(writer, devCalendarCatalog, DEV_CALENDAR_LEDGER);
       await writer.write(async (tx) => {
         const workspace = await tx.first<{ id: string }>(
-          "SELECT id FROM dev_workspaces WHERE id = ?", [this.workspaceId]);
+          "SELECT id FROM workspaces WHERE id = ?", [this.workspaceId]);
         if (workspace === null) throw new Error("CALENDAR_WORKSPACE_UNAVAILABLE");
         const now = new Date().toISOString();
         for (const seed of seedSessionTypes) {
-          const existing = await tx.first<{ id: string }>(`SELECT id FROM dev_session_types
+          const existing = await tx.first<{ id: string }>(`SELECT id FROM session_types
             WHERE workspace_id = ? AND seed_key = ?`, [this.workspaceId, seed.key]);
           if (existing !== null) continue;
-          await tx.run(`INSERT INTO dev_session_types (id, workspace_id, seed_key, name, category,
+          await tx.run(`INSERT INTO session_types (id, workspace_id, seed_key, name, category,
             default_duration_minutes, requires_credit, archived_at, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
           [await newId(tx), this.workspaceId, seed.key, seed.name, seed.category, seed.minutes,
             seed.credit, now]);
         }
-        await tx.run(`INSERT OR IGNORE INTO dev_calendar_settings (workspace_id, default_session_type_id)
-          SELECT ?, id FROM dev_session_types WHERE workspace_id = ? AND seed_key = 'personal'`,
+        await tx.run(`INSERT OR IGNORE INTO calendar_settings (workspace_id, default_session_type_id)
+          SELECT ?, id FROM session_types WHERE workspace_id = ? AND seed_key = 'personal'`,
         [this.workspaceId, this.workspaceId]);
       });
       this.connection = connection;
@@ -283,7 +283,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
   }
 
   private async settings(tx: SqliteStatementPort): Promise<CalendarSettings> {
-    const row = await tx.first<SettingsRow>("SELECT * FROM dev_calendar_settings WHERE workspace_id = ?",
+    const row = await tx.first<SettingsRow>("SELECT * FROM calendar_settings WHERE workspace_id = ?",
       [this.workspaceId]);
     if (row === null) throw new Error("CALENDAR_STORE_NOT_READY");
     const settings = toSettings(row);
@@ -295,7 +295,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
 
   async listSessionTypes(): Promise<readonly SessionType[]> {
     const rows = await this.ready().connection.all<SessionTypeRow>(`SELECT ${sessionTypeColumns}
-      FROM dev_session_types WHERE workspace_id = ? ORDER BY created_at, rowid`, [this.workspaceId]);
+      FROM session_types WHERE workspace_id = ? ORDER BY created_at, rowid`, [this.workspaceId]);
     return rows.map(toSessionType);
   }
 
@@ -305,10 +305,10 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
     if (!isLocalDate(from) || !isLocalDate(to) || to < from) throw new Error("CALENDAR_DATE_INVALID");
     const { connection } = this.ready();
     const [appointments, intervals] = await Promise.all([
-      connection.all<AppointmentRow>(`SELECT ${appointmentColumns} FROM dev_calendar_appointments
+      connection.all<AppointmentRow>(`SELECT ${appointmentColumns} FROM calendar_appointments
         WHERE workspace_id = ? AND local_date BETWEEN ? AND ? AND lifecycle <> 'CANCELLED'
         ORDER BY local_date, start_minute, id`, [this.workspaceId, from, to]),
-      connection.all<CalendarInterval>(`SELECT ${intervalColumns} FROM dev_calendar_intervals
+      connection.all<CalendarInterval>(`SELECT ${intervalColumns} FROM calendar_intervals
         WHERE workspace_id = ? AND local_date BETWEEN ? AND ?
         ORDER BY local_date, start_minute, id`, [this.workspaceId, from, to]),
     ]);
@@ -318,20 +318,20 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
   async summarize(from: LocalDate, to: LocalDate): Promise<readonly DaySummary[]> {
     if (!isLocalDate(from) || !isLocalDate(to) || to < from) throw new Error("CALENDAR_DATE_INVALID");
     return this.ready().connection.all<DaySummary>(`SELECT local_date AS localDate,
-      count(*) AS appointments FROM dev_calendar_appointments
+      count(*) AS appointments FROM calendar_appointments
       WHERE workspace_id = ? AND local_date BETWEEN ? AND ? AND lifecycle IN ('SCHEDULED','COMPLETED')
       GROUP BY local_date ORDER BY local_date`, [this.workspaceId, from, to]);
   }
 
   async getAppointment(id: string): Promise<Appointment | null> {
     const row = await this.ready().connection.first<AppointmentRow>(`SELECT ${appointmentColumns}
-      FROM dev_calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]);
+      FROM calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]);
     return row === null ? null : toAppointment(row);
   }
 
   private async appointmentById(tx: SqliteStatementPort, id: string): Promise<Appointment> {
     const row = await tx.first<AppointmentRow>(`SELECT ${appointmentColumns}
-      FROM dev_calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]);
+      FROM calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]);
     if (row === null) throw new Error("CALENDAR_STALE_APPOINTMENT");
     return toAppointment(row);
   }
@@ -370,7 +370,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
         || current.durationMinutes !== input.durationMinutes;
       const valid = validateAppointment(input, await this.settings(tx), moved);
       const type = valid.sessionTypeId === current.sessionTypeId
-        ? await tx.first<SessionTypeRow>(`SELECT ${sessionTypeColumns} FROM dev_session_types
+        ? await tx.first<SessionTypeRow>(`SELECT ${sessionTypeColumns} FROM session_types
             WHERE workspace_id = ? AND id = ?`, [this.workspaceId, valid.sessionTypeId])
         : await activeSessionType(tx, this.workspaceId, valid.sessionTypeId);
       if (type === null) throw new Error("CALENDAR_SESSION_TYPE_UNAVAILABLE");
@@ -379,7 +379,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       if (conflict !== null) throw new Error(conflict);
       const keepSnapshot = type.id === current.sessionTypeId;
       const currentRequires = (await tx.first<{ r: number }>(`SELECT session_type_requires_credit AS r
-        FROM dev_calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]))?.r === 1;
+        FROM calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]))?.r === 1;
       const next = booking(valid, keepSnapshot ? currentRequires : type.requiresCredit === 1);
       const creditChanged = current.clientId !== valid.clientId || current.sessionTypeId !== valid.sessionTypeId
         || current.creditBypass !== (valid.creditBypass === true);
@@ -390,7 +390,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       } else if (this.accounting !== null && moved) {
         await this.accounting.move(tx, this.workspaceId, id, next);
       }
-      const result = await tx.run(`UPDATE dev_calendar_appointments SET local_date = ?,
+      const result = await tx.run(`UPDATE calendar_appointments SET local_date = ?,
         start_minute = ?, duration_minutes = ?, client_id = ?, guest_name = ?, session_type_id = ?,
         session_type_name = CASE WHEN ? THEN session_type_name ELSE ? END,
         session_type_category = CASE WHEN ? THEN session_type_category ELSE ? END,
@@ -416,7 +416,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       const current = await this.appointmentById(tx, id);
       date = current.localDate;
       const now = new Date().toISOString();
-      const result = await tx.run(`UPDATE dev_calendar_appointments SET lifecycle = 'CANCELLED',
+      const result = await tx.run(`UPDATE calendar_appointments SET lifecycle = 'CANCELLED',
         cancelled_at = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'SCHEDULED'`,
       [now, now, this.workspaceId, id, expectedRevision]);
@@ -440,7 +440,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       if (current.outcome === outcome) return current;
       const stamp = now.toISOString();
       if (outcome === "CANCELLED") {
-        const result = await tx.run(`UPDATE dev_calendar_appointments SET lifecycle = 'CANCELLED',
+        const result = await tx.run(`UPDATE calendar_appointments SET lifecycle = 'CANCELLED',
           outcome = 'CANCELLED', outcome_at = ?, cancelled_at = ?, revision = revision + 1, updated_at = ?
           WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle <> 'CANCELLED'`,
         [stamp, stamp, stamp, this.workspaceId, id, expectedRevision]);
@@ -449,7 +449,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
         await this.accounting?.cancel(tx, this.workspaceId, id, "RETURN", stamp);
       } else {
         if (!appointmentStarted(current, now)) throw new Error("CALENDAR_OUTCOME_TOO_EARLY");
-        const result = await tx.run(`UPDATE dev_calendar_appointments SET lifecycle = 'COMPLETED',
+        const result = await tx.run(`UPDATE calendar_appointments SET lifecycle = 'COMPLETED',
           outcome = ?, outcome_at = ?, revision = revision + 1, updated_at = ?
           WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle <> 'CANCELLED'`,
         [outcome, stamp, stamp, this.workspaceId, id, expectedRevision]);
@@ -466,7 +466,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
 
   async clearOutcome(id: string, expectedRevision: number): Promise<Appointment> {
     const cleared = await this.ready().writer.write(async (tx) => {
-      const result = await tx.run(`UPDATE dev_calendar_appointments SET lifecycle = 'SCHEDULED',
+      const result = await tx.run(`UPDATE calendar_appointments SET lifecycle = 'SCHEDULED',
         outcome = NULL, outcome_at = NULL, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'COMPLETED'`,
       [new Date().toISOString(), this.workspaceId, id, expectedRevision]);
@@ -488,16 +488,18 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
         throw new Error("CALENDAR_CORRECTION_INVALID");
       }
       const requires = (await tx.first<{ r: number }>(`SELECT session_type_requires_credit AS r
-        FROM dev_calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]))?.r === 1;
+        FROM calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]))?.r === 1;
       const stamp = now.toISOString();
-      const result = await tx.run(`UPDATE dev_calendar_appointments SET client_id = ?,
+      // Release the old reservation and write compensating ledger facts before changing its owner.
+      // Everything remains inside this transaction; the new owner guard never observes a stale reservation.
+      await this.accounting?.correct(tx, this.workspaceId, id, { clientId: target,
+        sessionTypeId: current.sessionTypeId, requiresCredit: requires, bypass: current.creditBypass,
+        localDate: current.localDate, endMinute: current.startMinute + current.durationMinutes }, stamp);
+      const result = await tx.run(`UPDATE calendar_appointments SET client_id = ?,
         revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle <> 'CANCELLED'`,
       [target, stamp, this.workspaceId, id, expectedRevision]);
       if (result.changes !== 1) throw new Error("CALENDAR_STALE_APPOINTMENT");
-      await this.accounting?.correct(tx, this.workspaceId, id, { clientId: target,
-        sessionTypeId: current.sessionTypeId, requiresCredit: requires, bypass: current.creditBypass,
-        localDate: current.localDate, endMinute: current.startMinute + current.durationMinutes }, stamp);
       return this.appointmentById(tx, id);
     });
     this.publish({ dates: [corrected.localDate] });
@@ -519,14 +521,14 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
         current.startMinute + current.durationMinutes, id);
       if (conflict !== null) throw new Error(conflict);
       const stamp = now.toISOString();
-      const result = await tx.run(`UPDATE dev_calendar_appointments SET lifecycle = ?, outcome = ?,
+      const result = await tx.run(`UPDATE calendar_appointments SET lifecycle = ?, outcome = ?,
         outcome_at = ?, cancelled_at = NULL, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'CANCELLED'`,
       [previousOutcome === null ? "SCHEDULED" : "COMPLETED", previousOutcome,
         previousOutcome === null ? null : stamp, stamp, this.workspaceId, id, expectedRevision]);
       if (result.changes !== 1) throw new Error("CALENDAR_STALE_APPOINTMENT");
       const requires = (await tx.first<{ r: number }>(`SELECT session_type_requires_credit AS r
-        FROM dev_calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]))?.r === 1;
+        FROM calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]))?.r === 1;
       await this.accounting?.restore(tx, this.workspaceId, id, { clientId: current.clientId,
         sessionTypeId: current.sessionTypeId, requiresCredit: requires, bypass: current.creditBypass,
         localDate: current.localDate, endMinute: current.startMinute + current.durationMinutes },
@@ -538,7 +540,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
   }
 
   private async sessionTypeById(tx: SqliteStatementPort, id: string): Promise<SessionType> {
-    const row = await tx.first<SessionTypeRow>(`SELECT ${sessionTypeColumns} FROM dev_session_types
+    const row = await tx.first<SessionTypeRow>(`SELECT ${sessionTypeColumns} FROM session_types
       WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]);
     if (row === null) throw new Error("CALENDAR_SESSION_TYPE_UNAVAILABLE");
     return toSessionType(row);
@@ -548,7 +550,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
     const valid = validateSessionType(input);
     const created = await this.ready().writer.write(async (tx) => {
       const id = await newId(tx);
-      await tx.run(`INSERT INTO dev_session_types (id, workspace_id, seed_key, name, category,
+      await tx.run(`INSERT INTO session_types (id, workspace_id, seed_key, name, category,
           default_duration_minutes, requires_credit, archived_at, created_at, color)
         VALUES (?, ?, NULL, ?, ?, ?, ?, NULL, ?, ?)`,
       [id, this.workspaceId, valid.name, valid.category, valid.defaultDurationMinutes,
@@ -567,7 +569,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       if (current.inUse && current.requiresCredit !== valid.requiresCredit) {
         throw new Error("CALENDAR_SESSION_TYPE_CREDIT_LOCKED");
       }
-      await tx.run(`UPDATE dev_session_types SET name = ?, category = ?, default_duration_minutes = ?,
+      await tx.run(`UPDATE session_types SET name = ?, category = ?, default_duration_minutes = ?,
           requires_credit = ?, color = ? WHERE workspace_id = ? AND id = ?`,
       [valid.name, valid.category, valid.defaultDurationMinutes, valid.requiresCredit ? 1 : 0, valid.color,
         this.workspaceId, id]);
@@ -583,7 +585,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       if (archived && (await this.settings(tx)).defaultSessionTypeId === id) {
         throw new Error("CALENDAR_DEFAULT_TYPE_ARCHIVE");
       }
-      await tx.run(`UPDATE dev_session_types SET archived_at = ? WHERE workspace_id = ? AND id = ?`,
+      await tx.run(`UPDATE session_types SET archived_at = ? WHERE workspace_id = ? AND id = ?`,
         [archived ? new Date().toISOString() : null, this.workspaceId, id]);
     });
     this.publish({ dates: "ALL" });
@@ -592,7 +594,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
   async setDefaultSessionType(id: string): Promise<void> {
     await this.ready().writer.write(async (tx) => {
       if (await activeSessionType(tx, this.workspaceId, id) === null) throw new Error("CALENDAR_SESSION_TYPE_UNAVAILABLE");
-      await tx.run("UPDATE dev_calendar_settings SET default_session_type_id = ? WHERE workspace_id = ?",
+      await tx.run("UPDATE calendar_settings SET default_session_type_id = ? WHERE workspace_id = ?",
         [id, this.workspaceId]);
     });
     this.publish({ dates: "ALL" });
@@ -601,7 +603,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
   async updatePolicies(input: Readonly<{ copyPolicy: CategoryPolicy; clearPolicy: CategoryPolicy }>): Promise<CalendarSettings> {
     const flag = (value: boolean) => (value ? 1 : 0);
     const updated = await this.ready().writer.write(async (tx) => {
-      await tx.run(`UPDATE dev_calendar_settings SET copy_appointments = ?, copy_duty = ?, copy_blocked = ?,
+      await tx.run(`UPDATE calendar_settings SET copy_appointments = ?, copy_duty = ?, copy_blocked = ?,
           clear_appointments = ?, clear_duty = ?, clear_blocked = ? WHERE workspace_id = ?`,
       [flag(input.copyPolicy.appointments), flag(input.copyPolicy.duty), flag(input.copyPolicy.blocked),
         flag(input.clearPolicy.appointments), flag(input.clearPolicy.duty), flag(input.clearPolicy.blocked),
@@ -615,10 +617,10 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
   async resetSettings(): Promise<CalendarSettings> {
     const reset = await this.ready().writer.write(async (tx) => {
       // The seed «Персональная тренировка» is the safe default; if archived, the first active type.
-      const fallback = await tx.first<{ id: string }>(`SELECT id FROM dev_session_types
+      const fallback = await tx.first<{ id: string }>(`SELECT id FROM session_types
         WHERE workspace_id = ? AND archived_at IS NULL ORDER BY (seed_key = 'personal') DESC, created_at, rowid LIMIT 1`,
       [this.workspaceId]);
-      await tx.run(`UPDATE dev_calendar_settings SET copy_appointments = 1, copy_duty = 1, copy_blocked = 1,
+      await tx.run(`UPDATE calendar_settings SET copy_appointments = 1, copy_duty = 1, copy_blocked = 1,
           clear_appointments = 1, clear_duty = 1, clear_blocked = 1, undo_cancel_prompt = 1,
           default_session_type_id = ? WHERE workspace_id = ?`, [fallback?.id ?? null, this.workspaceId]);
       return this.settings(tx);
@@ -631,7 +633,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
     dayEndMinute: number }>): Promise<CalendarSettings> {
     const updated = await this.ready().writer.write(async (tx) => {
       validateSettings({ ...(await this.settings(tx)), ...input });
-      await tx.run(`UPDATE dev_calendar_settings SET visible_weekdays = ?, day_start_minute = ?, day_end_minute = ?
+      await tx.run(`UPDATE calendar_settings SET visible_weekdays = ?, day_start_minute = ?, day_end_minute = ?
         WHERE workspace_id = ?`, [input.visibleWeekdays.map((flag) => (flag ? "1" : "0")).join(""),
         input.dayStartMinute, input.dayEndMinute, this.workspaceId]);
       return this.settings(tx);
@@ -642,7 +644,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
 
   async setUndoCancelPrompt(enabled: boolean): Promise<void> {
     await this.ready().writer.write(async (tx) => {
-      await tx.run("UPDATE dev_calendar_settings SET undo_cancel_prompt = ? WHERE workspace_id = ?",
+      await tx.run("UPDATE calendar_settings SET undo_cancel_prompt = ? WHERE workspace_id = ?",
         [enabled ? 1 : 0, this.workspaceId]);
     });
   }
@@ -650,7 +652,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
   private async sameGuest(tx: SqliteStatementPort, row: Appointment): Promise<readonly Appointment[]> {
     const name = row.guestName;
     if (name === null) return [];
-    const rows = await tx.all<AppointmentRow>(`SELECT ${appointmentColumns} FROM dev_calendar_appointments
+    const rows = await tx.all<AppointmentRow>(`SELECT ${appointmentColumns} FROM calendar_appointments
       WHERE workspace_id = ? AND guest_name IS NOT NULL AND lifecycle <> 'CANCELLED' AND id <> ?
       ORDER BY local_date, start_minute, id`, [this.workspaceId, row.id]);
     // SQLite lower() is ASCII-only, so Cyrillic names are compared here.
@@ -660,7 +662,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
   async countSameGuest(appointmentId: string): Promise<number> {
     const { connection } = this.ready();
     const row = await connection.first<AppointmentRow>(`SELECT ${appointmentColumns}
-      FROM dev_calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, appointmentId]);
+      FROM calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, appointmentId]);
     return row === null ? 0 : (await this.sameGuest(connection, toAppointment(row))).length;
   }
 
@@ -679,7 +681,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       const rows = [current, ...(includeSameName ? await this.sameGuest(tx, current) : [])];
       const stamp = now.toISOString();
       for (const row of rows) {
-        const result = await tx.run(`UPDATE dev_calendar_appointments SET client_id = ?, guest_name = NULL,
+        const result = await tx.run(`UPDATE calendar_appointments SET client_id = ?, guest_name = NULL,
           revision = revision + 1, updated_at = ?
           WHERE workspace_id = ? AND id = ? AND guest_name IS NOT NULL AND lifecycle <> 'CANCELLED'`,
         [target, stamp, this.workspaceId, row.id]);
@@ -688,7 +690,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
         // A guest visit was never accounted, so only records that have not started book a credit.
         if (this.accounting === null || appointmentStarted(row, now)) continue;
         const requires = (await tx.first<{ r: number }>(`SELECT session_type_requires_credit AS r
-          FROM dev_calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, row.id]))?.r === 1;
+          FROM calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, row.id]))?.r === 1;
         const booking = { clientId: target, sessionTypeId: row.sessionTypeId, requiresCredit: requires,
           bypass: row.creditBypass, localDate: row.localDate, endMinute: row.startMinute + row.durationMinutes };
         let packId: string | null = null;
@@ -697,7 +699,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
         } catch (error) {
           if (!(error instanceof Error) || error.message !== "ACCOUNTING_INSUFFICIENT_CREDIT") throw error;
           // No credits yet must not block the link: the record is kept «без списания» explicitly.
-          await tx.run("UPDATE dev_calendar_appointments SET credit_bypass = 1 WHERE workspace_id = ? AND id = ?",
+          await tx.run("UPDATE calendar_appointments SET credit_bypass = 1 WHERE workspace_id = ? AND id = ?",
             [this.workspaceId, row.id]);
         }
         if (packId !== null) await this.accounting.reserve(tx, this.workspaceId, row.id, booking, packId);
@@ -711,7 +713,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
   async listPendingOutcomes(now: Date): Promise<readonly Appointment[]> {
     const today = localDateOf(now);
     const rows = await this.ready().connection.all<AppointmentRow>(`SELECT ${appointmentColumns}
-      FROM dev_calendar_appointments WHERE workspace_id = ? AND lifecycle = 'SCHEDULED'
+      FROM calendar_appointments WHERE workspace_id = ? AND lifecycle = 'SCHEDULED'
         AND participant_deleted = 0
         AND (local_date < ? OR (local_date = ? AND start_minute + duration_minutes <= ?))
       ORDER BY local_date, start_minute, id`, [this.workspaceId, today, today, minuteOfDay(now)]);
@@ -725,7 +727,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       if (conflict !== null) throw new Error(conflict);
       const id = await insertInterval(tx, this.workspaceId, valid);
       const row = await tx.first<CalendarInterval>(`SELECT ${intervalColumns}
-        FROM dev_calendar_intervals WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]);
+        FROM calendar_intervals WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]);
       if (row === null) throw new Error("CALENDAR_ID_UNAVAILABLE");
       return row;
     });
@@ -739,10 +741,10 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
     await this.ready().writer.write(async (tx) => {
       for (const id of removeIds) {
         const row = await tx.first<{ localDate: string }>(`SELECT local_date AS localDate
-          FROM dev_calendar_intervals WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]);
+          FROM calendar_intervals WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]);
         if (row === null) throw new Error("CALENDAR_INTERVAL_NOT_FOUND");
         dates.add(row.localDate);
-        await tx.run("DELETE FROM dev_calendar_intervals WHERE workspace_id = ? AND id = ?", [this.workspaceId, id]);
+        await tx.run("DELETE FROM calendar_intervals WHERE workspace_id = ? AND id = ?", [this.workspaceId, id]);
       }
       // Проверка пересечений видит уже удалённые интервалы как свободное время; любой конфликт откатывает всё.
       for (const input of valid) {
@@ -759,10 +761,10 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
     let date = "";
     await this.ready().writer.write(async (tx) => {
       const row = await tx.first<{ localDate: string }>(`SELECT local_date AS localDate
-        FROM dev_calendar_intervals WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]);
+        FROM calendar_intervals WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]);
       if (row === null) throw new Error("CALENDAR_INTERVAL_NOT_FOUND");
       date = row.localDate;
-      await tx.run("DELETE FROM dev_calendar_intervals WHERE workspace_id = ? AND id = ?",
+      await tx.run("DELETE FROM calendar_intervals WHERE workspace_id = ? AND id = ?",
         [this.workspaceId, id]);
     });
     this.publish({ dates: [date] });
@@ -845,12 +847,12 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       if (settings.clearPolicy.appointments) {
         // Only rows that have not started: bulk clear releases their reservations and never
         // charges; past and running rows keep their outcome and USED (§13.14, §48.35).
-        const cleared = await tx.all<{ id: string }>(`SELECT id FROM dev_calendar_appointments
+        const cleared = await tx.all<{ id: string }>(`SELECT id FROM calendar_appointments
           WHERE workspace_id = ? AND local_date BETWEEN ? AND ? AND lifecycle = 'SCHEDULED'
             AND ${NOT_STARTED_SQL}`, [this.workspaceId, monday, sunday, ...notStartedParams(now)]);
         for (const row of cleared) {
           await this.accounting?.cancel(tx, this.workspaceId, row.id, "RETURN", stamp);
-          await tx.run(`UPDATE dev_calendar_appointments SET lifecycle = 'CANCELLED', cancelled_at = ?,
+          await tx.run(`UPDATE calendar_appointments SET lifecycle = 'CANCELLED', cancelled_at = ?,
             revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND id = ?`,
           [stamp, stamp, this.workspaceId, row.id]);
         }
@@ -858,7 +860,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       const kinds = [settings.clearPolicy.duty ? "DUTY" : null,
         settings.clearPolicy.blocked ? "BLOCKED" : null].filter((kind) => kind !== null);
       for (const kind of kinds) {
-        await tx.run(`DELETE FROM dev_calendar_intervals
+        await tx.run(`DELETE FROM calendar_intervals
           WHERE workspace_id = ? AND local_date BETWEEN ? AND ? AND kind = ? AND ${NOT_STARTED_SQL}`,
         [this.workspaceId, monday, sunday, kind, ...notStartedParams(now)]);
       }
