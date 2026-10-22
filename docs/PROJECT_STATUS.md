@@ -1,3 +1,9 @@
+## 2026-10-22 — R01: фактические пакеты на подключённом телефоне
+
+- Read-only ADB подтвердил `com.fitcoach.app` 2.0.0 build 128 и отдельный `com.fitcoach.v3dev` 0.0.1 build 1. Текущий dev-пакет не является обновлением поверх 2.0.
+- Для будущего production overlay нужны package `com.fitcoach.app`, versionCode >128, совместимая подпись и доказанный migration/restore. Сертификат заново не измерялся, R01/overlay остаётся OPEN.
+- Данные/БД/APK не читались и не копировались; установки, удаления и сбросы не выполнялись. [Evidence и границы](spikes/R01_ANDROID_IDENTITY.md).
+
 ## 2026-10-22 — R04: единый source ledger подходов
 
 - Добавлен `LegacyFactLedger`: session/current/history/archive atoms в одном read snapshot, raw payload и физические source keys сохраняются. Logical grouping только по account/client/sourceFactId; без identity атом не сливается по метрикам или позиции.

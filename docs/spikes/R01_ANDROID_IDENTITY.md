@@ -1,5 +1,33 @@
 # R01 — Android package / signing / versionCode
 
+## Повторная read-only проверка 2026-10-22
+
+Через ADB подтверждено наличие двух отдельных пакетов на одном доступном
+устройстве (другой ADB transport не был ready; команды направлены явно
+на единственный transport со статусом device):
+
+| Пакет | versionName | versionCode | min/target SDK |
+|---|---|---|---|
+| `com.fitcoach.app` | `2.0.0` | 128 | 24 / 36 |
+| `com.fitcoach.v3dev` | `0.0.1` | 1 | 24 / 36 |
+
+Метод: `pm list packages` с фильтром package name и `dumpsys package` каждого
+пакета; наружу выводились только package/version/SDK/flags. Базы, файлы клиентов,
+секреты и APK не читались и не копировались; install/uninstall/clear-data не
+выполнялись. Наличие 2.0 — теперь проверенное package evidence.
+
+**Текущая dev-сборка не может обновить `com.fitcoach.app` как есть:** другой
+package и versionCode 1. Это ожидаемая изоляция dev-установки, а не основание
+менять её package и рисковать существующими данными. Для отдельного будущего
+production-кандидата требуются package `com.fitcoach.app`, versionCode >128,
+совместимая подпись и пройденный migration/restore gate. Наличие установленного
+`com.fitcoach.v3dev` не является доказательством готовности production-кандидата.
+
+Сертификаты повторно не извлекались. Полный R01/overlay acceptance остаётся
+OPEN; сведения о сертификате ниже — evidence от 2026-10-15, не новый замер.
+
+---
+
 **Статус 2026-10-15: PARTIAL EVIDENCE / OVERLAY UNDETERMINED.**
 Нормативный backlog `R01` остаётся `PLANNED`: требуемое сравнение с кандидатной
 подписью и тест обновления не проведены.
