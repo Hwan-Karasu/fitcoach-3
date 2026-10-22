@@ -137,7 +137,9 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
     <>
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.head}>
-          <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Данные дня</Text>
+          <Text style={[styles.cardTitle, styles.titleFlex, { color: colors.textPrimary }]} numberOfLines={1}
+            accessibilityLabel={`Данные дня. Тренировок на этой неделе: ${workoutsThisWeek === null ? "нет данных" : workoutsThisWeek}`}>Данные дня
+            <Text style={[styles.hint, { color: colors.textSecondary }]}>{`  ·  трен./нед.: ${workoutsThisWeek === null ? "нет данных" : workoutsThisWeek}`}</Text></Text>
           <View style={styles.headRight}>
             <View style={[styles.pill, { backgroundColor: colors.accentSoft }]}><Text style={[styles.pillText, { color: colors.accentInk }]}>Сегодня</Text></View>
             <AppIconButton compact label="Журнал данных дня: вес, шаги, тренировка по датам" icon={<CalendarDays size={20} color={colors.textPrimary} />} onPress={() => setJournal(true)} />
@@ -159,10 +161,6 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
             </Pressable>
           </View>
         </View>
-        <Text style={[styles.hint, { color: colors.textSecondary }]}
-          accessibilityLabel={`Тренировок на этой неделе: ${workoutsThisWeek === null ? "нет данных" : workoutsThisWeek}`}>
-          Трен./нед.: {workoutsThisWeek === null ? "нет данных" : workoutsThisWeek}
-        </Text>
         {dirty ? <AppButton compact label="Записать" busy={busy} onPress={() => { void saveDay(); }} /> : null}
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
         <DayDataJournal visible={journal} clientId={clientId} today={today} calc={calc} measurements={measurements} recordWeight={recordWeight} onClose={() => setJournal(false)} />
@@ -225,6 +223,7 @@ const styles = StyleSheet.create({
   group: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 12, overflow: "hidden" },
   segment: { minHeight: 28, paddingHorizontal: 8, alignItems: "center", justifyContent: "center" },
   segmentText: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 15 },
+  titleFlex: { flexShrink: 1 },
   cardTitle: { fontSize: 14, lineHeight: 19, fontFamily: fonts.bold },
   hint: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
   guide: { flex: 1, minWidth: 0, alignItems: "center", gap: 4 },

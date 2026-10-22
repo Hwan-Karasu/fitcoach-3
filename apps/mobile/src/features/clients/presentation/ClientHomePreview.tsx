@@ -129,7 +129,7 @@ export function ClientHomePreview({ client, summary, onOpenAccounting, onWriteOf
     {archiveError ? <InlineNotice kind="error">
       Не удалось переместить клиента в архив: карточка изменилась или операция не удалась. Данные не изменены.
     </InlineNotice> : null}
-    <AppButton variant="ghost" label="Переместить в архив"
+    <AppButton compact size="small" variant="ghost" label="Переместить в архив"
       onPress={() => { setArchiveError(false); setConfirming(true); }} />
     <ConfirmDialog visible={confirming} confirmBusy={archiving}
       title={`Переместить ${client.displayName} в Архив?`}
