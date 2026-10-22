@@ -109,6 +109,32 @@ test("R06 native SQLite backup captures committed WAL pages without checkpointin
   } finally { db.close(); f.cleanup(); }
 });
 
+test("R06 shared repository leases close before replacement and reinitialize against the restored file", async () => {
+  const f = await fixture();
+  const storage = new HostRestoreStorage(f.directory);
+  const liveDatabase = new SharedSqliteDatabase(async () => nodeSqlitePort(new DatabaseSync(storage.path("LIVE"))));
+  const clients = new DevClientRepository(liveDatabase, WS, []);
+  try {
+    const historic = await seed(f.shared);
+    const db = new DatabaseSync(f.file);
+    await createSqliteBackup(db, f.partial, f.destination, metadata()); db.close();
+    await prepareProductionDatabase(liveDatabase);
+    await clients.initialize();
+    const newer = await clients.create({ displayName: "Synthetic newer client" });
+    await prepareBackupForRestore(f.destination, storage.path("INCOMING"));
+    const hostGate = storage.withClosedDatabase.bind(storage);
+    storage.withClosedDatabase = (task) => liveDatabase.withClosedDatabase(() => clients.close(), () => hostGate(task));
+    assert.equal(await new GuardedRestore(storage).restore({ operationId: "live-lease-rehearsal",
+      currentSha256: hash(storage.path("LIVE")), incomingSha256: hash(storage.path("INCOMING")) }), "COMMITTED");
+    await clients.initialize();
+    assert.equal(await clients.get(newer.id), null);
+    assert.equal((await clients.get(historic.clientId))?.displayName, "Synthetic roundtrip");
+    const safety = new DatabaseSync(storage.path("SAFETY"), { readOnly: true });
+    try { assert.equal(safety.prepare("SELECT display_name FROM clients WHERE id=?").get(newer.id)?.display_name, "Synthetic newer client"); }
+    finally { safety.close(); }
+  } finally { await clients.close(); f.cleanup(); }
+});
+
 test("R06 backup→validated staging→guarded replacement restores the historical snapshot, not a merge", async () => {
   const f = await fixture();
   const storage = new HostRestoreStorage(f.directory);

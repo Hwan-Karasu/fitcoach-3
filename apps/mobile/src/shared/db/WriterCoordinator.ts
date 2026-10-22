@@ -7,13 +7,17 @@ export class WriterCoordinator {
   private paused = false;
   private readonly connection: SqliteConnectionPort;
   private readonly diagnostics?: DiagnosticSink;
+  private readonly assertAdmission?: () => void;
 
-  constructor(connection: SqliteConnectionPort, diagnostics?: DiagnosticSink) {
+  constructor(connection: SqliteConnectionPort, diagnostics?: DiagnosticSink, assertAdmission?: () => void) {
     this.connection = connection;
     this.diagnostics = diagnostics;
+    this.assertAdmission = assertAdmission;
   }
 
   write<T>(task: (tx: SqliteStatementPort) => Promise<T>): Promise<T> {
+    try { this.assertAdmission?.(); }
+    catch (error) { return Promise.reject(error); }
     if (this.paused) {
       this.report({ operation: "db.transaction", outcome: "rejected", durationMs: 0, code: "WRITES_QUIESCED" });
       return Promise.reject(new Error("WRITES_QUIESCED"));

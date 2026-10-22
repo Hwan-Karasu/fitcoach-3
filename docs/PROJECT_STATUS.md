@@ -1,3 +1,10 @@
+## 2026-10-22 — R06: shared DB quiescence перед заменой
+
+- SharedSqliteDatabase сериализует acquire/release: устранена гонка нового open с незавершённым close. Last release ждёт admitted reads и queued writes, старый lease больше не используется.
+- Добавлен withClosedDatabase: немедленно запрещает новые reads/writes/acquire, ждёт очередь и все repository/workflow holders; файловая операция запускается только после native close. При ошибке замены admission остаётся закрытым до recovery; uncertain close не допускает второе соединение.
+- Восемь lifecycle-тестов и настоящий файловый repository→backup→restore→reinitialize проверяют закрытие до замены, отсутствие merge и сохранность прежнего клиента в SAFETY. Scheduler/runtime orchestration ещё не подключены. [Гарантии и обязанности](spikes/R06_DATABASE_QUIESCENCE.md).
+- Проверки: foundation 899/899 (+9), typecheck, lint, arch:check, source:verify, secrets:check, diff --check и Android production JS bundle прошли. Это не Android APK/E2E и не закрытый R06; реальные базы/телефон не затрагивались.
+
 ## 2026-10-22 — R06: самостоятельный SQLite .atbackup на host
 
 - Host-прототип использует настоящий SQLite backup API (включая committed WAL), добавляет manifest/свой owner ledger только в копию, проверяет typed streaming SHA-256 всех канонических SQL/строк и публикует новое имя без перезаписи прежнего backup. Рабочая БД не меняется.
