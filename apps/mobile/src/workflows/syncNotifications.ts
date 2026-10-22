@@ -1,6 +1,18 @@
 import type { CalendarParticipantDirectoryPort, CalendarRepositoryPort } from "../features/calendar/public.ts";
-import { candidateFromReminder, diffSchedule, dueReminders, outcomeDueCandidates, planReminders, reminderIdentifier, SCHEDULE_HORIZON_DAYS, withinHorizon,
-  type CenterCandidate, type NotificationCenterPort, type OsPermission, type PlannerAppointment, type PlannerDuty, type PlatformNotificationPort } from "../features/notifications/public.ts";
+import type { candidateFromReminder, diffSchedule, dueReminders, outcomeDueCandidates, planReminders, reminderIdentifier, withinHorizon,
+  CenterCandidate, NotificationCenterPort, OsPermission, PlannerAppointment, PlannerDuty, PlatformNotificationPort } from "../features/notifications/public.ts";
+
+/** Чистые правила владельца уведомлений подставляет composition root: workflow остаётся type-only к public API фичи. */
+export interface NotificationRules {
+  readonly planReminders: typeof planReminders;
+  readonly dueReminders: typeof dueReminders;
+  readonly candidateFromReminder: typeof candidateFromReminder;
+  readonly outcomeDueCandidates: typeof outcomeDueCandidates;
+  readonly diffSchedule: typeof diffSchedule;
+  readonly reminderIdentifier: typeof reminderIdentifier;
+  readonly withinHorizon: typeof withinHorizon;
+  readonly horizonDays: number;
+}
 
 export interface NotificationSyncResult {
   readonly permission: OsPermission;
@@ -24,7 +36,7 @@ export interface NotificationSync {
 const pad = (value: number) => String(value).padStart(2, "0");
 const dateText = (at: Date) => `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
 
-export function createNotificationSync(ports: Readonly<{ calendar: Pick<CalendarRepositoryPort, "listRange">;
+export function createNotificationSync(rules: NotificationRules, ports: Readonly<{ calendar: Pick<CalendarRepositoryPort, "listRange">;
   participants: Pick<CalendarParticipantDirectoryPort, "listParticipants">; center: Pick<NotificationCenterPort, "getSettings" | "materialize">;
   platform: PlatformNotificationPort }>): NotificationSync {
   let chain: Promise<unknown> = Promise.resolve();
@@ -32,7 +44,7 @@ export function createNotificationSync(ports: Readonly<{ calendar: Pick<Calendar
     const settings = await ports.center.getSettings();
     // Окно: со вчерашнего дня (записи, ждущие исхода) на горизонт планирования вперёд.
     const from = dateText(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
-    const to = dateText(new Date(now.getFullYear(), now.getMonth(), now.getDate() + SCHEDULE_HORIZON_DAYS));
+    const to = dateText(new Date(now.getFullYear(), now.getMonth(), now.getDate() + rules.horizonDays));
     const [range, people] = await Promise.all([ports.calendar.listRange(from, to), ports.participants.listParticipants()]);
     const names = new Map(people.map((person) => [person.id, person.displayName]));
     const appointments: PlannerAppointment[] = range.appointments.map((item) => ({ id: item.id, localDate: item.localDate, startMinute: item.startMinute,
@@ -43,8 +55,8 @@ export function createNotificationSync(ports: Readonly<{ calendar: Pick<Calendar
 
     // Лента центра не зависит от разрешения ОС (§54.5 п.4).
     const candidates: CenterCandidate[] = [
-      ...dueReminders({ settings, appointments, duties, now }).map(candidateFromReminder),
-      ...outcomeDueCandidates(range.appointments.map((item) => ({ id: item.id, localDate: item.localDate, startMinute: item.startMinute,
+      ...rules.dueReminders({ settings, appointments, duties, now }).map(rules.candidateFromReminder),
+      ...rules.outcomeDueCandidates(range.appointments.map((item) => ({ id: item.id, localDate: item.localDate, startMinute: item.startMinute,
         durationMinutes: item.durationMinutes, lifecycle: item.lifecycle, outcome: item.outcome, clientId: item.clientId,
         participantName: item.clientId === null ? item.guestName : (names.get(item.clientId) ?? item.guestName), sessionTypeName: item.sessionTypeName })), now),
     ];
@@ -57,11 +69,11 @@ export function createNotificationSync(ports: Readonly<{ calendar: Pick<Calendar
       permission = await ports.platform.permission();
       const existing = await ports.platform.scheduledIds();
       // Без разрешения в ОС ничего не планируется, но прежние напоминания снимаются, если настройка выключена.
-      const desired = permission === "granted" ? withinHorizon(planReminders({ settings, appointments, duties, now }), now) : [];
-      const diff = diffSchedule(desired, existing);
+      const desired = permission === "granted" ? rules.withinHorizon(rules.planReminders({ settings, appointments, duties, now }), now) : [];
+      const diff = rules.diffSchedule(desired, existing);
       await ports.platform.cancel(diff.toCancel);
       for (const intent of diff.toSchedule) {
-        await ports.platform.schedule({ identifier: reminderIdentifier(intent), title: intent.title, body: intent.body, fireAt: intent.fireAt });
+        await ports.platform.schedule({ identifier: rules.reminderIdentifier(intent), title: intent.title, body: intent.body, fireAt: intent.fireAt });
       }
       scheduled = desired.length;
     } catch {

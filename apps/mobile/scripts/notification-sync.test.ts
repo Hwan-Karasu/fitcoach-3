@@ -6,7 +6,9 @@ import { DevClientRepository } from "../src/features/clients/data/DevClientRepos
 import { DevNotificationRepository } from "../src/features/notifications/data/DevNotificationRepository.ts";
 import { DEFAULT_NOTIFICATION_SETTINGS, type NotificationSettings } from "../src/features/notifications/domain/NotificationSettings.ts";
 import type { OsPermission, PlatformNotificationPort } from "../src/features/notifications/domain/PlatformNotificationPort.ts";
-import { REMINDER_PREFIX } from "../src/features/notifications/domain/ReminderReconciler.ts";
+import { candidateFromReminder, outcomeDueCandidates } from "../src/features/notifications/domain/CenterModel.ts";
+import { dueReminders, planReminders } from "../src/features/notifications/domain/ReminderPlanner.ts";
+import { REMINDER_PREFIX, SCHEDULE_HORIZON_DAYS, diffSchedule, reminderIdentifier, withinHorizon } from "../src/features/notifications/domain/ReminderReconciler.ts";
 import { SharedSqliteDatabase } from "../src/shared/db/SharedSqliteDatabase.ts";
 import { createNotificationSync } from "../src/workflows/syncNotifications.ts";
 import { nodeSqlitePort } from "../../../scripts/support/node-sqlite-port.ts";
@@ -14,6 +16,8 @@ import { nodeSqlitePort } from "../../../scripts/support/node-sqlite-port.ts";
 const WS = "synthetic-workspace-a";
 const NOW = new Date(2026, 9, 22, 12, 0);
 const TODAY = "2026-10-22";
+
+const rules = { planReminders, dueReminders, candidateFromReminder, outcomeDueCandidates, diffSchedule, reminderIdentifier, withinHorizon, horizonDays: SCHEDULE_HORIZON_DAYS };
 
 /** Внешняя граница — Android: в памяти, с журналом вызовов. */
 function fakePlatform(permission: OsPermission = "granted") {
@@ -44,7 +48,7 @@ async function world(permission: OsPermission = "granted", settings: Partial<Not
   await center.saveSettings({ ...DEFAULT_NOTIFICATION_SETTINGS, appointment: { enabled: true, minutesBefore: 60 }, duty: { enabled: true, minutesBefore: 30 }, ...settings });
   const platform = fakePlatform(permission);
   const participants = { listParticipants: async () => (await clients.list("ACTIVE")).map((row) => ({ id: row.id, displayName: row.displayName, emoji: row.emoji, active: true })) };
-  const sync = createNotificationSync({ calendar, participants, center, platform: platform.port });
+  const sync = createNotificationSync(rules, { calendar, participants, center, platform: platform.port });
   const type = (await calendar.listSessionTypes()).find((row) => !row.requiresCredit)!;
   const book = (clientId: string | null, startMinute: number, localDate = TODAY) =>
     calendar.createAppointment({ localDate, startMinute, durationMinutes: 60, clientId, guestName: clientId === null ? "Гость" : null, sessionTypeId: type.id, note: null });
