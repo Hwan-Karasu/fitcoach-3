@@ -7,6 +7,11 @@ import { SCHEMA_OWNERS } from "../../apps/mobile/src/app/composition/schema.ts";
 import { inspectDatabaseIdentity, type DatabaseOwnerCatalog } from "../../apps/mobile/src/shared/db/DatabaseIdentity.ts";
 import { runMigrationsInTransaction } from "../../apps/mobile/src/shared/db/MigrationRunner.ts";
 import { nodeSqlitePort } from "../support/node-sqlite-port.ts";
+import { SnapshotError, type SnapshotManifest, type SnapshotMediaSummary } from "./SnapshotContract.ts";
+import { embedRecipePhotos, extractRecipePhotos, mediaDdl, MEDIA_CHUNKS, MEDIA_TABLE, originalPhotoJsonForParity,
+  verifyRecipePhotos, type RestoredRecipePhoto, type SnapshotMediaOptions } from "./SqliteBackupMedia.ts";
+export { SnapshotError } from "./SnapshotContract.ts";
+export type { SnapshotManifest } from "./SnapshotContract.ts";
 
 /** Host-only R06 format candidate. No working database DDL is added or changed. */
 const manifestTable = "at_backup_manifest";
@@ -14,21 +19,9 @@ const backupLedger = "at_backup_schema_migrations";
 const manifestDdl = `CREATE TABLE ${manifestTable} (singleton INTEGER PRIMARY KEY NOT NULL CHECK (singleton = 1),
   json TEXT NOT NULL CHECK (json_valid(json) AND json_type(json) = 'object'))`;
 const snapshotOwner: DatabaseOwnerCatalog = { owner: "backup-snapshot", ledger: backupLedger,
-  chain: [{ version: 1, checksum: createHash("sha256").update(manifestDdl).digest("hex"), statements: [manifestDdl] }] };
-const backupObjects = new Set([manifestTable, backupLedger]);
-export interface SnapshotManifest {
-  readonly kind: "athlete-diary-snapshot";
-  readonly formatVersion: 3;
-  readonly backupId: string;
-  readonly createdAt: string;
-  readonly product: "athlete_diary";
-  readonly workspaceId: string;
-  readonly contentSha256: string;
-}
-export class SnapshotError extends Error {
-  readonly code: "SNAPSHOT_INVALID" | "SNAPSHOT_INCOMPLETE_MEDIA" | "SNAPSHOT_DESTINATION_EXISTS" | "SNAPSHOT_IO_FAILED";
-  constructor(code: SnapshotError["code"]) { super(code); this.code = code; }
-}
+  chain: [{ version: 1, checksum: createHash("sha256").update(manifestDdl).digest("hex"), statements: [manifestDdl] },
+    { version: 2, checksum: createHash("sha256").update(mediaDdl.join("\n")).digest("hex"), statements: mediaDdl }] };
+const backupObjects = new Set([manifestTable, backupLedger, MEDIA_TABLE, MEDIA_CHUNKS]);
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
 /** Streaming, typed logical checksum, not JSON.stringify of the entire database. Includes
@@ -36,7 +29,8 @@ const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
  * No locale/rowid dependency; equal rows have identical encodings, duplicates keep multiplicity.
  * Not a signature: checksums detect corruption, they do not authenticate the file's author.
  */
-export function canonicalContentSha256(db: DatabaseSync): string {
+export function canonicalContentSha256(db: DatabaseSync, photos: readonly RestoredRecipePhoto[] = []): string {
+  const relocated = new Map(photos.map((photo) => [photo.id, photo]));
   const hash = createHash("sha256").update("athlete-snapshot-content-v1\n");
   const feed = (value: unknown): void => {
     let tag: string; let bytes: Buffer;
@@ -64,7 +58,10 @@ export function canonicalContentSha256(db: DatabaseSync): string {
     statement.setReadBigInts(true);
     for (const row of statement.iterate()) {
       hash.update("row:");
-      for (const name of columns) feed(row[name]);
+      for (const name of columns) {
+        const photo = table === "recipes" && name === "details_json" ? relocated.get(String(row.id)) : undefined;
+        feed(photo ? originalPhotoJsonForParity(row[name], photo) : row[name]);
+      }
     }
     hash.update("end-table;");
   }
@@ -81,25 +78,31 @@ function parseManifest(json: unknown): SnapshotManifest {
       !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(m.backupId) ||
       typeof m.createdAt !== "string" || new Date(m.createdAt).toISOString() !== m.createdAt ||
       typeof m.contentSha256 !== "string" || !/^[0-9a-f]{64}$/u.test(m.contentSha256) ||
-      Object.keys(m).sort().join(",") !== "backupId,contentSha256,createdAt,formatVersion,kind,product,workspaceId") throw new Error();
+      Object.keys(m).sort().join(",") !== (m.media === undefined
+        ? "backupId,contentSha256,createdAt,formatVersion,kind,product,workspaceId"
+        : "backupId,contentSha256,createdAt,formatVersion,kind,media,product,workspaceId")) throw new Error();
+    if (m.media !== undefined) {
+      const media = m.media as Partial<SnapshotMediaSummary>;
+      if (!media || typeof media !== "object" || media.version !== 1 ||
+        !Number.isSafeInteger(media.entries) || media.entries! < 0 || !Number.isSafeInteger(media.bytes) || media.bytes! < 0 ||
+        typeof media.sha256 !== "string" || !/^[0-9a-f]{64}$/u.test(media.sha256) ||
+        Object.keys(media).sort().join(",") !== "bytes,entries,sha256,version") throw new Error();
+      // Normalize property order: JSON property order is not part of the file format.
+      return { ...m, media: { version: 1, entries: media.entries!, bytes: media.bytes!, sha256: media.sha256 } } as SnapshotManifest;
+    }
     return m as SnapshotManifest;
   } catch { throw new SnapshotError("SNAPSHOT_INVALID"); }
-}
-function requireMediaCoverage(db: DatabaseSync): void {
-  // Recipe photos really exist in the current feature set. Do not publish a misleadingly
-  // successful DB-only backup until their bytes are embedded and restored (R06 still open).
-  if (db.prepare("SELECT 1 FROM recipes WHERE json_extract(details_json, '$.photoUri') IS NOT NULL LIMIT 1").get()) {
-    throw new SnapshotError("SNAPSHOT_INCOMPLETE_MEDIA");
-  }
 }
 async function inspectSnapshot(db: DatabaseSync): Promise<SnapshotManifest> {
   if (await inspectDatabaseIdentity(nodeSqlitePort(db), PRODUCTION_IDENTITY, [...SCHEMA_OWNERS, snapshotOwner]) !== "OWNED") {
     throw new SnapshotError("SNAPSHOT_INVALID");
   }
-  const rows = db.prepare(`SELECT singleton, json FROM ${manifestTable}`).all();
+  const rows = db.prepare(`SELECT singleton, CASE WHEN length(json) <= 8192 THEN json END AS json FROM ${manifestTable}`).all();
   if (rows.length !== 1 || rows[0]?.singleton !== 1) throw new SnapshotError("SNAPSHOT_INVALID");
   const manifest = parseManifest(rows[0].json);
-  requireMediaCoverage(db);
+  const version = db.prepare(`SELECT max(version) AS version FROM ${backupLedger}`).get()?.version;
+  if ((version === 2) !== (manifest.media !== undefined)) throw new SnapshotError("SNAPSHOT_INVALID");
+  verifyRecipePhotos(db, manifest.media);
   if (canonicalContentSha256(db) !== manifest.contentSha256) throw new SnapshotError("SNAPSHOT_INVALID");
   return manifest;
 }
@@ -134,7 +137,7 @@ function canonicalPath(file: string): string {
  * be private paths on the same filesystem; new destination publication is exclusive.
  * No automatic deletion/rotation: old usable backups survive failure. */
 export async function createSqliteBackup(source: DatabaseSync, partial: string, destination: string,
-  metadata: Pick<SnapshotManifest, "backupId" | "createdAt">): Promise<SnapshotManifest> {
+  metadata: Pick<SnapshotManifest, "backupId" | "createdAt">, mediaOptions: SnapshotMediaOptions = {}): Promise<SnapshotManifest> {
   try {
     if (canonicalPath(partial) === canonicalPath(destination)) throw new SnapshotError("SNAPSHOT_DESTINATION_EXISTS");
     if (existsSync(destination)) throw new SnapshotError("SNAPSHOT_DESTINATION_EXISTS");
@@ -145,12 +148,13 @@ export async function createSqliteBackup(source: DatabaseSync, partial: string, 
     try {
       copy.exec("PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL");
       if (await inspectProductionDatabase(nodeSqlitePort(copy)) !== "OWNED") throw new SnapshotError("SNAPSHOT_INVALID");
-      requireMediaCoverage(copy);
-      const manifest = parseManifest(JSON.stringify({ kind: "athlete-diary-snapshot", formatVersion: 3,
-        product: PRODUCTION_IDENTITY.product, workspaceId: PRODUCTION_IDENTITY.workspaceId, ...metadata,
-        contentSha256: canonicalContentSha256(copy) }));
+      const contentSha256 = canonicalContentSha256(copy);
       await nodeSqlitePort(copy).exclusive(async (tx) => {
         await runMigrationsInTransaction(tx, snapshotOwner.chain, snapshotOwner.ledger);
+        const media = embedRecipePhotos(copy, mediaOptions);
+        const manifest = parseManifest(JSON.stringify({ kind: "athlete-diary-snapshot", formatVersion: 3,
+          product: PRODUCTION_IDENTITY.product, workspaceId: PRODUCTION_IDENTITY.workspaceId,
+          backupId: metadata.backupId, createdAt: metadata.createdAt, contentSha256, media }));
         await tx.run(`INSERT INTO ${manifestTable} (singleton, json) VALUES (1, ?)`, [JSON.stringify(manifest)]);
       });
     } finally { copy.close(); }
@@ -173,7 +177,7 @@ export async function validateSqliteBackup(file: string): Promise<SnapshotManife
 
 /** Preserve the source .atbackup. Remove snapshot-only metadata ONLY in a separately
  * reserved candidate, then run normal production identity/schema/integrity validation. */
-export async function prepareBackupForRestore(file: string, staging: string): Promise<SnapshotManifest> {
+export async function prepareBackupForRestore(file: string, staging: string, mediaOptions: SnapshotMediaOptions = {}): Promise<SnapshotManifest> {
   try {
     noSidecars(file);
     const source = new DatabaseSync(file, { readOnly: true });
@@ -188,10 +192,20 @@ export async function prepareBackupForRestore(file: string, staging: string): Pr
       candidate.exec("PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL");
       const copied = await inspectSnapshot(candidate);
       if (JSON.stringify(copied) !== JSON.stringify(manifest)) throw new SnapshotError("SNAPSHOT_INVALID");
+      const photos = extractRecipePhotos(candidate, manifest.backupId, mediaOptions);
       await nodeSqlitePort(candidate).exclusive(async (tx) => {
+        if (manifest.media !== undefined) {
+          await tx.run(`DROP TABLE ${MEDIA_CHUNKS}`);
+          await tx.run(`DROP TABLE ${MEDIA_TABLE}`);
+        }
         await tx.run(`DROP TABLE ${manifestTable}`);
         await tx.run(`DROP TABLE ${backupLedger}`);
-        if (await inspectProductionDatabase(tx) !== "OWNED" || canonicalContentSha256(candidate) !== manifest.contentSha256) {
+        for (const photo of photos) {
+          const changed = await tx.run("UPDATE recipes SET details_json=json_set(details_json, '$.photoUri', ?) WHERE id=? AND json_extract(details_json, '$.photoUri')=?",
+            [photo.restoredUri, photo.id, photo.sourceUri]);
+          if (changed.changes !== 1) throw new SnapshotError("SNAPSHOT_INVALID");
+        }
+        if (await inspectProductionDatabase(tx) !== "OWNED" || canonicalContentSha256(candidate, photos) !== manifest.contentSha256) {
           throw new SnapshotError("SNAPSHOT_INVALID");
         }
       });

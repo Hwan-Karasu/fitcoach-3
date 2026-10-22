@@ -1,3 +1,10 @@
+## 2026-10-22 — R06: фото рецептов в самостоятельной SQLite-копии
+
+- Snapshot owner forward migration 2 добавляет media descriptors/chunks только в копию. Фото читаются блоками до 256 КиБ, включаются в один `.atbackup`, проверяются по layout/байтам/SHA и точному покрытию ссылок, включая архивные рецепты.
+- Restore проверяет и публикует новые private изображения перед заменой, меняет только photoUri в staging и доказывает parity остальных строк/полей, включая revision, timestamps и unknown JSON. После удаления source DB/media один `.atbackup` восстанавливает точные байты. Старые изображения не удаляются и не затираются.
+- Проверены traversal/symlink escape/missing media, порча chunks/manifest/coverage, совместимость старого metadata-only prototype и реальные SIGKILL на встраивании/записи/публикации изображения. Новая попытка проходит без повреждения live/исходной копии. [Хранение и границы](spikes/R06_BACKUP_MEDIA.md).
+- Проверки: foundation 919/919 (+20), typecheck, lint, arch:check, source:verify, secrets:check, diff --check прошли. Native adapter, Android decoder/SAF, scheduler и app integration ещё открыты; это не закрытый R06/D05. Реальные базы/телефон не затрагивались.
+
 ## 2026-10-22 — R06: shared DB quiescence перед заменой
 
 - SharedSqliteDatabase сериализует acquire/release: устранена гонка нового open с незавершённым close. Last release ждёт admitted reads и queued writes, старый lease больше не используется.

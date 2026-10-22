@@ -14,7 +14,8 @@ SQLite-соединений и планировщика. Протокол сам
 Синтетический host-adapter, SQLite `.atbackup` и process-kill тесты находятся в
 `scripts/r06`. Они не подключены к живой БД. Format candidate — обычный SQLite
 snapshot с manifest, без ZIP/шифрования. Restore удаляет snapshot-only metadata
-только из отдельного staging. Фото рецепта пока блокирует публикацию: его байты
-должны попадать в тот же файл. Native adapter, Android lifecycle/SAF, медиа,
+только из отдельного staging. Host-прототип включает фото рецептов блоками BLOB
+до 256 КиБ, проверяет SHA/длины/полноту ссылок, восстанавливает новые private
+файлы и меняет URI только в staging. Native adapter, Android lifecycle/SAF,
 полная parity всех доменов и UI остаются открытыми. Это не готовая миграция
 и не закрытый R06/D05.

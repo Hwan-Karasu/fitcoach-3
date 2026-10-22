@@ -1,6 +1,6 @@
 # R06 — самостоятельный SQLite .atbackup, host-прототип
 
-2026-10-22. **HOST VERIFIED / NATIVE AND MEDIA GATES OPEN.**
+2026-10-22. **HOST VERIFIED / NATIVE GATES OPEN.**
 
 Task R06, входы/зависимости: R03, текущая D01 identity и owner catalogs,
 Product §§46.3, 46.12, 46.20, Feature Spec 18 BU-01/02/03. Production DDL,
@@ -21,7 +21,9 @@ Content digest включает SQL definitions и типизированные 
 канонических таблиц (включая soft-deleted/history), их multiplicity и owner
 ledgers. Обход построчный; вся БД не загружается в JS память. int64 читается как
 BigInt; BLOB/text/null/real различаются. Сортировка с BINARY, без locale/rowid.
-Снимочные metadata-таблицы не входят в собственный content checksum.
+Снимочные metadata-таблицы не входят в собственный content checksum. Фото
+имеют отдельные SHA-256 и общий digest дескрипторов в manifest. Подробнее:
+[хранение фото](R06_BACKUP_MEDIA.md).
 
 Перед публикацией private-файл закрывается, синхронизируется и повторно
 открывается read-only: собственная identity, catalog с дополнительным snapshot
@@ -37,7 +39,9 @@ Host-публикация через exclusive hard link не оставляет
 Источник открывается только read-only. После проверки отдельный SQLite backup
 создаёт private staging. Snapshot metadata удаляются только из staging одной
 транзакцией; штатная production identity и полный content digest проверяются
-до commit. После этого кандидат подходит для `GuardedRestore`. Файл `.atbackup`
+до commit. Для фото digest допускает только доказанную замену private URI;
+прочие поля/строки остаются прежними. После этого кандидат подходит для
+`GuardedRestore`. Файл `.atbackup`
 не меняется и пригоден для повторной попытки; replay/confirmation относится к
 конкретной операции восстановления, а не к записи доменных фактов.
 
@@ -55,11 +59,11 @@ digest схемы/строк. Отдельно проверяются committed 
 цепочка backup→staging→guarded restore, порча manifest/строки/ledger/inventory,
 exclusive paths и typed streaming checksum с int64/BLOB/null/дубликатами.
 
-**Фото рецепта реально присутствует в текущем приложении.** Сейчас прототип
-обнаруживает `recipes.details_json.photoUri` и не публикует неполный DB-only
-backup (`SNAPSHOT_INCOMPLETE_MEDIA`). Нельзя объявлять механизм полностью
-готовым, пока байты фото и перенос URI не включены в тот же SQLite `.atbackup`.
-Публичный UI не подключён: этот код пока не показывается пользователю.
+**Фото рецепта реально присутствует в текущем приложении.** Host-прототип
+включает содержимое `recipes.details_json.photoUri` в тот же SQLite `.atbackup`,
+а после удаления source восстанавливает файлы и URI в staging. Недоступные
+либо чужие файлы по-прежнему блокируют неполный backup. Android decoder и
+native I/O ещё не проверены; публичный UI не подключён.
 
 Открыты также: полная owner-matrix (анкеты, исторические версии программ,
 Ledger/Calendar, уведомления, targets), native API/streaming и memory traces,
