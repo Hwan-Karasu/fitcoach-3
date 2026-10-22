@@ -44,6 +44,7 @@ export function SectionTabs<Id extends string>({ tabs, selectedId, onSelect }: R
             accessibilityRole="tab"
             accessibilityLabel={`Перейти к разделу ${tab.label}`}
             accessibilityState={{ selected }}
+            hitSlop={{ top: 6, bottom: 6 }}
             onPress={() => onSelect(tab.id)}
             onFocus={() => setFocusedId(tab.id)}
             onBlur={() => setFocusedId((current) => current === tab.id ? null : current)}
@@ -62,7 +63,7 @@ export function SectionTabs<Id extends string>({ tabs, selectedId, onSelect }: R
               },
             ]}
           >
-            {tab.icon === undefined ? null : <tab.icon size={16} color={selected ? colors.onAccentFill : colors.textSecondary} />}
+            {tab.icon === undefined ? null : <tab.icon size={15} color={selected ? colors.onAccentFill : colors.textSecondary} />}
             <Text style={[styles.label, { color: selected ? colors.onAccentFill : colors.textPrimary }]}>
               {tab.label}
             </Text>
@@ -75,7 +76,8 @@ export function SectionTabs<Id extends string>({ tabs, selectedId, onSelect }: R
 
 const styles = StyleSheet.create({
   scroll: { flexGrow: 0, flexShrink: 0 },
-  content: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  tab: { minHeight: 48, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 2, borderRadius: 24, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  label: { fontSize: 13, lineHeight: 18, fontFamily: fonts.bold, textAlign: "center" },
+  content: { paddingHorizontal: 16, paddingVertical: 6, gap: 6 },
+  // Видимая высота 36; область нажатия 48 (hitSlop) — требование проекта к целям нажатия.
+  tab: { minHeight: 36, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1.5, borderRadius: 18, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 },
+  label: { fontSize: 12, lineHeight: 16, fontFamily: fonts.bold, textAlign: "center" },
 });
