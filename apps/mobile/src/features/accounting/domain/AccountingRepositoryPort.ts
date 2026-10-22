@@ -21,7 +21,7 @@ export interface AccountingRepositoryPort {
   recordPayment(clientId: string, input: NewPaymentInput): Promise<void>;
   /** Explicit manual correction with a reason; never edits an existing entry. */
   adjust(clientId: string, packId: string, delta: number, reason: string): Promise<void>;
-  /** Ручное списание −1 с «следующего» пакета (ADJUSTMENT); без доступного занятия — ACCOUNTING_INSUFFICIENT_CREDIT. */
+  /** Ручное списание −1 с «следующего» пакета (ADJUSTMENT); без доступного занятия — ACCOUNTING_INSUFFICIENT_CREDIT, при режиме не «В приложении» — ACCOUNTING_NOT_TRACKED. */
   writeOff(clientId: string): Promise<void>;
   /**
    * Возвращает последнее ещё не возвращённое списание (ручное или по записи календаря) новой записью RETURNED +1.

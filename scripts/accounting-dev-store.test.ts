@@ -833,3 +833,16 @@ test("A02 списание одного клиента не затрагивае
     assert.equal((await accounting.getClientSnapshot(b.id)).ledger.length, 2);
   } finally { await close(); }
 });
+
+test("A02 «Списать» не работает вне режима «В приложении», даже если пакет есть", async () => {
+  const { clients, accounting, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "NotTracked" });
+    await accounting.setClientMode(client.id, "FITCOACH");
+    await accounting.createPack(client.id, pack(2));
+    await accounting.setClientMode(client.id, "EXTERNAL");
+    await assert.rejects(accounting.writeOff(client.id), { message: "ACCOUNTING_NOT_TRACKED" });
+    assert.equal((await accounting.getClientSnapshot(client.id)).available, 2);
+    assert.equal((await accounting.getClientSnapshot(client.id)).ledger.length, 1, "только выдача пакета");
+  } finally { await close(); }
+});

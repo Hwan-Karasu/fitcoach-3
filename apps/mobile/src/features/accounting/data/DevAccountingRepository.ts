@@ -397,6 +397,7 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
 
   async writeOff(clientId: string): Promise<void> {
     await this.ready().writer.write(async (tx) => {
+      if ((await modeOf(tx, this.workspaceId, clientId)).mode !== "FITCOACH") throw new Error("ACCOUNTING_NOT_TRACKED");
       const packs = await packRows(tx, this.workspaceId, clientId);
       const chosen = chooseManualWriteOffPack(packs.map((pack) => ({ ...pack, available: pack.ledgerBalance - pack.reserved })),
         localParts(new Date()).today, await preferredPackOf(tx, this.workspaceId, clientId));

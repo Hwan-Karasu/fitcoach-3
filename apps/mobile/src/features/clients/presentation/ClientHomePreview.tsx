@@ -14,6 +14,7 @@ const toneKind = { active: "success", warning: "warning", empty: "action_require
 function creditErrorText(failure: unknown): string {
   switch (failure instanceof Error ? failure.message : "") {
     case "ACCOUNTING_INSUFFICIENT_CREDIT": return "Нет доступных занятий: списывать нечего. Данные учёта не изменены.";
+    case "ACCOUNTING_NOT_TRACKED": return "Учёт этого клиента не ведётся в приложении. Данные учёта не изменены.";
     case "ACCOUNTING_NOTHING_TO_RETURN": return "Возвращать нечего: последнее списание уже отменено.";
     case "ACCOUNTING_STALE": return "Журнал изменился. Проверьте абонемент и повторите.";
     default: return "Не удалось сохранить. Данные учёта не изменены.";
