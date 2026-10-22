@@ -3,7 +3,7 @@ import type { MigrationStep } from "../../../shared/db/MigrationRunner.ts";
 export const DEV_MEASUREMENT_LEDGER = "measurement_schema_migrations";
 
 const types = "'WEIGHT','BODY_FAT','NECK','SHOULDERS','CHEST','WAIST','HIPS','ARM','THIGH','CALF'";
-/** v2: + живот, левая/правая сторона бицепса, предплечья, бедра и голени (UX v1.1; поправка к Product §49.14 готовится). Сторона — часть типа. */
+/** v2: + живот, левая/правая сторона плеча, предплечья, бедра и голени (UX v1.1; поправка к Product §49.14 готовится). Сторона — часть типа. */
 const typesV2 = `${types},'ABDOMEN','ARM_L','ARM_R','FOREARM_L','FOREARM_R','THIGH_L','THIGH_R','CALF_L','CALF_R'`;
 
 /**

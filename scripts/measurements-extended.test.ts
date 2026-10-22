@@ -16,7 +16,7 @@ const WS = "synthetic-workspace-a";
 const NOW = new Date(2026, 9, 20, 21, 0);
 const DAY = "2026-10-20";
 
-test("NUT-FS-07…09: набор замеров — живот, предплечье, бицепс/предплечье/бедро/голень по сторонам; старые «Рука/Бедро/Икра» остаются без стороны", () => {
+test("NUT-FS-07…09: набор замеров — живот, плечо/предплечье/бедро/голень по сторонам; старые «Рука/Бедро/Икра» остаются без стороны", () => {
   for (const type of ["ABDOMEN", "ARM_L", "ARM_R", "FOREARM_L", "FOREARM_R", "THIGH_L", "THIGH_R", "CALF_L", "CALF_R", "ARM", "THIGH", "CALF"]) assert.ok((MEASUREMENT_TYPES as readonly string[]).includes(type), type);
   assert.deepEqual(MEASUREMENT_GROUPS.map((group) => group.id), ["NECK", "SHOULDERS", "CHEST", "WAIST", "ABDOMEN", "HIPS", "BICEPS", "FOREARM", "THIGH", "CALF"]);
   const biceps = MEASUREMENT_GROUPS.find((group) => group.id === "BICEPS");
@@ -27,6 +27,15 @@ test("NUT-FS-07…09: набор замеров — живот, предплеч
   assert.equal(measurementTypeInfo.ARM_L.minX10, 100);
   assert.throws(() => validateMeasurement({ type: "ARM_X" as never, valueX10: 330, localDate: DAY, localMinute: null }, NOW), { message: "MEASUREMENT_TYPE_INVALID" });
   assert.equal(validateMeasurement({ type: "ARM_L", valueX10: 330, localDate: DAY, localMinute: null }, NOW).type, "ARM_L");
+});
+
+test("замеры руки: плечо и предплечье, а не «бицепс» (замеряется обхват плеча, а не мышцы)", () => {
+  assert.equal(MEASUREMENT_GROUPS.find((group) => group.id === "BICEPS")?.label, "Плечо");
+  assert.equal(MEASUREMENT_GROUPS.find((group) => group.id === "FOREARM")?.label, "Предплечье");
+  assert.equal(measurementTypeInfo.ARM_L.label, "Плечо, левое");
+  assert.equal(measurementTypeInfo.ARM_R.label, "Плечо, правое");
+  assert.equal(measurementTypeInfo.FOREARM_L.label, "Предплечье, левое");
+  assert.equal(measurementTypeInfo.FOREARM_R.label, "Предплечье, правое");
 });
 
 test("NUT-FS-08, 12: левая и правая сторона — независимые ряды (одна сторона — допустимо), старое значение не получает сторону", async () => {

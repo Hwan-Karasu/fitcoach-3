@@ -20,7 +20,7 @@ export interface MeasurementGroup {
 export const MEASUREMENT_GROUPS: readonly MeasurementGroup[] = [
   { id: "NECK", label: "Шея", single: "NECK" }, { id: "SHOULDERS", label: "Плечи", single: "SHOULDERS" }, { id: "CHEST", label: "Грудь", single: "CHEST" },
   { id: "WAIST", label: "Талия", single: "WAIST" }, { id: "ABDOMEN", label: "Живот", single: "ABDOMEN" }, { id: "HIPS", label: "Бёдра", single: "HIPS" },
-  { id: "BICEPS", label: "Бицепс", left: "ARM_L", right: "ARM_R", legacy: "ARM" }, { id: "FOREARM", label: "Предплечье", left: "FOREARM_L", right: "FOREARM_R" },
+  { id: "BICEPS", label: "Плечо", left: "ARM_L", right: "ARM_R", legacy: "ARM" }, { id: "FOREARM", label: "Предплечье", left: "FOREARM_L", right: "FOREARM_R" },
   { id: "THIGH", label: "Бедро", left: "THIGH_L", right: "THIGH_R", legacy: "THIGH" }, { id: "CALF", label: "Голень", left: "CALF_L", right: "CALF_R", legacy: "CALF" },
 ];
 

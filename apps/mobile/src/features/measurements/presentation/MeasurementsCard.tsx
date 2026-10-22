@@ -12,7 +12,7 @@ import { dailyPoints, formatDate, localDateOf, measurementTypeInfo, parseValueX1
 
 /** Окружности: всё, кроме массы и % жира (они живут в расчёте и в журнале замеров). */
 const CIRCUMFERENCES: readonly MeasurementType[] = MEASUREMENT_TYPES.filter((type) => type !== "WEIGHT" && type !== "BODY_FAT");
-/** Базовый набор карточки: прежние восемь обхватов (бицепс, бедро и голень — с сторонами). Остальные включаются в «Настроить замеры» (UX v1.1, NUT-FS-10). */
+/** Базовый набор карточки: прежние восемь обхватов (плечо, бедро и голень — с сторонами). Остальные включаются в «Настроить замеры» (UX v1.1, NUT-FS-10). */
 const DEFAULT_VISIBLE: ReadonlySet<string> = new Set(["NECK", "SHOULDERS", "CHEST", "WAIST", "HIPS", "BICEPS", "THIGH", "CALF"]);
 const typesOf = (group: MeasurementGroup): readonly MeasurementType[] => [group.single, group.left, group.right, group.legacy].filter((type): type is MeasurementType => type !== undefined);
 
@@ -75,7 +75,7 @@ function Tile({ group, cells, compact }: Readonly<{ group: MeasurementGroup; cel
 }
 
 /**
- * Карточка «Замеры» (§§49.14–49.18, UX «Расчёт», v1.1 NUT-FS-07…14): лента дат, «+», компактные группы обхватов (бицепс, предплечье, бедро, голень — Л и П в одном блоке), «Изменить»,
+ * Карточка «Замеры» (§§49.14–49.18, UX «Расчёт», v1.1 NUT-FS-07…14): лента дат, «+», компактные группы обхватов (плечо, предплечье, бедро, голень — Л и П в одном блоке), «Изменить»,
  * «Удалить» и «Настроить замеры». Источник — единственный журнал Measurements; пусто — «—», не ноль; старые односторонние значения остаются «без стороны». Видимость полей — настройка
  * экрана на время работы: скрытое поле не удаляет факты, а группа с данными за выбранную дату показывается всегда.
  */
