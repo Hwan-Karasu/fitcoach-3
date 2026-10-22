@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useGroupVisibilityPreference } from "./GroupVisibilityPreference.tsx";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Check, ChevronLeft, ChevronRight, Plus } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, LoadingState, TextField } from "../../../shared/ui/components/public.ts";
@@ -95,6 +96,13 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal, compact 
   const [visible, setVisible] = useState<ReadonlySet<string>>(DEFAULT_VISIBLE);
   const [configuring, setConfiguring] = useState(false);
   const stripRef = useRef<ScrollView>(null);
+  const preference = useGroupVisibilityPreference();
+  useEffect(() => {
+    if (preference === null) return;
+    let active = true;
+    void preference.load().then((ids) => { if (active && ids !== null) setVisible(new Set(ids)); }, () => undefined);
+    return () => { active = false; };
+  }, [preference]);
 
   useEffect(() => {
     let active = true;
@@ -176,7 +184,12 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal, compact 
     const next = dates[index + step];
     if (next !== undefined) setSelected(next);
   };
-  const toggleGroup = (id: string) => setVisible((currentSet) => { const next = new Set(currentSet); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const toggleGroup = (id: string) => {
+    const next = new Set(visible);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setVisible(next);
+    if (preference !== null) preference.save([...next]).catch(() => setError("Не удалось сохранить настройку замеров: она действует до закрытия экрана."));
+  };
 
   /** Плотный просмотр — три группы в ряд; обычный — одиночные по три, парные по две. */
   const rows = (groups: readonly MeasurementGroup[]): readonly (readonly MeasurementGroup[])[] => {

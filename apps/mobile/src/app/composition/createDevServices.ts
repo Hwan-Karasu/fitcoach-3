@@ -18,6 +18,8 @@ import type { FoodCatalogPort, NutritionCalcPort, NutritionDiaryPort, NutritionT
 import { DevMeasurementRepository, devMeasurementClientDeletionParticipant } from
   "../../features/measurements/data/DevMeasurementRepository.ts";
 import { dailyPoints, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
+import { DevSettingsRepository } from "../../features/settings/data/DevSettingsRepository.ts";
+import type { SettingsPort } from "../../features/settings/public.ts";
 import { DevQuestionnaireRepository, devQuestionnaireClientDeletionParticipant } from
   "../../features/questionnaire/data/DevQuestionnaireRepository.ts";
 import type { QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
@@ -78,6 +80,8 @@ export interface DevServices {
   readonly measurements: MeasurementRepositoryPort;
   readonly nutrition: NutritionServices;
   readonly questionnaire: QuestionnaireRepositoryPort;
+  /** Z01: тема, акцент и видимые поля замеров тренера. */
+  readonly settings: SettingsPort;
   readonly trainingPlans: TrainingPlansRepositoryPort;
   readonly trainingExecution: TrainingExecutionPort;
   /** Таймеры отдыха всех клиентов (§48.62): глобальная панель и запуск из дневника. */
@@ -151,7 +155,7 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
   questionnaire: QuestionnaireRepositoryPort, trainingPlans: TrainingPlansRepositoryPort,
   trainingExecution: TrainingExecutionPort, restTimers: RestTimersPort, exercises: ExerciseCatalogPort,
   weekCopy: WeekCopyPort, weekSwap: WeekSwapPort, mesocycleSave: MesocycleSavePort & SimplePlanSavePort & WeekEditSavePort,
-  planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort): DevServices {
+  planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort, settings: SettingsPort): DevServices {
   return {
     runSqliteProbe: () => runF04Probe(() => openExpoSqliteConnection("fitcoach_f04_probe.db")),
     clients,
@@ -161,6 +165,7 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
     measurements,
     nutrition,
     questionnaire,
+    settings,
     trainingPlans,
     trainingExecution,
     restTimers,
@@ -199,6 +204,7 @@ export function createDevRuntime(): DevRuntime {
     recipes: new DevRecipeCatalogRepository(database, DEV_WORKSPACE_ID), diary: new DevNutritionDiaryRepository(database, DEV_WORKSPACE_ID),
     targets: new DevNutritionTargetsRepository(database, DEV_WORKSPACE_ID), calc: new DevNutritionCalcRepository(database, DEV_WORKSPACE_ID) };
   const questionnaire = new DevQuestionnaireRepository(database, DEV_WORKSPACE_ID);
+  const settings = new DevSettingsRepository(database, DEV_WORKSPACE_ID);
   const trainingPlans = new DevTrainingPlansRepository(database, DEV_WORKSPACE_ID);
   const trainingExecution = new DevTrainingExecutionRepository(database, DEV_WORKSPACE_ID);
   const restTimers = new RestTimerService(trainingExecution, expoRestSignal);
@@ -234,6 +240,7 @@ export function createDevRuntime(): DevRuntime {
         await nutrition.targets.initialize();
         await nutrition.calc.initialize();
         await questionnaire.initialize();
+        await settings.initialize();
         await trainingPlans.initialize();
         await trainingExecution.initialize();
         // Таймеры отдыха — не данные: сбой восстановления не мешает запуску (§44.7).
@@ -242,6 +249,6 @@ export function createDevRuntime(): DevRuntime {
         await exercises.initialize();
       },
     )),
-    services: createDevServices(clients, calendar, accounting, measurements, { ...nutrition, calcProfile }, questionnaire, trainingPlans, trainingExecution, restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete),
+    services: createDevServices(clients, calendar, accounting, measurements, { ...nutrition, calcProfile }, questionnaire, trainingPlans, trainingExecution, restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete, settings),
   };
 }

@@ -50,10 +50,10 @@ export function ThemeCatalogPreview({ onClose }: Readonly<{ onClose: () => void 
             <Text style={[styles.backText, { color: colors.accentInk }]}>← Назад</Text>
           </Pressable>
 
-          <Text style={[styles.eyebrow, { color: colors.accentInk }]}>F07 · ПРОТОТИП</Text>
+          <Text style={[styles.eyebrow, { color: colors.accentInk }]}>ОФОРМЛЕНИЕ</Text>
           <Text accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>Каталог оформления</Text>
           <Text style={[styles.description, { color: colors.textSecondary }]}>
-            Девять готовых тем и три совместимых акцента для каждой. Изменения видны во всём прототипе, но пока не сохраняются между запусками.
+            Девять готовых тем и три совместимых акцента для каждой. Выбор виден сразу во всём приложении и сохраняется между запусками.
           </Text>
 
           <ThemePreviewPanel />

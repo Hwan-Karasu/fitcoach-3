@@ -12,13 +12,10 @@ export function SettingsPreview({
   onOpenTrainingSettings: () => void }>) {
   return (
     <PrototypeScreen description="Локальные настройки тренера">
-      <PrototypeNotice>
-        Это навигационный прототип настроек. Изменения оформления видны сразу, но не сохраняются между запусками.
-      </PrototypeNotice>
       <SectionHeading>Внешний вид</SectionHeading>
       <PrototypeLink
         title="Оформление"
-        detail="Девять тем и совместимые акценты"
+        detail="Девять тем и акценты — выбор сохраняется"
         onPress={onOpenAppearance}
       />
       <SectionHeading>Рабочее пространство</SectionHeading>
@@ -35,8 +32,9 @@ export function SettingsPreview({
         detail="Напоминания, тихие часы и история"
         onPress={onOpenNotificationSettings}
       />
+      <SectionHeading>Данные</SectionHeading>
       <PrototypeNotice>
-        Резервное копирование, импорт и настройки календаря появятся в своих задачах и не имитируют сохранение сейчас.
+        Резервная копия и восстановление появятся в одном из ближайших обновлений.
       </PrototypeNotice>
     </PrototypeScreen>
   );

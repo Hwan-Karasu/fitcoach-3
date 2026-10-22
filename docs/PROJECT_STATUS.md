@@ -1,3 +1,9 @@
+## 2026-10-22 — Z01: настройки
+
+- `features/settings`: порт `SettingsPort`, `DevSettingsRepository` (таблица `dev_settings`, журнал `settings_schema_migrations`), тест `scripts/settings-dev-store.test.ts` (в `test:foundation`; на Node 22.12 нужен `--experimental-sqlite`).
+- Тема и акцент читаются до первого кадра и сохраняются; видимые группы замеров (NUT-FS-10) сохраняются; чистовой экран «Настройки», раздел «Данные» — заглушка до этапа бэкапа; демо-пункты меню — только `__DEV__`.
+- Проверки: typecheck, lint, arch:check, secrets:check, source:verify, 27 тестов зелёные. На телефоне не проверялось.
+
 ## 2026-10-21 — TRN-AUDIT-7: выбор «удалить с результатами / сохранить в истории» при правке недели и мезоцикла
 
 - Решение владельца: убираемая тренировка с результатами — не запрет, а выбор. `resultsAction` (`DELETE` | `KEEP_HISTORY`) в `WeekEditSaveRequest` и `MesocycleSaveRequest`; `keepAsHistory` дневника принимает список тренировок; диалог из трёх кнопок в `WeekEditorScreen` и `PeriodizedBuilderScreen`. Тесты `training-audit-regressions`; 596/596.

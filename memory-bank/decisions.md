@@ -275,3 +275,7 @@
 - Проблема:
 - Решение:
 - Почему отказались от альтернатив:
+
+## ADR-032: настройки тренера — отдельный владелец Settings (key-value, CHECK по ключам)
+
+Таблица `dev_settings(workspace_id, key, value_json, revision)`, ключи ограничены CHECK; повреждённое значение читается как «не сохранено». Фичи получают настройки не импортом `settings`, а контекстом/пропсом (тема — `ThemePersistence`, замеры — `GroupVisibilityPreference`), привязка в `SettingsBinding`. Новый ключ — миграция с расширенным CHECK.

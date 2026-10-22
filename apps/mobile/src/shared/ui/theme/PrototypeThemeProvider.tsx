@@ -2,7 +2,6 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 import { appThemes as catalogThemes } from "./themes.ts";
 import { resolvePalette, type ResolvedPalette, type ThemeId } from "./resolver.ts";
 
-// Development-only presentation state. The eventual Settings repository owns persistence.
 const previewFallbackThemeId: ThemeId = "zefirka";
 
 interface PrototypeThemeState {
@@ -13,9 +12,17 @@ interface PrototypeThemeState {
 
 const ThemeContext = createContext<PrototypeThemeState | null>(null);
 
-export function PrototypeThemeProvider({ children }: Readonly<{ children: ReactNode }>) {
-  const [themeId, setThemeId] = useState<ThemeId>(previewFallbackThemeId);
-  const [accentId, setAccentId] = useState<string | null>(null);
+/** Сохранённый выбор; запись вызывает владелец настроек, провайдер хранилища не знает. */
+export interface ThemePersistence {
+  readonly initial: Readonly<{ themeId: string; accentId: string | null }> | null;
+  readonly onChange: (value: Readonly<{ themeId: string; accentId: string | null }>) => void;
+}
+
+export function PrototypeThemeProvider({ children, persistence }: Readonly<{ children: ReactNode; persistence?: ThemePersistence }>) {
+  const initial = persistence?.initial ?? null;
+  const [themeId, setThemeId] = useState<ThemeId>(() => resolvePalette({ themeId: initial?.themeId ?? null, accentId: null }, previewFallbackThemeId).themeId);
+  const [accentId, setAccentId] = useState<string | null>(initial?.accentId ?? null);
+  const onChange = persistence?.onChange;
   const palette = useMemo(
     () => resolvePalette({ themeId, accentId }, previewFallbackThemeId),
     [themeId, accentId],
@@ -28,14 +35,16 @@ export function PrototypeThemeProvider({ children }: Readonly<{ children: ReactN
       if (!theme) return;
       setThemeId(theme.id);
       setAccentId(theme.accentDefault);
+      onChange?.({ themeId: theme.id, accentId: theme.accentDefault });
     },
     selectAccent: (nextAccentId) => {
       const theme = catalogThemes.find((candidate) => candidate.id === themeId);
       if (theme?.accentSwatches.some((candidate) => candidate.id === nextAccentId)) {
         setAccentId(nextAccentId);
+        onChange?.({ themeId, accentId: nextAccentId });
       }
     },
-  }), [palette, themeId]);
+  }), [palette, themeId, onChange]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

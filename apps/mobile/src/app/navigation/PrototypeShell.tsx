@@ -14,7 +14,8 @@ import { ClientMeasurementsScreen } from "../../features/measurements/public.ts"
 import { QuestionnaireBuilderScreen } from "../../features/questionnaire/public.ts";
 import { CustomExerciseEditorScreen, ExerciseDetailScreen, ExerciseLibraryScreen } from "../../features/exercises/public.ts";
 import { useAppointmentOutcomeQueue } from "../bootstrap/useAppointmentOutcomeQueue.ts";
-import { PrototypeThemeProvider, usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
+import { SettingsBinding } from "./SettingsBinding.tsx";
+import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { WorkspaceRoutePreview } from "../../shared/ui/prototype/WorkspaceRoutePreview.tsx";
 import { ClientWorkspaceNavigator } from "./ClientWorkspaceNavigator.tsx";
 import { ClientEditorRoute } from "./ClientEditorRoute.tsx";
@@ -219,7 +220,7 @@ export function PrototypeShell({ services, workspaceId }: Readonly<{
   return (
     <SafeAreaProvider>
       <KeyboardProvider>
-      <PrototypeThemeProvider>
+      <SettingsBinding settings={services.settings}>
         <BottomDockLayoutProvider>
         <BottomSheetModalProvider>
         <CalendarUndoProvider repository={services.calendar}>
@@ -229,7 +230,7 @@ export function PrototypeShell({ services, workspaceId }: Readonly<{
         </CalendarUndoProvider>
         </BottomSheetModalProvider>
         </BottomDockLayoutProvider>
-      </PrototypeThemeProvider>
+      </SettingsBinding>
       </KeyboardProvider>
     </SafeAreaProvider>
   );
