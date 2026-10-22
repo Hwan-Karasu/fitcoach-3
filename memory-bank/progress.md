@@ -1,5 +1,9 @@
 # Progress
 
+## 2026-10-22: NUT-019
+
+Фото рецептов: лишние копии удаляются (отмена/замена/убрать). Остаток: синхронная копия (`LocalImageStore.ts`), фото скрытого рецепта остаётся.
+
 ## 2026-10-22: A02 Главная
 
 Сделано: writeOff/returnLastDebit в `AccountingRepositoryPort`, `returnableDebitId` в снимке, кнопки на Главной, `workoutsInWeek`. Техдолг: `snapshot.available` на экране абонемента включает истёкшие пакеты (`ClientAccountingScreen.tsx:148`); `HomeProps` больше не получает measurements, но `NutritionHomeCards` всё ещё принимает `measurements`; 10 тестов R04 падают на Node 22.12 (`iterate` в node:sqlite) — среда, не код.

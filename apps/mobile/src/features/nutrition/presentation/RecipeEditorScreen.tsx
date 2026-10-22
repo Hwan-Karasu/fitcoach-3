@@ -12,7 +12,8 @@ import { formatDecimalX10, parseDecimalX10 } from "../domain/FoodRules.ts";
 import type { RecipeCatalogPort } from "../domain/RecipeCatalogPort.ts";
 import { recipeBases } from "../domain/RecipeRules.ts";
 import { metricLabels, nutritionErrorText, unitLabels, wholeText } from "./nutritionFormat.ts";
-import { storeLocalImage } from "../../../shared/media/LocalImageStore.ts";
+import { deleteLocalImage, storeLocalImage } from "../../../shared/media/LocalImageStore.ts";
+import { photosToDiscard } from "../domain/RecipePhotoRules.ts";
 
 interface Row { readonly food: FoodProduct; readonly quantity: string }
 
@@ -57,6 +58,15 @@ export function RecipeEditorScreen({ recipeId, foods, recipes, onSaved, onDirtyC
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [initialSignature, setInitialSignature] = useState<string | null>(null);
   const lock = useRef(false);
+  // NUT-019: копии, созданные в этом сеансе, и фото, уже записанное в рецепт; лишние файлы удаляются при выходе.
+  const picked = useRef<string[]>([]);
+  const savedPhoto = useRef<string | null>(null);
+  const currentPhoto = useRef<string | null>(null);
+  const committed = useRef(false);
+  currentPhoto.current = photoUri;
+  useEffect(() => () => {
+    for (const uri of photosToDiscard({ picked: picked.current, previous: savedPhoto.current, current: currentPhoto.current, saved: committed.current })) deleteLocalImage(uri);
+  }, []);
   const signature = JSON.stringify({ name, servings, mass, description, rows: rows.map((row) => [row.food.id, row.quantity]), prep, cook, categories, instructions, photoUri });
   useEffect(() => {
     if (loaded && initialSignature === null) setInitialSignature(signature);
@@ -74,7 +84,7 @@ export function RecipeEditorScreen({ recipeId, foods, recipes, onSaved, onDirtyC
       setFlags({ favorite: recipe.favorite === true, inCookbook: recipe.inCookbook === true }); setLoaded(true);
       setPrep(recipe.details?.prepMinutes == null ? "" : String(recipe.details.prepMinutes));
       setCook(recipe.details?.cookMinutes == null ? "" : String(recipe.details.cookMinutes));
-      setCategories(recipe.details?.categories.join(", ") ?? ""); setInstructions(recipe.details?.steps.join("\n") ?? ""); setPhotoUri(recipe.details?.photoUri ?? null);
+      setCategories(recipe.details?.categories.join(", ") ?? ""); setInstructions(recipe.details?.steps.join("\n") ?? ""); setPhotoUri(recipe.details?.photoUri ?? null); savedPhoto.current = recipe.details?.photoUri ?? null;
     }, () => { if (active) { setError("Не удалось загрузить рецепт."); setLoaded(true); } });
     return () => { active = false; };
   }, [recipeId, recipes]);
@@ -110,6 +120,7 @@ export function RecipeEditorScreen({ recipeId, foods, recipes, onSaved, onDirtyC
       const input = { name, servingsX10, cookedMassX10: massX10, description: description.trim() === "" ? null : description, ingredients,
         details: { prepMinutes, cookMinutes, categories: [...new Set(categories.split(",").map((text) => text.trim()).filter(Boolean))], steps: instructions.split("\n").map((text) => text.trim()).filter(Boolean), photoUri } };
       if (recipeId === undefined) await recipes.create(input); else await recipes.update(recipeId, revision, input);
+      committed.current = true;
       onDirtyChange?.(false);
       onSaved();
     } catch (failure) {
@@ -188,7 +199,7 @@ export function RecipeEditorScreen({ recipeId, foods, recipes, onSaved, onDirtyC
         <AppButton compact variant="ghost" label="Убрать фото" onPress={() => setPhotoUri(null)} /></> : null}
       <AppButton variant="secondary" label={photoUri === null ? "Добавить фото из галереи" : "Заменить фото"} onPress={() => {
         void launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 }).then((result) => {
-          if (!result.canceled && result.assets[0] !== undefined) setPhotoUri(storeLocalImage(result.assets[0].uri));
+          if (!result.canceled && result.assets[0] !== undefined) { const stored = storeLocalImage(result.assets[0].uri); picked.current.push(stored); setPhotoUri(stored); }
         }).catch(() => setError("Не удалось открыть или сохранить фотографию."));
       }} />
       {recipeId !== undefined ? <View style={styles.rowHead}>
