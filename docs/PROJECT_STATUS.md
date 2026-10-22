@@ -1,3 +1,10 @@
+## 2026-10-22 — Переходы по уведомлениям и таймер отдыха
+
+- Переходы: `notificationTarget.ts` (чистые правила, тест `notification-target`), `NotificationOpenHost` (нажатие на системное уведомление, холодный старт), `openTarget` в оболочке; в полезную нагрузку напоминаний календаря добавлены `sourceType`, `eventKind`, `clientId`.
+- Таймер: `RestTimerRules` (один таймер, `pauseTimer`/`resumeTimer`), `RestTimerService.pause/resume`, миграция v10, панель `RestTimerDock` (один таймер, ⏸/▶, свайп к краю, галочки‑подсказки, возврат в дневник с прокруткой к упражнению).
+- Тесты: `rest-timer` (8), `notification-target` (4), `notification-sync` (+1). `test:foundation` на Node 22.12: 667 из 677, 10 падений — R04 (среда). Бандл Metro собирается.
+- Не проверено на телефоне: свайп/сворачивание, прокрутка к упражнению, нажатия по уведомлениям, положение панели на разных экранах.
+
 ## 2026-10-22 — U01/U02: уведомления (код)
 
 - Домен: `NotificationSettings`, `ReminderPlanner`, `ReminderReconciler`, `CenterModel`; хранилище `DevNotificationRepository` (журнал `notifications_schema_migrations`); адаптер `ExpoNotificationAdapter`; workflow `syncNotifications`.

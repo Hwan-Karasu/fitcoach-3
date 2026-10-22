@@ -7,7 +7,9 @@ export interface PlatformNotificationPort {
   requestPermission(): Promise<OsPermission>;
   /** Идентификаторы запланированных напоминаний FitCoach (чужие уведомления, в том числе таймер отдыха, не возвращаются). */
   scheduledIds(): Promise<readonly string[]>;
-  schedule(request: Readonly<{ identifier: string; title: string; body: string; fireAt: Date }>): Promise<void>;
+  /** `target` уходит в полезную нагрузку уведомления: по нажатию приложение открывает нужный раздел (только идентификаторы, без имён). */
+  schedule(request: Readonly<{ identifier: string; title: string; body: string; fireAt: Date;
+    target: Readonly<{ sourceType: string; eventKind: string; clientId: string | null }> }>): Promise<void>;
   cancel(identifiers: readonly string[]): Promise<void>;
   openSystemSettings(): Promise<void>;
 }

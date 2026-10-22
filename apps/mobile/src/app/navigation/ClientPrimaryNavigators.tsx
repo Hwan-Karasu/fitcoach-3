@@ -42,7 +42,8 @@ type TrainingRoutes = {
   /** `selected` — уже отмеченные в каталоге упражнения: созданное встаёт после них (UI-OWN-029). */
   TrainingCreateExercise: { initialName: string; pick: TrainingRoutes["TrainingPickExercise"]; selected?: readonly string[] };
   /** `closeOnBack` — тренировка открыта из истории упражнения или статистики: «←» закрывает клиента и возвращает туда, откуда пришли. */
-  TrainingWorkout: { programId: string; weekIndex: number; workoutId: string; mesocycleId?: string; picked?: PickedExercise; closeOnBack?: boolean };
+  TrainingWorkout: { programId: string; weekIndex: number; workoutId: string; mesocycleId?: string; picked?: PickedExercise; closeOnBack?: boolean;
+    /** Плановое упражнение, к которому прокрутить дневник (возврат с таймера отдыха). */ focusExerciseId?: string };
 };
 
 type PickReturn =
@@ -401,7 +402,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
               };
             }); }} />} plans={repository} execution={execution}
           restTimers={restTimers} activeWorkouts={activeWorkouts} onOpenWorkout={onOpenWorkout} exercises={exerciseLookup}
-          picked={route.params.picked ?? null} onOpenExercise={onOpenExercise}
+          focusExerciseId={route.params.focusExerciseId ?? null} picked={route.params.picked ?? null} onOpenExercise={onOpenExercise}
           onOpenMatrix={() => navigation.navigate("TrainingMatrix", { programId: route.params.programId })}
           onPickExercises={(replace) => navigation.navigate("TrainingPickExercise", { workoutId: route.params.workoutId,
             ...(replace === undefined ? {} : { replace }),

@@ -73,7 +73,8 @@ export function createNotificationSync(rules: NotificationRules, ports: Readonly
       const diff = rules.diffSchedule(desired, existing);
       await ports.platform.cancel(diff.toCancel);
       for (const intent of diff.toSchedule) {
-        await ports.platform.schedule({ identifier: rules.reminderIdentifier(intent), title: intent.title, body: intent.body, fireAt: intent.fireAt });
+        await ports.platform.schedule({ identifier: rules.reminderIdentifier(intent), title: intent.title, body: intent.body, fireAt: intent.fireAt,
+          target: { sourceType: intent.sourceType, eventKind: intent.eventKind, clientId: intent.clientId } });
       }
       scheduled = desired.length;
     } catch {

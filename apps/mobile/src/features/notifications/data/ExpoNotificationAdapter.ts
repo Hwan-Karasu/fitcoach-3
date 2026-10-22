@@ -39,9 +39,9 @@ export const expoNotificationAdapter: PlatformNotificationPort = {
     const all = await (await available()).scheduled.getAllScheduledNotificationsAsync();
     return all.map((item) => item.identifier).filter((id) => id.startsWith(REMINDER_PREFIX));
   },
-  async schedule({ identifier, title, body, fireAt }) {
+  async schedule({ identifier, title, body, fireAt, target }) {
     const notifications = await available();
-    await notifications.schedule.scheduleNotificationAsync({ identifier, content: { title, body, sound: "default", data: { kind: "calendar-reminder" } },
+    await notifications.schedule.scheduleNotificationAsync({ identifier, content: { title, body, sound: "default", data: { kind: "calendar-reminder", sourceType: target.sourceType, eventKind: target.eventKind, clientId: target.clientId } },
       trigger: { type: notifications.types.SchedulableTriggerInputTypes.DATE, date: fireAt, channelId: CHANNEL } });
   },
   async cancel(identifiers) {

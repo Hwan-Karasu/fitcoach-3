@@ -23,16 +23,17 @@ const rules = { planReminders, dueReminders, candidateFromReminder, outcomeDueCa
 function fakePlatform(permission: OsPermission = "granted") {
   const scheduled = new Map<string, Date>([["rest-timer:keep", new Date(2030, 0, 1)]]);
   const calls = { schedule: 0, cancel: 0 };
+  const targets: unknown[] = [];
   let failSchedule = false;
   const port: PlatformNotificationPort = {
     permission: async () => permission,
     requestPermission: async () => permission,
     scheduledIds: async () => [...scheduled.keys()],
-    schedule: async ({ identifier, fireAt }) => { if (failSchedule) throw new Error("OS_FAILED"); calls.schedule += 1; scheduled.set(identifier, fireAt); },
+    schedule: async ({ identifier, fireAt, target }) => { if (failSchedule) throw new Error("OS_FAILED"); calls.schedule += 1; targets.push(target); scheduled.set(identifier, fireAt); },
     cancel: async (ids) => { for (const id of ids) { calls.cancel += 1; scheduled.delete(id); } },
     openSystemSettings: async () => undefined,
   };
-  return { port, scheduled, calls, mine: () => [...scheduled.keys()].filter((id) => id.startsWith(REMINDER_PREFIX)),
+  return { port, scheduled, calls, targets, mine: () => [...scheduled.keys()].filter((id) => id.startsWith(REMINDER_PREFIX)),
     failNext: (value: boolean) => { failSchedule = value; } };
 }
 
@@ -166,5 +167,21 @@ test("U02 новая запись в тот же день не смешивае�
     await w.sync.run(NOW);
     const feed = await w.center.listFeed();
     assert.deepEqual(feed.map((row) => [row.clientId, row.body.includes(row.clientId === a.id ? "Анна" : "Борис")]), [[b.id, true], [a.id, true]]);
+  } finally { await w.close(); }
+});
+
+test("U01 в уведомление кладётся цель для перехода: клиент у записи клиента, null у гостя и дежурства", async () => {
+  const w = await world();
+  try {
+    const client = await w.clients.create({ displayName: "Иван" });
+    await w.book(client.id, 15 * 60);
+    await w.book(null, 16 * 60);
+    await w.calendar.createInterval({ kind: "DUTY", localDate: TODAY, startMinute: 18 * 60, endMinute: 20 * 60 });
+    await w.sync.run(NOW);
+    assert.deepEqual([...w.platform.targets].map((item) => JSON.stringify(item)).sort(), [
+      JSON.stringify({ sourceType: "APPOINTMENT", eventKind: "REMINDER", clientId: client.id }),
+      JSON.stringify({ sourceType: "APPOINTMENT", eventKind: "REMINDER", clientId: null }),
+      JSON.stringify({ sourceType: "DUTY", eventKind: "REMINDER", clientId: null }),
+    ].sort());
   } finally { await w.close(); }
 });

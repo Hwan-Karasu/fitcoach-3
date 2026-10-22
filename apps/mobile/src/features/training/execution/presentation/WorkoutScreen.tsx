@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Image, Keyboard, Pressable, Text, View } from "react-native";
-import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+import { KeyboardAwareScrollView, type KeyboardAwareScrollViewRef } from "react-native-keyboard-controller";
 import { useKeepAwake } from "expo-keep-awake";
 import * as Haptics from "expo-haptics";
 import { usePreventRemove, useNavigation } from "@react-navigation/native";
@@ -70,7 +70,7 @@ const oneLine = { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale
  * исхода спрашивает «Завершить тренировку?» (§48.36).
  */
 export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, activeWorkouts, onOpenWorkout,
-  exercises, onChangeWeek, onEditWeek, onOpenMatrix, onPickExercises, picked, onOpenExercise, renderParticipants }: Readonly<{
+  exercises, onChangeWeek, onEditWeek, onOpenMatrix, onPickExercises, picked, onOpenExercise, renderParticipants, focusExerciseId = null }: Readonly<{
   slot: WorkoutSlot;
   /** Подпись таймера отдыха — таймеры разных клиентов различимы (§48.62). */
   clientName: string;
@@ -92,8 +92,20 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   picked: PickedExercise | null;
   /** «›» у названия — карточка упражнения. */
   onOpenExercise?: (exerciseId: string) => void;
+  /** Плановое упражнение, к которому один раз прокрутить дневник при открытии (возврат с панели таймера отдыха). */
+  focusExerciseId?: string | null;
 }>) {
   useKeepAwake();
+  // Возврат с таймера отдыха: после раскладки прокручиваем к упражнению, из которого он запущен, один раз на открытие.
+  const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
+  const bodyY = useRef(0);
+  const focusDone = useRef<string | null>(null);
+  const focusExercise = useCallback((exerciseId: string, cardY: number) => {
+    if (focusExerciseId === null || exerciseId !== focusExerciseId || focusDone.current === focusExerciseId) return;
+    focusDone.current = focusExerciseId;
+    setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, bodyY.current + cardY - 8), animated: true }), 50);
+  }, [focusExerciseId]);
+  useEffect(() => { focusDone.current = null; }, [focusExerciseId]);
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const navigation = useNavigation();
@@ -104,8 +116,9 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const startRest = useCallback((exercise: PlannedExercise) => {
     if (exercise.restSec === null) return;
     void restTimers.start({ clientId: slot.clientId, clientName, exerciseKey: exercise.id,
-      exerciseName: lookup?.get(exercise.exerciseId)?.name ?? "Упражнение", durationSec: exercise.restSec }).catch(() => undefined);
-  }, [clientName, lookup, restTimers, slot.clientId]);
+      exerciseName: lookup?.get(exercise.exerciseId)?.name ?? "Упражнение", durationSec: exercise.restSec,
+      programId: slot.programId, weekIndex: slot.weekIndex, plannedWorkoutId: slot.plannedWorkoutId }).catch(() => undefined);
+  }, [clientName, lookup, restTimers, slot.clientId, slot.programId, slot.weekIndex, slot.plannedWorkoutId]);
   const unilateralOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.unilateral === true, [lookup]);
   const diary = useWorkoutDiary(slot, plans, execution, metricsOf, unilateralOf, startRest);
   const pending = useRef(new PendingInputWrites()).current;
@@ -349,7 +362,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     <>
       {renderParticipants?.(finishInput)}
       <GestureDetector gesture={pinch}>
-      <KeyboardAwareScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={[styles.content, { paddingBottom: timers > 0 ? 200 : 24 }]}
+      <KeyboardAwareScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} contentContainerStyle={[styles.content, { paddingBottom: timers > 0 ? 200 : 24 }]}
         keyboardShouldPersistTaps="handled" bottomOffset={24}>
         <View style={[styles.topCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.titleRow}>
@@ -460,7 +473,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
           </View>
         </> : null}
         {/* Смена недели — тот же экран: пока грузится новая неделя, прежние значения приглушены и не нажимаются. */}
-        {ordering === null ? <View pointerEvents={diary.switching ? "none" : "auto"} style={[styles.body, diary.switching && styles.switching]}>
+        {ordering === null ? <View onLayout={(event) => { bodyY.current = event.nativeEvent.layout.y; }} pointerEvents={diary.switching ? "none" : "auto"} style={[styles.body, diary.switching && styles.switching]}>
         {workout.exercises.map((exercise) => {
           const info = lookup.get(exercise.exerciseId);
           const group = supersetNumber(workout, exercise);
@@ -472,7 +485,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
           const extraIds = new Set(extras.map((extra) => extra.set.id));
           // Ключи — по месту в плане, а не по ID недели: при смене недели строки не пересоздаются.
           return (
-            <View key={exercise.lineageId ?? exercise.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View key={exercise.lineageId ?? exercise.id} onLayout={(event) => focusExercise(exercise.id, event.nativeEvent.layout.y)} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               {group !== null ? <Text style={[styles.meta, { color: colors.accentInk }]}>{`Суперсет ${group}`}</Text> : null}
               <View style={styles.cardHead}>
                 {info?.thumbnail != null ? <Image source={info.thumbnail} style={[styles.thumb, { backgroundColor: colors.input }]} /> : null}

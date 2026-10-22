@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, StackActions, createNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ClientExerciseScreen, RestTimerDock, TrainingSettingsScreen } from "../../features/training/public.ts";
+import { calendarEventTarget, timerTarget, type NotificationTarget } from "./notificationTarget.ts";
+import { NotificationOpenHost } from "./NotificationOpenHost.tsx";
 import { NotificationCenterScreen, NotificationSettingsScreen } from "../../features/notifications/public.ts";
 import { NotificationsHost } from "./NotificationsHost.tsx";
 import { SettingsPreview, ThemeCatalogPreview } from "../../features/settings/public.ts";
@@ -46,7 +48,8 @@ type RootStackRoutes = {
   WorkspaceDev: undefined;
   /** `screen`/`params` — сразу открыть тренировку клиента (быстрый переход между дневниками, §48.83). */
   ClientWorkspace: { clientId: string; screen?: "Training";
-    params?: { screen: "TrainingWorkout"; params: { programId: string; weekIndex: number; workoutId: string; closeOnBack?: boolean } } };
+    params?: { screen: "TrainingWorkout"; params: { programId: string; weekIndex: number; workoutId: string; closeOnBack?: boolean; focusExerciseId?: string } }
+      | { screen: "TrainingIndex" } };
   ClientAccounting: { clientId: string };
   ClientMeasurements: { clientId: string };
   ClientEditorDev: { clientId?: string; guestLink?: GuestLinkRequest } | undefined;
@@ -54,6 +57,28 @@ type RootStackRoutes = {
 };
 
 const Stack = createNativeStackNavigator<RootStackRoutes>();
+const navigationRef = createNavigationContainerRef<RootStackRoutes>();
+
+/**
+ * Переход по нажатию на уведомление, строку центра или панель таймера. Календарь — вкладка корня; «Тренировки» клиента и его тренировка —
+ * экран клиента (тот же вызов, что у быстрого перехода между дневниками). Если тренировка уже открыта, ничего не меняется.
+ */
+function openTarget(target: NotificationTarget): void {
+  if (!navigationRef.isReady()) return;
+  if (target.kind === "CALENDAR") { navigationRef.navigate("Root", { screen: "Calendar" } as never); return; }
+  if (target.kind === "CLIENT_TRAINING") {
+    navigationRef.navigate("ClientWorkspace", { clientId: target.clientId, screen: "Training", params: { screen: "TrainingIndex" } });
+    return;
+  }
+  const top = navigationRef.getRootState()?.routes.at(-1);
+  const current = navigationRef.getCurrentRoute() as { name: string; params?: { programId?: string; weekIndex?: number; workoutId?: string } } | undefined;
+  const topParams = top?.params as { clientId?: string } | undefined;
+  if (top?.name === "ClientWorkspace" && topParams?.clientId === target.clientId && current?.name === "TrainingWorkout"
+    && current.params?.programId === target.programId && current.params.weekIndex === target.weekIndex && current.params.workoutId === target.plannedWorkoutId) return;
+  navigationRef.dispatch(StackActions.push("ClientWorkspace", { clientId: target.clientId, screen: "Training",
+    params: { screen: "TrainingWorkout", params: { programId: target.programId, weekIndex: target.weekIndex, workoutId: target.plannedWorkoutId,
+      ...(target.exerciseKey === null ? {} : { focusExerciseId: target.exerciseKey }) } } }));
+}
 
 function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
   services: DevServices; clientLists: ClientListController; rosterOverview: RosterOverviewPort;
@@ -61,7 +86,7 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
         screenOptions={{
           // Единая шапка-карточка одной высоты (UI-OWN-035).
@@ -93,7 +118,7 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
         </Stack.Screen>
         <Stack.Screen name="Notifications" options={{ title: "Центр уведомлений" }}>
           {({ navigation }) => <NotificationCenterScreen center={services.notifications} onOpenSettings={() => navigation.navigate("NotificationSettings")}
-            onOpenEvent={(item) => { if (item.sourceType === "APPOINTMENT") navigation.navigate("Root"); }} />}
+            onOpenEvent={(item) => openTarget(calendarEventTarget(item))} />}
         </Stack.Screen>
         <Stack.Screen name="NotificationSettings" options={{ title: "Настройки уведомлений" }}>
           {() => <NotificationSettingsScreen center={services.notifications} platform={services.notificationPlatform} onChanged={() => { services.notificationSync.run().catch(() => undefined); }} />}
@@ -232,7 +257,8 @@ export function PrototypeShell({ services, workspaceId }: Readonly<{
             <ShellNavigator services={services} clientLists={clientLists} rosterOverview={rosterOverview} />
           </NotificationsHost>
           <OutcomeQueueHost services={services} />
-          <RestTimerDock timers={services.restTimers} />
+          <RestTimerDock timers={services.restTimers} onOpen={(timer) => openTarget(timerTarget(timer))} />
+          <NotificationOpenHost navigationRef={navigationRef} onTarget={openTarget} />
         </CalendarUndoProvider>
         </BottomSheetModalProvider>
         </BottomDockLayoutProvider>

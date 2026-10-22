@@ -294,4 +294,15 @@ export const devTrainingExecutionCatalog: readonly MigrationStep[] = [{
     `ALTER TABLE dev_training_sessions ADD COLUMN finished_at TEXT
       CHECK (finished_at IS NULL OR (finished_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*Z' AND datetime(finished_at) IS NOT NULL))`,
   ],
+}, {
+  version: 10,
+  checksum: "rt-dev-training-execution-v10-rest-timer-origin-pause-20261022",
+  statements: [
+    // Один таймер на устройство (§44.3) с возвратом в свою тренировку (§44.22) и паузой. Старые строки остаются: у них нет происхождения
+    // (возврат ведёт в «Тренировки» клиента) и они не на паузе.
+    "ALTER TABLE dev_training_rest_timers ADD COLUMN program_id TEXT",
+    "ALTER TABLE dev_training_rest_timers ADD COLUMN week_index INTEGER CHECK (week_index IS NULL OR week_index >= 0)",
+    "ALTER TABLE dev_training_rest_timers ADD COLUMN planned_workout_id TEXT",
+    "ALTER TABLE dev_training_rest_timers ADD COLUMN paused_left_ms INTEGER CHECK (paused_left_ms IS NULL OR paused_left_ms >= 0)",
+  ],
 }];

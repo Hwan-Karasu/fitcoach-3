@@ -50,11 +50,11 @@ async function allowed(permissions: Awaited<ReturnType<typeof loadApi>>["permiss
 }
 
 export const expoRestSignal: RestSignalPort = {
-  async schedule({ endAt, title, body }) {
+  async schedule({ endAt, title, body, route }) {
     const notifications = await available();
     if (notifications === null || !(await allowed(notifications.permissions).catch(() => false))) return null;
     return notifications.schedule.scheduleNotificationAsync({
-      content: { title, body, sound: "default", data: { kind: KIND } },
+      content: { title, body, sound: "default", data: { kind: KIND, ...route } },
       trigger: { type: notifications.types.SchedulableTriggerInputTypes.DATE, date: endAt, channelId: CHANNEL },
     });
   },

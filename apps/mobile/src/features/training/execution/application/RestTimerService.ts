@@ -1,5 +1,5 @@
 import type { RestSignalPort, RestTimerStorePort, RestTimersPort } from "../domain/RestTimerPorts.ts";
-import { adjustTimer, runningTimers, startTimer, type RestTimer, type RestTimerStart } from "../domain/RestTimerRules.ts";
+import { adjustTimer, pauseTimer, resumeTimer, runningTimers, startTimer, type RestTimer, type RestTimerStart } from "../domain/RestTimerRules.ts";
 
 const defaultId = () => `rt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -48,13 +48,17 @@ export class RestTimerService implements RestTimersPort {
     const task = (async () => {
       await this.cancelSignal(previousSignal);
       const signalId = await this.signal.schedule({ endAt: timer.endAt, title: "Отдых окончен",
-        body: `${timer.clientName} · ${timer.exerciseName}` }).catch(() => null);
+        body: `${timer.clientName} · ${timer.exerciseName}`,
+        // Только идентификаторы для возврата в тренировку; имена и данные подходов в полезную нагрузку не кладутся (§44.22).
+        route: timer.programId === null || timer.weekIndex === null || timer.plannedWorkoutId === null ? { clientId: timer.clientId }
+          : { clientId: timer.clientId, programId: timer.programId, weekIndex: timer.weekIndex, plannedWorkoutId: timer.plannedWorkoutId,
+            exerciseKey: timer.exerciseKey } }).catch(() => null);
       if (signalId === null) return;
       await this.enqueue(async () => {
         const current = this.timers.find((item) => item.id === timer.id);
         if (current === undefined || current.endAt !== timer.endAt) { await this.cancelSignal(signalId); return; }
         const signalled = { ...current, signalId };
-        await this.store.putTimer(signalled, null);
+        await this.store.putTimer(signalled, []);
         this.publish(this.timers.map((item) => item.id === timer.id ? signalled : item));
       });
     })().catch(() => undefined);
@@ -83,7 +87,10 @@ export class RestTimerService implements RestTimersPort {
       const stored = await this.store.listTimers();
       const running = runningTimers(stored, this.now());
       for (const timer of stored) if (!running.includes(timer)) await this.store.removeTimer(timer.id);
-      this.publish(running);
+      // Не больше одного таймера (§44.3): если в хранилище остались старые записи, выживает последний запущенный.
+      const latest = [...running].sort((a, b) => b.startedAt - a.startedAt)[0];
+      for (const timer of running) if (timer !== latest) await this.store.removeTimer(timer.id);
+      this.publish(latest === undefined ? [] : [latest]);
     });
   }
 
@@ -93,12 +100,14 @@ export class RestTimerService implements RestTimersPort {
       const { timers, timer, replaced } = startTimer(before, input, this.newId(), this.now());
       this.publish(timers);
       try {
-        await this.store.putTimer(timer, replaced?.id ?? null);
+        await this.store.putTimer(timer, replaced.map((item) => item.id));
       } catch (error) {
         this.publish(before);
         throw error;
       }
-      this.attachSignal(timer, replaced?.signalId ?? null);
+      // Прежний таймер заменён: его системный сигнал не должен сработать.
+      for (const item of replaced) await this.cancelSignal(item.signalId);
+      this.attachSignal(timer, null);
     });
   }
 
@@ -108,8 +117,34 @@ export class RestTimerService implements RestTimersPort {
       if (current === undefined) return;
       const moved = { ...adjustTimer(current, deltaSec, this.now()), signalId: null };
       this.publish(this.timers.map((timer) => timer.id === id ? moved : timer));
-      await this.store.putTimer(moved, null);
-      this.attachSignal(moved, current.signalId);
+      await this.store.putTimer(moved, []);
+      // На паузе сигнала нет: он появится при продолжении.
+      if (moved.pausedLeftMs === null) this.attachSignal(moved, current.signalId);
+      else await this.cancelSignal(current.signalId);
+    });
+  }
+
+  pause(id: string): Promise<void> {
+    return this.enqueue(async () => {
+      const current = this.timers.find((timer) => timer.id === id);
+      if (current === undefined) return;
+      const paused = pauseTimer(current, this.now());
+      if (paused === current) return;
+      this.publish(this.timers.map((timer) => timer.id === id ? paused : timer));
+      await this.store.putTimer(paused, []);
+      await this.cancelSignal(current.signalId);
+    });
+  }
+
+  resume(id: string): Promise<void> {
+    return this.enqueue(async () => {
+      const current = this.timers.find((timer) => timer.id === id);
+      if (current === undefined) return;
+      const resumed = resumeTimer(current, this.now());
+      if (resumed === current) return;
+      this.publish(this.timers.map((timer) => timer.id === id ? resumed : timer));
+      await this.store.putTimer(resumed, []);
+      this.attachSignal(resumed, null);
     });
   }
 

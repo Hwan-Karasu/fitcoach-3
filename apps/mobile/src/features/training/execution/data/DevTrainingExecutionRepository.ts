@@ -718,18 +718,20 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
   listTimers(): Promise<readonly RestTimer[]> {
     return this.ready().connection.all<RestTimer>(`SELECT id, client_id AS clientId, client_name AS clientName,
       exercise_key AS exerciseKey, exercise_name AS exerciseName, started_at AS startedAt, end_at AS endAt,
-      signal_id AS signalId FROM dev_training_rest_timers WHERE workspace_id = ? ORDER BY end_at`, [this.workspaceId]);
+      signal_id AS signalId, program_id AS programId, week_index AS weekIndex, planned_workout_id AS plannedWorkoutId,
+      paused_left_ms AS pausedLeftMs FROM dev_training_rest_timers WHERE workspace_id = ? ORDER BY end_at`, [this.workspaceId]);
   }
 
-  async putTimer(timer: RestTimer, replacedId: string | null): Promise<void> {
+  async putTimer(timer: RestTimer, replacedIds: readonly string[]): Promise<void> {
     await this.ready().writer.write(async (tx) => {
-      if (replacedId !== null) await tx.run("DELETE FROM dev_training_rest_timers WHERE workspace_id = ? AND id = ?",
-        [this.workspaceId, replacedId]);
+      for (const replacedId of replacedIds) {
+        await tx.run("DELETE FROM dev_training_rest_timers WHERE workspace_id = ? AND id = ?", [this.workspaceId, replacedId]);
+      }
       await tx.run(`INSERT INTO dev_training_rest_timers (id, workspace_id, client_id, client_name, exercise_key, exercise_name,
-        started_at, end_at, signal_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT (id) DO UPDATE SET end_at = excluded.end_at, signal_id = excluded.signal_id`,
+        started_at, end_at, signal_id, program_id, week_index, planned_workout_id, paused_left_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (id) DO UPDATE SET end_at = excluded.end_at, signal_id = excluded.signal_id, paused_left_ms = excluded.paused_left_ms`,
       [timer.id, this.workspaceId, timer.clientId, timer.clientName, timer.exerciseKey, timer.exerciseName, timer.startedAt,
-        timer.endAt, timer.signalId]);
+        timer.endAt, timer.signalId, timer.programId, timer.weekIndex, timer.plannedWorkoutId, timer.pausedLeftMs]);
     });
   }
 
