@@ -31,12 +31,14 @@ import { auditLegacyTableCoverage, observedBuild120Tables,
   type CoverageRegistry, type LegacyTableCoverage } from "./LegacyTableCoverage.ts";
 import { summarizeSourceFactPreflight, type SourceFactPreflightReport } from "./SourceFactPreflightReport.ts";
 import { summarizeLegacySetMetrics, type LegacySetMetricReport } from "./LegacySetMetricCandidates.ts";
+import { summarizeLegacyExercises } from "./LegacyExerciseReferencePreflight.ts";
 
 export type R04FullReport = Readonly<{
   status: "requires-semantic-review";
   coverage: LegacyTableCoverage;
   sourceFacts: SourceFactPreflightReport;
   setMetrics: LegacySetMetricReport;
+  exercises: ReturnType<typeof summarizeLegacyExercises> | null;
   programBooks: ProgramBookPreflightReport;
   programLinks: ProgramLinkPreflightReport;
   sessionProgramCandidates: SessionProgramLinkCandidateSummary;
@@ -114,6 +116,8 @@ export function auditR04FullCopy(
       clientReferences,
       sourceFacts: summarizeSourceFactPreflight(evidence.sets),
       setMetrics: summarizeLegacySetMetrics(evidence.sets),
+      exercises: evidence.exerciseCatalog === null || evidence.exerciseReferences === null ? null
+        : summarizeLegacyExercises(evidence.exerciseCatalog, evidence.exerciseReferences),
       programBooks: summarizeProgramBooks(evidence.programBooks),
       programLinks,
       sessionProgramCandidates,

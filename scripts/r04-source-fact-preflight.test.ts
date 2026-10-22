@@ -979,6 +979,56 @@ test("R04 full audit blocks an unregistered table before classifying facts", () 
   });
 });
 
+function addSyntheticExerciseCatalog(db: DatabaseSync): void {
+  db.exec(`CREATE TABLE exercise_catalog (id TEXT PRIMARY KEY,name TEXT,category TEXT,equipment TEXT,
+    aliases_json TEXT,source TEXT,created_at TEXT,updated_at TEXT,deleted_at TEXT);
+    INSERT INTO exercise_catalog VALUES ('synthetic-custom','Synthetic exercise','Другое','',
+      '[]','user','2026-01-01T10:00:00Z','2026-01-01T10:00:00Z',NULL);
+    ALTER TABLE training_exercises ADD COLUMN name TEXT DEFAULT 'Synthetic snapshot';
+    ALTER TABLE training_exercises ADD COLUMN template_exercise_id TEXT DEFAULT 'synthetic-custom';
+    ALTER TABLE training_exercises ADD COLUMN data_json TEXT DEFAULT '{"catalogId":"synthetic-custom"}';
+    ALTER TABLE training_exercises ADD COLUMN deleted_at TEXT;
+    ALTER TABLE training_exercise_history ADD COLUMN exercise_key TEXT DEFAULT 'catalog:synthetic-custom';
+    ALTER TABLE training_exercise_history ADD COLUMN data_json TEXT DEFAULT '{"catalogId":"synthetic-custom","exerciseId":"synthetic-planned-exercise-a"}';
+    ALTER TABLE training_exercise_history ADD COLUMN deleted_at TEXT;`);
+}
+
+const exerciseSourceRegistry = {
+  sourceGateInspected: ["athlete_backup_manifest", "account_database_binding", "schema_migrations",
+    ...Object.keys(fixtureRows), "exercise_catalog"], mappingPending: [],
+};
+
+test("R04 full audit includes catalog and historical source links without modifying the file", () => {
+  withSyntheticCopy(addSyntheticExerciseCatalog, (path) => {
+    const hash = () => createHash("sha256").update(readFileSync(path)).digest("hex");
+    const before = hash();
+    const report = auditR04FullCopy(path, exerciseSourceRegistry);
+    assert.equal(report.status, "requires-semantic-review");
+    if (report.status !== "requires-semantic-review") return;
+    assert.equal(report.exercises?.catalogRows, 1);
+    assert.equal(report.exercises?.customRows, 1);
+    assert.equal(report.exercises?.categoryMappingRequiredRows, 1);
+    assert.equal(report.exercises?.linkedSourceRows, 3);
+    assert.equal(report.exercises?.unresolvedReferenceRows, 0);
+    assert.equal(report.exercises?.targetWrites, 0);
+    assert.equal(hash(), before);
+    assert.doesNotMatch(JSON.stringify(report), /Synthetic exercise|synthetic-custom|synthetic-planned-exercise-a/u);
+  });
+});
+
+test("R04 full audit blocks unsupported exercise source columns without changing bytes", () => {
+  withSyntheticCopy((db) => {
+    addSyntheticExerciseCatalog(db);
+    db.exec("ALTER TABLE exercise_catalog RENAME COLUMN category TO category_unknown");
+  }, (path) => {
+    const before = readFileSync(path);
+    assert.deepEqual(auditR04FullCopy(path, exerciseSourceRegistry), {
+      status: "blocked", reasons: ["R04_EXERCISE_SHAPE_UNSUPPORTED"],
+    });
+    assert.deepEqual(readFileSync(path), before);
+  });
+});
+
 test("R04 nutrition counts actual food entries, never water or legacy recorded flag alone", () => {
   const db = new DatabaseSync(":memory:");
   try {

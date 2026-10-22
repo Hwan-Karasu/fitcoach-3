@@ -5,6 +5,8 @@ import { readLegacyClientDayRowsInSnapshot } from "./LegacyClientDaySourceReader
 import { readLegacyClientIdentityInSnapshot } from "./LegacyClientIdentitySourceReader.ts";
 import { readLegacyCurrentSetRowsInSnapshot } from "./LegacyCurrentSetSourceReader.ts";
 import { readLegacyHistoryRowsInSnapshot } from "./LegacyHistorySourceReader.ts";
+import { readLegacyExerciseCatalogInSnapshot } from "./LegacyExerciseCatalogSourceReader.ts";
+import { readLegacyExerciseReferencesInSnapshot } from "./LegacyExerciseReferencePreflight.ts";
 import { readLegacyMeasurementRowsInSnapshot, legacyMeasurementFields } from "./LegacyMeasurementSourceReader.ts";
 import { readLegacyProfileWeightsInSnapshot } from "./LegacyWeightSourceReconciliation.ts";
 import { readLegacyProgramBooksInSnapshot } from "./LegacyProgramBookSourceReader.ts";
@@ -29,6 +31,10 @@ export function readLegacyEvidenceInSnapshot(db: DatabaseSync, accountScope: str
   const sets = readLegacySetRowsInSnapshot(db, accountScope);
   const programBooks = readLegacyProgramBooksInSnapshot(db, accountScope);
   const history = readLegacyHistoryRowsInSnapshot(db, accountScope);
+  const hasExerciseCatalog = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='exercise_catalog'").get();
+  const exerciseCatalog = hasExerciseCatalog ? readLegacyExerciseCatalogInSnapshot(db, accountScope) : null;
+  const exerciseReferences = exerciseCatalog === null ? null
+    : readLegacyExerciseReferencesInSnapshot(db, accountScope, exerciseCatalog);
   const currentTable = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='training_set_logs'").get();
   const currentSets = currentTable ? readLegacyCurrentSetRowsInSnapshot(db, accountScope) : null;
   const snapshotTable = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='training_workout_logs'").get();
@@ -60,6 +66,6 @@ export function readLegacyEvidenceInSnapshot(db: DatabaseSync, accountScope: str
   const clientIdentity = ["id", "workspace_id", "name", "created_at", "updated_at",
     "archived_at", "deleted_at"].every((column) => profileColumns.has(column))
     ? readLegacyClientIdentityInSnapshot(db, accountScope) : null;
-  return { sets, programBooks, history, currentSets, workoutSnapshots, archives, nutritionDays, nutritionEntries,
+  return { sets, programBooks, history, exerciseCatalog, exerciseReferences, currentSets, workoutSnapshots, archives, nutritionDays, nutritionEntries,
     measurements, calendar, clientDays, profileWeights, clientIdentity } as const;
 }
