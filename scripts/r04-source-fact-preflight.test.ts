@@ -954,6 +954,11 @@ test("R04 full audit combines coverage and fact evidence in one read-only file p
       assert.equal(report.coverage.sourceScopeBound, true);
       assert.equal(report.sourceFacts.sourceRows, 6);
       assert.equal(report.sourceFacts.targetWrites, 0);
+      assert.equal(report.setMetrics.sourceRows, 6);
+      assert.equal(report.setMetrics.trackingProfile, "LOAD_REPS");
+      assert.equal(report.setMetrics.exactValueRows, 6);
+      assert.equal(report.setMetrics.requiresValueReviewRows, 0);
+      assert.equal(report.setMetrics.targetWrites, 0);
       assert.equal(report.history.historyRows, 1);
       assert.deepEqual(report.currentSets, { status: "not-observed-in-source", targetWrites: 0 });
       assert.equal(report.currentHistoryTriangulation, null);

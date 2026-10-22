@@ -30,11 +30,13 @@ import { triangulateSessionWorkoutOriginsInSnapshot,
 import { auditLegacyTableCoverage, observedBuild120Tables,
   type CoverageRegistry, type LegacyTableCoverage } from "./LegacyTableCoverage.ts";
 import { summarizeSourceFactPreflight, type SourceFactPreflightReport } from "./SourceFactPreflightReport.ts";
+import { summarizeLegacySetMetrics, type LegacySetMetricReport } from "./LegacySetMetricCandidates.ts";
 
 export type R04FullReport = Readonly<{
   status: "requires-semantic-review";
   coverage: LegacyTableCoverage;
   sourceFacts: SourceFactPreflightReport;
+  setMetrics: LegacySetMetricReport;
   programBooks: ProgramBookPreflightReport;
   programLinks: ProgramLinkPreflightReport;
   sessionProgramCandidates: SessionProgramLinkCandidateSummary;
@@ -111,6 +113,7 @@ export function auditR04FullCopy(
       coverage,
       clientReferences,
       sourceFacts: summarizeSourceFactPreflight(evidence.sets),
+      setMetrics: summarizeLegacySetMetrics(evidence.sets),
       programBooks: summarizeProgramBooks(evidence.programBooks),
       programLinks,
       sessionProgramCandidates,
