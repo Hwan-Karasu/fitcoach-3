@@ -56,8 +56,9 @@ const midpoint = (range: Readonly<{ minX10: number; maxX10: number }>) => (range
  * «съедено от цели» из трёх цветов Б/Ж/У, «съедено / цель» по каждому макро, ручная корректировка). Источники — Nutrition, Measurements и дневник тренировок; legacy `client_kbju_state` не используется.
  * `trainedToday` — факт тренировки из дневника тренировок (авто «Да»), `null` — неизвестно.
  */
-export function NutritionHomeCards({ clientId, body, diary, targets, calc, measurements, trainedToday, onOpenNutrition, onOpenCalculation }: Readonly<{ clientId: string; body: CalcClientBody; diary: NutritionDiaryPort;
-  targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; trainedToday: boolean | null; onOpenNutrition: () => void; onOpenCalculation: () => void }>) {
+export function NutritionHomeCards({ clientId, body, diary, targets, calc, measurements, trainedToday, workoutsThisWeek, onOpenNutrition, onOpenCalculation }: Readonly<{ clientId: string; body: CalcClientBody; diary: NutritionDiaryPort;
+  targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; trainedToday: boolean | null;
+  /** Тренировок за текущую неделю Пн–Вс по дневнику; `null` — нет данных (не 0). */ workoutsThisWeek: number | null; onOpenNutrition: () => void; onOpenCalculation: () => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const macroColors = useMacroColors();
@@ -158,6 +159,10 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
             </Pressable>
           </View>
         </View>
+        <Text style={[styles.hint, { color: colors.textSecondary }]}
+          accessibilityLabel={`Тренировок на этой неделе: ${workoutsThisWeek === null ? "нет данных" : workoutsThisWeek}`}>
+          Трен./нед.: {workoutsThisWeek === null ? "нет данных" : workoutsThisWeek}
+        </Text>
         {dirty ? <AppButton compact label="Записать" busy={busy} onPress={() => { void saveDay(); }} /> : null}
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
         <DayDataJournal visible={journal} clientId={clientId} today={today} calc={calc} measurements={measurements} recordWeight={recordWeight} onClose={() => setJournal(false)} />

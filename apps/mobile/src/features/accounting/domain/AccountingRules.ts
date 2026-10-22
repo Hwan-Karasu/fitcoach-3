@@ -1,4 +1,4 @@
-import type { CreditScope, NewPackInput, NewPaymentInput } from "./AccountingModel.ts";
+import type { CreditScope, LedgerEntry, NewPackInput, NewPaymentInput } from "./AccountingModel.ts";
 
 function isLocalDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
@@ -80,4 +80,30 @@ export function choosePack(candidates: readonly AllocationCandidate[], sessionTy
     || (a.expiresOn === null ? 1 : 0) - (b.expiresOn === null ? 1 : 0)
     || (a.expiresOn ?? "").localeCompare(b.expiresOn ?? "")
     || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))[0] ?? null;
+}
+
+/** Причина ручного списания с Главной; общий отчёт истории показывает её как есть. */
+export const MANUAL_WRITE_OFF_REASON = "Ручное списание";
+
+/**
+ * Пакет, с которого уходит ручное списание: выбранный пакет, иначе ближайший срок и самый старый
+ * (порядок §22.1.2 без деления по типам занятий — как «следующий» пакет на Главной).
+ */
+export function chooseManualWriteOffPack(candidates: readonly AllocationCandidate[], today: string,
+  preferredPackId: string | null): AllocationCandidate | null {
+  const usable = candidates.filter((pack) => pack.available >= 1 && (pack.expiresOn === null || pack.expiresOn >= today));
+  if (preferredPackId !== null) return usable.find((pack) => pack.id === preferredPackId) ?? null;
+  return [...usable].sort((a, b) => (a.expiresOn === null ? 1 : 0) - (b.expiresOn === null ? 1 : 0)
+    || (a.expiresOn ?? "").localeCompare(b.expiresOn ?? "")
+    || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))[0] ?? null;
+}
+
+/**
+ * Последнее списание на одно занятие (автоматическое USED или ручное ADJUSTMENT −1), которое ещё не возвращено.
+ * `ledger` — от новых записей к старым, как отдаёт снимок.
+ */
+export function lastReturnableDebit(ledger: readonly Pick<LedgerEntry, "id" | "entryType" | "delta" | "sourceEntryId">[]): string | null {
+  const returned = new Set(ledger.filter((entry) => entry.entryType === "RETURNED").map((entry) => entry.sourceEntryId));
+  return ledger.find((entry) => entry.delta === -1 && (entry.entryType === "USED" || entry.entryType === "ADJUSTMENT")
+    && !returned.has(entry.id))?.id ?? null;
 }

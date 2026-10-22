@@ -1,32 +1,14 @@
 import type { ClientAccountingSnapshot } from "../features/accounting/public.ts";
-import type { ClientHomeSummary, HomeMetric, HomePackSummary } from "../features/clients/public.ts";
-import type { ClientMeasurements, DailyPoint, MeasurementType } from "../features/measurements/public.ts";
+import type { ClientHomeSummary, HomePackSummary } from "../features/clients/public.ts";
 
 /** Owners' pure rules, injected so this projection stays type-only towards feature public APIs. */
 export interface HomeSummaryRules {
-  readonly latestPoint: (measurements: ClientMeasurements["measurements"], primaries: ClientMeasurements["primaries"],
-    type: MeasurementType) => DailyPoint | null;
-  readonly formatValue: (valueX10: number, type: MeasurementType) => string;
   readonly formatKopeks: (kopeks: number) => string;
   readonly pricePerSessionKopeks: (totalKopeks: number, sessions: number) => number;
 }
 
 /** «Подходит к концу» threshold, taken from the build120 reference; not a new product rule. */
 const LOW_CREDITS = 2;
-
-function shortDate(date: string): string {
-  return `${date.slice(8, 10)}.${date.slice(5, 7)}`;
-}
-
-function metric(rules: HomeSummaryRules, label: string, data: ClientMeasurements | null,
-  type: MeasurementType): HomeMetric {
-  if (data === null) return { label, value: null };
-  const point = rules.latestPoint(data.measurements, data.primaries, type);
-  if (point === null) return { label, value: null };
-  if (point.kind === "AMBIGUOUS") return { label, value: null, status: `${shortDate(point.localDate)}: выберите основной` };
-  const [value, unit] = rules.formatValue(point.measurement.valueX10, type).split(" ");
-  return { label, value: value ?? null, unit, status: `от ${shortDate(point.localDate)}` };
-}
 
 /** Only packs usable today count; the ledger owner already derived each balance. */
 export function packSummary(rules: HomeSummaryRules, snapshot: ClientAccountingSnapshot | null, today: string): HomePackSummary {
@@ -51,19 +33,13 @@ export function packSummary(rules: HomeSummaryRules, snapshot: ClientAccountingS
     kind: "TRACKED", available, granted, reserved,
     tone: available === 0 ? "empty" : available <= LOW_CREDITS ? "warning" : "active",
     pricePerSession: price, expiresOn: next?.pack.expiresOn ?? null,
+    writeOffAvailable: next !== undefined && next.available > 0 && (next.pack.expiresOn === null || next.pack.expiresOn >= today),
+    returnableDebitId: snapshot.returnableDebitId,
   };
 }
 
-/** Projection of Measurements and SessionAccounting facts; a failed source stays «нет данных». */
+/** Проекция фактов учёта; сбой источника остаётся «нет данных». */
 export function buildClientHomeSummary(rules: HomeSummaryRules, accounting: ClientAccountingSnapshot | null,
-  measurements: ClientMeasurements | null, today: string): ClientHomeSummary {
-  return {
-    metrics: [
-      metric(rules, "Вес", measurements, "WEIGHT"),
-      metric(rules, "% жира", measurements, "BODY_FAT"),
-      // Workouts per week need the Training diary (T03); until then the tile honestly stays empty.
-      { label: "Трен./нед.", value: null, status: "нет дневника" },
-    ],
-    pack: packSummary(rules, accounting, today),
-  };
+  today: string): ClientHomeSummary {
+  return { pack: packSummary(rules, accounting, today) };
 }

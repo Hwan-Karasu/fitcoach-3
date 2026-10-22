@@ -55,6 +55,8 @@ export interface ClientAccountingSnapshot {
   /** null — автоматический выбор; применяется только к новым резервам. */
   readonly preferredPackId: string | null;
   readonly packs: readonly PackBalance[];
+  /** Запись, которую вернёт «Отменить» на Главной: последнее ещё не возвращённое списание; null — возвращать нечего. */
+  readonly returnableDebitId: string | null;
   readonly available: number;
   readonly reserved: number;
   readonly ledger: readonly LedgerEntry[];

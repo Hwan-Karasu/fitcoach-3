@@ -1,5 +1,9 @@
 # Progress
 
+## 2026-10-22: A02 Главная
+
+Сделано: writeOff/returnLastDebit в `AccountingRepositoryPort`, `returnableDebitId` в снимке, кнопки на Главной, `workoutsInWeek`. Техдолг: `snapshot.available` на экране абонемента включает истёкшие пакеты (`ClientAccountingScreen.tsx:148`); `HomeProps` больше не получает measurements, но `NutritionHomeCards` всё ещё принимает `measurements`; 10 тестов R04 падают на Node 22.12 (`iterate` в node:sqlite) — среда, не код.
+
 ## 2026-10-22: Z01 настройки
 
 Сделано: `DevSettingsRepository` + тест `settings-dev-store`, сохранение темы/акцента, FS-10 (замеры), чистовой экран. Техдолг: ошибка записи темы молча игнорируется (`SettingsBinding.tsx`, onChange); компоненты всё ещё называются `*Preview`; D01 — перенос `dev_settings` в production-журнал; настройки не в участниках удаления клиента (не клиентские данные).

@@ -12,6 +12,6 @@ export type { ClientCountsQueryPort, ClientCountsSnapshot, ClientListModel, Clie
   ClientListSnapshot } from "./domain/ClientRosterReadModel.ts";
 export type { ArchiveSortMode, ClientArchivePort, ClientDeletionManifest,
   ClientLifecycleCounts } from "./domain/ClientArchivePort.ts";
-export type { ClientHomeSummary, HomeMetric, HomePackSummary, HomePackTone } from "./domain/ClientHomeSummary.ts";
+export type { ClientHomeSummary, HomePackSummary, HomePackTone } from "./domain/ClientHomeSummary.ts";
 export type { RosterClientOverview, RosterMetricId, RosterMetricValue, RosterOverview,
   RosterOverviewPort } from "./domain/ClientRosterOverview.ts";

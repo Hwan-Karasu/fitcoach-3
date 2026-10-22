@@ -7,7 +7,7 @@ import type { AccountingMode, AppointmentCreditState, BookingCreditContext, Clie
   CreditScope, LedgerEntry, NewPackInput, NewPaymentInput, PackBalance, PaymentRecord, ReconcileResult,
   SessionPack } from "../domain/AccountingModel.ts";
 import type { AccountingCommittedChange, AccountingRepositoryPort } from "../domain/AccountingRepositoryPort.ts";
-import { choosePack, validatePack, validatePayment } from "../domain/AccountingRules.ts";
+import { choosePack, chooseManualWriteOffPack, lastReturnableDebit, MANUAL_WRITE_OFF_REASON, validatePack, validatePayment } from "../domain/AccountingRules.ts";
 import { DEV_ACCOUNTING_LEDGER, devAccountingCatalog } from "./DevAccountingCatalog.ts";
 
 interface PackRow {
@@ -75,6 +75,14 @@ async function unreturnedUsed(tx: SqliteStatementPort,
   [appointmentId]);
 }
 
+/** Журнал клиента от новых записей к старым — единый порядок для снимка и для «Отменить». */
+async function ledgerOf(tx: SqliteStatementPort, workspaceId: string, clientId: string): Promise<readonly LedgerEntry[]> {
+  return tx.all<LedgerEntry>(`SELECT id, pack_id AS packId, appointment_id AS appointmentId,
+    source_entry_id AS sourceEntryId, entry_type AS entryType, delta, reason, created_at AS createdAt
+    FROM dev_credit_ledger WHERE workspace_id = ? AND client_id = ?
+    ORDER BY created_at DESC, rowid DESC`, [workspaceId, clientId]);
+}
+
 /** Exactly one effective USED per appointment: generation-keyed and checked before insert. */
 async function insertUsed(tx: SqliteStatementPort, workspaceId: string, clientId: string, packId: string,
   appointmentId: string, now: string): Promise<void> {
@@ -88,7 +96,7 @@ async function insertUsed(tx: SqliteStatementPort, workspaceId: string, clientId
 }
 
 async function insertReturned(tx: SqliteStatementPort, workspaceId: string,
-  used: { id: string; clientId: string; packId: string }, appointmentId: string, now: string): Promise<void> {
+  used: { id: string; clientId: string; packId: string }, appointmentId: string | null, now: string): Promise<void> {
   await tx.run(`INSERT INTO dev_credit_ledger (id, workspace_id, client_id, pack_id, appointment_id,
       source_entry_id, entry_type, delta, reason, operation_key, created_at)
     VALUES (?, ?, ?, ?, ?, ?, 'RETURNED', 1, NULL, ?, ?)`,
@@ -264,10 +272,7 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
     const [mode, rows, ledger, payments, preferredPackId] = await Promise.all([
       modeOf(connection, this.workspaceId, clientId),
       packRows(connection, this.workspaceId, clientId),
-      connection.all<LedgerEntry>(`SELECT id, pack_id AS packId, appointment_id AS appointmentId,
-        source_entry_id AS sourceEntryId, entry_type AS entryType, delta, reason, created_at AS createdAt
-        FROM dev_credit_ledger WHERE workspace_id = ? AND client_id = ?
-        ORDER BY created_at DESC, rowid DESC`, [this.workspaceId, clientId]),
+      ledgerOf(connection, this.workspaceId, clientId),
       connection.all<PaymentRecord>(`SELECT id, pack_id AS packId, amount_kopeks AS amountKopeks,
         paid_on AS paidOn, method, note, created_at AS createdAt FROM dev_payment_records
         WHERE workspace_id = ? AND client_id = ? ORDER BY paid_on DESC, created_at DESC`,
@@ -282,7 +287,7 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
       available: row.ledgerBalance - row.reserved, paidKopeks: row.paidKopeks,
     }));
     return {
-      mode: mode.mode, inheritedMode: mode.inherited, preferredPackId, packs,
+      mode: mode.mode, inheritedMode: mode.inherited, preferredPackId, packs, returnableDebitId: lastReturnableDebit(ledger),
       available: packs.reduce((sum, pack) => sum + Math.max(pack.available, 0), 0),
       reserved: packs.reduce((sum, pack) => sum + pack.reserved, 0),
       ledger, payments,
@@ -386,6 +391,34 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
           source_entry_id, entry_type, delta, reason, operation_key, created_at)
         VALUES (?, ?, ?, ?, NULL, NULL, 'ADJUSTMENT', ?, ?, ?, ?)`,
       [id, this.workspaceId, clientId, packId, delta, why, `adjustment:${id}`, new Date().toISOString()]);
+    });
+    this.publish({ clientIds: [clientId] });
+  }
+
+  async writeOff(clientId: string): Promise<void> {
+    await this.ready().writer.write(async (tx) => {
+      const packs = await packRows(tx, this.workspaceId, clientId);
+      const chosen = chooseManualWriteOffPack(packs.map((pack) => ({ ...pack, available: pack.ledgerBalance - pack.reserved })),
+        localParts(new Date()).today, await preferredPackOf(tx, this.workspaceId, clientId));
+      if (chosen === null) throw new Error("ACCOUNTING_INSUFFICIENT_CREDIT");
+      const id = await newId(tx);
+      await tx.run(`INSERT INTO dev_credit_ledger (id, workspace_id, client_id, pack_id, appointment_id,
+          source_entry_id, entry_type, delta, reason, operation_key, created_at)
+        VALUES (?, ?, ?, ?, NULL, NULL, 'ADJUSTMENT', -1, ?, ?, ?)`,
+      [id, this.workspaceId, clientId, chosen.id, MANUAL_WRITE_OFF_REASON, `adjustment:${id}`, new Date().toISOString()]);
+    });
+    this.publish({ clientIds: [clientId] });
+  }
+
+  async returnLastDebit(clientId: string, expectedEntryId: string): Promise<void> {
+    await this.ready().writer.write(async (tx) => {
+      const ledger = await ledgerOf(tx, this.workspaceId, clientId);
+      const lastId = lastReturnableDebit(ledger);
+      if (lastId === null) throw new Error("ACCOUNTING_NOTHING_TO_RETURN");
+      if (lastId !== expectedEntryId) throw new Error("ACCOUNTING_STALE");
+      const source = ledger.find((entry) => entry.id === lastId)!;
+      await insertReturned(tx, this.workspaceId, { id: source.id, clientId, packId: source.packId }, source.appointmentId,
+        new Date().toISOString());
     });
     this.publish({ clientIds: [clientId] });
   }

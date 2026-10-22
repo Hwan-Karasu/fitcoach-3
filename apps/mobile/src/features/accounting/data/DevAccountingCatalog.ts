@@ -115,4 +115,16 @@ export const devAccountingCatalog: readonly MigrationStep[] = [{
       FOREIGN KEY (pack_id, workspace_id, client_id) REFERENCES dev_session_packs(id, workspace_id, client_id) ON DELETE RESTRICT
     )`,
   ],
+}, {
+  version: 3,
+  checksum: "a02-dev-accounting-v3-one-return-per-debit-20261022",
+  statements: [
+    // Второй возврат того же списания невозможен; возврат ссылается на списание того же пакета и клиента.
+    "CREATE UNIQUE INDEX dev_credit_ledger_one_return ON dev_credit_ledger(source_entry_id) WHERE entry_type = 'RETURNED'",
+    `CREATE TRIGGER dev_credit_ledger_return_source BEFORE INSERT ON dev_credit_ledger
+      WHEN NEW.entry_type = 'RETURNED' AND NOT EXISTS (SELECT 1 FROM dev_credit_ledger AS s
+        WHERE s.id = NEW.source_entry_id AND s.pack_id = NEW.pack_id AND s.client_id = NEW.client_id
+          AND s.delta = -1 AND s.entry_type IN ('USED','ADJUSTMENT'))
+      BEGIN SELECT RAISE(ABORT, 'ACCOUNTING_RETURN_SOURCE_INVALID'); END`,
+  ],
 }];

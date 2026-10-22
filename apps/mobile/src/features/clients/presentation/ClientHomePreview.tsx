@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { AppButton, ConfirmDialog, InlineNotice, StatusTag } from
   "../../../shared/ui/components/public.ts";
@@ -10,6 +10,15 @@ import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 const toneLabel = { active: "Активен", warning: "Подходит к концу", empty: "Закончился" } as const;
 const toneKind = { active: "success", warning: "warning", empty: "action_required" } as const;
+
+function creditErrorText(failure: unknown): string {
+  switch (failure instanceof Error ? failure.message : "") {
+    case "ACCOUNTING_INSUFFICIENT_CREDIT": return "Нет доступных занятий: списывать нечего. Данные учёта не изменены.";
+    case "ACCOUNTING_NOTHING_TO_RETURN": return "Возвращать нечего: последнее списание уже отменено.";
+    case "ACCOUNTING_STALE": return "Журнал изменился. Проверьте абонемент и повторите.";
+    default: return "Не удалось сохранить. Данные учёта не изменены.";
+  }
+}
 
 function formatIsoDate(date: string): string {
   return `${date.slice(8, 10)}.${date.slice(5, 7)}.${date.slice(0, 4)}`;
@@ -32,13 +41,17 @@ function PackSummaryLine({ pack }: Readonly<{ pack: HomePackSummary | null }>) {
  * Client Home (UX 2.0): identity header with the edit pencil, abonement first, then the nutrition blocks (day data and КБЖУ, supplied by the shell), archive last —
  * all projections of their owners' facts; no invented dashboard blocks.
  */
-export function ClientHomePreview({ client, summary, onOpenAccounting, nutritionSlot,
+export function ClientHomePreview({ client, summary, onOpenAccounting, onWriteOff, onReturnLast, nutritionSlot,
   onArchive }: Readonly<{
   /** Блоки питания (шаги, КБЖУ) — проекция Nutrition, подставляется оболочкой; Clients не знает о питании. */
   nutritionSlot?: ReactNode;
   client: ClientRecord;
   summary: ClientHomeSummary | null;
   onOpenAccounting: () => void;
+  /** «Списать»: ручное списание одного занятия; промис завершается после commit. */
+  onWriteOff: () => Promise<void>;
+  /** «Отменить»: возврат списания `entryId`, которое тренер видел на экране. */
+  onReturnLast: (entryId: string) => Promise<void>;
   /** Resolves only after the lifecycle commit; the caller leaves the workspace. */
   onArchive: () => Promise<void>;
 }>) {
@@ -47,6 +60,25 @@ export function ClientHomePreview({ client, summary, onOpenAccounting, nutrition
   const [confirming, setConfirming] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [archiveError, setArchiveError] = useState(false);
+  const [creditBusy, setCreditBusy] = useState(false);
+  const [creditError, setCreditError] = useState<string | null>(null);
+  const creditLock = useRef(false);
+
+  /** Одна операция учёта за раз: двойное нажатие не создаёт второе списание. */
+  const runCredit = async (action: () => Promise<void>) => {
+    if (creditLock.current) return;
+    creditLock.current = true;
+    setCreditBusy(true);
+    setCreditError(null);
+    try {
+      await action();
+    } catch (failure) {
+      setCreditError(creditErrorText(failure));
+    } finally {
+      creditLock.current = false;
+      setCreditBusy(false);
+    }
+  };
 
   const archive = async () => {
     if (archiving) return;
@@ -64,8 +96,9 @@ export function ClientHomePreview({ client, summary, onOpenAccounting, nutrition
 
   return <PrototypeScreen compact>
 
+    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <Pressable accessibilityRole="button" accessibilityLabel={pack?.kind === "TRACKED" ? `Абонемент: доступно ${pack.available} из ${pack.granted} занятий. Открыть абонемент и оплату` : "Абонемент. Открыть абонемент и оплату"}
-      onPress={onOpenAccounting} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      onPress={onOpenAccounting} style={styles.cardBody}>
       <View style={styles.cardHead}>
         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Абонемент</Text>
         <View style={styles.packLine}>
@@ -80,6 +113,16 @@ export function ClientHomePreview({ client, summary, onOpenAccounting, nutrition
         {pack?.kind === "TRACKED" ? <StatusTag kind={toneKind[pack.tone]} label={toneLabel[pack.tone]} /> : null}
       </View>
     </Pressable>
+    {pack?.kind === "TRACKED" ? <View style={styles.creditActions}>
+      <View style={styles.creditAction}><AppButton compact variant="secondary" label="Списать" busy={creditBusy}
+        disabled={!pack.writeOffAvailable} disabledReason="Нет доступных занятий" accessibilityLabel="Списать одно занятие"
+        onPress={() => { void runCredit(onWriteOff); }} /></View>
+      <View style={styles.creditAction}><AppButton compact variant="ghost" label="Отменить" busy={creditBusy}
+        disabled={pack.returnableDebitId === null} disabledReason="Нечего возвращать" accessibilityLabel="Отменить последнее списание"
+        onPress={() => { const entryId = pack.returnableDebitId; if (entryId !== null) void runCredit(() => onReturnLast(entryId)); }} /></View>
+    </View> : null}
+    </View>
+    {creditError !== null ? <InlineNotice kind="error">{creditError}</InlineNotice> : null}
 
     {nutritionSlot}
 
@@ -106,6 +149,9 @@ const styles = StyleSheet.create({
   tiles: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tile: { flexGrow: 1, flexBasis: 100 },
   card: { borderWidth: 1, borderRadius: 14, padding: 8, gap: 4 },
+  cardBody: { gap: 4 },
+  creditActions: { flexDirection: "row", gap: 8, marginTop: 4 },
+  creditAction: { flex: 1 },
   cardHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   cardTitle: { fontSize: 14, lineHeight: 19, fontFamily: fonts.bold },
   weightRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },

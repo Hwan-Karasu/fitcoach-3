@@ -1,3 +1,10 @@
+## 2026-10-22 — A02: Главная клиента
+
+- Учёт: `writeOff`, `returnLastDebit`, `returnableDebitId` в снимке; миграция `accounting` v3 (уникальный возврат, триггер источника). Правила `chooseManualWriteOffPack`, `lastReturnableDebit`.
+- Главная: кнопки «Списать»/«Отменить» в карточке абонемента (защита от двойного нажатия, ошибки через `InlineNotice`); `metrics` удалены; строка «Трен./нед.» в «Данных дня» (`read-models/trainingWeek.ts`, неделя Пн–Вс).
+- Тесты: 7 новых в `accounting-dev-store`, 1 в `client-home-summary`, новый `training-week`. `test:foundation` на Node 22.12 с `--experimental-sqlite`: 623 из 633, 10 падений — все R04 (`iterate` в node:sqlite), от правок не зависят.
+- OPEN-02 уже выполнен на экране абонемента. На телефоне не проверялось.
+
 ## 2026-10-22 — Z01: настройки
 
 - `features/settings`: порт `SettingsPort`, `DevSettingsRepository` (таблица `dev_settings`, журнал `settings_schema_migrations`), тест `scripts/settings-dev-store.test.ts` (в `test:foundation`; на Node 22.12 нужен `--experimental-sqlite`).

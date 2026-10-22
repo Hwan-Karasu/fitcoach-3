@@ -6,8 +6,6 @@ import type { Appointment } from "../src/features/calendar/public.ts";
 import type { ClientAccountingSnapshot } from "../src/features/accounting/public.ts";
 
 const rules: HomeSummaryRules = {
-  latestPoint: () => null,
-  formatValue: (value) => String(value / 10),
   formatKopeks: (kopeks) => `${kopeks / 100} ₽`,
   pricePerSessionKopeks: (total, sessions) => Math.round(total / sessions),
 };

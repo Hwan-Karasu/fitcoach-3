@@ -8,6 +8,7 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import { ageOn, type ClientRecord, type ClientRepositoryPort, type ClientRosterPort } from "../../features/clients/public.ts";
 import { localDateOf } from "../../features/measurements/public.ts";
 import { useTrainedOn } from "../../read-models/useTrainedOn.ts";
+import { useWorkoutsThisWeek } from "../../read-models/useWorkoutsThisWeek.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import type { CalcProfileWithBodyPort } from "../../workflows/saveCalcProfile.ts";
 import { NutritionHomeCards, type SaveCalcProfile, type FoodCatalogPort, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort, type RecipeCatalogPort } from "../../features/nutrition/public.ts";
@@ -145,6 +146,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   const [retryKey, setRetryKey] = useState(0);
   /** Тренировка сегодня по дневнику тренировок — авто «Да» в «Данных дня». */
   const trainedToday = useTrainedOn(clientId, localDateOf(new Date()), trainingHistory);
+  const workoutsThisWeek = useWorkoutsThisWeek(clientId, localDateOf(new Date()), trainingHistory);
   const client = selection?.clientId === clientId ? selection.result : undefined;
   // Режим, фильтры и раскрытые карточки истории и статистики живут, пока открыта карточка клиента (в том числе тренировка, открытая поверх неё).
   useEffect(() => {
@@ -218,8 +220,8 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
     >
       <Tabs.Screen name="Home" options={{ tabBarLabel: workspaceTabs.Home, tabBarAccessibilityLabel: workspaceTabs.Home, headerShown: true,
         header: () => <ClientHeader client={client} subtitle={workspaceTabs.Home} onBack={onClose} onClients={onOpenClients} onEdit={() => onOpenEdit(client.id)} /> }}>
-        {({ navigation }) => <HomeNavigator client={client} accounting={accounting} measurements={measurements}
-          nutritionSlot={<NutritionHomeCards key={client.id} clientId={client.id} body={calcBody} trainedToday={trainedToday} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements}
+        {({ navigation }) => <HomeNavigator client={client} accounting={accounting}
+          nutritionSlot={<NutritionHomeCards key={client.id} clientId={client.id} body={calcBody} trainedToday={trainedToday} workoutsThisWeek={workoutsThisWeek} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements}
             onOpenNutrition={() => navigation.navigate("Nutrition")} onOpenCalculation={() => navigation.navigate("Nutrition", { screen: "NutritionIndex", params: { section: "calc", requestKey: Date.now() } })} />}
           onOpenAccounting={() => onOpenAccounting(client.id)}
           onArchive={async () => {

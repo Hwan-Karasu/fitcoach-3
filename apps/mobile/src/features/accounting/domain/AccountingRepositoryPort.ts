@@ -7,7 +7,8 @@ export interface AccountingCommittedChange {
 
 /**
  * Typed failures: ACCOUNTING_INSUFFICIENT_CREDIT, ACCOUNTING_ALREADY_SETTLED,
- * ACCOUNTING_PACK_INVALID, ACCOUNTING_PACK_SCOPE_INVALID, ACCOUNTING_PAYMENT_INVALID.
+ * ACCOUNTING_PACK_INVALID, ACCOUNTING_PACK_SCOPE_INVALID, ACCOUNTING_PAYMENT_INVALID,
+ * ACCOUNTING_NOTHING_TO_RETURN, ACCOUNTING_STALE (последнее списание уже другое).
  */
 export interface AccountingRepositoryPort {
   getClientSnapshot(clientId: string): Promise<ClientAccountingSnapshot>;
@@ -20,6 +21,13 @@ export interface AccountingRepositoryPort {
   recordPayment(clientId: string, input: NewPaymentInput): Promise<void>;
   /** Explicit manual correction with a reason; never edits an existing entry. */
   adjust(clientId: string, packId: string, delta: number, reason: string): Promise<void>;
+  /** Ручное списание −1 с «следующего» пакета (ADJUSTMENT); без доступного занятия — ACCOUNTING_INSUFFICIENT_CREDIT. */
+  writeOff(clientId: string): Promise<void>;
+  /**
+   * Возвращает последнее ещё не возвращённое списание (ручное или по записи календаря) новой записью RETURNED +1.
+   * `expectedEntryId` — запись, которую видел тренер; если последнее списание уже другое — ACCOUNTING_STALE.
+   */
+  returnLastDebit(clientId: string, expectedEntryId: string): Promise<void>;
   bookingContext(clientId: string, sessionTypeId: string, requiresCredit: boolean): Promise<BookingCreditContext>;
   appointmentCredit(appointmentId: string): Promise<AppointmentCreditState>;
   /** Idempotent: every reservation whose interval ended becomes exactly one USED. */

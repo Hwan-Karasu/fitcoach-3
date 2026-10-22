@@ -8,7 +8,7 @@ import { WriterCoordinator } from "../apps/mobile/src/shared/db/WriterCoordinato
 import { accountingHistoryDate, shiftAccountingMonth } from "../apps/mobile/src/features/accounting/presentation/accountingHistoryPeriod.ts";
 import { DevAccountingRepository, devAccountingCalendarHook, devAccountingClientDeletionParticipant } from
   "../apps/mobile/src/features/accounting/data/DevAccountingRepository.ts";
-import { choosePack, formatKopeks, parseRublesToKopeks, pricePerSessionKopeks } from
+import { choosePack, chooseManualWriteOffPack, formatKopeks, lastReturnableDebit, parseRublesToKopeks, pricePerSessionKopeks } from
   "../apps/mobile/src/features/accounting/domain/AccountingRules.ts";
 import { DevCalendarRepository, devCalendarClientDeletionParticipant } from
   "../apps/mobile/src/features/calendar/data/DevCalendarRepository.ts";
@@ -691,4 +691,145 @@ test("история: месяц оплаты определяется указ�
   assert.equal(accountingHistoryDate(at), "2026-10-20");
   assert.equal(accountingHistoryDate(at, "2025-12-31"), "2025-12-31");
   assert.equal(accountingHistoryDate(at, "2026-09-30").slice(0, 7), "2026-09");
+});
+
+test("A02 ручное списание берёт пакет с ближайшим сроком; истёкший и пустой не участвуют", () => {
+  const base = { creditScope: "GENERAL" as const, sessionTypeId: null, available: 3 };
+  const candidates = [
+    { ...base, id: "no-expiry", expiresOn: null, createdAt: "2026-01-01" },
+    { ...base, id: "soon", expiresOn: "2026-11-01", createdAt: "2026-02-01" },
+    { ...base, id: "expired", expiresOn: "2026-01-01", createdAt: "2025-01-01" },
+    { ...base, id: "empty", expiresOn: "2026-10-30", createdAt: "2025-01-01", available: 0 },
+  ];
+  assert.equal(chooseManualWriteOffPack(candidates, "2026-10-22", null)?.id, "soon");
+  assert.equal(chooseManualWriteOffPack(candidates, "2026-10-22", "no-expiry")?.id, "no-expiry");
+  assert.equal(chooseManualWriteOffPack(candidates, "2026-10-22", "empty"), null, "выбранный пустой пакет не заменяется другим");
+  assert.equal(chooseManualWriteOffPack([], "2026-10-22", null), null);
+});
+
+test("A02 последнее списание: возвращённое пропускается, списания на несколько занятий и выдача не возвращаются", () => {
+  const entry = (id: string, entryType: "USED" | "ADJUSTMENT" | "RETURNED" | "ISSUED", delta: number, sourceEntryId: string | null = null) =>
+    ({ id, entryType, delta, sourceEntryId });
+  // От новых к старым.
+  assert.equal(lastReturnableDebit([entry("r2", "RETURNED", 1, "d2"), entry("d3", "ADJUSTMENT", -1), entry("d2", "USED", -1), entry("i", "ISSUED", 5)]), "d3");
+  assert.equal(lastReturnableDebit([entry("r3", "RETURNED", 1, "d3"), entry("d3", "ADJUSTMENT", -1), entry("r2", "RETURNED", 1, "d2"), entry("d2", "USED", -1)]), null);
+  assert.equal(lastReturnableDebit([entry("a", "ADJUSTMENT", -3), entry("b", "ADJUSTMENT", 2), entry("i", "ISSUED", 5)]), null);
+  assert.equal(lastReturnableDebit([]), null);
+});
+
+test("A02 «Списать» и «Отменить»: факты не удаляются, возврат один, пустой журнал нечего возвращать", async () => {
+  const { clients, accounting, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "WriteOff" });
+    await accounting.setClientMode(client.id, "FITCOACH");
+    await assert.rejects(accounting.writeOff(client.id), { message: "ACCOUNTING_INSUFFICIENT_CREDIT" });
+    await assert.rejects(accounting.returnLastDebit(client.id, "any"), { message: "ACCOUNTING_NOTHING_TO_RETURN" });
+    await accounting.createPack(client.id, pack(2));
+    await accounting.writeOff(client.id);
+    let snapshot = await accounting.getClientSnapshot(client.id);
+    assert.equal(snapshot.available, 1);
+    const debit = snapshot.ledger.find((row) => row.entryType === "ADJUSTMENT");
+    assert.equal(debit?.delta, -1);
+    assert.equal(debit?.reason, "Ручное списание");
+    assert.equal(snapshot.returnableDebitId, debit?.id);
+    await accounting.returnLastDebit(client.id, debit!.id);
+    snapshot = await accounting.getClientSnapshot(client.id);
+    assert.equal(snapshot.available, 2);
+    assert.equal(snapshot.ledger.length, 3, "выдача, списание и возврат — три факта");
+    const returned = snapshot.ledger.find((row) => row.entryType === "RETURNED");
+    assert.equal(returned?.delta, 1);
+    assert.equal(returned?.sourceEntryId, debit!.id);
+    assert.equal(snapshot.returnableDebitId, null);
+    await assert.rejects(accounting.returnLastDebit(client.id, debit!.id), { message: "ACCOUNTING_NOTHING_TO_RETURN" });
+    assert.equal((await accounting.getClientSnapshot(client.id)).available, 2);
+  } finally { await close(); }
+});
+
+test("A02 списать нельзя ниже нуля; два списания возвращаются от последнего к первому; устаревшая кнопка отклоняется", async () => {
+  const { clients, accounting, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "Order" });
+    await accounting.setClientMode(client.id, "FITCOACH");
+    await accounting.createPack(client.id, pack(2));
+    await accounting.writeOff(client.id);
+    const firstId = (await accounting.getClientSnapshot(client.id)).returnableDebitId!;
+    await accounting.writeOff(client.id);
+    await assert.rejects(accounting.writeOff(client.id), { message: "ACCOUNTING_INSUFFICIENT_CREDIT" });
+    const secondId = (await accounting.getClientSnapshot(client.id)).returnableDebitId!;
+    assert.notEqual(secondId, firstId);
+    await assert.rejects(accounting.returnLastDebit(client.id, firstId), { message: "ACCOUNTING_STALE" });
+    assert.equal((await accounting.getClientSnapshot(client.id)).available, 0);
+    await accounting.returnLastDebit(client.id, secondId);
+    assert.equal((await accounting.getClientSnapshot(client.id)).returnableDebitId, firstId);
+    await accounting.returnLastDebit(client.id, firstId);
+    assert.equal((await accounting.getClientSnapshot(client.id)).available, 2);
+  } finally { await close(); }
+});
+
+test("A02 «Отменить» возвращает автосписание по записи: запись не меняется, занятие помечено возвращённым, отмена записи не возвращает второй раз", async () => {
+  const { clients, calendar, accounting, personal, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "AutoUsed" });
+    await accounting.setClientMode(client.id, "FITCOACH");
+    await accounting.createPack(client.id, pack(3));
+    const visit = await calendar.createAppointment(slot(client.id, personal.id, { localDate: PAST }));
+    await accounting.reconcileDue(new Date(2026, 9, 16, 12, 0));
+    assert.equal(await accounting.appointmentCredit(visit.id), "USED");
+    let snapshot = await accounting.getClientSnapshot(client.id);
+    assert.equal(snapshot.available, 2);
+    await accounting.returnLastDebit(client.id, snapshot.returnableDebitId!);
+    assert.equal(await accounting.appointmentCredit(visit.id), "RETURNED");
+    assert.equal((await calendar.getAppointment(visit.id))?.lifecycle, "SCHEDULED");
+    snapshot = await accounting.getClientSnapshot(client.id);
+    assert.equal(snapshot.available, 3);
+    assert.equal(snapshot.returnableDebitId, null);
+    await calendar.cancelAppointment(visit.id, visit.revision, "RETURN");
+    const after = await accounting.getClientSnapshot(client.id);
+    assert.equal(after.available, 3, "возврат записью календаря не дублирует возврат с Главной");
+    assert.equal(after.ledger.filter((row) => row.entryType === "RETURNED").length, 1);
+  } finally { await close(); }
+});
+
+test("A02 схема: второй возврат того же списания и возврат не-списания отвергаются самой базой", async () => {
+  const { db, clients, accounting, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "Schema" });
+    const other = await clients.create({ displayName: "Other" });
+    await accounting.setClientMode(client.id, "FITCOACH");
+    await accounting.createPack(client.id, pack(2));
+    await accounting.createPack(other.id, pack(2));
+    await accounting.writeOff(client.id);
+    const snapshot = await accounting.getClientSnapshot(client.id);
+    const debit = snapshot.returnableDebitId!;
+    const issued = snapshot.ledger.find((row) => row.entryType === "ISSUED")!;
+    const packId = issued.packId;
+    const insert = (id: string, source: string, packOf: string, owner: string) => db.prepare(
+      "INSERT INTO dev_credit_ledger (id, workspace_id, client_id, pack_id, source_entry_id, entry_type, delta, operation_key, created_at) VALUES (?, ?, ?, ?, ?, 'RETURNED', 1, ?, 'x')")
+      .run(id, WS, owner, packOf, source, id);
+    assert.throws(() => insert("bad-issued", issued.id, packId, client.id), /ACCOUNTING_RETURN_SOURCE_INVALID/u);
+    const otherPack = (await accounting.getClientSnapshot(other.id)).packs[0]!.pack.id;
+    assert.throws(() => insert("bad-owner", debit, otherPack, other.id), /ACCOUNTING_RETURN_SOURCE_INVALID/u);
+    insert("good", debit, packId, client.id);
+    assert.throws(() => insert("twice", debit, packId, client.id), /UNIQUE/u);
+  } finally { await close(); }
+});
+
+test("A02 списание одного клиента не затрагивает другого; окончательное удаление клиента убирает и его возвраты", async () => {
+  const { clients, accounting, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "A" });
+    const b = await clients.create({ displayName: "B" });
+    for (const client of [a, b]) { await accounting.setClientMode(client.id, "FITCOACH"); await accounting.createPack(client.id, pack(2)); }
+    await accounting.writeOff(a.id);
+    await accounting.returnLastDebit(a.id, (await accounting.getClientSnapshot(a.id)).returnableDebitId!);
+    await accounting.writeOff(b.id);
+    assert.equal((await accounting.getClientSnapshot(a.id)).available, 2);
+    assert.equal((await accounting.getClientSnapshot(b.id)).available, 1);
+    await assert.rejects(accounting.returnLastDebit(a.id, (await accounting.getClientSnapshot(b.id)).returnableDebitId!),
+      { message: "ACCOUNTING_NOTHING_TO_RETURN" });
+    const archived = await clients.setArchived(a.id, a.revision, true);
+    await clients.deleteArchivedPermanently(a.id, archived.revision);
+    assert.equal((await accounting.getClientSnapshot(a.id)).ledger.length, 0);
+    assert.equal((await accounting.getClientSnapshot(b.id)).ledger.length, 2);
+  } finally { await close(); }
 });
