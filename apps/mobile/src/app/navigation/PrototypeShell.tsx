@@ -67,9 +67,11 @@ function openTarget(target: NotificationTarget): void {
   if (!navigationRef.isReady()) return;
   if (target.kind === "CALENDAR") { navigationRef.navigate("Root", { screen: "Calendar" } as never); return; }
   const top = navigationRef.getRootState()?.routes.at(-1);
-  // Уже внутри экрана клиента — заменяем его, а не добавляем: цепочка переходов с таймера не превращается в историю «как в браузере»,
-  // а «назад» возвращает туда, откуда тренер пришёл к клиенту.
-  const open = top?.name === "ClientWorkspace" ? StackActions.replace : StackActions.push;
+  // Уже внутри экрана клиента — заменяем его, а не добавляем: цепочка переходов с таймера не превращается в историю «как в браузере».
+  // Из другого места (например, Календаря) сначала открываем список клиентов, чтобы «назад» привело к нему, как при обычном заходе.
+  const inClient = top?.name === "ClientWorkspace";
+  if (!inClient) navigationRef.navigate("Root", { screen: "Clients" } as never);
+  const open = inClient ? StackActions.replace : StackActions.push;
   if (target.kind === "CLIENT_TRAINING") {
     navigationRef.dispatch(open("ClientWorkspace", { clientId: target.clientId, screen: "Training", params: { screen: "TrainingIndex" } }));
     return;
@@ -78,10 +80,14 @@ function openTarget(target: NotificationTarget): void {
   const topParams = top?.params as { clientId?: string } | undefined;
   if (top?.name === "ClientWorkspace" && topParams?.clientId === target.clientId && current?.name === "TrainingWorkout"
     && current.params?.programId === target.programId && current.params.weekIndex === target.weekIndex && current.params.workoutId === target.plannedWorkoutId) return;
-  // Без closeOnBack: «←» из тренировки ведёт к списку тренировок (программе) этого клиента, как при обычном открытии.
-  navigationRef.dispatch(open("ClientWorkspace", { clientId: target.clientId, screen: "Training",
-    params: { screen: "TrainingWorkout", params: { programId: target.programId, weekIndex: target.weekIndex, workoutId: target.plannedWorkoutId,
-      ...(target.exerciseKey === null ? {} : { focusExerciseId: target.exerciseKey }) } } }));
+  // Полный путь клиент → программы → программа → тренировка, как при обычном заходе: «назад» ведёт к списку тренировок (программе),
+  // затем к программам клиента и дальше к списку клиентов.
+  navigationRef.dispatch(open("ClientWorkspace", { clientId: target.clientId, screen: "Training", params: { state: { routes: [
+    { name: "TrainingIndex" },
+    { name: "TrainingProgram", params: { programId: target.programId, weekIndex: target.weekIndex } },
+    { name: "TrainingWorkout", params: { programId: target.programId, weekIndex: target.weekIndex, workoutId: target.plannedWorkoutId,
+      ...(target.exerciseKey === null ? {} : { focusExerciseId: target.exerciseKey }) } },
+  ] } } } as never));
 }
 
 function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
