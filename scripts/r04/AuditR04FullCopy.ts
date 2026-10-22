@@ -4,6 +4,7 @@ import { summarizeArchiveSource, type ArchiveSourcePreflightReport } from "./Arc
 import { summarizeLegacyArchiveSets } from "./LegacyArchiveSetInventory.ts";
 import { readLegacyFactLedgerInSnapshot, summarizeLegacyFactLedger } from "./LegacyFactLedger.ts";
 import { summarizeLegacyQuestionnaire } from "./LegacyQuestionnaireSourceReader.ts";
+import { projectLegacyMeasurementInputs, summarizeLegacyMeasurementProjection } from "./LegacyMeasurementProjection.ts";
 import { summarizeCalendarSource, type CalendarSourcePreflightReport } from "./CalendarSourcePreflightReport.ts";
 import { summarizeClientDaySource, type ClientDaySourcePreflightReport } from "./ClientDaySourcePreflightReport.ts";
 import { summarizeLegacyClientIdentity,
@@ -59,6 +60,7 @@ export type R04FullReport = Readonly<{
   nutritionEntryIdentity: NutritionEntryIdentityReport | null;
   measurements: MeasurementSourcePreflightReport | null;
   measurementValueCandidates: MeasurementCandidateSummary | null;
+  measurementProjection: ReturnType<typeof summarizeLegacyMeasurementProjection> | null;
   calendar: CalendarSourcePreflightReport | null;
   clientDays: ClientDaySourcePreflightReport | null;
   clientIdentity: ClientIdentityPreflightReport | null;
@@ -147,6 +149,8 @@ export function auditR04FullCopy(
         : summarizeMeasurementSource(evidence.measurements),
       measurementValueCandidates: evidence.measurements === null ? null
         : summarizeMeasurementValueCandidates(buildMeasurementValueCandidates(evidence.measurements)),
+      measurementProjection: evidence.measurements === null ? null
+        : summarizeLegacyMeasurementProjection(projectLegacyMeasurementInputs(evidence.measurements, new Date())),
       calendar: evidence.calendar === null ? null
         : summarizeCalendarSource(evidence.calendar),
       clientDays: evidence.clientDays === null ? null

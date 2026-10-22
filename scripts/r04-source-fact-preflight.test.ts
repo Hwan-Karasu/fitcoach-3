@@ -992,6 +992,30 @@ test("R04 full audit blocks an unregistered table before classifying facts", () 
   });
 });
 
+test("R04 full audit projects verified centimetre inputs without modifying the source file", () => {
+  withSyntheticCopy((db) => {
+    for (const field of ["neck", "shoulders", "chest", "waist", "hips", "upper_arm", "thigh", "calf"]) {
+      db.exec(`ALTER TABLE client_measurements ADD COLUMN ${field} TEXT`);
+    }
+    db.exec("UPDATE client_measurements SET neck='35,5',waist='75.55'");
+  }, (path) => {
+    const before = readFileSync(path);
+    const report = auditR04FullCopy(path, {
+      sourceGateInspected: ["athlete_backup_manifest", "account_database_binding", "schema_migrations", ...Object.keys(fixtureRows)],
+      mappingPending: [],
+    });
+    assert.equal(report.status, "requires-semantic-review");
+    if (report.status !== "requires-semantic-review") return;
+    // The fixture has two independent same-day rows; both values in each must remain accounted for.
+    assert.equal(report.measurementProjection?.sourceValues, 4);
+    assert.equal(report.measurementProjection?.targetInputCandidates, 2);
+    assert.equal(report.measurementProjection?.precisionReviewValues, 2);
+    assert.equal(report.measurementProjection?.targetWrites, 0);
+    assert.doesNotMatch(JSON.stringify(report), /35,5|75.55|valueX10|rawValue/u);
+    assert.deepEqual(readFileSync(path), before);
+  });
+});
+
 test("R04 full audit includes questionnaire target candidates without exposing or changing answers", () => {
   const questionnaireTables = ["questionnaire_templates", "questionnaire_revisions", "client_questionnaire_answers"];
   withSyntheticCopy((db) => {

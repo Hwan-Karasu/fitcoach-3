@@ -1,6 +1,9 @@
 # R04 — кандидат разбора legacy-замеров
 
 **Статус: SOURCE FIELD CANDIDATE / NOT TARGET-MAPPED / NO TARGET WRITES.**
+Продолжение: [подтверждённые сантиметры и target-shaped MeasurementInput](R04_MEASUREMENT_PROJECTION.md).
+Единицы восьми обхватов подтверждены по исходникам ввода/сохранения build120;
+исторические результаты исходного source-аудита ниже не переписываются.
 Основание: Product §§49.14–49.18, Stage 3 Data Design и прочитанный только
 для аудита build120 `.atbackup`. `client_measurements` содержит широкую строку,
 а в FitCoach 3.0 каждый показатель должен оставаться самостоятельным фактом.
