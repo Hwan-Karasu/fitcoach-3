@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { Easing, FadeIn, SlideInLeft, SlideInRight, SlideOutLeft, SlideOutRight, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
@@ -20,6 +20,10 @@ const TAB_BAR_HEIGHT = 80;
 const SWIPE_DISTANCE = 48;
 /** Рядом помещаются два таймера; остальные — под кнопкой «Ещё N» (§48.62). */
 const SIDE_BY_SIDE = 2;
+/** Длительности анимаций: уход панели за край, выезд «таблетки», разворот. */
+const SLIDE_OUT_MS = 200;
+const PILL_MS = 260;
+const EASE = Easing.out(Easing.cubic);
 
 type Side = "left" | "right";
 
@@ -61,13 +65,13 @@ function TimerCard({ timer, now, compact, timers, onOpen }: Readonly<{ timer: Re
       accessibilityLabel={`${timer.clientName}, ${timer.exerciseName}. ${finished ? "Отдых окончен" : paused ? `Пауза, осталось ${clock(left)}` : `Осталось ${clock(left)}`}. Открыть тренировку`}
       accessibilityHint="Смахните в сторону, чтобы свернуть панель к краю экрана" onPress={() => onOpen(timer)}
       style={[styles.card, compact && styles.cardCompact, { backgroundColor: colors.surface, borderColor: finished ? colors.success : colors.border }]}>
-      <Text style={[styles.owner, { color: colors.textSecondary }]} numberOfLines={1}>
+      <Text style={[styles.owner, compact && styles.ownerCompact, { color: colors.textSecondary }]} numberOfLines={1}>
         <Text style={{ color: colors.textPrimary, fontFamily: fonts.semibold }}>{timer.clientName}</Text>
         {` · ${timer.exerciseName}${paused ? " · Пауза" : ""}`}
       </Text>
       {compact ? <>
         <View style={styles.lineCenter}>{timeView}</View>
-        <View style={styles.line}>{adjust(-ADJUST_STEP_SEC)}{adjust(ADJUST_STEP_SEC)}{pause}{skip}</View>
+        <View style={[styles.line, styles.lineCompact]}>{adjust(-ADJUST_STEP_SEC)}{adjust(ADJUST_STEP_SEC)}{pause}{skip}</View>
       </> : (
         <View style={styles.line}>{adjust(-ADJUST_STEP_SEC)}{timeView}{adjust(ADJUST_STEP_SEC)}{pause}{skip}</View>
       )}
@@ -94,6 +98,7 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
   const signalled = useRef(new Set<string>());
   const pendingDismiss = useRef(new Set<ReturnType<typeof setTimeout>>());
   const offset = useSharedValue(0);
+  const { width: screenWidth } = useWindowDimensions();
 
   const anyRunning = list.some((timer) => !isPaused(timer));
   const latestId = list.length === 0 ? null : [...list].sort((a, b) => b.startedAt - a.startedAt)[0]!.id;
@@ -135,17 +140,24 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
 
   // Сдвиг от жеста обнуляется до смены вида: иначе свёрнутая «таблетка» унаследует смещение и окажется за краем экрана.
   const collapse = useCallback((next: Side) => { offset.value = 0; setSide(next); }, [offset]);
-  const expand = useCallback(() => { setSide(null); offset.value = withTiming(0, { duration: 120 }); }, [offset]);
+  const expand = useCallback(() => { offset.value = 0; setSide(null); }, [offset]);
 
   // Объекты жестов создаются один раз; на JS переходим через scheduleOnRN (правила проекта).
   const swipeToCollapse = useMemo(() => Gesture.Pan().activeOffsetX([-14, 14]).failOffsetY([-14, 14])
     .onUpdate((event) => { "worklet"; offset.value = event.translationX; })
     .onEnd((event) => {
       "worklet";
-      if (event.translationX > SWIPE_DISTANCE) scheduleOnRN(collapse, "right");
-      else if (event.translationX < -SWIPE_DISTANCE) scheduleOnRN(collapse, "left");
-      offset.value = withTiming(0, { duration: 120 });
-    }), [collapse, offset]);
+      if (Math.abs(event.translationX) > SWIPE_DISTANCE) {
+        // Панель плавно уезжает за тот край, куда её смахнули, и только потом заменяется «таблеткой», выезжающей с этого края.
+        const toRight = event.translationX > 0;
+        offset.value = withTiming(toRight ? screenWidth : -screenWidth, { duration: SLIDE_OUT_MS, easing: EASE }, (finished) => {
+          "worklet";
+          if (finished) scheduleOnRN(collapse, toRight ? "right" : "left");
+        });
+      } else {
+        offset.value = withSpring(0, { damping: 22, stiffness: 260 });
+      }
+    }), [collapse, offset, screenWidth]);
   const swipeToExpand = useMemo(() => Gesture.Pan().activeOffsetX([-10, 10]).failOffsetY([-14, 14])
     .onEnd((event) => {
       "worklet";
@@ -166,7 +178,8 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
     return (
       <View key="collapsed" pointerEvents="box-none" style={[styles.edge, { bottom }, side === "left" ? styles.edgeLeft : styles.edgeRight]}>
         <GestureDetector gesture={swipeToExpand}>
-          <Animated.View entering={FadeIn.duration(120)} exiting={FadeOut.duration(100)}>
+          <Animated.View entering={(side === "left" ? SlideInLeft : SlideInRight).duration(PILL_MS).easing(EASE)}
+            exiting={(side === "left" ? SlideOutLeft : SlideOutRight).duration(SLIDE_OUT_MS).easing(EASE)}>
             <Pressable accessibilityRole="button" accessibilityLiveRegion="polite"
               accessibilityLabel={`${finished ? "Отдых окончен" : isPaused(first) ? `Отдых на паузе, осталось ${timeText}` : `Идёт отдых, осталось ${timeText}`}${more > 0 ? `, ещё таймеров: ${more}` : ""}. Развернуть панель`}
               onPress={expand}
@@ -189,7 +202,7 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
   return (
     <View key="expanded" pointerEvents="box-none" style={[styles.dock, { bottom }]}>
       <GestureDetector gesture={swipeToCollapse}>
-        <Animated.View entering={FadeIn.duration(120)} style={panelStyle}>
+        <Animated.View entering={FadeIn.duration(PILL_MS).easing(EASE)} style={panelStyle}>
           <View style={styles.row}>
             {visible.map((timer) => <TimerCard key={timer.id} timer={timer} now={now} compact={visible.length > 1} timers={timers} onOpen={onOpen} />)}
           </View>
@@ -221,20 +234,22 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", gap: 8 },
   rest: { gap: 6, marginTop: 6 },
   card: { flex: 1, borderWidth: 1, borderRadius: 14, paddingHorizontal: 8, paddingVertical: 8, gap: 6, elevation: 8 },
-  cardCompact: { paddingHorizontal: 6 },
+  cardCompact: { paddingHorizontal: 6, paddingVertical: 6, gap: 3, borderRadius: 12 },
   owner: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, textAlign: "center" },
+  ownerCompact: { fontSize: 11, lineHeight: 14 },
   line: { flexDirection: "row", alignItems: "center", gap: 6 },
   lineCenter: { alignItems: "center" },
   time: { flex: 1, minWidth: 64, textAlign: "center", fontFamily: fonts.bold, fontSize: 20, lineHeight: 26 },
-  timeCompact: { flex: 0, fontSize: 18, lineHeight: 23 },
+  timeCompact: { flex: 0, fontSize: 17, lineHeight: 21 },
   button: { flex: 1, minWidth: 44, minHeight: 44, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  buttonCompact: { minWidth: 0, borderRadius: 9 },
+  buttonCompact: { minWidth: 0, minHeight: 34, borderRadius: 8 },
+  lineCompact: { gap: 4 },
   buttonText: { fontFamily: fonts.semibold, fontSize: 13 },
   buttonTextCompact: { fontSize: 11 },
   more: { alignSelf: "flex-end", minHeight: 36, marginTop: 6, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 4, elevation: 8 },
   moreText: { fontFamily: fonts.medium, fontSize: 12 },
-  hintLeft: { position: "absolute", left: -11, top: 20 },
-  hintRight: { position: "absolute", right: -11, top: 20 },
+  hintLeft: { position: "absolute", left: -11, top: 14 },
+  hintRight: { position: "absolute", right: -11, top: 14 },
   pill: { minHeight: 44, borderWidth: 1, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 4, elevation: 8 },
   pillLeft: { borderTopRightRadius: 22, borderBottomRightRadius: 22, borderLeftWidth: 0 },
   pillRight: { borderTopLeftRadius: 22, borderBottomLeftRadius: 22, borderRightWidth: 0 },

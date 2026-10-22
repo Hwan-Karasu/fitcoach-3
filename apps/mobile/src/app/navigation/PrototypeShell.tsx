@@ -66,17 +66,21 @@ const navigationRef = createNavigationContainerRef<RootStackRoutes>();
 function openTarget(target: NotificationTarget): void {
   if (!navigationRef.isReady()) return;
   if (target.kind === "CALENDAR") { navigationRef.navigate("Root", { screen: "Calendar" } as never); return; }
+  const top = navigationRef.getRootState()?.routes.at(-1);
+  // Уже внутри экрана клиента — заменяем его, а не добавляем: цепочка переходов с таймера не превращается в историю «как в браузере»,
+  // а «назад» возвращает туда, откуда тренер пришёл к клиенту.
+  const open = top?.name === "ClientWorkspace" ? StackActions.replace : StackActions.push;
   if (target.kind === "CLIENT_TRAINING") {
-    navigationRef.navigate("ClientWorkspace", { clientId: target.clientId, screen: "Training", params: { screen: "TrainingIndex" } });
+    navigationRef.dispatch(open("ClientWorkspace", { clientId: target.clientId, screen: "Training", params: { screen: "TrainingIndex" } }));
     return;
   }
-  const top = navigationRef.getRootState()?.routes.at(-1);
   const current = navigationRef.getCurrentRoute() as { name: string; params?: { programId?: string; weekIndex?: number; workoutId?: string } } | undefined;
   const topParams = top?.params as { clientId?: string } | undefined;
   if (top?.name === "ClientWorkspace" && topParams?.clientId === target.clientId && current?.name === "TrainingWorkout"
     && current.params?.programId === target.programId && current.params.weekIndex === target.weekIndex && current.params.workoutId === target.plannedWorkoutId) return;
-  navigationRef.dispatch(StackActions.push("ClientWorkspace", { clientId: target.clientId, screen: "Training",
-    params: { screen: "TrainingWorkout", params: { programId: target.programId, weekIndex: target.weekIndex, workoutId: target.plannedWorkoutId,
+  // closeOnBack: «←» закрывает клиента и возвращает на предыдущий экран, а не ведёт по программам.
+  navigationRef.dispatch(open("ClientWorkspace", { clientId: target.clientId, screen: "Training",
+    params: { screen: "TrainingWorkout", params: { programId: target.programId, weekIndex: target.weekIndex, workoutId: target.plannedWorkoutId, closeOnBack: true,
       ...(target.exerciseKey === null ? {} : { focusExerciseId: target.exerciseKey }) } } }));
 }
 
