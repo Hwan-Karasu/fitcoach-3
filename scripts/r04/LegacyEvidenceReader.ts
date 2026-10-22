@@ -4,6 +4,7 @@ import { readLegacyArchiveSetInventoryInSnapshot } from "./LegacyArchiveSetInven
 import { readLegacyCalendarRowsInSnapshot } from "./LegacyCalendarSourceReader.ts";
 import { readLegacyClientDayRowsInSnapshot } from "./LegacyClientDaySourceReader.ts";
 import { readLegacyClientIdentityInSnapshot } from "./LegacyClientIdentitySourceReader.ts";
+import { readLegacyClientCardsInSnapshot } from "./LegacyClientCardProjection.ts";
 import { readLegacyCurrentSetRowsInSnapshot } from "./LegacyCurrentSetSourceReader.ts";
 import { readLegacyHistoryRowsInSnapshot } from "./LegacyHistorySourceReader.ts";
 import { readLegacyExerciseCatalogInSnapshot } from "./LegacyExerciseCatalogSourceReader.ts";
@@ -72,6 +73,8 @@ export function readLegacyEvidenceInSnapshot(db: DatabaseSync, accountScope: str
   const clientIdentity = ["id", "workspace_id", "name", "created_at", "updated_at",
     "archived_at", "deleted_at"].every((column) => profileColumns.has(column))
     ? readLegacyClientIdentityInSnapshot(db, accountScope) : null;
+  const clientCards = clientIdentity !== null && ["birthdate", "height", "gender", "avatar_emoji", "profile_json"]
+    .every((column) => profileColumns.has(column)) ? readLegacyClientCardsInSnapshot(db, accountScope, clientIdentity) : null;
   return { sets, programBooks, programStructure, questionnaire, history, exerciseCatalog, exerciseReferences, currentSets, workoutSnapshots, archives, archiveSetInventory, nutritionDays, nutritionEntries,
-    measurements, calendar, clientDays, profileWeights, clientIdentity } as const;
+    measurements, calendar, clientDays, profileWeights, clientIdentity, clientCards } as const;
 }

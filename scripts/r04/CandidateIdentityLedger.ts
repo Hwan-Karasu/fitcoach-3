@@ -4,6 +4,7 @@ import { projectClientIdentityDrafts, type ClientDraftIdMap } from "./ProjectCli
 import type { LegacyClientIdentityCandidate } from "./LegacyClientIdentitySourceReader.ts";
 import { clientsBaseline } from "../../apps/mobile/src/features/clients/data/ClientsBaseline.generated.ts";
 import { isExplicitTimestamp } from "./ExactScaledHundredth.ts";
+import type { ClientCardFields, LegacyClientCardCandidate } from "./LegacyClientCardProjection.ts";
 
 export interface CandidateIdentityContext {
   readonly sourceSha256: string;
@@ -18,7 +19,7 @@ function contextJson(context: CandidateIdentityContext): string {
     || !context.sourceWorkspaceId.trim() || !workspace.test(context.targetWorkspaceId)) {
     throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
   }
-  return JSON.stringify([1, context.sourceSha256, context.accountScope, context.sourceWorkspaceId, context.targetWorkspaceId]);
+  return JSON.stringify([2, context.sourceSha256, context.accountScope, context.sourceWorkspaceId, context.targetWorkspaceId]);
 }
 function validateClientKey(key: string, scope: string): void {
   let parts: unknown;
@@ -98,9 +99,11 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
     if (inspect() === "owned") return;
     db.exec(`CREATE TABLE r04_candidate_identity(id INTEGER PRIMARY KEY CHECK(id=1),context_json TEXT NOT NULL);
       CREATE TABLE r04_candidate_ids(kind TEXT NOT NULL CHECK(kind IN ('WORKSPACE','CLIENT')),
-        source_key TEXT NOT NULL,target_id TEXT NOT NULL,PRIMARY KEY(kind,source_key),UNIQUE(kind,target_id));`);
+        source_key TEXT NOT NULL,target_id TEXT NOT NULL,
+        source_payload_json TEXT CHECK(source_payload_json IS NULL OR json_valid(source_payload_json)),
+        PRIMARY KEY(kind,source_key),UNIQUE(kind,target_id));`);
     db.prepare("INSERT INTO r04_candidate_identity VALUES(1,?)").run(expectedContext);
-    db.prepare("INSERT INTO r04_candidate_ids VALUES('WORKSPACE',?,?)").run(workspaceKey, binding.targetWorkspaceId);
+    db.prepare("INSERT INTO r04_candidate_ids(kind,source_key,target_id) VALUES('WORKSPACE',?,?)").run(workspaceKey, binding.targetWorkspaceId);
     if (jobCreatedAt !== undefined) {
       for (const name of ["workspaces", "clients"]) {
         const sql = clientsBaseline[0]!.statements.find((statement) => statement.startsWith(`CREATE TABLE ${name} (`));
@@ -126,7 +129,7 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
         const target = allocate();
         if (!uuid.test(target)) throw new Error("R04_ID_LEDGER_INVALID_TARGET_ID");
         if (db.prepare("SELECT 1 FROM r04_candidate_ids WHERE kind='CLIENT' AND target_id=?").get(target)) throw new Error("R04_ID_LEDGER_TARGET_COLLISION");
-        db.prepare("INSERT INTO r04_candidate_ids VALUES('CLIENT',?,?)").run(key, target);
+        db.prepare("INSERT INTO r04_candidate_ids(kind,source_key,target_id) VALUES('CLIENT',?,?)").run(key, target);
         result.set(key, target);
       }
       return result;
@@ -141,7 +144,8 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
       clients: new Map(rows.map((row) => [String(row.source_key), String(row.target_id)])) };
   }
   function stageClientIdentities(source: readonly LegacyClientIdentityCandidate[], allocate: () => string = randomUUID,
-    checkpoint: (stage: "after-ids" | "after-client" | "before-commit") => void = () => undefined) {
+    checkpoint: (stage: "after-ids" | "after-client" | "before-commit") => void = () => undefined,
+    cards?: ReadonlyMap<string, ClientCardFields>, sourcePayloads?: ReadonlyMap<string, string>) {
     if (jobCreatedAt === undefined) throw new Error("R04_ID_LEDGER_REHEARSAL_NOT_ENABLED");
     return transaction(() => {
       if (db.prepare("PRAGMA foreign_keys").get()?.foreign_keys !== 1) throw new Error("R04_ID_LEDGER_FOREIGN_KEYS_DISABLED");
@@ -154,23 +158,34 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
       if (projection.status !== "projected-draft") throw new Error("R04_ID_LEDGER_CLIENT_PROJECTION_BLOCKED");
       let inserted = 0, unchanged = 0;
       for (const client of projection.rows) {
+        const payload = sourcePayloads?.get(client.sourceIdentityKey);
+        if (sourcePayloads !== undefined && payload === undefined) throw new Error("R04_ID_LEDGER_CLIENT_CARD_MISSING");
+        const savedPayload = db.prepare("SELECT source_payload_json FROM r04_candidate_ids WHERE kind='CLIENT' AND source_key=?")
+          .get(client.sourceIdentityKey)?.source_payload_json;
+        if (savedPayload != null && savedPayload !== payload) throw new Error("R04_ID_LEDGER_CLIENT_PARITY_MISMATCH");
         const archivedAt = client.lifecycle === "ARCHIVED" ? client.sourceArchivedAt : null;
+        const card = cards?.get(client.sourceIdentityKey);
+        if (cards !== undefined && !card) throw new Error("R04_ID_LEDGER_CLIENT_CARD_MISSING");
         const expected = [client.id, client.workspaceId, client.displayName, client.lifecycle, 1,
-          client.createdAt, client.updatedAt, archivedAt];
-        const columns = ["id", "workspace_id", "display_name", "lifecycle", "revision", "created_at", "updated_at", "archived_at"];
+          client.createdAt, client.updatedAt, archivedAt, card?.birthDate ?? null, card?.heightCmX10 ?? null,
+          card?.sex ?? null, card?.emoji ?? null];
+        const columns = ["id", "workspace_id", "display_name", "lifecycle", "revision", "created_at", "updated_at", "archived_at",
+          "birth_date", "height_cm_x10", "sex", "emoji"];
         const existing = db.prepare("SELECT * FROM clients WHERE id=?").get(client.id);
         if (existing) {
           if (columns.some((column, index) => existing[column] !== expected[index])
-            || ["contact_phone", "contact_email", "birth_date", "height_cm_x10", "emoji", "sex"].some((column) => existing[column] !== null)) {
+            || ["contact_phone", "contact_email"].some((column) => existing[column] !== null)) {
             throw new Error("R04_ID_LEDGER_CLIENT_PARITY_MISMATCH");
           }
           unchanged += 1;
         } else {
-          db.prepare(`INSERT INTO clients(${columns.join(",")}) VALUES(?,?,?,?,?,?,?,?)`).run(...expected);
+          db.prepare(`INSERT INTO clients(${columns.join(",")}) VALUES(${columns.map(() => "?").join(",")})`).run(...expected);
           inserted += 1;
         }
         const actual = db.prepare(`SELECT ${columns.join(",")} FROM clients WHERE id=?`).get(client.id);
         if (!actual || columns.some((column, index) => actual[column] !== expected[index])) throw new Error("R04_ID_LEDGER_CLIENT_PARITY_MISMATCH");
+        if (payload !== undefined && savedPayload === null) db.prepare("UPDATE r04_candidate_ids SET source_payload_json=? WHERE kind='CLIENT' AND source_key=?")
+          .run(payload, client.sourceIdentityKey);
         checkpoint("after-client");
       }
       if (db.prepare("SELECT count(*) AS count FROM clients").get()?.count !== projection.rows.length
@@ -184,5 +199,16 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
         sourceWrites: 0 as const };
     });
   }
-  return { reserveClientIds, loadClientDraftIds, stageClientIdentities };
+  function stageClientCards(source: readonly LegacyClientCardCandidate[], allocate: () => string = randomUUID,
+    checkpoint: (stage: "after-ids" | "after-client" | "before-commit") => void = () => undefined) {
+    const cards = new Map<string, ClientCardFields>();
+    const payloads = new Map<string, string>();
+    for (const row of source) {
+      if (row.issues.length > 0 || row.fields === null || cards.has(row.identity.sourceIdentityKey)) throw new Error("R04_ID_LEDGER_CLIENT_CARD_BLOCKED");
+      cards.set(row.identity.sourceIdentityKey, row.fields);
+      payloads.set(row.identity.sourceIdentityKey, JSON.stringify(row.raw));
+    }
+    return stageClientIdentities(source.map((row) => row.identity), allocate, checkpoint, cards, payloads);
+  }
+  return { reserveClientIds, loadClientDraftIds, stageClientIdentities, stageClientCards };
 }

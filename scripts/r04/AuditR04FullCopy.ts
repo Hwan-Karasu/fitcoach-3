@@ -9,6 +9,7 @@ import { summarizeCalendarSource, type CalendarSourcePreflightReport } from "./C
 import { summarizeClientDaySource, type ClientDaySourcePreflightReport } from "./ClientDaySourcePreflightReport.ts";
 import { summarizeLegacyClientIdentity,
   type ClientIdentityPreflightReport } from "./LegacyClientIdentitySourceReader.ts";
+import { summarizeLegacyClientCards } from "./LegacyClientCardProjection.ts";
 import { inventoryLegacyClientReferencesInSnapshot,
   type LegacyClientReferenceInventory } from "./LegacyClientReferenceInventory.ts";
 import { triangulateUnpairedCompletedCurrentSets,
@@ -64,6 +65,7 @@ export type R04FullReport = Readonly<{
   calendar: CalendarSourcePreflightReport | null;
   clientDays: ClientDaySourcePreflightReport | null;
   clientIdentity: ClientIdentityPreflightReport | null;
+  clientCards: ReturnType<typeof summarizeLegacyClientCards> | null;
   clientReferences: LegacyClientReferenceInventory;
   weightSources: WeightSourceReconciliationReport | null;
 }> | Readonly<{ status: "blocked"; reasons: readonly string[] }>;
@@ -157,6 +159,7 @@ export function auditR04FullCopy(
         : summarizeClientDaySource(evidence.clientDays),
       clientIdentity: evidence.clientIdentity === null ? null
         : summarizeLegacyClientIdentity(evidence.clientIdentity),
+      clientCards: evidence.clientCards === null ? null : summarizeLegacyClientCards(evidence.clientCards),
       weightSources: evidence.clientDays === null || evidence.profileWeights === null ? null
         : reconcileLegacyWeightSources(evidence.profileWeights,
           buildDailyWeightCandidates(evidence.clientDays)),

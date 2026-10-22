@@ -1,6 +1,8 @@
 # R04 — транзакционная репетиция записи client identity
 
 Статус: SYNTHETIC REHEARSAL / NOT PRODUCTION MIGRATION.
+Продолжение: [поля карточки и persisted raw source profile](R04_CLIENT_CARD_PROJECTION.md),
+отдельный метод stageClientCards; identity-only replay не подменяет card replay.
 Задача R04, зависимость R03. Product §§1, 10, 46.6: owner isolation,
 стабильные ID, сохранение архивности и повтор без частичной записи.
 

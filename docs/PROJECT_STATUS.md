@@ -1,3 +1,10 @@
+## 2026-10-22 — R04: поля карточки и исходный profile_json в rehearsal
+
+- По исходникам build120 добавлена проекция даты рождения, точного роста, пола и emoji в текущие поля 3.x. Неизвестные значения/повреждённый JSON блокируются без default-подмены; weight/тарифные счётчики не становятся чужими доменными фактами.
+- stageClientCards сохраняет карту ID, структурные поля карточки и полный raw source row одной транзакцией. Приватный profile_json не теряется в rehearsal; изменение payload при replay отклоняется. Полное смысловое сопоставление profile_json ещё не реализовано.
+- Формат candidate ledger 2; старый prototype-файл отклоняется без пересборки. Production DDL и приложение не менялись. Добавлены reader, безопасный агрегат полного аудита и файловый reopen test. [Границы](spikes/R04_CLIENT_CARD_PROJECTION.md).
+- Проверки: foundation 849/849 (+14), typecheck, lint, arch:check, source:verify, secrets:check и diff --check прошли. Рабочие данные/телефон не затрагивались. Сквозная цель полного переноса/backup/restore активна; UI и темы отложены.
+
 ## 2026-10-22 — R04: транзакционная репетиция записи client identity
 
 - В отдельной синтетической rehearsal-БД используются текущие D01-определения `workspaces`/`clients`; базовый ID ledger сохраняет прежний режим. Контекст привязан к source SHA/account/workspace, режиму и времени job.

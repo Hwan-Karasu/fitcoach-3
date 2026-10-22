@@ -86,6 +86,20 @@ test("different source hash, account, source workspace or target workspace is re
   }
 }));
 
+test("old prototype format is rejected without rebuilding or modifying its file", () => file((path) => {
+  const db = new DatabaseSync(path);
+  try {
+    db.exec(`CREATE TABLE r04_candidate_identity(id INTEGER PRIMARY KEY,context_json TEXT);
+      CREATE TABLE r04_candidate_ids(kind TEXT,source_key TEXT,target_id TEXT);`);
+    db.prepare("INSERT INTO r04_candidate_identity VALUES(1,?)").run(JSON.stringify([
+      1, context.sourceSha256, context.accountScope, context.sourceWorkspaceId, context.targetWorkspaceId,
+    ]));
+    const before = readFileSync(path);
+    assert.throws(() => prepareCandidateIdentityLedger(db, context), /CONTEXT_MISMATCH/u);
+    assert.deepEqual(readFileSync(path), before);
+  } finally { db.close(); }
+}));
+
 test("a source or runtime-looking database is never claimed as a staging ledger", () => file((path) => {
   const db = new DatabaseSync(path);
   try {
