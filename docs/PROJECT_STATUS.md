@@ -1,3 +1,10 @@
+## 2026-10-22 — R06: guarded restore и прерывание процесса на host
+
+- Добавлен application-протокол восстановления через private slots: preview закрепляет SHA обеих баз, проверка полной D01 identity/integrity, независимая SAFETY, durable PREPARED/COMMITTED и final receipts. До сохранённого commit выполняется rollback; повтор не затирает последующие пользовательские записи.
+- Host SQLite integration проверяет SIGKILL на переходах замены и самого recovery, fallback из SAFETY, ошибки I/O/нехватки места, invalid/foreign source, stale preview, double tap и неизвестные занятые slots. Файлы не перезаписываются молча; исходные ошибки/пути не выходят через публичный API.
+- Проверки: foundation 879/879 (+30), typecheck, lint, arch:check, source:verify, secrets:check, diff --check прошли. Process tests выполнены с разрешённым subprocess; sandbox изначально блокировал spawn с EPERM.
+- Это host-proof R06, не закрытый Android gate: native storage/quiescence, `.atbackup` container, full-owner roundtrip, SAF и live integration впереди. Production DDL/рабочие базы/телефон не затрагивались. [Протокол и границы](spikes/R06_GUARDED_RESTORE.md).
+
 ## 2026-10-22 — R04: поля карточки и исходный profile_json в rehearsal
 
 - По исходникам build120 добавлена проекция даты рождения, точного роста, пола и emoji в текущие поля 3.x. Неизвестные значения/повреждённый JSON блокируются без default-подмены; weight/тарифные счётчики не становятся чужими доменными фактами.
