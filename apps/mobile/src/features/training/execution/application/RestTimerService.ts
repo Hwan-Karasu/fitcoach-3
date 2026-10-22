@@ -87,10 +87,7 @@ export class RestTimerService implements RestTimersPort {
       const stored = await this.store.listTimers();
       const running = runningTimers(stored, this.now());
       for (const timer of stored) if (!running.includes(timer)) await this.store.removeTimer(timer.id);
-      // Не больше одного таймера (§44.3): если в хранилище остались старые записи, выживает последний запущенный.
-      const latest = [...running].sort((a, b) => b.startedAt - a.startedAt)[0];
-      for (const timer of running) if (timer !== latest) await this.store.removeTimer(timer.id);
-      this.publish(latest === undefined ? [] : [latest]);
+      this.publish(running);
     });
   }
 

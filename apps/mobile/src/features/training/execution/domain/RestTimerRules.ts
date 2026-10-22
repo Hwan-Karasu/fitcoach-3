@@ -37,16 +37,18 @@ export interface RestTimerStart {
 export const ADJUST_STEP_SEC = 15;
 
 /**
- * Новый запуск: на устройстве один таймер отдыха (§44.3, решение владельца 2026-10-22 вместо нескольких из §48.62) —
- * любой идущий или приостановленный таймер заменяется новым, даже другого упражнения или клиента.
+ * Новый запуск (§48.55 п. 8, §48.62): таймер того же упражнения того же участника перезапускается (отсчёт от последнего подхода),
+ * остальные — другие упражнения и другие участники — идут дальше независимо. Таймер принадлежит упражнению тренировки
+ * (`exerciseKey` — плановое упражнение) и участнику, а не экрану: смена экрана, недели или участника его не трогает.
  */
 export function startTimer(timers: readonly RestTimer[], input: RestTimerStart, id: string, now: number):
   Readonly<{ timers: readonly RestTimer[]; timer: RestTimer; replaced: readonly RestTimer[] }> {
   if (!Number.isInteger(input.durationSec) || input.durationSec <= 0) throw new Error("REST_DURATION_INVALID");
+  const same = timers.filter((item) => item.clientId === input.clientId && item.exerciseKey === input.exerciseKey);
   const timer: RestTimer = { id, clientId: input.clientId, clientName: input.clientName, exerciseKey: input.exerciseKey,
     exerciseName: input.exerciseName, startedAt: now, endAt: now + input.durationSec * 1000, signalId: null,
     programId: input.programId, weekIndex: input.weekIndex, plannedWorkoutId: input.plannedWorkoutId, pausedLeftMs: null };
-  return { timers: [timer], timer, replaced: timers };
+  return { timers: [...timers.filter((item) => !same.includes(item)), timer], timer, replaced: same };
 }
 
 export const isPaused = (timer: RestTimer): boolean => timer.pausedLeftMs !== null;
