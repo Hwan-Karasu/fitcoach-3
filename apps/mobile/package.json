@@ -45,6 +45,7 @@
     "react-native-timer-picker": "2.7.0",
     "react-native-ui-datepicker": "^3.3.0",
     "react-native-view-shot": "5.1.0",
+    "react-native-webview": "13.16.1",
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {

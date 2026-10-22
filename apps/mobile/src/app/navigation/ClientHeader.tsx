@@ -16,8 +16,10 @@ export function clientMark(client: Readonly<{ displayName: string; emoji: string
  * Шапка экранов клиента (UI-OWN-035, макет владельца): карточка с аватаром, имя клиента, подзаголовок — экран;
  * справа — к списку клиентов. Android Back и стрелка вызывают один маршрут.
  */
-export function ClientHeader({ client, subtitle, onBack, onClients, onEdit, trailingAction, search }: Readonly<{
+export function ClientHeader({ client, subtitle, title, onBack, onClients, onEdit, trailingAction, search }: Readonly<{
   client: Readonly<{ displayName: string; emoji: string | null }>; subtitle: string; onBack: () => void; onClients: () => void;
+  /** Заголовок вместо имени клиента (без аватара) — например, название программы в матрице. */
+  title?: string;
   /** Карандаш рядом со списком клиентов — редактор карточки с анкетой (только на «Главной»). */
   onEdit?: () => void;
   /** Карандаш вместо значка «К списку клиентов» — действие самого экрана (например, карточка продукта). */
@@ -46,7 +48,7 @@ export function ClientHeader({ client, subtitle, onBack, onClients, onEdit, trai
       </View>
     </ScreenHeader>;
   }
-  return <ScreenHeader title={client.displayName} subtitle={subtitle} mark={clientMark(client)} onBack={onBack}
+  return <ScreenHeader title={title ?? client.displayName} subtitle={subtitle} {...(title === undefined ? { mark: clientMark(client) } : {})} onBack={onBack}
     right={<View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
       {onEdit === undefined ? null : <AppIconButton compact label="Редактировать карточку и анкету клиента" icon={<Pencil size={20} color={colors.textPrimary} />} onPress={onEdit} />}
       {trailingAction === undefined

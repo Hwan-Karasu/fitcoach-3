@@ -219,6 +219,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
       contentStyle: { backgroundColor: palette.tokens.canvas },
       // Подзаголовок — заголовок экрана; экран может его сменить (вкладка «Шаблоны» программы).
       header: ({ options }) => <ClientHeader subtitle={options.title ?? trainingTitles[route.name]} client={{ displayName: viewerName, emoji: participant === null ? clientEmoji : null }}
+        {...(typeof options.headerTitle === "string" ? { title: options.headerTitle } : {})}
         search={route.name === "TrainingPickExercise" ? { query: pickQuery, onChangeQuery: setPickQuery, placeholder: "Поиск упражнения", accessibilityLabel: "Поиск упражнения" } : undefined}
         onClients={onOpenClients} onBack={() => {
           if (route.name === "TrainingWorkout") {
@@ -256,8 +257,9 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingMatrix">
         {/* UI-OWN-045: матрица — таблица с правкой на месте, без перехода в дневник по нажатию. */}
-        {({ route }) => <ProgramMatrixScreen clientId={viewer} programId={route.params.programId} plans={repository}
-          execution={execution} exercises={exerciseLookup} />}
+        {({ navigation, route }) => <ProgramMatrixScreen clientId={viewer} programId={route.params.programId} plans={repository}
+          execution={execution} exercises={exerciseLookup}
+          onProgramTitle={(title) => navigation.setOptions({ headerTitle: title })} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingTemplates">
         {({ navigation }) => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
