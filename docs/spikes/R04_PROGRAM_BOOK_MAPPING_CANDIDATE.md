@@ -1,6 +1,8 @@
 # R04 — legacy program/book identity (кандидат)
 
 **Статус: SOURCE GROUPING CANDIDATE / NOT TARGET-MAPPED / NO TARGET WRITES.**
+Продолжение: [source graph программ и составной ключ библиотеки](R04_PROGRAM_STRUCTURE_MAPPING.md).
+Ключ library — `(client_id,id)`; одинаковые ID разных клиентов допустимы.
 Вход — `training_programs` и, если есть, `training_library_programs` в том же
 read-only снимке, что R02/R04 coverage. Product §48.1 требует изоляцию
 фактов участников; §48.2 запрещает закреплять legacy `book_id` как

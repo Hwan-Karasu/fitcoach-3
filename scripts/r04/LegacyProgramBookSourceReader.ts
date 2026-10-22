@@ -40,15 +40,17 @@ export function readLegacyProgramBooksInSnapshot(
   const libraryColumns = new Set(db.prepare("PRAGMA table_info('training_library_programs')").all()
     .map((row) => String(row.name)));
   const libraryObserved = libraryColumns.has("id") && libraryColumns.has("client_id");
-  const libraryOwners = new Map<string, string>();
+  const libraryOwners = new Map<string, Set<string>>();
   if (libraryObserved) {
     const libraryRows = db.prepare("SELECT id, client_id FROM training_library_programs").all();
     for (const row of libraryRows) {
       const id = textOrNull(row.id);
       const clientId = textOrNull(row.client_id);
       if (id === null || clientId === null) throw new Error("R04_PROGRAM_LIBRARY_PROVENANCE_INCOMPLETE");
-      if (libraryOwners.has(id)) throw new Error("R04_DUPLICATE_PROGRAM_LIBRARY_ID");
-      libraryOwners.set(id, clientId);
+      const owners = libraryOwners.get(id) ?? new Set<string>();
+      if (owners.has(clientId)) throw new Error("R04_DUPLICATE_PROGRAM_LIBRARY_ID");
+      owners.add(clientId);
+      libraryOwners.set(id, owners);
     }
     const count = db.prepare("SELECT count(*) AS count FROM training_library_programs").get() as
       { count: number };
@@ -72,11 +74,11 @@ export function readLegacyProgramBooksInSnapshot(
       throw new Error("R04_PROGRAM_BOOK_PROVENANCE_INCOMPLETE");
     }
     const bookId = textOrNull(row.bookId);
-    const libraryClientId = bookId === null ? undefined : libraryOwners.get(bookId);
+    const libraryClients = bookId === null ? undefined : libraryOwners.get(bookId);
     const libraryIdHint = bookId === null ? "no-book"
       : !libraryObserved ? "library-not-observed"
-        : libraryClientId === undefined ? "not-found"
-          : libraryClientId === clientId ? "same-client" : "other-client";
+        : libraryClients === undefined ? "not-found"
+          : libraryClients.has(clientId) ? "same-client" : "other-client";
     return {
       accountScope, sourceProgramId, clientId,
       ownerFound: row.ownerClientId === clientId, bookId,

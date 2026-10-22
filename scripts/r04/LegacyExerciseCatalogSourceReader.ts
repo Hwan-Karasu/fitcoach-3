@@ -31,11 +31,13 @@ export interface LegacyExerciseCatalogCandidate {
   readonly targetExerciseId: null;
 }
 
-export function requireLegacyColumns(db: DatabaseSync, table: string, required: readonly string[]): void {
+export function requireLegacyColumns(
+  db: DatabaseSync, table: string, required: readonly string[], errorCode = "R04_EXERCISE_SHAPE_UNSUPPORTED",
+): void {
   // Table names are fixed by callers, not supplied by the backup or user.
   if (!/^[a-z_]+$/u.test(table)) throw new Error("R04_EXERCISE_TABLE_INVALID");
   const columns = new Set(db.prepare(`PRAGMA table_info('${table}')`).all().map((row) => String(row.name)));
-  if (required.some((column) => !columns.has(column))) throw new Error("R04_EXERCISE_SHAPE_UNSUPPORTED");
+  if (required.some((column) => !columns.has(column))) throw new Error(errorCode);
 }
 
 export function legacyObjectJson(raw: unknown): Readonly<Record<string, unknown>> | null {

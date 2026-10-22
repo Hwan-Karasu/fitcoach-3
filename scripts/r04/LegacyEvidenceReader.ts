@@ -10,6 +10,7 @@ import { readLegacyExerciseReferencesInSnapshot } from "./LegacyExerciseReferenc
 import { readLegacyMeasurementRowsInSnapshot, legacyMeasurementFields } from "./LegacyMeasurementSourceReader.ts";
 import { readLegacyProfileWeightsInSnapshot } from "./LegacyWeightSourceReconciliation.ts";
 import { readLegacyProgramBooksInSnapshot } from "./LegacyProgramBookSourceReader.ts";
+import { readLegacyProgramStructureInSnapshot } from "./LegacyProgramStructureSourceReader.ts";
 import { readLegacyNutritionDayRowsInSnapshot } from "./LegacyNutritionDaySourceReader.ts";
 import { readLegacyNutritionEntryEvidenceInSnapshot } from "./LegacyNutritionEntrySourceReader.ts";
 import { readLegacySetRowsInSnapshot } from "./LegacySetSourceReader.ts";
@@ -30,6 +31,7 @@ export function readLegacyEvidenceInSnapshot(db: DatabaseSync, accountScope: str
   if (!accountScope.trim()) throw new Error("R04_ACCOUNT_SCOPE_REQUIRED");
   const sets = readLegacySetRowsInSnapshot(db, accountScope);
   const programBooks = readLegacyProgramBooksInSnapshot(db, accountScope);
+  const programStructure = readLegacyProgramStructureInSnapshot(db, accountScope);
   const history = readLegacyHistoryRowsInSnapshot(db, accountScope);
   const hasExerciseCatalog = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='exercise_catalog'").get();
   const exerciseCatalog = hasExerciseCatalog ? readLegacyExerciseCatalogInSnapshot(db, accountScope) : null;
@@ -66,6 +68,6 @@ export function readLegacyEvidenceInSnapshot(db: DatabaseSync, accountScope: str
   const clientIdentity = ["id", "workspace_id", "name", "created_at", "updated_at",
     "archived_at", "deleted_at"].every((column) => profileColumns.has(column))
     ? readLegacyClientIdentityInSnapshot(db, accountScope) : null;
-  return { sets, programBooks, history, exerciseCatalog, exerciseReferences, currentSets, workoutSnapshots, archives, nutritionDays, nutritionEntries,
+  return { sets, programBooks, programStructure, history, exerciseCatalog, exerciseReferences, currentSets, workoutSnapshots, archives, nutritionDays, nutritionEntries,
     measurements, calendar, clientDays, profileWeights, clientIdentity } as const;
 }

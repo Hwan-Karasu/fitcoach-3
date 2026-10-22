@@ -1,3 +1,11 @@
+## 2026-10-22 — R04: иерархия программ и составной ключ библиотеки
+
+- По миграции 025 build120 исправлена проверка library identity: ключ `(client_id,id)`, одинаковый ID у разных клиентов допустим. Та же пара-дубликат отклоняется; source программы/факты клиентов не сливаются.
+- Добавлен read-only source graph `programs → weeks → workouts → exercises` с сохранением всех исходных колонок, JSON, заметок, порядка и deletion markers. Проверяются владельцы, parent links, program/week mismatch и неоднозначный порядок. Проблемные строки не теряются и не исправляются автоматически.
+- Graph включён в единый R04 snapshot и агрегат `programStructure`. Исходные IDs и payload не выводятся; целевые IDs не создаются. Валидная форма JSON не объявляется доказательством вложенных фактов.
+- Проверки: R04 128/128, foundation 760/760 (+17); typecheck, lint, arch:check, source:verify, secrets:check, diff --check. Файловая интеграция сверяет counts и неизменность источника.
+- R04 PARTIAL: mapping мезоциклов, архивных JSON, подходов/сегментов и target parity ещё открыт; полноценное восстановление и Android не проверены. Реальная база и телефон не затрагивались. [Подробности и source evidence](spikes/R04_PROGRAM_STRUCTURE_MAPPING.md).
+
 ## 2026-10-22 — R04: собственные упражнения, категории и исходные связи
 
 - По исходникам build120 подтверждены поля `exercise_catalog`, `source=user/stock`, пустое оборудование и категория `Другое`. Добавлен reader каталога с сохранением исходных колонок, aliases, lifecycle и account-scoped identity, включая soft-deleted записи.

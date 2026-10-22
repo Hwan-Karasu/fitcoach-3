@@ -953,6 +953,12 @@ test("R04 full audit combines coverage and fact evidence in one read-only file p
       assert.equal(report.coverage.countedTables, registry.sourceGateInspected.length);
       assert.equal(report.coverage.sourceScopeBound, true);
       assert.equal(report.sourceFacts.sourceRows, 6);
+      assert.equal(report.programStructure.programRows, 7);
+      assert.equal(report.programStructure.weekRows, 6);
+      assert.equal(report.programStructure.workoutRows, 2);
+      assert.equal(report.programStructure.exerciseRows, 2);
+      assert.equal(report.programStructure.physicalRows, 17);
+      assert.equal(report.programStructure.targetWrites, 0);
       assert.equal(report.sourceFacts.targetWrites, 0);
       assert.equal(report.setMetrics.sourceRows, 6);
       assert.equal(report.setMetrics.trackingProfile, "LOAD_REPS");
