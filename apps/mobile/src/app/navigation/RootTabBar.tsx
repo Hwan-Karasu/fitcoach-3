@@ -26,7 +26,7 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
   // Со строкой экрана панель остаётся той же высоты: кнопки вкладок ужимаются и освобождают под неё место.
   const compact = dock !== null && dock !== undefined;
   return (
-    <View style={[styles.dock, { backgroundColor: colors.canvas, paddingBottom: insets.bottom + 12 }]}>
+    <View style={[styles.dock, { backgroundColor: colors.canvas, paddingBottom: insets.bottom + 6 }]}>
       <View style={[styles.bar, compact ? styles.barCompact : null, shadow.floating, { backgroundColor: colors.surface }]}>
         {compact ? <View style={styles.dockRow}>{dock}</View> : null}
         <View style={[styles.tabsRow, compact ? styles.tabsRowCompact : null]}>
@@ -93,7 +93,8 @@ function CompactArrow({ label, disabled, onPress, icon }: Readonly<{ label: stri
 
 const styles = StyleSheet.create({
   arrow: { justifyContent: "center" },
-  dock: { paddingHorizontal: 12, paddingTop: 4 },
+  /** Подложка плашки (фон экрана): тонкая — поля 12 по бокам, снизу 6 над жестовой зоной, сверху вплотную к экрану. */
+  dock: { paddingHorizontal: 12 },
   bar: { borderRadius: 26, padding: 8, gap: 6 },
   /** Со строкой экрана: те же 76 dp (6 + 32 + 2 + 30 + 6), кнопки ужаты. */
   barCompact: { padding: 6, gap: 2 },
