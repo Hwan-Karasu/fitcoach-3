@@ -114,10 +114,10 @@ export function ClientHomePreview({ client, summary, onOpenAccounting, onWriteOf
       </View>
     </Pressable>
     {pack?.kind === "TRACKED" ? <View style={styles.creditActions}>
-      <View style={styles.creditAction}><AppButton compact variant="secondary" label="Списать" busy={creditBusy}
+      <View style={styles.creditAction}><AppButton compact size="small" variant="secondary" label="Списать" busy={creditBusy}
         disabled={!pack.writeOffAvailable} disabledReason="Нет доступных занятий" accessibilityLabel="Списать одно занятие"
         onPress={() => { void runCredit(onWriteOff); }} /></View>
-      <View style={styles.creditAction}><AppButton compact variant="ghost" label="Отменить" busy={creditBusy}
+      <View style={styles.creditAction}><AppButton compact size="small" variant="ghost" label="Отменить" busy={creditBusy}
         disabled={pack.returnableDebitId === null} disabledReason="Нечего возвращать" accessibilityLabel="Отменить последнее списание"
         onPress={() => { const entryId = pack.returnableDebitId; if (entryId !== null) void runCredit(() => onReturnLast(entryId)); }} /></View>
     </View> : null}
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
   tile: { flexGrow: 1, flexBasis: 100 },
   card: { borderWidth: 1, borderRadius: 14, padding: 8, gap: 4 },
   cardBody: { gap: 4 },
-  creditActions: { flexDirection: "row", gap: 8, marginTop: 4 },
+  creditActions: { flexDirection: "row", gap: 8 },
   creditAction: { flex: 1 },
   cardHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   cardTitle: { fontSize: 14, lineHeight: 19, fontFamily: fonts.bold },
