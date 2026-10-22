@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
 import { Pressable, ScrollView, StyleSheet, Text, View, type NativeScrollEvent } from "react-native";
+import { TabBarDock } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../../shared/ui/theme/style.ts";
@@ -30,15 +31,54 @@ export function ParticipantSwitcher({ clientId, activeClientId = clientId, ancho
   busy?: boolean;
   onSelect: (copy: GroupCopy) => void;
   /** Готовая группа: экран программы читает её сам и отдаёт сюда — переключатель не читает базу и не подписывается второй раз. */
-  members?: readonly GroupCopy[];
+  members?: readonly GroupCopy[] | null;
   /** Строка внутри нижней панели навигации: без собственных отступов и фона. */
   docked?: boolean;
 }>) {
+  /** `null` — состав группы ещё не прочитан: в нижней панели строка не показывается и не убирается (держится прежнее). */
+  const [read, setRead] = useState<readonly GroupCopy[] | null>(null);
+  const [version, setVersion] = useState(0);
+  const members = given === undefined ? read : given;
+  useEffect(() => {
+    if (given !== undefined) return undefined;
+    let active = true;
+    const ref = workoutId !== undefined ? { workoutId } : mesocycleId != null ? { mesocycleId } : null;
+    if (ref === null) { setRead([]); return () => { active = false; }; }
+    repository.getMesocycleGroup(clientId, programId, ref).then((copies) => { if (active) setRead(copies); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [clientId, given, mesocycleId, programId, repository, version, workoutId]);
+  // Выбор и порядок мезоциклов состав группы не меняют: без лишнего перечитывания на каждую смену мезоцикла.
+  useEffect(() => given !== undefined ? undefined : repository.subscribeCommittedChanges((change) => {
+    if (change.selectionOnly !== true && change.orderOnly !== true) setVersion((value) => value + 1);
+  }), [given, repository]);
+  // Пока загружается состав нового мезоцикла, полоса показывает прежний и не нажимается: исчезни она на это время, весь экран под
+  // ней сдвинулся бы вверх и вернулся вниз. Нажимать нельзя, чтобы не перейти к участнику прежнего мезоцикла.
+  const fresh = workoutId !== undefined || mesocycleId == null || isGroupOfMesocycle(members ?? [], mesocycleId);
+  // Строка в нижней панели занимается, только когда группа есть: иначе панель ужала бы кнопки вкладок без переключателя. Пока состав
+  // не прочитан, ничего не регистрируется (панель держит прежнее); «группы нет» — готовая запись «строки нет».
+  if (members === null) return null;
+  if (members.length < 2) return docked ? <TabBarDock>{null}</TabBarDock> : null;
+  const strip = <ParticipantStrip group={members} activeClientId={activeClientId} anchorClientId={anchorClientId} names={names}
+    busy={busy} fresh={fresh} onSelect={onSelect} docked={docked} />;
+  return docked ? <TabBarDock>{strip}</TabBarDock> : strip;
+}
+
+/**
+ * Сама строка карточек участников. Отдельный компонент: при `docked` она монтируется в нижней панели навигации, и её состояние
+ * (прокрутка, метки у краёв) живёт там, а не в экране.
+ */
+function ParticipantStrip({ group, activeClientId, anchorClientId, names, busy, fresh, onSelect, docked }: Readonly<{
+  group: readonly GroupCopy[];
+  activeClientId: string;
+  anchorClientId: string;
+  names: ReadonlyMap<string, string>;
+  busy: boolean;
+  fresh: boolean;
+  onSelect: (copy: GroupCopy) => void;
+  docked: boolean;
+}>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const [read, setRead] = useState<readonly GroupCopy[]>([]);
-  const [version, setVersion] = useState(0);
-  const members = given ?? read;
   const scroll = useRef<ScrollView>(null);
   const positions = useRef(new Map<string, number>());
   /** Сколько карточек не видно слева и справа: полоса прокручивается, и по размеру не видно, что там есть ещё участники. */
@@ -56,32 +96,13 @@ export function ParticipantSwitcher({ clientId, activeClientId = clientId, ancho
     setHidden((current) => current.left === left && current.right === right ? current : { left, right });
   };
   const onScroll = (event: { nativeEvent: NativeScrollEvent }) => measure(event.nativeEvent.contentOffset.x);
-
-  useEffect(() => {
-    if (given !== undefined) return undefined;
-    let active = true;
-    const ref = workoutId !== undefined ? { workoutId } : mesocycleId != null ? { mesocycleId } : null;
-    if (ref === null) { setRead([]); return () => { active = false; }; }
-    repository.getMesocycleGroup(clientId, programId, ref).then((copies) => { if (active) setRead(copies); }).catch(() => undefined);
-    return () => { active = false; };
-  }, [clientId, given, mesocycleId, programId, repository, version, workoutId]);
-  // Выбор и порядок мезоциклов состав группы не меняют: без лишнего перечитывания на каждую смену мезоцикла.
-  useEffect(() => given !== undefined ? undefined : repository.subscribeCommittedChanges((change) => {
-    if (change.selectionOnly !== true && change.orderOnly !== true) setVersion((value) => value + 1);
-  }), [given, repository]);
   useEffect(() => { scroll.current?.scrollTo({ x: Math.max(0, (positions.current.get(activeClientId) ?? 0) - 16), animated: true }); }, [activeClientId]);
-
-  // Пока загружается состав нового мезоцикла, полоса показывает прежний и не нажимается: исчезни она на это время, весь экран под
-  // ней сдвинулся бы вверх и вернулся вниз. Нажимать нельзя, чтобы не перейти к участнику прежнего мезоцикла.
-  const fresh = workoutId !== undefined || mesocycleId == null || isGroupOfMesocycle(members, mesocycleId);
-  const group = members;
-  if (group.length < 2) return null;
   const byClient = new Map(group.map((copy) => [copy.clientId, copy]));
   const ordered = participantOrder(group.map((copy) => copy.clientId), anchorClientId);
   total.current = ordered.length;
   return (
     <View style={docked ? null : [styles.wrap, { backgroundColor: colors.canvas }]}>
-      <View style={[styles.card, { backgroundColor: colors.border }]}>
+      <View style={[styles.card, docked ? styles.cardDocked : null, { backgroundColor: colors.border }]}>
         <ScrollView ref={scroll} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}
           keyboardShouldPersistTaps="handled" scrollEventThrottle={32} onScroll={onScroll}
           onLayout={(event) => { viewport.current = event.nativeEvent.layout.width; measure(0); }}>
@@ -92,10 +113,10 @@ export function ParticipantSwitcher({ clientId, activeClientId = clientId, ancho
               <Pressable key={id} accessibilityRole="button" accessibilityLabel={current ? `${name}, открыт` : `Переключиться на ${name}`}
                 accessibilityState={{ selected: current, disabled: current || busy || !fresh }} disabled={current || busy || !fresh}
                 onLayout={(event) => positions.current.set(id, event.nativeEvent.layout.x)} onPress={() => onSelect(byClient.get(id)!)}
-                style={({ pressed }) => [styles.chip, current ? shadow.control : null, {
+                style={({ pressed }) => [styles.chip, docked ? styles.chipDocked : null, current ? shadow.control : null, {
                   backgroundColor: current ? colors.surface : pressed ? colors.surfaceRaised : "transparent", opacity: busy && !current ? 0.6 : 1 }]}>
                 <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.85}
-                  style={[styles.chipText, current ? styles.chipCurrent : null, { color: current ? colors.accentInk : colors.textSecondary }]}>{name}</Text>
+                  style={[styles.chipText, docked ? styles.chipTextDocked : null, current ? styles.chipCurrent : null, { color: current ? colors.accentInk : colors.textSecondary }]}>{name}</Text>
               </Pressable>
             );
           })}
@@ -140,6 +161,10 @@ const styles = StyleSheet.create({
   row: { gap: CHIP_GAP },
   chip: { width: CHIP_WIDTH, height: 36, borderRadius: 11, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   chipText: { fontFamily: fonts.semibold, fontSize: 15, textAlign: "center" },
+  /** В нижней панели: строка 32 dp (рамка 2 + карточка 28 + рамка 2). */
+  cardDocked: { borderRadius: 11, padding: 2 },
+  chipDocked: { height: 28, borderRadius: 9 },
+  chipTextDocked: { fontSize: 13 },
   mark: { position: "absolute", top: 8, bottom: 8, flexDirection: "row", alignItems: "center", gap: 2, paddingHorizontal: 8, borderRadius: 12 },
   markLeft: { left: 8 },
   markRight: { right: 8 },

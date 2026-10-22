@@ -1,7 +1,9 @@
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Archive, CalendarDays, ChevronLeft, ChevronRight, Dumbbell, Ellipsis, House, Users, Utensils, type LucideIcon } from "lucide-react-native";
-import { AppIconButton, useTabBarDockContent, useWeekNavigationState } from "../../shared/ui/components/public.ts";
+import { AppIconButton, useTabBarSlots } from "../../shared/ui/components/public.ts";
+import { focusedLeafKey } from "./focusedLeafKey.ts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
@@ -19,16 +21,21 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const insets = useSafeAreaInsets();
-  const weeks = useWeekNavigationState();
-  const dock = useTabBarDockContent();
+  // Что положил в панель экран, который сейчас в фокусе (стрелки недель, строка переключателя): выбор — по состоянию навигации.
+  const { weeks, dock } = useTabBarSlots(focusedLeafKey(state));
+  // Со строкой экрана панель остаётся той же высоты: кнопки вкладок ужимаются и освобождают под неё место.
+  const compact = dock !== null && dock !== undefined;
   return (
     <View style={[styles.dock, { backgroundColor: colors.canvas, paddingBottom: insets.bottom + 12 }]}>
-      <View style={[styles.bar, shadow.floating, { backgroundColor: colors.surface }]}>
-        {dock !== null && dock !== undefined ? <View style={styles.dockRow}>{dock}</View> : null}
-        <View style={styles.tabsRow}>
-        {weeks ? <View style={styles.arrow}><AppIconButton label={`Предыдущая неделя. Сейчас неделя ${weeks.week}`}
-          disabled={weeks.previous === null || weeks.busy} onPress={() => weeks.previous?.()}
-          icon={<ChevronLeft size={24} color={colors.accentInk} />} /></View> : null}
+      <View style={[styles.bar, compact ? styles.barCompact : null, shadow.floating, { backgroundColor: colors.surface }]}>
+        {compact ? <View style={styles.dockRow}>{dock}</View> : null}
+        <View style={[styles.tabsRow, compact ? styles.tabsRowCompact : null]}>
+        {weeks ? <View style={styles.arrow}>{compact
+          ? <CompactArrow label={`Предыдущая неделя. Сейчас неделя ${weeks.week}`} disabled={weeks.previous === null || weeks.busy === true}
+            onPress={() => weeks.previous?.()} icon={<ChevronLeft size={20} color={colors.accentInk} />} />
+          : <AppIconButton label={`Предыдущая неделя. Сейчас неделя ${weeks.week}`}
+            disabled={weeks.previous === null || weeks.busy} onPress={() => weeks.previous?.()}
+            icon={<ChevronLeft size={24} color={colors.accentInk} />} />}</View> : null}
         {state.routes.map((route, index) => {
           const options = descriptors[route.key]?.options;
           const focused = state.index === index;
@@ -46,10 +53,10 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
                 const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
                 if (!focused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
               }}
-              style={[styles.tab, focused ? [styles.focused, { backgroundColor: colors.accentSoft }] : null]}
+              style={[styles.tab, compact ? styles.tabCompact : null, focused ? [styles.focused, { backgroundColor: colors.accentSoft }] : null]}
             >
               <View>
-                <Icon size={22} color={color} strokeWidth={focused ? 2.2 : 1.9} />
+                <Icon size={compact ? 17 : 22} color={color} strokeWidth={focused ? 2.2 : 1.9} />
                 {badge !== undefined ? (
                   <View style={[styles.badge, { backgroundColor: colors.accentFill }]}>
                     <Text style={[styles.badgeText, { color: colors.onAccentFill }]}>{String(badge)}</Text>
@@ -57,16 +64,30 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
                 ) : null}
               </View>
               <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
-                style={[styles.label, { color, fontFamily: focused ? fonts.bold : fonts.semibold }]}>{label}</Text>
+                style={[styles.label, compact ? styles.labelCompact : null, { color, fontFamily: focused ? fonts.bold : fonts.semibold }]}>{label}</Text>
             </Pressable>
           );
         })}
-        {weeks ? <View style={styles.arrow}><AppIconButton label={`Следующая неделя. Сейчас неделя ${weeks.week}`}
-          disabled={weeks.next === null || weeks.busy} onPress={() => weeks.next?.()}
-          icon={<ChevronRight size={24} color={colors.accentInk} />} /></View> : null}
+        {weeks ? <View style={styles.arrow}>{compact
+          ? <CompactArrow label={`Следующая неделя. Сейчас неделя ${weeks.week}`} disabled={weeks.next === null || weeks.busy === true}
+            onPress={() => weeks.next?.()} icon={<ChevronRight size={20} color={colors.accentInk} />} />
+          : <AppIconButton label={`Следующая неделя. Сейчас неделя ${weeks.week}`}
+            disabled={weeks.next === null || weeks.busy} onPress={() => weeks.next?.()}
+            icon={<ChevronRight size={24} color={colors.accentInk} />} />}</View> : null}
         </View>
       </View>
     </View>
+  );
+}
+
+/** Стрелка недели в ужатой панели: 30 dp в раскладке (иначе строка кнопок выросла бы до 44 dp), область нажатия — через hitSlop. */
+function CompactArrow({ label, disabled, onPress, icon }: Readonly<{ label: string; disabled: boolean; onPress: () => void; icon: ReactNode }>) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
+      hitSlop={{ top: 7, bottom: 7, left: 6, right: 6 }}
+      style={({ pressed }) => [styles.arrowCompact, { opacity: disabled ? 0.5 : pressed ? 0.75 : 1 }]}>
+      {icon}
+    </Pressable>
   );
 }
 
@@ -74,9 +95,15 @@ const styles = StyleSheet.create({
   arrow: { justifyContent: "center" },
   dock: { paddingHorizontal: 12, paddingTop: 4 },
   bar: { borderRadius: 26, padding: 8, gap: 6 },
+  /** Со строкой экрана: те же 76 dp (6 + 32 + 2 + 30 + 6), кнопки ужаты. */
+  barCompact: { padding: 6, gap: 2 },
   /** Строка экрана над вкладками (переключатель участников): внутри той же плашки. */
   dockRow: {},
   tabsRow: { flexDirection: "row", gap: 6, minHeight: 60 },
+  tabsRowCompact: { minHeight: 30 },
+  arrowCompact: { width: 32, height: 30, alignItems: "center", justifyContent: "center" },
+  tabCompact: { gap: 0, borderRadius: 12 },
+  labelCompact: { fontSize: 11, lineHeight: 12 },
   tab: { flex: 1, borderRadius: 18, alignItems: "center", justifyContent: "center", gap: 3 },
   focused: { flex: 1.25 },
   label: { fontSize: 12, lineHeight: 15 },

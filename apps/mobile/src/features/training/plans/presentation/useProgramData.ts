@@ -24,7 +24,8 @@ export function useProgramData({ clientId, programId, repository, requestedMesoc
   /** Чьи данные сейчас на экране (`клиент:программа`): при переключении участника до загрузки они прежние — тогда экран приглушён. */
   const [shown, setShown] = useState<Readonly<{ clientId: string; programId: string }> | null>(null);
   const [version, setVersion] = useState(0);
-  const [group, setGroup] = useState<readonly GroupCopy[]>([]);
+  /** `null` — группа выбранного мезоцикла ещё не прочитана (переключатель участников её не показывает и не прячет). */
+  const [group, setGroup] = useState<readonly GroupCopy[] | null>(null);
   const callbacks = useRef({ onRequestedWeek, onMessage });
   callbacks.current = { onRequestedWeek, onMessage };
   const cycleKey = periodized?.selectedMesocycleId ?? periodized?.mesocycles[0]?.id ?? "simple";

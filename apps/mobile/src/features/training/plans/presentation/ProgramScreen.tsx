@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import { Archive, ArrowLeftRight, Bookmark, CalendarDays, Copy, Ellipsis, LayoutGrid, Pencil, Plus, Trash2, TrendingUp } from "lucide-react-native";
-import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, InlineNotice, LoadingState, SegmentedControl, TabBarDock, TextField } from "../../../../shared/ui/components/public.ts";
+import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, InlineNotice, LoadingState, SegmentedControl, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { membersWord, PROGRAM_TITLE_MAX, programKindLabels } from "../domain/ProgramRules.ts";
@@ -86,7 +86,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   /** UI-OWN-043: полоса участников группы под шапкой; получает текущее место плана (мезоцикл и неделя). */
   /** `shown` — чьи данные сейчас на экране: состав группы читается по ним, а не по параметрам маршрута, которые меняются раньше. */
   renderParticipants?: (current: () => CounterpartRef, shown: Readonly<{ clientId: string; programId: string }> | null,
-    group: readonly GroupCopy[]) => ReactNode;
+    group: readonly GroupCopy[] | null) => ReactNode;
   /** §48.11, §50.3: удаление мезоцикла и программы у этого клиента; без порта пунктов нет. */
   planDelete?: MesocycleDeletePort & ProgramDeletePort;
 }>) {
@@ -427,7 +427,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
                 <View>
                   <Text accessibilityRole="header" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6} style={[styles.cardTitle, styles.cardTitleFixed, { color: colors.textPrimary }]}>{selected.title}</Text>
                   <Text numberOfLines={1} style={[styles.meta, { color: colors.textSecondary }]}>
-                    {`${program.title} · ${membersWord(Math.max(1, group.length))}`}
+                    {`${program.title} · ${membersWord(Math.max(1, group?.length ?? 1))}`}
                   </Text>
                 </View>
                 {/* Два ряда фиксированной высоты: у участников с разным текстом карточка не меняет размер при переключении. */}
@@ -509,7 +509,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     </Animated.ScrollView>
     {/* Переключатель участников — строка внутри нижней панели навигации (UI-OWN-043): в раскладку экрана не входит, его высоту
         забирает сама панель — верх страницы и прокрутка при смене мезоцикла не меняются. */}
-    <TabBarDock>{participants}</TabBarDock>
+    {participants}
     </View>
     </View>
   );

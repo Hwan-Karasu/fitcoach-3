@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ConfirmDialog } from "../../shared/ui/components/public.ts";
+import { ConfirmDialog, TabBarPending } from "../../shared/ui/components/public.ts";
 import { CommonActions } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { AccountingRepositoryPort } from "../../features/accounting/public.ts";
@@ -287,7 +287,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId } }] })} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingProgram">
-        {({ navigation, route }) => <ProgramScreen clientId={viewer} programId={route.params.programId}
+        {({ navigation, route }) => <><TabBarPending weeks dock /><ProgramScreen clientId={viewer} programId={route.params.programId}
           requestedWeek={route.params.weekIndex} requestedMesocycle={route.params.mesocycleId}
           repository={repository} listCandidates={listCandidates} exercises={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap} planDelete={planDelete}
           onOpenMatrix={() => navigation.navigate("TrainingMatrix", { programId: route.params.programId })}
@@ -315,7 +315,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
           onAddMesocycle={() => navigation.navigate("TrainingCreate", { kind: "PERIODIZED", programId: route.params.programId })}
           onEditWeek={(mesocycleId, weekIndex) => navigation.navigate("TrainingCreate", { kind: "PERIODIZED", programId: route.params.programId,
             mesocycleId, weekIndex })}
-          onArchived={() => navigation.popTo("TrainingIndex")} />}
+          onArchived={() => navigation.popTo("TrainingIndex")} /></>}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingBuilder">
         {({ navigation, route }) => <SimpleProgramBuilderScreen clientId={viewer} programId={route.params?.programId ?? null}
@@ -378,9 +378,9 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
               params: { programId: route.params.programId, weekIndex: route.params.weekIndex, workoutId: route.params.workoutId } } })} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingWorkout">
-        {({ route, navigation }) => <WorkoutScreen slot={{ clientId: viewer, programId: route.params.programId, weekIndex: route.params.weekIndex,
+        {({ route, navigation }) => <><TabBarPending weeks dock /><WorkoutScreen slot={{ clientId: viewer, programId: route.params.programId, weekIndex: route.params.weekIndex,
           plannedWorkoutId: route.params.workoutId }} clientName={viewerName}
-          renderParticipants={(finishInput) => <ParticipantSwitcher clientId={viewer} anchorClientId={clientId} programId={route.params.programId}
+          renderParticipants={(finishInput) => <ParticipantSwitcher docked clientId={viewer} anchorClientId={clientId} programId={route.params.programId}
             workoutId={route.params.workoutId}
             repository={repository} names={names} busy={switching} onSelect={(next) => { void switchTo(next.clientId, async () => {
               if (!await finishInput()) throw new Error("INPUT_NOT_SAVED");
@@ -416,7 +416,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
             if (workoutId === null) navigation.popTo("TrainingProgram", context);
             // Тот же экран с другими параметрами: без анимации перехода и без пересоздания дневника.
             else navigation.setParams({ ...context, workoutId });
-          }} />}
+          }} /></>}
       </TrainingStack.Screen>
     </TrainingStack.Navigator>
   );

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { TabBarDockProvider, WeekNavigationProvider } from "../../shared/ui/components/public.ts";
+import { TabBarSlotsProvider } from "../../shared/ui/components/public.ts";
 import { useFocusEffect } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -211,7 +211,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       {activityErrorFor === clientId ? <Text style={[styles.warning, { color: colors.danger }]}>
         Не удалось обновить «Недавно открытые»; карточка доступна.
       </Text> : null}
-    <WeekNavigationProvider><TabBarDockProvider><ScreenToneProvider><Tabs.Navigator
+    <TabBarSlotsProvider><ScreenToneProvider><Tabs.Navigator
       backBehavior="history"
       tabBar={(props) => <RootTabBar {...props} />}
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.canvas } }}
@@ -243,7 +243,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
           history={trainingHistory} bodyweight={clientBodyweight} exerciseLookup={exerciseLookup}
           onOpenExercise={(exerciseId) => onOpenExercise?.(exerciseId)} onOpenWorkout={onOpenWorkout} />}
       </Tabs.Screen>
-    </Tabs.Navigator></ScreenToneProvider></TabBarDockProvider></WeekNavigationProvider>
+    </Tabs.Navigator></ScreenToneProvider></TabBarSlotsProvider>
     </View>
   );
 }

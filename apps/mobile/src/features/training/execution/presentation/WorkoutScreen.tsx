@@ -126,6 +126,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const activeSheet = useRef<BottomSheetModal>(null);
   const [others, setOthers] = useState<readonly ActiveWorkoutCard[]>([]);
   const [weekNavigation, setWeekNavigation] = useState<WorkoutWeekNavigation | null>(null);
+  /** Недели программы прочитаны (`null` — их нет): до этого панель держит прежние стрелки, а не «стрелок нет». */
+  const [navigationLoaded, setNavigationLoaded] = useState(false);
   const [navigationError, setNavigationError] = useState<string | null>(null);
   const navigationAuthorized = useRef(false);
   // UI-OWN-037: правка плана из дневника — действие на месте, затем выбор области в окне.
@@ -151,7 +153,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   useEffect(() => {
     let active = true;
     const load = () => { void plans.getWorkoutWeekNavigation(slot.clientId, slot.programId, slot.plannedWorkoutId)
-      .then((value) => { if (active) setWeekNavigation(value); })
+      .then((value) => { if (active) { setWeekNavigation(value); setNavigationLoaded(true); } })
       .catch(() => { if (active) setNavigationError("Не удалось загрузить недели программы."); }); };
     load();
     const unsubscribe = plans.subscribeCommittedChanges((change) => { if (change.clientIds.includes(slot.clientId)) load(); });
@@ -211,7 +213,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const nextWeek = weekNavigation?.weeks[currentWeek + 1];
   useWeekNavigation(weekNavigation === null ? null : { week: slot.weekIndex, busy,
     previous: previousWeek ? () => { void changeWeek(previousWeek.index); } : null,
-    next: nextWeek ? () => { void changeWeek(nextWeek.index); } : null });
+    next: nextWeek ? () => { void changeWeek(nextWeek.index); } : null }, navigationLoaded);
 
   const onSave = useCallback((item: SetTarget, patch: SetPatch) =>
     saveSet(item.exercise, item.set, item.position, patch), [saveSet]);
