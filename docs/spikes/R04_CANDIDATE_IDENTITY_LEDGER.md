@@ -1,6 +1,9 @@
 # R04 — сохраняемый реестр кандидатных ID
 
 Статус: isolated staging prototype / NOT PRODUCTION MIGRATION.
+Продолжение: [атомарная репетиция записи client identity и ID maps](R04_CLIENT_IDENTITY_REHEARSAL.md).
+В ней есть отдельный opt-in режим с двумя таблицами текущей D01-схемы;
+описанный ниже базовый режим с двумя prototype-таблицами сохраняется.
 Задача R04, зависимость R03. Product §§1, 10, 46.6: source provenance,
 owner isolation, повтор без случайных новых клиентов. Производственная политика
 D04 и полный D03 этим срезом не объявляются завершёнными.

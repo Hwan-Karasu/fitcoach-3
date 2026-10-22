@@ -1,3 +1,11 @@
+## 2026-10-22 — R04: транзакционная репетиция записи client identity
+
+- В отдельной синтетической rehearsal-БД используются текущие D01-определения `workspaces`/`clients`; базовый ID ledger сохраняет прежний режим. Контекст привязан к source SHA/account/workspace, режиму и времени job.
+- Client UUID и active/archived строки записываются одной транзакцией, с read-back parity/FK/integrity. Повтор/reopen проверяет прежние строки без дубликатов, перезаписи дат или increments revision. Checkpoint exceptions откатывают новые IDs и клиентов вместе.
+- Проверены смена payload, неполный/чужой batch, некорректная проекция, CHECK clients, отключённый FK, неизвестная строка и защита уже заполненного профиля. Это identity-only synthetic rehearsal: полное приложение/профиль/restore/R05 Android ещё не готовы. [Границы](spikes/R04_CLIENT_IDENTITY_REHEARSAL.md).
+- Проверки: R04 203/203, foundation 835/835 (+10), typecheck, lint, arch:check, source:verify, secrets:check и diff --check прошли.
+- Рабочая БД и телефон не затрагивались; UI/темы не менялись.
+
 ## 2026-10-22 — R04: обхваты в модель измерений 3.x
 
 - По исходникам build120 подтверждены сантиметры для восьми полей. Добавлена target-shaped проекция с проверкой текущим `validateMeasurement`, точным `valueX10` без округления и сохранением исходных значений/review причин.

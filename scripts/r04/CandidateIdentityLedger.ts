@@ -1,6 +1,9 @@
 import type { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
-import type { ClientDraftIdMap } from "./ProjectClientIdentityDraft.ts";
+import { projectClientIdentityDrafts, type ClientDraftIdMap } from "./ProjectClientIdentityDraft.ts";
+import type { LegacyClientIdentityCandidate } from "./LegacyClientIdentitySourceReader.ts";
+import { clientsBaseline } from "../../apps/mobile/src/features/clients/data/ClientsBaseline.generated.ts";
+import { isExplicitTimestamp } from "./ExactScaledHundredth.ts";
 
 export interface CandidateIdentityContext {
   readonly sourceSha256: string;
@@ -27,15 +30,21 @@ function validateClientKey(key: string, scope: string): void {
 }
 
 /** R04 isolated synthetic staging contract. Never attach this schema to a source or runtime DB. */
-export function prepareCandidateIdentityLedger(db: DatabaseSync, context: CandidateIdentityContext) {
+export function prepareCandidateIdentityLedger(db: DatabaseSync, context: CandidateIdentityContext,
+  options?: { readonly clientIdentityRehearsal: { readonly createdAt: string } }) {
   // Snapshot caller input so a later caller mutation cannot change the ledger's binding.
-  const binding = { ...context }, expectedContext = contextJson(binding);
+  const binding = { ...context }, jobCreatedAt = options?.clientIdentityRehearsal.createdAt;
+  if (jobCreatedAt !== undefined && !isExplicitTimestamp(jobCreatedAt)) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
+  const expectedContext = jobCreatedAt === undefined ? contextJson(binding)
+    : JSON.stringify([contextJson(binding), "CLIENT_IDENTITY_REHEARSAL_V1", jobCreatedAt]);
   const workspaceKey = JSON.stringify([binding.accountScope, binding.sourceWorkspaceId]);
   function inspect(): "new" | "owned" {
     const objects = db.prepare("SELECT type,name FROM sqlite_schema WHERE substr(name,1,7)<>'sqlite_' ORDER BY name").all();
     if (objects.length === 0) return "new";
-    if (objects.length !== 2 || objects.some((row) => row.type !== "table"
-      || row.name !== "r04_candidate_identity" && row.name !== "r04_candidate_ids")) {
+    const expectedTables = jobCreatedAt === undefined ? ["r04_candidate_identity", "r04_candidate_ids"]
+      : ["r04_candidate_identity", "r04_candidate_ids", "workspaces", "clients"];
+    if (objects.length !== expectedTables.length || objects.some((row) => row.type !== "table"
+      || !expectedTables.includes(String(row.name)))) {
       throw new Error("R04_ID_LEDGER_FOREIGN_DATABASE");
     }
     const identities = db.prepare("SELECT id,context_json FROM r04_candidate_identity").all();
@@ -57,6 +66,15 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
       } else throw new Error("R04_ID_LEDGER_CORRUPT");
     }
     if (workspaceRows !== 1) throw new Error("R04_ID_LEDGER_CORRUPT");
+    if (jobCreatedAt !== undefined) {
+      const workspaces = db.prepare("SELECT id,created_at FROM workspaces").all();
+      if (workspaces.length !== 1 || workspaces[0]?.id !== binding.targetWorkspaceId || workspaces[0]?.created_at !== jobCreatedAt) {
+        throw new Error("R04_ID_LEDGER_CORRUPT");
+      }
+      for (const client of db.prepare("SELECT id,workspace_id FROM clients").all()) {
+        if (client.workspace_id !== binding.targetWorkspaceId || !targets.has(String(client.id))) throw new Error("R04_ID_LEDGER_CORRUPT");
+      }
+    }
     return "owned";
   }
   function transaction<T>(run: () => T): T {
@@ -71,6 +89,11 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
   }
   // Inspect before any mutation, then inspect again under the writer lock.
   inspect();
+  if (jobCreatedAt !== undefined) {
+    if (db.isTransaction) throw new Error("R04_ID_LEDGER_TRANSACTION_REQUIRED_EXCLUSIVE");
+    db.exec("PRAGMA foreign_keys = ON");
+    if (db.prepare("PRAGMA foreign_keys").get()?.foreign_keys !== 1) throw new Error("R04_ID_LEDGER_FOREIGN_KEYS_DISABLED");
+  }
   transaction(() => {
     if (inspect() === "owned") return;
     db.exec(`CREATE TABLE r04_candidate_identity(id INTEGER PRIMARY KEY CHECK(id=1),context_json TEXT NOT NULL);
@@ -78,15 +101,23 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
         source_key TEXT NOT NULL,target_id TEXT NOT NULL,PRIMARY KEY(kind,source_key),UNIQUE(kind,target_id));`);
     db.prepare("INSERT INTO r04_candidate_identity VALUES(1,?)").run(expectedContext);
     db.prepare("INSERT INTO r04_candidate_ids VALUES('WORKSPACE',?,?)").run(workspaceKey, binding.targetWorkspaceId);
+    if (jobCreatedAt !== undefined) {
+      for (const name of ["workspaces", "clients"]) {
+        const sql = clientsBaseline[0]!.statements.find((statement) => statement.startsWith(`CREATE TABLE ${name} (`));
+        if (!sql) throw new Error("R04_ID_LEDGER_CLIENT_SCHEMA_UNAVAILABLE");
+        db.exec(sql);
+      }
+      db.prepare("INSERT INTO workspaces(id,display_name,created_at) VALUES(?,?,?)")
+        .run(binding.targetWorkspaceId, "R04 synthetic identity rehearsal", jobCreatedAt);
+    }
   });
-  function reserveClientIds(sourceKeys: readonly string[], allocate: () => string = randomUUID): ReadonlyMap<string, string> {
+  function reserveInTransaction(sourceKeys: readonly string[], allocate: () => string): ReadonlyMap<string, string> {
     const unique = new Set<string>();
     for (const key of sourceKeys) {
       validateClientKey(key, binding.accountScope);
       if (unique.has(key)) throw new Error("R04_ID_LEDGER_DUPLICATE_SOURCE_KEY");
       unique.add(key);
     }
-    return transaction(() => {
       if (inspect() !== "owned") throw new Error("R04_ID_LEDGER_CORRUPT");
       const result = new Map<string, string>();
       for (const key of [...unique].sort()) {
@@ -99,7 +130,9 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
         result.set(key, target);
       }
       return result;
-    });
+  }
+  function reserveClientIds(sourceKeys: readonly string[], allocate: () => string = randomUUID): ReadonlyMap<string, string> {
+    return transaction(() => reserveInTransaction(sourceKeys, allocate));
   }
   function loadClientDraftIds(): ClientDraftIdMap {
     if (inspect() !== "owned") throw new Error("R04_ID_LEDGER_CORRUPT");
@@ -107,5 +140,49 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
     return { workspaces: new Map([[workspaceKey, binding.targetWorkspaceId]]),
       clients: new Map(rows.map((row) => [String(row.source_key), String(row.target_id)])) };
   }
-  return { reserveClientIds, loadClientDraftIds };
+  function stageClientIdentities(source: readonly LegacyClientIdentityCandidate[], allocate: () => string = randomUUID,
+    checkpoint: (stage: "after-ids" | "after-client" | "before-commit") => void = () => undefined) {
+    if (jobCreatedAt === undefined) throw new Error("R04_ID_LEDGER_REHEARSAL_NOT_ENABLED");
+    return transaction(() => {
+      if (db.prepare("PRAGMA foreign_keys").get()?.foreign_keys !== 1) throw new Error("R04_ID_LEDGER_FOREIGN_KEYS_DISABLED");
+      if (source.some((row) => row.accountScope !== binding.accountScope || row.sourceWorkspaceId !== binding.sourceWorkspaceId)) {
+        throw new Error("R04_ID_LEDGER_CLIENT_SCOPE_MISMATCH");
+      }
+      reserveInTransaction(source.map((row) => row.sourceIdentityKey), allocate);
+      checkpoint("after-ids");
+      const projection = projectClientIdentityDrafts(source, loadClientDraftIds(), binding.targetWorkspaceId);
+      if (projection.status !== "projected-draft") throw new Error("R04_ID_LEDGER_CLIENT_PROJECTION_BLOCKED");
+      let inserted = 0, unchanged = 0;
+      for (const client of projection.rows) {
+        const archivedAt = client.lifecycle === "ARCHIVED" ? client.sourceArchivedAt : null;
+        const expected = [client.id, client.workspaceId, client.displayName, client.lifecycle, 1,
+          client.createdAt, client.updatedAt, archivedAt];
+        const columns = ["id", "workspace_id", "display_name", "lifecycle", "revision", "created_at", "updated_at", "archived_at"];
+        const existing = db.prepare("SELECT * FROM clients WHERE id=?").get(client.id);
+        if (existing) {
+          if (columns.some((column, index) => existing[column] !== expected[index])
+            || ["contact_phone", "contact_email", "birth_date", "height_cm_x10", "emoji", "sex"].some((column) => existing[column] !== null)) {
+            throw new Error("R04_ID_LEDGER_CLIENT_PARITY_MISMATCH");
+          }
+          unchanged += 1;
+        } else {
+          db.prepare(`INSERT INTO clients(${columns.join(",")}) VALUES(?,?,?,?,?,?,?,?)`).run(...expected);
+          inserted += 1;
+        }
+        const actual = db.prepare(`SELECT ${columns.join(",")} FROM clients WHERE id=?`).get(client.id);
+        if (!actual || columns.some((column, index) => actual[column] !== expected[index])) throw new Error("R04_ID_LEDGER_CLIENT_PARITY_MISMATCH");
+        checkpoint("after-client");
+      }
+      if (db.prepare("SELECT count(*) AS count FROM clients").get()?.count !== projection.rows.length
+        || db.prepare("PRAGMA foreign_key_check").all().length > 0
+        || db.prepare("PRAGMA integrity_check").get()?.integrity_check !== "ok") {
+        throw new Error("R04_ID_LEDGER_CLIENT_PARITY_MISMATCH");
+      }
+      checkpoint("before-commit");
+      return { status: "identity-rehearsal-staged" as const, sourceRows: source.length,
+        targetRows: projection.rows.length, insertedRows: inserted, unchangedRows: unchanged,
+        sourceWrites: 0 as const };
+    });
+  }
+  return { reserveClientIds, loadClientDraftIds, stageClientIdentities };
 }
