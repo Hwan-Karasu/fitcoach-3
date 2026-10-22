@@ -1,5 +1,10 @@
 # R07 — Expo Android SQLite spike
 
+Стенд также запускает R06 native backup/guarded restore через
+`EXPO_PUBLIC_R06_BACKUP=1`; default R07 режим сохранён. Настройки,
+process-kill сценарий и фактическое устройство:
+[R06 native storage](../../docs/spikes/R06_NATIVE_STORAGE.md).
+
 Изолированный TypeScript-прототип проверки `expo-sqlite`. Android package
 `com.fitcoach.r07sqlite` не совпадает с release-приложением.
 

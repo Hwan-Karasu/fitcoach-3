@@ -3,7 +3,8 @@
   "compilerOptions": {
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["index.ts", "App.tsx", "src/**/*.ts", "scripts/**/*.ts"]
+  "include": ["index.ts", "App.tsx", "metro.config.ts", "src/**/*.ts", "scripts/**/*.ts"]
 }

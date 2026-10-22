@@ -1,3 +1,10 @@
+## 2026-10-22 — R06: native guarded restore на телефоне
+
+- Добавлены ExpoRestoreStorage и portable streaming SHA-256 (256 КиБ/yield), порт отделён от application в domain. Закреплён @noble/hashes 2.4.0. Default runtime пока не подключает restore.
+- Отдельный Expo Go стенд на Android API 36: normal native backup→guarded replace→repository reopen/replay 9/9. Настоящий force-stop после physical swap до COMMITTED; новый процесс вернул точные прежние bytes/client/SAFETY без merge, recovery 7/7. [Отчёт и границы](spikes/R06_NATIVE_STORAGE.md).
+- Устройство выявило async File.copy: добавлен await до SHA/validation SAFETY. Файлы/БД 2.0 не открывались; установленная 2.0.0 (128) не заменялась. Есть подтверждение process death, не power-loss durability и не custom APK upgrade.
+- Проверки: foundation 934/934 (+15), mobile/spike typecheck, lint, arch:check, source:verify, secrets:check, diff --check и Android production JS bundle прошли. R06/D05 остаются открытыми: native manifest/media, SAF, full-owner matrix и приложение впереди.
+
 ## 2026-10-22 — R06: фото рецептов в самостоятельной SQLite-копии
 
 - Snapshot owner forward migration 2 добавляет media descriptors/chunks только в копию. Фото читаются блоками до 256 КиБ, включаются в один `.atbackup`, проверяются по layout/байтам/SHA и точному покрытию ссылок, включая архивные рецепты.

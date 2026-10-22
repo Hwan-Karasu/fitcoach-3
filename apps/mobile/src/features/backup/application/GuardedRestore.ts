@@ -1,32 +1,5 @@
-/** R06 protocol candidate. Not connected to the live database until native gates pass. */
-export type RestoreSlot = "LIVE" | "INCOMING" | "SAFETY" | "PREVIOUS" | "REJECTED" | "ROLLBACK";
-export type RestorePhase = "PREPARED" | "COMMITTED" | "COMPLETED" | "ROLLED_BACK";
-export interface RestorePlan {
-  readonly operationId: string;
-  readonly incomingSha256: string;
-  readonly currentSha256: string;
-}
-export interface RestoreGuard extends RestorePlan {
-  readonly version: 1;
-  readonly phase: RestorePhase;
-}
-
-/** All paths are private, fixed slots, never paths taken from a backup/guard.
- * Calls must be under withClosedDatabase: drain writers AND readers, close all SQLite handles,
- * pause notifications and prevent repository acquisition until the callback finishes.
- * copy/move never overwrite; move is atomic within one filesystem. A fulfilled saveGuard must
- * survive process death as either the previous or new complete guard, never truncated JSON.
- * SAFETY is an independent, closed SQLite copy; it is never moved or deleted by this protocol.
- */
-export interface RestoreStorage {
-  withClosedDatabase<T>(task: () => Promise<T>): Promise<T>;
-  loadGuard(): Promise<unknown | null>;
-  saveGuard(guard: RestoreGuard): Promise<void>;
-  sha256(slot: RestoreSlot): Promise<string | null>;
-  validateDatabase(slot: RestoreSlot): Promise<void>;
-  copyExclusive(from: RestoreSlot, to: RestoreSlot): Promise<void>;
-  moveExclusive(from: RestoreSlot, to: RestoreSlot): Promise<void>;
-}
+import type { RestoreGuard, RestorePlan, RestoreSlot, RestoreStorage } from "../domain/RestoreStorage.ts";
+export type { RestoreGuard, RestorePlan, RestoreSlot, RestoreStorage } from "../domain/RestoreStorage.ts";
 export type RestoreOutcome = "COMMITTED" | "ROLLED_BACK" | "NO_OPERATION";
 export class RestoreProtocolError extends Error {
   readonly code: "RESTORE_INVALID_PLAN" | "RESTORE_STALE_PREVIEW" | "RESTORE_FAILED" | "RESTORE_RECOVERY_REQUIRED" | "RESTORE_BUSY";

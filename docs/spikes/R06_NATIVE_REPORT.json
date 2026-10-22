@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-22",
+  "scope": "synthetic private files in isolated Expo Go SQLite spike",
+  "androidApi": 36,
+  "expoGo": { "versionName": "57.0.9", "versionCode": 445 },
+  "legacyInstalledApp": { "versionName": "2.0.0", "versionCode": 128, "databaseAccessed": false },
+  "normal": {
+    "kind": "R06_NATIVE",
+    "checks": [
+      { "name": "streaming_sha256", "passed": true },
+      { "name": "native_backup_preserves_source", "passed": true },
+      { "name": "guarded_replace", "passed": true },
+      { "name": "independent_safety", "passed": true },
+      { "name": "previous_preserved", "passed": true },
+      { "name": "reopen_restored_client", "passed": true },
+      { "name": "snapshot_not_merge", "passed": true },
+      { "name": "receipt_replay", "passed": true },
+      { "name": "replay_preserves_later_writes", "passed": true }
+    ],
+    "allPassed": true,
+    "elapsedMs": 24665
+  },
+  "interruption": {
+    "boundary": "AFTER_FILE_SWITCH_BEFORE_COMMIT",
+    "readinessObserved": true,
+    "kill": "adb am force-stop host.exp.exponent",
+    "pidAbsentAfterKill": true,
+    "recoveryInNewProcess": true,
+    "report": {
+      "kind": "R06_NATIVE",
+      "checks": [
+        { "name": "native_kill_rolls_back", "passed": true },
+        { "name": "native_kill_original_bytes", "passed": true },
+        { "name": "native_kill_safety_intact", "passed": true },
+        { "name": "native_kill_rejected_preserved", "passed": true },
+        { "name": "native_kill_original_client", "passed": true },
+        { "name": "native_kill_no_partial_merge", "passed": true },
+        { "name": "native_kill_idempotent_recovery", "passed": true }
+      ],
+      "allPassed": true,
+      "elapsedMs": 11747
+    }
+  },
+  "notCovered": [
+    "native atbackup manifest/media and full owner roundtrip",
+    "SAF and scheduled rotation",
+    "low storage and power loss",
+    "normal app UI/scheduler/boot integration",
+    "custom APK in-place 2.0 upgrade and release signing"
+  ]
+}
