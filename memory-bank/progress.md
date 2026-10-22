@@ -1,5 +1,9 @@
 # Progress
 
+## 2026-10-22: уведомления U01/U02
+
+Сделано: см. activeContext. Техдолг: касание строки «запись» в центре пока ведёт на корень (`PrototypeShell.tsx`, onOpenEvent) — нужен переход к записи в календаре; обработчик показа уведомлений в открытом приложении задаёт сигнал таймера (`expoRestSignal.ts`) — напоминания зависят от его предзагрузки; на экране настроек нет сообщения о том, что в Expo Go доставка может отличаться; `dev_notification_*` — в production-журнал при D01; события центра попадут в бэкап (§46) на этапе 6.
+
 ## 2026-10-22: этап 4
 
 Сделано: `MeasurementRepositoryPort.applyBatch`, `ClientCardWithAnswersPort`, `AnswersForm.adopt`. Техдолг: вес в карточке клиента вне транзакции (`ClientEditorRoute.tsx`, шаг `upsertDailyMeasurement`); `useExerciseLookup` (без State) в 5 экранах аналитики при сбое показывает «Упражнение» вместо ошибки.

@@ -47,6 +47,11 @@ import { createDevBootDependencies, DEV_WORKSPACE_ID } from "../bootstrap/DevBoo
 type DevClientServices = ClientRepositoryPort & ClientRecoveryDraftPort & ClientRosterPort
   & ClientChangePort & ClientArchivePort;
 
+import { DevNotificationRepository, devNotificationClientDeletionParticipant } from "../../features/notifications/data/DevNotificationRepository.ts";
+import { expoNotificationAdapter } from "../../features/notifications/data/ExpoNotificationAdapter.ts";
+import { SCHEDULE_HORIZON_DAYS, candidateFromReminder, diffSchedule, dueReminders, outcomeDueCandidates, planReminders, reminderIdentifier, withinHorizon,
+  type NotificationCenterPort, type PlatformNotificationPort } from "../../features/notifications/public.ts";
+import { createNotificationSync, type NotificationSync } from "../../workflows/syncNotifications.ts";
 import { createClientCardWorkflow, type ClientCardWithAnswersPort } from "../../workflows/saveClientCard.ts";
 import { createCalcProfileWorkflow, type CalcProfileWithBodyPort } from "../../workflows/saveCalcProfile.ts";
 import { createWeekCopyWorkflow, type TrainingTransaction } from "../../workflows/copyTrainingWeek.ts";
@@ -83,6 +88,10 @@ export interface DevServices {
   readonly questionnaire: QuestionnaireRepositoryPort;
   /** Z01: тема, акцент и видимые поля замеров тренера. */
   readonly settings: SettingsPort;
+  /** Настройки и лента уведомлений (§§41, 54), граница с Android и сверка с календарём. */
+  readonly notifications: NotificationCenterPort;
+  readonly notificationPlatform: PlatformNotificationPort;
+  readonly notificationSync: NotificationSync;
   /** Карточка клиента и ответы анкеты — одной транзакцией. */
   readonly clientCard: ClientCardWithAnswersPort;
   readonly trainingPlans: TrainingPlansRepositoryPort;
@@ -159,7 +168,7 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
   trainingExecution: TrainingExecutionPort, restTimers: RestTimersPort, exercises: ExerciseCatalogPort,
   weekCopy: WeekCopyPort, weekSwap: WeekSwapPort, mesocycleSave: MesocycleSavePort & SimplePlanSavePort & WeekEditSavePort,
   planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort, settings: SettingsPort,
-  clientCard: ClientCardWithAnswersPort): DevServices {
+  clientCard: ClientCardWithAnswersPort, notifications: NotificationCenterPort): DevServices {
   return {
     runSqliteProbe: () => runF04Probe(() => openExpoSqliteConnection("fitcoach_f04_probe.db")),
     clients,
@@ -170,6 +179,10 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
     nutrition,
     questionnaire,
     settings,
+    notifications,
+    notificationPlatform: expoNotificationAdapter,
+    notificationSync: createNotificationSync({ planReminders, dueReminders, candidateFromReminder, outcomeDueCandidates, diffSchedule, reminderIdentifier, withinHorizon,
+      horizonDays: SCHEDULE_HORIZON_DAYS }, { calendar, participants: participantDirectory(clients), center: notifications, platform: expoNotificationAdapter }),
     clientCard,
     trainingPlans,
     trainingExecution,
@@ -199,7 +212,7 @@ export function createDevRuntime(): DevRuntime {
   // reservation each commit as one transaction across owners.
   const database = new SharedSqliteDatabase(() => openExpoSqliteConnection("fitcoach_f04_clients_dev.db"));
   const clients = new DevClientRepository(database, DEV_WORKSPACE_ID,
-    [devAccountingClientDeletionParticipant, devCalendarClientDeletionParticipant,
+    [devAccountingClientDeletionParticipant, devCalendarClientDeletionParticipant, devNotificationClientDeletionParticipant,
       devMeasurementClientDeletionParticipant, devNutritionCalcClientDeletionParticipant, devNutritionClientDeletionParticipant, devNutritionTargetsClientDeletionParticipant, devQuestionnaireClientDeletionParticipant,
       devTrainingPlansClientDeletionParticipant, devTrainingExecutionClientDeletionParticipant]);
   const calendar = new DevCalendarRepository(database, DEV_WORKSPACE_ID, devAccountingCalendarHook);
@@ -210,6 +223,7 @@ export function createDevRuntime(): DevRuntime {
     targets: new DevNutritionTargetsRepository(database, DEV_WORKSPACE_ID), calc: new DevNutritionCalcRepository(database, DEV_WORKSPACE_ID) };
   const questionnaire = new DevQuestionnaireRepository(database, DEV_WORKSPACE_ID);
   const settings = new DevSettingsRepository(database, DEV_WORKSPACE_ID);
+  const notifications = new DevNotificationRepository(database, DEV_WORKSPACE_ID);
   const trainingPlans = new DevTrainingPlansRepository(database, DEV_WORKSPACE_ID);
   const trainingExecution = new DevTrainingExecutionRepository(database, DEV_WORKSPACE_ID);
   const restTimers = new RestTimerService(trainingExecution, expoRestSignal);
@@ -247,6 +261,7 @@ export function createDevRuntime(): DevRuntime {
         await nutrition.calc.initialize();
         await questionnaire.initialize();
         await settings.initialize();
+        await notifications.initialize();
         await trainingPlans.initialize();
         await trainingExecution.initialize();
         // Таймеры отдыха — не данные: сбой восстановления не мешает запуску (§44.7).
@@ -255,6 +270,6 @@ export function createDevRuntime(): DevRuntime {
         await exercises.initialize();
       },
     )),
-    services: createDevServices(clients, calendar, accounting, measurements, { ...nutrition, calcProfile }, questionnaire, trainingPlans, trainingExecution, restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete, settings, clientCard),
+    services: createDevServices(clients, calendar, accounting, measurements, { ...nutrition, calcProfile }, questionnaire, trainingPlans, trainingExecution, restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete, settings, clientCard, notifications),
   };
 }

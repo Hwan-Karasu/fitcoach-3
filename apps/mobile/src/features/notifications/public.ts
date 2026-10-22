@@ -1,4 +1,5 @@
-export { NotificationsPreview, NotificationSettingsPreview } from "./presentation/NotificationsPreview.tsx";
+export { NotificationCenterScreen } from "./presentation/NotificationCenterScreen.tsx";
+export { NotificationSettingsScreen } from "./presentation/NotificationSettingsScreen.tsx";
 export type { CenterCandidate, CenterEvent, CenterEventKind, OutcomeAppointment } from "./domain/CenterModel.ts";
 export { candidateFromReminder, outcomeDueCandidates } from "./domain/CenterModel.ts";
 export type { NotificationCenterPort, NotificationsCommittedChange } from "./domain/NotificationCenterPort.ts";

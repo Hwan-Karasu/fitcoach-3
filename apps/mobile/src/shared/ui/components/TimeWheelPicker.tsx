@@ -167,6 +167,53 @@ export function DurationWheelPicker({ visible, title, value, min, max, clearLabe
   );
 }
 
+/**
+ * Барабаны «часы : минуты» для интервала (напоминание «за N до начала», §41.4): значение — минуты, `min`/`max` включительно;
+ * выбор вне границ подтягивается к ним, итог показан строкой «Будет».
+ */
+export function HourMinutePicker({ visible, title, value, min, max, onConfirm, onClose }: Readonly<{
+  visible: boolean; title: string; value: number; min: number; max: number; onConfirm: (minutes: number) => void; onClose: () => void;
+}>) {
+  const [hour, setHour] = useState(Math.floor(value / 60));
+  const [minute, setMinute] = useState(value % 60);
+  useEffect(() => {
+    if (!visible) return;
+    setHour(Math.floor(value / 60));
+    setMinute(value % 60);
+  }, [value, visible]);
+  const chosen = Math.max(min, Math.min(max, hour * 60 + minute));
+  const { palette } = usePrototypeTheme();
+  const colors = palette.tokens;
+  return (
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+      <Pressable accessibilityLabel="Закрыть" style={[StyleSheet.absoluteFill, styles.scrim]} onPress={onClose} />
+      <View style={styles.center} pointerEvents="box-none">
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
+          <TimerPicker hideDays hideSeconds padHoursWithZero padMinutesWithZero padWithNItems={2}
+            maximumHours={Math.floor(max / 60)} maximumMinutes={59} hourLabel="ч" minuteLabel="мин"
+            initialValue={{ hours: Math.floor(value / 60), minutes: value % 60 }}
+            onDurationChange={(duration) => { setHour(duration.hours); setMinute(duration.minutes); }}
+            pickerFeedback={() => Haptics.selectionAsync().catch(() => undefined)}
+            styles={{
+              backgroundColor: colors.surface,
+              pickerItem: { fontFamily: fonts.medium, fontSize: 18, color: colors.textMuted },
+              selectedPickerItem: { fontFamily: fonts.semibold, color: colors.textPrimary },
+              pickerLabel: { fontFamily: fonts.medium, fontSize: 13, color: colors.textSecondary },
+              pickerItemContainer: { height: 44 },
+              pickerContainer: { backgroundColor: colors.surface },
+            }} />
+          <Text style={[styles.hint, { color: colors.textSecondary }]}>{`Будет: ${Math.floor(chosen / 60)} ч ${chosen % 60} мин`}</Text>
+          <View style={styles.actions}>
+            <View style={styles.action}><AppButton compact variant="secondary" label="Отмена" onPress={onClose} /></View>
+            <View style={styles.action}><AppButton compact label="Готово" onPress={() => { onConfirm(chosen); onClose(); }} /></View>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
   hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, textAlign: "center" },
   scrim: { backgroundColor: "rgba(0,0,0,0.45)" },

@@ -1,3 +1,11 @@
+## 2026-10-22 — U01/U02: уведомления (код)
+
+- Домен: `NotificationSettings`, `ReminderPlanner`, `ReminderReconciler`, `CenterModel`; хранилище `DevNotificationRepository` (журнал `notifications_schema_migrations`); адаптер `ExpoNotificationAdapter`; workflow `syncNotifications`.
+- UI: `NotificationCenterScreen` (свайп, «Отменить», «Отметить всё», «Очистить прочитанные»), `NotificationSettingsScreen` (переключатели, барабаны часы/минуты, тихие часы, срок хранения, статус разрешения), значок на колокольчике, `HourMinutePicker` в общих компонентах.
+- Тесты: `notification-rules` (9), `notification-center-store` (9), `notification-sync` (8). `test:foundation` на Node 22.12: 659 из 669, 10 падений — R04 (среда).
+- Исходники `expo-notifications` 57.0.23: перезагрузка (`BOOT_COMPLETED`, `REBOOT`, `MY_PACKAGE_REPLACED`) восстанавливает будильники; точный будильник при праве `canScheduleExactAlarms`, иначе `setAndAllowWhileIdle` (возможна задержка).
+- Не проверено на телефоне: R10 (разрешение, доставка, перезагрузка, отказ, Expo Go).
+
 ## 2026-10-22 — Этап 4: хвосты данных
 
 - Замеры: `applyBatch` (запись/правка/удаление дня одной транзакцией, одно событие), `MeasurementsCard.save` переведён; 2 теста.

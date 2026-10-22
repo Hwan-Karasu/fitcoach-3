@@ -5,7 +5,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ClientExerciseScreen, RestTimerDock, TrainingSettingsScreen } from "../../features/training/public.ts";
-import { NotificationsPreview, NotificationSettingsPreview } from "../../features/notifications/public.ts";
+import { NotificationCenterScreen, NotificationSettingsScreen } from "../../features/notifications/public.ts";
+import { NotificationsHost } from "./NotificationsHost.tsx";
 import { SettingsPreview, ThemeCatalogPreview } from "../../features/settings/public.ts";
 import { ClientRosterSettingsScreen } from "../../features/clients/public.ts";
 import { AppointmentOutcomeDialog, CalendarUndoProvider, type GuestLinkRequest } from "../../features/calendar/public.ts";
@@ -91,9 +92,12 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
           )}
         </Stack.Screen>
         <Stack.Screen name="Notifications" options={{ title: "Центр уведомлений" }}>
-          {({ navigation }) => <NotificationsPreview onOpenSettings={() => navigation.navigate("NotificationSettings")} />}
+          {({ navigation }) => <NotificationCenterScreen center={services.notifications} onOpenSettings={() => navigation.navigate("NotificationSettings")}
+            onOpenEvent={(item) => { if (item.sourceType === "APPOINTMENT") navigation.navigate("Root"); }} />}
         </Stack.Screen>
-        <Stack.Screen name="NotificationSettings" component={NotificationSettingsPreview} options={{ title: "Настройки уведомлений" }} />
+        <Stack.Screen name="NotificationSettings" options={{ title: "Настройки уведомлений" }}>
+          {() => <NotificationSettingsScreen center={services.notifications} platform={services.notificationPlatform} onChanged={() => { services.notificationSync.run().catch(() => undefined); }} />}
+        </Stack.Screen>
         <Stack.Screen name="Settings" options={{ title: "Настройки" }}>
           {({ navigation }) => (
             <SettingsPreview
@@ -224,7 +228,9 @@ export function PrototypeShell({ services, workspaceId }: Readonly<{
         <BottomDockLayoutProvider>
         <BottomSheetModalProvider>
         <CalendarUndoProvider repository={services.calendar}>
-          <ShellNavigator services={services} clientLists={clientLists} rosterOverview={rosterOverview} />
+          <NotificationsHost center={services.notifications} calendar={services.calendar} sync={services.notificationSync}>
+            <ShellNavigator services={services} clientLists={clientLists} rosterOverview={rosterOverview} />
+          </NotificationsHost>
           <OutcomeQueueHost services={services} />
           <RestTimerDock timers={services.restTimers} />
         </CalendarUndoProvider>

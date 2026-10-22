@@ -2,6 +2,7 @@ import { useEffect, useRef, type RefObject } from "react";
 import { Animated, BackHandler, Pressable, StyleSheet, TextInput, View } from "react-native";
 import { Bell, Menu, Search, Settings, X } from "lucide-react-native";
 import { AppIconButton, BrandMark, ScreenHeader, SCREEN_HEADER_HEIGHT } from "../../shared/ui/components/public.ts";
+import { useUnreadNotifications } from "./NotificationsHost.tsx";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 import { appBrandName } from "./routeCatalog.ts";
@@ -36,6 +37,7 @@ export function RootHeader({
   onOpenSettings?: () => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
+  const unreadNotifications = useUnreadNotifications();
   const progress = useRef(new Animated.Value(collapsed ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(progress, { toValue: collapsed ? 1 : 0, duration: 160, useNativeDriver: true }).start();
@@ -88,6 +90,7 @@ export function RootHeader({
       <AppIconButton
         compact
         label="Открыть центр уведомлений"
+        badgeCount={unreadNotifications}
         icon={<Bell size={20} color={colors.textPrimary} strokeWidth={1.8} />}
         onPress={onOpenNotifications}
         testID="open-notifications"
