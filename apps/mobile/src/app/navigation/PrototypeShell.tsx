@@ -78,9 +78,9 @@ function openTarget(target: NotificationTarget): void {
   const topParams = top?.params as { clientId?: string } | undefined;
   if (top?.name === "ClientWorkspace" && topParams?.clientId === target.clientId && current?.name === "TrainingWorkout"
     && current.params?.programId === target.programId && current.params.weekIndex === target.weekIndex && current.params.workoutId === target.plannedWorkoutId) return;
-  // closeOnBack: «←» закрывает клиента и возвращает на предыдущий экран, а не ведёт по программам.
+  // Без closeOnBack: «←» из тренировки ведёт к списку тренировок (программе) этого клиента, как при обычном открытии.
   navigationRef.dispatch(open("ClientWorkspace", { clientId: target.clientId, screen: "Training",
-    params: { screen: "TrainingWorkout", params: { programId: target.programId, weekIndex: target.weekIndex, workoutId: target.plannedWorkoutId, closeOnBack: true,
+    params: { screen: "TrainingWorkout", params: { programId: target.programId, weekIndex: target.weekIndex, workoutId: target.plannedWorkoutId,
       ...(target.exerciseKey === null ? {} : { focusExerciseId: target.exerciseKey }) } } }));
 }
 
