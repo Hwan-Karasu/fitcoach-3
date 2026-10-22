@@ -152,3 +152,27 @@ test("ADR-029 NUT-001: цель дня одна для дневника и ст�
   assert.equal(noCalc.days[0]?.targetSource, "NONE");
   assert.equal(noCalc.metrics.kcal.compared, 0);
 });
+
+// «Недельные средние» статистики: недели с понедельника, только учтённые дни, неизвестное не заменяется нулём.
+function dayPoint(localDate: string, accounted: boolean, values: Partial<Record<"kcal" | "protein" | "fat" | "carbs", number>>) {
+  const valuesX10 = { kcal: null, protein: null, fat: null, carbs: null, ...Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value * 10])) };
+  return { localDate, accounted, valuesX10, verdicts: {}, targetSource: "NONE", ranges: { kcal: null, protein: null, fat: null, carbs: null } } as never;
+}
+
+test("недельные средние: понедельник — начало недели, новые недели сверху, незнание не ноль", async () => {
+  const { weeklyAverages } = await import("../apps/mobile/src/features/nutrition/domain/NutritionStats.ts");
+  const weeks = weeklyAverages([
+    dayPoint("2026-10-19", true, { kcal: 2000, protein: 100 }),   // понедельник
+    dayPoint("2026-10-21", true, { kcal: 2200 }),                 // белок неизвестен
+    dayPoint("2026-10-22", false, {}),                            // день без еды не входит
+    dayPoint("2026-10-25", true, { kcal: 1800, protein: 90 }),    // воскресенье той же недели
+    dayPoint("2026-10-26", true, { kcal: 1500 }),                 // следующий понедельник — новая неделя
+  ]);
+  assert.deepEqual(weeks.map((week) => week.monday), ["2026-10-26", "2026-10-19"]);
+  assert.equal(weeks[1]!.accountedDays, 3);
+  assert.deepEqual(weeks[1]!.metrics.kcal, { averageX10: 20000, daysWithValue: 3 });
+  assert.deepEqual(weeks[1]!.metrics.protein, { averageX10: 950, daysWithValue: 2 });
+  assert.deepEqual(weeks[1]!.metrics.fat, { averageX10: null, daysWithValue: 0 });
+  assert.equal(weeks[0]!.accountedDays, 1);
+  assert.deepEqual(weeks[0]!.metrics.kcal, { averageX10: 15000, daysWithValue: 1 });
+});

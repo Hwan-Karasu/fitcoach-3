@@ -9,7 +9,7 @@ import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
 import type { EatenEntry } from "../domain/DiaryModel.ts";
 import { corridorsForDate, homeAdjustmentFor } from "../domain/HomeMacroTargets.ts";
-import { averageTargetX10, computeNutritionStats } from "../domain/NutritionStats.ts";
+import { averageTargetX10, computeNutritionStats, weeklyAverages } from "../domain/NutritionStats.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
 import { TARGET_METRICS, type Corridors, type ResolvedTarget, type TargetException, type TargetMetric, type TargetVersion } from "../domain/TargetModel.ts";
@@ -19,6 +19,7 @@ import { useToday } from "./useToday.ts";
 import { metricLabels, shiftDate, wholeText } from "./nutritionFormat.ts";
 import { useMacroColors } from "./MacroGrid.tsx";
 import { MacroGlass } from "./MacroGlass.tsx";
+import { WeeklyAveragesCard } from "./WeeklyAveragesCard.tsx";
 
 type PeriodId = "week" | "month" | "quarter" | "all" | "range";
 const periods: readonly Readonly<{ id: PeriodId; label: string; days: number }>[] = [
@@ -108,16 +109,7 @@ export function NutritionStatsScreen({ clientId, body, diary, targets, measureme
     return dailyPoints(data.body.measurements, data.body.primaries, trend === "weight" ? "WEIGHT" : "BODY_FAT").filter((row) => row.localDate >= from && row.localDate <= to)
       .flatMap((row) => row.kind !== "VALUE" ? [] : [{ key: row.localDate, label: shortDate(row.localDate), caption: row.localDate, value: row.measurement.valueX10 / 10 }]);
   }, [data, trend, from, to]);
-  const weekGroups = useMemo(() => {
-    const weeks = new Map<string, NonNullable<typeof stats>["days"][number][]>();
-    for (const day of stats?.days ?? []) {
-      if (!day.accounted) continue;
-      const weekday = new Date(`${day.localDate}T00:00:00Z`).getUTCDay();
-      const monday = shiftDate(day.localDate, -((weekday + 6) % 7));
-      weeks.set(monday, [...(weeks.get(monday) ?? []), day]);
-    }
-    return [...weeks.entries()].reverse();
-  }, [stats]);
+  const weekGroups = useMemo(() => weeklyAverages(stats?.days ?? []), [stats]);
   const selected = selectedDate ?? graph.at(-1)?.key ?? to;
   const selectedDay = stats?.days.find((day) => day.localDate === selected);
   const rangeDays = draftRange.from === null || draftRange.to === null ? 0 : Math.round((Date.parse(draftRange.to) - Date.parse(draftRange.from)) / 86400000) + 1;
@@ -181,13 +173,7 @@ export function NutritionStatsScreen({ clientId, body, diary, targets, measureme
         <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Шаги: ${data?.steps.find((row) => row.localDate === selected)?.steps ?? "—"} · Отметка тренировки: ${data?.workouts.find((row) => row.localDate === selected)?.done === true ? "Да" : data?.workouts.find((row) => row.localDate === selected)?.done === false ? "Нет" : "—"}`}</Text>
         <AppButton label="Открыть день в дневнике" compact onPress={() => onOpenDay(selected)} />
       </View>
-      {weekGroups.length > 0 ? <View style={[styles.card, { backgroundColor: colors.surface }]}><Text style={[styles.heading, { color: colors.textPrimary }]}>Недельные средние</Text>
-        {weekGroups.map(([monday, points]) => <View key={monday} style={styles.week}><Text style={[styles.meta, { color: colors.textPrimary }]}>{`${shortDate(monday)} — ${shortDate(shiftDate(monday, 6))} · ${points.length} дн. с едой`}</Text>
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>{TARGET_METRICS.map((metric) => {
-            const values = points.flatMap((day) => day.valuesX10[metric] === null ? [] : [day.valuesX10[metric]!]);
-            return `${metricLabels[metric]} ${values.length === 0 ? "—" : wholeText(Math.round(values.reduce((sum, value) => sum + value, 0) / values.length))} (${values.length} дн.)`;
-          }).join(" · ")}</Text></View>)}
-      </View> : null}
+      {weekGroups.length > 0 ? <WeeklyAveragesCard weeks={weekGroups} /> : null}
       </>}
     </ScrollView>
   );
@@ -206,7 +192,6 @@ const styles = StyleSheet.create({
   periodText: { textAlign: "center" },
   metricTitle: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
   metricValue: { fontFamily: fonts.bold, fontSize: 22, lineHeight: 28 },
-  week: { gap: 4, paddingVertical: 6 },
   backdrop: { flex: 1, padding: 16, justifyContent: "center", backgroundColor: "rgba(0,0,0,0.45)" },
   dialog: { padding: 12, borderRadius: 20, gap: 8 },
 });

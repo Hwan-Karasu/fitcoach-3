@@ -119,3 +119,34 @@ export function averageTargetX10(days: readonly NutritionDayPoint[], metric: Tar
   const middles = days.flatMap((day) => day.accounted && day.ranges[metric] !== null ? [(day.ranges[metric]!.minX10 + day.ranges[metric]!.maxX10) / 2] : []);
   return middles.length === 0 ? null : Math.round(middles.reduce((sum, value) => sum + value, 0) / middles.length);
 }
+
+export interface WeekAverages {
+  /** Понедельник недели (`YYYY-MM-DD`). */
+  readonly monday: string;
+  /** Учтённых дней недели (с пищевой записью). */
+  readonly accountedDays: number;
+  /** Среднее по учтённым дням с известным значением (десятые доли), `null` — таких дней нет; знаменатель — `daysWithValue`. */
+  readonly metrics: Readonly<Record<TargetMetric, Readonly<{ averageX10: number | null; daysWithValue: number }>>>;
+}
+
+/** Недельные средние по дням периода: недели с понедельника, новые сверху; только учтённые дни, неизвестное значение не заменяется нулём. */
+export function weeklyAverages(days: readonly NutritionDayPoint[]): readonly WeekAverages[] {
+  const mondayOf = (localDate: string) => {
+    const time = Date.parse(`${localDate}T00:00:00Z`);
+    return new Date(time - ((new Date(time).getUTCDay() + 6) % 7) * 86400000).toISOString().slice(0, 10);
+  };
+  const weeks = new Map<string, NutritionDayPoint[]>();
+  for (const day of days) {
+    if (!day.accounted) continue;
+    const monday = mondayOf(day.localDate);
+    weeks.set(monday, [...(weeks.get(monday) ?? []), day]);
+  }
+  return [...weeks.entries()].reverse().map(([monday, points]) => ({
+    monday,
+    accountedDays: points.length,
+    metrics: Object.fromEntries(TARGET_METRICS.map((metric) => {
+      const values = points.flatMap((day) => day.valuesX10[metric] === null ? [] : [day.valuesX10[metric]!]);
+      return [metric, { averageX10: values.length === 0 ? null : Math.round(values.reduce((sum, value) => sum + value, 0) / values.length), daysWithValue: values.length }];
+    })) as WeekAverages["metrics"],
+  }));
+}
