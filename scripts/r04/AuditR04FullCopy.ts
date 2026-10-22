@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { inspectLegacyBackup } from "../r02/LegacyBackupInspector.ts";
 import { summarizeArchiveSource, type ArchiveSourcePreflightReport } from "./ArchiveSourcePreflightReport.ts";
+import { summarizeLegacyArchiveSets } from "./LegacyArchiveSetInventory.ts";
 import { summarizeCalendarSource, type CalendarSourcePreflightReport } from "./CalendarSourcePreflightReport.ts";
 import { summarizeClientDaySource, type ClientDaySourcePreflightReport } from "./ClientDaySourcePreflightReport.ts";
 import { summarizeLegacyClientIdentity,
@@ -49,6 +50,7 @@ export type R04FullReport = Readonly<{
   currentSets: CurrentSetLinkPreflightReport;
   currentHistoryTriangulation: CurrentHistoryTriangulationReport | null;
   archives: ArchiveSourcePreflightReport | null;
+  archiveSets: ReturnType<typeof summarizeLegacyArchiveSets> | null;
   nutritionDays: NutritionSourcePreflightReport | null;
   nutritionEntryIdentity: NutritionEntryIdentityReport | null;
   measurements: MeasurementSourcePreflightReport | null;
@@ -129,6 +131,8 @@ export function auditR04FullCopy(
       currentSets,
       currentHistoryTriangulation,
       archives: evidence.archives === null ? null : summarizeArchiveSource(evidence.archives),
+      archiveSets: evidence.archiveSetInventory === null ? null
+        : summarizeLegacyArchiveSets(evidence.archiveSetInventory, evidence.sets),
       nutritionDays: evidence.nutritionDays === null ? null
         : summarizeNutritionSource(evidence.nutritionDays),
       nutritionEntryIdentity: evidence.nutritionEntries === null ? null

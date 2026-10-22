@@ -1,5 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { readLegacyArchiveRowsInSnapshot } from "./LegacyArchiveSourceReader.ts";
+import { readLegacyArchiveSetInventoryInSnapshot } from "./LegacyArchiveSetInventory.ts";
 import { readLegacyCalendarRowsInSnapshot } from "./LegacyCalendarSourceReader.ts";
 import { readLegacyClientDayRowsInSnapshot } from "./LegacyClientDaySourceReader.ts";
 import { readLegacyClientIdentityInSnapshot } from "./LegacyClientIdentitySourceReader.ts";
@@ -43,6 +44,7 @@ export function readLegacyEvidenceInSnapshot(db: DatabaseSync, accountScope: str
   const workoutSnapshots = snapshotTable ? readLegacyWorkoutSnapshotRowsInSnapshot(db, accountScope) : null;
   const archiveTable = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='training_archive_entries'").get();
   const archives = archiveTable ? readLegacyArchiveRowsInSnapshot(db, accountScope) : null;
+  const archiveSetInventory = archiveTable ? readLegacyArchiveSetInventoryInSnapshot(db, accountScope) : null;
   const nutritionColumns = new Set(db.prepare("PRAGMA table_info('nutrition_days')").all()
     .map((row) => String(row.name)));
   const nutritionDays = nutritionColumns.has("meals_json")
@@ -68,6 +70,6 @@ export function readLegacyEvidenceInSnapshot(db: DatabaseSync, accountScope: str
   const clientIdentity = ["id", "workspace_id", "name", "created_at", "updated_at",
     "archived_at", "deleted_at"].every((column) => profileColumns.has(column))
     ? readLegacyClientIdentityInSnapshot(db, accountScope) : null;
-  return { sets, programBooks, programStructure, history, exerciseCatalog, exerciseReferences, currentSets, workoutSnapshots, archives, nutritionDays, nutritionEntries,
+  return { sets, programBooks, programStructure, history, exerciseCatalog, exerciseReferences, currentSets, workoutSnapshots, archives, archiveSetInventory, nutritionDays, nutritionEntries,
     measurements, calendar, clientDays, profileWeights, clientIdentity } as const;
 }

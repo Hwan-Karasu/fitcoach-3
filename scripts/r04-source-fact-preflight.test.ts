@@ -969,6 +969,9 @@ test("R04 full audit combines coverage and fact evidence in one read-only file p
       assert.deepEqual(report.currentSets, { status: "not-observed-in-source", targetWrites: 0 });
       assert.equal(report.currentHistoryTriangulation, null);
       assert.equal(report.archives?.physicalArchiveRows, 1);
+      assert.equal(report.archiveSets?.archiveRows, 1);
+      assert.equal(report.archiveSets?.physicalSetOccurrences, 0);
+      assert.equal(report.archiveSets?.targetFactsCreated, 0);
       assert.equal(report.archives?.targetWrites, 0);
     }
     assert.equal(hash(), before);
@@ -982,6 +985,32 @@ test("R04 full audit blocks an unregistered table before classifying facts", () 
       sourceGateInspected: ["athlete_backup_manifest"], mappingPending: [],
     });
     assert.deepEqual(report, { status: "blocked", reasons: ["R04_SOURCE_COVERAGE_SHAPE_BLOCKED"] });
+  });
+});
+
+test("R04 full audit inventories root/cycle archive sets and session references without changing bytes", () => {
+  withSyntheticCopy((db) => {
+    const workouts = [{ exercises: [{ sets: [{
+      sourceFactId: "synthetic-fact-a", reps: "10", weight: "20", completedAt: null, data: {},
+    }] }] }];
+    db.prepare("UPDATE training_archive_entries SET data_json=?").run(JSON.stringify({
+      programId: "synthetic-program-a", weeks: [], workouts,
+      cycles: [{ snapshot: { weeks: [], workouts } }],
+    }));
+  }, (path) => {
+    const before = readFileSync(path);
+    const report = auditR04FullCopy(path, {
+      sourceGateInspected: ["athlete_backup_manifest", "account_database_binding", "schema_migrations", ...Object.keys(fixtureRows)],
+      mappingPending: [],
+    });
+    assert.equal(report.status, "requires-semantic-review");
+    if (report.status !== "requires-semantic-review") return;
+    assert.equal(report.archiveSets?.physicalSetOccurrences, 2);
+    assert.equal(report.archiveSets?.rootCycleOverlapGroups, 1);
+    assert.equal(report.archiveSets?.sameClientSessionLinkedOccurrences, 2);
+    assert.equal(report.archiveSets?.targetFactsCreated, 0);
+    assert.doesNotMatch(JSON.stringify(report), /synthetic-fact-a|sourceFactId|completedAt/u);
+    assert.deepEqual(readFileSync(path), before);
   });
 });
 
