@@ -25,10 +25,10 @@ export function NotificationsHost({ center, calendar, sync, children }: Readonly
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const run = () => { sync.run().catch(() => undefined); };
+    const run = (scope: "FULL" | "TICK" = "FULL") => { sync.run(undefined, scope).catch(() => undefined); };
     const schedule = () => {
       if (timer !== null) clearTimeout(timer);
-      timer = setTimeout(run, 400);
+      timer = setTimeout(() => run(), 400);
     };
     const refreshBadge = () => { center.unreadCount().then((count) => { if (active) setUnread(count); }, () => undefined); };
     run();
@@ -39,7 +39,7 @@ export function NotificationsHost({ center, calendar, sync, children }: Readonly
       if (change.scope === "SETTINGS") schedule();
     });
     const appState = AppState.addEventListener("change", (state) => { if (state === "active") { run(); refreshBadge(); } });
-    const interval = setInterval(run, RESYNC_MS);
+    const interval = setInterval(() => run("TICK"), RESYNC_MS);
     return () => {
       active = false;
       if (timer !== null) clearTimeout(timer);

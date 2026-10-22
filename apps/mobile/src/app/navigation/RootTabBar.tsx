@@ -2,7 +2,7 @@ import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Archive, CalendarDays, ChevronLeft, ChevronRight, Dumbbell, Ellipsis, House, Users, Utensils, type LucideIcon } from "lucide-react-native";
-import { AppIconButton, useTabBarSlots } from "../../shared/ui/components/public.ts";
+import { AppIconButton, useBottomBarLayout, useTabBarSlots } from "../../shared/ui/components/public.ts";
 import { focusedLeafKey } from "./focusedLeafKey.ts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -21,12 +21,13 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const insets = useSafeAreaInsets();
+  const onBarLayout = useBottomBarLayout();
   // Что положил в панель экран, который сейчас в фокусе (стрелки недель, строка переключателя): выбор — по состоянию навигации.
   const { weeks, dock } = useTabBarSlots(focusedLeafKey(state));
   // Со строкой экрана панель остаётся той же высоты: кнопки вкладок ужимаются и освобождают под неё место.
   const compact = dock !== null && dock !== undefined;
   return (
-    <View style={[styles.dock, { backgroundColor: colors.canvas, paddingBottom: insets.bottom + 6 }]}>
+    <View onLayout={onBarLayout} style={[styles.dock, { backgroundColor: colors.canvas, paddingBottom: insets.bottom + 6 }]}>
       <View style={[styles.bar, compact ? styles.barCompact : null, shadow.floating, { backgroundColor: colors.surface }]}>
         {compact ? <View style={styles.dockRow}>{dock}</View> : null}
         <View style={[styles.tabsRow, compact ? styles.tabsRowCompact : null]}>

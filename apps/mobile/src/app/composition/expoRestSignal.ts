@@ -36,8 +36,9 @@ let api: ReturnType<typeof loadApi> | null = null;
 let asked = false;
 
 const available = () => {
-  api ??= loadApi();
-  return api.catch(() => null);
+  const pending = (api ??= loadApi());
+  // Разовый сбой загрузки не отключает сигнал до перезапуска: кэш сбрасывается.
+  return pending.catch(() => { if (api === pending) api = null; return null; });
 };
 
 /** Разрешение спрашивается один раз за запуск; отказ не блокирует таймер (§44.14). */

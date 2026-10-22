@@ -185,3 +185,16 @@ test("U01 в уведомление кладётся цель для перех�
     ].sort());
   } finally { await w.close(); }
 });
+
+test("AUD-06 давно неразобранная запись находится полной сверкой за срок хранения, минутная сверка её не ищет; старше срока — нет", async () => {
+  const w = await world("denied");
+  try {
+    const old = await w.book(null, 10 * 60, "2026-09-12");
+    await w.book(null, 10 * 60, "2026-05-01");
+    assert.equal((await w.sync.run(NOW, "TICK")).feedAdded, 0, "минутная сверка смотрит только вчера и вперёд");
+    assert.equal((await w.sync.run(NOW, "FULL")).feedAdded, 1, "запись 40 дней назад в пределах 90 дней найдена, запись от мая — нет");
+    const [row] = await w.center.listFeed();
+    assert.equal(row?.sourceId, old.id);
+    assert.equal((await w.sync.run(NOW, "FULL")).feedAdded, 0);
+  } finally { await w.close(); }
+});

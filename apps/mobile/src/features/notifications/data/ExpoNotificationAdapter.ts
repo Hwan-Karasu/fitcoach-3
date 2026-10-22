@@ -23,7 +23,12 @@ async function loadApi() {
 }
 
 let api: ReturnType<typeof loadApi> | null = null;
-const available = () => (api ??= loadApi());
+const available = () => {
+  const pending = (api ??= loadApi());
+  // Разовый сбой загрузки не должен отключать напоминания до перезапуска: кэш сбрасывается, следующий вызов попробует снова.
+  pending.catch(() => { if (api === pending) api = null; });
+  return pending;
+};
 
 const toPermission = (state: { granted: boolean; canAskAgain: boolean }): OsPermission =>
   state.granted ? "granted" : state.canAskAgain ? "undetermined" : "denied";

@@ -10,12 +10,12 @@ import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemePro
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { ADJUST_STEP_SEC, isFinished, isPaused, remainingSec, type RestTimer } from "../domain/RestTimerRules.ts";
 import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
-import { useEditorDockHeight } from "../../../../shared/ui/components/public.ts";
+import { useBottomBarHeight, useEditorDockHeight } from "../../../../shared/ui/components/public.ts";
 
 /** Сколько секунд закончившийся таймер остаётся на панели с надписью «Готово». */
 const FINISHED_VISIBLE_MS = 4000;
-/** Высота нижней навигации над краем экрана: панель таймеров — над ней. */
-const TAB_BAR_HEIGHT = 80;
+/** Отступ от края экрана, когда нижней панели вкладок на экране нет. */
+const EDGE_GAP = 8;
 /** Сдвиг пальца, после которого свайп сворачивает панель к краю. */
 const SWIPE_DISTANCE = 48;
 /** Рядом помещаются два таймера; остальные — под кнопкой «Ещё N» (§48.62). */
@@ -95,6 +95,7 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
   const colors = palette.tokens;
   const insets = useSafeAreaInsets();
   const editorHeight = useEditorDockHeight();
+  const barHeight = useBottomBarHeight();
   const subscribe = useCallback((listener: () => void) => timers.subscribe(listener), [timers]);
   const list = useSyncExternalStore(subscribe, () => timers.list());
   const [now, setNow] = useState(() => Date.now());
@@ -173,7 +174,8 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
   if (list.length === 0) return null;
   const ordered = stableOrder(list);
   const nearest = nearestRunning(list, now);
-  const bottom = insets.bottom + TAB_BAR_HEIGHT + editorHeight;
+  // Над фактической нижней панелью вкладок; без неё — у нижнего края с учётом системной полосы.
+  const bottom = (barHeight > 0 ? barHeight : insets.bottom + EDGE_GAP) + editorHeight;
 
   if (side !== null) {
     const first = nearest ?? ordered[0]!;

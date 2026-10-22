@@ -29,8 +29,10 @@ export interface NotificationSync {
    * Календарь остаётся единственным источником расписания (§41.2): из него и настроек строится полный набор напоминаний,
    * ОС приводится к нему (отмена лишних, добавление недостающих), а наступившие события попадают в ленту центра.
    * Идемпотентна: вызывается при запуске, возврате в приложение, после коммита календаря и смены настроек.
+   * `scope`: `FULL` (по умолчанию) просматривает записи за весь срок хранения ленты — находит и давно неразобранные; `TICK` — лёгкая минутная
+   * сверка за вчера и вперёд, пока приложение открыто.
    */
-  run(now?: Date): Promise<NotificationSyncResult>;
+  run(now?: Date, scope?: "FULL" | "TICK"): Promise<NotificationSyncResult>;
 }
 
 const pad = (value: number) => String(value).padStart(2, "0");
@@ -40,10 +42,11 @@ export function createNotificationSync(rules: NotificationRules, ports: Readonly
   participants: Pick<CalendarParticipantDirectoryPort, "listParticipants">; center: Pick<NotificationCenterPort, "getSettings" | "materialize">;
   platform: PlatformNotificationPort }>): NotificationSync {
   let chain: Promise<unknown> = Promise.resolve();
-  async function once(now: Date): Promise<NotificationSyncResult> {
+  async function once(now: Date, scope: "FULL" | "TICK"): Promise<NotificationSyncResult> {
     const settings = await ports.center.getSettings();
-    // Окно: со вчерашнего дня (записи, ждущие исхода) на горизонт планирования вперёд.
-    const from = dateText(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+    // Окно: назад — на срок хранения ленты (записи, давно ждущие исхода) либо только на вчера при минутной сверке; вперёд — горизонт планирования.
+    const back = scope === "FULL" ? settings.retentionDays : 1;
+    const from = dateText(new Date(now.getFullYear(), now.getMonth(), now.getDate() - back));
     const to = dateText(new Date(now.getFullYear(), now.getMonth(), now.getDate() + rules.horizonDays));
     const [range, people] = await Promise.all([ports.calendar.listRange(from, to), ports.participants.listParticipants()]);
     const names = new Map(people.map((person) => [person.id, person.displayName]));
@@ -84,8 +87,8 @@ export function createNotificationSync(rules: NotificationRules, ports: Readonly
   }
   return {
     // Запуски идут по очереди: два одновременных вызова (запуск + коммит календаря) не планируют одно и то же дважды.
-    run: (now = new Date()) => {
-      const next = chain.then(() => once(now), () => once(now));
+    run: (now = new Date(), scope = "FULL") => {
+      const next = chain.then(() => once(now, scope), () => once(now, scope));
       chain = next.catch(() => undefined);
       return next;
     },

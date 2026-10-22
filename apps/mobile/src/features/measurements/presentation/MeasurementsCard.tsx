@@ -97,10 +97,12 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal, compact 
   const [configuring, setConfiguring] = useState(false);
   const stripRef = useRef<ScrollView>(null);
   const preference = useGroupVisibilityPreference();
+  const touchedGroups = useRef(false);
   useEffect(() => {
     if (preference === null) return;
     let active = true;
-    void preference.load().then((ids) => { if (active && ids !== null) setVisible(new Set(ids)); }, () => undefined);
+    // Если тренер уже переключил группы, пока набор загружался, загруженное его выбор не затирает.
+    void preference.load().then((ids) => { if (active && ids !== null && !touchedGroups.current) setVisible(new Set(ids)); }, () => undefined);
     return () => { active = false; };
   }, [preference]);
 
@@ -188,6 +190,7 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal, compact 
     if (next !== undefined) setSelected(next);
   };
   const toggleGroup = (id: string) => {
+    touchedGroups.current = true;
     const next = new Set(visible);
     if (next.has(id)) next.delete(id); else next.add(id);
     setVisible(next);

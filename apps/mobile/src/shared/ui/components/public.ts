@@ -7,7 +7,7 @@ export { SegmentedControl } from "./SegmentedControl.tsx";
 export { InlineNotice, type NoticeKind } from "./InlineNotice.tsx";
 export { ConfirmDialog } from "./ConfirmDialog.tsx";
 export { StickyEditorFooter } from "./StickyEditorFooter.tsx";
-export { BottomDockLayoutProvider, useEditorDockHeight } from "./BottomDockLayout.tsx";
+export { BottomDockLayoutProvider, useBottomBarHeight, useBottomBarLayout, useEditorDockHeight } from "./BottomDockLayout.tsx";
 export { TrainingEditorLayout } from "./TrainingEditorLayout.tsx";
 export { WeekCards, type WeekCardItem } from "./WeekCards.tsx";
 export { TabBarDock, TabBarPending, TabBarSlotsProvider, useTabBarSlots, useWeekNavigation, type WeekNavigationState } from "./TabBarSlots.tsx";
