@@ -1,3 +1,9 @@
+## 2026-10-22 — пауза по просьбе владельца
+
+- Все implementation-изменения закоммичены; последний commit `be5f8f7`, проверки foundation 934/934, native 9/9 + kill/recovery 7/7.
+- Следующий шаг: общий mobile engine полного `.atbackup` с manifest/media; его перенос ещё не начат. Полная цель не завершена, R06/D05 и миграционные gates открыты.
+- [Точка продолжения, ограничения и оставшаяся работа](HANDOFF_BACKUP_MIGRATION.md). Работа остановлена до просьбы продолжить.
+
 ## 2026-10-22 — R06: native guarded restore на телефоне
 
 - Добавлены ExpoRestoreStorage и portable streaming SHA-256 (256 КиБ/yield), порт отделён от application в domain. Закреплён @noble/hashes 2.4.0. Default runtime пока не подключает restore.
