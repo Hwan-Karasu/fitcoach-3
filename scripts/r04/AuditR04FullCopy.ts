@@ -3,6 +3,7 @@ import { inspectLegacyBackup } from "../r02/LegacyBackupInspector.ts";
 import { summarizeArchiveSource, type ArchiveSourcePreflightReport } from "./ArchiveSourcePreflightReport.ts";
 import { summarizeLegacyArchiveSets } from "./LegacyArchiveSetInventory.ts";
 import { readLegacyFactLedgerInSnapshot, summarizeLegacyFactLedger } from "./LegacyFactLedger.ts";
+import { summarizeLegacyQuestionnaire } from "./LegacyQuestionnaireSourceReader.ts";
 import { summarizeCalendarSource, type CalendarSourcePreflightReport } from "./CalendarSourcePreflightReport.ts";
 import { summarizeClientDaySource, type ClientDaySourcePreflightReport } from "./ClientDaySourcePreflightReport.ts";
 import { summarizeLegacyClientIdentity,
@@ -53,6 +54,7 @@ export type R04FullReport = Readonly<{
   archives: ArchiveSourcePreflightReport | null;
   archiveSets: ReturnType<typeof summarizeLegacyArchiveSets> | null;
   factLedger: ReturnType<typeof summarizeLegacyFactLedger>;
+  questionnaire: ReturnType<typeof summarizeLegacyQuestionnaire> | null;
   nutritionDays: NutritionSourcePreflightReport | null;
   nutritionEntryIdentity: NutritionEntryIdentityReport | null;
   measurements: MeasurementSourcePreflightReport | null;
@@ -120,6 +122,7 @@ export function auditR04FullCopy(
       status: "requires-semantic-review",
       coverage,
       factLedger: summarizeLegacyFactLedger(readLegacyFactLedgerInSnapshot(db, binding.scope_key, evidence)),
+      questionnaire: evidence.questionnaire === null ? null : summarizeLegacyQuestionnaire(evidence.questionnaire),
       clientReferences,
       sourceFacts: summarizeSourceFactPreflight(evidence.sets),
       setMetrics: summarizeLegacySetMetrics(evidence.sets),

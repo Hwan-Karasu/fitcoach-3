@@ -992,6 +992,38 @@ test("R04 full audit blocks an unregistered table before classifying facts", () 
   });
 });
 
+test("R04 full audit includes questionnaire target candidates without exposing or changing answers", () => {
+  const questionnaireTables = ["questionnaire_templates", "questionnaire_revisions", "client_questionnaire_answers"];
+  withSyntheticCopy((db) => {
+    db.exec(`CREATE TABLE questionnaire_templates(workspace_id TEXT PRIMARY KEY,draft_revision_id TEXT,published_revision_id TEXT,updated_at TEXT);
+      CREATE TABLE questionnaire_revisions(id TEXT PRIMARY KEY,workspace_id TEXT,revision INTEGER,status TEXT,schema_json TEXT,created_at TEXT,published_at TEXT);
+      CREATE TABLE client_questionnaire_answers(client_id TEXT,question_id TEXT,value_json TEXT,template_revision INTEGER,updated_at TEXT,deleted_at TEXT,PRIMARY KEY(client_id,question_id));`);
+    const schema = { version: 1, sections: [{ id: "synthetic-section", title: "Synthetic section", hidden: false,
+      questions: [{ id: "synthetic-question", title: "Synthetic question", type: "switch", required: false,
+        access: "trainer_only", options: [], hidden: false }] }] };
+    const timestamp = "2026-01-01T10:00:00Z";
+    for (const [id, revision, status] of [["published", 1, "published"], ["draft", 2, "draft"]] as const) {
+      db.prepare("INSERT INTO questionnaire_revisions VALUES(?,?,?,?,?,?,?)").run(id, "synthetic-trainer-workspace", revision,
+        status, JSON.stringify(schema), timestamp, status === "published" ? timestamp : null);
+    }
+    db.prepare("INSERT INTO questionnaire_templates VALUES(?,?,?,?)").run("synthetic-trainer-workspace", "draft", "published", timestamp);
+    db.prepare("INSERT INTO client_questionnaire_answers VALUES(?,?,?,?,?,?)").run("synthetic-client-a", "synthetic-question", "false", 1, timestamp, null);
+  }, (path) => {
+    const before = readFileSync(path);
+    const report = auditR04FullCopy(path, {
+      sourceGateInspected: ["athlete_backup_manifest", "account_database_binding", "schema_migrations",
+        ...Object.keys(fixtureRows), ...questionnaireTables], mappingPending: [],
+    });
+    assert.equal(report.status, "requires-semantic-review");
+    if (report.status !== "requires-semantic-review") return;
+    assert.equal(report.questionnaire?.projectedAnswerCandidates, 1);
+    assert.equal(report.questionnaire?.answersRequiringReview, 0);
+    assert.equal(report.questionnaire?.targetWrites, 0);
+    assert.doesNotMatch(JSON.stringify(report), /synthetic-question|Synthetic question|value_json|legacy:/u);
+    assert.deepEqual(readFileSync(path), before);
+  });
+});
+
 test("R04 full audit inventories root/cycle archive sets and session references without changing bytes", () => {
   withSyntheticCopy((db) => {
     const workouts = [{ exercises: [{ sets: [{

@@ -1,3 +1,12 @@
+## 2026-10-22 — R04: преобразование старых анкет в модель 3.x
+
+- По исходникам build120 добавлен строгий projector всех семи типов в актуальный `QuestionnaireSchema`, с `validateSchema`/`answerProblem` приложения. Candidate field/option IDs детерминированы; выбор по строкам 2.0 преобразуется в option IDs, неизвестные значения не угадываются.
+- Reader сохраняет templates/revisions/answers/change sets, включая deleted. Проверяются workspace pointers и точная опубликованная версия ответа; нет fallback к latest. Ноль, false, null, даты и исходный текст сохраняются.
+- В единый read-only R04 добавлен приватный агрегат `questionnaire`; raw payload остаётся внутри. Файловая интеграция проверяет ответ-кандидат и неизменность источника.
+- Это projection в памяти без публикации и записи. Legacy typed client profile, merge со схемой 3.x, version ledger и полное восстановление ещё открыты. [Mapping и границы](spikes/R04_QUESTIONNAIRE_MAPPING.md).
+- Проверки: R04 170/170; foundation 802/802 (+17), typecheck, lint, arch:check, source:verify, secrets:check и diff --check.
+- По решению владельца данные/перенос/восстановление идут раньше финальной проработки UI и тем.
+
 ## 2026-10-22 — R01: фактические пакеты на подключённом телефоне
 
 - Read-only ADB подтвердил `com.fitcoach.app` 2.0.0 build 128 и отдельный `com.fitcoach.v3dev` 0.0.1 build 1. Текущий dev-пакет не является обновлением поверх 2.0.
