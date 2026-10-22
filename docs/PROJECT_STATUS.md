@@ -1,3 +1,10 @@
+## 2026-10-22 — R06: самостоятельный SQLite .atbackup на host
+
+- Host-прототип использует настоящий SQLite backup API (включая committed WAL), добавляет manifest/свой owner ledger только в копию, проверяет typed streaming SHA-256 всех канонических SQL/строк и публикует новое имя без перезаписи прежнего backup. Рабочая БД не меняется.
+- Restore создаёт отдельный staging, удаляет snapshot metadata только там и проверяет штатную D01 identity/integrity плюс полный content digest до guarded replacement. Синтетический roundtrip работает после удаления исходной установки; через repositories заполнены клиент/emoji, замеры, тема, рецепт/продукт, питание и подход 20×10кг.
+- Проверки: foundation 890/890 (+11), typecheck, lint, arch:check, source:verify, secrets:check, diff --check прошли. Snapshot с unknown schema/порчей данных/manifest/ledger отклоняется; destination/partial/staging не затираются.
+- Native/SAF и полная owner-matrix остаются открытыми. Фото рецептов действительно есть: до встраивания их байтов прототип блокирует неполную копию. Не объявлять R06/D05 готовыми. [Формат и границы](spikes/R06_SQLITE_BACKUP.md).
+
 ## 2026-10-22 — R06: guarded restore и прерывание процесса на host
 
 - Добавлен application-протокол восстановления через private slots: preview закрепляет SHA обеих баз, проверка полной D01 identity/integrity, независимая SAFETY, durable PREPARED/COMMITTED и final receipts. До сохранённого commit выполняется rollback; повтор не затирает последующие пользовательские записи.
