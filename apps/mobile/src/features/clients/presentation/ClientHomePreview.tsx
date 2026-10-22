@@ -94,7 +94,7 @@ export function ClientHomePreview({ client, summary, onOpenAccounting, onWriteOf
 
   const pack = summary?.pack ?? null;
 
-  return <PrototypeScreen compact>
+  return <PrototypeScreen compact scroll={false}>
 
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <Pressable accessibilityRole="button" accessibilityLabel={pack?.kind === "TRACKED" ? `Абонемент: доступно ${pack.available} из ${pack.granted} занятий. Открыть абонемент и оплату` : "Абонемент. Открыть абонемент и оплату"}

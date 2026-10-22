@@ -8,18 +8,26 @@ export function PrototypeScreen({
   title,
   description,
   compact = false,
+  scroll = true,
   children,
-}: Readonly<{ title?: string; description?: string; children: ReactNode; /** Плотная компоновка (главная клиента): меньшие отступы, чтобы блоки помещались без прокрутки. */ compact?: boolean }>) {
+}: Readonly<{ title?: string; description?: string; children: ReactNode; /** Плотная компоновка (главная клиента): меньшие отступы, чтобы блоки помещались без прокрутки. */ compact?: boolean;
+  /** `false` — без прокрутки: экран целиком помещается (главная клиента). */ scroll?: boolean }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
+  const heading = <>
+    {title ? <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>{title}</Text> : null}
+    {description ? <Text style={[styles.description, { color: colors.textSecondary }]}>{description}</Text> : null}
+  </>;
+  if (!scroll) {
+    return <View style={[{ flex: 1, backgroundColor: colors.canvas }, compact ? styles.screenContentCompact : styles.screenContent]}>{heading}{children}</View>;
+  }
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.canvas }}
       contentContainerStyle={compact ? styles.screenContentCompact : styles.screenContent}
       keyboardShouldPersistTaps="handled"
     >
-      {title ? <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>{title}</Text> : null}
-      {description ? <Text style={[styles.description, { color: colors.textSecondary }]}>{description}</Text> : null}
+      {heading}
       {children}
     </ScrollView>
   );
