@@ -3,7 +3,7 @@ import { SharedSqliteDatabase } from "../../../shared/db/SharedSqliteDatabase.ts
 import { UUID_V4_SQL } from "../../../shared/db/SqlIds.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
-import type { ClientBodyParticipant, ClientRecord, CreateClientInput, ClientRepositoryPort } from
+import type { ClientBodyParticipant, ClientCardParticipant, ClientRecord, CreateClientInput, ClientRepositoryPort } from
   "../domain/ClientRepositoryPort.ts";
 import type { ArchiveSortMode, ClientArchivePort, ClientDeletionManifest,
   ClientLifecycleCounts } from "../domain/ClientArchivePort.ts";
@@ -92,6 +92,39 @@ function normalizedEmoji(value: string | null | undefined): string | null {
   const emoji = value?.trim() || null;
   if (emoji !== null && Array.from(emoji).length > 8) throw new Error("CLIENT_EMOJI_INVALID");
   return emoji;
+}
+
+async function createIn(tx: SqliteStatementPort, workspaceId: string, input: CreateClientInput): Promise<ClientRecord> {
+  const { name, phone, email, birthDate, heightCmX10, emoji, sex } = validatedInput(input);
+  const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
+  if (!id) throw new Error("CLIENT_ID_UNAVAILABLE");
+  const now = new Date().toISOString();
+  await tx.run(`INSERT INTO dev_clients
+    (id, workspace_id, display_name, contact_phone, contact_email,
+     birth_date, height_cm_x10, sex, emoji, lifecycle,
+     revision, created_at, updated_at, archived_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 1, ?, ?, NULL)`,
+  [id, workspaceId, name, phone, email, birthDate, heightCmX10, sex ?? null, emoji, now, now]);
+  await tx.run(`DELETE FROM dev_client_recovery_drafts
+    WHERE workspace_id = ? AND mode = 'create'`, [workspaceId]);
+  return clientById(tx, workspaceId, id);
+}
+
+async function updateIn(tx: SqliteStatementPort, workspaceId: string, id: string, expectedRevision: number,
+  input: CreateClientInput): Promise<ClientRecord> {
+  if (!id.trim() || !Number.isSafeInteger(expectedRevision) || expectedRevision < 1) throw new Error("CLIENT_COMMAND_INVALID");
+  const { name, phone, email, birthDate, heightCmX10, emoji, sex } = validatedInput(input);
+  const result = await tx.run(`UPDATE dev_clients SET display_name = ?, contact_phone = ?,
+    contact_email = ?, birth_date = ?, height_cm_x10 = ?, emoji = ?,
+    sex = CASE WHEN ? = 1 THEN ? ELSE sex END,
+    updated_at = ?, revision = revision + 1
+    WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'ACTIVE'`,
+  [name, phone, email, birthDate, heightCmX10, emoji, sex === undefined ? 0 : 1, sex ?? null,
+    new Date().toISOString(), workspaceId, id, expectedRevision]);
+  if (result.changes !== 1) throw new Error("CLIENT_STALE_OR_WRONG_SCOPE");
+  await tx.run(`DELETE FROM dev_client_recovery_drafts
+    WHERE workspace_id = ? AND mode = 'edit' AND client_id = ?`, [workspaceId, id]);
+  return clientById(tx, workspaceId, id);
 }
 
 async function writeBody(tx: SqliteStatementPort, workspaceId: string, id: string, expectedRevision: number,
@@ -389,48 +422,25 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
   }
 
   async create(input: CreateClientInput): Promise<ClientRecord> {
-    const { name, phone, email, birthDate, heightCmX10, emoji, sex } = validatedInput(input);
     const { writer } = this.ready();
-    const created = await writer.write(async (tx) => {
-      const id = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
-      if (!id) throw new Error("CLIENT_ID_UNAVAILABLE");
-      const now = new Date().toISOString();
-      await tx.run(`INSERT INTO dev_clients
-        (id, workspace_id, display_name, contact_phone, contact_email,
-         birth_date, height_cm_x10, sex, emoji, lifecycle,
-         revision, created_at, updated_at, archived_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 1, ?, ?, NULL)`,
-      [id, this.workspaceId, name, phone, email, birthDate, heightCmX10, sex ?? null, emoji, now, now]);
-      await tx.run(`DELETE FROM dev_client_recovery_drafts
-        WHERE workspace_id = ? AND mode = 'create'`, [this.workspaceId]);
-      return clientById(tx, this.workspaceId, id);
-    });
+    const created = await writer.write((tx) => createIn(tx, this.workspaceId, input));
     this.publishCommitted({ clientId: created.id, affectedRosters: ["ACTIVE"] });
     return created;
   }
 
   async update(id: string, expectedRevision: number, input: CreateClientInput): Promise<ClientRecord> {
-    if (!id.trim() || !Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
-      throw new Error("CLIENT_COMMAND_INVALID");
-    }
-    const { name, phone, email, birthDate, heightCmX10, emoji, sex } = validatedInput(input);
     const { writer } = this.ready();
-    const updated = await writer.write(async (tx) => {
-      const result = await tx.run(`UPDATE dev_clients SET display_name = ?, contact_phone = ?,
-        contact_email = ?, birth_date = ?, height_cm_x10 = ?, emoji = ?,
-        sex = CASE WHEN ? = 1 THEN ? ELSE sex END,
-        updated_at = ?, revision = revision + 1
-        WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'ACTIVE'`,
-      [name, phone, email, birthDate, heightCmX10, emoji, sex === undefined ? 0 : 1, sex ?? null,
-        new Date().toISOString(), this.workspaceId, id, expectedRevision]);
-      if (result.changes !== 1) throw new Error("CLIENT_STALE_OR_WRONG_SCOPE");
-      await tx.run(`DELETE FROM dev_client_recovery_drafts
-        WHERE workspace_id = ? AND mode = 'edit' AND client_id = ?`, [this.workspaceId, id]);
-      return clientById(tx, this.workspaceId, id);
-    });
+    const updated = await writer.write((tx) => updateIn(tx, this.workspaceId, id, expectedRevision, input));
     this.publishCommitted({ clientId: id, affectedRosters: ["ACTIVE"] });
     return updated;
   }
+
+  /** Для workflow «карточка + анкета»: те же правила внутри общей транзакции. */
+  readonly cardParticipant: ClientCardParticipant<SqliteStatementPort> = {
+    create: (tx, input) => createIn(tx, this.workspaceId, input),
+    update: (tx, id, expectedRevision, input) => updateIn(tx, this.workspaceId, id, expectedRevision, input),
+    notify: (id) => this.publishCommitted({ clientId: id, affectedRosters: ["ACTIVE"] }),
+  };
 
   async updateBody(id: string, expectedRevision: number, patch: Readonly<{ sex: "MALE" | "FEMALE" | null; heightCmX10: number | null }>): Promise<ClientRecord> {
     const { writer } = this.ready();

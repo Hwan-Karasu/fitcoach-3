@@ -32,6 +32,16 @@ export interface ClientBodyParticipant<Tx> {
   notify(id: string): void;
 }
 
+/**
+ * Создание и правка карточки внутри чужой транзакции (workflow «карточка + анкета»); уведомление — после коммита.
+ * Правила те же, что у `create`/`update`; черновик восстановления удаляется в той же транзакции.
+ */
+export interface ClientCardParticipant<Tx> {
+  create(tx: Tx, input: CreateClientInput): Promise<ClientRecord>;
+  update(tx: Tx, id: string, expectedRevision: number, input: CreateClientInput): Promise<ClientRecord>;
+  notify(id: string): void;
+}
+
 export interface ClientRepositoryPort {
   list(lifecycle: ClientRecord["lifecycle"]): Promise<readonly ClientRecord[]>;
   get(id: string): Promise<ClientRecord | null>;

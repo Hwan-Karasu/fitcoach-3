@@ -11,6 +11,12 @@ export interface QuestionnaireCommittedChange {
  * QUESTIONNAIRE_SCHEMA_INVALID, QUESTIONNAIRE_NOTHING_TO_PUBLISH, QUESTIONNAIRE_ANSWERED_FIELD_REMOVED,
  * QUESTIONNAIRE_ANSWERED_TYPE_CHANGED, QUESTIONNAIRE_ANSWER_INVALID, QUESTIONNAIRE_VERSION_NOT_FOUND.
  */
+/** Запись ответов внутри чужой транзакции (workflow «карточка + анкета»); уведомление — после коммита. Правила те же, что у `saveAnswers`. */
+export interface AnswersParticipant<Tx> {
+  save(tx: Tx, clientId: string, patch: Readonly<Record<string, AnswerValue | null>>): Promise<ClientAnswers>;
+  notify(clientId: string): void;
+}
+
 export interface QuestionnaireRepositoryPort {
   getPublished(): Promise<PublishedQuestionnaire>;
   listVersions(): Promise<readonly Readonly<{ version: number; publishedAt: string }>[]>;

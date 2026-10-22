@@ -4,5 +4,5 @@ export { QuestionnaireBuilderScreen } from "./presentation/QuestionnaireBuilderS
 export type { AnswerValue, Answers, ChoiceOption, ClientAnswers, CompletionStatus, FieldConstraints, PublishedQuestionnaire,
   PublishSummary, QuestionField, QuestionnaireDraft, QuestionnaireSchema, QuestionSection, QuestionType,
   VisibilityRule } from "./domain/QuestionnaireModel.ts";
-export type { QuestionnaireCommittedChange, QuestionnaireRepositoryPort } from "./domain/QuestionnaireRepositoryPort.ts";
+export type { AnswersParticipant, QuestionnaireCommittedChange, QuestionnaireRepositoryPort } from "./domain/QuestionnaireRepositoryPort.ts";
 export { useAnswersForm, type AnswersForm } from "./presentation/useAnswersForm.ts";

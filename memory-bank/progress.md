@@ -1,5 +1,9 @@
 # Progress
 
+## 2026-10-22: этап 4
+
+Сделано: `MeasurementRepositoryPort.applyBatch`, `ClientCardWithAnswersPort`, `AnswersForm.adopt`. Техдолг: вес в карточке клиента вне транзакции (`ClientEditorRoute.tsx`, шаг `upsertDailyMeasurement`); `useExerciseLookup` (без State) в 5 экранах аналитики при сбое показывает «Упражнение» вместо ошибки.
+
 ## 2026-10-22: NUT-019
 
 Фото рецептов: лишние копии удаляются (отмена/замена/убрать). Остаток: синхронная копия (`LocalImageStore.ts`), фото скрытого рецепта остаётся.

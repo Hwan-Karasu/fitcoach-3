@@ -243,7 +243,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
         : code === "CLIENT_FIELD_TOO_LONG" ? "Слишком длинное значение одного из полей."
           : code === "CLIENT_STALE_OR_WRONG_SCOPE" ? "Карточка изменилась. Закройте форму и откройте её снова."
             : code === "CLIENT_DRAFT_SAVE_FAILED" ? "Не удалось защитить ввод черновиком. Повторите сохранение."
-              : code === "QUESTIONNAIRE_SAVE_FAILED" ? "Карточка сохранена, а ответы анкеты — нет. Нажмите сохранить ещё раз."
+              : code === "QUESTIONNAIRE_SAVE_FAILED" ? "Ответы анкеты не сохранились, карточка не изменена. Проверьте ответы и нажмите сохранить ещё раз."
           : "Не удалось сохранить карточку. Введённые данные остались в форме; попробуйте ещё раз.");
     } finally {
       savingRef.current = false;

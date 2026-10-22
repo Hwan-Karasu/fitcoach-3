@@ -1,3 +1,10 @@
+## 2026-10-22 — Этап 4: хвосты данных
+
+- Замеры: `applyBatch` (запись/правка/удаление дня одной транзакцией, одно событие), `MeasurementsCard.save` переведён; 2 теста.
+- Анкета: workflow `saveClientCard` + участники в Clients и Questionnaire, `ClientEditorRoute` использует его; 4 теста (`apps/mobile/scripts/client-card-workflow.test.ts`). Текст ошибки: «Ответы анкеты не сохранились, карточка не изменена».
+- `useExerciseLookup` с ошибкой/повтором и `trainingHistory` в навигаторе клиента уже были сделаны ранее.
+- Проверки зелёные; `test:foundation` на Node 22.12: 632 из 642, 10 падений — R04 (среда). На телефоне не проверялось.
+
 ## 2026-10-22 — NUT-019: файлы фото рецептов
 
 - Правило `photosToDiscard` (`features/nutrition/domain/RecipePhotoRules.ts`) и `deleteLocalImage` (удаляет только файлы из каталога приложения); редактор рецепта чистит лишние копии при выходе и после записи. Тест `nutrition-recipe-photo` (в `test:foundation`).

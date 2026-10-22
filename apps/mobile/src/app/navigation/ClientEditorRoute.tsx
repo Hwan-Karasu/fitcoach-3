@@ -7,6 +7,7 @@ import { ClientEditorPreview, type ClientEditorAppendix, type ClientRecord, type
 import { QuestionnaireForm, useAnswersForm, type AnswerValue,
   type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
 import { latestPoint, localDateOf, parseValueX10, upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
+import type { ClientCardWithAnswersPort } from "../../workflows/saveClientCard.ts";
 import { AppButton, ConfirmDialog, LoadingState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
@@ -23,7 +24,7 @@ type Loaded = Readonly<{ client: ClientRecord | null; draft: ClientRecoveryDraft
  * с одним сохранением — сначала карточка, затем ответы по её ID. Если ответы не сохранились, повторное
  * сохранение не создаёт второго клиента, а дописывает ответы к уже сохранённой карточке.
  */
-export function ClientEditorRoute({ clientId, repository, questionnaire, measurements, onClose, prefillName, onCreated }: Readonly<{
+export function ClientEditorRoute({ clientId, repository, questionnaire, clientCard, measurements, onClose, prefillName, onCreated }: Readonly<{
   clientId?: string;
   /** A guest name from Calendar; an existing recovery draft still asks first. */
   prefillName?: string;
@@ -31,6 +32,8 @@ export function ClientEditorRoute({ clientId, repository, questionnaire, measure
   onCreated?: (client: ClientRecord) => Promise<void>;
   repository: ClientRepositoryPort & ClientRecoveryDraftPort;
   questionnaire: QuestionnaireRepositoryPort;
+  /** Карточка и ответы анкеты сохраняются одной транзакцией. */
+  clientCard: ClientCardWithAnswersPort;
   /** Вес клиента — единый факт Measurements: показывается и записывается из карточки. */
   measurements: MeasurementRepositoryPort;
   onClose: () => void;
@@ -155,14 +158,16 @@ export function ClientEditorRoute({ clientId, repository, questionnaire, measure
     onDiscardDraft={() => repository.discardDraft(clientId ?? null)}
     onSave={async (input, extras) => {
       const known = savedClient.current ?? client;
-      if (known !== null) savedClient.current = await repository.update(known.id, known.revision, input);
-      else {
-        savedClient.current = await repository.create(input);
-        await onCreated?.(savedClient.current);
+      // Карточка и изменённые ответы — одна транзакция: сбой ответов не оставляет ни новой карточки, ни половины правки.
+      let saved: Awaited<ReturnType<ClientCardWithAnswersPort["save"]>>;
+      try { saved = await clientCard.save(known === null ? null : { id: known.id, revision: known.revision }, input, patch.current); }
+      catch (error) {
+        throw error instanceof Error && error.message.startsWith("QUESTIONNAIRE_") ? new Error("QUESTIONNAIRE_SAVE_FAILED") : error;
       }
-      try { await answers.commit(savedClient.current.id, patch.current); }
-      catch { throw new Error("QUESTIONNAIRE_SAVE_FAILED"); }
+      savedClient.current = saved.client;
+      if (saved.answers !== null) answers.adopt(patch.current, saved.answers);
       patch.current = {};
+      if (known === null) await onCreated?.(saved.client);
       // Вес из карточки — новый факт замеров за сегодня (или правка сегодняшнего), только если изменился.
       const weightText = extras.weightText.replace(",", ".");
       if (weightText !== "" && weightText !== (initialWeight ?? "").replace(",", ".")) {

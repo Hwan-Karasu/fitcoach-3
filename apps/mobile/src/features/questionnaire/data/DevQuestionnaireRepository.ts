@@ -4,7 +4,7 @@ import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/
 import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
 import type { AnswerValue, Answers, ClientAnswers, CompletionStatus, PublishedQuestionnaire, PublishSummary,
   QuestionnaireDraft, QuestionnaireSchema } from "../domain/QuestionnaireModel.ts";
-import type { QuestionnaireCommittedChange, QuestionnaireRepositoryPort } from "../domain/QuestionnaireRepositoryPort.ts";
+import type { AnswersParticipant, QuestionnaireCommittedChange, QuestionnaireRepositoryPort } from "../domain/QuestionnaireRepositoryPort.ts";
 import { allFields, completionStatus, defaultQuestionnaireSchema, normalizeAnswer, withMissingSystemOptions, publishSummary, sameSchema,
   validateSchema } from "../domain/QuestionnaireRules.ts";
 import { DEV_QUESTIONNAIRE_LEDGER, devQuestionnaireCatalog } from "./DevQuestionnaireCatalog.ts";
@@ -259,33 +259,41 @@ export class DevQuestionnaireRepository implements QuestionnaireRepositoryPort {
   getAnswers(clientId: string): Promise<ClientAnswers> { return this.answers(this.ready().connection, clientId); }
 
   async saveAnswers(clientId: string, patch: Readonly<Record<string, AnswerValue | null>>): Promise<ClientAnswers> {
-    const today = localToday();
-    const saved = await this.ready().writer.write(async (tx) => {
-      // Answers are checked against the schema current at commit time, so an outdated open form
-      // cannot write into a retired or unknown field (§25.14).
-      const current = await this.current(tx);
-      const known = new Map(allFields(current.schema).map((item) => [item.field.id, item.field]));
-      const before = (await this.answers(tx, clientId)).answers;
-      const now = new Date().toISOString();
-      for (const [fieldId, raw] of Object.entries(patch)) {
-        const target = known.get(fieldId);
-        if (target === undefined) throw new Error("QUESTIONNAIRE_ANSWER_INVALID");
-        const value = normalizeAnswer(target, raw, before[fieldId], today);
-        if (value === null) {
-          await tx.run("DELETE FROM dev_questionnaire_answers WHERE workspace_id = ? AND client_id = ? AND field_id = ?",
-            [this.workspaceId, clientId, fieldId]);
-        } else {
-          await tx.run(`INSERT INTO dev_questionnaire_answers (workspace_id, client_id, field_id, value_json,
-              schema_version, updated_at) VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(workspace_id, client_id, field_id) DO UPDATE SET value_json = excluded.value_json,
-              schema_version = excluded.schema_version, updated_at = excluded.updated_at`,
-          [this.workspaceId, clientId, fieldId, JSON.stringify(value), current.version, now]);
-        }
-      }
-      return this.answers(tx, clientId);
-    });
+    const saved = await this.ready().writer.write((tx) => this.saveAnswersIn(tx, clientId, patch));
     this.publish({ scope: "ANSWERS", clientId });
     return saved;
+  }
+
+  /** Для workflow «карточка + анкета»: те же правила внутри общей транзакции. */
+  readonly answersParticipant: AnswersParticipant<SqliteStatementPort> = {
+    save: (tx, clientId, patch) => this.saveAnswersIn(tx, clientId, patch),
+    notify: (clientId) => this.publish({ scope: "ANSWERS", clientId }),
+  };
+
+  private async saveAnswersIn(tx: SqliteStatementPort, clientId: string, patch: Readonly<Record<string, AnswerValue | null>>): Promise<ClientAnswers> {
+    const today = localToday();
+    // Answers are checked against the schema current at commit time, so an outdated open form
+    // cannot write into a retired or unknown field (§25.14).
+    const current = await this.current(tx);
+    const known = new Map(allFields(current.schema).map((item) => [item.field.id, item.field]));
+    const before = (await this.answers(tx, clientId)).answers;
+    const now = new Date().toISOString();
+    for (const [fieldId, raw] of Object.entries(patch)) {
+      const target = known.get(fieldId);
+      if (target === undefined) throw new Error("QUESTIONNAIRE_ANSWER_INVALID");
+      const value = normalizeAnswer(target, raw, before[fieldId], today);
+      if (value === null) {
+        await tx.run("DELETE FROM dev_questionnaire_answers WHERE workspace_id = ? AND client_id = ? AND field_id = ?",
+          [this.workspaceId, clientId, fieldId]);
+      } else {
+        await tx.run(`INSERT INTO dev_questionnaire_answers (workspace_id, client_id, field_id, value_json,
+            schema_version, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(workspace_id, client_id, field_id) DO UPDATE SET value_json = excluded.value_json,
+            schema_version = excluded.schema_version, updated_at = excluded.updated_at`,
+        [this.workspaceId, clientId, fieldId, JSON.stringify(value), current.version, now]);
+      }
+    }
+    return this.answers(tx, clientId);
   }
 
   async completion(clientId: string): Promise<CompletionStatus> {

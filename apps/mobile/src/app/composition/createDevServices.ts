@@ -47,6 +47,7 @@ import { createDevBootDependencies, DEV_WORKSPACE_ID } from "../bootstrap/DevBoo
 type DevClientServices = ClientRepositoryPort & ClientRecoveryDraftPort & ClientRosterPort
   & ClientChangePort & ClientArchivePort;
 
+import { createClientCardWorkflow, type ClientCardWithAnswersPort } from "../../workflows/saveClientCard.ts";
 import { createCalcProfileWorkflow, type CalcProfileWithBodyPort } from "../../workflows/saveCalcProfile.ts";
 import { createWeekCopyWorkflow, type TrainingTransaction } from "../../workflows/copyTrainingWeek.ts";
 import { createWeekSwapWorkflow } from "../../workflows/swapTrainingWeeks.ts";
@@ -82,6 +83,8 @@ export interface DevServices {
   readonly questionnaire: QuestionnaireRepositoryPort;
   /** Z01: тема, акцент и видимые поля замеров тренера. */
   readonly settings: SettingsPort;
+  /** Карточка клиента и ответы анкеты — одной транзакцией. */
+  readonly clientCard: ClientCardWithAnswersPort;
   readonly trainingPlans: TrainingPlansRepositoryPort;
   readonly trainingExecution: TrainingExecutionPort;
   /** Таймеры отдыха всех клиентов (§48.62): глобальная панель и запуск из дневника. */
@@ -155,7 +158,8 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
   questionnaire: QuestionnaireRepositoryPort, trainingPlans: TrainingPlansRepositoryPort,
   trainingExecution: TrainingExecutionPort, restTimers: RestTimersPort, exercises: ExerciseCatalogPort,
   weekCopy: WeekCopyPort, weekSwap: WeekSwapPort, mesocycleSave: MesocycleSavePort & SimplePlanSavePort & WeekEditSavePort,
-  planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort, settings: SettingsPort): DevServices {
+  planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort, settings: SettingsPort,
+  clientCard: ClientCardWithAnswersPort): DevServices {
   return {
     runSqliteProbe: () => runF04Probe(() => openExpoSqliteConnection("fitcoach_f04_probe.db")),
     clients,
@@ -166,6 +170,7 @@ export function createDevServices(clients: DevClientServices, calendar: Calendar
     nutrition,
     questionnaire,
     settings,
+    clientCard,
     trainingPlans,
     trainingExecution,
     restTimers,
@@ -216,6 +221,7 @@ export function createDevRuntime(): DevRuntime {
   let lease: Promise<SqliteDatabaseLease> | null = null;
   const transaction: TrainingTransaction = async (task) => (await (lease ??= database.acquire())).writer.write(task);
   const calcProfile = createCalcProfileWorkflow(transaction, nutrition.calc.profileParticipant, clients.bodyParticipant);
+  const clientCard = createClientCardWorkflow(transaction, clients.cardParticipant, questionnaire.answersParticipant);
   const weekCopy = createWeekCopyWorkflow(transaction, trainingPlans.weekCopyParticipant, trainingExecution.weekCopyParticipant,
     exerciseLookup(exercises));
   const weekSwap = createWeekSwapWorkflow(transaction, trainingPlans.weekSwapParticipant, trainingExecution.weekRenumberParticipant);
@@ -249,6 +255,6 @@ export function createDevRuntime(): DevRuntime {
         await exercises.initialize();
       },
     )),
-    services: createDevServices(clients, calendar, accounting, measurements, { ...nutrition, calcProfile }, questionnaire, trainingPlans, trainingExecution, restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete, settings),
+    services: createDevServices(clients, calendar, accounting, measurements, { ...nutrition, calcProfile }, questionnaire, trainingPlans, trainingExecution, restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete, settings, clientCard),
   };
 }

@@ -28,6 +28,8 @@ export interface AnswersForm {
   readonly prepare: () => Patch | null;
   /** Сохранить подготовленные ответы клиенту (после создания карточки — по её новому ID). */
   readonly commit: (clientId: string, patch: Patch) => Promise<void>;
+  /** Ответы уже сохранены другим путём (общая транзакция с карточкой): обновить форму сохранёнными значениями. */
+  readonly adopt: (patch: Patch, next: ClientAnswers) => void;
 }
 
 /**
@@ -109,7 +111,11 @@ export function useAnswersForm(repository: QuestionnaireRepositoryPort, clientId
 
   const commit = async (targetId: string, patch: Patch) => {
     if (published === null || Object.keys(patch).length === 0) return;
-    const next = await repository.saveAnswers(targetId, patch);
+    adopt(patch, await repository.saveAnswers(targetId, patch));
+  };
+
+  const adopt = (patch: Patch, next: ClientAnswers) => {
+    if (published === null) return;
     const fields = new Map(allFields(published.schema).map((item) => [item.field.id, item.field]));
     setSaved(next);
     setInputs((old) => ({ ...old, ...Object.fromEntries(Object.keys(patch).map((id) => {
@@ -121,6 +127,6 @@ export function useAnswersForm(repository: QuestionnaireRepositoryPort, clientId
 
   return {
     status: failed ? "failed" : published === null || saved === null ? "loading" : "ready",
-    published, inputs, errors, dirtyIds, completion, schemaUpdated, onChange, prepare, commit,
+    published, inputs, errors, dirtyIds, completion, schemaUpdated, onChange, prepare, commit, adopt,
   };
 }
