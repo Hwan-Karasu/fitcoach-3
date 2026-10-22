@@ -44,7 +44,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 
 /** All-or-nothing in-memory R04 projection; no schema creation or database write. */
 export function projectClientIdentityDrafts(
-  source: readonly LegacyClientIdentityCandidate[], ids: ClientDraftIdMap,
+  source: readonly LegacyClientIdentityCandidate[], ids: ClientDraftIdMap, expectedWorkspaceId?: string,
 ): ClientDraftProjection {
   const reasons = new Set<ClientDraftBlocker>();
   const seenSource = new Set<string>();
@@ -74,7 +74,9 @@ export function projectClientIdentityDrafts(
     const clientId = ids.clients.get(sourceKey);
     if (workspaceId === undefined) reasons.add("WORKSPACE_MAPPING_MISSING");
     if (clientId === undefined) reasons.add("CLIENT_MAPPING_MISSING");
-    if ((workspaceId !== undefined && !UUID.test(workspaceId))
+    const workspaceValid = workspaceId !== undefined && (expectedWorkspaceId === undefined
+      ? UUID.test(workspaceId) : workspaceId === expectedWorkspaceId && /^[a-zA-Z0-9][a-zA-Z0-9:_-]{0,127}$/u.test(workspaceId));
+    if ((workspaceId !== undefined && !workspaceValid)
       || (clientId !== undefined && !UUID.test(clientId))) reasons.add("INVALID_TARGET_ID");
     if (workspaceId !== undefined && workspaceSourceKey !== null) {
       const previous = targetWorkspaces.get(workspaceId);

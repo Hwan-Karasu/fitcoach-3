@@ -1,3 +1,11 @@
+## 2026-10-22 — R04: сохраняемый реестр кандидатных ID
+
+- Добавлен isolated SQLite staging prototype: явная привязка к source hash/account/workspace и target workspace; client UUID сохраняются и повторно используются после reopen/retry. В чужую или несовместимую базу не пишется.
+- Атомарный пакет назначений, проверка коллизий/ключей, rollback новых mappings при ошибке; ранние committed mappings остаются. Синтетические файловые тесты проверяют неизменность при отказе по binding и повтор через два соединения.
+- Реестр соединён с client draft. Исправлена UUID-only проверка workspace: при явном ожидаемом ID projector допускает фактический `local-trainer` и требует точного совпадения; client IDs остаются UUID, owner collision guards сохранены.
+- Проверки: R04 182/182, foundation 814/814 (+12), typecheck, lint, arch:check, source:verify, secrets:check и diff --check. Реальные базы и телефон не затрагивались.
+- Это тестовый staging-контракт, не production DDL и не запись пользовательских данных. R04/D03/D04/R05 ещё открыты; exception injection не объявляется process-kill proof. [Границы и проверки](spikes/R04_CANDIDATE_IDENTITY_LEDGER.md).
+
 ## 2026-10-22 — R04: преобразование старых анкет в модель 3.x
 
 - По исходникам build120 добавлен строгий projector всех семи типов в актуальный `QuestionnaireSchema`, с `validateSchema`/`answerProblem` приложения. Candidate field/option IDs детерминированы; выбор по строкам 2.0 преобразуется в option IDs, неизвестные значения не угадываются.
