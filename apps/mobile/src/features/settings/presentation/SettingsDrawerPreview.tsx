@@ -13,8 +13,8 @@ interface SettingsDrawerPreviewProps {
   readonly onOpenSettings: () => void;
   readonly onOpenAppearance: () => void;
   readonly onOpenNotificationSettings: () => void;
-  readonly onOpenWorkspaceDev: () => void;
-  readonly onOpenSqliteDev: () => void;
+  readonly onOpenWorkspaceDev?: () => void;
+  readonly onOpenSqliteDev?: () => void;
 }
 
 function DrawerLink({ title, onPress }: Readonly<{ title: string; onPress: () => void }>) {
@@ -134,12 +134,12 @@ export function SettingsDrawerPreview({
             <Text style={[styles.groupLabel, { color: colors.textMuted }]}>СИСТЕМА</Text>
             <DrawerLink title="Настройки" onPress={() => open(onOpenSettings)} />
             <DrawerLink title="Настройки уведомлений" onPress={() => open(onOpenNotificationSettings)} />
-            {__DEV__ ? <>
+            {__DEV__ && onOpenWorkspaceDev && onOpenSqliteDev ? <>
               <Text style={[styles.groupLabel, { color: colors.textMuted }]}>ДЕМОНСТРАЦИЯ</Text>
               <DrawerLink title="Карточка клиента · демо" onPress={() => open(onOpenWorkspaceDev)} />
               <DrawerLink title="SQLite · диагностика" onPress={() => open(onOpenSqliteDev)} />
             </> : null}
-            <Text style={[styles.footnote, { color: colors.textMuted }]}>Аккаунты и облачная синхронизация не входят в offline V1.</Text>
+            {__DEV__ ? <Text style={[styles.footnote, { color: colors.textMuted }]}>Аккаунты и облачная синхронизация не входят в offline V1.</Text> : null}
           </ScrollView>
         </SafeAreaView>
         </Animated.View>

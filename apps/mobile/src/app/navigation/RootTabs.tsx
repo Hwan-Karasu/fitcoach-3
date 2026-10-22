@@ -28,10 +28,10 @@ interface RootTabsProps {
   readonly onOpenAppearance: () => void;
   readonly onOpenNotificationSettings: () => void;
   readonly onOpenNotifications: () => void;
-  readonly onOpenWorkspaceDev: () => void;
+  readonly onOpenWorkspaceDev?: () => void;
   readonly onOpenCreate: () => void;
   readonly onOpenClient: (clientId: string) => void;
-  readonly onOpenSqliteDev: () => void;
+  readonly onOpenSqliteDev?: () => void;
   readonly clients: ClientRepositoryPort & ClientRosterPort & ClientArchivePort;
   readonly clientLists: ClientListController;
   readonly rosterOverview: RosterOverviewPort;

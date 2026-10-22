@@ -28,7 +28,7 @@ function validateApplied(rows: readonly AppliedMigration[], catalog: readonly Mi
 }
 
 /**
- * Runs only supplied, forward-only migrations; D01 supplies the production catalog later.
+ * Runs only supplied, forward-only migrations, including the shared D01 runtime catalogs.
  * Each owner sharing one database file keeps its own ledger table.
  */
 export async function runMigrations(
@@ -36,22 +36,28 @@ export async function runMigrations(
 ): Promise<readonly number[]> {
   if (!/^[a-z][a-z0-9_]*$/u.test(ledger)) throw new Error("MIGRATION_LEDGER_INVALID");
   validateCatalog(catalog);
-  return writer.write(async (tx: SqliteStatementPort) => {
-    await tx.run(`CREATE TABLE IF NOT EXISTS ${ledger} (version INTEGER PRIMARY KEY NOT NULL, checksum TEXT NOT NULL)`);
-    const applied = await tx.all<AppliedMigration>(`SELECT version, checksum FROM ${ledger} ORDER BY version`);
-    validateApplied(applied, catalog);
+  return writer.write((tx) => runMigrationsInTransaction(tx, catalog, ledger));
+}
 
-    const newVersions: number[] = [];
-    for (const step of catalog.slice(applied.length)) {
-      for (const statement of step.statements) await tx.run(statement);
-      await tx.run(`INSERT INTO ${ledger} (version, checksum) VALUES (?, ?)`, [step.version, step.checksum]);
-      newVersions.push(step.version);
-    }
+/** The caller owns the transaction, including cross-owner schema initialization. Never nests commits. */
+export async function runMigrationsInTransaction(tx: SqliteStatementPort, catalog: readonly MigrationStep[],
+  ledger = "schema_migrations"): Promise<readonly number[]> {
+  if (!/^[a-z][a-z0-9_]*$/u.test(ledger)) throw new Error("MIGRATION_LEDGER_INVALID");
+  validateCatalog(catalog);
+  await tx.run(`CREATE TABLE IF NOT EXISTS ${ledger} (version INTEGER PRIMARY KEY NOT NULL, checksum TEXT NOT NULL)`);
+  const applied = await tx.all<AppliedMigration>(`SELECT version, checksum FROM ${ledger} ORDER BY version`);
+  validateApplied(applied, catalog);
 
-    const fkViolations = await tx.all<unknown>("PRAGMA foreign_key_check");
-    if (fkViolations.length > 0) throw new Error("MIGRATION_FOREIGN_KEY_VIOLATION");
-    const integrity = await tx.first<{ integrity_check: string }>("PRAGMA integrity_check");
-    if (integrity?.integrity_check !== "ok") throw new Error("MIGRATION_INTEGRITY_FAILED");
-    return newVersions;
-  });
+  const newVersions: number[] = [];
+  for (const step of catalog.slice(applied.length)) {
+    for (const statement of step.statements) await tx.run(statement);
+    await tx.run(`INSERT INTO ${ledger} (version, checksum) VALUES (?, ?)`, [step.version, step.checksum]);
+    newVersions.push(step.version);
+  }
+
+  const fkViolations = await tx.all<unknown>("PRAGMA foreign_key_check");
+  if (fkViolations.length > 0) throw new Error("MIGRATION_FOREIGN_KEY_VIOLATION");
+  const integrity = await tx.first<{ integrity_check: string }>("PRAGMA integrity_check");
+  if (integrity?.integrity_check !== "ok") throw new Error("MIGRATION_INTEGRITY_FAILED");
+  return newVersions;
 }

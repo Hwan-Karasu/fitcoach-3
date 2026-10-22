@@ -2,14 +2,14 @@ import { useState } from "react";
 import { StyleSheet } from "react-native";
 import { useFonts } from "expo-font";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import FoundationScreen from "./src/app/bootstrap/FoundationScreen";
-import { DevBootGate } from "./src/app/bootstrap/DevBootGate.tsx";
-import { createDevRuntime } from "./src/app/composition/createDevServices.ts";
+import { ApplicationBootGate } from "./src/app/bootstrap/ApplicationBootGate.tsx";
+import { createDevRuntime } from "./src/app/composition/createDevRuntime.ts";
+import { createProductionRuntime } from "./src/app/composition/createProductionRuntime.ts";
 import { fontAssets } from "./src/shared/ui/theme/fontAssets.ts";
 
-function DevEntry() {
-  const [runtime] = useState(createDevRuntime);
-  return <DevBootGate {...runtime} />;
+function ApplicationEntry() {
+  const [runtime] = useState(() => __DEV__ ? createDevRuntime() : createProductionRuntime());
+  return <ApplicationBootGate {...runtime} />;
 }
 
 export default function App() {
@@ -18,7 +18,7 @@ export default function App() {
   if (!fontsLoaded && fontError === null) return null;
   return (
     <GestureHandlerRootView style={styles.root}>
-      {__DEV__ ? <DevEntry /> : <FoundationScreen />}
+      <ApplicationEntry />
     </GestureHandlerRootView>
   );
 }

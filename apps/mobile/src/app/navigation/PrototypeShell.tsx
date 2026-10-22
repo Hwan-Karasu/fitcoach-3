@@ -22,7 +22,7 @@ import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.
 import { WorkspaceRoutePreview } from "../../shared/ui/prototype/WorkspaceRoutePreview.tsx";
 import { ClientWorkspaceNavigator } from "./ClientWorkspaceNavigator.tsx";
 import { ClientEditorRoute } from "./ClientEditorRoute.tsx";
-import type { DevServices } from "../composition/createDevServices.ts";
+import type { ApplicationServices } from "../composition/createServices.ts";
 import { ClientListController } from "../../read-models/ClientListController.ts";
 import { createRosterOverviewSource } from "../../read-models/rosterOverview.ts";
 import { homeSummaryRules } from "../../read-models/useClientHomeSummary.ts";
@@ -92,10 +92,11 @@ function openTarget(target: NotificationTarget): void {
 }
 
 function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
-  services: DevServices; clientLists: ClientListController; rosterOverview: RosterOverviewPort;
+  services: ApplicationServices; clientLists: ClientListController; rosterOverview: RosterOverviewPort;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
+  const developmentTools = services.developmentTools;
   return (
     <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
@@ -113,10 +114,10 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
               onOpenAppearance={() => navigation.navigate("Appearance")}
               onOpenNotificationSettings={() => navigation.navigate("NotificationSettings")}
               onOpenNotifications={() => navigation.navigate("Notifications")}
-              onOpenWorkspaceDev={() => navigation.navigate("WorkspaceDev")}
+              onOpenWorkspaceDev={developmentTools ? () => navigation.navigate("WorkspaceDev") : undefined}
               onOpenCreate={() => navigation.navigate("ClientEditorDev")}
               onOpenClient={(clientId) => navigation.navigate("ClientWorkspace", { clientId })}
-              onOpenSqliteDev={() => navigation.navigate("SqliteDev")}
+              onOpenSqliteDev={developmentTools ? () => navigation.navigate("SqliteDev") : undefined}
               clients={services.clients}
               clientLists={clientLists}
               rosterOverview={rosterOverview}
@@ -175,9 +176,9 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
         <Stack.Screen name="Appearance" options={{ headerShown: false }}>
           {({ navigation }) => <ThemeCatalogPreview onClose={() => navigation.goBack()} />}
         </Stack.Screen>
-        <Stack.Screen name="WorkspaceDev" options={{ title: "Маршрут клиента · демо" }}>
+        {developmentTools ? <Stack.Screen name="WorkspaceDev" options={{ title: "Маршрут клиента · демо" }}>
           {() => <WorkspaceRoutePreview context="Маршрут без выбранного клиента" />}
-        </Stack.Screen>
+        </Stack.Screen> : null}
         {/* Шапку клиента рисуют вкладки и стеки клиента (UI-OWN-035). */}
         <Stack.Screen name="ClientWorkspace" options={{ title: "Карточка клиента", headerShown: false }}>
           {({ navigation, route }) => <ClientWorkspaceNavigator
@@ -226,23 +227,23 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
             }}
             onClose={() => navigation.goBack()} />}
         </Stack.Screen>
-        <Stack.Screen name="SqliteDev" options={{ title: "SQLite · диагностика" }}>
-          {() => <SqliteDiagnosticsScreen runProbe={services.runSqliteProbe} />}
-        </Stack.Screen>
+        {developmentTools ? <Stack.Screen name="SqliteDev" options={{ title: "SQLite · диагностика" }}>
+          {() => <SqliteDiagnosticsScreen runProbe={developmentTools.runSqliteProbe} />}
+        </Stack.Screen> : null}
       </Stack.Navigator>
     </NavigationContainer>
   );
 }
 
 /** Ended appointments without an outcome pop up over any screen (§48.35.3). */
-function OutcomeQueueHost({ services }: Readonly<{ services: DevServices }>) {
+function OutcomeQueueHost({ services }: Readonly<{ services: ApplicationServices }>) {
   const queue = useAppointmentOutcomeQueue(services.calendar, services.accounting);
   return <AppointmentOutcomeDialog items={queue.items} visible={queue.visible} onLater={queue.later}
     repository={services.calendar} participants={services.calendarParticipants} credit={services.accounting} />;
 }
 
 export function PrototypeShell({ services, workspaceId }: Readonly<{
-  services: DevServices; workspaceId: string;
+  services: ApplicationServices; workspaceId: string;
 }>) {
   const [clientLists] = useState(() => new ClientListController(services.clients, workspaceId));
   const [rosterOverview] = useState(() => createRosterOverviewSource({ rules: homeSummaryRules,

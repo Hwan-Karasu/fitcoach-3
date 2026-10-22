@@ -31,9 +31,11 @@ async function configure(native: NativeSqliteDatabase, enableWal: boolean): Prom
  * Expo's withExclusiveTransactionAsync also opens a new handle, but starts BEGIN before its callback;
  * enabling foreign_keys inside that callback would silently have no effect.
  */
-export async function openIsolatedSqliteConnection(open: () => Promise<NativeSqliteDatabase>): Promise<SqliteConnectionPort> {
+export async function openIsolatedSqliteConnection(open: () => Promise<NativeSqliteDatabase>,
+  inspectBeforeWrite?: (reader: SqliteStatementPort) => Promise<unknown>): Promise<SqliteConnectionPort> {
   const reader = await open();
   try {
+    if (inspectBeforeWrite) await inspectBeforeWrite(statements(reader));
     await configure(reader, true);
     return {
       ...statements(reader),

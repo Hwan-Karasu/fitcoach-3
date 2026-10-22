@@ -4,6 +4,8 @@ import { resolvePalette, type ResolvedPalette, type ThemeId, type ThemePreferenc
 export type BootErrorCode =
   | "WORKSPACE_UNAVAILABLE"
   | "DB_UNAVAILABLE"
+  | "DATABASE_INCOMPATIBLE"
+  | "DATABASE_NEWER"
   | "MIGRATION_INCOMPLETE"
   | "PREFERENCES_UNAVAILABLE"
   | "THEME_UNAVAILABLE";
