@@ -99,11 +99,12 @@ export function chooseManualWriteOffPack(candidates: readonly AllocationCandidat
 }
 
 /**
- * Последнее списание на одно занятие (автоматическое USED или ручное ADJUSTMENT −1), которое ещё не возвращено.
+ * Последнее списание на одно занятие, которое ещё не возвращено: автоматическое USED или ручное «Списать» (ADJUSTMENT −1 с причиной
+ * `MANUAL_WRITE_OFF_REASON`). Прочие корректировки −1 (исправление остатка вручную в экране абонемента) «Отменить» на Главной не возвращает.
  * `ledger` — от новых записей к старым, как отдаёт снимок.
  */
-export function lastReturnableDebit(ledger: readonly Pick<LedgerEntry, "id" | "entryType" | "delta" | "sourceEntryId">[]): string | null {
+export function lastReturnableDebit(ledger: readonly Pick<LedgerEntry, "id" | "entryType" | "delta" | "sourceEntryId" | "reason">[]): string | null {
   const returned = new Set(ledger.filter((entry) => entry.entryType === "RETURNED").map((entry) => entry.sourceEntryId));
-  return ledger.find((entry) => entry.delta === -1 && (entry.entryType === "USED" || entry.entryType === "ADJUSTMENT")
-    && !returned.has(entry.id))?.id ?? null;
+  return ledger.find((entry) => entry.delta === -1 && !returned.has(entry.id)
+    && (entry.entryType === "USED" || (entry.entryType === "ADJUSTMENT" && entry.reason === MANUAL_WRITE_OFF_REASON)))?.id ?? null;
 }

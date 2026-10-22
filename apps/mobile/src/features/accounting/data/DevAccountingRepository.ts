@@ -413,6 +413,7 @@ export class DevAccountingRepository implements AccountingRepositoryPort {
 
   async returnLastDebit(clientId: string, expectedEntryId: string): Promise<void> {
     await this.ready().writer.write(async (tx) => {
+      if ((await modeOf(tx, this.workspaceId, clientId)).mode !== "FITCOACH") throw new Error("ACCOUNTING_NOT_TRACKED");
       const ledger = await ledgerOf(tx, this.workspaceId, clientId);
       const lastId = lastReturnableDebit(ledger);
       if (lastId === null) throw new Error("ACCOUNTING_NOTHING_TO_RETURN");

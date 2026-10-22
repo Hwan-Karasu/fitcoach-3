@@ -108,13 +108,24 @@ export class RestTimerService implements RestTimersPort {
     });
   }
 
+  /** Меняет один таймер: экран обновляется сразу, запись в хранилище при сбое откатывает экран (иначе он разошёлся бы с базой до перезапуска). */
+  private async replace(current: RestTimer, next: RestTimer): Promise<void> {
+    const before = this.timers;
+    this.publish(this.timers.map((timer) => timer.id === current.id ? next : timer));
+    try {
+      await this.store.putTimer(next, []);
+    } catch (error) {
+      this.publish(before);
+      throw error;
+    }
+  }
+
   adjust(id: string, deltaSec: number): Promise<void> {
     return this.enqueue(async () => {
       const current = this.timers.find((timer) => timer.id === id);
       if (current === undefined) return;
       const moved = { ...adjustTimer(current, deltaSec, this.now()), signalId: null };
-      this.publish(this.timers.map((timer) => timer.id === id ? moved : timer));
-      await this.store.putTimer(moved, []);
+      await this.replace(current, moved);
       // На паузе сигнала нет: он появится при продолжении.
       if (moved.pausedLeftMs === null) this.attachSignal(moved, current.signalId);
       else await this.cancelSignal(current.signalId);
@@ -127,8 +138,7 @@ export class RestTimerService implements RestTimersPort {
       if (current === undefined) return;
       const paused = pauseTimer(current, this.now());
       if (paused === current) return;
-      this.publish(this.timers.map((timer) => timer.id === id ? paused : timer));
-      await this.store.putTimer(paused, []);
+      await this.replace(current, paused);
       await this.cancelSignal(current.signalId);
     });
   }
@@ -139,8 +149,7 @@ export class RestTimerService implements RestTimersPort {
       if (current === undefined) return;
       const resumed = resumeTimer(current, this.now());
       if (resumed === current) return;
-      this.publish(this.timers.map((timer) => timer.id === id ? resumed : timer));
-      await this.store.putTimer(resumed, []);
+      await this.replace(current, resumed);
       this.attachSignal(resumed, null);
     });
   }

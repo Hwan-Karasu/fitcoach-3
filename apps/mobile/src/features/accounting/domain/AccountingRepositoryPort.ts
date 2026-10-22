@@ -8,7 +8,7 @@ export interface AccountingCommittedChange {
 /**
  * Typed failures: ACCOUNTING_INSUFFICIENT_CREDIT, ACCOUNTING_ALREADY_SETTLED,
  * ACCOUNTING_PACK_INVALID, ACCOUNTING_PACK_SCOPE_INVALID, ACCOUNTING_PAYMENT_INVALID,
- * ACCOUNTING_NOTHING_TO_RETURN, ACCOUNTING_STALE (последнее списание уже другое).
+ * ACCOUNTING_NOTHING_TO_RETURN, ACCOUNTING_STALE (последнее списание уже другое), ACCOUNTING_NOT_TRACKED (режим не «В приложении»).
  */
 export interface AccountingRepositoryPort {
   getClientSnapshot(clientId: string): Promise<ClientAccountingSnapshot>;

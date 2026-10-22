@@ -29,13 +29,18 @@ type Side = "left" | "right";
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
-/** Ближайший к окончанию — первым; приостановленные упорядочены по остатку. */
-function byRemaining(list: readonly RestTimer[], now: number): readonly RestTimer[] {
-  const left = (timer: RestTimer) => timer.pausedLeftMs ?? timer.endAt - now;
-  return [...list].sort((a, b) => left(a) - left(b));
+/** Порядок карточек стабилен — по времени запуска: ±15, пауза и ход времени не переставляют их под пальцем (иначе нажатие попадает в соседний таймер). */
+function stableOrder(list: readonly RestTimer[]): readonly RestTimer[] {
+  return [...list].sort((a, b) => a.startedAt - b.startedAt || a.id.localeCompare(b.id));
 }
 
-function TimerCard({ timer, now, compact, timers, onOpen }: Readonly<{ timer: RestTimer; now: number; compact: boolean;
+/** Идущий таймер, который закончится первым: его карточка выделяется рамкой, а не местом. */
+function nearestRunning(list: readonly RestTimer[], now: number): RestTimer | null {
+  const running = list.filter((timer) => !isPaused(timer) && !isFinished(timer, now));
+  return running.sort((a, b) => a.endAt - b.endAt)[0] ?? null;
+}
+
+function TimerCard({ timer, now, compact, nearest, timers, onOpen }: Readonly<{ timer: RestTimer; now: number; compact: boolean; nearest: boolean;
   timers: RestTimersPort; onOpen: (timer: RestTimer) => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -49,13 +54,13 @@ function TimerCard({ timer, now, compact, timers, onOpen }: Readonly<{ timer: Re
       style={[styles.button, compact && styles.buttonCompact, { backgroundColor: primary ? colors.accentFill : colors.input }]}>{content}</Pressable>
   );
   const adjust = (delta: number) => (
-    button(delta < 0 ? "minus" : "plus", `Отдых ${delta < 0 ? "меньше" : "больше"} на ${ADJUST_STEP_SEC} секунд`, () => { void timers.adjust(timer.id, delta); },
+    button(delta < 0 ? "minus" : "plus", `Отдых ${delta < 0 ? "меньше" : "больше"} на ${ADJUST_STEP_SEC} секунд`, () => { timers.adjust(timer.id, delta).catch(() => undefined); },
       <Text style={[styles.buttonText, compact && styles.buttonTextCompact, { color: colors.textPrimary }]}>{`${delta < 0 ? "−" : "+"}${ADJUST_STEP_SEC}`}</Text>)
   );
   const pause = finished ? null : button("pause", paused ? "Продолжить отдых" : "Поставить отдых на паузу",
-    () => { void (paused ? timers.resume(timer.id) : timers.pause(timer.id)); },
+    () => { (paused ? timers.resume(timer.id) : timers.pause(timer.id)).catch(() => undefined); },
     paused ? <Play size={18} color={colors.textPrimary} strokeWidth={2} /> : <Pause size={18} color={colors.textPrimary} strokeWidth={2} />);
-  const skip = button("skip", "Пропустить отдых", () => { void timers.skip(timer.id); }, <SkipForward size={18} color={colors.onAccentFill} strokeWidth={2} />, true);
+  const skip = button("skip", "Пропустить отдых", () => { timers.skip(timer.id).catch(() => undefined); }, <SkipForward size={18} color={colors.onAccentFill} strokeWidth={2} />, true);
   const timeView = (
     <Text accessibilityLabel={finished ? "Отдых окончен" : `Осталось ${clock(left)}`} numberOfLines={1}
       style={[styles.time, compact && styles.timeCompact, { color: timeColor }]}>{timeText}</Text>
@@ -64,7 +69,7 @@ function TimerCard({ timer, now, compact, timers, onOpen }: Readonly<{ timer: Re
     <Pressable accessibilityRole="button" accessibilityLiveRegion="polite"
       accessibilityLabel={`${timer.clientName}, ${timer.exerciseName}. ${finished ? "Отдых окончен" : paused ? `Пауза, осталось ${clock(left)}` : `Осталось ${clock(left)}`}. Открыть тренировку`}
       accessibilityHint="Смахните в сторону, чтобы свернуть панель к краю экрана" onPress={() => onOpen(timer)}
-      style={[styles.card, compact && styles.cardCompact, { backgroundColor: colors.surface, borderColor: finished ? colors.success : colors.border }]}>
+      style={[styles.card, compact && styles.cardCompact, { backgroundColor: colors.surface, borderColor: finished ? colors.success : nearest ? colors.accentFill : colors.border }]}>
       <Text style={[styles.owner, compact && styles.ownerCompact, { color: colors.textSecondary }]} numberOfLines={1}>
         <Text style={{ color: colors.textPrimary, fontFamily: fonts.semibold }}>{timer.clientName}</Text>
         {` · ${timer.exerciseName}${paused ? " · Пауза" : ""}`}
@@ -166,11 +171,12 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
   const panelStyle = useAnimatedStyle(() => ({ transform: [{ translateX: offset.value }] }));
 
   if (list.length === 0) return null;
-  const ordered = byRemaining(list, now);
+  const ordered = stableOrder(list);
+  const nearest = nearestRunning(list, now);
   const bottom = insets.bottom + TAB_BAR_HEIGHT + editorHeight;
 
   if (side !== null) {
-    const first = ordered[0]!;
+    const first = nearest ?? ordered[0]!;
     const Hint = side === "left" ? ChevronRight : ChevronLeft;
     const finished = isFinished(first, now);
     const timeText = finished ? "Готово" : clock(remainingSec(first, now));
@@ -204,7 +210,7 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
       <GestureDetector gesture={swipeToCollapse}>
         <Animated.View entering={FadeIn.duration(PILL_MS).easing(EASE)} style={panelStyle}>
           <View style={styles.row}>
-            {visible.map((timer) => <TimerCard key={timer.id} timer={timer} now={now} compact={visible.length > 1} timers={timers} onOpen={onOpen} />)}
+            {visible.map((timer) => <TimerCard key={timer.id} timer={timer} now={now} compact={visible.length > 1} nearest={timer.id === nearest?.id && ordered.length > 1} timers={timers} onOpen={onOpen} />)}
           </View>
           {hidden.length > 0 ? (
             <Pressable accessibilityRole="button" accessibilityState={{ expanded: showAll }}
@@ -216,7 +222,7 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
             </Pressable>
           ) : null}
           {showAll ? <View style={styles.rest}>
-            {hidden.map((timer) => <TimerCard key={timer.id} timer={timer} now={now} compact={false} timers={timers} onOpen={onOpen} />)}
+            {hidden.map((timer) => <TimerCard key={timer.id} timer={timer} now={now} compact={false} nearest={timer.id === nearest?.id} timers={timers} onOpen={onOpen} />)}
           </View> : null}
           <ChevronLeft size={14} color={colors.textMuted} strokeWidth={2.5} style={styles.hintLeft} />
           <ChevronRight size={14} color={colors.textMuted} strokeWidth={2.5} style={styles.hintRight} />

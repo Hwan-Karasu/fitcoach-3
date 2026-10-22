@@ -708,13 +708,16 @@ test("A02 ручное списание берёт пакет с ближайш�
 });
 
 test("A02 последнее списание: возвращённое пропускается, списания на несколько занятий и выдача не возвращаются", () => {
-  const entry = (id: string, entryType: "USED" | "ADJUSTMENT" | "RETURNED" | "ISSUED", delta: number, sourceEntryId: string | null = null) =>
-    ({ id, entryType, delta, sourceEntryId });
+  const entry = (id: string, entryType: "USED" | "ADJUSTMENT" | "RETURNED" | "ISSUED", delta: number, sourceEntryId: string | null = null,
+    reason: string | null = entryType === "ADJUSTMENT" ? "Ручное списание" : null) => ({ id, entryType, delta, sourceEntryId, reason });
   // От новых к старым.
   assert.equal(lastReturnableDebit([entry("r2", "RETURNED", 1, "d2"), entry("d3", "ADJUSTMENT", -1), entry("d2", "USED", -1), entry("i", "ISSUED", 5)]), "d3");
   assert.equal(lastReturnableDebit([entry("r3", "RETURNED", 1, "d3"), entry("d3", "ADJUSTMENT", -1), entry("r2", "RETURNED", 1, "d2"), entry("d2", "USED", -1)]), null);
   assert.equal(lastReturnableDebit([entry("a", "ADJUSTMENT", -3), entry("b", "ADJUSTMENT", 2), entry("i", "ISSUED", 5)]), null);
   assert.equal(lastReturnableDebit([]), null);
+  // Исправление остатка вручную (−1 с другой причиной) «Отменить» на Главной не возвращает.
+  assert.equal(lastReturnableDebit([entry("fix", "ADJUSTMENT", -1, null, "Пересчёт остатка"), entry("d2", "USED", -1)]), "d2");
+  assert.equal(lastReturnableDebit([entry("fix", "ADJUSTMENT", -1, null, "Пересчёт остатка")]), null);
 });
 
 test("A02 «Списать» и «Отменить»: факты не удаляются, возврат один, пустой журнал нечего возвращать", async () => {
@@ -844,5 +847,33 @@ test("A02 «Списать» не работает вне режима «В пр
     await assert.rejects(accounting.writeOff(client.id), { message: "ACCOUNTING_NOT_TRACKED" });
     assert.equal((await accounting.getClientSnapshot(client.id)).available, 2);
     assert.equal((await accounting.getClientSnapshot(client.id)).ledger.length, 1, "только выдача пакета");
+  } finally { await close(); }
+});
+
+test("AUD-08 «Отменить» не работает вне режима «В приложении», факты не меняются", async () => {
+  const { clients, accounting, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "NotTrackedReturn" });
+    await accounting.setClientMode(client.id, "FITCOACH");
+    await accounting.createPack(client.id, pack(2));
+    await accounting.writeOff(client.id);
+    const debit = (await accounting.getClientSnapshot(client.id)).returnableDebitId!;
+    await accounting.setClientMode(client.id, "EXTERNAL");
+    await assert.rejects(accounting.returnLastDebit(client.id, debit), { message: "ACCOUNTING_NOT_TRACKED" });
+    assert.equal((await accounting.getClientSnapshot(client.id)).ledger.filter((row) => row.entryType === "RETURNED").length, 0);
+  } finally { await close(); }
+});
+
+test("AUD-09 ручная корректировка −1 с другой причиной не попадает под «Отменить» на Главной", async () => {
+  const { clients, accounting, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "FixNotReturnable" });
+    await accounting.setClientMode(client.id, "FITCOACH");
+    const created = await accounting.createPack(client.id, pack(3));
+    await accounting.adjust(client.id, created.id, -1, "Пересчёт остатка");
+    assert.equal((await accounting.getClientSnapshot(client.id)).returnableDebitId, null);
+    await accounting.writeOff(client.id);
+    const snapshot = await accounting.getClientSnapshot(client.id);
+    assert.equal(snapshot.ledger.find((row) => row.id === snapshot.returnableDebitId)?.reason, "Ручное списание");
   } finally { await close(); }
 });

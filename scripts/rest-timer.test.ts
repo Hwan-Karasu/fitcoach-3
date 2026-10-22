@@ -223,3 +223,31 @@ test("миграция v10: прежние таймеры сохраняются
     assert.deepEqual(service.list().map((timer) => timer.id), ["old-1", "old-2"], "оба идущих восстановлены независимо");
   } finally { await execution.close(); await clients.close(); }
 });
+
+test("AUD-03 сбой записи в хранилище откатывает экран: пауза, продолжение и ±15 не расходятся с базой", async () => {
+  const { execution, close } = await stores();
+  try {
+    let fail = false;
+    const flaky = {
+      listTimers: () => execution.listTimers(),
+      putTimer: (timer: Parameters<typeof execution.putTimer>[0], replaced: readonly string[]) => fail ? Promise.reject(new Error("SQLITE_BUSY")) : execution.putTimer(timer, replaced),
+      removeTimer: (id: string) => execution.removeTimer(id),
+    };
+    const service = new RestTimerService(flaky, fakeSignal().port, () => T0 + 10_000);
+    await service.start(bench);
+    await service.idle();
+    const id = service.list()[0]!.id;
+    const before = service.list()[0]!;
+    fail = true;
+    await assert.rejects(service.pause(id), { message: "SQLITE_BUSY" });
+    assert.equal(service.list()[0]!.pausedLeftMs, null, "пауза не показана, раз не записана");
+    await assert.rejects(service.adjust(id, 15), { message: "SQLITE_BUSY" });
+    assert.equal(service.list()[0]!.endAt, before.endAt, "±15 не применены");
+    fail = false;
+    await service.pause(id);
+    fail = true;
+    await assert.rejects(service.resume(id), { message: "SQLITE_BUSY" });
+    assert.notEqual(service.list()[0]!.pausedLeftMs, null, "продолжение не показано, раз не записано");
+    assert.equal((await execution.listTimers())[0]!.pausedLeftMs, service.list()[0]!.pausedLeftMs, "экран и база совпадают");
+  } finally { await close(); }
+});
