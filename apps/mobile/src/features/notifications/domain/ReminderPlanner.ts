@@ -6,6 +6,8 @@ export interface PlannerAppointment {
   readonly localDate: string;
   readonly startMinute: number;
   readonly lifecycle: "SCHEDULED" | "COMPLETED" | "CANCELLED";
+  /** Для связи события центра с клиентом (удаление клиента); гость — null. */
+  readonly clientId?: string | null;
   /** Имя клиента или гостя; null — без имени. */
   readonly participantName: string | null;
   readonly sessionTypeName: string;
@@ -22,6 +24,7 @@ export interface PlannerDuty {
 export interface ReminderIntent {
   readonly sourceType: "APPOINTMENT" | "DUTY";
   readonly sourceId: string;
+  readonly clientId: string | null;
   readonly eventKind: "REMINDER";
   /** Меняется вместе со временем срабатывания и текстом: новая версия — новое событие центра, прежняя запись остаётся историей. */
   readonly eventVersion: string;
@@ -51,27 +54,41 @@ export function leadText(minutes: number): string {
   return hours === 0 ? `${rest} мин` : rest === 0 ? `${hours} ч` : `${hours} ч ${rest} мин`;
 }
 
-function fireTimeAllowed(settings: NotificationSettings, fireAt: Date, now: Date): boolean {
-  // Просроченное напоминание задним числом не создаётся (§54.5 п.3); попавшее в тихие часы подавляется и не переносится (§41.9).
-  return fireAt.getTime() > now.getTime() && !isQuietMinute(settings.quietHours, minuteOfDay(fireAt));
+/** Попавшее в тихие часы напоминание подавляется и не переносится (§41.9). */
+function fireTimeAllowed(settings: NotificationSettings, fireAt: Date): boolean {
+  return !isQuietMinute(settings.quietHours, minuteOfDay(fireAt));
+}
+
+type PlannerInput = Readonly<{ settings: NotificationSettings; appointments: readonly PlannerAppointment[]; duties: readonly PlannerDuty[] }>;
+
+/**
+ * Будущие напоминания по текущим данным календаря и настройкам (для планирования в ОС). Идемпотентен: одинаковые входы дают одинаковый результат,
+ * поэтому перепланирование после любого коммита календаря не плодит дубли. На запись и на дежурство — не больше одного напоминания (§41.4).
+ * Просроченное напоминание задним числом не создаётся (§54.5 п.3).
+ */
+export function planReminders(input: PlannerInput & Readonly<{ now: Date }>): readonly ReminderIntent[] {
+  return allReminders(input).filter((intent) => intent.fireAt.getTime() > input.now.getTime());
 }
 
 /**
- * Полный набор будущих напоминаний по текущим данным календаря и настройкам. Идемпотентен: одинаковые входы дают одинаковый результат,
- * поэтому перепланирование после любого коммита календаря не плодит дубли. На запись и на дежурство — не больше одного напоминания (§41.4).
+ * Напоминания, чьё время уже наступило, а запись ещё не началась: их можно показать в центре как актуальные.
+ * Это не утверждение, что Android доставил уведомление (§54.5 п.3).
  */
-export function planReminders(input: Readonly<{ settings: NotificationSettings; appointments: readonly PlannerAppointment[];
-  duties: readonly PlannerDuty[]; now: Date }>): readonly ReminderIntent[] {
-  const { settings, now } = input;
+export function dueReminders(input: PlannerInput & Readonly<{ now: Date }>): readonly ReminderIntent[] {
+  return allReminders(input).filter((intent) => intent.fireAt.getTime() <= input.now.getTime() && input.now.getTime() < intent.startsAt.getTime());
+}
+
+function allReminders(input: PlannerInput): readonly ReminderIntent[] {
+  const { settings } = input;
   const intents: ReminderIntent[] = [];
   if (settings.appointment.enabled) {
     for (const item of input.appointments) {
       if (item.lifecycle !== "SCHEDULED") continue;
       const startsAt = localMoment(item.localDate, item.startMinute);
       const fireAt = new Date(startsAt.getTime() - settings.appointment.minutesBefore * 60_000);
-      if (!fireTimeAllowed(settings, fireAt, now)) continue;
+      if (!fireTimeAllowed(settings, fireAt)) continue;
       const who = item.participantName?.trim() ? item.participantName.trim() : "Без имени";
-      intents.push({ sourceType: "APPOINTMENT", sourceId: item.id, eventKind: "REMINDER",
+      intents.push({ sourceType: "APPOINTMENT", sourceId: item.id, clientId: item.clientId ?? null, eventKind: "REMINDER",
         eventVersion: `${fireAt.getTime()}:${who}:${item.sessionTypeName}`, fireAt, startsAt,
         title: `Запись ${leadText(settings.appointment.minutesBefore)} до начала`,
         body: `${clockText(item.startMinute)} · ${who} · ${item.sessionTypeName}` });
@@ -81,8 +98,8 @@ export function planReminders(input: Readonly<{ settings: NotificationSettings; 
     for (const item of input.duties) {
       const startsAt = localMoment(item.localDate, item.startMinute);
       const fireAt = new Date(startsAt.getTime() - settings.duty.minutesBefore * 60_000);
-      if (!fireTimeAllowed(settings, fireAt, now)) continue;
-      intents.push({ sourceType: "DUTY", sourceId: item.id, eventKind: "REMINDER",
+      if (!fireTimeAllowed(settings, fireAt)) continue;
+      intents.push({ sourceType: "DUTY", sourceId: item.id, clientId: null, eventKind: "REMINDER",
         eventVersion: `${fireAt.getTime()}:${item.endMinute}`, fireAt, startsAt,
         title: `Дежурство ${leadText(settings.duty.minutesBefore)} до начала`,
         body: `${clockText(item.startMinute)}–${clockText(item.endMinute)}` });
