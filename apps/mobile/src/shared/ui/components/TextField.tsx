@@ -24,6 +24,11 @@ interface TextFieldProps {
   readonly hideLabel?: boolean;
   /** Многострочное поле (описание): минимальная высота — три строки, текст сверху. */
   readonly multiline?: boolean;
+  /**
+   * Растущее поле: высота как у однострочного, но по мере набора поле становится выше, а не прокручивает текст вправо. Enter
+   * закрывает клавиатуру, а не вставляет перенос строки (для коротких ответов и названий).
+   */
+  readonly grow?: boolean;
   readonly textAlign?: "left" | "center" | "right";
   readonly compact?: boolean;
 }
@@ -47,6 +52,7 @@ export function TextField({
   testID,
   hideLabel = false,
   multiline = false,
+  grow = false,
   textAlign = "left",
   compact = false,
 }: Readonly<TextFieldProps>) {
@@ -77,9 +83,10 @@ export function TextField({
         returnKeyType={returnKeyType}
         onSubmitEditing={onSubmitEditing}
         testID={testID}
-        multiline={multiline}
-        textAlignVertical={multiline ? "top" : "center"}
-        style={[styles.input, compact && styles.compactInput, multiline ? styles.multiline : null, { textAlign, backgroundColor: colors.input, borderColor, color: colors.textPrimary, opacity: disabled ? 0.6 : 1 }]}
+        multiline={multiline || grow}
+        submitBehavior={grow ? "blurAndSubmit" : undefined}
+        textAlignVertical={multiline || grow ? "top" : "center"}
+        style={[styles.input, compact && styles.compactInput, multiline ? styles.multiline : null, grow ? styles.grow : null, { textAlign, backgroundColor: colors.input, borderColor, color: colors.textPrimary, opacity: disabled ? 0.6 : 1 }]}
       />
       {error ? <Text accessibilityLiveRegion="polite" style={[styles.helper, { color: colors.danger }]}>{error}</Text> : null}
       {!error && helpText ? <Text style={[styles.helper, { color: colors.textSecondary }]}>{helpText}</Text> : null}
@@ -92,6 +99,8 @@ const styles = StyleSheet.create({
   compactLabel: { fontSize: 11, lineHeight: 15 },
   compactInput: { minHeight: 34, paddingHorizontal: 8, paddingVertical: 4, fontSize: 13, lineHeight: 18 },
   multiline: { minHeight: 96, paddingTop: 12 },
+  /** Однострочная высота (42) с равными отступами сверху и снизу: у многострочного поля текст по центру не выравнивается. */
+  grow: { paddingTop: 10, paddingBottom: 10 },
   field: { gap: 6 },
   label: { fontSize: 13, lineHeight: 18, fontFamily: fonts.bold },
   input: { minHeight: 42, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },

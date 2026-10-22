@@ -85,6 +85,7 @@ export function QuestionnaireForm({ schema, inputs, errors, onChange, disabled =
         <View key={entry.id} style={styles.field}>
           <TextField label={label} value={typeof value === "string" ? value : ""} disabled={disabled}
             keyboardType={entry.type === "NUMBER" ? "decimal-pad" : undefined}
+            grow={entry.type === "SHORT_TEXT"} multiline={entry.type === "LONG_TEXT"}
             placeholder={entry.type === "NUMBER" ? "Число" : entry.help ?? undefined}
             hint={entry.type === "NUMBER" ? entry.help ?? undefined : undefined}
             error={error} onChangeText={(text) => onChange(entry.id, text)} />

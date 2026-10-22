@@ -83,8 +83,8 @@ export function FieldEditorSheet({ schema, published, fieldId, showIssues, apply
                 {issues.map((issue) => `• ${issue.message}`).join("\n")}
               </Text>
             ) : null}
-            <TextField label="Текст вопроса" required value={field.label} inputRef={labelRef} onChangeText={(label) => patch({ label })} />
-            <TextField label="Подсказка · необязательно" value={field.help ?? ""}
+            <TextField grow label="Текст вопроса" required value={field.label} inputRef={labelRef} onChangeText={(label) => patch({ label })} />
+            <TextField grow label="Подсказка · необязательно" value={field.help ?? ""}
               onChangeText={(help) => patch({ help: help.trim() === "" ? null : help })} />
 
             <Text style={[styles.group, { color: colors.textPrimary }]}>Обязательный вопрос</Text>
@@ -108,7 +108,7 @@ export function FieldEditorSheet({ schema, published, fieldId, showIssues, apply
               {field.options.map((option, index) => (
                 <View key={option.id} style={styles.optionRow}>
                   <View style={styles.optionInput}>
-                    <TextField label={option.retired ? `Вариант ${index + 1} · выведен` : `Вариант ${index + 1}`}
+                    <TextField grow label={option.retired ? `Вариант ${index + 1} · выведен` : `Вариант ${index + 1}`}
                       value={option.label} disabled={option.retired}
                       onChangeText={(label) => apply((current) => renameOption(current, field.id, option.id, label))} />
                   </View>
@@ -177,7 +177,7 @@ export function FieldEditorSheet({ schema, published, fieldId, showIssues, apply
                 <ChoiceGrid group="Значение" columns={2} items={[{ id: "true", label: "Да" }, { id: "false", label: "Нет" }]}
                   selected={[rule.value]} onPress={(id) => patch({ visibleIf: { ...rule, value: id } })} />
               </> : (
-                <TextField label="Значение" value={rule.value} onChangeText={(value) => patch({ visibleIf: { ...rule, value } })} />
+                <TextField grow label="Значение" value={rule.value} onChangeText={(value) => patch({ visibleIf: { ...rule, value } })} />
               )}
             </> : null}
 

@@ -355,7 +355,7 @@ export function QuestionnaireBuilderScreen({ repository }: Readonly<{ repository
         </Pressable>
         {open && renaming === section.id ? (
           <View style={[styles.rename, { borderTopColor: colors.border }]}>
-            <TextField label="Название раздела" required value={section.title}
+            <TextField grow label="Название раздела" required value={section.title}
               onChangeText={(value) => builder.apply((current) => updateSection(current, section.id, { title: value }), `section:${section.id}`)} />
             <AppButton compact variant="secondary" label="Готово" onPress={() => setRenaming(null)} />
           </View>
