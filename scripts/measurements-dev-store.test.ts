@@ -141,3 +141,45 @@ test("§15.7 permanent client delete removes the journal of that client only; wi
     assert.equal((await blocked.measurements.listForClient(client.id)).measurements.length, 1);
   } finally { await blocked.close(); }
 });
+
+test("Z-хвост пакетная запись замеров: запись, правка и удаление дня — одной транзакцией, одно событие", async () => {
+  const { clients, measurements, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticBatch" });
+    const waist = await measurements.record(client.id, { type: "WAIST", valueX10: 800, localDate: "2026-10-14", localMinute: null }, NOW);
+    const chest = await measurements.record(client.id, { type: "CHEST", valueX10: 1000, localDate: "2026-10-14", localMinute: null }, NOW);
+    let events = 0;
+    measurements.subscribeCommittedChanges(() => { events += 1; });
+    await measurements.applyBatch(client.id, [
+      { kind: "correct", id: waist.id, expectedRevision: waist.revision, input: { type: "WAIST", valueX10: 795, localDate: "2026-10-14", localMinute: null } },
+      { kind: "remove", id: chest.id, expectedRevision: chest.revision },
+      { kind: "record", input: { type: "HIPS", valueX10: 1020, localDate: "2026-10-14", localMinute: null } },
+    ], NOW);
+    assert.equal(events, 1);
+    const day = (await measurements.listForClient(client.id)).measurements;
+    assert.deepEqual(day.map((row) => [row.type, row.valueX10]).sort(), [["HIPS", 1020], ["WAIST", 795]]);
+  } finally { await close(); }
+});
+
+test("Z-хвост пакетная запись замеров: устаревшая revision или неверное значение не оставляют частичного результата", async () => {
+  const { clients, measurements, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticBatchFail" });
+    const other = await clients.create({ displayName: "SyntheticBatchOther" });
+    const waist = await measurements.record(client.id, { type: "WAIST", valueX10: 800, localDate: "2026-10-14", localMinute: null }, NOW);
+    const foreign = await measurements.record(other.id, { type: "WAIST", valueX10: 900, localDate: "2026-10-14", localMinute: null }, NOW);
+    let events = 0;
+    measurements.subscribeCommittedChanges(() => { events += 1; });
+    const record = (valueX10: number) => ({ kind: "record" as const, input: { type: "HIPS" as const, valueX10, localDate: "2026-10-14", localMinute: null } });
+    await assert.rejects(measurements.applyBatch(client.id, [record(1020),
+      { kind: "remove", id: waist.id, expectedRevision: waist.revision + 1 }], NOW), { message: "MEASUREMENT_STALE" });
+    await assert.rejects(measurements.applyBatch(client.id, [record(1020), record(5)], NOW), { message: "MEASUREMENT_VALUE_INVALID" });
+    await assert.rejects(measurements.applyBatch(client.id, [record(1020),
+      { kind: "remove", id: foreign.id, expectedRevision: foreign.revision }], NOW), { message: "MEASUREMENT_STALE" });
+    assert.equal(events, 0);
+    assert.deepEqual((await measurements.listForClient(client.id)).measurements.map((row) => row.type), ["WAIST"]);
+    assert.equal((await measurements.listForClient(other.id)).measurements.length, 1, "чужая запись не удалена");
+    await measurements.applyBatch(client.id, [], NOW);
+    assert.equal(events, 0, "пустой пакет ничего не публикует");
+  } finally { await close(); }
+});

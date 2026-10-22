@@ -1,4 +1,4 @@
-import type { ClientMeasurements, Measurement, MeasurementInput } from "./MeasurementModel.ts";
+import type { ClientMeasurements, Measurement, MeasurementInput, MeasurementOperation } from "./MeasurementModel.ts";
 
 export interface MeasurementCommittedChange {
   readonly clientId: string;
@@ -14,6 +14,11 @@ export interface MeasurementRepositoryPort {
   record(clientId: string, input: MeasurementInput, now?: Date): Promise<Measurement>;
   /** Corrects this entry only and keeps its ID; a moved date or type drops its primary mark. */
   correct(id: string, expectedRevision: number, input: MeasurementInput, now?: Date): Promise<Measurement>;
+  /**
+   * Несколько правок одного клиента одной транзакцией: все или ни одной, одно событие после commit.
+   * Любая устаревшая revision или неверное значение отменяет всё (MEASUREMENT_STALE / ошибка правила).
+   */
+  applyBatch(clientId: string, operations: readonly MeasurementOperation[], now?: Date): Promise<void>;
   /** Explicit delete of one entry; its primary mark is removed and nothing else is promoted. */
   remove(id: string, expectedRevision: number): Promise<void>;
   /** Marks the daily primary for its own `type + date`, replacing the previous choice. */

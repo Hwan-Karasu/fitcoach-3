@@ -65,3 +65,9 @@ export interface ClientMeasurements {
 export type DailyPoint =
   | Readonly<{ kind: "VALUE"; type: MeasurementType; localDate: string; measurement: Measurement; chosen: boolean }>
   | Readonly<{ kind: "AMBIGUOUS"; type: MeasurementType; localDate: string; candidates: readonly Measurement[] }>;
+
+/** Одна правка в пакетной записи; `correct` и `remove` сверяют revision записи. */
+export type MeasurementOperation =
+  | Readonly<{ kind: "record"; input: MeasurementInput }>
+  | Readonly<{ kind: "correct"; id: string; expectedRevision: number; input: MeasurementInput }>
+  | Readonly<{ kind: "remove"; id: string; expectedRevision: number }>;

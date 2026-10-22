@@ -7,7 +7,7 @@ import { pickDate } from "../../../shared/ui/components/pickDate.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
-import { MEASUREMENT_GROUPS, MEASUREMENT_TYPES, type ClientMeasurements, type Measurement, type MeasurementGroup, type MeasurementType } from "../domain/MeasurementModel.ts";
+import { MEASUREMENT_GROUPS, MEASUREMENT_TYPES, type ClientMeasurements, type Measurement, type MeasurementGroup, type MeasurementOperation, type MeasurementType } from "../domain/MeasurementModel.ts";
 import type { MeasurementRepositoryPort } from "../domain/MeasurementRepositoryPort.ts";
 import { dailyPoints, formatDate, localDateOf, measurementTypeInfo, parseValueX10 } from "../domain/MeasurementRules.ts";
 
@@ -143,22 +143,25 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal, compact 
     setBusy(true);
     setError(null);
     try {
+      // Все правки дня — одной транзакцией: сбой посередине не оставляет половину значений.
+      const operations: MeasurementOperation[] = [];
       for (const item of parsed) {
         const cell = source[item.type];
         if (cell.kind === "MANY") { if (item.valueX10 !== null && editor.editingDate === null) throw new Error("MEASUREMENT_MANY"); continue; }
         if (item.valueX10 === null) {
           // Пустое поле удаляет значение только при изменении существующей записи; в новой записи пустое поле ничего не делает.
-          if (cell.kind === "VALUE" && editor.editingDate !== null) await repository.remove(cell.measurement.id, cell.measurement.revision);
+          if (cell.kind === "VALUE" && editor.editingDate !== null) operations.push({ kind: "remove", id: cell.measurement.id, expectedRevision: cell.measurement.revision });
           continue;
         }
         if (cell.kind === "VALUE") {
           if (cell.measurement.valueX10 !== item.valueX10 || cell.measurement.localDate !== editor.date) {
-            await repository.correct(cell.measurement.id, cell.measurement.revision, { type: item.type, valueX10: item.valueX10, localDate: editor.date, localMinute: cell.measurement.localMinute });
+            operations.push({ kind: "correct", id: cell.measurement.id, expectedRevision: cell.measurement.revision, input: { type: item.type, valueX10: item.valueX10, localDate: editor.date, localMinute: cell.measurement.localMinute } });
           }
         } else {
-          await repository.record(clientId, { type: item.type, valueX10: item.valueX10, localDate: editor.date, localMinute: null });
+          operations.push({ kind: "record", input: { type: item.type, valueX10: item.valueX10, localDate: editor.date, localMinute: null } });
         }
       }
+      await repository.applyBatch(clientId, operations);
       setSelected(editor.date);
       setEditor(null);
     } catch (failure) {
