@@ -1,63 +1,64 @@
 # Active context — 2026-10-23
 
 «Дневник атлета», audit/training-fixes. GoalACTIVE full2.0→3.0+backup/restore,не100%.
-TaskR04→R03/D03→D01/R04/R05; R06→R03/D05→D01/R06. Product31.11/33/39.1–7/46.6/
-46.19/48.5.7/48.86.30/49–50/53–56 plus10.15/20.2/22.2/23–27. Migration/overlay/
-signing/releaseOPEN, no realmigration/productionDDL/overlay untilgates. UI/themeslater,
-Excelafterbackup/GitHubfirst/2.0readonly. Targeted area+dependencytests/fullsuite
-milestones. Russiancommits/no push/no subagentsunlessrequested. Basee123c13.
-PreviousgoalturnPROGRESS e123c13 WorkData/healthfix; fullgoalunchangedACTIVE.
+TaskR04→R03; D03→D01/R04/R05. Product48.1–48.5.7/48.6/48.10/48.28/48.39/33/39/
+46.6/46.19/49–50/53–56 plus10.15/20.2/22.2/23–27. Migration/overlay/signing/release
+OPEN; no realmigration/newprodDDL/overlay untilgates. UI/themeslater, Excelafterbackup/
+GitHubfirst/2.0readonly. Targeted area+dependencytests/fullsuite milestones. Russian
+commits/no push/no subagentsunlessrequested. Baseb077518. Previous turnPROGRESS
+b077518 exerciseIDs/links. FullgoalunchangedACTIVE.
 
-Established D01baselines/fullsnapshot/hash/media/staging/GuardedRestore/v2oneuseReturn/
-completion/runtime15holders+workflow/admission/drain/closedrecoverybeforeDBopen.
-ConnectedRestoreActions/ExpoRestoreJobs/UI/WALpin/capacity/generation/GC. Native
-reports35/12/13/24/3/Downloads20/SAF19/reinstall6. ExpoRestoreJobsonly3.0, NOTlegacy.
-Historicalfullfoundation1086. AutoService/Scheduler/UI30min/resume/hash/unchanged/
-ownershipreceipts/pendingmanagedretiredcleanup/status cap2/catalogv1; missingnative19,
-actualautoforce-stops32506→1641→3837 recovery15+14; fixtureCOMPLETE/no armedpause.
-Onlycom.fitcoach.r07sqlite changed;2.0build128untouched. Notallhistories/powerloss.
+Prior D01/fullsnapshot/hash/media/staging/GuardedRestore/v2Return/runtime15holders/
+closedrecovery/connectedRestoreUI/WALpin/capacity/generation/GC. Native35/12/13/24/3/
+Downloads20/SAF19/reinstall6/auto21/status3/missing19/actualauto killrecovery15+14.
+FixtureCOMPLETE/no armedpause/notallhistories. OnlytestAPKchanged;2.0build128untouched.
+Historicalfoundation1086/bundle5623/1185. ExpoRestoreJobsonly3.0, NOTlegacy. Earlier
+profile37/Qhistory/typeepochs/exactversions/draft/retired/tombstones, privateWorkData
+Notes/Tags/PENDING_REVIEW/UUIDs/healthvisibilityfix(no medicalinference). Exercise
+private registry/IDs/links, CUSTOMusr:UUID/oldstocksys:legacy-v2:UUID/SYSTEM/LEGACY_V2,
+allLOAD_REPS,no names/aliasesmerge/RepDBguess. UnknownBodyPart/equipmentnotinvented;
+normalcreationrules/baselinesunchanged. ProductionWorkData/importedregistryrepo/
+DDL/commands/UI/backup/deletion stillOPEN. See detailed handoff/contracts.
 
-b3e17bb profile37→30systemanswers+2CUSTOM+3WorkData+2excludedsteps/photo.8d29b65
-Qcomposition keepspubs/gaps/time/answerrevision/newmigrationmax+1/draftunpublished/
-typeepochs/retiredusedfields/options/tombstones/provenance/retry83tests. e123c13
-private normalizedNotes/Tags/Assignments/PENDING_REVIEW+UUIDs/sameClientQtx/parity/
-FK/integrity/retry105tests. Notejobtime/unknownsourcetime+clientupdatedAt/rawbody;
-tagpolicyNFC_WHITESPACE_RU_CASE_V1/rawlabels/sharedentity; healthsourcesneverACTIVE.
-Healthvisibility10.15fixed positiveclearance+filleddetailsbothkept, oldCLEARANCE_CONFLICT
-removed; explicit hide/retire/customrulesunchanged. ProductionWorkDatarepo/DDL/UI/
-backup/deletion stillmissing; finalizable:false.
+NEW LegacyPlansSourceReader/LegacyPlanPrescription/LegacyPlansProjection/LegacyPlansStage.
+Exactreadonlye116b42 source001/025/ProgramLibrary/TrainingProgram/WorkoutRepository/
+bookPageOrder/sharedProgram/setLogPlan/exerciseSaveData/exerciseDraftSetLogs/
+cleanTemplate/saveSimple/Periodized inspected. Root(client_id,book_id||sourcepgID)
+→ownProgram/member; periodizedrow→mesocycle. SamebookIDacrossclientsNOTsameprogram.
+Sharedpagegid+consistentparticipantsets→mesolineageacrossprograms. Duplicatecopy/
+client ormembershipconflictblocks(no resurrection). DescendantlineagephysicalIDs,
+notinferredcrossweek/client. plans:true requiresprofiles/Q/workData/exercises,
+TRAINING_PLANS_REHEARSAL_V1. stageClientPlans sharedBEGINIMMEDIATEallowners. Existing
+D01Plansdefinitionsonlyinprivatejob, r04_plan_ids/source/receipt forIDs/allraw/target
+manifest/parity/FK/integrity. Oldfilesnotclaimed/rebuilt. loadPlanDraftMappings
+rechecksallplanrows/source/IDledger thenaliases(client,targetProgram,targetId,
+weekIndex,disposition). LogicalSIMPLEworkoutIDs acrossweeks NEVERfactdedup key.
 
-NEW LegacyExerciseCatalogStage + pure rawprojectors extracted fromreaders(retain
-shape/owner/countprivacy/targetWrites0). exercises:true requiresprofiles/Q/workData;
-EXERCISE_REGISTRY_REHEARSAL_V1. stageClientExerciseCatalog sameSQLtx ClientIDs/cards/
-Q/work/registry/overlay/links/receipts/parity/FK/integrity. Oldfilesnotclaimed/rebuilt.
-Private r04_exercise_registry/ids/links/receipt +actualD01exercise_overlay. Current
-custom_exercises NOTNULLbodypart/80name NOTweakened. PersistedCUSTOMusr:UUID/
-oldstocksys:legacy-v2:UUID(originSYSTEM/sourceLEGACY_V2). No names/aliasesmerge/
-RepDBmapping/inferredprofile. loadExerciseDraftIds validates sourcekey/raw/scope/
-origin/prefix/UUID forlaterowners. Fullnames(even>80)/exactaliases whitespace/order/
-duplicates/sourceDates;deletedCUSTOM/SYSTEMarchivedreadablehistory/excludedactive.
-Explicitplan/historyreferences keepraw name/note/JSON/deletion +client/exercise/
-workspaceFK, ambiguous/crossclientrefsblock. Rawinputclonedbeforecallbacks/reparsed;
-reopen/reorder noallocator/newIDs/dates/UPDATE/REPLACE, driftblockedunchanged.
-DomainExerciseDefinition.bodyPartnull forlegacyimport, normalCreateCustomrequires
-category. equipmentUnspecifiedtrue+null distinctknownnone/bodyweight. Rules/search/
-ALL/MINE/filters/minimallabels handleunknown; unknownnotfullbody/musclestatgroup,
-Traininglookupomitsgroup; oldSYSTEMnotattributedRepDB. AlllegacyLOAD_REPS(20×10кг),
-no guessedmuscles/equipment. Registryprivateproposal NOTproductionstore/DDL;
-runtimecommands/enrichment/archive/backup/deletion wiringOPEN. Historicalclassification
-notmigrated; overlaydefaultsNOTproofsourceprefs migrated.
+PageorderpageIndex/createdAt,ties/activepositions/gaps/unsupportedvaluesblock;
+deletedduplicatepositionsnotactive. SIMPLEbase+weeklyoverrides keepphysicalex/setIDs;
+sourceSimpleweek→program+index/no faketargetWeekID. Varyingworkoutordinalsetsnot
+representable→block. PlanJSONlegacypriority/exactgrams/ranges/missingnull; RIR
+exercise thenfirstactivesetJSON, notactualRPE. Actualreps/weight/completion/segments
+retainedforExecution, notfakeplan/facts. ExplicitsetCountonlywhenworkinglogsabsent.
+Note/supersetmapped; missingrestnullnotoldtimerprefproof. Explicitworkspacepage→
+root+mesoselection; archive notselected; invalidselectionretained/no neighborfallback.
+Source libraryheader/date; absentheadernewcontaineratimporttime/provenance.
+Deferredsource NOToperational:archiveentries/templates/deleted/free standalone/
+orphanlibrary/workspacestate/view/preferences(counts+raw). Othermetadata/annotations/
+historicalclassification/actorchoice/descendantlineageneedmapping. finalizable:false,
+privateDBnotpublishablefitcoach_v3.db. Retained deleted/warmup aliases keep proven
+book/week context without activeentity IDs; parentFKancestry beats shadowmetadata.
+No unexplainedPENDING_PLAN infixture.
 
-153/153 npm run r04:exercise-stage:test(17new),82/82 downstreamfullsourceaudit.
-Synthetic5definitions/5links+Client/Q/work/additionallegacycustomQ;6faultboundaries
-rollbackall, sourcefileSHAunchanged/targetreopenreorderbyteidentical, ownership/FK/
-collision/drift/mutation. Root/mobileTS/changedESLint/source/arch506/secrets/diff.
-AndroidJS/Hermesbundle5623/1185. No fullfoundation/newAPK/Androidfixture/phone.
-Testsregisteredr04/foundation. R04_EXERCISE_REGISTRY_STAGING.md contract.
-finalizable:false, privateDBnotfitcoach_v3.db. NEXT structure/program/library/
-archive→Plans usingClient/ExerciseIDmaps, canonicalTrainingfacts/remainingowners/
-fullstagingparity/provenance/retry/Android/runtime2.0Restore/JSONv1v2. Missingrefs
-session/library/archive/aliasregistry/exercise_identity_unresolved/preferences.
-Otherbackupedgesclock/DST/SAFgap/copydeletekill/ENOSPC/providers/UI/OS/first-runOPEN.
-No personalDB/backups/secrets/keyread. LastPID3837terminal/Metro99958historical/
-unverified/no pendingkill/scrcpyopen. See docs/HANDOFF_BACKUP_MIGRATION.md.
+230/230 npm run r04:plans:test(18new+source/metric/client/Q/work/catalog/normalplans).
+Productionreadhelpers read3programs/3mesos/ownheaders/sharedcopies/simpleoverrides/
+customQ/allowners.14faultboundariesrollbackall/retry, read-onlysourceSHAunchanged/
+targetreopenreorderbyteidentical, drift/missingIDs/membership/mutation. Root/mobile
+TS/changedESLint/source/arch506/secrets/diff pass. Testsregisteredr04/foundation.
+NO fullfoundation/APK/bundle/Androidthisturn(runtimeunchanged). Contract
+R04_TRAINING_PLANS_STAGING.md. NEXT actualarchive/template conversion +canonical
+Trainingfacts viaaliases/sourcefactdedup/segments/dateprecision, otherowners/full
+staging/parity/retry/runtimeSQLite/JSONv1v2Restore/Android. Otherbackupedgesclock/DST/
+SAFgap/copydeletekill/ENOSPC/providers/UI/OS/first-runOPEN. No personalDB/backups/
+secrets/keyread. LastnativePID3837terminal/Metro99958historical/unverified/no pending
+kill/scrcpyopen. Full handoff docs/HANDOFF_BACKUP_MIGRATION.md.

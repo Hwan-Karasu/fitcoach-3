@@ -1,7 +1,9 @@
 # R04 — исходная структура программ 2.0
 
-Статус: PARTIAL, read-only graph и проверка связей. Целевые записи и schema
-migrations не создаются. Это продолжение проверки program/book identity.
+Статус: PARTIAL. Reader остаётся read-only graph; отдельный
+[TrainingPlans staging](R04_TRAINING_PLANS_STAGING.md) теперь пишет и проверяет
+Client/Q/WorkData/catalog/Plan rows в общей synthetic-транзакции. Production
+migrations не создаются; архивы/факты ещё не завершены.
 
 ## Входы и требования
 

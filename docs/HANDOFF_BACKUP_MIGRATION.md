@@ -1,4 +1,73 @@
-## Последнее продолжение — R04 exercise registry/IDs/links, база e123c13
+## Последнее продолжение — R04 live Plans/stable aliases, база b077518
+
+Previous goal turn PROGRESS b077518 exercise registry/IDs/links. CurrentR04→R03,
+D03→D01/R04/R05. Product48.1–48.5.7/48.6/48.10/48.28/48.39/33/39/46.6/46.19/
+49–50/53–56. New productionDDL/realmigration/overlay/signing/release NOTstarted,
+gatesOPEN. FullgoalACTIVE, not100%.
+
+New LegacyPlansSourceReader/LegacyPlanPrescription/LegacyPlansProjection/
+LegacyPlansStage. Readonly exactbuild120e116b42 inspected:001/025, ProgramLibrary/
+TrainingProgram/TrainingWorkoutRepository, bookPageOrder, sharedProgram, setLogPlan,
+exerciseSaveData/exerciseDraftSetLogs, cleanProgramTemplate, saveSimple/Periodized.
+Proof: libraryroot(client_id,COALESCE(NULLIF(book_id,''),id)), page→mesocycle;
+sourcebookIDacrossclientsNOTsharedroot. Sharedpagegroups via exactgid+consistent
+participantsets (ownerdefault accordinglegacyaccessor), atmostonecopy/client.
+Target Placement/MesocycleGroupStore supportslineage acrossdifferentprograms.
+
+plans:true requiresprofiles/Q/workData/exercises, TRAINING_PLANS_REHEARSAL_V1
+persistedbinding. stageClientPlans sameBEGINIMMEDIATE acrossallowners/IDs/receipts.
+Actual existingD01TrainingPlans schema inprivatejob, no newprodDDL. r04_plan_ids/
+source/receipt retainallraw/IDs/targetmanifests; oldfilesnotclaimed/rebuilt. Public
+loadPlanDraftMappings firstrechecksallplanrows/source/IDledgerparity, provides
+sourcealiases(client,targetProgram,targetId,weekIndex,disposition) forfact/archive
+adapters. SimplelogicalWorkoutIDsharedbyweeks MUSTNOTdeduplicatefacts; sourcefactID
+andclient/week/sessionidentityremainseparate. Names/positionsnotFactidentity.
+
+Active clientbook→Program/member; periodizedpage→ownmesocycle/week/workout/exercise/
+plannedsets. PageorderpageIndex/createdtime, tiesblock; activepositionconflictsblock,
+deletedduplicatepositions notactive. Source libraryheader/date retained; absent
+librarycreatesnewcontainer atimporttime withprovenance. Sharedcopieskeepindependent
+headers/clientstructures; descendantlineage onlysourcephysicalIDs, no guessed
+crossweek/client equivalence. SIMPLEphysicalrepeattemplates→base+weekoverrides,
+ownphysicalexercise/setIDs. Weekaliasesprogram+weekIndex/no faketargetWeekID.
+Differentworkoutordinalsbetweenweeksunrepresentable→block, notsilentlybasefallback.
+
+PlanonlyJSONaliases exactlegacypriority; exercise repRange/weight fallback, RIR
+exercise thenfirstactivesetJSON. Actualreps/weight/rpe/completedAt/segments notused
+asplanorperformedfacts here. Exactgrams/no rounding/ranges/missingnull. Workinglogs
+defineplan; whenabsent explicitsetCountonly createsvirtualprescription slots.
+Warmupsource retainedforExecution. Retained deleted/warmup aliases keep proven
+client-book/week context without creating an active entity. Note/supersetstored; missingperexrestnull not
+proofoldtimerprefmigration. Explicitactiveworkspacepage→root+mesoselection; archive
+notselected; invalidoldselectionretained UNRESOLVED_NOT_SELECTED withoutguessing.
+
+Deferred raw, NOT operational:archiveentries/templates/deletedstructure/free
+standalone, orphanlibrary/workspacestate/view/preferences; countsreturnedandmanifest.
+Annotations/othermetadata/actorchoice/historicalclassification/descendantlineage
+stillneedmapping. Everycore rawrow retained, no PENDING_PLAN unexplained infixture.
+ActivePlanonly scope explicit; don'tcallarchives/factsDONE fromrawsnapshot retention.
+
+230/230 npm run r04:plans:test (18new +ledger/source/metric/client/Q/work/catalog/
+normalplanstoredependencies). Production readMesocycles/readStructure/readSimpleWeeks/
+groupOfCopy readactualD01rows:3programs/3mesos, client-scopedduplicatebookIDs, shared
+copiesinindependentprograms, simpleweeklyvariation, customQhistory+allowners.
+14injectedfaultboundariesrollbackall+retry, sourcefileSHAunchanged/targetreopenreorder
+byteidentical, drift/missingIDs/membershipconflict/callermutation. Root/mobileTS,
+changedESLint/source/arch506/secrets/diff pass. No fullfoundation/APK/bundle/Android
+thisturn(runtimeunchanged). Testsregisteredr04/foundation. Detailedcontract
+docs/spikes/R04_TRAINING_PLANS_STAGING.md. finalizable:false; private r04_* DB cannot
+publish throughcommonengine asfitcoach_v3.db. ProductionWorkData/importedregistry
+store/DDL/commands/backup/deletion alsoOPEN, ExpoRestoreJobsonly3.0.
+
+NEXT R04 actualarchive/template conversion +canonicalTrainingfacts usingthesealias
+maps/provenance/sourcefactdedup/segments/dateprecision; remainingowners/fullstaging/
+parity/retry/runtimeSQLite+JSONv1v2Restore/Android. Keepfullgoal/gatesOPEN; UI/themes
+later, Excelafterbackup. Otherbackupedgesclock/DST/SAFgap/copydeletekill/ENOSPC/
+providers/ordinaryUI/OS/first-run remain. Phone/2.0/personalfilesuntouched, last
+nativePID3837terminal/Metro99958historical/unverified/scrcpyopen/no pendingkill.
+Russiancommits/no push. Check currentworktree/handles before relying onhistory.
+
+## Предыдущий срез — R04 exercise registry/IDs/links, база e123c13
 
 Previous goal turn PROGRESS e123c13: WorkData normalizedstage+health visibility.
 Current R04→R03, D03→D01/R04/R05. Product31.11/33/39.1–7/46.6/46.19/48.5.7/

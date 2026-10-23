@@ -1,3 +1,10 @@
+## 2026-10-23 — R04: книги, мезоциклы и плановые назначения 2.0
+
+- По точным исходникам025/ProgramLibrary/Program/Shared/SetLogPlan подтверждены client-scoped books, страницы и отдельные копии общих мезоциклов. Новый stageClientPlans пишет настоящие D01 Plans rows в общей Client/Q/WorkData/catalog транзакции, source/ID/target manifests и aliases. [Контракт](spikes/R04_TRAINING_PLANS_STAGING.md).
+- SIMPLE сохраняет недельные отличия через overrides и physical exercise/set IDs. Plan JSON/ranges/RIR/вес отделены от actual reps/weight/completion; warmup/deleted/template/free standalone источники не становятся выдуманными фактами. Shared gid без согласованного состава не возвращает участника в группу.
+- **230/230** targeted (18 новых), production read helpers читают staged Plans;14 failure boundaries rollback/retry, read-only source SHA unchanged и target reopen/reorder byte-identical. Root/mobile TS, changed ESLint/source/arch506/secrets/diff. Fullfoundation/APK/bundle/телефон не затрагивались, runtime не менялся.
+- finalizable:false: архивные snapshots/templates/deleted/free и остальные metadata пока retained source с deferred counts, не законченные operational records. Далее реальные архивы/шаблоны и canonical Training facts/dedup/segments/dates, остальные владельцы/full staging/runtime2.0 Restore/Android. Общая цель ACTIVE, gates OPEN.
+
 ## 2026-10-23 — R04: каталог упражнений и устойчивые ссылки 2.0
 
 - В общей транзакции Client/Q/WorkData добавлены5 synthetic definitions/5links, persisted Exercise IDs/provenance/receipts/parity. CUSTOM usr:UUID и прежний stock sys:legacy-v2:UUID не сливаются по имени/RepDB. Сохранены полные имена/aliases/даты и удалённые SYSTEM/CUSTOM для истории. [Контракт](spikes/R04_EXERCISE_REGISTRY_STAGING.md).

@@ -1,6 +1,11 @@
 # R04 — legacy program/book identity (кандидат)
 
-**Статус: SOURCE GROUPING CANDIDATE / NOT TARGET-MAPPED / NO TARGET WRITES.**
+**Статус этого read-only preflight: SOURCE GROUPING CANDIDATE / NO TARGET WRITES.**
+Продолжение [TrainingPlans staging](R04_TRAINING_PLANS_STAGING.md): по точным025/
+ProgramLibraryRepository подтверждён client-scoped root и страницы мезоциклов.
+Отдельный persisted ledger/actual D01 staging уже проверяет преобразование.
+Book ID разных клиентов не объединяет их в одну программу; группы копий основаны
+на sharedGroupId и согласованном participant set.
 Продолжение: [source graph программ и составной ключ библиотеки](R04_PROGRAM_STRUCTURE_MAPPING.md).
 Ключ library — `(client_id,id)`; одинаковые ID разных клиентов допустимы.
 Вход — `training_programs` и, если есть, `training_library_programs` в том же
