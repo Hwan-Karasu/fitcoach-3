@@ -13,7 +13,7 @@ import type { RecipeCatalogPort } from "../domain/RecipeCatalogPort.ts";
 import { recipeBases } from "../domain/RecipeRules.ts";
 import { metricLabels, nutritionErrorText, unitLabels, wholeText } from "./nutritionFormat.ts";
 import { deleteLocalImage, storeLocalImage } from "../../../shared/media/LocalImageStore.ts";
-import { photosToDiscard } from "../domain/RecipePhotoRules.ts";
+import { RecipePhotoSession } from "../application/RecipePhotoSession.ts";
 
 interface Row { readonly food: FoodProduct; readonly quantity: string }
 
@@ -49,6 +49,7 @@ export function RecipeEditorScreen({ recipeId, foods, recipes, onSaved, onDirtyC
   const [options, setOptions] = useState<readonly FoodProduct[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [confirmHide, setConfirmHide] = useState(false);
   const [step, setStep] = useState(recipeId === undefined ? 1 : 3);
   const [prep, setPrep] = useState("");
@@ -58,14 +59,12 @@ export function RecipeEditorScreen({ recipeId, foods, recipes, onSaved, onDirtyC
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [initialSignature, setInitialSignature] = useState<string | null>(null);
   const lock = useRef(false);
-  // NUT-019: копии, созданные в этом сеансе, и фото, уже записанное в рецепт; лишние файлы удаляются при выходе.
-  const picked = useRef<string[]>([]);
-  const savedPhoto = useRef<string | null>(null);
-  const currentPhoto = useRef<string | null>(null);
-  const committed = useRef(false);
-  currentPhoto.current = photoUri;
-  useEffect(() => () => {
-    for (const uri of photosToDiscard({ picked: picked.current, previous: savedPhoto.current, current: currentPhoto.current, saved: committed.current })) deleteLocalImage(uri);
+  const photoSession = useRef<RecipePhotoSession | null>(null);
+  useEffect(() => {
+    // Each effect attachment owns a session, including React Strict Mode setup/cleanup.
+    const session = new RecipePhotoSession({ store: storeLocalImage, remove: deleteLocalImage });
+    photoSession.current = session;
+    return () => { session.dispose(); if (photoSession.current === session) photoSession.current = null; };
   }, []);
   const signature = JSON.stringify({ name, servings, mass, description, rows: rows.map((row) => [row.food.id, row.quantity]), prep, cook, categories, instructions, photoUri });
   useEffect(() => {
@@ -84,7 +83,7 @@ export function RecipeEditorScreen({ recipeId, foods, recipes, onSaved, onDirtyC
       setFlags({ favorite: recipe.favorite === true, inCookbook: recipe.inCookbook === true }); setLoaded(true);
       setPrep(recipe.details?.prepMinutes == null ? "" : String(recipe.details.prepMinutes));
       setCook(recipe.details?.cookMinutes == null ? "" : String(recipe.details.cookMinutes));
-      setCategories(recipe.details?.categories.join(", ") ?? ""); setInstructions(recipe.details?.steps.join("\n") ?? ""); setPhotoUri(recipe.details?.photoUri ?? null); savedPhoto.current = recipe.details?.photoUri ?? null;
+      setCategories(recipe.details?.categories.join(", ") ?? ""); setInstructions(recipe.details?.steps.join("\n") ?? ""); setPhotoUri(recipe.details?.photoUri ?? null); photoSession.current?.setInitial(recipe.details?.photoUri ?? null);
     }, () => { if (active) { setError("Не удалось загрузить рецепт."); setLoaded(true); } });
     return () => { active = false; };
   }, [recipeId, recipes]);
@@ -104,7 +103,8 @@ export function RecipeEditorScreen({ recipeId, foods, recipes, onSaved, onDirtyC
   }, [rows, servingsX10, massX10]);
 
   const save = async () => {
-    if (lock.current) return;
+    const session = photoSession.current;
+    if (lock.current || !session || session.isDisposed || session.busy) return;
     if (name.trim() === "" || name.trim().length > 80 || description.length > 500) { setError("Введите название до 80 символов и описание до 500 символов."); return; }
     if (step === 1) { setError(null); setStep(2); return; }
     if (servingsX10 === null || servingsX10 <= 0) { setError("Укажите число порций, например 4."); return; }
@@ -117,16 +117,28 @@ export function RecipeEditorScreen({ recipeId, foods, recipes, onSaved, onDirtyC
     if (ingredients.some((item) => item.quantityX10 <= 0)) { setError("Укажите количество каждого ингредиента."); return; }
     lock.current = true; setBusy(true);
     try {
-      const input = { name, servingsX10, cookedMassX10: massX10, description: description.trim() === "" ? null : description, ingredients,
-        details: { prepMinutes, cookMinutes, categories: [...new Set(categories.split(",").map((text) => text.trim()).filter(Boolean))], steps: instructions.split("\n").map((text) => text.trim()).filter(Boolean), photoUri } };
-      if (recipeId === undefined) await recipes.create(input); else await recipes.update(recipeId, revision, input);
-      committed.current = true;
-      onDirtyChange?.(false);
-      onSaved();
+      const saved = await session.persist(async (readyPhotoUri) => {
+        const input = { name, servingsX10, cookedMassX10: massX10, description: description.trim() === "" ? null : description, ingredients,
+          details: { prepMinutes, cookMinutes, categories: [...new Set(categories.split(",").map((text) => text.trim()).filter(Boolean))], steps: instructions.split("\n").map((text) => text.trim()).filter(Boolean), photoUri: readyPhotoUri } };
+        if (recipeId === undefined) await recipes.create(input); else await recipes.update(recipeId, revision, input);
+      });
+      if (saved && !session.isDisposed) { onDirtyChange?.(false); onSaved(); }
     } catch (failure) {
-      setError(recipeError(failure));
-      setBusy(false);
-    } finally { lock.current = false; }
+      if (!session.isDisposed) setError(recipeError(failure));
+    } finally { lock.current = false; if (!session.isDisposed) setBusy(false); }
+  };
+  const pickPhoto = async () => {
+    const session = photoSession.current;
+    if (lock.current || !session || session.isDisposed || session.busy) return;
+    setPhotoBusy(true);
+    try {
+      const stored = await session.choosePhoto(async () => {
+        const result = await launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
+        return result.canceled ? null : result.assets[0]?.uri ?? null;
+      });
+      if (!session.isDisposed && stored !== null) { setPhotoUri(stored); setError(null); }
+    } catch { if (!session.isDisposed) setError("Не удалось открыть или сохранить фотографию."); }
+    finally { if (!session.isDisposed) setPhotoBusy(false); }
   };
   const toggle = async (kind: "favorite" | "inCookbook") => {
     if (recipeId === undefined) return;
@@ -137,9 +149,15 @@ export function RecipeEditorScreen({ recipeId, foods, recipes, onSaved, onDirtyC
     } catch (failure) { setError(recipeError(failure)); }
   };
   const hide = async () => {
-    if (recipeId === undefined) return;
-    setBusy(true);
-    try { await recipes.archive(recipeId, revision); onDirtyChange?.(false); onSaved(); } catch (failure) { setError(recipeError(failure)); setBusy(false); setConfirmHide(false); }
+    const session = photoSession.current;
+    if (recipeId === undefined || lock.current || !session || session.isDisposed || session.busy) return;
+    lock.current = true; setBusy(true);
+    try {
+      await recipes.archive(recipeId, revision);
+      if (!session.isDisposed) { onDirtyChange?.(false); onSaved(); }
+    } catch (failure) {
+      if (!session.isDisposed) { setError(recipeError(failure)); setConfirmHide(false); }
+    } finally { lock.current = false; if (!session.isDisposed) setBusy(false); }
   };
 
   if (!loaded) return <LoadingState label="Загружаем рецепт…" />;
@@ -196,20 +214,17 @@ export function RecipeEditorScreen({ recipeId, foods, recipes, onSaved, onDirtyC
       </View>
       <TextField label="Способ приготовления" value={instructions} onChangeText={setInstructions} multiline hint="Каждый шаг — с новой строки. Необязательно." />
       {photoUri !== null ? <><Image accessibilityLabel="Фотография рецепта" source={{ uri: photoUri }} style={{ width: "100%", height: 180, borderRadius: 16 }} />
-        <AppButton compact variant="ghost" label="Убрать фото" onPress={() => setPhotoUri(null)} /></> : null}
-      <AppButton variant="secondary" label={photoUri === null ? "Добавить фото из галереи" : "Заменить фото"} onPress={() => {
-        void launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 }).then((result) => {
-          if (!result.canceled && result.assets[0] !== undefined) { const stored = storeLocalImage(result.assets[0].uri); picked.current.push(stored); setPhotoUri(stored); }
-        }).catch(() => setError("Не удалось открыть или сохранить фотографию."));
-      }} />
+        <AppButton compact variant="ghost" label="Убрать фото" disabled={busy || photoBusy} onPress={() => { if (photoSession.current?.removePhoto()) setPhotoUri(null); }} /></> : null}
+      <AppButton variant="secondary" label={photoUri === null ? "Добавить фото из галереи" : "Заменить фото"}
+        disabled={busy} busy={photoBusy} busyLabel="Подготавливаем фото…" onPress={() => { void pickPhoto(); }} />
       {recipeId !== undefined ? <View style={styles.rowHead}>
         <View style={styles.flex}><AppButton compact variant="secondary" label={flags.inCookbook ? "Убрать из кулинарной книги" : "Добавить в кулинарную книгу"} disabled={busy} onPress={() => { void toggle("inCookbook"); }} /></View>
         <View style={styles.flex}><AppButton compact variant="ghost" label={flags.favorite ? "Убрать из избранного" : "В избранное"} disabled={busy} onPress={() => { void toggle("favorite"); }} /></View>
       </View> : null}
       </> : null}
-      <AppButton label={step < 3 ? "Следующий шаг" : recipeId === undefined ? "Сохранить рецепт" : "Сохранить изменения"} onPress={() => { void save(); }} busy={busy} />
-      {step > 1 ? <AppButton variant="ghost" label="Предыдущий шаг" disabled={busy} onPress={() => setStep(step - 1)} /> : null}
-      {recipeId !== undefined ? <AppButton variant="destructive" label="Убрать рецепт из каталога" disabled={busy} onPress={() => setConfirmHide(true)} /> : null}
+      <AppButton label={step < 3 ? "Следующий шаг" : recipeId === undefined ? "Сохранить рецепт" : "Сохранить изменения"} onPress={() => { void save(); }} busy={busy} disabled={photoBusy} />
+      {step > 1 ? <AppButton variant="ghost" label="Предыдущий шаг" disabled={busy || photoBusy} onPress={() => setStep(step - 1)} /> : null}
+      {recipeId !== undefined ? <AppButton variant="destructive" label="Убрать рецепт из каталога" disabled={busy || photoBusy} onPress={() => setConfirmHide(true)} /> : null}
       <ConfirmDialog visible={confirmHide} destructive title="Убрать рецепт из каталога?" confirmLabel="Убрать" onCancel={() => setConfirmHide(false)} onConfirm={() => { void hide(); }}
         description="Рецепт перестанет предлагаться при добавлении еды. Уже внесённые записи в дневниках не изменятся." />
     </ScrollView>

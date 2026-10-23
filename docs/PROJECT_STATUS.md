@@ -1,3 +1,9 @@
+## 2026-10-23 — R06: готовность фото до сохранения и безопасный cleanup
+
+- `storeLocalImage` теперь ждёт File.copy и проверяет готовый размер; при сбое URI не публикуется, удаляется только собственный частичный файл. Flat image-store path guard блокирует traversal/encoded separators и чужие файлы при cleanup.
+- `RecipePhotoSession` сериализует picker/copy/save: сохранение недоступно до готовности фото, поздняя копия после ухода удаляется. При unmount во время DB write cleanup ждёт результат, сохраняет фото committed-рецепта и не удаляет прежнее при отказе. UI показывает «Подготавливаем фото…», без технических кодов.
+- Семь новых lifecycle/path регрессий; foundation 946/946, typecheck, lint, arch:check, source:verify, secrets:check, diff --check и Android production JS bundle (5561 modules, 1185 assets) прошли. Ручной picker E2E на телефоне не выполнялся. Следующий шаг R06 — runtime controller и boot/leases/scheduler, SAF/rotation/Return; полный перенос 2.0 и Excel впереди.
+
 ## 2026-10-23 — R06: общий snapshot engine и полный формат на Android
 
 - Продолжена работа после просьбы владельца «не спим, работаем». Snapshot manifest/catalog/content hash/media/staging перенесены в общий mobile engine; Node и Expo используют одну реализацию. Snapshot migrations/checksum сохранены, Node hash остаётся независимым oracle. Расхождение на REAL -0 устранено без ослабления fixture; short reads и rollback при изменении исходного фото проверены.

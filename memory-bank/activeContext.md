@@ -9,8 +9,9 @@ manifest, frozen snapshot migrations, typed hash, media и staging. WIP `1f47d45
 исправлен: REAL -0 не проходит через printf; INTEGER читается точным TEXT.
 Node oracle и original migration checksums сохранены.
 
-Текущие проверки: foundation 939/939, typecheck mobile/spike, lint, arch,
-source/secrets/diff. Android full `.atbackup` с фото: normal 19/19;
+Текущие проверки: foundation 946/946, typecheck mobile, lint, arch,
+source/secrets/diff и Android production JS bundle. Общий engine `b629fa1`
+также прошёл spike typecheck и Android full `.atbackup` с фото: normal 19/19;
 actual force-stop после swap до COMMITTED и recovery нового процесса 7/7.
 Данные только синтетические. Установленная 2.0.0 (128) не заменялась;
 её БД и личные backup-файлы не открывались. Metro и reverse 8096 остановлены.
@@ -22,9 +23,10 @@ reinstall/full-owner matrix. Default app runtime пока не использу�
 Реальный полный legacy migration engine также ещё не закончен; gates OPEN.
 Нельзя считать R04 audits/projections полноценной записью всех owners 3.x.
 
-До интеграции исправить `shared/media/LocalImageStore.ts`: File.copy без await;
-RecipeEditor должен ждать фото, блокировать save и удалять поздний результат
-после unmount. В backup/restore adapters await уже есть.
+Photo readiness исправлена: `storeLocalImage` ждёт copy/проверяет размер,
+`RecipePhotoSession` блокирует save/remove/повторный picker и ждёт исход DB save
+до cleanup при unmount. Семь регрессий проверяют async lifecycle/path guard;
+ручной picker E2E не выполнялся. В backup/restore adapters await также есть.
 
 После завершения backup/restore владелец запросил Excel import как в 2.0 и
 workout export в Excel. Сначала исследовать GitHub solutions/libraries,

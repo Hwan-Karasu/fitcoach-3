@@ -15,7 +15,10 @@
   совместим с прежним форматом. INTEGER int64/REAL edge fixtures совпадают с
   независимым Node oracle на host и Android. Short photo reads собираются точно;
   изменение исходного файла откатывает metadata transaction.
-- Foundation 939/939. Android normal full-format 19/19, actual force-stop/recovery
+- Photo readiness: async store/copy, save lock, lifecycle cleanup ждёт DB commit,
+  late-copy после unmount удаляется; own-image path guard. Семь новых регрессий.
+- Foundation 946/946, typecheck/lint/arch/source/secrets/diff и Android JS bundle.
+  Android normal full-format 19/19, actual force-stop/recovery
   нового процесса 7/7. Отчёт: `docs/spikes/R06_FULL_SNAPSHOT_REPORT.json`.
 
 Открыто:
@@ -23,8 +26,8 @@
 - R06/D05: runtime controller, boot recovery, release всех repository/workflow
   leases и scheduler, UI confirmation/reopen/read models, SAF folder/file rights
   и publication, rotation/Return, native negative/low-storage/reinstall/full-owner.
-- `apps/mobile/src/shared/media/LocalImageStore.ts`: copy без await; исправить
-  вместе с async lifecycle `RecipeEditorScreen.tsx`, save lock и unmount cleanup.
+- Ручной picker E2E для photo readiness пока не выполнен; lifecycle проверен
+  автоматическими тестами, UI скомпилирован production JS bundle.
 - R04/D03/D04: закончить semantic mapping и staging всех legacy owners/историй,
   устойчивые IDs/provenance/parity/retry/kill/low-storage. Текущие audits и client
   rehearsal не равны полной миграции всех данных. LOAD_REPS для 2.0 утверждён

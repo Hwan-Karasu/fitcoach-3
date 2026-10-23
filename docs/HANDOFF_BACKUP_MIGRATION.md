@@ -6,7 +6,7 @@ UI и темы остаются на последующую шлифовку. П
 
 ## Последний завершённый этап R06 — общий snapshot engine
 
-Ветка `audit/training-fixes`. Ранее: `be5f8f7` (native guarded restore),
+Ветка `audit/training-fixes`. Общий engine: `b629fa1`; ранее `be5f8f7` (native guarded restore),
 `1f47d45` (WIP checkpoint). WIP-ошибка checksum исправлена: SQLite printf терял
 знак REAL -0; теперь REAL читается исходным double, INTEGER — точным TEXT.
 Старый Node hash остался независимым oracle. Checksum snapshot migrations 1/2
@@ -20,10 +20,12 @@ Host больше не содержит отдельного второго medi
 Mutable рабочая БД не передаётся в seal/stage и не получает snapshot metadata.
 Исходный metadata-only snapshot остаётся читаемым, D01 рабочая схема не менялась.
 
-Проверки текущего этапа: foundation **939/939**, mobile и spike typecheck,
-lint, arch:check (463 source files), source:verify, secrets:check и diff --check.
-Отдельный Android production bundle в этом срезе не запускался; фактически
-собран и запущен development bundle SQLite spike на устройстве.
+Проверки общего engine: foundation **939/939**, mobile и spike typecheck,
+lint, arch:check, source:verify, secrets:check и diff --check; development
+bundle SQLite spike запущен на устройстве. После исправления photo readiness:
+foundation **946/946**, mobile typecheck, lint, arch:check (465 source files),
+source/secrets/diff и Android production JS bundle (5561 modules/1185 assets).
+Это сборка JS, не release APK и не ручной E2E редактора с picker.
 
 Телефон: Android API 36, Expo Go 57.0.9. Новый полный формат на синтетических
 private данных: **19/19**, включая Node scalar oracle, embedded photo >512 КиБ,
@@ -47,11 +49,13 @@ invalidation, подтверждение полной замены. Default runt
 новый Expo driver. Нужны SAF/Downloads выбор/публикация/права, rotation, Return
 point, negative/low-storage/reinstall/full-owner native matrix. R06/D05 OPEN.
 
-Известный отдельный дефект готовности фото: в `shared/media/LocalImageStore.ts`
-`File.copy` ещё вызывается без await, RecipeEditor может сохранить URI раньше
-завершения копирования. Исправить async lifecycle, блокировку save во время copy
-и освобождение позднего результата при unmount. В новых backup/restore adapters
-копирование уже ожидается.
+Дефект готовности фото исправлен: `storeLocalImage` ждёт copy, проверяет размер
+и не публикует URI частичной копии. `RecipePhotoSession` блокирует save/remove/
+второй picker во время copy, удаляет позднюю готовую копию после unmount;
+если экран ушёл во время DB save, cleanup ждёт исход транзакции, сохраняя фото
+успешной записи. Ошибка/отмена сохраняют прошлый выбор. Удаление принимает только
+файл своего плоского каталога без traversal/encoded separators. Семь новых
+регрессий проверяют эти lifecycle/path сценарии. Ручной picker E2E ещё не выполнен.
 
 ## Общая цель по-прежнему шире R06
 
