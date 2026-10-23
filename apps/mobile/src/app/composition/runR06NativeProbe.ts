@@ -2,7 +2,7 @@ import { Directory, File, Paths } from "expo-file-system";
 import * as SQLite from "expo-sqlite";
 import { uuid } from "expo-modules-core";
 import { Image } from "react-native";
-import { GuardedRestore, RestoreProtocolError, SnapshotError } from "../../features/backup/public.ts";
+import { RestoreProtocolError, SnapshotError } from "../../features/backup/public.ts";
 import { ExpoRestoreStorage } from "../../features/backup/data/ExpoRestoreStorage.ts";
 import { ExpoSqliteBackup } from "../../features/backup/data/ExpoSqliteBackup.ts";
 import { expoSnapshotMedia } from "../../features/backup/data/ExpoSnapshotMedia.ts";
@@ -16,13 +16,15 @@ import { RuntimeMaintenance } from "../runtime/RuntimeMaintenance.ts";
 import { WorkflowDatabaseLease } from "../runtime/WorkflowDatabaseLease.ts";
 import { BootCoordinator } from "../bootstrap/BootCoordinator.ts";
 import { recoverLocalRestore } from "./recoverProductionRestore.ts";
+import { restoreWithRuntimeJournal } from "../runtime/JournaledRestore.ts";
+import { ExpoRuntimeRestoreJournal } from "./ExpoRuntimeRestoreJournal.ts";
 import { createClientCardWorkflow } from "../../workflows/saveClientCard.ts";
 import { SharedSqliteDatabase } from "../../shared/db/SharedSqliteDatabase.ts";
 import { openIsolatedSqliteConnection } from "../../shared/db/IsolatedSqliteConnection.ts";
 import { expoFileSha256 } from "../../shared/files/ExpoFileSha256.ts";
 import { LocalFileHashError } from "../../shared/files/LocalFileSha256.ts";
 import { DatabaseCompatibilityError } from "../../shared/db/DatabaseIdentity.ts";
-import type { RestoreStorage } from "../../features/backup/public.ts";
+import type { RestorePlan, RestoreStorage } from "../../features/backup/public.ts";
 import { inspectProductionDatabase, prepareProductionDatabase, PRODUCTION_WORKSPACE_ID, PRODUCTION_IDENTITY } from "./productionDatabase.ts";
 import { SCHEMA_OWNERS } from "./schema.ts";
 import { R06_SCALAR_FIXTURE_SHA256, R06_SCALAR_FIXTURE_SQL } from "./r06ScalarFixture.ts";
@@ -229,10 +231,10 @@ export async function runR06NativeProbe(mode: "NORMAL" | "INTERRUPT" | "RECOVER"
         };
       },
     });
-    const protocol = new GuardedRestore(observed);
+    const runtimeJournal = new ExpoRuntimeRestoreJournal(journal);
+    const protocol = { restore: (plan: RestorePlan) => restoreWithRuntimeJournal({ version: 1, ...plan }, observed, runtimeJournal) };
     const currentHash = (await expoFileSha256(liveFile)).sha256;
     const plan = { operationId, currentSha256: currentHash, incomingSha256: incomingHash };
-    new File(journal, "pending.json").write(JSON.stringify({ version: 1, ...plan }));
     if (mode === "INTERRUPT") {
       pendingProbe().write(JSON.stringify({ rootUri: root.uri, beforeId: before.id, restoredId: restored.id,
         oldHash: currentHash, incomingHash, operationId } satisfies InterruptedProbe));

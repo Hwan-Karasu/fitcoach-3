@@ -1,0 +1,213 @@
+{
+    "kind":  "R06_ANDROID_PUBLICATION",
+    "date":  "2026-10-23",
+    "scope":  "Isolated synthetic APK; not production UI or legacy migration",
+    "build":  {
+                  "package":  "com.fitcoach.r07sqlite",
+                  "variant":  "debug",
+                  "abi":  "arm64-v8a",
+                  "kotlinCompile":  "PASSED",
+                  "assembleDebug":  "PASSED",
+                  "jdk":  "17.0.10",
+                  "javaNetworkOption":  "-Djava.net.preferIPv4Stack=true"
+              },
+    "downloads":  {
+                      "kind":  "R06_PUBLICATION",
+                      "destination":  "DOWNLOADS",
+                      "checks":  [
+                                     {
+                                         "name":  "native_publication_module_present",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "native_downloads_supported",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "wrong_source_hash_rejected",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "wrong_source_size_rejected",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "missing_source_rejected",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "non_sqlite_header_rejected",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "ungranted_saf_tree_rejected",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "public_receipt_matches_verified_file",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "public_file_readback_matches_source",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "duplicate_filename_not_reported_as_new_success",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "existing_copy_unchanged_after_duplicate_attempt",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "private_snapshot_unchanged_after_publication",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "original_database_snapshot_and_photo_removed",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "published_snapshot_manifest_and_media_valid",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "all_fifteen_repository_holders_open_the_restored_file",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "client_restored_from_external_copy",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "recipe_restored_from_external_copy",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "photo_relocated_to_new_private_directory",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "restored_photo_has_exact_known_bytes",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "external_copy_not_modified_by_restore",
+                                         "passed":  true
+                                     }
+                                 ],
+                      "allPassed":  true,
+                      "elapsedMs":  23947,
+                      "filename":  "athlete-diary-20000101-000000-81816e9e-1703-46fc-87c3-f734a51c8800.atbackup",
+                      "sha256":  "ceb2b1e62f5b58fb3cca5e63f1877b1eb3012150088bf4b0f4107518951806f7",
+                      "bytes":  1044480
+                  },
+    "persistedSafGrantAfterProcessRestart":  {
+                                                 "kind":  "R06_PUBLICATION",
+                                                 "destination":  "DIRECTORY",
+                                                 "checks":  [
+                                                                {
+                                                                    "name":  "native_publication_module_present",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "wrong_source_hash_rejected",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "wrong_source_size_rejected",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "missing_source_rejected",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "non_sqlite_header_rejected",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "ungranted_saf_tree_rejected",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "public_receipt_matches_verified_file",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "public_file_readback_matches_source",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "duplicate_filename_not_reported_as_new_success",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "existing_copy_unchanged_after_duplicate_attempt",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "private_snapshot_unchanged_after_publication",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "original_database_snapshot_and_photo_removed",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "published_snapshot_manifest_and_media_valid",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "all_fifteen_repository_holders_open_the_restored_file",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "client_restored_from_external_copy",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "recipe_restored_from_external_copy",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "photo_relocated_to_new_private_directory",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "restored_photo_has_exact_known_bytes",
+                                                                    "passed":  true
+                                                                },
+                                                                {
+                                                                    "name":  "external_copy_not_modified_by_restore",
+                                                                    "passed":  true
+                                                                }
+                                                            ],
+                                                 "allPassed":  true,
+                                                 "elapsedMs":  24627,
+                                                 "filename":  "athlete-diary-20000101-000000-4e8a2080-d070-44eb-a480-984f42a0f3d9.atbackup",
+                                                 "sha256":  "06866544d2c433252718440acadd5795fba049959e918634f486f559af156a4e",
+                                                 "bytes":  1044480
+                                             },
+    "uninstall":  {
+                      "filename":  "athlete-diary-20000101-000000-81816e9e-1703-46fc-87c3-f734a51c8800.atbackup",
+                      "legacyBuild128Untouched":  true,
+                      "publicBackupPresent":  true,
+                      "testPackage":  "com.fitcoach.r07sqlite",
+                      "uninstalled":  true
+                  },
+    "reinstallRestore":  {
+                             "status":  "NOT_RUN",
+                             "reason":  "Owner postponed APK installation; continue host work without device installation"
+                         },
+    "openChecks":  [
+                       "Ordinary production restore UI",
+                       "New atomic runtime journal writer on Android",
+                       "Reinstall and picked-file restore",
+                       "Publication process death and partial cleanup",
+                       "Low storage and other document providers",
+                       "Full populated owner matrix",
+                       "Automatic backup rotation and Return point",
+                       "Legacy migration and release gates"
+                   ]
+}

@@ -1,16 +1,17 @@
 # R06 — публикация копий в общем хранилище Android
 
-Дата: 2026-10-23. **WIP / NATIVE BUILD NOT VERIFIED**. R06/D05 OPEN.
-Обычный runtime/UI теперь подключён через manual controller; в Expo Go/dev он
-отключён. Этот документ описывает предыдущую нативную часть; актуальный срез и
-границы проверки — [R06_MANUAL_BACKUP.md](R06_MANUAL_BACKUP.md).
+Дата: 2026-10-23. **NATIVE BUILD + SYNTHETIC PUBLICATION VERIFIED**; R06/D05 OPEN.
+Изолированная APK собрана и проверена: Downloads 20/20, SAF 19/19. Обычный
+runtime/UI подключён через manual controller, в Expo Go/dev отключён. Эти native
+проверки не заменяют E2E штатного интерфейса. [Отчёт](R06_PUBLICATION_ANDROID_REPORT.json),
+[ручное копирование](R06_MANUAL_BACKUP.md), [журнал восстановления](R06_JOURNALED_RESTORE.md).
 
 Входы: общий snapshot engine, D01 production identity, проверенный private
 `.atbackup` с неизменяемым именем. Зависимости D05: D01/R06; D03: R04/R05.
 Product refs: §§46.1–46.3, 46.12, 46.15–46.16, 46.20, 46.25, поздние §§53–56.
 Перенос/overlay/signing/release gates не закрываются этим срезом.
 
-## Реализация, ещё не доказанная на устройстве
+## Реализация
 
 `apps/mobile/modules/athlete-backup-storage` — локальный Expo Android module без
 новой сторонней библиотеки. Kotlin нужен для платформенных MediaStore и
@@ -42,29 +43,37 @@ SAF content URI. Обычный Expo Go локального модуля не �
 SHA и content URI. NativeBackupPublisher проверяет наличие модуля через optional
 lookup, не требует его при загрузке Expo Go, маскирует платформенные исключения.
 Это boundary-контракт; его тесты не доказывают корректность Android IO.
+`publicationTreeUri` убирает только завершающий сырой `/`, добавляемый Expo
+Directory.uri; сохранённый Android tree grant такого слеша не содержит. Encoded
+document ID, включая `%2F`, остаётся прежним; native требует точного grant.
 
 ## Фактические проверки
 
 - Автоподключение Expo распознало локальный module и точный Kotlin classifier
   в основном mobile app и в `spikes/sqlite` (пакет `com.fitcoach.r07sqlite`).
-- 11 новых проверок receipt: другой hash/размер/backup, private/web/неполный URI,
-  лишние сырые ошибки, invalid metadata не становятся успешным результатом.
-- Foundation **984/984**, mobile/spike typecheck, lint, arch:check (473 TS files),
-  source:verify (73 entries), secrets:check и diff --check прошли.
-- Android production JS bundle **5583 modules/1185 assets** собран. Этот результат
-  не включает компиляцию Kotlin и не подтверждает работу нативного модуля.
-- **Нативная компиляция не дошла до исходника**: Gradle 9.3.1 есть в пользовательском
-  кеше, но отсутствует foojay-resolver-convention 1.0.0. Онлайн --info выявил
-  `java.net.SocketException: Permission denied` при обращении Java к Maven.
-  Проверка того же публичного plugin POM через PowerShell дала HTTP 200.
-  HTTPS_PROXY окружения агента — заглушка; прокси из этого окружения не решает
-  загрузку Gradle. Сертификаты/TLS-проверки не менялись, код RN/Gradle не ослаблялся.
-  Журналы в игнорируемых `.cache/r06-native-build*.log`.
-- APK не устанавливалась; MediaStore/SAF readback, provider failures, interrupted
-  publication и uninstall/reinstall данным срезом **не проверены**.
+- Java Maven-запросы заработали с `JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true`.
+  JDK 17.0.10, Gradle 9.3.1; TLS и версии framework не менялись. Найденные ошибки
+  исходника исправлены: `defaultConfig.versionName` для Expo Maven plugin и import
+  `expo.modules.kotlin.functions.Coroutine`. `:athlete-backup-storage:compileDebugKotlin`
+  и `:app:assembleDebug -PreactNativeArchitectures=arm64-v8a` завершились успешно.
+- APK `com.fitcoach.r07sqlite` debug 0.0.1 установлена отдельно от 2.0. Downloads
+  **20/20**: hash/size/header/missing source/ungranted tree negatives, receipt,
+  независимый readback, отказ от duplicate без изменения первой копии, удаление
+  исходной БД/snapshot/фото, staging из внешней копии, открытие всех 15 holders,
+  клиент/рецепт и точные bytes восстановленного фото.
+- SAF **19/19**: те же проверки в специально созданной тестовой папке. После
+  нового процесса использован сохранённый read/write grant без повторного picker.
+  Первый запуск обнаружил реальный trailing-slash mismatch; исправление проверено
+  на телефоне и отдельной host-регрессией.
+- Каждая внешняя копия содержит 1 044 480 bytes синтетических данных; имена
+  намеренно имеют дату 2000-01-01. SHA/имена/checks зафиксированы в JSON-отчёте.
+  Ни личные backup-файлы, ни рабочая база 2.0 не читались.
+- Тестовая APK действительно удалена; конкретная копия Downloads осталась на
+  месте. 2.0 build128 не затронута. Повторная установка потребовала подтверждения
+  владельца; он отложил установку и разрешил продолжать без APK. Ожидание adb
+  остановлено. **Восстановление после переустановки не выполнено.**
 
-Следующее: доступная нативная toolchain/зависимости и компиляция; подключение
-manual create/export controller и экрана настроек; native-проверка default и SAF.
-Далее сохраняются полная restore confirmation/job/journal writer, Return point,
-autoscheduler/rotation, native negative/low-storage/reinstall/full-owner matrix,
-полный legacy mapping/staging. Excel — после backup/restore, по прежней очереди.
+Открыты: обычный restore controller/confirmation и Return с фото, scheduler/rotation,
+native process-death/partial cleanup/low-storage/другие providers/reinstall/full-owner
+matrix. Новый atomic journal writer проверяется на host, на Android ещё не запущен.
+Полный legacy mapping/staging и Excel остаются в прежней очереди.

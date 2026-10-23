@@ -12,6 +12,11 @@ export interface VerifiedBackupFile {
   readonly bytes: number;
 }
 export type BackupDestination = Readonly<{ kind: "DOWNLOADS" }> | Readonly<{ kind: "DIRECTORY"; uri: string }>;
+/** Expo Directory.uri appends a raw slash; Android's persisted tree grant does not.
+ * Keep encoded document IDs intact and let native code require the exact grant. */
+export function publicationTreeUri(destination: BackupDestination): string | null {
+  return destination.kind === "DIRECTORY" ? destination.uri.replace(/\/+$/u, "") : null;
+}
 export interface PublishedBackup {
   readonly uri: string;
   readonly filename: string;

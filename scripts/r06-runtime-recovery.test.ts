@@ -10,12 +10,21 @@ import { DatabaseSync } from "node:sqlite";
 import { BootCoordinator } from "../apps/mobile/src/app/bootstrap/BootCoordinator.ts";
 import { parsePendingRuntimeRestore, recoverRuntimeRestore, type PendingRuntimeRestore } from "../apps/mobile/src/app/bootstrap/recoverRuntimeRestore.ts";
 import { GuardedRestore } from "../apps/mobile/src/features/backup/public.ts";
+import { restoreWithRuntimeJournal, type RuntimeRestoreJournal } from "../apps/mobile/src/app/runtime/JournaledRestore.ts";
 import { prepareProductionDatabase, PRODUCTION_IDENTITY } from "../apps/mobile/src/app/composition/productionDatabase.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { HostRestoreStorage } from "./r06/HostRestoreStorage.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
 
 const hash = (file: string) => createHash("sha256").update(readFileSync(file)).digest("hex");
+function journalAt(directory: string): RuntimeRestoreJournal {
+  const path = join(directory, "pending.json");
+  return {
+    readPending: async () => existsSync(path) ? { value: JSON.parse(readFileSync(path, "utf8")) as unknown } : null,
+    readGuard: async () => { throw new Error("UNEXPECTED_PREVIOUS_JOB"); },
+    publish: async (plan) => { const next = join(directory, "pending.next"); writeFileSync(next, JSON.stringify(plan)); renameSync(next, path); },
+  };
+}
 async function fixture() {
   const directory = mkdtempSync(join(tmpdir(), "athlete-runtime-recovery-")); const storage = new HostRestoreStorage(directory);
   for (const slot of ["LIVE", "INCOMING"] as const) {
@@ -34,6 +43,139 @@ async function fixture() {
 
 test("R06 no pending journal never constructs storage or opens a database", async () => {
   await recoverRuntimeRestore(async () => null, () => { throw new Error("MUST_NOT_OPEN"); }, async () => { throw new Error("MUST_NOT_READ"); });
+});
+
+test("R06 confirmed restore publishes its journal before file replacement inside one uninterrupted closed lease", async () => {
+  const f = await fixture(); const incoming = readFileSync(f.storage.path("INCOMING")); const journal = journalAt(f.directory);
+  let leases = 0; let closed = false; const original = f.storage.withClosedDatabase.bind(f.storage);
+  f.storage.withClosedDatabase = (task) => original(async () => { leases++; closed = true; try { return await task(); } finally { closed = false; } });
+  const move = f.storage.moveExclusive.bind(f.storage);
+  f.storage.moveExclusive = async (from, to) => {
+    assert.equal(closed, true);
+    assert.deepEqual((await journal.readPending())?.value, f.plan);
+    return move(from, to);
+  };
+  try {
+    assert.equal(await restoreWithRuntimeJournal(f.plan, f.storage, journal), "COMMITTED");
+    assert.equal(leases, 1); assert.equal(closed, false);
+    assert.deepEqual(readFileSync(f.storage.path("LIVE")), incoming);
+    assert.deepEqual((await journal.readPending())?.value, f.plan);
+  } finally { f.cleanup(); }
+});
+
+test("R06 failure after journal publication but before PREPARED leaves the original recoverable by cold boot", async () => {
+  const f = await fixture(); const before = readFileSync(f.storage.path("LIVE")); const journal = journalAt(f.directory);
+  try {
+    await assert.rejects(restoreWithRuntimeJournal(f.plan, f.storage, { ...journal, publish: async (plan) => {
+      await journal.publish(plan); throw new Error("SYNTHETIC_INTERRUPTION");
+    } }));
+    assert.deepEqual(readFileSync(f.storage.path("LIVE")), before);
+    assert.equal(existsSync(f.storage.guardPath()), false);
+    await recoverRuntimeRestore(() => journal.readPending(), () => f.storage, async () => existsSync(f.storage.path("LIVE")));
+    assert.equal(JSON.parse(readFileSync(f.storage.guardPath(), "utf8")).phase, "ROLLED_BACK");
+    assert.deepEqual(readFileSync(f.storage.path("LIVE")), before);
+  } finally { f.cleanup(); }
+});
+
+test("R06 a queued confirmation cannot be changed through its caller's object", async () => {
+  const f = await fixture(); const journal = journalAt(f.directory);
+  const expected = readFileSync(f.storage.path("INCOMING")); const input = { ...f.plan };
+  try {
+    const restoring = restoreWithRuntimeJournal(input, f.storage, journal);
+    input.operationId = "20000000-0000-4000-8000-000000000002";
+    input.incomingSha256 = "a".repeat(64);
+    assert.equal(await restoring, "COMMITTED");
+    assert.deepEqual((await journal.readPending())?.value, f.plan);
+    assert.deepEqual(readFileSync(f.storage.path("LIVE")), expected);
+  } finally { f.cleanup(); }
+});
+
+for (const event of ["journal:pending", "journal:published", "guard:PREPARED", "move:INCOMING:LIVE", "guard:COMMITTED"]) {
+  test(`R06 actual process death at ${event} recovers through the published routing journal`, async () => {
+    const f = await fixture(); const journal = journalAt(f.directory);
+    const before = readFileSync(f.storage.path("LIVE")); const incoming = readFileSync(f.storage.path("INCOMING"));
+    try {
+      writeFileSync(join(f.directory, "plan.json"), JSON.stringify(f.plan));
+      const child = spawnSync(process.execPath, ["--experimental-strip-types",
+        fileURLToPath(new URL("./r06/journal-crash-worker.ts", import.meta.url)), f.directory, event],
+      { encoding: "utf8", timeout: 20_000, windowsHide: true });
+      assert.ok(!child.error, String(child.error));
+      assert.ok(child.signal !== null || child.status !== 0);
+      assert.equal(child.stdout.trim(), `R06_JOURNAL_KILL:${event}`);
+      assert.equal(child.stderr.includes("Error:"), false, child.stderr);
+      const committed = event === "guard:COMMITTED";
+      await recoverRuntimeRestore(() => journal.readPending(), () => new HostRestoreStorage(f.directory), async () => existsSync(f.storage.path("LIVE")));
+      assert.deepEqual(readFileSync(f.storage.path("LIVE")), committed ? incoming : before);
+      if (event === "journal:pending") assert.equal(await journal.readPending(), null);
+      else assert.equal(JSON.parse(readFileSync(f.storage.guardPath(), "utf8")).phase, committed ? "COMPLETED" : "ROLLED_BACK");
+      if (existsSync(f.storage.path("SAFETY"))) assert.deepEqual(readFileSync(f.storage.path("SAFETY")), before);
+      const db = new DatabaseSync(f.storage.path("LIVE"));
+      db.exec("UPDATE workspaces SET display_name='SYNTHETIC AFTER RECOVERY'"); db.close();
+      const later = readFileSync(f.storage.path("LIVE"));
+      await recoverRuntimeRestore(() => journal.readPending(), () => new HostRestoreStorage(f.directory), async () => existsSync(f.storage.path("LIVE")));
+      assert.deepEqual(readFileSync(f.storage.path("LIVE")), later);
+    } finally { f.cleanup(); }
+  });
+}
+
+for (const phase of [null, "PREPARED", "COMMITTED"] as const) test(`R06 a new restore cannot replace an unfinished ${phase ?? "unguarded"} journal`, async () => {
+  const f = await fixture(); const before = readFileSync(f.storage.path("LIVE")); const journal = journalAt(f.directory);
+  const old = { ...f.plan, operationId: "20000000-0000-4000-8000-000000000002" };
+  try {
+    await journal.publish(old);
+    await assert.rejects(restoreWithRuntimeJournal(f.plan, f.storage, { ...journal,
+      readGuard: async () => phase === null ? null : { ...old, phase } }));
+    assert.deepEqual((await journal.readPending())?.value, old);
+    assert.deepEqual(readFileSync(f.storage.path("LIVE")), before);
+    assert.equal(existsSync(f.storage.guardPath()), false);
+  } finally { f.cleanup(); }
+});
+
+for (const phase of ["COMPLETED", "ROLLED_BACK"] as const) test(`R06 a settled ${phase} journal may be replaced by the next confirmed operation`, async () => {
+  const f = await fixture(); const journal = journalAt(f.directory);
+  const old = { ...f.plan, operationId: "20000000-0000-4000-8000-000000000002" };
+  try {
+    await journal.publish(old);
+    assert.equal(await restoreWithRuntimeJournal(f.plan, f.storage, { ...journal, readGuard: async () => ({ ...old, phase }) }), "COMMITTED");
+    assert.deepEqual((await journal.readPending())?.value, f.plan);
+  } finally { f.cleanup(); }
+});
+
+test("R06 a stale source or a failed journal write never moves LIVE or replaces the previous receipt", async () => {
+  const f = await fixture(); const before = readFileSync(f.storage.path("LIVE")); const journal = journalAt(f.directory);
+  const old = { ...f.plan, operationId: "20000000-0000-4000-8000-000000000002" };
+  try {
+    await journal.publish(old);
+    const port = { ...journal, readGuard: async () => ({ ...old, phase: "COMPLETED" }), publish: async () => { throw new Error("SYNTHETIC_NO_SPACE"); } };
+    await assert.rejects(restoreWithRuntimeJournal({ ...f.plan, incomingSha256: "a".repeat(64) }, f.storage, port));
+    await assert.rejects(restoreWithRuntimeJournal(f.plan, f.storage, port));
+    assert.deepEqual((await journal.readPending())?.value, old);
+    assert.deepEqual(readFileSync(f.storage.path("LIVE")), before);
+    assert.equal(existsSync(f.storage.path("SAFETY")), false);
+  } finally { f.cleanup(); }
+});
+
+test("R06 replay of a journalled restore preserves later writes and never republishes the pointer", async () => {
+  const f = await fixture(); const journal = journalAt(f.directory);
+  try {
+    await restoreWithRuntimeJournal(f.plan, f.storage, journal);
+    const db = new DatabaseSync(f.storage.path("LIVE")); db.exec("UPDATE workspaces SET display_name='LATER BUSINESS WRITE'"); db.close();
+    const later = readFileSync(f.storage.path("LIVE"));
+    assert.equal(await restoreWithRuntimeJournal(f.plan, f.storage, { ...journal, publish: async () => { throw new Error("MUST_NOT_REPUBLISH"); } }), "COMMITTED");
+    assert.deepEqual(readFileSync(f.storage.path("LIVE")), later);
+    renameSync(f.storage.path("LIVE"), join(f.directory, "preserved.db"));
+    await assert.rejects(restoreWithRuntimeJournal(f.plan, f.storage, journal));
+    assert.equal(existsSync(f.storage.path("LIVE")), false);
+  } finally { f.cleanup(); }
+});
+
+test("R06 a corrupted atomic publication cannot start the file replacement", async () => {
+  const f = await fixture(); const journal = journalAt(f.directory); const before = readFileSync(f.storage.path("LIVE"));
+  try {
+    await assert.rejects(restoreWithRuntimeJournal(f.plan, f.storage, { ...journal, publish: (plan) => journal.publish({ ...plan, incomingSha256: "a".repeat(64) }) }));
+    assert.deepEqual(readFileSync(f.storage.path("LIVE")), before);
+    assert.equal(existsSync(f.storage.path("SAFETY")), false);
+  } finally { f.cleanup(); }
 });
 
 for (const mutate of [

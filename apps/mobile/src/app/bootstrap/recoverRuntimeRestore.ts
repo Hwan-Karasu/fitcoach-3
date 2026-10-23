@@ -9,7 +9,9 @@ export function parsePendingRuntimeRestore(value: unknown): PendingRuntimeRestor
     typeof entry.currentSha256 !== "string" || !/^[a-f0-9]{64}$/u.test(entry.currentSha256) ||
     typeof entry.incomingSha256 !== "string" || !/^[a-f0-9]{64}$/u.test(entry.incomingSha256) ||
     Object.keys(entry).sort().join(",") !== "currentSha256,incomingSha256,operationId,version") throw new Error("RESTORE_JOURNAL_INVALID");
-  return entry as PendingRuntimeRestore;
+  // Capture confirmation before an async maintenance wait; callers may reuse their object.
+  return { version: 1, operationId: entry.operationId, currentSha256: entry.currentSha256,
+    incomingSha256: entry.incomingSha256 };
 }
 /** A routing journal is recorded only for a confirmed restore, before invoking the protocol.
  * Its files stay in the app's fixed private job directory. A missing guard means replacement

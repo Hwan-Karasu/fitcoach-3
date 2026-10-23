@@ -1,5 +1,5 @@
 import { requireOptionalNativeModule } from "expo-modules-core";
-import { BackupStorageError, parsePublishedBackup, type BackupDestination, type BackupPublisherPort,
+import { BackupStorageError, parsePublishedBackup, publicationTreeUri, type BackupDestination, type BackupPublisherPort,
   type PublishedBackup, type VerifiedBackupFile } from "../domain/BackupPublication.ts";
 
 interface NativeStorage {
@@ -17,7 +17,7 @@ export function nativeBackupPublisher(): BackupPublisherPort {
       if (native === null) throw new BackupStorageError("BACKUP_STORAGE_UNAVAILABLE");
       try {
         const result = await native.publish(source.sourceUri, source.backupId, source.createdAt, source.sha256,
-          source.bytes, destination.kind === "DIRECTORY" ? destination.uri : null);
+          source.bytes, publicationTreeUri(destination));
         return parsePublishedBackup(result, source);
       } catch (error) {
         if (error instanceof BackupStorageError) throw error;

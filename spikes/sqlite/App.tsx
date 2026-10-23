@@ -2,9 +2,37 @@ import { useCallback, useEffect, useState } from "react";
 import { Button, SafeAreaView, ScrollView, Text } from "react-native";
 import { runSqliteSpike, type SpikeReport } from "./src/runSqliteSpike";
 import { runR06NativeProbe, type R06NativeReport } from "../../apps/mobile/src/app/composition/runR06NativeProbe.ts";
+import { chooseR06PublicationDirectory, runR06PublicationProbe, savedR06PublicationDirectory,
+  verifyR06PickedPublication, type R06PublicationReport } from "../../apps/mobile/src/app/composition/runR06PublicationProbe.ts";
 
 export default function App() {
+  if (process.env.EXPO_PUBLIC_R06_PUBLICATION === "1") return <PublicationProbe />;
   return process.env.EXPO_PUBLIC_R06_BACKUP === "1" ? <BackupProbe /> : <SqliteProbe />;
+}
+
+function PublicationProbe() {
+  const [report, setReport] = useState<R06PublicationReport | R06NativeReport | null>(null);
+  const [busy, setBusy] = useState(false); const [failed, setFailed] = useState(false);
+  const expectedFilename = (report && "filename" in report ? report.filename : undefined) ?? process.env.EXPO_PUBLIC_R06_PUBLICATION_FILENAME;
+  const run = (task: () => Promise<R06PublicationReport | R06NativeReport>) => {
+    if (busy) return;
+    setBusy(true); setFailed(false);
+    void task().then((value) => { setReport(value); console.info(`${value.kind === "R06_NATIVE" ? "R06_REPORT" : "R06_PUBLICATION_REPORT"} ${JSON.stringify(value)}`); })
+      .catch(() => { setFailed(true); console.info("R06_PUBLICATION_REPORT FAILED"); }).finally(() => setBusy(false));
+  };
+  return <SafeAreaView style={{ flex: 1, padding: 20 }}><ScrollView>
+    <Text>R06 — синтетические копии. Приложение 2.0 не изменяется.</Text>
+    <Button title="Проверить Загрузки" disabled={busy} onPress={() => run(() => runR06PublicationProbe({ kind: "DOWNLOADS" }))} />
+    <Button title="Выбрать тестовую папку и проверить SAF" disabled={busy} onPress={() => run(async () => {
+      await chooseR06PublicationDirectory(); return runR06PublicationProbe(await savedR06PublicationDirectory());
+    })} />
+    <Button title="Повторить SAF без выбора папки" disabled={busy} onPress={() => run(async () => runR06PublicationProbe(await savedR06PublicationDirectory()))} />
+    <Button title="Проверить тестовую копию через выбор файла" disabled={busy || !expectedFilename} onPress={() => run(() => verifyR06PickedPublication(expectedFilename!))} />
+    <Button title="Проверить журнал и восстановление" disabled={busy} onPress={() => run(() => runR06NativeProbe())} />
+    <Button title="Подготовить прерывание восстановления" disabled={busy} onPress={() => run(() => runR06NativeProbe("INTERRUPT"))} />
+    <Button title="Восстановить после прерывания" disabled={busy} onPress={() => run(() => runR06NativeProbe("RECOVER"))} />
+    <Text selectable>{busy ? "Проверка…" : failed ? "R06_PUBLICATION_FAILED" : report ? JSON.stringify(report, null, 2) : "Готово к проверке"}</Text>
+  </ScrollView></SafeAreaView>;
 }
 
 function BackupProbe() {

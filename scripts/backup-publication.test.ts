@@ -1,11 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BackupStorageError, backupFilename, parsePublishedBackup } from "../apps/mobile/src/features/backup/domain/BackupPublication.ts";
+import { BackupStorageError, backupFilename, parsePublishedBackup, publicationTreeUri } from "../apps/mobile/src/features/backup/domain/BackupPublication.ts";
 
 const source = { sourceUri: "file:///private/synthetic.atbackup", backupId: "10000000-0000-4000-8000-000000000001",
   createdAt: "2026-10-23T15:24:05.000Z", sha256: "a".repeat(64), bytes: 12288 };
 const filename = "athlete-diary-20261023-152405-10000000-0000-4000-8000-000000000001.atbackup";
 const good = { ok: true, uri: "content://media/external_primary/downloads/42", filename, sha256: "a".repeat(64), bytes: 12288 };
+
+test("R06 Expo directory URI matches the Android persisted SAF grant without changing its encoded document ID", () => {
+  const grant = "content://com.android.externalstorage.documents/tree/primary%3AR06-Backup-Test";
+  assert.equal(publicationTreeUri({ kind: "DIRECTORY", uri: `${grant}/` }), grant);
+  assert.equal(publicationTreeUri({ kind: "DIRECTORY", uri: grant }), grant);
+  const encodedSeparator = "content://example.documents/tree/root%2Fchild%2F";
+  assert.equal(publicationTreeUri({ kind: "DIRECTORY", uri: `${encodedSeparator}/` }), encodedSeparator);
+  assert.equal(publicationTreeUri({ kind: "DOWNLOADS" }), null);
+});
 
 test("R06 publication binds the native receipt to the exact verified snapshot and readable content URI", () => {
   assert.equal(backupFilename(source), filename);

@@ -13,7 +13,7 @@ function validPlan(value: unknown): value is RestorePlan {
     typeof plan.currentSha256 === "string" && digestPattern.test(plan.currentSha256) &&
     typeof plan.incomingSha256 === "string" && digestPattern.test(plan.incomingSha256);
 }
-function parseGuard(value: unknown): RestoreGuard {
+export function parseRestoreGuard(value: unknown): RestoreGuard {
   const guard = value as Partial<RestoreGuard> | null;
   if (!validPlan(value) || guard?.version !== 1 ||
     !["PREPARED", "COMMITTED", "COMPLETED", "ROLLED_BACK"].includes(guard.phase ?? "") ||
@@ -38,7 +38,7 @@ export class GuardedRestore {
     return this.closed(async () => {
       const saved = await this.storage.loadGuard();
       if (saved !== null) {
-        const guard = parseGuard(saved);
+        const guard = parseRestoreGuard(saved);
         if (guard.operationId !== plan.operationId || guard.currentSha256 !== plan.currentSha256 ||
           guard.incomingSha256 !== plan.incomingSha256) throw new RestoreProtocolError("RESTORE_BUSY");
         return this.recoverLocked(guard);
@@ -68,7 +68,7 @@ export class GuardedRestore {
       } catch {
         try {
           const guard = await this.storage.loadGuard();
-          if (guard !== null && await this.recoverLocked(parseGuard(guard)) === "COMMITTED") return "COMMITTED";
+          if (guard !== null && await this.recoverLocked(parseRestoreGuard(guard)) === "COMMITTED") return "COMMITTED";
         } catch { throw new RestoreProtocolError("RESTORE_RECOVERY_REQUIRED"); }
         throw new RestoreProtocolError("RESTORE_FAILED");
       }
@@ -79,7 +79,7 @@ export class GuardedRestore {
     return this.closed(async () => {
       try {
         const saved = await this.storage.loadGuard();
-        return saved === null ? "NO_OPERATION" : await this.recoverLocked(parseGuard(saved));
+        return saved === null ? "NO_OPERATION" : await this.recoverLocked(parseRestoreGuard(saved));
       } catch { throw new RestoreProtocolError("RESTORE_RECOVERY_REQUIRED"); }
     });
   }

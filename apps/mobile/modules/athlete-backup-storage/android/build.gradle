@@ -8,4 +8,8 @@ version = '0.0.1'
 
 android {
   namespace 'expo.modules.athletebackup'
+  defaultConfig {
+    versionCode 1
+    versionName '0.0.1'
+  }
 }

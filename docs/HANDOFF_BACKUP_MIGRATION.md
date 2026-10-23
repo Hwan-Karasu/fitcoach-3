@@ -4,7 +4,47 @@
 Полный перенос 2.0→3.0 и backup/restore не завершён; 100% не заявлено.
 UI и темы остаются на последующую шлифовку. Продукт — «Дневник атлета».
 
-## Текущий срез — ручная копия в runtime и настройках
+## Текущий срез — Android publication и atomic restore journal
+
+По просьбе владельца продолжать **без установленной тестовой APK**. Не запускать
+новую установку и не ждать ввода ключа. Ожидание adb install остановлено; scrcpy
+«Phone screen» оставлен открытым. Защищённый экран ввода ключа Android скрывает в
+трансляции; рисунок/ключ не сохранять и не вводить. 2.0 build128 не затронута.
+
+Native Kotlin compile и isolated debug arm64 APK **собраны**: JDK17.0.10,
+Gradle9.3.1, `JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true` решает Maven
+PermissionDenied. В local module добавлены defaultConfig.versionName и Coroutine
+import; TLS/framework не менялись. APK com.fitcoach.r07sqlite установлена отдельно.
+Downloads **20/20**, SAF **19/19**, в том числе восстановление фото/рецепта/клиента
+после удаления исходников, 15 holders, native + независимый JS readback, duplicate/
+input negatives. SAF grant повторно использован в новом процессе без picker.
+Реальный defect Directory.uri с завершающим `/` исправлен на JS boundary; encoded
+ID сохраняется, native всё ещё требует точного persisted grant.
+[Отчёт](spikes/R06_PUBLICATION_ANDROID_REPORT.json), [границы](spikes/R06_ANDROID_PUBLICATION.md).
+
+Удаление только тестовой APK подтверждено, публичная synthetic Downloads-копия
+пережила uninstall. **Reinstall/picked-file restore не выполнен**; native writer
+тоже ещё не запущен. Это отдельные открытые проверки, не причина останавливать
+независимую разработку на компьютере. Личные .atbackup и данные 2.0 не читать.
+
+Добавлены `JournaledRestore.ts` и `ExpoRuntimeRestoreJournal.ts`; cold reader
+использует тот же private adapter. Одна closed lease покрывает pin/валидацию,
+атомарную публикацию и readback pending.json, затем весь GuardedRestore. Новый
+указатель не затирает незавершённую операцию. Parser копирует подтверждение до
+await, terminal replay не теряет поздние записи. Пять настоящих host SIGKILL
+проходят через writer и cold reader, сохраняя точные bytes и последующие записи.
+Целевой runtime recovery файл **33/33**, полный foundation **1019/1019**;
+root/mobile/spike typecheck, lint/arch483/source/secrets/diff зелёные.
+[Контракт и ограничения](spikes/R06_JOURNALED_RESTORE.md).
+
+Далее без телефона: Restore controller с preview/подтверждением, private Return
+snapshot с фото и устойчивым завершением после COMMITTED; scheduler/дневная
+ротация, OS rest signals. Текущий writer не создаёт пользовательскую Return-точку,
+поэтому обычный Restore UI ещё не включать. Runtime probe подготовлен к повторной
+native проверке нового writer; прежний normal25/recovery11 её не заменяет.
+R06/D05, полный legacy mapping/staging и release gates OPEN; затем Excel.
+
+## Предыдущий срез — ручная копия в runtime и настройках
 
 Подключены ManualBackupService, private snapshot job, настройка папки отдельно
 от SQLite и экран «Резервные копии». В Expo Go/dev операции отключены; boot,

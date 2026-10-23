@@ -5,6 +5,7 @@ import type { RuntimeMaintenance } from "../runtime/RuntimeMaintenance.ts";
 import { recoverRuntimeRestore } from "../bootstrap/recoverRuntimeRestore.ts";
 import { inspectProductionDatabase, PRODUCTION_DATABASE, PRODUCTION_IDENTITY } from "./productionDatabase.ts";
 import { sqliteDirectoryUri } from "../../shared/db/SqliteDirectoryUri.ts";
+import { ExpoRuntimeRestoreJournal } from "./ExpoRuntimeRestoreJournal.ts";
 
 /** No journal = no directory creation and no SQLite open before the normal production gate.
  * The next file-restore controller will publish pending.json after explicit confirmation.
@@ -19,12 +20,8 @@ export async function recoverProductionRestore(maintenance: RuntimeMaintenance):
 /** Composition supplies trusted private paths. The isolated Android rehearsal uses this
  * same reader/header/adapter with its own namespace, never the production database. */
 export function recoverLocalRestore(maintenance: RuntimeMaintenance, root: Directory, live: File): Promise<void> {
-  const pending = new File(root, "pending.json");
-  return recoverRuntimeRestore(async () => {
-    if (!pending.exists) return null;
-    if (pending.size > 8192) throw new Error("RESTORE_JOURNAL_INVALID");
-    return { value: JSON.parse(await pending.text()) as unknown };
-  }, (plan) => {
+  const journal = new ExpoRuntimeRestoreJournal(root);
+  return recoverRuntimeRestore(() => journal.readPending(), (plan) => {
     const directory = new Directory(root, "jobs", plan.operationId);
     if (!directory.exists) throw new Error("RESTORE_JOB_MISSING");
     return new ExpoRestoreStorage({ live, directory,

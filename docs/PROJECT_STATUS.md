@@ -1,3 +1,10 @@
+## 2026-10-23 — R06: native публикация и журнал подтверждённого восстановления
+
+- Исправлены нативная сборка (Expo versionName/Coroutine import) и доступ Java к Maven через IPv4. Изолированная debug APK собрана; TLS/framework не менялись. Реальные synthetic Downloads **20/20**, SAF **19/19**: readback, duplicate/input negatives, восстановление клиента/рецепта/фото из внешней копии после удаления оригиналов и открытие всех 15 holders. Найден и исправлен trailing-slash mismatch сохранённого SAF grant. [Отчёт](spikes/R06_PUBLICATION_ANDROID_REPORT.json), [границы](spikes/R06_ANDROID_PUBLICATION.md).
+- После удаления только тестовой APK внешний файл остался, 2.0 build128 не затронута. Переустановка и восстановление через picker **не выполнены**: владелец отложил установку и разрешил продолжать без APK; ожидающий adb install остановлен. Личные копии не открывались.
+- Добавлен atomic routing journal writer: одна непрерывная closed lease до окончания GuardedRestore, strict UUID/hash record, защита незавершённой операции, readback, terminal replay. Parser фиксирует подтверждение до async wait. На host **пять настоящих SIGKILL** через новый writer и cold reader сохраняют точные старые/новые данные и последующие записи. [Детали](spikes/R06_JOURNALED_RESTORE.md). На Android новый writer ещё не проверен.
+- Итоговый foundation **1019/1019**; root/mobile/spike typecheck, lint, arch:check (483 sources), source:verify, secrets:check и diff --check прошли. R06/D05 OPEN: обычный Restore controller/confirmation, Return с фото, autoscheduler/rotation, OS rest signals, native negative/reinstall/full-owner matrix и полный legacy mapping/staging впереди. Excel после backup/restore; UI/темы позже.
+
 ## 2026-10-23 — R06: ручное копирование в runtime и экран настроек
 
 - Подключены controller, согласованный snapshot job и создание/экспорт/папка через публичный порт. Операция целиком учитывается runtime gate; отмена и отказ не меняют прежний успех. Настройка папки хранится вне SQLite-копий. UI показывает понятный текст без технических кодов.
