@@ -5,6 +5,7 @@ import type { ApplicationRuntime } from "../composition/createServices.ts";
 import { PrototypeShell } from "../navigation/PrototypeShell.tsx";
 import type { BootErrorCode } from "./BootCoordinator.ts";
 import { fonts } from "../../shared/ui/theme/typography.ts";
+import { AutomaticBackupHost } from "./AutomaticBackupHost.tsx";
 
 const errorLabels: Record<BootErrorCode, string> = {
   WORKSPACE_UNAVAILABLE: "Не удалось открыть локальные данные.",
@@ -18,7 +19,7 @@ const errorLabels: Record<BootErrorCode, string> = {
 };
 
 /** Screens receive repositories only after the critical database gate succeeds. */
-export function ApplicationBootGate({ boot, services, development, maintenance, manualBackup, restoreActions }: Readonly<ApplicationRuntime>) {
+export function ApplicationBootGate({ boot, services, development, maintenance, manualBackup, restoreActions, automaticBackup }: Readonly<ApplicationRuntime>) {
   const [state, setState] = useState(boot.state);
   const [maintenanceView, setMaintenanceView] = useState({ phase: maintenance.state, generation: 0 });
   const [retrying, setRetrying] = useState(false);
@@ -33,8 +34,8 @@ export function ApplicationBootGate({ boot, services, development, maintenance, 
     return unsubscribe;
   }, [boot]);
 
-  if (state.kind === "APP_READY" && maintenanceState === "ACTIVE") return <PrototypeShell key={maintenanceView.generation} services={services}
-    workspaceId={state.workspaceId} manualBackup={manualBackup} restoreActions={restoreActions} initialBackup={maintenanceView.generation > 0} />;
+  if (state.kind === "APP_READY" && maintenanceState === "ACTIVE") return <><AutomaticBackupHost backup={automaticBackup} /><PrototypeShell key={maintenanceView.generation} services={services}
+    workspaceId={state.workspaceId} manualBackup={manualBackup} restoreActions={restoreActions} automaticBackup={automaticBackup} initialBackup={maintenanceView.generation > 0} /></>;
   const failed = state.kind === "BOOT_FAILED";
   const recovering = maintenanceState === "RECOVERY_REQUIRED";
   const maintaining = maintenanceState !== "ACTIVE";

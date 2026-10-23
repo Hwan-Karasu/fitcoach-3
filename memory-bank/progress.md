@@ -1,34 +1,35 @@
 # Progress — 2026-10-23
 
-ПолнаяцельACTIVE/taskR06/gatesOPEN, не100%. Testing preference: targetedtests для
-текущихправок, fullsuite тольконакрупныхконтрольныхэтапах.
+Goal ACTIVE, taskR06, gates OPEN, не100%. Целевые проверки по области; fullsuite
+только на крупных контрольных этапах (пожелание владельца).
 
 Сделано:
-- D01baselines/identity/FK/JSON, общийSQLite snapshot/hash/media/staging, Nodeoracle.
-- GuardedRestore safety/rollback/terminalreceipts, closedruntime15holders+workflow.
-- ПолнаяprivateReturnpoint/v2completion доreopen:onepoint/oneuse/noreverse/resurrection.
-- Nativev2normal35/rollback12/commitgap13; host32returnchecks/14SIGKILL, writer5SIGKILL.
-- ExternalDownloads20/SAF19; cleanreinstallpicked6/6, внешнийhashсохранён.
-- НовыйExpoRestoreJobs/controller/core→runtime→BackupScreen: picker/privatecopies/
-  verifiedpreview/Alertconfirm/Return/delete/recoveryretry, logicalWALpin/capacity.
-- Privatejobcleanup и closedGCgeneratedphotos сallrecipe refs+verifiedembeddedpoint.
-- Runtimegenerationremount, Backпослеreopen; latepreviewcancel; confirmedapplyunmountsafe.
-- OSrestsignalreconciliation:actualkindownership/oldIDsnottrusted/calendarpreserved,
-  sameendAt/paused/expired/nopermissionprompt; hostrace/failureproof.
-- ActualAndroidACTIONS24/24 наsyntheticdata: staledatanooverwrite, cancel/orphancleanup,
-  fullRestore/Returnточноефото, pointprotected, mediaGC, laterwrites/replay/delete.
-- FocusedAndroidrecoveryreceipt3/3 за6463ms; controller15/15послеfinalisolatedchanges.
-- Foundation1086/1086 наинтеграции; fullповторноНЕзапускалсяпоследнихмалыхправок.
-  Root/mobile/spikeTS/lint/arch494/source/secrets/diff; bundle5614modules1185assets.
-- Manualbackup/create/export/folder; devURI/import64tables1150rowsparity, oldfilesцелы.
+- D01 baselines/identity/FK/JSON; общий full snapshot engine/hash/media/staging.
+- GuardedRestore + v2 Return point/finalization до reopen; terminal receipts.
+- Runtime15holders+workflow, whole-command admission/maintenance; connected
+  Restore/Return/delete/capacity/logicalWALpin/cleanup/UI generation/recovery.
+- Native restore35/rollback12/commitgap13, actions24/focused3, externalDownloads20/
+  SAF19/reinstall6. Новые autos не выдают их за своё process-death доказательство.
+- AutoService/Scheduler/AppState/production/UI; 30мин/changeddata/3daily candidate,
+  immutable pending before publication, native ownership receipt + retired queue.
+- Stable online copy accepts late ordinary writes; unchanged skips duplicate.
+- Native auto21/21: daily rotation/ownership/idempotence/manual preserved + clients/
+  photo recovery; focused status3/3(448ms) persistence/visibility/verified clear.
+- Native module compiled; отдельный test APK обновлён успешно, 2.0build128 цела.
+- Host auto15/scheduler4/manual12/restore15 passed. Fullfoundation не запускался.
+  TS/lint/arch503/source/secrets/diff; Android bundle5622modules/1185assets.
 
 Открыто:
-- EnabledordinaryUIE2E/Back/Alert/remount/nativeOSsignals; realENOSPC/providers/
-  publicationdeath/partialcleanup/fullpopulatedownermatrix.
-- Auto30min changed-data/3dailyrotation и first-runrestorechoice.
-- Fulllegacysemanticmapping/staging/IDs/provenance/parity/retry; migration/releasegates.
-- Excelпослеbackup/restore(GitHubfirst,2.0read-onlylater), UI/темыпозже.
+- Native missing vs unavailable inspection и recreate удалённой default folder:
+  сейчас missing даёт безопасную паузу, без автоматического восстановления.
+- Clock re-anchor после легитимного timezone/DST; historical fallback tech decision.
+- Actual auto publication/catalog/delete process death; SAF rename→receipt gap,
+  partial/orphan cleanup, ENOSPC/providers/большие заполненные данные.
+- Enabled ordinary UI/AppState E2E, native OS rest signals, first-run Restore choice.
+- Full legacy mapping/staging/IDs/provenance/parity/retry и migration/release gates.
+- Excel позже: GitHub first, потом2.0read-only; UI/темы после функциональности.
 
-2.0build128/личныекопии/секретынезатронуты;неоткрыватьих/невводитьключ.
-Currentdocs: R06_APPLICATION_RESTORE.md, R06_RESTORE_ACTIONS_ANDROID_REPORT.json,
-HANDOFF_BACKUP_MIGRATION.md. Предыдущийcommit24b8344; новыйсреззафиксироватьбезpush.
+Исходные пользовательские данные/личные копии/секреты сохранены; не читать их
+без соответствующего контекста. NativeMetro99958 live; autoSTATUS завершён.
+Детали: docs/spikes/R06_AUTOMATIC_BACKUP.md, R06_AUTOMATIC_ANDROID_REPORT.json,
+docs/HANDOFF_BACKUP_MIGRATION.md. База текущего срезаfafe3e5; commit безpush.

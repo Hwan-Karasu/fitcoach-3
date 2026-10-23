@@ -95,6 +95,7 @@ fixture: **3/3**, 6463 мс, повторная большая подготов�
 
 Открыты: обычный enabled UI E2E/Back/Alert на Android, native OS timer signals,
 реальный ENOSPC/другие providers, publication process death/partial cleanup,
-full populated owner matrix, autoscheduler/3 daily rotation, first-run restore
+full populated owner matrix, приёмка autoscheduler/3 daily rotation
+([добавленная реализация](R06_AUTOMATIC_BACKUP.md)), first-run restore
 choice и полный legacy mapping/staging/IDs/provenance/parity/retry. 2.0 build128,
 личные backup-файлы и секреты не затрагиваются. Excel идёт после backup/restore.

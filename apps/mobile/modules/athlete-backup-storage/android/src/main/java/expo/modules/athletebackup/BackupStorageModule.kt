@@ -23,14 +23,44 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** Publication only: source is an already verified immutable private snapshot, never LIVE.
- * No storage-wide permissions, imported paths, overwrites, rotation or deletion of old copies.
+ * No storage-wide permissions, imported paths or overwrites. Automatic retention requires
+ * a separate installation-private native ownership receipt; manual files are ineligible.
  * All exceptions crossing the JS boundary have fixed content-free codes.
  */
 class BackupStorageModule : Module() {
+  private val automaticLock = Any()
   override fun definition() = ModuleDefinition {
     Name("AthleteBackupStorage")
 
     Function("supportsDownloads") { Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q }
+    Function("automaticProtocolVersion") { 1 }
+
+    AsyncFunction("publishAutomatic") Coroutine { sourceUri: String, backupId: String, createdAt: String,
+      sha256: String, bytes: Double, treeUri: String? ->
+      val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+      withContext(Dispatchers.IO) { synchronized(automaticLock) {
+        try { AutomaticPublications(context).publish(sourceUri, backupId, createdAt, sha256, bytes, treeUri) }
+        catch (error: CancellationException) { throw error }
+        catch (error: PublicationFailure) { mapOf("ok" to false, "code" to error.failureCode) }
+        catch (_: Exception) { mapOf("ok" to false, "code" to "BACKUP_DESTINATION_UNAVAILABLE") }
+      } }
+    }
+    AsyncFunction("verifyAutomatic") Coroutine { backupId: String, uri: String, sha256: String, bytes: Double ->
+      val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+      withContext(Dispatchers.IO) { synchronized(automaticLock) {
+        try { AutomaticPublications(context).verify(backupId, uri, sha256, bytes); true }
+        catch (error: CancellationException) { throw error }
+        catch (_: Exception) { false }
+      } }
+    }
+    AsyncFunction("removeAutomatic") Coroutine { backupId: String, uri: String, sha256: String, bytes: Double ->
+      val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+      withContext(Dispatchers.IO) { synchronized(automaticLock) {
+        try { AutomaticPublications(context).remove(backupId, uri, sha256, bytes); true }
+        catch (error: CancellationException) { throw error }
+        catch (_: Exception) { false }
+      } }
+    }
 
     AsyncFunction("publish") Coroutine { sourceUri: String, backupId: String, createdAt: String,
       expectedSha256: String, expectedBytes: Double, treeUri: String? ->
@@ -50,16 +80,17 @@ class BackupStorageModule : Module() {
   }
 }
 
-private class PublicationFailure(val failureCode: String) : Exception(failureCode)
+internal class PublicationFailure(val failureCode: String) : Exception(failureCode)
 private fun invalid(): Nothing = throw PublicationFailure("BACKUP_PUBLICATION_INVALID")
 private fun unavailable(): Nothing = throw PublicationFailure("BACKUP_DESTINATION_UNAVAILABLE")
 private fun mismatch(): Nothing = throw PublicationFailure("BACKUP_VERIFICATION_FAILED")
 
-private class Publisher(private val context: Context) {
+internal class Publisher(private val context: Context) {
   private val resolver: ContentResolver get() = context.contentResolver
 
   fun publish(sourceUri: String, backupId: String, createdAt: String, expectedHash: String,
-    expectedSize: Double, treeUri: String?): Map<String, Any> {
+    expectedSize: Double, treeUri: String?, automatic: Boolean = false,
+    record: ((Uri, String) -> Unit)? = null): Map<String, Any> {
     if (!Regex("^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$").matches(backupId) ||
       !Regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$").matches(createdAt) ||
       !Regex("^[a-f0-9]{64}$").matches(expectedHash) || !expectedSize.isFinite() ||
@@ -75,12 +106,12 @@ private class Publisher(private val context: Context) {
     }
     verify(source.inputStream(), expectedHash, expectedSize.toLong())
     val stamp = createdAt.take(19).replace("-", "").replace(":", "").replace("T", "-")
-    val filename = "athlete-diary-$stamp-$backupId.atbackup"
-    return if (treeUri == null) publishDownloads(source, filename, expectedHash, expectedSize.toLong())
-      else publishDocument(source, filename, Uri.parse(treeUri), expectedHash, expectedSize.toLong())
+    val filename = "athlete-diary-${if (automatic) "auto-" else ""}$stamp-$backupId.atbackup"
+    return if (treeUri == null) publishDownloads(source, filename, expectedHash, expectedSize.toLong(), record)
+      else publishDocument(source, filename, Uri.parse(treeUri), expectedHash, expectedSize.toLong(), record)
   }
 
-  private fun publishDownloads(source: File, filename: String, hash: String, size: Long): Map<String, Any> {
+  private fun publishDownloads(source: File, filename: String, hash: String, size: Long, record: ((Uri, String) -> Unit)?): Map<String, Any> {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) throw PublicationFailure("BACKUP_LOCATION_UNSUPPORTED")
     val values = ContentValues().apply {
       put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
@@ -92,6 +123,7 @@ private class Publisher(private val context: Context) {
     var completed = false
     try {
       writeVerified(source, uri, hash, size)
+      record?.invoke(uri, filename) // Ownership receipt precedes public visibility.
       // Until this update, other apps cannot see a partially written backup.
       val publish = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
       if (resolver.update(uri, publish, null, null) != 1) unavailable()
@@ -105,7 +137,7 @@ private class Publisher(private val context: Context) {
     }
   }
 
-  private fun publishDocument(source: File, filename: String, tree: Uri, hash: String, size: Long): Map<String, Any> {
+  private fun publishDocument(source: File, filename: String, tree: Uri, hash: String, size: Long, record: ((Uri, String) -> Unit)?): Map<String, Any> {
     if (tree.scheme != "content" || !DocumentsContract.isTreeUri(tree)) invalid()
     if (resolver.persistedUriPermissions.none { it.uri == tree && it.isReadPermission && it.isWritePermission }) unavailable()
     val directory = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
@@ -121,6 +153,7 @@ private class Publisher(private val context: Context) {
       created = DocumentsContract.renameDocument(resolver, created, filename) ?: unavailable()
       verify(resolver.openInputStream(created) ?: unavailable(), hash, size)
       if (displayName(created) != filename) mismatch()
+      record?.invoke(created, filename)
       completed = true
       return mapOf("ok" to true, "uri" to created.toString(), "filename" to filename, "bytes" to size, "sha256" to hash)
     } finally {

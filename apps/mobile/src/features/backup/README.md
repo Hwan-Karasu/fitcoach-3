@@ -1,5 +1,11 @@
 # BackupRestoreUpgrade
 
+Добавлен AutomaticBackupService и foreground scheduler, private catalog/native
+ownership receipts для трёх дневных внешних копий. Targeted host sets и Android
+21/21 + focused status3/3 прошли. Отсутствующие файлы/clock re-anchor/SAF kill
+ещё требуют доработки; это не закрытый R06. Подробно:
+`docs/spikes/R06_AUTOMATIC_BACKUP.md` и `R06_AUTOMATIC_ANDROID_REPORT.json`.
+
 Обычный runtime получил `ManualBackupService` и экран настроек «Резервные копии»:
 ручное создание/одноразовый экспорт через общий snapshot engine и native publisher.
 В Expo Go и dev-режиме операции отключены; экран проверен на телефоне. Реальная

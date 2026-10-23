@@ -51,6 +51,8 @@ import { WorkflowDatabaseLease } from "../runtime/WorkflowDatabaseLease.ts";
 import { RuntimeCommandGate } from "../runtime/RuntimeCommandGate.ts";
 import { RuntimeMaintenance } from "../runtime/RuntimeMaintenance.ts";
 import { createRestoreActions } from "./createRestoreActions.ts";
+import { createAutomaticBackup } from "./createAutomaticBackup.ts";
+import type { AutomaticBackupPort } from "../../features/backup/public.ts";
 import type { RestoreActionsPort } from "../../features/backup/public.ts";
 import { recoverProductionRestore } from "./recoverProductionRestore.ts";
 import { createManualBackup } from "./createManualBackup.ts";
@@ -207,6 +209,7 @@ export interface ApplicationRuntime {
   readonly maintenance: RuntimeMaintenance;
   readonly manualBackup: ManualBackupPort;
   readonly restoreActions: RestoreActionsPort;
+  readonly automaticBackup: AutomaticBackupPort;
 }
 
 export function createRuntime(mode: "development" | "production"): ApplicationRuntime {
@@ -281,5 +284,6 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
   };
   const manualBackup = createManualBackup(development, commands, boot);
   const restoreActions = createRestoreActions(development, commands, boot, maintenance);
-  return { development, boot, services, maintenance, manualBackup, restoreActions };
+  const automaticBackup = createAutomaticBackup(development, commands, boot);
+  return { development, boot, services, maintenance, manualBackup, restoreActions, automaticBackup };
 }

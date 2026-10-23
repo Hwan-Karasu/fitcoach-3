@@ -1,0 +1,142 @@
+{
+    "task":  "R06",
+    "date":  "2026-10-23",
+    "baseCommit":  "fafe3e5",
+    "platform":  "Android API36; isolated com.fitcoach.r07sqlite 0.0.1",
+    "apkSha256":  "a3134c9d079b7109e082d913bdcab81919365fb3640fc217c42382e54c86bcfb",
+    "data":  "Fresh synthetic r06-auto private files only; exact newly created public auto/manual URIs; legacy com.fitcoach.app build128 untouched",
+    "native":  {
+                   "kind":  "R06_NATIVE",
+                   "checks":  [
+                                  {
+                                      "name":  "native_auto_capability",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_first_check_schedules_without_publication",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_first_publication",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_online_snapshot_keeps_consistent_before_late_write",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_late_write_gets_next_same_day_copy",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_old_same_day_file_retired",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_unchanged_does_not_duplicate",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_day_1_successful",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_day_2_successful",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_day_3_successful",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_three_daily_versions",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_three_versions_verified",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_manual_file_ineligible_even_with_owned_id",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_unknown_id_ineligible",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_changed_receipt_ineligible",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_native_receipt_replay_without_source",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_retired_tombstone_is_idempotent",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_rotation_keeps_manual_export_exact",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_restore_all_client_facts",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_restore_embedded_photo_after_loss",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_live_repositories_remain_usable",
+                                      "passed":  true
+                                  }
+                              ],
+                   "allPassed":  true,
+                   "elapsedMs":  71393
+               },
+    "focusedStatus":  {
+                          "kind":  "R06_NATIVE",
+                          "checks":  [
+                                         {
+                                             "name":  "native_auto_status_failure_persisted",
+                                             "passed":  true
+                                         },
+                                         {
+                                             "name":  "native_auto_status_visible_after_recreation",
+                                             "passed":  true
+                                         },
+                                         {
+                                             "name":  "native_auto_status_cleared_only_after_verified_retry",
+                                             "passed":  true
+                                         }
+                                     ],
+                          "allPassed":  true,
+                          "elapsedMs":  448
+                      },
+    "hostChecks":  {
+                       "automatic":  "15/15",
+                       "scheduler":  "4/4 (final bounded-clock timer separately)",
+                       "manual":  "12/12",
+                       "restoreActions":  "15/15",
+                       "fullFoundation":  "Not rerun; focused command 45/45 before final scheduler case, then scheduler4/4"
+                   },
+    "tooling":  {
+                    "typecheck":  "root/mobile/spike passed",
+                    "lint":  "passed",
+                    "architecture":  "503 sources",
+                    "nativeBuild":  "compileDebugKotlin and arm64 assembleDebug passed; isolated test update succeeded",
+                    "bundle":  "5622 modules / 1185 assets",
+                    "sourceSecretsDiff":  "passed"
+                },
+    "scope":  "Shared snapshot engine + actual AutomaticBackupService/Expo files/catalog + native ownership receipts + Downloads retention; full daily calendar time injected, no real multi-day wait",
+    "openChecks":  [
+                       "Deleted/missing previous backup must be distinguished from unavailable storage so default folder can be recreated",
+                       "Safe re-anchoring after permanent timezone changes/DST and historical fallback technical approval",
+                       "Actual process death across native publication/catalog/cleanup, especially SAF rename-to-receipt gap; current host restart cases are injected faults, not SIGKILL",
+                       "Automatic SAF/provider/ENOSPC matrix and ordinary enabled UI/AppState E2E",
+                       "Native OS rest signals, first-run restore choice, populated domain histories and full legacy 2.0 migration",
+                       "Release/overlay/signing gates remain OPEN"
+                   ]
+}

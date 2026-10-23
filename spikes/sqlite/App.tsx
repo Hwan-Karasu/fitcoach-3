@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button, SafeAreaView, ScrollView, Text } from "react-native";
 import { runSqliteSpike, type SpikeReport } from "./src/runSqliteSpike";
 import { runR06NativeProbe, type R06NativeReport } from "../../apps/mobile/src/app/composition/runR06NativeProbe.ts";
+import { runR06AutomaticProbe } from "../../apps/mobile/src/app/composition/runR06AutomaticProbe.ts";
 import { chooseR06PublicationDirectory, runR06PublicationProbe, savedR06PublicationDirectory,
   verifyR06PickedPublication, type R06PublicationReport } from "../../apps/mobile/src/app/composition/runR06PublicationProbe.ts";
 
@@ -34,6 +35,8 @@ function PublicationProbe() {
     <Button title="Восстановить после прерывания" disabled={busy} onPress={() => run(() => runR06NativeProbe("RECOVER"))} />
     <Button title="Проверить действия восстановления" disabled={busy} onPress={() => run(() => runR06NativeProbe("ACTIONS"))} />
     <Button title="Проверить только повтор восстановления" disabled={busy} onPress={() => run(() => runR06NativeProbe("ACTIONS_RECOVERY"))} />
+    <Button title="Проверить автоматические копии" disabled={busy} onPress={() => run(() => runR06AutomaticProbe())} />
+    <Button title="Проверить только статус автокопий" disabled={busy} onPress={() => run(() => runR06AutomaticProbe("STATUS"))} />
     <Text selectable>{busy ? "Проверка…" : failed ? "R06_PUBLICATION_FAILED" : report ? JSON.stringify(report, null, 2) : "Готово к проверке"}</Text>
   </ScrollView></SafeAreaView>;
 }

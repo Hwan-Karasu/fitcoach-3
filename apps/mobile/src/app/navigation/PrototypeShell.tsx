@@ -32,7 +32,8 @@ import { SqliteDiagnosticsScreen } from "./SqliteDiagnosticsScreen.tsx";
 import { BottomDockLayoutProvider, ScreenHeader } from "../../shared/ui/components/public.ts";
 import { DataReadNotice } from "../../shared/ui/components/DataReadNotice.tsx";
 import { BackupScreen } from "./BackupScreen.tsx";
-import type { ManualBackupPort, RestoreActionsPort } from "../../features/backup/public.ts";
+import { AutomaticBackupNotice } from "./AutomaticBackupSection.tsx";
+import type { ManualBackupPort, RestoreActionsPort, AutomaticBackupPort } from "../../features/backup/public.ts";
 
 type RootStackRoutes = {
   Root: undefined;
@@ -94,8 +95,8 @@ function openTarget(target: NotificationTarget): void {
   ] } } } as never));
 }
 
-function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, restoreActions, initialBackup }: Readonly<{
-  services: ApplicationServices; clientLists: ClientListController; rosterOverview: RosterOverviewPort; manualBackup: ManualBackupPort; restoreActions: RestoreActionsPort; initialBackup: boolean;
+function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, restoreActions, automaticBackup, initialBackup }: Readonly<{
+  services: ApplicationServices; clientLists: ClientListController; rosterOverview: RosterOverviewPort; manualBackup: ManualBackupPort; restoreActions: RestoreActionsPort; automaticBackup: AutomaticBackupPort; initialBackup: boolean;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -152,7 +153,7 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
           )}
         </Stack.Screen>
         <Stack.Screen name="Backup" options={{ title: "Резервные копии" }}>
-          {() => <BackupScreen backup={manualBackup} restore={restoreActions} />}
+          {() => <BackupScreen backup={manualBackup} restore={restoreActions} automatic={automaticBackup} />}
         </Stack.Screen>
         <Stack.Screen name="TrainingSettings" options={{ title: "Тренировки" }}>
           {() => <TrainingSettingsScreen execution={services.trainingExecution} />}
@@ -249,8 +250,8 @@ function OutcomeQueueHost({ services }: Readonly<{ services: ApplicationServices
     repository={services.calendar} participants={services.calendarParticipants} credit={services.accounting} />;
 }
 
-export function PrototypeShell({ services, workspaceId, manualBackup, restoreActions, initialBackup }: Readonly<{
-  services: ApplicationServices; workspaceId: string; manualBackup: ManualBackupPort; restoreActions: RestoreActionsPort; initialBackup: boolean;
+export function PrototypeShell({ services, workspaceId, manualBackup, restoreActions, automaticBackup, initialBackup }: Readonly<{
+  services: ApplicationServices; workspaceId: string; manualBackup: ManualBackupPort; restoreActions: RestoreActionsPort; automaticBackup: AutomaticBackupPort; initialBackup: boolean;
 }>) {
   const [clientLists] = useState(() => new ClientListController(services.clients, workspaceId));
   const [rosterOverview] = useState(() => createRosterOverviewSource({ rules: homeSummaryRules,
@@ -270,11 +271,12 @@ export function PrototypeShell({ services, workspaceId, manualBackup, restoreAct
       <KeyboardProvider>
       <SettingsBinding settings={services.settings}>
         <DataReadNotice />
+        <AutomaticBackupNotice backup={automaticBackup} onOpen={() => { if (navigationRef.isReady()) navigationRef.navigate("Backup"); }} />
         <BottomDockLayoutProvider>
         <BottomSheetModalProvider>
         <CalendarUndoProvider repository={services.calendar}>
           <NotificationsHost center={services.notifications} calendar={services.calendar} sync={services.notificationSync}>
-            <ShellNavigator services={services} clientLists={clientLists} rosterOverview={rosterOverview} manualBackup={manualBackup} restoreActions={restoreActions} initialBackup={initialBackup} />
+            <ShellNavigator services={services} clientLists={clientLists} rosterOverview={rosterOverview} manualBackup={manualBackup} restoreActions={restoreActions} automaticBackup={automaticBackup} initialBackup={initialBackup} />
           </NotificationsHost>
           <OutcomeQueueHost services={services} />
           <RestTimerDock timers={services.restTimers} onOpen={(timer) => openTarget(timerTarget(timer))} />

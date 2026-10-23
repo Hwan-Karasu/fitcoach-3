@@ -1,6 +1,11 @@
 export { GuardedRestore, RestoreProtocolError, parseRestoreGuard } from "./application/GuardedRestore.ts";
 export { ReturnPointCompletion } from "./application/ReturnPointCompletion.ts";
 export { RestoreActionsService } from "./application/RestoreActionsService.ts";
+export { AutomaticBackupService } from "./application/AutomaticBackupService.ts";
+export { AutomaticBackupError, AUTO_BACKUP_INTERVAL, automaticFilename, automaticDay, automaticRetention,
+  parseAutomaticCatalog, parsePendingAutomatic, parseAutomaticPublication, parseAutomaticFailure, sameBackupDestination } from "./domain/AutomaticBackup.ts";
+export type { AutomaticBackupErrorCode, PendingAutomatic, AutomaticEntry, AutomaticCatalog, AutomaticBackupStore,
+  AutomaticBackupFiles, AutomaticBackupState, AutomaticBackupPort, AutomaticFailure } from "./domain/AutomaticBackup.ts";
 export { RestoreActionError, restoreSpaceRequired } from "./domain/RestoreActions.ts";
 export type { RestoreActionErrorCode, RestoreActionOutcome, RestoreActionState, RestoreActionsPort, RestoreJobsPort, RestorePreview, ReturnPointSummary } from "./domain/RestoreActions.ts";
 export { parseReturnPoint, parseReturnPointState, parseRestoreCompletionIntent, emptyReturnPointState } from "./domain/RestoreCompletion.ts";

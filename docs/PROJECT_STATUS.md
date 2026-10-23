@@ -1,3 +1,10 @@
+## 2026-10-23 — R06: автоматические копии, дневная ротация и native ownership
+
+- AutomaticBackupService/foreground scheduler подключены к runtime/UI: 30мин, проверка после фона, stable online hash до embedding, без дубликатов при неизменённых данных. Atomic pending→native receipt→managed set/retired→delete; settings/status вне SQLite. Failure видна вне настроек и сохраняется после recreation. [Контракт и открытые края](spikes/R06_AUTOMATIC_BACKUP.md).
+- Native automaticProtocolVersion1 и installation-private ownership receipts добавлены к local Kotlin module. Только точный свой auto URI/hash/bytes/name/owner/grant разрешает delete; manual/foreign ineligible. Kotlin/APK собраны, отдельный стенд обновлён без key prompt, 2.0build128 цела. Android auto **21/21**, включая daily/unchanged/late write/manual preservation/полный restore клиентов и PNG; focused status **3/3 за448ms**. [Фактический отчёт](spikes/R06_AUTOMATIC_ANDROID_REPORT.json).
+- Targeted host: auto15/15, scheduler4/4, manual12/12, restore15/15; общий targeted45/45 до final clock case, после него scheduler4/4. Fullfoundation не запускался. Root/mobile/spike TS, lint/arch503/source/secrets/diff; Android JS/Hermes5622/1185.
+- R06/D05 OPEN: missing-file vs unavailable/recreate default folder, safe timezone/DST re-anchor и fallback tech acceptance, actual kill/SAF rename-receipt gap/ENOSPC/provider/полные истории, ordinary UI/AppState/native OS signals, first-run choice и полный legacy mapping/staging/IDs/parity/retry. Excel после backup/restore, UI/темы позже.
+
 ## 2026-10-23 — R06: восстановление в runtime/UI, cleanup и OS rest reconciliation
 
 - ExpoRestoreJobs/createRestoreActions подключены к ApplicationRuntime/BackupScreen: private inspection/staging, logical preview pin, actual capacity, explicit Alert confirmation, Return/delete/recovery retry. Generation remount очищает старые drafts/navigation; dev/ExpoGo операции отключены. [Реализация и границы](spikes/R06_APPLICATION_RESTORE.md).

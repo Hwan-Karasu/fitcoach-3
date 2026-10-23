@@ -1,3 +1,37 @@
+## Последнее продолжение — автокопии подключены, Android21 + focused3
+
+База fafe3e5. AutoService/Scheduler/AppState production port + settings/globalfailure
+плашка, 30мин/changeddata/3daily candidate. Online private copy/hash до embedding;
+все операции whole-command gate, обычные writes не ждут full snapshot. Atomic pending
+до публикации; native exact ownership receipt; новый managed set/retired queue до
+любого старого delete. New folder архивирует старую metadata/pending без удаления
+старых файлов. Failure status durable, verified retry снимает. Dev/ExpoGo/oldmodule
+disabled. Native compileDebugKotlin/arm64 APK успешны; test-only update SUCCESS.
+
+Actual native21/21, injected calendar2000: late businesswrite consistency, same-day/
+unchanged/three days, native owner negatives, receipt без source/tombstone, manual
+export hash intact, all5clients+embeddedPNG после потери originals,15holders usable.
+После status change focused3/3 за448ms на той же fixture, без повторного full setup.
+Host auto15/scheduler4/manual12/restore15 passed. Target command45/45 до finalclock
+test; final scheduler4/4 отдельно. Fullfoundation НЕ запускался. TS/lint/arch503/
+source/secrets/diff; bundle5622/1185. [Контракт](spikes/R06_AUTOMATIC_BACKUP.md),
+[реальные отчёты](spikes/R06_AUTOMATIC_ANDROID_REPORT.json).
+
+Следующий конкретный дефект: deleted old/default-folder files дают verification
+failure и не позволяют автоматически воссоздать default folder. Нужен owner-bound
+native inspect VALID/MISSING/UNAVAILABLE (или эквивалент): отсутствие доказывать
+отдельно от Security/provider error. Исключать только missing metadata, остальные
+истории сохранять; если пригодной свежей нет, новый full backup даже без business
+change. Не удалять/сканировать реальные пользовательские папки для теста.
+
+Далее safe clock re-anchor/DST и fallback tech acceptance; actual kill/SAF rename→
+receipt gap/ENOSPC/providers/orphan cleanup, enabled UI/AppState/native OS signals,
+first-run choice, full legacy mapping/staging/IDs/provenance/parity/retry. Полная цель
+ACTIVE, не100%; release/overlay/signing/migration gates OPEN. Excel послеbackup,
+UI/темы позже. NativeMetro8097handle99958жив, latestSTATUSterminal; старыйtestPID
+послеupdateнеактуален. 2.0build128/личныефайлыцелы. Ключневводить/несохранять.
+Проверки по пожеланию владельца: targeted области/зависимости, fullsuite на milestones.
+
 ## Последний срез — restore actions подключены, native24 + focused3
 
 База24b8344. ExpoRestoreJobs/createRestoreActions→runtime.restoreActions→BackupScreen/
