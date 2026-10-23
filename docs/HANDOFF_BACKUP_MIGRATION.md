@@ -4,7 +4,20 @@
 Полный перенос 2.0→3.0 и backup/restore не завершён; 100% не заявлено.
 UI и темы остаются на последующую шлифовку. Продукт — «Дневник атлета».
 
-## Последний завершённый срез R06 — runtime lifecycle и boot recovery
+## Текущий R06 WIP — публикация в общем хранилище
+
+Локальный Expo module `apps/mobile/modules/athlete-backup-storage`: default
+MediaStore.Downloads + pending/readback и SAF partial/rename/readback. TypeScript
+port проверяет привязку receipt к источнику; 11 новых проверок, foundation 984/984,
+mobile/spike typecheck/lint/arch/source/secrets/diff. Autolinking app/spike module
+видит. **Native compile не дошла до Kotlin**, Gradle foojay plugin не закеширован,
+прямые Java Maven-запросы дают SocketException Permission denied; PowerShell HEAD
+того же POM HTTP 200. Агентский HTTPS_PROXY — заглушка. TLS не отключать и framework
+не ослаблять. Подробно [R06_ANDROID_PUBLICATION.md](spikes/R06_ANDROID_PUBLICATION.md).
+Нужны доступные зависимости/компиляция/изолированная APK, manual controller/UI и
+native IO proof. Runtime/UI пока не вызывает адаптер; R06/D05 OPEN.
+
+## Предыдущий завершённый срез — runtime lifecycle и boot recovery
 
 `RuntimeCommandGate` дожидается целых публичных async-команд; общая инвентаризация
 15 owners и workflow lease освобождаются до физического close. После замены

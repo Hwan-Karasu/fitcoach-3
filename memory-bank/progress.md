@@ -21,7 +21,10 @@
   physical close/replace/reopen и очистка кешей. Boot recovery private journal
   до открытия DB; strict journal/guard и missing LIVE не дают создать пустую DB.
   Completed receipt сохраняет поздние записи/WAL после deliberate process kill.
-- Foundation 973/973, typecheck/lint/arch/source/secrets/diff и Android JS bundle.
+- Local Android publication WIP: MediaStore pending + SAF partial/rename/readback,
+  TS receipt binding и optional native wrapper. Module autolinking обнаружен;
+  compiler/IO/APK пока не доказаны, runtime/UI ещё не подключены.
+- Foundation 984/984, mobile/spike typecheck/lint/arch/source/secrets/diff.
 - Android runtime/journal rehearsal: normal 25/25, deliberate force-stop и
   recovery нового процесса 11/11; та же инвентаризация 15 owners + workflow.
   Это не UI E2E и не заполненная история каждого owner; OS scheduler не участвовал.
@@ -30,6 +33,9 @@
 
 Открыто:
 
+- Native compile: `modules/athlete-backup-storage/android/src/main/java/expo/modules/athletebackup/BackupStorageModule.kt`
+  ещё не скомпилирован. Gradle foojay artifact не в кеше; Java Maven соединения
+  Permission denied, PowerShell POM 200. Подробно R06_ANDROID_PUBLICATION.md.
 - R06/D05: controller/confirmation
   и job/journal writer, SAF folder/file rights/publication, autoscheduler,
   rotation/Return, native negative/low-storage/reinstall/full-owner.

@@ -1,3 +1,10 @@
+## 2026-10-23 — R06 WIP: адаптер общего хранилища Android
+
+- Добавлен локальный Kotlin Expo module для MediaStore.Downloads (`IS_PENDING`, fixed default folder) и SAF (новый partial document, проверка, DocumentsContract rename, повторная проверка). Размер/SHA и источник в canonical private files проверяются; ошибка удаляет только свежий URI операции, прежние копии не затрагивает. Нет новой сторонней библиотеки.
+- TypeScript native boundary связывает успешный receipt с конкретной копией; 11 новых проверок. Foundation **984/984**, mobile/spike typecheck, lint, arch (473 sources), source/secrets/diff и Android JS bundle **5583 modules/1185 assets** прошли. Expo autolinking распознал module в app и isolated spike. JS bundle не является Kotlin compile/APK proof.
+- **NATIVE BUILD NOT VERIFIED:** сборка не дошла до Kotlin — нет cached foojay plugin, Java не может обратиться к Maven (`SocketException: Permission denied`), хотя PowerShell получил HTTP 200 для plugin POM. Прокси окружения агента — заглушка; TLS/Gradle проверки не ослаблялись. Нативный IO/APK/SAF/reinstall не проверены; controller/UI ещё не подключены. [Реализация, доказательства и продолжение](spikes/R06_ANDROID_PUBLICATION.md).
+- Владелец разблокировал телефон самостоятельно и попросил продолжать. Scrcpy оставлен открытым; ключ/его рисунок не внесены в проект. Данные установленной 2.0 не затрагивались. R06/D05 и полный legacy перенос остаются OPEN.
+
 ## 2026-10-23 — R06: Android с полной инвентаризацией holders и boot journal
 
 - Расширенный native стенд использует настоящую инвентаризацию 15 repositories и workflow lease, RuntimeMaintenance и тот же journal/header reader, что production boot, с синтетическими private путями. Normal **25/25**: закрытие до файлов, reopen/invalidation, полное фото и сохранение поздних записей.

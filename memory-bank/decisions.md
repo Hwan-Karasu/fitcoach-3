@@ -292,6 +292,18 @@
 
 Напоминания не хранятся как отдельное расписание: `planReminders` строит полный набор из календаря и настроек, `diffSchedule` приводит ОС к нему (отмена лишних, добавление недостающих, чужие идентификаторы не трогаются). Лента центра — таблица событий с identity `(workspace, sourceType, sourceId, eventKind, eventVersion)`, статус монотонен (триггер), удаление клиента — через участника. Наступившие напоминания показываются в ленте как актуальные, без утверждения о доставке Android (§54.5 п.3). Тихие часы подавляют напоминание без переноса; таймер отдыха отдельный сигнал.
 
+## ADR-038: публикация внешней копии через Android API, локальный Expo module (2026-10-23)
+
+Product §46.16 требует default Download/Дневник атлета без обязательного picker;
+§46.25 отделяет manual create от export. JS Expo File.rename не поддерживает SAF
+content URI. Локальный Kotlin module использует MediaStore.Downloads + IS_PENDING
+для default API29+ и DocumentsContract partial/rename для выбранной папки.
+Private sealed snapshot проверяется по SHA/размеру; readback предшествует успеху.
+Нет новой сторонней библиотеки и storage-wide permissions. Expo Go не содержит
+локальный native module; optional JS lookup даёт capability state. Автоподключение
+и TS receipt binding проверены, native compile/IO/APK остаются OPEN, не закрываются
+зелёным JS bundle. Контракт/проверки: `docs/spikes/R06_ANDROID_PUBLICATION.md`.
+
 ## ADR-037: restore journal перед boot и receipts после последующих записей (2026-10-23)
 
 Recovery вызывается до создания/открытия рабочей базы. Private journal содержит

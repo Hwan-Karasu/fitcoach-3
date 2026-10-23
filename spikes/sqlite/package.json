@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "main": "index.ts",
+  "expo": {
+    "autolinking": { "nativeModulesDir": "../../apps/mobile/modules" }
+  },
   "scripts": {
     "typecheck": "tsc --noEmit --project tsconfig.check.json",
     "doctor": "expo-doctor",
