@@ -15,10 +15,14 @@ Completed receipt допускает последующие записи/WAL; о
 [R06_RUNTIME_LIFECYCLE.md](spikes/R06_RUNTIME_LIFECYCLE.md).
 
 Текущие проверки: **973/973** foundation, typecheck/lint/arch/source/secrets/diff,
-Android production JS bundle **5582 modules/1185 assets**. Новая связка runtime +
-journal reader ещё не проверена на телефоне. Предыдущие native отчёты ниже —
-доказательство отдельного стенда. Намеренное завершение тестовых процессов не
-является обнаруженным самопроизвольным падением приложения.
+Android production JS bundle **5582 modules/1185 assets**. Native rehearsal с той
+же инвентаризацией 15 owners + workflow, RuntimeMaintenance и production journal
+reader в отдельном namespace: normal **25/25**, deliberate force-stop до COMMITTED
+и recovery нового процесса через BootCoordinator **11/11**. Все holders закрыты
+до файлов; точные прежние bytes/SAFETY и поздние записи после replay сохранены.
+[Фактический отчёт](spikes/R06_RUNTIME_ANDROID_REPORT.json). Это не обычный UI E2E,
+не заполненная история каждого owner и не проверка OS scheduler/SAF/low-storage.
+Намеренное завершение тестовых процессов не является обнаруженным падением.
 
 ## Предыдущий срез — общий snapshot engine
 
@@ -58,14 +62,14 @@ Metro стенда остановлен; ADB reverse tcp:8096 снят посл�
 
 ## Следующее действие
 
-Продолжить **R06**: native-проверка новой runtime/journal связки, application
-controller с явным подтверждением полной замены и atomic private job/journal
+Продолжить **R06**: application controller с явным подтверждением полной замены и atomic private job/journal
 writer. Runtime использует ExpoRestoreStorage для cold recovery, но пользователь
 пока не может запустить backup/restore из обычного приложения. Нужны SAF/Downloads
 выбор/публикация/права, changed-data autoscheduler, rotation, Return point,
 negative/low-storage/reinstall/full-owner native matrix. После замены также
 согласовать старые/восстановленные OS-сигналы таймеров без запроса разрешений
-при обычном boot. R06/D05 OPEN.
+при обычном boot. R06/D05 OPEN. Metro/reverse 8096 остановлены; по просьбе
+владельца оставлено открытым окно scrcpy «Экран телефона» на ПК.
 
 Дефект готовности фото исправлен: `storeLocalImage` ждёт copy, проверяет размер
 и не публикует URI частичной копии. `RecipePhotoSession` блокирует save/remove/

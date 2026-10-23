@@ -15,13 +15,16 @@ R06 runtime lifecycle: gate целых команд, единая инвента
 освобождаемый workflow lease, close/reopen/cache reset; production boot читает
 private journal до открытия DB. Receipt сохраняет последующие записи/WAL;
 missing LIVE/invalid journal блокируют boot без создания пустой базы.
-Новая runtime/journal связка на устройстве ещё не проверена. Общий engine `b629fa1`
+Расширенный Android rehearsal с теми же 15 owners/workflow/maintenance/journal
+reader: normal 25/25, deliberate force-stop до COMMITTED и новый boot/recovery
+11/11. Это не обычный UI E2E, не полная заполненная owner matrix и не OS scheduler.
+Отчёт `docs/spikes/R06_RUNTIME_ANDROID_REPORT.json`. Общий engine `b629fa1`
 также прошёл spike typecheck и Android full `.atbackup` с фото: normal 19/19;
 actual force-stop после swap до COMMITTED и recovery нового процесса 7/7.
 Данные только синтетические. Установленная 2.0.0 (128) не заменялась;
 её БД и личные backup-файлы не открывались. Metro и reverse 8096 остановлены.
 
-Следующее: R06 native runtime/journal proof, application controller/confirmation
+Следующее: R06 application controller/confirmation
 и job/journal writer; SAF folder/file/publishing, autoscheduler/rotation/Return,
 reconcile OS rest-timer signals и native negative/low-storage/reinstall/full-owner.
 Обычный app пока не предоставляет пользователю backup/restore.
@@ -41,5 +44,6 @@ workout export в Excel. Сначала исследовать GitHub solutions/
 `docs/spikes/R06_RUNTIME_LIFECYCLE.md`, `docs/EXCEL_IMPORT_EXPORT_PLAN.md`.
 Вопрос владельца о падении относился к описанию намеренного force-stop теста;
 самопроизвольного падения в нём не было. Формулировать это явно.
+По просьбе владельца запущен scrcpy «Экран телефона» на ПК; оставить открытым.
 Прежняя память сохранена в `archive/activeContext-before-backup-2026-10-23.md`;
 это исторические сведения, текущий статус берётся из этой записи и handoff.

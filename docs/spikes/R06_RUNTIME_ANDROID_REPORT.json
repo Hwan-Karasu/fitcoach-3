@@ -1,0 +1,166 @@
+{
+    "task":  "R06",
+    "date":  "2026-10-23",
+    "platform":  "Android API 36; Expo Go 57.0.9",
+    "data":  "Synthetic private files only",
+    "normal":  {
+                   "kind":  "R06_NATIVE",
+                   "checks":  [
+                                  {
+                                      "name":  "native_scalar_hash_matches_node",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_all_owners_and_workflow_initialized",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "streaming_sha256",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_manifest_embeds_media",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_backup_preserves_source",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_self_contained_after_photo_loss",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_staging_manifest_parity",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_external_backup_unchanged",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_all_runtime_holders_closed_before_files",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "guarded_replace",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "independent_safety",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "previous_preserved",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_runtime_reopened_and_invalidated",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "reopen_restored_client",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "snapshot_not_merge",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_recipe_revision_archive_preserved",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_recipe_json_parity",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_photo_private_relocation",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_photo_exact_bytes",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_photo_decoder_accepts",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_all_runtime_holders_closed_before_files",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "receipt_replay",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_workflow_works_after_reopen",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "replay_preserves_later_writes",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_completed_journal_preserves_later_writes",
+                                      "passed":  true
+                                  }
+                              ],
+                   "allPassed":  true,
+                   "elapsedMs":  119809
+               },
+    "recovery":  {
+                     "kind":  "R06_NATIVE",
+                     "checks":  [
+                                    {
+                                        "name":  "native_cold_recovery_before_runtime_open",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_kill_rolls_back",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_kill_original_bytes",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_kill_safety_intact",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_kill_rejected_preserved",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_boot_ready_after_recovery",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_recovery_workspace_database_order",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_all_owners_reopened_after_kill",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_kill_original_client",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_kill_no_partial_merge",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_kill_idempotent_recovery",
+                                        "passed":  true
+                                    }
+                                ],
+                     "allPassed":  true,
+                     "elapsedMs":  15176
+                 },
+    "forceStopConfirmed":  true,
+    "scope":  "Runtime owner inventory and production journal reader in an isolated namespace; no overlay, release or personal data migration"
+}

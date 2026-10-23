@@ -10,8 +10,14 @@ import { inspectProductionDatabase, PRODUCTION_DATABASE, PRODUCTION_IDENTITY } f
  * External/legacy source files never supply the live path or a job directory name. */
 export function recoverProductionRestore(maintenance: RuntimeMaintenance): Promise<void> {
   const root = new Directory(Paths.document, "runtime-restore", "production");
-  const pending = new File(root, "pending.json");
   const live = new File(new Directory(defaultDatabaseDirectory), PRODUCTION_DATABASE);
+  return recoverLocalRestore(maintenance, root, live);
+}
+
+/** Composition supplies trusted private paths. The isolated Android rehearsal uses this
+ * same reader/header/adapter with its own namespace, never the production database. */
+export function recoverLocalRestore(maintenance: RuntimeMaintenance, root: Directory, live: File): Promise<void> {
+  const pending = new File(root, "pending.json");
   return recoverRuntimeRestore(async () => {
     if (!pending.exists) return null;
     if (pending.size > 8192) throw new Error("RESTORE_JOURNAL_INVALID");

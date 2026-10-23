@@ -5,7 +5,7 @@
   "type": "module",
   "main": "index.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit --project tsconfig.check.json",
     "doctor": "expo-doctor",
     "mobile": "node --experimental-strip-types ./scripts/mobile.ts",
     "android": "expo run:android"

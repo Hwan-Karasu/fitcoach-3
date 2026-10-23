@@ -22,12 +22,15 @@
   до открытия DB; strict journal/guard и missing LIVE не дают создать пустую DB.
   Completed receipt сохраняет поздние записи/WAL после deliberate process kill.
 - Foundation 973/973, typecheck/lint/arch/source/secrets/diff и Android JS bundle.
+- Android runtime/journal rehearsal: normal 25/25, deliberate force-stop и
+  recovery нового процесса 11/11; та же инвентаризация 15 owners + workflow.
+  Это не UI E2E и не заполненная история каждого owner; OS scheduler не участвовал.
   Android normal full-format 19/19, actual force-stop/recovery
   нового процесса 7/7. Отчёт: `docs/spikes/R06_FULL_SNAPSHOT_REPORT.json`.
 
 Открыто:
 
-- R06/D05: native-проверка новой runtime/journal связки; controller/confirmation
+- R06/D05: controller/confirmation
   и job/journal writer, SAF folder/file rights/publication, autoscheduler,
   rotation/Return, native negative/low-storage/reinstall/full-owner.
 - RestTimerService.recover в `features/training/execution/application/RestTimerService.ts`:

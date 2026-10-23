@@ -1,3 +1,10 @@
+## 2026-10-23 — R06: Android с полной инвентаризацией holders и boot journal
+
+- Расширенный native стенд использует настоящую инвентаризацию 15 repositories и workflow lease, RuntimeMaintenance и тот же journal/header reader, что production boot, с синтетическими private путями. Normal **25/25**: закрытие до файлов, reopen/invalidation, полное фото и сохранение поздних записей.
+- Намеренный force-stop после INCOMING→LIVE до COMMITTED подтверждён отсутствием процесса. В новом процессе **11/11**: rollback до runtime open, точные прежние bytes/SAFETY, BootCoordinator→workspace→DB, reopen всех owners, рабочая составная запись и idempotent receipt. [Отчёт](spikes/R06_RUNTIME_ANDROID_REPORT.json), [точные границы](spikes/R06_RUNTIME_LIFECYCLE.md).
+- Foundation **973/973**, mobile/spike typecheck, lint, arch, source/secrets/diff, Android JS bundle **5582 modules/1185 assets**. Стенд проверяет lifecycle всех holders, а не каждую заполненную доменную историю и не обычный UI/OS scheduler/SAF/reinstall/low-storage. R06/D05 OPEN; controller/confirmation/job writer и реальные пользовательские операции ещё впереди.
+- Metro/reverse 8096 остановлены. Установленная 2.0 и её данные не затрагивались. По отдельной просьбе владельца запущено окно scrcpy для экрана телефона на ПК, оно оставлено открытым.
+
 ## 2026-10-23 — R06: остановка runtime перед заменой и recovery до boot
 
 - Обычный runtime использует единую инвентаризацию 15 repository holders, освобождаемый workflow lease и gate целых публичных async-команд. Maintenance ждёт команды/сигналы, закрывает DB до файловых операций, переоткрывает owners, очищает read-model кеши и возвращает экраны. При отказе команды остаются закрытыми до recovery.

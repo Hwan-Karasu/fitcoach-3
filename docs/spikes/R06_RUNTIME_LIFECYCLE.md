@@ -60,9 +60,28 @@ boot, он не удаляется вручную.
 - Typecheck, lint, arch:check (471 source files), source:verify (73 entries),
   secrets:check, diff --check; Android production JS bundle: 5582 modules,
   1185 assets. Это сборка JS, не release APK.
-- Новая runtime/production-journal связка **ещё не проверена на устройстве**.
-  Прежний Android full-format 19/19 и deliberate force-stop/recovery 7/7 относятся
-  к отдельному стенду, а не ко всем изменениям этого среза.
+- Android API 36 / Expo Go 57.0.9: расширенный стенд использует ту же
+  `createLocalRepositories` инвентаризацию всех 15 owners, настоящий workflow lease,
+  RuntimeMaintenance и общий production journal/header reader в отдельном private
+  namespace. Normal **25/25**: holders закрыты до файлов, reopen/cache invalidation,
+  full-format фото и поздние записи после completed journal replay.
+- После наблюдаемого checkpoint INCOMING→LIVE до COMMITTED тестовый Expo Go процесс
+  намеренно force-stopped; отсутствие процесса подтверждено. Новый процесс прошёл
+  **11/11**: BootCoordinator вызвал journal recovery до workspace/runtime open,
+  точные исходные bytes/SAFETY сохранены, все owners открылись после recovery,
+  workflow снова пишет, повтор не откатывает новые записи.
+  [Фактический отчёт](R06_RUNTIME_ANDROID_REPORT.json). Время normal включает Dozing
+  телефона; это не performance SLA. Metro и reverse 8096 после проверки остановлены.
+- Это isolated native rehearsal, не E2E экранов обычного приложения и не полная
+  заполненная owner matrix: все owners инициализированы, но каждый доменный тип
+  истории не заполнялся. OS scheduler/rest signals, фактическое default-directory
+  размещение production DB, native WAL после поздней записи и повторного kill,
+  SAF/reinstall/low-storage пока этим отчётом не подтверждены. Прежние native
+  отчёты 19/19 + 7/7 остаются отдельными историческими доказательствами.
+
+`spikes/sqlite/tsconfig.check.json` выбирает одну копию React/RN types для общего
+app source, как Metro выбирает один runtime. Этот mapping используется только
+typecheck-командой; обычный tsconfig не направляет Metro в declaration files.
 
 Ещё нужны пользовательский controller/confirmation, запись job/journal, SAF
 выбор/публикация/права, scheduler/rotation и Return point; согласование оставшихся
