@@ -1,4 +1,56 @@
-## Последнее продолжение — R04 WorkData + health visibility, база593552f
+## Последнее продолжение — R04 exercise registry/IDs/links, база e123c13
+
+Previous goal turn PROGRESS e123c13: WorkData normalizedstage+health visibility.
+Current R04→R03, D03→D01/R04/R05. Product31.11/33/39.1–7/46.6/46.19/48.5.7/
+48.86.30/49–50/53–56. No realmigration/newproductionDDL, gatesOPEN.
+
+LegacyExerciseCatalogStage: private r04_exercise_registry/ids/links/receipt, actual
+D01 exercise_overlay (baseline unchanged). Explicit exercises:true requires
+profiles/questionnaires/workData, EXERCISE_REGISTRY_REHEARSAL_V1 binding.
+stageClientExerciseCatalog same BEGINIMMEDIATE with Client IDs/cards/Q/work records,
+full readback/FK/integrity/receipt parity. Old files reject mode without changes.
+Persisted IDs CUSTOM usr:UUID, oldstock sys:legacy-v2:UUID/originSYSTEM; source
+LEGACY_V2, no name/alias merge or inferred RepDB identity/profile. loadExerciseDraftIds
+public map validates scope/raw/origin/prefix/UUID for later owners.
+
+Pure projectLegacyExerciseCatalogRow/projectLegacyExerciseReferences extracted from
+readers for raw reparse; readers retain all shape/owner/physicalcount checks and
+targetWrites0. Typed candidate name/bodyPart/status cannot authorize staged data.
+Full source names(even>80)/aliases whitespace/order/duplicates/timestamps retained;
+deleted CUSTOM/SYSTEM archived and available to history, excluded active picks.
+References training_exercises/history keep source notes/JSON/snapshots/deletion,
+targetClient/Exercise/workspace FKs; ambiguous/crossclient refs block, no guessedrepair.
+
+ExerciseDefinition.bodyPart nullable for savedlegacyimport only, normalCreateCustom
+stillrequirescategory. equipmentUnspecified:true+null distinct from knownnone/
+bodyweight; labels/rules/filtercounts reflect unknown, Traininglookup omitsgroup.
+Alllegacy LOAD_REPS byownerdecision. Primarymusclesnotinferred. LegacySYSTEM not
+attributedtoRepDB. UI changes onlyfallback/readability, notthemes/redesign.
+Currentproductioncustom_exercises NOTNULL/80char constraint NOTweakened/rebuilt;
+nullable/longrecords inprivate registryproposal, runtime registry store/production
+DDL/commands/enrichment/archive/backup/deletion wiring notimplemented. No source
+historicalclassification migration yet. Overlaydefaultsfalse/null NOTprooffavorites
+preferences migrated; sourceprefs need compose in catalog owner later.
+
+153/153 npm run r04:exercise-stage:test(17new),82/82 downstream fullsourceaudit.
+Actualsynthetic5definitions/5links+Client/Q/work, additionallegacycustomQhistory/
+draft/answer version1.6 new rollback boundaries, byteidenticalfile replay/sourceSHA
+unchanged, source/targetdrift/FK/collision/stalederived/callermutation. Root/mobileTS,
+changedESLint/source/arch506/secrets/diff. AndroidJS/Hermesbundle5623/1185 passed.
+Fullfoundation/newAPK/Androidfixture/phonechanges NOTrun. Contract
+docs/spikes/R04_EXERCISE_REGISTRY_STAGING.md. finalizable:false; partialr04_* DB
+cannotpublishasfitcoach_v3.db or feedcommonRestore.
+
+NEXT R04 structure/program/library/archive→Plans using stableClient/Exercise maps,
+then canonicalTrainingfacts/remainingowners/fullstagingparity/provenance/retry/
+Android/runtime2.0Restore/JSONv1v2. Missingrefs session/library/archive, aliasregistry/
+exercise_identity_unresolved/preferences remain; don't claim allreferences done.
+ProductionWorkDataowner stillOPEN. Otherbackupedgesclock/DST/SAFgap/copydeletekill/
+ENOSPC/providers/ordinaryUI/OS/first-run. KeepfullgoalACTIVE/gatesOPEN, no100%.
+UI/themeslater/Excelafterbackup. Personalfiles/2.0untouched. LastnativePID3837terminal,
+Metro99958historical/unverified/scrcpyopen/no pendingkill. Russiancommit/no push.
+
+## Предыдущий срез — R04 WorkData + health visibility, база593552f
 
 Previous goal turn PROGRESS:8d29b65 Qhistory staging and593552f documented WorkData
 gap. Current TaskR04→R03/D03→R04/R05, Product10.15/20.2/22.2/23–27/46.6/46.19/

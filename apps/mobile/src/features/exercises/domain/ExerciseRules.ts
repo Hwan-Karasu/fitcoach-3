@@ -28,6 +28,11 @@ export interface CatalogFilters {
 }
 
 export const NO_FILTERS: CatalogFilters = { bodyParts: new Set(), equipment: new Set(), profiles: new Set(), showHidden: false };
+/** Empty is not a valid equipment value; reserve it for unspecified import metadata. */
+export const UNSPECIFIED_EQUIPMENT_FILTER = "";
+export function equipmentFilterKey(definition: ExerciseDefinition): string {
+  return definition.equipmentUnspecified ? UNSPECIFIED_EQUIPMENT_FILTER : definition.equipment ?? "none";
+}
 
 export function displayNameOf(entry: CatalogEntry): string {
   return entry.overlay.displayName?.trim() || entry.definition.name;
@@ -83,7 +88,8 @@ export function filterOptionCounts(entries: readonly CatalogEntry[], query: stri
   const counts = new Map<string, number>();
   for (const { definition } of filterCatalog(entries, query, mode, open)) {
     const key = dimension === "bodyParts" ? definition.bodyPart : dimension === "profiles" ? definition.trackingProfile
-      : definition.equipment ?? "none";
+      : equipmentFilterKey(definition);
+    if (key === null) continue; // Unknown classification contributes to no known muscle group.
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;
@@ -97,8 +103,8 @@ export function filterCatalog(entries: readonly CatalogEntry[], query: string, m
     if (overlay.hidden && !filters.showHidden) return false;
     if (mode === "FAVORITES" && !overlay.favorite) return false;
     if (mode === "MINE" && definition.origin !== "CUSTOM") return false;
-    if (filters.bodyParts.size > 0 && !filters.bodyParts.has(definition.bodyPart)) return false;
-    if (filters.equipment.size > 0 && !filters.equipment.has(definition.equipment ?? "none")) return false;
+    if (filters.bodyParts.size > 0 && (definition.bodyPart === null || !filters.bodyParts.has(definition.bodyPart))) return false;
+    if (filters.equipment.size > 0 && !filters.equipment.has(equipmentFilterKey(definition))) return false;
     if (filters.profiles.size > 0 && !filters.profiles.has(definition.trackingProfile)) return false;
     return matchesWords(entry, words);
   });

@@ -1,4 +1,4 @@
-import type { BodyPart, TrackingProfileId } from "./ExerciseModel.ts";
+import type { BodyPart, ExerciseDefinition, TrackingProfileId } from "./ExerciseModel.ts";
 
 /** Русские подписи метаданных каталога (§39.10: локализация — слой над canonical identity). */
 
@@ -13,6 +13,12 @@ export const bodyPartLabels: Readonly<Record<BodyPart, string>> = {
   lower_legs: "Голени",
   full_body: "Всё тело",
 };
+export function bodyPartLabel(part: BodyPart | null): string {
+  return part === null ? "Группа мышц не указана" : bodyPartLabels[part];
+}
+export function exerciseEquipmentLabel(definition: ExerciseDefinition): string {
+  return definition.equipmentUnspecified ? "Оборудование не указано" : equipmentLabel(definition.equipment);
+}
 
 export const trackingProfileLabels: Readonly<Record<TrackingProfileId, string>> = {
   REPS: "Повторы",

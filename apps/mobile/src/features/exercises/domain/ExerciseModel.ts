@@ -20,7 +20,8 @@ export const TRACKING_PROFILES: Readonly<Record<TrackingProfileId, readonly Trac
 
 export const TRACKING_PROFILE_IDS = Object.keys(TRACKING_PROFILES) as readonly TrackingProfileId[];
 
-/** Группа мышц — обязательная категория упражнения, в том числе своего (§31.11, Feature 08). */
+/** Категория при создании упражнения обязательна (§31.11). Старый импорт может
+ * сохранить неизвестную категорию как null, не присваивая фиктивную группу. */
 export type BodyPart = "chest" | "back" | "shoulders" | "upper_arms" | "lower_arms" | "core"
   | "upper_legs" | "lower_legs" | "full_body";
 
@@ -38,7 +39,7 @@ export interface ExerciseMedia {
 
 /** Ссылка на запись внешнего источника: не является identity FitCoach (§29.2). */
 export interface ExerciseSourceRef {
-  readonly provider: "REPDB";
+  readonly provider: "REPDB" | "LEGACY_V2";
   readonly sourceId: string;
 }
 
@@ -52,10 +53,12 @@ export interface ExerciseDefinition {
   /** Название по-русски; если перевода нет — английское. */
   readonly name: string;
   readonly nameEn: string | null;
-  readonly bodyPart: BodyPart;
+  readonly bodyPart: BodyPart | null;
   readonly primaryMuscles: readonly string[];
   readonly secondaryMuscles: readonly string[];
   readonly equipment: string | null;
+  /** Legacy empty metadata is unknown, distinct from known bodyweight/no equipment. */
+  readonly equipmentUnspecified?: true;
   readonly trackingProfile: TrackingProfileId;
   readonly mechanic: "compound" | "isolation" | null;
   readonly difficulty: "beginner" | "intermediate" | "advanced" | null;

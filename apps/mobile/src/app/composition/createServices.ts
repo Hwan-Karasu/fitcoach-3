@@ -137,7 +137,7 @@ function exerciseLookup(exercises: ExerciseCatalogPort, registerInvalidation?: (
     metrics: TRACKING_PROFILES[entry.definition.trackingProfile],
     thumbnail: thumbnailOf(entry.definition.media),
     unilateral: entry.definition.unilateral,
-    group: { id: entry.definition.bodyPart, label: bodyPartLabels[entry.definition.bodyPart] },
+    ...(entry.definition.bodyPart === null ? {} : { group: { id: entry.definition.bodyPart, label: bodyPartLabels[entry.definition.bodyPart] } }),
     ...(archived ? { archived: true } : {}),
   }] as const;
   // Архивные свои упражнения остаются в справочнике только для чтения: в фактах они известны по id (имя и профиль не пропадают из истории).

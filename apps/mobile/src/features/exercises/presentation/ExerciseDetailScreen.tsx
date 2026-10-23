@@ -4,7 +4,7 @@ import { AppButton, ConfirmDialog, InlineNotice, LoadingState, StatusTag, TextFi
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import type { ExerciseCatalogPort } from "../domain/ExerciseCatalogPort.ts";
-import { bodyPartLabels, equipmentLabel, muscleLabel, trackingProfileLabels } from "../domain/ExerciseLabels.ts";
+import { bodyPartLabel, exerciseEquipmentLabel, muscleLabel, trackingProfileLabels } from "../domain/ExerciseLabels.ts";
 import { displayNameOf, type CatalogEntry } from "../domain/ExerciseRules.ts";
 import { posesOf } from "./exerciseImage.ts";
 
@@ -47,8 +47,8 @@ export function ExerciseDetailScreen({ exerciseId, repository, onEdit, onArchive
   const { definition, overlay } = entry;
   const run = (action: Promise<unknown>) => { setError(null); void action.catch(() => setError("Не удалось сохранить. Каталог не изменён.")); };
   const facts: readonly (readonly [string, string])[] = [
-    ["Группа мышц", bodyPartLabels[definition.bodyPart]],
-    ["Оборудование", equipmentLabel(definition.equipment)],
+    ["Группа мышц", bodyPartLabel(definition.bodyPart)],
+    ["Оборудование", exerciseEquipmentLabel(definition)],
     ["Как записывается подход", trackingProfileLabels[definition.trackingProfile]],
     ...(definition.primaryMuscles.length > 0 ? [["Основные мышцы", definition.primaryMuscles.map(muscleLabel).join(", ")] as const] : []),
     ...(definition.secondaryMuscles.length > 0 ? [["Вспомогательные", definition.secondaryMuscles.map(muscleLabel).join(", ")] as const] : []),
@@ -138,12 +138,12 @@ export function ExerciseDetailScreen({ exerciseId, repository, onEdit, onArchive
           <View style={styles.grow}><AppButton variant="secondary" label="Изменить" onPress={() => onEdit(definition.id)} /></View>
           <View style={styles.grow}><AppButton variant="secondary" label="В архив" onPress={() => setConfirmArchive(true)} /></View>
         </View>
-      ) : (
+      ) : definition.source?.provider === "REPDB" ? (
         <Pressable accessibilityRole="link" accessibilityLabel={repository.meta().attribution}
           onPress={() => { void Linking.openURL("https://repdb.co"); }}>
           <Text style={[styles.attribution, { color: colors.textMuted }]}>{repository.meta().attribution}</Text>
         </Pressable>
-      )}
+      ) : <Text style={[styles.attribution, { color: colors.textMuted }]}>Перенесено из версии 2.0</Text>}
       <ConfirmDialog visible={confirmArchive} title="Убрать упражнение в архив?"
         description="Упражнение пропадёт из каталога и выбора. Записанные раньше тренировки его сохранят."
         confirmLabel="В архив" onCancel={() => setConfirmArchive(false)}

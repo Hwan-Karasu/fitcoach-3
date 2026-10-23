@@ -60,6 +60,17 @@ export function readLegacyExerciseReferencesInSnapshot(
   const history = db.prepare(`SELECT h.*,
     c.id AS owner_client_id FROM training_exercise_history h
     LEFT JOIN clients c ON c.id=h.client_id ORDER BY h.id`).all();
+  const exerciseCount = db.prepare("SELECT count(*) AS count FROM training_exercises").get()!.count;
+  const historyCount = db.prepare("SELECT count(*) AS count FROM training_exercise_history").get()!.count;
+  if (exercises.length !== exerciseCount || history.length !== historyCount) throw new Error("R04_EXERCISE_REFERENCE_CARDINALITY_MISMATCH");
+  return projectLegacyExerciseReferences(accountScope, catalog, exercises, history);
+}
+
+export function projectLegacyExerciseReferences(accountScope: string, catalog: readonly LegacyExerciseCatalogCandidate[],
+  exercises: readonly Readonly<Record<string, unknown>>[], history: readonly Readonly<Record<string, unknown>>[]): readonly LegacyExerciseReferenceCandidate[] {
+  if (!accountScope.trim() || catalog.some((row) => row.accountScope !== accountScope)) throw new Error("R04_EXERCISE_ACCOUNT_MISMATCH");
+  const catalogIds = new Set(catalog.map((row) => row.sourceCatalogId));
+  if (catalogIds.size !== catalog.length) throw new Error("R04_EXERCISE_CATALOG_IDENTITY_INVALID");
   const rows: LegacyExerciseReferenceCandidate[] = [];
   const seen = new Set<string>();
   function append(
@@ -113,11 +124,6 @@ export function readLegacyExerciseReferencesInSnapshot(
       else issues.add("UNRESOLVED_INSTANCE");
     }
     append("training_exercise_history", raw, refs, issues);
-  }
-  const exerciseCount = db.prepare("SELECT count(*) AS count FROM training_exercises").get()!.count;
-  const historyCount = db.prepare("SELECT count(*) AS count FROM training_exercise_history").get()!.count;
-  if (exercises.length !== exerciseCount || history.length !== historyCount) {
-    throw new Error("R04_EXERCISE_REFERENCE_CARDINALITY_MISMATCH");
   }
   return rows;
 }

@@ -1,3 +1,10 @@
+## 2026-10-23 — R04: каталог упражнений и устойчивые ссылки 2.0
+
+- В общей транзакции Client/Q/WorkData добавлены5 synthetic definitions/5links, persisted Exercise IDs/provenance/receipts/parity. CUSTOM usr:UUID и прежний stock sys:legacy-v2:UUID не сливаются по имени/RepDB. Сохранены полные имена/aliases/даты и удалённые SYSTEM/CUSTOM для истории. [Контракт](spikes/R04_EXERCISE_REGISTRY_STAGING.md).
+- Domain model/rules/минимальные labels принимают legacy null category/unspecified equipment, сохраняя LOAD_REPS. Неизвестность не становится full_body/bodyweight и не приписывается статистике группы; обычный CreateCustom по-прежнему требует категорию. Runtime imported registry/production DDL ещё не подключены; текущий baseline не ослаблен.
+- **153/153** targeted (17 новых), **82/82** downstream audit, root/mobile TS/changed ESLint/source/arch506/secrets/diff. Шесть rollback boundaries, sourceSHA unchanged/target replay byte-identical, source/target drift/ownership/FK/collision. Дополнительная композиция с legacy custom Q. Android bundle5623/1185; fullfoundation/APK/телефон не затрагивались.
+- Следующий R04 этап — structure/program/library/archive→Plans с Client/Exercise ID maps, canonical facts/остальные владельцы/full staging/parity/runtime2.0 Restore/Android. Ещё открыты session/library/archive refs, alias registry/preferences, production WorkData/registry. finalizable:false, общая цель ACTIVE и gates OPEN.
+
 ## 2026-10-23 — R04: отдельные заметки, общие теги и проверка ограничений
 
 - Добавлены ClientWorkData domain model и normalized R04 rows для Notes/Tags/Assignments/PENDING_REVIEW. Persisted UUID, workspace FK, raw provenance и naming policy; одна транзакция с Client IDs/cards/Q. Старая заметка сохраняется целиком, дата переноса отделена от неизвестной исходной даты. Диагнозы не создают ACTIVE limitations. [Контракт](spikes/R04_CLIENT_WORK_DATA_STAGING.md).

@@ -1,6 +1,7 @@
 # R04 — каталог упражнений и ссылки 2.0 → 3.x
 
-Статус: PARTIAL, read-only source evidence и кандидаты в памяти. Production
+Статус: PARTIAL. Помимо read-only candidates проверен отдельный
+[registry staging](R04_EXERCISE_REGISTRY_STAGING.md) со stable IDs/links/parity. Production
 импорт, изменение схемы и восстановление на Android этим срезом не выполняются.
 
 ## Входы, зависимости, требования
@@ -52,9 +53,14 @@ aliases сохраняется в raw; он не превращается в п�
 Это кандидаты dry-run, а не переклассификация сохранённых фактов. Конкретные
 мышцы и оборудование по названию не определяются. Исходная категория сохраняется
 даже при наличии однозначного соответствия. Неизвестная категория представлена
-в staging-кандидате как `null`, отдельно от обязательной категории `ExerciseDefinition`.
-Целевой ID упражнения не назначается. Production CHECK и обычное создание
-упражнений без категории не изменяются.
+в staging-кандидате как `null`; теперь общая ExerciseDefinition также поддерживает
+это состояние для сохранённого legacy import, сохраняя обязательность категории
+при обычном CreateCustom.
+Read-only candidate не получает target ID; отдельный staging ledger теперь
+резервирует и сохраняет его. Production CHECK и обычное создание без категории
+не изменяются. Сохранённый legacy import в общей domain model допускает null
+category/unspecified equipment; частный registry stage проверяет такие records
+без подстановки full_body/bodyweight. Runtime storage ещё не подключён.
 
 ## Проверка ссылок и истории
 
@@ -86,7 +92,9 @@ read-only SQLite snapshot, что и остальные проверки. Нар
 проверяет неизменность байтов как при успехе, так и при ошибке формы.
 Реальная пользовательская база в этом срезе не открывалась.
 
-Открыты: source→target ID ledger, проверка `exercise_identity_unresolved` и alias
+Source→target ID ledger и ссылки двух указанных source tables теперь проверены в
+общем Client/Q/WorkData staging, включая read-back/FK/retry и17 новых tests.
+Открыты проверка `exercise_identity_unresolved` и alias
 registry, ссылки из session exercises, JSON программ/библиотеки/архивов, сохранение
 исторической классификации, UI уточнения категории и полноценное восстановление.
 Пользовательское уточнение новых полей не должно переписывать старые результаты.

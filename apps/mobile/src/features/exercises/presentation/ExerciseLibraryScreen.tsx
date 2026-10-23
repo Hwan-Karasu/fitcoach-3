@@ -8,7 +8,7 @@ import { AppButton, FilterPill, FloatingActionButton, InlineNotice, LoadingState
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import type { ExerciseCatalogPort } from "../domain/ExerciseCatalogPort.ts";
-import { bodyPartLabels, equipmentLabel, trackingProfileLabels } from "../domain/ExerciseLabels.ts";
+import { bodyPartLabel, bodyPartLabels, equipmentLabel, exerciseEquipmentLabel, trackingProfileLabels } from "../domain/ExerciseLabels.ts";
 import { BODY_PARTS, TRACKING_PROFILE_IDS } from "../domain/ExerciseModel.ts";
 import { displayNameOf, filterCatalog, filterOptionCounts, NO_FILTERS, type CatalogEntry, type CatalogFilters,
   type CatalogMode } from "../domain/ExerciseRules.ts";
@@ -29,6 +29,7 @@ export const COMMON_EQUIPMENT: readonly string[] = ["none", "barbell", "dumbbell
 
 /** Подпись варианта фильтра — с заглавной буквы (в строке упражнения оборудование идёт строчными). */
 export function equipmentFilterLabel(id: string): string {
+  if (id === "") return "Не указано";
   if (id === "none") return "Без оборудования";
   const label = equipmentLabel(id);
   return label.charAt(0).toUpperCase() + label.slice(1);
@@ -51,7 +52,7 @@ const ExerciseRow = memo(function ExerciseRow({ entry, onPressId, order, favorit
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const { definition, overlay } = entry;
-  const meta = [bodyPartLabels[definition.bodyPart], equipmentLabel(definition.equipment),
+  const meta = [bodyPartLabel(definition.bodyPart), exerciseEquipmentLabel(definition),
     trackingProfileLabels[definition.trackingProfile]].join(" · ");
   const name = displayNameOf(entry);
   const thumbnail = thumbnailOf(definition.media);
