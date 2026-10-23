@@ -4,11 +4,16 @@ import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.system.ErrnoException
+import android.system.Os
+import android.system.OsConstants
 import java.io.File
 import java.io.FileOutputStream
+import java.io.FileNotFoundException
 import java.security.MessageDigest
 import java.util.UUID
 import org.json.JSONObject
@@ -16,7 +21,7 @@ import org.json.JSONObject
 /** Native, installation-private proof of creation. No URI from the TS catalog is deletion
  * authority by itself. Missing/corrupt receipts never authorize scanning external storage.
  * Atomic rename protects process-death replay, not directory-fsync/power-loss durability. */
-internal class AutomaticPublications(private val context: Context) {
+internal class AutomaticPublications(private val context: Context, private val downloadsFolder: String = "Дневник атлета") {
   private val resolver get() = context.contentResolver
   private val root get() = File(context.filesDir, "automatic-publications")
   private fun unavailable(): Nothing = throw PublicationFailure("BACKUP_DESTINATION_UNAVAILABLE")
@@ -106,12 +111,55 @@ internal class AutomaticPublications(private val context: Context) {
         return mapOf("ok" to true, "uri" to r.getString("uri"), "filename" to r.getString("filename"), "sha256" to hash, "bytes" to size.toLong())
       }
     }
-    return Publisher(context).publish(source, id, createdAt, hash, size, tree, true) { uri, filename ->
+    return Publisher(context, downloadsFolder).publish(source, id, createdAt, hash, size, tree, true) { uri, filename ->
       write(JSONObject().put("version", 1).put("id", id).put("createdAt", createdAt).put("sha256", hash).put("bytes", size.toLong())
         .put("tree", tree ?: JSONObject.NULL).put("uri", uri.toString()).put("filename", filename).put("removed", false))
     }
   }
   fun verify(id: String, uri: String, hash: String, size: Double) { verified(checked(id, uri, hash, size)) }
+  /** Absence retires native authority before the TS catalog can forget a missing entry.
+   * A missing/foreign receipt, unavailable volume, revoked grant or failed provider query
+   * is NOT evidence that a user file was deleted. No external file is removed here. */
+  fun inspect(id: String, uri: String, hash: String, size: Double): String {
+    val r = checked(id, uri, hash, size)
+    if (r.getBoolean("removed")) return "MISSING"
+    val target = authorized(r)
+    if (r.isNull("tree")) {
+      if (Environment.getExternalStorageState() != Environment.MEDIA_MOUNTED) unavailable()
+    } else {
+      val tree = Uri.parse(r.getString("tree"))
+      val directory = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+      val parent = resolver.query(directory, arrayOf(DocumentsContract.Document.COLUMN_MIME_TYPE), null, null, null) ?: unavailable()
+      parent.use { if (!it.moveToFirst() || it.getString(0) != DocumentsContract.Document.MIME_TYPE_DIR) unavailable() }
+    }
+    var missing = name(r, target) == null
+    if (!missing) {
+      try { verified(r) }
+      catch (error: FileNotFoundException) {
+        // Our MediaStore row can outlive a file removed from its actual directory.
+        // FileNotFound alone also covers permission/IO failures: require exact ENOENT.
+        if (!r.isNull("tree")) throw error
+        missing = downloadsFileMissing(r, target)
+        if (!missing) throw error
+      }
+    }
+    if (!missing) return "VALID"
+    write(r.put("removed", true))
+    return "MISSING"
+  }
+  @Suppress("DEPRECATION")
+  private fun downloadsFileMissing(r: JSONObject, uri: Uri): Boolean {
+    val cursor = resolver.query(uri, arrayOf(MediaStore.MediaColumns.DATA), null, null, null) ?: unavailable()
+    val path = cursor.use { if (!it.moveToFirst() || it.isNull(0)) unavailable(); it.getString(0) }
+    val file = File(path).canonicalFile
+    val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).canonicalFile
+    if (!file.path.startsWith(downloads.path + File.separator) || file.name != r.getString("filename")) invalid()
+    try { Os.stat(file.path); return false }
+    catch (error: ErrnoException) {
+      if (error.errno == OsConstants.ENOENT || error.errno == OsConstants.ENOTDIR) return true
+      throw error
+    }
+  }
   fun remove(id: String, uri: String, hash: String, size: Double) {
     val r = checked(id, uri, hash, size); if (r.getBoolean("removed")) return
     val target = authorized(r)

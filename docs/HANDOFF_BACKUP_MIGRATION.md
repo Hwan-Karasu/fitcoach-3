@@ -1,4 +1,38 @@
-## Последнее продолжение — автокопии подключены, Android21 + focused3
+## Последнее продолжение — missing/recreate, Android19, база3fcd092
+
+Native automaticProtocolVersion2 + inspect VALID/MISSING/UNAVAILABLE/INVALID:
+exact receipt/owner/hash/grant, mounted volume/provider root; only proven absence
+tombstones authority. FileNotFound alone insufficient, owned MediaStore DATA path
+stat requires ENOENT/ENOTDIR; EACCES/EIO unavailable. Catalog/receipts remain v1.
+Service inspects entries+retired completely before metadata repair; missing only
+discarded after full pass. Healthy retired predecessor promoted, no early cleanup
+during repair; retained files rechecked before every old delete. All missing means
+new full snapshot without business changes, same destination.
+
+Host **52/52**: auto21/scheduler4/manual12/restore15; fullfoundation not run.
+Root/mobile/spike TS, changed TS lint, arch504/source/secrets/diff; Kotlin/arm64
+debug APK success; main bundle5622/1185. APK SHA
+6b5c8915b388b5d17fcc2bcca42bf1db582b0cb170415b321a99395aa07f5fb0.
+Updated only com.fitcoach.r07sqlite; legacy2.0build128 unchanged.
+Native **19/19 за47471ms**, injected2001: 3versions/ownership negatives/missing
+history/latest/all; failed preparation preserves predecessor; empty UUID directory
+actually deleted nonrecursively/recreated by same Publisher; all3clients in snapshot.
+Real default directory untouched; marker/receipt/owner/path protect isolated fixture.
+Initial fixture required row to remain after unlink and stopped; device removed row,
+fixture now records actual result. **Stale-row/stat path not exercised here.**
+[Report](spikes/R06_AUTOMATIC_MISSING_ANDROID_REPORT.json),
+[contract](spikes/R06_AUTOMATIC_BACKUP.md).
+
+NEXT: safe timezone/DST re-anchor/fallback technical acceptance, real automatic
+SIGKILL/catalog/delete and SAF rename→receipt gap, ENOSPC/providers; ordinary UI/
+AppState/native OS signals and first-run choice. Full legacy mapping/staging/stable
+IDs/provenance/parity/retry remains OPEN, do not substitute autos for that goal.
+Goal ACTIVE; migration/overlay/signing/release OPEN; Excel after backup, UI later.
+Targeted tests per owner; fullsuite milestones only. Native Metro8097 handle99958
+confirmed live this turn; new testPID30121, missing probe terminal. No pending kill.
+Leave scrcpy open, do not read personal DBs/backups/secrets or input pattern key.
+
+## Предыдущий срез — автокопии подключены, Android21 + focused3
 
 База fafe3e5. AutoService/Scheduler/AppState production port + settings/globalfailure
 плашка, 30мин/changeddata/3daily candidate. Online private copy/hash до embedding;

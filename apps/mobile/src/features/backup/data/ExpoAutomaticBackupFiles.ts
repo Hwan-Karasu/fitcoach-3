@@ -14,6 +14,7 @@ import type { SnapshotSchema } from "./SqliteSnapshotEngine.ts";
 
 interface NativeAutomatic {
   automaticProtocolVersion?(): number;
+  inspectAutomatic(id: string, uri: string, sha256: string, bytes: number): Promise<unknown>;
   publishAutomatic(source: string, id: string, createdAt: string, sha256: string, bytes: number, tree: string | null): Promise<unknown>;
   verifyAutomatic(id: string, uri: string, sha256: string, bytes: number): Promise<boolean>;
   removeAutomatic(id: string, uri: string, sha256: string, bytes: number): Promise<boolean>;
@@ -21,7 +22,7 @@ interface NativeAutomatic {
 const ownedId = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
 const owner = (id: string) => JSON.stringify({ kind: "athlete-auto-job", version: 1, id });
 export function nativeAutomaticBackupAvailable(): boolean {
-  try { return requireOptionalNativeModule<NativeAutomatic>("AthleteBackupStorage")?.automaticProtocolVersion?.() === 1; }
+  try { return requireOptionalNativeModule<NativeAutomatic>("AthleteBackupStorage")?.automaticProtocolVersion?.() === 2; }
   catch { return false; }
 }
 interface Options {
@@ -42,7 +43,7 @@ export class ExpoAutomaticBackupFiles implements AutomaticBackupFiles {
   constructor(options: Options) {
     this.options = options; this.driver = new ExpoSqliteBackup(options.schema);
     for (const path of [options.root, options.live, options.images]) assertSnapshotPrivateUri(path.uri);
-    try { this.available = this.native?.automaticProtocolVersion?.() === 1; } catch { this.available = false; }
+    try { this.available = this.native?.automaticProtocolVersion?.() === 2; } catch { this.available = false; }
   }
   private job(id: string): Directory {
     if (!ownedId.test(id)) throw new AutomaticBackupError("AUTO_STATE_UNAVAILABLE");
@@ -105,6 +106,13 @@ export class ExpoAutomaticBackupFiles implements AutomaticBackupFiles {
       if (await this.native?.verifyAutomatic(entry.backupId, entry.uri, entry.sha256, entry.bytes) === true) return;
     } catch { /* Mask platform messages/paths. */ }
     throw new AutomaticBackupError("AUTO_VERIFICATION_FAILED");
+  }
+  async inspect(entry: AutomaticEntry): Promise<"VALID" | "MISSING"> {
+    let result: unknown;
+    try { result = await this.native?.inspectAutomatic(entry.backupId, entry.uri, entry.sha256, entry.bytes); }
+    catch { throw new AutomaticBackupError("AUTO_FOLDER_UNAVAILABLE"); }
+    if (result === "VALID" || result === "MISSING") return result;
+    throw new AutomaticBackupError(result === "INVALID" ? "AUTO_VERIFICATION_FAILED" : "AUTO_FOLDER_UNAVAILABLE");
   }
   async remove(entry: AutomaticEntry): Promise<void> {
     try { if (await this.native?.removeAutomatic(entry.backupId, entry.uri, entry.sha256, entry.bytes) === true) return; }

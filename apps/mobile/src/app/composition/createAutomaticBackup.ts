@@ -20,6 +20,7 @@ export function createAutomaticBackup(development: boolean, commands: RuntimeCom
     pendingIds: () => getStore().protectedJobIds() });
   const files: AutomaticBackupFiles = { available: !development && nativeAutomaticBackupAvailable(),
     prepare: (previous) => getJobs().prepare(previous), publish: (pending, destination) => getJobs().publish(pending, destination),
+    inspect: (entry) => getJobs().inspect(entry),
     verify: (entry) => getJobs().verify(entry), remove: (entry) => getJobs().remove(entry), cleanup: (id) => getJobs().cleanup(id) };
   return new AutomaticBackupService({ enabled: !development, files,
     store: { read: () => getStore().read(), write: (catalog) => getStore().write(catalog), archive: (catalog) => getStore().archive(catalog),

@@ -33,7 +33,34 @@ class BackupStorageModule : Module() {
     Name("AthleteBackupStorage")
 
     Function("supportsDownloads") { Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q }
-    Function("automaticProtocolVersion") { 1 }
+    Function("automaticProtocolVersion") { 2 }
+    AsyncFunction("createAutomaticFixture") Coroutine { ->
+      val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+      withContext(Dispatchers.IO) { synchronized(automaticLock) { AutomaticBackupFixture(context).create() } }
+    }
+    AsyncFunction("publishAutomaticFixture") Coroutine { source: String, id: String, createdAt: String, hash: String, size: Double, token: String ->
+      val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+      withContext(Dispatchers.IO) { synchronized(automaticLock) {
+        AutomaticPublications(context, AutomaticBackupFixture(context).directory(token).name).publish(source, id, createdAt, hash, size, null)
+      } }
+    }
+    AsyncFunction("removeAutomaticFixtureFile") Coroutine { token: String, id: String, staleRow: Boolean ->
+      val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+      withContext(Dispatchers.IO) { synchronized(automaticLock) { AutomaticBackupFixture(context).removeFile(token, id, staleRow) } }
+    }
+    AsyncFunction("removeAutomaticFixtureDirectory") Coroutine { token: String ->
+      val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+      withContext(Dispatchers.IO) { synchronized(automaticLock) { AutomaticBackupFixture(context).removeDirectory(token); true } }
+    }
+    AsyncFunction("inspectAutomatic") Coroutine { backupId: String, uri: String, sha256: String, bytes: Double ->
+      val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+      withContext(Dispatchers.IO) { synchronized(automaticLock) {
+        try { AutomaticPublications(context).inspect(backupId, uri, sha256, bytes) }
+        catch (error: CancellationException) { throw error }
+        catch (error: PublicationFailure) { if (error.failureCode == "BACKUP_VERIFICATION_FAILED") "INVALID" else "UNAVAILABLE" }
+        catch (_: Exception) { "UNAVAILABLE" }
+      } }
+    }
 
     AsyncFunction("publishAutomatic") Coroutine { sourceUri: String, backupId: String, createdAt: String,
       sha256: String, bytes: Double, treeUri: String? ->
@@ -85,7 +112,7 @@ private fun invalid(): Nothing = throw PublicationFailure("BACKUP_PUBLICATION_IN
 private fun unavailable(): Nothing = throw PublicationFailure("BACKUP_DESTINATION_UNAVAILABLE")
 private fun mismatch(): Nothing = throw PublicationFailure("BACKUP_VERIFICATION_FAILED")
 
-internal class Publisher(private val context: Context) {
+internal class Publisher(private val context: Context, private val downloadsFolder: String = "Дневник атлета") {
   private val resolver: ContentResolver get() = context.contentResolver
 
   fun publish(sourceUri: String, backupId: String, createdAt: String, expectedHash: String,
@@ -116,7 +143,7 @@ internal class Publisher(private val context: Context) {
     val values = ContentValues().apply {
       put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
       put(MediaStore.MediaColumns.MIME_TYPE, "application/octet-stream")
-      put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Дневник атлета/")
+      put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/$downloadsFolder/")
       put(MediaStore.MediaColumns.IS_PENDING, 1)
     }
     val uri = resolver.insert(MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values) ?: unavailable()

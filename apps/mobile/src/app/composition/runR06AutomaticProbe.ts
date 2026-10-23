@@ -58,7 +58,7 @@ export async function runR06AutomaticProbe(mode: "FULL" | "STATUS" = "FULL"): Pr
         JSON.stringify({ photoUri: photo.uri, prepMinutes: 0, cookMinutes: 0, categories: [], steps: [] })]));
     } finally { await database.release(); }
     const observed: AutomaticBackupFiles = { available: files.available,
-      prepare: (previous) => files.prepare(previous), verify: (e) => files.verify(e), remove: (e) => files.remove(e), cleanup: (id) => files.cleanup(id),
+      prepare: (previous) => files.prepare(previous), inspect: (e) => files.inspect(e), verify: (e) => files.verify(e), remove: (e) => files.remove(e), cleanup: (id) => files.cleanup(id),
       publish: async (pending, destination) => {
         if (firstPending === null) {
           firstPending = pending;
@@ -137,7 +137,7 @@ async function runStatusProbe(): Promise<R06NativeReport> {
   const files: AutomaticBackupFiles = { available: nativeFiles.available,
     prepare: async () => { if (failing) throw new AutomaticBackupError("AUTO_SOURCE_UNAVAILABLE"); return null; },
     publish: async () => { throw new Error("R06_UNEXPECTED_PUBLICATION"); },
-    verify: (e) => nativeFiles.verify(e), remove: (e) => nativeFiles.remove(e), cleanup: async () => undefined };
+    inspect: (e) => nativeFiles.inspect(e), verify: (e) => nativeFiles.verify(e), remove: (e) => nativeFiles.remove(e), cleanup: async () => undefined };
   const create = () => new AutomaticBackupService({ enabled: true, files, store, ready: () => true, now: () => time,
     offset: () => prior.entries[0]!.offsetMinutes, location: async () => prior.destination, run: (task) => task() });
   const checks: { name: string; passed: boolean }[] = []; const check = (name: string, passed: boolean) => {

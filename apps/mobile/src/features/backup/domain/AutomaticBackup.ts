@@ -53,6 +53,8 @@ export interface AutomaticBackupFiles {
   prepare(previousContentSha256: string | null): Promise<PendingAutomatic | null>;
   /** Idempotent native publication, bound to its private ownership receipt. */
   publish(pending: PendingAutomatic, destination: BackupDestination): Promise<PublishedBackup>;
+  /** MISSING requires exact native ownership plus proven absence; access/IO errors throw. */
+  inspect(entry: AutomaticEntry): Promise<"VALID" | "MISSING">;
   verify(entry: AutomaticEntry): Promise<void>;
   /** Only the native receipt's exact auto file. Manual/foreign files are ineligible. */
   remove(entry: AutomaticEntry): Promise<void>;

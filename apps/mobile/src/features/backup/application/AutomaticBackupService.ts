@@ -43,11 +43,36 @@ export class AutomaticBackupService implements AutomaticBackupPort {
   private async retire(catalog: AutomaticCatalog): Promise<AutomaticCatalog> {
     let c = catalog;
     for (const old of c.retired) {
+      // A formerly verified new file can be deleted externally before cleanup/restart.
+      // Never delete its last healthy predecessor merely because an old commit existed.
+      if (c.entries.length === 0) throw new AutomaticBackupError("AUTO_VERIFICATION_FAILED");
+      for (const retained of c.entries) if (await this.options.files.inspect(retained) !== "VALID") throw new AutomaticBackupError("AUTO_VERIFICATION_FAILED");
       try { await this.options.files.remove(old); }
       catch { throw new AutomaticBackupError("AUTO_CLEANUP_PENDING"); }
       c = await this.save({ ...c, retired: c.retired.filter((e) => e.backupId !== old.backupId) });
     }
     return c;
+  }
+  private async reconcileFiles(catalog: AutomaticCatalog): Promise<{ catalog: AutomaticCatalog; repair: boolean }> {
+    const missing = new Set<string>();
+    for (const entry of [...catalog.entries, ...catalog.retired]) {
+      const status = await this.options.files.inspect(entry);
+      if (status === "MISSING") missing.add(entry.backupId);
+      else if (status !== "VALID") throw new AutomaticBackupError("AUTO_VERIFICATION_FAILED");
+    }
+    const repair = catalog.entries.some((entry) => missing.has(entry.backupId)) || (catalog.entries.length === 0 && catalog.retired.length > 0);
+    if (missing.size === 0 && !repair) return { catalog, repair: false };
+    const valid = [...catalog.entries, ...catalog.retired].filter((entry) => !missing.has(entry.backupId)).sort((a, b) => b.sequence - a.sequence);
+    let entries = catalog.entries.filter((entry) => !missing.has(entry.backupId));
+    if (repair) {
+      // Promote a verified predecessor while re-creating a lost current version. This is
+      // metadata recovery, not permission to delete any unselected historical file.
+      const days = new Set<string>(); entries = [];
+      for (const entry of valid) if (entries.length < 3 && !days.has(entry.day)) { entries.push(entry); days.add(entry.day); }
+    }
+    const retired = valid.filter((entry) => !entries.some((kept) => kept.backupId === entry.backupId));
+    const saved = await this.save({ ...catalog, entries, retired }); this.summary(saved);
+    return { catalog: saved, repair };
   }
   check(): Promise<void> { return this.perform(false); }
   retry(): Promise<void> { return this.perform(true); }
@@ -92,11 +117,12 @@ export class AutomaticBackupService implements AutomaticBackupPort {
       c = await this.save({ version: 1, destination, sequence: 0, checkedAt: now, entries: [], retired: [], pending: null });
       force = true; this.summary(c);
     }
-    c = await this.retire(c);
+    const observed = await this.reconcileFiles(c); c = observed.catalog; force = force || observed.repair;
+    // During repair, keep every verified predecessor until a new full copy is committed.
+    if (!observed.repair) c = await this.retire(c);
     if (!force && c.pending === null && now >= c.checkedAt && now - c.checkedAt < AUTO_BACKUP_INTERVAL) {
       this.publish({ nextCheckAt: c.checkedAt + AUTO_BACKUP_INTERVAL, error: null }); return;
     }
-    for (const e of c.entries) await this.options.files.verify(e);
     if (c.pending === null) {
       automaticRetention(c.entries, new Date(now).toISOString(), this.offset());
       c = await this.save({ ...c, checkedAt: now });
@@ -107,8 +133,8 @@ export class AutomaticBackupService implements AutomaticBackupPort {
     }
     const pending = c.pending!;
     automaticRetention(c.entries, new Date(this.now()).toISOString(), this.offset());
-    // Validate retained files before publishing, never delete a healthy historical version
-    // to compensate for an inaccessible/corrupt copy or a failed new publication.
+    // Publishing never authorizes old deletion by itself. After the catalog commit,
+    // retire() revalidates retained files before removing any healthy predecessor.
     this.publish({ phase: "PUBLISHING" });
     const publication = parseAutomaticPublication(await this.options.files.publish(pending, c.destination), pending);
     const completedAt = new Date(this.now()).toISOString(); const offsetMinutes = this.offset();
@@ -116,7 +142,7 @@ export class AutomaticBackupService implements AutomaticBackupPort {
     const next = { ...pending, ...publication, completedAt, offsetMinutes, day: automaticDay(completedAt, offsetMinutes), sequence: c.sequence + 1 };
     const kept = [next, ...historical];
     c = await this.save({ ...c, sequence: next.sequence, checkedAt: this.now(), entries: kept,
-      retired: c.entries.filter((e) => !historical.includes(e)), pending: null });
+      retired: [...c.retired, ...c.entries.filter((e) => !historical.includes(e))], pending: null });
     this.summary(c); this.publish({ error: null, nextCheckAt: c.checkedAt + AUTO_BACKUP_INTERVAL });
     // Cleanup is separately retryable; its failure never mislabels a completed publication.
     try { await this.options.files.cleanup(pending.backupId); } catch { /* Private orphan. */ }

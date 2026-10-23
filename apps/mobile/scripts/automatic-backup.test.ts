@@ -41,6 +41,10 @@ function world() {
       if (!external.has(p.backupId)) external.set(p.backupId, { uri: `content://synthetic/${p.backupId}`, filename: automaticFilename(p), bytes: p.bytes, sha256: p.sha256 });
       return copy(external.get(p.backupId)!);
     },
+    inspect: async (entry) => {
+      if (faults.verify) throw new AutomaticBackupError("AUTO_VERIFICATION_FAILED");
+      return external.has(entry.backupId) ? "VALID" : "MISSING";
+    },
     verify: async (entry) => {
       if (faults.verify || !external.has(entry.backupId)) throw new AutomaticBackupError("AUTO_VERIFICATION_FAILED");
     },
@@ -73,6 +77,47 @@ test("R06 unchanged working data does not hide an inaccessible external backup",
   const prepares = w.prepares; await w.service.check();
   assert.equal(w.service.state.error, "AUTO_VERIFICATION_FAILED"); assert.equal(w.prepares, prepares); assert.equal(w.external.size, 1);
 });
+test("R06 deleted current backup is recreated without a business change and keeps healthy daily predecessors", async () => {
+  const w = world();
+  for (const day of [0, 1, 2]) { w.change(); w.setTime(monday + day * 86_400_000); await w.service.retry(); }
+  const before = copy(w.catalog!); const missing = before.entries[0]!; w.external.delete(missing.backupId);
+  await w.service.retry();
+  assert.equal(w.service.state.error, null); assert.equal(w.catalog!.entries.length, 3); assert.notEqual(w.catalog!.entries[0]!.backupId, missing.backupId);
+  assert.deepEqual(w.catalog!.entries.slice(1).map((e) => e.backupId), before.entries.slice(1).map((e) => e.backupId));
+  assert.ok(before.entries.slice(1).every((e) => w.external.has(e.backupId))); assert.equal(w.removed.has(missing.backupId), false);
+});
+test("R06 missing historical version is removed only from metadata; unchanged current data is not duplicated", async () => {
+  const w = world();
+  for (const day of [0, 1, 2]) { w.change(); w.setTime(monday + day * 86_400_000); await w.service.retry(); }
+  const before = copy(w.catalog!); w.external.delete(before.entries[1]!.backupId);
+  await w.service.retry(); assert.equal(w.service.state.error, null); assert.equal(w.catalog!.sequence, before.sequence);
+  assert.deepEqual(w.catalog!.entries.map((e) => e.backupId), [before.entries[0]!.backupId, before.entries[2]!.backupId]); assert.equal(w.removed.size, 0);
+});
+test("R06 all deleted backup files restart the same managed destination even with unchanged SQLite", async () => {
+  const w = world(); await w.service.retry(); const before = copy(w.catalog!); w.external.clear();
+  await w.service.retry(); assert.equal(w.service.state.error, null); assert.equal(w.external.size, 1);
+  assert.equal(w.catalog!.sequence, before.sequence + 1); assert.equal(w.catalog!.destination.kind, "DOWNLOADS"); assert.equal(w.archives.length, 0);
+});
+test("R06 a partial observation with later provider failure cannot discard missing metadata or delete healthy history", async () => {
+  const w = world();
+  for (const day of [0, 1, 2]) { w.change(); w.setTime(monday + day * 86_400_000); await w.service.retry(); }
+  const before = copy(w.catalog!); let calls = 0;
+  w.files.inspect = async () => { if (++calls === 1) return "MISSING"; throw new AutomaticBackupError("AUTO_FOLDER_UNAVAILABLE"); };
+  await w.service.retry(); assert.deepEqual(w.catalog, before); assert.equal(w.external.size, 3); assert.equal(w.removed.size, 0);
+  assert.equal(w.service.state.error, "AUTO_FOLDER_UNAVAILABLE");
+});
+test("R06 a deleted replacement cannot cause cleanup to delete its last valid predecessor before repair succeeds", async () => {
+  const w = world(); await w.service.retry(); const predecessor = w.catalog!.entries[0]!;
+  w.change(); w.faults.remove = true; await w.service.retry(); const lost = w.catalog!.entries[0]!;
+  assert.equal(w.catalog!.retired[0]!.backupId, predecessor.backupId); w.external.delete(lost.backupId);
+  w.faults.remove = false; w.faults.publish = true; const failed = w.make(); await failed.check();
+  assert.equal(failed.state.error, "AUTO_FOLDER_UNAVAILABLE");
+  assert.ok(w.external.has(predecessor.backupId)); assert.equal(w.removed.has(predecessor.backupId), false);
+  assert.equal(w.catalog!.entries[0]!.backupId, predecessor.backupId);
+  w.faults.publish = false; const repaired = w.make(); await repaired.check();
+  assert.ok(w.external.has(w.catalog!.entries[0]!.backupId)); assert.notEqual(w.catalog!.entries[0]!.backupId, lost.backupId);
+  assert.equal(w.catalog!.retired.length, 0); assert.equal(repaired.state.error, null);
+});
 test("R06 auto keeps latest Monday/Tuesday/Wednesday, replaces only today, and retires Monday after Thursday succeeds", async () => {
   const w = world(); await w.service.retry(); const mon = w.catalog!.entries[0]!.backupId;
   w.change(); w.setTime(monday + AUTO_BACKUP_INTERVAL); await w.service.retry(); assert.equal(w.external.size, 1); assert.ok(w.removed.has(mon));
@@ -83,6 +128,16 @@ test("R06 auto keeps latest Monday/Tuesday/Wednesday, replaces only today, and r
   assert.deepEqual(w.catalog!.entries.slice(1).map((e) => e.backupId), oldIds.slice(1));
   w.change(); w.setTime(monday + 3 * 86_400_000); await w.service.check();
   assert.deepEqual(w.catalog!.entries.map((e) => e.day), ["2026-10-22", "2026-10-21", "2026-10-20"]); assert.equal(w.external.size, 3);
+});
+test("R06 disappearance between native publication and cleanup preserves the previous valid file", async () => {
+  const w = world(); await w.service.retry(); const predecessor = w.catalog!.entries[0]!;
+  const publish = w.files.publish;
+  w.files.publish = async (...args) => { const receipt = await publish(...args); w.external.delete(args[0].backupId); return receipt; };
+  w.change(); await w.service.retry();
+  assert.equal(w.service.state.error, "AUTO_VERIFICATION_FAILED"); assert.equal(w.removed.size, 0);
+  assert.ok(w.external.has(predecessor.backupId)); assert.equal(w.catalog!.retired[0]!.backupId, predecessor.backupId);
+  w.files.publish = publish; const restarted = w.make(); await restarted.retry();
+  assert.equal(restarted.state.error, null); assert.equal(w.catalog!.retired.length, 0); assert.equal(w.external.size, 1);
 });
 test("R06 auto gaps preserve actual older dates in free slots; no fictional daily copies", async () => {
   const w = world();

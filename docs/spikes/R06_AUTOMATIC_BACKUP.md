@@ -16,7 +16,7 @@ Unmount отменяет таймер, не начатый job. Runtime gate д�
 интервалом, поэтому обратный скачок даты не переполняет платформенный setTimeout.
 
 Dev/ExpoGo и старая версия native module отключены. Production использует
-automaticProtocolVersion=1. SharedSqliteDatabase/DDL и установленные данные 2.0
+automaticProtocolVersion=2. SharedSqliteDatabase/DDL и установленные данные 2.0
 не меняются. Настройки показывают отдельные automatic/manual/Return sections;
 значимая неисправность видна также общей плашкой с переходом к копиям. В продукте
 нет системных кодов/путей. Fixed failure status хранится вне SQLite и не пропадает
@@ -74,7 +74,49 @@ native receipt ещё открыто**: прежний набор не удал�
 файл. Provider/partial cleanup acceptance не закрыта. Atomic file rename не является
 доказательством directory fsync/power-loss durability Android.
 
-## Фактические проверки
+## Удалённые файлы и восстановление каталога — 2026-10-23
+
+Native inspect требует точный private receipt прежде любых обращений к URI.
+VALID означает проверенные имя/owner/grant/bytes/SHA. MISSING — доказанное отсутствие
+собственного файла при доступном носителе/корне provider; native receipt сначала
+погашается tombstone. Неизвестный receipt, отозванный grant, ошибки provider и IO
+означают UNAVAILABLE, нарушение содержимого — INVALID. Эти статусы не позволяют
+удалять записи каталога или исправные копии. Никакого сканирования старых файлов.
+
+FileNotFoundException сама по себе недостаточна. Если собственная строка MediaStore
+ещё есть, проверяется её точный путь внутри Downloads и native stat: только ENOENT/
+ENOTDIR доказывают отсутствие. EACCES/EIO остаются ошибкой доступа. На проверенном
+Android прямое удаление файла также удалило строку MediaStore; ветка stale-row/stat
+реализована, но на этом устройстве отдельно не доказана.
+
+Service сначала проверяет весь entries+retired. Только после полной успешной проверки
+исключает missing metadata, сохраняя пригодные версии. Если новая копия потеряна,
+проверенная предшественница из retired возвращается в entries; до новой успешной
+публикации прежние пригодные файлы не удаляются. Повторная проверка оставляемых
+файлов непосредственно перед каждым cleanup защищает и от потери replacement
+после catalog commit. Если все файлы исчезли, подготовка без прежнего content hash
+создаёт новый полный snapshot даже без бизнес-изменений; destination не меняется.
+Catalog/receipt file format остаётся v1; версия native capability повышена до 2.
+
+Целевые host sets **52/52**: automatic21, scheduler4, manual12, restore15. Full
+foundation не запускался. Root/mobile/spike typecheck, lint затронутого TypeScript,
+arch504/source/secrets/diff; Kotlin/arm64 APK и bundle5622/1185 успешны.
+Android **19/19 за47471мс**: три дневные версии, ownership negatives, missing history,
+unlink, отказ подготовки с сохранением предшественницы, восстановление текущей
+копии без изменения данных, удаление пустого каталога и повторная публикация в том
+же месте, все три исходных клиента в итоговом snapshot.
+
+Для удаления использован **отдельный native-owned debug UUID каталог**. Его private
+marker, exact receipt/URI/hash/owner/relative path проверяются до удаления. Каталог
+удаляется только пустым, без recursion. Настоящая папка `Дневник атлета` не удалялась;
+production и fixture используют один Publisher/MediaStore механизм. Это доказательство
+этого механизма на одном устройстве, а не всей матрицы Android/providers.
+Первый запуск остановился из-за предположения fixture об оставшейся строке после
+unlink; fixture исправлена, actual ROW_ABSENT отражён в итоговом отчёте.
+
+[Фактический дополнительный отчёт](R06_AUTOMATIC_MISSING_ANDROID_REPORT.json).
+
+## Прежние фактические проверки (срез 3fcd092)
 
 - Целевые host sets: automatic15/15, scheduler4/4, manual12/12, restore15/15.
   Запущено 45/45 до последнего bounded-clock case, затем отдельно scheduler4/4.
@@ -93,9 +135,7 @@ native receipt ещё открыто**: прежний набор не удал�
 
 [Фактические результаты и границы](R06_AUTOMATIC_ANDROID_REPORT.json).
 
-Следующий обязательный край: сейчас отсутствующий старый файл считается verification
-failure. Нужно отличать доказанно удалённую копию от отзыва grant/ошибки provider,
-сохранять остальные пригодные версии и воссоздавать удалённую штатную папку.
-Также OPEN: real kill/SAF/ENOSPC/provider matrix, enabled UI/AppState E2E, native OS
+Далее OPEN: safe clock/timezone re-anchor и fallback tech acceptance,
+real kill/SAF/ENOSPC/provider matrix, stale-row stat branch, enabled UI/AppState E2E, native OS
 rest signals, first-run choice, full populated histories и полный legacy mapping/
 staging/IDs/provenance/parity/retry. Excel после backup/restore, UI/темы позже.

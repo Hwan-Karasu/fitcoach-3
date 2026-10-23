@@ -1,3 +1,10 @@
+## 2026-10-23 — R06: удалённые копии и повторное создание каталога
+
+- Native protocol2 различает proven MISSING и UNAVAILABLE/INVALID по exact private receipt; FileNotFound без доказательства отсутствия не считается удалением. Service сохраняет здоровую историю, поднимает пригодную предшественницу из retired и проверяет retained files перед каждым cleanup.
+- Целевые **52/52**, Android **19/19 за47471мс**: missing history/latest/all, failed repair сохраняет предшественницу, пустая тестовая папка физически удалена и воссоздана тем же Publisher; snapshot содержит все три клиента. Настоящая папка пользователя не удалялась. Прямой unlink на этом Android удалил и строку MediaStore; stale-row/stat ветка отдельно не доказана. [Отчёт и границы](spikes/R06_AUTOMATIC_MISSING_ANDROID_REPORT.json).
+- Root/mobile/spike TS, lint затронутого TypeScript, arch504/source/secrets/diff; Kotlin/arm64 debug APK и bundle5622/1185. Обновлён только com.fitcoach.r07sqlite; установленная2.0build128 цела. Fullfoundation не запускался по принятому правилу целевых проверок.
+- Goal ACTIVE, R06/D05 и migration/overlay/signing/release gates OPEN. Дальше clock/timezone re-anchor, actual auto process death/SAF/ENOSPC/providers, enabled ordinary UI/OS signals/first-run choice; полный legacy mapping/staging/IDs/provenance/parity/retry ещё не завершён.
+
 ## 2026-10-23 — R06: автоматические копии, дневная ротация и native ownership
 
 - AutomaticBackupService/foreground scheduler подключены к runtime/UI: 30мин, проверка после фона, stable online hash до embedding, без дубликатов при неизменённых данных. Atomic pending→native receipt→managed set/retired→delete; settings/status вне SQLite. Failure видна вне настроек и сохраняется после recreation. [Контракт и открытые края](spikes/R06_AUTOMATIC_BACKUP.md).

@@ -1,0 +1,124 @@
+{
+    "task":  "R06",
+    "date":  "2026-10-23",
+    "baseCommit":  "3fcd092",
+    "platform":  "Android API36; isolated com.fitcoach.r07sqlite 0.0.1 code1",
+    "apkSha256":  "6b5c8915b388b5d17fcc2bcca42bf1db582b0cb170415b321a99395aa07f5fb0",
+    "automaticProtocolVersion":  2,
+    "data":  "Fresh synthetic r06-auto-missing private fixture and native-owned R06-ATLD-test UUID directory only. Real Download/Дневник атлета and legacy com.fitcoach.app 2.0.0 build128 untouched.",
+    "native":  {
+                   "kind":  "R06_NATIVE",
+                   "checks":  [
+                                  {
+                                      "name":  "native_auto_missing_capability",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_day_0_published",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_day_1_published",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_day_2_published",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_unknown_receipt_unavailable",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_wrong_hash_unavailable",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_historical_external_delete",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_zero_row_tombstone",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_history_metadata_only",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_healthy_versions_exact",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_unlink_also_removed_row",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_unlinked_file_absence_proven",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_failed_repair_keeps_predecessor",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_current_recreated_without_business_change",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_remaining_external_delete",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_remaining_external_delete",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_empty_directory_actually_deleted",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_same_destination_recreated",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_auto_missing_recreated_snapshot_has_all_facts",
+                                      "passed":  true
+                                  }
+                              ],
+                   "allPassed":  true,
+                   "elapsedMs":  47471
+               },
+    "observed":  {
+                     "deletion":  "Own exact URI deletion and direct unlink both proved missing; unlink also removed the MediaStore row on this device.",
+                     "folder":  "Native guard proved the isolated directory empty, deleted it nonrecursively, then the same Publisher recreated the same relative directory through MediaStore.",
+                     "repair":  "Missing history removed only from metadata; healthy versions verified; failed preparation preserved predecessor; unchanged business SQLite backed up again after latest/all files lost.",
+                     "initialAttempt":  "Test fixture initially required a stale row after direct unlink and stopped. The file was removed. Fixture corrected to record actual ROW_PRESENT/ROW_ABSENT; full focused scenario then passed."
+                 },
+    "host":  {
+                 "automatic":  21,
+                 "scheduler":  4,
+                 "manual":  12,
+                 "restoreActions":  15,
+                 "passed":  52,
+                 "fullFoundationRun":  false
+             },
+    "checks":  [
+                   "root/mobile/spike typecheck",
+                   "lint of changed TypeScript",
+                   "arch: 504 TypeScript sources",
+                   "source baseline",
+                   "sensitive-file scan",
+                   "git diff --check",
+                   "Kotlin compile and arm64 debug APK build",
+                   "main Android JS/Hermes bundle: 5622 modules / 1185 assets"
+               ],
+    "limits":  [
+                   "One real Android device, synthetic data and injected calendar dates; not full provider or populated-owner coverage.",
+                   "Stale MediaStore-row ENOENT path implemented but not exercised: Android removed the row during direct unlink. EACCES/EIO/provider/grant failures are not deletion proof.",
+                   "Real default directory was not deleted; same native Publisher and MediaStore path logic used in an isolated UUID directory.",
+                   "No new automatic SIGKILL, ENOSPC, SAF rename-receipt gap or power-loss proof.",
+                   "Clock/timezone re-anchor, first-run restore choice, ordinary enabled UI/AppState/OS signals and full legacy mapping/staging/IDs/parity/retry remain open."
+               ],
+    "goalStatus":  "ACTIVE; R06/D05, migration/overlay/signing/release gates remain OPEN"
+}
