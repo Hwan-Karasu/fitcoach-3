@@ -1,4 +1,4 @@
-import { PrototypeLink, PrototypeNotice, PrototypeScreen, SectionHeading } from "../../../shared/ui/prototype/ScreenPieces.tsx";
+import { PrototypeLink, PrototypeScreen, SectionHeading } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 
 export function SettingsPreview({
   onOpenAppearance,
@@ -7,9 +7,10 @@ export function SettingsPreview({
   onOpenQuestionnaireBuilder,
   onOpenExerciseCatalog,
   onOpenTrainingSettings,
+  onOpenBackup,
 }: Readonly<{ onOpenAppearance: () => void; onOpenNotificationSettings: () => void;
   onOpenClientRosterSettings: () => void; onOpenQuestionnaireBuilder: () => void; onOpenExerciseCatalog: () => void;
-  onOpenTrainingSettings: () => void }>) {
+  onOpenTrainingSettings: () => void; onOpenBackup: () => void }>) {
   return (
     <PrototypeScreen description="Локальные настройки тренера">
       <SectionHeading>Внешний вид</SectionHeading>
@@ -33,9 +34,7 @@ export function SettingsPreview({
         onPress={onOpenNotificationSettings}
       />
       <SectionHeading>Данные</SectionHeading>
-      <PrototypeNotice>
-        Резервная копия и восстановление появятся в одном из ближайших обновлений.
-      </PrototypeNotice>
+      <PrototypeLink title="Резервные копии" detail="Создание копии и экспорт в другую папку" onPress={onOpenBackup} />
     </PrototypeScreen>
   );
 }

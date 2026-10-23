@@ -1,57 +1,55 @@
 # Active context — 2026-10-23
 
-Ветка `audit/training-fixes`. Продукт — «Дневник атлета». Владелец возобновил
-работу («не спим, работаем»); цель переноса 2.0→3.0 и backup/restore ACTIVE.
-Не объявлять 100% до фактических проверок. UI/темы — после функциональной работы.
+Ветка audit/training-fixes, продукт «Дневник атлета». Цель ACTIVE:
+полный перенос 2.0→3.0 и backup/restore не завершены, 100% не заявлять.
+Текущий task R06; migration/overlay/signing/release gates OPEN. UI/темы позже.
 
-Текущий task R06. Общий mobile `SqliteSnapshotEngine` используется host и Expo:
-manifest, frozen snapshot migrations, typed hash, media и staging. WIP `1f47d45`
-исправлен: REAL -0 не проходит через printf; INTEGER читается точным TEXT.
-Node oracle и original migration checksums сохранены.
+Текущий срез подключил ManualBackupService, отдельный snapshot job, настройку
+папки вне SQLite и экран Настройки → Резервные копии. Полная операция держит
+RuntimeCommandGate до закрытия reader и завершения публикации/cleanup. Отмена,
+ошибка и повторный тап не создают ложный успех. Разовый экспорт не меняет папку.
+UI показывает понятные сообщения без кодов/путей. В Expo Go/dev операции отключены.
 
-Текущий WIP: local Expo Android `athlete-backup-storage` (MediaStore default + SAF
-publication), NativeBackupPublisher и receipt binding. Autolinking app/spike видит
-module; controller/UI пока не подключены. Foundation 984/984, mobile/spike
-typecheck/lint/arch (473 sources)/source/secrets/diff. Native compile не дошла до
-Kotlin: cached foojay plugin отсутствует, Java Maven даёт Permission denied;
-PowerShell HEAD plugin POM 200. Агентский HTTPS_PROXY — заглушка, не решение.
-TLS/framework проверки не ослаблялись. Нужны доступная native toolchain и APK proof.
-Подробно `docs/spikes/R06_ANDROID_PUBLICATION.md`. Android JS bundle WIP собран:
-5583 modules/1185 assets; это не Kotlin compile/APK.
-R06 runtime lifecycle: gate целых команд, единая инвентаризация 15 owners,
-освобождаемый workflow lease, close/reopen/cache reset; production boot читает
-private journal до открытия DB. Receipt сохраняет последующие записи/WAL;
-missing LIVE/invalid journal блокируют boot без создания пустой базы.
-Расширенный Android rehearsal с теми же 15 owners/workflow/maintenance/journal
-reader: normal 25/25, deliberate force-stop до COMMITTED и новый boot/recovery
-11/11. Это не обычный UI E2E, не полная заполненная owner matrix и не OS scheduler.
-Отчёт `docs/spikes/R06_RUNTIME_ANDROID_REPORT.json`. Общий engine `b629fa1`
-также прошёл spike typecheck и Android full `.atbackup` с фото: normal 19/19;
-actual force-stop после swap до COMMITTED и recovery нового процесса 7/7.
-Данные только синтетические. Установленная 2.0.0 (128) не заменялась;
-её БД и личные backup-файлы не открывались. Metro и reverse 8096 остановлены.
+На телефоне исправлены startup bugs: SQLite default directory — native path,
+файловому API нужен file URI (SqliteDirectoryUri); jobs теперь ленивые,
+cold recovery без pending.json не конструирует LIVE. Пустой переходный
+fitcoach_dev_v3.db имел старые журналы. Назначение baseline теперь
+fitcoach_dev_baseline_v3.db: из наполненного fitcoach_f04_clients_dev.db
+перенесены 64 таблицы/1150 строк, проверены внутри транзакции. Прежние файлы и
+журналы сохранены; dev-клиенты видны. Unsafe JS integer отклоняется без округления.
+В Expo Go filesystem может скрывать native SQLite directory: File.exists не
+доказывает отсутствие dev-источника. Не подменять SQLite-проверку этим API.
 
-Следующее: R06 application controller/confirmation
-и job/journal writer; SAF folder/file/publishing, autoscheduler/rotation/Return,
-reconcile OS rest-timer signals и native negative/low-storage/reinstall/full-owner.
-Обычный app пока не предоставляет пользователю backup/restore.
-Реальный полный legacy migration engine также ещё не закончен; gates OPEN.
-Нельзя считать R04 audits/projections полноценной записью всех owners 3.x.
+Телефон: boot, настройки, экран копий, возврат/повторный вход проверены. Установленная
+2.0 build128 и её данные не затронуты; личные backup-файлы не открывались.
+Scrcpy «Phone screen» оставить открытым; владелец разблокировал телефон сам.
+Ключ/рисунок не сохранять и не повторять попытки ввода.
+Android JS/Hermes bundle: 5600 modules/1136 assets, не Kotlin/APK proof.
+Предыдущий HEAD 0e0ffe4; текущий срез ещё фиксируется. Проверки/границы:
+docs/spikes/R06_MANUAL_BACKUP.md, docs/PROJECT_STATUS.md.
+Итоговый foundation 1002/1002, typecheck/lint/arch/source/secrets/diff зелёные.
+Main Metro offline8096 (handle16439) и ADB reverse оставлены для продолжения;
+у процесса закрыт stdin, перезагрузка через cold/warm Expo Go URI при необходимости.
 
-Photo readiness исправлена: `storeLocalImage` ждёт copy/проверяет размер,
-`RecipePhotoSession` блокирует save/remove/повторный picker и ждёт исход DB save
-до cleanup при unmount. Семь регрессий проверяют async lifecycle/path guard;
-ручной picker E2E не выполнялся. В backup/restore adapters await также есть.
+Native publication module athlete-backup-storage (MediaStore pending + SAF
+partial/rename/readback) автоподключается, но Kotlin ещё не скомпилирован:
+нет cached foojay plugin, Java Maven Permission denied, PowerShell POM 200.
+Агентский HTTPS_PROXY — заглушка. Не отключать TLS и не менять framework ради
+сборки. Нужны доступные зависимости и изолированная APK, потом реальный IO proof.
 
-После завершения backup/restore владелец запросил Excel import как в 2.0 и
-workout export в Excel. Сначала исследовать GitHub solutions/libraries,
-затем 2.0 как образец. Исследование/реализация ещё не начаты.
+Ранее проверены общий snapshot engine/фото/scalar parity, runtime gate целых
+команд, 15 holders + workflow lease, maintenance close/reopen/cache, cold journal
+reader и receipts с поздним WAL. Android synthetic runtime normal25/recovery11,
+полный snapshot normal19/recovery7 после deliberate force-stop. Это не обычный
+UI restore E2E, не заполненная история всех owners и не OS scheduler.
 
-Подробно: `docs/HANDOFF_BACKUP_MIGRATION.md`, `docs/PROJECT_STATUS.md`,
-`docs/spikes/R06_RUNTIME_LIFECYCLE.md`, `docs/EXCEL_IMPORT_EXPORT_PLAN.md`.
-Вопрос владельца о падении относился к описанию намеренного force-stop теста;
-самопроизвольного падения в нём не было. Формулировать это явно.
-Владелец разблокировал телефон сам, попросил работать дальше. Scrcpy «Phone screen»
-оставлен открытым. Ключ/рисунок не сохранять в проект и не повторять попытки.
-Прежняя память сохранена в `archive/activeContext-before-backup-2026-10-23.md`;
-это исторические сведения, текущий статус берётся из этой записи и handoff.
+Далее: native compile/publication; restore controller с явным подтверждением,
+job/journal writer, Return point с фото, autoscheduler/rotation, OS rest signals,
+native low-storage/reinstall/full-owner. Полный semantic mapping/staging всех
+legacy owners ещё впереди: audits/projections и client rehearsal не равны полному
+переносу. 2.0 упражнения LOAD_REPS (20 повторений ×10кг), неизвестные оборудование
+и мышечные группы не угадывать. После backup/restore — Excel import/export,
+сначала GitHub-исследование библиотек, затем 2.0 как read-only образец.
+
+Подробная точка продолжения: docs/HANDOFF_BACKUP_MIGRATION.md.
+Историческая память: archive/activeContext-before-backup-2026-10-23.md.

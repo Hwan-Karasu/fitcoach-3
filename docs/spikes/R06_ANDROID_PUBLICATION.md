@@ -1,7 +1,9 @@
 # R06 — публикация копий в общем хранилище Android
 
 Дата: 2026-10-23. **WIP / NATIVE BUILD NOT VERIFIED**. R06/D05 OPEN.
-Обычный runtime/UI пока не вызывает этот адаптер.
+Обычный runtime/UI теперь подключён через manual controller; в Expo Go/dev он
+отключён. Этот документ описывает предыдущую нативную часть; актуальный срез и
+границы проверки — [R06_MANUAL_BACKUP.md](R06_MANUAL_BACKUP.md).
 
 Входы: общий snapshot engine, D01 production identity, проверенный private
 `.atbackup` с неизменяемым именем. Зависимости D05: D01/R06; D03: R04/R05.

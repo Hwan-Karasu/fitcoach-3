@@ -1,3 +1,10 @@
+## 2026-10-23 — R06: ручное копирование в runtime и экран настроек
+
+- Подключены controller, согласованный snapshot job и создание/экспорт/папка через публичный порт. Операция целиком учитывается runtime gate; отмена и отказ не меняют прежний успех. Настройка папки хранится вне SQLite-копий. UI показывает понятный текст без технических кодов.
+- Проверка на телефоне нашла два дефекта запуска: native SQLite path вместо file URI и старый журнал в пустом переходном dev-файле. URI нормализован, ресурсы backup ленивые; в отдельное baseline-назначение перенесены 64 таблицы/1150 строк исходной dev-базы с проверкой строк в транзакции. Старые файлы и журналы сохранены. Boot, настройки, экран копий и повторный вход проверены в Expo Go; операции в этой сборке отключены.
+- Android JS/Hermes bundle: **5600 modules/1136 assets**; typecheck/lint/arch (480 sources)/source/secrets/diff прошли. Нативный Kotlin module всё ещё не скомпилирован, внешняя публикация не доказана. Restore UI, scheduler/rotation/Return и полный legacy-перенос впереди. Подробности: [R06_MANUAL_BACKUP.md](spikes/R06_MANUAL_BACKUP.md). R06/D05 OPEN.
+- Итоговый `npm run test:foundation`: **1002/1002**, включая 12 manual-backup, четыре URI и две дополнительные проверки dev-import. Main Metro 8096 и scrcpy оставлены для продолжения проверки телефона; 2.0 не заменялась.
+
 ## 2026-10-23 — R06 WIP: адаптер общего хранилища Android
 
 - Добавлен локальный Kotlin Expo module для MediaStore.Downloads (`IS_PENDING`, fixed default folder) и SAF (новый partial document, проверка, DocumentsContract rename, повторная проверка). Размер/SHA и источник в canonical private files проверяются; ошибка удаляет только свежий URI операции, прежние копии не затрагивает. Нет новой сторонней библиотеки.

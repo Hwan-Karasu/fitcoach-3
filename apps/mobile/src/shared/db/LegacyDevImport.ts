@@ -87,9 +87,18 @@ export async function importLegacyDevData(target: Readonly<{ writer: WriterCoord
       }
       const source = await legacy.all<Record<string, SqlValue>>(`SELECT * FROM ${LEGACY_PREFIX}${table}`);
       for (const row of source) {
+        if (columns.some((column) => {
+          const value = row[column];
+          return value !== null && typeof value !== "string" && (typeof value !== "number" || !Number.isFinite(value) ||
+            (Number.isInteger(value) && !Number.isSafeInteger(value)));
+        })) throw new Error("LEGACY_IMPORT_VALUE_UNSUPPORTED");
         await tx.run(`INSERT INTO ${table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`, columns.map((column) => row[column] ?? null));
         rows += 1;
       }
+      const copied = await tx.all<Record<string, SqlValue>>(`SELECT * FROM ${table}`);
+      const key = (row: Record<string, SqlValue>) => JSON.stringify(columns.map((column) => row[column]));
+      const expected = source.map(key).sort(); const actual = copied.map(key).sort();
+      if (expected.length !== actual.length || expected.some((row, i) => row !== actual[i])) throw new Error("LEGACY_IMPORT_PARITY_FAILED");
     }
     const violations = await tx.all<{ table: string }>("PRAGMA foreign_key_check");
     if (violations.length > 0) throw new Error(`LEGACY_IMPORT_FOREIGN_KEY:${violations[0]!.table}`);

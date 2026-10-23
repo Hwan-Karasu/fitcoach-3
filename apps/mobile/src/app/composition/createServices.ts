@@ -51,6 +51,8 @@ import { WorkflowDatabaseLease } from "../runtime/WorkflowDatabaseLease.ts";
 import { RuntimeCommandGate } from "../runtime/RuntimeCommandGate.ts";
 import { RuntimeMaintenance } from "../runtime/RuntimeMaintenance.ts";
 import { recoverProductionRestore } from "./recoverProductionRestore.ts";
+import { createManualBackup } from "./createManualBackup.ts";
+import type { ManualBackupPort } from "../../features/backup/public.ts";
 
 /** Питание: каталог продуктов и рецептов (общий) и дневник клиента (N01–N02). */
 export interface NutritionServices {
@@ -63,8 +65,9 @@ export interface NutritionServices {
   readonly calcProfile: CalcProfileWithBodyPort;
 }
 
-/** Новая dev-база (D01): таблицы без префикса `dev_`; прежний файл `fitcoach_f04_clients_dev.db` читается только для одноразового переноса. */
-const DEV_DATABASE = "fitcoach_dev_v3.db";
+/** D01 baseline destination. The previous empty transitional dev file and the original
+ * populated prefixed source stay intact; all original data is imported and verified. */
+const DEV_DATABASE = "fitcoach_dev_baseline_v3.db";
 
 /** Shared port bindings; development tooling is absent from the ordinary runtime. */
 export interface ApplicationServices {
@@ -200,6 +203,7 @@ export interface ApplicationRuntime {
   readonly boot: BootCoordinator;
   readonly services: ApplicationServices;
   readonly maintenance: RuntimeMaintenance;
+  readonly manualBackup: ManualBackupPort;
 }
 
 export function createRuntime(mode: "development" | "production"): ApplicationRuntime {
@@ -272,5 +276,6 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
     mesocycleSave: commands.port(raw.mesocycleSave), planDelete: commands.port(raw.planDelete),
     listCreditSessionTypes: () => commands.run(raw.listCreditSessionTypes),
   };
-  return { development, boot, services, maintenance };
+  const manualBackup = createManualBackup(development, commands, boot);
+  return { development, boot, services, maintenance, manualBackup };
 }

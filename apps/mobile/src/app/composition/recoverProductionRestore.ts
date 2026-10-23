@@ -4,14 +4,16 @@ import { ExpoRestoreStorage } from "../../features/backup/data/ExpoRestoreStorag
 import type { RuntimeMaintenance } from "../runtime/RuntimeMaintenance.ts";
 import { recoverRuntimeRestore } from "../bootstrap/recoverRuntimeRestore.ts";
 import { inspectProductionDatabase, PRODUCTION_DATABASE, PRODUCTION_IDENTITY } from "./productionDatabase.ts";
+import { sqliteDirectoryUri } from "../../shared/db/SqliteDirectoryUri.ts";
 
 /** No journal = no directory creation and no SQLite open before the normal production gate.
  * The next file-restore controller will publish pending.json after explicit confirmation.
  * External/legacy source files never supply the live path or a job directory name. */
-export function recoverProductionRestore(maintenance: RuntimeMaintenance): Promise<void> {
+export async function recoverProductionRestore(maintenance: RuntimeMaintenance): Promise<void> {
   const root = new Directory(Paths.document, "runtime-restore", "production");
-  const live = new File(new Directory(defaultDatabaseDirectory), PRODUCTION_DATABASE);
-  return recoverLocalRestore(maintenance, root, live);
+  if (!new File(root, "pending.json").exists) return;
+  const live = new File(new Directory(sqliteDirectoryUri(defaultDatabaseDirectory)), PRODUCTION_DATABASE);
+  await recoverLocalRestore(maintenance, root, live);
 }
 
 /** Composition supplies trusted private paths. The isolated Android rehearsal uses this

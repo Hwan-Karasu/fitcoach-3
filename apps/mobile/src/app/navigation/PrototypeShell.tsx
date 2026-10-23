@@ -31,12 +31,15 @@ import { RootTabs } from "./RootTabs.tsx";
 import { SqliteDiagnosticsScreen } from "./SqliteDiagnosticsScreen.tsx";
 import { BottomDockLayoutProvider, ScreenHeader } from "../../shared/ui/components/public.ts";
 import { DataReadNotice } from "../../shared/ui/components/DataReadNotice.tsx";
+import { BackupScreen } from "./BackupScreen.tsx";
+import type { ManualBackupPort } from "../../features/backup/public.ts";
 
 type RootStackRoutes = {
   Root: undefined;
   Notifications: undefined;
   NotificationSettings: undefined;
   Settings: undefined;
+  Backup: undefined;
   ClientRosterSettings: undefined;
   TrainingSettings: undefined;
   QuestionnaireBuilder: undefined;
@@ -91,8 +94,8 @@ function openTarget(target: NotificationTarget): void {
   ] } } } as never));
 }
 
-function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
-  services: ApplicationServices; clientLists: ClientListController; rosterOverview: RosterOverviewPort;
+function ShellNavigator({ services, clientLists, rosterOverview, manualBackup }: Readonly<{
+  services: ApplicationServices; clientLists: ClientListController; rosterOverview: RosterOverviewPort; manualBackup: ManualBackupPort;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -144,8 +147,12 @@ function ShellNavigator({ services, clientLists, rosterOverview }: Readonly<{
               onOpenQuestionnaireBuilder={() => navigation.navigate("QuestionnaireBuilder")}
               onOpenExerciseCatalog={() => navigation.navigate("ExerciseCatalog")}
               onOpenTrainingSettings={() => navigation.navigate("TrainingSettings")}
+              onOpenBackup={() => navigation.navigate("Backup")}
             />
           )}
+        </Stack.Screen>
+        <Stack.Screen name="Backup" options={{ title: "Резервные копии" }}>
+          {() => <BackupScreen backup={manualBackup} />}
         </Stack.Screen>
         <Stack.Screen name="TrainingSettings" options={{ title: "Тренировки" }}>
           {() => <TrainingSettingsScreen execution={services.trainingExecution} />}
@@ -242,8 +249,8 @@ function OutcomeQueueHost({ services }: Readonly<{ services: ApplicationServices
     repository={services.calendar} participants={services.calendarParticipants} credit={services.accounting} />;
 }
 
-export function PrototypeShell({ services, workspaceId }: Readonly<{
-  services: ApplicationServices; workspaceId: string;
+export function PrototypeShell({ services, workspaceId, manualBackup }: Readonly<{
+  services: ApplicationServices; workspaceId: string; manualBackup: ManualBackupPort;
 }>) {
   const [clientLists] = useState(() => new ClientListController(services.clients, workspaceId));
   const [rosterOverview] = useState(() => createRosterOverviewSource({ rules: homeSummaryRules,
@@ -267,7 +274,7 @@ export function PrototypeShell({ services, workspaceId }: Readonly<{
         <BottomSheetModalProvider>
         <CalendarUndoProvider repository={services.calendar}>
           <NotificationsHost center={services.notifications} calendar={services.calendar} sync={services.notificationSync}>
-            <ShellNavigator services={services} clientLists={clientLists} rosterOverview={rosterOverview} />
+            <ShellNavigator services={services} clientLists={clientLists} rosterOverview={rosterOverview} manualBackup={manualBackup} />
           </NotificationsHost>
           <OutcomeQueueHost services={services} />
           <RestTimerDock timers={services.restTimers} onOpen={(timer) => openTarget(timerTarget(timer))} />

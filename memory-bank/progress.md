@@ -1,56 +1,44 @@
 # Progress — 2026-10-23
 
-Полная цель data migration 2.0→3.0 и backup/restore не завершена; работа ACTIVE.
-Текущий task R06, production migration/overlay/signing gates остаются OPEN.
+Перенос 2.0→3.0 и backup/restore ACTIVE, не 100%. Task R06; gates OPEN.
 
-Реализовано и проверено:
+Сделано:
 
-- D01 production identity/owner baselines без dev_ и dev seeds, preflight;
-  устойчивая обработка повреждённых JSON и ограничения целостности.
-- Host single SQLite `.atbackup`, typed digest/manifest и embedded recipe photos,
-  staging с сохранением всех полей кроме проверенного photoUri relocation.
-- GuardedRestore с SAFETY/guard/receipts, rollback/replay; SharedSqliteDatabase
-  quiescence ждёт readers/writers/native close перед файловой заменой.
-- Общий mobile snapshot engine и Node/Expo adapters; forward migration checksum
-  совместим с прежним форматом. INTEGER int64/REAL edge fixtures совпадают с
-  независимым Node oracle на host и Android. Short photo reads собираются точно;
-  изменение исходного файла откатывает metadata transaction.
-- Photo readiness: async store/copy, save lock, lifecycle cleanup ждёт DB commit,
-  late-copy после unmount удаляется; own-image path guard. Семь новых регрессий.
-- Runtime gate целых async-команд; общая инвентаризация 15 owners, workflow close,
-  physical close/replace/reopen и очистка кешей. Boot recovery private journal
-  до открытия DB; strict journal/guard и missing LIVE не дают создать пустую DB.
-  Completed receipt сохраняет поздние записи/WAL после deliberate process kill.
-- Local Android publication WIP: MediaStore pending + SAF partial/rename/readback,
-  TS receipt binding и optional native wrapper. Module autolinking обнаружен;
-  compiler/IO/APK пока не доказаны, runtime/UI ещё не подключены.
-- Foundation 984/984, mobile/spike typecheck/lint/arch/source/secrets/diff.
-- Android runtime/journal rehearsal: normal 25/25, deliberate force-stop и
-  recovery нового процесса 11/11; та же инвентаризация 15 owners + workflow.
-  Это не UI E2E и не заполненная история каждого owner; OS scheduler не участвовал.
-  Android normal full-format 19/19, actual force-stop/recovery
-  нового процесса 7/7. Отчёт: `docs/spikes/R06_FULL_SNAPSHOT_REPORT.json`.
+- D01 identity/owner baselines без dev_ и seeds, FK/целостность/устойчивый JSON.
+- Общий SQLite snapshot engine: manifest/typed hash/media, staging/photo relocation,
+  независимый Node oracle. Guarded restore: SAFETY/guard/receipts, rollback/replay.
+- Runtime gate целых команд, 15 holders + workflow lease, physical close/reopen,
+  cache reset; private journal recovery до boot. Поздний WAL после receipt сохраняется.
+- Android synthetic snapshot normal19/recovery7 и runtime normal25/recovery11,
+  deliberate force-stop и новый процесс. Не обычный UI E2E или full owner history.
+- Готовность фото: copy awaited, save lock, cleanup ждёт commit/unmount; 7 регрессий.
+- Native MediaStore/SAF publication module + TS receipt binding; autolinking найден.
+  Kotlin compile и внешний IO не доказаны (см. ниже).
+- ManualBackupService и экран настроек подключены: ручная копия/экспорт/папка,
+  полная операция держит runtime gate; папка вне SQLite. Отмена/ошибки/duplicate
+  admission/receipt/cleanup проверены. В Expo Go/dev операции отключены.
+- Реальный Node snapshot пригоден после удаления исходной установки (publisher
+  заменён на FS boundary). 12 новых controller/integration tests, 4 URI tests.
+- Телефон: исправлены native path→file URI и dev boot mismatch, сохранены исходные
+  dev-файлы/журналы. В baseline dev-базу перенесены 64 таблицы/1150 строк;
+  добавлены parity и unsafe-integer rollback. Boot/settings/backup screen/re-entry
+  проверены; копирование в Expo Go отключено. 2.0 build128 не трогали.
+- JS/Hermes Android bundle 5600 modules/1136 assets; typecheck/lint/arch (480),
+  source/secrets/diff прошли. Итоговый foundation 1002/1002.
 
 Открыто:
 
-- Native compile: `modules/athlete-backup-storage/android/src/main/java/expo/modules/athletebackup/BackupStorageModule.kt`
-  ещё не скомпилирован. Gradle foojay artifact не в кеше; Java Maven соединения
-  Permission denied, PowerShell POM 200. Подробно R06_ANDROID_PUBLICATION.md.
-- R06/D05: controller/confirmation
-  и job/journal writer, SAF folder/file rights/publication, autoscheduler,
-  rotation/Return, native negative/low-storage/reinstall/full-owner.
-- RestTimerService.recover в `features/training/execution/application/RestTimerService.ts`:
-  после замены ещё нужен reconcile прежних/восстановленных OS-сигналов без запроса
-  разрешений при обычном boot. Drain сигналов перед close уже проверен.
-- Ручной picker E2E для photo readiness пока не выполнен; lifecycle проверен
-  автоматическими тестами, UI скомпилирован production JS bundle.
-- R04/D03/D04: закончить semantic mapping и staging всех legacy owners/историй,
-  устойчивые IDs/provenance/parity/retry/kill/low-storage. Текущие audits и client
-  rehearsal не равны полной миграции всех данных. LOAD_REPS для 2.0 утверждён
-  владельцем; неизвестное оборудование/мышечные группы не угадывать.
-- После backup/restore — Excel import/export по запросу владельца; сначала
-  GitHub-исследование библиотек, затем 2.0 как образец. Пока не начато.
-- UI/темы — последующая шлифовка.
+- Native compile BackupStorageModule.kt: foojay plugin не закеширован, Java Maven
+  Permission denied, PowerShell POM200. Без TLS/framework ослаблений нужны зависимости
+  и изолированная APK; MediaStore/SAF readback/rights/kill/low-storage/reinstall.
+- Restore controller/preview/confirmation/job writer, Return с фото, autoscheduler,
+  три ежедневных auto copies/rotation, full-owner matrix. UI пока лишь manual copy.
+- RestTimerService.recover: reconcile прежних/восстановленных OS-сигналов после
+  замены без permission prompt при обычном boot. Drain уже проверен.
+- Полный legacy mapping/staging всех owners/историй, IDs/provenance/parity/retry.
+  LOAD_REPS утверждён; отсутствующие equipment/groups не угадывать.
+- После backup/restore — Excel import/export: сначала GitHub, потом 2.0 read-only.
+- Ручной photo-picker E2E и последующая шлифовка UI/тем.
 
-Историческая память: `archive/progress-before-backup-2026-10-23.md`.
-Актуальная подробная точка продолжения: `docs/HANDOFF_BACKUP_MIGRATION.md`.
+Точка продолжения: docs/HANDOFF_BACKUP_MIGRATION.md,
+docs/spikes/R06_MANUAL_BACKUP.md. Историческая память в archive/.

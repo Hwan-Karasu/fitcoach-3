@@ -18,7 +18,7 @@ const errorLabels: Record<BootErrorCode, string> = {
 };
 
 /** Screens receive repositories only after the critical database gate succeeds. */
-export function ApplicationBootGate({ boot, services, development, maintenance }: Readonly<ApplicationRuntime>) {
+export function ApplicationBootGate({ boot, services, development, maintenance, manualBackup }: Readonly<ApplicationRuntime>) {
   const [state, setState] = useState(boot.state);
   const [maintenanceState, setMaintenanceState] = useState(maintenance.state);
   useEffect(() => maintenance.subscribe(setMaintenanceState), [maintenance]);
@@ -30,7 +30,7 @@ export function ApplicationBootGate({ boot, services, development, maintenance }
   }, [boot]);
 
   if (state.kind === "APP_READY" && maintenanceState === "ACTIVE") return <PrototypeShell services={services}
-    workspaceId={state.workspaceId} />;
+    workspaceId={state.workspaceId} manualBackup={manualBackup} />;
   const failed = state.kind === "BOOT_FAILED";
   const recovering = maintenanceState === "RECOVERY_REQUIRED";
   const maintaining = maintenanceState !== "ACTIVE";

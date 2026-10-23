@@ -259,3 +259,38 @@ test("D01 источник закрывается даже при отказе �
   })), { message: "SYNTHETIC_OPEN_FAILURE" });
   assert.equal(closed, 1);
 });
+
+test("D01 перенос проверяет содержимое строк до отметки успеха; искажение откатывается, повтор сохраняет исходник", async () => {
+  const legacy = await legacyDatabase();
+  const { db, target } = await freshTarget();
+  db.exec(`CREATE TRIGGER synthetic_corruption AFTER INSERT ON clients BEGIN
+    UPDATE clients SET display_name='Corrupted' WHERE id=NEW.id; END`);
+  try {
+    await assert.rejects(importLegacyDevData(target, nodeSqlitePort(legacy)), { message: "LEGACY_IMPORT_PARITY_FAILED" });
+    assert.equal(db.prepare("SELECT count(*) AS n FROM clients").get()?.n, 0);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM dev_legacy_import").get()?.n, 0);
+    assert.equal(legacy.prepare("SELECT count(*) AS n FROM dev_clients WHERE display_name='SyntheticAnna'").get()?.n, 1);
+    db.exec("DROP TRIGGER synthetic_corruption");
+    assert.equal((await importLegacyDevData(target, nodeSqlitePort(legacy))).status, "IMPORTED");
+    assert.equal(db.prepare("SELECT count(*) AS n FROM clients WHERE display_name='SyntheticAnna'").get()?.n, 1);
+  } finally { db.close(); legacy.close(); }
+});
+
+test("D01 dev-перенос не округляет небезопасное целое число из исходной SQLite", async () => {
+  const legacy = await legacyDatabase();
+  const { db, target } = await freshTarget();
+  legacy.exec("UPDATE dev_clients SET height_cm_x10=9007199254740993 WHERE display_name='SyntheticAnna'");
+  try {
+    // Expo's native boundary returns JS numbers; Node normally rejects int64 overflow
+    // before our guard sees it. Model that external numeric conversion explicitly.
+    const nativeNumbers = { ...nodeSqlitePort(legacy), all: async <Row>(sql: string): Promise<readonly Row[]> => {
+      const statement = legacy.prepare(sql); statement.setReadBigInts(true);
+      return statement.all().map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) =>
+        [key, typeof value === "bigint" ? Number(value) : value]))) as Row[];
+    } };
+    await assert.rejects(importLegacyDevData(target, nativeNumbers), { message: "LEGACY_IMPORT_VALUE_UNSUPPORTED" });
+    assert.equal(db.prepare("SELECT count(*) AS n FROM clients").get()?.n, 0);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM dev_legacy_import").get()?.n, 0);
+    assert.equal(legacy.prepare("SELECT CAST(height_cm_x10 AS TEXT) AS exact FROM dev_clients WHERE display_name='SyntheticAnna'").get()?.exact, "9007199254740993");
+  } finally { db.close(); legacy.close(); }
+});

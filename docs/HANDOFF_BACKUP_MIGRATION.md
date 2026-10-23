@@ -4,7 +4,26 @@
 Полный перенос 2.0→3.0 и backup/restore не завершён; 100% не заявлено.
 UI и темы остаются на последующую шлифовку. Продукт — «Дневник атлета».
 
-## Текущий R06 WIP — публикация в общем хранилище
+## Текущий срез — ручная копия в runtime и настройках
+
+Подключены ManualBackupService, private snapshot job, настройка папки отдельно
+от SQLite и экран «Резервные копии». В Expo Go/dev операции отключены; boot,
+навигация и повторный вход проверены на телефоне. Полная операция держит runtime
+gate, UI получает только порт. Android JS/Hermes bundle 5600 modules/1136 assets.
+Foundation 1002/1002, typecheck/lint/arch/source/secrets/diff прошли. Main Metro
+offline8096/reverse и scrcpy оставлены для следующего телефонного шага.
+Обнаруженные URI и dev boot ошибки исправлены: новая baseline dev-база
+`fitcoach_dev_baseline_v3.db` получила 64 таблицы/1150 строк из наполненного
+prefixed dev-источника; пустой переходный файл и все прежние журналы сохранены.
+При переносе выполняется проверка содержимого до commit; unsafe integer не
+округляется. Подробно [R06_MANUAL_BACKUP.md](spikes/R06_MANUAL_BACKUP.md).
+
+Следующее: нативная компиляция и реальная публикация MediaStore/SAF в изолированной
+APK; restore controller/confirmation и atomic journal writer, Return с фото,
+autoscheduler/rotation, OS rest signals и полная owner matrix. Полная миграция
+2.0 и последующий Excel остаются открытыми; 100% не заявлено.
+
+## Предыдущий R06 WIP — публикация в общем хранилище
 
 Локальный Expo module `apps/mobile/modules/athlete-backup-storage`: default
 MediaStore.Downloads + pending/readback и SAF partial/rename/readback. TypeScript
@@ -14,8 +33,8 @@ mobile/spike typecheck/lint/arch/source/secrets/diff. Autolinking app/spike modu
 прямые Java Maven-запросы дают SocketException Permission denied; PowerShell HEAD
 того же POM HTTP 200. Агентский HTTPS_PROXY — заглушка. TLS не отключать и framework
 не ослаблять. Подробно [R06_ANDROID_PUBLICATION.md](spikes/R06_ANDROID_PUBLICATION.md).
-Нужны доступные зависимости/компиляция/изолированная APK, manual controller/UI и
-native IO proof. Runtime/UI пока не вызывает адаптер; R06/D05 OPEN.
+Нужны доступные зависимости/компиляция/изолированная APK и native IO proof.
+Manual controller/UI подключены следующим срезом выше; R06/D05 OPEN.
 
 ## Предыдущий завершённый срез — runtime lifecycle и boot recovery
 
