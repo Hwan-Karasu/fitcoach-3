@@ -1,3 +1,9 @@
+## 2026-10-23 — R04: сохранённые шаблоны 2.0
+
+- Отдельный templates:true добавляет настоящие D01 training_templates в общую Client/Q/WorkData/catalog/Plans транзакцию. Account binding проверяется, periodized page становится MESOCYCLE, эквивалентные недели free — SIMPLE. Plan values/supersets/указания сохранены, actual values/история/участники остаются только в raw provenance. [Контракт](spikes/R04_TRAINING_TEMPLATES_STAGING.md).
+- **248/248** targeted:30 Plans tests, из них12 новых, плюс текущие template/domain/dependency tests. Все15 границ rollback/retry, source SHA unchanged, reopened/reordered target byte-identical, drift/mode/owner protections и независимое применение. Root/mobile TS/changed ESLint/source73/arch506/secrets/diff pass. Fullfoundation/APK/bundle/телефон не затрагивались; runtime не менялся.
+- Не объявлен полный перенос шаблонов: различия недель SIMPLE и book-bound template пока блокируются без потери источника, отдельные settings сохранены raw. Реальные архивы/canonical Training facts/dedup/segments/точность дат и остальные владельцы впереди; runtime2.0 Restore не подключён. finalizable:false, общая цель ACTIVE/gates OPEN.
+
 ## 2026-10-23 — R04: книги, мезоциклы и плановые назначения 2.0
 
 - По точным исходникам025/ProgramLibrary/Program/Shared/SetLogPlan подтверждены client-scoped books, страницы и отдельные копии общих мезоциклов. Новый stageClientPlans пишет настоящие D01 Plans rows в общей Client/Q/WorkData/catalog транзакции, source/ID/target manifests и aliases. [Контракт](spikes/R04_TRAINING_PLANS_STAGING.md).

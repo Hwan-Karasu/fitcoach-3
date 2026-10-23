@@ -1,4 +1,44 @@
-## Последнее продолжение — R04 live Plans/stable aliases, база b077518
+## Последнее продолжение — R04 templates, база92d00bb
+
+GoalACTIVE; R04→R03/D03→D01/R04/R05. Product48.12–48.16/33/39/46.6/46.19/
+49–50/53–56. Migration/overlay/signing/release OPEN. No newproductionDDL/real
+migration/overlay. Source e116b42: ProgramTemplateService,027_template_ownership,
+saveSimple/Periodized,cleanTemplate. template_workspace_id точный sourceWorkspace,
+не inferred client binding. Старый periodized template — сохранённая страница,
+поэтому MESOCYCLE, free equivalent weeks→SIMPLE. templates:true требует всех
+предыдущих режимов, persisted TRAINING_TEMPLATES_REHEARSAL_V1. Старые файлы не
+присваиваются. stageClientPlans shared tx пишет D01 training_templates/11tables,
+stable IDs/raw/metadata/receipt/parity. Template root alias programId=null,
+TEMPLATE_PLAN; descendants never become fact dedup aliases. Actual reps/weight/
+RPE/completion/segments/history, members/lineage/date не в payload. Source author,
+dates/settings/actual contamination retained raw. Deleted/warmup не воскресают.
+Same-title templates distinct. Applying ordinary domain helpers makes new IDs.
+
+248/248 targeted(30Plans/12new +6normalTemplates+dependencies),15failure boundaries
+rollbackall/retry; sourceSHA unchanged, reopen/reorder target byte-identical,
+drift/mode/owner/unclaimedtable protections. Root/mobileTS/changedESLint/source73/
+arch506/secrets/diff pass.
+No fullfoundation/APK/bundle/native/phone actions; runtime unchanged.
+[Контракт](spikes/R04_TRAINING_TEMPLATES_STAGING.md).
+
+LIMITS: SIMPLE differing week plans not representable in current TemplatePayload,
+book-bound templates unsupported; both block without source mutation. Other settings
+cycle_type/repRange/startDate retained raw, not separate template properties. Thus
+not complete template coverage. finalizable:false/privateDBnotpublishable.
+NEXT actualarchives+canonicalTraining facts/dedup/segments/dateprecision, remaining
+owners/fullstaging/runtimeSQLite+JSONv1v2Restore/Android. ProductionWorkData/registry
+repo/DDL/commands/backup/deletionOPEN. Other backup edges below stillOPEN.
+
+Archive primarysource now inspected/stored: archiveTypes/buildTrainingArchiveSnapshot,
+TrainingArchiveRepository/archiveTrainingProgram in exact build120. Archive is whole
+book: root workouts mirrors cycles with week offsets, sourceFactId historyOriginId
+else set.id. Never double-count root/cycles; old parser's brokenJSON→empty fallback
+must not be ported. Source program ID alone can point across legacy shared copies;
+need exact account/client/fact evidence. Actual archive converter NOTimplementedyet.
+Tools store contains these source strings; Github readonly fallback available.
+No personal DB/backup/key/secrets read;2.0 untouched/scrcpyopen/no pending kill.
+
+## Предыдущее продолжение — R04 live Plans/stable aliases, база b077518
 
 Previous goal turn PROGRESS b077518 exercise registry/IDs/links. CurrentR04→R03,
 D03→D01/R04/R05. Product48.1–48.5.7/48.6/48.10/48.28/48.39/33/39/46.6/46.19/

@@ -1,5 +1,9 @@
 # R04 — книги, мезоциклы и плановые подходы 2.0 в staging
 
+Продолжение2026-10-23: отдельный templates:true теперь пишет D01 шаблоны в той же
+транзакции. Ниже зафиксирован исходный plans-only режим; актуальный дополнительный
+контракт, доказательства и ограничения — [R04_TRAINING_TEMPLATES_STAGING.md](R04_TRAINING_TEMPLATES_STAGING.md).
+
 Дата2026-10-23; база b077518. Task R04→R03; D03→D01/R04/R05.
 Вход: Client/Exercise maps, Q/WorkData/catalog, raw plan tables, job time.
 Product §§48.1–48.5.7/48.6/48.10/48.28/48.39,33,39,46.6/46.19,49–50,53–56;

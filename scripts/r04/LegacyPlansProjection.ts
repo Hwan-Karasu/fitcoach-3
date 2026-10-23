@@ -3,13 +3,16 @@ import { PLAN_SOURCE_TABLES, type LegacyPlansSource, type PlanSourceTable } from
 import { projectLegacyPlanPrescription, sourceObject, sourcePlanRange } from "./LegacyPlanPrescription.ts";
 import { isExplicitTimestamp } from "./ExactScaledHundredth.ts";
 import type { PlannedExercise, PlannedSet, PlannedWorkout } from "../../apps/mobile/src/features/training/plans/domain/SimplePlanModel.ts";
-import { storedWorkout } from "../../apps/mobile/src/features/training/plans/domain/StoredPlanShape.ts";
+import { storedTemplate, storedWorkout } from "../../apps/mobile/src/features/training/plans/domain/StoredPlanShape.ts";
+import type { TemplatePayload } from "../../apps/mobile/src/features/training/plans/domain/TemplateModel.ts";
+import type { WeekType } from "../../apps/mobile/src/features/training/plans/domain/PeriodizedModel.ts";
 
 type Raw = Readonly<Record<string, unknown>>;
 export type PlanRow = Readonly<Record<string, string | number | null>>;
-export type PlanIdentityKind = "PROGRAM" | "MESOCYCLE" | "LINEAGE" | "WEEK" | "WORKOUT" | "EXERCISE" | "SET" | "SUPERSET";
+export type PlanIdentityKind = "PROGRAM" | "MESOCYCLE" | "LINEAGE" | "WEEK" | "WORKOUT" | "EXERCISE" | "SET" | "SUPERSET" | "TEMPLATE";
 export const PLAN_TARGET_TABLES = ["training_programs", "training_program_members", "training_mesocycles", "training_weeks", "training_workouts",
   "training_planned_exercises", "training_planned_sets", "training_simple_overrides", "training_client_selection", "training_mesocycle_selection"] as const;
+export const TEMPLATE_TARGET_TABLES = [...PLAN_TARGET_TABLES, "training_templates"] as const;
 export interface ExercisePlanLink { readonly sourceKey: string; readonly clientId: string; readonly exerciseId: string; readonly raw: Raw }
 function fail(code: string): never { throw new Error(`R04_ID_LEDGER_PLANS_${code}`); }
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
@@ -25,11 +28,11 @@ function same(a: unknown, b: unknown): boolean { return JSON.stringify(a) === JS
  * position is historical evidence, not a second active slot or an invented fact. */
 export function composeLegacyPlans(context: CandidateIdentityContext, importedAt: string, source: LegacyPlansSource,
   clientIds: ReadonlyMap<string, string>, exerciseLinks: ReadonlyMap<string, ExercisePlanLink>,
-  identity: (kind: PlanIdentityKind, sourceKey: string) => string) {
+  identity: (kind: PlanIdentityKind, sourceKey: string) => string, templatesEnabled = false) {
   if (source.accountScope !== context.accountScope) return fail("SCOPE_MISMATCH"); time(importedAt);
   if (Object.keys(source.tables).length !== PLAN_SOURCE_TABLES.length || PLAN_SOURCE_TABLES.some((t) => source.tables[t] !== null && !Array.isArray(source.tables[t]))) return fail("SOURCE_TABLE_MISSING");
   const scope = context.accountScope, workspace = context.targetWorkspaceId;
-  const tables = Object.fromEntries(PLAN_TARGET_TABLES.map((name) => [name, [] as PlanRow[]])) as Record<typeof PLAN_TARGET_TABLES[number], PlanRow[]>;
+  const tables = Object.fromEntries(TEMPLATE_TARGET_TABLES.map((name) => [name, [] as PlanRow[]])) as Record<typeof TEMPLATE_TARGET_TABLES[number], PlanRow[]>;
   const maps = new Map<PlanSourceTable, Map<string, Raw>>(); const json = new Map<Raw, Raw>();
   const dispositions: Record<string, { clientId: string | null; targetId: string | null; targetProgramId: string | null; weekIndex: number | null; disposition: string }> = {};
   const metadata: unknown[] = [];
@@ -80,7 +83,7 @@ export function composeLegacyPlans(context: CandidateIdentityContext, importedAt
   const byParent = new Map<PlanSourceTable, Map<Raw, Raw[]>>();
   for (const table of ["training_weeks", "training_workouts", "training_exercises", "training_set_logs"] as const) {
     const index = new Map<Raw, Raw[]>(); byParent.set(table, index);
-    for (const row of rows(table)) if (eligible(row)) {
+    for (const row of rows(table)) if (eligible(row) || templatesEnabled && active(row) && programOf.get(row)?.is_template === 1) {
       const p = parent.get(row)!; const siblings = index.get(p) ?? []; siblings.push(row); index.set(p, siblings);
     }
     const column = table === "training_weeks" ? "week_index" : table === "training_set_logs" ? "set_index" : "sort_index";
@@ -108,12 +111,16 @@ export function composeLegacyPlans(context: CandidateIdentityContext, importedAt
   const sharedMembership = new Map<string, string>();
   const rowId = (kind: PlanIdentityKind, table: PlanSourceTable, row: Raw) => identity(kind, sourceKey(table, row));
   function mark(table: PlanSourceTable, row: Raw, id: string | null, programId: string, weekIndex: number | null) {
-    Object.assign(dispositions[sourceKey(table, row)]!, { targetId: id, targetProgramId: programId, weekIndex, disposition: "PLAN" });
+    const template = programOf.get(row)?.is_template === 1;
+    Object.assign(dispositions[sourceKey(table, row)]!, { targetId: id, targetProgramId: template ? null : programId, weekIndex,
+      disposition: template ? "TEMPLATE_PLAN" : "PLAN" });
   }
-  function workout(p: Raw, w: Raw, programId: string, weekIndex: number, targetWorkoutId?: string): PlannedWorkout {
+  function workout(p: Raw, w: Raw, programId: string, weekIndex: number, targetWorkoutId?: string, templateSlot?: string): PlannedWorkout {
     const id = targetWorkoutId ?? rowId("WORKOUT", "training_workouts", w); mark("training_workouts", w, id, programId, weekIndex);
-    const exercises: PlannedExercise[] = children("training_exercises", w).map((e) => {
-      const eId = rowId("EXERCISE", "training_exercises", e), data = json.get(e)!;
+    const supersets = new Map<string, string>();
+    const exercises: PlannedExercise[] = children("training_exercises", w).map((e, ei) => {
+      const eId = templateSlot === undefined ? rowId("EXERCISE", "training_exercises", e)
+        : identity("EXERCISE", JSON.stringify([scope, "template-exercise-slot", templateSlot, ei])), data = json.get(e)!;
       const link = exerciseLinks.get(sourceKey("training_exercises", e));
       if (!link || link.clientId !== owner.get(e) || Object.keys(e).some((k) => !same(e[k], link.raw[k]))) return fail("EXERCISE_LINK_MISMATCH");
       mark("training_exercises", e, eId, programId, weekIndex);
@@ -128,24 +135,31 @@ export function composeLegacyPlans(context: CandidateIdentityContext, importedAt
       for (const set of logs) {
         const setData = json.get(set)!; const kind = set.set_kind ?? "working";
         if (!["working", "warmup", "drop"].includes(String(kind))) return fail("SET_KIND_INVALID");
-        if (kind === "warmup") { dispositions[sourceKey("training_set_logs", set)]!.disposition = "RETAINED_WARMUP_FACT_SOURCE"; continue; }
-        const id = rowId("SET", "training_set_logs", set), prescription = projectLegacyPlanPrescription(setData, data);
+        if (kind === "warmup") { dispositions[sourceKey("training_set_logs", set)]!.disposition = p.is_template === 1 ? "RETAINED_TEMPLATE_WARMUP_SOURCE" : "RETAINED_WARMUP_FACT_SOURCE"; continue; }
+        const id = templateSlot === undefined ? rowId("SET", "training_set_logs", set)
+          : identity("SET", JSON.stringify([scope, "template-set-slot", eId, sets.length])), prescription = projectLegacyPlanPrescription(setData, data);
         const { basis, ...values } = prescription; sets.push({ id, ...values }); mark("training_set_logs", set, id, programId, weekIndex);
         planBases.push({ sourceKey: sourceKey("training_set_logs", set), basis });
       }
       if (sets.length === 0 && data.setCount !== undefined && data.setCount !== null) {
         const count = pos(data.setCount); if (count > 999) return fail("PRESCRIPTION_INVALID");
         const { basis, ...values } = projectLegacyPlanPrescription({}, data);
-        for (let i = 0; i < count; i++) sets.push({ id: identity("SET", JSON.stringify([scope, "DECLARED_PLAN_SLOT", e.id, i])), ...values });
+        for (let i = 0; i < count; i++) sets.push({ id: identity("SET", templateSlot === undefined
+          ? JSON.stringify([scope, "DECLARED_PLAN_SLOT", e.id, i]) : JSON.stringify([scope, "template-set-slot", eId, i])), ...values });
         planBases.push({ sourceKey: sourceKey("training_exercises", e), declaredSetCount: count, basis });
       }
       let supersetId: string | undefined;
-      if (data.supersetGroupId !== undefined && data.supersetGroupId !== null && data.supersetGroupId !== "") supersetId = identity("SUPERSET", JSON.stringify([scope, w.id, text(data.supersetGroupId)]));
+      if (data.supersetGroupId !== undefined && data.supersetGroupId !== null && data.supersetGroupId !== "") {
+        const group = text(data.supersetGroupId);
+        supersetId = supersets.get(group) ?? identity("SUPERSET", templateSlot === undefined
+          ? JSON.stringify([scope, w.id, group]) : JSON.stringify([scope, "template-superset-slot", templateSlot, ei]));
+        supersets.set(group, supersetId);
+      }
       return { id: eId, exerciseId: link.exerciseId, restSec: rest, instruction: e.note.trim() ? e.note : null, rir, sets,
-        ...(p.mode === "periodized" ? { lineageId: identity("LINEAGE", JSON.stringify([scope, "exercise-lineage", e.id])) } : {}), ...(supersetId ? { supersetId } : {}) };
+        ...(p.mode === "periodized" && p.is_template !== 1 ? { lineageId: identity("LINEAGE", JSON.stringify([scope, "exercise-lineage", e.id])) } : {}), ...(supersetId ? { supersetId } : {}) };
     });
     const result: PlannedWorkout = { id, title: title(w.name), exercises,
-      ...(p.mode === "periodized" ? { lineageId: identity("LINEAGE", JSON.stringify([scope, "workout-lineage", w.id])) } : {}) };
+      ...(p.mode === "periodized" && p.is_template !== 1 ? { lineageId: identity("LINEAGE", JSON.stringify([scope, "workout-lineage", w.id])) } : {}) };
     if (!storedWorkout(result)) return fail("TARGET_SHAPE_INVALID");
     return result;
   }
@@ -236,6 +250,36 @@ export function composeLegacyPlans(context: CandidateIdentityContext, importedAt
       }
     }
   }
+  if (templatesEnabled) for (const p of rows("training_programs").filter((r) => r.is_template === 1 && active(r)).sort((a, b) => compare(text(a.id), text(b.id)))) {
+    // Migration 027 binds templates to an account, independently of the client
+    // used to author the plan. Never infer or silently repair a missing binding.
+    if (p.template_workspace_id !== context.sourceWorkspaceId) return fail("TEMPLATE_OWNER_MISMATCH");
+    if (p.book_id !== null) return fail("TEMPLATE_BOOK_UNREPRESENTABLE");
+    const id = rowId("TEMPLATE", "training_programs", p), weeks = children("training_weeks", p), data = json.get(p)!;
+    if (weeks.length < 1 || weeks.length > 52 || weeks.some((w, i) => w.week_index !== i)) return fail("WEEKS_UNREPRESENTABLE");
+    if (data.totalWeeks !== undefined && data.totalWeeks !== weeks.length) return fail("WEEK_COUNT_CONFLICT");
+    const templateWeeks = weeks.map((week, wi) => {
+      const type = week.week_type === "" ? "base" : week.week_type;
+      if (!["base", "light", "medium", "heavy", "deload"].includes(String(type))) return fail("WEEK_TYPE_UNREPRESENTABLE");
+      mark("training_weeks", week, null, id, wi + 1);
+      return { type: type as WeekType, workouts: children("training_workouts", week).map((w, i) => {
+        const slot = p.mode === "free" ? JSON.stringify([scope, "template-workout-slot", p.id, i]) : undefined;
+        return workout(p, w, id, wi + 1, slot === undefined ? undefined : identity("WORKOUT", slot), slot);
+      }) };
+    });
+    let payload: TemplatePayload;
+    if (p.mode === "free") {
+      if (templateWeeks.some((w) => w.type !== "base" || !same(w.workouts, templateWeeks[0]!.workouts))) return fail("SIMPLE_TEMPLATE_WEEKS_UNREPRESENTABLE");
+      payload = { kind: "SIMPLE", weeks: weeks.length, workouts: templateWeeks[0]!.workouts };
+    } else payload = { kind: "MESOCYCLE", mesocycle: { title: title(p.name), weeks: templateWeeks } };
+    if (!storedTemplate(payload)) return fail("TARGET_SHAPE_INVALID");
+    mark("training_programs", p, id, id, null);
+    tables.training_templates.push({ id, workspace_id: workspace, kind: payload.kind, title: title(p.name), payload_json: JSON.stringify(payload),
+      revision: 1, created_at: time(p.created_at), updated_at: time(p.updated_at) });
+    metadata.push({ sourceKey: sourceKey("training_programs", p), targetTemplateId: id, sourceTemplateKind: p.mode,
+      targetTemplateKind: payload.kind, sourceAuthorClientId: owner.get(p), sourceWorkspaceId: p.template_workspace_id,
+      omittedFromTemplate: "EXECUTIONS_DATES_HISTORY_MEMBERS_LINEAGE", sourceSettingsRetained: true });
+  }
   // A retained fact/deleted row may have a proven book/week context even when
   // it has no active planned entity. This is contextual provenance, not revival.
   for (const table of ["training_programs", "training_weeks", "training_workouts", "training_exercises", "training_set_logs"] as const) for (const row of rows(table)) {
@@ -271,9 +315,9 @@ export function composeLegacyPlans(context: CandidateIdentityContext, importedAt
   }
   sourceRows.sort((a, b) => compare(String(a.source_key), String(b.source_key)));
   return { tables, sourceRows, metadata, planBases,
-    deferredArchiveRows: rows("training_archive_entries").length, deferredTemplatePages: rows("training_programs").filter((p) => p.is_template === 1).length,
+    deferredArchiveRows: rows("training_archive_entries").length, deferredTemplatePages: rows("training_programs").filter((p) => p.is_template === 1 && (!templatesEnabled || !active(p))).length,
     deferredLibraryRows: [...library.keys()].filter((k) => !groups.has(k)).length,
     deferredWorkspaceStateRows: rows("training_workspaces").filter((r) => Object.keys(sourceObject(r.week_state_json)).length > 0).length,
     deferredViewRows: rows("training_program_view_state").length, deferredPreferenceRows: rows("training_library_preferences").length,
-    retainedSourceRows: sourceRows.filter((r) => r.disposition !== "PLAN" && r.disposition !== "SIMPLE_WEEK_INDEX").length, finalizable: false as const };
+    retainedSourceRows: sourceRows.filter((r) => !["PLAN", "SIMPLE_WEEK_INDEX", "TEMPLATE_PLAN"].includes(String(r.disposition))).length, finalizable: false as const };
 }

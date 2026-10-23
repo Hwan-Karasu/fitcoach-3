@@ -18,11 +18,14 @@ import { readMesocycles } from "../apps/mobile/src/features/training/plans/data/
 import { readStructure } from "../apps/mobile/src/features/training/plans/data/SimplePlanStore.ts";
 import { readSimpleWeeks } from "../apps/mobile/src/features/training/plans/data/SimpleWeekStore.ts";
 import { groupOfCopy } from "../apps/mobile/src/features/training/plans/data/MesocycleGroupStore.ts";
+import { storedTemplate } from "../apps/mobile/src/features/training/plans/domain/StoredPlanShape.ts";
+import { weeksFromTemplate, workoutsFromTemplate, type TemplatePayload } from "../apps/mobile/src/features/training/plans/domain/TemplateModel.ts";
 
 const context = { sourceSha256: "d".repeat(64), accountScope: "synthetic-scope", sourceWorkspaceId: "synthetic-workspace", targetWorkspaceId: "local-trainer" };
 const timestamp = "2026-04-01T10:00:00Z", updated = "2026-04-02T10:00:00Z", archived = "2026-04-03T10:00:00Z";
 const options = { clientIdentityRehearsal: { createdAt: "2026-04-05T10:00:00Z", profiles: true as const, questionnaires: true as const,
   workData: true as const, exercises: true as const, plans: true as const } };
+const templateOptions = { clientIdentityRehearsal: { ...options.clientIdentityRehearsal, templates: true as const } };
 function allocate() { let n = 0; return () => `11111111-1111-4111-8111-${String(++n).padStart(12, "0")}`; }
 function seed(db: DatabaseSync) {
   db.exec(`CREATE TABLE clients(id TEXT PRIMARY KEY,workspace_id TEXT,name TEXT,created_at TEXT,updated_at TEXT,archived_at TEXT,deleted_at TEXT,
@@ -91,8 +94,8 @@ async function fixture(run: (source: DatabaseSync, target: DatabaseSync) => void
   const source = new DatabaseSync(":memory:"), target = new DatabaseSync(":memory:");
   try { seed(source); await run(source, target); } finally { source.close(); target.close(); }
 }
-function stage(source: DatabaseSync, target: DatabaseSync) {
-  const input = read(source), ledger = prepareCandidateIdentityLedger(target, context, options);
+function stage(source: DatabaseSync, target: DatabaseSync, templates = false) {
+  const input = read(source), ledger = prepareCandidateIdentityLedger(target, context, templates ? templateOptions : options);
   return { input, ledger, result: ledger.stageClientPlans(input.cards, null, input.catalog, input.refs, input.plans, allocate()) };
 }
 function mapped(db: DatabaseSync, table: string, id: string) {
@@ -102,6 +105,23 @@ const targetTables = ["clients", "questionnaire_versions", "questionnaire_answer
   "r04_exercise_ids", "r04_exercise_registry", "exercise_overlay", "r04_exercise_links", "r04_exercise_receipt", "r04_plan_ids", "r04_plan_source", "r04_plan_receipt",
   "training_programs", "training_program_members", "training_mesocycles", "training_weeks", "training_workouts", "training_planned_exercises", "training_planned_sets",
   "training_simple_overrides", "training_client_selection", "training_mesocycle_selection", "training_builder_drafts"];
+
+function enableTemplateSource(db: DatabaseSync) {
+  db.exec("ALTER TABLE training_programs ADD COLUMN template_workspace_id TEXT");
+  db.prepare("UPDATE training_programs SET template_workspace_id=? WHERE is_template=1").run(context.sourceWorkspaceId);
+}
+function simpleTemplateSource(db: DatabaseSync) {
+  enableTemplateSource(db);
+  db.prepare("UPDATE training_programs SET is_template=1,template_workspace_id=? WHERE id='p-c'").run(context.sourceWorkspaceId);
+  db.exec("UPDATE training_weeks SET week_type='' WHERE program_id='p-c'");
+  db.prepare("UPDATE training_workouts SET name=? WHERE program_id='p-c'").run("Одинаковый план");
+  db.prepare("UPDATE training_set_logs SET data_json=? WHERE exercise_id LIKE 'p-c:%'").run('{"plannedReps":"8-12","plannedWeight":"2,5"}');
+}
+function templatePayload(db: DatabaseSync, sourceId: string): TemplatePayload {
+  const alias = mapped(db, "training_programs", sourceId), row = db.prepare("SELECT * FROM training_templates WHERE id=?").get(alias.target_id!);
+  assert.ok(row); const value: unknown = JSON.parse(row.payload_json as string);
+  assert.ok(storedTemplate(value)); assert.equal(value.kind, row.kind); return value;
+}
 
 test("book headers become programs and physical source programs become independent mesocycles with their own clients", () => fixture((source, target) => {
   const { result } = stage(source, target);
@@ -286,3 +306,160 @@ test("a read-only source file and reopened/reordered staged plan retain exact by
     source.exec("ROLLBACK"); source.close(); source = null; assert.equal(hash(sourcePath), sourceHash);
   } finally { target?.close(); source?.close(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("legacy periodized templates become account-owned MESOCYCLE templates with only prescription and exact source provenance", () => fixture((source, target) => {
+  enableTemplateSource(source);
+  const setId = "p-template:week:0:workout:0:exercise:0:set";
+  source.prepare("UPDATE training_set_logs SET data_json=? WHERE id=?").run(JSON.stringify({ plannedReps: "8-12", plannedWeight: "2,5",
+    historyOriginId: "must-stay-source-only", historyDateStatus: "unknown", segments: [{ reps: "3", weight: "99" }] }), setId);
+  const { result, ledger } = stage(source, target, true), payload = templatePayload(target, "p-template");
+  assert.equal(result.templateRows, 1); assert.equal(result.deferredTemplatePages, 0); assert.equal(result.programRows, 3);
+  assert.equal(payload.kind, "MESOCYCLE"); if (payload.kind !== "MESOCYCLE") assert.fail();
+  assert.equal(payload.mesocycle.title, "Старый шаблон"); assert.equal(payload.mesocycle.weeks[0]!.type, "base");
+  const exercise = payload.mesocycle.weeks[0]!.workouts[0]!.exercises[0]!;
+  assert.deepEqual(exercise.sets.map((s) => [s.reps, s.repsMax, s.loadGrams]), [[8, 12, 2500]]);
+  assert.equal(exercise.instruction, "Плановое указание"); assert.deepEqual(exercise.rir, { min: 1, max: 2 });
+  const serialized = JSON.stringify(payload);
+  for (const key of ["completedAt", "historyOriginId", "segments", "lineageId", "participantIds", "createdAt", "startDate", "clientId", "rpe"]) assert.equal(serialized.includes(`"${key}"`), false, key);
+  const raw = JSON.parse(mapped(target, "training_set_logs", setId).source_json as string) as Record<string, unknown>;
+  assert.equal(raw.reps, "20"); assert.equal(raw.weight, "10"); assert.equal(raw.completed_at, updated);
+  assert.equal((JSON.parse(raw.data_json as string) as Record<string, unknown>).historyOriginId, "must-stay-source-only");
+  const alias = ledger.loadPlanDraftMappings().get(JSON.stringify([context.accountScope, "training_programs", "p-template"]))!;
+  assert.equal(alias.disposition, "TEMPLATE_PLAN"); assert.equal(alias.programId, null);
+  assert.deepEqual({ ...target.prepare("SELECT created_at,updated_at,revision FROM training_templates").get() }, { created_at: timestamp, updated_at: updated, revision: 1 });
+  let next = 0; const copied = weeksFromTemplate(payload.mesocycle, () => `copy-${++next}`);
+  assert.notEqual(copied[0]!.workouts[0]!.id, payload.mesocycle.weeks[0]!.workouts[0]!.id);
+  assert.notEqual(copied[0]!.workouts[0]!.exercises[0]!.id, exercise.id);
+  assert.deepEqual(target.prepare("PRAGMA foreign_key_check").all(), []);
+}));
+
+test("equivalent physical weeks form one SIMPLE template with stable logical aliases and independent application", () => fixture((source, target) => {
+  simpleTemplateSource(source);
+  // Client execution contamination must not make otherwise equivalent template
+  // weeks different, or supply a prescription that the source never contained.
+  source.prepare("UPDATE training_set_logs SET reps='1',weight='999',completed_at=NULL WHERE exercise_id LIKE 'p-c:week:1:%'").run();
+  const { result } = stage(source, target, true), payload = templatePayload(target, "p-c");
+  assert.equal(result.templateRows, 2); assert.equal(result.programRows, 2); assert.equal(payload.kind, "SIMPLE");
+  if (payload.kind !== "SIMPLE") assert.fail(); assert.equal(payload.weeks, 2); assert.equal(payload.workouts.length, 1);
+  for (const [table, suffix] of [["training_workouts", ":workout:0"], ["training_exercises", ":workout:0:exercise:0"], ["training_set_logs", ":workout:0:exercise:0:set"]]) {
+    const a = mapped(target, table!, `p-c:week:0${suffix}`), b = mapped(target, table!, `p-c:week:1${suffix}`);
+    assert.equal(a.target_id, b.target_id); assert.equal(a.week_index, 1); assert.equal(b.week_index, 2); assert.equal(a.target_program_id, null);
+  }
+  let next = 0; const copied = workoutsFromTemplate(payload.workouts, () => `new-${++next}`);
+  assert.notEqual(copied[0]!.id, payload.workouts[0]!.id); assert.equal(copied[0]!.exercises[0]!.sets[0]!.loadGrams, 2500);
+}));
+
+test("a legacy saved page with multiple typed weeks stays a MESOCYCLE and cannot import its old group membership", () => fixture((source, target) => {
+  enableTemplateSource(source);
+  source.prepare("UPDATE training_programs SET is_template=1,book_id=NULL,template_workspace_id=? WHERE id='p-a1'").run(context.sourceWorkspaceId);
+  stage(source, target, true); const payload = templatePayload(target, "p-a1");
+  assert.equal(payload.kind, "MESOCYCLE"); if (payload.kind !== "MESOCYCLE") assert.fail();
+  assert.deepEqual(payload.mesocycle.weeks.map((w) => w.type), ["base", "heavy"]);
+  const exercises = payload.mesocycle.weeks[0]!.workouts[0]!.exercises;
+  assert.ok(exercises[0]!.supersetId); assert.equal(exercises[0]!.supersetId, exercises[1]!.supersetId);
+  assert.equal(exercises[0]!.sets.length, 2); assert.equal(JSON.stringify(payload).includes("shared-page"), false);
+  assert.equal(mapped(target, "training_set_logs", "warmup").disposition, "RETAINED_TEMPLATE_WARMUP_SOURCE");
+  assert.equal(mapped(target, "training_programs", "p-a1").target_program_id, null);
+}));
+
+test("template owner, representability, and ordering failures roll back every staged owner", async () => {
+  for (const sql of ["UPDATE training_programs SET template_workspace_id=NULL WHERE id='p-template'",
+    "UPDATE training_programs SET template_workspace_id='foreign' WHERE id='p-template'",
+    "UPDATE training_programs SET book_id='unexpected-book' WHERE id='p-template'",
+    "UPDATE training_weeks SET week_index=2 WHERE program_id='p-template'",
+    "UPDATE training_set_logs SET data_json='{bad' WHERE exercise_id LIKE 'p-template:%'",
+    "UPDATE training_programs SET name=' ' WHERE id='p-template'"]) await fixture((source, target) => {
+      enableTemplateSource(source); source.exec(sql); const input = read(source), ledger = prepareCandidateIdentityLedger(target, context, templateOptions);
+      assert.throws(() => ledger.stageClientPlans(input.cards, null, input.catalog, input.refs, input.plans, allocate()), /PLANS_/u);
+      for (const table of [...targetTables, "training_templates"]) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n, 0, table);
+    });
+});
+
+test("simple template week differences are not silently discarded or converted to another program kind", () => fixture((source, target) => {
+  simpleTemplateSource(source);
+  source.prepare("UPDATE training_set_logs SET data_json=? WHERE exercise_id LIKE 'p-c:week:1:%'").run('{"plannedReps":"15"}');
+  const input = read(source), ledger = prepareCandidateIdentityLedger(target, context, templateOptions);
+  assert.throws(() => ledger.stageClientPlans(input.cards, null, input.catalog, input.refs, input.plans, allocate()), /SIMPLE_TEMPLATE_WEEKS_UNREPRESENTABLE/u);
+  assert.equal(target.prepare("SELECT count(*) AS n FROM clients").get()?.n, 0);
+  assert.equal(target.prepare("SELECT count(*) AS n FROM training_templates").get()?.n, 0);
+}));
+
+test("two same-named live templates retain separate identities", () => fixture((source, target) => {
+  simpleTemplateSource(source);
+  source.prepare("UPDATE training_programs SET name='Старый шаблон' WHERE id='p-c'").run();
+  stage(source, target, true);
+  const templates = target.prepare("SELECT id,title FROM training_templates").all();
+  assert.equal(templates.length, 2); assert.equal(templates[0]!.title, templates[1]!.title); assert.notEqual(templates[0]!.id, templates[1]!.id);
+}));
+
+test("deleted template descendants never return to the shared library", () => fixture((source, target) => {
+  enableTemplateSource(source); source.prepare("UPDATE training_programs SET deleted_at=? WHERE id='p-template'").run(archived);
+  const { result } = stage(source, target, true);
+  assert.equal(result.templateRows, 0); assert.equal(result.deferredTemplatePages, 1);
+  assert.equal(mapped(target, "training_programs", "p-template").disposition, "RETAINED_TEMPLATE_SOURCE");
+  assert.equal(mapped(target, "training_exercises", "p-template:week:0:workout:0:exercise:0").target_id, null);
+}));
+
+test("template-enabled staging binds the complete mode; older plan jobs and missing source ownership cannot be claimed", () => fixture((source, target) => {
+  enableTemplateSource(source); stage(source, target);
+  assert.throws(() => prepareCandidateIdentityLedger(target, context, templateOptions), /CONTEXT_MISMATCH/u);
+  const empty = new DatabaseSync(":memory:");
+  try {
+    assert.throws(() => prepareCandidateIdentityLedger(empty, context, { clientIdentityRehearsal: { ...templateOptions.clientIdentityRehearsal, plans: undefined } }), /CONTEXT_INVALID/u);
+    source.exec("ALTER TABLE training_programs DROP COLUMN template_workspace_id");
+    assert.throws(() => stage(source, empty, true), /TEMPLATE_OWNER_MISMATCH/u);
+    assert.equal(empty.prepare("SELECT count(*) AS n FROM clients").get()?.n, 0);
+  } finally { empty.close(); }
+}));
+
+test("all 15 template-plan transaction boundaries roll back clients, questionnaires, work data, registry and templates together", async () => {
+  for (const [phase, occurrence] of [["after-plan-ids", 1], ...Array.from({ length: 11 }, (_, n) => ["after-plan-rows", n + 1] as const),
+    ["after-plan-source", 1], ["after-plan-receipt", 1], ["before-commit", 1]] as const) await fixture((source, target) => {
+    enableTemplateSource(source); const input = read(source), ledger = prepareCandidateIdentityLedger(target, context, templateOptions); let seen = 0;
+    assert.throws(() => ledger.stageClientPlans(input.cards, null, input.catalog, input.refs, input.plans, allocate(), (stage) => {
+      if (stage === phase && ++seen === occurrence) throw new Error("injected");
+    }), /WRITE_FAILED/u);
+    for (const table of [...targetTables, "training_templates"]) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n, 0, table);
+    assert.equal(ledger.stageClientPlans(input.cards, null, input.catalog, input.refs, input.plans, allocate()).templateRows, 1);
+  });
+});
+
+test("template aliases verify payload and ID parity, and source changes cannot rewrite an already staged template", () => fixture((source, target) => {
+  enableTemplateSource(source); const { input, ledger } = stage(source, target, true);
+  const original = target.prepare("SELECT payload_json FROM training_templates").get()!.payload_json;
+  target.prepare("UPDATE training_templates SET payload_json=?").run('{"kind":"MESOCYCLE","mesocycle":{"title":"drift","weeks":[]}}');
+  assert.throws(() => ledger.loadPlanDraftMappings(), /PARITY_MISMATCH/u);
+  target.prepare("UPDATE training_templates SET payload_json=?").run(original!); assert.ok(ledger.loadPlanDraftMappings().size > 0);
+  source.exec("UPDATE training_programs SET name='Изменённый шаблон' WHERE id='p-template'"); const changed = read(source);
+  assert.throws(() => ledger.stageClientPlans(changed.cards, null, changed.catalog, changed.refs, changed.plans, allocate()), /PARITY_MISMATCH/u);
+  assert.equal(target.prepare("SELECT title FROM training_templates").get()?.title, "Старый шаблон");
+  assert.equal(ledger.stageClientPlans(input.cards, null, input.catalog, input.refs, input.plans, () => { throw new Error("reuse IDs"); }).templateRows, 1);
+}));
+
+test("template receipts and aliases survive file reopen and reordered retry without modifying source or target bytes", () => {
+  const dir = mkdtempSync(join(tmpdir(), "athlete-r04-templates-")), sourcePath = join(dir, "source.db"), targetPath = join(dir, "stage.db");
+  const hash = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
+  let source: DatabaseSync | null = null, target: DatabaseSync | null = null;
+  try {
+    source = new DatabaseSync(sourcePath); seed(source); simpleTemplateSource(source); source.close(); source = null; const sourceHash = hash(sourcePath);
+    source = new DatabaseSync(sourcePath, { readOnly: true }); source.exec("PRAGMA query_only=ON; BEGIN");
+    const input = read(source), exact = { ...context, sourceSha256: sourceHash };
+    target = new DatabaseSync(targetPath); const first = prepareCandidateIdentityLedger(target, exact, templateOptions);
+    first.stageClientPlans(input.cards, null, input.catalog, input.refs, input.plans, allocate());
+    const aliases = [...first.loadPlanDraftMappings()]; target.close(); target = null; const targetHash = hash(targetPath);
+    target = new DatabaseSync(targetPath); for (const rows of Object.values(input.plans.tables)) if (rows !== null) (rows as unknown[]).reverse();
+    const reopened = prepareCandidateIdentityLedger(target, exact, templateOptions);
+    const result = reopened.stageClientPlans([...input.cards].reverse(), null, [...input.catalog].reverse(), [...input.refs].reverse(), input.plans,
+      () => { throw new Error("must reuse IDs"); });
+    assert.equal(result.templateRows, 2); assert.deepEqual([...reopened.loadPlanDraftMappings()], aliases);
+    target.close(); target = null; assert.equal(hash(targetPath), targetHash);
+    source.exec("ROLLBACK"); source.close(); source = null; assert.equal(hash(sourcePath), sourceHash);
+  } finally { target?.close(); source?.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("plan-only alias reads reject an unclaimed template inserted outside the bound rehearsal", () => fixture((source, target) => {
+  const { ledger } = stage(source, target);
+  target.prepare("INSERT INTO training_templates VALUES('unclaimed',?,'SIMPLE','Посторонний шаблон',?,1,?,?)")
+    .run(context.targetWorkspaceId, '{"kind":"SIMPLE","weeks":1,"workouts":[]}', timestamp, updated);
+  assert.throws(() => ledger.loadPlanDraftMappings(), /PARITY_MISMATCH/u);
+}));

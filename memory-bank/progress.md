@@ -1,37 +1,43 @@
 # Progress — 2026-10-23
 
-GoalACTIVE R04→R03/D03→D01/R04/R05; migration/overlay/signing/releaseOPEN,не100%.
-Targetedchecks/fullsuite milestones/UIlater/Excelafterbackup. PreviousturnPROGRESS
-b077518 exerciseIDs. D01/fullsnapshot/GuardedRestore/v2Return/15holders/closedrecovery/
-connectedRestoreUI; native35/12/13/24/3/Downloads20/SAF19/reinstall6/auto21/status3/
-missing19/actualkillrecovery15+14.2.0untouched/fixtureCOMPLETE. Historicalfoundation
-1086/bundle5623/1185, ExpoRestoreJobsonly3.0. Profile37/Qhistory/exactversions/type
- epochs/draft/retired/tombstones, privateWorkData Notes/Tags/review/healthfix and
-ExerciseRegistry/IDs/links/unknownmetadata retained. ProductionownersstillOPEN.
+GoalACTIVE R04→R03/D03→D01/R04/R05,not100%. Migration/overlay/signing/releaseOPEN;
+no prodDDL/realmigration/overlay. Targetedchecks/fullsuite milestones/UIlater/Excel
+afterbackup. Russiancommit/nopush. Base92d00bb; previousturnPROGRESS livePlans.
+D01/fullsnapshot/GuardedRestore/v2Return/15holders/closedrecovery/connectedRestoreUI;
+native35/12/13/24/3/Downloads20/SAF19/reinstall6/auto21/status3/missing19/actualkill
+recovery15+14,2.0untouched/fixtureCOMPLETE. Historicalfoundation1086/bundle5623/1185;
+ExpoRestoreJobsonly3.0. Profile37/Qhistory/exactversions/typeepochs/draft/retired/
+tombstones;privateWorkData Notes/Tags/review/healthfix;ExerciseRegistry/IDs/links/
+unknownmetadata. ProductionownersstillOPEN.
 
-NEW actualD01Plans inprivate sharedClient/Q/work/catalog tx. Sourcee116b42 proves
-clientbookroot→Program, periodizedpage→mesocycle, sharedpagegid+consistentmembers→
-lineage acrossdifferentprograms. SamebookIDnotcrossclientmerge/no memberresurrection.
-SourceReader/Prescription/Projection/Stage, plans:true/newbinding, stableIDs/allraw/
-targetreceipts/parity/FK/integrity/retry. loadPlanDraftMappings revalidatesrows/source/
-IDs. SIMPLEbase+overrides preservesphysicalexercise/setIDs; logicalworkout+weekindex
-notFactdedup. PlanJSONpriority/exactrange/grams/RIRfallback; actualfactsnotconverted
-tofakeprescription. Missingnull/notzero, explicitsetCountonly. Sourceorder/dates/
-provenance preserved, no guessedpage/lineage/selection, archive notselected.
+92d00bb actualD01Plans inprivate sharedClient/Q/work/catalog tx. Sourceclientbook
+→Program/page→mesocycle/sharedgid+consistentmembers→lineage; no crossclientmerge/
+resurrection. StableIDs/raw/parity/FK/receipts/aliases;SIMPLEbase+weeklyoverrides keep
+physicalexercise/setIDs, logicalworkout+weeknotfactdedup. ExactplanJSON/ranges/grams/
+RIRvsactualseparation/sourceorder/date/selection.230/230historic,14faultboundaries.
 
-230/230 targeted(18new),productionreadhelpers verify3programs/3mesos/sharedcopies/
-simpleweeklyvariation/customQ/allowners.14faultboundariesrollbackall/retry,
-sourceSHAunchanged/targetreopenreorderbyteidentical/drift/missingIDs/membership/
-mutation. Root/mobileTS/changedESLint/source/arch506/secrets/diff. No fullsuite/APK/
-bundle/Androidthisturn(runtimeunchanged). Testregisteredr04/foundation. Contract
-R04_TRAINING_PLANS_STAGING.md, finalizable:false/privateDBnotpublishable.
+NEW templates:true/allmodes/explicitpersistedbinding. Exactbuild120027ownership+
+ProgramTemplateService/saveSimple/Periodized/cleanTemplate provesaccountbinding/
+savedpage. Liveperiodized→MESOCYCLE/freeequivalentweeks→SIMPLE. D01training_templates
+joins11targettables/sametransaction,stableIDs/raw/metadata/receipts/parity. Actual
+results/history/date/members/lineage excludedfrompayload;prescription/typedweeks/
+supersets/instruction/rest preserved. Sourceauthor/settings/actualraw retained.
+Deleted/warmupnotresurrected/same-title recordsdistinct. Simplelogicaltemplatealiases
+notfactdedup. Domaincopyhelpers makenewIDs. Aliasread rejects unclaimed tables.
 
-Retainedraw NOTfinishedoperationalmigration:archives/templates/deleted/free
-standalone/orphanlibrary/workspacestate/view/preferences/annotations/metadata/
-historicalclassification/unprovedlineage. NEXT actualarchive/template conversion+
-canonicalTrainingfacts/sourcefactdedup/segments/dateprecision, remainingowners/full
-staging/parity/retry/runtimeSQLite+JSONv1v2Restore/Android. ProductionWorkData/
-registrystore/DDL/commands/backup/deletionOPEN; otherbackupedgesclock/DST/SAFgap/
-copydeletekill/ENOSPC/providers/UI/OS/first-run. Personaldata/2.0untouched. LastPID
-3837terminal/Metro99958unverified/scrcpyopen/no pendingkill. Baseb077518, Russian
-commit/no push. FullgoalunchangedACTIVE; detailed handoff in docs.
+248/248targeted(30Plans/12new+6normalTemplate+dependencies),15injectedboundaries
+rollbackall/retry/sourceSHAunchanged/targetreopenreorderbyteidentical/IDreuse;
+drift/mode/owner/deleted/raw/actualcontamination. Root/mobileTS/changedESLint/
+source73/arch506/secrets/diff pass. No fullfoundation/APK/bundle/native/runtimechanges.
+ContractR04_TRAINING_TEMPLATES_STAGING.md. LIMITS: SIMPLEtemplatesdifferingweeks/
+book-boundtemplates blockwithoutlosingsource;currentpayloadunrepresentable. Extra
+settingsonlyraw/notoperationalproperties. finalizable:false/notfinishedalltemplates.
+
+Archiveprimarysourceinspected: wholebook/rootmirrorscycles+offsets/sourceFactID;
+neverdoublecountorportoldcorruptJSON→emptyfallback. ActualarchiveconverterNOTdone.
+NEXT archives/canonicalTrainingfacts/dedup/segments/dateprecision/remainingowners/
+fullstaging/parity/retry/runtimeSQLite+JSONv1v2Restore/Android. Retaineddeleted/free/
+orphanlibrary/state/view/preferences/annotations/historicalclassification/unproved
+lineageopen. ProductionWorkData/registrystore/DDL/commands/backup/deletionOPEN;
+backupclock/DST/SAFgap/copydeletekill/ENOSPC/providers/UI/OS/first-runOPEN. Personaldata/
+2.0untouched/lastPID3837terminal/Metro99958unverified/scrcpyopen/no pendingkill.
