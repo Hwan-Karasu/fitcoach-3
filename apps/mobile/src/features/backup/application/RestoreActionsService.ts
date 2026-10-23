@@ -17,6 +17,8 @@ export class RestoreActionsService implements RestoreActionsPort {
   private readonly options: Options;
   private readonly listeners = new Set<() => void>();
   private active = false;
+  private preparingPreview = false;
+  private cancelPreparation = false;
   private current: RestoreActionState;
   constructor(options: Options) {
     this.options = options; this.current = { available: options.enabled, phase: "IDLE", preview: null, point: null, notice: null, error: null };
@@ -55,9 +57,16 @@ export class RestoreActionsService implements RestoreActionsPort {
   private prepare(task: () => Promise<RestorePreview | null>): Promise<RestoreActionOutcome> {
     if (this.current.preview !== null) return Promise.resolve({ kind: "FAILED", code: "RESTORE_BUSY" });
     return this.perform("PREPARING", async () => {
-      const preview = await this.options.read(task);
-      if (preview === null) return { kind: "CANCELLED" };
-      this.publish({ preview: Object.freeze({ ...preview }) }); return { kind: "UPDATED" };
+      this.preparingPreview = true; this.cancelPreparation = false;
+      try {
+        const preview = await this.options.read(async () => {
+          const value = await task();
+          if (this.cancelPreparation && value !== null) { await this.discard(value.id); return null; }
+          return value;
+        });
+        if (preview === null) return { kind: "CANCELLED" };
+        this.publish({ preview: Object.freeze({ ...preview }) }); return { kind: "UPDATED" };
+      } finally { this.preparingPreview = false; }
     });
   }
   chooseFile(): Promise<RestoreActionOutcome> { return this.prepare(() => this.options.jobs.prepareFile()); }
@@ -72,6 +81,7 @@ export class RestoreActionsService implements RestoreActionsPort {
     try { await this.options.jobs.discard(id); } catch { /* A private orphan cannot become a confirmation. */ }
   }
   cancelPreview(): Promise<RestoreActionOutcome> {
+    if (this.active && this.preparingPreview) { this.cancelPreparation = true; return Promise.resolve({ kind: "CANCELLED" }); }
     return this.perform("PREPARING", async () => {
       const preview = this.current.preview; this.publish({ preview: null });
       if (preview !== null) await this.options.read(() => this.discard(preview.id));
@@ -103,10 +113,15 @@ export class RestoreActionsService implements RestoreActionsPort {
   }
   recover(): Promise<RestoreActionOutcome> {
     return this.perform("RECOVERING", async () => {
-      await this.options.jobs.recover();
+      const receipt = await this.options.jobs.recover();
       const preview = this.current.preview; this.publish({ preview: null, phase: "IDLE" });
       if (preview !== null) await this.discard(preview.id);
-      this.publish({ point: await this.options.read(() => this.options.jobs.readPoint()) });
+      if (preview !== null && receipt?.id === preview.id) {
+        if (receipt.outcome === "COMMITTED") this.publish({ notice: preview.kind === "RESTORE" ? "RESTORED" : "RETURNED" });
+        else this.publish({ error: "RESTORE_FAILED" });
+      } else this.publish({ notice: "CHECKED" });
+      try { this.publish({ point: await this.options.read(() => this.options.jobs.readPoint()) }); }
+      catch { this.publish({ point: null, error: "RESTORE_POINT_UNAVAILABLE" }); }
       return { kind: "UPDATED" };
     }, { recovery: true });
   }

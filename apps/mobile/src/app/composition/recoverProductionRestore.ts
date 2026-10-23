@@ -22,7 +22,7 @@ export async function recoverProductionRestore(maintenance: RuntimeMaintenance):
 
 /** Composition supplies trusted private paths. The isolated Android rehearsal uses this
  * same reader/header/adapter with its own namespace, never the production database. */
-export function recoverLocalRestore(maintenance: RuntimeMaintenance, root: Directory, live: File): Promise<void> {
+export function recoverLocalRestore(maintenance: Pick<RuntimeMaintenance, "withClosedDatabase">, root: Directory, live: File): Promise<void> {
   const journal = new ExpoRuntimeRestoreJournal(root);
   return recoverRuntimeRestore(() => journal.readPending(), (plan) => {
     const directory = new Directory(root, "jobs", plan.operationId);

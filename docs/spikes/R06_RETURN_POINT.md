@@ -1,7 +1,8 @@
 # R06 — одна полная private точка возврата и завершение операции
 
 Дата: 2026-10-23. **HOST + SYNTHETIC ANDROID VERIFIED**. R06/D05 OPEN.
-Владелец завершил установку отдельной тестовой APK; production UI ещё не подключён.
+Владелец завершил установку отдельной тестовой APK. Production UI подключён следующим
+срезом; [его доказательства и границы](R06_APPLICATION_RESTORE.md).
 
 Входы: общий SQLite snapshot engine с embedded media, D01 identity, staging
 INCOMING, RuntimeMaintenance, GuardedRestore и atomic routing writer. R06 зависит
@@ -74,11 +75,10 @@ Android JS/Hermes bundle собран: **5605 modules / 1185 assets**, без у
 
 ## Открытая интеграция
 
-Cold production reader уже использует completion protocol. Обычный Restore UI
-ещё не включён: нужны выбор/preview/явное подтверждение, привязка input к текущему
-логическому состоянию с учётом WAL, проверка свободного места и job lifecycle/
-очистка orphan до публикации routing record. Нужен единый controller для Restore,
-Return и подтверждённого удаления; итоговое восстановление включает OS rest signals.
+Cold production reader использует completion protocol. Следующий срез подключил
+Restore/Return/delete controller, preview/confirmation, logical WAL pin, actual
+free-space preflight и lifecycle private jobs. OS rest signals согласуются на
+boot/reopen без permission prompt. [Границы интеграции](R06_APPLICATION_RESTORE.md).
 
 Native v2 createPoint/finalization/replay и однократный Return проверены отдельно:
 normal **35/35**, force-stop до COMMITTED с rollback **12/12**, force-stop после

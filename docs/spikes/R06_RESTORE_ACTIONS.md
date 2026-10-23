@@ -1,6 +1,8 @@
 # R06 — подтверждение восстановления и привязка preview
 
-Дата: 2026-10-23. HOST VERIFIED; native adapter/ordinary UI ещё не подключены.
+Дата исходного среза: 2026-10-23. HOST VERIFIED.
+Следующий срез подключил native adapter/ordinary UI:
+[R06_APPLICATION_RESTORE.md](R06_APPLICATION_RESTORE.md). Ниже — первоначальный core.
 Входы: общий snapshot engine, RuntimeMaintenance, v2 routing/completion.
 R06→R03, D05→D01/R06; Product §46 и §§53–56. Migration/release gates OPEN.
 

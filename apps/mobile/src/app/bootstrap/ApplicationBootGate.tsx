@@ -18,10 +18,14 @@ const errorLabels: Record<BootErrorCode, string> = {
 };
 
 /** Screens receive repositories only after the critical database gate succeeds. */
-export function ApplicationBootGate({ boot, services, development, maintenance, manualBackup }: Readonly<ApplicationRuntime>) {
+export function ApplicationBootGate({ boot, services, development, maintenance, manualBackup, restoreActions }: Readonly<ApplicationRuntime>) {
   const [state, setState] = useState(boot.state);
-  const [maintenanceState, setMaintenanceState] = useState(maintenance.state);
-  useEffect(() => maintenance.subscribe(setMaintenanceState), [maintenance]);
+  const [maintenanceView, setMaintenanceView] = useState({ phase: maintenance.state, generation: 0 });
+  const [retrying, setRetrying] = useState(false);
+  useEffect(() => maintenance.subscribe((phase) => setMaintenanceView((before) => ({ phase,
+    generation: before.generation + (phase === "DRAINING" && before.phase === "ACTIVE" ? 1 : 0),
+  }))), [maintenance]);
+  const maintenanceState = maintenanceView.phase;
 
   useEffect(() => {
     const unsubscribe = boot.subscribe(setState);
@@ -29,8 +33,8 @@ export function ApplicationBootGate({ boot, services, development, maintenance, 
     return unsubscribe;
   }, [boot]);
 
-  if (state.kind === "APP_READY" && maintenanceState === "ACTIVE") return <PrototypeShell services={services}
-    workspaceId={state.workspaceId} manualBackup={manualBackup} />;
+  if (state.kind === "APP_READY" && maintenanceState === "ACTIVE") return <PrototypeShell key={maintenanceView.generation} services={services}
+    workspaceId={state.workspaceId} manualBackup={manualBackup} restoreActions={restoreActions} initialBackup={maintenanceView.generation > 0} />;
   const failed = state.kind === "BOOT_FAILED";
   const recovering = maintenanceState === "RECOVERY_REQUIRED";
   const maintaining = maintenanceState !== "ACTIVE";
@@ -44,10 +48,17 @@ export function ApplicationBootGate({ boot, services, development, maintenance, 
             {maintaining ? recovering ? "Восстановление не завершено" : "Восстанавливаем данные" : failed ? "Запуск не завершён" : "Подготовка приложения"}
           </Text>
           <Text style={styles.body}>
-            {maintaining ? recovering ? "Для безопасного продолжения закройте и снова откройте приложение." : "Дождитесь завершения операции." : failed ? errorLabels[state.code] : "Открываем локальную базу клиентов и проверяем тему оформления."}
+            {maintaining ? recovering ? "Исходные файлы сохранены. Повторите попытку, чтобы безопасно завершить восстановление." : "Дождитесь завершения операции." : failed ? errorLabels[state.code] : "Открываем локальную базу клиентов и проверяем тему оформления."}
           </Text>
           {development ? <Text style={styles.note}>Данные прежней версии сохраняются. Резервное копирование тестового хранилища ещё не подключено.</Text> : null}
-          {failed && !maintaining ? (
+          {recovering && restoreActions.state.available ? <Pressable accessibilityRole="button" disabled={retrying}
+            onPress={() => {
+              setRetrying(true);
+              void restoreActions.recover().then(async (outcome) => {
+                if (outcome.kind !== "FAILED" && boot.state.kind === "BOOT_FAILED") await boot.retry();
+              }).finally(() => { setRetrying(false); });
+            }} style={styles.button}><Text style={styles.buttonLabel}>{retrying ? "Завершаем восстановление…" : "Повторить восстановление"}</Text></Pressable> : null}
+          {failed && (!maintaining || (recovering && !restoreActions.state.available)) ? (
             <Pressable accessibilityRole="button" onPress={() => { void boot.retry(); }} style={styles.button}>
               <Text style={styles.buttonLabel}>Повторить</Text>
             </Pressable>

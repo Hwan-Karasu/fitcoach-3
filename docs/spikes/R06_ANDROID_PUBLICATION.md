@@ -74,7 +74,7 @@ document ID, включая `%2F`, остаётся прежним; native тр�
   **picked-file restore6/6**, клиент/рецепт/точное фото. Независимый SHA публичного
   файла совпал с SHA до удаления APK. 2.0 build128 и личные копии не затронуты.
 
-Открыты: обычный restore controller/confirmation, scheduler/rotation, native
+Открыты: обычный enabled restore UI E2E, scheduler/rotation, native
 publication process-death/partial cleanup/low-storage/другие providers/full-owner
 matrix. v2 writer и Return с фото теперь проверены на Android: normal35/35,
 rollback12/12, commit-gap recovery13/13 ([отчёт](R06_MANAGED_ANDROID_REPORT.json)).

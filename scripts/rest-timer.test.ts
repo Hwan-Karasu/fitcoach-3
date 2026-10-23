@@ -64,6 +64,96 @@ test("R06 idle waits for a queued start, its late OS signal, and the signalId DB
   assert.equal(writes, 2); assert.equal(service.list()[0]?.signalId, "synthetic-signal");
 });
 
+test("R06 restore reconciles imported OS IDs without permission prompt, preserves paused timers/endAt and removes expired", async () => {
+  const { execution, close } = await stores();
+  try {
+    const running = { ...startTimer([], bench, "restored-running", T0).timer, signalId: "another-install-running" };
+    const paused = { ...running, id: "restored-paused", exerciseKey: "paused", signalId: "another-install-paused", pausedLeftMs: 45_000 };
+    const expired = { ...running, id: "restored-expired", exerciseKey: "expired", startedAt: T0 - 180_000, endAt: T0 - 1, signalId: "another-install-expired" };
+    for (const timer of [running, paused, expired]) await execution.putTimer(timer, []);
+    const events: string[] = []; const scheduled: Parameters<RestSignalPort["schedule"]>[0][] = [];
+    const service = new RestTimerService(execution, {
+      clearOwned: async () => { events.push("clear-owned"); }, cancel: async (id) => { events.push(id); },
+      schedule: async (input) => { scheduled.push(input); return "new-install-signal"; },
+    }, () => T0 + 20_000);
+    await service.recover({ reconcileSignals: true }); await service.idle();
+    assert.deepEqual(events, ["clear-owned"], "imported OS IDs never cancel a calendar/other notification with a matching ID");
+    assert.equal(scheduled.length, 1); assert.equal(scheduled[0]!.requestPermission, false);
+    assert.equal(scheduled[0]!.endAt, running.endAt); assert.deepEqual(scheduled[0]!.route,
+      { clientId: bench.clientId, programId: bench.programId, weekIndex: bench.weekIndex, plannedWorkoutId: bench.plannedWorkoutId, exerciseKey: bench.exerciseKey });
+    const rows = await execution.listTimers(); assert.equal(rows.length, 2);
+    assert.equal(rows.find((timer) => timer.id === running.id)?.signalId, "new-install-signal");
+    assert.equal(rows.find((timer) => timer.id === paused.id)?.signalId, null);
+    assert.equal(rows.find((timer) => timer.id === paused.id)?.pausedLeftMs, 45_000);
+    assert.deepEqual(service.list(), runningTimers(rows, T0 + 20_000).map((timer) => ({ ...timer })));
+  } finally { await close(); }
+});
+
+test("R06 suspend drains a late OS schedule before clearing signals and leaves persisted timer times intact", async () => {
+  const { execution, close } = await stores();
+  try {
+    let release!: (id: string) => void; const events: string[] = [];
+    const service = new RestTimerService(execution, { schedule: () => new Promise((resolve) => { release = resolve; }),
+      cancel: async (id) => { events.push(`cancel:${id}`); }, clearOwned: async () => { events.push("clear"); } }, () => T0);
+    await service.start(bench); const original = service.list()[0]!;
+    let done = false; const suspending = service.suspendSignals().then(() => { done = true; });
+    await new Promise<void>((resolve) => setImmediate(resolve)); assert.equal(done, false); assert.deepEqual(events, []);
+    release("late-before-close"); await suspending;
+    assert.deepEqual(events, ["clear"]);
+    const stored = (await execution.listTimers())[0]!; assert.equal(stored.endAt, original.endAt); assert.equal(stored.signalId, "late-before-close");
+  } finally { await close(); }
+});
+
+test("R06 unavailable OS signals still replace the old dock with restored timers and erase foreign signal IDs", async () => {
+  const { execution, close } = await stores();
+  try {
+    const timer = { ...startTimer([], bench, "restored", T0).timer, signalId: "foreign-os-id" };
+    await execution.putTimer(timer, []); let cancelled = false;
+    const service = new RestTimerService(execution, { clearOwned: async () => { throw new Error("OS unavailable"); },
+      schedule: async () => { throw new Error("permission unavailable"); }, cancel: async (id) => { cancelled = id === "foreign-os-id"; } }, () => T0 + 1000);
+    await service.recover({ reconcileSignals: true });
+    assert.equal(cancelled, false, "failed enumeration does not trust imported signal IDs"); assert.deepEqual(service.list(), [{ ...timer, signalId: null }]);
+    assert.equal((await execution.listTimers())[0]!.signalId, null);
+  } finally { await close(); }
+});
+
+test("R06 timer expiring during OS reconciliation is not scheduled again", async () => {
+  const { execution, close } = await stores();
+  try {
+    const timer = startTimer([], bench, "expires-during-clear", T0).timer; await execution.putTimer(timer, []);
+    let now = T0; let scheduled = false;
+    const service = new RestTimerService(execution, { clearOwned: async () => { now = timer.endAt + 1; }, cancel: async () => undefined,
+      schedule: async () => { scheduled = true; return "should-not-exist"; } }, () => now);
+    await service.recover({ reconcileSignals: true }); assert.equal(scheduled, false); assert.deepEqual(service.list(), []); assert.deepEqual(await execution.listTimers(), []);
+  } finally { await close(); }
+});
+
+test("R06 failed signal-ID persistence cancels the fresh OS signal and never leaves the previous dock", async () => {
+  const { execution, close } = await stores();
+  try {
+    const timer = startTimer([], bench, "restored-new", T0).timer; await execution.putTimer(timer, []);
+    const cancelled: string[] = [];
+    const service = new RestTimerService({ listTimers: () => execution.listTimers(), removeTimer: (id) => execution.removeTimer(id),
+      putTimer: async () => { throw new Error("SQLITE_BUSY"); } }, { clearOwned: async () => undefined,
+      schedule: async () => "new-orphan", cancel: async (id) => { cancelled.push(id); } }, () => T0);
+    await assert.rejects(service.recover({ reconcileSignals: true }), { message: "SQLITE_BUSY" });
+    assert.deepEqual(cancelled, ["new-orphan"]); assert.deepEqual(service.list(), [timer]);
+  } finally { await close(); }
+});
+
+test("R06 pause cancels an OS signal that arrives after the pause with unchanged endAt", async () => {
+  const { execution, close } = await stores();
+  try {
+    let release!: (id: string) => void; const cancelled: string[] = [];
+    const service = new RestTimerService(execution, { schedule: () => new Promise((resolve) => { release = resolve; }),
+      cancel: async (id) => { cancelled.push(id); } }, () => T0);
+    await service.start(bench); const id = service.list()[0]!.id;
+    await service.pause(id); release("late-paused"); await service.idle();
+    assert.deepEqual(cancelled, ["late-paused"]); assert.equal((await execution.listTimers())[0]!.signalId, null);
+    assert.equal((await execution.listTimers())[0]!.pausedLeftMs, 180_000);
+  } finally { await close(); }
+});
+
 test("T03 правила таймера: перезапуск того же упражнения того же участника, остальные независимы, ±15 не в прошлое, ближайший первым", () => {
   const first = startTimer([], bench, "t1", T0);
   assert.equal(first.timer.endAt, T0 + 180_000);

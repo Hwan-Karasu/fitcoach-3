@@ -18,9 +18,13 @@ export interface RestTimerStorePort {
  * (нет разрешения, нет точного времени) возвращает `null` и не ломает таймер (§44.14).
  */
 export interface RestSignalPort {
-  schedule(input: Readonly<{ endAt: number; title: string; body: string; route: RestTimerRoute }>): Promise<string | null>;
+  schedule(input: Readonly<{ endAt: number; title: string; body: string; route: RestTimerRoute;
+    /** Boot/restore only reuses existing permission and never opens a system prompt. */
+    requestPermission?: boolean }>): Promise<string | null>;
   /** Отменить ожидающий сигнал и убрать уже показанный; повторный вызов безопасен. */
   cancel(signalId: string): Promise<void>;
+  /** Enumerate/cancel only notifications owned by the rest-timer kind, including orphan IDs. */
+  clearOwned?(): Promise<void>;
 }
 
 /** Таймеры отдыха для экранов: явные команды Start / Adjust / Skip (§44.11). */

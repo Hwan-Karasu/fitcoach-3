@@ -1,4 +1,5 @@
 import type { RestSignalPort } from "../../features/training/public.ts";
+import { clearRestSignals } from "../runtime/ClearRestSignals.ts";
 
 const CHANNEL = "rest-timer";
 const KIND = "rest-timer";
@@ -9,7 +10,7 @@ const KIND = "rest-timer";
  * но таймер работает (§44.14).
  */
 async function loadApi() {
-  const [schedule, cancel, dismiss, channel, permissions, handler, types, channelTypes] = await Promise.all([
+  const [schedule, cancel, dismiss, channel, permissions, handler, types, channelTypes, scheduled, presented, emitter] = await Promise.all([
     import("expo-notifications/build/scheduleNotificationAsync"),
     import("expo-notifications/build/cancelScheduledNotificationAsync"),
     import("expo-notifications/build/dismissNotificationAsync"),
@@ -18,6 +19,9 @@ async function loadApi() {
     import("expo-notifications/build/NotificationsHandler"),
     import("expo-notifications/build/Notifications.types"),
     import("expo-notifications/build/NotificationChannelManager.types"),
+    import("expo-notifications/build/getAllScheduledNotificationsAsync"),
+    import("expo-notifications/build/getPresentedNotificationsAsync"),
+    import("expo-notifications/build/NotificationsEmitter"),
   ]);
   // Отдельный канал таймера отдыха (§44.16–44.18): высокая важность, звук и вибрация; без будильника и DND.
   handler.setNotificationHandler({
@@ -29,7 +33,7 @@ async function loadApi() {
   });
   await channel.setNotificationChannelAsync(CHANNEL, { name: "Таймер отдыха",
     importance: channelTypes.AndroidImportance.HIGH, vibrationPattern: [0, 400, 200, 400], sound: "default" });
-  return { schedule, cancel, dismiss, permissions, types };
+  return { schedule, cancel, dismiss, permissions, types, scheduled, presented, emitter };
 }
 
 let api: ReturnType<typeof loadApi> | null = null;
@@ -42,18 +46,18 @@ const available = () => {
 };
 
 /** Разрешение спрашивается один раз за запуск; отказ не блокирует таймер (§44.14). */
-async function allowed(permissions: Awaited<ReturnType<typeof loadApi>>["permissions"]): Promise<boolean> {
+async function allowed(permissions: Awaited<ReturnType<typeof loadApi>>["permissions"], requestPermission: boolean): Promise<boolean> {
   const current = await permissions.getPermissionsAsync();
   if (current.granted) return true;
-  if (asked || !current.canAskAgain) return false;
+  if (!requestPermission || asked || !current.canAskAgain) return false;
   asked = true;
   return (await permissions.requestPermissionsAsync()).granted;
 }
 
 export const expoRestSignal: RestSignalPort = {
-  async schedule({ endAt, title, body, route }) {
+  async schedule({ endAt, title, body, route, requestPermission = true }) {
     const notifications = await available();
-    if (notifications === null || !(await allowed(notifications.permissions).catch(() => false))) return null;
+    if (notifications === null || !(await allowed(notifications.permissions, requestPermission).catch(() => false)) || endAt <= Date.now()) return null;
     return notifications.schedule.scheduleNotificationAsync({
       content: { title, body, sound: "default", data: { kind: KIND, ...route } },
       trigger: { type: notifications.types.SchedulableTriggerInputTypes.DATE, date: endAt, channelId: CHANNEL },
@@ -64,6 +68,14 @@ export const expoRestSignal: RestSignalPort = {
     if (notifications === null) return;
     await notifications.cancel.cancelScheduledNotificationAsync(signalId).catch(() => undefined);
     await notifications.dismiss.dismissNotificationAsync(signalId).catch(() => undefined);
+  },
+  async clearOwned() {
+    const notifications = await available(); if (notifications === null) return;
+    await clearRestSignals({ scheduled: notifications.scheduled.getAllScheduledNotificationsAsync,
+      presented: notifications.presented.getPresentedNotificationsAsync,
+      response: notifications.emitter.getLastNotificationResponseAsync,
+      cancel: notifications.cancel.cancelScheduledNotificationAsync, dismiss: notifications.dismiss.dismissNotificationAsync,
+      clearResponse: notifications.emitter.clearLastNotificationResponseAsync });
   },
 };
 

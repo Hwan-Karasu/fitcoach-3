@@ -1,3 +1,36 @@
+## Последний срез — restore actions подключены, native24 + focused3
+
+База24b8344. ExpoRestoreJobs/createRestoreActions→runtime.restoreActions→BackupScreen/
+RestoreSection: picker/privateinspection/staging/media, verifiedpreview ID/date/counts,
+Alert explicitconfirm/Return/delete. Wholecommandprepare; applyвнеgate. LogicalclosedLIVE/
+rawincoming/capacity; expectedrejectreopenshealthyLIVE. Generationkey сбрасываетdrafts/
+navigation приmaintenance batching; послеreopenBackupсBack. Recoveryretrybutton и
+правдивыйрезультат:matchingreceiptcommit/rollback,oldreceiptневыдаётновыйуспех.
+SummaryIOпослеverifiedrecoveryнеблокируетhealthyDB. Dev/ExpoGodisabled.
+
+PrivateownerUUIDjobcleanupзащищаетpending/point/unknownmetadata; largeterminalslots
+pruned. GeneratedmediaGCтолькоclosedruntime сallrecipe refs/архив/verifyactivepoint;
+pointembeddedmediaнезависимыотстарыхURI. NativeACTIONS24/24проверяеттотжеадаптер/
+controller/core/15holders+workflow, включаяstale/cancel/orphan/Restore/Return/photos/
+GC/latewrites/nextRestore/delete/noresurrection. Lastreceiptchange focused3/3(6463ms)
+провереннапрежнейfixture безповторногобольшогоsetup. [Отчёт](spikes/R06_RESTORE_ACTIONS_ANDROID_REPORT.json),
+[контракт](spikes/R06_APPLICATION_RESTORE.md).
+
+OSrestsignals: suspenddrainslatejobs; actualOSkindfilterpreservescalendar/otherkinds/
+launchresponse, importedIDsnottrusted. Boot/reopen sameendAt/paused/expired/noprompt,
+platformfailurekeepsvisualtimer. NativeOSsignalE2Eнепроверен. Foundation1086/1086
+наинтеграционномсрезе, послеfinalisolatedchangestarget15/15. Fullsuiteповторно
+НЕзапускался. Root/mobile/spikeTS,lint,arch494/source/secrets/diff, bundle5614/1185.
+Владелецпопросилtargetedtestsдлятекущейобласти; fullsuiteтольконаmilestones.
+
+Далее: enabledordinaryUIE2E/systempicker/Alert/Back/remount/recovery, nativeOSsignals;
+auto30min changed-data/3dailyrotation, first-runrestorechoice; realENOSPC/providers/
+publicationdeath/partial/fullowners. Полныйlegacy mapping/staging/stableIDs/provenance/
+parity/retryиrelease/upgradegatesOPEN. Необъявлятьполноеготово/100%.
+2.0build128/личныеbackup/секретыцелы, неоткрыватьих. НоваяустановкаAPKненужна.
+NativeMetro8097handle99958live, testPID9181, последнийfocusedreportterminal.
+ExcelпотомGitHubfirst; UI/темыпозже.
+
 ## Последнее состояние — Android v2 проверен, подключение обычного восстановления
 
 База среза7eb66d9. Владелец завершил установку отдельной test APK. Native v2

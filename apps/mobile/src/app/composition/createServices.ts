@@ -50,6 +50,8 @@ import { createLocalRepositories } from "./createLocalRepositories.ts";
 import { WorkflowDatabaseLease } from "../runtime/WorkflowDatabaseLease.ts";
 import { RuntimeCommandGate } from "../runtime/RuntimeCommandGate.ts";
 import { RuntimeMaintenance } from "../runtime/RuntimeMaintenance.ts";
+import { createRestoreActions } from "./createRestoreActions.ts";
+import type { RestoreActionsPort } from "../../features/backup/public.ts";
 import { recoverProductionRestore } from "./recoverProductionRestore.ts";
 import { createManualBackup } from "./createManualBackup.ts";
 import type { ManualBackupPort } from "../../features/backup/public.ts";
@@ -204,6 +206,7 @@ export interface ApplicationRuntime {
   readonly services: ApplicationServices;
   readonly maintenance: RuntimeMaintenance;
   readonly manualBackup: ManualBackupPort;
+  readonly restoreActions: RestoreActionsPort;
 }
 
 export function createRuntime(mode: "development" | "production"): ApplicationRuntime {
@@ -233,7 +236,7 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
     ...createPlanOnlyDeleteWorkflow(transaction, trainingPlans.deleteParticipant, trainingExecution.cleanupParticipant) };
   const initializeRepositories = async () => {
     await repositories.initialize();
-    await restTimers.recover().catch(() => undefined);
+    await restTimers.recover({ reconcileSignals: true }).catch(() => undefined);
     preloadRestSignal();
     workflow.resume();
   };
@@ -252,7 +255,7 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
     development ? { runSqliteProbe: () => runF04Probe(() => openExpoSqliteConnection("fitcoach_f04_probe.db")) } : undefined, registerInvalidation);
   const commands = new RuntimeCommandGate();
   const maintenance: RuntimeMaintenance = new RuntimeMaintenance({ database, commands,
-    drainBackground: () => restTimers.idle(),
+    drainBackground: () => restTimers.suspendSignals(),
     closeOwners: async () => {
       const results = await Promise.allSettled([repositories.close(), workflow.close()]);
       if (results.some((result) => result.status === "rejected")) throw new Error("RUNTIME_CLOSE_FAILED");
@@ -277,5 +280,6 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
     listCreditSessionTypes: () => commands.run(raw.listCreditSessionTypes),
   };
   const manualBackup = createManualBackup(development, commands, boot);
-  return { development, boot, services, maintenance, manualBackup };
+  const restoreActions = createRestoreActions(development, commands, boot, maintenance);
+  return { development, boot, services, maintenance, manualBackup, restoreActions };
 }

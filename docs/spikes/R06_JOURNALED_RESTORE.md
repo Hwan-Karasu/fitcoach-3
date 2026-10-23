@@ -3,7 +3,8 @@
 Дата: 2026-10-23. **HOST + SYNTHETIC ANDROID v2 VERIFIED**. R06/D05 OPEN.
 Владелец завершил установку отдельной тестовой APK. v2 writer/point protocol:
 normal35/35, rollback12/12, commit-gap recovery13/13; оба force-stop подтверждены
-новым процессом. [Отчёт](R06_MANAGED_ANDROID_REPORT.json). Обычный UI ещё не подключён.
+новым процессом. [Отчёт](R06_MANAGED_ANDROID_REPORT.json). Обычный UI подключён следующим
+срезом; [его scope и проверки](R06_APPLICATION_RESTORE.md).
 Следующий срез добавил v2 routing и обязательную finalization полной Return-точки:
 [R06_RETURN_POINT.md](R06_RETURN_POINT.md). Ниже — исходный контракт v1 writer.
 

@@ -1,0 +1,144 @@
+{
+    "task":  "R06",
+    "date":  "2026-10-23",
+    "platform":  "Android API36; isolated debug APK com.fitcoach.r07sqlite 0.0.1",
+    "data":  "Synthetic private files only; legacy build128 untouched",
+    "scope":  "Actual ExpoRestoreJobs + RestoreActionsService + ApplyPreparedRestore + v2 writer/finalizer + fifteen runtime holders/workflow",
+    "actions":  {
+                    "kind":  "R06_NATIVE",
+                    "checks":  [
+                                   {
+                                       "name":  "native_scalar_hash_matches_node",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_all_owners_and_workflow_initialized",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "streaming_sha256",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_manifest_embeds_media",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_backup_preserves_source",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_verified_preview_without_replacement",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_cancel_cleans_only_own_preparation",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_business_write_rejects_stale_preview",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_stale_cleanup_preserves_source_and_live",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_abandoned_preview_cleanup",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_confirm_restores",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_full_runtime_reopened_without_merge",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_exact_restored_photo",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_point_survives_job_cleanup",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_return_preview_uses_full_point",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_return_consumes_without_reverse",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_return_photo_after_original_loss",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_old_restored_media_collected_after_return",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_cleaned_receipts_keep_later_writes",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_second_restore_replaces_point",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_old_return_media_embedded_before_collection",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_explicit_point_deletion",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_deleted_point_not_resurrected",
+                                       "passed":  true
+                                   },
+                                   {
+                                       "name":  "native_actions_external_copy_unchanged",
+                                       "passed":  true
+                                   }
+                               ],
+                    "allPassed":  true,
+                    "elapsedMs":  284130
+                },
+    "focusedRecovery":  {
+                            "kind":  "R06_NATIVE",
+                            "checks":  [
+                                           {
+                                               "name":  "native_actions_recovery_returns_matching_terminal_receipt",
+                                               "passed":  true
+                                           },
+                                           {
+                                               "name":  "native_actions_recovery_older_receipt_reports_checked",
+                                               "passed":  true
+                                           },
+                                           {
+                                               "name":  "native_actions_recovery_keeps_later_writes_and_deleted_point",
+                                               "passed":  true
+                                           }
+                                       ],
+                            "allPassed":  true,
+                            "elapsedMs":  6463
+                        },
+    "validation":  {
+                       "foundationAtIntegration":  "1086/1086",
+                       "finalControllerChecks":  "15/15 targeted after final recovery-result changes",
+                       "typecheck":  "root/mobile/spike passed",
+                       "lint":  "full integration and final changed files passed",
+                       "architecture":  "494 sources",
+                       "bundle":  "5614 modules / 1185 assets"
+                   },
+    "limitations":  [
+                        "Synthetic source selection injected by test composition; ordinary enabled Alert/system picker UI E2E still open",
+                        "Actual native OS timer scheduling/reconciliation not exercised by this probe",
+                        "Real ENOSPC, additional providers, publication process death/partial cleanup and full populated domain histories remain open",
+                        "Auto backups/daily retention, first-run choice and full legacy migration remain open",
+                        "Process death is not power-loss/directory-fsync proof"
+                    ]
+}

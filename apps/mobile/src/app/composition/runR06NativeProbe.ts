@@ -2,7 +2,8 @@ import { Directory, File, Paths } from "expo-file-system";
 import * as SQLite from "expo-sqlite";
 import { uuid } from "expo-modules-core";
 import { Image } from "react-native";
-import { ReturnPointCompletion, parseReturnPointState, RestoreProtocolError, SnapshotError } from "../../features/backup/public.ts";
+import { ReturnPointCompletion, RestoreActionsService, parseReturnPointState, RestoreProtocolError, SnapshotError } from "../../features/backup/public.ts";
+import { ExpoRestoreJobs } from "./ExpoRestoreJobs.ts";
 import { ExpoRestoreStorage } from "../../features/backup/data/ExpoRestoreStorage.ts";
 import { ExpoSqliteBackup } from "../../features/backup/data/ExpoSqliteBackup.ts";
 import { expoSnapshotMedia } from "../../features/backup/data/ExpoSnapshotMedia.ts";
@@ -15,6 +16,7 @@ import { RuntimeCommandGate } from "../runtime/RuntimeCommandGate.ts";
 import { RuntimeMaintenance } from "../runtime/RuntimeMaintenance.ts";
 import { WorkflowDatabaseLease } from "../runtime/WorkflowDatabaseLease.ts";
 import { BootCoordinator } from "../bootstrap/BootCoordinator.ts";
+import { parsePendingRuntimeRestore } from "../bootstrap/recoverRuntimeRestore.ts";
 import { recoverLocalRestore } from "./recoverProductionRestore.ts";
 import { restoreWithRuntimeJournal } from "../runtime/JournaledRestore.ts";
 import { ExpoRuntimeRestoreJournal } from "./ExpoRuntimeRestoreJournal.ts";
@@ -132,7 +134,8 @@ async function recoverInterruptedProbe(): Promise<R06NativeReport> {
 /** Only invoked by the isolated SQLite spike. Always uses a newly allocated synthetic private
  * directory, never runtime DB names, sources, imports or actual user data. No cleanup of other jobs.
  */
-export async function runR06NativeProbe(mode: "NORMAL" | "INTERRUPT" | "INTERRUPT_FINALIZATION" | "RECOVER" = "NORMAL"): Promise<R06NativeReport> {
+export async function runR06NativeProbe(mode: "NORMAL" | "ACTIONS" | "ACTIONS_RECOVERY" | "INTERRUPT" | "INTERRUPT_FINALIZATION" | "RECOVER" = "NORMAL"): Promise<R06NativeReport> {
+  if (mode === "ACTIONS_RECOVERY") return recoverActionsProbe();
   if (mode === "RECOVER") return recoverInterruptedProbe();
   if (mode !== "NORMAL" && pendingProbe().exists) throw new Error("R06_PENDING_REHEARSAL_EXISTS");
   const started = Date.now();
@@ -216,6 +219,69 @@ export async function runR06NativeProbe(mode: "NORMAL" | "INTERRUPT" | "INTERRUP
     check("native_backup_preserves_source", (await expoFileSha256(sourceFile)).sha256 === sourceHash);
     const snapshotHash = (await expoFileSha256(snapshotFile)).sha256;
     originalPhoto.delete();
+    if (mode === "ACTIONS") {
+      stage = "RESTORE_ACTIONS";
+      await runtime.initialize();
+      const makeJobs = () => new ExpoRestoreJobs({ root: journal, live: liveFile, images: liveImages,
+        maintenance: runtime.maintenance, pick: async () => snapshotFile });
+      let jobs = makeJobs();
+      const service = () => new RestoreActionsService({ enabled: true, jobs, read: (task) => runtime.commands.run(task),
+        ready: () => runtime.maintenance.state === "ACTIVE" });
+      let actions = service();
+      const actionCheck = (name: string, passed: boolean) => { check(name, passed); console.info(`R06_ACTIONS_CHECK ${name}`); };
+      await actions.chooseFile(); const cancelled = actions.state.preview;
+      actionCheck("native_actions_verified_preview_without_replacement", cancelled?.activeClients === 1 && cancelled.archivedClients === 0 &&
+        (await clients.get(before.id)) !== null && (await clients.get(restored.id)) === null);
+      await actions.cancelPreview();
+      actionCheck("native_actions_cancel_cleans_only_own_preparation", !new Directory(journal, "jobs", cancelled!.id).exists &&
+        livePhoto.exists && !liveImages.list().some((file) => file.name.startsWith(`restore-${cancelled!.id}-`)));
+      await actions.chooseFile(); const staleId = actions.state.preview!.id;
+      const intervening = (await runtime.card.save(null, { displayName: "R06 SYNTHETIC PREVIEW WRITE" }, {})).client;
+      const stale = await actions.confirmPreview(staleId);
+      actionCheck("native_actions_business_write_rejects_stale_preview", stale.kind === "FAILED" && stale.code === "RESTORE_STALE_PREVIEW" &&
+        runtime.maintenance.state === "ACTIVE" && (await clients.get(intervening.id)) !== null && (await clients.get(restored.id)) === null);
+      actionCheck("native_actions_stale_cleanup_preserves_source_and_live", !new Directory(journal, "jobs", staleId).exists && livePhoto.exists &&
+        (await expoFileSha256(snapshotFile)).sha256 === snapshotHash);
+      // A new adapter models the in-memory ownership loss of an abandoned pre-confirmation job.
+      await jobs.prepareFile(); const orphanNames = new Directory(journal, "jobs").list().map((entry) => entry.name);
+      jobs = makeJobs(); actions = service();
+      await actions.chooseFile();
+      actionCheck("native_actions_abandoned_preview_cleanup", orphanNames.filter((name) => name !== operationId).every((name) => !new Directory(journal, "jobs", name).exists));
+      const restoreId = actions.state.preview!.id;
+      actionCheck("native_actions_confirm_restores", (await actions.confirmPreview(restoreId)).kind === "RESTORED");
+      actionCheck("native_actions_full_runtime_reopened_without_merge", runtime.handles === 1 && runtime.peak === 1 && runtime.owners.ownerCount === 15 &&
+        (await clients.get(restored.id)) !== null && (await clients.get(before.id)) === null && (await clients.get(intervening.id)) === null);
+      const restoredRecipe = await runtime.owners.nutrition.recipes.get(recipeId);
+      actionCheck("native_actions_exact_restored_photo", restoredRecipe?.details?.photoUri !== null && restoredRecipe?.details?.photoUri !== undefined &&
+        (await expoFileSha256(new File(restoredRecipe.details.photoUri))).sha256 === imageHash);
+      const point = actions.state.point;
+      actionCheck("native_actions_point_survives_job_cleanup", point?.id === restoreId && new File(journal, "jobs", restoreId, "return.atbackup").exists &&
+        new File(journal, "jobs", restoreId, "guard.json").exists && !new File(journal, "jobs", restoreId, "safety.db").exists);
+      livePhoto.delete();
+      await actions.previewReturn();
+      actionCheck("native_actions_return_preview_uses_full_point", actions.state.preview?.kind === "RETURN" && actions.state.preview.activeClients === 2);
+      const returned = await actions.confirmPreview(actions.state.preview!.id);
+      actionCheck("native_actions_return_consumes_without_reverse", returned.kind === "RETURNED" && actions.state.point === null &&
+        (await clients.get(before.id)) !== null && (await clients.get(intervening.id)) !== null && (await clients.get(restored.id)) === null);
+      const priorRecipe = await runtime.owners.nutrition.recipes.get(liveRecipeId);
+      actionCheck("native_actions_return_photo_after_original_loss", priorRecipe?.details?.photoUri !== null && priorRecipe?.details?.photoUri !== undefined &&
+        (await expoFileSha256(new File(priorRecipe.details.photoUri))).sha256 === imageHash);
+      actionCheck("native_actions_old_restored_media_collected_after_return", !new File(restoredRecipe!.details!.photoUri!).exists);
+      const later = (await runtime.card.save(null, { displayName: "R06 SYNTHETIC ACTIONS LATER" }, {})).client;
+      await runtime.close(); runtime.cold();
+      await recoverLocalRestore(runtime.maintenance, journal, liveFile); await runtime.initialize();
+      actionCheck("native_actions_cleaned_receipts_keep_later_writes", (await clients.get(later.id)) !== null && await jobs.readPoint() === null);
+      await actions.chooseFile();
+      actionCheck("native_actions_second_restore_replaces_point", (await actions.confirmPreview(actions.state.preview!.id)).kind === "RESTORED" && actions.state.point !== null);
+      actionCheck("native_actions_old_return_media_embedded_before_collection", !new File(priorRecipe!.details!.photoUri!).exists &&
+        (await jobs.readPoint())?.id === actions.state.point!.id);
+      const deleteId = actions.state.point!.id;
+      actionCheck("native_actions_explicit_point_deletion", (await actions.deletePoint(deleteId)).kind === "POINT_DELETED" && actions.state.point === null);
+      await runtime.close(); runtime.cold(); await recoverLocalRestore(runtime.maintenance, journal, liveFile); await runtime.initialize();
+      actionCheck("native_actions_deleted_point_not_resurrected", await jobs.readPoint() === null && (await clients.get(restored.id)) !== null);
+      actionCheck("native_actions_external_copy_unchanged", (await expoFileSha256(snapshotFile)).sha256 === snapshotHash);
+      return { kind: "R06_NATIVE", checks, allPassed: checks.every((item) => item.passed), elapsedMs: Date.now() - started };
+    }
     stage = "VALIDATE_COMPLETE_SNAPSHOT";
     const manifest = await backupDriver.validateExternal(snapshotFile, new File(root, "inspection.db"));
     check("native_self_contained_after_photo_loss", manifest.media?.entries === 1 && !originalPhoto.exists);
@@ -357,4 +423,32 @@ export async function runR06NativeProbe(mode: "NORMAL" | "INTERRUPT" | "INTERRUP
     console.info(`R06_PROBE_FAILURE ${JSON.stringify({ stage, code, checks })}`);
     throw error;
   } finally { await historicOwners.close(); await runtime.close(); }
+}
+
+/** Focused replay of the last completed ACTIONS fixture; never reruns its expensive setup.
+ * Only this spike's strictly named synthetic namespace is eligible, not production/legacy. */
+async function recoverActionsProbe(): Promise<R06NativeReport> {
+  const started = Date.now(); const parent = new Directory(Paths.document, "r06-native");
+  const root = parent.list().filter((item): item is Directory => item instanceof Directory && /^run-\d{13}-[a-z0-9]+$/u.test(item.name))
+    .sort((a, b) => a.name.localeCompare(b.name)).at(-1);
+  if (!root) throw new Error("R06_ACTIONS_FIXTURE_MISSING");
+  const journal = new Directory(root, "journal"); const pointer = new ExpoRuntimeRestoreJournal(journal);
+  const pending = await pointer.readPending(); if (pending === null) throw new Error("R06_ACTIONS_FIXTURE_MISSING");
+  const plan = parsePendingRuntimeRestore(pending.value);
+  const owner = new File(journal, "jobs", plan.operationId, "owner.json");
+  if (!owner.exists || owner.size > 200 || await owner.text() !== JSON.stringify({ kind: "athlete-restore-job", version: 1, operationId: plan.operationId })) throw new Error("R06_ACTIONS_FIXTURE_MISSING");
+  const runtime = probeRuntime(root, "live.db"); const checks: { name: string; passed: boolean }[] = [];
+  const check = (name: string, passed: boolean) => { checks.push({ name, passed }); if (!passed) throw new Error("R06_ACTIONS_RECOVERY_FAILED"); };
+  try {
+    await runtime.initialize();
+    const later = (await runtime.card.save(null, { displayName: "R06 SYNTHETIC RECEIPT LATER" }, {})).client;
+    const jobs = new ExpoRestoreJobs({ root: journal, live: new File(root, "live.db"), images: new Directory(root, "live-images"), maintenance: runtime.maintenance });
+    const receipt = await jobs.recover();
+    check("native_actions_recovery_returns_matching_terminal_receipt", receipt?.id === plan.operationId && receipt.outcome === "COMMITTED");
+    const actions = new RestoreActionsService({ enabled: true, jobs, read: (task) => runtime.commands.run(task), ready: () => runtime.maintenance.state === "ACTIVE" });
+    await actions.recover();
+    check("native_actions_recovery_older_receipt_reports_checked", actions.state.notice === "CHECKED" && actions.state.phase === "IDLE" && actions.state.error === null);
+    check("native_actions_recovery_keeps_later_writes_and_deleted_point", (await runtime.owners.clients.get(later.id)) !== null && await jobs.readPoint() === null && runtime.handles === 1 && runtime.peak === 1);
+    return { kind: "R06_NATIVE", checks, allPassed: true, elapsedMs: Date.now() - started };
+  } finally { await runtime.close(); }
 }

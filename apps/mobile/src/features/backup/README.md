@@ -34,9 +34,12 @@ publication process-death/low-storage и restore UI остаются откры�
 активации/погашения точки до reopen; v1 сохранён для прежнего technical rehearsal.
 Однократный Return не создаёт обратную точку. Atomic return-state.json хранит
 settledOperationId даже после явного удаления: cold boot не воскрешает точку.
-Cold production adapter подключён; обычный preview/confirmation/controller ещё нет.
+Cold production adapter подключён. Следующий срез подключил ExpoRestoreJobs,
+preview/confirmation/Return/delete к production composition и BackupScreen;
+в dev/ExpoGo они отключены. Границы UI/native proof описаны в
+`docs/spikes/R06_APPLICATION_RESTORE.md`.
 32 host-проверки включают 14 реальных SIGKILL. Native v2 normal35/35,
 rollback12/12 и commit-gap recovery13/13 прошли; reinstall/picked restore6/6 тоже.
 Новые RestoreActionsService и ApplyPreparedRestore дают pure controller и логический
-pin с учётом WAL (ещё25 host-проверок); native job adapter и обычный UI не подключены.
+pin с учётом WAL (25 host-проверок исходного среза). Адаптер теперь использует этот core.
 Подробности: `docs/spikes/R06_RETURN_POINT.md`.

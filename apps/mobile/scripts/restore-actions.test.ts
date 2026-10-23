@@ -40,6 +40,17 @@ test("R06 Back/cancel discards only the prepared job and never invokes replaceme
   const w = world(); await w.service.chooseFile(); await w.service.cancelPreview(); await w.service.cancelPreview();
   assert.deepEqual(w.calls.discard, [preview.id]); assert.equal(w.service.state.preview, null); assert.equal(w.calls.apply, 0);
 });
+test("R06 leaving during file preparation discards its late preview before releasing read admission", async () => {
+  const gate = latch(); const cleanup = latch(); const events: string[] = [];
+  const w = world({ prepareFile: async () => { await gate.promise; return preview; },
+    discard: async () => { events.push("cleanup"); await cleanup.promise; } });
+  const preparing = w.service.chooseFile(); await tick();
+  assert.deepEqual(await w.service.cancelPreview(), { kind: "CANCELLED" });
+  let drained = false; w.commands.pause(); const idle = w.commands.idle().then(() => { drained = true; });
+  gate.release(); await tick(); assert.deepEqual(events, ["cleanup"]); assert.equal(drained, false);
+  cleanup.release(); assert.deepEqual(await preparing, { kind: "CANCELLED" }); await idle;
+  assert.equal(w.service.state.preview, null); assert.equal(w.calls.apply, 0); assert.equal(drained, true);
+});
 test("R06 duplicate selection cannot open another picker and whole-read admission waits for preparation", async () => {
   const gate = latch(); let opened = 0;
   const w = world({ prepareFile: async () => { opened++; await gate.promise; return preview; } });
@@ -80,6 +91,24 @@ test("R06 incomplete recovery retains the prepared job and blocks ordinary actio
   assert.deepEqual(await w.service.recover(), { kind: "FAILED", code: "RESTORE_RECOVERY_REQUIRED" });
   assert.equal(w.service.state.phase, "RECOVERY_REQUIRED"); recoverable = true; await w.service.recover();
   assert.equal(w.service.state.phase, "IDLE"); assert.equal(w.service.state.error, null); assert.deepEqual(w.calls.discard, [preview.id]);
+});
+test("R06 recovery distinguishes the confirmed operation's commit/rollback from an older receipt", async () => {
+  for (const outcome of ["COMMITTED", "ROLLED_BACK"] as const) {
+    const w = world({ apply: async () => { throw new RestoreActionError("RESTORE_RECOVERY_REQUIRED"); },
+      recover: async () => ({ id: preview.id, outcome }) });
+    await w.service.chooseFile(); await w.service.confirmPreview(preview.id); await w.service.recover();
+    assert.equal(w.service.state.notice, outcome === "COMMITTED" ? "RESTORED" : null);
+    assert.equal(w.service.state.error, outcome === "COMMITTED" ? null : "RESTORE_FAILED"); assert.equal(w.service.state.phase, "IDLE");
+  }
+  const old = world({ apply: async () => { throw new RestoreActionError("RESTORE_RECOVERY_REQUIRED"); },
+    recover: async () => ({ id: point.id, outcome: "COMMITTED" }) });
+  await old.service.chooseFile(); await old.service.confirmPreview(preview.id); await old.service.recover();
+  assert.equal(old.service.state.notice, "CHECKED", "an older terminal receipt never becomes a false restore success");
+});
+test("R06 point-summary read failure after verified recovery keeps healthy data available for refresh", async () => {
+  const w = world({ recover: async () => undefined, readPoint: async () => { throw new Error("private file IO"); } });
+  assert.deepEqual(await w.service.recover(), { kind: "UPDATED" });
+  assert.equal(w.service.state.phase, "IDLE"); assert.equal(w.service.state.error, "RESTORE_POINT_UNAVAILABLE"); assert.equal(w.service.state.notice, "CHECKED");
 });
 test("R06 Return has its own explicit preview and successful outcome", async () => {
   const w = world(); await w.service.refresh(); await w.service.previewReturn();

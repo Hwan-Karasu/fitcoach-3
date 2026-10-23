@@ -43,20 +43,23 @@ export class RestTimerService implements RestTimersPort {
     return signalId ? this.signal.cancel(signalId).catch(() => undefined) : Promise.resolve();
   }
 
+  private schedule(timer: RestTimer, requestPermission: boolean): Promise<string | null> {
+    return this.signal.schedule({ endAt: timer.endAt, title: "Отдых окончен", body: `${timer.clientName} · ${timer.exerciseName}`,
+      requestPermission,
+      route: timer.programId === null || timer.weekIndex === null || timer.plannedWorkoutId === null ? { clientId: timer.clientId }
+        : { clientId: timer.clientId, programId: timer.programId, weekIndex: timer.weekIndex, plannedWorkoutId: timer.plannedWorkoutId,
+          exerciseKey: timer.exerciseKey } }).catch(() => null);
+  }
+
   /** Поставить сигнал на окончание этого таймера и прежний снять — в фоне, без задержки отсчёта. */
   private attachSignal(timer: RestTimer, previousSignal: string | null): void {
     const task = (async () => {
       await this.cancelSignal(previousSignal);
-      const signalId = await this.signal.schedule({ endAt: timer.endAt, title: "Отдых окончен",
-        body: `${timer.clientName} · ${timer.exerciseName}`,
-        // Только идентификаторы для возврата в тренировку; имена и данные подходов в полезную нагрузку не кладутся (§44.22).
-        route: timer.programId === null || timer.weekIndex === null || timer.plannedWorkoutId === null ? { clientId: timer.clientId }
-          : { clientId: timer.clientId, programId: timer.programId, weekIndex: timer.weekIndex, plannedWorkoutId: timer.plannedWorkoutId,
-            exerciseKey: timer.exerciseKey } }).catch(() => null);
+      const signalId = await this.schedule(timer, true);
       if (signalId === null) return;
       await this.enqueue(async () => {
         const current = this.timers.find((item) => item.id === timer.id);
-        if (current === undefined || current.endAt !== timer.endAt) { await this.cancelSignal(signalId); return; }
+        if (current === undefined || current.endAt !== timer.endAt || current.pausedLeftMs !== null) { await this.cancelSignal(signalId); return; }
         const signalled = { ...current, signalId };
         await this.store.putTimer(signalled, []);
         this.publish(this.timers.map((item) => item.id === timer.id ? signalled : item));
@@ -86,13 +89,37 @@ export class RestTimerService implements RestTimersPort {
   }
 
   /** §44.7: идущие таймеры возвращаются с прежним `endAt`, закончившиеся убираются без нового запуска. */
-  recover(): Promise<void> {
+  recover(options: Readonly<{ reconcileSignals?: boolean }> = {}): Promise<void> {
     return this.enqueue(async () => {
       const stored = await this.store.listTimers();
       const running = runningTimers(stored, this.now());
+      // Replace the old in-memory model before any optional platform or persistence work.
+      // A restore must never leave the previous workspace's dock visible after an IO failure.
+      this.publish(options.reconcileSignals ? running.map((timer) => ({ ...timer, signalId: null })) : running);
+      if (options.reconcileSignals) {
+        if (this.signal.clearOwned) await this.signal.clearOwned().catch(() => undefined);
+        else for (const timer of stored) await this.cancelSignal(timer.signalId);
+      }
       for (const timer of stored) if (!running.includes(timer)) await this.store.removeTimer(timer.id);
-      this.publish(running);
+      if (options.reconcileSignals) for (const timer of this.timers) {
+        if (timer.pausedLeftMs === null && timer.endAt <= this.now()) {
+          await this.store.removeTimer(timer.id); this.publish(this.timers.filter((item) => item.id !== timer.id)); continue;
+        }
+        const signalId = timer.pausedLeftMs === null ? await this.schedule(timer, false) : null;
+        const next = { ...timer, signalId };
+        try { await this.store.putTimer(next, []); }
+        catch (error) { await this.cancelSignal(signalId); throw error; }
+        this.publish(this.timers.map((item) => item.id === timer.id ? next : item));
+      }
     });
+  }
+
+  /** Caller has paused whole-command admission. Drain late schedules before removing only
+   * our OS signals; reopen reconciles the chosen DB with the same original endAt values. */
+  async suspendSignals(): Promise<void> {
+    await this.idle();
+    if (this.signal.clearOwned) await this.signal.clearOwned().catch(() => undefined);
+    else for (const timer of this.timers) await this.cancelSignal(timer.signalId);
   }
 
   start(input: RestTimerStart): Promise<void> {

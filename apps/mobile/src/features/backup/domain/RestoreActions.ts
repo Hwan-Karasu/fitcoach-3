@@ -18,7 +18,7 @@ export interface RestoreActionState {
   readonly phase: "IDLE" | "PREPARING" | "PREVIEW" | "APPLYING" | "DELETING" | "RECOVERING" | "RECOVERY_REQUIRED";
   readonly preview: RestorePreview | null;
   readonly point: ReturnPointSummary | null;
-  readonly notice: "RESTORED" | "RETURNED" | "POINT_DELETED" | null;
+  readonly notice: "RESTORED" | "RETURNED" | "POINT_DELETED" | "CHECKED" | null;
   readonly error: RestoreActionErrorCode | null;
 }
 export type RestoreActionOutcome = Readonly<{ kind: "UPDATED" | "CANCELLED" | "RESTORED" | "RETURNED" | "POINT_DELETED" }>
@@ -46,7 +46,7 @@ export interface RestoreJobsPort {
   discard(previewId: string): Promise<void>;
   readPoint(): Promise<ReturnPointSummary | null>;
   deletePoint(pointId: string): Promise<void>;
-  recover(): Promise<void>;
+  recover(): Promise<void | Readonly<{ id: string; outcome: "COMMITTED" | "ROLLED_BACK" }>>;
 }
 /** Includes room for SQLite media pages/indexes and guard/state publication. Actual IO
  * is still checked before switching; this estimate is never permission to delete backups. */
