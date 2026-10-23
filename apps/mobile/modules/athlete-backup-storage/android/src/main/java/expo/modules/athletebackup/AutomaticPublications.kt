@@ -114,6 +114,7 @@ internal class AutomaticPublications(private val context: Context, private val d
     return Publisher(context, downloadsFolder).publish(source, id, createdAt, hash, size, tree, true) { uri, filename ->
       write(JSONObject().put("version", 1).put("id", id).put("createdAt", createdAt).put("sha256", hash).put("bytes", size.toLong())
         .put("tree", tree ?: JSONObject.NULL).put("uri", uri.toString()).put("filename", filename).put("removed", false))
+      AutomaticBackupFixture(context).afterReceipt(downloadsFolder, id)
     }
   }
   fun verify(id: String, uri: String, hash: String, size: Double) { verified(checked(id, uri, hash, size)) }

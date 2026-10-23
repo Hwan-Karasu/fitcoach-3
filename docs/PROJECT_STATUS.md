@@ -1,3 +1,9 @@
+## 2026-10-23 — R06: два настоящих прерывания автоматического копирования
+
+- Проверены process death после native receipt/до публичной видимости и после committed catalog/до cleanup. Два `am force-stop` только com.fitcoach.r07sqlite, старые PID отсутствовали, новые PID отличались. Recovery **15/15 за8362мс** и **14/14 за7694мс**: тот же ID/URI, без повторного snapshot/publication; безопасный cleanup, unchanged retry, private orphan GC и сохранность клиентских фактов. [Отчёт](spikes/R06_AUTOMATIC_INTERRUPTION_ANDROID_REPORT.json).
+- Debug-only latch защищён private UUID marker; штатная папка его не активирует. Fixture COMPLETE, armed/pending операций нет. Host21/21, root/mobile/spike TS, changed lint, arch505/source/secrets/diff; Kotlin/arm64APK update только стенда, 2.0build128 неизменна. Fullfoundation и main bundle не повторялись.
+- Это не проверка power loss/SAF/ENOSPC/всех доменных историй. Gates R06/D05/migration/overlay/signing/release остаются OPEN. Следующая основная работа — полный legacy mapping/staging/stable IDs/provenance/parity/retry, а не дополнительное повторение уже пройденных сценариев.
+
 ## 2026-10-23 — R06: удалённые копии и повторное создание каталога
 
 - Native protocol2 различает proven MISSING и UNAVAILABLE/INVALID по exact private receipt; FileNotFound без доказательства отсутствия не считается удалением. Service сохраняет здоровую историю, поднимает пригодную предшественницу из retired и проверяет retained files перед каждым cleanup.

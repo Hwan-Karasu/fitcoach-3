@@ -1,4 +1,35 @@
-## Последнее продолжение — missing/recreate, Android19, база3fcd092
+## Последнее продолжение — actual auto force-stop15+14, база6091dcb
+
+Два независимых checkpoint с `am force-stop` только test package и подтверждёнными
+PID gone/distinct newPID: 32506→1641 native receipt before IS_PENDING0; затем
+1641→3837 committed catalog/retired before cleanup. Новые runtime owners/Service
+в другом процессе читают реальные files/native receipts. Recovery15/15(8362ms)
+и14/14(7694ms): same exact ID/URI, no reprepare; первая фаза делает visibility,
+вторая no publication; retirement только после commit. Explicit unchanged retry
+без duplicate и source/orphan cleanup. Snapshots2/4clients, итоговый LIVE5.
+All15holders initialized, clientswrite/read checked; не все populated histories.
+
+Debug latch только FLAG_DEBUGGABLE+strict owned UUID directory/private control;
+производственная папка не активирует hook. ARM/RECOVER explicit, no auto on boot.
+Fixture COMPLETE, native pause удалён, pendingnull/retiredempty. Report
+spikes/R06_AUTOMATIC_INTERRUPTION_ANDROID_REPORT.json. Actual UI artifact copied
+through guarded uiautomator; independent pre-stop metadata captured in .cache.
+APK SHAe30725f0e2d70c15f1aec0a43778c40b26facc7655eb750ba4783d5721986bfc,
+test-only install-r SUCCESS, legacy2.0build128 unchanged. NativeModule2 unchanged.
+Host21/21, root/mobile/spike TS, changed lint/arch505/source/secrets/diff; native
+Kotlin/arm64 build. Fullfoundation/mainbundle не повторялись (new TS only probe).
+
+NEXT PRIMARY: full legacy mapping/staging/stable IDs/provenance/parity/retry. Runtime
+ExpoRestoreJobs still supports common3.0 snapshot only; scripts/r04 contains partial
+projections/identity ledger, not full integrated converter. Keep unsupported inputs
+fail-closed until full staging/parity can be proven; do not replace work with that
+rejection. Remain OPEN: clock/timezone re-anchor, actual copy/delete/tombstone death,
+SAF rename→receipt gap/ENOSPC/providers, ordinary UI/AppState/OS signals/first-run.
+No gate closure or100%. Excel after backup; UI later. Targeted tests per owner,
+fullsuite milestones. NativeMetro99958 confirmed live; testPID3837 new and terminal,
+no pending kill. Preserve scrcpy, personal DB/backup/key. Commit R06 without push.
+
+## Предыдущий срез — missing/recreate, Android19, база3fcd092
 
 Native automaticProtocolVersion2 + inspect VALID/MISSING/UNAVAILABLE/INVALID:
 exact receipt/owner/hash/grant, mounted volume/provider root; only proven absence

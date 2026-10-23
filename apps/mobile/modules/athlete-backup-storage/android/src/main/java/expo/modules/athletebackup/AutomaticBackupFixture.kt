@@ -7,8 +7,11 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.system.Os
+import android.util.Log
 import java.io.File
+import java.io.FileOutputStream
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
 import org.json.JSONObject
 
 /** Debug-only fault injection. A fresh private marker and fixed UUID directory are
@@ -39,6 +42,38 @@ internal class AutomaticBackupFixture(private val context: Context) {
     requireFixture(markers.isDirectory || markers.mkdirs())
     val marker = File(markers, token); requireFixture(marker.createNewFile()); marker.writeText(token)
     return token
+  }
+  fun armReceipt(token: String, id: String) {
+    directory(token); requireFixture(uuid.matches(id))
+    requireFixture(!File(context.filesDir, "automatic-publications/$id.json").exists())
+    FileOutputStream(File(markers, "$token.pause")).use { it.write(id.toByteArray(Charsets.UTF_8)); it.flush(); it.fd.sync() }
+  }
+  fun disarmReceipt(token: String, id: String) {
+    directory(token); requireFixture(uuid.matches(id)); val file = File(markers, "$token.pause")
+    if (file.exists()) { requireFixture(file.readText() == id && file.delete()) }
+  }
+  /** Called only after the real private receipt was synced/renamed, before IS_PENDING=0.
+   * The latch is intentionally released by killing this debug test process. */
+  fun afterReceipt(folder: String, id: String) {
+    if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 || !folder.startsWith("R06-ATLD-test-")) return
+    val token = folder.removePrefix("R06-ATLD-test-"); directory(token)
+    val pause = File(markers, "$token.pause")
+    if (!pause.exists()) return
+    requireFixture(uuid.matches(id) && pause.length() == id.length.toLong() && pause.readText() == id)
+    Log.i("R06_AUTO_KILL", "RECEIPT_DURABLE_WAIT")
+    CountDownLatch(1).await()
+  }
+  fun publication(token: String, id: String): Map<String, Any> {
+    val folder = directory(token); requireFixture(uuid.matches(id))
+    val receipt = JSONObject(File(context.filesDir, "automatic-publications/$id.json").readText())
+    val uri = Uri.parse(receipt.getString("uri")); requireFixture(receipt.getString("id") == id && receipt.isNull("tree"))
+    AutomaticPublications(context).verify(id, uri.toString(), receipt.getString("sha256"), receipt.getLong("bytes").toDouble())
+    val columns = arrayOf(MediaStore.MediaColumns.RELATIVE_PATH, MediaStore.MediaColumns.OWNER_PACKAGE_NAME, MediaStore.MediaColumns.IS_PENDING)
+    val cursor = context.contentResolver.query(uri, columns, null, null, null) ?: throw PublicationFailure("BACKUP_DESTINATION_UNAVAILABLE")
+    return cursor.use {
+      requireFixture(it.moveToFirst() && it.getString(0) == "${Environment.DIRECTORY_DOWNLOADS}/${folder.name}/" && it.getString(1) == context.packageName)
+      mapOf("uri" to uri.toString(), "pending" to (it.getInt(2) == 1))
+    }
   }
   fun removeFile(token: String, id: String, staleRow: Boolean): String {
     val folder = directory(token); requireFixture(uuid.matches(id))

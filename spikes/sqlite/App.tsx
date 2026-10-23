@@ -4,6 +4,7 @@ import { runSqliteSpike, type SpikeReport } from "./src/runSqliteSpike";
 import { runR06NativeProbe, type R06NativeReport } from "../../apps/mobile/src/app/composition/runR06NativeProbe.ts";
 import { runR06AutomaticProbe } from "../../apps/mobile/src/app/composition/runR06AutomaticProbe.ts";
 import { runR06AutomaticMissingProbe } from "../../apps/mobile/src/app/composition/runR06AutomaticMissingProbe.ts";
+import { runR06AutomaticInterruptionProbe } from "../../apps/mobile/src/app/composition/runR06AutomaticInterruptionProbe.ts";
 import { chooseR06PublicationDirectory, runR06PublicationProbe, savedR06PublicationDirectory,
   verifyR06PickedPublication, type R06PublicationReport } from "../../apps/mobile/src/app/composition/runR06PublicationProbe.ts";
 
@@ -22,7 +23,7 @@ function PublicationProbe() {
     void task().then((value) => { setReport(value); console.info(`${value.kind === "R06_NATIVE" ? "R06_REPORT" : "R06_PUBLICATION_REPORT"} ${JSON.stringify(value)}`); })
       .catch(() => { setFailed(true); console.info("R06_PUBLICATION_REPORT FAILED"); }).finally(() => setBusy(false));
   };
-  return <SafeAreaView style={{ flex: 1, padding: 20 }}><ScrollView>
+  return <SafeAreaView style={{ flex: 1, padding: 20 }}><ScrollView contentContainerStyle={{ paddingBottom: 200 }}>
     <Text>R06 — синтетические копии. Приложение 2.0 не изменяется.</Text>
     <Button title="Проверить Загрузки" disabled={busy} onPress={() => run(() => runR06PublicationProbe({ kind: "DOWNLOADS" }))} />
     <Button title="Выбрать тестовую папку и проверить SAF" disabled={busy} onPress={() => run(async () => {
@@ -39,6 +40,10 @@ function PublicationProbe() {
     <Button title="Проверить автоматические копии" disabled={busy} onPress={() => run(() => runR06AutomaticProbe())} />
     <Button title="Проверить только статус автокопий" disabled={busy} onPress={() => run(() => runR06AutomaticProbe("STATUS"))} />
     <Button title="Проверить удаление файлов и папки копий" disabled={busy} onPress={() => run(runR06AutomaticMissingProbe)} />
+    <Button title="Прервать автокопию до публикации" disabled={busy} onPress={() => run(() => runR06AutomaticInterruptionProbe("ARM_RECEIPT"))} />
+    <Button title="Продолжить автокопию после прерывания" disabled={busy} onPress={() => run(() => runR06AutomaticInterruptionProbe("RECOVER_RECEIPT"))} />
+    <Button title="Прервать автокопию до очистки" disabled={busy} onPress={() => run(() => runR06AutomaticInterruptionProbe("ARM_CATALOG"))} />
+    <Button title="Продолжить очистку после прерывания" disabled={busy} onPress={() => run(() => runR06AutomaticInterruptionProbe("RECOVER_CATALOG"))} />
     <Text selectable>{busy ? "Проверка…" : failed ? "R06_PUBLICATION_FAILED" : report ? JSON.stringify(report, null, 2) : "Готово к проверке"}</Text>
   </ScrollView></SafeAreaView>;
 }

@@ -116,6 +116,41 @@ unlink; fixture исправлена, actual ROW_ABSENT отражён в ито
 
 [Фактический дополнительный отчёт](R06_AUTOMATIC_MISSING_ANDROID_REPORT.json).
 
+## Прерывания Downloads — 2026-10-23, база6091dcb
+
+Два настоящих `am force-stop` отдельного тестового пакета; отсутствие старого PID
+и новый отличный PID проверены независимо. Не исключения JavaScript и не recreation.
+Первый checkpoint — внутри native publisher после sync/rename точного receipt,
+до IS_PENDING=0. После старта новый процесс прочитал pending plan и увидел собственный
+проверенный файл с IS_PENDING=1; replay опубликовал **тот же URI/backup ID**, без
+новой подготовки, затем безопасно удалил предшественницу. **15/15 за8362мс**.
+
+Второй checkpoint — после readback нового managed catalog/retired queue, до cleanup.
+После запуска новый процесс сохранил тот же актуальный файл и закончил очередь без
+подготовки/публикации. **14/14 за7694мс**. Повторная unchanged проверка не создала
+дубликат; private source/orphan очищен. Snapshot проверен общим engine и SQLite:
+первая копия содержит двух клиентов, следующая — четырёх, включая позднюю LIVE
+запись. После второй проверки LIVE содержит пять отслеживаемых тестовых клиентов.
+Все15 holders инициализированы, записи/чтения проверены через clients port; это не
+полная проверка наполненных историй каждого владельца.
+
+Fault latch только в debuggable APK, строго в native-owned UUID test directory с
+private marker/control. Default production folder не активирует hook. Ни одного
+оставленного armed pause/pending cleanup: fixture COMPLETE. Для стенда добавлены
+четыре явные команды ARM/RECOVER; запуск приложения сам не начинает такие проверки.
+
+Свежие host21/21; root/mobile/spike TS, changed lint/arch505/source/secrets/diff;
+Kotlin/arm64 APK собран и обновлён только тестовый пакет, legacy2.0build128 цела.
+Full foundation и main JS bundle в этом срезе не перезапускались: application TS
+не менялся, новый сценарий доставлялся через Metro. Предыдущие bundle результаты
+остаются историческими. [Фактический отчёт](R06_AUTOMATIC_INTERRUPTION_ANDROID_REPORT.json).
+
+Это две границы process death в Downloads, **не** power-loss/directory-fsync,
+не SAF rename→receipt и не прерывание внутри copy/physical delete/tombstone.
+Эти края, ENOSPC/provider matrix и timezone re-anchor остаются OPEN. Следующая
+основная работа — полный legacy mapping/staging/IDs/provenance/parity/retry;
+готовность backup-инфраструктуры не подменяет перенос2.0→3.0.
+
 ## Прежние фактические проверки (срез 3fcd092)
 
 - Целевые host sets: automatic15/15, scheduler4/4, manual12/12, restore15/15.

@@ -1,0 +1,196 @@
+{
+    "task":  "R06",
+    "date":  "2026-10-23",
+    "baseCommit":  "6091dcb",
+    "platform":  "Android API36; isolated com.fitcoach.r07sqlite 0.0.1 code1",
+    "apkSha256":  "e30725f0e2d70c15f1aec0a43778c40b26facc7655eb750ba4783d5721986bfc",
+    "delivery":  "Debug APK plus Metro sources in this change. Actual force-stops, not thrown JS errors or controller recreation.",
+    "data":  "Fresh synthetic r06-auto-interruption private fixture and native-owned R06-ATLD-test UUID directory only. Legacy com.fitcoach.app 2.0.0 build128 and personal copies untouched.",
+    "nativeReceiptRecovery":  {
+                                  "kind":  "R06_NATIVE",
+                                  "checks":  [
+                                                 {
+                                                     "name":  "native_auto_kill_capability",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_matching_fixture_phase",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_previous_file_still_valid",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_pending_plan_survived",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_native_receipt_precedes_visibility",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_disarm_after_new_process",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_recovery_completed",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_same_exact_native_uri",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_recovery_did_not_prepare_another_snapshot",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_recovered_file_visible_and_exact",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_old_file_retired_only_after_commit",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_repeat_has_no_duplicate",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_private_source_cleaned",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_snapshot_preserves_all_client_facts",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_all_holders_and_late_write_usable",
+                                                     "passed":  true
+                                                 }
+                                             ],
+                                  "allPassed":  true,
+                                  "elapsedMs":  8362
+                              },
+    "nativeCatalogRecovery":  {
+                                  "kind":  "R06_NATIVE",
+                                  "checks":  [
+                                                 {
+                                                     "name":  "native_auto_kill_capability",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_matching_fixture_phase",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_previous_file_still_valid",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_committed_plan_survived",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_committed_file_already_visible",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_recovery_completed",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_same_exact_native_uri",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_recovery_did_not_prepare_another_snapshot",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_recovered_file_visible_and_exact",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_old_file_retired_only_after_commit",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_repeat_has_no_duplicate",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_private_source_cleaned",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_snapshot_preserves_all_client_facts",
+                                                     "passed":  true
+                                                 },
+                                                 {
+                                                     "name":  "native_auto_kill_all_holders_and_late_write_usable",
+                                                     "passed":  true
+                                                 }
+                                             ],
+                                  "allPassed":  true,
+                                  "elapsedMs":  7694
+                              },
+    "receiptStop":  {
+                        "boundary":  "RECEIPT_DURABLE_BEFORE_VISIBILITY",
+                        "pidBefore":  32506,
+                        "fixture":  "a4f5d8ee-5356-4893-a89d-65f2f54d8acc",
+                        "backupId":  "b1af7fe3-f87c-43d2-bd33-385ae2625685",
+                        "previousId":  "d8e9ea1f-aff0-4ea3-b514-51449d05d1ca",
+                        "previousUri":  "content://media/external_primary/downloads/1000026230",
+                        "uri":  "content://media/external_primary/downloads/1000026231",
+                        "sha256":  "572fb61c756368b5d24d5274af45fcb895422da1f165a7c679e078dc938b30dc",
+                        "bytes":  1044480,
+                        "pendingPlanVerified":  true,
+                        "nativeReceiptVerified":  true,
+                        "pidAbsentAfterStop":  true,
+                        "pidAfter":  1641
+                    },
+    "catalogStop":  {
+                        "boundary":  "CATALOG_COMMITTED_BEFORE_CLEANUP",
+                        "pidBefore":  1641,
+                        "fixture":  "a4f5d8ee-5356-4893-a89d-65f2f54d8acc",
+                        "backupId":  "a662433c-fc7f-4870-8d1f-a1f2e8d2844e",
+                        "previousId":  "b1af7fe3-f87c-43d2-bd33-385ae2625685",
+                        "previousUri":  "content://media/external_primary/downloads/1000026231",
+                        "uri":  "content://media/external_primary/downloads/1000026234",
+                        "sha256":  "67a716e0a0c272eabbb3603c0b2d2bf679a92077f3061b97c5db4ec1615e655f",
+                        "bytes":  1044480,
+                        "catalogCommitted":  true,
+                        "retiredQueueVerified":  true,
+                        "privateSourceRetained":  true,
+                        "pidAbsentAfterStop":  true,
+                        "pidAfter":  3837
+                    },
+    "observed":  {
+                     "receipt":  "File copy/hash and native receipt completed; debug latch paused inside native publisher before IS_PENDING=0. Pending TS plan and exact receipt read independently before stop. New process observed IS_PENDING=1, replayed same backup ID/URI without preparation, made it visible, then retired previous version.",
+                     "catalog":  "Verified public copy and new managed catalog/retired queue read back before pause. New process observed committed plan, preserved exact current URI and completed old-file cleanup without preparation or publication.",
+                     "retry":  "Explicit unchanged retry did not increment sequence or publish another file. Owned private source/orphan cleaned; snapshot facts validated independently through common full snapshot engine and SQLite reads.",
+                     "facts":  "Receipt snapshot has two clients; later LIVE write is included with third new fact in catalog snapshot (four clients). Final LIVE has five tracked client IDs. All 15 repository holders initialized; client writes/reads checked, not every populated domain history.",
+                     "terminal":  "Fixture COMPLETE; catalog pending null, retired empty, one verified current entry; no armed native pause remains."
+                 },
+    "checks":  [
+                   "automatic service host tests: 21/21",
+                   "root/mobile/spike typecheck",
+                   "changed TypeScript lint",
+                   "arch: 505 TypeScript sources",
+                   "source baseline and sensitive-file scan",
+                   "Kotlin/arm64 debug APK build",
+                   "git diff --check"
+               ],
+    "fullFoundationRun":  false,
+    "limits":  [
+                   "One Android device and synthetic data; injected calendar 2002.",
+                   "Only these two verified force-stop boundaries. No proof for power loss, process death during copy/rename/delete, ENOSPC or full provider matrix.",
+                   "SAF rename-to-native-receipt gap remains OPEN; Downloads proof must not be transferred to SAF.",
+                   "All-holder initialization and client facts are not complete populated-owner or legacy parity proof.",
+                   "Clock/timezone re-anchor, first-run restore choice, ordinary enabled UI/AppState/native OS signals and full legacy mapping/staging/stable IDs/provenance/parity/retry remain open."
+               ],
+    "goalStatus":  "ACTIVE; R06/D05 and migration/overlay/signing/release gates OPEN",
+    "independentlyMatchedReceiptUriAcrossProcesses":  true
+}

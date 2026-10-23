@@ -1,37 +1,38 @@
 # Progress — 2026-10-23
 
-Goal ACTIVE, taskR06, gates OPEN, не100%. Targeted checks области+зависимостей;
-fullsuite только milestones (пожелание владельца).
+Goal ACTIVE/taskR06/gatesOPEN, не100%. Targeted tests, fullsuite milestones only.
+Владелец уточнил необходимость проверок, после объяснения просит продолжать.
 
-Сделано:
-- D01 baselines/identity/FK/JSON; common full snapshot/hash/media/staging.
-- GuardedRestore/v2 one-use Return/completion; runtime15holders+workflow и closed
-  recovery до boot, connected Restore/Return/delete/capacity/WALpin/cleanup/UI.
-- Native prior restore35/rollback12/commitgap13, actions24/focused3;
-  externalDownloads20/SAF19/reinstall6. Не доказательства нового auto SIGKILL.
-- AutoService/Scheduler/AppState/UI,30мин/changeddata/3daily candidate, atomic pending,
-  native ownership receipts/retired queue, online-copy consistency и durablefailure.
-- Prior Android auto21/status3: daily rotation/ownership/manual+clients/embedded PNG.
-- NEW native protocol2 inspect: only proven missing drops metadata; provider/grant/
-  permission/IO failure preserves history. Healthy retired predecessor promotion и
-  recheck retained before destructive cleanup; allmissing→fresh fullcopy sameplace.
-- Android missing/recreate19/19 за47471ms, отдельный debug UUID directory: missing
-  history/latest/all, failed repair keeps predecessor, actual empty-folder deletion/
-  same-Publisher recreation, все3клиента. Реальная папка пользователя не удалялась.
-  Android unlink также удалил row: stale-row/stat ветка НЕ доказана.
-- Targeted52/52(auto21/scheduler4/manual12/restore15). Fullfoundation НЕ запускался.
-  Root/mobile/spike TS, changed lint, arch504/source/secrets/diff; bundle5622/1185.
-  Kotlin/arm64APK successful, updated isolated test package;2.0build128 unchanged.
+Готово в пределах отчётов:
+- D01 baselines/identity/FK/JSON; common snapshot/hash/media/staging.
+- GuardedRestore/v2oneuseReturn/runtime15holders+workflow/closed cold recovery;
+  connected Restore/Return/delete/capacity/WALpin/cleanup/UI.
+- Earlier native restore35/rollback12/commitgap13/actions24/focused3;
+  Downloads20/SAF19/reinstall6. Не все domain histories.
+- AutoService/Scheduler/AppState/UI:30min/changeddata/dailycandidate/atomicpending/
+  native ownership/retired queue/durablestatus. Prior Androidauto21/status3.
+- 6091dcb missinginspect/predpromotion/recheckbeforecleanup/allmissingfreshcopy.
+  Host52/52, Androidmissing19/19. Default folder intact, UUIDfixture recreated.
+- NEW actual auto process death: native receipt beforevisibility PID32506→1641,
+  recovery15/15(8362ms); committed catalog beforecleanup PID1641→3837,
+  recovery14/14(7694ms). Old PID absent/newdistinct independently verified.
+  Same exact ID/URI/no unnecessary prepare/publication, safe retirement, unchanged
+  retry/no duplicate, private source/orphan GC. Snapshots2/4clients, finalLIVE5.
+  All15holders initialized+clientwrite/read, notall populated histories.
+- Fixture COMPLETE/no armed native pause. Only isolated debugAPK updated,2.0build128
+  unchanged. Hostauto21 fresh; root/mobile/spike TS, changedlint/arch505/source/
+  secrets/diff; Kotlin/arm64 build. Fullfoundation/mainbundle NOT rerun this slice.
 
-Открыто:
-- Clock/timezone/DST safe re-anchor и fallback technical acceptance.
-- Actual auto publication/catalog/delete SIGKILL, SAF rename→receipt gap, orphan/
-  ENOSPC/providers/stale-row stat/full populated histories.
-- Ordinary enabled UI/AppState E2E/native OS rest signals/first-run restore choice.
-- Full legacy mapping/staging/stable IDs/provenance/parity/retry и migration gates.
-- Excel после backup: GitHub first, затем2.0read-only; UI/темы позже.
+Следующая основная работа: full legacy mapping/staging/stable IDs/provenance/
+parity/retry. ExpoRestoreJobs now only3.0 snapshot; scripts/r04 partial projections
+and candidate clients ledger notfulladapter. Do not substitute rejection/rawpayload
+storage or autos infrastructure for working legacy migration. LOAD_REPS for2.0;
+unknown equipment/groups notguessed. Realmigration/overlay/release gates stillOPEN.
+OtherOPEN:clock/DST re-anchor, actual copy/delete/tombstone death, SAF renamegap,
+ENOSPC/provider/stalerow matrix, ordinaryUI/AppState/OSsignals/first-runrestore.
+Excel afterbackup, GitHubfirst; UI/themes later.
 
-Личные исходные данные/копии/секреты не открывать. NativeMetro99958 confirmedlive;
-latest missing probe terminal, pending kill нет. Scrcpy оставлено. База3fcd092,
-новый срез commit R06 без push. Детали docs/spikes/R06_AUTOMATIC_BACKUP.md,
-R06_AUTOMATIC_MISSING_ANDROID_REPORT.json, docs/HANDOFF_BACKUP_MIGRATION.md.
+Sources safe; personal DBs/copies/keys notread. Metro99958confirmedlive, testPID3837
+terminal/no pending kill; scrcpy leftopen. Report docs/spikes/
+R06_AUTOMATIC_INTERRUPTION_ANDROID_REPORT.json, R06_AUTOMATIC_BACKUP.md,
+docs/HANDOFF_BACKUP_MIGRATION.md. Base6091dcb; commit R06 withoutpush.

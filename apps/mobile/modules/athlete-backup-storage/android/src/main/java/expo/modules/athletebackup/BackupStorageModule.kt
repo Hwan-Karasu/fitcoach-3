@@ -38,6 +38,18 @@ class BackupStorageModule : Module() {
       val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
       withContext(Dispatchers.IO) { synchronized(automaticLock) { AutomaticBackupFixture(context).create() } }
     }
+    AsyncFunction("armAutomaticFixtureReceipt") Coroutine { token: String, id: String ->
+      val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+      withContext(Dispatchers.IO) { synchronized(automaticLock) { AutomaticBackupFixture(context).armReceipt(token, id); true } }
+    }
+    AsyncFunction("disarmAutomaticFixtureReceipt") Coroutine { token: String, id: String ->
+      val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+      withContext(Dispatchers.IO) { synchronized(automaticLock) { AutomaticBackupFixture(context).disarmReceipt(token, id); true } }
+    }
+    AsyncFunction("automaticFixturePublication") Coroutine { token: String, id: String ->
+      val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+      withContext(Dispatchers.IO) { synchronized(automaticLock) { AutomaticBackupFixture(context).publication(token, id) } }
+    }
     AsyncFunction("publishAutomaticFixture") Coroutine { source: String, id: String, createdAt: String, hash: String, size: Double, token: String ->
       val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
       withContext(Dispatchers.IO) { synchronized(automaticLock) {
