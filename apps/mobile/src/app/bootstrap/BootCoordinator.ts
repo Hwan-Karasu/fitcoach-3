@@ -7,6 +7,7 @@ export type BootErrorCode =
   | "DATABASE_INCOMPATIBLE"
   | "DATABASE_NEWER"
   | "MIGRATION_INCOMPLETE"
+  | "RESTORE_RECOVERY_REQUIRED"
   | "PREFERENCES_UNAVAILABLE"
   | "THEME_UNAVAILABLE";
 
@@ -18,6 +19,8 @@ export type BootState =
 
 export interface BootDependencies {
   readonly fallbackThemeId: ThemeId;
+  /** Recover any interrupted file replacement before opening/creating any workspace DB. */
+  readonly recoverBeforeOpen?: () => Promise<void>;
   /** Must return only after a local trainer workspace has been identified. */
   readonly prepareWorkspace: () => Promise<{ readonly id: string }>;
   /** Must resolve only after SQLite integrity/migrations are safe for use. */
@@ -80,8 +83,10 @@ export class BootCoordinator {
   }
 
   private async runCritical(attempt: number): Promise<BootState> {
-    let stage: BootErrorCode = "WORKSPACE_UNAVAILABLE";
+    let stage: BootErrorCode = "RESTORE_RECOVERY_REQUIRED";
     try {
+      await this.dependencies.recoverBeforeOpen?.();
+      stage = "WORKSPACE_UNAVAILABLE";
       const workspace = await this.dependencies.prepareWorkspace();
       if (typeof workspace.id !== "string" || workspace.id.trim().length === 0) {
         throw new BootGateError("WORKSPACE_UNAVAILABLE");

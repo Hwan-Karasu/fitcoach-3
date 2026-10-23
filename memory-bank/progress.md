@@ -17,15 +17,22 @@
   изменение исходного файла откатывает metadata transaction.
 - Photo readiness: async store/copy, save lock, lifecycle cleanup ждёт DB commit,
   late-copy после unmount удаляется; own-image path guard. Семь новых регрессий.
-- Foundation 946/946, typecheck/lint/arch/source/secrets/diff и Android JS bundle.
+- Runtime gate целых async-команд; общая инвентаризация 15 owners, workflow close,
+  physical close/replace/reopen и очистка кешей. Boot recovery private journal
+  до открытия DB; strict journal/guard и missing LIVE не дают создать пустую DB.
+  Completed receipt сохраняет поздние записи/WAL после deliberate process kill.
+- Foundation 973/973, typecheck/lint/arch/source/secrets/diff и Android JS bundle.
   Android normal full-format 19/19, actual force-stop/recovery
   нового процесса 7/7. Отчёт: `docs/spikes/R06_FULL_SNAPSHOT_REPORT.json`.
 
 Открыто:
 
-- R06/D05: runtime controller, boot recovery, release всех repository/workflow
-  leases и scheduler, UI confirmation/reopen/read models, SAF folder/file rights
-  и publication, rotation/Return, native negative/low-storage/reinstall/full-owner.
+- R06/D05: native-проверка новой runtime/journal связки; controller/confirmation
+  и job/journal writer, SAF folder/file rights/publication, autoscheduler,
+  rotation/Return, native negative/low-storage/reinstall/full-owner.
+- RestTimerService.recover в `features/training/execution/application/RestTimerService.ts`:
+  после замены ещё нужен reconcile прежних/восстановленных OS-сигналов без запроса
+  разрешений при обычном boot. Drain сигналов перед close уже проверен.
 - Ручной picker E2E для photo readiness пока не выполнен; lifecycle проверен
   автоматическими тестами, UI скомпилирован production JS bundle.
 - R04/D03/D04: закончить semantic mapping и staging всех legacy owners/историй,

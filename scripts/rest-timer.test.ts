@@ -49,6 +49,21 @@ async function stores() {
 const bench = { clientId: "a", clientName: "SyntheticA", exerciseKey: "pe-bench", exerciseName: "Жим", durationSec: 180,
   programId: "prog-1", weekIndex: 2, plannedWorkoutId: "w-1" };
 
+test("R06 idle waits for a queued start, its late OS signal, and the signalId DB update", async () => {
+  let finishWrite!: () => void; let finishSignal!: (value: string) => void;
+  const write = new Promise<void>((resolve) => { finishWrite = resolve; });
+  const signal = new Promise<string>((resolve) => { finishSignal = resolve; });
+  let writes = 0; let idleDone = false;
+  const service = new RestTimerService({ listTimers: async () => [], removeTimer: async () => undefined,
+    putTimer: async () => { if (++writes === 1) await write; } },
+  { schedule: () => signal, cancel: async () => undefined }, () => T0, () => "synthetic-timer");
+  const start = service.start(bench); const idle = service.idle().then(() => { idleDone = true; });
+  await new Promise<void>((resolve) => setImmediate(resolve)); assert.equal(idleDone, false);
+  finishWrite(); await start; await new Promise<void>((resolve) => setImmediate(resolve)); assert.equal(idleDone, false);
+  finishSignal("synthetic-signal"); await idle;
+  assert.equal(writes, 2); assert.equal(service.list()[0]?.signalId, "synthetic-signal");
+});
+
 test("T03 правила таймера: перезапуск того же упражнения того же участника, остальные независимы, ±15 не в прошлое, ближайший первым", () => {
   const first = startTimer([], bench, "t1", T0);
   assert.equal(first.timer.endAt, T0 + 180_000);

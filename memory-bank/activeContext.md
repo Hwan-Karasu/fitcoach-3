@@ -9,17 +9,22 @@ manifest, frozen snapshot migrations, typed hash, media и staging. WIP `1f47d45
 исправлен: REAL -0 не проходит через printf; INTEGER читается точным TEXT.
 Node oracle и original migration checksums сохранены.
 
-Текущие проверки: foundation 946/946, typecheck mobile, lint, arch,
-source/secrets/diff и Android production JS bundle. Общий engine `b629fa1`
+Текущие проверки: foundation 973/973, typecheck mobile, lint, arch (471 sources),
+source/secrets/diff и Android production JS bundle (5582 modules/1185 assets).
+R06 runtime lifecycle: gate целых команд, единая инвентаризация 15 owners,
+освобождаемый workflow lease, close/reopen/cache reset; production boot читает
+private journal до открытия DB. Receipt сохраняет последующие записи/WAL;
+missing LIVE/invalid journal блокируют boot без создания пустой базы.
+Новая runtime/journal связка на устройстве ещё не проверена. Общий engine `b629fa1`
 также прошёл spike typecheck и Android full `.atbackup` с фото: normal 19/19;
 actual force-stop после swap до COMMITTED и recovery нового процесса 7/7.
 Данные только синтетические. Установленная 2.0.0 (128) не заменялась;
 её БД и личные backup-файлы не открывались. Metro и reverse 8096 остановлены.
 
-Следующее: R06 application controller/boot recovery до repositories,
-закрытие всех leases/workflow/scheduler, confirmation/reopen/read models;
-SAF folder/file/publishing, rotation/Return и native negative/low-storage/
-reinstall/full-owner matrix. Default app runtime пока не использует новый driver.
+Следующее: R06 native runtime/journal proof, application controller/confirmation
+и job/journal writer; SAF folder/file/publishing, autoscheduler/rotation/Return,
+reconcile OS rest-timer signals и native negative/low-storage/reinstall/full-owner.
+Обычный app пока не предоставляет пользователю backup/restore.
 Реальный полный legacy migration engine также ещё не закончен; gates OPEN.
 Нельзя считать R04 audits/projections полноценной записью всех owners 3.x.
 
@@ -33,6 +38,8 @@ workout export в Excel. Сначала исследовать GitHub solutions/
 затем 2.0 как образец. Исследование/реализация ещё не начаты.
 
 Подробно: `docs/HANDOFF_BACKUP_MIGRATION.md`, `docs/PROJECT_STATUS.md`,
-`docs/spikes/R06_PORTABLE_SNAPSHOT.md`, `docs/EXCEL_IMPORT_EXPORT_PLAN.md`.
+`docs/spikes/R06_RUNTIME_LIFECYCLE.md`, `docs/EXCEL_IMPORT_EXPORT_PLAN.md`.
+Вопрос владельца о падении относился к описанию намеренного force-stop теста;
+самопроизвольного падения в нём не было. Формулировать это явно.
 Прежняя память сохранена в `archive/activeContext-before-backup-2026-10-23.md`;
 это исторические сведения, текущий статус берётся из этой записи и handoff.

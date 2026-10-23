@@ -4,7 +4,23 @@
 Полный перенос 2.0→3.0 и backup/restore не завершён; 100% не заявлено.
 UI и темы остаются на последующую шлифовку. Продукт — «Дневник атлета».
 
-## Последний завершённый этап R06 — общий snapshot engine
+## Последний завершённый срез R06 — runtime lifecycle и boot recovery
+
+`RuntimeCommandGate` дожидается целых публичных async-команд; общая инвентаризация
+15 owners и workflow lease освобождаются до физического close. После замены
+reopen очищает кеши и заново открывает экраны. Production boot выполняет private
+journal recovery до workspace/DB, development file остаётся отдельным.
+Completed receipt допускает последующие записи/WAL; отсутствующий LIVE или
+повреждённый journal не подменяется пустой базой. Подробно:
+[R06_RUNTIME_LIFECYCLE.md](spikes/R06_RUNTIME_LIFECYCLE.md).
+
+Текущие проверки: **973/973** foundation, typecheck/lint/arch/source/secrets/diff,
+Android production JS bundle **5582 modules/1185 assets**. Новая связка runtime +
+journal reader ещё не проверена на телефоне. Предыдущие native отчёты ниже —
+доказательство отдельного стенда. Намеренное завершение тестовых процессов не
+является обнаруженным самопроизвольным падением приложения.
+
+## Предыдущий срез — общий snapshot engine
 
 Ветка `audit/training-fixes`. Общий engine: `b629fa1`; ранее `be5f8f7` (native guarded restore),
 `1f47d45` (WIP checkpoint). WIP-ошибка checksum исправлена: SQLite printf терял
@@ -42,12 +58,14 @@ Metro стенда остановлен; ADB reverse tcp:8096 снят посл�
 
 ## Следующее действие
 
-Продолжить **R06** с application controller и lifecycle обычного приложения:
-recovery до открытия repositories, остановка всех владельцев leases (включая
-workflow lease) и scheduler, блокировка новых команд, reopen и read-model
-invalidation, подтверждение полной замены. Default runtime пока не использует
-новый Expo driver. Нужны SAF/Downloads выбор/публикация/права, rotation, Return
-point, negative/low-storage/reinstall/full-owner native matrix. R06/D05 OPEN.
+Продолжить **R06**: native-проверка новой runtime/journal связки, application
+controller с явным подтверждением полной замены и atomic private job/journal
+writer. Runtime использует ExpoRestoreStorage для cold recovery, но пользователь
+пока не может запустить backup/restore из обычного приложения. Нужны SAF/Downloads
+выбор/публикация/права, changed-data autoscheduler, rotation, Return point,
+negative/low-storage/reinstall/full-owner native matrix. После замены также
+согласовать старые/восстановленные OS-сигналы таймеров без запроса разрешений
+при обычном boot. R06/D05 OPEN.
 
 Дефект готовности фото исправлен: `storeLocalImage` ждёт copy, проверяет размер
 и не публикует URI частичной копии. `RecipePhotoSession` блокирует save/remove/

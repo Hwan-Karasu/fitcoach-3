@@ -1,32 +1,13 @@
 import { runF04Probe, type F04ProbeReport } from "../diagnostics/runF04Probe.ts";
 import { openExpoSqliteConnection } from "../../shared/db/ExpoSqliteConnection.ts";
 import { SharedSqliteDatabase } from "../../shared/db/SharedSqliteDatabase.ts";
-import { DevAccountingRepository, devAccountingCalendarHook, devAccountingClientDeletionParticipant } from
-  "../../features/accounting/data/DevAccountingRepository.ts";
 import type { AccountingRepositoryPort } from "../../features/accounting/public.ts";
-import { DevCalendarRepository, devCalendarClientDeletionParticipant } from
-  "../../features/calendar/data/DevCalendarRepository.ts";
 import type { CalendarParticipantDirectoryPort, CalendarRepositoryPort } from
   "../../features/calendar/public.ts";
-import { DevClientRepository } from "../../features/clients/data/DevClientRepository.ts";
-import { DevFoodCatalogRepository } from "../../features/nutrition/data/DevFoodCatalogRepository.ts";
-import { DevNutritionCalcRepository, devNutritionCalcClientDeletionParticipant } from "../../features/nutrition/data/DevNutritionCalcRepository.ts";
-import { DevNutritionDiaryRepository, devNutritionClientDeletionParticipant } from "../../features/nutrition/data/DevNutritionDiaryRepository.ts";
-import { DevNutritionTargetsRepository, devNutritionTargetsClientDeletionParticipant } from "../../features/nutrition/data/DevNutritionTargetsRepository.ts";
-import { DevRecipeCatalogRepository } from "../../features/nutrition/data/DevRecipeCatalogRepository.ts";
 import type { FoodCatalogPort, NutritionCalcPort, NutritionDiaryPort, NutritionTargetsPort, RecipeCatalogPort } from "../../features/nutrition/public.ts";
-import { DevMeasurementRepository, devMeasurementClientDeletionParticipant } from
-  "../../features/measurements/data/DevMeasurementRepository.ts";
 import { dailyPoints, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
-import { DevSettingsRepository } from "../../features/settings/data/DevSettingsRepository.ts";
 import type { SettingsPort } from "../../features/settings/public.ts";
-import { DevQuestionnaireRepository, devQuestionnaireClientDeletionParticipant } from
-  "../../features/questionnaire/data/DevQuestionnaireRepository.ts";
 import type { QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
-import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant } from
-  "../../features/training/plans/data/DevTrainingPlansRepository.ts";
-import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParticipant } from
-  "../../features/training/execution/data/DevTrainingExecutionRepository.ts";
 import type { ActiveWorkoutsPort, RestTimersPort, TrainingExecutionPort, TrainingPlansRepositoryPort } from
   "../../features/training/public.ts";
 import { createActiveWorkouts } from "../../read-models/activeWorkouts.ts";
@@ -34,7 +15,6 @@ import { RestTimerService, hasEnteredData, isWorkingSet, sessionDurationSec, sor
 import { createTrainingHistory, type TrainingHistoryPort } from "../../read-models/trainingHistory.ts";
 import { createClientBodyweight, type ClientBodyweightPort } from "../../read-models/clientBodyweight.ts";
 import { expoRestSignal, preloadRestSignal } from "./expoRestSignal.ts";
-import { DevExerciseCatalogRepository } from "../../features/exercises/data/DevExerciseCatalogRepository.ts";
 import systemCatalogJson from "../../features/exercises/data/system-catalog.generated.json";
 import { bodyPartLabels, displayNameOf, thumbnailOf, TRACKING_PROFILES, type CatalogEntry, type ExerciseCatalogPort, type SystemCatalog } from
   "../../features/exercises/public.ts";
@@ -49,7 +29,6 @@ import { PRODUCTION_DATABASE, PRODUCTION_WORKSPACE_ID, inspectProductionDatabase
 type LocalClientServices = ClientRepositoryPort & ClientRecoveryDraftPort & ClientRosterPort
   & ClientChangePort & ClientArchivePort;
 
-import { DevNotificationRepository, devNotificationClientDeletionParticipant } from "../../features/notifications/data/DevNotificationRepository.ts";
 import { expoNotificationAdapter } from "../../features/notifications/data/ExpoNotificationAdapter.ts";
 import { SCHEDULE_HORIZON_DAYS, candidateFromReminder, diffSchedule, dueReminders, outcomeDueCandidates, planReminders, reminderIdentifier, withinHorizon,
   type NotificationCenterPort, type PlatformNotificationPort } from "../../features/notifications/public.ts";
@@ -67,7 +46,11 @@ import { createMesocycleDeleteWorkflow } from "../../workflows/deleteTrainingMes
 import { createProgramDeleteWorkflow } from "../../workflows/deleteTrainingProgram.ts";
 import { createPlanOnlyDeleteWorkflow } from "../../workflows/deleteTrainingPlanOnly.ts";
 import type { MesocycleDeletePort, MesocycleSavePort, SimplePlanSavePort, WeekEditSavePort, PlanOnlyDeletePort, ProgramDeletePort, WeekCopyPort, WeekSwapPort } from "../../features/training/plans/public.ts";
-import type { SqliteDatabaseLease } from "../../shared/db/SharedSqliteDatabase.ts";
+import { createLocalRepositories } from "./createLocalRepositories.ts";
+import { WorkflowDatabaseLease } from "../runtime/WorkflowDatabaseLease.ts";
+import { RuntimeCommandGate } from "../runtime/RuntimeCommandGate.ts";
+import { RuntimeMaintenance } from "../runtime/RuntimeMaintenance.ts";
+import { recoverProductionRestore } from "./recoverProductionRestore.ts";
 
 /** Питание: каталог продуктов и рецептов (общий) и дневник клиента (N01–N02). */
 export interface NutritionServices {
@@ -141,7 +124,7 @@ function participantDirectory(clients: ClientRosterPort & ClientChangePort): Cal
 }
 
 /** Планы получают только поля отображения и профиль учёта, через публичный порт каталога. */
-function exerciseLookup(exercises: ExerciseCatalogPort): ExerciseLookupPort {
+function exerciseLookup(exercises: ExerciseCatalogPort, registerInvalidation?: (invalidate: () => void) => void): ExerciseLookupPort {
   const infoOf = (entry: CatalogEntry, archived: boolean) => [entry.definition.id, {
     name: displayNameOf(entry),
     metrics: TRACKING_PROFILES[entry.definition.trackingProfile],
@@ -158,7 +141,9 @@ function exerciseLookup(exercises: ExerciseCatalogPort): ExerciseLookupPort {
   // Справочник из 643 записей строится один раз и до следующей правки каталога отдаётся всем экранам: раньше каждый экран
   // читал и пересобирал его заново.
   let cached: ReturnType<typeof build> | null = null;
-  exercises.subscribeCommittedChanges(() => { cached = null; });
+  const invalidate = () => { cached = null; };
+  exercises.subscribeCommittedChanges(invalidate);
+  registerInvalidation?.(invalidate);
   return {
     lookup: () => {
       const pending = cached ??= build();
@@ -176,7 +161,7 @@ export function createServices(clients: LocalClientServices, calendar: CalendarR
   weekCopy: WeekCopyPort, weekSwap: WeekSwapPort, mesocycleSave: MesocycleSavePort & SimplePlanSavePort & WeekEditSavePort,
   planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort, settings: SettingsPort,
   clientCard: ClientCardWithAnswersPort, notifications: NotificationCenterPort,
-  developmentTools?: ApplicationServices["developmentTools"]): ApplicationServices {
+  developmentTools?: ApplicationServices["developmentTools"], registerInvalidation?: (invalidate: () => void) => void): ApplicationServices {
   return {
     ...(developmentTools === undefined ? {} : { developmentTools }),
     clients,
@@ -196,10 +181,10 @@ export function createServices(clients: LocalClientServices, calendar: CalendarR
     trainingExecution,
     restTimers,
     activeWorkouts: createActiveWorkouts(trainingExecution, trainingPlans, clients),
-    trainingHistory: createTrainingHistory({ hasEnteredData, isWorkingSet, sessionDurationSec, workoutStatus, sortHistory }, trainingExecution, trainingPlans),
+    trainingHistory: createTrainingHistory({ hasEnteredData, isWorkingSet, sessionDurationSec, workoutStatus, sortHistory }, trainingExecution, trainingPlans, registerInvalidation),
     clientBodyweight: createClientBodyweight(dailyPoints, measurements),
     exercises,
-    exerciseLookup: exerciseLookup(exercises),
+    exerciseLookup: exerciseLookup(exercises, registerInvalidation),
     weekCopy,
     weekSwap,
     mesocycleSave,
@@ -214,6 +199,7 @@ export interface ApplicationRuntime {
   readonly development: boolean;
   readonly boot: BootCoordinator;
   readonly services: ApplicationServices;
+  readonly maintenance: RuntimeMaintenance;
 }
 
 export function createRuntime(mode: "development" | "production"): ApplicationRuntime {
@@ -223,33 +209,17 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
   const workspaceId = development ? DEV_WORKSPACE_ID : PRODUCTION_WORKSPACE_ID;
   const database = new SharedSqliteDatabase(() => development ? openExpoSqliteConnection(DEV_DATABASE)
     : openExpoSqliteConnection(PRODUCTION_DATABASE, inspectProductionDatabase));
-  const clients = new DevClientRepository(database, workspaceId,
-    [devAccountingClientDeletionParticipant, devCalendarClientDeletionParticipant, devNotificationClientDeletionParticipant,
-      devMeasurementClientDeletionParticipant, devNutritionCalcClientDeletionParticipant, devNutritionClientDeletionParticipant, devNutritionTargetsClientDeletionParticipant, devQuestionnaireClientDeletionParticipant,
-      devTrainingPlansClientDeletionParticipant, devTrainingExecutionClientDeletionParticipant]);
-  const calendar = new DevCalendarRepository(database, workspaceId, devAccountingCalendarHook);
-  const accounting = new DevAccountingRepository(database, workspaceId);
-  const measurements = new DevMeasurementRepository(database, workspaceId);
-  const nutrition = { foods: new DevFoodCatalogRepository(database, workspaceId),
-    recipes: new DevRecipeCatalogRepository(database, workspaceId), diary: new DevNutritionDiaryRepository(database, workspaceId),
-    targets: new DevNutritionTargetsRepository(database, workspaceId), calc: new DevNutritionCalcRepository(database, workspaceId) };
-  const questionnaire = new DevQuestionnaireRepository(database, workspaceId);
-  const settings = new DevSettingsRepository(database, workspaceId);
-  const notifications = new DevNotificationRepository(database, workspaceId);
-  const trainingPlans = new DevTrainingPlansRepository(database, workspaceId);
-  const trainingExecution = new DevTrainingExecutionRepository(database, workspaceId);
+  const repositories = createLocalRepositories(database, workspaceId, systemCatalogJson as SystemCatalog);
+  const { clients, calendar, accounting, measurements, nutrition, questionnaire, settings, notifications, trainingPlans, trainingExecution, exercises } = repositories;
   const restTimers = new RestTimerService(trainingExecution, expoRestSignal);
-  // Системный каталог — снимок RepDB Free, собранный `npm run catalog:build` (§29, §39.12).
-  const exercises = new DevExerciseCatalogRepository(database, workspaceId, systemCatalogJson as SystemCatalog);
-  // Calendar commands move reservations inside their own transactions.
-  calendar.subscribeCommittedChanges(() => accounting.notifyExternalChange());
-  // Общая транзакция для workflow: база открыта на всё время работы приложения, как у репозиториев.
-  let lease: Promise<SqliteDatabaseLease> | null = null;
-  const transaction: TrainingTransaction = async (task) => (await (lease ??= database.acquire())).writer.write(task);
+  const invalidators: (() => void)[] = [];
+  const registerInvalidation = (invalidate: () => void) => { invalidators.push(invalidate); };
+  const workflow = new WorkflowDatabaseLease(database);
+  const transaction: TrainingTransaction = (task) => workflow.write(task);
   const calcProfile = createCalcProfileWorkflow(transaction, nutrition.calc.profileParticipant, clients.bodyParticipant);
   const clientCard = createClientCardWorkflow(transaction, clients.cardParticipant, questionnaire.answersParticipant);
   const weekCopy = createWeekCopyWorkflow(transaction, trainingPlans.weekCopyParticipant, trainingExecution.weekCopyParticipant,
-    exerciseLookup(exercises));
+    exerciseLookup(exercises, registerInvalidation));
   const weekSwap = createWeekSwapWorkflow(transaction, trainingPlans.weekSwapParticipant, trainingExecution.weekRenumberParticipant);
   const mesocycleSave = { ...createMesocycleSaveWorkflow(transaction, trainingPlans.mesocycleSaveParticipant, trainingExecution.weekCopyParticipant, trainingExecution.cleanupParticipant),
     ...createSimplePlanSaveWorkflow(transaction, trainingPlans.simplePlanSaveParticipant, trainingExecution.weekCopyParticipant),
@@ -258,25 +228,10 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
     ...createProgramDeleteWorkflow(transaction, trainingPlans.deleteParticipant, trainingExecution.cleanupParticipant),
     ...createPlanOnlyDeleteWorkflow(transaction, trainingPlans.deleteParticipant, trainingExecution.cleanupParticipant) };
   const initializeRepositories = async () => {
-    await clients.initialize();
-    await calendar.initialize();
-    await accounting.initialize();
-    await measurements.initialize();
-    // Порядок важен: дневник ссылается на клиентов, рецепты — на продукты.
-    await nutrition.foods.initialize();
-    await nutrition.recipes.initialize();
-    await nutrition.diary.initialize();
-    await nutrition.targets.initialize();
-    await nutrition.calc.initialize();
-    await questionnaire.initialize();
-    await settings.initialize();
-    await notifications.initialize();
-    await trainingPlans.initialize();
-    await trainingExecution.initialize();
-    // Таймеры отдыха — не данные: сбой восстановления не мешает запуску (§44.7).
+    await repositories.initialize();
     await restTimers.recover().catch(() => undefined);
     preloadRestSignal();
-    await exercises.initialize();
+    workflow.resume();
   };
   const dependencies = development ? createDevBootDependencies(
     () => openExpoSqliteConnection("fitcoach_f03_dev_gate.db"), async () => {
@@ -284,11 +239,38 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
       await importLegacyDevDatabase(database);
       await initializeRepositories();
     }) : createProductionBootDependencies(database, initializeRepositories, () => settings.readAppearance());
-  return {
-    development,
-    boot: new BootCoordinator(dependencies),
-    services: createServices(clients, calendar, accounting, measurements, { ...nutrition, calcProfile }, questionnaire, trainingPlans, trainingExecution,
-      restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete, settings, clientCard, notifications,
-      development ? { runSqliteProbe: () => runF04Probe(() => openExpoSqliteConnection("fitcoach_f04_probe.db")) } : undefined),
+  const boot: BootCoordinator = new BootCoordinator({ ...dependencies,
+    // The dev file has a separate workspace/schema gate; do not claim it as production.
+    ...(development ? {} : { recoverBeforeOpen: (): Promise<void> => recoverProductionRestore(maintenance) }),
+  });
+  const raw = createServices(clients, calendar, accounting, measurements, { ...nutrition, calcProfile }, questionnaire, trainingPlans, trainingExecution,
+    restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete, settings, clientCard, notifications,
+    development ? { runSqliteProbe: () => runF04Probe(() => openExpoSqliteConnection("fitcoach_f04_probe.db")) } : undefined, registerInvalidation);
+  const commands = new RuntimeCommandGate();
+  const maintenance: RuntimeMaintenance = new RuntimeMaintenance({ database, commands,
+    drainBackground: () => restTimers.idle(),
+    closeOwners: async () => {
+      const results = await Promise.allSettled([repositories.close(), workflow.close()]);
+      if (results.some((result) => result.status === "rejected")) throw new Error("RUNTIME_CLOSE_FAILED");
+    },
+    shouldReopen: (): boolean => boot.state.kind === "APP_READY",
+    reopen: initializeRepositories,
+    invalidate: () => { for (const invalidate of invalidators) invalidate(); },
+  });
+  // Enumerate every public boundary: new service fields must be consciously gated.
+  const services: ApplicationServices = {
+    ...(raw.developmentTools ? { developmentTools: commands.port(raw.developmentTools) } : {}),
+    clients: commands.port(raw.clients), calendar: commands.port(raw.calendar), calendarParticipants: commands.port(raw.calendarParticipants),
+    accounting: commands.port(raw.accounting), measurements: commands.port(raw.measurements), questionnaire: commands.port(raw.questionnaire),
+    nutrition: { foods: commands.port(raw.nutrition.foods), recipes: commands.port(raw.nutrition.recipes), diary: commands.port(raw.nutrition.diary),
+      targets: commands.port(raw.nutrition.targets), calc: commands.port(raw.nutrition.calc), calcProfile: commands.port(raw.nutrition.calcProfile) },
+    settings: commands.port(raw.settings), notifications: commands.port(raw.notifications), notificationPlatform: commands.port(raw.notificationPlatform),
+    notificationSync: commands.port(raw.notificationSync), clientCard: commands.port(raw.clientCard), trainingPlans: commands.port(raw.trainingPlans),
+    trainingExecution: commands.port(raw.trainingExecution), restTimers: commands.port(raw.restTimers, ["list"]), activeWorkouts: commands.port(raw.activeWorkouts),
+    trainingHistory: commands.port(raw.trainingHistory), clientBodyweight: commands.port(raw.clientBodyweight), exercises: commands.port(raw.exercises, ["meta"]),
+    exerciseLookup: commands.port(raw.exerciseLookup), weekCopy: commands.port(raw.weekCopy), weekSwap: commands.port(raw.weekSwap),
+    mesocycleSave: commands.port(raw.mesocycleSave), planDelete: commands.port(raw.planDelete),
+    listCreditSessionTypes: () => commands.run(raw.listCreditSessionTypes),
   };
+  return { development, boot, services, maintenance };
 }

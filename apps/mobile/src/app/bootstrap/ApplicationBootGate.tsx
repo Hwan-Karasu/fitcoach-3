@@ -12,13 +12,16 @@ const errorLabels: Record<BootErrorCode, string> = {
   DATABASE_INCOMPATIBLE: "Не удалось открыть этот файл данных. Исходные данные сохранены.",
   DATABASE_NEWER: "Эти данные созданы более новой версией приложения. Обновите «Дневник атлета».",
   MIGRATION_INCOMPLETE: "Проверка локальной базы не завершена.",
+  RESTORE_RECOVERY_REQUIRED: "Не удалось завершить восстановление данных. Исходные файлы сохранены.",
   PREFERENCES_UNAVAILABLE: "Настройки отображения недоступны.",
   THEME_UNAVAILABLE: "Тема оформления недоступна.",
 };
 
 /** Screens receive repositories only after the critical database gate succeeds. */
-export function ApplicationBootGate({ boot, services, development }: Readonly<ApplicationRuntime>) {
+export function ApplicationBootGate({ boot, services, development, maintenance }: Readonly<ApplicationRuntime>) {
   const [state, setState] = useState(boot.state);
+  const [maintenanceState, setMaintenanceState] = useState(maintenance.state);
+  useEffect(() => maintenance.subscribe(setMaintenanceState), [maintenance]);
 
   useEffect(() => {
     const unsubscribe = boot.subscribe(setState);
@@ -26,9 +29,11 @@ export function ApplicationBootGate({ boot, services, development }: Readonly<Ap
     return unsubscribe;
   }, [boot]);
 
-  if (state.kind === "APP_READY") return <PrototypeShell services={services}
+  if (state.kind === "APP_READY" && maintenanceState === "ACTIVE") return <PrototypeShell services={services}
     workspaceId={state.workspaceId} />;
   const failed = state.kind === "BOOT_FAILED";
+  const recovering = maintenanceState === "RECOVERY_REQUIRED";
+  const maintaining = maintenanceState !== "ACTIVE";
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.safe}>
@@ -36,13 +41,13 @@ export function ApplicationBootGate({ boot, services, development }: Readonly<Ap
         <View style={styles.content}>
           <Text style={styles.label}>{development ? "ДНЕВНИК АТЛЕТА · РАЗРАБОТКА" : "ДНЕВНИК АТЛЕТА"}</Text>
           <Text accessibilityRole="header" style={styles.title}>
-            {failed ? "Запуск не завершён" : "Подготовка приложения"}
+            {maintaining ? recovering ? "Восстановление не завершено" : "Восстанавливаем данные" : failed ? "Запуск не завершён" : "Подготовка приложения"}
           </Text>
           <Text style={styles.body}>
-            {failed ? errorLabels[state.code] : "Открываем локальную базу клиентов и проверяем тему оформления."}
+            {maintaining ? recovering ? "Для безопасного продолжения закройте и снова откройте приложение." : "Дождитесь завершения операции." : failed ? errorLabels[state.code] : "Открываем локальную базу клиентов и проверяем тему оформления."}
           </Text>
           {development ? <Text style={styles.note}>Данные прежней версии сохраняются. Резервное копирование тестового хранилища ещё не подключено.</Text> : null}
-          {failed ? (
+          {failed && !maintaining ? (
             <Pressable accessibilityRole="button" onPress={() => { void boot.retry(); }} style={styles.button}>
               <Text style={styles.buttonLabel}>Повторить</Text>
             </Pressable>

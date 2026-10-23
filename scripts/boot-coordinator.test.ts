@@ -6,6 +6,20 @@ import type { ThemePreference } from "../apps/mobile/src/shared/ui/theme/resolve
 
 const preference: ThemePreference = { themeId: "slate-blue", accentId: "violet" };
 
+test("R06 interrupted restore recovery precedes workspace/database creation and failure blocks all normal boot work", async () => {
+  const events: string[] = []; let failed = true;
+  const boot = new BootCoordinator({ fallbackThemeId: "graphite-teal",
+    recoverBeforeOpen: async () => { events.push("recover"); if (failed) throw new Error("PRIVATE_RECOVERY_PATH"); },
+    prepareWorkspace: async () => { events.push("workspace"); return { id: "local" }; },
+    openDatabase: async () => { events.push("database"); },
+    loadThemePreference: async () => { events.push("theme"); return preference; },
+  });
+  assert.deepEqual(await boot.start(), { kind: "BOOT_FAILED", attempt: 1, code: "RESTORE_RECOVERY_REQUIRED" });
+  assert.deepEqual(events, ["recover"]);
+  failed = false; assert.equal((await boot.retry()).kind, "APP_READY");
+  assert.deepEqual(events, ["recover", "recover", "workspace", "database", "theme"]);
+});
+
 test("critical DB and theme gate precedes APP_READY; background starts afterward", async () => {
   const events: string[] = [];
   const states: string[] = [];

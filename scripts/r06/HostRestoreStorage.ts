@@ -11,6 +11,7 @@ import { nodeSqlitePort } from "../support/node-sqlite-port.ts";
 export class HostRestoreStorage implements RestoreStorage {
   private tail: Promise<void> = Promise.resolve();
   private locked = false;
+  private checkedFiles = false;
   readonly directory: string;
   readonly onBoundary: (event: string) => void;
   constructor(directory: string, onBoundary: (event: string) => void = () => undefined) {
@@ -28,19 +29,17 @@ export class HostRestoreStorage implements RestoreStorage {
     this.tail = new Promise<void>((resolve) => { unlock = resolve; });
     await previous;
     try {
-      // Tests only use already-closed DELETE-journal files. Never copy an open WAL file.
-      for (const slot of ["LIVE", "INCOMING", "SAFETY", "PREVIOUS", "REJECTED", "ROLLBACK"] as const) {
-        for (const suffix of ["-wal", "-shm", "-journal"]) {
-          if (existsSync(`${this.path(slot)}${suffix}`)) throw new Error("R06_SIDECAR_PRESENT");
-        }
-      }
+      this.checkedFiles = false;
       this.locked = true;
       return await task();
     } finally { this.locked = false; unlock(); }
   }
   async loadGuard(): Promise<unknown | null> {
     this.assertLocked();
-    return existsSync(this.guardPath()) ? JSON.parse(readFileSync(this.guardPath(), "utf8")) as unknown : null;
+    if (!existsSync(this.guardPath())) return null;
+    const value: unknown = JSON.parse(readFileSync(this.guardPath(), "utf8"));
+    if (value === null) throw new Error("RESTORE_GUARD_INVALID");
+    return value;
   }
   async saveGuard(guard: RestoreGuard): Promise<void> {
     this.assertLocked();
@@ -54,11 +53,11 @@ export class HostRestoreStorage implements RestoreStorage {
     this.onBoundary(`guard:${guard.phase}`);
   }
   async sha256(slot: RestoreSlot): Promise<string | null> {
-    this.assertLocked();
+    this.assertFileAccess();
     return existsSync(this.path(slot)) ? createHash("sha256").update(readFileSync(this.path(slot))).digest("hex") : null;
   }
   async validateDatabase(slot: RestoreSlot): Promise<void> {
-    this.assertLocked();
+    this.assertFileAccess();
     const db = new DatabaseSync(this.path(slot), { readOnly: true });
     try {
       if (await inspectProductionDatabase(nodeSqlitePort(db)) !== "OWNED") throw new Error("R06_INVALID_DATABASE");
@@ -66,17 +65,27 @@ export class HostRestoreStorage implements RestoreStorage {
     this.onBoundary(`validated:${slot}`);
   }
   async copyExclusive(from: RestoreSlot, to: RestoreSlot): Promise<void> {
-    this.assertLocked();
+    this.assertFileAccess();
     copyFileSync(this.path(from), this.path(to), constants.COPYFILE_EXCL);
     const fd = openSync(this.path(to), "r+");
     try { fsyncSync(fd); } finally { closeSync(fd); }
     this.onBoundary(`copy:${from}:${to}`);
   }
   async moveExclusive(from: RestoreSlot, to: RestoreSlot): Promise<void> {
-    this.assertLocked();
+    this.assertFileAccess();
     if (existsSync(this.path(to))) throw new Error("R06_DESTINATION_EXISTS");
     renameSync(this.path(from), this.path(to));
     this.onBoundary(`move:${from}:${to}`);
   }
   private assertLocked(): void { if (!this.locked) throw new Error("R06_DATABASE_NOT_QUIESCED"); }
+  private assertFileAccess(): void {
+    this.assertLocked();
+    if (this.checkedFiles) return;
+    for (const slot of ["LIVE", "INCOMING", "SAFETY", "PREVIOUS", "REJECTED", "ROLLBACK"] as const) {
+      for (const suffix of ["-wal", "-shm", "-journal"]) {
+        if (existsSync(`${this.path(slot)}${suffix}`)) throw new Error("R06_SIDECAR_PRESENT");
+      }
+    }
+    this.checkedFiles = true;
+  }
 }

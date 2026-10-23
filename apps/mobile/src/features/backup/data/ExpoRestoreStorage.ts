@@ -20,6 +20,7 @@ export interface ExpoRestoreStorageOptions {
 export class ExpoRestoreStorage implements RestoreStorage {
   private readonly options: ExpoRestoreStorageOptions;
   private active = false;
+  private checkedFiles = false;
   constructor(options: ExpoRestoreStorageOptions) {
     if (Platform.OS !== "android") throw new Error("RESTORE_PLATFORM_UNSUPPORTED");
     this.options = options;
@@ -34,13 +35,9 @@ export class ExpoRestoreStorage implements RestoreStorage {
     return this.options.withClosedDatabase(async () => {
       if (this.active) throw new Error("RESTORE_STORAGE_BUSY");
       this.active = true;
+      this.checkedFiles = false;
       try {
         this.options.directory.create({ idempotent: true, intermediates: true });
-        for (const slot of ["LIVE", "INCOMING", "SAFETY", "PREVIOUS", "REJECTED", "ROLLBACK"] as const) {
-          for (const suffix of ["-wal", "-shm", "-journal"]) {
-            if (new File(`${this.file(slot).uri}${suffix}`).exists) throw new Error("RESTORE_SIDECAR_PRESENT");
-          }
-        }
         return await task();
       } finally { this.active = false; }
     });
@@ -50,7 +47,9 @@ export class ExpoRestoreStorage implements RestoreStorage {
     const guard = this.guard();
     if (!guard.exists) return null;
     if (guard.size > 8192) throw new Error("RESTORE_GUARD_INVALID");
-    return JSON.parse(await guard.text()) as unknown;
+    const value: unknown = JSON.parse(await guard.text());
+    if (value === null) throw new Error("RESTORE_GUARD_INVALID");
+    return value;
   }
   async saveGuard(guard: RestoreGuard): Promise<void> {
     this.assertActive();
@@ -60,12 +59,12 @@ export class ExpoRestoreStorage implements RestoreStorage {
     await moveAsync({ from: pending.uri, to: this.guard().uri });
   }
   async sha256(slot: RestoreSlot): Promise<string | null> {
-    this.assertActive();
+    this.assertFileAccess();
     const file = this.file(slot);
     return file.exists ? (await expoFileSha256(file)).sha256 : null;
   }
   async validateDatabase(slot: RestoreSlot): Promise<void> {
-    this.assertActive();
+    this.assertFileAccess();
     const file = this.file(slot);
     if (!file.exists || file.size < 100) throw new Error("RESTORE_DATABASE_INVALID");
     const reader = file.open(FileMode.ReadOnly);
@@ -87,18 +86,30 @@ export class ExpoRestoreStorage implements RestoreStorage {
     } finally { await db.closeAsync(); }
   }
   async copyExclusive(from: RestoreSlot, to: RestoreSlot): Promise<void> {
-    this.assertActive();
+    this.assertFileAccess();
     const target = this.file(to);
     if (target.exists) throw new Error("RESTORE_DESTINATION_EXISTS");
     await this.file(from).copy(target);
   }
   async moveExclusive(from: RestoreSlot, to: RestoreSlot): Promise<void> {
-    this.assertActive();
+    this.assertFileAccess();
     const target = this.file(to);
     if (target.exists) throw new Error("RESTORE_DESTINATION_EXISTS");
     await moveAsync({ from: this.file(from).uri, to: target.uri });
   }
   private assertActive(): void { if (!this.active) throw new Error("RESTORE_DATABASE_NOT_CLOSED"); }
+  private assertFileAccess(): void {
+    this.assertActive();
+    if (this.checkedFiles) return;
+    // Receipts do not inspect/replace LIVE: its WAL may contain later legitimate writes
+    // from a crashed business session. Normal SQLite boot, not file rollback, owns that WAL.
+    for (const slot of ["LIVE", "INCOMING", "SAFETY", "PREVIOUS", "REJECTED", "ROLLBACK"] as const) {
+      for (const suffix of ["-wal", "-shm", "-journal"]) {
+        if (new File(`${this.file(slot).uri}${suffix}`).exists) throw new Error("RESTORE_SIDECAR_PRESENT");
+      }
+    }
+    this.checkedFiles = true;
+  }
   private assertPrivate(uri: string): void {
     const root = Paths.document.uri.replace(/\/$/u, "");
     const decoded = decodeURIComponent(uri);

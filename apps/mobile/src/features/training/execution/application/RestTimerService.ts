@@ -77,8 +77,12 @@ export class RestTimerService implements RestTimersPort {
 
   /** Дождаться очереди команд и фоновых сигналов (тесты, завершение работы). */
   async idle(): Promise<void> {
-    while (this.signalling.size > 0) await Promise.all([...this.signalling]);
-    await this.tail;
+    for (;;) {
+      const tail = this.tail;
+      await tail;
+      await Promise.all([...this.signalling]);
+      if (tail === this.tail && this.signalling.size === 0) return;
+    }
   }
 
   /** §44.7: идущие таймеры возвращаются с прежним `endAt`, закончившиеся убираются без нового запуска. */

@@ -1,3 +1,11 @@
+## 2026-10-23 — R06: остановка runtime перед заменой и recovery до boot
+
+- Обычный runtime использует единую инвентаризацию 15 repository holders, освобождаемый workflow lease и gate целых публичных async-команд. Maintenance ждёт команды/сигналы, закрывает DB до файловых операций, переоткрывает owners, очищает read-model кеши и возвращает экраны. При отказе команды остаются закрытыми до recovery.
+- Production boot читает private restore journal до открытия/создания рабочей базы. Malformed journal/guard, отсутствие LIVE и несовпадение операции блокируют обычный boot без создания пустой базы. Завершённый receipt сохраняет последующие записи, включая WAL после принудительного завершения процесса; sidecars не удаляются вручную.
+- Foundation **973/973**, typecheck, lint, arch:check (471 sources), source:verify, secrets:check, diff --check и Android production JS bundle (5582 modules/1185 assets). Новая runtime/journal связка ещё не проверена на телефоне; прежние native 19/19 + 7/7 не выдаются за её E2E. [Контракт и границы среза](spikes/R06_RUNTIME_LIFECYCLE.md).
+- Намеренный force-stop/SIGKILL в проверках не является обнаруженным самопроизвольным падением. Владелец уточнил, что вопрос об аварийном закрытии относился к описанию проверки. Установленная 2.0 и её данные не затрагивались.
+- R06/D05 OPEN: controller/confirmation/job writer, SAF, scheduler/rotation/Return и native matrix впереди; отдельно нужен reconcile OS-сигналов таймеров после замены. Полный legacy migration и последующий Excel остаются открытыми.
+
 ## 2026-10-23 — R06: готовность фото до сохранения и безопасный cleanup
 
 - `storeLocalImage` теперь ждёт File.copy и проверяет готовый размер; при сбое URI не публикуется, удаляется только собственный частичный файл. Flat image-store path guard блокирует traversal/encoded separators и чужие файлы при cleanup.

@@ -19,7 +19,8 @@ type Origin = Readonly<{ mesocycleId: string | null; mesocycleTitle: string | nu
  */
 export function createTrainingHistory(rules: TrainingHistoryRules,
   execution: Pick<TrainingExecutionPort, "listClientExecutions" | "subscribeCommittedChanges">,
-  plans: Pick<TrainingPlansRepositoryPort, "getLibrary" | "getPeriodizedPlan" | "getSimpleWeeks" | "subscribeCommittedChanges">) {
+  plans: Pick<TrainingPlansRepositoryPort, "getLibrary" | "getPeriodizedPlan" | "getSimpleWeeks" | "subscribeCommittedChanges">,
+  registerInvalidation?: (invalidate: () => void) => void) {
   const { hasEnteredData, isWorkingSet, sessionDurationSec, workoutStatus, sortHistory } = rules;
   /** Расчёт хронологии клиента: дневник + планы (программы, мезоциклы, тренировки). */
   async function compute(clientId: string): Promise<readonly TrainingHistoryEntry[]> {
@@ -82,6 +83,7 @@ export function createTrainingHistory(rules: TrainingHistoryRules,
   // готовый результат, пересчёт — только после изменений дневника этого клиента или его планов. Выбор программы/мезоцикла (`selectionOnly`)
   // историю не меняет. Подписки сбрасывают кэш раньше экранов: они зарегистрированы при создании, экраны — позже.
   const cache = new Map<string, Promise<readonly TrainingHistoryEntry[]>>();
+  registerInvalidation?.(() => cache.clear());
   execution.subscribeCommittedChanges((change) => { cache.delete(change.clientId); });
   plans.subscribeCommittedChanges((change) => { if (change.selectionOnly !== true) for (const id of change.clientIds) cache.delete(id); });
   return {
