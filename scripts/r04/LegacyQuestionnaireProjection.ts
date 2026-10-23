@@ -11,7 +11,7 @@ function object(value: unknown): Record<string, unknown> | null {
 }
 function nonblank(value: unknown): value is string { return typeof value === "string" && !!value.trim(); }
 /** Candidate identity is stable across retries, question renames and option reordering. */
-function id(parts: readonly string[]): string {
+export function legacyQuestionnaireId(parts: readonly string[]): string {
   return `legacy:${createHash("sha256").update(JSON.stringify(parts)).digest("hex")}`;
 }
 export interface QuestionnaireProjection {
@@ -23,6 +23,7 @@ export interface QuestionnaireProjection {
 /** Does not seed defaults or normalize unknown types; caller retains the exact source JSON. */
 export function projectLegacyQuestionnaireSchema(
   accountScope: string, workspaceId: string, raw: unknown,
+  fieldEpochs: ReadonlyMap<string, string> = new Map(),
 ): QuestionnaireProjection {
   if (!accountScope.trim() || !workspaceId.trim()) throw new Error("R04_QUESTIONNAIRE_SCOPE_REQUIRED");
   const source = object(raw);
@@ -59,12 +60,13 @@ export function projectLegacyQuestionnaireSchema(
         throw new Error("R04_QUESTIONNAIRE_UNSUPPORTED_FIELD_PROPERTIES");
       }
       const sourceId = unique("question", question.id), optionIds = new Map<string, string>();
+      const epoch = fieldEpochs.get(sourceId); const suffix = epoch === undefined ? [] : ["semantic-epoch", epoch];
       for (const option of question.options as string[]) {
         if (optionIds.has(option)) throw new Error("R04_QUESTIONNAIRE_OPTIONS_AMBIGUOUS");
-        optionIds.set(option, id([accountScope, workspaceId, "option", sourceId, option]));
+        optionIds.set(option, legacyQuestionnaireId([accountScope, workspaceId, "option", sourceId, option, ...suffix]));
       }
       const field: QuestionField = {
-        id: id([accountScope, workspaceId, "question", sourceId]), origin: "CUSTOM", semanticKey: null,
+        id: legacyQuestionnaireId([accountScope, workspaceId, "question", sourceId, ...suffix]), origin: "CUSTOM", semanticKey: null,
         type: types[question.type]!, label: question.title, help: question.description as string | undefined ?? null,
         required: question.required, hidden: question.hidden, retired: false,
         options: [...optionIds].map(([label, optionId]) => ({ id: optionId, label, retired: false })),
@@ -74,7 +76,7 @@ export function projectLegacyQuestionnaireSchema(
     }
     // Empty legacy wrappers have no questionnaire fields; original metadata remains in source inventory.
     if (projectedFields.length > 0) sections.push({
-      id: id([accountScope, workspaceId, "section", sectionId]), origin: "CUSTOM", title: section.title,
+      id: legacyQuestionnaireId([accountScope, workspaceId, "section", sectionId]), origin: "CUSTOM", title: section.title,
       help: section.description as string | undefined ?? null, hidden: section.hidden, fields: projectedFields,
     });
   }

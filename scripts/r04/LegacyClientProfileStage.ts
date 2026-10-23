@@ -5,6 +5,7 @@ import { legacyProfileQuestionnaireSchema, projectLegacyClientProfile } from "./
 import type { LegacyClientCardCandidate } from "./LegacyClientCardProjection.ts";
 import type { CandidateIdentityContext } from "./CandidateIdentityLedger.ts";
 import type { ClientDraftIdMap } from "./ProjectClientIdentityDraft.ts";
+import { composeLegacyQuestionnaires, type LegacyQuestionnaireSource } from "./LegacyQuestionnaireComposition.ts";
 
 /** Only an explicit, separately bound R04 rehearsal. These objects never become runtime DDL. */
 export const profileRehearsalObjects: Readonly<Record<string, string>> = {
@@ -35,7 +36,8 @@ function canonical(value: unknown): string {
  * WorkData candidates/exclusions are retained in the private receipt, never claimed as
  * final operational records or as a complete client migration. */
 export function stageClientProfilesInTransaction(db: DatabaseSync, context: CandidateIdentityContext, createdAt: string,
-  source: readonly LegacyClientCardCandidate[], ids: ClientDraftIdMap, checkpoint: () => void) {
+  source: readonly LegacyClientCardCandidate[], ids: ClientDraftIdMap, checkpoint: () => void,
+  questionnaire?: LegacyQuestionnaireSource | null) {
   if (!db.isTransaction) throw new Error("R04_ID_LEDGER_TRANSACTION_REQUIRED_EXCLUSIVE");
   const schema = legacyProfileQuestionnaireSchema(); const schemaJson = JSON.stringify(schema);
   const plans = [...source].sort((a, b) => a.identity.sourceIdentityKey < b.identity.sourceIdentityKey ? -1 : 1).map((card) => {
@@ -45,16 +47,20 @@ export function stageClientProfilesInTransaction(db: DatabaseSync, context: Cand
     if (!id || projection.answers === null || projection.issues.length > 0) throw new Error("R04_ID_LEDGER_PROFILE_BLOCKED");
     return { card, id, projection };
   });
-  const answers = plans.flatMap(({ card, id, projection }) => Object.entries(projection.answers!).sort(([a], [b]) => a < b ? -1 : 1).map(([field, value]) => ({
+  const composition = questionnaire == null ? null : composeLegacyQuestionnaires(context, createdAt,
+    plans.map(({ card, id, projection }) => ({ sourceClientId: card.identity.sourceClientId, targetClientId: id,
+      answers: projection.answers!, updatedAt: card.identity.updatedAt! })), questionnaire);
+  const answers = composition?.answers ?? plans.flatMap(({ card, id, projection }) => Object.entries(projection.answers!).sort(([a], [b]) => a < b ? -1 : 1).map(([field, value]) => ({
     workspace_id: context.targetWorkspaceId, client_id: id, field_id: field, value_json: JSON.stringify(value),
     schema_version: 1, updated_at: card.identity.updatedAt,
   }))).sort((a, b) => a.client_id < b.client_id ? -1 : a.client_id > b.client_id ? 1 : a.field_id < b.field_id ? -1 : 1);
-  const versions = [{ workspace_id: context.targetWorkspaceId, version: 1, format_version: 1, schema_json: schemaJson, base_version: null, published_at: createdAt }];
-  const drafts = [{ workspace_id: context.targetWorkspaceId, base_version: 1, revision: 1, schema_json: schemaJson, updated_at: createdAt }];
-  const sourceJson = canonical(plans.map(({ card }) => ({ sourceKey: card.identity.sourceIdentityKey, raw: card.raw })));
+  const versions = composition?.versions ?? [{ workspace_id: context.targetWorkspaceId, version: 1, format_version: 1, schema_json: schemaJson, base_version: null, published_at: createdAt }];
+  const drafts = composition?.drafts ?? [{ workspace_id: context.targetWorkspaceId, base_version: 1, revision: 1, schema_json: schemaJson, updated_at: createdAt }];
+  const rawCards = plans.map(({ card }) => ({ sourceKey: card.identity.sourceIdentityKey, raw: card.raw }));
+  const sourceJson = canonical(questionnaire === undefined ? rawCards : { cards: rawCards, questionnaire: composition?.sourceRaw ?? null });
   const targetJson = canonical({ versions, drafts, answers, workData: plans.map(({ card, id, projection }) => ({
     sourceKey: card.identity.sourceIdentityKey, clientId: id, candidates: projection.workData, excludedByProduct: projection.excludedByProduct,
-  })) });
+  })), ...(questionnaire === undefined ? {} : { questionnaire: composition?.provenance ?? null }) });
   const receipts = db.prepare("SELECT * FROM r04_profile_receipt").all();
   if (receipts.length > 1 || receipts.length === 1 && (receipts[0]?.id !== 1 || receipts[0]?.source_json !== sourceJson || receipts[0]?.target_json !== targetJson)) {
     throw new Error("R04_ID_LEDGER_PROFILE_PARITY_MISMATCH");
@@ -64,10 +70,10 @@ export function stageClientProfilesInTransaction(db: DatabaseSync, context: Cand
     for (const table of ["questionnaire_versions", "questionnaire_drafts", "questionnaire_answers"]) {
       if (db.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n !== 0) throw new Error("R04_ID_LEDGER_PROFILE_FOREIGN_TARGET");
     }
-    db.prepare("INSERT INTO questionnaire_versions(workspace_id,version,format_version,schema_json,base_version,published_at) VALUES(?,1,1,?,NULL,?)")
-      .run(context.targetWorkspaceId, schemaJson, createdAt);
-    db.prepare("INSERT INTO questionnaire_drafts(workspace_id,base_version,revision,schema_json,updated_at) VALUES(?,1,1,?,?)")
-      .run(context.targetWorkspaceId, schemaJson, createdAt);
+    for (const row of versions) db.prepare("INSERT INTO questionnaire_versions(workspace_id,version,format_version,schema_json,base_version,published_at) VALUES(?,?,?,?,?,?)")
+      .run(row.workspace_id, row.version, row.format_version, row.schema_json, row.base_version, row.published_at);
+    for (const row of drafts) db.prepare("INSERT INTO questionnaire_drafts(workspace_id,base_version,revision,schema_json,updated_at) VALUES(?,?,?,?,?)")
+      .run(row.workspace_id, row.base_version, row.revision, row.schema_json, row.updated_at);
   }
   for (const { id } of plans) {
     if (!existing) for (const row of answers.filter((answer) => answer.client_id === id)) {

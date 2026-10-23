@@ -1,3 +1,10 @@
+## 2026-10-23 — R04: общая запись профиля и истории анкет 2.0
+
+- Профиль объединён с custom questionnaire revisions/answers в отдельно включаемом staging. Исторические номера/даты, привязка ответа к версии, неопубликованный draft и source provenance сохранены; добавляется отдельная migration publication. Несовместимая смена типа получает отдельную идентичность, удалённые использованные вопросы/варианты — retired. [Контракт](spikes/R04_QUESTIONNAIRE_STAGING.md).
+- Общая транзакция Client IDs/cards/Q/private receipt, read-back/FK/integrity; пять injected failures откатывают всё. Read-only synthetic source SHA неизменён, target reopen/reordered replay byte-identical; drift не затирается. Старые profile-only файлы не пересобираются.
+- **83/83** целевых теста (14 новых), root/mobile typecheck, changed-script ESLint, source/arch505/secrets/diff. Полный foundation/APK/bundle не запускались, runtime не менялся.
+- `finalizable:false`: окончательные WorkData owners, остальные домены/full parity/Android и подключение legacy Restore ещё впереди. Change sets пока audit metadata. Это частный стенд, не fitcoach_v3.db. R04/D03/R05 и технические gates OPEN; личные данные/телефон не затрагивались.
+
 ## 2026-10-23 — R04: профиль2.0 → ответы анкеты и persisted staging
 
 - Сверены все37 полей ClientProfileFields build120:30 стандартных ответов,2 дополнительных CUSTOM,3 отдельных WorkData candidates и2 product exclusions. Явные option aliases, false/пустота/отсутствие, без guessed выбора/округления/обрезания. [Контракт и источники](spikes/R04_CLIENT_PROFILE_STAGING.md).

@@ -1,4 +1,42 @@
-## Последнее продолжение — R04 profile mapping/persisted stage, база1e3e7ed
+## Последнее продолжение — R04 profile + questionnaire history, база b3e17bb
+
+Task R04→R03; D03→R04/R05. Product §§10/22.2/23–27/46.6/46.19/48.5.7/53–56.
+Exact source build120 e116b42 QuestionnaireRepository confirms published history,
+answer.template_revision and one last draft. New LegacyQuestionnaireComposition
+reparses raw source, preserves publication numbers/gaps/dates and exact answer
+version/time. Adds new migration publication maxPublished+1 for typed profile and
+retained answers. Original draft stays unpublished; target CAS revision1 is distinct
+from source ordinal. Sections use legacySectionId, never guessed label matching.
+Incompatible question-type epochs use source revisionID; SHORT/LONG text shareID.
+Used removed fields/options retired only in migration view/draft; historical views
+unchanged. DELETED/NULL dispositions/raw retained, never active answer resurrection.
+Change sets preserved only as audit metadata, not final event/notification replay.
+
+Explicit questionnaires:true requires profiles:true; persisted binding
+QUESTIONNAIRE_COMPOSITION_V1. stageClientQuestionnaires shares Client IDs/cards/
+actual D01 Qversions/draft/answers/private receipt transaction/parity/FK/integrity.
+Source cloned before callbacks and reprojected from raw; old profile-only files
+reject new mode unchanged. Retry exact receipt/row comparison, no UPDATE/REPLACE/
+new IDs/revisions/dates. Null source means all Q tables absent, not broken source.
+
+83/83 targeted (14 new) via npm run r04:questionnaire:test. Read-only synthetic
+source file SHA unchanged; reopen/reordered target retry byte-identical; drift
+blocked;5 injected failures rollback all/new retry succeeds. Not Android kill.
+Root/mobile TS, changed ESLint, source/arch505/secrets/diff pass. No fullfoundation,
+APK/bundle or phone changes (runtime untouched). Tests registered r04/foundation.
+Details docs/spikes/R04_QUESTIONNAIRE_STAGING.md. Partial rehearsal DB has r04_*
+objects and cannot be fitcoach_v3.db or published by common snapshot engine.
+
+NEXT: final WorkData Notes/ManualTags/Safety owners (currently retained candidates,
+finalizable:false), then remaining domains/stable IDs/provenance/full staging/
+parity/retry/Android and runtime2.0 Restore adapter. ExpoRestoreJobs only3.0.
+Keep goalACTIVE/gatesOPEN; no100%. LOAD_REPS for old20×10кг; equipment/groups not
+guessed. Other backup edges: clock/DST, SAF renamegap, copy/delete death/ENOSPC/
+providers, enabledUI/AppState/OS signals/first-run. Excel afterbackup, UI/themeslater.
+Phone2.0/personal data untouched. LastPID3837 terminal; Metro99958 historical/unverified
+this turn; scrcpy leaveopen, no pendingkill/key prompt. Russian commit, no push.
+
+## Предыдущий срез — R04 profile mapping/persisted stage, база1e3e7ed
 
 Task R04→R03, D03→R04/R05; Product §§10/22.2/23–27/46.6/46.19/48.5.7 и53–56.
 Read-only build120e116b42 exact domain/profile/option/form/health sources inspected.

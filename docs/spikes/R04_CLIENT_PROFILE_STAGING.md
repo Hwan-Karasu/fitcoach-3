@@ -99,8 +99,10 @@ client-card phase в том же profile-enabled job без переназнач
 
 Rehearsal DB содержит дополнительные r04_* объекты и только выбранные владельцы:
 это **не** готовый fitcoach_v3.db и его нельзя публиковать через current restore.
-Runtime ExpoRestoreJobs пока принимает common3.0 snapshots, не2.0. Остаются общая
-композиция с legacy custom questionnaire revisions/answers, WorkData owner и
+Runtime ExpoRestoreJobs пока принимает common3.0 snapshots, не2.0. Общая композиция
+с legacy custom questionnaire revisions/answers теперь проверена в отдельном
+[questionnaire-enabled staging](R04_QUESTIONNAIRE_STAGING.md):83/83 targeted.
+Профильный режим выше остаётся отдельно совместимым. Остаются WorkData owner и
 согласованные timestamps/provenance, все остальные домены/ID maps/полная parity,
 конвертер JSON v1/v2, job checkpoint/retry/Android. R04/D03/R05 и migration/overlay/
 signing/release gates OPEN. Общая цель ACTIVE, не100%.

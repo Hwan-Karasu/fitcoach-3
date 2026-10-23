@@ -6,6 +6,7 @@ import { clientsBaseline } from "../../apps/mobile/src/features/clients/data/Cli
 import { isExplicitTimestamp } from "./ExactScaledHundredth.ts";
 import { projectLegacyClientCard, type ClientCardFields, type LegacyClientCardCandidate } from "./LegacyClientCardProjection.ts";
 import { createProfileRehearsalSchema, profileRehearsalObjects, stageClientProfilesInTransaction } from "./LegacyClientProfileStage.ts";
+import type { LegacyQuestionnaireSource } from "./LegacyQuestionnaireComposition.ts";
 
 export interface CandidateIdentityContext {
   readonly sourceSha256: string;
@@ -33,13 +34,16 @@ function validateClientKey(key: string, scope: string): void {
 
 /** R04 isolated synthetic staging contract. Never attach this schema to a source or runtime DB. */
 export function prepareCandidateIdentityLedger(db: DatabaseSync, context: CandidateIdentityContext,
-  options?: { readonly clientIdentityRehearsal: { readonly createdAt: string; readonly profiles?: true } }) {
+  options?: { readonly clientIdentityRehearsal: { readonly createdAt: string; readonly profiles?: true; readonly questionnaires?: true } }) {
   // Snapshot caller input so a later caller mutation cannot change the ledger's binding.
   const binding = { ...context }, jobCreatedAt = options?.clientIdentityRehearsal.createdAt;
   const profilesEnabled = options?.clientIdentityRehearsal.profiles === true;
+  const questionnairesEnabled = options?.clientIdentityRehearsal.questionnaires === true;
+  if (questionnairesEnabled && !profilesEnabled) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
   if (jobCreatedAt !== undefined && !isExplicitTimestamp(jobCreatedAt)) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
   const expectedContext = jobCreatedAt === undefined ? contextJson(binding)
-    : JSON.stringify([contextJson(binding), "CLIENT_IDENTITY_REHEARSAL_V1", jobCreatedAt, ...(profilesEnabled ? ["PROFILE_REHEARSAL_V1"] : [])]);
+    : JSON.stringify([contextJson(binding), "CLIENT_IDENTITY_REHEARSAL_V1", jobCreatedAt, ...(profilesEnabled ? ["PROFILE_REHEARSAL_V1"] : []),
+      ...(questionnairesEnabled ? ["QUESTIONNAIRE_COMPOSITION_V1"] : [])]);
   const workspaceKey = JSON.stringify([binding.accountScope, binding.sourceWorkspaceId]);
   function inspect(): "new" | "owned" {
     const objects = db.prepare("SELECT type,name FROM sqlite_schema WHERE substr(name,1,7)<>'sqlite_' ORDER BY name").all();
@@ -217,17 +221,25 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
     return stageClientIdentities(source.map((row) => row.identity), allocate, checkpoint, cards, payloads, afterClients);
   }
   function stageClientProfiles(source: readonly LegacyClientCardCandidate[], allocate: () => string = randomUUID,
-    checkpoint: (stage: "after-ids" | "after-client" | "after-profile" | "before-commit") => void = () => undefined) {
+    checkpoint: (stage: "after-ids" | "after-client" | "after-profile" | "before-commit") => void = () => undefined,
+    questionnaire?: LegacyQuestionnaireSource | null) {
     if (!profilesEnabled || jobCreatedAt === undefined) throw new Error("R04_ID_LEDGER_PROFILE_NOT_ENABLED");
+    if (questionnairesEnabled !== (questionnaire !== undefined)) throw new Error("R04_ID_LEDGER_QUESTIONNAIRE_MODE_MISMATCH");
+    const questionnaireSnapshot = questionnaire === undefined ? undefined : structuredClone(questionnaire);
     const snapshot = structuredClone(source).map((row) => {
       if (row.issues.length > 0) throw new Error("R04_ID_LEDGER_CLIENT_CARD_BLOCKED");
       return projectLegacyClientCard(row.identity, row.raw);
     });
     let profiles: ReturnType<typeof stageClientProfilesInTransaction> | null = null;
     const clients = stageClientCards(snapshot, allocate, checkpoint, () => {
-      profiles = stageClientProfilesInTransaction(db, binding, jobCreatedAt, snapshot, loadClientDraftIds(), () => checkpoint("after-profile"));
+      profiles = stageClientProfilesInTransaction(db, binding, jobCreatedAt, snapshot, loadClientDraftIds(), () => checkpoint("after-profile"), questionnaireSnapshot);
     });
     return { ...clients, ...profiles!, status: "profile-rehearsal-staged" as const };
   }
-  return { reserveClientIds, loadClientDraftIds, stageClientIdentities, stageClientCards, stageClientProfiles };
+  function stageClientQuestionnaires(source: readonly LegacyClientCardCandidate[], questionnaire: LegacyQuestionnaireSource | null,
+    allocate: () => string = randomUUID, checkpoint: (stage: "after-ids" | "after-client" | "after-profile" | "before-commit") => void = () => undefined) {
+    if (!questionnairesEnabled) throw new Error("R04_ID_LEDGER_QUESTIONNAIRE_NOT_ENABLED");
+    return { ...stageClientProfiles(source, allocate, checkpoint, questionnaire), status: "questionnaire-rehearsal-staged" as const };
+  }
+  return { reserveClientIds, loadClientDraftIds, stageClientIdentities, stageClientCards, stageClientProfiles, stageClientQuestionnaires };
 }

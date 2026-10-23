@@ -1,66 +1,65 @@
 # Active context — 2026-10-23
 
-«Дневник атлета», audit/training-fixes. GoalACTIVE full2.0→3.0 +backup/restore, не100%.
-CurrentR04→R03, D03→R04/R05; R06→R03/D05→D01/R06. Product §§10/22.2/23–27/46.6/
-46.19/48.5.7/53–56. Migration/overlay/signing/releaseOPEN; no productionDDL/real
-migration/overlay untilgates. UI/themeslater; Excelafterbackup: GitHubfirst,2.0readonly.
-Targeted area+dependencytests, fullsuite milestones. Owneraskedwhychecks, then«да нет,
-продолжай»; no pause. Base1e3e7ed. CommitR04 inRussian, no push.
+«Дневник атлета», audit/training-fixes. Goal ACTIVE full2.0→3.0+backup/restore,
+не100%. Task R04→R03, D03→R04/R05; R06→R03/D05→D01/R06. Product §§10/22.2/
+23–27/46.6/46.19/48.5.7/53–56. Migration/overlay/signing/release OPEN; no real
+migration/productionDDL/overlay before gates. UI/themeslater; Excelafterbackup,
+GitHubfirst/2.0readonly. Targeted area+dependencytests, fullsuite milestones.
+Owner «да нет,продолжай» after explanation of checks, no pause. Base b3e17bb.
+Russian commits authorized/no push. No subagents unless explicitly requested.
 
-Established D01 baselines/identity/FK/JSON, commonfullsnapshot/hash/media/staging,
-GuardedRestore/v2oneuseReturn/completion, runtime15holders+workflow/admission/drain/
-closedrecoverybeforeDBopen. ConnectedRestoreActions/ExpoRestoreJobs/Return/deleteUI,
-WALpin/capacity/generation/GC. Earliernative restore35/rollback12/commitgap13/actions24/
-focused3, Downloads20/SAF19/reinstall6. ExpoRestoreJobs stillonly3.0 commonengine;
-fulllegacybranch notconnected. Oldfullfoundation1086, historicalmainbundle5622/1185.
+Established D01 baselines/identity/FK/JSON, fullsnapshot/hash/media/staging,
+GuardedRestore/v2 oneuseReturn/completion, runtime15holders+workflow/admission/
+drain/closedrecoverybeforeDBopen. ConnectedRestoreActions/ExpoRestoreJobs/UI,
+WALpin/capacity/generation/GC. Historical native reports restore35/rollback12/
+commitgap13/actions24/focused3/Downloads20/SAF19/reinstall6. ExpoRestoreJobs still
+only3.0 commonengine, no legacy branch. Oldfullfoundation1086, mainbundle5622/1185.
 
-AutoService/Scheduler/AppState/UI:30min active/resume; onlinecopy/hashbeforemedia,
-ordinarywritescontinue, unchangednoduplicates. Atomicpending→nativereceipt→managed3/
-retired→delete, exactURI/hash/bytes/name/owner/grant/tombstones, durablestatus.
-Nativecap2/catalogreceiptv1. 6091dcbmissinginspect/predecessorpromotion/recheckbefore
-cleanup/allmissingfreshcopy samedestination; native19(47471ms) UUIDfolderrecreated,
-realdefaultuntouched. Stalerow/stat notexercised: unlinkalso removesrow ondevice.
-Priorauto21/status3 separate. Dailyfallback candidate; clock/offset pauses/reanchor
-andSAFrename→receiptgapOPEN. 1e3e7ed twoactualforce-stops32506→1641→3837, verifiedgone/
-newPID; receiptbeforevisibility recovery15/15(8362ms), committedcatalogbeforecleanup
-14/14(7694ms). SameID/URI/noreprepare/repub, safecleanup/unchangedretry/orphanGC,
-snapshots2/4clients, finalLIVE5. All15holdersinitialized+clientread/write, notallhistories.
-FixtureCOMPLETE/no armedpause. OnlytestAPKcom.fitcoach.r07sqlite0.0.1code1 updated,
-legacycom.fitcoach.app2.0build128unchanged. NativeSHA/report details in handoff.
+AutoService/Scheduler/AppState/UI:30min/resume, stable onlinehash beforemedia,
+unchanged no duplicates. Atomicpending→nativereceipt→managed/retired→delete,
+exact ownership/status. Nativecap2/catalogv1. 6091dcb missinginspect/predecessor/
+recheckbeforecleanup/freshcopy, native19 syntheticUUIDfolderrecreated. Stalerow
+stat unproven: unlinkremovesrow ondevice. Priorauto21/status3. 1e3e7ed actual
+force-stops32506→1641→3837 beforevisibility/beforecleanup, recovery15+14. SameID/
+URI/no reprepare/repub, safecleanup/unchangedretry/orphanGC. All15holders init,
+notallhistories. FixtureCOMPLETE/no armedpause. Onlycom.fitcoach.r07sqlite changed,
+legacycom.fitcoach.app2.0build128 untouched. Reports/details in handoff.
 
-NEW R04: readonlybuild120e116b42 exact ClientProfileFields37/optionlists/FormScreen/
-health sources. scripts/r04/LegacyClientProfileProjection.ts and LegacyClientProfileStage.ts;
-CandidateIdentityLedger.stageClientProfiles optional clientIdentityRehearsal:
-{createdAt,profiles:true}, separatelybound PROFILE_REHEARSAL_V1. Oldmodes unchanged,
-oldstagefilesnotclaimed/rebuilt. 30source→systemanswers,2supplementalCUSTOMstable
-legacyfields,3WorkData(note/tags/loadAvoidance)candidates,2exclusionssteps/photo(V1).
-Explicitspellingaliases only; missing/false/empty retained. Unknown/type/options/
-duplicates/oversizeblock, nottruncate. Healthtruewouldhidelegacydetails: visibility
-conflict/review, NOT medicalinference or guessedfalse. Safety sources candidates,
-notfinalSafety/Limitations. WeightHistory remains text, notsyntheticmeasurement.
+b3e17bb R04: exact readonlybuild120e116b42 ClientProfileFields37.30systemanswers+
+2 CUSTOMstable legacyprofilefields+3WorkDatacandidates+2exclusionssteps/photoV1.
+Explicit spellingaliases only; sparse/false/empty retained. Invalid/unknown/
+oversizeblock. Healthtrue with details hiddenbyv3 is visibilityreview, NOT medical
+inference/guessedfalse. WeightHistory text notsyntheticmeasurement. FinalSafety
+notinferred. Profile-enabled CandidateLedger same tx IDs/cards/D01Q/private
+receipt/parity/FK/integrity, noUPDATE/newIDs onretry.69profiletests/82audit green.
 
-Same BEGINIMMEDIATE: stableclientIDs+actualD01cards/Qversion/draft/answers/private
-source+targetreceipt, readback/FK/integrity. NoUPDATE/REPLACE/newIDs/revisions/dates
-onretry. Inputs copied/reprojectedfromrawJSON, notmutablederivedobject. Schema
-publishedAt=explicitjobtime; answerupdatedAt=sourceclientrowupdatedAt, NOT exact
-answertime. WorkData/exclusions inprivateprovenance, finalizable:false. PartialDB
-hasr04_*objectsandonlyselectedowners, cannotpublishasfitcoach_v3.db. Fullread-only
-audit clientCards adds onlyprofilecandidates/review/workdatacounts, targetWrites0,
-noPII. Newtestregisteredr04/foundation; npm run r04:profile:test69/69(17new),
-downstreampreflight82/82. SyntheticreadOnlysourcefile→identity/cardreaders→stage
-active/archived+32answers; sourceSHAunchanged. Reopentarget/reorderedretrybyteidentical;
-6faultpoints rollbackIDs/cards/schema/answers/receipt. NotAndroidkillproof. Root/mobile
-TS, changedscriptslint/source/arch505/secrets/diff. Fullfoundation/APK/bundleNOT rerun
-(runtimeunchanged). Doc R04_CLIENT_PROFILE_STAGING.md exactsources/mappings/limits.
+NEW R04 LegacyQuestionnaireComposition: exact QuestionnaireRepository evidence:
+published history, answer.template_revision, one lastdraft. Raw reparse/copy before
+callbacks, scope/pointers/time/version validation. Preserve numberedpublications/
+gaps/publishedAt; exact answer version/updatedAt. NEW migrationversion maxpub+1
+jobtime; typedprofile answers referenceit using sourceclient.updatedAt. Original
+draft neverpublished; targetdraft base=migration CAS1/sourceupdatedAt. Wrappers
+legacySectionId notlabels; preservemetadata/order/emptycustoms, absentwrappershidden.
+Usedremovedfields/optionsretired only migrationview/draft, historyunchanged.
+Incompatible typeepochs bysource revisionID; SHORT/LONGtextsameID, flipbackthirdID.
+0/false/whitespace/choiceorder retained. DELETED/NULLraw+dispositions, noresurrection.
+Changes auditmetadata only, notfinalevents. Exact revision/section/field/option
+maps+fullraw inprivate receipt. questionnaires:true requiresprofiles:true,
+QUESTIONNAIRE_COMPOSITION_V1 binding; stageClientQuestionnaires sameSQLtransaction.
+Oldprofilefilesnotrebuilt. Nullsource=allQabsent, notbroken. Retryexactparity,
+source/targetdriftblocks. finalizable:false, partialDB/r04_* cannotpublish asv3.
 
-NEXT: compose typedprofile schema/answers with customlegacyquestionnaire versions/
-answers/exactIDs. FinalWorkDataownerNotes/Tags/Safetyseparate; remainingowners,
-complete staging/parity/stableIDs/provenance/retry/Android +runtime2.0Restore. Do not
-replacefullmigrationbyrawpayload/rejection/partialprototype. LOAD_REPSfor2.0(20×10кг),
-unknown equipment/groupsnotguessed. Backupremaining:clock/DST/copydeletekill/SAFgap/
-ENOSPC/providers, ordinaryUI/AppState/OSsignals/first-runchoice. Goal/gatesremainOPEN.
+83/83 targeted (14new), npm run r04:questionnaire:test. Read-only syntheticfileSHA
+unchanged; reopentarget/reorderedretry byteidentical;5faultpoints rollbackall.
+Root/mobileTS, changedESLint/source/arch505/secrets/diff. NOT Androidkill/fullsuite/
+APK/bundle(runtimeunchanged). Newtestregisteredr04/foundation. Contractdoc
+spikes/R04_QUESTIONNAIRE_STAGING.md. No realuserDB/backup read or migrated.
 
-No personalDB/backup/secrets/keyread. Dev64tables1150rows/oldfileshistoricallysafe.
-No phonechangesthisslice. LastnativePID3837terminal, Metro99958waslivepreviousturn
-(revalidatebeforeuse); no pendingkill; scrcpyleaveopen. MainMetro16439old/unverified.
-Timeoutnotreasonrestart. Detailed docs/HANDOFF_BACKUP_MIGRATION.md.
+NEXT finalWorkDataowners Notes/ManualTags/Safety, remainingdomains/stableIDs/
+provenance/fullstagingparity/retry/Android+runtime2.0Restore. Do not substitute
+rawcandidates/partialprototype forfullgoal. LOAD_REPS2.0(20×10кг), equipment/groups
+notguessed. Otherbackupedges clock/DST/SAFgap/copydeletekill/ENOSPC/providers/
+ordinaryUI/OSsignals/first-runOPEN. No personalDB/backup/secrets/keyread.
+No phonechangesthisslice. LastPID3837terminal, Metro99958historical/unverified,
+MainMetro16439old/unverified. Revalidatebeforeuse, timeoutnotreasonrestart.
+No pendingkill; scrcpyleaveopen. See docs/HANDOFF_BACKUP_MIGRATION.md.
