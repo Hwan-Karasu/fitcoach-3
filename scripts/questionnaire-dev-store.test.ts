@@ -61,6 +61,19 @@ test("Q validation: type checks and per-field constraints give plain messages", 
     .some((issue) => issue.message === "минимум больше максимума"));
 });
 
+test("populated system health details remain visible under clearance without changing the source flag", () => {
+  const schema = defaultQuestionnaireSchema();
+  for (const id of ["sys:health.diagnoses", "sys:health.injuries", "sys:health.surgeries", "sys:health.pain"]) {
+    const answers = { "sys:health.noContra": true, [id]: "  Исходные сведения  " };
+    assert.equal(isFieldVisible(schema, id, answers), true);
+    assert.equal(isFieldVisible(schema, id, { "sys:health.noContra": true, [id]: "  " }), false);
+    assert.equal(answers["sys:health.noContra"], true);
+    const hidden: QuestionnaireSchema = { ...schema, sections: schema.sections.map((s) => ({ ...s, fields: s.fields.map((f) => f.id === id ? { ...f, hidden: true } : f) })) };
+    assert.equal(isFieldVisible(hidden, id, answers), false);
+    const retired: QuestionnaireSchema = { ...schema, sections: schema.sections.map((s) => ({ ...s, fields: s.fields.map((f) => f.id === id ? { ...f, retired: true } : f) })) };
+    assert.equal(isFieldVisible(retired, id, answers), false);
+  }
+});
 test("Q-02 conditional visibility and completion: hidden required never blocks COMPLETE", () => {
   const schema = defaultQuestionnaireSchema();
   assert.equal(completionStatus(schema, {}), "NOT_STARTED");

@@ -76,8 +76,11 @@ test("unknown choices, duplicate aliases, unknown properties and malformed types
   }
 });
 test("clearance cannot hide retained diagnoses/injuries/pain; explicit no-data legacy markers are not guessed diagnoses", () => {
-  assert.equal(projectLegacyClientProfile({ healthCleared: true, injuries: "Синтетическая травма" }).answers, null);
-  assert.ok(projectLegacyClientProfile({ healthCleared: true, diagnoses: "Синтетический диагноз" }).issues.includes("R04_PROFILE_CLEARANCE_CONFLICT"));
+  assert.equal(projectLegacyClientProfile({ healthCleared: true, injuries: "Синтетическая травма" }).answers!["sys:health.injuries"], "Синтетическая травма");
+  const populated = projectLegacyClientProfile({ healthCleared: true, diagnoses: "Синтетический диагноз" });
+  assert.deepEqual(populated.issues, []);
+  assert.equal(populated.answers!["sys:health.noContra"], true);
+  assert.equal(populated.answers!["sys:health.diagnoses"], "Синтетический диагноз");
   const result = projectLegacyClientProfile({ healthCleared: true, diagnoses: "Нет", injuries: "—", pain: "не указано" });
   assert.equal(result.answers!["sys:health.noContra"], true); assert.equal(result.answers!["sys:health.diagnoses"], "Нет");
 });

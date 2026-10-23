@@ -38,7 +38,7 @@ export function defaultQuestionnaireSchema(): QuestionnaireSchema {
       field("goals.deadline", "SHORT_TEXT", "Есть ли конкретный срок?", { help: "К отпуску, к свадьбе, через 3 месяца…" }),
     ]),
     section("health", "Здоровье", [
-      field("health.noContra", "SWITCH", "Противопоказаний нет"),
+      field("health.noContra", "SWITCH", "Нет известных противопоказаний"),
       field("health.diagnoses", "LONG_TEXT", "Диагнозы и хронические заболевания", { visibleIf: noContraindications }),
       field("health.injuries", "LONG_TEXT", "Травмы или проблемы с опорно-двигательным аппаратом", { visibleIf: noContraindications }),
       field("health.surgeries", "LONG_TEXT", "Операции или серьёзные повреждения", { visibleIf: noContraindications }),
@@ -133,6 +133,11 @@ export function isFieldVisible(schema: QuestionnaireSchema, fieldId: string, ans
   if (entry === undefined || entry.field.hidden || entry.field.retired || entry.section.hidden) return false;
   const rule = entry.field.visibleIf;
   if (rule === null) return true;
+  // §10.15: the clearance switch never hides populated health details, including
+  // older published schemas. Explicit hide/retire and custom visibility keep their semantics.
+  if (entry.field.origin === "SYSTEM" && ["sys:health.diagnoses", "sys:health.injuries", "sys:health.surgeries", "sys:health.pain"].includes(fieldId)
+    && rule.sourceFieldId === "sys:health.noContra" && rule.operator === "NOT_EQUALS" && rule.value === "true"
+    && hasAnswer(answers[fieldId])) return true;
   if (seen.has(fieldId)) return false;
   const source = allFields(schema).find((item) => item.field.id === rule.sourceFieldId)?.field;
   if (source === undefined || !isFieldVisible(schema, source.id, answers, new Set([...seen, fieldId]))) return false;

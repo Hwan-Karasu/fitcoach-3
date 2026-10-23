@@ -1,46 +1,37 @@
 # Progress — 2026-10-23
 
-GoalACTIVE/taskR04; R04/D03/R05/migration/overlay/signing/releaseOPEN, не100%.
-Targeted area+dependencychecks/fullsuite milestones. UIlater/Excelafterbackup.
+GoalACTIVE TaskR04→R03/D03→R04/R05, gatesmigration/overlay/signing/releaseOPEN.
+No100%. Targetedchecks/fullsuite milestones, UIlater/Excelafterbackup.
+Prior goalturnPROGRESS8d29b65Qcomposition/593552fWorkDatagap.
 
-Prior D01/commonfullsnapshot/hash/media/staging, GuardedRestore/v2Return,
-runtime15holders/closedrecovery/connectedRestoreUI. Native restore35/rollback12/
-commitgap13/actions24/focused3/Downloads20/SAF19/reinstall6. AutoService/Scheduler/
-ownership/status auto21/status3/missing19.1e3e7ed actualauto force-stops before
-visibility/beforecleanup recovery15+14; fixtureCOMPLETE/2.0build128untouched.
-Notallhistories/powerloss/SAFgap proof. Historical fullfoundation1086.
+Prior D01/commonfullsnapshot/GuardedRestore/v2Return/15holders/closedrecovery/
+connectedRestoreUI. Native35/12/13/24/3/Downloads20/SAF19/reinstall6; auto21/status3/
+missing19,1e3e7ed actualforce-stopsrecovery15+14, fixtureCOMPLETE/2.0untouched.
+Notallhistories/powerlossproof. Historicalfoundation1086.
+b3e17bb exact37profilefields/typedanswers/candidates/exclusions, stableIDs/actual
+D01cards/Q/parity/receipt.69tests+82audit.8d29b65 customQhistory/revisions/gaps/times/
+exactanswerrevision+newmigrationpub+draftunpublished/typeepochs/retiredusedfields/
+tombstones/provenance/sharedtx/retry.83targeted, partialrehearsalonly.
 
-b3e17bb exact37profilefields:30systemanswers+2CUSTOM+3WorkDatacandidates+
-2productexclusions. Explicit aliases, sparse/false/empty preserved. Invalidblocks,
-healthvisibilityreview notmedicalinference. ActualD01cards/IDs/Q/receipt same tx,
-parity/FK/integrity/retry.69profiletests+82downstreamaudit. Partial/notpublishable.
+NEW ClientWorkDataModel and normalized privateR04stage Notes/ManualTags/
+Assignments/PENDING_REVIEW+persisted UUIDs/provenance/receipts, same Client/Q tx.
+workData:true separatebinding(oldfilesnotrebuilt), source/targetparity+FK/integrity.
+ImportedNote timeexplicitjobtime/unknownsourcenotetime/sourceclientupdatedAt;
+bodykept. Sharedtagentity normalizedNFC/whitespace/rucase withrawlabels/order.
+Noёfold/transliteration/punctuationguess. IDsnotnames. SafetyreviewneverACTIVE/
+autotag; no medical inference. Product10.15fix: populatedhealthdetailsvisiblewith
+positiveclearance, bothsourcefactspreserved. Oldblockingclearanceconflictremoved;
+newlabelНет известных противопоказаний. Explicit hide/retire/customrulesunchanged.
 
-NEW compose profile+custom questionnairehistory in same staged tx. Exact readonly
-build120e116b42 QuestionnaireRepository evidence. Historicalpub numbers/gaps/times
-and answer-specificversion retained; newmigrationpubmax+1, source draftunpublished,
-CAS1/base migration/sourceupdatedAt. Explicitwrapperidentity, semantic typeepochs
-avoid reinterpreting oldanswers; SHORT/LONGsameID, flipbackthird. Removedused
-questions/optionsretired in migration/draft only. Null/deletednoresurrection;
-raw/dispositions/maps/changeaudit retained. Separate persisted modebinding, old
-profilefilesnotrebuilt, inputcopied/reparsedbeforecallbacks. RetrynoUPDATE/REPLACE/
-newIDs/versions/dates, source/targetdriftblocks.
+105/105 targeted,15new worktests+Qstore/visibility/profile/Q/identitydeps.
+7faultboundariesrollback/retry,read-onlysourceSHAunchanged,reopen/reordertarget
+byteidentical, drift/collision/FK/mutationchecks. Root/mobileTS/changedESLint/
+source/arch506/secrets/diff. No fullfoundation/APK/bundle/phone; testsregistered.
+R04_CLIENT_WORK_DATA_STAGING.md contract. finalizable:false, privateprototypeNOT
+productionWorkDatarepo/DDL/runtimecommands/reads/reviewUI/backup/deletion wiring.
 
-83/83 targeted (14new), including5faultcheckpointsrollback/retry,7types,
-sourceSHAunchanged/targetreplaybyteidentical. Root/mobileTS, changedESLint,
-source/arch505/secrets/diff. NOT Androidkill/fullfoundation/APK/bundle.
-Runtimeuntouched. Newtestregisteredr04/foundation. See R04_QUESTIONNAIRE_STAGING.md.
-
-NEXT finalWorkDataNotes/ManualTags/Safety(currentcandidates/finalizable:false),
-remainingdomains/stableIDs/provenance/fullstagingparity/retry/Android andruntime2.0
-Restorebranch. ExpoRestoreJobsonly3.0. LOAD_REPS2.0, equipment/groupsnotguessed.
-Backupedgesclock/DST/SAFgap/copydeletekill/ENOSPC/providers/ordinaryUI/OS/first-run.
-KeepfullgoalACTIVE/gatesOPEN, notprofileprototype. ExcelGitHubfirstafterbackup.
-Personaldata/phoneuntouched. LastPID3837terminal/Metro99958unverified/scrcpyopen,
-no pendingkill. Base b3e17bb; Russiancommit/no push. Detailed handoff in docs.
-
-WorkData follow-up inspected: runtime has no ClientWorkData owner/port/store yet.
-Reference SQL client_work_data blob is NOT production and conflicts with approved
-Product22.2: separate stable TrainerNote, workspace TrainerTag+ClientTagAssignment.
-Product20.2 forbids diagnoses/injuries/pain→automatic ACTIVE limitation. Tag
-normalization policy stillfuture: do not silently merge case/whitespace variants.
-Implement proper owner contract before claiming final operational persistence.
+NEXT exercisecatalogstableIDs/LOAD_REPS2.0/equipmentgroupsunknown, remainingowners/
+fullstaging/parity/provenance/retry/Android/runtime2.0Restore/JSONv1v2. No narrowing
+fullgoal. Also clock/DST/SAFgap/copydeletekill/ENOSPC/providers/UI/OS/first-runOPEN.
+Personaldata/2.0untouched. LastPID3837terminal/Metro99958unverified/scrcpyopen,
+no pendingkill. Base593552f; Russiancommit/no push. Detailed handoff in docs.

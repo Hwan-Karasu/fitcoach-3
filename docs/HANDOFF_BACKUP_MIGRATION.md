@@ -1,4 +1,51 @@
-## Последнее продолжение — R04 profile + questionnaire history, база b3e17bb
+## Последнее продолжение — R04 WorkData + health visibility, база593552f
+
+Previous goal turn PROGRESS:8d29b65 Qhistory staging and593552f documented WorkData
+gap. Current TaskR04→R03/D03→R04/R05, Product10.15/20.2/22.2/23–27/46.6/46.19/
+48.5.7/53–56. No new productionDDL/real migration; gatesOPEN.
+
+ClientWorkDataModel (clients/domain/public): separate TrainerNote/TrainerTag/
+ClientTagAssignment/SafetyImportReview. New LegacyClientWorkDataStage writes
+normalized private r04_work_* objects, persisted NOTE/TAG/REVIEW UUIDs and full
+source/target provenance. Explicit workData:true requires profiles/questionnaires;
+WORK_DATA_REHEARSAL_V1 binding, stageClientWorkData. Shared BEGINIMMEDIATE with
+Client IDs/cards/Q/profile; old staging files notclaimed/rebuilt. Internal callbacks
+not exposed by public stageClientProfiles. All rows/readback/receipt/FK/integrity.
+Reopen/reordered replay no new IDs/dates/UPDATE/REPLACE, drift rejected unchanged.
+
+One intact imported Note, body/whitespace preserved, pinnedfalse/LEGACY_IMPORT.
+createdAt=updatedAt=explicit jobtime; provenance sourceclient.updatedAt and
+IMPORT_TIME_SOURCE_NOTE_TIME_UNKNOWN, not invented source note date. Tag policy
+NFC_WHITESPACE_RU_CASE_V1: NFC/trim/collapsewhitespace/ru lowerkey, no ёfold or
+transliteration/punctuation merge; raw labels/positions retained. Same tag across
+clients one entity/assignments; deterministic presentation. Persisted UUID stays
+distinct from name; runtime rename not implemented. Safety details/unwantedLoad
+become PENDING_REVIEW, never ACTIVE/auto-tag/roster indicator. Full source preserved.
+
+Fixed prior profile false rejection per Product10.15: healthClearedtrue+details now
+imports both; isFieldVisible keeps populated system diagnoses/injuries/surgeries/
+pain visible under old noContra rule, even old published schemas. Explicit hidden/
+retired/hidden section/custom rules remain. New defaultlabel Нет известных
+противопоказаний. Removed R04_PROFILE_CLEARANCE_CONFLICT, no medical inference.
+
+105/105 targeted npm run r04:work-data:test,15new worktests +Qstore/visibility and
+profile/Q/card/identity deps.7 rollback boundaries including4 worktables; actual
+SQLite notes2/tags3/assignments4/reviews5 +customanswers/archive. Read-only sourceSHA
+unchanged, target reopen/reordered retry byte-identical; FK/collision/drift/mutation.
+Root/mobile TS, changedESLint, source/arch506/secrets/diff. No fullfoundation/APK/
+bundle/phone changes. Test registeredr04/foundation. Contract R04_CLIENT_WORK_DATA_STAGING.md.
+
+Still finalizable:false: new domain records +normalized prototype not a production
+WorkData repository/DDL, no runtime commands/reads/reviewUI/backup/deletion wiring.
+Only selected owners/r04_* DB, cannot publish asfitcoach_v3.db. NEXT actual exercise
+catalog owner-shaped staging(stableIDs,2.0 LOAD_REPS, unknown equipment/groups not
+guessed), remainingowners/fullstaging/parity/provenance/retry/Android/runtime2.0
+Restore/JSONv1v2. KeepfullgoalACTIVE, no100%. Also clock/DST/SAFgap/copydeletekill/
+ENOSPC/providers/UI/OS/first-run remain. UI/themeslater, Excelafterbackup.
+LastnativePID3837terminal, Metro99958historical/unverified, no pendingkill; scrcpy
+leaveopen. Personaldata/2.0 untouched, Russiancommit/no push.
+
+## Предыдущий срез — R04 profile + questionnaire history, база b3e17bb
 
 Task R04→R03; D03→R04/R05. Product §§10/22.2/23–27/46.6/46.19/48.5.7/53–56.
 Exact source build120 e116b42 QuestionnaireRepository confirms published history,

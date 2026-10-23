@@ -90,11 +90,8 @@ export function projectLegacyClientProfile(raw: Readonly<Record<string, unknown>
     if (answerProblem(field, converted, undefined, "1970-01-01") !== null) issues.push("R04_PROFILE_ANSWER_INVALID");
     else answers[targetId] = converted as Answers[string];
   }
-  // v2 displayed populated health details even with clearance. v3 visibility must not
-  // silently hide them; this is a visibility conflict, not a medical inference.
-  if (raw.healthCleared === true && ["diagnoses", "injuries", "surgeries", "pain"].some((key) => typeof raw[key] === "string" && meaningful(raw[key]))) {
-    issues.push("R04_PROFILE_CLEARANCE_CONFLICT");
-  }
+  // §10.15 visibility keeps populated health answers even with clearance=true.
+  // Preserve both source facts; neither reject valid intake nor infer medical clearance.
   const text = (key: string) => typeof raw[key] === "string" && raw[key].trim() ? raw[key] : null;
   const manualTags = Array.isArray(raw.trainerTags) && raw.trainerTags.every((v: unknown) => typeof v === "string") ? [...raw.trainerTags] as string[] : [];
   return { answers: issues.length > 0 ? null : answers, sourceFields: Object.keys(raw).length, issues: [...new Set(issues)],

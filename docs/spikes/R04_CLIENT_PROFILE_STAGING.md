@@ -44,11 +44,17 @@ Target — текущие QuestionnaireModel/Rules и Clients/QuestionnaireBasel
 весь профиль, сохраняя raw source. Текст не обрезается. История веса остаётся текстом
 анкеты и не создаёт измерение. Поля WorkData также разбираются по исходным типам.
 
-Если `healthCleared=true`, а в прежних полях есть содержательные данные, которые
+Историческое правило этого среза (заменено исправлением ниже): если `healthCleared=true`, а в прежних полях есть содержательные данные, которые
 новая visibility-логика спрятала бы, нужен разбор конфликта отображения. Это **не**
 медицинский вывод о наличии противопоказаний; галочка не меняется на false наугад.
 Исходные детали сохраняются. Кандидатные safety sources не становятся финальными
 Safety/Limitations автоматически; это остаётся задачей отдельного владельца.
+
+Уточнение 2026-10-23: [WorkData staging и health visibility](R04_CLIENT_WORK_DATA_STAGING.md)
+исправляют скрытие заполненных health details по Product10.15. Теперь оба исходных
+значения сохраняются без blocking clearance conflict и без изменения галочки.
+Notes/ManualTags/PENDING_REVIEW записаны отдельными normalized rows в частном
+стенде, но production WorkData repository/DDL ещё не подключены.
 
 ## Одна транзакция и read-back parity
 

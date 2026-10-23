@@ -1,3 +1,10 @@
+## 2026-10-23 — R04: отдельные заметки, общие теги и проверка ограничений
+
+- Добавлены ClientWorkData domain model и normalized R04 rows для Notes/Tags/Assignments/PENDING_REVIEW. Persisted UUID, workspace FK, raw provenance и naming policy; одна транзакция с Client IDs/cards/Q. Старая заметка сохраняется целиком, дата переноса отделена от неизвестной исходной даты. Диагнозы не создают ACTIVE limitations. [Контракт](spikes/R04_CLIENT_WORK_DATA_STAGING.md).
+- Исправлен прежний blocking clearance conflict по Product10.15: заполненные health details остаются видимыми при положительной галочке, оба значения переносятся. Default label — «Нет известных противопоказаний». Explicit hide/retire и custom visibility сохранены.
+- **105/105** targeted, включая15 новых WorkData tests, Q store/visibility и migration dependencies. Семь rollback boundaries, read-only source SHA unchanged, file reopen/reordered retry byte-identical, drift/FK/collision protections. Root/mobile TS, changed ESLint, source/arch506/secrets/diff; fullfoundation/APK/bundle не запускались.
+- Runtime WorkData repository/production DDL/UI/backup/deletion participation ещё не подключены; частная staging DB finalizable:false. Дальше legacy exercise catalog/остальные владельцы/full parity/runtime2.0 Restore/Android. Общая цель ACTIVE, R04/D03/R05/gates OPEN. Телефон/2.0/личные файлы не затрагивались.
+
 ## 2026-10-23 — R04: общая запись профиля и истории анкет 2.0
 
 - Профиль объединён с custom questionnaire revisions/answers в отдельно включаемом staging. Исторические номера/даты, привязка ответа к версии, неопубликованный draft и source provenance сохранены; добавляется отдельная migration publication. Несовместимая смена типа получает отдельную идентичность, удалённые использованные вопросы/варианты — retired. [Контракт](spikes/R04_QUESTIONNAIRE_STAGING.md).

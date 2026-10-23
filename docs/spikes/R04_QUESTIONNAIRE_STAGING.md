@@ -81,8 +81,10 @@ maps, dispositions и полный raw source. Read-back всех строк, FK
 
 ## Что остаётся
 
-Результат по-прежнему `finalizable:false`: Notes/ManualTags/Safety пока только
-WorkData candidates. Частная DB содержит r04_* объекты и выбранных владельцев;
+Результат по-прежнему `finalizable:false`: [следующий WorkData срез](R04_CLIENT_WORK_DATA_STAGING.md)
+уже записывает отдельные Notes/ManualTags/PENDING_REVIEW в частные normalized
+таблицы, но production repository/DDL этого владельца пока отсутствуют.
+Частная DB содержит r04_* объекты и выбранных владельцев;
 это не fitcoach_v3.db и публиковать её через restore engine нельзя. Runtime
 ExpoRestoreJobs принимает общие 3.0 snapshots; ветка 2.0 ещё не подключена.
 

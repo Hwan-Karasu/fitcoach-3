@@ -4,6 +4,14 @@ Identity, basic profile и lifecycle клиента; отдельно — раб
 ограничения безопасности и оркестрация архива/удаления. Анкета, измерения,
 абонементы и тренировки остаются у своих владельцев.
 
+`domain/ClientWorkDataModel.ts` задаёт отдельные TrainerNote, TrainerTag,
+ClientTagAssignment и SafetyImportReview (§§10.15/20.2/22.2). Версионированная
+нормализация имён ручных тегов учитывает NFC, пробелы и регистр без транслитерации.
+Импортированная health-информация не создаёт ACTIVE limitation. Нормализованные
+записи и stable IDs проверены в частном R04 staging; runtime repository/DDL/UI
+этого владельца пока не подключены. Reference client_work_data JSON blob не
+является реализацией актуальных Notes/Tags.
+
 Dev-only вертикальный срез использует `data/DevClientRepository.ts` и отдельную
 SQLite-базу для новых карточек: создание, редактирование имени/контактов,
 даты рождения/роста/emoji, список, архив и восстановление. Recovery Draft

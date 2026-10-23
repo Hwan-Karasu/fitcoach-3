@@ -13,5 +13,7 @@ export type { ClientCountsQueryPort, ClientCountsSnapshot, ClientListModel, Clie
 export type { ArchiveSortMode, ClientArchivePort, ClientDeletionManifest,
   ClientLifecycleCounts } from "./domain/ClientArchivePort.ts";
 export type { ClientHomeSummary, HomePackSummary, HomePackTone } from "./domain/ClientHomeSummary.ts";
+export { TRAINER_TAG_NAME_POLICY, trainerTagName } from "./domain/ClientWorkDataModel.ts";
+export type { TrainerNote, TrainerTag, ClientTagAssignment, SafetyImportReview } from "./domain/ClientWorkDataModel.ts";
 export type { RosterClientOverview, RosterMetricId, RosterMetricValue, RosterOverview,
   RosterOverviewPort } from "./domain/ClientRosterOverview.ts";

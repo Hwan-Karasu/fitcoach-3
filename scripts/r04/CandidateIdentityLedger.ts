@@ -7,6 +7,7 @@ import { isExplicitTimestamp } from "./ExactScaledHundredth.ts";
 import { projectLegacyClientCard, type ClientCardFields, type LegacyClientCardCandidate } from "./LegacyClientCardProjection.ts";
 import { createProfileRehearsalSchema, profileRehearsalObjects, stageClientProfilesInTransaction } from "./LegacyClientProfileStage.ts";
 import type { LegacyQuestionnaireSource } from "./LegacyQuestionnaireComposition.ts";
+import { createWorkDataRehearsalSchema, stageLegacyClientWorkDataInTransaction, workDataRehearsalObjects } from "./LegacyClientWorkDataStage.ts";
 
 export interface CandidateIdentityContext {
   readonly sourceSha256: string;
@@ -34,16 +35,18 @@ function validateClientKey(key: string, scope: string): void {
 
 /** R04 isolated synthetic staging contract. Never attach this schema to a source or runtime DB. */
 export function prepareCandidateIdentityLedger(db: DatabaseSync, context: CandidateIdentityContext,
-  options?: { readonly clientIdentityRehearsal: { readonly createdAt: string; readonly profiles?: true; readonly questionnaires?: true } }) {
+  options?: { readonly clientIdentityRehearsal: { readonly createdAt: string; readonly profiles?: true; readonly questionnaires?: true; readonly workData?: true } }) {
   // Snapshot caller input so a later caller mutation cannot change the ledger's binding.
   const binding = { ...context }, jobCreatedAt = options?.clientIdentityRehearsal.createdAt;
   const profilesEnabled = options?.clientIdentityRehearsal.profiles === true;
   const questionnairesEnabled = options?.clientIdentityRehearsal.questionnaires === true;
+  const workDataEnabled = options?.clientIdentityRehearsal.workData === true;
   if (questionnairesEnabled && !profilesEnabled) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
+  if (workDataEnabled && !questionnairesEnabled) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
   if (jobCreatedAt !== undefined && !isExplicitTimestamp(jobCreatedAt)) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
   const expectedContext = jobCreatedAt === undefined ? contextJson(binding)
     : JSON.stringify([contextJson(binding), "CLIENT_IDENTITY_REHEARSAL_V1", jobCreatedAt, ...(profilesEnabled ? ["PROFILE_REHEARSAL_V1"] : []),
-      ...(questionnairesEnabled ? ["QUESTIONNAIRE_COMPOSITION_V1"] : [])]);
+      ...(questionnairesEnabled ? ["QUESTIONNAIRE_COMPOSITION_V1"] : []), ...(workDataEnabled ? ["WORK_DATA_REHEARSAL_V1"] : [])]);
   const workspaceKey = JSON.stringify([binding.accountScope, binding.sourceWorkspaceId]);
   function inspect(): "new" | "owned" {
     const objects = db.prepare("SELECT type,name FROM sqlite_schema WHERE substr(name,1,7)<>'sqlite_' ORDER BY name").all();
@@ -52,6 +55,7 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
       : ["r04_candidate_identity", "r04_candidate_ids", "workspaces", "clients"];
     const expectedObjects: Record<string, string> = Object.fromEntries(expectedTables.map((name) => [name, "table"]));
     if (profilesEnabled) Object.assign(expectedObjects, profileRehearsalObjects);
+    if (workDataEnabled) Object.assign(expectedObjects, workDataRehearsalObjects);
     if (objects.length !== Object.keys(expectedObjects).length || objects.some((row) => !Object.hasOwn(expectedObjects, String(row.name))
       || row.type !== expectedObjects[String(row.name)])) {
       throw new Error("R04_ID_LEDGER_FOREIGN_DATABASE");
@@ -121,6 +125,7 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
       db.prepare("INSERT INTO workspaces(id,display_name,created_at) VALUES(?,?,?)")
         .run(binding.targetWorkspaceId, "R04 synthetic identity rehearsal", jobCreatedAt);
       if (profilesEnabled) createProfileRehearsalSchema(db);
+      if (workDataEnabled) createWorkDataRehearsalSchema(db);
     }
   });
   function reserveInTransaction(sourceKeys: readonly string[], allocate: () => string): ReadonlyMap<string, string> {
@@ -220,11 +225,12 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
     }
     return stageClientIdentities(source.map((row) => row.identity), allocate, checkpoint, cards, payloads, afterClients);
   }
-  function stageClientProfiles(source: readonly LegacyClientCardCandidate[], allocate: () => string = randomUUID,
+  function stageClientProfilesWithQuestionnaire(source: readonly LegacyClientCardCandidate[], allocate: () => string = randomUUID,
     checkpoint: (stage: "after-ids" | "after-client" | "after-profile" | "before-commit") => void = () => undefined,
-    questionnaire?: LegacyQuestionnaireSource | null) {
+    questionnaire?: LegacyQuestionnaireSource | null, afterProfiles?: (snapshot: readonly LegacyClientCardCandidate[], ids: ClientDraftIdMap) => void) {
     if (!profilesEnabled || jobCreatedAt === undefined) throw new Error("R04_ID_LEDGER_PROFILE_NOT_ENABLED");
     if (questionnairesEnabled !== (questionnaire !== undefined)) throw new Error("R04_ID_LEDGER_QUESTIONNAIRE_MODE_MISMATCH");
+    if (workDataEnabled !== (afterProfiles !== undefined)) throw new Error("R04_ID_LEDGER_WORK_DATA_MODE_MISMATCH");
     const questionnaireSnapshot = questionnaire === undefined ? undefined : structuredClone(questionnaire);
     const snapshot = structuredClone(source).map((row) => {
       if (row.issues.length > 0) throw new Error("R04_ID_LEDGER_CLIENT_CARD_BLOCKED");
@@ -233,13 +239,28 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
     let profiles: ReturnType<typeof stageClientProfilesInTransaction> | null = null;
     const clients = stageClientCards(snapshot, allocate, checkpoint, () => {
       profiles = stageClientProfilesInTransaction(db, binding, jobCreatedAt, snapshot, loadClientDraftIds(), () => checkpoint("after-profile"), questionnaireSnapshot);
+      afterProfiles?.(snapshot, loadClientDraftIds());
     });
     return { ...clients, ...profiles!, status: "profile-rehearsal-staged" as const };
+  }
+  function stageClientProfiles(source: readonly LegacyClientCardCandidate[], allocate: () => string = randomUUID,
+    checkpoint: (stage: "after-ids" | "after-client" | "after-profile" | "before-commit") => void = () => undefined) {
+    return stageClientProfilesWithQuestionnaire(source, allocate, checkpoint);
   }
   function stageClientQuestionnaires(source: readonly LegacyClientCardCandidate[], questionnaire: LegacyQuestionnaireSource | null,
     allocate: () => string = randomUUID, checkpoint: (stage: "after-ids" | "after-client" | "after-profile" | "before-commit") => void = () => undefined) {
     if (!questionnairesEnabled) throw new Error("R04_ID_LEDGER_QUESTIONNAIRE_NOT_ENABLED");
-    return { ...stageClientProfiles(source, allocate, checkpoint, questionnaire), status: "questionnaire-rehearsal-staged" as const };
+    return { ...stageClientProfilesWithQuestionnaire(source, allocate, checkpoint, questionnaire), status: "questionnaire-rehearsal-staged" as const };
   }
-  return { reserveClientIds, loadClientDraftIds, stageClientIdentities, stageClientCards, stageClientProfiles, stageClientQuestionnaires };
+  function stageClientWorkData(source: readonly LegacyClientCardCandidate[], questionnaire: LegacyQuestionnaireSource | null,
+    allocate: () => string = randomUUID,
+    checkpoint: (stage: "after-ids" | "after-client" | "after-profile" | "after-work-data" | "before-commit") => void = () => undefined) {
+    if (!workDataEnabled || jobCreatedAt === undefined) throw new Error("R04_ID_LEDGER_WORK_DATA_NOT_ENABLED");
+    let workData: ReturnType<typeof stageLegacyClientWorkDataInTransaction> | null = null;
+    const clients = stageClientProfilesWithQuestionnaire(source, allocate, checkpoint, questionnaire, (snapshot, ids) => {
+      workData = stageLegacyClientWorkDataInTransaction(db, binding, jobCreatedAt, snapshot, ids, allocate, () => checkpoint("after-work-data"));
+    });
+    return { ...clients, ...workData!, status: "work-data-rehearsal-staged" as const };
+  }
+  return { reserveClientIds, loadClientDraftIds, stageClientIdentities, stageClientCards, stageClientProfiles, stageClientQuestionnaires, stageClientWorkData };
 }
