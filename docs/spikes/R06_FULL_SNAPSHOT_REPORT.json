@@ -1,0 +1,129 @@
+{
+  "date": "2026-10-23",
+  "scope": "Synthetic private full SQLite snapshot, embedded recipe image, guarded restore; normal device run",
+  "platform": "Android API 36 / Expo Go 57.0.9",
+  "performanceNote": "Elapsed includes device dozing; not an SLA measurement",
+  "normal": {
+    "kind": "R06_NATIVE",
+    "checks": [
+      {
+        "name": "native_scalar_hash_matches_node",
+        "passed": true
+      },
+      {
+        "name": "streaming_sha256",
+        "passed": true
+      },
+      {
+        "name": "native_manifest_embeds_media",
+        "passed": true
+      },
+      {
+        "name": "native_backup_preserves_source",
+        "passed": true
+      },
+      {
+        "name": "native_self_contained_after_photo_loss",
+        "passed": true
+      },
+      {
+        "name": "native_staging_manifest_parity",
+        "passed": true
+      },
+      {
+        "name": "native_external_backup_unchanged",
+        "passed": true
+      },
+      {
+        "name": "guarded_replace",
+        "passed": true
+      },
+      {
+        "name": "independent_safety",
+        "passed": true
+      },
+      {
+        "name": "previous_preserved",
+        "passed": true
+      },
+      {
+        "name": "reopen_restored_client",
+        "passed": true
+      },
+      {
+        "name": "snapshot_not_merge",
+        "passed": true
+      },
+      {
+        "name": "native_recipe_revision_archive_preserved",
+        "passed": true
+      },
+      {
+        "name": "native_recipe_json_parity",
+        "passed": true
+      },
+      {
+        "name": "native_photo_private_relocation",
+        "passed": true
+      },
+      {
+        "name": "native_photo_exact_bytes",
+        "passed": true
+      },
+      {
+        "name": "native_photo_decoder_accepts",
+        "passed": true
+      },
+      {
+        "name": "receipt_replay",
+        "passed": true
+      },
+      {
+        "name": "replay_preserves_later_writes",
+        "passed": true
+      }
+    ],
+    "allPassed": true,
+    "elapsedMs": 131551
+  },
+  "interruption": {
+    "boundary": "AFTER_FILE_SWITCH_BEFORE_COMMIT",
+    "forceStopExecuted": true,
+    "processAbsentAfterStop": true
+  },
+  "recoveryInNewProcess": {
+    "kind": "R06_NATIVE",
+    "checks": [
+      {
+        "name": "native_kill_rolls_back",
+        "passed": true
+      },
+      {
+        "name": "native_kill_original_bytes",
+        "passed": true
+      },
+      {
+        "name": "native_kill_safety_intact",
+        "passed": true
+      },
+      {
+        "name": "native_kill_rejected_preserved",
+        "passed": true
+      },
+      {
+        "name": "native_kill_original_client",
+        "passed": true
+      },
+      {
+        "name": "native_kill_no_partial_merge",
+        "passed": true
+      },
+      {
+        "name": "native_kill_idempotent_recovery",
+        "passed": true
+      }
+    ],
+    "allPassed": true,
+    "elapsedMs": 12645
+  }
+}

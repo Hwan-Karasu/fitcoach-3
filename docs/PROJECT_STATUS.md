@@ -1,4 +1,11 @@
-## 2026-10-23 — повторная пауза по просьбе владельца
+## 2026-10-23 — R06: общий snapshot engine и полный формат на Android
+
+- Продолжена работа после просьбы владельца «не спим, работаем». Snapshot manifest/catalog/content hash/media/staging перенесены в общий mobile engine; Node и Expo используют одну реализацию. Snapshot migrations/checksum сохранены, Node hash остаётся независимым oracle. Расхождение на REAL -0 устранено без ослабления fixture; short reads и rollback при изменении исходного фото проверены.
+- Android полный `.atbackup` с фото >512 КиБ: 19/19, включая scalar parity с Node, потерю исходного фото, точные восстановленные bytes, native decoder, revisions/архив/JSON, guarded replacement и replay. Реальный force-stop после swap до COMMITTED: отсутствие процесса подтверждено; recovery в новом процессе 7/7. [Результат и границы](spikes/R06_PORTABLE_SNAPSHOT.md), [фактический отчёт](spikes/R06_FULL_SNAPSHOT_REPORT.json).
+- Foundation 939/939; lint/source:verify/secrets:check/diff --check прошли. Обычный runtime ещё не подключает ExpoSqliteBackup; SAF, boot/scheduler/leases, rotation/Return, negative/low-storage/reinstall/full-owner native gates впереди. Установленная 2.0.0 (128) и её данные не менялись.
+- Следующий этап после backup/restore по запросу владельца: [импорт/экспорт Excel](EXCEL_IMPORT_EXPORT_PLAN.md). Сначала GitHub-исследование решений и библиотек, затем 2.0 как образец; Excel-код пока не начат.
+
+## 2026-10-23 — предыдущая пауза по просьбе владельца
 
 - Сохранён незавершённый перенос R06 в общий mobile snapshot module и host SQL adapter; default runtime не подключён. Последняя полностью проверенная реализация остаётся `be5f8f7` (foundation 934/934, native 9/9 + kill/recovery 7/7).
 - Текущие typecheck, arch:check, lint, secrets:check и diff --check прошли. Новый portable snapshot test: 1 passed / 1 failed — checksum расходится с Node oracle на edge-value fixture. Полный foundation после новых файлов не запускался; этот этап не объявлен готовым.

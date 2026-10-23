@@ -4,24 +4,19 @@ import { basename, dirname, join } from "node:path";
 import { backup, DatabaseSync } from "node:sqlite";
 import { PRODUCTION_IDENTITY, inspectProductionDatabase } from "../../apps/mobile/src/app/composition/productionDatabase.ts";
 import { SCHEMA_OWNERS } from "../../apps/mobile/src/app/composition/schema.ts";
-import { inspectDatabaseIdentity, type DatabaseOwnerCatalog } from "../../apps/mobile/src/shared/db/DatabaseIdentity.ts";
-import { runMigrationsInTransaction } from "../../apps/mobile/src/shared/db/MigrationRunner.ts";
 import { nodeSqlitePort } from "../support/node-sqlite-port.ts";
-import { SnapshotError, type SnapshotManifest, type SnapshotMediaSummary } from "./SnapshotContract.ts";
-import { embedRecipePhotos, extractRecipePhotos, mediaDdl, MEDIA_CHUNKS, MEDIA_TABLE, originalPhotoJsonForParity,
-  verifyRecipePhotos, type RestoredRecipePhoto, type SnapshotMediaOptions } from "./SqliteBackupMedia.ts";
+import { SnapshotError, type SnapshotManifest } from "./SnapshotContract.ts";
+import { originalPhotoJsonForParity, type RestoredRecipePhoto } from "./SqliteBackupMedia.ts";
+import { SqliteSnapshotEngine } from "../../apps/mobile/src/features/backup/data/SqliteSnapshotEngine.ts";
+import { SNAPSHOT_OBJECTS } from "../../apps/mobile/src/features/backup/data/SnapshotCatalog.ts";
+import { nodeSnapshotSql } from "./NodeSnapshotSql.ts";
+import { nodeSnapshotMediaSettings, type SnapshotMediaOptions } from "./NodeSnapshotMedia.ts";
 export { SnapshotError } from "./SnapshotContract.ts";
 export type { SnapshotManifest } from "./SnapshotContract.ts";
 
-/** Host-only R06 format candidate. No working database DDL is added or changed. */
-const manifestTable = "at_backup_manifest";
-const backupLedger = "at_backup_schema_migrations";
-const manifestDdl = `CREATE TABLE ${manifestTable} (singleton INTEGER PRIMARY KEY NOT NULL CHECK (singleton = 1),
-  json TEXT NOT NULL CHECK (json_valid(json) AND json_type(json) = 'object'))`;
-const snapshotOwner: DatabaseOwnerCatalog = { owner: "backup-snapshot", ledger: backupLedger,
-  chain: [{ version: 1, checksum: createHash("sha256").update(manifestDdl).digest("hex"), statements: [manifestDdl] },
-    { version: 2, checksum: createHash("sha256").update(mediaDdl.join("\n")).digest("hex"), statements: mediaDdl }] };
-const backupObjects = new Set([manifestTable, backupLedger, MEDIA_TABLE, MEDIA_CHUNKS]);
+/** Host file driver around the same engine as Expo. Never adds working database DDL. */
+const engine = new SqliteSnapshotEngine({ identity: PRODUCTION_IDENTITY, owners: SCHEMA_OWNERS });
+const backupObjects = SNAPSHOT_OBJECTS;
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
 /** Streaming, typed logical checksum, not JSON.stringify of the entire database. Includes
@@ -67,44 +62,8 @@ export function canonicalContentSha256(db: DatabaseSync, photos: readonly Restor
   }
   return hash.digest("hex");
 }
-function parseManifest(json: unknown): SnapshotManifest {
-  try {
-    if (typeof json !== "string") throw new Error();
-    const value: unknown = JSON.parse(json);
-    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error();
-    const m = value as Partial<SnapshotManifest>;
-    if (m.kind !== "athlete-diary-snapshot" || m.formatVersion !== 3 || m.product !== "athlete_diary" ||
-      m.workspaceId !== PRODUCTION_IDENTITY.workspaceId || typeof m.backupId !== "string" ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(m.backupId) ||
-      typeof m.createdAt !== "string" || new Date(m.createdAt).toISOString() !== m.createdAt ||
-      typeof m.contentSha256 !== "string" || !/^[0-9a-f]{64}$/u.test(m.contentSha256) ||
-      Object.keys(m).sort().join(",") !== (m.media === undefined
-        ? "backupId,contentSha256,createdAt,formatVersion,kind,product,workspaceId"
-        : "backupId,contentSha256,createdAt,formatVersion,kind,media,product,workspaceId")) throw new Error();
-    if (m.media !== undefined) {
-      const media = m.media as Partial<SnapshotMediaSummary>;
-      if (!media || typeof media !== "object" || media.version !== 1 ||
-        !Number.isSafeInteger(media.entries) || media.entries! < 0 || !Number.isSafeInteger(media.bytes) || media.bytes! < 0 ||
-        typeof media.sha256 !== "string" || !/^[0-9a-f]{64}$/u.test(media.sha256) ||
-        Object.keys(media).sort().join(",") !== "bytes,entries,sha256,version") throw new Error();
-      // Normalize property order: JSON property order is not part of the file format.
-      return { ...m, media: { version: 1, entries: media.entries!, bytes: media.bytes!, sha256: media.sha256 } } as SnapshotManifest;
-    }
-    return m as SnapshotManifest;
-  } catch { throw new SnapshotError("SNAPSHOT_INVALID"); }
-}
 async function inspectSnapshot(db: DatabaseSync): Promise<SnapshotManifest> {
-  if (await inspectDatabaseIdentity(nodeSqlitePort(db), PRODUCTION_IDENTITY, [...SCHEMA_OWNERS, snapshotOwner]) !== "OWNED") {
-    throw new SnapshotError("SNAPSHOT_INVALID");
-  }
-  const rows = db.prepare(`SELECT singleton, CASE WHEN length(json) <= 8192 THEN json END AS json FROM ${manifestTable}`).all();
-  if (rows.length !== 1 || rows[0]?.singleton !== 1) throw new SnapshotError("SNAPSHOT_INVALID");
-  const manifest = parseManifest(rows[0].json);
-  const version = db.prepare(`SELECT max(version) AS version FROM ${backupLedger}`).get()?.version;
-  if ((version === 2) !== (manifest.media !== undefined)) throw new SnapshotError("SNAPSHOT_INVALID");
-  verifyRecipePhotos(db, manifest.media);
-  if (canonicalContentSha256(db) !== manifest.contentSha256) throw new SnapshotError("SNAPSHOT_INVALID");
-  return manifest;
+  return engine.validateSnapshot(nodeSnapshotSql(db));
 }
 function reserve(file: string): void {
   try { closeSync(openSync(file, "wx", 0o600)); }
@@ -147,16 +106,7 @@ export async function createSqliteBackup(source: DatabaseSync, partial: string, 
     const copy = new DatabaseSync(partial);
     try {
       copy.exec("PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL");
-      if (await inspectProductionDatabase(nodeSqlitePort(copy)) !== "OWNED") throw new SnapshotError("SNAPSHOT_INVALID");
-      const contentSha256 = canonicalContentSha256(copy);
-      await nodeSqlitePort(copy).exclusive(async (tx) => {
-        await runMigrationsInTransaction(tx, snapshotOwner.chain, snapshotOwner.ledger);
-        const media = embedRecipePhotos(copy, mediaOptions);
-        const manifest = parseManifest(JSON.stringify({ kind: "athlete-diary-snapshot", formatVersion: 3,
-          product: PRODUCTION_IDENTITY.product, workspaceId: PRODUCTION_IDENTITY.workspaceId,
-          backupId: metadata.backupId, createdAt: metadata.createdAt, contentSha256, media }));
-        await tx.run(`INSERT INTO ${manifestTable} (singleton, json) VALUES (1, ?)`, [JSON.stringify(manifest)]);
-      });
+      await engine.sealSnapshot(nodeSnapshotSql(copy), metadata, nodeSnapshotMediaSettings(mediaOptions));
     } finally { copy.close(); }
     sync(partial);
     const manifest = await validateSqliteBackup(partial);
@@ -192,23 +142,7 @@ export async function prepareBackupForRestore(file: string, staging: string, med
       candidate.exec("PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL");
       const copied = await inspectSnapshot(candidate);
       if (JSON.stringify(copied) !== JSON.stringify(manifest)) throw new SnapshotError("SNAPSHOT_INVALID");
-      const photos = extractRecipePhotos(candidate, manifest.backupId, mediaOptions);
-      await nodeSqlitePort(candidate).exclusive(async (tx) => {
-        if (manifest.media !== undefined) {
-          await tx.run(`DROP TABLE ${MEDIA_CHUNKS}`);
-          await tx.run(`DROP TABLE ${MEDIA_TABLE}`);
-        }
-        await tx.run(`DROP TABLE ${manifestTable}`);
-        await tx.run(`DROP TABLE ${backupLedger}`);
-        for (const photo of photos) {
-          const changed = await tx.run("UPDATE recipes SET details_json=json_set(details_json, '$.photoUri', ?) WHERE id=? AND json_extract(details_json, '$.photoUri')=?",
-            [photo.restoredUri, photo.id, photo.sourceUri]);
-          if (changed.changes !== 1) throw new SnapshotError("SNAPSHOT_INVALID");
-        }
-        if (await inspectProductionDatabase(tx) !== "OWNED" || canonicalContentSha256(candidate, photos) !== manifest.contentSha256) {
-          throw new SnapshotError("SNAPSHOT_INVALID");
-        }
-      });
+      await engine.stageSnapshot(nodeSnapshotSql(candidate), nodeSnapshotMediaSettings(mediaOptions));
     } finally { candidate.close(); }
     sync(staging);
     return manifest;

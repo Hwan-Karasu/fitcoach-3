@@ -7,8 +7,8 @@ import type { SnapshotSqlPort } from "./SnapshotSqlPort.ts";
 
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
 /** Same byte protocol as the original node:crypto oracle. Integers cross the native bridge
- * as TEXT, never an imprecise JS number. printf's 26-digit REAL representation roundtrips
- * the original IEEE double; its binary bits (not text formatting) are hashed.
+ * as TEXT, never an imprecise JS number. REAL values retain their native IEEE double,
+ * including the sign bit of negative zero; decimal printf loses that bit.
  */
 export async function snapshotContentSha256(db: SnapshotSqlPort, photos: readonly RestoredRecipePhoto[] = []): Promise<string> {
   const relocated = new Map(photos.map((photo) => [photo.id, photo]));
@@ -19,10 +19,8 @@ export async function snapshotContentSha256(db: SnapshotSqlPort, photos: readonl
     let tag: string; let bytes: Uint8Array;
     if (kind === "null" && value === null) { tag = "null"; bytes = new Uint8Array(0); }
     else if (kind === "integer" && typeof value === "string" && /^-?(?:0|[1-9][0-9]*)$/u.test(value)) { tag = "integer"; bytes = utf8ToBytes(value); }
-    else if (kind === "real" && typeof value === "string") {
-      const number = value === "Inf" ? Infinity : value === "-Inf" ? -Infinity : Number(value);
-      if (Number.isNaN(number)) throw new SnapshotError("SNAPSHOT_INVALID");
-      tag = "real"; bytes = new Uint8Array(8); new DataView(bytes.buffer).setFloat64(0, number, false);
+    else if (kind === "real" && typeof value === "number" && !Number.isNaN(value)) {
+      tag = "real"; bytes = new Uint8Array(8); new DataView(bytes.buffer).setFloat64(0, value, false);
     } else if (kind === "text" && typeof value === "string") { tag = "text"; bytes = utf8ToBytes(value); }
     else if (kind === "blob" && value instanceof Uint8Array) { tag = "blob"; bytes = value; }
     else throw new SnapshotError("SNAPSHOT_INVALID");
@@ -42,7 +40,7 @@ export async function snapshotContentSha256(db: SnapshotSqlPort, photos: readonl
       for (const name of columns) feed("text", name);
       const fields = columns.map((name, index) => {
         const col = quote(name);
-        return `typeof(${col}) AS t${index}, CASE typeof(${col}) WHEN 'integer' THEN CAST(${col} AS TEXT) WHEN 'real' THEN printf('%!.26g', ${col}) ELSE ${col} END AS v${index}`;
+        return `typeof(${col}) AS t${index}, CASE typeof(${col}) WHEN 'integer' THEN CAST(${col} AS TEXT) ELSE ${col} END AS v${index}`;
       }).join(", ");
       const order = columns.map((name) => `${quote(name)} COLLATE BINARY`).join(", ");
       for await (const row of db.each<Record<string, unknown>>(`SELECT ${fields} FROM ${quote(object.name)} ORDER BY ${order}`)) {
