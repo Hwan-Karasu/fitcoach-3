@@ -1,4 +1,42 @@
-## Последнее продолжение — R04 archive Plans, база74fa6cf
+## Последнее продолжение — R04 canonical Execution, база12381f4
+
+Previous goal turnPROGRESS12381f4 archivePlans. GoalACTIVEfull2.0→3.0+backup/restore,
+not100%; R04→R03/D03→D01/R04/R05. Product48.5.7/33/39/46.6/46.19/49–50/53–56/
+INT03–12. Migration/overlay/signing/releaseOPEN; no newprodDDL/real migration/overlay.
+
+NEW LegacyExecutionSourceReader/Dates/Occurrences/Projection/Stage. Exacte116b42
+trainingSetFacts/SetLogRepo/writeHistory/021sessions/022importdates/HistoryRepo
+inspected. executions:true/allpreviousmodes/TRAINING_EXECUTIONS_REHEARSAL_V1, full
+stageClientExecutions sharedtx. Sixprivate r04_execution_* tables normalizedIDs/
+sessions/facts/segments/representations/receipt, not D01 training_execution owner.
+No prodDDL/runtime changes. SourceFact identity account+client; physical workout
+refs/sharedfacts join graph, never names/date/metrics/logicalSIMPLEID. Exactall
+segments/type/effort/nonemptyRPE; conflicts/currentunconfirmation block. Warmup
+workingcountseparate/no fakeCOMPLETED. Implicitoldcompletion onlyfullvalues/no
+plannedfields/noexplicitmarker. Historydata.id fallback; archiveopaque path only
+root/cycleproof, no guessedcross-source identity. Snapshotnames/basis retained,
+missingname nullable/notcatalognamefake. Deletedrepresentation preserved/reviewflag.
+Knownforeignarchiveprogram requires nonarchive sameclient proof, anotherarchive
+cannotauthorize. OtherwiseOWNERSHIP_REVIEW/no fact orsessionID.
+
+Dates INSTANT/LOCAL_DATETIME/DAY/DERIVED/UNKNOWN; importedunknown evenwithoutimportedAt
+overridesweakcache, manualexactDAY wins oldannotations. Allfractionalprecision/
+offsetpreserved;notTZguessed,derivedonlyestimate,unknownnotnow. INSTANTday recorded
+clockday/notprovenbusinessday; timezone policycompat marker. Privatecompat flags
+retain D01unknownDate/largeMetrics/drop+failure/identity/binding/lifecycleissues,
+notresolve. D01factscreated0/finalizable:false, private graph countnotcompleted
+workoutcount. Outcome/notes/editablevalues/runtimeprojectionremainOPEN.
+
+306/306targeted(19new+existingarea/dependencies),22failureboundaries rollbackall/
+retry inclclientIDs; readonlysourceSHAunchanged,targetreopenreorderbyteidentical,
+allocatornotcalled. Readverifiesallprivate rows/IDs/sourceSHA256; source/targetdrift,
+corruption/ownership/shape/cloning/exactdate/labels. Root/mobileTS/changedESLint/
+source73/arch506/secrets/diff pass.
+No fullfoundation/bundle/APK/native/phone/personalfiles. [Контракт](spikes/R04_CANONICAL_EXECUTIONS_STAGING.md).
+NEXT runtimeproposal fordateprecision/identity/effort withinOPENgates, complete
+states/owners/fullparity/restoreSQLite+JSONv1v2/Android. Allpreviouslimitsbelowpersist.
+
+## Предыдущее продолжение — R04 archive Plans, база74fa6cf
 
 Previous goal turn PROGRESS74fa6cf templates. GoalACTIVEfull2.0→3.0+backup/restore,
 не100%. TaskR04→R03/D03→D01/R04/R05; Product48.5.7/48.28/48.39/49–50/53–56,

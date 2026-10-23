@@ -1,0 +1,286 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { DatabaseSync } from "node:sqlite";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { prepareCandidateIdentityLedger } from "./r04/CandidateIdentityLedger.ts";
+import { readLegacyExecutionInSnapshot } from "./r04/LegacyExecutionSourceReader.ts";
+import { readLegacyPlansInSnapshot } from "./r04/LegacyPlansSourceReader.ts";
+import { readLegacyClientIdentityInSnapshot } from "./r04/LegacyClientIdentitySourceReader.ts";
+import { readLegacyClientCardsInSnapshot } from "./r04/LegacyClientCardProjection.ts";
+import { readLegacyExerciseCatalogInSnapshot } from "./r04/LegacyExerciseCatalogSourceReader.ts";
+import { readLegacyExerciseReferencesInSnapshot } from "./r04/LegacyExerciseReferencePreflight.ts";
+import { legacyExecutionDate, mergeLegacyExecutionDates } from "./r04/LegacyExecutionDates.ts";
+
+const context = { sourceSha256: "f".repeat(64), accountScope: "execution-synthetic", sourceWorkspaceId: "source-workspace", targetWorkspaceId: "local-trainer" };
+const date0 = "2026-03-01T12:00:00.000Z", date1 = "2026-03-08T12:00:00.000Z", imported = "2026-05-01T10:00:00Z";
+const options = { clientIdentityRehearsal: { createdAt: imported, profiles: true as const, questionnaires: true as const, workData: true as const,
+  exercises: true as const, plans: true as const, templates: true as const, archives: true as const, executions: true as const } };
+function allocator() { let n = 0; return () => `55555555-5555-4555-8555-${String(++n).padStart(12, "0")}`; }
+function snapshot(id: string, fact: string, date: string) {
+  return { programId: id, mode: "periodized", cycleType: "hypertrophy", settings: { totalWeeks: 1 }, totalWeeks: 1, totalWorkouts: 1, completedWorkouts: 1,
+    weeks: [{ weekId: `${id}:week`, weekIndex: 0, weekType: "", label: "Неделя 1", workoutCount: 1 }],
+    workouts: [{ name: "Архивная тренировка", weekIndex: 0, sortIndex: 0, status: "completed", exercises: [
+      { name: "Архивное имя", note: "", sortIndex: 0, templateExerciseId: "x", data: { catalogId: "x" }, sets: [
+        { sourceFactId: fact, setIndex: 0, reps: "20", weight: "10", rpe: "8", completedAt: date, setKind: "working", effortOutcome: "normal",
+          segments: [{ reps: "20", weight: "10" }], data: { factCompletionExplicit: true, plannedReps: "8-12", plannedWeight: "2,5" } },
+      ] },
+    ] }],
+  };
+}
+function seed(db: DatabaseSync) {
+  db.exec(`CREATE TABLE clients(id TEXT PRIMARY KEY,workspace_id TEXT,name TEXT,created_at TEXT,updated_at TEXT,archived_at TEXT,deleted_at TEXT,birthdate TEXT,height TEXT,gender TEXT,avatar_emoji TEXT,profile_json TEXT);
+    CREATE TABLE exercise_catalog(id TEXT PRIMARY KEY,name TEXT,category TEXT,equipment TEXT,aliases_json TEXT,source TEXT,created_at TEXT,updated_at TEXT,deleted_at TEXT);
+    CREATE TABLE training_programs(id TEXT PRIMARY KEY,client_id TEXT,mode TEXT,name TEXT,cycle_type TEXT,settings_json TEXT,book_id TEXT,is_template INTEGER,created_at TEXT,updated_at TEXT,deleted_at TEXT,template_workspace_id TEXT);
+    CREATE TABLE training_weeks(id TEXT PRIMARY KEY,program_id TEXT,week_index INTEGER,week_type TEXT,label TEXT,data_json TEXT,deleted_at TEXT);
+    CREATE TABLE training_workouts(id TEXT PRIMARY KEY,client_id TEXT,program_id TEXT,week_id TEXT,sort_index INTEGER,name TEXT,data_json TEXT,created_at TEXT,updated_at TEXT,deleted_at TEXT);
+    CREATE TABLE training_exercises(id TEXT PRIMARY KEY,workout_id TEXT,sort_index INTEGER,name TEXT,note TEXT,template_exercise_id TEXT,data_json TEXT,deleted_at TEXT);
+    CREATE TABLE training_set_logs(id TEXT PRIMARY KEY,exercise_id TEXT,set_index INTEGER,reps TEXT,weight TEXT,rpe TEXT,completed_at TEXT,data_json TEXT,deleted_at TEXT,set_kind TEXT,effort_outcome TEXT);
+    CREATE TABLE training_set_segments(id TEXT PRIMARY KEY,set_log_id TEXT,segment_index INTEGER,reps TEXT,weight TEXT,deleted_at TEXT);
+    CREATE TABLE training_exercise_history(id TEXT PRIMARY KEY,client_id TEXT,exercise_key TEXT,source_fact_id TEXT,data_json TEXT,updated_at TEXT,deleted_at TEXT);
+    CREATE TABLE training_archive_entries(id TEXT PRIMARY KEY,client_id TEXT,title TEXT,data_json TEXT,archived_at TEXT,deleted_at TEXT);
+    CREATE TABLE training_sessions(id TEXT PRIMARY KEY,client_id TEXT,source_workout_id TEXT,program_key TEXT,week_key TEXT,workout_name TEXT,performed_at TEXT,date_source TEXT,data_json TEXT,deleted_at TEXT);
+    CREATE TABLE training_session_exercises(id TEXT PRIMARY KEY,session_id TEXT,source_exercise_id TEXT,catalog_id TEXT,exercise_key TEXT,name TEXT,sort_index INTEGER,data_json TEXT,deleted_at TEXT);
+    CREATE TABLE training_session_sets(id TEXT PRIMARY KEY,session_exercise_id TEXT,source_fact_id TEXT,set_index INTEGER,reps TEXT,weight TEXT,rpe TEXT,set_kind TEXT,effort_outcome TEXT,completed_at TEXT,segments_json TEXT,data_json TEXT,deleted_at TEXT);`);
+  for (const client of ["a", "b"]) {
+    db.prepare("INSERT INTO clients VALUES(?,?,?,?,?,NULL,NULL,'','','','',?)").run(client, context.sourceWorkspaceId, `Синтетический ${client}`, date0, date0,
+      JSON.stringify({ trainerNotes: `Заметка ${client}`, trainerTags: ["Общий"] }));
+    db.prepare("INSERT INTO training_programs VALUES(?,?,?,?,?, ?,NULL,0,?,?,NULL,NULL)").run(`p-${client}`, client, client === "a" ? "free" : "periodized", `Программа ${client}`, "hypertrophy",
+      JSON.stringify({ totalWeeks: client === "a" ? 2 : 1 }), date0, date0);
+    for (let i = 0; i < (client === "a" ? 2 : 1); i++) {
+      const prefix = `${client}${i}`, time = i === 0 ? date0 : date1;
+      db.prepare("INSERT INTO training_weeks VALUES(?,?,?,'','Неделя','{}',NULL)").run(`week-${prefix}`, `p-${client}`, i);
+      db.prepare("INSERT INTO training_workouts VALUES(?,?,?,?,0,'Тренировка','{}',?,?,NULL)").run(`w-${prefix}`, client, `p-${client}`, `week-${prefix}`, time, time);
+      db.prepare("INSERT INTO training_exercises VALUES(?,?,0,'Текущее имя','','x',?,NULL)").run(`e-${prefix}`, `w-${prefix}`, '{"catalogId":"x"}');
+      const set = `set-${prefix}`, data = { factCompletionExplicit: true, plannedReps: "8-12", plannedWeight: "2,5", ...(client === "b" ? { historyOriginId: "set-a0" } : {}) };
+      db.prepare("INSERT INTO training_set_logs VALUES(?,?,0,'20','10','8',?,?,NULL,'working','normal')").run(set, `e-${prefix}`, time, JSON.stringify(data));
+      db.prepare("INSERT INTO training_set_segments VALUES(?,?,0,'20','10',NULL)").run(`segment-${set}`, set);
+    }
+  }
+  db.prepare("INSERT INTO exercise_catalog VALUES('x','Каталожное имя','Другое','','[]','user',?,?,NULL)").run(date0, date0);
+  db.prepare("INSERT INTO training_set_logs VALUES('warmup','e-a0',1,'5','0','',?,'{" + '"factCompletionExplicit":true' + "}',NULL,'warmup','normal')").run(date0);
+  db.exec("INSERT INTO training_set_logs VALUES('draft','e-a0',2,'5','','',NULL,'{\"factCompletionExplicit\":true,\"plannedReps\":\"8\"}',NULL,'working','normal')");
+  db.prepare("INSERT INTO training_set_logs VALUES('drop','e-a1',1,'20','10','9',?,'{" + '"factCompletionExplicit":true,"plannedReps":"8"' + "}',NULL,'drop','failure')").run(date1);
+  db.exec("INSERT INTO training_set_segments VALUES('drop-main','drop',0,'20','10',NULL); INSERT INTO training_set_segments VALUES('drop-mini','drop',1,'15','8',NULL)");
+  cache(db, "cache", "set-a0", date0, "completed-at", "w-a0", "20", "10");
+  db.prepare("INSERT INTO training_exercise_history VALUES('h-a0','a','catalog:x','set-a0',?,?,NULL)").run(JSON.stringify({ id: "set-a0", sourceFactId: "set-a0", catalogId: "x", exerciseId: "e-a0", name: "Историческое имя",
+    workoutId: "w-a0", workoutName: "Тренировка", setIndex: 0, reps: "20", weight: "10", rpe: "8", setKind: "working", effortOutcome: "normal", date: date0, dateStatus: "exact", segments: [{ reps: "20", weight: "10" }] }), date0);
+  const cycles = [{ name: "Первый цикл", snapshot: snapshot("old-first", "set-a0", date0) }, { name: "Второй цикл", snapshot: snapshot("old-second", "set-a1", date1) }];
+  const root = { ...cycles[0]!.snapshot, totalWeeks: 2, totalWorkouts: 2, completedWorkouts: 2,
+    weeks: cycles.flatMap((c, i) => c.snapshot.weeks.map((w) => ({ ...w, weekIndex: i }))),
+    workouts: cycles.flatMap((c, i) => c.snapshot.workouts.map((w) => ({ ...w, weekIndex: i }))), cycles };
+  db.prepare("INSERT INTO training_archive_entries VALUES('archive','a','Архив',?,?,NULL)").run(JSON.stringify(root), "2026-04-01T10:00:00Z");
+}
+function cache(db: DatabaseSync, id: string, fact: string, date: string, dateSource: string, workout: string | null, reps: string, weight: string) {
+  db.prepare("INSERT INTO training_sessions VALUES(?,'a',?,'old-program','old-week','Проекция',?,?,'{}',NULL)").run(id, workout, date, dateSource);
+  db.prepare("INSERT INTO training_session_exercises VALUES(?,?,NULL,'x','catalog:x','Имя проекции',0,'{}',NULL)").run(`e-${id}`, id);
+  db.prepare("INSERT INTO training_session_sets VALUES(?,?,?,0,?,?,'8','working','normal',?,?,'{}',NULL)").run(`f-${id}`, `e-${id}`, fact, reps, weight, date, JSON.stringify([{ reps, weight }]));
+}
+function read(db: DatabaseSync) {
+  const catalog = readLegacyExerciseCatalogInSnapshot(db, context.accountScope);
+  return { cards: readLegacyClientCardsInSnapshot(db, context.accountScope, readLegacyClientIdentityInSnapshot(db, context.accountScope)), catalog,
+    refs: readLegacyExerciseReferencesInSnapshot(db, context.accountScope, catalog), plans: readLegacyPlansInSnapshot(db, context.accountScope), executions: readLegacyExecutionInSnapshot(db, context.accountScope) };
+}
+function stage(source: DatabaseSync, target: DatabaseSync) {
+  const input = read(source), ledger = prepareCandidateIdentityLedger(target, context, options);
+  return { input, ledger, result: ledger.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, allocator()) };
+}
+async function fixture(run: (source: DatabaseSync, target: DatabaseSync) => void | Promise<void>) {
+  const source = new DatabaseSync(":memory:"), target = new DatabaseSync(":memory:");
+  try { seed(source); await run(source, target); } finally { source.close(); target.close(); }
+}
+function fact(target: DatabaseSync, sourceId: string, client = "a") {
+  return target.prepare("SELECT * FROM r04_execution_facts WHERE source_identity_key=?").get(JSON.stringify([context.accountScope, client, "EXPLICIT", sourceId]))!;
+}
+const ownTables = ["clients", "questionnaire_versions", "questionnaire_answers", "r04_work_ids", "r04_work_notes", "r04_work_tags", "r04_work_assignments", "r04_work_receipt",
+  "r04_exercise_ids", "r04_exercise_registry", "exercise_overlay", "r04_exercise_links", "r04_exercise_receipt", "r04_plan_ids", "r04_plan_source", "r04_plan_receipt",
+  "training_programs", "training_program_members", "training_mesocycles", "training_weeks", "training_workouts", "training_planned_exercises", "training_planned_sets", "training_simple_overrides", "training_templates",
+  "r04_execution_ids", "r04_execution_sessions", "r04_execution_facts", "r04_execution_segments", "r04_execution_representations", "r04_execution_receipt"];
+
+test("canonical facts deduplicate current/session/history/archive mirrors once per client, without merging identical other weeks", () => fixture((source, target) => {
+  const { result, ledger } = stage(source, target);
+  assert.equal(result.performedFacts, 5); assert.equal(result.canonicalSessions, 3); assert.equal(result.executionRepresentations, 12);
+  assert.equal(result.status, "training-executions-rehearsal-staged"); assert.equal(result.finalizable, false);
+  const first = fact(target, "set-a0"), second = fact(target, "set-a1"), otherClient = fact(target, "set-a0", "b");
+  assert.notEqual(first.id, second.id); assert.notEqual(first.session_id, second.session_id); assert.notEqual(first.id, otherClient.id);
+  assert.equal(first.reps, 20); assert.equal(first.load_grams, 10000); assert.equal(first.actual_timestamp, date0);
+  assert.equal(target.prepare("SELECT count(*) AS n FROM r04_execution_representations WHERE fact_id=?").get(first.id!)?.n, 5);
+  assert.equal(first.snapshot_name, "Историческое имя"); assert.ok((JSON.parse(first.names_json as string) as string[]).includes("Архивное имя"));
+  assert.equal(ledger.loadExecutionDraftFacts().length, 5); assert.deepEqual(target.prepare("PRAGMA foreign_key_check").all(), []);
+}));
+
+test("warmups, DROP mini-sets, failure effort and unconfirmed draft values retain independent semantics", () => fixture((source, target) => {
+  stage(source, target); const warmup = fact(target, "warmup"), drop = fact(target, "drop");
+  assert.equal(warmup.set_type, "WARMUP"); assert.equal(warmup.load_grams, 0); assert.equal(drop.set_type, "DROP"); assert.equal(drop.effort_outcome, "failure");
+  assert.deepEqual(target.prepare("SELECT reps,load_grams FROM r04_execution_segments WHERE fact_id=? ORDER BY position").all(drop.id!).map((r) => ({ ...r })), [{ reps: 20, load_grams: 10000 }, { reps: 15, load_grams: 8000 }]);
+  assert.ok((JSON.parse(drop.compatibility_json as string) as string[]).includes("D01_DROP_FAILURE_FIELD_REQUIRED"));
+  const draft = target.prepare("SELECT * FROM r04_execution_representations WHERE source_key=?").get(JSON.stringify([context.accountScope, "training_set_logs", "draft"]));
+  assert.equal(draft?.disposition, "UNCONFIRMED"); assert.equal(draft?.fact_id, null); assert.equal((JSON.parse(draft!.source_json as string) as Record<string, unknown>).reps, "5");
+  assert.equal(target.prepare("SELECT working_facts FROM r04_execution_sessions WHERE id=?").get(warmup.session_id!)?.working_facts, 1);
+}));
+
+test("imported-unknown markers override cached completion timestamps even when importedAt is missing", () => fixture((source, target) => {
+  source.exec("UPDATE training_set_logs SET data_json=json_set(data_json,'$.historyDateStatus','imported-unknown') WHERE exercise_id='e-a0'");
+  const { result } = stage(source, target), f = fact(target, "set-a0");
+  assert.equal(result.performedFacts, 5); assert.equal(f.date_precision, "UNKNOWN"); assert.equal(f.actual_date, null); assert.equal(f.actual_timestamp, null); assert.equal(f.imported_at, null);
+  assert.equal(fact(target, "warmup").actual_date, null);
+  assert.equal(target.prepare("SELECT undated_facts,first_known_date FROM r04_execution_sessions WHERE id=?").get(f.session_id!)?.undated_facts, 2);
+}));
+
+test("manual exact day correction beats stale import annotations and never invents a completion time", () => fixture((source, target) => {
+  source.exec("UPDATE training_set_logs SET data_json=json_set(data_json,'$.historyDateStatus','exact'),completed_at='2026-03-02T12:00:00.000Z' WHERE id='set-a0'");
+  stage(source, target); const f = fact(target, "set-a0");
+  assert.equal(f.date_precision, "DAY"); assert.equal(f.actual_date, "2026-03-02"); assert.equal(f.actual_timestamp, null);
+  assert.ok(target.prepare("SELECT source_json FROM r04_execution_representations WHERE fact_id=? AND source_kind='ARCHIVE' LIMIT 1").get(f.id!)?.source_json?.toString().includes(date0));
+}));
+
+test("legacy derived session dates stay estimates; valid large legacy metrics survive outside current D01 limits", () => fixture((source, target) => {
+  cache(source, "derived", "derived-fact", "2026-02-01 12:00:00", "derived-week", null, "1000", "1000.001");
+  const { result } = stage(source, target), f = fact(target, "derived-fact");
+  assert.equal(result.performedFacts, 6); assert.equal(f.date_precision, "DERIVED"); assert.equal(f.actual_date, null); assert.equal(f.estimated_date, "2026-02-01");
+  assert.equal(f.reps, 1000); assert.equal(f.load_grams, 1000001); assert.ok((JSON.parse(f.compatibility_json as string) as string[]).includes("D01_METRIC_LIMIT"));
+}));
+
+test("calendar days, local date-times and exact timestamp precision remain distinct", () => {
+  assert.equal(legacyExecutionDate("2024-02-29", "exact", undefined, undefined).precision, "DAY");
+  assert.equal(legacyExecutionDate("2026-03-01 12:01:02.123", undefined, undefined, undefined).precision, "LOCAL_DATETIME");
+  assert.equal(mergeLegacyExecutionDates([legacyExecutionDate("2026-03-01T12:01:02.1230", undefined, undefined, undefined),
+    legacyExecutionDate("2026-03-01 12:01:02.123", undefined, undefined, undefined)]).precision, "LOCAL_DATETIME");
+  const a = legacyExecutionDate("2026-03-01T12:00:00.1234Z", undefined, undefined, undefined), b = legacyExecutionDate("2026-03-01T15:00:00.123400+03:00", undefined, undefined, undefined);
+  assert.equal(mergeLegacyExecutionDates([a, b]).precision, "INSTANT");
+  assert.throws(() => mergeLegacyExecutionDates([a, legacyExecutionDate("2026-03-01T12:00:00.1235Z", undefined, undefined, undefined)]), /DATE_INVALID_OR_CONFLICTING/u);
+  assert.throws(() => legacyExecutionDate("2026-02-29", "exact", undefined, undefined), /DATE_INVALID/u);
+  assert.equal(mergeLegacyExecutionDates([a, legacyExecutionDate(null, "imported-unknown", undefined, undefined)]).precision, "UNKNOWN");
+});
+
+test("missing historical labels do not discard otherwise proved facts or invent catalog names as snapshots", () => fixture((source, target) => {
+  source.exec("UPDATE training_exercises SET name='' WHERE id='e-a0'; UPDATE training_session_exercises SET name=''; UPDATE training_exercise_history SET data_json=json_set(data_json,'$.name','')");
+  source.exec("UPDATE training_archive_entries SET data_json=json_set(data_json,'$.workouts[0].exercises[0].name','','$.cycles[0].snapshot.workouts[0].exercises[0].name','')");
+  stage(source, target); const row = fact(target, "set-a0"); assert.equal(row.snapshot_name, null); assert.equal(row.reps, 20);
+  assert.ok((JSON.parse(row.compatibility_json as string) as string[]).includes("SNAPSHOT_NAME_NOT_OBSERVED"));
+}));
+
+test("contradictory values, explicit IDs, current unconfirmation, foreign ownership and invalid segments roll back all owners", async () => {
+  for (const sql of ["UPDATE training_session_sets SET reps='21',segments_json='[{\"reps\":\"21\",\"weight\":\"10\"}]' WHERE id='f-cache'",
+    "UPDATE training_set_logs SET completed_at=NULL WHERE id='set-a0'",
+    "UPDATE training_sessions SET source_workout_id='w-b0' WHERE id='cache'",
+    "UPDATE training_session_sets SET rpe='0' WHERE id='f-cache'",
+    "UPDATE training_set_segments SET weight='8.0001' WHERE id='drop-mini'",
+    "UPDATE training_exercise_history SET data_json=json_set(data_json,'$.sourceFactId','different') WHERE id='h-a0'"]) await fixture((source, target) => {
+      source.exec(sql); const input = read(source), ledger = prepareCandidateIdentityLedger(target, context, options);
+      assert.throws(() => ledger.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, allocator()), /EXECUTION_/u);
+      for (const table of ownTables) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n, 0, table);
+    });
+});
+
+test("deleted current structures cannot erase a fact that survives in history/archive/session representations", () => fixture((source, target) => {
+  source.prepare("UPDATE training_set_logs SET deleted_at=? WHERE id='set-a0'").run(date1);
+  stage(source, target); const f = fact(target, "set-a0"); assert.ok(f);
+  const row = target.prepare("SELECT * FROM r04_execution_representations WHERE source_key=?").get(JSON.stringify([context.accountScope, "training_set_logs", "set-a0"]));
+  assert.equal(row?.disposition, "DELETED"); assert.equal(row?.fact_id, f.id);
+  assert.ok((JSON.parse(f.compatibility_json as string) as string[]).includes("DELETION_EVIDENCE_REQUIRES_REVIEW"));
+}));
+
+test("legacy completed history can recover its original physical ID without a name or metrics lookup", () => fixture((source, target) => {
+  source.exec("UPDATE training_exercise_history SET source_fact_id=NULL,data_json=json_remove(data_json,'$.sourceFactId') WHERE id='h-a0'");
+  stage(source, target); assert.equal(target.prepare("SELECT count(*) AS n FROM r04_execution_facts").get()?.n, 5);
+}));
+
+test("missing archive fact IDs retain one proven root/cycle occurrence but never merge with current facts by identical metrics", () => fixture((source, target) => {
+  source.exec("UPDATE training_archive_entries SET data_json=json_remove(data_json,'$.workouts[0].exercises[0].sets[0].sourceFactId','$.cycles[0].snapshot.workouts[0].exercises[0].sets[0].sourceFactId')");
+  const { result } = stage(source, target); assert.equal(result.performedFacts, 6);
+  const opaque = target.prepare("SELECT * FROM r04_execution_facts WHERE source_fact_id IS NULL").all(); assert.equal(opaque.length, 1);
+  assert.ok((JSON.parse(opaque[0]!.compatibility_json as string) as string[]).includes("NO_EXPLICIT_SOURCE_FACT_ID"));
+  assert.equal(target.prepare("SELECT count(*) AS n FROM r04_execution_representations WHERE fact_id=?").get(opaque[0]!.id!)?.n, 2);
+}));
+
+test("archive references to another client's program require independent same-client fact corroboration", async () => {
+  for (const corroborated of [false, true]) await fixture((source, target) => {
+    source.exec("UPDATE training_archive_entries SET data_json=json_set(data_json,'$.programId','p-b','$.cycles[0].snapshot.programId','p-b')");
+    if (!corroborated) source.exec("UPDATE training_archive_entries SET data_json=json_set(data_json,'$.workouts[0].exercises[0].sets[0].sourceFactId','unproved-foreign','$.cycles[0].snapshot.workouts[0].exercises[0].sets[0].sourceFactId','unproved-foreign')");
+    const { result } = stage(source, target); assert.equal(result.performedFacts, 5);
+    const rows = target.prepare("SELECT * FROM r04_execution_representations WHERE source_kind='ARCHIVE' AND json_extract(context_json,'$.ownership')='ARCHIVE_FOREIGN_PROGRAM'").all();
+    assert.equal(rows.length, 2); assert.ok(rows.every((r) => corroborated ? r.fact_id === fact(target, "set-a0").id : r.fact_id === null && r.disposition === "OWNERSHIP_REVIEW"));
+  });
+});
+
+test("a second archive alone cannot authorize facts referencing a known foreign program", () => fixture((source, target) => {
+  source.exec("INSERT INTO training_archive_entries SELECT 'owned-copy',client_id,title,data_json,archived_at,deleted_at FROM training_archive_entries");
+  source.exec("UPDATE training_archive_entries SET data_json=json_set(data_json,'$.programId','p-b','$.cycles[0].snapshot.programId','p-b') WHERE id='archive'");
+  source.exec("DELETE FROM training_set_segments WHERE set_log_id='set-a0'; DELETE FROM training_set_logs WHERE id='set-a0'; DELETE FROM training_session_sets; DELETE FROM training_exercise_history");
+  stage(source, target);
+  const rows = target.prepare("SELECT * FROM r04_execution_representations WHERE source_kind='ARCHIVE' AND json_extract(context_json,'$.ownership')='ARCHIVE_FOREIGN_PROGRAM'").all();
+  assert.equal(rows.length, 2); assert.ok(rows.every((r) => r.fact_id === null && r.disposition === "OWNERSHIP_REVIEW")); assert.ok(fact(target, "set-a0"));
+}));
+
+test("execution input is frozen before allocator and earlier-owner callbacks run", () => fixture((source, target) => {
+  const input = read(source), ledger = prepareCandidateIdentityLedger(target, context, options);
+  const result = ledger.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, allocator(), (stage) => {
+    if (stage === "after-ids") Object.assign(input.executions.tables.training_session_sets![0]!, { reps: "700" });
+  });
+  assert.equal(result.performedFacts, 5); assert.equal(fact(target, "set-a0").reps, 20);
+}));
+
+test("all 22 plan/archive/execution transaction checkpoints roll back together and permit a single retry", async () => {
+  const phases = ["after-archive-plans", "after-plan-ids", ...Array.from({ length: 11 }, () => "after-plan-rows"), "after-plan-source", "after-plan-receipt",
+    "after-execution-ids", "after-execution-sessions", "after-execution-facts", "after-execution-segments", "after-execution-representations", "after-execution-receipt", "before-commit"];
+  for (let n = 0; n < phases.length; n++) await fixture((source, target) => {
+    const input = read(source), ledger = prepareCandidateIdentityLedger(target, context, options), phase = phases[n]!, occurrence = phases.slice(0, n + 1).filter((p) => p === phase).length; let seen = 0;
+    assert.throws(() => ledger.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, allocator(), (stage) => {
+      if (stage === phase && ++seen === occurrence) throw new Error("injected");
+    }), /WRITE_FAILED/u);
+    for (const table of ownTables) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n, 0, table);
+    assert.equal(target.prepare("SELECT count(*) AS n FROM r04_candidate_ids WHERE kind='CLIENT'").get()?.n, 0);
+    assert.equal(ledger.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, allocator()).performedFacts, 5);
+  });
+});
+
+test("source and target drift block replay; guarded reads verify facts, segments, provenance and IDs", () => fixture((source, target) => {
+  const { input, ledger } = stage(source, target), f = fact(target, "set-a0");
+  target.prepare("UPDATE r04_execution_facts SET reps=999 WHERE id=?").run(f.id!); assert.throws(() => ledger.loadExecutionDraftFacts(), /PARITY_MISMATCH/u);
+  target.prepare("UPDATE r04_execution_facts SET reps=20 WHERE id=?").run(f.id!);
+  const receipt = target.prepare("SELECT * FROM r04_execution_receipt").get()!;
+  target.prepare("UPDATE r04_execution_receipt SET source_json='{}'").run(); assert.throws(() => ledger.loadExecutionDraftFacts(), /PARITY_MISMATCH/u);
+  target.prepare("UPDATE r04_execution_receipt SET source_json=?").run(receipt.source_json!);
+  target.prepare("UPDATE r04_execution_receipt SET target_json='null'").run(); assert.throws(() => ledger.loadExecutionDraftFacts(), /PARITY_MISMATCH/u);
+  target.prepare("UPDATE r04_execution_receipt SET target_json=?").run(receipt.target_json!);
+  source.exec("UPDATE training_session_sets SET data_json='{\"extra\":true}' WHERE id='f-cache'"); const changed = read(source);
+  assert.throws(() => ledger.stageClientExecutions(changed.cards, null, changed.catalog, changed.refs, changed.plans, changed.executions, allocator()), /PARITY_MISMATCH/u);
+  assert.equal(ledger.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, () => { throw new Error("reuse IDs"); }).performedFacts, 5);
+}));
+
+test("execution mode cannot claim older archive jobs or bypass the complete entry point", () => fixture((source, target) => {
+  const prior = { clientIdentityRehearsal: { ...options.clientIdentityRehearsal, executions: undefined } }, input = read(source);
+  prepareCandidateIdentityLedger(target, context, prior).stageClientPlans(input.cards, null, input.catalog, input.refs, input.plans, allocator());
+  assert.throws(() => prepareCandidateIdentityLedger(target, context, options), /FOREIGN_DATABASE/u);
+  const empty = new DatabaseSync(":memory:"); try {
+    const ledger = prepareCandidateIdentityLedger(empty, context, options);
+    assert.throws(() => ledger.stageClientPlans(input.cards, null, input.catalog, input.refs, input.plans, allocator()), /EXECUTION_MODE_MISMATCH/u);
+    assert.equal(empty.prepare("SELECT count(*) AS n FROM clients").get()?.n, 0);
+  } finally { empty.close(); }
+}));
+
+test("execution source shape absence stays explicit and partial canonical caches cannot masquerade as complete", () => fixture((source) => {
+  source.exec("DROP TABLE training_session_sets"); assert.throws(() => readLegacyExecutionInSnapshot(source, context.accountScope), /PARTIAL_SESSION_STORE/u);
+  source.exec("DROP TABLE training_session_exercises; DROP TABLE training_sessions; DROP TABLE training_set_segments");
+  const input = readLegacyExecutionInSnapshot(source, context.accountScope); assert.equal(input.tables.training_sessions, null); assert.equal(input.tables.training_set_segments, null);
+}));
+
+test("read-only source and reopened/reordered canonical executions preserve bytes, source precision and all stable IDs", () => {
+  const dir = mkdtempSync(join(tmpdir(), "athlete-r04-executions-")), sourcePath = join(dir, "source.db"), targetPath = join(dir, "stage.db");
+  const hash = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex"); let source: DatabaseSync | null = null, target: DatabaseSync | null = null;
+  try {
+    source = new DatabaseSync(sourcePath); seed(source); source.close(); source = null; const sourceHash = hash(sourcePath);
+    source = new DatabaseSync(sourcePath, { readOnly: true }); source.exec("PRAGMA query_only=ON; BEGIN"); const input = read(source), exact = { ...context, sourceSha256: sourceHash };
+    target = new DatabaseSync(targetPath); const first = prepareCandidateIdentityLedger(target, exact, options);
+    first.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, allocator());
+    const facts = first.loadExecutionDraftFacts(); target.close(); target = null; const targetHash = hash(targetPath); target = new DatabaseSync(targetPath);
+    for (const rows of [...Object.values(input.plans.tables), ...Object.values(input.executions.tables)]) if (rows !== null) (rows as unknown[]).reverse();
+    const reopened = prepareCandidateIdentityLedger(target, exact, options);
+    assert.equal(reopened.stageClientExecutions([...input.cards].reverse(), null, [...input.catalog].reverse(), [...input.refs].reverse(), input.plans, input.executions, () => { throw new Error("reuse IDs"); }).performedFacts, 5);
+    assert.deepEqual(reopened.loadExecutionDraftFacts(), facts); target.close(); target = null; assert.equal(hash(targetPath), targetHash);
+    source.exec("ROLLBACK"); source.close(); source = null; assert.equal(hash(sourcePath), sourceHash);
+  } finally { target?.close(); source?.close(); rmSync(dir, { recursive: true, force: true }); }
+});

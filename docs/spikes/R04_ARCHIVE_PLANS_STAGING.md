@@ -1,5 +1,9 @@
 # R04 — структура архивных программ 2.0 в staging
 
+Продолжение после12381f4: [R04_CANONICAL_EXECUTIONS_STAGING.md](R04_CANONICAL_EXECUTIONS_STAGING.md)
+добавляет normalized private executions с sourceFactId dedup и precision дат.
+Ниже описан первоначальный archive-plan срез; runtime/D01 Execution ещё не подключён.
+
 2026-10-23; входная база74fa6cf. Task R04→R03, D03→D01/R04/R05.
 Вход: полный Plans snapshot, Client/Exercise IDs, Client/Q/WorkData/catalog/Plans/
 templates staging. Product §§48.5.7,48.28,48.39,49–50 (особенно50.1–50.3),53–56;

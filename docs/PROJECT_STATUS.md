@@ -1,3 +1,9 @@
+## 2026-10-23 — R04: единые факты выполнений и точность дат
+
+- stageClientExecutions пишет normalized private facts/segments/workout graph/representations в общей транзакции всех предыдущих владельцев. Account+client+sourceFactId dedup, exact metrics, snapshot labels, imported-unknown/DAY/local/instant/derived precision. Foreign archive source требует независимого same-client подтверждения. [Контракт](spikes/R04_CANONICAL_EXECUTIONS_STAGING.md).
+- **306/306** targeted,19 новых tests;22 rollback/retry boundaries, source SHA unchanged, target reopen/reorder byte-identical/IDs reuse, source/target corruption, ownership/shape/cloning/date precision. Root/mobile TS/changed ESLint/source73/arch506/secrets/diff pass. Runtime/production DDL/APK/телефон не менялись.
+- finalizable:false: это6 r04_execution_* tables, не production Execution. D01 требует доработки date precision/effort/legacy limits/identity; outcomes/notes/editable values/остальные owners/full parity/runtimeRestore/Android ещё впереди. Private graph count не объявлен числом завершённых тренировок. Общая цель ACTIVE/gates OPEN.
+
 ## 2026-10-23 — R04: структура архивных программ 2.0
 
 - archives:true добавляет настоящие D01 archived Program/member/mesocycles/план в общую staging-транзакцию. Root/cycle mirrors сверяются и получают общие plan IDs с отдельными raw paths; sourceFactId/actual/segments сохраняются для будущего Execution. SIMPLE weekly differences остаются overrides. [Контракт](spikes/R04_ARCHIVE_PLANS_STAGING.md).

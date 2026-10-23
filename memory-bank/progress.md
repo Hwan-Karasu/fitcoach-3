@@ -1,47 +1,47 @@
 # Progress — 2026-10-23
 
-GoalACTIVE full2.0→3.0+backup/restore, R04→R03/D03→D01/R04/R05,not100%.
-Migration/overlay/signing/releaseOPEN/no prodDDL/realmigration/overlay. Targetedchecks/
-fullsuite milestones/UIlater/Excelafterbackup. Russiancommit/nopush. Base74fa6cf;
-previousPROGRESStemplates. D01/fullsnapshot/GuardedRestore/v2Return/15holders/
-closedrecovery/connectedRestoreUI;native35/12/13/24/3/Downloads20/SAF19/reinstall6/
-auto21/status3/missing19/actualkill15+14;2.0untouched/fixtureCOMPLETE. Historical
-foundation1086/bundle5623/1185;ExpoRestoreJobsonly3.0. Profile37/Qhistory/typeepochs/
-exactversions/draft/retired/tombstones,privateWorkData/healthfix,ExerciseRegistry/
-IDs/links/unknownmetadata. ProductionownersstillOPEN.
+GoalACTIVEfull2.0→3.0+backup/restore,not100%;R04→R03/D03→D01/R04/R05. Migration/
+overlay/signing/releaseOPEN/no prodDDL/realmigration/overlay. Targetedchecks/fullsuite
+milestones/UIlater/Excelafterbackup. Russiancommit/nopush. Base12381f4, previous
+PROGRESSarchivePlans. D01/fullsnapshot/GuardedRestore/v2Return/15holders/closedrecovery/
+connectedRestoreUI/native35/12/13/24/3/Downloads20/SAF19/reinstall6/auto21/status3/
+missing19/actualkill15+14,2.0untouched/fixtureCOMPLETE. Historicalfoundation1086/bundle
+5623/1185;ExpoRestoreJobsonly3.0. Profile37/Qhistory/typeepochs/exactversions/draft/
+retired/tombstones/privateWorkData/healthfix/ExerciseRegistry/IDs/links. ProdownersOPEN.
+92d00bb D01Plans/clientbook/page/meso/lineage/physicalIDs/SIMPLEweeklyoverrides,
+planvsactual/exactranges/grams/RIR/order/dates/selection.230/230historic18new/14boundaries.
+74fa6cf D01templates/savedpage→MESOCYCLE/freeequivalent→SIMPLE/accountownership,
+onlyplan/noactual/history/members.248/248historic12new/15boundaries.12381f4 archived
+D01Plans/wholebook/rootcyclesverified/aliases/localglobalweek/ownerisolation, no
+selection/resurrection.287/287historic15new/16boundaries. Limitsnotclosed.
 
-92d00bb actualD01Plans sharedClient/Q/work/catalog tx: clientbook/page/mesocycle/
-lineage/physicalIDs/receipts/FK/parity, SIMPLEweeklyoverrides. Planvsactualseparate,
-exactranges/grams/RIR/sourceorder/date/selection.230/230historic18new/14boundaries.
-74fa6cf D01templates/allmodes/newbinding/workspaceownership; savedpage→MESOCYCLE/
-equivalentfreeweeks→SIMPLE. Onlyplaninpayload/noactual/history/members/lineage;
-rawsource retained.248/248historic30Plans/12new+6normalTemplate/15boundaries.
-SIMPLEtemplatevariation/bookbound/extrasettingslimits stillOPEN.
+NEW canonical normalized privateExecution:6 r04_execution_* tables, notD01. Reader/
+Dates/Occurrences/Projection/Stage;executions:true/allmodes/newpersistedbinding,
+fullentrysharedClient/Q/work/catalog/Plans/templates/archive tx. SourceID account+
+client dedup;workoutgraph onlyphysicalrefs/sharedfacts, nevernames/date/metrics/
+logicalSIMPLE. Exactsegments/base/type/effort/nonemptyRPE;conflictsblock. Fulllegacy
+implicitcompletion onlynomarkers/noplanfields;historydata.id fallback. Warmup/
+workingcountsseparate/no fakeoutcome. Deletedreprretained/reviewflag;unconfirmed
+notfacts. Snapshotnames+basis retained/missingnullable. Foreignarchivepg needs
+nonarchive sameclient proof, secondarchivealone notauthorization; otherwise review
+withoutfact/sessionID. OpaquearchiveIDs onlyroot/cyclemirror proof/no crossmerge.
 
-NEW actualarchivedPlans viaLegacyArchivePlansProjection +archives:true/allmodes/
-TRAINING_ARCHIVES_REHEARSAL_V1. Exacte116b42 source wholebooks/rootmirrorscycles+
-weekoffsets. ArchivedProgram/member/mesos/weeks/plannedrows join11D01tables in
-sameClient/Q/work/catalog/livePlans/templates tx. Sourceouterclientowned, never
-foreignliveprogram/groupjoins/selectionchange/resurrection. Root/cycleexactparity
-required; aliasesoneplanID/separateoriginalrawpaths/globalvsLocalweekcontext.
-SIMPLEweeklydifferences stayoverrides. Explicitcatalogrefs/exactprescription,
-actual/segments/sourceFactID retainedNOTcanonicalfacts. Deletedarchivesrawonly.
-Newcontainerdatesimporttimeexplicit/sourcearchivedAt separate, noactualdateguesses.
-VirtualadapternamespacesavoidliveIDtextcollision; rawaliases/bases originalpaths,
-syntheticlibrarynotclaimedsource. Perpagemirrorwalk/nolargepushspread.
-
-287/287targeted(15newarchive-stage+Plans/templates+24preflight+dependencies),16fault
-boundariesrollbackall/retry;readonlysourceSHAunchanged/reopenreorderbyteidentical/
-allIDsreuse. Productionreadhelpers provearchivedmesos/typedweeks/SIMPLEoverrides.
+INSTANT/LOCAL_DATETIME/DAY/DERIVED/UNKNOWN, importedunknown evenwithoutimportAt
+beatsweakcache/manualDAY winsolderannotations. Fractionalprecision/offsetretained,
+no fakeTZ/day/currenttime. D01limits unknownDate/metrics/drop+failure/identity/
+binding/lifecycle/labels andinstant→trainingday policy flaggednotresolved.
+Sourceexacte116b42 SetLog/SetFacts/writeHistory/021/022/HistoryRepo inspected.
+306/306targeted(19new+area/dependencies),22faultboundariesrollbackall/retryinclIDs;
+readonlysourceSHAunchanged/reopenreorderbyteidentical/IDreuse. Guardedreadchecks
+rows/IDs/sourcehash;source/targetcorruption/ownership/shape/cloning/dateprecision.
 Root/mobileTS/changedESLint/source73/arch506/secrets/diff pass. No fullfoundation/
-APK/bundle/native/runtimechanges. ContractR04_ARCHIVE_PLANS_STAGING.md.
+APK/bundle/native/phone/runtimechanges. ContractR04_CANONICAL_EXECUTIONS_STAGING.md.
 
-finalizable:false/targetFactsCreated0. NEXT canonicalTrainingfacts/dedup/session-
-current-history-archive/segments/dateprecision/snapshotnames/multipleplanviewcontexts.
-Phase1withoutworkoutsunsupported: inspectweektombstone reconstruction ortrulymissing
-sourceinfo;missingcatalogrefsneedunresolvedidentitymodel. Otherowners/fullstaging/
-parity/retry/runtimeSQLite+JSONv1v2Restore/Android. Sourceorphanlibrary/state/views/
-preferences/annotations/classification/unprovedlineage retainednotalloperational.
-ProductionWorkData/registryrepo/DDL/commands/backup/deletionOPEN;backupclock/DST/
-SAFgap/copydeletekill/ENOSPC/providers/UI/OS/first-runOPEN. Personaldata/2.0untouched;
-lastPID3837terminal/Metro99958unverified/scrcpyopen/no pendingkill.
+D01factscreated0/finalizable:false/notcompletegoal. NEXT runtimeproposalforprecision/
+identity/effortwithinOPENgates, outcomes/notes/editablevalues/remainingowners/full
+parity/runtimeSQLite+JSONv1v2Restore/Android. Phase1archives/missingcatalogidentities/
+templatevariation/extrasettings/sourceorphanlibrary/state/views/preferences/
+annotations/classification/unprovedlineageOPEN. ProductionWorkData/registryrepo/DDL/
+commands/backup/deletionOPEN;backupclock/DST/SAFgap/copydeletekill/ENOSPC/providers/
+UI/OS/first-runOPEN.2.0/personaldatauntouched/scrcpyopen/lastPID3837terminal/
+Metro99958unverified/no pendingkill.
