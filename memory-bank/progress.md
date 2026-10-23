@@ -37,3 +37,10 @@ Backupedgesclock/DST/SAFgap/copydeletekill/ENOSPC/providers/ordinaryUI/OS/first-
 KeepfullgoalACTIVE/gatesOPEN, notprofileprototype. ExcelGitHubfirstafterbackup.
 Personaldata/phoneuntouched. LastPID3837terminal/Metro99958unverified/scrcpyopen,
 no pendingkill. Base b3e17bb; Russiancommit/no push. Detailed handoff in docs.
+
+WorkData follow-up inspected: runtime has no ClientWorkData owner/port/store yet.
+Reference SQL client_work_data blob is NOT production and conflicts with approved
+Product22.2: separate stable TrainerNote, workspace TrainerTag+ClientTagAssignment.
+Product20.2 forbids diagnoses/injuries/pain→automatic ACTIVE limitation. Tag
+normalization policy stillfuture: do not silently merge case/whitespace variants.
+Implement proper owner contract before claiming final operational persistence.

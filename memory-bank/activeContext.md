@@ -5,7 +5,7 @@
 23–27/46.6/46.19/48.5.7/53–56. Migration/overlay/signing/release OPEN; no real
 migration/productionDDL/overlay before gates. UI/themeslater; Excelafterbackup,
 GitHubfirst/2.0readonly. Targeted area+dependencytests, fullsuite milestones.
-Owner «да нет,продолжай» after explanation of checks, no pause. Base b3e17bb.
+Current base8d29b65; goalACTIVE.
 Russian commits authorized/no push. No subagents unless explicitly requested.
 
 Established D01 baselines/identity/FK/JSON, fullsnapshot/hash/media/staging,
@@ -61,5 +61,12 @@ rawcandidates/partialprototype forfullgoal. LOAD_REPS2.0(20×10кг), equipment/
 notguessed. Otherbackupedges clock/DST/SAFgap/copydeletekill/ENOSPC/providers/
 ordinaryUI/OSsignals/first-runOPEN. No personalDB/backup/secrets/keyread.
 No phonechangesthisslice. LastPID3837terminal, Metro99958historical/unverified,
-MainMetro16439old/unverified. Revalidatebeforeuse, timeoutnotreasonrestart.
+Revalidate Metro beforeuse.
 No pendingkill; scrcpyleaveopen. See docs/HANDOFF_BACKUP_MIGRATION.md.
+
+WorkData follow-up inspected: runtime has no ClientWorkData owner/port/store yet.
+Reference SQL client_work_data blob is NOT production and conflicts with approved
+Product22.2: separate stable TrainerNote, workspace TrainerTag+ClientTagAssignment.
+Product20.2 forbids diagnoses/injuries/pain→automatic ACTIVE limitation. Tag
+normalization policy stillfuture: do not silently merge case/whitespace variants.
+Implement proper owner contract before claiming final operational persistence.

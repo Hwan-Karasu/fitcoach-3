@@ -444,3 +444,10 @@ Product §§46, 52–56. Не отмечать R06/D05/D03 готовыми по
 в Excel. Сначала GitHub-исследование готовых решений/библиотек, затем сверка с
 2.0 как образцом. Исследование ещё не выполнено, реализация не начата.
 [Зафиксированные требования](EXCEL_IMPORT_EXPORT_PLAN.md). UI/темы остаются позже.
+
+WorkData follow-up inspected: runtime has no ClientWorkData owner/port/store yet.
+Reference SQL client_work_data blob is NOT production and conflicts with approved
+Product22.2: separate stable TrainerNote, workspace TrainerTag+ClientTagAssignment.
+Product20.2 forbids diagnoses/injuries/pain→automatic ACTIVE limitation. Tag
+normalization policy stillfuture: do not silently merge case/whitespace variants.
+Implement proper owner contract before claiming final operational persistence.
