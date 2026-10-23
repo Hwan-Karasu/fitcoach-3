@@ -6,6 +6,9 @@ import { recoverRuntimeRestore } from "../bootstrap/recoverRuntimeRestore.ts";
 import { inspectProductionDatabase, PRODUCTION_DATABASE, PRODUCTION_IDENTITY } from "./productionDatabase.ts";
 import { sqliteDirectoryUri } from "../../shared/db/SqliteDirectoryUri.ts";
 import { ExpoRuntimeRestoreJournal } from "./ExpoRuntimeRestoreJournal.ts";
+import { ExpoReturnPointStore } from "../../features/backup/data/ExpoReturnPointStore.ts";
+import { ReturnPointCompletion } from "../../features/backup/public.ts";
+import { SCHEMA_OWNERS } from "./schema.ts";
 
 /** No journal = no directory creation and no SQLite open before the normal production gate.
  * The next file-restore controller will publish pending.json after explicit confirmation.
@@ -37,5 +40,5 @@ export function recoverLocalRestore(maintenance: RuntimeMaintenance, root: Direc
       return bytes.length === 100 && magic.every((byte, index) => bytes[index] === byte) &&
         new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(68, false) === PRODUCTION_IDENTITY.applicationId;
     } finally { reader.close(); }
-  });
+  }, new ReturnPointCompletion(new ExpoReturnPointStore(root, { identity: PRODUCTION_IDENTITY, owners: SCHEMA_OWNERS })));
 }

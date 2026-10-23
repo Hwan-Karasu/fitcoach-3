@@ -1,5 +1,6 @@
 export type RestoreSlot = "LIVE" | "INCOMING" | "SAFETY" | "PREVIOUS" | "REJECTED" | "ROLLBACK";
 export type RestorePhase = "PREPARED" | "COMMITTED" | "COMPLETED" | "ROLLED_BACK";
+export type RestoreOutcome = "COMMITTED" | "ROLLED_BACK" | "NO_OPERATION";
 export interface RestorePlan {
   readonly operationId: string;
   readonly incomingSha256: string;

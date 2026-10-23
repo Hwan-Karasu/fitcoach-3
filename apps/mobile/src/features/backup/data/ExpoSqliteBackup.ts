@@ -50,6 +50,11 @@ export class ExpoSqliteBackup {
     try { return await this.engine.validateSnapshot(expoSnapshotSql(db)); }
     finally { await db.closeAsync(); }
   }
+  /** Verification of an already sealed private point; never opens the old photo URIs. */
+  async validatePrivateSnapshot(file: File): Promise<SnapshotManifest> {
+    try { assertSnapshotPrivateUri(file.uri); return await this.inspectPrivate(file); }
+    catch (error) { return typed(error); }
+  }
   async createSnapshot(source: SQLite.SQLiteDatabase, partial: File, destination: File,
     metadata: Pick<SnapshotManifest, "backupId" | "createdAt">, settings: SnapshotMediaSettings = {}): Promise<SnapshotManifest> {
     try {

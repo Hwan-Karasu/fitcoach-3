@@ -1,4 +1,7 @@
 export { GuardedRestore, RestoreProtocolError, parseRestoreGuard } from "./application/GuardedRestore.ts";
+export { ReturnPointCompletion } from "./application/ReturnPointCompletion.ts";
+export { parseReturnPoint, parseReturnPointState, parseRestoreCompletionIntent, emptyReturnPointState } from "./domain/RestoreCompletion.ts";
+export type { ReturnPoint, ReturnPointState, RestoreCompletionIntent, RestoreCompletionProtocol, ReturnPointStore } from "./domain/RestoreCompletion.ts";
 export type { RestoreGuard, RestoreOutcome, RestorePlan, RestoreSlot, RestoreStorage } from "./application/GuardedRestore.ts";
 export { SnapshotError } from "./domain/SnapshotManifest.ts";
 export type { SnapshotManifest } from "./domain/SnapshotManifest.ts";

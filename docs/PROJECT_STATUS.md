@@ -1,3 +1,10 @@
+## 2026-10-23 — R06: private точка возврата и совместная finalization
+
+- Добавлены общий ReturnPointCompletion и ExpoReturnPointStore: полный private SQLite snapshot с embedded media; одна активная точка, замена только после успеха, однократное погашение Return без обратной точки. Atomic state хранит receipt после удаления, поэтому cold boot не воскрешает точку.
+- Routing v2 требует completion intent и завершение state publication внутри той же closed lease. Cold production reader подключён; ошибка finalization оставляет runtime закрытым. Прежний v1 rehearsal поддерживается отдельно; guard version остаётся 1.
+- **32 новых host-проверки**: цепочка 30→25→30 и точное фото после потери исходника; поздние записи/restart; успешный следующий Restore; неудачная подготовка/swap/state write/cleanup; stale/corrupt intent; реальный RuntimeMaintenance до успешного recovery. **14 настоящих SIGKILL** покрывают подготовку, swap, COMMITTED, state publication и cleanup Restore/Return. [Контракт и границы](spikes/R06_RETURN_POINT.md).
+- Foundation **1051/1051**, root/mobile/spike typecheck, lint, arch:check (487 sources), source/secrets/diff; Android JS/Hermes bundle **5605 modules/1185 assets**. Это не native Return proof. Обычный preview/confirmation/controller, free-space/job lifecycle, OS rest signals, autoscheduler/rotation и full legacy migration ещё впереди; R06/D05 OPEN. Без новых установок APK, данные 2.0 не затрагивались.
+
 ## 2026-10-23 — R06: native публикация и журнал подтверждённого восстановления
 
 - Исправлены нативная сборка (Expo versionName/Coroutine import) и доступ Java к Maven через IPv4. Изолированная debug APK собрана; TLS/framework не менялись. Реальные synthetic Downloads **20/20**, SAF **19/19**: readback, duplicate/input negatives, восстановление клиента/рецепта/фото из внешней копии после удаления оригиналов и открытие всех 15 holders. Найден и исправлен trailing-slash mismatch сохранённого SAF grant. [Отчёт](spikes/R06_PUBLICATION_ANDROID_REPORT.json), [границы](spikes/R06_ANDROID_PUBLICATION.md).

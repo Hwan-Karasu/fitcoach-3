@@ -1,54 +1,58 @@
 # Active context — 2026-10-23
 
-Ветка audit/training-fixes, продукт «Дневник атлета». Цель ACTIVE:
-полный перенос 2.0→3.0 и backup/restore не завершены; 100% не заявлять.
-Task R06; D05 зависит от D01/R06, D03 от R04/R05. Product §46 и §§53–56;
-migration/overlay/signing/release gates OPEN. UI/темы позже.
+Продукт «Дневник атлета», ветка audit/training-fixes. Цель ACTIVE: полный
+перенос 2.0→3.0 и backup/restore не завершены; 100% не заявлять. Task R06.
+R06→R03, D05→D01/R06, D03→R04/R05; Product §46 и §§53–56.
+Migration/overlay/signing/release gates OPEN; UI/темы позже.
 
-Последний зафиксированный срез до текущего: 941db8c (ручная копия/runtime/UI,
-dev boot). Текущий срез фиксирует native publication и atomic restore journal.
-ManualBackupService/экран настроек подключены; Expo Go/dev операции отключены.
-Runtime gate держит всю команду; папка вне SQLite, ошибки UI без системных кодов.
-Dev baseline fitcoach_dev_baseline_v3.db: сохранены 64 таблицы/1150 строк из
-старого prefixed файла, проверена parity в транзакции; старые файлы/журналы целы.
+HEAD до текущего среза faf5fce: native publication + atomic restore journal.
+Текущий срез добавляет private Return point и обязательную v2 finalization.
+ReturnPointCompletion общий pure TS, ExpoReturnPointStore private FS adapter;
+models в features/backup/domain/RestoreCompletion.ts. RestoreProtocolError и
+RestoreOutcome вынесены в domain, прежний public API/reexports сохранены.
 
-Native build теперь РАБОТАЕТ: JDK17.0.10, Gradle9.3.1,
-JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true решает Java Maven PermissionDenied.
-Исправлены defaultConfig.versionName и Coroutine import локального Expo module.
-compileDebugKotlin и assembleDebug arm64-v8a успешны; TLS/framework не ослаблялись.
-Isolated com.fitcoach.r07sqlite отдельно от 2.0: Downloads20/20, SAF19/19.
-Native и независимый JS readback, input/duplicate negatives, удаление исходных
-DB/snapshot/photo, restore внешней копии с клиентом/рецептом/точным PNG, 15 holders.
-SAF persisted grant пережил новый процесс. Исправлен trailing raw slash Directory.uri,
-encoded ID не меняется. Отчёт docs/spikes/R06_PUBLICATION_ANDROID_REPORT.json.
+Одна closed lease: pin/валидация LIVE/INCOMING → полный return.atbackup из LIVE
+(с фото) → completion.json → v2 pending.json → GuardedRestore → atomic
+return-state.json → reopen/cleanup прежней точки. State хранит settledOperationId
+и одну point либо null; explicit delete/Return сохраняют receipt, cold boot не
+воскрешает точку. При rollback прежняя point сохраняется; повреждение нового
+неиспользованного candidate не мешает безопасному cold rollback.
+Guard version всё ещё1, routing v2 требует completion; v1 оставлен для прежних
+technical probes. Cold production reader подключён. Новый Restore сначала
+завершает finalization прежнего terminal v2 job перед сменой routing pointer.
+Обычный Restore UI/controller/preview/confirmation ещё НЕ включён.
 
-Тестовая APK удалена; public Downloads-файл сохранился. Reinstall/picked-file
-restore НЕ выполнены: пользователь не может установить и велел продолжать БЕЗ APK.
-Ожидание adb install остановлено, повторно установку не запускать. Это не общий
-blocker. 2.0 com.fitcoach.app build128 не затронута; личные .atbackup не открывать.
-Scrcpy Phone screen оставить открытым; Android скрывает защищённый ввод ключа.
-Ключ/рисунок не сохранять/не вводить. PID окна может измениться; старый12676.
-Main Metro8096 handle16439 stdin закрыт; native spikeMetro8097 handle99958 watch.
-Не перезапускать без нужды, не считать наличие Metro доказательством APK.
+Host return-point32/32: цепочка30→25→30 + точный PNG после потери исходника,
+restart/поздние записи, следующий Restore, ошибки подготовки/swap/state/cleanup,
+corrupt intent, реальные RuntimeMaintenance gate/reopen. 14 настоящих SIGKILL
+Restore/Return; новая reader/finalizer связка проверена на host.
+Foundation1051/1051, root/mobile/spike typecheck, lint, arch487, source/secrets/diff
+OK. Android JS/Hermes bundle5605modules/1185assets. Native point/v2 не запускались.
 
-JournaledRestore удерживает одну closed lease для pin/validation/journal/readback/
-GuardedRestore, не затирает незавершённую старую операцию. ExpoRuntimeRestoreJournal
-пишет private pending-UUID.next→pending.json; cold reader использует тот же adapter.
-Parser копирует значения до await; terminal replay сохраняет поздние записи.
-Host runtime recovery33/33, включая пять настоящих SIGKILL нового writer;
-foundation1019/1019, root/mobile/spike typecheck/lint/arch483/source/secrets/diff OK.
-Новый writer на Android ещё НЕ проверен. Прежний native normal25/recovery11 относится
-к reader/runtime + ручному pending, не выдавать за новый writer E2E.
-Обычный Restore UI не включён: Return с фото/controller confirmation ещё нужны.
+Ранее native build успешен: JDK17.0.10/Gradle9.3.1,
+JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true решает MavenPermissionDenied.
+Local Expo module versionName/Coroutine import исправлены; TLS не ослаблять.
+Isolated com.fitcoach.r07sqlite: Downloads20/20, SAF19/19; native+JS readback,
+duplicate/input negatives, restore client/recipe/photo после удаления оригиналов,
+15holders; SAF grant после нового процесса. Исправлен trailing raw slash URI.
+Тестовая APK удалена, внешний synthetic Downloads-файл остался. Reinstall/picked
+restore НЕ выполнены: пользователь не может установить, продолжать БЕЗ APK.
+Не запускать новые установки. 2.0com.fitcoach.app build128 и личные backup целы;
+личные .atbackup/секреты не открывать. Ключ/рисунок не сохранять и не вводить.
+Scrcpy Phone screen оставить открытым (старыйPID12676). MainMetro8096handle16439
+stdin закрыт; nativeMetro8097handle99958watch. Не перезапускать без нужды.
 
-Далее без телефона: Restore controller preview/confirmation, full Return snapshot
-с фото/атомарное завершение после COMMITTED и cold recovery этой стадии; затем
-auto30min/changed-data/3 daily rotation, OS rest signals. Native reinstall/writer/
-publication death/low-storage/providers/full-owner matrix отложены, не закрыты.
-Полный legacy mapping/staging/IDs/provenance/parity/retry ещё не завершён; audits/
-client rehearsal не равны полной миграции. 2.0 упражнения LOAD_REPS (20×10кг),
-equipment/groups не угадывать. После backup/restore Excel import/export, сначала
-GitHub библиотеки, затем 2.0 read-only образец.
+ManualBackupService и экран настроек подключены, операции ExpoGo/dev отключены.
+Dev baseline fitcoach_dev_baseline_v3.db: сохранены64таблицы/1150строк, parity
+в транзакции; старые dev файлы/журналы сохранены. Shared runtime15owners+workflow,
+physicalclose/reopen, whole-command gate, фото readiness7регрессий.
+Прежние native snapshot19/recovery7 и runtime25/recovery11 не доказывают новый v2.
 
-Подробная точка: docs/HANDOFF_BACKUP_MIGRATION.md,
-docs/spikes/R06_JOURNALED_RESTORE.md и R06_ANDROID_PUBLICATION.md.
+Далее без APK: общий Restore/Return/delete controller/UI port, picker/preview/
+logical pin с WAL, явное подтверждение, free-space preflight, job orphan cleanup,
+OS rest signal reconcile; затем auto30min/changed-data/3daily rotation. Native
+v2/reinstall/providers/low-storage/full-owner matrix и полный legacy mapping/
+staging/IDs/provenance/parity/retry OPEN. LOAD_REPS для2.0(20×10кг), отсутствующие
+equipment/groups не угадывать. Excel после backup/restore: сначала GitHub
+библиотеки, затем2.0 read-only. Подробно docs/HANDOFF_BACKUP_MIGRATION.md,
+docs/spikes/R06_RETURN_POINT.md и R06_PUBLICATION_ANDROID_REPORT.json.

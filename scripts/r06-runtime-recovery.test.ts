@@ -180,7 +180,7 @@ test("R06 a corrupted atomic publication cannot start the file replacement", asy
 
 for (const mutate of [
   () => undefined, () => null, () => [], (p: PendingRuntimeRestore) => ({ ...p, operationId: "../live.db" }),
-  (p: PendingRuntimeRestore) => ({ ...p, version: 2 }), (p: PendingRuntimeRestore) => ({ ...p, currentSha256: "ABC" }),
+  (p: PendingRuntimeRestore) => ({ ...p, version: 3 }), (p: PendingRuntimeRestore) => ({ ...p, currentSha256: "ABC" }),
   (p: PendingRuntimeRestore) => ({ ...p, livePath: "file:///foreign" }),
 ]) test("R06 routing journal rejects malformed/foreign path/version before constructing storage", async () => {
   const plan: PendingRuntimeRestore = { version: 1, operationId: "10000000-0000-4000-8000-000000000001", currentSha256: "a".repeat(64), incomingSha256: "b".repeat(64) };
@@ -192,7 +192,7 @@ test("R06 cold boot routes PREPARED rollback before workspace/database initializ
   const f = await fixture(); const before = readFileSync(f.storage.path("LIVE")); const events: string[] = [];
   try {
     await f.storage.withClosedDatabase(async () => {
-      await f.storage.copyExclusive("LIVE", "SAFETY"); await f.storage.saveGuard({ ...f.plan, phase: "PREPARED" });
+      await f.storage.copyExclusive("LIVE", "SAFETY"); await f.storage.saveGuard({ ...f.plan, version: 1, phase: "PREPARED" });
       await f.storage.moveExclusive("LIVE", "PREVIOUS"); await f.storage.moveExclusive("INCOMING", "LIVE");
     });
     const boot = new BootCoordinator({ fallbackThemeId: "zefirka",
@@ -230,7 +230,7 @@ for (const missing of [false, true]) test(`R06 journal without guard and ${missi
 test("R06 routing journal and guard must identify exactly the same confirmed operation", async () => {
   const f = await fixture(); const before = readFileSync(f.storage.path("LIVE"));
   try {
-    await f.storage.withClosedDatabase(() => f.storage.saveGuard({ ...f.plan, operationId: "other-operation", phase: "PREPARED" }));
+    await f.storage.withClosedDatabase(() => f.storage.saveGuard({ ...f.plan, version: 1, operationId: "other-operation", phase: "PREPARED" }));
     await assert.rejects(f.recover()); assert.deepEqual(readFileSync(f.storage.path("LIVE")), before);
   } finally { f.cleanup(); }
 });

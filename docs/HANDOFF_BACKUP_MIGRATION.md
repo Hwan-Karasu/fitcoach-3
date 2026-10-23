@@ -4,7 +4,39 @@
 Полный перенос 2.0→3.0 и backup/restore не завершён; 100% не заявлено.
 UI и темы остаются на последующую шлифовку. Продукт — «Дневник атлета».
 
-## Текущий срез — Android publication и atomic restore journal
+## Текущий срез — одна private точка возврата
+
+База для среза: faf5fce. Добавлены `ReturnPointCompletion`, `ExpoReturnPointStore`,
+строгие models/state/intent и routing v2. Полный return.atbackup с embedded media
+создаётся из текущей закрытой LIVE до pending/swap. После COMMITTED новая точка
+проверяется и активируется atomic return-state.json в той же closed lease;
+потом разрешены reopen и cleanup старого снимка. Return погашает точку без
+обратного пользовательского snapshot; explicit delete сохраняет settledOperationId.
+Cold boot не воскрешает удалённую/использованную точку. Откат сохраняет прежнюю
+точку; повреждение неиспользованного candidate не блокирует безопасный rollback.
+
+v2 без completion adapter/intent блокируется до замены/boot; guard остаётся v1.
+Новый Restore сначала завершает finalization прежнего terminal v2 intent, чтобы
+не потерять незакреплённую точку при смене routing record. Production cold reader
+подключён; обычный controller/preview/confirmation ещё не включены. Writer v1 и
+старые Android probe отчёты не являются проверкой нового managed v2.
+
+Host32/32: 30→25→30 с точным восстановленным фото после удаления исходника,
+последовательный Restore/restart/поздние записи, ошибки подготовки/swap/state/cleanup,
+испорченные intent и обязательная closed lease RuntimeMaintenance. 14 настоящих
+SIGKILL Restore/Return проходят через общий writer/reader/finalizer и новые storage
+objects. Foundation1051/1051, root/mobile/spike typecheck, lint/arch487/source/secrets/
+diff прошли; Android JS/Hermes bundle5605modules/1185assets. Все данные synthetic.
+[Подробно](spikes/R06_RETURN_POINT.md).
+
+Следующее без APK: единый Restore/Return/delete controller и публичный UI port,
+file picker/preview/logical state pin с WAL, явное подтверждение полной замены,
+free-space preflight и private job lifecycle/orphan cleanup, OS rest signals.
+После этого auto scheduler/daily rotation; native writer/point/reinstall/low-storage
+и full owner matrix по-прежнему OPEN. Данные 2.0 не трогать, новых установок APK
+не запускать. Excel после backup/restore; UI/темы шлифовать позже.
+
+## Предыдущий срез — Android publication и atomic restore journal
 
 По просьбе владельца продолжать **без установленной тестовой APK**. Не запускать
 новую установку и не ждать ввода ключа. Ожидание adb install остановлено; scrcpy

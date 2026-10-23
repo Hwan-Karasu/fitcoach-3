@@ -1,10 +1,7 @@
-import type { RestoreGuard, RestorePlan, RestoreSlot, RestoreStorage } from "../domain/RestoreStorage.ts";
-export type { RestoreGuard, RestorePlan, RestoreSlot, RestoreStorage } from "../domain/RestoreStorage.ts";
-export type RestoreOutcome = "COMMITTED" | "ROLLED_BACK" | "NO_OPERATION";
-export class RestoreProtocolError extends Error {
-  readonly code: "RESTORE_INVALID_PLAN" | "RESTORE_STALE_PREVIEW" | "RESTORE_FAILED" | "RESTORE_RECOVERY_REQUIRED" | "RESTORE_BUSY";
-  constructor(code: RestoreProtocolError["code"]) { super(code); this.code = code; }
-}
+import type { RestoreGuard, RestoreOutcome, RestorePlan, RestoreSlot, RestoreStorage } from "../domain/RestoreStorage.ts";
+import { RestoreProtocolError } from "../domain/RestoreProtocolError.ts";
+export { RestoreProtocolError } from "../domain/RestoreProtocolError.ts";
+export type { RestoreGuard, RestoreOutcome, RestorePlan, RestoreSlot, RestoreStorage } from "../domain/RestoreStorage.ts";
 const digestPattern = /^[a-f0-9]{64}$/u;
 function validPlan(value: unknown): value is RestorePlan {
   if (!value || typeof value !== "object") return false;

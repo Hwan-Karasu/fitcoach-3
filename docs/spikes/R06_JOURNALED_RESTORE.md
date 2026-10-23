@@ -2,6 +2,8 @@
 
 Дата: 2026-10-23. **HOST VERIFIED / ANDROID WRITER NOT VERIFIED**. R06/D05 OPEN.
 По просьбе владельца работа продолжается без повторной установки тестовой APK.
+Следующий срез добавил v2 routing и обязательную finalization полной Return-точки:
+[R06_RETURN_POINT.md](R06_RETURN_POINT.md). Ниже — исходный контракт v1 writer.
 
 Входы: private staging INCOMING, проверенная D01 identity, подтверждённый план,
 GuardedRestore и RuntimeMaintenance. Зависимости: D05 → D01/R06; D03 → R04/R05.
