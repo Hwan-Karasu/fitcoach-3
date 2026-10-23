@@ -1,4 +1,42 @@
-## Последнее продолжение — actual auto force-stop15+14, база6091dcb
+## Последнее продолжение — R04 profile mapping/persisted stage, база1e3e7ed
+
+Task R04→R03, D03→R04/R05; Product §§10/22.2/23–27/46.6/46.19/48.5.7 и53–56.
+Read-only build120e116b42 exact domain/profile/option/form/health sources inspected.
+37fields:30system answers+2 CUSTOM imported fields+3 WorkData candidates+2product
+exclusions. Explicit spelling aliases only; unknown/type/option/duplicate/oversize
+blocks profile. Health true with legacy details that v3 would hide is a visibility
+conflict needing review, not a medical inference or invented false clearance.
+
+LegacyClientProfileProjection + LegacyClientProfileStage, profile-enabled existing
+CandidateIdentityLedger. Explicit profiles:true binding; same tx clientmaps/cards/
+actual D01 questionnaire rows/private receipt/parity/FK/integrity. Source snapshot
+reprojected from raw JSON, not caller derived object. Reopen/reordered replay no
+UPDATE/REPLACE/newIDs/revisions; prior IDs survive failed new batch. card-only modes
+unchanged; oldstage not rebuilt. Private receipt holds WorkData shaped candidates,
+not final note/tag/safety rows; finalizable:false. Summary counts added to clientCards
+in full audit, no personal payload, targetWrites0 for read-only source audit.
+
+Host `npm run r04:profile:test`69/69 (17new profile tests), downstream preflight82/82.
+Read-only synthetic source file→stage active/archived+32answers, exactsourceSHA
+unchanged; byte-identical target after reopen/reordered retry;6injected failure
+checkpoints roll back IDs/cards/schema/answers/receipt. Not Android process kill.
+Root/mobile TS, changedscript lint, source/arch505/secrets/diff. Fullfoundation and
+APK/bundle not rerun (runtime untouched). Registered newtests in r04/foundation.
+docs/spikes/R04_CLIENT_PROFILE_STAGING.md includes exact mappings/sources/limits.
+
+NEXT: compose typed profile schema/answers with custom legacy questionnaire revisions
+and their exact version/IDs. Persist final WorkData owner candidates to Notes/Tags/
+Safety as separate proper records, not editable questionnaire fields. Then remaining
+owners, complete staging schema/parity, stable IDs/provenance/retry + Android and
+runtime2.0 Restore branch. Current stage is partial/prototype, cannot publish through
+snapshot engine as fitcoach_v3.db. Keep full goal ACTIVE and gatesOPEN; no100%.
+Backup edges stillOPEN: clock/DST, SAF renamegap, copy/delete death/ENOSPC/providers,
+ordinary enabledUI/AppState/OS signals/first-runchoice. Excelafterbackup,UIlater.
+Phone/2.0/personaldata untouched this slice. Last nativePID3837 terminal, Metro99958
+was live previous turn (revalidate before use), scrcpy leaveopen. No pendingkill.
+No real user DB/backup/key read, no prodDDL/overlay/push. Commit R04 in Russian.
+
+## Предыдущий срез — actual auto force-stop15+14, база6091dcb
 
 Два независимых checkpoint с `am force-stop` только test package и подтверждёнными
 PID gone/distinct newPID: 32506→1641 native receipt before IS_PENDING0; затем

@@ -1,3 +1,10 @@
+## 2026-10-23 — R04: профиль2.0 → ответы анкеты и persisted staging
+
+- Сверены все37 полей ClientProfileFields build120:30 стандартных ответов,2 дополнительных CUSTOM,3 отдельных WorkData candidates и2 product exclusions. Явные option aliases, false/пустота/отсутствие, без guessed выбора/округления/обрезания. [Контракт и источники](spikes/R04_CLIENT_PROFILE_STAGING.md).
+- Profile-enabled CandidateIdentityLedger пишет реальные D01 Client/Questionnaire rows вместе с IDs/provenance в одной транзакции; полный readback/FK/integrity, reopen/reordered replay без UPDATE/новыхIDs/ревизий. Старая rehearsal DB не пересобирается. WorkData пока candidates; finalizable:false.
+- **69/69** targeted profile+card/identity/questionnaire и **82/82** downstream source audit. Synthetic source file→read-only readers→stage active/archived+32answers сохранил исходный SHA. Root/mobile TS, changed-script lint/source/arch505/secrets/diff. Fullfoundation/новый APK не запускались.
+- R04/D03/R05 и migration/release gates OPEN: custom questionnaire versions вместе с typed profile, финальные WorkData/остальные владельцы, full staging/parity/retry/Android и подключение2.0 к Restore ещё не завершены. UI/темы позже.
+
 ## 2026-10-23 — R06: два настоящих прерывания автоматического копирования
 
 - Проверены process death после native receipt/до публичной видимости и после committed catalog/до cleanup. Два `am force-stop` только com.fitcoach.r07sqlite, старые PID отсутствовали, новые PID отличались. Recovery **15/15 за8362мс** и **14/14 за7694мс**: тот же ID/URI, без повторного snapshot/publication; безопасный cleanup, unchanged retry, private orphan GC и сохранность клиентских фактов. [Отчёт](spikes/R06_AUTOMATIC_INTERRUPTION_ANDROID_REPORT.json).

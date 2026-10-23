@@ -1,67 +1,66 @@
 # Active context — 2026-10-23
 
-«Дневник атлета», audit/training-fixes. Goal ACTIVE: full2.0→3.0 + backup/restore,
-не100%. Task R06→R03, D05→D01/R06, D03→R04/R05. Product §46, §§53–56.
-Migration/overlay/signing/release gates OPEN; production DDL/real migration/overlay
-не начинать до соответствующих gates. Excel послеbackup: GitHub first,2.0read-only.
-UI/темы позже. Targeted tests области+зависимостей; fullsuite milestones (владелец).
-Владелец спросил о необходимости проверок; пояснены data safety/retry и optional
-provider matrix; ответил «да нет, продолжай» — работу не останавливать.
+«Дневник атлета», audit/training-fixes. GoalACTIVE full2.0→3.0 +backup/restore, не100%.
+CurrentR04→R03, D03→R04/R05; R06→R03/D05→D01/R06. Product §§10/22.2/23–27/46.6/
+46.19/48.5.7/53–56. Migration/overlay/signing/releaseOPEN; no productionDDL/real
+migration/overlay untilgates. UI/themeslater; Excelafterbackup: GitHubfirst,2.0readonly.
+Targeted area+dependencytests, fullsuite milestones. Owneraskedwhychecks, then«да нет,
+продолжай»; no pause. Base1e3e7ed. CommitR04 inRussian, no push.
 
-Основа: D01 baselines/identity/FK/JSON/common full snapshot/hash/media/staging;
-GuardedRestore/v2 one-use Return/completion receipts, runtime15holders+workflow и
-command drain/closed recovery before DB open. Connected RestoreActions/ExpoJobs/
-Return/delete/UI, WAL logical pin/capacity/generation/GC. Earlier native restore35/
-rollback12/commitgap13, actions24/focused3; Downloads20/SAF19/reinstall6. All-owner
-populated histories и legacy mapping в runtime ещё НЕ доказаны.
+Established D01 baselines/identity/FK/JSON, commonfullsnapshot/hash/media/staging,
+GuardedRestore/v2oneuseReturn/completion, runtime15holders+workflow/admission/drain/
+closedrecoverybeforeDBopen. ConnectedRestoreActions/ExpoRestoreJobs/Return/deleteUI,
+WALpin/capacity/generation/GC. Earliernative restore35/rollback12/commitgap13/actions24/
+focused3, Downloads20/SAF19/reinstall6. ExpoRestoreJobs stillonly3.0 commonengine;
+fulllegacybranch notconnected. Oldfullfoundation1086, historicalmainbundle5622/1185.
 
-AutoService/Scheduler/AppState/UI:30мин foreground/resume, wholecommand admission,
-ordinary writes continue, stable online copy hashed before embedded media, unchanged
-no duplicates. Atomic pending→native receipt→managed entries≤3/retired→delete.
-Actual success day/offset + freshness sequence. Daily fallback older distinct days
-technical candidate, not APPROVED; clock backward/offset pauses, safe re-anchor OPEN.
-New destination archives prior catalog/pending without deleting/transferring files.
-Durable failure/status/global banner. Exact native URI/hash/bytes/name/owner/grant,
-manual/foreign ineligible; receipt replay without source, tombstones.
+AutoService/Scheduler/AppState/UI:30min active/resume; onlinecopy/hashbeforemedia,
+ordinarywritescontinue, unchangednoduplicates. Atomicpending→nativereceipt→managed3/
+retired→delete, exactURI/hash/bytes/name/owner/grant/tombstones, durablestatus.
+Nativecap2/catalogreceiptv1. 6091dcbmissinginspect/predecessorpromotion/recheckbefore
+cleanup/allmissingfreshcopy samedestination; native19(47471ms) UUIDfolderrecreated,
+realdefaultuntouched. Stalerow/stat notexercised: unlinkalso removesrow ondevice.
+Priorauto21/status3 separate. Dailyfallback candidate; clock/offset pauses/reanchor
+andSAFrename→receiptgapOPEN. 1e3e7ed twoactualforce-stops32506→1641→3837, verifiedgone/
+newPID; receiptbeforevisibility recovery15/15(8362ms), committedcatalogbeforecleanup
+14/14(7694ms). SameID/URI/noreprepare/repub, safecleanup/unchangedretry/orphanGC,
+snapshots2/4clients, finalLIVE5. All15holdersinitialized+clientread/write, notallhistories.
+FixtureCOMPLETE/no armedpause. OnlytestAPKcom.fitcoach.r07sqlite0.0.1code1 updated,
+legacycom.fitcoach.app2.0build128unchanged. NativeSHA/report details in handoff.
 
-6091dcb: native capability2 inspect VALID/MISSING/UNAVAILABLE/INVALID, only proven
-absence changes metadata. FileNotFound alone insufficient; stale owned Downloads
-path stat ENOENT/ENOTDIR vs EACCES/EIO. Catalog/receiptfilev1 retained. Whole catalog
-inspected before repair; healthy retired predecessor promoted and all retained files
-rechecked before destructive cleanup. Allmissing→freshfullcopy without business
-change, same destination. Host52/52(auto21/scheduler4/manual12/restore15), Android
-missing19/19(47471ms) isolated UUID folder deleted/recreated, realdefault untouched.
-This Android unlink deletes MediaStore row too; stale-row/stat branch not exercised.
-Prior auto21/status3 remain separate reports; last old fullfoundation1086.
+NEW R04: readonlybuild120e116b42 exact ClientProfileFields37/optionlists/FormScreen/
+health sources. scripts/r04/LegacyClientProfileProjection.ts and LegacyClientProfileStage.ts;
+CandidateIdentityLedger.stageClientProfiles optional clientIdentityRehearsal:
+{createdAt,profiles:true}, separatelybound PROFILE_REHEARSAL_V1. Oldmodes unchanged,
+oldstagefilesnotclaimed/rebuilt. 30source→systemanswers,2supplementalCUSTOMstable
+legacyfields,3WorkData(note/tags/loadAvoidance)candidates,2exclusionssteps/photo(V1).
+Explicitspellingaliases only; missing/false/empty retained. Unknown/type/options/
+duplicates/oversizeblock, nottruncate. Healthtruewouldhidelegacydetails: visibility
+conflict/review, NOT medicalinference or guessedfalse. Safety sources candidates,
+notfinalSafety/Limitations. WeightHistory remains text, notsyntheticmeasurement.
 
-NEW based6091dcb: actual automatic force-stop boundaries. Native debug-only latch
-inside publisher AFTER synced/renamed receipt BEFORE IS_PENDING0; strict private
-UUID marker/control, production folder never arms. Independent pending/receipt
-read before stop; PID32506 absent→1641; freshprocess seespendingvisibility1 and
-replays same ID/URI, no prepare. Recovery15/15 за8362ms. Then readback committed
-catalog/retired BEFORE cleanup; PID1641 absent→3837. Freshprocess no prepare/pub,
-samecurrentURI and safe retirement, recovery14/14 за7694ms. Explicit unchangedretry
-no duplicate, private source/orphan GC. Snapshot2 then4clients (incl prior latewrite);
-final LIVE5 tracked clients. All15holders initialized, only clientwrites/read checked.
-Fixture COMPLETE/no pending retired/no armed pause, no process awaiting kill.
-Report docs/spikes/R06_AUTOMATIC_INTERRUPTION_ANDROID_REPORT.json; raw .cache/
-r06-auto-kill-{receipt,catalog}-{arm,report}.json. DebugAPK code1/version0.0.1 only
-com.fitcoach.r07sqlite updated, legacycom.fitcoach.app2.0build128 unchanged. SHA
- e30725f0e2d70c15f1aec0a43778c40b26facc7655eb750ba4783d5721986bfc.
-Hostauto21 fresh, root/mobile/spike TS, changedlint/arch505/source/secrets/diff,
-Kotlin/arm64 build. Mainbundle/fullfoundation NOT rerun; new TS only debugprobe via
-Metro. Historicalmainbundle5622/1185. New native moduleversion remains2.
+Same BEGINIMMEDIATE: stableclientIDs+actualD01cards/Qversion/draft/answers/private
+source+targetreceipt, readback/FK/integrity. NoUPDATE/REPLACE/newIDs/revisions/dates
+onretry. Inputs copied/reprojectedfromrawJSON, notmutablederivedobject. Schema
+publishedAt=explicitjobtime; answerupdatedAt=sourceclientrowupdatedAt, NOT exact
+answertime. WorkData/exclusions inprivateprovenance, finalizable:false. PartialDB
+hasr04_*objectsandonlyselectedowners, cannotpublishasfitcoach_v3.db. Fullread-only
+audit clientCards adds onlyprofilecandidates/review/workdatacounts, targetWrites0,
+noPII. Newtestregisteredr04/foundation; npm run r04:profile:test69/69(17new),
+downstreampreflight82/82. SyntheticreadOnlysourcefile→identity/cardreaders→stage
+active/archived+32answers; sourceSHAunchanged. Reopentarget/reorderedretrybyteidentical;
+6faultpoints rollbackIDs/cards/schema/answers/receipt. NotAndroidkillproof. Root/mobile
+TS, changedscriptslint/source/arch505/secrets/diff. Fullfoundation/APK/bundleNOT rerun
+(runtimeunchanged). Doc R04_CLIENT_PROFILE_STAGING.md exactsources/mappings/limits.
 
-NEXT PRIMARY: full legacy mapping/staging/stable IDs/provenance/parity/retry.
-Actual ExpoRestoreJobs only3.0 engine, no legacy branch. scripts/r04 partial source
-readers/projections/identity ledger teststage (clients only) notfullconverter. Must
-connect fulladapter, not merely reject2.0 or preserve rawblob. LOAD_REPS for2.0
-(20×10кг), equipment/groups unknown notguessed. Read R04/task deps/source refs
-before next code. Remain OPEN: clock/timezone re-anchor, copy/delete/tombstone death,
-SAF rename→receipt gap/ENOSPC/providers, ordinaryUI/AppState/OS signals/first-run.
+NEXT: compose typedprofile schema/answers with customlegacyquestionnaire versions/
+answers/exactIDs. FinalWorkDataownerNotes/Tags/Safetyseparate; remainingowners,
+complete staging/parity/stableIDs/provenance/retry/Android +runtime2.0Restore. Do not
+replacefullmigrationbyrawpayload/rejection/partialprototype. LOAD_REPSfor2.0(20×10кг),
+unknown equipment/groupsnotguessed. Backupremaining:clock/DST/copydeletekill/SAFgap/
+ENOSPC/providers, ordinaryUI/AppState/OSsignals/first-runchoice. Goal/gatesremainOPEN.
 
-Личные DB/backup/secrets не читать/коммитить; patternkey не вводить/сохранять.
-Dev64tables1150rows/oldfiles сохранены. NativeMetro8097 handle99958 confirmedlive;
-reverse8081→8097. TestPID3837 terminal; scrcpy оставить. MainMetro8096handle16439
-старый/unverified. Timeout не повод restart. Handoff docs/HANDOFF_BACKUP_MIGRATION.md.
-Commit R06 безpush.
+No personalDB/backup/secrets/keyread. Dev64tables1150rows/oldfileshistoricallysafe.
+No phonechangesthisslice. LastnativePID3837terminal, Metro99958waslivepreviousturn
+(revalidatebeforeuse); no pendingkill; scrcpyleaveopen. MainMetro16439old/unverified.
+Timeoutnotreasonrestart. Detailed docs/HANDOFF_BACKUP_MIGRATION.md.

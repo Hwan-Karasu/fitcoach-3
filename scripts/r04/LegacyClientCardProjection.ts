@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { LegacyClientIdentityCandidate } from "./LegacyClientIdentitySourceReader.ts";
 import { legacyObjectJson, requireLegacyColumns } from "./LegacyExerciseCatalogSourceReader.ts";
 import { parseHeightCmX10, validPastBirthDate } from "../../apps/mobile/src/features/clients/domain/ClientProfileValidation.ts";
+import { projectLegacyClientProfile } from "./LegacyClientProfileProjection.ts";
 
 export interface ClientCardFields {
   readonly birthDate: string | null;
@@ -65,8 +66,13 @@ export function readLegacyClientCardsInSnapshot(db: DatabaseSync, accountScope: 
 }
 
 export function summarizeLegacyClientCards(rows: readonly LegacyClientCardCandidate[]) {
+  const profiles = rows.filter((row) => row.legacyProfile !== null).map((row) => projectLegacyClientProfile(row.legacyProfile!));
   return { status: "requires-mapping" as const, sourceRows: rows.length,
     cardCandidates: rows.filter((row) => row.fields !== null).length,
     rowsRequiringReview: rows.filter((row) => row.issues.length > 0).length,
-    retainedLegacyProfileRows: rows.filter((row) => row.legacyProfile !== null).length, targetWrites: 0 as const };
+    retainedLegacyProfileRows: rows.filter((row) => row.legacyProfile !== null).length,
+    profileAnswerCandidates: profiles.reduce((n, row) => n + Object.keys(row.answers ?? {}).length, 0),
+    profilesRequiringReview: rows.length - profiles.filter((row) => row.answers !== null).length,
+    workDataCandidateRows: profiles.filter(({ workData: w }) => w.trainerNote !== null || w.manualTags.length > 0 || w.loadAvoidance !== null || w.safety.length > 0).length,
+    targetWrites: 0 as const };
 }
