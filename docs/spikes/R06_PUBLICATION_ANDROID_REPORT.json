@@ -197,17 +197,52 @@
                       "uninstalled":  true
                   },
     "reinstallRestore":  {
-                             "status":  "NOT_RUN",
-                             "reason":  "Owner postponed APK installation; continue host work without device installation"
+                             "status":  "PASSED",
+                             "cleanPrivatePreferenceAbsent":  true,
+                             "publicFileHashMatchesBeforeUninstall":  true,
+                             "filename":  "athlete-diary-20000101-000000-81816e9e-1703-46fc-87c3-f734a51c8800.atbackup",
+                             "sha256":  "ceb2b1e62f5b58fb3cca5e63f1877b1eb3012150088bf4b0f4107518951806f7",
+                             "bytes":  1044480,
+                             "pickedFileResult":  {
+                                                      "kind":  "R06_PUBLICATION",
+                                                      "destination":  "PICKED_FILE",
+                                                      "checks":  [
+                                                                     {
+                                                                         "name":  "published_snapshot_manifest_and_media_valid",
+                                                                         "passed":  true
+                                                                     },
+                                                                     {
+                                                                         "name":  "all_fifteen_repository_holders_open_the_restored_file",
+                                                                         "passed":  true
+                                                                     },
+                                                                     {
+                                                                         "name":  "client_restored_from_external_copy",
+                                                                         "passed":  true
+                                                                     },
+                                                                     {
+                                                                         "name":  "recipe_restored_from_external_copy",
+                                                                         "passed":  true
+                                                                     },
+                                                                     {
+                                                                         "name":  "photo_relocated_to_new_private_directory",
+                                                                         "passed":  true
+                                                                     },
+                                                                     {
+                                                                         "name":  "restored_photo_has_exact_known_bytes",
+                                                                         "passed":  true
+                                                                     }
+                                                                 ],
+                                                      "allPassed":  true,
+                                                      "elapsedMs":  10025
+                                                  },
+                             "legacyBuild128Untouched":  true
                          },
     "openChecks":  [
                        "Ordinary production restore UI",
-                       "New atomic runtime journal writer on Android",
-                       "Reinstall and picked-file restore",
                        "Publication process death and partial cleanup",
                        "Low storage and other document providers",
                        "Full populated owner matrix",
-                       "Automatic backup rotation and Return point",
+                       "Automatic backup scheduling and daily rotation",
                        "Legacy migration and release gates"
                    ]
 }

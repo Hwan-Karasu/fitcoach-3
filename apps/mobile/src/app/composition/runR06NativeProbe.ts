@@ -2,7 +2,7 @@ import { Directory, File, Paths } from "expo-file-system";
 import * as SQLite from "expo-sqlite";
 import { uuid } from "expo-modules-core";
 import { Image } from "react-native";
-import { RestoreProtocolError, SnapshotError } from "../../features/backup/public.ts";
+import { ReturnPointCompletion, parseReturnPointState, RestoreProtocolError, SnapshotError } from "../../features/backup/public.ts";
 import { ExpoRestoreStorage } from "../../features/backup/data/ExpoRestoreStorage.ts";
 import { ExpoSqliteBackup } from "../../features/backup/data/ExpoSqliteBackup.ts";
 import { expoSnapshotMedia } from "../../features/backup/data/ExpoSnapshotMedia.ts";
@@ -18,6 +18,7 @@ import { BootCoordinator } from "../bootstrap/BootCoordinator.ts";
 import { recoverLocalRestore } from "./recoverProductionRestore.ts";
 import { restoreWithRuntimeJournal } from "../runtime/JournaledRestore.ts";
 import { ExpoRuntimeRestoreJournal } from "./ExpoRuntimeRestoreJournal.ts";
+import { ExpoReturnPointStore } from "../../features/backup/data/ExpoReturnPointStore.ts";
 import { createClientCardWorkflow } from "../../workflows/saveClientCard.ts";
 import { SharedSqliteDatabase } from "../../shared/db/SharedSqliteDatabase.ts";
 import { openIsolatedSqliteConnection } from "../../shared/db/IsolatedSqliteConnection.ts";
@@ -42,6 +43,7 @@ interface InterruptedProbe {
   readonly oldHash: string;
   readonly incomingHash: string;
   readonly operationId: string;
+  readonly expectCommit: boolean;
 }
 const pendingProbe = () => new File(Paths.document, "r06-native-pending.json");
 const databaseAt = (root: Directory, name: string) => new SharedSqliteDatabase(() => openIsolatedSqliteConnection(
@@ -82,7 +84,7 @@ async function recoverInterruptedProbe(): Promise<R06NativeReport> {
     typeof state.beforeId !== "string" || !uuid.test(state.beforeId) || typeof state.restoredId !== "string" || !uuid.test(state.restoredId) ||
     typeof state.oldHash !== "string" || !/^[a-f0-9]{64}$/u.test(state.oldHash) ||
     typeof state.incomingHash !== "string" || !/^[a-f0-9]{64}$/u.test(state.incomingHash) ||
-    typeof state.operationId !== "string" || !uuid.test(state.operationId)) throw new Error("R06_PENDING_INVALID");
+    typeof state.operationId !== "string" || !uuid.test(state.operationId) || typeof state.expectCommit !== "boolean") throw new Error("R06_PENDING_INVALID");
   const root = new Directory(state.rootUri);
   const runtime = probeRuntime(root, "live.db", true); const clients = runtime.owners.clients;
   const journal = new Directory(root, "journal");
@@ -96,18 +98,28 @@ async function recoverInterruptedProbe(): Promise<R06NativeReport> {
       events.push("recovery");
       await recoverLocalRestore(runtime.maintenance, journal, storage.file("LIVE"));
       check("native_cold_recovery_before_runtime_open", runtime.opens === 0 && runtime.handles === 0);
-      check("native_kill_rolls_back", JSON.parse(await new File(storage.file("SAFETY").parentDirectory, "guard.json").text()).phase === "ROLLED_BACK");
-      check("native_kill_original_bytes", (await expoFileSha256(storage.file("LIVE"))).sha256 === state.oldHash);
+      check(state.expectCommit ? "native_kill_completes_commit" : "native_kill_rolls_back",
+        JSON.parse(await new File(storage.file("SAFETY").parentDirectory, "guard.json").text()).phase === (state.expectCommit ? "COMPLETED" : "ROLLED_BACK"));
+      check(state.expectCommit ? "native_kill_committed_bytes" : "native_kill_original_bytes",
+        (await expoFileSha256(storage.file("LIVE"))).sha256 === (state.expectCommit ? state.incomingHash : state.oldHash));
       check("native_kill_safety_intact", (await expoFileSha256(storage.file("SAFETY"))).sha256 === state.oldHash);
-      check("native_kill_rejected_preserved", storage.file("REJECTED").exists);
+      check(state.expectCommit ? "native_kill_previous_preserved" : "native_kill_rejected_preserved",
+        state.expectCommit ? (await expoFileSha256(storage.file("PREVIOUS"))).sha256 === state.oldHash : storage.file("REJECTED").exists);
+      const points = new ExpoReturnPointStore(journal, { identity: PRODUCTION_IDENTITY, owners: SCHEMA_OWNERS });
+      const point = parseReturnPointState(await points.readState()).point;
+      check(state.expectCommit ? "native_v2_committed_point_activated" : "native_v2_rollback_keeps_point_retired",
+        state.expectCommit ? point?.operationId === state.operationId : point === null);
+      if (state.expectCommit) { await points.verifyPoint(point!); check("native_v2_committed_point_valid", true); }
     }, prepareWorkspace: async () => { events.push("workspace"); return { id: PRODUCTION_WORKSPACE_ID }; },
     openDatabase: async () => { events.push("database"); await prepareProductionDatabase(runtime.database); await runtime.initialize(); },
     loadThemePreference: async () => (await runtime.owners.settings.readAppearance()) ?? { themeId: null, accentId: null } });
     check("native_boot_ready_after_recovery", (await boot.start()).kind === "APP_READY");
     check("native_recovery_workspace_database_order", events.join(",") === "recovery,workspace,database");
     check("native_all_owners_reopened_after_kill", runtime.owners.ownerCount === 15 && runtime.handles === 1 && runtime.peak === 1);
-    check("native_kill_original_client", (await clients.get(state.beforeId))?.displayName === "R06 SYNTHETIC BEFORE");
-    check("native_kill_no_partial_merge", await clients.get(state.restoredId) === null);
+    check(state.expectCommit ? "native_kill_restored_client" : "native_kill_original_client",
+      state.expectCommit ? (await clients.get(state.restoredId))?.displayName === "R06 SYNTHETIC RESTORED"
+        : (await clients.get(state.beforeId))?.displayName === "R06 SYNTHETIC BEFORE");
+    check("native_kill_no_partial_merge", await clients.get(state.expectCommit ? state.beforeId : state.restoredId) === null);
     await runtime.card.save(null, { displayName: "R06 SYNTHETIC AFTER RECOVERY" }, {});
     await runtime.close(); runtime.cold();
     const later = (await expoFileSha256(storage.file("LIVE"))).sha256;
@@ -120,9 +132,9 @@ async function recoverInterruptedProbe(): Promise<R06NativeReport> {
 /** Only invoked by the isolated SQLite spike. Always uses a newly allocated synthetic private
  * directory, never runtime DB names, sources, imports or actual user data. No cleanup of other jobs.
  */
-export async function runR06NativeProbe(mode: "NORMAL" | "INTERRUPT" | "RECOVER" = "NORMAL"): Promise<R06NativeReport> {
+export async function runR06NativeProbe(mode: "NORMAL" | "INTERRUPT" | "INTERRUPT_FINALIZATION" | "RECOVER" = "NORMAL"): Promise<R06NativeReport> {
   if (mode === "RECOVER") return recoverInterruptedProbe();
-  if (mode === "INTERRUPT" && pendingProbe().exists) throw new Error("R06_PENDING_REHEARSAL_EXISTS");
+  if (mode !== "NORMAL" && pendingProbe().exists) throw new Error("R06_PENDING_REHEARSAL_EXISTS");
   const started = Date.now();
   const checks: { name: string; passed: boolean }[] = [];
   const check = (name: string, passed: boolean) => { checks.push({ name, passed }); if (!passed) throw new Error("R06_NATIVE_CHECK_FAILED"); };
@@ -138,6 +150,8 @@ export async function runR06NativeProbe(mode: "NORMAL" | "INTERRUPT" | "RECOVER"
   const historic = historicOwners.clients;
   const oldImages = new Directory(root, "old-images"); oldImages.create();
   const newImages = new Directory(root, "new-images"); newImages.create();
+  const liveImages = new Directory(root, "live-images"); liveImages.create();
+  const livePhoto = new File(liveImages, "before-restore.png"); const liveRecipeId = uuid.v4();
   const originalPhoto = new File(oldImages, "synthetic.png");
   const recipeId = uuid.v4();
   const photoDetails = { prepMinutes: 0, cookMinutes: 5, categories: [], photoUri: originalPhoto.uri,
@@ -171,6 +185,7 @@ export async function runR06NativeProbe(mode: "NORMAL" | "INTERRUPT" | "RECOVER"
     originalPhoto.write("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4HsAAAAASUVORK5CYII=", { encoding: "base64" });
     const png = await originalPhoto.bytes();
     const image = new Uint8Array(256 * 1024 * 2 + 19); image.set(png); originalPhoto.write(image);
+    livePhoto.write(image);
     const imageHash = (await expoFileSha256(originalPhoto)).sha256;
     const seed = await SQLite.openDatabaseAsync("source.db", { useNewConnection: true }, root.uri);
     try {
@@ -179,6 +194,13 @@ export async function runR06NativeProbe(mode: "NORMAL" | "INTERRUPT" | "RECOVER"
         VALUES (?, ?, ?, 10, 7, ?, ?, ?, ?)`, [recipeId, PRODUCTION_WORKSPACE_ID, "R06 SYNTHETIC RECIPE",
         "2026-10-23T08:00:00.000Z", "2026-10-23T08:00:00.000Z", JSON.stringify(photoDetails, null, 2), "2026-10-23T08:00:00.000Z"]);
     } finally { await seed.closeAsync(); }
+    const liveSeed = await SQLite.openDatabaseAsync("live.db", { useNewConnection: true }, root.uri);
+    try {
+      await liveSeed.execAsync("PRAGMA foreign_keys=ON");
+      await liveSeed.runAsync(`INSERT INTO recipes (id, workspace_id, name, servings_x10, revision, created_at, updated_at, details_json)
+        VALUES (?, ?, ?, 10, 9, ?, ?, ?)`, [liveRecipeId, PRODUCTION_WORKSPACE_ID, "R06 SYNTHETIC BEFORE RECIPE",
+        "2026-10-23T07:00:00.000Z", "2026-10-23T07:00:00.000Z", JSON.stringify({ ...photoDetails, photoUri: livePhoto.uri })]);
+    } finally { await liveSeed.closeAsync(); }
     stage = "HASH_CLOSED_FILES";
     const oldHash = (await expoFileSha256(liveFile)).sha256;
     const sourceHash = (await expoFileSha256(sourceFile)).sha256;
@@ -232,12 +254,22 @@ export async function runR06NativeProbe(mode: "NORMAL" | "INTERRUPT" | "RECOVER"
       },
     });
     const runtimeJournal = new ExpoRuntimeRestoreJournal(journal);
-    const protocol = { restore: (plan: RestorePlan) => restoreWithRuntimeJournal({ version: 1, ...plan }, observed, runtimeJournal) };
+    const points = new ExpoReturnPointStore(journal, { identity: PRODUCTION_IDENTITY, owners: SCHEMA_OWNERS });
+    const completion = new ReturnPointCompletion(points, { kind: "RESTORE", createPoint: (plan) => points.createPoint(plan, liveFile, liveImages) });
+    const protocol = { restore: (plan: RestorePlan) => restoreWithRuntimeJournal({ version: 2, ...plan }, observed, runtimeJournal, completion) };
     const currentHash = (await expoFileSha256(liveFile)).sha256;
     const plan = { operationId, currentSha256: currentHash, incomingSha256: incomingHash };
-    if (mode === "INTERRUPT") {
+    if (mode === "INTERRUPT" || mode === "INTERRUPT_FINALIZATION") {
       pendingProbe().write(JSON.stringify({ rootUri: root.uri, beforeId: before.id, restoredId: restored.id,
-        oldHash: currentHash, incomingHash, operationId } satisfies InterruptedProbe));
+        oldHash: currentHash, incomingHash, operationId, expectCommit: mode === "INTERRUPT_FINALIZATION" } satisfies InterruptedProbe));
+    }
+    if (mode === "INTERRUPT_FINALIZATION") {
+      points.writeState = async () => {
+        console.info("R06_INTERRUPT_READY AFTER_COMMIT_BEFORE_POINT_PUBLICATION");
+        await new Promise<void>(() => { /* Real process death, before atomic point state publication. */ });
+      };
+    }
+    if (mode === "INTERRUPT") {
       const move = storage.moveExclusive.bind(storage);
       storage.moveExclusive = async (from, to) => {
         await move(from, to);
@@ -251,6 +283,11 @@ export async function runR06NativeProbe(mode: "NORMAL" | "INTERRUPT" | "RECOVER"
     check("guarded_replace", await protocol.restore(plan) === "COMMITTED");
     check("independent_safety", (await expoFileSha256(storage.file("SAFETY"))).sha256 === currentHash);
     check("previous_preserved", (await expoFileSha256(storage.file("PREVIOUS"))).sha256 === currentHash);
+    const point = parseReturnPointState(await points.readState()).point;
+    check("native_v2_point_activated", point?.operationId === operationId);
+    if (point === null) throw new Error("R06_POINT_MISSING");
+    await points.verifyPoint(point);
+    check("native_v2_full_point_embeds_before_photo", (await backupDriver.validatePrivateSnapshot(points.pointFile(point))).media?.entries === 1);
     stage = "REOPEN_REPOSITORY";
     check("native_runtime_reopened_and_invalidated", runtime.handles === 1 && runtime.peak === 1 && runtime.invalidations === 1 && runtime.maintenance.state === "ACTIVE");
     check("reopen_restored_client", (await clients.get(restored.id))?.emoji === "🏋️");
@@ -280,6 +317,39 @@ export async function runR06NativeProbe(mode: "NORMAL" | "INTERRUPT" | "RECOVER"
     check("replay_preserves_later_writes", (await expoFileSha256(liveFile)).sha256 === after);
     await recoverLocalRestore(runtime.maintenance, journal, liveFile);
     check("native_completed_journal_preserves_later_writes", (await expoFileSha256(liveFile)).sha256 === after && runtime.handles === 0);
+    check("native_v2_point_survives_cold_boot", parseReturnPointState(await points.readState()).point?.operationId === operationId);
+    stage = "RETURN_STAGING";
+    liveImages.delete(); // Only synthetic originals; the full point must be independently sufficient.
+    const returnId = uuid.v4(); const returnDirectory = new Directory(journal, "jobs", returnId); returnDirectory.create();
+    await backupDriver.prepareForRestore(points.pointFile(point), new File(returnDirectory, "inspection.atbackup"), new File(returnDirectory, "incoming.db"),
+      { files: expoSnapshotMedia(newImages), restoreId: returnId });
+    await runtime.initialize(); await runtime.primeWorkflow();
+    const returning = new ExpoRestoreStorage({ live: liveFile, directory: returnDirectory,
+      withClosedDatabase: (task) => runtime.maintenance.withClosedDatabase(task), inspectDatabase: inspectProductionDatabase });
+    const returnPlan = { version: 2, operationId: returnId, currentSha256: (await expoFileSha256(liveFile)).sha256,
+      incomingSha256: (await expoFileSha256(returning.file("INCOMING"))).sha256 };
+    stage = "RETURN_APPLY";
+    check("native_v2_return_committed", await restoreWithRuntimeJournal(returnPlan, returning, runtimeJournal,
+      new ReturnPointCompletion(points, { kind: "RETURN", expectedPointOperationId: point.operationId })) === "COMMITTED");
+    check("native_v2_return_original_client_id", (await clients.get(before.id))?.displayName === "R06 SYNTHETIC BEFORE");
+    check("native_v2_return_no_merge", await clients.get(restored.id) === null && await clients.get(afterClient.id) === null);
+    const returnedLease = await live.acquire();
+    let returnedPhotoUri: string;
+    try {
+      const row = await returnedLease.connection.first<{ revision: number; created_at: string; details_json: string }>(
+        "SELECT revision, created_at, details_json FROM recipes WHERE id=?", [liveRecipeId]);
+      check("native_v2_return_recipe_id_revision_dates", row?.revision === 9 && row.created_at === "2026-10-23T07:00:00.000Z");
+      returnedPhotoUri = String((JSON.parse(row!.details_json) as { photoUri: string }).photoUri);
+    } finally { await live.release(); }
+    check("native_v2_return_embedded_photo_after_original_loss", !liveImages.exists && returnedPhotoUri !== livePhoto.uri &&
+      (await expoFileSha256(new File(returnedPhotoUri))).sha256 === imageHash);
+    check("native_v2_return_point_consumed_without_reverse", parseReturnPointState(await points.readState()).point === null &&
+      !points.pointFile(point).exists && !new File(returnDirectory, "return.atbackup").exists);
+    await runtime.card.save(null, { displayName: "R06 SYNTHETIC AFTER RETURN" }, {}); await runtime.close(); runtime.cold();
+    const afterReturn = (await expoFileSha256(liveFile)).sha256;
+    await recoverLocalRestore(runtime.maintenance, journal, liveFile);
+    check("native_v2_consumed_point_not_resurrected", parseReturnPointState(await points.readState()).point === null &&
+      (await expoFileSha256(liveFile)).sha256 === afterReturn && runtime.handles === 0);
     return { kind: "R06_NATIVE", checks, allPassed: checks.every((item) => item.passed), elapsedMs: Date.now() - started };
   } catch (error) {
     const code = error instanceof RestoreProtocolError || error instanceof LocalFileHashError || error instanceof DatabaseCompatibilityError || error instanceof SnapshotError

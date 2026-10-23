@@ -1,3 +1,33 @@
+## Последнее состояние — Android v2 проверен, подключение обычного восстановления
+
+База среза7eb66d9. Владелец завершил установку отдельной test APK. Native v2
+normal35/35, rollback12/12 после force-stop до COMMITTED, commit-gap13/13 после
+force-stop между COMPLETED и point-state publication. Recovery выполнен новым
+процессом до открытия 15 holders. Полный Return/точное фото после потери оригинала/
+погашение точки/поздние writes подтверждены. Отдельно после clean reinstall:
+picked-file restore6/6 и внешний SHA совпал с SHA до uninstall. 2.0build128 цела.
+Личные backup-файлы не открывались. Новая установка не нужна; старые записи ниже
+«продолжать без APK» описывают предыдущее состояние и больше не актуальны.
+
+Добавлены pure RestoreActionsService и ApplyPreparedRestore (25hosttests):
+frozen opaque preview ID, explicitconfirm, cancel/doubletap/recovery, logical
+closed-LIVE pin с harmless WAL checkpoint, rawincomingpin/capacity callback.
+Ожидаемый отказ reopen исходной здоровой LIVE; uncertain protocol recovery до reopen.
+Foundation1076/1076, TS/lint/arch490/source/secrets/diff, Android JS/Hermes
+bundle5607modules1185assets. Это не native proof нового coordinator/ordinary UI.
+Документы: [core](spikes/R06_RESTORE_ACTIONS.md),
+[Android protocol](spikes/R06_MANAGED_ANDROID_REPORT.json),
+[reinstall](spikes/R06_PUBLICATION_ANDROID_REPORT.json).
+
+Следующий шаг: native ExpoRestoreJobs/createRestoreActions в composition:
+File.pickFileAsync→privatejob→validate/stage→summary+stablelogicalpin; actual
+availableDiskSpace/preparedjob ownership, discard/orphan cleanup без удаления
+pending/point/LIVEmedia. Runtime.restoreActions→BackupScreen, generation remount,
+recovery retry BootGate. Затем OSrestsignals reconcile безpermission prompt,
+auto30min/changed-data/3dailyrotation. Full legacy migration, nativeUI/fullowners/
+lowspace/providers/publicationdeath и signing/upgrade/release gates OPEN.
+Excel после backup/restore, UI/темы позже. Goal ACTIVE, не100%.
+
 # Точка продолжения — 23 октября 2026
 
 Работа возобновлена по просьбе владельца: «не спим, работаем». Цель ACTIVE.

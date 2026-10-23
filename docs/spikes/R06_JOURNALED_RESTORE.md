@@ -1,7 +1,9 @@
 # R06 — публикация журнала подтверждённого восстановления
 
-Дата: 2026-10-23. **HOST VERIFIED / ANDROID WRITER NOT VERIFIED**. R06/D05 OPEN.
-По просьбе владельца работа продолжается без повторной установки тестовой APK.
+Дата: 2026-10-23. **HOST + SYNTHETIC ANDROID v2 VERIFIED**. R06/D05 OPEN.
+Владелец завершил установку отдельной тестовой APK. v2 writer/point protocol:
+normal35/35, rollback12/12, commit-gap recovery13/13; оба force-stop подтверждены
+новым процессом. [Отчёт](R06_MANAGED_ANDROID_REPORT.json). Обычный UI ещё не подключён.
 Следующий срез добавил v2 routing и обязательную finalization полной Return-точки:
 [R06_RETURN_POINT.md](R06_RETURN_POINT.md). Ниже — исходный контракт v1 writer.
 
@@ -58,9 +60,10 @@ terminal replay, пропавшая LIVE и неизменность подтв�
 runtime и GuardedRestore с ручной записью pending; он не засчитывается как native
 доказательство нового writer. Стенд обновлён для повторной проверки позже.
 
-## Дальнейшая работа без APK
+## Дальнейшая интеграция
 
-Контроллер выбора/preview/подтверждения, полная private Return-копия с фотографиями,
-завершение её публикации после COMMITTED и прерывания этой стадии; затем scheduler,
-ротация дневных копий и согласование OS-сигналов таймеров. Нативные проверки
-переустановки/writer/low-storage остаются отдельным незавершённым пунктом.
+Контроллер выбора/preview/подтверждения, logical pin с учётом WAL, capacity/job
+lifecycle; затем scheduler, ротация дневных копий и согласование OS-сигналов
+таймеров. Полная Return-копия и её прерывания уже проверены общим v2 protocol.
+Переустановка с picked-file restore6/6 также завершена; low-storage, process death
+при внешней публикации, другие providers и полные доменные истории ещё открыты.

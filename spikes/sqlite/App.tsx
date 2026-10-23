@@ -30,6 +30,7 @@ function PublicationProbe() {
     <Button title="Проверить тестовую копию через выбор файла" disabled={busy || !expectedFilename} onPress={() => run(() => verifyR06PickedPublication(expectedFilename!))} />
     <Button title="Проверить журнал и восстановление" disabled={busy} onPress={() => run(() => runR06NativeProbe())} />
     <Button title="Подготовить прерывание восстановления" disabled={busy} onPress={() => run(() => runR06NativeProbe("INTERRUPT"))} />
+    <Button title="Прервать перед закреплением точки возврата" disabled={busy} onPress={() => run(() => runR06NativeProbe("INTERRUPT_FINALIZATION"))} />
     <Button title="Восстановить после прерывания" disabled={busy} onPress={() => run(() => runR06NativeProbe("RECOVER"))} />
     <Text selectable>{busy ? "Проверка…" : failed ? "R06_PUBLICATION_FAILED" : report ? JSON.stringify(report, null, 2) : "Готово к проверке"}</Text>
   </ScrollView></SafeAreaView>;

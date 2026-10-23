@@ -1,3 +1,10 @@
+## 2026-10-23 — R06: Android v2/Return/reinstall и confirmed restore core
+
+- Владелец завершил установку отдельной APK. Android v2 normal **35/35**, rollback после force-stop до COMMITTED **12/12**, cold finalization после force-stop между COMPLETED и point-state publication **13/13**. Оба остановленных процесса и новые PID подтверждены; последняя граница дополнительно проверена отсутствием point state. Проверены Return с точным фото после потери оригинала, 15 holders, отсутствие merge/обратной точки и сохранение поздних записей. [Отчёт](spikes/R06_MANAGED_ANDROID_REPORT.json).
+- После чистой переустановки известная публичная synthetic копия выбрана через системный picker: **6/6**, клиент/рецепт/точное фото; внешний SHA совпал с SHA до удаления APK. Установленная 2.0 build128 и личные копии не затронуты. [Отчёт](spikes/R06_PUBLICATION_ANDROID_REPORT.json).
+- Добавлены pure RestoreActionsService и ApplyPreparedRestore: точное подтверждение preview ID, whole-command preparation, apply вне gate без self-deadlock, logical pin после close с допуском harmless WAL checkpoint, capacity callback и recovery до reopen. **25 новых host-тестов**; native job adapter/ordinary restore UI пока не подключены. [Границы](spikes/R06_RESTORE_ACTIONS.md).
+- Foundation **1076/1076**, root/mobile/spike typecheck, lint, arch490, source/secrets/diff; Android JS/Hermes bundle **5607 modules/1185 assets**. R06/D05 OPEN: native job lifecycle/capacity/ordinary UI, OS rest signals, auto/daily rotation, providers/low-space/publication-death/full-owner matrix и полный legacy mapping/staging/IDs/parity/retry впереди. Excel после backup/restore, UI/темы позже.
+
 ## 2026-10-23 — R06: private точка возврата и совместная finalization
 
 - Добавлены общий ReturnPointCompletion и ExpoReturnPointStore: полный private SQLite snapshot с embedded media; одна активная точка, замена только после успеха, однократное погашение Return без обратной точки. Atomic state хранит receipt после удаления, поэтому cold boot не воскрешает точку.

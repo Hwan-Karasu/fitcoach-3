@@ -25,7 +25,7 @@ snapshot с manifest, без ZIP/шифрования. Restore удаляет sn
 только из отдельного staging. Host-прототип включает фото рецептов блоками BLOB
 до 256 КиБ, проверяет SHA/длины/полноту ссылок, восстанавливает новые private
 файлы и меняет URI только в staging. Native snapshot/lifecycle проверены отдельным
-синтетическим Android стендом; полная parity всех доменов, переустановка,
+синтетическим Android стендом; полная parity всех доменов,
 publication process-death/low-storage и restore UI остаются открытыми. Это не готовая миграция
 и не закрытый R06/D05.
 
@@ -35,5 +35,8 @@ publication process-death/low-storage и restore UI остаются откры�
 Однократный Return не создаёт обратную точку. Atomic return-state.json хранит
 settledOperationId даже после явного удаления: cold boot не воскрешает точку.
 Cold production adapter подключён; обычный preview/confirmation/controller ещё нет.
-32 новых host-проверки, включая 14 реальных SIGKILL, не заменяют native proof.
+32 host-проверки включают 14 реальных SIGKILL. Native v2 normal35/35,
+rollback12/12 и commit-gap recovery13/13 прошли; reinstall/picked restore6/6 тоже.
+Новые RestoreActionsService и ApplyPreparedRestore дают pure controller и логический
+pin с учётом WAL (ещё25 host-проверок); native job adapter и обычный UI не подключены.
 Подробности: `docs/spikes/R06_RETURN_POINT.md`.

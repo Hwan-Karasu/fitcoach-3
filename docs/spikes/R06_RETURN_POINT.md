@@ -1,7 +1,7 @@
 # R06 — одна полная private точка возврата и завершение операции
 
-Дата: 2026-10-23. **HOST VERIFIED / ANDROID NOT VERIFIED**. R06/D05 OPEN.
-Владелец разрешил продолжать без установки тестовой APK; новых установок нет.
+Дата: 2026-10-23. **HOST + SYNTHETIC ANDROID VERIFIED**. R06/D05 OPEN.
+Владелец завершил установку отдельной тестовой APK; production UI ещё не подключён.
 
 Входы: общий SQLite snapshot engine с embedded media, D01 identity, staging
 INCOMING, RuntimeMaintenance, GuardedRestore и atomic routing writer. R06 зависит
@@ -80,8 +80,16 @@ Cold production reader уже использует completion protocol. Обыч
 очистка orphan до публикации routing record. Нужен единый controller для Restore,
 Return и подтверждённого удаления; итоговое восстановление включает OS rest signals.
 
-Native createPoint/finalization/replay ещё не запускались; SDK API проверены
-типами, host state machine использует отдельный FS adapter с общим алгоритмом.
+Native v2 createPoint/finalization/replay и однократный Return проверены отдельно:
+normal **35/35**, force-stop до COMMITTED с rollback **12/12**, force-stop после
+COMPLETED до публикации point state с завершением commit **13/13**. Последняя
+граница подтверждена отсутствием return-state.json до остановки; recovery работает
+в новом процессе до открытия 15 holders. Проверены точные фото после потери
+оригиналов, отсутствие merge, погашение точки и поздние записи.
+[Фактический отчёт](R06_MANAGED_ANDROID_REPORT.json). Это synthetic protocol proof,
+а не E2E нового controller/preview/ordinary UI и не заполненные истории всех owners.
 Process-death proof не является гарантией power-loss/directory fsync Android.
-Autoscheduler/дневная rotation, full populated owner matrix, reinstall и полная
-legacy миграция остаются OPEN. Excel идёт после backup/restore.
+Переустановка отдельной APK с restore из публичной synthetic копии: **6/6**,
+включая клиент/рецепт/точное фото; hash файла совпал с hash до удаления APK.
+Autoscheduler/дневная rotation, full populated owner matrix, low-storage/provider
+matrix и полная legacy миграция остаются OPEN. Excel идёт после backup/restore.

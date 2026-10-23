@@ -1,0 +1,293 @@
+{
+    "task":  "R06",
+    "date":  "2026-10-23",
+    "platform":  "Android API36; isolated debug APK com.fitcoach.r07sqlite 0.0.1",
+    "data":  "Synthetic private files only",
+    "routingVersion":  2,
+    "guardVersion":  1,
+    "normal":  {
+                   "kind":  "R06_NATIVE",
+                   "checks":  [
+                                  {
+                                      "name":  "native_scalar_hash_matches_node",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_all_owners_and_workflow_initialized",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "streaming_sha256",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_manifest_embeds_media",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_backup_preserves_source",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_self_contained_after_photo_loss",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_staging_manifest_parity",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_external_backup_unchanged",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_all_runtime_holders_closed_before_files",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "guarded_replace",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "independent_safety",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "previous_preserved",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_v2_point_activated",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_v2_full_point_embeds_before_photo",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_runtime_reopened_and_invalidated",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "reopen_restored_client",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "snapshot_not_merge",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_recipe_revision_archive_preserved",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_recipe_json_parity",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_photo_private_relocation",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_photo_exact_bytes",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_photo_decoder_accepts",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_all_runtime_holders_closed_before_files",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "receipt_replay",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_workflow_works_after_reopen",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "replay_preserves_later_writes",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_completed_journal_preserves_later_writes",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_v2_point_survives_cold_boot",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_v2_return_committed",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_v2_return_original_client_id",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_v2_return_no_merge",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_v2_return_recipe_id_revision_dates",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_v2_return_embedded_photo_after_original_loss",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_v2_return_point_consumed_without_reverse",
+                                      "passed":  true
+                                  },
+                                  {
+                                      "name":  "native_v2_consumed_point_not_resurrected",
+                                      "passed":  true
+                                  }
+                              ],
+                   "allPassed":  true,
+                   "elapsedMs":  150499
+               },
+    "rollback":  {
+                     "kind":  "R06_NATIVE",
+                     "checks":  [
+                                    {
+                                        "name":  "native_cold_recovery_before_runtime_open",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_kill_rolls_back",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_kill_original_bytes",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_kill_safety_intact",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_kill_rejected_preserved",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_v2_rollback_keeps_point_retired",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_boot_ready_after_recovery",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_recovery_workspace_database_order",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_all_owners_reopened_after_kill",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_kill_original_client",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_kill_no_partial_merge",
+                                        "passed":  true
+                                    },
+                                    {
+                                        "name":  "native_kill_idempotent_recovery",
+                                        "passed":  true
+                                    }
+                                ],
+                     "allPassed":  true,
+                     "elapsedMs":  15932
+                 },
+    "rollbackStop":  {
+                         "forceStopConfirmed":  true,
+                         "distinctNewProcess":  true,
+                         "package":  "com.fitcoach.r07sqlite",
+                         "point":  "AFTER_FILE_SWITCH_BEFORE_COMMIT"
+                     },
+    "commitGap":  {
+                      "kind":  "R06_NATIVE",
+                      "checks":  [
+                                     {
+                                         "name":  "native_cold_recovery_before_runtime_open",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "native_kill_completes_commit",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "native_kill_committed_bytes",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "native_kill_safety_intact",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "native_kill_previous_preserved",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "native_v2_committed_point_activated",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "native_v2_committed_point_valid",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "native_boot_ready_after_recovery",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "native_recovery_workspace_database_order",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "native_all_owners_reopened_after_kill",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "native_kill_restored_client",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "native_kill_no_partial_merge",
+                                         "passed":  true
+                                     },
+                                     {
+                                         "name":  "native_kill_idempotent_recovery",
+                                         "passed":  true
+                                     }
+                                 ],
+                      "allPassed":  true,
+                      "elapsedMs":  20884
+                  },
+    "commitGapStop":  {
+                          "forceStopConfirmed":  true,
+                          "distinctNewProcess":  true,
+                          "guardPhase":  "COMPLETED",
+                          "pointStateAbsentBeforeStop":  true,
+                          "package":  "com.fitcoach.r07sqlite",
+                          "point":  "AFTER_COMMIT_BEFORE_POINT_PUBLICATION"
+                      },
+    "scope":  "Shared runtime with all 15 holders and workflow, v2 writer/cold reader/point finalization/one-shot Return; not ordinary production UI or full populated owner histories",
+    "openChecks":  [
+                       "Ordinary file picker, preview and confirmation integration",
+                       "Native logical preview/WAL/capacity/job lifecycle",
+                       "OS timer signal reconciliation",
+                       "Automatic scheduling and daily rotation",
+                       "Low storage and publication process death/providers",
+                       "Complete legacy formats and migration",
+                       "Production upgrade/signing/release gates"
+                   ]
+}

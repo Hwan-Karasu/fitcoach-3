@@ -69,11 +69,13 @@ document ID, включая `%2F`, остаётся прежним; native тр�
   намеренно имеют дату 2000-01-01. SHA/имена/checks зафиксированы в JSON-отчёте.
   Ни личные backup-файлы, ни рабочая база 2.0 не читались.
 - Тестовая APK действительно удалена; конкретная копия Downloads осталась на
-  месте. 2.0 build128 не затронута. Повторная установка потребовала подтверждения
-  владельца; он отложил установку и разрешил продолжать без APK. Ожидание adb
-  остановлено. **Восстановление после переустановки не выполнено.**
+  месте. Владелец затем завершил установку. Отсутствие private настройки папки
+  подтвердило чистое app storage. Выбран только известный synthetic файл:
+  **picked-file restore6/6**, клиент/рецепт/точное фото. Независимый SHA публичного
+  файла совпал с SHA до удаления APK. 2.0 build128 и личные копии не затронуты.
 
-Открыты: обычный restore controller/confirmation и Return с фото, scheduler/rotation,
-native process-death/partial cleanup/low-storage/другие providers/reinstall/full-owner
-matrix. Новый atomic journal writer проверяется на host, на Android ещё не запущен.
+Открыты: обычный restore controller/confirmation, scheduler/rotation, native
+publication process-death/partial cleanup/low-storage/другие providers/full-owner
+matrix. v2 writer и Return с фото теперь проверены на Android: normal35/35,
+rollback12/12, commit-gap recovery13/13 ([отчёт](R06_MANAGED_ANDROID_REPORT.json)).
 Полный legacy mapping/staging и Excel остаются в прежней очереди.

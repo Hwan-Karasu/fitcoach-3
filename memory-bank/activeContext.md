@@ -1,58 +1,55 @@
 # Active context — 2026-10-23
 
-Продукт «Дневник атлета», ветка audit/training-fixes. Цель ACTIVE: полный
-перенос 2.0→3.0 и backup/restore не завершены; 100% не заявлять. Task R06.
-R06→R03, D05→D01/R06, D03→R04/R05; Product §46 и §§53–56.
-Migration/overlay/signing/release gates OPEN; UI/темы позже.
+«Дневник атлета», audit/training-fixes. Цель ACTIVE: полный перенос2.0→3.0 и
+backup/restore не завершён; не100%. Task R06→R03, D05→D01/R06, D03→R04/R05.
+Product §46, поздние §§53–56; migration/overlay/signing/release gates OPEN.
 
-HEAD до текущего среза faf5fce: native publication + atomic restore journal.
-Текущий срез добавляет private Return point и обязательную v2 finalization.
-ReturnPointCompletion общий pure TS, ExpoReturnPointStore private FS adapter;
-models в features/backup/domain/RestoreCompletion.ts. RestoreProtocolError и
-RestoreOutcome вынесены в domain, прежний public API/reexports сохранены.
+База текущего среза7eb66d9: общий snapshot engine+media, GuardedRestore,
+RuntimeMaintenance15holders+workflow, whole-command gate, v2 routing/point completion.
+ReturnPointCompletion/ExpoReturnPointStore: полный private return.atbackup с фото;
+intent→pending→swap→point state в одной closed lease. Point одна, меняется после
+успеха, Return без обратной точки. Settled receipt предотвращает resurrection
+после consume/delete. Cold reader подключён, missing LIVE не создаёт пустую DB.
 
-Одна closed lease: pin/валидация LIVE/INCOMING → полный return.atbackup из LIVE
-(с фото) → completion.json → v2 pending.json → GuardedRestore → atomic
-return-state.json → reopen/cleanup прежней точки. State хранит settledOperationId
-и одну point либо null; explicit delete/Return сохраняют receipt, cold boot не
-воскрешает точку. При rollback прежняя point сохраняется; повреждение нового
-неиспользованного candidate не мешает безопасному cold rollback.
-Guard version всё ещё1, routing v2 требует completion; v1 оставлен для прежних
-technical probes. Cold production reader подключён. Новый Restore сначала
-завершает finalization прежнего terminal v2 job перед сменой routing pointer.
-Обычный Restore UI/controller/preview/confirmation ещё НЕ включён.
+Текущий срез: RestoreActionsService/public opaque preview, ApplyPreparedRestore.
+Whole-command picker/prepare, apply вне gate; frozen ID, двойное подтверждение,
+Back/cancel, stale preview, recovery retry. Closed LIVE logical pin принимает
+harmless WAL checkpoint, отклоняет business write; raw INCOMING pin, capacity
+callback. Expected preflight rejection возвращает здоровую LIVE через reopen;
+protocol uncertainty вызывает real cold recovery в той же lease до reopen.
+12controller+13realSQLite/maintenance новых host tests; native job adapter/UI
+ещё НЕ подключены. Не выдавать Android probe за проверку этих новых компонентов.
 
-Host return-point32/32: цепочка30→25→30 + точный PNG после потери исходника,
-restart/поздние записи, следующий Restore, ошибки подготовки/swap/state/cleanup,
-corrupt intent, реальные RuntimeMaintenance gate/reopen. 14 настоящих SIGKILL
-Restore/Return; новая reader/finalizer связка проверена на host.
-Foundation1051/1051, root/mobile/spike typecheck, lint, arch487, source/secrets/diff
-OK. Android JS/Hermes bundle5605modules/1185assets. Native point/v2 не запускались.
+Владелец сообщил «вроде получилось установить»: отдельная com.fitcoach.r07sqlite
+0.0.1 действительно установлена. Native v2 normal35/35; force-stop после swap
+доCOMMITTED rollback12/12; force-stop послеCOMPLETED до point-state publication
+recovery13/13. Оба force-stop/newPID подтверждены, перед последним state отсутствовал.
+Return сохранил client/recipe/revision/date/точное фото после удаления оригиналов;
+point consumed, поздние записи/cold replay сохраняются. Synthetic данные только.
+Reinstall/picked restore6/6: private folder preference отсутствовала, выбрана только
+точная известная synthetic Downloads-копия, внешний SHA равен до-uninstall SHA.
+2.0com.fitcoach.app build128/личные копии не затронуты; не открывать их/секреты.
+Не вводить/сохранять графический ключ. Новая установка не нужна.
 
-Ранее native build успешен: JDK17.0.10/Gradle9.3.1,
-JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true решает MavenPermissionDenied.
-Local Expo module versionName/Coroutine import исправлены; TLS не ослаблять.
-Isolated com.fitcoach.r07sqlite: Downloads20/20, SAF19/19; native+JS readback,
-duplicate/input negatives, restore client/recipe/photo после удаления оригиналов,
-15holders; SAF grant после нового процесса. Исправлен trailing raw slash URI.
-Тестовая APK удалена, внешний synthetic Downloads-файл остался. Reinstall/picked
-restore НЕ выполнены: пользователь не может установить, продолжать БЕЗ APK.
-Не запускать новые установки. 2.0com.fitcoach.app build128 и личные backup целы;
-личные .atbackup/секреты не открывать. Ключ/рисунок не сохранять и не вводить.
-Scrcpy Phone screen оставить открытым (старыйPID12676). MainMetro8096handle16439
-stdin закрыт; nativeMetro8097handle99958watch. Не перезапускать без нужды.
+Foundation1076/1076, root/mobile/spike typecheck, lint, arch490, source/secrets/diff
+OK; Android JS/Hermes bundle5607modules/1185assets. Новый код/отчёты этой точки
+зафиксировать R06 commit без push. Docs: R06_RESTORE_ACTIONS.md,
+R06_MANAGED_ANDROID_REPORT.json, R06_PUBLICATION_ANDROID_REPORT.json.
+Предыдущие native Downloads20/20, SAF19/19; module compiled JDK17/Gradle9.3.1,
+JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true, TLS не ослаблялся.
 
-ManualBackupService и экран настроек подключены, операции ExpoGo/dev отключены.
-Dev baseline fitcoach_dev_baseline_v3.db: сохранены64таблицы/1150строк, parity
-в транзакции; старые dev файлы/журналы сохранены. Shared runtime15owners+workflow,
-physicalclose/reopen, whole-command gate, фото readiness7регрессий.
-Прежние native snapshot19/recovery7 и runtime25/recovery11 не доказывают новый v2.
+Продолжить: ExpoRestoreJobs+createRestoreActions в app/composition, приватные UUID
+jobs/ownership, picker→private copy→stage→logical preview pin, space/capacity,
+cleanup только своих unpublished previews без activepoint/pending/LIVE media.
+Подключить runtime.restoreActions→BackupScreen и retry recovery BootGate.
+Gate уже unmounts UI nonACTIVE; добавить generation remount при быстром maintenance.
+OS rest signals после restore/boot reconcile без запроса permission. Потом auto30min/
+changed-data/3dailyrotation; native UI/providers/lowstorage/publicationdeath/full-owner.
+Legacy full mapping/staging/stableIDs/provenance/parity/retry OPEN, LOAD_REPS для
+2.0 (20×10кг), equipment/groups неизвестные не угадывать. Excel потом: GitHub
+библиотеки, затем2.0 read-only; UI/темы позже. Данные dev64таблицы/1150строк и
+старые файлы сохранены. Manual backup screen работает только native production.
 
-Далее без APK: общий Restore/Return/delete controller/UI port, picker/preview/
-logical pin с WAL, явное подтверждение, free-space preflight, job orphan cleanup,
-OS rest signal reconcile; затем auto30min/changed-data/3daily rotation. Native
-v2/reinstall/providers/low-storage/full-owner matrix и полный legacy mapping/
-staging/IDs/provenance/parity/retry OPEN. LOAD_REPS для2.0(20×10кг), отсутствующие
-equipment/groups не угадывать. Excel после backup/restore: сначала GitHub
-библиотеки, затем2.0 read-only. Подробно docs/HANDOFF_BACKUP_MIGRATION.md,
-docs/spikes/R06_RETURN_POINT.md и R06_PUBLICATION_ANDROID_REPORT.json.
+Metro: native8097handle99958watch, main8096handle16439stdinclosed из прежнего turns;
+перед использованием проверить live. Scrcpy Phone screen оставить. Не рестартовать
+из-за timeout. Нет pending native kill probe: последний commit-gap report завершён.
