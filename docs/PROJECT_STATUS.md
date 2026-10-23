@@ -1,4 +1,10 @@
-## 2026-10-22 — пауза по просьбе владельца
+## 2026-10-23 — повторная пауза по просьбе владельца
+
+- Сохранён незавершённый перенос R06 в общий mobile snapshot module и host SQL adapter; default runtime не подключён. Последняя полностью проверенная реализация остаётся `be5f8f7` (foundation 934/934, native 9/9 + kill/recovery 7/7).
+- Текущие typecheck, arch:check, lint, secrets:check и diff --check прошли. Новый portable snapshot test: 1 passed / 1 failed — checksum расходится с Node oracle на edge-value fixture. Полный foundation после новых файлов не запускался; этот этап не объявлен готовым.
+- [Точная точка продолжения, команда воспроизведения и оставшаяся работа](HANDOFF_BACKUP_MIGRATION.md). По просьбе владельца работа остановлена до возобновления.
+
+## 2026-10-22 — предыдущая пауза
 
 - Все implementation-изменения закоммичены; последний commit `be5f8f7`, проверки foundation 934/934, native 9/9 + kill/recovery 7/7.
 - Следующий шаг: общий mobile engine полного `.atbackup` с manifest/media; его перенос ещё не начат. Полная цель не завершена, R06/D05 и миграционные gates открыты.
