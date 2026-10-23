@@ -64,7 +64,9 @@ export interface WorkoutSession extends WorkoutSlot {
   readonly id: string;
   readonly outcome: WorkoutOutcome | null;
   /** §48.84: фактическая дата `YYYY-MM-DD`, по умолчанию — день первого ввода. */
-  readonly actualDate: string;
+  readonly actualDate: string | null;
+  /** Import precision; absent for ordinary diary entries with an explicit day. */
+  readonly dateEvidence?: import("./WorkoutDateEvidence.ts").WorkoutDateEvidence;
   /**
    * Отметки фактического времени занятия (PC §48.86.10/13): момент в UTC (`…Z`). Начало — автоматически при первом подтверждённом
    * подходе, окончание — при «Завершить»; обе правятся вручную. `null` — не задано; длительность — только при валидной паре.

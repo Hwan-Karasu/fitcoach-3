@@ -1,9 +1,6 @@
-export interface LegacyExecutionDate {
-  readonly precision: "INSTANT" | "LOCAL_DATETIME" | "DAY" | "DERIVED" | "UNKNOWN";
-  readonly actualDate: string | null;
-  readonly timestamp: string | null;
-  readonly estimatedDate: string | null;
-  readonly importedAt: string | null;
+import type { WorkoutDateEvidence } from "../../apps/mobile/src/features/training/execution/domain/WorkoutDateEvidence.ts";
+
+export interface LegacyExecutionDate extends WorkoutDateEvidence {
   readonly forcedDay: boolean;
   readonly importedUnknown: boolean;
 }

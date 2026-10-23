@@ -1,11 +1,13 @@
 import type { StatusKind } from "../../../../shared/ui/components/public.ts";
 import type { SetFact, SetValues, WorkoutStatus } from "../../execution/public.ts";
+import { isCalendarDay as isWorkoutDay } from "../../../../shared/format/calendarDay.ts";
 import { formatDuration } from "../../plans/public.ts";
 import type { TrainingHistoryEntry } from "./trainingHistory.ts";
 
 /** Подписи истории занятий: дата, подход в величинах профиля (общие для архива и истории упражнения). */
 export const MONTHS = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
-export const dateText = (date: string) => {
+export const dateText = (date: string | null) => {
+  if (!isWorkoutDay(date)) return "Дата неизвестна";
   const [year, month, day] = date.split("-").map(Number) as [number, number, number];
   return `${day} ${MONTHS[month - 1] ?? ""} ${year}`;
 };

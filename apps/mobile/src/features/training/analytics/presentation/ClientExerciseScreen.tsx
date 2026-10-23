@@ -12,7 +12,7 @@ import { formatDuration, useExerciseLookup, type ExerciseLookupPort } from "../.
 import type { SetFact } from "../../execution/public.ts";
 import { isWorkingSet } from "./workingSet.ts";
 import { periodRange } from "./statsFilters.ts";
-import { rangeFor } from "./trainingStats.ts";
+import { entriesInRange, rangeFor } from "./trainingStats.ts";
 import { PeriodPill, type PeriodValue } from "./PeriodPill.tsx";
 import { exerciseSessions, exerciseTree, progressMetrics, progressSeries, repRecords, sessionValue, type ExerciseProgramNode,
   type ExerciseSession, type ExerciseWeekNode, type ProgressMetricId } from "./exerciseProgress.ts";
@@ -224,8 +224,10 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
     [entries, exerciseId]);
   const sessions = useMemo(() => exerciseSessions(filterHistory(own, filter), exerciseId), [own, filter, exerciseId]);
   const range = useMemo(() => periodRange(now, period), [now, period]);
-  const inPeriod = useMemo(() => sessions.filter((session) => (range.from === null || session.entry.actualDate >= range.from)
-    && session.entry.actualDate <= range.to), [sessions, range]);
+  const inPeriod = useMemo(() => {
+    const allowed = new Set(entriesInRange(sessions.map((session) => session.entry), range).map((entry) => entry.key));
+    return sessions.filter((session) => allowed.has(session.entry.key));
+  }, [sessions, range]);
   const tree = useMemo(() => exerciseTree(inPeriod), [inPeriod]);
   const metrics = progressMetrics(lookup?.get(exerciseId)?.metrics ?? []);
   const metric = chosen !== null && metrics.includes(chosen) ? chosen : metrics[0] ?? null;

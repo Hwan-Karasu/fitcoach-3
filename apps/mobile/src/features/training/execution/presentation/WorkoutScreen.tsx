@@ -383,7 +383,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                   onPress={() => {
                     const current = state.session?.actualDate;
                     if (current === undefined) return;
-                    void pickDate({ value: current, max: localDateOf(new Date()) }).then((date) => {
+                    void pickDate({ value: current ?? localDateOf(new Date()), max: localDateOf(new Date()) }).then((date) => {
                       if (date !== null && date !== current) void diary.setActualDate(date);
                     });
                   }}
@@ -408,6 +408,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
             <View style={styles.timeRow}>
               {([["start", "Начало", state.session.startedAt], ["end", "Окончание", state.session.finishedAt]] as const).map(([kind, label, instant]) => (
                 <Pressable key={kind} accessibilityRole="button" hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+                  disabled={state.session?.actualDate === null}
                   accessibilityLabel={`${label} тренировки ${instant === null ? "не указано" : timeText(instant)}. Изменить`}
                   onPress={() => { flushPending(); Keyboard.dismiss(); setTimeEdit(kind); }}
                   style={[styles.dateButton, { backgroundColor: colors.surfaceRaised }]}>
@@ -415,6 +416,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                   <Text style={[styles.dateText, { color: colors.accentInk }]}>{`${label} ${instant === null ? "—" : timeText(instant)}`}</Text>
                 </Pressable>
               ))}
+              {state.session.actualDate === null ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Для времени сначала укажите дату</Text> : null}
               {state.session.startedAt !== null && state.session.finishedAt !== null
                 ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{sessionDurationSec(state.session.startedAt, state.session.finishedAt) === null
                   ? "Длительность: нет данных" : durationText(sessionDurationSec(state.session.startedAt, state.session.finishedAt)!)}</Text> : null}
@@ -592,7 +594,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         }}
         onConfirm={(minute) => {
           const session = state.session;
-          if (session === null || timeEdit === null) return;
+          if (session === null || session.actualDate === null || timeEdit === null) return;
           void diary.setTimes(timeEdit === "start"
             ? { startedAt: instantFromLocal(session.actualDate, minute), finishedAt: session.finishedAt }
             : { startedAt: session.startedAt, finishedAt: endInstantAfter(session.startedAt, session.actualDate, minute) });

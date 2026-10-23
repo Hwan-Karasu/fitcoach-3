@@ -1,4 +1,5 @@
-import type { SetFact, WorkoutStatus } from "../../execution/public.ts";
+import type { SetFact, WorkoutStatus, WorkoutDateEvidence } from "../../execution/public.ts";
+import { compareOptionalDays as compareWorkoutDays } from "../../../../shared/format/calendarDay.ts";
 
 /**
  * Единая хронология занятий клиента (§48.85, T06): факты дневника из всех его Простых и Расширенных программ — активных
@@ -29,7 +30,8 @@ export interface TrainingHistoryEntry {
   /** Плановый слот — переход из истории в тренировку (§37.3). */
   readonly plannedWorkoutId: string;
   readonly weekIndex: number;
-  readonly actualDate: string;
+  readonly actualDate: string | null;
+  readonly dateEvidence?: WorkoutDateEvidence;
   readonly status: WorkoutStatus;
   /** Фактическое время занятия (PC §48.86.10/13/17): моменты UTC и длительность в секундах; `null` — не задано или пара невалидна. */
   readonly startedAt: string | null;
@@ -52,7 +54,7 @@ export interface HistoryFilter {
 
 /** Новые сверху; при совпадении даты — устойчиво по ключу (§50.4 п. 1). */
 export function sortHistory(entries: readonly TrainingHistoryEntry[]): readonly TrainingHistoryEntry[] {
-  return [...entries].sort((a, b) => b.actualDate.localeCompare(a.actualDate) || a.key.localeCompare(b.key));
+  return [...entries].sort((a, b) => compareWorkoutDays(a.actualDate, b.actualDate) || a.key.localeCompare(b.key));
 }
 
 export function filterHistory(entries: readonly TrainingHistoryEntry[], filter: HistoryFilter): readonly TrainingHistoryEntry[] {

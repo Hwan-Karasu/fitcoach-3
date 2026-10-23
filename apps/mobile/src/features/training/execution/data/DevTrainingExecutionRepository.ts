@@ -365,6 +365,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     assertSlot(slot);
     const { connection } = this.ready();
     const current = await this.getWorkout(slot);
+    if (current.session !== null && current.session.actualDate === null) return new Map();
     const date = current.session?.actualDate ?? localDateOf(now);
     // В тот же день «прошлое» — только начатое раньше текущего выполнения (ещё не начатое начнётся сейчас).
     const startedBefore = current.session === null ? now.toISOString()

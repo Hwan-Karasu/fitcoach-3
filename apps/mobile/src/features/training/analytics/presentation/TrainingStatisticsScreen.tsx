@@ -79,6 +79,7 @@ export function TrainingStatisticsScreen({ clientId, history, bodyweight, exerci
     return () => { active = false; };
   }, [clientId, history, filter, version]);
   const scoped = useMemo(() => entriesInRange(filterHistory(all, filter), range), [all, filter, range]);
+  const undated = useMemo(() => filterHistory(all, filter).filter((entry) => entry.actualDate === null).length, [all, filter]);
   const summary = useMemo(() => summarize(scoped, infoOf, bodyOf), [scoped, infoOf, bodyOf]);
   const completion = useMemo(() => planned === null ? null : planCompletion(filterHistory(all, filter), planned), [planned, all, filter]);
   const nameOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.name ?? "Упражнение", [lookup]);
@@ -129,6 +130,9 @@ export function TrainingStatisticsScreen({ clientId, history, bodyweight, exerci
             caption={summary.avgDurationSec === null ? undefined : `В среднем, по ${number(summary.timedWorkouts)} из ${number(summary.workouts)}`} />
         </View>
         {incomplete ? <Text style={[styles.caption, { color: colors.warning }]}>{incompleteNote}</Text> : null}
+        {undated > 0 ? <Text style={[styles.caption, { color: colors.textSecondary }]}>Без даты: {number(undated)}. {range.from === null
+          ? "Учтены в итогах; в графики по датам не входят."
+          : "Доступны за всё время; в выбранный период не входят."}</Text> : null}
         {completion === null ? null : <PlanCompletionCard completion={completion} />}
 
         <SegmentedControl compact items={sections} selectedId={section} onSelect={setSection} />
@@ -140,7 +144,7 @@ export function TrainingStatisticsScreen({ clientId, history, bodyweight, exerci
           <ChartCard title="Проведённые тренировки" note={`Завершённые, ${scaleCaption[workoutsChart.scale]}. Нажмите на столбец — покажем занятия.`}>
             <BarChart items={items(workoutsChart)} format={(value) => number(value)}
               onPressItem={drillBucket(workoutsChart, "Проведённые тренировки", "workouts", (entry) => entry.status === "COMPLETED")}
-              accessibilityLabel={`Проведённые тренировки ${scaleCaption[workoutsChart.scale]}: всего ${summary.completed}`} />
+              accessibilityLabel={`Проведённые тренировки ${scaleCaption[workoutsChart.scale]}: всего ${workoutsChart.items.reduce((sum, item) => sum + (item.value ?? 0), 0)}`} />
           </ChartCard>
           <ChartCard title="Исходы занятий">
             {(["COMPLETED", "IN_PROGRESS", "MISSED", "CANCELLED"] as const).map((status) => (

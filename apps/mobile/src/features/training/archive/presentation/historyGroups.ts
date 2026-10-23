@@ -1,4 +1,5 @@
 import { ALL_OPTION, completedCount, sortHistory, type FilterOption, type TrainingHistoryEntry } from "./trainingHistory.ts";
+import { compareOptionalDays as compareWorkoutDays } from "../../../../shared/format/calendarDay.ts";
 
 /**
  * Иерархия истории «программа → мезоцикл → тренировка → выполнения» (UX-контракт истории v1.2). Чистые функции над единой хронологией
@@ -20,7 +21,7 @@ export interface ProgramHistorySummary {
   readonly workingSets: number;
   /** Мезоциклы с историей; у Простой программы и у «план удалён» — 0. */
   readonly mesocycles: number;
-  readonly lastDate: string;
+  readonly lastDate: string | null;
 }
 
 /** Программы, у которых есть записи, — по дате последнего занятия (новее выше), при равенстве — стабильно по id. */
@@ -32,7 +33,7 @@ export function programsWithHistory(entries: readonly TrainingHistoryEntry[]): r
     return { programId, title: latest.programTitle, kind: latest.programKind, archived: latest.archived, planDeleted: latest.planDeleted,
       records: items.length, completed: completedCount(items), workingSets: items.reduce((sum, item) => sum + item.workingSets, 0),
       mesocycles: new Set(items.flatMap((item) => item.mesocycleId === null ? [] : [item.mesocycleId])).size, lastDate: latest.actualDate };
-  }).sort((a, b) => b.lastDate.localeCompare(a.lastDate) || a.programId.localeCompare(b.programId));
+  }).sort((a, b) => compareWorkoutDays(a.lastDate, b.lastDate) || a.programId.localeCompare(b.programId));
 }
 
 export interface MesocycleOption {

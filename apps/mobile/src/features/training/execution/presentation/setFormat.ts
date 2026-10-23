@@ -2,6 +2,7 @@ import type { PaletteTokens } from "../../../../shared/ui/theme/resolver.ts";
 import { formatDuration, formatRange, parseDuration, parseLoad, type PlannedSet } from "../../plans/public.ts";
 import type { SetType, SetValues, TrackingMetric, WeekStatus, WorkoutStatus } from "../domain/ExecutionModel.ts";
 import { fieldsOf, inLimits, type SetField } from "../domain/ExecutionRules.ts";
+import { isCalendarDay } from "../../../../shared/format/calendarDay.ts";
 
 /** Порядок колонок дневника (§48.65 п. 1): повторы, затем вес; дистанция перед временем. */
 const FIELD_ORDER: readonly SetField[] = ["reps", "loadGrams", "distanceM", "durationSec"];
@@ -106,7 +107,8 @@ export const weekStatusLabels: Readonly<Record<WeekStatus, string>> = {
 const MONTHS = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 
 /** `2026-10-17` → «17 окт». */
-export function shortDate(date: string): string {
+export function shortDate(date: string | null): string {
+  if (!isCalendarDay(date)) return "Дата неизвестна";
   const [, month, day] = date.split("-").map(Number) as [number, number, number];
   return `${day} ${MONTHS[month - 1] ?? ""}`;
 }

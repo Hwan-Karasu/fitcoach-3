@@ -11,7 +11,7 @@ import type { QuestionnaireRepositoryPort } from "../../features/questionnaire/p
 import type { ActiveWorkoutsPort, RestTimersPort, TrainingExecutionPort, TrainingPlansRepositoryPort } from
   "../../features/training/public.ts";
 import { createActiveWorkouts } from "../../read-models/activeWorkouts.ts";
-import { RestTimerService, hasEnteredData, isWorkingSet, sessionDurationSec, sortHistory, workoutStatus } from "../../features/training/public.ts";
+import { RestTimerService, hasEnteredData, isWorkingSet, sessionDurationSec, sortHistory, workoutStatus, workoutDayFromEvidence } from "../../features/training/public.ts";
 import { createTrainingHistory, type TrainingHistoryPort } from "../../read-models/trainingHistory.ts";
 import { createClientBodyweight, type ClientBodyweightPort } from "../../read-models/clientBodyweight.ts";
 import { expoRestSignal, preloadRestSignal } from "./expoRestSignal.ts";
@@ -188,7 +188,8 @@ export function createServices(clients: LocalClientServices, calendar: CalendarR
     trainingExecution,
     restTimers,
     activeWorkouts: createActiveWorkouts(trainingExecution, trainingPlans, clients),
-    trainingHistory: createTrainingHistory({ hasEnteredData, isWorkingSet, sessionDurationSec, workoutStatus, sortHistory }, trainingExecution, trainingPlans, registerInvalidation),
+    trainingHistory: createTrainingHistory({ hasEnteredData, isWorkingSet, sessionDurationSec, workoutStatus, sortHistory, workoutDayFromEvidence,
+      dateContextKey: () => Intl.DateTimeFormat().resolvedOptions().timeZone }, trainingExecution, trainingPlans, registerInvalidation),
     clientBodyweight: createClientBodyweight(dailyPoints, measurements),
     exercises,
     exerciseLookup: exerciseLookup(exercises, registerInvalidation),

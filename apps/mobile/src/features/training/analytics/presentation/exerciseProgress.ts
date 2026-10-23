@@ -1,4 +1,5 @@
 import type { SetFact, SetValues } from "../../execution/public.ts";
+import { compareOptionalDays as compareWorkoutDays } from "../../../../shared/format/calendarDay.ts";
 import { isWorkingSet } from "./workingSet.ts";
 import type { ExerciseInfo } from "../../plans/public.ts";
 
@@ -27,8 +28,8 @@ export interface ProgressPoint {
 export interface RepRecord {
   readonly reps: number;
   readonly loadKg: number;
-  /** Дата первого достижения лучшего веса. */
-  readonly date: string;
+  /** Первая известная дата достижения; `null` — лучший вес есть только без даты. */
+  readonly date: string | null;
   readonly sessionKey: string;
 }
 
@@ -97,11 +98,11 @@ export function sessionValue(session: ExerciseSession, metric: ProgressMetricId)
   }
 }
 
-/** Точки графика от старых к новым; занятия без значения пропускаются (§48.86.32). */
+/** Точки графика от старых к новым; занятия без значения или достоверной даты пропускаются (§48.86.32). */
 export function progressSeries(sessions: readonly ExerciseSession[], metric: ProgressMetricId): readonly ProgressPoint[] {
   return [...sessions].reverse().flatMap((session) => {
     const value = sessionValue(session, metric);
-    return value === null ? [] : [{ key: session.entry.key, date: session.entry.actualDate, value }];
+    return value === null || session.entry.actualDate === null ? [] : [{ key: session.entry.key, date: session.entry.actualDate, value }];
   });
 }
 
@@ -113,7 +114,7 @@ export function repRecords(sessions: readonly ExerciseSession[]): readonly RepRe
       const load = kg(values);
       if (load === null || !(load > 0) || values.reps === null || values.reps < 1) continue;
       const current = best.get(values.reps);
-      if (current === undefined || load > current.loadKg) {
+      if (current === undefined || load > current.loadKg || load === current.loadKg && current.date === null && session.entry.actualDate !== null) {
         best.set(values.reps, { reps: values.reps, loadKg: load, date: session.entry.actualDate, sessionKey: session.entry.key });
       }
     }
@@ -142,14 +143,14 @@ export interface ExerciseProgramNode {
   readonly cycles: readonly ExerciseCycleNode[];
   readonly weeks: readonly ExerciseWeekNode[];
   readonly sessionCount: number;
-  readonly lastDate: string;
+  readonly lastDate: string | null;
 }
 
 function weekNodes(sessions: readonly ExerciseSession[]): readonly ExerciseWeekNode[] {
   const byWeek = new Map<number, ExerciseSession[]>();
   for (const session of sessions) byWeek.set(session.entry.weekIndex, [...(byWeek.get(session.entry.weekIndex) ?? []), session]);
   return [...byWeek].map(([weekIndex, items]): ExerciseWeekNode => ({ weekIndex,
-    sessions: [...items].sort((a, b) => b.entry.actualDate.localeCompare(a.entry.actualDate) || a.entry.key.localeCompare(b.entry.key)) }))
+    sessions: [...items].sort((a, b) => compareWorkoutDays(a.entry.actualDate, b.entry.actualDate) || a.entry.key.localeCompare(b.entry.key)) }))
     .sort((a, b) => a.weekIndex - b.weekIndex);
 }
 
@@ -161,7 +162,7 @@ export function exerciseTree(sessions: readonly ExerciseSession[]): readonly Exe
   const byProgram = new Map<string, ExerciseSession[]>();
   for (const session of sessions) byProgram.set(session.entry.programId, [...(byProgram.get(session.entry.programId) ?? []), session]);
   return [...byProgram].map(([programId, items]): ExerciseProgramNode => {
-    const latest = [...items].sort((a, b) => b.entry.actualDate.localeCompare(a.entry.actualDate))[0]!.entry;
+    const latest = [...items].sort((a, b) => compareWorkoutDays(a.entry.actualDate, b.entry.actualDate) || a.entry.key.localeCompare(b.entry.key))[0]!.entry;
     const byCycle = new Map<string, ExerciseSession[]>();
     const loose: ExerciseSession[] = [];
     for (const item of items) {
@@ -173,5 +174,5 @@ export function exerciseTree(sessions: readonly ExerciseSession[]): readonly Exe
       .sort((a, b) => a.index - b.index || a.id.localeCompare(b.id)).map((item) => item.node);
     return { programId, title: latest.programTitle, archived: latest.archived, cycles, weeks: weekNodes(loose),
       sessionCount: items.length, lastDate: latest.actualDate };
-  }).sort((a, b) => b.lastDate.localeCompare(a.lastDate) || a.programId.localeCompare(b.programId));
+  }).sort((a, b) => compareWorkoutDays(a.lastDate, b.lastDate) || a.programId.localeCompare(b.programId));
 }

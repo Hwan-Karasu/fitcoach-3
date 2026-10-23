@@ -1,4 +1,5 @@
 import type { SetFact, WorkoutStatus } from "../../execution/public.ts";
+import { compareOptionalDays as compareWorkoutDays } from "../../../../shared/format/calendarDay.ts";
 import { isWorkingSet } from "./workingSet.ts";
 import type { HistoryFilter, TrainingHistoryEntry } from "../../archive/public.ts";
 import type { ExerciseInfo } from "../../plans/public.ts";
@@ -31,7 +32,8 @@ export function rangeFor(now: Date, days: number | null): StatsRange {
 }
 
 export function entriesInRange(entries: readonly TrainingHistoryEntry[], range: StatsRange): readonly TrainingHistoryEntry[] {
-  return entries.filter((entry) => (range.from === null || entry.actualDate >= range.from) && entry.actualDate <= range.to);
+  return entries.filter((entry) => entry.actualDate === null ? range.from === null
+    : (range.from === null || entry.actualDate >= range.from) && entry.actualDate <= range.to);
 }
 
 /** §48.44, §48.80: засчитанный рабочий подход — не разминка; частично выполненный односторонний тоже один подход. */
@@ -91,7 +93,7 @@ export interface EntryTonnage {
 }
 
 export function entryTonnage(entry: TrainingHistoryEntry, infoOf: InfoOf, bodyOf?: BodyOf): EntryTonnage {
-  const body = bodyOf?.(entry.actualDate) ?? null;
+  const body = entry.actualDate === null ? null : bodyOf?.(entry.actualDate) ?? null;
   let kg: number | null = null;
   let incompleteSets = 0;
   for (const exercise of entry.exercises) {
@@ -155,7 +157,11 @@ export interface Bucket {
   readonly value: number | null;
 }
 
-export const bucketKeyOf = (date: string, scale: Scale) => scale === "day" ? date : scale === "week" ? weekStart(date) : date.slice(0, 7);
+export function bucketKeyOf(date: string, scale: Scale): string;
+export function bucketKeyOf(date: string | null, scale: Scale): string | null;
+export function bucketKeyOf(date: string | null, scale: Scale): string | null {
+  return date === null ? null : scale === "day" ? date : scale === "week" ? weekStart(date) : date.slice(0, 7);
+}
 function nextKey(key: string, scale: Scale): string {
   if (scale === "day") return addDays(key, 1);
   if (scale === "week") return addDays(key, 7);
@@ -165,16 +171,19 @@ function nextKey(key: string, scale: Scale): string {
 
 /**
  * Столбцы по выбранной шкале. Периоды без занятий — `emptyAs` (0 для счётчиков, `null` для вычислимого тоннажа);
- * сумма столбцов равна сумме по занятиям — агрегация итог не меняет.
+ * Включает только занятия с известной датой: их сумма сохраняется. Занятия без даты
+ * остаются в итогах за всё время, но не образуют столбец на дату импорта или сегодня.
  */
 export function buckets(entries: readonly TrainingHistoryEntry[], range: StatsRange, valueOf: (entry: TrainingHistoryEntry) => number | null,
   emptyAs: 0 | null): Readonly<{ scale: Scale; items: readonly Bucket[] }> {
-  const dates = entries.map((entry) => entry.actualDate).sort();
+  const dates = entries.flatMap((entry) => entry.actualDate === null ? [] : [entry.actualDate]).sort();
   const from = range.from ?? dates[0] ?? range.to;
   const scale = scaleFor(from, range.to);
+  if (range.from === null && dates.length === 0) return { scale, items: [] };
   const sums = new Map<string, number | null>();
   for (const entry of entries) {
     const key = bucketKeyOf(entry.actualDate, scale);
+    if (key === null) continue;
     const value = valueOf(entry);
     sums.set(key, value === null ? sums.get(key) ?? null : (sums.get(key) ?? 0) + value);
   }
@@ -213,23 +222,23 @@ export interface ExerciseActivity {
   readonly exerciseId: string;
   readonly sessions: number;
   readonly workingSets: number;
-  readonly lastDate: string;
+  readonly lastDate: string | null;
 }
 
 /** «Прогресс упражнений»: что выполнялось в выборе, последние сверху. */
 export function exerciseActivity(entries: readonly TrainingHistoryEntry[]): readonly ExerciseActivity[] {
-  const rows = new Map<string, { sessions: Set<string>; workingSets: number; lastDate: string }>();
+  const rows = new Map<string, { sessions: Set<string>; workingSets: number; lastDate: string | null }>();
   for (const entry of entries) {
     for (const exercise of entry.exercises) {
       const row = rows.get(exercise.exerciseId) ?? { sessions: new Set<string>(), workingSets: 0, lastDate: entry.actualDate };
       row.sessions.add(entry.key);
       row.workingSets += exercise.facts.filter(isWorkingSet).length;
-      if (entry.actualDate > row.lastDate) row.lastDate = entry.actualDate;
+      if (compareWorkoutDays(entry.actualDate, row.lastDate) < 0) row.lastDate = entry.actualDate;
       rows.set(exercise.exerciseId, row);
     }
   }
   return [...rows].map(([exerciseId, row]) => ({ exerciseId, sessions: row.sessions.size, workingSets: row.workingSets, lastDate: row.lastDate }))
-    .sort((a, b) => b.lastDate.localeCompare(a.lastDate) || b.workingSets - a.workingSets);
+    .sort((a, b) => compareWorkoutDays(a.lastDate, b.lastDate) || b.workingSets - a.workingSets);
 }
 
 export interface RecordEvent {
@@ -253,7 +262,7 @@ export function recordsInRange(all: readonly TrainingHistoryEntry[], scoped: rea
     const metrics = infoOf(exerciseId)?.metrics ?? [];
     if (!(metrics.includes("load") && metrics.includes("reps"))) continue;
     for (const record of repRecords(exerciseSessions(all, exerciseId))) {
-      if ((range.from === null || record.date >= range.from) && record.date <= range.to && scopedKeys.has(record.sessionKey)) {
+      if (record.date !== null && (range.from === null || record.date >= range.from) && record.date <= range.to && scopedKeys.has(record.sessionKey)) {
         events.push({ exerciseId, reps: record.reps, loadKg: record.loadKg, date: record.date, sessionKey: record.sessionKey });
       }
     }

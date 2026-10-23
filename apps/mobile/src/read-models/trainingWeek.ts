@@ -1,4 +1,4 @@
-type WeekEntry = Readonly<{ actualDate: string; workingSets: number }>;
+type WeekEntry = Readonly<{ actualDate: string | null; workingSets: number }>;
 
 /** Понедельник недели, в которую входит дата `ГГГГ-ММ-ДД` (неделя Пн–Вс), в том же формате. */
 export function weekStart(localDate: string): string {
@@ -10,14 +10,15 @@ export function weekStart(localDate: string): string {
 
 /**
  * Число тренировок с рабочими подходами за текущую неделю Пн–Вс по фактической дате дневника.
- * Нет ни одной тренировки за всё время — `null` («нет данных»), а не ноль; если тренировки были раньше, но не на этой неделе, — 0.
+ * Нет тренировок с известной датой — `null` («нет данных»), а не ноль;
+ * если датированные тренировки были раньше, но не на этой неделе, — 0.
  */
 export function workoutsInWeek(entries: readonly WeekEntry[], today: string): number | null {
   const started = entries.filter((entry) => entry.workingSets > 0);
-  if (started.length === 0) return null;
+  if (started.every((entry) => entry.actualDate === null)) return null;
   const monday = weekStart(today);
   const sunday = new Date(`${monday}T00:00:00Z`);
   sunday.setUTCDate(sunday.getUTCDate() + 6);
   const last = sunday.toISOString().slice(0, 10);
-  return started.filter((entry) => entry.actualDate >= monday && entry.actualDate <= last).length;
+  return started.filter((entry) => entry.actualDate !== null && entry.actualDate >= monday && entry.actualDate <= last).length;
 }

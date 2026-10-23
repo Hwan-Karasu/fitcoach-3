@@ -14,3 +14,5 @@ export type { ClientExecution, ProgramExecution, SaveSetInput, SessionOrigin, Se
 export type { WeekExecutionParticipant, WorkoutCopyMapping } from "./domain/WeekCopyParticipant.ts";
 export type { WeekRenumberInput, WeekRenumberParticipant } from "./domain/WeekRenumberParticipant.ts";
 export type { ExecutionCleanupParticipant } from "./domain/ExecutionCleanupParticipant.ts";
+export type { WorkoutDateEvidence } from "./domain/WorkoutDateEvidence.ts";
+export { compareWorkoutDays, isWorkoutDay, workoutDayFromEvidence } from "./domain/WorkoutDateEvidence.ts";

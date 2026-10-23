@@ -5,7 +5,7 @@ import { StatusTag, type StatusKind } from "../../../../shared/ui/components/pub
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../../shared/ui/theme/style.ts";
-import { MONTHS, dateText, factText, type TrainingHistoryEntry } from "../../archive/public.ts";
+import { MONTHS, dateText, factText, sortHistory, type TrainingHistoryEntry } from "../../archive/public.ts";
 import type { WorkoutStatus } from "../../execution/public.ts";
 import type { ExerciseInfo } from "../../plans/public.ts";
 import { factTonnage, isWorkingSet, type BodyOf, type PlanCompletion, type Scale } from "./trainingStats.ts";
@@ -97,7 +97,7 @@ function DrillEntry({ entry, mode, infoOf, nameOf, bodyOf, onOpenWorkout }: Read
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const body = mode === "tonnage" ? bodyOf(entry.actualDate) : null;
+  const body = mode === "tonnage" && entry.actualDate !== null ? bodyOf(entry.actualDate) : null;
   const origin = [entry.planDeleted ? `${entry.programTitle} (план удалён)` : entry.archived ? `${entry.programTitle} (архив)` : entry.programTitle,
     entry.mesocycleTitle, `Неделя ${entry.weekIndex}`].filter((part): part is string => part !== null).join(" · ");
   return (
@@ -145,7 +145,7 @@ export function DrillDownModal({ target, infoOf, nameOf, bodyOf, onClose, onOpen
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const entries = useMemo(() => [...(target?.entries ?? [])].sort((a, b) => b.actualDate.localeCompare(a.actualDate) || a.key.localeCompare(b.key)),
+  const entries = useMemo(() => sortHistory(target?.entries ?? []),
     [target]);
   return (
     <Modal visible={target !== null} animationType="slide" onRequestClose={onClose}>

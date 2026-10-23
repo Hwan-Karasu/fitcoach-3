@@ -1,5 +1,5 @@
 import type { ClientExecution, SetFact, TrainingExecutionPort, TrainingHistoryEntry, TrainingPlansRepositoryPort, WorkoutOutcome,
-  WorkoutStatus } from "../features/training/public.ts";
+  WorkoutStatus, WorkoutDateEvidence } from "../features/training/public.ts";
 import type { PlannedWorkout } from "../features/training/plans/public.ts";
 
 /** Чистые правила владельцев (как у сводки «Главной»): рабочий подход, статус тренировки, порядок хронологии. */
@@ -9,6 +9,8 @@ export interface TrainingHistoryRules {
   readonly sessionDurationSec: (startedAt: string | null, finishedAt: string | null) => number | null;
   readonly workoutStatus: (outcome: WorkoutOutcome | null, started: boolean) => WorkoutStatus;
   readonly sortHistory: (entries: readonly TrainingHistoryEntry[]) => readonly TrainingHistoryEntry[];
+  readonly workoutDayFromEvidence?: (evidence: WorkoutDateEvidence, timeZone: string) => string | null;
+  readonly dateContextKey?: () => string;
 }
 
 type Origin = Readonly<{ mesocycleId: string | null; mesocycleTitle: string | null; mesocycleIndex: number | null; workout: PlannedWorkout }>;
@@ -23,7 +25,7 @@ export function createTrainingHistory(rules: TrainingHistoryRules,
   registerInvalidation?: (invalidate: () => void) => void) {
   const { hasEnteredData, isWorkingSet, sessionDurationSec, workoutStatus, sortHistory } = rules;
   /** Расчёт хронологии клиента: дневник + планы (программы, мезоциклы, тренировки). */
-  async function compute(clientId: string): Promise<readonly TrainingHistoryEntry[]> {
+  async function compute(clientId: string, dateContext: string): Promise<readonly TrainingHistoryEntry[]> {
       const [executions, library] = await Promise.all([execution.listClientExecutions(clientId), plans.getLibrary(clientId)]);
       const cards = new Map([...library.active, ...library.archived].map((card) => [card.id, card]));
       const origins = new Map<string, ReadonlyMap<string, Origin>>();
@@ -71,7 +73,10 @@ export function createTrainingHistory(rules: TrainingHistoryRules,
           mesocycleId: origin?.mesocycleId ?? null, mesocycleTitle: snapshot !== null ? snapshot.mesocycleTitle : origin?.mesocycleTitle ?? null,
           mesocycleIndex: origin?.mesocycleIndex ?? null,
           workoutTitle: snapshot !== null ? snapshot.workoutTitle : origin?.workout.title ?? null,
-          workoutKey: origin?.workout.lineageId ?? item.plannedWorkoutId, plannedWorkoutId: item.plannedWorkoutId, weekIndex: item.weekIndex, actualDate: session.actualDate,
+          workoutKey: origin?.workout.lineageId ?? item.plannedWorkoutId, plannedWorkoutId: item.plannedWorkoutId, weekIndex: item.weekIndex,
+          actualDate: session.dateEvidence === undefined ? session.actualDate
+            : rules.workoutDayFromEvidence?.(session.dateEvidence, dateContext) ?? null,
+          ...(session.dateEvidence === undefined ? {} : { dateEvidence: session.dateEvidence }),
           status: workoutStatus(session.outcome, facts.length > 0),
           startedAt: session.startedAt, finishedAt: session.finishedAt, durationSec: sessionDurationSec(session.startedAt, session.finishedAt),
           workingSets: facts.filter(isWorkingSet).length,
@@ -82,18 +87,19 @@ export function createTrainingHistory(rules: TrainingHistoryRules,
   // Один расчёт на всех читателей (история, программа, статистика, упражнение читают её независимо): повторные и параллельные чтения берут
   // готовый результат, пересчёт — только после изменений дневника этого клиента или его планов. Выбор программы/мезоцикла (`selectionOnly`)
   // историю не меняет. Подписки сбрасывают кэш раньше экранов: они зарегистрированы при создании, экраны — позже.
-  const cache = new Map<string, Promise<readonly TrainingHistoryEntry[]>>();
+  const cache = new Map<string, { readonly context: string; readonly pending: Promise<readonly TrainingHistoryEntry[]> }>();
   registerInvalidation?.(() => cache.clear());
   execution.subscribeCommittedChanges((change) => { cache.delete(change.clientId); });
   plans.subscribeCommittedChanges((change) => { if (change.selectionOnly !== true) for (const id of change.clientIds) cache.delete(id); });
   return {
     list(clientId: string): Promise<readonly TrainingHistoryEntry[]> {
       const found = cache.get(clientId);
-      if (found !== undefined) return found;
-      const pending = compute(clientId);
-      cache.set(clientId, pending);
+      const context = rules.dateContextKey?.() ?? "";
+      if (found !== undefined && found.context === context) return found.pending;
+      const pending = compute(clientId, context);
+      cache.set(clientId, { context, pending });
       // Ошибка не кэшируется: следующее чтение пробует снова.
-      pending.catch(() => { if (cache.get(clientId) === pending) cache.delete(clientId); });
+      pending.catch(() => { if (cache.get(clientId)?.pending === pending) cache.delete(clientId); });
       return pending;
     },
     /**
