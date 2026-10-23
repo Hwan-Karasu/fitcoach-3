@@ -1,5 +1,9 @@
 # R04 — шаблоны 2.0 в изолированном staging
 
+Следующий срез после74fa6cf: [R04_ARCHIVE_PLANS_STAGING.md](R04_ARCHIVE_PLANS_STAGING.md)
+реализует структуру архивных Plans. Упоминание «ещё не реализовано» ниже относится
+к состоянию этого исходного template-среза; canonical факты по-прежнему не созданы.
+
 2026-10-23; входная база92d00bb. Task R04→R03; D03→D01/R04/R05.
 Входы: raw Plans source, Client/Exercise maps, общий Client/Q/WorkData/catalog/Plans
 staging. Product §§48.12–48.16,33,39,46.6/46.19,49–50,53–56. Migration,

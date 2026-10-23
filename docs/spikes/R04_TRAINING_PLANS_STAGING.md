@@ -1,5 +1,9 @@
 # R04 — книги, мезоциклы и плановые подходы 2.0 в staging
 
+Продолжение после74fa6cf: archives:true добавляет архивные Plans и проверенные
+root/cycle aliases; canonical факты ещё впереди.
+[Актуальный контракт архивов](R04_ARCHIVE_PLANS_STAGING.md).
+
 Продолжение2026-10-23: отдельный templates:true теперь пишет D01 шаблоны в той же
 транзакции. Ниже зафиксирован исходный plans-only режим; актуальный дополнительный
 контракт, доказательства и ограничения — [R04_TRAINING_TEMPLATES_STAGING.md](R04_TRAINING_TEMPLATES_STAGING.md).

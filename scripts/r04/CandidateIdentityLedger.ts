@@ -40,7 +40,7 @@ function validateClientKey(key: string, scope: string): void {
 
 /** R04 isolated synthetic staging contract. Never attach this schema to a source or runtime DB. */
 export function prepareCandidateIdentityLedger(db: DatabaseSync, context: CandidateIdentityContext,
-  options?: { readonly clientIdentityRehearsal: { readonly createdAt: string; readonly profiles?: true; readonly questionnaires?: true; readonly workData?: true; readonly exercises?: true; readonly plans?: true; readonly templates?: true } }) {
+  options?: { readonly clientIdentityRehearsal: { readonly createdAt: string; readonly profiles?: true; readonly questionnaires?: true; readonly workData?: true; readonly exercises?: true; readonly plans?: true; readonly templates?: true; readonly archives?: true } }) {
   // Snapshot caller input so a later caller mutation cannot change the ledger's binding.
   const binding = { ...context }, jobCreatedAt = options?.clientIdentityRehearsal.createdAt;
   const profilesEnabled = options?.clientIdentityRehearsal.profiles === true;
@@ -49,17 +49,19 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
   const exercisesEnabled = options?.clientIdentityRehearsal.exercises === true;
   const plansEnabled = options?.clientIdentityRehearsal.plans === true;
   const templatesEnabled = options?.clientIdentityRehearsal.templates === true;
+  const archivesEnabled = options?.clientIdentityRehearsal.archives === true;
   if (questionnairesEnabled && !profilesEnabled) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
   if (workDataEnabled && !questionnairesEnabled) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
   if (exercisesEnabled && !workDataEnabled) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
   if (plansEnabled && !exercisesEnabled) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
   if (templatesEnabled && !plansEnabled) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
+  if (archivesEnabled && !templatesEnabled) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
   if (jobCreatedAt !== undefined && !isExplicitTimestamp(jobCreatedAt)) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
   const expectedContext = jobCreatedAt === undefined ? contextJson(binding)
     : JSON.stringify([contextJson(binding), "CLIENT_IDENTITY_REHEARSAL_V1", jobCreatedAt, ...(profilesEnabled ? ["PROFILE_REHEARSAL_V1"] : []),
       ...(questionnairesEnabled ? ["QUESTIONNAIRE_COMPOSITION_V1"] : []), ...(workDataEnabled ? ["WORK_DATA_REHEARSAL_V1"] : []),
       ...(exercisesEnabled ? ["EXERCISE_REGISTRY_REHEARSAL_V1"] : []), ...(plansEnabled ? ["TRAINING_PLANS_REHEARSAL_V1"] : []),
-      ...(templatesEnabled ? ["TRAINING_TEMPLATES_REHEARSAL_V1"] : [])]);
+      ...(templatesEnabled ? ["TRAINING_TEMPLATES_REHEARSAL_V1"] : []), ...(archivesEnabled ? ["TRAINING_ARCHIVES_REHEARSAL_V1"] : [])]);
   const workspaceKey = JSON.stringify([binding.accountScope, binding.sourceWorkspaceId]);
   function inspect(): "new" | "owned" {
     const objects = db.prepare("SELECT type,name FROM sqlite_schema WHERE substr(name,1,7)<>'sqlite_' ORDER BY name").all();
@@ -314,7 +316,7 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
     const plansSnapshot = structuredClone(plans);
     let planRows: ReturnType<typeof stageLegacyPlansInTransaction> | null = null;
     const clients = stageClientExerciseCatalogWithPlans(source, questionnaire, catalog, refs, allocate, checkpoint, (snapshot, ids) => {
-      planRows = stageLegacyPlansInTransaction(db, binding, jobCreatedAt, snapshot, ids, plansSnapshot, allocate, checkpoint, templatesEnabled);
+      planRows = stageLegacyPlansInTransaction(db, binding, jobCreatedAt, snapshot, ids, plansSnapshot, allocate, checkpoint, templatesEnabled, archivesEnabled);
     });
     return { ...clients, ...planRows!, status: "training-plans-rehearsal-staged" as const };
   }

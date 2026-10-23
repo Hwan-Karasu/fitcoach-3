@@ -5,6 +5,7 @@ import type { LegacyClientCardCandidate } from "./LegacyClientCardProjection.ts"
 import type { ClientDraftIdMap } from "./ProjectClientIdentityDraft.ts";
 import { PLAN_SOURCE_TABLES, type LegacyPlansSource } from "./LegacyPlansSourceReader.ts";
 import { composeLegacyPlans, PLAN_TARGET_TABLES, TEMPLATE_TARGET_TABLES, type ExercisePlanLink, type PlanIdentityKind, type PlanRow } from "./LegacyPlansProjection.ts";
+import { composeLegacyArchivePlans } from "./LegacyArchivePlansProjection.ts";
 
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -35,10 +36,10 @@ export function createPlansRehearsalSchema(db: DatabaseSync): void {
     CREATE TABLE r04_plan_receipt(id INTEGER PRIMARY KEY CHECK(id=1),source_json TEXT NOT NULL CHECK(json_valid(source_json)),
       target_json TEXT NOT NULL CHECK(json_valid(target_json)));`);
 }
-export type PlanStageCheckpoint = "after-plan-ids" | "after-plan-rows" | "after-plan-source" | "after-plan-receipt";
+export type PlanStageCheckpoint = "after-plan-ids" | "after-plan-rows" | "after-plan-source" | "after-plan-receipt" | "after-archive-plans";
 export function stageLegacyPlansInTransaction(db: DatabaseSync, context: CandidateIdentityContext, importedAt: string,
   cards: readonly LegacyClientCardCandidate[], clients: ClientDraftIdMap, source: LegacyPlansSource, allocate: () => string,
-  checkpoint: (stage: PlanStageCheckpoint) => void, templatesEnabled = false) {
+  checkpoint: (stage: PlanStageCheckpoint) => void, templatesEnabled = false, archivesEnabled = false) {
   if (!db.isTransaction) return fail("TRANSACTION_REQUIRED");
   const clientIds = new Map<string, string>();
   for (const card of cards) {
@@ -70,6 +71,21 @@ export function stageLegacyPlansInTransaction(db: DatabaseSync, context: Candida
     db.prepare("INSERT INTO r04_plan_ids VALUES(?,?,?)").run(kind, sourceKey, id); cache.set(k, { kind, sourceKey, id }); targetIds.add(id); return id;
   };
   const projection = composeLegacyPlans(context, importedAt, source, clientIds, links, identity, templatesEnabled);
+  const archiveCatalog = new Map<string, string>();
+  if (archivesEnabled) for (const row of db.prepare("SELECT source_catalog_id,id FROM r04_exercise_registry WHERE workspace_id=?").all(context.targetWorkspaceId)) {
+    archiveCatalog.set(row.source_catalog_id as string, row.id as string);
+  }
+  const archives = archivesEnabled ? composeLegacyArchivePlans(context, importedAt, source, clientIds, archiveCatalog, identity) : null;
+  if (archives) {
+    for (const name of TEMPLATE_TARGET_TABLES) for (const row of archives.tables[name]) projection.tables[name].push(row);
+    for (const row of archives.sourceRows) projection.sourceRows.push(row);
+    projection.sourceRows.sort((a, b) => compare(String(a.source_key), String(b.source_key)));
+    for (const row of archives.metadata) projection.metadata.push(row);
+    for (const row of archives.planBases) projection.planBases.push(row);
+    projection.deferredArchiveRows = archives.deferredArchiveRows;
+    projection.retainedSourceRows += archives.sourceRows.filter((r) => r.disposition === "RETAINED_DELETED_ARCHIVE_SOURCE" || r.disposition === "ARCHIVE_WARMUP_SOURCE").length;
+    checkpoint("after-archive-plans");
+  }
   if (used.size !== cache.size) return fail("IDENTITY_MISMATCH");
   checkpoint("after-plan-ids");
   const targetTables: readonly string[] = templatesEnabled ? TEMPLATE_TARGET_TABLES : PLAN_TARGET_TABLES;
@@ -82,6 +98,7 @@ export function stageLegacyPlansInTransaction(db: DatabaseSync, context: Candida
     identities,
     metadata: projection.metadata.map(canonical).sort(compare), planBases: projection.planBases.map(canonical).sort(compare),
     deferredArchiveRows: projection.deferredArchiveRows, deferredTemplatePages: projection.deferredTemplatePages,
+    ...(archives ? { archivedProgramRows: archives.archivedProgramRows, mirroredArchiveAliasRows: archives.mirroredAliasRows } : {}),
     deferredLibraryRows: projection.deferredLibraryRows, deferredWorkspaceStateRows: projection.deferredWorkspaceStateRows,
     deferredViewRows: projection.deferredViewRows, deferredPreferenceRows: projection.deferredPreferenceRows });
   const receipts = db.prepare("SELECT * FROM r04_plan_receipt").all();
@@ -107,6 +124,7 @@ export function stageLegacyPlansInTransaction(db: DatabaseSync, context: Candida
   return { programRows: projection.tables.training_programs.length, mesocycleRows: projection.tables.training_mesocycles.length,
     plannedWorkoutRows: projection.tables.training_workouts.length, plannedExerciseRows: projection.tables.training_planned_exercises.length,
     plannedSetRows: projection.tables.training_planned_sets.length, templateRows: projection.tables.training_templates.length, retainedPlanSourceRows: projection.retainedSourceRows,
+    archivedProgramRows: archives?.archivedProgramRows ?? 0, mirroredArchiveAliasRows: archives?.mirroredAliasRows ?? 0, targetFactsCreated: 0 as const,
     deferredArchiveRows: projection.deferredArchiveRows, deferredTemplatePages: projection.deferredTemplatePages,
     deferredLibraryRows: projection.deferredLibraryRows, deferredWorkspaceStateRows: projection.deferredWorkspaceStateRows,
     deferredViewRows: projection.deferredViewRows, deferredPreferenceRows: projection.deferredPreferenceRows, finalizable: false as const };

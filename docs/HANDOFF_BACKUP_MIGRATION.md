@@ -1,4 +1,44 @@
-## Последнее продолжение — R04 templates, база92d00bb
+## Последнее продолжение — R04 archive Plans, база74fa6cf
+
+Previous goal turn PROGRESS74fa6cf templates. GoalACTIVEfull2.0→3.0+backup/restore,
+не100%. TaskR04→R03/D03→D01/R04/R05; Product48.5.7/48.28/48.39/49–50/53–56,
+INT03–12. Migration/overlay/signing/releaseOPEN, no newprodDDL/realmigration/overlay.
+
+LegacyArchivePlansProjection adapts full snapshots to verified Plans projection.
+archives:true/allpreviousmodes/TRAINING_ARCHIVES_REHEARSAL_V1 binding; no oldjobclaim.
+Actual D01 archived Program/member/page/week/planned descendants in sharedClient/Q/
+WorkData/catalog/livePlans/templates tx. Account client fromouter archive, never
+join anotherclient'ssourceprogram/group. No selection changed/sharedresurrection.
+Rootweeks/workouts verified exact mirrors ofcycles+offsets; root/cycle aliases use
+oneplanID while rawglobal/localweekcontext preserved. SIMPLEbase+weeklyoverrides
+preserve differentprescriptions. Explicitcatalogrefs only; conflicting/missing/
+unknownblock. Datesfornewcontainers importtimeexplicit, sourcearchivedAt separate;
+no invented actualdate. Deletedarchivesrawonly. SourceFactID/actual/segments raw,
+NOTcanonicalfacts. targetFactsCreated0/finalizable:false/privateDBnotpublishable.
+Adapter IDs namespaced againstlive textualIDcollisions; outputrawaliases/bases exact
+archiveJSONpaths, notvirtualrows/syntheticlibraryprovenance. Allreceiptparitychecks.
+Mirror traversal perpage, no fullrescan/no largearraypushspread.
+
+287/287targeted(15newarchive-stage+Plans/templates+24preflight+dependencies),16failure
+boundariesrollbackall/retry, readonlysourceSHAunchanged/reopenreorderbyteidentical/
+allIDsreuse. Productionreadhelpers verifyarchivedmesos/typedweeks/SIMPLEoverrides;
+owner/count/JSON/catalog/rootcycle/deleted/optionalabsence/drift/modes. Root/mobile
+TS/changedESLint/source73/arch506/secrets/diff pass. No fullfoundation/APK/bundle/
+native(phone/runtimeunchanged).
+[Контракт](spikes/R04_ARCHIVE_PLANS_STAGING.md).
+
+NEXT canonicalTrainingfacts/sourceFactIddedup/session-current-history-archive/
+segments/dateprecision+planviewcontexts. Facts notdedup bylogicalworkout/metrics/name.
+Sourcearchivesphase1withoutworkouts unsupportedyet: preserve/block, inspectwhether
+weektombstones/sourcegraphcanreconstruct missingstructure; don'tcall empty successful.
+Missingcatalogidentity needsunresolvedmodel/no fuzzynameguess. Otherowners/full
+staging/parity/retry/runtimeSQLite+JSONv1v2Restore/Android. Old orphanlibrary/state/
+views/preferences/annotations/classification retainednotalloperational. Template
+weekvariation/extrasettingslimits stillopen. ProductionWorkData/registryrepo/DDL/
+commands/backup/deletionOPEN; otherbackupedges below.2.0untouched/scrcpyopen/no
+pendingkill; lastPID3837/Metro99958historicalnotrevalidated.
+
+## Предыдущее продолжение — R04 templates, база92d00bb
 
 GoalACTIVE; R04→R03/D03→D01/R04/R05. Product48.12–48.16/33/39/46.6/46.19/
 49–50/53–56. Migration/overlay/signing/release OPEN. No newproductionDDL/real

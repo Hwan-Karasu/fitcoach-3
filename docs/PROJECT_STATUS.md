@@ -1,3 +1,9 @@
+## 2026-10-23 — R04: структура архивных программ 2.0
+
+- archives:true добавляет настоящие D01 archived Program/member/mesocycles/план в общую staging-транзакцию. Root/cycle mirrors сверяются и получают общие plan IDs с отдельными raw paths; sourceFactId/actual/segments сохраняются для будущего Execution. SIMPLE weekly differences остаются overrides. [Контракт](spikes/R04_ARCHIVE_PLANS_STAGING.md).
+- **287/287** targeted,15 новых archive-stage tests плюс Plans/templates/preflight/dependencies.16 rollback boundaries, read-only source hash unchanged, reopened/reordered target byte-identical/ID reuse; production read helpers читают архивы. TypeScript root/mobile/changed ESLint/source73/arch506/secrets/diff pass. Выбор программы/чужие участники не переносятся из archive source references.
+- finalizable:false: canonical executions/dedup/segments/даты, phase1 archives без сохранённых workouts, unresolved catalog identities и остальные owners/runtime2.0 Restore ещё впереди. Production DDL/реальная база/APK/телефон не менялись; полная цель ACTIVE/gates OPEN.
+
 ## 2026-10-23 — R04: сохранённые шаблоны 2.0
 
 - Отдельный templates:true добавляет настоящие D01 training_templates в общую Client/Q/WorkData/catalog/Plans транзакцию. Account binding проверяется, periodized page становится MESOCYCLE, эквивалентные недели free — SIMPLE. Plan values/supersets/указания сохранены, actual values/история/участники остаются только в raw provenance. [Контракт](spikes/R04_TRAINING_TEMPLATES_STAGING.md).
