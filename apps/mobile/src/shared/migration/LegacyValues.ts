@@ -15,3 +15,12 @@ export function legacyObjectJson(raw: unknown): Readonly<Record<string, unknown>
       ? parsed as Record<string, unknown> : null;
   } catch { return null; }
 }
+
+/** Legacy validation convention retained while importing saved dates. */
+export function isLegacyLocalDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number) as [number, number, number];
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  return year > 0 && probe.getUTCFullYear() === year && probe.getUTCMonth() === month - 1
+    && probe.getUTCDate() === day;
+}

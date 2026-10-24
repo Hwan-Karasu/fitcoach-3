@@ -1,3 +1,21 @@
+## Продолжение — async питание и архивы
+
+2026-10-24, базаd854a31; R04→R03/Product49–50/53–56/INT03–12.
+Private synthetic/finalizable:false; production/native/release gates OPEN.
+Owner pure nutrition/values/calculator/archive, shared DTO/date semantics;
+common Node/async schema/write/parity/diary+archive read. RealUUIDorder/pending SQL
+reservation before rows; raw/mode captured; nobleSHA unchanged/no dependencies.
+10new full admitted chain async==host, historical snapshots/savedtotals/missingfood/
+recipe no doublecount/archive exactdecimal/no fakefacts; every tableboundary rollback/
+retry/replay/ackloss/capture/source+targetdrift/collision/mode/IO/FK/sourceSHA/handles.
+Archive-day collision test uses committed witness IDs, retains full fatal rollback.
+Old d854a31writer==current all65tables/IDs/receipts in3cases. 519profile/43initial/
+10new PASS; root/mobileTS/lint/source73/arch596. Native-field backup/candidate history
+isolate tests pass, not full production/privateprovenance backup. No APK/Android.
+[Контракт и оставшийся объём](spikes/R04_PORTABLE_NUTRITION_STAGING.md).
+NEXT Calendar/fullcomposition/permanentmodels/admission/fullbackup/JSON/Android/
+removal. GoalACTIVE/fullscope/не100%.
+
 ## Продолжение — async замеры и дневной вес
 
 2026-10-24, база61fbb4c; R04→R03/Product49–50/53–56/INT-12.

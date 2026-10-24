@@ -57,22 +57,22 @@ Client76ab152: R04_PORTABLE_CLIENT_STAGING.md; 459/44/8PASS.
 
 Q3d094b4: R04_PORTABLE_QUESTIONNAIRE_STAGING.md; 467/41-18PASS.
 
-Workfa44bc3: R04_PORTABLE_WORK_DATA_STAGING.md; sharedprivateWorkData,
-8new/475profile/40-7-8PASS, notproduction/ordinarybackup/UI.
+Workfa44bc3: R04_PORTABLE_WORK_DATA_STAGING.md; 8new/475profile PASS.
 
-Exercisef7ccdf9: R04_PORTABLE_EXERCISE_STAGING.md; sharedcatalog/ref/read/IDs,
-8new/483profile/55-8PASS, source alias collisions reject/no shadowing.
+Exercisef7ccdf9: R04_PORTABLE_EXERCISE_STAGING.md; 8new/483profile PASS.
 
 Plans5332754: R04_PORTABLE_PLANS_STAGING.md; 8new/491profile PASS.
 
 Execution61fbb4c: R04_PORTABLE_EXECUTION_STAGING.md; 9new/500profile PASS.
 
-CURRENT R04_PORTABLE_MEASUREMENT_STAGING.md: owner pure/commonNode-async writer/
-parity/read/fixedday/sourcecapture/sharedDTO. 9new fullchain async==host/exacttenths/
-unsided/sameday/noPrimary/profileUNKNOWN/rawreview/rollback/retry/replay/ackloss/
-drift/collision/mode/IO. Old61fbb4cwriter==current all48tables/IDs/receipts in2cases.
-509profile/27initial/92preflight/9new PASS; root/mobileTS/lint/source73/arch589/secrets PASS.
-Normalrepo/nativefieldbackup pass, NOTprivate provenance/review. Fullproof in doc.
+Measurementd854a31: R04_PORTABLE_MEASUREMENT_STAGING.md; 9new/509profile PASS.
+
+CURRENT R04_PORTABLE_NUTRITION_STAGING.md: owner/commonNode-async writer/read,
+sharedDTO/date/realUUIDorder/pendingSQL. 10new fullchain async==host/snapshots/
+savedtotals/exactarchives/rollback/retry/replay/ackloss/drift/collision/mode/IO.
+Oldd854a31writer==current all65tables/IDs/receipts in3cases. Fullproof in doc.
+519profile/43initial/10new PASS; root/mobileTS/lint/source73/arch596.
+Nativefieldbackup/historyisolate pass, NOTfull privateprovenance/review backup.
 No foundation/bundle/Hermesruntime/APK/Android/prodDDL. Fullgoal NOTDONE.
 
 NEXT fullportablewriter/otherprojections/coverage/prefs/lineage/permanentExecution-

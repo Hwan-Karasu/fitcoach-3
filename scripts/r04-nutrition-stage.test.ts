@@ -1,3 +1,4 @@
+import { meal, emptyMeals, calcProfile, seedCalculator, seedArchives, seedLegacyNutritionSource as seed, time, day } from "./support/legacy-nutrition-source.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { backup as sqliteBackup, DatabaseSync } from "node:sqlite";
@@ -34,50 +35,13 @@ import { nutritionHistoryClientDeletionParticipant, SqliteNutritionHistoryReader
 import { clearReadIssues, readIssueCount } from "../apps/mobile/src/shared/diagnostics/ReadIssues.ts";
 
 const context = { sourceSha256: "d".repeat(64), accountScope: "nutrition-synthetic", sourceWorkspaceId: "source-workspace", targetWorkspaceId: "local-trainer" };
-const time = "2026-03-01T12:00:00.000Z", imported = "2026-10-24T10:00:00.000Z", day = "2026-03-01";
+const imported = "2026-10-24T10:00:00.000Z";
 const options = { clientIdentityRehearsal: { createdAt: imported, profiles: true as const, questionnaires: true as const, workData: true as const,
   exercises: true as const, plans: true as const, templates: true as const, archives: true as const, executions: true as const,
   measurements: { referenceDay: "2026-10-24" }, nutrition: true as const } };
 const plans: LegacyPlansSource = { accountScope: context.accountScope, tables: Object.fromEntries(PLAN_SOURCE_TABLES.map((t, i) => [t, i < 5 ? [] : null])) as LegacyPlansSource["tables"] };
 const executions: LegacyExecutionSource = { accountScope: context.accountScope, tables: Object.fromEntries(EXECUTION_SOURCE_TABLES.map((t) => [t, t === "training_exercise_history" ? [] : null])) as LegacyExecutionSource["tables"] };
 function allocator() { let n = 0; return () => `88888888-8888-4888-8888-${String(++n).padStart(12, "0")}`; }
-function snapshot(id = "p", historical = false) { return { id, name: historical ? "Историческое имя" : "Сегодняшнее имя", brand: "", barcode: "", servingMode: "grams", gramsPerPiece: 0,
-  calories: historical ? 100 : 300, protein: historical ? 5 : 10, fat: historical ? 1 : 5, carbs: historical ? 10 : 30 }; }
-function meal(id: string, historical = true) { return { id, productId: "p", productSnapshot: snapshot("p", historical), grams: historical ? "17.4" : "100", unit: "grams", pieceCount: "",
-  calories: historical ? 17 : 300, protein: historical ? 0.9 : 10, fat: historical ? 0.2 : 5, carbs: historical ? 1.7 : 30, createdAt: time }; }
-const emptyMeals = () => ({ breakfast: [] as unknown[], lunch: [] as unknown[], dinner: [] as unknown[], snack: [] as unknown[] });
-const calcProfile = () => ({ goal: "Похудение", activity: "Очень активный", workouts: "3", workoutDuration: "90", workoutIntensity: "Тяжелая", deficit: "300" });
-function seedCalculator(db: DatabaseSync) {
-  db.exec("CREATE TABLE client_kbju_state(client_id TEXT PRIMARY KEY,profile_json TEXT,manual_kbju_json TEXT,updated_at TEXT)");
-  for (const client of ["a", "b"]) db.prepare("INSERT INTO client_kbju_state VALUES(?,?,?,?)").run(client,
-    JSON.stringify(client === "a" ? calcProfile() : { ...calcProfile(), goal: "Поддержание", workouts: "0", deficit: "0" }), '{"protein":"","fat":"","carbs":""}', time);
-}
-function seedArchives(db: DatabaseSync) {
-  db.exec(`CREATE TABLE nutrition_archive_weeks(id TEXT PRIMARY KEY,client_id TEXT,start_date TEXT,end_date TEXT,label TEXT,saved_at TEXT,
-    avg_weight REAL,avg_steps REAL,avg_cal REAL,avg_fat_percent REAL,train_days INTEGER,protein REAL,fat REAL,carbs REAL,days_json TEXT)`);
-  const days = JSON.stringify([{ dateKey: day, weight: 81.25, steps: 0, calories: 500, fatPercent: null, training: "Нет", protein: null, fat: 0, carbs: 20 }]);
-  for (const [id, client, start, end, detail] of [["archive-a", "a", "2026-02-23", day, days],
-    ["archive-overlap", "a", "2026-02-24", "2026-03-02", "{}"], ["archive-b", "b", "2026-02-23", day, days]]) {
-    db.prepare("INSERT INTO nutrition_archive_weeks VALUES(?,?,?,?,?,?,80.125,1234.5,2222.25,0,0,NULL,0,20,?)").run(id!, client!, start!, end!, `Снимок ${id}`, time, detail!);
-  }
-}
-function seed(db: DatabaseSync) {
-  db.exec(`CREATE TABLE clients(id TEXT PRIMARY KEY,workspace_id TEXT,name TEXT,created_at TEXT,updated_at TEXT,archived_at TEXT,deleted_at TEXT,birthdate TEXT,height TEXT,gender TEXT,avatar_emoji TEXT,profile_json TEXT,weight TEXT);
-    CREATE TABLE food_products(id TEXT PRIMARY KEY,name TEXT,brand TEXT,barcode TEXT,serving_mode TEXT,grams_per_piece REAL,calories REAL,protein REAL,fat REAL,carbs REAL,favorite INTEGER,created_at TEXT,updated_at TEXT,fiber REAL,sugar REAL,sodium REAL,cholesterol REAL);
-    CREATE TABLE nutrition_recipes(id TEXT PRIMARY KEY,name TEXT,description TEXT,servings TEXT,items_json TEXT,calories REAL,protein REAL,fat REAL,carbs REAL,saved_to_cookbook INTEGER,created_at TEXT,updated_at TEXT);
-    CREATE TABLE nutrition_days(client_id TEXT,date_key TEXT,meals_json TEXT,water_ml INTEGER,meals_recorded INTEGER,updated_at TEXT,extra_text TEXT,PRIMARY KEY(client_id,date_key));
-    CREATE TABLE client_day_facts(client_id TEXT,date_key TEXT,weight TEXT,steps TEXT,training TEXT,updated_at TEXT,PRIMARY KEY(client_id,date_key));`);
-  for (const id of ["a", "b"]) db.prepare("INSERT INTO clients VALUES(?,?,?,?,?,NULL,NULL,'','','','',?,'80.1')").run(id, context.sourceWorkspaceId, `Синтетический ${id}`, time, time, '{"trainerNotes":"Сохранить рабочую заметку"}');
-  db.prepare("INSERT INTO food_products VALUES('p','Сегодняшнее имя','','','grams',0,300,10,5,30,1,?,?,0,0,0,0)").run(time, time);
-  const item = { ...meal("unused", false), productId: "p" };
-  db.prepare("INSERT INTO nutrition_recipes VALUES('r','Рецепт','Описание','2',?,300,10,5,30,1,?,?)").run(JSON.stringify([item]), time, time);
-  const missing = { ...meal("gone-entry", false), productId: "gone", productSnapshot: { ...snapshot("gone"), name: "Удалённый продукт", calories: 20, protein: null, fat: 0, carbs: 1 }, calories: 20, protein: null, fat: 0, carbs: 1 };
-  for (const [client, date, meals, water] of [["a", day, { breakfast: [meal("old")], lunch: [meal("from-recipe", false)], dinner: [missing], snack: [] }, 500],
-    ["b", day, { ...emptyMeals(), breakfast: [meal("other-client")] }, 0], ["a", "2026-03-02", emptyMeals(), 1200], ["a", "2026-03-03", emptyMeals(), 0]] as const) {
-    db.prepare("INSERT INTO nutrition_days VALUES(?,?,?,?,1,?,'source extras preserved')").run(client, date, JSON.stringify(meals), water, time);
-  }
-  db.prepare("INSERT INTO client_day_facts VALUES('a',?,'80.1','1234','Да',?)").run(day, time);
-}
 function input(source: DatabaseSync) { return { cards: readLegacyClientCardsInSnapshot(source, context.accountScope, readLegacyClientIdentityInSnapshot(source, context.accountScope)),
   measurements: readLegacyMeasurementsSnapshotInSnapshot(source, context.accountScope), nutrition: readLegacyNutritionInSnapshot(source, context.accountScope) }; }
 function stage(source: DatabaseSync, target: DatabaseSync) {
@@ -510,9 +474,16 @@ test("archive snapshots are frozen before owner callbacks and source/target muta
 
 test("archive day ID collisions escape JSON handling and roll back the full job", () => fixture((source, target) => {
   seedArchives(source); const data = input(source), ledger = prepareCandidateIdentityLedger(target, context, options), next = allocator(); let injected = false;
+  // Observe committed allocations rather than requiring SQL inside the pure projection.
+  const witness = new DatabaseSync(":memory:"); let firstWeek: string, firstDay: string;
+  try {
+    stage(source, witness);
+    firstWeek = witness.prepare("SELECT target_id FROM r04_nutrition_ids WHERE kind='ARCHIVE_WEEK' ORDER BY target_id LIMIT 1").get()!.target_id as string;
+    firstDay = witness.prepare("SELECT target_id FROM r04_nutrition_ids WHERE kind='ARCHIVE_DAY' ORDER BY target_id LIMIT 1").get()!.target_id as string;
+  } finally { witness.close(); }
   assert.throws(() => ledger.stageClientNutrition(data.cards, null, [], [], plans, executions, data.measurements, data.nutrition, () => {
-    const week = target.prepare("SELECT target_id FROM r04_nutrition_ids WHERE kind='ARCHIVE_WEEK' LIMIT 1").get();
-    if (week && !injected) { injected = true; return week.target_id as string; } return next();
+    const id = next();
+    if (id === firstDay && !injected) { injected = true; return firstWeek; } return id;
   }), /IDENTITY_COLLISION/u);
   assert.equal(injected, true);
   for (const name of ["clients", "body_measurements", "food_diary_entries", "r04_nutrition_archive_weeks", "r04_nutrition_ids"]) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${name}`).get()?.n, 0);
