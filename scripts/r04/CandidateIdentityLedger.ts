@@ -1,4 +1,5 @@
-import { LEGACY_STAGE_UUID as uuid, legacyIdentityContextJson as contextJson, type CandidateIdentityContext, type LegacyIdentityStageBinding } from "../../apps/mobile/src/shared/migration/LegacyIdentityBinding.ts";
+import { legacyLoadExerciseDraftIdsPlan } from "../../apps/mobile/src/features/exercises/data/legacy-import/LegacyExerciseCatalogStagePlan.ts";
+import { legacyIdentityContextJson as contextJson, type CandidateIdentityContext, type LegacyIdentityStageBinding } from "../../apps/mobile/src/shared/migration/LegacyIdentityBinding.ts";
 import { legacyInspectIdentityPlan, legacyCreateIdentityPlan, legacyReserveClientIdsPlan, legacyLoadClientIdsPlan, legacyStageClientIdentitiesPlan } from "../../apps/mobile/src/features/clients/data/legacy-import/LegacyClientStagePlan.ts";
 import { runNodeLegacyWritePlan } from "./NodeLegacyWritePlan.ts";
 import type { DatabaseSync } from "node:sqlite";
@@ -11,7 +12,7 @@ import { createProfileRehearsalSchema, profileRehearsalObjects, stageClientProfi
 import type { LegacyQuestionnaireSource } from "./LegacyQuestionnaireComposition.ts";
 import { createWorkDataRehearsalSchema, stageLegacyClientWorkDataInTransaction, workDataRehearsalObjects } from "./LegacyClientWorkDataStage.ts";
 import { createExerciseRehearsalSchema, exerciseRehearsalObjects, stageLegacyExerciseCatalogInTransaction, type ExerciseStageCheckpoint } from "./LegacyExerciseCatalogStage.ts";
-import { projectLegacyExerciseCatalogRow, type LegacyExerciseCatalogCandidate } from "./LegacyExerciseCatalogSourceReader.ts";
+import type { LegacyExerciseCatalogCandidate } from "./LegacyExerciseCatalogSourceReader.ts";
 import type { LegacyExerciseReferenceCandidate } from "./LegacyExerciseReferencePreflight.ts";
 import { createPlansRehearsalSchema, loadStagedPlanMappings, plansRehearsalObjects, stageLegacyPlansInTransaction, type PlanStageCheckpoint } from "./LegacyPlansStage.ts";
 import type { LegacyPlansSource } from "./LegacyPlansSourceReader.ts";
@@ -120,8 +121,8 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
     if (jobCreatedAt === undefined) throw new Error("R04_ID_LEDGER_REHEARSAL_NOT_ENABLED");
     return transaction(() => runNodeLegacyWritePlan(db, legacyStageClientIdentitiesPlan(stageBinding, source, allocate, cards, sourcePayloads), (phase) => {
       if (phase === "after-clients") afterClients?.();
-      else if (phase === "after-profile" || phase === "after-work-data") throw new Error("R04_ID_LEDGER_UNEXPECTED_CHECKPOINT");
-      else checkpoint(phase);
+      else if (phase === "after-ids" || phase === "after-client" || phase === "before-commit") checkpoint(phase);
+      else throw new Error("R04_ID_LEDGER_UNEXPECTED_CHECKPOINT");
     }));
   }
   function stageClientCards(source: readonly LegacyClientCardCandidate[], allocate: () => string = randomUUID,
@@ -291,19 +292,7 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
   function loadExerciseDraftIds(): ReadonlyMap<string, string> {
     if (!exercisesEnabled) throw new Error("R04_ID_LEDGER_EXERCISE_NOT_ENABLED");
     if (inspect() !== "owned") throw new Error("R04_ID_LEDGER_CORRUPT");
-    const rows = db.prepare("SELECT * FROM r04_exercise_ids ORDER BY source_key").all();
-    const result = new Map<string, string>();
-    for (const row of rows) {
-      let raw: unknown;
-      try { raw = JSON.parse(row.source_payload_json as string) as unknown; } catch { throw new Error("R04_ID_LEDGER_EXERCISE_IDENTITY_MISMATCH"); }
-      if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("R04_ID_LEDGER_EXERCISE_IDENTITY_MISMATCH");
-      const projected = projectLegacyExerciseCatalogRow(binding.accountScope, raw as Record<string, unknown>);
-      const prefix = projected.origin === "CUSTOM" ? "usr:" : "sys:legacy-v2:";
-      if (projected.issues.length > 0 || row.source_key !== projected.sourceIdentityKey || typeof row.target_id !== "string"
-        || !row.target_id.startsWith(prefix) || !uuid.test(row.target_id.slice(prefix.length))) throw new Error("R04_ID_LEDGER_EXERCISE_IDENTITY_MISMATCH");
-      result.set(row.source_key, row.target_id);
-    }
-    return result;
+    return runNodeLegacyWritePlan(db, legacyLoadExerciseDraftIdsPlan(binding.accountScope));
   }
   function loadPlanDraftMappings() {
     if (!plansEnabled) throw new Error("R04_ID_LEDGER_PLANS_NOT_ENABLED");

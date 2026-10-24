@@ -1,3 +1,24 @@
+## Продолжение — async registry/reference ownership
+
+2026-10-24, базаfa44bc3; R04→R03/Product48.5.7/49–50/53–56/INT03–12.
+Private synthetic/finalizable:false; production/native/release gates OPEN.
+Shared LegacyReadPlan extracted/re-exported без изменения прежних guards;
+exercise reference read plan +pure physical owner joins. Старый Node reader sameplan.
+Duplicate owners/workouts и source alias collisions блокируются, не затираются.
+Общие exercise schema/write/parity/catalog-read/ID-load generators у владельца,
+Node stage/fullledger/readers samecode. Async extension требует Q/WorkData и сразу
+фиксирует schema/binding; registry/IDs/overlay/links/receipt в общей client tx.
+LOAD_REPS/unknown metadata/no namejoins/archived visibility/source raw сохранены.
+8new tests admitted actualQ+clients+WorkData+catalog async==host allrowsIDsreceipts,
+domain reads/ID map, sourceSHA/FK/handles; allboundaries rollback/retry/reopen/replay,
+COMMITackloss/capture/foreign-conflictingrefs/IDcollision/aliasguards/drift/IO/schema.
+483ownerprofile/initial55/focused8 PASS; root/mobileTS/lint/source73/arch562/secrets
+PASS; staged diff PASS. Нет foundation/bundle/APK/Android.
+[Контракт, доказательства, открытый объём](spikes/R04_PORTABLE_EXERCISE_STAGING.md).
+Registry по-прежнему private proposal, не production/runtime/ordinarybackup proof.
+NEXT остальные portable writers/projections/permanent models/schemaadmission/
+fullcomposition/backup/SQLite+JSON+other2.0/Android/removal. GoalACTIVE/не100%.
+
 ## Продолжение — async WorkData после clients/Q
 
 2026-10-24, база3d094b4; R04→R03/Product48.5.7/49–50/53–56/INT03–12.

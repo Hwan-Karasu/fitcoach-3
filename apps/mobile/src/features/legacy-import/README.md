@@ -90,3 +90,13 @@ questionnaire/domain/legacy-import. Ни client-only, ни profile-only job не
 правила full profile validation, нормализации меток и сохранения note text не менялись.
 WorkData пока записывается в private R04 owner-shaped tables. Это не утверждение,
 что постоянная production модель, обычный backup, UI или Android уже подключены.
+
+Каталог подключается `exercises/data/legacy-import/LegacyExerciseCatalogStaging`
+после Q и WorkData. Он захватывает raw catalog и physical clients/workouts/
+exercises/history из того же admitted snapshot. Общие read/table guards вынесены
+в `shared/migration/LegacyReadPlan`; прежние entry points сохранены re-export.
+Владение ссылками определяется по точным физическим ID; duplicate workouts и
+исходные поля, совпадающие с join aliases, блокируются без затирания данных.
+Общий registry write/parity/ID-read/candidate catalog-read plan использует и Node.
+Неизвестные категории/оборудование не угадываются, используется LOAD_REPS.
+Registry остаётся private R04 candidate, не production custom_exercises или cutover.

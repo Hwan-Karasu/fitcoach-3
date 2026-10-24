@@ -46,8 +46,7 @@ projections/twoargWorker/normalreaderimportban; 8newtests. HermesHBCcompileonly.
 PortableSQLaad8901/R04_PORTABLE_SQL_SOURCE.md: rawplans/safeSQLnumbers/WAL/close.
 9source+1stageintegration/687area/latest74PASS; admission later e1d7484.
 
-Copy229e880/R04_INSPECTION_COPY.md: freshslot/privatefile+receipt/sourceSHA guards,
-no sourceSQLite/delete/nooverwrite; ExpoDriver delayedSDKmocks/realhostfiles.
+Copy229e880: R04_INSPECTION_COPY.md; private slots/SHA/source untouched.
 
 Admissione1d7484/R04_SOURCE_ADMISSION.md: canonical25 metadata/ledger/size/revision/
 integrity-FK/exactscope/privateverifiedlineage; 152area, notfullmappingadmission.
@@ -58,18 +57,21 @@ Profile85c7e32: R04_PORTABLE_PROFILE_SOURCE.md; 449/24/8PASS.
 
 Client76ab152: R04_PORTABLE_CLIENT_STAGING.md; 459/44/8PASS.
 
-Q3d094b4/R04_PORTABLE_QUESTIONNAIRE_STAGING.md: shared asyncQ/clienttx/epochs/draft/
-receipts, 8new/467profile/41-18PASS, thenWorkData onlyprivatecandidates.
+Q3d094b4: R04_PORTABLE_QUESTIONNAIRE_STAGING.md; 467/41-18PASS.
 
-CURRENT R04_PORTABLE_WORK_DATA_STAGING.md: shared WorkData schema/write/parity
-Node+async; sharedrawextractor usedbyQandclientowner. Ordered extensioncombine/
-mode-deps/objects/allocator fixedatinit; Q→WorkData withinclienttx. Notes exact,
-import-time/unknown-note-time provenance, NFCtags/rawlabels/order, pendingreviews
-notACTIVE. Private R04 tables, NOTproductionmodel/ordinarybackup/UI. 8newtests:
-admitted actualQ+client+WorkData async==hostrowsIDsreceipts; SHA/rollbackall/retry/
-reopen/replay/ackloss/mutation/order/mode/invalidtags/collisions/drift/IO/schema.
-475profile/initial40-7/latest8 PASS; root/mobileTS/lint/source73/arch556/secrets PASS.
-No foundation/bundle/APK/Hermes/Android/nativeExpo/prodDDL.
+Workfa44bc3: R04_PORTABLE_WORK_DATA_STAGING.md; sharedprivateWorkData,
+8new/475profile/40-7-8PASS, notproduction/ordinarybackup/UI.
+
+CURRENT R04_PORTABLE_EXERCISE_STAGING.md: sharedReadPlan extracted/re-exported;
+reference readplan/exactphysicaljoins; alias-shadow/duplicateowners/workouts reject.
+Owner catalog schema/write/parity/domainread/IDload shared Node+async; extension
+requiresQ/WorkData/sameclienttx. LOAD_REPS/unknownmetadata/archives/raw kept;
+no namejoins. Private registryproposal only. 8newtests admitted actualQ+clients+
+WorkData+catalog async==hostrowsIDsreceipts/domainmodel; sourceSHA/FK/handles/
+rollback/retry/reopen/ackloss/capture/badrefs/collision/aliasguards/drift/IO/schema.
+483profile/initial55/focused8 PASS; root/mobileTS/lint/source73/arch562/secrets PASS.
+No foundation/bundle/APK/Hermes/Android/nativeExpo/prodDDL. Remainingwriters/
+permanentmodels/composition OPEN.
 
 NEXT fullportablewriter/otherprojections/coverage/prefs/lineage/permanentExecution-
 review-provenance/schemaadmission/composition/cutover/UI/deletion/fullbackup/
