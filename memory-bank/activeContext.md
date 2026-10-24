@@ -5,7 +5,7 @@ backup/restore NOT100%. R04→R03; Product48.5.7/49–50/53–56/INT03–12.
 ProdDDL/realmigration/overlay/signing/release gates OPEN, no bypass. Private synthetic
 staging/finalizable:false only. Russiancommits/nopush/no agents. Pinned node.cmd24.3,
 strictTS/UTF8/rg. Targetedchecks/fullfoundation milestones. Memory≤5000chars/bytes.
-ConcurrentTHEME/calendar samefolder: preserve/exclude its paths/packagehunks.
+Original FitCoach_3 UIbranch separate: preserve it; stay isolated R04 worktree.
 UIlater/Excelafterbackup/GitHubfirst. No personalDB/backups/secrets/key reads;
 real2.0/phone/scrcpy untouched. Sourceoftruth synced2026-10-14 package.
 
@@ -43,23 +43,27 @@ coversnativeNutrition+Measurementrows/IDs, NOTprivateprovenance/review/archives.
 
 3c4d019 retainedNutrition domain/reader/candidatebackup/isolate proof, notproduction.
 
-Calendar6d84461/evidence258ef27: R04_CALENDAR_STAGING.md. CalendarV1/allpriorowners/
-frozen/sharedtx/IDs/SHA/parity; activeSCHEDULED/outcomeNULL/softdeletehidden. Exact
-clientIDs/4newcatalogtypes/oldlabels/bypass1/UNTRACKED/no paidfacts. Unsupportedraw.
-669area/normalbackup nativefieldsONLY, notprivateprovenance/reviews.
+Calendar6d84461/258ef27: R04_CALENDAR_STAGING.md. V1 sharedtx/IDs/parity; schedules
+notoutcomes/exactclientIDs/4templates/legacybypass1/UNTRACKED/no paidfacts.
+669historical/normalbackup nativefieldsONLY, notprivateprovenance/reviews.
+SourceJSON99c318f: R04_PORTABLE_SOURCE_JSON.md exacttokens/no context.source, all4
+projections/twoargWorker/normalreaderimportban; 8newtests. HermesHBCcompileonly.
 
-CURRENT R04_PORTABLE_SOURCE_JSON.md: pinnedHermes250829098.0.17 executeCall2/no
-context.source. Executionmetrics/Nutrition/archiveDays/Calendar nowusepuremobile
-legacy-import/domain/SourceJson: nativegrammar+collisionfreetags+exactnumbertokens,
-no roundedfactvalues/NodeAPI/globalpatch/newdeps/PIIerrors. Two parses/memorycost;
-Androidperf unmeasured/notcomposition. 8newtests/1000corpus/deep+large/freshWorker
-withoutrevivercontext/all4projections. 677area/latest43 PASS. Normal3.xreader guard
-alsoblocksfeatures/legacy-import; bothintentionalimportsblocked. Root/mobileTS/
-scopedlint/source73/arch525/secrets/diff PASS. Pinnedhermesc HBCcompile2590bytes,
--exec unsupported: NOactualHermesruntime/Androidproof. Setup0e6392c isolatedbranch;
-assets/depsjunctions; originalUIworktreeuntouched.
+CURRENT R04_PORTABLE_SQL_SOURCE.md: mobile LegacySourceSnapshots/ReadPlans/SqliteSource.
+Samegeneratorplan usedbyNode Nutrition/MeasurementSnapshot/Calendar collectors.
+Fullrows/null-empty/rawJSON/unknownfields/BLOB/scopedsettings/shape/count/wrongkind.
+xinfo coversgenerated; unsafeSQLINTEGER/Infinity blockedbeforebridge: REJECT,
+NOTexactretention. Expo-compatiblePick getAll/exec/close/privatecopyONLY. Caller
+filecopy/admission/hash/ownership UNIMPLEMENTED. Pragmas query_only1/FK1/
+read_uncommitted0/trusted_schema0 verified. PinnedBEGIN/all3domains/ROLLBACK/close;
+fixedIOerrors/cleanupfailuresreported. 9source+1integration/WALconcurrentwriter/
+allnativefailureboundaries/unchangedbytes/retry/count/config/cleanup/generated.
+Asyncsnapshots->sharedstaging receiptfailure rollbackall/retry/replaystableIDs/
+noallocator/no credit/finalizablefalse. 687area/latest74 PASS. Root/mobileTS/
+scopedlint/source73/arch528/secrets/diff PASS. 3mobilemoduleshermescHBCcompile;
+NOHermesexecution/Android/foundation/bundle/APK/phone/sourcePII thisphase.
 
-NEXT portableSQL/source/fullcoverage/prefs/lineage/permanentExecution/review/
-provenance/schemaadmission/composition/UI/deletion/ordinarybackup/fullparity/
+NEXT othercollectors/filecopy+admission/permanentExecution/review/provenance/
+portablewriter/schemaadmission/composition/UI/deletion/ordinarybackup/fullparity/
 appSQLite+JSONlegacyrestore/Android/fullremovalproof. AllpriorbackupedgecasesOPEN.
 HoststagingNOTmobileimporter. GoalACTIVE/not100%.

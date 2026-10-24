@@ -1,3 +1,23 @@
+## Продолжение — общий mobile/host SQLite source reader
+
+2026-10-24 R04/R03/Product48.5.7/49–50/53–56/INT03–12, база99c318f. Новый mobile
+LegacySourceSnapshots/LegacySourceReadPlans/LegacySqliteSource; старые Node source
+collectors Nutrition/Measurements/Calendar исполняют тот же план запросов.
+Full rows/null-empty/unknown fields/ownedsettings/shape/count, wrong-kind rejected;
+unsafe SQL INTEGER/nonfinite REAL blocked before JS (включая generated columns
+через xinfo), без округления. Это отказ от неподдерживаемого SQL value, не его
+постоянное хранение. Async Expo-compatible fresh-handle adapter проверяет pragmas,
+держит один pinned read tx через три домена, ROLLBACK/close на любом исходе.
+Фабрика ТОЛЬКО для private inspection copy; файл/допуск/sourcehash/ownership caller
+ещё не реализован. Никакого открытия внешнего source/рабочей базы/composition.
+9 новых source tests +1 async→shared staging rollback/retry/stable-ID replay.
+687/687 area+deps, последние74/74 после generated-column guard. Root/mobileTS/
+scopedlint/source73/arch528/secrets/diff PASS. Hermesc compile3modules PASS,
+не runtime/Android/bundle/APK/fullfoundation. Production/native gates OPEN.
+[Механизм, доказательства и ограничения](spikes/R04_PORTABLE_SQL_SOURCE.md).
+NEXT остальные sourcecollectors/file admission/permanentExecution+review+provenance/
+portablewriter/schemaadmission/composition/ordinarybackup/Android/fullrestore/removal.
+
 ## Продолжение — переносимый разбор точных чисел JSON
 
 2026-10-24 R04/R03, Product48.5.7/49–50/53–56/INT03–12. Убрана Node-only зависимость

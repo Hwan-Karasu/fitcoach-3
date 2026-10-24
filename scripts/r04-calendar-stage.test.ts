@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
@@ -21,6 +21,7 @@ import { DevCalendarRepository } from "../apps/mobile/src/features/calendar/data
 import { DevAccountingRepository, devAccountingCalendarHook } from "../apps/mobile/src/features/accounting/data/DevAccountingRepository.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
 import { createSqliteBackup, prepareBackupForRestore } from "./r06/SqliteBackup.ts";
+import { readLegacyDomainSnapshots } from "../apps/mobile/src/features/legacy-import/data/LegacySqliteSource.ts";
 
 const context = { sourceSha256: "c".repeat(64), accountScope: "calendar-synthetic", sourceWorkspaceId: "source", targetWorkspaceId: "local-trainer" };
 const imported = "2026-10-24T12:00:00.000Z", time = "2026-02-01T10:00:00.000Z", day = "2026-03-01";
@@ -59,6 +60,27 @@ async function fixture(run: (source: DatabaseSync, target: DatabaseSync) => void
 }
 function cleanup(dir: string) { const path = resolve(dir); assert.equal(dirname(path), resolve(tmpdir())); assert.ok(basename(path).startsWith("athlete-r04-calendar-")); rmSync(path, { recursive: true, force: true }); }
 const receipt = (db: DatabaseSync) => db.prepare("SELECT * FROM r04_calendar_receipt").get()!;
+
+test("asynchronous mobile source snapshots feed shared staging, rollback together, and replay with stable IDs", () => fixture(async (source, target) => {
+  const expected = input(source), inspection = new DatabaseSync(":memory:"); seed(inspection);
+  const actual = await readLegacyDomainSnapshots(async () => ({
+    getAllAsync: async <Row>(sql: string, ...bindings: unknown[]): Promise<Row[]> => inspection.prepare(sql).all(...bindings as SQLInputValue[]) as Row[],
+    execAsync: async (sql: string) => { inspection.exec(sql); }, closeAsync: async () => { inspection.close(); },
+  }), context.accountScope);
+  assert.deepEqual(actual, { nutrition: expected.nutrition, measurements: expected.measurements, calendar: expected.calendar });
+  const ledger = prepareCandidateIdentityLedger(target, context, options);
+  const run = (allocate = allocator(), checkpoint?: Checkpoint) => ledger.stageClientCalendar(expected.cards, null, [], [], plans, executions,
+    actual.measurements, actual.nutrition, actual.calendar, allocate, checkpoint);
+  assert.throws(() => run(allocator(), (point) => { if (point === "after-calendar-receipt") throw new Error("INTERRUPTED_AFTER_MOBILE_SOURCE"); }), /WRITE_FAILED/u);
+  for (const table of ["clients", "body_measurements", "r04_work_notes", "r04_nutrition_receipt", "r04_calendar_receipt", ...calendarTargetTables]) {
+    assert.equal(target.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n, 0, table);
+  }
+  const result = run(), appointments = ledger.loadCalendarDraftAppointments(), calendarReceipt = { ...receipt(target) };
+  assert.equal(result.calendarAppointmentRows, 4); assert.equal(result.finalizable, false);
+  run(() => assert.fail("replay must reuse all target IDs"));
+  assert.deepEqual(ledger.loadCalendarDraftAppointments(), appointments); assert.deepEqual({ ...receipt(target) }, calendarReceipt);
+  assert.equal(target.prepare("SELECT count(*) AS n FROM credit_ledger").get()!.n, 0);
+}));
 
 test("calendar maps schedules/guests/soft-delete visibility and planner flags without completed outcomes, workouts or credits", () => fixture((source, target) => {
   const { result, ledger } = stage(source, target);

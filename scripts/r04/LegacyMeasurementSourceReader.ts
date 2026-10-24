@@ -1,8 +1,10 @@
 import type { DatabaseSync } from "node:sqlite";
+import { legacyMeasurementsReadPlan } from "../../apps/mobile/src/features/legacy-import/data/LegacySourceReadPlans.ts";
+import { legacyMeasurementFields } from "../../apps/mobile/src/features/legacy-import/domain/LegacySourceSnapshots.ts";
+import { runNodeLegacyReadPlan } from "./NodeLegacySourceReadPlan.ts";
 
-export const legacyMeasurementFields = [
-  "neck", "shoulders", "chest", "waist", "hips", "upper_arm", "thigh", "calf",
-] as const;
+export { legacyMeasurementFields } from "../../apps/mobile/src/features/legacy-import/domain/LegacySourceSnapshots.ts";
+export type { LegacyMeasurementsSnapshot } from "../../apps/mobile/src/features/legacy-import/domain/LegacySourceSnapshots.ts";
 
 export type LegacyMeasurementValueStatus =
   "missing" | "decimal-dot" | "decimal-comma" | "invalid" | "nonpositive";
@@ -19,24 +21,8 @@ export interface LegacyMeasurementSource {
   readonly fieldRawValues: Readonly<Record<typeof legacyMeasurementFields[number], unknown>>;
 }
 
-export interface LegacyMeasurementsSnapshot {
-  readonly accountScope: string;
-  /** null means the optional source table is absent, not an observed empty table. */
-  readonly rows: readonly Readonly<Record<string, unknown>>[] | null;
-  readonly clientDays: readonly Readonly<Record<string, unknown>>[] | null;
-}
-export function readLegacyMeasurementsSnapshotInSnapshot(db: DatabaseSync, accountScope: string): LegacyMeasurementsSnapshot {
-  if (!accountScope.trim()) throw new Error("R04_ACCOUNT_SCOPE_REQUIRED");
-  function read(table: "client_measurements" | "client_day_facts", required: readonly string[]) {
-    if (!db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name=?").get(table)) return null;
-    const columns = new Set(db.prepare("SELECT name FROM pragma_table_info(?)").all(table).map((r) => r.name));
-    if (required.some((field) => !columns.has(field))) throw new Error("R04_MEASUREMENT_SHAPE_UNSUPPORTED");
-    const rows = db.prepare(`SELECT * FROM ${table}`).all().map((r) => ({ ...r }));
-    if (rows.length !== db.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n) throw new Error("R04_MEASUREMENT_CARDINALITY_MISMATCH");
-    return rows;
-  }
-  return { accountScope, rows: read("client_measurements", ["id", "client_id", "date_key", ...legacyMeasurementFields]),
-    clientDays: read("client_day_facts", ["client_id", "date_key", "weight", "steps", "training"]) };
+export function readLegacyMeasurementsSnapshotInSnapshot(db: DatabaseSync, accountScope: string) {
+  return runNodeLegacyReadPlan(db, legacyMeasurementsReadPlan(accountScope));
 }
 
 /** Reparse a frozen physical row; caller-derived status flags are never trusted. */
