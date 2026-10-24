@@ -4,19 +4,22 @@ import { createLegacyTrainingTables } from "./legacy-training-tables.ts";
 /** Synthetic canonical-v25 backup metadata, matching the pinned v2 file contract.
  * These tables are test input only, never a migration or production schema.
  */
-export function seedLegacyBackupMetadata(db: DatabaseSync, accountScope: string) {
+export function seedLegacyBackupMetadata(db: DatabaseSync, accountScope: string, options: { readonly existingDomainTables?: boolean } = {}) {
   db.exec(`CREATE TABLE athlete_backup_manifest(id INTEGER PRIMARY KEY,json TEXT);
     CREATE TABLE account_database_binding(id INTEGER PRIMARY KEY,scope_key TEXT);
     CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY);
-    CREATE TABLE clients(id TEXT PRIMARY KEY,workspace_id TEXT,name TEXT,created_at TEXT,updated_at TEXT,archived_at TEXT,deleted_at TEXT,
+    CREATE TABLE app_settings(key TEXT,value TEXT,updated_at TEXT);
+    CREATE TABLE backup_state(id INTEGER PRIMARY KEY,database_id TEXT,data_revision INTEGER);
+    INSERT INTO backup_state VALUES(1,'synthetic-database',7);`);
+  if (!options.existingDomainTables) {
+    db.exec(`    CREATE TABLE clients(id TEXT PRIMARY KEY,workspace_id TEXT,name TEXT,created_at TEXT,updated_at TEXT,archived_at TEXT,deleted_at TEXT,
       birthdate TEXT,height TEXT,gender TEXT,avatar_emoji TEXT,profile_json TEXT);
     INSERT INTO clients(id,workspace_id,name,created_at,updated_at,birthdate,height,gender,avatar_emoji,profile_json)
       VALUES('a','synthetic-workspace','Synthetic client','2026-10-01T12:00:00Z','2026-10-02T12:00:00Z','','','','','{}');
     CREATE TABLE exercise_catalog(id TEXT PRIMARY KEY,name TEXT,category TEXT,equipment TEXT,aliases_json TEXT,source TEXT,created_at TEXT,updated_at TEXT,deleted_at TEXT);
-    CREATE TABLE app_settings(key TEXT,value TEXT,updated_at TEXT);
-    CREATE TABLE backup_state(id INTEGER PRIMARY KEY,database_id TEXT,data_revision INTEGER);
-    INSERT INTO backup_state VALUES(1,'synthetic-database',7);`);
-  createLegacyTrainingTables(db);
+`);
+    createLegacyTrainingTables(db);
+  }
   db.exec("CREATE TABLE coaching_program_permissions(id TEXT)");
   const insert = db.prepare("INSERT INTO schema_migrations VALUES(?)"); for (let version = 1; version <= 25; version++) insert.run(version);
   db.prepare("INSERT INTO account_database_binding VALUES(1,?)").run(accountScope);

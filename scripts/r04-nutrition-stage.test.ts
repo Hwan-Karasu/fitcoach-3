@@ -551,17 +551,18 @@ test("candidate 3.x history survives the actual snapshot engine and a fresh read
     const readerUrl = pathToFileURL(resolve("apps/mobile/src/features/nutrition/data/SqliteNutritionHistoryReader.ts")).href;
     const importerUrl = pathToFileURL(resolve("scripts/r04/LegacyNutritionArchive.ts")).href;
     const bridgeModuleUrl = pathToFileURL(resolve("apps/mobile/src/features/legacy-import/domain/SourceJson.ts")).href;
+    const sharedBridgeUrl = pathToFileURL(resolve("apps/mobile/src/shared/migration/SourceJson.ts")).href;
     const worker = `import {DatabaseSync} from 'node:sqlite';import {parentPort,workerData} from 'node:worker_threads';import {registerHooks} from 'node:module';
       const loaded=[];registerHooks({resolve(specifier,context,next){const found=next(specifier,context);
-        if(found.url.includes('/scripts/r04/')||found.url.includes('/Legacy')||found.url.includes('/features/legacy-import/'))throw Error('IMPORTER_UNAVAILABLE');loaded.push(found.url);return found;}});
-      for(const url of [workerData.importerUrl,workerData.bridgeModuleUrl]){let blocked=false;try{await import(url);}catch(error){blocked=error.message==='IMPORTER_UNAVAILABLE';}
+        if(found.url.includes('/scripts/r04/')||found.url.includes('/Legacy')||found.url.includes('/features/legacy-import/')||found.url.includes('/shared/migration/'))throw Error('IMPORTER_UNAVAILABLE');loaded.push(found.url);return found;}});
+      for(const url of [workerData.importerUrl,workerData.bridgeModuleUrl,workerData.sharedBridgeUrl]){let blocked=false;try{await import(url);}catch(error){blocked=error.message==='IMPORTER_UNAVAILABLE';}
         if(!blocked)throw Error('IMPORTER_GUARD_INACTIVE');}
       const {SqliteNutritionHistoryReader}=await import(workerData.readerUrl);const db=new DatabaseSync(workerData.restored,{readOnly:true});
       const port={all:async(sql,args=[])=>db.prepare(sql).all(...args),first:async(sql,args=[])=>db.prepare(sql).get(...args)??null,run:async()=>{throw Error('READ_ONLY')}};
       try{const result=await new SqliteNutritionHistoryReader(port,workerData.workspace).listWeeks(workerData.client);parentPort.postMessage({result,loaded});}finally{db.close();}`;
     const fromIsolate = await new Promise<{ result: unknown; loaded: string[] }>((resolveWorker, reject) => {
       const task = new Worker(new URL(`data:text/javascript,${encodeURIComponent(worker)}`), { execArgv: ["--experimental-strip-types"],
-        workerData: { restored, client, workspace: context.targetWorkspaceId, readerUrl, importerUrl, bridgeModuleUrl } });
+        workerData: { restored, client, workspace: context.targetWorkspaceId, readerUrl, importerUrl, bridgeModuleUrl, sharedBridgeUrl } });
       let received: { result: unknown; loaded: string[] } | null = null;
       task.once("message", (value) => { received = value as { result: unknown; loaded: string[] }; });
       task.once("error", reject); task.once("exit", (code) => {
@@ -569,7 +570,7 @@ test("candidate 3.x history survives the actual snapshot engine and a fresh read
       });
     });
     assert.deepEqual(fromIsolate.result, retained); assert.ok(fromIsolate.loaded.includes(readerUrl));
-    assert.ok(fromIsolate.loaded.every((url) => !url.includes("/scripts/r04/") && !url.includes("/Legacy") && !url.includes("/features/legacy-import/")));
+    assert.ok(fromIsolate.loaded.every((url) => !url.includes("/scripts/r04/") && !url.includes("/Legacy") && !url.includes("/features/legacy-import/") && !url.includes("/shared/migration/")));
   } finally { db?.close(); removeFixtureDirectory(dir, "athlete-r04-history-candidate-"); }
 }));
 

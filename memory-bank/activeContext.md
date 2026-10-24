@@ -64,15 +64,15 @@ Workfa44bc3: R04_PORTABLE_WORK_DATA_STAGING.md; sharedprivateWorkData,
 Exercisef7ccdf9: R04_PORTABLE_EXERCISE_STAGING.md; sharedcatalog/ref/read/IDs,
 8new/483profile/55-8PASS, source alias collisions reject/no shadowing.
 
-CURRENT R04_PORTABLE_PLANS_STAGING.md: purePlans/Templates/Archives+prescription
-atplanowner; sharedsourceDTO/exactkgmetrics. CommonNode/asyncschema-write-parity-
-mappingread. Real IDs inoldorder/dependentparentkeys; pendingSQLcollision/reserve
-before rows, no fakeIDs/reprojectloops. Fullmode/raw captured atinit/requiresregistry.
-8newtests actualQ+WorkData+registry+simple/periodized/template/archives async==host
-rowsIDsreceipts/domainreaders; weeklyoverride/noactual-as-plan/nofacts/crossclient
-archive/rollback/retry/reopen/replay/ackloss/capture/collision/mode/drift/IO/schema.
-491profile/initial45/latest8 PASS; root/mobileTS/lint/source73/arch569/secrets PASS.
-No foundation/bundle/APK/Hermes/Android/nativeExpo/prodDDL. Fullgoal NOTDONE.
+Plans5332754: R04_PORTABLE_PLANS_STAGING.md; 8new/491profile PASS.
+
+CURRENT R04_PORTABLE_EXECUTION_STAGING.md: owner projections/commonNode-async
+schema/write/parity/read/shared exactJSON+DTO/verifiedPlansport. RealUUIDorder,
+pendingSQLreservations/nobleSHA unchanged. 9new admitted fullgraph/hostparity/
+rollback/retry/replay/ackloss/drift/capture/collision/mode/IO; sourceSHA/FK/handles.
+Old5332754writer==current all44tables/IDs/receipts in4cases. Fullproof in handoff/doc.
+500profile/54initial/9new PASS; root/mobileTS/lint/source73/arch581/secrets PASS.
+No foundation/bundle/Hermesruntime/APK/Android/prodDDL. Fullgoal NOTDONE.
 
 NEXT fullportablewriter/otherprojections/coverage/prefs/lineage/permanentExecution-
 review-provenance/schemaadmission/composition/cutover/UI/deletion/fullbackup/

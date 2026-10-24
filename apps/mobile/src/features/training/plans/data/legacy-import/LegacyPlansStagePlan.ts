@@ -1,3 +1,5 @@
+import type { PlanDraftMapping } from "../../../../../shared/migration/LegacyPlanMappings.ts";
+export type { PlanDraftMapping } from "../../../../../shared/migration/LegacyPlanMappings.ts";
 import { trainingPlansBaseline } from "../TrainingPlansBaseline.generated.ts";
 import type { CandidateIdentityContext } from "../../../../../shared/migration/LegacyIdentityBinding.ts";
 import type { LegacyStageClient, LegacyStageClientIds } from "../../../../../shared/migration/LegacyStageExtension.ts";
@@ -139,10 +141,6 @@ export function* legacyPlansStagePlan(context: CandidateIdentityContext, importe
     deferredViewRows: projection.deferredViewRows, deferredPreferenceRows: projection.deferredPreferenceRows, finalizable: false as const };
 }
 
-export interface PlanDraftMapping {
-  readonly sourceTable: string; readonly sourceRowId: string; readonly clientId: string | null;
-  readonly targetId: string | null; readonly programId: string | null; readonly weekIndex: number | null; readonly disposition: string;
-}
 /** Downstream fact/archive adapters consume source aliases, never deduplicate facts
  * by a logical simple-workout ID shared by several weeks. Read verifies plan parity. */
 export function* legacyLoadPlanMappingsPlan(templatesEnabled = false): LegacyWritePlan<ReadonlyMap<string, PlanDraftMapping>> {

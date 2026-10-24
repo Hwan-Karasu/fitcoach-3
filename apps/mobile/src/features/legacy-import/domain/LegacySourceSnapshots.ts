@@ -3,12 +3,8 @@ export type { LegacySourceRow, LegacyClientsSource, LegacyExerciseCatalogSource,
 
 import type { LegacyPlansSource } from "../../../shared/migration/LegacyPlanSources.ts";
 export { PLAN_SOURCE_TABLES, type PlanSourceTable, type LegacyPlansSource } from "../../../shared/migration/LegacyPlanSources.ts";
-export const EXECUTION_SOURCE_TABLES = ["training_sessions", "training_session_exercises", "training_session_sets", "training_set_segments", "training_exercise_history", "training_workout_logs"] as const;
-export type ExecutionSourceTable = typeof EXECUTION_SOURCE_TABLES[number];
-export interface LegacyExecutionSource {
-  readonly accountScope: string;
-  readonly tables: Readonly<Record<ExecutionSourceTable, readonly LegacySourceRow[] | null>>;
-}
+import type { LegacyExecutionSource } from "../../../shared/migration/LegacyExecutionSources.ts";
+export { EXECUTION_SOURCE_TABLES, type ExecutionSourceTable, type LegacyExecutionSource } from "../../../shared/migration/LegacyExecutionSources.ts";
 export interface LegacyTrainingSnapshots {
   readonly plans: LegacyPlansSource;
   readonly executions: LegacyExecutionSource;

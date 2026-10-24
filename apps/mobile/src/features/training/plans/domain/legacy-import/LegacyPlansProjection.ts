@@ -1,3 +1,4 @@
+import type { PlanTargetRow as PlanRow } from "../../../../../shared/migration/LegacyPlanMappings.ts";
 import type { CandidateIdentityContext } from "../../../../../shared/migration/LegacyIdentityBinding.ts";
 import { PLAN_SOURCE_TABLES, type LegacyPlansSource, type PlanSourceTable } from "../../../../../shared/migration/LegacyPlanSources.ts";
 import { projectLegacyPlanPrescription, sourceObject, sourcePlanRange } from "./LegacyPlanPrescription.ts";
@@ -8,7 +9,7 @@ import type { TemplatePayload } from "../TemplateModel.ts";
 import type { WeekType } from "../PeriodizedModel.ts";
 
 type Raw = Readonly<Record<string, unknown>>;
-export type PlanRow = Readonly<Record<string, string | number | null>>;
+export type { PlanTargetRow as PlanRow } from "../../../../../shared/migration/LegacyPlanMappings.ts";
 export type PlanIdentityKind = "PROGRAM" | "MESOCYCLE" | "LINEAGE" | "WEEK" | "WORKOUT" | "EXERCISE" | "SET" | "SUPERSET" | "TEMPLATE";
 export const PLAN_TARGET_TABLES = ["training_programs", "training_program_members", "training_mesocycles", "training_weeks", "training_workouts",
   "training_planned_exercises", "training_planned_sets", "training_simple_overrides", "training_client_selection", "training_mesocycle_selection"] as const;

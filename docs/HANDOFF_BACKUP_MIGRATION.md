@@ -1,3 +1,23 @@
+## Продолжение — async выполненные тренировки
+
+2026-10-24, база5332754; R04→R03/Product48.5.7/49–50/53–56/INT03–12.
+Private synthetic/finalizable:false; production/native/release gates OPEN.
+Execution pure projections у владельца; exact JSON lexer и source/mapping DTO
+в shared. Общий Node/async schema/write/parity/read, проверенный Plans reader
+через port. Настоящие UUID в прежнем порядке, SQL reservations после projection
+до rows/checkpoints. SHA256 noble совпадает с прежним Node; новых зависимостей нет.
+9 новых tests admitted actualQ+WorkData+registry+Plans+Executions async==host;
+DROP/segments/failure/RPE/partial-input/UNKNOWN/snapshot-cache identity;
+все 7 boundaries+beforecommit rollback/retry/reordered replay; commit/close ackloss;
+capture/collision/source drift/mode beforeWAL/target drift/IO/schema/sourceSHA/FK.
+Unsupported numeric JSON остаётся точным raw, без округлённого performed fact.
+Отдельно прежний writer из5332754 совпал по44tables/IDs/receipts в4сценариях.
+500ownerprofile/54initial/9new PASS; root/mobileTS/scopedlint/source73/arch581/
+secrets PASS. Нет foundation/bundle/Hermesruntime/APK/Android.
+[Контракт, доказательства, открытый объём](spikes/R04_PORTABLE_EXECUTION_STAGING.md).
+NEXT остальные portable writers/permanent Execution model/admission/fullcomposition/
+backup/JSON/Android/removal. GoalACTIVE/fullscope/не100%.
+
 ## Продолжение — async Plans/Templates/Archives
 
 2026-10-24, базаf7ccdf9; R04→R03/Product48.5.7/49–50/53–56/INT03–12.
