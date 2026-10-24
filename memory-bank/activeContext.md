@@ -33,34 +33,35 @@ Profileweight UNKNOWN/targetIdNULL/no guesseddate/equalitymerge. Calculatorweigh
 fatPercent notfacts. Outlier/zero/negativezero/future/precision review/no rounding/
 clipping/fake0. MeasurementmodeV2/projectionVersion2.460historicaltests.
 
-800ebb1 Nutrition: sixfullrawstores/nullabsence/frozen/sharedtx afterpriorowners,
-dayfacts==Measurementsreceipt. AccountIDs/sourceSHA/manifestSHA/fulltableparity.
-ExistingD01 privateonly/stageClientNutrition/loadNutritionDraftEntries. Products/
-representableRecipes/diary/water/positiveSteps/Да–НетNutritionmarks. Historic snapshot+
-savedtotals nativeoverride/no catalogrewrite/phantomfood. Recipeexpandedingredients/
-no extraRECIPEfact. ProvedJSONmissingmode/unit→grams only. ExactX10/JSONtokens,
-createdsourceorimportTime+explicitbasis/updatedimportTime. Water-only unaccounted,
-marks notWorkout/Calendar/Credit.550historicaltests.
+800ebb1 Nutrition nativefacts; b048d05 calculator profiles. Historic snapshots/
+savedportiontotals via override, no catalogrewrite/phantomfood/doublecountedrecipe.
+Water-only unaccounted; marks notWorkout/Credit. Manual/bodyinputs undated snapshots
+notTargets/Measurements, no guesseddate/derivedkcal. Existingnormal3.x backup proof
+coversnativeNutrition+Measurementrows/IDs, NOTprivateprovenance/review/archives.
 
-CURRENT calculator saved goal/activity/intensity +wholeworkouts/duration/deficit→
-nutrition_calc_profiles via existingvalidator. 0/0 kept, no defaults/clamping for
-missing/blank/fraction/unknown/outofrange. Undatedbodyinputs notClient/Measurements.
-ManualJSON independent, originalfractions/0/null/presence/unknownfields retained;
-undatedCALCINPUT notTargetSchedule, effectiveFrom/versionIdNULL/no derivedkcal.
-TargetupdatedimportTime explicitbasis. BindingNutritionV2/projectionVersion2 rejects
-olderjobs, no newDDL; countnutritionCalcProfileRows.7newtests/22Nutritiontotal.
-593/593 area+deps incl NutritionTargets/Calc; latest67/67 Nutrition+Execution after
-crossownerfixtureupdate: receiptfailure rollback5facts/3components/weight/food/calc,
-retry no extraWorkout. Everyboundary now2nonemptyprofiles. Readonly/reopen/reorder/
-byteidentity includesprofiles. Normal3.xDB→.atbackup→restore→normalCalcRepo exact
-parameters/allNutrition+Measurementrows/IDs/no r04tables. NOTproof privateprovenance/
-review/fulllegacy/APKremoval. Root/mobileTS/ownlint/source73/secrets/arch/diff pass.
-Initialmobile foreigncalendarstylesmissing resolvedbyotherthread/recheckedpass.
-No fullsuite/bundle/APK/native/phone. Contract R04_NUTRITION_STAGING.md/handofftop.
+CURRENT archives: LegacyNutritionArchive physicalweek/dayarrayposition stableUUIDs,
+ABSENT/UNKNOWN/VALUE/UNSUPPORTED/sourceDecimal exactJSONtokens/no D01rounding.
+Dates/period/savedAt unknownNULL/no importdate. Duplicate/invaliddays retainID/position/
+issues; array/default'{}'/missing/badJSON distinct. Unknownfields/fullraw retained.
+No Measurement/FoodDiary/Workout/Calendar/Credit oraverages→7days. OverlapIDs/current
+source-storepresence perclient, no merge/last-write-wins/sum. Alwaysmarked
+ARCHIVE_PRODUCTION_STORAGE_REQUIRED. Private r04_nutrition_archive_weeks FK/client/
+sourcekey/payload, ARCHIVE_WEEK/DAY IDs, sourceSHA/manifestSHA/fullparity/sharedtx/
+frozenbeforepriorcallbacks. NutritionbindingV3/projectionVersion3 rejectsoldjobs/no
+rebuild. loadNutritionDraftArchiveWeeks(mappedclient) guarded/client-scoped. Allocator
+errors escapeJSONcatch. NativeDDL unchanged; normal3.x backup stilldoesNOTcoverarchives.
 
-NEXT weeklyarchives: days_json vsresidualaggregate/overlappriorities proved, rawonly;
-no averages→7days/mergebyweekstart. Recipeversions/rounding/duplicates/unknownactual
- totals/extrasunits/0steps remainrawreview. Calendar/Ledger/productionreview+provenance/
-Executionstorage/fullparity/appSQLite+JSONlegacyrestore/Android/removalproof pending.
-Catalog/phase1archives/templateextras/variation/orphans/preferences/lineage OPEN.
-Backupclock/DST/SAFgap/copydeletekill/ENOSPC/providers/UI/OS/first-run OPEN.
+601/601 area+deps (R04Plans/measurementprojection/preflight/SQLitebackup/Nutrition).
+8new/30Nutritiontests. Everyboundary+beforecommit3archives/2profiles rollbackallprior
+owners/IDs/retry; combined5facts/3components/weight/food/calc/archive receiptfailure
+rollback/retry no extraWorkout. Readonly/reopen/reorder/bytes/IDreuse includesarchives.
+Root/mobileTS/scopedlint/source73/secrets/arch/diff pass. No fullsuite/bundle/APK/native/
+phone; real2.0/personaldata/scrcpy/concurrentUI untouched. finalizable:false/goalACTIVE.
+Contract docs/spikes/R04_NUTRITION_ARCHIVE_STAGING.md +handofftop.
+
+NEXT productionarchive/review/provenance retention +normal3.x backup/restore/UI;
+Calendar/Ledger/otherowners. Recipeversions/rounding/duplicates/unknownactualtotals/
+extrasunits/0steps/manual/bodyinputstorage; Executionstorage/identity/outcomes/precision/
+contexts; fullparity/appSQLite+JSONlegacyrestore/Android/removalproof. Catalog/phase1
+archives/templateextras/variation/orphans/preferences/lineage OPEN. Backupclock/DST/
+SAFgap/copydeletekill/ENOSPC/providers/UI/OS/first-run OPEN. Neverclaim100% fromprivateproofs.

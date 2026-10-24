@@ -18,7 +18,7 @@ import { createExecutionRehearsalSchema, executionRehearsalObjects, loadStagedEx
 import { createMeasurementRehearsalSchema, measurementRehearsalObjects, stageLegacyMeasurementsInTransaction, loadStagedMeasurements, type MeasurementStageCheckpoint } from "./LegacyMeasurementStage.ts";
 import type { LegacyMeasurementsSnapshot } from "./LegacyMeasurementSourceReader.ts";
 import { isLocalDate } from "../../apps/mobile/src/features/measurements/domain/MeasurementRules.ts";
-import { createNutritionRehearsalSchema, nutritionRehearsalObjects, stageLegacyNutritionInTransaction, loadStagedNutrition, type NutritionStageCheckpoint } from "./LegacyNutritionStage.ts";
+import { createNutritionRehearsalSchema, nutritionRehearsalObjects, stageLegacyNutritionInTransaction, loadStagedNutrition, loadStagedNutritionArchives, type NutritionStageCheckpoint } from "./LegacyNutritionStage.ts";
 import type { LegacyNutritionSource } from "./LegacyNutritionSourceReader.ts";
 
 type FullStageCheckpoint = "after-ids" | "after-client" | "after-profile" | "after-work-data" | "before-commit" |
@@ -79,7 +79,7 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
       ...(exercisesEnabled ? ["EXERCISE_REGISTRY_REHEARSAL_V1"] : []), ...(plansEnabled ? ["TRAINING_PLANS_REHEARSAL_V1"] : []),
       ...(templatesEnabled ? ["TRAINING_TEMPLATES_REHEARSAL_V1"] : []), ...(archivesEnabled ? ["TRAINING_ARCHIVES_REHEARSAL_V1"] : []),
       ...(executionsEnabled ? ["TRAINING_EXECUTIONS_REHEARSAL_V3"] : []), ...(measurementsEnabled ? ["MEASUREMENTS_REHEARSAL_V2", measurementDay] : []),
-      ...(nutritionEnabled ? ["NUTRITION_REHEARSAL_V2"] : [])]);
+      ...(nutritionEnabled ? ["NUTRITION_REHEARSAL_V3"] : [])]);
   const workspaceKey = JSON.stringify([binding.accountScope, binding.sourceWorkspaceId]);
   function inspect(): "new" | "owned" {
     const objects = db.prepare("SELECT type,name FROM sqlite_schema WHERE substr(name,1,7)<>'sqlite_' ORDER BY name").all();
@@ -439,5 +439,9 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
     if (!nutritionEnabled || inspect() !== "owned") throw new Error("R04_ID_LEDGER_NUTRITION_NOT_ENABLED");
     loadMeasurementDraftFacts(); return loadStagedNutrition(db);
   }
-  return { reserveClientIds, loadClientDraftIds, loadExerciseDraftIds, loadPlanDraftMappings, loadExecutionDraftFacts, loadExecutionDraftContexts, loadMeasurementDraftFacts, loadNutritionDraftEntries, stageClientIdentities, stageClientCards, stageClientProfiles, stageClientQuestionnaires, stageClientWorkData, stageClientExerciseCatalog, stageClientPlans, stageClientExecutions, stageClientMeasurements, stageClientNutrition };
+  function loadNutritionDraftArchiveWeeks(clientId: string) {
+    if (!nutritionEnabled || inspect() !== "owned") throw new Error("R04_ID_LEDGER_NUTRITION_NOT_ENABLED");
+    loadMeasurementDraftFacts(); return loadStagedNutritionArchives(db, binding.targetWorkspaceId, clientId);
+  }
+  return { reserveClientIds, loadClientDraftIds, loadExerciseDraftIds, loadPlanDraftMappings, loadExecutionDraftFacts, loadExecutionDraftContexts, loadMeasurementDraftFacts, loadNutritionDraftEntries, loadNutritionDraftArchiveWeeks, stageClientIdentities, stageClientCards, stageClientProfiles, stageClientQuestionnaires, stageClientWorkData, stageClientExerciseCatalog, stageClientPlans, stageClientExecutions, stageClientMeasurements, stageClientNutrition };
 }

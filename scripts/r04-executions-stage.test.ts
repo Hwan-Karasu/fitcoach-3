@@ -128,6 +128,8 @@ test("nutrition receipt failure rolls back nonempty training facts, plans, work 
   source.prepare("INSERT INTO food_products VALUES('p','Текущий продукт','','','grams',200,2,1,10,0,?,?)").run(date0, date0);
   source.exec("CREATE TABLE client_kbju_state(client_id TEXT,profile_json TEXT,manual_kbju_json TEXT,updated_at TEXT)");
   source.prepare("INSERT INTO client_kbju_state VALUES('a',?,'{}',?)").run(JSON.stringify({ goal: "Поддержание", activity: "Умеренный", workouts: "0", workoutDuration: "60", workoutIntensity: "Средняя", deficit: "0" }), date0);
+  source.exec("CREATE TABLE nutrition_archive_weeks(id TEXT,client_id TEXT,start_date TEXT,end_date TEXT,label TEXT,saved_at TEXT,days_json TEXT)");
+  source.prepare("INSERT INTO nutrition_archive_weeks VALUES('week','a','2026-02-23','2026-03-01','',?,'{}')").run(date0);
   source.prepare("INSERT INTO nutrition_days VALUES('a','2026-03-01',?,500,?)").run(JSON.stringify({ breakfast: [{ id: "meal", productId: "p", productSnapshot: {
     id: "p", name: "Исторический продукт", brand: "", barcode: "", servingMode: "grams", gramsPerPiece: 0, calories: 100, protein: 2, fat: 1, carbs: 10 },
     grams: "100", unit: "grams", pieceCount: "", calories: 100, protein: 2, fat: 1, carbs: 10, createdAt: date0 }], lunch: [], dinner: [], snack: [] }), date0);
@@ -136,10 +138,11 @@ test("nutrition receipt failure rolls back nonempty training facts, plans, work 
   assert.throws(() => ledger.stageClientNutrition(data.cards, null, data.catalog, data.refs, data.plans, data.executions, measurements, nutrition, allocator(), (phase) => {
     if (phase === "after-nutrition-receipt") throw new Error("injected");
   }), /WRITE_FAILED/u);
-  for (const name of [...ownTables, "body_measurements", "food_products", "food_diary_entries", "nutrition_calc_profiles", "r04_nutrition_ids", "r04_nutrition_receipt"]) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${name}`).get()?.n, 0, name);
+  for (const name of [...ownTables, "body_measurements", "food_products", "food_diary_entries", "nutrition_calc_profiles", "r04_nutrition_archive_weeks", "r04_nutrition_ids", "r04_nutrition_receipt"]) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${name}`).get()?.n, 0, name);
   const result = ledger.stageClientNutrition(data.cards, null, data.catalog, data.refs, data.plans, data.executions, measurements, nutrition, allocator());
   assert.deepEqual([result.performedFacts, result.canonicalSessions, result.weightMeasurementRows, result.nutritionEntryRows], [5, 3, 1, 1]);
   assert.equal(result.nutritionCalcProfileRows, 1);
+  assert.equal(result.nutritionArchiveWeekRows, 1);
   assert.equal(ledger.loadNutritionDraftEntries()[0]!.per_kcal_x10, 1000);
 }));
 

@@ -9,10 +9,12 @@ import { validateRecipe } from "../../apps/mobile/src/features/nutrition/domain/
 import { sumNutrients } from "../../apps/mobile/src/features/nutrition/domain/EnergyRules.ts";
 import { isExplicitTimestamp } from "./ExactScaledHundredth.ts";
 import { legacyCalcInputSnapshot, legacyCalcProfile, legacyManualMacroSnapshot } from "./LegacyNutritionCalculator.ts";
+import { projectNutritionArchive } from "./LegacyNutritionArchive.ts";
+import { isLocalDate } from "../../apps/mobile/src/features/measurements/domain/MeasurementRules.ts";
 
-export type NutritionIdentityKind = "FOOD" | "RECIPE" | "ENTRY";
+export type NutritionIdentityKind = "FOOD" | "RECIPE" | "ENTRY" | "ARCHIVE_WEEK" | "ARCHIVE_DAY";
 export type NutritionRow = Record<string, string | number | null>;
-export const NUTRITION_CORE_TABLES = ["food_products", "recipes", "recipe_ingredients", "food_diary_entries", "water_days", "nutrition_daily_steps", "nutrition_daily_workout_marks", "nutrition_calc_profiles"] as const;
+export const NUTRITION_CORE_TABLES = ["food_products", "recipes", "recipe_ingredients", "food_diary_entries", "water_days", "nutrition_daily_steps", "nutrition_daily_workout_marks", "nutrition_calc_profiles", "r04_nutrition_archive_weeks"] as const;
 interface Representation { readonly sourceKey: string; readonly targetIds: readonly string[]; readonly issues: readonly string[]; readonly metadata: unknown }
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 const flag = (v: unknown) => v === 0 || v === 1 ? v : fail("FLAG_INVALID");
@@ -166,8 +168,26 @@ export function composeLegacyNutrition(context: CandidateIdentityContext, import
       issues: manual.value === null ? manual.issues : [...(manual.value.hasValues ? ["UNDATED_MANUAL_MACRO_STORAGE_REQUIRED"] : []),
         ...(manual.value.unknownFields.length ? ["MANUAL_MACRO_FIELDS_UNSUPPORTED"] : [])], metadata: manual.value });
   }
-  for (const { sourceKey } of ordered("nutrition_archive_weeks", true)) {
-    representations.push({ sourceKey, targetIds: [], issues: ["ARCHIVE_AGGREGATE_MAPPING_REQUIRED"], metadata: null });
+  const archives = ordered("nutrition_archive_weeks", true).map(({ row, sourceKey }) => projectNutritionArchive(row, sourceKey, clients.get(id(row.client_id))!,
+    identity("ARCHIVE_WEEK", sourceKey), (position) => identity("ARCHIVE_DAY", key("archive_day", sourceKey, position))));
+  const byClient = new Map<string, typeof archives>(), currentByClient = new Map<string, Map<string, string[]>>();
+  for (const archive of archives) { const group = byClient.get(archive.clientId) ?? []; group.push(archive); byClient.set(archive.clientId, group); }
+  for (const table of ["nutrition_days", "client_day_facts"] as const) for (const row of rows(table)) {
+    const client = clients.get(id(row.client_id)); if (!client || typeof row.date_key !== "string" || !isLocalDate(row.date_key)) continue;
+    const dates = currentByClient.get(client) ?? new Map<string, string[]>(), stores = dates.get(row.date_key) ?? [];
+    if (!stores.includes(table)) stores.push(table); dates.set(row.date_key, stores); currentByClient.set(client, dates);
+  }
+  for (const archive of archives) {
+    const overlaps = byClient.get(archive.clientId)!.filter((other) => other.id !== archive.id && archive.startDate !== null && archive.endDate !== null
+      && other.startDate !== null && other.endDate !== null && archive.startDate <= archive.endDate && other.startDate <= other.endDate
+      && archive.startDate <= other.endDate && archive.endDate >= other.startDate).map((other) => other.id).sort(compare);
+    const current = [...currentByClient.get(archive.clientId) ?? []].filter(([date]) => archive.startDate !== null && archive.endDate !== null && date >= archive.startDate && date <= archive.endDate);
+    const payload = { ...archive, overlappingArchiveIds: overlaps,
+      currentSourceOverlap: current.sort(([a], [b]) => compare(a, b)).map(([localDate, stores]) => ({ localDate, stores: [...stores].sort(compare) })) };
+    tables.r04_nutrition_archive_weeks.push({ id: archive.id, workspace_id: context.targetWorkspaceId, client_id: archive.clientId, source_key: archive.sourceKey, payload_json: JSON.stringify(payload) });
+    representations.push({ sourceKey: archive.sourceKey, targetIds: [archive.id, ...archive.days.map((day) => day.id)],
+      issues: ["ARCHIVE_PRODUCTION_STORAGE_REQUIRED", ...archive.issues, ...new Set(archive.days.flatMap((day) => day.issues))],
+      metadata: { semantics: archive.semantics, dailyFactsCreated: 0, workoutSessionsCreated: 0, normalizedDaySnapshots: archive.days.length } });
   }
   return { tables, representations: representations.sort((a, b) => compare(a.sourceKey, b.sourceKey)) };
 }

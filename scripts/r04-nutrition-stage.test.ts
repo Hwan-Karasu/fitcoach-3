@@ -10,7 +10,7 @@ import { readLegacyClientIdentityInSnapshot } from "./r04/LegacyClientIdentitySo
 import { readLegacyClientCardsInSnapshot } from "./r04/LegacyClientCardProjection.ts";
 import { readLegacyMeasurementsSnapshotInSnapshot } from "./r04/LegacyMeasurementSourceReader.ts";
 import { readLegacyNutritionInSnapshot } from "./r04/LegacyNutritionSourceReader.ts";
-import { nutritionTargetTables } from "./r04/LegacyNutritionStage.ts";
+import { nutritionNativeTables, nutritionTargetTables } from "./r04/LegacyNutritionStage.ts";
 import { PLAN_SOURCE_TABLES, type LegacyPlansSource } from "./r04/LegacyPlansSourceReader.ts";
 import { EXECUTION_SOURCE_TABLES, type LegacyExecutionSource } from "./r04/LegacyExecutionSourceReader.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
@@ -41,6 +41,15 @@ function seedCalculator(db: DatabaseSync) {
   db.exec("CREATE TABLE client_kbju_state(client_id TEXT PRIMARY KEY,profile_json TEXT,manual_kbju_json TEXT,updated_at TEXT)");
   for (const client of ["a", "b"]) db.prepare("INSERT INTO client_kbju_state VALUES(?,?,?,?)").run(client,
     JSON.stringify(client === "a" ? calcProfile() : { ...calcProfile(), goal: "Поддержание", workouts: "0", deficit: "0" }), '{"protein":"","fat":"","carbs":""}', time);
+}
+function seedArchives(db: DatabaseSync) {
+  db.exec(`CREATE TABLE nutrition_archive_weeks(id TEXT PRIMARY KEY,client_id TEXT,start_date TEXT,end_date TEXT,label TEXT,saved_at TEXT,
+    avg_weight REAL,avg_steps REAL,avg_cal REAL,avg_fat_percent REAL,train_days INTEGER,protein REAL,fat REAL,carbs REAL,days_json TEXT)`);
+  const days = JSON.stringify([{ dateKey: day, weight: 81.25, steps: 0, calories: 500, fatPercent: null, training: "Нет", protein: null, fat: 0, carbs: 20 }]);
+  for (const [id, client, start, end, detail] of [["archive-a", "a", "2026-02-23", day, days],
+    ["archive-overlap", "a", "2026-02-24", "2026-03-02", "{}"], ["archive-b", "b", "2026-02-23", day, days]]) {
+    db.prepare("INSERT INTO nutrition_archive_weeks VALUES(?,?,?,?,?,?,80.125,1234.5,2222.25,0,0,NULL,0,20,?)").run(id!, client!, start!, end!, `Снимок ${id}`, time, detail!);
+  }
 }
 function seed(db: DatabaseSync) {
   db.exec(`CREATE TABLE clients(id TEXT PRIMARY KEY,workspace_id TEXT,name TEXT,created_at TEXT,updated_at TEXT,archived_at TEXT,deleted_at TEXT,birthdate TEXT,height TEXT,gender TEXT,avatar_emoji TEXT,profile_json TEXT,weight TEXT);
@@ -149,7 +158,7 @@ test("source identity collisions, foreign owners and mixed-time daily snapshots 
 test("each nutrition write boundary rolls back prior owners, IDs and all nutrition tables, then permits clean retry", async () => {
   const phases = ["after-nutrition-ids", ...nutritionTargetTables.map(() => "after-nutrition-rows"), "after-nutrition-receipt", "before-commit"];
   for (const [index, phase] of phases.entries()) await fixture((source, target) => {
-    seedCalculator(source);
+    seedCalculator(source); seedArchives(source);
     const data = input(source), ledger = prepareCandidateIdentityLedger(target, context, options), occurrence = phases.slice(0, index + 1).filter((p) => p === phase).length; let seen = 0;
     assert.throws(() => ledger.stageClientNutrition(data.cards, null, [], [], plans, executions, data.measurements, data.nutrition, allocator(), (p) => {
       if (p === phase && ++seen === occurrence) throw new Error("injected");
@@ -157,6 +166,7 @@ test("each nutrition write boundary rolls back prior owners, IDs and all nutriti
     for (const name of ["clients", "body_measurements", "r04_work_notes", "r04_measurement_ids", "r04_measurement_receipt", "r04_nutrition_ids", "r04_nutrition_receipt", ...nutritionTargetTables]) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${name}`).get()?.n, 0, name);
     const retried = ledger.stageClientNutrition(data.cards, null, [], [], plans, executions, data.measurements, data.nutrition, allocator());
     assert.equal(retried.nutritionEntryRows, 4); assert.equal(retried.nutritionCalcProfileRows, 2);
+    assert.equal(retried.nutritionArchiveWeekRows, 3);
   });
 });
 
@@ -186,16 +196,18 @@ test("read-only source, reopened target and reordered rows/properties retain byt
   const dir = mkdtempSync(join(tmpdir(), "athlete-r04-nutrition-")), sourcePath = join(dir, "source.db"), targetPath = join(dir, "target.db");
   const hash = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex"); let source: DatabaseSync | null = null, target: DatabaseSync | null = null;
   try {
-    source = new DatabaseSync(sourcePath); seed(source); seedCalculator(source); source.close(); source = null; const before = hash(sourcePath);
+    source = new DatabaseSync(sourcePath); seed(source); seedCalculator(source); seedArchives(source); source.close(); source = null; const before = hash(sourcePath);
     source = new DatabaseSync(sourcePath, { readOnly: true }); source.exec("PRAGMA query_only=ON; BEGIN"); const data = input(source), exact = { ...context, sourceSha256: before };
     target = new DatabaseSync(targetPath); const ledger = prepareCandidateIdentityLedger(target, exact, options);
     ledger.stageClientNutrition(data.cards, null, [], [], plans, executions, data.measurements, data.nutrition, allocator()); const entries = ledger.loadNutritionDraftEntries();
+    const client = ledger.loadClientDraftIds().clients.get(JSON.stringify([context.accountScope, "a"]))!, archives = ledger.loadNutritionDraftArchiveWeeks(client);
     target.close(); target = null; const after = hash(targetPath); target = new DatabaseSync(targetPath);
     for (const rows of Object.values(data.nutrition.tables)) if (rows !== null) (rows as unknown[]).reverse();
     const reordered = { ...data.nutrition, tables: Object.fromEntries(Object.entries(data.nutrition.tables).map(([table, rows]) => [table, rows?.map((r) => Object.fromEntries(Object.entries(r).reverse())) ?? null])) as typeof data.nutrition.tables };
     const reopened = prepareCandidateIdentityLedger(target, exact, options);
     reopened.stageClientNutrition([...data.cards].reverse(), null, [], [], plans, executions, data.measurements, reordered, () => { throw new Error("reuse every ID"); });
-    assert.deepEqual(reopened.loadNutritionDraftEntries(), entries); target.close(); target = null; assert.equal(hash(targetPath), after);
+    assert.deepEqual(reopened.loadNutritionDraftEntries(), entries); assert.deepEqual(reopened.loadNutritionDraftArchiveWeeks(client), archives);
+    target.close(); target = null; assert.equal(hash(targetPath), after);
     source.exec("ROLLBACK"); source.close(); source = null; assert.equal(hash(sourcePath), before);
   } finally { target?.close(); source?.close(); removeFixtureDirectory(dir, "athlete-r04-nutrition-"); }
 });
@@ -203,13 +215,15 @@ test("read-only source, reopened target and reordered rows/properties retain byt
 test("ordinary 3.x backup restores mapped catalog/recipe/food facts; catalog editing preserves historic totals and water-only days remain unaccounted", () => fixture(async (source, target) => {
   seedCalculator(source);
   const { ledger } = stage(source, target), client = ledger.loadClientDraftIds().clients.get(JSON.stringify([context.accountScope, "a"]))!;
+  // This proof covers existing native D01 facts; archive production storage is a separate open requirement.
+  assert.equal(target.prepare("SELECT count(*) AS n FROM r04_nutrition_archive_weeks").get()?.n, 0);
   const dir = mkdtempSync(join(tmpdir(), "athlete-r04-nutrition-backup-")), live = join(dir, "live.db"), restored = join(dir, "restored.db"), backup = join(dir, "copy.atbackup");
   try {
     await prepareProductionDatabase(new SharedSqliteDatabase(async () => nodeSqlitePort(new DatabaseSync(live))));
     const db = new DatabaseSync(live);
     try {
       db.exec("PRAGMA foreign_keys=ON; BEGIN IMMEDIATE");
-      for (const name of ["clients", "body_measurements", ...nutritionTargetTables]) for (const row of target.prepare(`SELECT * FROM ${name}`).all()) {
+      for (const name of ["clients", "body_measurements", ...nutritionNativeTables]) for (const row of target.prepare(`SELECT * FROM ${name}`).all()) {
         const keys = Object.keys(row); db.prepare(`INSERT INTO ${name}(${keys.join(",")}) VALUES(${keys.map(() => "?").join(",")})`).run(...Object.values(row));
       }
       db.exec("COMMIT"); const original = readFileSync(live);
@@ -219,7 +233,7 @@ test("ordinary 3.x backup restores mapped catalog/recipe/food facts; catalog edi
     const original = readFileSync(backup); await prepareBackupForRestore(backup, restored); assert.deepEqual(readFileSync(backup), original);
     const candidate = new DatabaseSync(restored, { readOnly: true });
     try {
-      for (const name of ["clients", "body_measurements", ...nutritionTargetTables]) {
+      for (const name of ["clients", "body_measurements", ...nutritionNativeTables]) {
         const encoded = (db: DatabaseSync) => db.prepare(`SELECT * FROM ${name}`).all().map((row) => JSON.stringify({ ...row })).sort();
         assert.deepEqual(encoded(candidate), encoded(target), name);
       }
@@ -370,12 +384,113 @@ test("calculator input is frozen with the owner snapshot and subsequent source/t
   target.exec("UPDATE nutrition_calc_profiles SET step_kcal=123"); assert.throws(() => ledger.loadNutritionDraftEntries(), /PARITY_MISMATCH/u);
 }));
 
-test("calculator V2 rejects an older nutrition job and unsupported manifest versions", () => fixture((source, target) => {
+test("nutrition V3 rejects an older nutrition job and unsupported manifest versions", () => fixture((source, target) => {
   seedCalculator(source); const { ledger } = stage(source, target);
-  target.exec("UPDATE r04_candidate_identity SET context_json=replace(context_json,'NUTRITION_REHEARSAL_V2','NUTRITION_REHEARSAL_V1')");
+  target.exec("UPDATE r04_candidate_identity SET context_json=replace(context_json,'NUTRITION_REHEARSAL_V3','NUTRITION_REHEARSAL_V2')");
   assert.throws(() => prepareCandidateIdentityLedger(target, context, options), /CONTEXT_MISMATCH/u);
-  target.exec("UPDATE r04_candidate_identity SET context_json=replace(context_json,'NUTRITION_REHEARSAL_V1','NUTRITION_REHEARSAL_V2')");
-  const manifest = JSON.parse(receipt(target).target_json as string); manifest.projectionVersion = 1; const json = JSON.stringify(manifest);
+  target.exec("UPDATE r04_candidate_identity SET context_json=replace(context_json,'NUTRITION_REHEARSAL_V2','NUTRITION_REHEARSAL_V3')");
+  const manifest = JSON.parse(receipt(target).target_json as string); manifest.projectionVersion = 2; const json = JSON.stringify(manifest);
   target.prepare("UPDATE r04_nutrition_receipt SET target_json=?,target_sha256=?").run(json, createHash("sha256").update(json).digest("hex"));
   assert.throws(() => ledger.loadNutritionDraftEntries(), /PARITY_MISMATCH/u);
+}));
+
+test("archive snapshots retain physical versions and overlapping current stores without creating or changing daily facts", () => fixture((source, target) => {
+  seedArchives(source); const { result, ledger } = stage(source, target);
+  assert.equal(result.nutritionArchiveWeekRows, 3); assert.equal(result.finalizable, false);
+  assert.equal(result.nutritionEntryRows, 4); assert.equal(result.weightMeasurementRows, 1); assert.equal(result.nutritionReviewRepresentations, 3);
+  const client = ledger.loadClientDraftIds().clients.get(JSON.stringify([context.accountScope, "a"]))!, weeks = ledger.loadNutritionDraftArchiveWeeks(client);
+  assert.equal(weeks.length, 2); const detail = weeks.find((w) => w.days.length)!; const summary = weeks.find((w) => !w.days.length)!;
+  assert.deepEqual(detail.aggregates.avg_weight, { state: "VALUE", sourceDecimal: "80.125" });
+  assert.deepEqual(detail.aggregates.avg_steps, { state: "VALUE", sourceDecimal: "1234.5" });
+  assert.deepEqual(detail.aggregates.protein, { state: "UNKNOWN" }); assert.deepEqual(detail.aggregates.fat, { state: "VALUE", sourceDecimal: "0" });
+  assert.deepEqual(detail.days[0]!.values.weight, { state: "VALUE", sourceDecimal: "81.25" });
+  assert.deepEqual(detail.days[0]!.training, { state: "VALUE", value: "NO" });
+  assert.equal(summary.detailShape, "LEGACY_EMPTY_OBJECT"); assert.equal(summary.days.length, 0);
+  assert.deepEqual(detail.overlappingArchiveIds, [summary.id]); assert.deepEqual(summary.overlappingArchiveIds, [detail.id]);
+  assert.deepEqual(detail.currentSourceOverlap, [{ localDate: day, stores: ["client_day_facts", "nutrition_days"] }]);
+  assert.equal(target.prepare("SELECT value_x10 FROM body_measurements").get()?.value_x10, 801);
+  assert.equal(target.prepare("SELECT done FROM nutrition_daily_workout_marks").get()?.done, 1);
+  assert.ok(weeks.every((w) => w.semantics === "HISTORICAL_SNAPSHOT_NOT_DAILY_FACTS"));
+  assert.match(receipt(target).target_json as string, /ARCHIVE_PRODUCTION_STORAGE_REQUIRED/u);
+}));
+
+test("archive access is scoped to the mapped client and identical other-client snapshots keep independent IDs", () => fixture((source, target) => {
+  seedArchives(source); const { ledger } = stage(source, target), clients = ledger.loadClientDraftIds().clients;
+  const a = clients.get(JSON.stringify([context.accountScope, "a"]))!, b = clients.get(JSON.stringify([context.accountScope, "b"]))!;
+  const first = ledger.loadNutritionDraftArchiveWeeks(a), second = ledger.loadNutritionDraftArchiveWeeks(b);
+  assert.equal(second.length, 1); assert.ok(first.every((w) => w.clientId === a)); assert.equal(second[0]!.clientId, b);
+  assert.deepEqual(second[0]!.overlappingArchiveIds, []); assert.notEqual(first[0]!.id, second[0]!.id);
+  assert.notEqual(first.find((w) => w.days.length)!.days[0]!.id, second[0]!.days[0]!.id);
+  assert.throws(() => ledger.loadNutritionDraftArchiveWeeks("a"), /OWNER_INVALID/u);
+  assert.throws(() => ledger.loadNutritionDraftArchiveWeeks("foreign-target"), /OWNER_INVALID/u);
+}));
+
+test("archived JSON numbers retain exact source tokens and never accept numeric strings or forged numeric wrappers as numbers", () => fixture((source, target) => {
+  seedArchives(source);
+  source.prepare("UPDATE nutrition_archive_weeks SET days_json=? WHERE id='archive-a'").run('[{"dateKey":"2026-03-01","weight":80.1234567890123456789,"steps":9007199254740993,"calories":1e-30,"protein":"100","fat":0,"carbs":{"source":"20"},"training":"Да"}]');
+  const { ledger } = stage(source, target), client = ledger.loadClientDraftIds().clients.get(JSON.stringify([context.accountScope, "a"]))!;
+  const record = ledger.loadNutritionDraftArchiveWeeks(client).find((w) => w.days.length)!.days[0]!;
+  assert.deepEqual(record.values.weight, { state: "VALUE", sourceDecimal: "80.1234567890123456789" });
+  assert.deepEqual(record.values.steps, { state: "VALUE", sourceDecimal: "9007199254740993" });
+  assert.deepEqual(record.values.calories, { state: "VALUE", sourceDecimal: "1e-30" });
+  assert.deepEqual(record.values.protein, { state: "UNSUPPORTED" }); assert.deepEqual(record.values.carbs, { state: "UNSUPPORTED" });
+  assert.deepEqual(record.values.fatPercent, { state: "ABSENT" }); assert.deepEqual(record.values.fat, { state: "VALUE", sourceDecimal: "0" });
+}));
+
+test("duplicate archived dates, invalid dates and non-object elements retain positions and IDs instead of becoming merged daily facts", () => fixture((source, target) => {
+  seedArchives(source); const raw = [{ dateKey: day, weight: 80 }, { dateKey: day, weight: 81 }, { dateKey: "2026-02-30", calories: 100 }, null,
+    { dateKey: "2026-01-01", training: "unknown", newField: "preserve" }];
+  source.prepare("UPDATE nutrition_archive_weeks SET days_json=? WHERE id='archive-a'").run(JSON.stringify(raw));
+  const { ledger, result } = stage(source, target), client = ledger.loadClientDraftIds().clients.get(JSON.stringify([context.accountScope, "a"]))!;
+  const days = ledger.loadNutritionDraftArchiveWeeks(client).find((w) => w.days.length)!.days;
+  assert.equal(days.length, 5); assert.equal(new Set(days.map((d) => d.id)).size, 5); assert.deepEqual(days.map((d) => d.position), [0, 1, 2, 3, 4]);
+  assert.ok(days[0]!.issues.includes("DUPLICATE_DAY_DATE")); assert.ok(days[1]!.issues.includes("DUPLICATE_DAY_DATE"));
+  assert.equal(days[2]!.localDate, null); assert.ok(days[3]!.issues.includes("DAY_SHAPE_UNSUPPORTED"));
+  assert.ok(days[4]!.issues.includes("DAY_OUTSIDE_PERIOD")); assert.ok(days[4]!.issues.includes("TRAINING_FLAG_UNSUPPORTED"));
+  assert.deepEqual(days[4]!.unknownFields, ["newField"]); assert.equal(result.weightMeasurementRows, 1); assert.equal(result.nutritionEntryRows, 4);
+}));
+
+test("unreadable archive details, unknown shapes and missing fields preserve weekly summaries without pretending they have known empty days", async () => {
+  for (const details of ["{broken", '{"days":[]}', "null", "123"]) await fixture((source, target) => {
+    seedArchives(source); source.prepare("UPDATE nutrition_archive_weeks SET days_json=?,start_date='invalid',saved_at='' WHERE id='archive-a'").run(details);
+    const { ledger } = stage(source, target), client = ledger.loadClientDraftIds().clients.get(JSON.stringify([context.accountScope, "a"]))!;
+    const week = ledger.loadNutritionDraftArchiveWeeks(client).find((w) => w.startDate === null)!;
+    assert.equal(week.detailShape, "UNSUPPORTED"); assert.equal(week.sourceSavedAt, null); assert.equal(week.days.length, 0);
+    assert.deepEqual(week.aggregates.avg_cal, { state: "VALUE", sourceDecimal: "2222.25" });
+    assert.ok(week.issues.includes("SAVED_TIME_UNKNOWN")); assert.match(receipt(target).source_json as string, /days_json/u);
+  });
+});
+
+test("archive source ownership and duplicate physical keys abort all prior owners", async () => {
+  for (const mode of ["owner", "duplicate"]) await fixture((source, target) => {
+    seedArchives(source); const data = input(source);
+    if (mode === "owner") Object.assign(data.nutrition.tables.nutrition_archive_weeks![0]!, { client_id: "foreign" });
+    else (data.nutrition.tables.nutrition_archive_weeks as unknown[]).push(structuredClone(data.nutrition.tables.nutrition_archive_weeks![0]!));
+    const ledger = prepareCandidateIdentityLedger(target, context, options);
+    assert.throws(() => ledger.stageClientNutrition(data.cards, null, [], [], plans, executions, data.measurements, data.nutrition, allocator()), /OWNER_INVALID|DUPLICATE_SOURCE_KEY/u);
+    for (const name of ["clients", "body_measurements", "food_diary_entries", "r04_nutrition_archive_weeks", "r04_nutrition_ids"]) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${name}`).get()?.n, 0);
+  });
+});
+
+test("archive snapshots are frozen before owner callbacks and source/target mutations block reuse and guarded reads", () => fixture((source, target) => {
+  seedArchives(source); const data = input(source), ledger = prepareCandidateIdentityLedger(target, context, options);
+  ledger.stageClientNutrition(data.cards, null, [], [], plans, executions, data.measurements, data.nutrition, allocator(), (phase) => {
+    if (phase === "after-ids") Object.assign(data.nutrition.tables.nutrition_archive_weeks![0]!, { days_json: "injected" });
+  });
+  assert.doesNotMatch(receipt(target).source_json as string, /injected/u);
+  source.exec("UPDATE nutrition_archive_weeks SET label='changed'"); const changed = input(source);
+  assert.throws(() => ledger.stageClientNutrition(changed.cards, null, [], [], plans, executions, changed.measurements, changed.nutrition, allocator()), /PARITY_MISMATCH/u);
+  const client = ledger.loadClientDraftIds().clients.get(JSON.stringify([context.accountScope, "a"]))!;
+  target.exec("UPDATE r04_nutrition_archive_weeks SET payload_json=json_set(payload_json,'$.label','modified')");
+  assert.throws(() => ledger.loadNutritionDraftArchiveWeeks(client), /PARITY_MISMATCH/u);
+}));
+
+test("archive day ID collisions escape JSON handling and roll back the full job", () => fixture((source, target) => {
+  seedArchives(source); const data = input(source), ledger = prepareCandidateIdentityLedger(target, context, options), next = allocator(); let injected = false;
+  assert.throws(() => ledger.stageClientNutrition(data.cards, null, [], [], plans, executions, data.measurements, data.nutrition, () => {
+    const week = target.prepare("SELECT target_id FROM r04_nutrition_ids WHERE kind='ARCHIVE_WEEK' LIMIT 1").get();
+    if (week && !injected) { injected = true; return week.target_id as string; } return next();
+  }), /IDENTITY_COLLISION/u);
+  assert.equal(injected, true);
+  for (const name of ["clients", "body_measurements", "food_diary_entries", "r04_nutrition_archive_weeks", "r04_nutrition_ids"]) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${name}`).get()?.n, 0);
 }));

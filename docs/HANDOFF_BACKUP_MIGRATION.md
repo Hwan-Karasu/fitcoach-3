@@ -1,4 +1,34 @@
-## Продолжение — параметры калькулятора, база 800ebb1
+## Продолжение — исторические недельные снимки питания, база b048d05
+
+2026-10-24 R04→R03/Product49.5/49.14–24/49–50/53–56/INT03–12/15.
+Входы frozen nutrition_archive_weeks/client IDmap/priorowners; productionDDL/
+migration/overlay/signing/release OPEN. Synthetic/finalizable:false only.
+LegacyNutritionArchive сохраняет physicalweek +day arraypositions со stableUUIDs,
+ABSENT/UNKNOWN/VALUE/UNSUPPORTED, sourceDecimal tokens без округления. Даты/период/
+saved_at отдельно, unknown даты null, raw/extras retained. '{}' legacy sentinel
+отдельно от array/badJSON/absence. Дубли дат/неверные элементы сохраняют IDs/issues.
+Архивные наблюдения не создают Measurement/FoodDiary/Workout/Calendar/Credit.
+Overlap IDs/current source store presence отмечены, no merge/last-write-wins/суммы.
+
+Private r04_nutrition_archive_weeks с FK/sourcekey/payloadJson входит в IDs/receipt/
+fulltableparity. NutritionV3/projectionVersion3 rejectolderprivatejobs/no rebuild.
+loadNutritionDraftArchiveWeeks(mappedClient) guarded/client-scoped, unknownclient
+blocked. IDcollision вне JSONcatch abortall. Native D01/prodDDL не менялись.
+ARCHIVE_PRODUCTION_STORAGE_REQUIRED всегдаявен: обычный 3.x backup НЕ покрывает
+архивы; прежний proof отдельноограничен nativeD01 facts, archivefixture=0.
+
+601/601 area+deps,8new/30Nutrition tests. Все boundaries с3archives+2calcprofiles,
+rollbackallowners/IDs/retry; crossownerreceipt failure с5facts/3components/weight/
+food/calc/archive; retry без новых Workout. Readonly/reopen/reorder/bytes/IDsreuse
+включает archive guardedreads. Root/mobileTS/scopedlint/source73/secrets/arch/diff
+pass; no fullsuite/bundle/APK/native/phone. Source2.0/personaldata/concurrentUI untouched.
+[Контракт и источники](spikes/R04_NUTRITION_ARCHIVE_STAGING.md).
+
+NEXT productionrepresentations/review/provenance retention inclarchive +normal3.x
+backup/restore; Calendar/Ledger/otherowners/fullparity/appSQLite+JSONlegacyrestore/
+Android/removalproof. Goal ACTIVE/fullscope/NOT100%.
+
+## Предыдущее продолжение — параметры калькулятора, база 800ebb1
 
 2026-10-24, R04→R03/Product49.8–12/49–50/53–56/INT03–12. Frozen
 client_kbju_state + priorowners/IDmap/existingNutrition baseline; productionDDL/
