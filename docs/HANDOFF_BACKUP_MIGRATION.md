@@ -35,6 +35,10 @@ Root/mobileTS/scopedlint/source73/secrets/arch/diff pass. No fullsuite/bundle/AP
 native/phone/personaldata. ConcurrentUI/theme/packagehunks preserved.
 [Контракт/источники/границы](spikes/R04_CALENDAR_STAGING.md).
 
+Code/test registrations/docs вошли в общий checkpoint6d84461, созданный параллельной
+UI-работой. Текущий R04 commit добавляет final evidence/memory, не переписывает
+чужой checkpoint. Последний targeted12/12 после table/view guard тоже PASS.
+
 NEXT whole-sourcecoverage/preferences/lineage/retention/Executionstorage, portable
 mobile source+JSONrawtoken adapters (Node-onlyhoststaging isnotExpoimporter), schema
 admission/composition/UI/deletion/ordinarybackup/Android/fullparity/legacySQLite+JSON

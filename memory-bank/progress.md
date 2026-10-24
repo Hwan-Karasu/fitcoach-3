@@ -31,26 +31,27 @@ coversnativeNutrition+Measurementrows/IDs, NOTprivateprovenance/review/archives.
 
 522369a privatearchives: stableIDs/exactdecimals/dateprecision/raw/overlap/NutritionV3.
 
-CURRENT retained3.x history: NutritionHistorySnapshot/Port in appdomain; Legacy
-parser depends on model, runtime neverimportsparser. SqliteNutritionHistoryReader
-onlynormalizedtables/SHA+shape+identity+scope, badrows skip+fixedReadIssues notice
-(noPII/codes), validneighborsreadable. Host-only NutritionHistoryStorageCandidate
-DDL/ownerledger1 notregisteredproduction. Sources metadata hashes/format/time only;
-week client-owned snapshot+fullrawrow+review+hashes/FK/identity/immutableUPDATE.
-Copy needs validatedstaging/context/callertransaction/same-file-guard; rollbacknative+history/retry/
-replaybyteidentity. Deletionparticipant prepared/tested includesbadrows/Aisolation,
-no rawA in globalsources; NOTregisteredfullclientdeleteworkflow yet.
-606/606 area+deps;5new/35Nutritiontests. Sourcefixture->R04->candidate3.x native+history
-->actualSnapshotEngine seal/validate .atbackup->restore->normalreader preserves IDs/
-values/raw/review/native rows, live/externalbytes unchanged/no r04tables. Fresh Worker
-isolate testedresolvehook blocks scripts/r04/Legacy imports; normalreader identical.
-NOTwholeAPK proof. Root/mobileTS/scopedlint/source73/secrets/arch/diff pass. No fullsuite/
-bundle/APK/native/phone/personaldata. Contract R04_NUTRITION_HISTORY_STORAGE_CANDIDATE.md.
-IMPORTANT currentproduction backup rejectscandidateDB; explicitcandidateengine owner
-only. ProductionDDL/admission/composition/UI/deletion/native gates OPEN/finalizable:false.
+3c4d019 retainedNutrition domain/reader/candidatebackup/isolate proof, notproduction.
 
-NEXT Calendar/Ledger/otherowners, unsupportedrecipes/manual/bodyinputreviewstorage,
-provenance; productionhistoryadmission/movepermanentowner outsideimporter/upgradechecks/
-ordinarybackup/runtimeUI/deletion/Android. Fullparity/appSQLite+JSONlegacyrestore/
-release-removalproof. Catalog/phase1archives/templateextras/orphans/preferences/lineage
-and backupclock/DST/SAFgap/copydeletekill/ENOSPC/providers/OS/first-run OPEN. GoalACTIVE.
+CURRENT Calendar/code6d84461 (R04_CALENDAR_STAGING.md): fullcalendarrows/Calendar-ownedsettings;
+unknownshape/view blocked. CalendarV1 requiresNutritionV3/allpriorowners; frozen/shared
+tx/IDs/sourceSHA/manifestSHA/fullCalendar+Accountingparity/guards. Enums->standardseed
+IDs/all4new3.xdefaults, oldtype labels snapshots. ActiveSCHEDULED/outcomeNULL evenpast;
+softdelete hiddenCANCELLED/outcomeNULL/sourceDeleteTime+basis NOTconfirmedcancelled.
+No Workout/datejoin. ExactclientID/guestnotnamejoin. End22inclusive->23:00/Sunday0->
+Mondaybits/truehourflags DUTY-BLOCKED, false nofact. Overlaps retained/midnightendvalid;
+overnight/statusbilling/orphans/unknownforms rawreview/no guessing. Longtext/durations
+beyondeditor keptnative+review. NewAccountingUNTRACKED, no paidfacts. Unexpectedfinance
+source tables blockevenempty. Personalnewcatalogpolicy1/importedbypass1 preventsold
+retrocharge afterFITCOACH/newpack5/explicitoutcome. No duplicatecatalogtypes oninit.
+669/669 area+deps/12newCalendar/latest57combinedExecution. Allboundaries+beforecommit
+rollback/retry including5facts/3components/notes/weight/nutrition/calc/archive/calendar.
+Readonly/reopen/reorder/bytes/IDsreuse/drift. Nativefacts->normal3.xDB->.atbackup->restore
+->normalCalendar/Accounting repos. NOTprivateprovenance/unsupportedrows/client_name
+backup. Root/mobileTS/scopedlint/source73/secrets/arch/diff pass; no fullsuite/bundle/
+APK/native/phone/personaldata/concurrentUI. finalizable:false/productiongatesOPEN.
+
+NEXT fullsourcecoverage/prefs/lineage/permanentExecution/review/provenance retention;
+portablemobile source/exactJSONnumber adapters (Nodehost isnotExpoimporter), schema
+admission/composition/UI/deletion/ordinarybackup/fullparity/appSQLite+JSONlegacyrestore/
+Android/release-removalproof. Keepallpriorbackup edgecases OPEN. GoalACTIVE/not100%.

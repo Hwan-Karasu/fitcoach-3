@@ -120,4 +120,10 @@ Production gates OPEN, finalizable:false; ни весь перенос, ни APK
 669/669 area+deps: R04 Plans и все предыдущие владельцы, measurements projection/
 preflight, SQLite backup, Nutrition, Calendar и Accounting stores. Root/mobile
 TypeScript, scoped ESLint, source73/secrets/arch/diff pass. Full foundation, bundle,
-APK/Android/phone не запускались. Параллельные UI/theme изменения не включались.
+APK/Android/phone не запускались. UI/theme относятся к параллельной работе.
+
+Код и регистрация тестов уже сохранены общим рабочим checkpoint `6d84461`, который
+создан параллельной UI-работой в том же worktree. Здесь не выполнялся откат/перезапись
+этого общего коммита. После последней проверки physical table/view discriminator
+дополнительно прошли 12/12 Calendar tests; итоговая память и evidence фиксируются
+отдельным R04 коммитом. Schema/runtime/production gates остаются OPEN.
