@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -16,6 +16,7 @@ import { legacyExecutionDate, mergeLegacyExecutionDates } from "./r04/LegacyExec
 import { readLegacyMeasurementsSnapshotInSnapshot } from "./r04/LegacyMeasurementSourceReader.ts";
 import { readLegacyNutritionInSnapshot } from "./r04/LegacyNutritionSourceReader.ts";
 import { readLegacyCalendarSnapshot } from "./r04/LegacyCalendarSnapshot.ts";
+import { readLegacyTrainingSnapshots } from "../apps/mobile/src/features/legacy-import/data/LegacySqliteSource.ts";
 
 const context = { sourceSha256: "f".repeat(64), accountScope: "execution-synthetic", sourceWorkspaceId: "source-workspace", targetWorkspaceId: "local-trainer" };
 const date0 = "2026-03-01T12:00:00.000Z", date1 = "2026-03-08T12:00:00.000Z", imported = "2026-05-01T10:00:00Z";
@@ -120,6 +121,27 @@ const ownTables = ["clients", "questionnaire_versions", "questionnaire_answers",
   "r04_exercise_ids", "r04_exercise_registry", "exercise_overlay", "r04_exercise_links", "r04_exercise_receipt", "r04_plan_ids", "r04_plan_source", "r04_plan_receipt",
   "training_programs", "training_program_members", "training_mesocycles", "training_weeks", "training_workouts", "training_planned_exercises", "training_planned_sets", "training_simple_overrides", "training_templates",
   "r04_execution_ids", "r04_execution_sessions", "r04_execution_facts", "r04_execution_segments", "r04_execution_representations", "r04_execution_contexts", "r04_execution_receipt"];
+
+test("mobile plans/execution snapshots keep canonical facts and IDs through staging rollback, retry and replay", () => fixture(async (source, target) => {
+  const expected = read(source), inspection = new DatabaseSync(":memory:"); seed(inspection);
+  const mobile = await readLegacyTrainingSnapshots(async () => ({
+    getAllAsync: async <Row>(sql: string, ...bindings: unknown[]): Promise<Row[]> => inspection.prepare(sql).all(...bindings as SQLInputValue[]) as Row[],
+    execAsync: async (sql: string) => { inspection.exec(sql); }, closeAsync: async () => { inspection.close(); },
+  }), context.accountScope);
+  assert.deepEqual(mobile, { plans: expected.plans, executions: expected.executions });
+  const ledger = prepareCandidateIdentityLedger(target, context, options);
+  type Checkpoint = Parameters<typeof ledger.stageClientExecutions>[7];
+  const run = (allocate = allocator(), checkpoint?: Checkpoint) => ledger.stageClientExecutions(expected.cards, null, expected.catalog, expected.refs, mobile.plans, mobile.executions, allocate, checkpoint);
+  assert.throws(() => run(allocator(), (point) => { if (point === "after-execution-receipt") throw new Error("INTERRUPTED_AFTER_ASYNC_TRAINING"); }), /WRITE_FAILED/u);
+  for (const table of ownTables) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n, 0, table);
+  run(); const facts = ledger.loadExecutionDraftFacts(), contexts = ledger.loadExecutionDraftContexts();
+  const receipt = { ...target.prepare("SELECT * FROM r04_execution_receipt").get()! };
+  assert.equal(facts.length, 5); assert.ok(contexts.length > 0);
+  run(() => assert.fail("replay must reuse existing IDs"));
+  assert.deepEqual(ledger.loadExecutionDraftFacts(), facts); assert.deepEqual(ledger.loadExecutionDraftContexts(), contexts);
+  assert.deepEqual({ ...target.prepare("SELECT * FROM r04_execution_receipt").get()! }, receipt);
+  assert.deepEqual(target.prepare("PRAGMA foreign_key_check").all(), []);
+}));
 
 test("nutrition/calendar receipt failures roll back all nonempty owners and clean retry adds no new workout or credit", async () => {
   for (const failurePoint of ["after-nutrition-receipt", "after-calendar-receipt"]) await fixture((source, target) => {

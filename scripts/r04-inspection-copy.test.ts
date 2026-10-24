@@ -189,5 +189,7 @@ test("actual Expo file driver awaits asynchronous copy and rename before opening
   const privateFile = join(f.dir, "mock-app-documents", "legacy-source-copies", operation, "source.sqlite");
   assert.equal(actual.calls.at(-1)!.file, privateFile); assert.notEqual(privateFile, f.source);
   assert.equal(actual.result.snapshots.measurements.clientDays![0]!.weight, "80.1");
+  assert.deepEqual(actual.result.snapshots.plans.tables.training_programs, []);
+  assert.deepEqual(actual.result.snapshots.executions.tables.training_exercise_history, []);
   assert.deepEqual({ sha256: actual.result.receipt.sha256, bytes: actual.result.receipt.bytes }, digest(f.source));
 }));

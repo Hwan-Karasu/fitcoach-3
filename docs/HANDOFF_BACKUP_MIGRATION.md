@@ -1,3 +1,21 @@
+## Продолжение — portable Plans/Execution source
+
+2026-10-24 R04/R03/Product48.5.7/49–50/53–56/INT03–12, базаe1d7484. Общие mobile
+LegacyTrainingReadPlans/SourceSnapshots: Plans10/Execution6, oldNode readers thin
+wrappers/sharedtablequeryguards. Fullraw/unknown/BLOB/null-empty/deleted/drafts/
+archive/history/logs, mandatory/optional/partialsession/wrongkind/safeSQLnumbers.
+No projection/identity rulechanges. Fileentry afteradmission nowcollects5owners
+inone pinnedtx +postclosedSHA. Metadata fixtures training fullfields, no prodDDL.
+6newsource+1async→staging tests: twoowners/samenames/rawprecision/NULLweight/
+realWALconcurrentwriter/countparity; stage5canonicalfacts/rollbackall/retry/replay
+stableIDs/receipt/noallocator. 441ownerprofile, initial52/20PASS. Root/mobileTS/
+scopedlint/source73/arch534/secrets/diff PASS. No fullfoundation/bundle/APK/phone.
+Lowlevel3domain API preserved; admitted5domain result includesplans/executions.
+[Контракт, доказательства, ограничения](spikes/R04_PORTABLE_TRAINING_SOURCE.md).
+NEXT Client/Catalog/Questionnaire/identity/prefs/lineage/portableprojections-writer/
+permanentstorage/schemaadmission/composition/fullbackup/restore/Android/removalproof.
+Production/native gates OPEN. GoalACTIVE/fullscope/not100%.
+
 ## Продолжение — общий формат/identity/integrity gate
 
 2026-10-24 R04/R03/Product46.6/48.5.7/49–50/53–56/INT03–12, база229e880.

@@ -48,18 +48,19 @@ fullraw/null-empty/xinfo/unsafeSQLnumberREJECT/WALsnapshot/pragmas/readtx/close.
 Copy229e880/R04_INSPECTION_COPY.md: freshslot/privatefile+receipt/sourceSHA guards,
 no sourceSQLite/delete/nooverwrite; ExpoDriver delayedSDKmocks/realhostfiles.
 
-CURRENT R04_SOURCE_ADMISSION.md: common LegacyBackupReadPlans+Inventory. Node
-inspect preliminary/admit strict==mobile. Fileentry mandatory canonical25 gate:
-manifest/fullfields/ids1/INTEGERledger/file-pagebytes/revision/integrity/FK/tables
-BEFOREbusinessrows. Scope fromexactmanifestbinding (notcaller); workspaceBINARY/
-NULL/nontext/JSblank guard; emptyclients->null. ExactJSONtokens/safeSQLnumbers; verifiedDB-ID/revision/backupID/exportTime privateforlineage/notfactdates.
-Gate+3collectors onepinnedtx/postclosedSHA; aggregateerrors noPII. Pinned e116b42
-format/types/revision/validation/binding reviewed; noauth/backend copied.
-10admission+1fileentry+1NodeTx tests; 152targeted/latest20 PASS. Root/mobileTS/
-scopedlint/source73/arch533/secrets/diff PASS. No foundation/bundle/APK/phone.
-Canonical25candidate NOTfullschema/relations/mapping/parity admission.
+Admissione1d7484/R04_SOURCE_ADMISSION.md: canonical25 metadata/ledger/size/revision/
+integrity-FK/exactscope/privateverifiedlineage; 152area, notfullmappingadmission.
 
-NEXT othercollectors/fullcoverage/lineage/permanentExecution-review-provenance/
-mobilewriter/schemaadmission/composition/UI/deletion/fullordinarybackup/
-SQLite+JSON+othersourcevariants/fullrestore/Android/GC/powerloss/removalproof.
+CURRENT R04_PORTABLE_TRAINING_SOURCE.md: mobileTrainingReadPlans sharedbyNode
+Plans10/Execution6/fullrows/rawJSON/unknown/BLOB/null-empty/deleted/drafts/history/
+archives/logs. Commonxinfo/count/safeSQLnumbers/wrongkind/partialsessionguards.
+Identity/projectionrulesunchanged; admittedfileentry now5owners onepinnedtx+SHA.
+Lowlevel3domainAPIkept. 6newsource+1asyncstageproof: WALwriter/ownerisolation/
+rawprecision/nulls/5canonicalfacts/rollbackall/retry/replaystableIDs/noallocator.
+441ownerprofile/initial52/latest20 PASS. Root/mobileTS/scopedlint/source73/arch534/
+secrets/diff PASS. No foundation/bundle/APK/phone/Hermesruntime/prodDDL.
+
+NEXT Client/Catalog/Questionnaire/identity/prefs/lineage/fullcoverage/portable
+projections-writer/permanentExecution-review-provenance/schemaadmission/composition/
+UI/deletion/fullbackup/SQLite+JSON+other2.0/fullrestore/Android/GC/powerloss/removal.
 AllpriorbackupedgecasesOPEN. GoalACTIVE/fullscope/NOT100%.

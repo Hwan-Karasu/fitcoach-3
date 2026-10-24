@@ -33,6 +33,7 @@ function* read(table: string, required: readonly string[], shapeError: string, c
   if (count.length !== 1 || !Number.isSafeInteger(count[0]!.n) || rows.length !== count[0]!.n) return fail(coverageError);
   return rows.map((row) => ({ ...row }));
 }
+export { read as readLegacySourceTable };
 
 const nutritionColumns: Readonly<Record<typeof NUTRITION_SOURCE_TABLES[number], readonly string[]>> = {
   food_products: ["id", "name", "brand", "barcode", "serving_mode", "calories", "protein", "fat", "carbs", "favorite", "created_at", "updated_at"],

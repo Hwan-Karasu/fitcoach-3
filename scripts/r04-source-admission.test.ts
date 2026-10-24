@@ -33,6 +33,8 @@ test("strict file candidate derives account and workspace from matching metadata
   assert.equal(result.admission.sourceDatabaseId, "synthetic-database"); assert.equal(result.admission.sourceDataRevision, 7);
   assert.equal(result.admission.sourceBackupId, "synthetic-backup"); assert.equal(result.admission.sourceCreatedAt, "2026-10-24T12:00:00.000Z");
   assert.equal(result.snapshots.nutrition.accountScope, accountScope); assert.equal(result.snapshots.measurements.clientDays![0]!.weight, "80.1");
+  assert.equal(result.snapshots.plans.accountScope, accountScope); assert.deepEqual(result.snapshots.plans.tables.training_programs, []);
+  assert.equal(result.snapshots.executions.accountScope, accountScope); assert.deepEqual(result.snapshots.executions.tables.training_exercise_history, []);
   assert.equal(JSON.stringify(result.admission.inventory).includes(accountScope), false);
   assert.deepEqual(f.calls.slice(-2), ["ROLLBACK", "CLOSE"]);
 });

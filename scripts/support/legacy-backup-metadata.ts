@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { createLegacyTrainingTables } from "./legacy-training-tables.ts";
 
 /** Synthetic canonical-v25 backup metadata, matching the pinned v2 file contract.
  * These tables are test input only, never a migration or production schema.
@@ -9,14 +10,11 @@ export function seedLegacyBackupMetadata(db: DatabaseSync, accountScope: string)
     CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY);
     CREATE TABLE clients(id TEXT PRIMARY KEY,workspace_id TEXT);
     INSERT INTO clients VALUES('a','synthetic-workspace');
-    CREATE TABLE training_sessions(id TEXT,client_id TEXT);
     CREATE TABLE app_settings(key TEXT,value TEXT,updated_at TEXT);
     CREATE TABLE backup_state(id INTEGER PRIMARY KEY,database_id TEXT,data_revision INTEGER);
     INSERT INTO backup_state VALUES(1,'synthetic-database',7);`);
-  for (const table of ["training_workspaces", "training_programs", "training_weeks", "training_workouts", "training_exercises", "training_set_logs",
-    "training_session_exercises", "training_session_sets", "training_library_programs", "training_library_preferences", "training_program_view_state", "coaching_program_permissions"]) {
-    db.exec(`CREATE TABLE ${table}(id TEXT)`);
-  }
+  createLegacyTrainingTables(db);
+  db.exec("CREATE TABLE coaching_program_permissions(id TEXT)");
   const insert = db.prepare("INSERT INTO schema_migrations VALUES(?)"); for (let version = 1; version <= 25; version++) insert.run(version);
   db.prepare("INSERT INTO account_database_binding VALUES(1,?)").run(accountScope);
   db.prepare("INSERT INTO athlete_backup_manifest VALUES(1,?)").run(JSON.stringify({ type: "manual", formatVersion: 1, schemaVersion: 25,

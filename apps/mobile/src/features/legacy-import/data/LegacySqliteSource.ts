@@ -1,8 +1,9 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 import type { SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
-import type { LegacyDomainSnapshots, LegacySourceRow } from "../domain/LegacySourceSnapshots.ts";
+import type { LegacyDomainSnapshots, LegacyImportSourceSnapshots, LegacySourceRow, LegacyTrainingSnapshots } from "../domain/LegacySourceSnapshots.ts";
 import { legacyCalendarReadPlan, legacyMeasurementsReadPlan, legacyNutritionReadPlan, type LegacySourceReadPlan } from "./LegacySourceReadPlans.ts";
 import { legacyBackupAdmissionPlan } from "./LegacyBackupReadPlans.ts";
+import { legacyExecutionReadPlan, legacyPlansReadPlan } from "./LegacyTrainingReadPlans.ts";
 
 export type NativeLegacySourceDatabase = Pick<SQLiteDatabase, "getAllAsync" | "execAsync" | "closeAsync">;
 
@@ -19,8 +20,17 @@ export async function readLegacyDomainSnapshots(open: () => Promise<NativeLegacy
 export async function readAdmittedLegacyDomainSnapshots(open: () => Promise<NativeLegacySourceDatabase>, fileBytes: number) {
   return withLegacySourceSnapshot(open, async (reader) => {
     const admission = await runLegacyReadPlan(reader, legacyBackupAdmissionPlan(fileBytes));
-    return { admission, snapshots: await collectLegacyDomainSnapshots(reader, admission.accountScope) };
+    const snapshots: LegacyImportSourceSnapshots = { ...await collectLegacyDomainSnapshots(reader, admission.accountScope), ...await collectLegacyTrainingSnapshots(reader, admission.accountScope) };
+    return { admission, snapshots };
   });
+}
+
+export async function readLegacyTrainingSnapshots(open: () => Promise<NativeLegacySourceDatabase>, accountScope: string): Promise<LegacyTrainingSnapshots> {
+  if (!accountScope.trim()) throw new Error("R04_ACCOUNT_SCOPE_REQUIRED");
+  return withLegacySourceSnapshot(open, (reader) => collectLegacyTrainingSnapshots(reader, accountScope));
+}
+async function collectLegacyTrainingSnapshots(reader: Pick<SqliteStatementPort, "all">, accountScope: string): Promise<LegacyTrainingSnapshots> {
+  return { plans: await runLegacyReadPlan(reader, legacyPlansReadPlan(accountScope)), executions: await runLegacyReadPlan(reader, legacyExecutionReadPlan(accountScope)) };
 }
 
 async function collectLegacyDomainSnapshots(reader: Pick<SqliteStatementPort, "all">, accountScope: string): Promise<LegacyDomainSnapshots> {
