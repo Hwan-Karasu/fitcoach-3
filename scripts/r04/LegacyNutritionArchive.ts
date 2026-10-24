@@ -1,7 +1,7 @@
 import type { NutritionRaw as Raw } from "./LegacyNutritionSourceReader.ts";
 import { isExplicitTimestamp } from "./ExactScaledHundredth.ts";
 import { isLocalDate } from "../../apps/mobile/src/features/measurements/domain/MeasurementRules.ts";
-import { nutritionFail } from "./LegacyNutritionValues.ts";
+import { parseSourceJson } from "../../apps/mobile/src/features/legacy-import/domain/SourceJson.ts";
 
 import { ARCHIVE_DAY_METRICS, type ArchiveNumber, type NutritionArchiveDaySnapshot, type NutritionArchiveWeekSnapshot } from "../../apps/mobile/src/features/nutrition/domain/NutritionHistorySnapshot.ts";
 export type { NutritionArchiveDaySnapshot, NutritionArchiveWeekSnapshot } from "../../apps/mobile/src/features/nutrition/domain/NutritionHistorySnapshot.ts";
@@ -50,11 +50,7 @@ export function projectNutritionArchive(row: Raw, sourceKey: string, clientId: s
     let parsed: unknown, readable = false;
     if (typeof row.days_json !== "string") { detailShape = "UNSUPPORTED"; issues.push("DAYS_JSON_UNREADABLE"); }
     else try {
-      parsed = JSON.parse(row.days_json, (_key: string, value: unknown, context?: { source?: string }) => {
-        if (typeof value !== "number") return value;
-        if (typeof context?.source !== "string") return nutritionFail("ARCHIVE_NUMBER_SOURCE_REQUIRED");
-        return new NumberToken(context.source);
-      }) as unknown;
+      parsed = parseSourceJson(row.days_json, (_key, source) => new NumberToken(source));
       readable = true;
     } catch (error) {
       if (!(error instanceof SyntaxError)) throw error;

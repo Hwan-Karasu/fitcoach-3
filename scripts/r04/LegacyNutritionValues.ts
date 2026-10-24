@@ -1,6 +1,7 @@
 import type { NutritionRaw as Raw } from "./LegacyNutritionSourceReader.ts";
 import type { FoodInput, Nutrients } from "../../apps/mobile/src/features/nutrition/domain/FoodModel.ts";
 import { validateFood } from "../../apps/mobile/src/features/nutrition/domain/FoodRules.ts";
+import { parseSourceJson } from "../../apps/mobile/src/features/legacy-import/domain/SourceJson.ts";
 
 export function nutritionFail(code: string): never { throw new Error(`R04_ID_LEDGER_NUTRITION_${code}`); }
 export const nutritionObject = (v: unknown): Raw => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Raw : nutritionFail("OBJECT_INVALID");
@@ -10,10 +11,7 @@ const keys = new Set<string>([...nutritionMacros, "grams", "pieceCount", "gramsP
 /** JSON source tokens remain exact even when JSON.parse would round a number. */
 export function nutritionJson(value: unknown): unknown {
   if (typeof value !== "string") return nutritionFail("JSON_INVALID");
-  try { return JSON.parse(value, (key: string, parsed: unknown, context?: { source?: string }): unknown => {
-    if (typeof parsed !== "number" || !keys.has(key)) return parsed;
-    return typeof context?.source === "string" ? context.source : nutritionFail("NUMERIC_SOURCE_UNAVAILABLE");
-  }) as unknown; } catch (error) {
+  try { return parseSourceJson(value, (key, source) => keys.has(key) ? source : Number(source)); } catch (error) {
     if (error instanceof Error && error.message.startsWith("R04_")) throw error;
     return nutritionFail("JSON_INVALID");
   }

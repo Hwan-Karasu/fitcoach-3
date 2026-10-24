@@ -2,6 +2,7 @@ import type { CandidateIdentityContext } from "./CandidateIdentityLedger.ts";
 import { LEGACY_CALENDAR_COLUMNS, type CalendarRaw, type LegacyCalendarSnapshot } from "./LegacyCalendarSnapshot.ts";
 import { isExplicitTimestamp } from "./ExactScaledHundredth.ts";
 import { isLocalDate, overlaps } from "../../apps/mobile/src/features/calendar/domain/CalendarRules.ts";
+import { parseSourceJson } from "../../apps/mobile/src/features/legacy-import/domain/SourceJson.ts";
 
 export type CalendarIdentityKind = "SESSION_TYPE" | "APPOINTMENT" | "INTERVAL";
 export type CalendarRow = Record<string, string | number | null>;
@@ -18,11 +19,8 @@ function minute(value: unknown): number {
 }
 function json(value: unknown): CalendarRaw {
   if (typeof value !== "string") return issue("PLANNER_JSON_UNSUPPORTED");
-  try { return object(JSON.parse(value, (_key: string, item: unknown, context?: { source?: string }) => {
-    if (typeof item !== "number") return item;
-    if (typeof context?.source !== "string") return fail("NUMERIC_SOURCE_UNAVAILABLE");
-    return new NumericToken(context.source);
-  }) as unknown); } catch (error) { if (error instanceof SyntaxError) return issue("PLANNER_JSON_UNREADABLE"); throw error; }
+  try { return object(parseSourceJson(value, (_key, source) => new NumericToken(source))); }
+  catch (error) { if (error instanceof SyntaxError) return issue("PLANNER_JSON_UNREADABLE"); throw error; }
 }
 function jsonInteger(value: unknown, min: number, max: number): number {
   if (!(value instanceof NumericToken) || !/^(?:0|[1-9]\d*)(?:\.0+)?$/u.test(value.text)) return issue("PLANNER_NUMBER_UNSUPPORTED");

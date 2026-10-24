@@ -1,3 +1,22 @@
+## Продолжение — переносимый разбор точных чисел JSON
+
+2026-10-24 R04/R03, Product48.5.7/49–50/53–56/INT03–12. Убрана Node-only зависимость
+четырёх проекций от reviver context.source: pinned Hermes source передаёт key/value
+без context. Pure mobile `features/legacy-import/domain/SourceJson.ts` сохраняет
+исходные числовые токены; native JSON проверяет грамматику, теги без коллизий,
+фиксированные SyntaxError без PII, без новых dependencies/глобальных патчей.
+Execution metrics/Nutrition/archive days/Calendar используют общий код. 8 новых
+тестов, 1000-document differential corpus, fresh Worker без третьего аргумента;
+все четыре проекции дают прежний результат, длинная дробь не становится целым.
+677/677 area+deps, последние43/43 после stronger normal-reader import-removal guard.
+Guard теперь запрещает также `/features/legacy-import/`, его активность проверена.
+Root/mobile TS/scopedlint/source73/arch525/secrets/diff PASS, hermesc HBC compile PASS.
+Compiler не умеет `-exec`; это НЕ Hermes runtime/Android/full import proof.
+Новая граница не подключена к composition/БД; production/native gates OPEN.
+[Источники, механизм, проверки и ограничения](spikes/R04_PORTABLE_SOURCE_JSON.md).
+NEXT portableSQL/source adapters/fullcoverage/permanentExecution+provenance/review/
+schemaadmission/composition/ordinarybackup/Android/fulllegacyrestore/removalproof.
+
 ## Рабочая копия R04
 
 С 2026-10-24 дальнейшая работа этого goal ведётся в
