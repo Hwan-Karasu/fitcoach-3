@@ -1,5 +1,8 @@
 # R04: исторические недельные снимки питания
 
+Продолжение: [самостоятельная модель 3.x и candidate storage/backup proof](R04_NUTRITION_HISTORY_STORAGE_CANDIDATE.md).
+Production admission и подключение остаются OPEN; ниже исходный private staging.
+
 2026-10-24, база b048d05. R04→R03; Product §§49.5, 49.14–49.24,
 49–50, 53–56; INT-03–12/15. Входы: frozen полные nutrition_archive_weeks,
 проверенная client ID map, snapshots Nutrition/Measurements и все предыдущие

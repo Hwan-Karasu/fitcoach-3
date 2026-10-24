@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DatabaseSync } from "node:sqlite";
+import { backup as sqliteBackup, DatabaseSync } from "node:sqlite";
+import { Worker } from "node:worker_threads";
+import { pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
@@ -22,6 +24,14 @@ import { DevNutritionCalcRepository } from "../apps/mobile/src/features/nutritio
 import { summarizeDay } from "../apps/mobile/src/features/nutrition/domain/DiaryRules.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
 import { createSqliteBackup, prepareBackupForRestore } from "./r06/SqliteBackup.ts";
+import { SqliteSnapshotEngine } from "../apps/mobile/src/features/backup/data/SqliteSnapshotEngine.ts";
+import { PRODUCTION_IDENTITY } from "../apps/mobile/src/app/composition/productionDatabase.ts";
+import { SCHEMA_OWNERS } from "../apps/mobile/src/app/composition/schema.ts";
+import { runMigrationsInTransaction } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
+import { nodeSnapshotSql } from "./r06/NodeSnapshotSql.ts";
+import { NUTRITION_HISTORY_CANDIDATE_OWNER, copyNutritionHistoryCandidate } from "./r04/NutritionHistoryStorageCandidate.ts";
+import { nutritionHistoryClientDeletionParticipant, SqliteNutritionHistoryReader } from "../apps/mobile/src/features/nutrition/data/SqliteNutritionHistoryReader.ts";
+import { clearReadIssues, readIssueCount } from "../apps/mobile/src/shared/diagnostics/ReadIssues.ts";
 
 const context = { sourceSha256: "d".repeat(64), accountScope: "nutrition-synthetic", sourceWorkspaceId: "source-workspace", targetWorkspaceId: "local-trainer" };
 const time = "2026-03-01T12:00:00.000Z", imported = "2026-10-24T10:00:00.000Z", day = "2026-03-01";
@@ -83,6 +93,19 @@ function removeFixtureDirectory(dir: string, prefix: string) {
   rmSync(resolved, { recursive: true, force: true });
 }
 const receipt = (db: DatabaseSync) => db.prepare("SELECT * FROM r04_nutrition_receipt").get()!;
+const historySchema = { identity: PRODUCTION_IDENTITY, owners: [...SCHEMA_OWNERS, NUTRITION_HISTORY_CANDIDATE_OWNER] };
+async function historyCandidate(path = ":memory:") {
+  const db = new DatabaseSync(path);
+  const wrapper = new SharedSqliteDatabase(async () => ({ ...nodeSqlitePort(db), close: async () => undefined }));
+  await prepareProductionDatabase(wrapper);
+  await nodeSnapshotSql(db).transaction((tx) => runMigrationsInTransaction(tx, NUTRITION_HISTORY_CANDIDATE_OWNER.chain, NUTRITION_HISTORY_CANDIDATE_OWNER.ledger));
+  return db;
+}
+function copyNativeRows(staging: DatabaseSync, target: DatabaseSync) {
+  for (const name of ["clients", "body_measurements", ...nutritionNativeTables]) for (const row of staging.prepare(`SELECT * FROM ${name}`).all()) {
+    const keys = Object.keys(row); target.prepare(`INSERT INTO ${name}(${keys.join(",")}) VALUES(${keys.map(() => "?").join(",")})`).run(...Object.values(row));
+  }
+}
 
 test("nutrition stages real D01 food/recipe/diary/water/daily fields without catalog rewrites or double-counting recipe ingredients", () => fixture((source, target) => {
   const { result, ledger } = stage(source, target);
@@ -493,4 +516,132 @@ test("archive day ID collisions escape JSON handling and roll back the full job"
   }), /IDENTITY_COLLISION/u);
   assert.equal(injected, true);
   for (const name of ["clients", "body_measurements", "food_diary_entries", "r04_nutrition_archive_weeks", "r04_nutrition_ids"]) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${name}`).get()?.n, 0);
+}));
+
+test("candidate 3.x history survives the actual snapshot engine and a fresh reader isolate that blocks all 2.0 parser imports", () => fixture(async (source, staging) => {
+  seedArchives(source); seedCalculator(source); const { ledger } = stage(source, staging);
+  const client = ledger.loadClientDraftIds().clients.get(JSON.stringify([context.accountScope, "a"]))!;
+  const expected = ledger.loadNutritionDraftArchiveWeeks(client), dir = mkdtempSync(join(tmpdir(), "athlete-r04-history-candidate-"));
+  const live = join(dir, "live.db"), copy = join(dir, "history.atbackup"), restored = join(dir, "restored.db");
+  let db: DatabaseSync | null = null;
+  try {
+    db = await historyCandidate(live); db.exec("BEGIN IMMEDIATE"); copyNativeRows(staging, db);
+    assert.equal(copyNutritionHistoryCandidate(staging, db, context, imported).historyRows, 3); db.exec("COMMIT");
+    const before = readFileSync(live);
+    db.exec("BEGIN IMMEDIATE"); copyNutritionHistoryCandidate(staging, db, context, imported); db.exec("COMMIT"); assert.deepEqual(readFileSync(live), before);
+    // Admission remains explicit: the present production catalog rejects this proposed extension.
+    await assert.rejects(createSqliteBackup(db, join(dir, "forbidden.partial"), join(dir, "forbidden.atbackup"), { backupId: "77777777-7777-4777-8777-777777777777", createdAt: imported }), { code: "SNAPSHOT_INVALID" });
+    await sqliteBackup(db, copy); assert.deepEqual(readFileSync(live), before); db.close(); db = null;
+    const engine = new SqliteSnapshotEngine(historySchema); db = new DatabaseSync(copy);
+    const manifest = await engine.sealSnapshot(nodeSnapshotSql(db), { backupId: "77777777-7777-4777-8777-777777777777", createdAt: imported });
+    assert.deepEqual(await engine.validateSnapshot(nodeSnapshotSql(db)), manifest); db.close(); db = null;
+    const backupBytes = readFileSync(copy); db = new DatabaseSync(copy, { readOnly: true }); await sqliteBackup(db, restored); db.close(); db = null;
+    db = new DatabaseSync(restored); assert.deepEqual(await engine.stageSnapshot(nodeSnapshotSql(db)), manifest);
+    assert.deepEqual(readFileSync(copy), backupBytes);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM sqlite_schema WHERE name GLOB 'r04_*'").get()?.n, 0);
+    for (const table of ["clients", "body_measurements", ...nutritionNativeTables]) {
+      const rows = (sql: DatabaseSync) => sql.prepare(`SELECT * FROM ${table}`).all().map((r) => JSON.stringify({ ...r })).sort();
+      assert.deepEqual(rows(db), rows(staging), table);
+    }
+    const read = new SqliteNutritionHistoryReader(nodeSqlitePort(db), context.targetWorkspaceId), retained = await read.listWeeks(client);
+    assert.deepEqual(retained.map((row) => row.snapshot), expected); assert.ok(retained.every((row) => row.provenance.sourceDigest === context.sourceSha256));
+    const archiveRows = db.prepare("SELECT source_row_json,source_row_sha256,review_json FROM nutrition_history_weeks").all();
+    assert.equal(archiveRows.length, 3); for (const row of archiveRows) assert.equal(createHash("sha256").update(row.source_row_json as string).digest("hex"), row.source_row_sha256);
+    db.close(); db = null;
+    const readerUrl = pathToFileURL(resolve("apps/mobile/src/features/nutrition/data/SqliteNutritionHistoryReader.ts")).href;
+    const importerUrl = pathToFileURL(resolve("scripts/r04/LegacyNutritionArchive.ts")).href;
+    const worker = `import {DatabaseSync} from 'node:sqlite';import {parentPort,workerData} from 'node:worker_threads';import {registerHooks} from 'node:module';
+      const loaded=[];registerHooks({resolve(specifier,context,next){const found=next(specifier,context);
+        if(found.url.includes('/scripts/r04/')||found.url.includes('/Legacy'))throw Error('IMPORTER_UNAVAILABLE');loaded.push(found.url);return found;}});
+      let blocked=false;try{await import(workerData.importerUrl);}catch(error){blocked=error.message==='IMPORTER_UNAVAILABLE';}
+      if(!blocked)throw Error('IMPORTER_GUARD_INACTIVE');
+      const {SqliteNutritionHistoryReader}=await import(workerData.readerUrl);const db=new DatabaseSync(workerData.restored,{readOnly:true});
+      const port={all:async(sql,args=[])=>db.prepare(sql).all(...args),first:async(sql,args=[])=>db.prepare(sql).get(...args)??null,run:async()=>{throw Error('READ_ONLY')}};
+      try{const result=await new SqliteNutritionHistoryReader(port,workerData.workspace).listWeeks(workerData.client);parentPort.postMessage({result,loaded});}finally{db.close();}`;
+    const fromIsolate = await new Promise<{ result: unknown; loaded: string[] }>((resolveWorker, reject) => {
+      const task = new Worker(new URL(`data:text/javascript,${encodeURIComponent(worker)}`), { execArgv: ["--experimental-strip-types"],
+        workerData: { restored, client, workspace: context.targetWorkspaceId, readerUrl, importerUrl } });
+      let received: { result: unknown; loaded: string[] } | null = null;
+      task.once("message", (value) => { received = value as { result: unknown; loaded: string[] }; });
+      task.once("error", reject); task.once("exit", (code) => {
+        if (code !== 0 || received === null) reject(new Error(`READER_ISOLATE_EXIT_${code}`)); else resolveWorker(received);
+      });
+    });
+    assert.deepEqual(fromIsolate.result, retained); assert.ok(fromIsolate.loaded.includes(readerUrl));
+    assert.ok(fromIsolate.loaded.every((url) => !url.includes("/scripts/r04/") && !url.includes("/Legacy")));
+  } finally { db?.close(); removeFixtureDirectory(dir, "athlete-r04-history-candidate-"); }
+}));
+
+test("candidate history writes roll back together with native facts and preserve all IDs on retry and replay", () => fixture(async (source, staging) => {
+  seedArchives(source); const { ledger } = stage(source, staging), client = ledger.loadClientDraftIds().clients.get(JSON.stringify([context.accountScope, "a"]))!;
+  for (const occurrence of [0, 1, 2, 3]) {
+    const candidate = await historyCandidate();
+    try {
+      candidate.exec("BEGIN IMMEDIATE"); let visited = 0;
+      assert.throws(() => { copyNativeRows(staging, candidate); copyNutritionHistoryCandidate(staging, candidate, context, imported, () => { if (visited++ === occurrence) throw new Error("injected"); }); }, /injected/u);
+      candidate.exec("ROLLBACK");
+      for (const table of ["clients", "body_measurements", "food_diary_entries", "nutrition_history_sources", "nutrition_history_weeks"]) assert.equal(candidate.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n, 0);
+      candidate.exec("BEGIN IMMEDIATE"); copyNativeRows(staging, candidate); copyNutritionHistoryCandidate(staging, candidate, context, imported); candidate.exec("COMMIT");
+      const reader = new SqliteNutritionHistoryReader(nodeSqlitePort(candidate), context.targetWorkspaceId), expected = await reader.listWeeks(client);
+      assert.deepEqual(expected.map((item) => item.snapshot), ledger.loadNutritionDraftArchiveWeeks(client));
+      candidate.exec("BEGIN IMMEDIATE"); copyNutritionHistoryCandidate(staging, candidate, context, imported); candidate.exec("COMMIT");
+      assert.deepEqual(await reader.listWeeks(client), expected);
+      assert.throws(() => candidate.exec("UPDATE nutrition_history_weeks SET source_key='changed'"), /NUTRITION_HISTORY_IMMUTABLE/u);
+      assert.throws(() => candidate.exec("UPDATE nutrition_history_sources SET source_format='changed'"), /NUTRITION_HISTORY_IMMUTABLE/u);
+    } finally { candidate.close(); }
+  }
+}));
+
+test("normal 3.x history reader skips damaged rows and reports one content-free notice while preserving other clients", () => fixture(async (source, staging) => {
+  seedArchives(source); const { ledger } = stage(source, staging), clients = ledger.loadClientDraftIds().clients;
+  const a = clients.get(JSON.stringify([context.accountScope, "a"]))!, b = clients.get(JSON.stringify([context.accountScope, "b"]))!, candidate = await historyCandidate();
+  clearReadIssues();
+  try {
+    candidate.exec("BEGIN IMMEDIATE"); copyNativeRows(staging, candidate); copyNutritionHistoryCandidate(staging, candidate, context, imported); candidate.exec("COMMIT");
+    const original = candidate.prepare("SELECT * FROM nutrition_history_weeks WHERE client_id=? ORDER BY source_key LIMIT 1").get(a)!;
+    for (const [index, mode] of ["snapshot_sha256", "source_row_sha256", "review_sha256", "shape"].entries()) {
+      const row = { ...original, id: `66666666-6666-4666-8666-${String(index).padStart(12, "0")}`, source_key: `${original.source_key as string}:damaged-${index}` };
+      const snapshot = JSON.parse(original.snapshot_json as string); snapshot.id = row.id; snapshot.sourceKey = row.source_key;
+      if (mode === "shape") snapshot.days = "invalid";
+      Object.assign(row, { snapshot_json: JSON.stringify(snapshot), snapshot_sha256: createHash("sha256").update(JSON.stringify(snapshot)).digest("hex") });
+      if (mode !== "shape") Object.assign(row, { [mode!]: "0".repeat(64) });
+      const fields = Object.keys(row); candidate.prepare(`INSERT INTO nutrition_history_weeks(${fields.join(",")}) VALUES(${fields.map(() => "?").join(",")})`).run(...Object.values(row));
+    }
+    const port = nodeSqlitePort(candidate), reader = new SqliteNutritionHistoryReader(port, context.targetWorkspaceId);
+    assert.equal((await reader.listWeeks(a)).length, 2); assert.equal(readIssueCount(), 1); assert.equal((await reader.listWeeks(b)).length, 1);
+    assert.deepEqual(await new SqliteNutritionHistoryReader(port, "foreign-workspace").listWeeks(a), []);
+    assert.equal(await nutritionHistoryClientDeletionParticipant.count(port, context.targetWorkspaceId, a), 6);
+    await nutritionHistoryClientDeletionParticipant.detach(port, "foreign-workspace", a); assert.equal((await reader.listWeeks(a)).length, 2);
+    await nutritionHistoryClientDeletionParticipant.detach(port, context.targetWorkspaceId, a); assert.deepEqual(await reader.listWeeks(a), []);
+    assert.equal((await reader.listWeeks(b)).length, 1);
+    for (const row of candidate.prepare("SELECT source_row_json FROM nutrition_history_weeks").all()) assert.equal(JSON.parse(row.source_row_json as string).client_id, "b");
+    assert.deepEqual(Object.keys(candidate.prepare("SELECT * FROM nutrition_history_sources").get()!).sort(), ["id", "imported_at", "source_digest", "source_format", "workspace_id"]);
+  } finally { clearReadIssues(); candidate.close(); }
+}));
+
+test("candidate export rejects a mismatched source binding and leaves native insertion in the caller's rollback", () => fixture(async (source, staging) => {
+  seedArchives(source); stage(source, staging); const candidate = await historyCandidate();
+  try {
+    assert.throws(() => copyNutritionHistoryCandidate(staging, candidate, context, imported), /ISOLATED_TRANSACTION_REQUIRED/u);
+    candidate.exec("BEGIN IMMEDIATE"); copyNativeRows(staging, candidate);
+    assert.throws(() => copyNutritionHistoryCandidate(staging, candidate, { ...context, sourceSha256: "e".repeat(64) }, imported), /CONTEXT_MISMATCH/u);
+    candidate.exec("ROLLBACK"); assert.equal(candidate.prepare("SELECT count(*) AS n FROM clients").get()?.n, 0);
+    assert.equal(candidate.prepare("SELECT count(*) AS n FROM nutrition_history_sources").get()?.n, 0);
+  } finally { candidate.close(); }
+}));
+
+test("candidate export rejects another connection to the staging file before any mutation", () => fixture(async (source, staging) => {
+  seedArchives(source); stage(source, staging);
+  const dir = mkdtempSync(join(tmpdir(), "athlete-r04-history-isolation-")), file = join(dir, "staging.db");
+  let first: DatabaseSync | null = null, second: DatabaseSync | null = null;
+  try {
+    await sqliteBackup(staging, file); const before = readFileSync(file); first = new DatabaseSync(file); second = new DatabaseSync(file);
+    second.exec("BEGIN IMMEDIATE");
+    assert.throws(() => copyNutritionHistoryCandidate(first!, second!, context, imported), /ISOLATED_TRANSACTION_REQUIRED/u);
+    second.exec("ROLLBACK"); first.close(); first = null; second.close(); second = null;
+    assert.deepEqual(readFileSync(file), before);
+    first = new DatabaseSync(file); second = await historyCandidate(join(dir, "candidate.db"));
+    second.exec("BEGIN IMMEDIATE"); copyNativeRows(first, second); assert.equal(copyNutritionHistoryCandidate(first, second, context, imported).historyRows, 3);
+    second.exec("COMMIT"); first.close(); first = null; second.close(); second = null; assert.deepEqual(readFileSync(file), before);
+  } finally { first?.close(); second?.close(); removeFixtureDirectory(dir, "athlete-r04-history-isolation-"); }
 }));

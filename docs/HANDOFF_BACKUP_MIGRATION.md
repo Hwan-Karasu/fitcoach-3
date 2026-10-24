@@ -1,4 +1,40 @@
-## Продолжение — исторические недельные снимки питания, база b048d05
+## Продолжение — самостоятельный Nutrition history reader/storage candidate, база 522369a
+
+2026-10-24 R04→R03/D01/Product46.6/46.19/49–50/53–56/INT03–12/15.
+Входы validated archive snapshots/receipt/IDmap +nativefacts+SnapshotEngine.
+Production DDL/migration/overlay/signing/release gates OPEN; isolatedcandidate only.
+NutritionHistorySnapshot/Port теперь в обычном domain3.x; Legacy parser использует
+их, обратной зависимости нет. SqliteNutritionHistoryReader читает нормализованные
+3.x history tables, hashes/shape/identity/scope guards, плохие rows skip+существующий
+ReadIssues/DataReadNotice безPII/codes; остальные доступны.
+
+Host-only NutritionHistoryStorageCandidate: source metadata hash/format/time,
+client-owned normalized snapshot+fullrawphysicalrow+review+hashes, FK/identitychecks/
+immutableUPDATE. Никакого общегоrawсданными всехклиентов в source metadata.
+Copy requires sharednative transaction/sourcebinding/parity/IDmap, immutable replay.
+Clientdeletionparticipant prepared/tested сdamagedrows/Aisolation, ещёнеподключён.
+SCHEMA_OWNERS/productionDDL/runtimecomposition не менялись, finalizable:false.
+
+606/606 area+deps,5new/35Nutrition tests. Sourcefixture→R04→candidate3.x(nativefacts+
+history)→actualSnapshotEngine .atbackup seal/validate→restore→normalreader preserves
+IDs/values/raw/review/normalnative rows; no r04tables/liveandexternalbytes unchanged.
+Fresh Worker isolate blocks scripts/r04/Legacy imports via testedresolvehook,
+normalreaderreturns identicaldata. InitialOSsubprocess EPERM replacedbyfreshisolate
+withstrongerimportban, no skippedtest. NOTwholeAPK/importerremoval proof.
+Source/weekfailures rollbacknative+history, retry/replay byteidentity; damagedhash/
+shape skipsafe; Adelete leavesB/rawAabsentglobalsources. Root/mobileTS/scopedlint/
+source73/secrets/arch/diff pass; no fullsuite/bundle/APK/native/phone/personaldata.
+Samephysicalfile черездругоесоединение отвергаетсядозаписи; separatefilepositive
+и неизменность исходника проверены. Latest35/35 послерасширения fixture.
+[Контракт/границы](spikes/R04_NUTRITION_HISTORY_STORAGE_CANDIDATE.md).
+
+IMPORTANT candidateengine usesexplicitowner catalog; currentproduction backup
+rejectscandidateDB bydesign. Ordinaryapp integration/admission/Android stillOPEN.
+NEXT Calendar/Ledger/otherowners, unsupportedrepresentations/review/provenance,
+productionadmission/schemaupgrade/composition/UI/deletion/ordinarybackup,
+fullparity/appSQLite+JSONlegacyrestore/Android/release-removalproof. GoalACTIVE/NOT100%.
+
+## Предыдущее продолжение — исторические недельные снимки питания, база b048d05
 
 2026-10-24 R04→R03/Product49.5/49.14–24/49–50/53–56/INT03–12/15.
 Входы frozen nutrition_archive_weeks/client IDmap/priorowners; productionDDL/

@@ -3,26 +3,9 @@ import { isExplicitTimestamp } from "./ExactScaledHundredth.ts";
 import { isLocalDate } from "../../apps/mobile/src/features/measurements/domain/MeasurementRules.ts";
 import { nutritionFail } from "./LegacyNutritionValues.ts";
 
-export type ArchiveNumber = Readonly<{ state: "ABSENT" | "UNKNOWN" | "UNSUPPORTED" }> | Readonly<{ state: "VALUE"; sourceDecimal: string }>;
-export const ARCHIVE_DAY_METRICS = ["weight", "steps", "calories", "fatPercent", "protein", "fat", "carbs"] as const;
+import { ARCHIVE_DAY_METRICS, type ArchiveNumber, type NutritionArchiveDaySnapshot, type NutritionArchiveWeekSnapshot } from "../../apps/mobile/src/features/nutrition/domain/NutritionHistorySnapshot.ts";
+export type { NutritionArchiveDaySnapshot, NutritionArchiveWeekSnapshot } from "../../apps/mobile/src/features/nutrition/domain/NutritionHistorySnapshot.ts";
 const aggregates = ["avg_weight", "avg_steps", "avg_cal", "avg_fat_percent", "train_days", "protein", "fat", "carbs"] as const;
-export interface NutritionArchiveDaySnapshot {
-  readonly id: string; readonly position: number; readonly localDate: string | null;
-  readonly values: Readonly<Record<typeof ARCHIVE_DAY_METRICS[number], ArchiveNumber>>;
-  readonly training: Readonly<{ state: "ABSENT" | "UNKNOWN" | "UNSUPPORTED" }> | Readonly<{ state: "VALUE"; value: "YES" | "NO" }>;
-  readonly unknownFields: readonly string[]; readonly issues: readonly string[];
-}
-export interface NutritionArchiveWeekSnapshot {
-  readonly version: 1; readonly id: string; readonly clientId: string; readonly sourceKey: string;
-  readonly startDate: string | null; readonly endDate: string | null; readonly label: string | null;
-  readonly sourceSavedAt: string | null;
-  readonly aggregates: Readonly<Record<typeof aggregates[number], ArchiveNumber>>;
-  readonly detailShape: "ARRAY" | "LEGACY_EMPTY_OBJECT" | "ABSENT" | "UNSUPPORTED";
-  readonly days: readonly NutritionArchiveDaySnapshot[]; readonly issues: readonly string[]; readonly unknownFields: readonly string[];
-  readonly overlappingArchiveIds: readonly string[];
-  readonly currentSourceOverlap: readonly Readonly<{ localDate: string; stores: readonly string[] }>[];
-  readonly semantics: "HISTORICAL_SNAPSHOT_NOT_DAILY_FACTS";
-}
 class NumberToken { readonly source: string; constructor(source: string) { this.source = source; } }
 const isObject = (value: unknown): value is Raw => value !== null && typeof value === "object" && !Array.isArray(value) && !(value instanceof NumberToken);
 

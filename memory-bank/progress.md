@@ -29,29 +29,28 @@ Water-only unaccounted; marks notWorkout/Credit. Manual/bodyinputs undated snaps
 notTargets/Measurements, no guesseddate/derivedkcal. Existingnormal3.x backup proof
 coversnativeNutrition+Measurementrows/IDs, NOTprivateprovenance/review/archives.
 
-CURRENT archives: LegacyNutritionArchive physicalweek/dayarrayposition stableUUIDs,
-ABSENT/UNKNOWN/VALUE/UNSUPPORTED/sourceDecimal exactJSONtokens/no D01rounding.
-Dates/period/savedAt unknownNULL/no importdate. Duplicate/invaliddays retainID/position/
-issues; array/default'{}'/missing/badJSON distinct. Unknownfields/fullraw retained.
-No Measurement/FoodDiary/Workout/Calendar/Credit oraverages→7days. OverlapIDs/current
-source-storepresence perclient, no merge/last-write-wins/sum. Alwaysmarked
-ARCHIVE_PRODUCTION_STORAGE_REQUIRED. Private r04_nutrition_archive_weeks FK/client/
-sourcekey/payload, ARCHIVE_WEEK/DAY IDs, sourceSHA/manifestSHA/fullparity/sharedtx/
-frozenbeforepriorcallbacks. NutritionbindingV3/projectionVersion3 rejectsoldjobs/no
-rebuild. loadNutritionDraftArchiveWeeks(mappedclient) guarded/client-scoped. Allocator
-errors escapeJSONcatch. NativeDDL unchanged; normal3.x backup stilldoesNOTcoverarchives.
+522369a privatearchives: stableIDs/exactdecimals/dateprecision/raw/overlap/NutritionV3.
 
-601/601 area+deps (R04Plans/measurementprojection/preflight/SQLitebackup/Nutrition).
-8new/30Nutritiontests. Everyboundary+beforecommit3archives/2profiles rollbackallprior
-owners/IDs/retry; combined5facts/3components/weight/food/calc/archive receiptfailure
-rollback/retry no extraWorkout. Readonly/reopen/reorder/bytes/IDreuse includesarchives.
-Root/mobileTS/scopedlint/source73/secrets/arch/diff pass. No fullsuite/bundle/APK/native/
-phone; real2.0/personaldata/scrcpy/concurrentUI untouched. finalizable:false/goalACTIVE.
-Contract docs/spikes/R04_NUTRITION_ARCHIVE_STAGING.md +handofftop.
+CURRENT retained3.x history: NutritionHistorySnapshot/Port in appdomain; Legacy
+parser depends on model, runtime neverimportsparser. SqliteNutritionHistoryReader
+onlynormalizedtables/SHA+shape+identity+scope, badrows skip+fixedReadIssues notice
+(noPII/codes), validneighborsreadable. Host-only NutritionHistoryStorageCandidate
+DDL/ownerledger1 notregisteredproduction. Sources metadata hashes/format/time only;
+week client-owned snapshot+fullrawrow+review+hashes/FK/identity/immutableUPDATE.
+Copy needs validatedstaging/context/callertransaction/same-file-guard; rollbacknative+history/retry/
+replaybyteidentity. Deletionparticipant prepared/tested includesbadrows/Aisolation,
+no rawA in globalsources; NOTregisteredfullclientdeleteworkflow yet.
+606/606 area+deps;5new/35Nutritiontests. Sourcefixture->R04->candidate3.x native+history
+->actualSnapshotEngine seal/validate .atbackup->restore->normalreader preserves IDs/
+values/raw/review/native rows, live/externalbytes unchanged/no r04tables. Fresh Worker
+isolate testedresolvehook blocks scripts/r04/Legacy imports; normalreader identical.
+NOTwholeAPK proof. Root/mobileTS/scopedlint/source73/secrets/arch/diff pass. No fullsuite/
+bundle/APK/native/phone/personaldata. Contract R04_NUTRITION_HISTORY_STORAGE_CANDIDATE.md.
+IMPORTANT currentproduction backup rejectscandidateDB; explicitcandidateengine owner
+only. ProductionDDL/admission/composition/UI/deletion/native gates OPEN/finalizable:false.
 
-NEXT productionarchive/review/provenance retention +normal3.x backup/restore/UI;
-Calendar/Ledger/otherowners. Recipeversions/rounding/duplicates/unknownactualtotals/
-extrasunits/0steps/manual/bodyinputstorage; Executionstorage/identity/outcomes/precision/
-contexts; fullparity/appSQLite+JSONlegacyrestore/Android/removalproof. Catalog/phase1
-archives/templateextras/variation/orphans/preferences/lineage OPEN. Backupclock/DST/
-SAFgap/copydeletekill/ENOSPC/providers/UI/OS/first-run OPEN. Neverclaim100% fromprivateproofs.
+NEXT Calendar/Ledger/otherowners, unsupportedrecipes/manual/bodyinputreviewstorage,
+provenance; productionhistoryadmission/movepermanentowner outsideimporter/upgradechecks/
+ordinarybackup/runtimeUI/deletion/Android. Fullparity/appSQLite+JSONlegacyrestore/
+release-removalproof. Catalog/phase1archives/templateextras/orphans/preferences/lineage
+and backupclock/DST/SAFgap/copydeletekill/ENOSPC/providers/OS/first-run OPEN. GoalACTIVE.
