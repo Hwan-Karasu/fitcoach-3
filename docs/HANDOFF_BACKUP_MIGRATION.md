@@ -1,3 +1,23 @@
+## Продолжение — мобильные Clients/Catalog/Questionnaire
+
+2026-10-24 R04/R03/Product48.5.7/49–50/53–56/INT03–12, база6bb28b7.
+Общий LegacyProfileReadPlans: full clients/catalog, questionnaire versions/answers/
+templates/change sets; strict shape/count/SQLnumbers/presence и SQLite ordering.
+File entry после admission теперь8owners/one pinnedtx +postclosedSHA.
+Чистые identity/card/profile/catalog/questionnaire projections у владельцев в
+domain/legacy-import; private shared source contracts/value helpers в shared/migration.
+Node wrappers используют этот же код; boundaries не ослаблены. Questionnaire SHA256
+через существующую noble, прежние UTF8 IDs и epochs сохранены. Same-name owners,
+archived/deleted/raw JSON/BLOB не теряются; partial/change-only/view анкета блокируется.
+8newtests: WAL/rowloss/unsafeSQL/Node-free worker/SHA parity/admitted mobile→host
+staging rollbackall/retry/replay/noallocator/zero answer/FK. 449ownerprofile/latest8 PASS.
+Root/mobileTS/scopedlint/source73/arch543/secrets/diff PASS.
+Нет fullfoundation/bundle/APK/phone/nativewriter proof. Synthetic metadata fixtures
+расширены readable client fields/empty catalog, не target DDL.
+[Подробности и оставшийся объём](spikes/R04_PORTABLE_PROFILE_SOURCE.md).
+Portable projections/writer/permanentstorage/schemaadmission/composition/fullbackup/
+SQLite+JSON+other2.0/Android/removal остаются. Production gates OPEN; GoalACTIVE.
+
 ## Продолжение — portable Plans/Execution source
 
 2026-10-24 R04/R03/Product48.5.7/49–50/53–56/INT03–12, базаe1d7484. Общие mobile

@@ -191,5 +191,7 @@ test("actual Expo file driver awaits asynchronous copy and rename before opening
   assert.equal(actual.result.snapshots.measurements.clientDays![0]!.weight, "80.1");
   assert.deepEqual(actual.result.snapshots.plans.tables.training_programs, []);
   assert.deepEqual(actual.result.snapshots.executions.tables.training_exercise_history, []);
+  assert.equal(actual.result.snapshots.clients.rows[0]!.id, "a");
+  assert.deepEqual(actual.result.snapshots.exerciseCatalog.rows, []); assert.equal(actual.result.snapshots.questionnaire, null);
   assert.deepEqual({ sha256: actual.result.receipt.sha256, bytes: actual.result.receipt.bytes }, digest(f.source));
 }));

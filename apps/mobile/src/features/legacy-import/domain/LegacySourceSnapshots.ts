@@ -1,4 +1,5 @@
-export type LegacySourceRow = Readonly<Record<string, unknown>>;
+import type { LegacySourceRow, LegacyClientsSource, LegacyExerciseCatalogSource, LegacyQuestionnaireSource } from "../../../shared/migration/LegacyProfileSources.ts";
+export type { LegacySourceRow, LegacyClientsSource, LegacyExerciseCatalogSource, LegacyQuestionnaireSource } from "../../../shared/migration/LegacyProfileSources.ts";
 
 export const PLAN_SOURCE_TABLES = ["training_programs", "training_weeks", "training_workouts", "training_exercises", "training_set_logs",
   "training_library_programs", "training_workspaces", "training_program_view_state", "training_library_preferences", "training_archive_entries"] as const;
@@ -46,4 +47,9 @@ export interface LegacyDomainSnapshots {
   readonly measurements: LegacyMeasurementsSnapshot;
   readonly calendar: LegacyCalendarSnapshot;
 }
-export interface LegacyImportSourceSnapshots extends LegacyDomainSnapshots, LegacyTrainingSnapshots {}
+export interface LegacyProfileSnapshots {
+  readonly clients: LegacyClientsSource;
+  readonly exerciseCatalog: LegacyExerciseCatalogSource;
+  readonly questionnaire: LegacyQuestionnaireSource | null;
+}
+export interface LegacyImportSourceSnapshots extends LegacyDomainSnapshots, LegacyTrainingSnapshots, LegacyProfileSnapshots {}

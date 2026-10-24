@@ -9,8 +9,4 @@ export function exactNonnegativeHundredth(value: unknown): number | null {
   return scaled <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(scaled) : null;
 }
 
-export function isExplicitTimestamp(value: unknown): value is string {
-  return typeof value === "string"
-    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u.test(value)
-    && !Number.isNaN(Date.parse(value));
-}
+export { isExplicitTimestamp } from "../../apps/mobile/src/shared/migration/LegacyValues.ts";

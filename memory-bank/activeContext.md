@@ -46,9 +46,8 @@ notoutcomes/exactclientIDs/4templates/legacybypass1/UNTRACKED/no paidfacts.
 SourceJSON99c318f: R04_PORTABLE_SOURCE_JSON.md exacttokens/no context.source, all4
 projections/twoargWorker/normalreaderimportban; 8newtests. HermesHBCcompileonly.
 
-PortableSQLaad8901/R04_PORTABLE_SQL_SOURCE.md: sharedNode/mobile3domainplans,
-fullraw/null-empty/xinfo/unsafeSQLnumberREJECT/WALsnapshot/pragmas/readtx/close.
-9source+1stageintegration/687area/latest74; source/account/admission pending.
+PortableSQLaad8901/R04_PORTABLE_SQL_SOURCE.md: rawplans/safeSQLnumbers/WAL/close.
+9source+1stageintegration/687area/latest74PASS; admission later e1d7484.
 
 Copy229e880/R04_INSPECTION_COPY.md: freshslot/privatefile+receipt/sourceSHA guards,
 no sourceSQLite/delete/nooverwrite; ExpoDriver delayedSDKmocks/realhostfiles.
@@ -56,16 +55,20 @@ no sourceSQLite/delete/nooverwrite; ExpoDriver delayedSDKmocks/realhostfiles.
 Admissione1d7484/R04_SOURCE_ADMISSION.md: canonical25 metadata/ledger/size/revision/
 integrity-FK/exactscope/privateverifiedlineage; 152area, notfullmappingadmission.
 
-CURRENT R04_PORTABLE_TRAINING_SOURCE.md: mobileTrainingReadPlans sharedbyNode
-Plans10/Execution6/fullrows/rawJSON/unknown/BLOB/null-empty/deleted/drafts/history/
-archives/logs. Commonxinfo/count/safeSQLnumbers/wrongkind/partialsessionguards.
-Identity/projectionrulesunchanged; admittedfileentry now5owners onepinnedtx+SHA.
-Lowlevel3domainAPIkept. 6newsource+1asyncstageproof: WALwriter/ownerisolation/
-rawprecision/nulls/5canonicalfacts/rollbackall/retry/replaystableIDs/noallocator.
-441ownerprofile/initial52/latest20 PASS. Root/mobileTS/scopedlint/source73/arch534/
-secrets/diff PASS. No foundation/bundle/APK/phone/Hermesruntime/prodDDL.
+Training6bb28b7/R04_PORTABLE_TRAINING_SOURCE.md: Plans10/Execution6 sharedraw;
+admitted5owners/441profile/52/20PASS, projections/writer thenhost-only.
 
-NEXT Client/Catalog/Questionnaire/identity/prefs/lineage/fullcoverage/portable
-projections-writer/permanentExecution-review-provenance/schemaadmission/composition/
-UI/deletion/fullbackup/SQLite+JSON+other2.0/fullrestore/Android/GC/powerloss/removal.
-AllpriorbackupedgecasesOPEN. GoalACTIVE/fullscope/NOT100%.
+CURRENT R04_PORTABLE_PROFILE_SOURCE.md: Client/Catalog/Questionnaire fullraw,
+shape/count/safeSQL/order/partial-change-only-view guards. Fileentry8owners one
+pinnedtx+SHA. Pure identity/card/profile/catalog/Q in ownerdomain/legacy-import;
+shared/migration contracts/values. Node wrappers samecode; boundaries unchanged.
+Existingnoble SHA256 keepsUTF8 IDs/epochs; no namejoin/classification invention.
+8newtests raw/BLOB/deletion/WAL/count/SHA/noNodeworker/admittedmobile→hoststage
+rollbackall/retry/replay/noallocator/zeroanswer/FK. 449profile/24focused/latest8 PASS;
+root/mobileTS/scopedlint/source73/arch543/secrets/diff PASS.
+No foundation/bundle/APK/phone/Hermesruntime/nativewriter/prodDDL.
+
+NEXT othercoverage/prefs/lineage/portable Plans-Execution/otherprojections-writer/
+permanentExecution-review-provenance/schemaadmission/composition/UI/deletion/full
+backup/SQLite+JSON+other2.0/fullrestore/Android/GC/powerloss/removal. JSONQprecision
+notproved byrawretention. AllpriorbackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.

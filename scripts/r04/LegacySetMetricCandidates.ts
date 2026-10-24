@@ -1,9 +1,8 @@
-import type { TrackingProfileId } from "../../apps/mobile/src/features/exercises/domain/ExerciseModel.ts";
+import { LEGACY_V2_TRACKING_PROFILE } from "../../apps/mobile/src/shared/migration/LegacyValues.ts";
 import type { SetValues } from "../../apps/mobile/src/features/training/execution/domain/ExecutionModel.ts";
 import { preflightSourceFacts, type LegacySetSource, type SourceFactCandidate } from "./SourceFactPreflight.ts";
 
-/** Owner-confirmed v2 convention: repetitions and working weight in kilograms. */
-export const LEGACY_V2_TRACKING_PROFILE = "LOAD_REPS" satisfies TrackingProfileId;
+export { LEGACY_V2_TRACKING_PROFILE };
 
 export type LegacySetMetricIssue = "MISSING_REPS" | "INVALID_REPS" | "MISSING_WEIGHT" | "INVALID_WEIGHT";
 

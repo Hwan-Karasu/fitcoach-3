@@ -35,6 +35,8 @@ test("strict file candidate derives account and workspace from matching metadata
   assert.equal(result.snapshots.nutrition.accountScope, accountScope); assert.equal(result.snapshots.measurements.clientDays![0]!.weight, "80.1");
   assert.equal(result.snapshots.plans.accountScope, accountScope); assert.deepEqual(result.snapshots.plans.tables.training_programs, []);
   assert.equal(result.snapshots.executions.accountScope, accountScope); assert.deepEqual(result.snapshots.executions.tables.training_exercise_history, []);
+  assert.equal(result.snapshots.clients.accountScope, accountScope); assert.equal(result.snapshots.clients.rows[0]!.id, "a");
+  assert.deepEqual(result.snapshots.exerciseCatalog.rows, []); assert.equal(result.snapshots.questionnaire, null);
   assert.equal(JSON.stringify(result.admission.inventory).includes(accountScope), false);
   assert.deepEqual(f.calls.slice(-2), ["ROLLBACK", "CLOSE"]);
 });
@@ -44,7 +46,7 @@ test("bad binding, metadata versions, migration gaps and ambiguous workspace sto
     ["BINDING_UNVERIFIED", (db) => db.exec("UPDATE account_database_binding SET scope_key='PRIVATE-other-owner'")],
     ["WORKSPACE_AMBIGUOUS", (db) => db.exec("UPDATE clients SET workspace_id=NULL")],
     ["WORKSPACE_AMBIGUOUS", (db) => db.prepare("UPDATE clients SET workspace_id=?").run("\n\u00a0\u2001\ufeff")],
-    ["WORKSPACE_AMBIGUOUS", (db) => db.exec("INSERT INTO clients VALUES('b','PRIVATE-other-workspace')")],
+    ["WORKSPACE_AMBIGUOUS", (db) => db.exec("INSERT INTO clients(id,workspace_id) VALUES('b','PRIVATE-other-workspace')")],
     ["MIGRATION_LEDGER_UNEXPECTED", (db) => db.exec("DELETE FROM schema_migrations WHERE version=4")],
     ["UNSUPPORTED_VERSION", (db) => patchManifest(db, (m) => ({ ...m, schemaVersion: 24 }))],
     ["BACKUP_REVISION_MISMATCH", (db) => db.exec("UPDATE backup_state SET database_id='PRIVATE-other-database'")],

@@ -1,9 +1,10 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 import type { SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
-import type { LegacyDomainSnapshots, LegacyImportSourceSnapshots, LegacySourceRow, LegacyTrainingSnapshots } from "../domain/LegacySourceSnapshots.ts";
+import type { LegacyDomainSnapshots, LegacyImportSourceSnapshots, LegacyProfileSnapshots, LegacySourceRow, LegacyTrainingSnapshots } from "../domain/LegacySourceSnapshots.ts";
 import { legacyCalendarReadPlan, legacyMeasurementsReadPlan, legacyNutritionReadPlan, type LegacySourceReadPlan } from "./LegacySourceReadPlans.ts";
 import { legacyBackupAdmissionPlan } from "./LegacyBackupReadPlans.ts";
 import { legacyExecutionReadPlan, legacyPlansReadPlan } from "./LegacyTrainingReadPlans.ts";
+import { legacyClientsReadPlan, legacyExerciseCatalogReadPlan, legacyQuestionnaireReadPlan } from "./LegacyProfileReadPlans.ts";
 
 export type NativeLegacySourceDatabase = Pick<SQLiteDatabase, "getAllAsync" | "execAsync" | "closeAsync">;
 
@@ -20,9 +21,19 @@ export async function readLegacyDomainSnapshots(open: () => Promise<NativeLegacy
 export async function readAdmittedLegacyDomainSnapshots(open: () => Promise<NativeLegacySourceDatabase>, fileBytes: number) {
   return withLegacySourceSnapshot(open, async (reader) => {
     const admission = await runLegacyReadPlan(reader, legacyBackupAdmissionPlan(fileBytes));
-    const snapshots: LegacyImportSourceSnapshots = { ...await collectLegacyDomainSnapshots(reader, admission.accountScope), ...await collectLegacyTrainingSnapshots(reader, admission.accountScope) };
+    const snapshots: LegacyImportSourceSnapshots = { ...await collectLegacyDomainSnapshots(reader, admission.accountScope), ...await collectLegacyTrainingSnapshots(reader, admission.accountScope), ...await collectLegacyProfileSnapshots(reader, admission.accountScope) };
     return { admission, snapshots };
   });
+}
+
+export async function readLegacyProfileSnapshots(open: () => Promise<NativeLegacySourceDatabase>, accountScope: string): Promise<LegacyProfileSnapshots> {
+  if (!accountScope.trim()) throw new Error("R04_ACCOUNT_SCOPE_REQUIRED");
+  return withLegacySourceSnapshot(open, (reader) => collectLegacyProfileSnapshots(reader, accountScope));
+}
+async function collectLegacyProfileSnapshots(reader: Pick<SqliteStatementPort, "all">, accountScope: string): Promise<LegacyProfileSnapshots> {
+  return { clients: await runLegacyReadPlan(reader, legacyClientsReadPlan(accountScope)),
+    exerciseCatalog: await runLegacyReadPlan(reader, legacyExerciseCatalogReadPlan(accountScope)),
+    questionnaire: await runLegacyReadPlan(reader, legacyQuestionnaireReadPlan(accountScope)) };
 }
 
 export async function readLegacyTrainingSnapshots(open: () => Promise<NativeLegacySourceDatabase>, accountScope: string): Promise<LegacyTrainingSnapshots> {

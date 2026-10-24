@@ -1,7 +1,8 @@
 # Переходный импорт
 
 Отдельная граница для будущего мобильного импортёра 2.0. Здесь переносимый разбор
-точных чисел JSON, общее чтение Nutrition/Measurements/Calendar/Plans/Execution и
+точных чисел JSON, общее чтение Nutrition/Measurements/Calendar/Plans/Execution,
+Clients/ExerciseCatalog/Questionnaire и
 подготовка отдельной файловой копии. Модуль не подключён к композиции приложения
 и не активирует перенесённую БД. Host-проверки R04 используют тот же код; это не
 доказательство полного импорта на Android. Production migration/release gates OPEN.
@@ -22,7 +23,7 @@ SQL-значений в модели 3.x; исходная копия сохра
 
 `data/LegacySqliteSource.ts` принимает фабрику нового Expo-совместимого соединения
 с отдельной inspection copy. Проверяет connection pragmas, держит один read
-transaction через все три домена, откатывает его и закрывает handle при любом
+transaction через выбранных владельцев, откатывает его и закрывает handle при любом
 результате. Файловую копию готовит `LegacyInspectionCopy` с
 `ExpoLegacyInspectionFiles`: новый UUID slot, hash до/после копирования, header,
 проверка private bytes, закрытая копия и отдельный receipt. Чтение проверяет их
@@ -41,6 +42,20 @@ AccountScope извлекается из источника. Это кандид
 `LegacyTrainingReadPlans` читает программы/недели/тренировки/подходы, состояние
 библиотек и архивы, сессии/сегменты/историю/снимки тренировок. Это те же полные
 строки, что ранее собирал Node reader. Новый файловый путь после admission
-читает все пять владельцев в одном snapshot. Отсутствующие optional tables — null,
+читает программы и результаты в общем snapshot. Отсутствующие optional tables — null,
 пустые — []; partial session store и wrong kind не скрываются. Преобразования
-и writer пока host-only: наличие raw mobile snapshots не означает готовую миграцию.
+Plans/Execution и writer пока host-only: наличие raw mobile snapshots не означает готовую миграцию.
+
+`LegacyProfileReadPlans` добавляет полные clients/exercise_catalog и все версии,
+ответы, указатели и change history анкеты. File entry после admission теперь
+собирает восемь владельцев в одной транзакции; partial questionnaire (в том числе
+только change history) и view вместо таблицы блокируют чтение.
+
+Чистые преобразования находятся у владельцев в `clients`, `exercises` и
+`questionnaire`, внутри `domain/legacy-import/`. Общие входные контракты и значения —
+`shared/migration/LegacyProfileSources.ts` и `LegacyValues.ts`. Node wrappers
+исполняют те же mobile read plans и преобразования. Для SHA256 идентификаторов
+анкеты используется существующая `@noble/hashes`; прежние UTF8 ID сохранены.
+Эти файлы также относятся к удаляемому переходному импортёру, а не к обычным
+читателям 3.x. Raw JSON остаётся исходной строкой; это не утверждение точной
+переносимости всех числовых JSON-ответов в конечную модель.

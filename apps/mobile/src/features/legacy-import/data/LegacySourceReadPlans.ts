@@ -15,7 +15,7 @@ function* present(table: string, shapeError: string): LegacySourceReadPlan<boole
   return rows.length === 1;
 }
 
-function* read(table: string, required: readonly string[], shapeError: string, coverageError: string, key?: string): LegacySourceReadPlan<readonly LegacySourceRow[] | null> {
+function* read(table: string, required: readonly string[], shapeError: string, coverageError: string, key?: string, order: readonly string[] = []): LegacySourceReadPlan<readonly LegacySourceRow[] | null> {
   if (!(yield* present(table, shapeError))) return null;
   // table_info omits generated columns even though SELECT * returns them.
   const columns = yield query("SELECT name,hidden FROM pragma_table_xinfo(?)", [table]);
@@ -28,12 +28,13 @@ function* read(table: string, required: readonly string[], shapeError: string, c
     OR (typeof(${quoted(name as string)})='real' AND (${quoted(name as string)}>1.7976931348623157e308 OR ${quoted(name as string)}< -1.7976931348623157e308))`).join(" OR ");
   const unsupported = yield query(`SELECT 1 AS unsupported FROM ${quoted(table)}${suffix}${suffix ? " AND" : " WHERE"} (${unsafe}) LIMIT 1`, bindings);
   if (unsupported.length) return fail("R04_SOURCE_SQL_NUMBER_UNREPRESENTABLE");
-  const rows = yield query(`SELECT * FROM ${quoted(table)}${suffix}`, bindings);
+  const rows = yield query(`SELECT * FROM ${quoted(table)}${suffix}${order.length ? ` ORDER BY ${order.map(quoted).join(",")}` : ""}`, bindings);
   const count = yield query(`SELECT count(*) AS n FROM ${quoted(table)}${suffix}`, bindings);
   if (count.length !== 1 || !Number.isSafeInteger(count[0]!.n) || rows.length !== count[0]!.n) return fail(coverageError);
   return rows.map((row) => ({ ...row }));
 }
 export { read as readLegacySourceTable };
+export { present as legacySourceTablePresent };
 
 const nutritionColumns: Readonly<Record<typeof NUTRITION_SOURCE_TABLES[number], readonly string[]>> = {
   food_products: ["id", "name", "brand", "barcode", "serving_mode", "calories", "protein", "fat", "carbs", "favorite", "created_at", "updated_at"],
