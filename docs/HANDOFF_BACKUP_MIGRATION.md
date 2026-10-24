@@ -1,3 +1,25 @@
+## Продолжение — общий формат/identity/integrity gate
+
+2026-10-24 R04/R03/Product46.6/48.5.7/49–50/53–56/INT03–12, база229e880.
+LegacyBackupInventory +shared LegacyBackupReadPlans; old Node aggregate inspector
+исполняет commonplan, own snapshot onlywhenneeded. Node admitLegacyBackup и mobile
+strict gate одинаковы: canonical25 manifest/fullfields/ids1/ledger INTEGER1..25/
+bytes-pagecount-pagesize/revision databaseIDcounter/integrity/FK/requiredtables.
+AccountScope больше не callerargument в fileentry, derivedfromexactmanifestbinding;
+workspace BINARY/NULL/nontext/Unicodeblank guard, emptyclients→null/no inventedID.
+Metadata tokens exact incl exponent/underflow/unsafeintegers. Aggregateerror noPII.
+Gate+collectors в одном pinnedreadtx; failure BEFOREdomainrows, postclosedSHA guard.
+Source review pinned e116b42 (format/revision/validation/accountbinding) in doc.
+Verified databaseID/revision/backupID/exportTime retainedprivate forlineage,
+not aggregate report/notfactdates. 10newadmission+1fileentry+1txownership tests.
+152targeted/latest20 aftermetadataretention PASS.
+Root/mobileTS/scopedlint/source73/arch533/secrets/diff PASS. No foundation/687rerun/
+bundle/APK/phone. Candidate NOTfullschema/mappingadmission, canonical25ONLY path;
+JSON/other2.0 variants/fullrelations/ownership/provenance/parity notclosed.
+[Механизм, первичные источники, проверки](spikes/R04_SOURCE_ADMISSION.md).
+NEXT othercollectors/permanentExecution-review-provenance/portablewriter/fullcoverage/
+productionadmission/composition/fullbackup/fullrestore/Android/removalproof.
+
 ## Продолжение — отдельная inspection copy перед SQLite
 
 2026-10-24 R04/R03/Product46.6/48.5.7/49–50/53–56/INT03–12, базаaad8901.

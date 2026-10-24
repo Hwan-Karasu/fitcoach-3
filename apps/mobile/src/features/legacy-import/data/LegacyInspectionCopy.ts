@@ -1,5 +1,5 @@
 import { InspectionCopyError, inspectionOperationId, parseInspectionReceipt, type LegacyInspectionReceipt } from "../domain/InspectionCopy.ts";
-import { readLegacyDomainSnapshots, type NativeLegacySourceDatabase } from "./LegacySqliteSource.ts";
+import { readAdmittedLegacyDomainSnapshots, type NativeLegacySourceDatabase } from "./LegacySqliteSource.ts";
 
 export interface InspectionDigest { readonly sha256: string; readonly bytes: number }
 export interface InspectionFileState { readonly digest: InspectionDigest; readonly header: Uint8Array; readonly hasSidecars: boolean }
@@ -56,14 +56,13 @@ export async function prepareLegacyInspectionCopy(files: LegacyInspectionFiles, 
   return receipt;
 }
 
-/** Internal collector, not a restore/cutover entry point. Admission/mapping gates
- * remain separate. Verify the closed private copy before and after SQLite reads.
+/** Format/owner admission and collectors share one snapshot. Mapping/parity and
+ * cutover gates remain separate. Recheck the closed file before returning data.
  */
-export async function readLegacyInspectionCopy(files: LegacyInspectionReader, expected: LegacyInspectionReceipt, accountScope: string) {
+export async function readLegacyInspectionCopy(files: LegacyInspectionReader, expected: LegacyInspectionReceipt) {
   const receipt = parseInspectionReceipt(expected);
-  if (!accountScope.trim()) throw new Error("R04_ACCOUNT_SCOPE_REQUIRED");
   await verifyReady(files, receipt);
-  const snapshots = await readLegacyDomainSnapshots(() => files.openReady(receipt.operationId), accountScope);
+  const result = await readAdmittedLegacyDomainSnapshots(() => files.openReady(receipt.operationId), receipt.bytes);
   await verifyReady(files, receipt);
-  return { receipt, snapshots };
+  return { receipt, ...result };
 }

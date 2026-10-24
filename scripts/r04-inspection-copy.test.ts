@@ -9,6 +9,8 @@ import { Worker } from "node:worker_threads";
 import { InspectionCopyError, inspectionOperationId, parseInspectionReceipt } from "../apps/mobile/src/features/legacy-import/domain/InspectionCopy.ts";
 import { prepareLegacyInspectionCopy, readLegacyInspectionCopy, type LegacyInspectionReader } from "../apps/mobile/src/features/legacy-import/data/LegacyInspectionCopy.ts";
 import { inspectionExpoMock } from "./support/inspection-expo-mock.ts";
+import { seedLegacyBackupMetadata } from "./support/legacy-backup-metadata.ts";
+import { LegacySourceAdmissionError } from "../apps/mobile/src/features/legacy-import/domain/LegacyBackupInventory.ts";
 
 const operation = "11111111-1111-4111-8111-111111111111", retryOperation = "22222222-2222-4222-8222-222222222222";
 const scope = "inspection-synthetic";
@@ -25,8 +27,8 @@ function setup() {
   db.exec(`CREATE TABLE client_day_facts(client_id TEXT,date_key TEXT,weight TEXT,steps TEXT,training TEXT);
     INSERT INTO client_day_facts VALUES('a','2026-10-19','80.1',NULL,'Нет');
     CREATE TABLE source_data_not_yet_projected(payload TEXT); INSERT INTO source_data_not_yet_projected VALUES('untouched full-file data');`);
-  db.close();
-  const calls: string[] = [], opened: string[] = [];
+  seedLegacyBackupMetadata(db, scope); db.close();
+  const calls: string[] = [], opened: string[] = [], queries: string[] = [];
   const state: { hook: ((phase: string) => void) | null } = { hook: null };
   const point = (phase: string) => { calls.push(phase); state.hook?.(phase); };
   const path = (op: string, name: string) => { assert.ok(inspectionOperationId(op)); return join(root, op, name); };
@@ -53,11 +55,11 @@ function setup() {
     },
     async openReady(op) {
       point("open-sqlite"); const file = path(op, "source.sqlite"); opened.push(file); const connection = new DatabaseSync(file);
-      return { getAllAsync: async <Row>(sql: string, ...bindings: unknown[]): Promise<Row[]> => connection.prepare(sql).all(...bindings as SQLInputValue[]) as Row[],
+      return { getAllAsync: async <Row>(sql: string, ...bindings: unknown[]): Promise<Row[]> => { queries.push(sql); return connection.prepare(sql).all(...bindings as SQLInputValue[]) as Row[]; },
         execAsync: async (sql: string) => { connection.exec(sql); }, closeAsync: async () => { connection.close(); point("after-sqlite-close"); } };
     },
   };
-  return { dir, root, source, files, calls, opened, state, path };
+  return { dir, root, source, files, calls, opened, queries, state, path };
 }
 
 test("prepared SQLite copy is byte-identical, sealed, and the only file opened by the source collector", () => fixture(async (f) => {
@@ -67,7 +69,8 @@ test("prepared SQLite copy is byte-identical, sealed, and the only file opened b
   assert.deepEqual(readFileSync(f.path(operation, "source.sqlite")), original);
   assert.equal(existsSync(f.path(operation, "source.partial")), false);
   assert.equal(f.opened.length, 0, "preparing a byte copy does not open SQLite");
-  const actual = await readLegacyInspectionCopy(f.files, receipt, scope);
+  const actual = await readLegacyInspectionCopy(f.files, receipt);
+  assert.equal(actual.admission.accountScope, scope); assert.equal(actual.admission.sourceWorkspaceId, "synthetic-workspace");
   assert.equal(actual.snapshots.nutrition.tables.client_day_facts![0]!.weight, "80.1");
   assert.deepEqual(actual.snapshots.measurements.clientDays, actual.snapshots.nutrition.tables.client_day_facts);
   assert.deepEqual(f.opened, [f.path(operation, "source.sqlite")]); assert.deepEqual(readFileSync(f.source), original);
@@ -90,7 +93,15 @@ test("an existing operation slot is never overwritten", () => fixture(async (f) 
   const receipt = await prepareLegacyInspectionCopy(f.files, operation), copy = readFileSync(f.path(operation, "source.sqlite")), metadata = readFileSync(f.path(operation, "receipt.json"));
   await assert.rejects(prepareLegacyInspectionCopy(f.files, operation), { message: "SOURCE_COPY_EXISTS" });
   assert.deepEqual(readFileSync(f.path(operation, "source.sqlite")), copy); assert.deepEqual(readFileSync(f.path(operation, "receipt.json")), metadata);
-  assert.deepEqual((await readLegacyInspectionCopy(f.files, receipt, scope)).receipt, receipt);
+  assert.deepEqual((await readLegacyInspectionCopy(f.files, receipt)).receipt, receipt);
+}));
+
+test("a byte-perfect copied SQLite file cannot bypass source admission to collect domain rows", () => fixture(async (f) => {
+  const db = new DatabaseSync(f.source); db.exec("UPDATE account_database_binding SET scope_key='wrong-owner'"); db.close();
+  const original = readFileSync(f.source), receipt = await prepareLegacyInspectionCopy(f.files, operation);
+  await assert.rejects(readLegacyInspectionCopy(f.files, receipt), (error) => error instanceof LegacySourceAdmissionError && error.inventory.reasons.includes("BINDING_UNVERIFIED"));
+  assert.equal(f.queries.some((sql) => sql.startsWith('SELECT * FROM "')), false);
+  assert.deepEqual(f.opened, [f.path(operation, "source.sqlite")]); assert.deepEqual(readFileSync(f.source), original);
 }));
 
 test("every copy/publication IO failure preserves the external source and permits a fresh-copy retry", async () => {
@@ -104,7 +115,7 @@ test("every copy/publication IO failure preserves the external source and permit
     assert.deepEqual(readFileSync(f.source), original); assert.equal(f.opened.length, 0);
     f.state.hook = null;
     const retry = await prepareLegacyInspectionCopy(f.files, retryOperation); assert.deepEqual({ sha256: retry.sha256, bytes: retry.bytes }, digest(f.source));
-    await readLegacyInspectionCopy(f.files, retry, scope); assert.deepEqual(readFileSync(f.source), original);
+    await readLegacyInspectionCopy(f.files, retry); assert.deepEqual(readFileSync(f.source), original);
   });
 });
 
@@ -136,9 +147,9 @@ test("file-publish and receipt-write interruptions remain unreadable until the r
     await assert.rejects(prepareLegacyInspectionCopy(f.files, operation), { message: "SOURCE_COPY_IO_FAILED" }); f.state.hook = null;
     if (phase === "after-receipt-publish") {
       unlinkSync(f.source); // Simulate losing access to this synthetic picker file after a completed copy.
-      assert.equal((await readLegacyInspectionCopy(f.files, expected, scope)).snapshots.measurements.clientDays!.length, 1);
+      assert.equal((await readLegacyInspectionCopy(f.files, expected)).snapshots.measurements.clientDays!.length, 1);
     } else {
-      await assert.rejects(readLegacyInspectionCopy(f.files, expected, scope), { message: "SOURCE_COPY_INVALID" }); assert.equal(f.opened.length, 0);
+      await assert.rejects(readLegacyInspectionCopy(f.files, expected), { message: "SOURCE_COPY_INVALID" }); assert.equal(f.opened.length, 0);
     }
   });
 });
@@ -149,7 +160,7 @@ test("receipt drift, sidecars and changes during SQLite reading invalidate the r
     if (kind === "receipt") writeFileSync(f.path(operation, "receipt.json"), JSON.stringify({ ...receipt, sha256: "b".repeat(64) }));
     if (kind === "sidecar") writeFileSync(f.path(operation, "source.sqlite-shm"), "");
     if (kind === "during-read") f.state.hook = (phase) => { if (phase === "after-sqlite-close") { const db = new DatabaseSync(f.path(operation, "source.sqlite")); db.exec("UPDATE client_day_facts SET weight='99'"); db.close(); } };
-    await assert.rejects(readLegacyInspectionCopy(f.files, receipt, scope), { message: kind === "sidecar" ? "SOURCE_COPY_INVALID" : "SOURCE_COPY_CHANGED" });
+    await assert.rejects(readLegacyInspectionCopy(f.files, receipt), { message: kind === "sidecar" ? "SOURCE_COPY_INVALID" : "SOURCE_COPY_CHANGED" });
     assert.equal(f.opened.length, kind === "during-read" ? 1 : 0); assert.deepEqual(readFileSync(f.source), original);
   });
 });
@@ -161,7 +172,7 @@ test("actual Expo file driver awaits asynchronous copy and rename before opening
     const {File}=await import('expo-file-system');const{ExpoLegacyInspectionFiles}=await import(workerData.driver);
     const{prepareLegacyInspectionCopy,readLegacyInspectionCopy}=await import(workerData.protocol);
     const files=new ExpoLegacyInspectionFiles(new File(workerData.source));const receipt=await prepareLegacyInspectionCopy(files,workerData.operation);
-    const result=await readLegacyInspectionCopy(new ExpoLegacyInspectionFiles(),receipt,workerData.scope);
+    const result=await readLegacyInspectionCopy(new ExpoLegacyInspectionFiles(),receipt);
     parentPort.postMessage({result,calls:globalThis.inspectionCalls});`;
   const actual = await new Promise<{ result: Awaited<ReturnType<typeof readLegacyInspectionCopy>>; calls: { phase: string; file?: string; to?: string }[] }>((resolveWorker, reject) => {
     const task = new Worker(new URL(`data:text/javascript,${encodeURIComponent(worker)}`), { execArgv: ["--experimental-strip-types"], workerData: {

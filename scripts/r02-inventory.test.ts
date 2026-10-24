@@ -83,3 +83,12 @@ test("R02: broken FK and missing schema shape block even with valid manifest", (
     assert.ok(inspectLegacyBackup(missingShape).reasons.includes("UNSUPPORTED_SHAPE"));
   } finally { brokenFk.close(); missingShape.close(); }
 });
+
+test("R02: inventory owns only its own read transaction and preserves an existing snapshot", () => {
+  const db = fixture();
+  try {
+    db.exec("BEGIN"); assert.equal(inspectLegacyBackup(db).status, "candidate");
+    assert.equal(db.isTransaction, true); db.exec("ROLLBACK");
+    assert.equal(inspectLegacyBackup(db).status, "candidate"); assert.equal(db.isTransaction, false);
+  } finally { db.close(); }
+});

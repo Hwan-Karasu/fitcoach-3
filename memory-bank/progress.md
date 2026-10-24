@@ -45,18 +45,21 @@ PortableSQLaad8901/R04_PORTABLE_SQL_SOURCE.md: sharedNode/mobile3domainplans,
 fullraw/null-empty/xinfo/unsafeSQLnumberREJECT/WALsnapshot/pragmas/readtx/close.
 9source+1stageintegration/687area/latest74; source/account/admission pending.
 
-CURRENT R04_INSPECTION_COPY.md: receipt/domain+LegacyInspectionCopy+ExpoFiles.
-SourceSHA->freshUUID/ownzeroPartial->copy->sourceRehash/privateSHA/header/no sidecars
-->privatefile rename->receipt rename/readback. Source neverSQLite/renamed/deleted.
-ExistingUUIDnooverwrite/retrynewslot. Readverifiesprivatebytes before+after common
-reader; receiptNOT2.0admission/scope stillcaller. Awaitlegacyfile://moveAsync
-renameTo-or-fail (File.move hasasync+copy-deletefallback). 9newtests: realhostfiles/
-allcopyfaults/sourcebytes/retry/drift/incompletepublish/readwithoutsource. Actual
-ExpoDriver freshWorker/SDKmocks delayedcopy+renames/privateonlySQL/newconnection.
-106targeted/root-mobileTS/scopedlint/source73/arch531/secrets/diff PASS.
-No Android/foundation/bundle/APK. OrphanGC/powerloss/kill OPEN. Phoneuntouched.
+Copy229e880/R04_INSPECTION_COPY.md: freshslot/privatefile+receipt/sourceSHA guards,
+no sourceSQLite/delete/nooverwrite; ExpoDriver delayedSDKmocks/realhostfiles.
 
-NEXT format/manifest/binding/account/integrity/FK admission/othercollectors/
-permanentExecution/review/provenance/mobilewriter/schemaadmission/composition/
-UI/deletion/fullordinarybackup/appSQLite+JSONlegacyrestore/Android/fullremovalproof.
+CURRENT R04_SOURCE_ADMISSION.md: common LegacyBackupReadPlans+Inventory. Node
+inspect preliminary/admit strict==mobile. Fileentry mandatory canonical25 gate:
+manifest/fullfields/ids1/INTEGERledger/file-pagebytes/revision/integrity/FK/tables
+BEFOREbusinessrows. Scope fromexactmanifestbinding (notcaller); workspaceBINARY/
+NULL/nontext/JSblank guard; emptyclients->null. ExactJSONtokens/safeSQLnumbers; verifiedDB-ID/revision/backupID/exportTime privateforlineage/notfactdates.
+Gate+3collectors onepinnedtx/postclosedSHA; aggregateerrors noPII. Pinned e116b42
+format/types/revision/validation/binding reviewed; noauth/backend copied.
+10admission+1fileentry+1NodeTx tests; 152targeted/latest20 PASS. Root/mobileTS/
+scopedlint/source73/arch533/secrets/diff PASS. No foundation/bundle/APK/phone.
+Canonical25candidate NOTfullschema/relations/mapping/parity admission.
+
+NEXT othercollectors/fullcoverage/lineage/permanentExecution-review-provenance/
+mobilewriter/schemaadmission/composition/UI/deletion/fullordinarybackup/
+SQLite+JSON+othersourcevariants/fullrestore/Android/GC/powerloss/removalproof.
 AllpriorbackupedgecasesOPEN. GoalACTIVE/fullscope/NOT100%.

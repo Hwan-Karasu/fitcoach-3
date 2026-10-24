@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from "expo-sqlite";
 import type { SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
 import type { LegacyDomainSnapshots, LegacySourceRow } from "../domain/LegacySourceSnapshots.ts";
 import { legacyCalendarReadPlan, legacyMeasurementsReadPlan, legacyNutritionReadPlan, type LegacySourceReadPlan } from "./LegacySourceReadPlans.ts";
+import { legacyBackupAdmissionPlan } from "./LegacyBackupReadPlans.ts";
 
 export type NativeLegacySourceDatabase = Pick<SQLiteDatabase, "getAllAsync" | "execAsync" | "closeAsync">;
 
@@ -12,8 +13,25 @@ export type NativeLegacySourceDatabase = Pick<SQLiteDatabase, "getAllAsync" | "e
  */
 export async function readLegacyDomainSnapshots(open: () => Promise<NativeLegacySourceDatabase>, accountScope: string): Promise<LegacyDomainSnapshots> {
   if (!accountScope.trim()) throw new Error("R04_ACCOUNT_SCOPE_REQUIRED");
+  return withLegacySourceSnapshot(open, (reader) => collectLegacyDomainSnapshots(reader, accountScope));
+}
+
+export async function readAdmittedLegacyDomainSnapshots(open: () => Promise<NativeLegacySourceDatabase>, fileBytes: number) {
+  return withLegacySourceSnapshot(open, async (reader) => {
+    const admission = await runLegacyReadPlan(reader, legacyBackupAdmissionPlan(fileBytes));
+    return { admission, snapshots: await collectLegacyDomainSnapshots(reader, admission.accountScope) };
+  });
+}
+
+async function collectLegacyDomainSnapshots(reader: Pick<SqliteStatementPort, "all">, accountScope: string): Promise<LegacyDomainSnapshots> {
+  return { nutrition: await runLegacyReadPlan(reader, legacyNutritionReadPlan(accountScope)),
+    measurements: await runLegacyReadPlan(reader, legacyMeasurementsReadPlan(accountScope)),
+    calendar: await runLegacyReadPlan(reader, legacyCalendarReadPlan(accountScope)) };
+}
+
+async function withLegacySourceSnapshot<Result>(open: () => Promise<NativeLegacySourceDatabase>, task: (reader: Pick<SqliteStatementPort, "all">) => Promise<Result>): Promise<Result> {
   const db = await io(open);
-  let begun = false, failure: { error: unknown } | null = null, result: LegacyDomainSnapshots | undefined;
+  let begun = false, failure: { error: unknown } | null = null, result: Result | undefined;
   try {
     await io(() => db.execAsync("PRAGMA query_only=ON; PRAGMA foreign_keys=ON; PRAGMA read_uncommitted=OFF; PRAGMA trusted_schema=OFF"));
     for (const [name, expected] of [["query_only", 1], ["foreign_keys", 1], ["read_uncommitted", 0], ["trusted_schema", 0]] as const) {
@@ -24,9 +42,7 @@ export async function readLegacyDomainSnapshots(open: () => Promise<NativeLegacy
     // Pin the read snapshot before the first domain and keep it through all reads.
     await io(() => db.getAllAsync("SELECT count(*) AS n FROM sqlite_schema"));
     const reader: Pick<SqliteStatementPort, "all"> = { all: (sql, bindings = []) => io(() => db.getAllAsync(sql, ...bindings)) };
-    result = { nutrition: await runLegacyReadPlan(reader, legacyNutritionReadPlan(accountScope)),
-      measurements: await runLegacyReadPlan(reader, legacyMeasurementsReadPlan(accountScope)),
-      calendar: await runLegacyReadPlan(reader, legacyCalendarReadPlan(accountScope)) };
+    result = await task(reader);
   } catch (error) { failure = { error }; }
   finally {
     let cleanupFailed = false;

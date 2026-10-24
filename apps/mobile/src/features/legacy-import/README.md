@@ -26,8 +26,12 @@ transaction через все три домена, откатывает его �
 результате. Файловую копию готовит `LegacyInspectionCopy` с
 `ExpoLegacyInspectionFiles`: новый UUID slot, hash до/после копирования, header,
 проверка private bytes, закрытая копия и отдельный receipt. Чтение проверяет их
-до/после SQLite; внешний файл SQLite не открывает. Полный допуск формата 2.0,
-ownership исходного аккаунта, integrity/FK и подключение к restore ещё впереди.
+до/после SQLite; внешний файл SQLite не открывает. Перед бизнес-строками общий
+`LegacyBackupReadPlans` проверяет canonical-v25 metadata, размеры/revision,
+integrity/FK и согласованность manifest/account binding в том же read transaction.
+AccountScope извлекается из источника. Это кандидат формата, не полная проверка
+всех доменных связей/схемы и не готовый restore. JSON 2.0 и другие schema versions
+этот путь ещё не читает. Production composition/Android gates остаются OPEN.
 Не передавать внешний или рабочий файл прямо в readLegacyDomainSnapshots.
 
 При удалении переходного импортёра из обычного выпуска 3.x эта граница может
