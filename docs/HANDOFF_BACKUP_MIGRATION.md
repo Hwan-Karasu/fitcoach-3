@@ -1,4 +1,29 @@
-## Продолжение — workout contexts/notes/status evidence, базаe93a4c8
+## Продолжение — старые workout_logs, база3015bdd
+
+2026-10-24. Previous research: PROGRESS, найден source gap. Теперь implemented:
+optional6th Execution source training_workout_logs, full raw CONTEXT и физические
+set paths. R04→R03/Product48.5.7/48.44/51–52/49–50/53–56/INT03–12; gates OPEN.
+Array/object exercises/direct set arrays; malformedactive blocksall, deletedbadJSON
+retained/no revival. Proven cache alias требует sourcePriority2/sourceVersionId,
+наблюдаемого source_fact_id, sameclient/workout/account и точных values/segments/
+kind/effort/RPE. Metadata различает colon-ID collisions между разными logs; внутри
+одного log повторённый exerciseID блокирует неоднозначную связь. Names/metrics не
+идентификаторы. Без доказательства values editable/confirmedfalse/noactualdate;
+completion-like fields неизвестного writer не считаются выполнением. NumericJSON
+токены сохраняются через Node24reviver, включая cache segments; FP rounding нет.
+Исходная строка со всеми неизвестными полями сохраняется полностью. SNAPSHOT kind,
+V3 binding/snapshotProjectionVersion1, новых таблиц нет, productionD01 unchanged.
+
+330/330r04:plans (43Execution/13new),23tx boundaries nowwithprovenlog/cache rollbackall/
+retry/ClientIDs; readonlysource/reopen/reorder/byteidentical/allIDsreuse withlog/cache.
+Freeze/drift/version/foreignrefs tested. Root/mobileTS/ownESLint/source73/secrets/diff
+pass. No bundle/fullfoundation/APK/native/phone. Concurrent UI/theme edits excluded.
+NEXT oldwriter/completion/relations tocurrent/history/archive IDs stillneedproof;
+021 proves cacheconstruction, not unknown writersemantics. Then runtime binding,
+remainingowners/fullparity/SQLite+JSON1/2 legacyrestore/Android. finalizable:false,
+goalACTIVEfullscope. [Контракт/точные источники](spikes/R04_WORKOUT_LOG_SNAPSHOTS.md).
+
+## Предыдущее продолжение — workout contexts/notes/status evidence, базаe93a4c8
 
 Previous goal turn: status-only/NOPROGRESS; revalidated worktree and took nextsafe
 action. NowPROGRESS: LegacyWorkoutContexts→sharedstage→r04_execution_contexts,

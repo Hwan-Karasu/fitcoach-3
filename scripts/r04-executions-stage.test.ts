@@ -73,10 +73,19 @@ function seed(db: DatabaseSync) {
     workouts: cycles.flatMap((c, i) => c.snapshot.workouts.map((w) => ({ ...w, weekIndex: i }))), cycles };
   db.prepare("INSERT INTO training_archive_entries VALUES('archive','a','Архив',?,?,NULL)").run(JSON.stringify(root), "2026-04-01T10:00:00Z");
 }
-function cache(db: DatabaseSync, id: string, fact: string, date: string, dateSource: string, workout: string | null, reps: string, weight: string) {
+function cache(db: DatabaseSync, id: string, fact: string, date: string, dateSource: string, workout: string | null, reps: string, weight: string, snapshotId?: string) {
   db.prepare("INSERT INTO training_sessions VALUES(?,'a',?,'old-program','old-week','Проекция',?,?,'{}',NULL)").run(id, workout, date, dateSource);
   db.prepare("INSERT INTO training_session_exercises VALUES(?,?,NULL,'x','catalog:x','Имя проекции',0,'{}',NULL)").run(`e-${id}`, id);
   db.prepare("INSERT INTO training_session_sets VALUES(?,?,?,0,?,?,'8','working','normal',?,?,'{}',NULL)").run(`f-${id}`, `e-${id}`, fact, reps, weight, date, JSON.stringify([{ reps, weight }]));
+  if (snapshotId !== undefined) db.prepare("UPDATE training_sessions SET data_json=? WHERE id=?").run(JSON.stringify({ sourcePriority: 2, sourceVersionId: snapshotId }), id);
+}
+function addWorkoutLog(db: DatabaseSync, value: unknown, id = "old-log", client = "a", workout = "w-a0", deleted: string | null = null) {
+  db.exec("CREATE TABLE IF NOT EXISTS training_workout_logs(id TEXT PRIMARY KEY,client_id TEXT,workout_id TEXT,logged_at TEXT,data_json TEXT,deleted_at TEXT)");
+  db.prepare("INSERT INTO training_workout_logs VALUES(?,?,?,?,?,?)").run(id, client, workout, date1, JSON.stringify(value), deleted);
+}
+function oldWorkoutLog(reps: string | number = "20", weight: string | number = "10") {
+  return { status: "completed", workoutName: "Снимок до перестройки", date: date0,
+    exercises: [{ exerciseId: "e-a0", name: "Имя старого снимка", catalogId: "x", sets: [{ reps, weight, rpe: "8", completedAt: date0 }] }] };
 }
 function read(db: DatabaseSync) {
   const catalog = readLegacyExerciseCatalogInSnapshot(db, context.accountScope);
@@ -120,6 +129,144 @@ test("canonical facts deduplicate current/session/history/archive mirrors once p
   assert.equal(first.snapshot_name, "Историческое имя"); assert.ok((JSON.parse(first.names_json as string) as string[]).includes("Архивное имя"));
   assert.equal(ledger.loadExecutionDraftFacts().length, 5); assert.deepEqual(target.prepare("PRAGMA foreign_key_check").all(), []);
 }));
+
+test("a workout snapshot joins only its observed cache ID and preserves the entire old snapshot without adding a duplicate fact", () => fixture((source, target) => {
+  const raw = oldWorkoutLog(); addWorkoutLog(source, raw);
+  cache(source, "log-cache", "old-log:e-a0:0", date0, "completed-at", "w-a0", "20", "10", "old-log");
+  const { result, ledger } = stage(source, target), f = fact(target, "old-log:e-a0:0"), c = workoutContext(target, "training_workout_logs", "old-log");
+  assert.equal(result.performedFacts, 6); assert.equal(result.executionContexts, 8);
+  const rows = target.prepare("SELECT * FROM r04_execution_representations WHERE fact_id=?").all(f.id!);
+  assert.equal(rows.length, 2); assert.deepEqual(rows.map((r) => r.source_kind).sort(), ["SESSION", "SNAPSHOT"]);
+  assert.equal(c.session_id, f.session_id); assert.equal(c.source_kind, "SNAPSHOT");
+  assert.deepEqual(JSON.parse((JSON.parse(c.source_json as string) as { data_json: string }).data_json), raw);
+  assert.equal(contextState(c).targetOutcome, null); assert.equal(contextState(c).derived, null);
+  assert.ok((JSON.parse(f.names_json as string) as string[]).includes("Имя старого снимка"));
+  assert.equal(ledger.loadExecutionDraftFacts().length, 6); assert.deepEqual(target.prepare("PRAGMA foreign_key_check").all(), []);
+}));
+
+test("uncorroborated snapshot metrics and completion-like fields remain editable values, never manufactured facts or dates", () => fixture((source, target) => {
+  addWorkoutLog(source, oldWorkoutLog(20, 2.5));
+  const { result } = stage(source, target), c = workoutContext(target, "training_workout_logs", "old-log");
+  const r = target.prepare("SELECT * FROM r04_execution_representations WHERE source_kind='SNAPSHOT'").get()!;
+  const detail = JSON.parse(r.context_json as string) as { sourceFactId: string | null; editable: { confirmed: boolean; values: { reps: number; loadGrams: number } }; completionBasis: string };
+  assert.equal(result.performedFacts, 5); assert.equal(r.fact_id, null); assert.equal(r.disposition, "UNCONFIRMED");
+  assert.equal(detail.sourceFactId, null); assert.equal(detail.completionBasis, "SNAPSHOT_COMPLETION_NOT_PROVEN");
+  assert.equal(detail.editable.confirmed, false); assert.deepEqual([detail.editable.values.reps, detail.editable.values.loadGrams], [20, 2500]);
+  assert.equal((JSON.parse(r.date_json as string) as { precision: string }).precision, "UNKNOWN");
+  assert.equal(contextState(c).targetOutcome, null); assert.equal(contextState(c).completedSets, null);
+}));
+
+test("numeric snapshot mini-sets agree exactly with numeric JSON retained in the old canonical cache", () => fixture((source, target) => {
+  addWorkoutLog(source, { exercises: [{ exerciseId: "e-a0", catalogId: "x", sets: [{ reps: 20, weight: 2.5, rpe: 8, setKind: "drop", effortOutcome: "failure",
+    segments: [{ reps: 20, weight: 2.5 }, { reps: 10, weight: 1.25 }] }] }] });
+  cache(source, "log-cache", "old-log:e-a0:0", date0, "completed-at", "w-a0", "20", "2.5", "old-log");
+  source.prepare("UPDATE training_session_sets SET set_kind='drop',effort_outcome='failure',segments_json=? WHERE id='f-log-cache'")
+    .run(JSON.stringify([{ reps: 20, weight: 2.5 }, { reps: 10, weight: 1.25 }]));
+  const { result } = stage(source, target), f = fact(target, "old-log:e-a0:0");
+  assert.equal(result.performedFacts, 6); assert.equal(f.load_grams, 2500); assert.equal(f.effort_outcome, "failure");
+  assert.deepEqual(target.prepare("SELECT reps,load_grams FROM r04_execution_segments WHERE fact_id=? ORDER BY position").all(f.id!).map((r) => ({ ...r })),
+    [{ reps: 20, load_grams: 2500 }, { reps: 10, load_grams: 1250 }]);
+}));
+
+test("object exercise maps, direct set arrays and escaped physical paths survive without name or value deduplication", () => fixture((source, target) => {
+  addWorkoutLog(source, { exercises: { "e/~": [{ reps: "20", weight: "10" }], second: { id: "old-instance", exerciseName: "Старое имя", sets: [{ reps: "20", weight: "10" }] } } });
+  const { result } = stage(source, target), rows = target.prepare("SELECT * FROM r04_execution_representations WHERE source_kind='SNAPSHOT' ORDER BY source_key").all();
+  assert.equal(result.performedFacts, 5); assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((r) => (JSON.parse(r.source_key as string) as string[])[3]), ["/exercises/e~1~0/0", "/exercises/second/sets/0"]);
+  assert.ok(rows.every((r) => r.fact_id === null));
+  const c = workoutContext(target, "training_workout_logs", "old-log"); assert.equal(contextState(c).totalSets, 2);
+}));
+
+test("matching snapshot values cannot hide a cache conflict or merge a different physical workout", async () => {
+  for (const wrongWorkout of [false, true]) await fixture((source, target) => {
+    addWorkoutLog(source, oldWorkoutLog());
+    cache(source, "log-cache", "old-log:e-a0:0", date0, "completed-at", wrongWorkout ? "w-a1" : "w-a0", "20", wrongWorkout ? "10" : "11", "old-log");
+    assert.throws(() => stage(source, target), wrongWorkout ? /SNAPSHOT_CACHE_REFERENCE_CONFLICT/u : /FACT_VALUE_CONFLICT/u);
+    for (const table of ownTables) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n, 0, table);
+  });
+});
+
+test("source-version metadata disambiguates colon-concatenated IDs from different logs", () => fixture((source, target) => {
+  addWorkoutLog(source, { exercises: [{ exerciseId: "part:exercise", catalogId: "x", sets: [{ reps: "20", weight: "10", rpe: "8" }] }] }, "log");
+  addWorkoutLog(source, { exercises: [{ exerciseId: "exercise", catalogId: "x", sets: [{ reps: "20", weight: "10", rpe: "8" }] }] }, "log:part");
+  cache(source, "log-cache", "log:part:exercise:0", date0, "completed-at", "w-a0", "20", "10", "log");
+  stage(source, target);
+  const rows = target.prepare("SELECT * FROM r04_execution_representations WHERE source_kind='SNAPSHOT' ORDER BY source_key").all();
+  assert.deepEqual(rows.map((r) => r.disposition), ["PERFORMED", "UNCONFIRMED"]);
+  assert.equal(rows[1]!.fact_id, null);
+}));
+
+test("duplicate exercise IDs within one snapshot cannot identify two physical sets even if values match", () => fixture((source, target) => {
+  const exercise = { exerciseId: "same", catalogId: "x", sets: [{ reps: "20", weight: "10" }] };
+  addWorkoutLog(source, { exercises: [exercise, exercise] });
+  cache(source, "log-cache", "old-log:same:0", date0, "completed-at", "w-a0", "20", "10", "old-log");
+  assert.throws(() => stage(source, target), /SNAPSHOT_ID_AMBIGUOUS/u);
+  assert.equal(target.prepare("SELECT count(*) AS n FROM clients").get()?.n, 0);
+}));
+
+test("snapshots preserve deleted unreadable rows, absent workouts and templates without reviving their facts", async () => {
+  for (const mode of ["deleted", "missing", "template"] as const) await fixture((source, target) => {
+    const workout = mode === "missing" ? "no-longer-present" : "w-b0";
+    addWorkoutLog(source, oldWorkoutLog(), "old-log", "b", workout, mode === "deleted" ? date1 : null);
+    if (mode === "deleted") source.exec("UPDATE training_workout_logs SET data_json='broken old JSON'");
+    if (mode === "template") source.prepare("UPDATE training_programs SET is_template=1,template_workspace_id=? WHERE id='p-b'").run(context.sourceWorkspaceId);
+    stage(source, target); const c = workoutContext(target, "training_workout_logs", "old-log");
+    assert.equal(c.lifecycle, mode === "deleted" ? "DELETED" : mode === "template" ? "TEMPLATE" : "ACTIVE");
+    assert.equal(contextState(c).targetOutcome, null);
+    assert.equal(target.prepare("SELECT count(*) AS n FROM r04_execution_representations WHERE source_kind='SNAPSHOT' AND disposition='PERFORMED'").get()?.n, 0);
+    if (mode === "deleted") assert.equal((JSON.parse(c.source_json as string) as { data_json: string }).data_json, "broken old JSON");
+    if (mode === "missing") assert.equal(c.session_id, null);
+  });
+});
+
+test("invalid active snapshot shapes and foreign clients roll back all owners instead of silently losing sets", async () => {
+  for (const mode of ["json", "exercises", "sets", "segments", "foreign", "owner"] as const) await fixture((source, target) => {
+    addWorkoutLog(source, mode === "exercises" ? {} : mode === "sets" ? { exercises: [{}] } : mode === "segments" ? { exercises: [{ sets: [{ segments: {} }] }] } : oldWorkoutLog(),
+      "old-log", mode === "owner" ? "unknown-client" : "a", mode === "foreign" ? "w-b0" : "w-a0");
+    if (mode === "json") source.exec("UPDATE training_workout_logs SET data_json='{'");
+    assert.throws(() => stage(source, target), /METRIC_JSON_INVALID|SNAPSHOT_(?:EXERCISES|SETS|SEGMENTS)_INVALID|FOREIGN_WORKOUT|OWNER_OR_COVERAGE_INVALID/u);
+    for (const table of ownTables) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n, 0, table);
+  });
+});
+
+test("numeric JSON tokens retain their exact decimal text instead of rounding to an apparently valid weight", () => fixture((source, target) => {
+  addWorkoutLog(source, { exercises: [{ sets: [{ reps: 20, weight: 0.1 }] }] });
+  source.exec("UPDATE training_workout_logs SET data_json=replace(data_json,'0.1','0.10000000000000001')");
+  stage(source, target);
+  const row = target.prepare("SELECT * FROM r04_execution_representations WHERE source_kind='SNAPSHOT'").get()!;
+  const detail = JSON.parse(row.context_json as string) as { editable: { values: { loadGrams: number | null }; issues: string[] } };
+  assert.equal(detail.editable.values.loadGrams, null); assert.ok(detail.editable.issues.includes("BASE_INVALID_WEIGHT"));
+  assert.equal((JSON.parse(row.source_json as string) as { set: { weight: string } }).set.weight, "0.10000000000000001");
+}));
+
+test("a snapshot cannot revive a deleted cache projection or obtain its fact ID from another client", async () => {
+  for (const mode of ["deleted-cache", "other-client"] as const) await fixture((source, target) => {
+    addWorkoutLog(source, oldWorkoutLog());
+    cache(source, "log-cache", "old-log:e-a0:0", date0, "completed-at", "w-a0", "20", "10", "old-log");
+    if (mode === "deleted-cache") source.prepare("UPDATE training_session_sets SET deleted_at=? WHERE id='f-log-cache'").run(date1);
+    else source.exec("UPDATE training_sessions SET client_id='b',source_workout_id='w-b0' WHERE id='log-cache'");
+    const { result } = stage(source, target);
+    const r = target.prepare("SELECT * FROM r04_execution_representations WHERE source_kind='SNAPSHOT'").get()!;
+    assert.equal(result.performedFacts, mode === "deleted-cache" ? 5 : 6); assert.equal(r.disposition, "UNCONFIRMED"); assert.equal(r.fact_id, null);
+    if (mode === "other-client") assert.equal((JSON.parse(r.context_json as string) as { sourceFactId: string | null }).sourceFactId, null);
+  });
+});
+
+test("older snapshot coverage cannot be asserted by omitting its manifest version", () => fixture((source, target) => {
+  addWorkoutLog(source, oldWorkoutLog()); const { ledger } = stage(source, target);
+  target.exec("UPDATE r04_execution_receipt SET target_json=json_remove(target_json,'$.snapshotProjectionVersion')");
+  assert.throws(() => ledger.loadExecutionDraftContexts(), /PARITY_MISMATCH/u);
+}));
+
+test("a matching cache set ID alone cannot invent snapshot origin; direct arrays can use the proven cache catalog", async () => {
+  for (const origin of ["missing", "different-log", "proved"] as const) await fixture((source, target) => {
+    addWorkoutLog(source, { exercises: { "e-a0": [{ reps: "20", weight: "10", rpe: "8" }] } });
+    cache(source, "log-cache", "old-log:e-a0:0", date0, "completed-at", "w-a0", "20", "10", origin === "missing" ? undefined : origin === "proved" ? "old-log" : "other-log");
+    stage(source, target); const r = target.prepare("SELECT * FROM r04_execution_representations WHERE source_kind='SNAPSHOT'").get()!;
+    assert.equal(r.disposition, origin === "proved" ? "PERFORMED" : "UNCONFIRMED");
+    assert.equal(r.fact_id === null, origin !== "proved");
+  });
+});
 
 test("notes-only workout keeps owner/plan/long diary notes without creating a performed session or trusting stored completion", () => fixture((source, target) => {
   const long = "Точная заметка без обрезки. ".repeat(90);
@@ -219,7 +366,7 @@ test("guarded context reads reject changed notes; changed source cannot overwrit
 test("old execution mode cannot claim the new context schema or omit its manifest version", () => fixture((source, target) => {
   const { ledger } = stage(source, target);
   const binding = target.prepare("SELECT context_json FROM r04_candidate_identity").get()!;
-  target.prepare("UPDATE r04_candidate_identity SET context_json=?").run((binding.context_json as string).replace("TRAINING_EXECUTIONS_REHEARSAL_V2", "TRAINING_EXECUTIONS_REHEARSAL_V1"));
+  target.prepare("UPDATE r04_candidate_identity SET context_json=?").run((binding.context_json as string).replace("TRAINING_EXECUTIONS_REHEARSAL_V3", "TRAINING_EXECUTIONS_REHEARSAL_V2"));
   assert.throws(() => prepareCandidateIdentityLedger(target, context, options), /CONTEXT_MISMATCH/u);
   target.prepare("UPDATE r04_candidate_identity SET context_json=?").run(binding.context_json!);
   target.exec("UPDATE r04_execution_receipt SET target_json=json_remove(target_json,'$.contextProjectionVersion')");
@@ -388,32 +535,38 @@ test("a second archive alone cannot authorize facts referencing a known foreign 
 }));
 
 test("execution input is frozen before allocator and earlier-owner callbacks run", () => fixture((source, target) => {
+  addWorkoutLog(source, oldWorkoutLog());
   const input = read(source), ledger = prepareCandidateIdentityLedger(target, context, options);
   const result = ledger.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, allocator(), (stage) => {
     if (stage === "after-ids") {
       Object.assign(input.executions.tables.training_session_sets![0]!, { reps: "700" });
       Object.assign(input.plans.tables.training_workouts![0]!, { data_json: '{"note":"injected-note"}' });
+      Object.assign(input.executions.tables.training_workout_logs![0]!, { data_json: '{"exercises":[]}' });
     }
   });
   assert.equal(result.performedFacts, 5); assert.equal(fact(target, "set-a0").reps, 20);
   assert.ok(ledger.loadExecutionDraftContexts().every((row) => !(row.source_json as string).includes("injected-note")));
+  assert.equal(contextState(workoutContext(target, "training_workout_logs", "old-log")).totalSets, 1);
 }));
 
 test("all 23 plan/archive/execution transaction checkpoints roll back together and permit a single retry", async () => {
   const phases = ["after-archive-plans", "after-plan-ids", ...Array.from({ length: 11 }, () => "after-plan-rows"), "after-plan-source", "after-plan-receipt",
     "after-execution-ids", "after-execution-sessions", "after-execution-facts", "after-execution-segments", "after-execution-representations", "after-execution-contexts", "after-execution-receipt", "before-commit"];
   for (let n = 0; n < phases.length; n++) await fixture((source, target) => {
+    addWorkoutLog(source, oldWorkoutLog());
+    cache(source, "log-cache", "old-log:e-a0:0", date0, "completed-at", "w-a0", "20", "10", "old-log");
     const input = read(source), ledger = prepareCandidateIdentityLedger(target, context, options), phase = phases[n]!, occurrence = phases.slice(0, n + 1).filter((p) => p === phase).length; let seen = 0;
     assert.throws(() => ledger.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, allocator(), (stage) => {
       if (stage === phase && ++seen === occurrence) throw new Error("injected");
     }), /WRITE_FAILED/u);
     for (const table of ownTables) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n, 0, table);
     assert.equal(target.prepare("SELECT count(*) AS n FROM r04_candidate_ids WHERE kind='CLIENT'").get()?.n, 0);
-    assert.equal(ledger.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, allocator()).performedFacts, 5);
+    assert.equal(ledger.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, allocator()).performedFacts, 6);
   });
 });
 
 test("source and target drift block replay; guarded reads verify facts, segments, provenance and IDs", () => fixture((source, target) => {
+  addWorkoutLog(source, oldWorkoutLog());
   const { input, ledger } = stage(source, target), f = fact(target, "set-a0");
   target.prepare("UPDATE r04_execution_facts SET reps=999 WHERE id=?").run(f.id!); assert.throws(() => ledger.loadExecutionDraftFacts(), /PARITY_MISMATCH/u);
   target.prepare("UPDATE r04_execution_facts SET reps=20 WHERE id=?").run(f.id!);
@@ -425,6 +578,8 @@ test("source and target drift block replay; guarded reads verify facts, segments
   source.exec("UPDATE training_session_sets SET data_json='{\"extra\":true}' WHERE id='f-cache'"); const changed = read(source);
   assert.throws(() => ledger.stageClientExecutions(changed.cards, null, changed.catalog, changed.refs, changed.plans, changed.executions, allocator()), /PARITY_MISMATCH/u);
   assert.equal(ledger.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, () => { throw new Error("reuse IDs"); }).performedFacts, 5);
+  source.exec("UPDATE training_workout_logs SET logged_at='2026-04-02T00:00:00Z'"); const changedLogs = read(source);
+  assert.throws(() => ledger.stageClientExecutions(changedLogs.cards, null, changedLogs.catalog, changedLogs.refs, changedLogs.plans, changedLogs.executions, allocator()), /PARITY_MISMATCH/u);
 }));
 
 test("execution mode cannot claim older archive jobs or bypass the complete entry point", () => fixture((source, target) => {
@@ -442,13 +597,18 @@ test("execution source shape absence stays explicit and partial canonical caches
   source.exec("DROP TABLE training_session_sets"); assert.throws(() => readLegacyExecutionInSnapshot(source, context.accountScope), /PARTIAL_SESSION_STORE/u);
   source.exec("DROP TABLE training_session_exercises; DROP TABLE training_sessions; DROP TABLE training_set_segments");
   const input = readLegacyExecutionInSnapshot(source, context.accountScope); assert.equal(input.tables.training_sessions, null); assert.equal(input.tables.training_set_segments, null);
+  assert.equal(input.tables.training_workout_logs, null);
+  source.exec("CREATE TABLE training_workout_logs(id TEXT)");
+  assert.throws(() => readLegacyExecutionInSnapshot(source, context.accountScope), /SOURCE_SHAPE_UNSUPPORTED/u);
 }));
 
 test("read-only source and reopened/reordered canonical executions preserve bytes, source precision and all stable IDs", () => {
   const dir = mkdtempSync(join(tmpdir(), "athlete-r04-executions-")), sourcePath = join(dir, "source.db"), targetPath = join(dir, "stage.db");
   const hash = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex"); let source: DatabaseSync | null = null, target: DatabaseSync | null = null;
   try {
-    source = new DatabaseSync(sourcePath); seed(source); source.close(); source = null; const sourceHash = hash(sourcePath);
+    source = new DatabaseSync(sourcePath); seed(source); addWorkoutLog(source, oldWorkoutLog());
+    cache(source, "log-cache", "old-log:e-a0:0", date0, "completed-at", "w-a0", "20", "10", "old-log");
+    source.close(); source = null; const sourceHash = hash(sourcePath);
     source = new DatabaseSync(sourcePath, { readOnly: true }); source.exec("PRAGMA query_only=ON; BEGIN"); const input = read(source), exact = { ...context, sourceSha256: sourceHash };
     target = new DatabaseSync(targetPath); const first = prepareCandidateIdentityLedger(target, exact, options);
     first.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, allocator());
@@ -458,7 +618,7 @@ test("read-only source and reopened/reordered canonical executions preserve byte
       for (const [i, row] of rows.entries()) (rows as Record<string, unknown>[])[i] = Object.fromEntries(Object.entries(row).reverse());
     }
     const reopened = prepareCandidateIdentityLedger(target, exact, options);
-    assert.equal(reopened.stageClientExecutions([...input.cards].reverse(), null, [...input.catalog].reverse(), [...input.refs].reverse(), input.plans, input.executions, () => { throw new Error("reuse IDs"); }).performedFacts, 5);
+    assert.equal(reopened.stageClientExecutions([...input.cards].reverse(), null, [...input.catalog].reverse(), [...input.refs].reverse(), input.plans, input.executions, () => { throw new Error("reuse IDs"); }).performedFacts, 6);
     assert.deepEqual(reopened.loadExecutionDraftFacts(), facts); assert.deepEqual(reopened.loadExecutionDraftContexts(), contexts);
     target.close(); target = null; assert.equal(hash(targetPath), targetHash);
     source.exec("ROLLBACK"); source.close(); source = null; assert.equal(hash(sourcePath), sourceHash);

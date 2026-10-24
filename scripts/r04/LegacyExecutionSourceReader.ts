@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { requireLegacyColumns } from "./LegacyExerciseCatalogSourceReader.ts";
 
 export const EXECUTION_SOURCE_TABLES = ["training_sessions", "training_session_exercises", "training_session_sets",
-  "training_set_segments", "training_exercise_history"] as const;
+  "training_set_segments", "training_exercise_history", "training_workout_logs"] as const;
 export type ExecutionSourceTable = typeof EXECUTION_SOURCE_TABLES[number];
 export type ExecutionRaw = Readonly<Record<string, unknown>>;
 export interface LegacyExecutionSource {
@@ -15,6 +15,7 @@ const columns: Readonly<Record<ExecutionSourceTable, readonly string[]>> = {
   training_session_sets: ["id", "session_exercise_id", "source_fact_id", "set_index", "reps", "weight", "rpe", "set_kind", "effort_outcome", "completed_at", "segments_json", "data_json", "deleted_at"],
   training_set_segments: ["id", "set_log_id", "segment_index", "reps", "weight", "deleted_at"],
   training_exercise_history: ["id", "client_id", "exercise_key", "source_fact_id", "data_json", "updated_at", "deleted_at"],
+  training_workout_logs: ["id", "client_id", "workout_id", "logged_at", "data_json", "deleted_at"],
 };
 /** Caller holds the same immutable source snapshot as Plans/catalog. Missing
  * optional stores stay null, never reconstructed by running v2 migrations. */

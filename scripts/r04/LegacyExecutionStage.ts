@@ -50,14 +50,14 @@ export function createExecutionRehearsalSchema(db: DatabaseSync): void {
       reps INTEGER NOT NULL CHECK(reps>=1),load_grams INTEGER NOT NULL CHECK(load_grams>=0),PRIMARY KEY(workspace_id,fact_id,position),
       FOREIGN KEY(fact_id,workspace_id) REFERENCES r04_execution_facts(id,workspace_id) ON DELETE RESTRICT);
     CREATE TABLE r04_execution_representations(source_key TEXT PRIMARY KEY NOT NULL,workspace_id TEXT NOT NULL,client_id TEXT NOT NULL,
-      fact_id TEXT,session_id TEXT,source_kind TEXT NOT NULL CHECK(source_kind IN ('CURRENT','SESSION','HISTORY','ARCHIVE')),
+      fact_id TEXT,session_id TEXT,source_kind TEXT NOT NULL CHECK(source_kind IN ('CURRENT','SESSION','HISTORY','ARCHIVE','SNAPSHOT')),
       disposition TEXT NOT NULL CHECK(disposition IN ('PERFORMED','UNCONFIRMED','DELETED','TEMPLATE','OWNERSHIP_REVIEW')),
       source_json TEXT NOT NULL CHECK(json_valid(source_json)),context_json TEXT NOT NULL CHECK(json_valid(context_json)),date_json TEXT NOT NULL CHECK(json_valid(date_json)),
       FOREIGN KEY(client_id,workspace_id) REFERENCES clients(id,workspace_id) ON DELETE RESTRICT,
       FOREIGN KEY(fact_id,workspace_id,client_id) REFERENCES r04_execution_facts(id,workspace_id,client_id) ON DELETE RESTRICT,
       FOREIGN KEY(session_id,workspace_id,client_id) REFERENCES r04_execution_sessions(id,workspace_id,client_id) ON DELETE RESTRICT);
     CREATE TABLE r04_execution_contexts(id TEXT PRIMARY KEY NOT NULL,source_key TEXT NOT NULL UNIQUE,workspace_id TEXT NOT NULL,client_id TEXT NOT NULL,
-      session_id TEXT,source_kind TEXT NOT NULL CHECK(source_kind IN ('CURRENT','ARCHIVE','SESSION')),
+      session_id TEXT,source_kind TEXT NOT NULL CHECK(source_kind IN ('CURRENT','ARCHIVE','SESSION','SNAPSHOT')),
       lifecycle TEXT NOT NULL CHECK(lifecycle IN ('ACTIVE','DELETED','TEMPLATE','OWNERSHIP_REVIEW')),source_workout_key TEXT NOT NULL,
       plan_json TEXT NOT NULL CHECK(json_valid(plan_json)),source_json TEXT NOT NULL CHECK(json_valid(source_json)),
       diary_json TEXT NOT NULL CHECK(json_valid(diary_json)),state_json TEXT NOT NULL CHECK(json_valid(state_json)),
@@ -120,7 +120,7 @@ export function stageLegacyExecutionsInTransaction(db: DatabaseSync, context: Ca
       context_json: canonical(JSON.parse(r.context_json as string) as unknown), date_json: canonical(JSON.parse(r.date_json as string) as unknown) } : {}),
     ...(name === "r04_execution_contexts" ? Object.fromEntries(["source_json", "diary_json", "state_json", "plan_json"]
       .map((column) => [column, canonical(JSON.parse(r[column] as string) as unknown)])) : {}) })).sort(compare) }));
-  const targetJson = canonical({ contextProjectionVersion: 1, editableProjectionVersion: 1, tables, identities, sourceSha256: createHash("sha256").update(sourceJson).digest("hex") });
+  const targetJson = canonical({ snapshotProjectionVersion: 1, contextProjectionVersion: 1, editableProjectionVersion: 1, tables, identities, sourceSha256: createHash("sha256").update(sourceJson).digest("hex") });
   const receipts = db.prepare("SELECT * FROM r04_execution_receipt").all();
   if (receipts.length > 1 || receipts.length === 1 && (receipts[0]?.id !== 1 || receipts[0]?.source_json !== sourceJson || receipts[0]?.target_json !== targetJson)) return fail("PARITY_MISMATCH");
   const stages: readonly ExecutionStageCheckpoint[] = ["after-execution-sessions", "after-execution-facts", "after-execution-segments", "after-execution-representations", "after-execution-contexts"];
@@ -147,7 +147,7 @@ export function loadStagedExecutionFacts(db: DatabaseSync) {
   let parsed: unknown; try { parsed = JSON.parse(receipts[0].target_json as string) as unknown; } catch { return fail("PARITY_MISMATCH"); }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return fail("PARITY_MISMATCH");
   const saved = parsed as Record<string, unknown>;
-  if (saved.contextProjectionVersion !== 1 || saved.editableProjectionVersion !== 1 || !Array.isArray(saved.tables) || saved.tables.length !== EXECUTION_TARGET_TABLES.length || !Array.isArray(saved.identities)
+  if (saved.snapshotProjectionVersion !== 1 || saved.contextProjectionVersion !== 1 || saved.editableProjectionVersion !== 1 || !Array.isArray(saved.tables) || saved.tables.length !== EXECUTION_TARGET_TABLES.length || !Array.isArray(saved.identities)
     || saved.sourceSha256 !== createHash("sha256").update(receipts[0].source_json as string).digest("hex")) return fail("PARITY_MISMATCH");
   const seen = new Set<string>();
   for (const item of saved.tables) {

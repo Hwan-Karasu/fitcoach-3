@@ -6,6 +6,8 @@ import { legacyExecutionDate, type LegacyExecutionDate } from "./LegacyExecution
 import { convertLegacySetMetrics } from "./LegacySetMetricCandidates.ts";
 import { isExplicitTimestamp } from "./ExactScaledHundredth.ts";
 import { projectLegacyEditableSet, type LegacyEditableSet } from "./LegacyEditableSet.ts";
+import { readLegacyWorkoutSnapshots } from "./LegacyWorkoutSnapshots.ts";
+import { parseLegacyExecutionMetricJson } from "./LegacyExecutionMetricJson.ts";
 
 function fail(code: string): never { throw new Error(`R04_ID_LEDGER_EXECUTION_${code}`); }
 export function executionObject(value: unknown): Raw {
@@ -23,7 +25,7 @@ function index(rows: readonly Raw[]): Map<string, Raw> {
 }
 export interface ExecutionSegment { readonly reps: number; readonly loadGrams: number }
 export interface ExecutionOccurrence {
-  readonly sourceKey: string; readonly kind: "CURRENT" | "SESSION" | "HISTORY" | "ARCHIVE";
+  readonly sourceKey: string; readonly kind: "CURRENT" | "SESSION" | "HISTORY" | "ARCHIVE" | "SNAPSHOT";
   readonly client: string; readonly factKey: string; readonly sourceFactId: string | null; readonly workoutKey: string;
   readonly disposition: "PERFORMED" | "UNCONFIRMED" | "DELETED" | "TEMPLATE";
   readonly exerciseId: string | null; readonly name: string | null; readonly position: number;
@@ -41,6 +43,7 @@ interface Input {
   readonly status?: unknown; readonly dateSource?: unknown; readonly dateValue?: unknown; readonly importedAt?: unknown; readonly forceDay?: boolean;
   readonly fallbackKey?: string; readonly planKey?: string;
   readonly foreignArchiveProgram?: boolean;
+  readonly snapshotCorroborated?: boolean;
 }
 
 /** All stores are reparsed from the frozen source, not preflight dispositions.
@@ -69,13 +72,13 @@ export function composeLegacyExecutionOccurrences(context: CandidateIdentityCont
     if (!clients.has(input.client) || seen.has(input.sourceKey)) return fail("OWNER_OR_COVERAGE_INVALID"); seen.add(input.sourceKey);
     const ids = explicitRefs(input.factRefs); if (new Set(ids).size > 1) return fail("FACT_ID_CONFLICT");
     const sourceFactId = ids[0] ?? null, factKey = JSON.stringify([scope, input.client, sourceFactId === null ? "PHYSICAL" : "EXPLICIT", sourceFactId ?? input.fallbackKey ?? input.sourceKey]);
-    const disposition = input.template ? "TEMPLATE" : input.deleted ? "DELETED" : input.kind === "HISTORY" || input.kind === "SESSION" || input.completedAt != null && input.completedAt !== ""
+    const disposition = input.template ? "TEMPLATE" : input.deleted ? "DELETED" : input.kind === "SNAPSHOT" ? input.snapshotCorroborated ? "PERFORMED" : "UNCONFIRMED" : input.kind === "HISTORY" || input.kind === "SESSION" || input.completedAt != null && input.completedAt !== ""
       ? "PERFORMED" : "UNCONFIRMED";
     const type = input.setKind === "drop" ? "DROP" : input.setKind === "warmup" ? "WARMUP" : input.effort === "failure" ? "FAILURE" : "NORMAL";
     let completion: ExecutionOccurrence["disposition"] = disposition;
-    let basis: string = disposition === "PERFORMED" ? input.kind === "HISTORY" ? "PERSISTED_COMPLETED_HISTORY" : input.kind === "SESSION" ? "PERSISTED_SESSION_PROJECTION" : "COMPLETION_MARKER" : disposition;
+    let basis: string = disposition === "PERFORMED" ? input.kind === "HISTORY" ? "PERSISTED_COMPLETED_HISTORY" : input.kind === "SESSION" ? "PERSISTED_SESSION_PROJECTION" : input.kind === "SNAPSHOT" ? "CACHE_CORROBORATED_SNAPSHOT" : "COMPLETION_MARKER" : input.kind === "SNAPSHOT" && disposition === "UNCONFIRMED" ? "SNAPSHOT_COMPLETION_NOT_PROVEN" : disposition;
     const metrics = convertLegacySetMetrics(input.reps, input.weight);
-    const implicit = input.data.factCompletionExplicit !== true && input.data.factCompletionExplicit !== 1
+    const implicit = input.kind !== "SNAPSHOT" && input.data.factCompletionExplicit !== true && input.data.factCompletionExplicit !== 1
       && !Object.hasOwn(input.data, "plannedReps") && !Object.hasOwn(input.data, "plannedWeight");
     const implicitSegments = input.segments == null ? [] : array(input.segments);
     const implicitValues = (implicitSegments.length ? implicitSegments : [{ reps: input.reps, weight: input.weight }]);
@@ -139,9 +142,39 @@ export function composeLegacyExecutionOccurrences(context: CandidateIdentityCont
     append({ sourceKey: key("training_session_sets", text(row.id)), kind: "SESSION", client, factRefs: [row.source_fact_id],
       workoutKey: typeof s.source_workout_id === "string" && s.source_workout_id.trim() ? workoutKey(client, s.source_workout_id) : key("training_sessions", text(s.id)),
       row, data, deleted: deleted(row.deleted_at) || deleted(ex.deleted_at) || deleted(s.deleted_at), catalogRefs: refs, name: ex.name,
-      position: row.set_index, segments: executionJson(row.segments_json), completedAt: row.completed_at, reps: row.reps, weight: row.weight, rpe: row.rpe,
+      position: row.set_index, segments: parseLegacyExecutionMetricJson(row.segments_json), completedAt: row.completed_at, reps: row.reps, weight: row.weight, rpe: row.rpe,
       setKind: row.set_kind, effort: row.effort_outcome, status: meta.dateStatus, importedAt: meta.importedAt, dateSource: s.date_source,
       dateValue: s.date_source === "explicit" ? s.performed_at : row.completed_at });
+  }
+  const snapshots = readLegacyWorkoutSnapshots(source), origins = new Map<string, number>();
+  const aliasKey = (client: string, snapshot: string, id: string) => JSON.stringify([client, snapshot, id]);
+  for (const snapshot of snapshots) for (const set of snapshot.sets) {
+    const k = aliasKey(snapshot.client, snapshot.id, set.derivedCacheId); origins.set(k, (origins.get(k) ?? 0) + 1);
+  }
+  const cached = new Map<string, ExecutionOccurrence[]>();
+  for (const row of result) if (row.kind === "SESSION" && row.sourceFactId !== null) {
+    const ex = sessionExercises.get(text(executionObject(row.raw).session_exercise_id))!, s = sessions.get(text(ex.session_id))!, meta = objectJson(s.data_json);
+    // Migration 021 persists the winning source kind and physical log ID.
+    // A coincidentally equal, concatenated set ID cannot prove this origin.
+    if (meta.sourcePriority !== 2 || typeof meta.sourceVersionId !== "string" || !meta.sourceVersionId.trim()) continue;
+    const k = aliasKey(row.client, meta.sourceVersionId, row.sourceFactId), rows = cached.get(k) ?? []; rows.push(row); cached.set(k, rows);
+  }
+  for (const snapshot of snapshots) {
+    const wk = workoutKey(snapshot.client, snapshot.workoutId), parent = workouts.get(snapshot.workoutId);
+    const program = parent?.program_id == null ? undefined : programs.get(text(parent.program_id));
+    for (const set of snapshot.sets) {
+      const matches = cached.get(aliasKey(snapshot.client, snapshot.id, set.derivedCacheId)) ?? [];
+      if (matches.length && origins.get(aliasKey(snapshot.client, snapshot.id, set.derivedCacheId)) !== 1) return fail("SNAPSHOT_ID_AMBIGUOUS");
+      if (matches.some((r) => r.workoutKey !== wk)) return fail("SNAPSHOT_CACHE_REFERENCE_CONFLICT");
+      const positive = matches.find((r) => r.disposition === "PERFORMED");
+      const refs = explicitRefs(set.catalogRefs), fallbackRefs = positive === undefined ? [] : [...catalog].filter(([, id]) => id === positive.exerciseId).map(([id]) => id);
+      append({ sourceKey: key("training_workout_logs", snapshot.id, set.path), client: snapshot.client, kind: "SNAPSHOT", workoutKey: wk,
+        factRefs: matches.length ? [set.derivedCacheId] : [], row: { logId: snapshot.id, path: set.path, set: set.raw }, data: {},
+        deleted: false, template: program?.is_template === 1, catalogRefs: refs.length ? refs : fallbackRefs,
+        name: set.name, position: set.position, segments: set.segments, completedAt: undefined, reps: set.raw.reps, weight: set.raw.weight,
+        rpe: set.raw.rpe, setKind: set.raw.setKind === "" ? null : set.raw.setKind, effort: set.raw.effortOutcome === "" ? null : set.raw.effortOutcome,
+        snapshotCorroborated: positive !== undefined });
+    }
   }
   index(e("training_exercise_history"));
   for (const row of e("training_exercise_history")) {

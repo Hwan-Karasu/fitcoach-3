@@ -7,7 +7,7 @@ import type { LegacyWorkoutContext } from "./LegacyWorkoutContexts.ts";
 export const EXECUTION_TARGET_TABLES = ["r04_execution_sessions", "r04_execution_facts", "r04_execution_segments", "r04_execution_representations", "r04_execution_contexts"] as const;
 export type ExecutionIdentityKind = "SESSION" | "FACT" | "CONTEXT";
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
-const rank = { HISTORY: 0, SESSION: 1, ARCHIVE: 2, CURRENT: 3 } as const;
+const rank = { HISTORY: 0, SESSION: 1, SNAPSHOT: 2, ARCHIVE: 3, CURRENT: 4 } as const;
 function fail(code: string): never { throw new Error(`R04_ID_LEDGER_EXECUTION_${code}`); }
 /** One fact per account/client/explicit source identity; only proven shared fact
  * identity or a physical source-workout reference joins workout representations. */

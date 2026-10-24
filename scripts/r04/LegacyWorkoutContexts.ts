@@ -5,6 +5,7 @@ import type { PlanDraftMapping } from "./LegacyPlansStage.ts";
 import { executionJson, executionObject } from "./LegacyExecutionOccurrences.ts";
 import { isExplicitTimestamp } from "./ExactScaledHundredth.ts";
 import { NOTE_MAX } from "../../apps/mobile/src/features/training/execution/domain/ExecutionModel.ts";
+import { readLegacyWorkoutSnapshots } from "./LegacyWorkoutSnapshots.ts";
 
 function fail(code: string): never { throw new Error(`R04_ID_LEDGER_EXECUTION_CONTEXT_${code}`); }
 const text = (v: unknown): string => typeof v === "string" && v.trim() ? v : fail("IDENTITY_INVALID");
@@ -38,7 +39,7 @@ function complete(set: SourceSet): boolean {
 }
 export interface LegacyWorkoutContext {
   readonly sourceKey: string; readonly workoutKey: string; readonly client: string;
-  readonly kind: "CURRENT" | "ARCHIVE" | "SESSION";
+  readonly kind: "CURRENT" | "ARCHIVE" | "SESSION" | "SNAPSHOT";
   readonly lifecycle: "ACTIVE" | "DELETED" | "TEMPLATE" | "OWNERSHIP_REVIEW";
   readonly plan: PlanDraftMapping | null; readonly raw: unknown;
   readonly diary: unknown; readonly state: unknown;
@@ -136,6 +137,15 @@ export function composeLegacyWorkoutContexts(context: CandidateIdentityContext, 
     add({ sourceKey: key("training_sessions", id), workoutKey: sourceId === null ? key("training_sessions", id) : workoutKey(client, sourceId), client, kind: "SESSION",
       lifecycle: isDeleted(s.deleted_at) ? "DELETED" : "ACTIVE", plan: sourceId === null ? null : bind(key("training_workouts", sourceId), client), raw: s,
       diary: diary(null, []), state: state(s, null) });
+  }
+  for (const snapshot of readLegacyWorkoutSnapshots(source)) {
+    const w = workouts.get(snapshot.workoutId), p = w?.program_id == null ? undefined : programs.get(text(w.program_id));
+    add({ sourceKey: key("training_workout_logs", snapshot.id), workoutKey: workoutKey(snapshot.client, snapshot.workoutId),
+      client: snapshot.client, kind: "SNAPSHOT", lifecycle: snapshot.deleted ? "DELETED" : p?.is_template === 1 ? "TEMPLATE" : "ACTIVE",
+      plan: bind(key("training_workouts", snapshot.workoutId), snapshot.client, p?.is_template === 1), raw: snapshot.raw,
+      diary: diary(null, []), state: { stored: { present: false, value: null }, derived: null, completedSets: null,
+        totalSets: snapshot.deleted ? null : snapshot.sets.length, sourceSetKeys: snapshot.sets.map((s) => key("training_workout_logs", snapshot.id, s.path)).sort(compare),
+        basis: "LEGACY_SNAPSHOT_NOT_WORKOUT_OUTCOME", targetOutcome: null, issues: ["SNAPSHOT_OUTCOME_NOT_PROVEN"] } });
   }
   return result.sort((a, b) => compare(a.sourceKey, b.sourceKey));
 }
