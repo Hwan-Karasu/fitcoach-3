@@ -94,10 +94,20 @@ async function fixture(run: (source: DatabaseSync, target: DatabaseSync) => void
 function fact(target: DatabaseSync, sourceId: string, client = "a") {
   return target.prepare("SELECT * FROM r04_execution_facts WHERE source_identity_key=?").get(JSON.stringify([context.accountScope, client, "EXPLICIT", sourceId]))!;
 }
+function workoutContext(target: DatabaseSync, table: string, id: string, path?: string) {
+  const row = target.prepare("SELECT * FROM r04_execution_contexts WHERE source_key=?")
+    .get(JSON.stringify([context.accountScope, table, id, ...(path === undefined ? [] : [path])]));
+  assert.ok(row); return row;
+}
+type Note = { present: boolean; value: string | null };
+const contextDiary = (row: Record<string, unknown>) => JSON.parse(row.diary_json as string) as {
+  workoutNote: Note | null; exerciseNotes: { sourceKey: string; diaryNote: Note | null }[]; compatibility: string[] };
+const contextState = (row: Record<string, unknown>) => JSON.parse(row.state_json as string) as {
+  stored: Note; derived: string | null; completedSets: number | null; totalSets: number | null; targetOutcome: null; basis: string; issues: string[] };
 const ownTables = ["clients", "questionnaire_versions", "questionnaire_answers", "r04_work_ids", "r04_work_notes", "r04_work_tags", "r04_work_assignments", "r04_work_receipt",
   "r04_exercise_ids", "r04_exercise_registry", "exercise_overlay", "r04_exercise_links", "r04_exercise_receipt", "r04_plan_ids", "r04_plan_source", "r04_plan_receipt",
   "training_programs", "training_program_members", "training_mesocycles", "training_weeks", "training_workouts", "training_planned_exercises", "training_planned_sets", "training_simple_overrides", "training_templates",
-  "r04_execution_ids", "r04_execution_sessions", "r04_execution_facts", "r04_execution_segments", "r04_execution_representations", "r04_execution_receipt"];
+  "r04_execution_ids", "r04_execution_sessions", "r04_execution_facts", "r04_execution_segments", "r04_execution_representations", "r04_execution_contexts", "r04_execution_receipt"];
 
 test("canonical facts deduplicate current/session/history/archive mirrors once per client, without merging identical other weeks", () => fixture((source, target) => {
   const { result, ledger } = stage(source, target);
@@ -109,6 +119,113 @@ test("canonical facts deduplicate current/session/history/archive mirrors once p
   assert.equal(target.prepare("SELECT count(*) AS n FROM r04_execution_representations WHERE fact_id=?").get(first.id!)?.n, 5);
   assert.equal(first.snapshot_name, "Историческое имя"); assert.ok((JSON.parse(first.names_json as string) as string[]).includes("Архивное имя"));
   assert.equal(ledger.loadExecutionDraftFacts().length, 5); assert.deepEqual(target.prepare("PRAGMA foreign_key_check").all(), []);
+}));
+
+test("notes-only workout keeps owner/plan/long diary notes without creating a performed session or trusting stored completion", () => fixture((source, target) => {
+  const long = "Точная заметка без обрезки. ".repeat(90);
+  source.exec("ALTER TABLE training_workouts ADD COLUMN status TEXT; UPDATE training_set_logs SET reps='',weight='',completed_at=NULL WHERE id='set-b0'");
+  source.prepare("UPDATE training_workouts SET status='completed',data_json=? WHERE id='w-b0'").run(JSON.stringify({ note: "Заметка ко всей тренировке" }));
+  source.prepare("UPDATE training_exercises SET note='Указание плана',data_json=? WHERE id='e-b0'").run(JSON.stringify({ catalogId: "x", diaryNote: long }));
+  const { result, ledger } = stage(source, target), row = workoutContext(target, "training_workouts", "w-b0"), state = contextState(row), notes = contextDiary(row);
+  assert.equal(result.performedFacts, 4); assert.equal(result.canonicalSessions, 2); assert.equal(result.executionContexts, 6);
+  assert.equal(row.session_id, null); assert.equal(row.lifecycle, "ACTIVE");
+  assert.equal(row.client_id, ledger.loadClientDraftIds().clients.get(JSON.stringify([context.accountScope, "b"])));
+  assert.ok((JSON.parse(row.plan_json as string) as { targetId: string }).targetId);
+  assert.equal(notes.workoutNote!.value, "Заметка ко всей тренировке"); assert.equal(notes.exerciseNotes[0]!.diaryNote!.value, long);
+  assert.deepEqual(notes.compatibility, ["D01_WORKOUT_NOTE_FIELD_REQUIRED", "D01_NOTE_LIMIT"]);
+  assert.deepEqual([state.stored.value, state.derived, state.completedSets, state.totalSets, state.targetOutcome], ["completed", "planned", 0, 1, null]);
+  assert.ok(state.issues.includes("STORED_AND_DERIVED_STATUS_DIFFER"));
+  assert.equal((JSON.parse(row.source_json as string) as { exercises: { note: string }[] }).exercises[0]!.note, "Указание плана");
+  assert.equal(ledger.loadExecutionDraftContexts().length, 6); assert.deepEqual(target.prepare("PRAGMA foreign_key_check").all(), []);
+}));
+
+test("a free workout with no exercises or facts retains its note and stable context without inventing plan bindings", () => fixture((source, target) => {
+  source.prepare("INSERT INTO training_workouts VALUES('free-empty','a',NULL,NULL,0,'Без программы',?,?,?,NULL)")
+    .run(JSON.stringify({ note: "Записано до составления плана" }), date0, date0);
+  const { result, ledger } = stage(source, target), row = workoutContext(target, "training_workouts", "free-empty");
+  assert.equal(result.performedFacts, 5); assert.equal(result.canonicalSessions, 3); assert.equal(result.executionContexts, 7);
+  assert.equal(row.session_id, null); assert.equal(contextDiary(row).workoutNote!.value, "Записано до составления плана");
+  assert.deepEqual(contextDiary(row).exerciseNotes, []); assert.equal(contextState(row).totalSets, 0);
+  assert.equal((JSON.parse(row.plan_json as string) as { targetId: string | null }).targetId, null);
+  const input = read(source);
+  ledger.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, () => { throw new Error("reuse context IDs"); });
+  assert.equal(workoutContext(target, "training_workouts", "free-empty").id, row.id);
+}));
+
+test("template and deleted workout contexts retain their lifecycle without reviving executions", async () => {
+  for (const template of [false, true]) await fixture((source, target) => {
+    if (template) {
+      source.prepare("UPDATE training_programs SET is_template=1,template_workspace_id=? WHERE id='p-b'").run(context.sourceWorkspaceId);
+    } else {
+      source.prepare("UPDATE training_workouts SET deleted_at=?,data_json='{\"note\":4}' WHERE id='w-b0'").run(date1);
+    }
+    const { result } = stage(source, target), row = workoutContext(target, "training_workouts", "w-b0");
+    assert.equal(row.lifecycle, template ? "TEMPLATE" : "DELETED"); assert.equal(row.session_id, null);
+    assert.equal(result.performedFacts, 4); assert.equal(contextState(row).targetOutcome, null);
+    if (!template) assert.equal(contextDiary(row).workoutNote, null, "удалённое содержимое сохранено raw, не интерпретируется и не воскрешается");
+  });
+});
+
+test("live and archive diary notes stay separate; verified root/cycle mirrors keep one context and both raw paths", () => fixture((source, target) => {
+  source.prepare("UPDATE training_workouts SET data_json=? WHERE id='w-a0'").run(JSON.stringify({ note: "Текущая заметка" }));
+  source.prepare("UPDATE training_exercises SET note='Инструкция',data_json=? WHERE id='e-a0'").run(JSON.stringify({ catalogId: "x", diaryNote: "Текущее выполнение" }));
+  source.exec(`UPDATE training_archive_entries SET data_json=json_set(data_json,
+    '$.workouts[0].data',json('{"note":"Архивная заметка"}'), '$.cycles[0].snapshot.workouts[0].data',json('{"note":"Архивная заметка"}'),
+    '$.workouts[0].exercises[0].data.diaryNote','Архивное выполнение', '$.cycles[0].snapshot.workouts[0].exercises[0].data.diaryNote','Архивное выполнение')`);
+  stage(source, target);
+  const current = workoutContext(target, "training_workouts", "w-a0"), archive = workoutContext(target, "training_archive_entries", "archive", "/cycles/0/snapshot/workouts/0");
+  assert.notEqual(current.id, archive.id); assert.equal(current.session_id, archive.session_id, "общие подтверждённые факты не стирают разные контексты заметок");
+  assert.equal(contextDiary(current).workoutNote!.value, "Текущая заметка"); assert.equal(contextDiary(archive).workoutNote!.value, "Архивная заметка");
+  assert.equal(contextDiary(current).exerciseNotes[0]!.diaryNote!.value, "Текущее выполнение");
+  assert.equal(contextDiary(archive).exerciseNotes[0]!.diaryNote!.value, "Архивное выполнение");
+  assert.equal(target.prepare("SELECT count(*) AS n FROM r04_execution_contexts WHERE source_kind='ARCHIVE'").get()?.n, 2);
+  const raw = JSON.parse(archive.source_json as string) as { mirror: { sourceKey: string; workout: { data: { note: string } } } };
+  assert.equal(raw.mirror.sourceKey, JSON.stringify([context.accountScope, "training_archive_entries", "archive", "/workouts/0"]));
+  assert.equal(raw.mirror.workout.data.note, "Архивная заметка");
+}));
+
+test("contexts retain legacy status evidence and never turn cache/unknown labels into a v3 outcome", () => fixture((source, target) => {
+  source.exec("ALTER TABLE training_workouts ADD COLUMN status TEXT; UPDATE training_workouts SET status='missed' WHERE id='w-b0'");
+  stage(source, target);
+  const current = contextState(workoutContext(target, "training_workouts", "w-b0"));
+  assert.deepEqual([current.stored.value, current.derived, current.completedSets, current.targetOutcome], ["missed", "completed", 1, null]);
+  assert.ok(current.issues.includes("SOURCE_STATUS_REQUIRES_REVIEW"));
+  const cache = contextState(workoutContext(target, "training_sessions", "cache"));
+  assert.deepEqual([cache.derived, cache.completedSets, cache.totalSets, cache.targetOutcome], [null, null, null, null]);
+  assert.equal(cache.basis, "CANONICAL_CACHE_NOT_WORKOUT_OUTCOME");
+}));
+
+test("unreadable active note values and a foreign cache reference without facts roll back every owner", async () => {
+  for (const sql of ["UPDATE training_workouts SET data_json='{\"note\":4}' WHERE id='w-a0'",
+    "UPDATE training_exercises SET data_json='{\"catalogId\":\"x\",\"diaryNote\":4}' WHERE id='e-a0'",
+    "DELETE FROM training_session_sets; UPDATE training_sessions SET source_workout_id='w-b0' WHERE id='cache'"]) await fixture((source, target) => {
+    source.exec(sql); const input = read(source), ledger = prepareCandidateIdentityLedger(target, context, options);
+    assert.throws(() => ledger.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, allocator()), /EXECUTION_CONTEXT_/u);
+    for (const table of ownTables) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n, 0, table);
+  });
+});
+
+test("guarded context reads reject changed notes; changed source cannot overwrite saved contexts", () => fixture((source, target) => {
+  const { ledger } = stage(source, target), original = workoutContext(target, "training_workouts", "w-a0");
+  target.prepare("UPDATE r04_execution_contexts SET diary_json='{}' WHERE id=?").run(original.id!);
+  assert.throws(() => ledger.loadExecutionDraftContexts(), /EXECUTION_PARITY_MISMATCH/u);
+  assert.throws(() => ledger.loadExecutionDraftFacts(), /EXECUTION_PARITY_MISMATCH/u);
+  target.prepare("UPDATE r04_execution_contexts SET diary_json=? WHERE id=?").run(original.diary_json!, original.id!);
+  source.exec("UPDATE training_workouts SET data_json='{\"note\":\"изменено\"}' WHERE id='w-a0'"); const changed = read(source);
+  assert.throws(() => ledger.stageClientExecutions(changed.cards, null, changed.catalog, changed.refs, changed.plans, changed.executions, allocator()), /PARITY_MISMATCH/u);
+  assert.deepEqual(workoutContext(target, "training_workouts", "w-a0"), original);
+}));
+
+test("old execution mode cannot claim the new context schema or omit its manifest version", () => fixture((source, target) => {
+  const { ledger } = stage(source, target);
+  const binding = target.prepare("SELECT context_json FROM r04_candidate_identity").get()!;
+  target.prepare("UPDATE r04_candidate_identity SET context_json=?").run((binding.context_json as string).replace("TRAINING_EXECUTIONS_REHEARSAL_V2", "TRAINING_EXECUTIONS_REHEARSAL_V1"));
+  assert.throws(() => prepareCandidateIdentityLedger(target, context, options), /CONTEXT_MISMATCH/u);
+  target.prepare("UPDATE r04_candidate_identity SET context_json=?").run(binding.context_json!);
+  target.exec("UPDATE r04_execution_receipt SET target_json=json_remove(target_json,'$.contextProjectionVersion')");
+  assert.throws(() => ledger.loadExecutionDraftContexts(), /EXECUTION_PARITY_MISMATCH/u);
+  target.exec("DROP TABLE r04_execution_contexts");
+  assert.throws(() => prepareCandidateIdentityLedger(target, context, options), /FOREIGN_DATABASE/u);
 }));
 
 test("warmups, DROP mini-sets, failure effort and unconfirmed draft values retain independent semantics", () => fixture((source, target) => {
@@ -255,6 +372,9 @@ test("archive references to another client's program require independent same-cl
     const { result } = stage(source, target); assert.equal(result.performedFacts, 5);
     const rows = target.prepare("SELECT * FROM r04_execution_representations WHERE source_kind='ARCHIVE' AND json_extract(context_json,'$.ownership')='ARCHIVE_FOREIGN_PROGRAM'").all();
     assert.equal(rows.length, 2); assert.ok(rows.every((r) => corroborated ? r.fact_id === fact(target, "set-a0").id : r.fact_id === null && r.disposition === "OWNERSHIP_REVIEW"));
+    const notes = workoutContext(target, "training_archive_entries", "archive", "/cycles/0/snapshot/workouts/0");
+    assert.equal(notes.lifecycle, "OWNERSHIP_REVIEW"); assert.equal(notes.session_id, null);
+    assert.notEqual(notes.client_id, workoutContext(target, "training_workouts", "w-b0").client_id);
   });
 });
 
@@ -270,14 +390,18 @@ test("a second archive alone cannot authorize facts referencing a known foreign 
 test("execution input is frozen before allocator and earlier-owner callbacks run", () => fixture((source, target) => {
   const input = read(source), ledger = prepareCandidateIdentityLedger(target, context, options);
   const result = ledger.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, allocator(), (stage) => {
-    if (stage === "after-ids") Object.assign(input.executions.tables.training_session_sets![0]!, { reps: "700" });
+    if (stage === "after-ids") {
+      Object.assign(input.executions.tables.training_session_sets![0]!, { reps: "700" });
+      Object.assign(input.plans.tables.training_workouts![0]!, { data_json: '{"note":"injected-note"}' });
+    }
   });
   assert.equal(result.performedFacts, 5); assert.equal(fact(target, "set-a0").reps, 20);
+  assert.ok(ledger.loadExecutionDraftContexts().every((row) => !(row.source_json as string).includes("injected-note")));
 }));
 
-test("all 22 plan/archive/execution transaction checkpoints roll back together and permit a single retry", async () => {
+test("all 23 plan/archive/execution transaction checkpoints roll back together and permit a single retry", async () => {
   const phases = ["after-archive-plans", "after-plan-ids", ...Array.from({ length: 11 }, () => "after-plan-rows"), "after-plan-source", "after-plan-receipt",
-    "after-execution-ids", "after-execution-sessions", "after-execution-facts", "after-execution-segments", "after-execution-representations", "after-execution-receipt", "before-commit"];
+    "after-execution-ids", "after-execution-sessions", "after-execution-facts", "after-execution-segments", "after-execution-representations", "after-execution-contexts", "after-execution-receipt", "before-commit"];
   for (let n = 0; n < phases.length; n++) await fixture((source, target) => {
     const input = read(source), ledger = prepareCandidateIdentityLedger(target, context, options), phase = phases[n]!, occurrence = phases.slice(0, n + 1).filter((p) => p === phase).length; let seen = 0;
     assert.throws(() => ledger.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, allocator(), (stage) => {
@@ -328,11 +452,15 @@ test("read-only source and reopened/reordered canonical executions preserve byte
     source = new DatabaseSync(sourcePath, { readOnly: true }); source.exec("PRAGMA query_only=ON; BEGIN"); const input = read(source), exact = { ...context, sourceSha256: sourceHash };
     target = new DatabaseSync(targetPath); const first = prepareCandidateIdentityLedger(target, exact, options);
     first.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, allocator());
-    const facts = first.loadExecutionDraftFacts(); target.close(); target = null; const targetHash = hash(targetPath); target = new DatabaseSync(targetPath);
-    for (const rows of [...Object.values(input.plans.tables), ...Object.values(input.executions.tables)]) if (rows !== null) (rows as unknown[]).reverse();
+    const facts = first.loadExecutionDraftFacts(), contexts = first.loadExecutionDraftContexts(); target.close(); target = null; const targetHash = hash(targetPath); target = new DatabaseSync(targetPath);
+    for (const rows of [...Object.values(input.plans.tables), ...Object.values(input.executions.tables)]) if (rows !== null) {
+      (rows as Record<string, unknown>[]).reverse();
+      for (const [i, row] of rows.entries()) (rows as Record<string, unknown>[])[i] = Object.fromEntries(Object.entries(row).reverse());
+    }
     const reopened = prepareCandidateIdentityLedger(target, exact, options);
     assert.equal(reopened.stageClientExecutions([...input.cards].reverse(), null, [...input.catalog].reverse(), [...input.refs].reverse(), input.plans, input.executions, () => { throw new Error("reuse IDs"); }).performedFacts, 5);
-    assert.deepEqual(reopened.loadExecutionDraftFacts(), facts); target.close(); target = null; assert.equal(hash(targetPath), targetHash);
+    assert.deepEqual(reopened.loadExecutionDraftFacts(), facts); assert.deepEqual(reopened.loadExecutionDraftContexts(), contexts);
+    target.close(); target = null; assert.equal(hash(targetPath), targetHash);
     source.exec("ROLLBACK"); source.close(); source = null; assert.equal(hash(sourcePath), sourceHash);
   } finally { target?.close(); source?.close(); rmSync(dir, { recursive: true, force: true }); }
 });

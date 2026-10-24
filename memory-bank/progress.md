@@ -1,46 +1,42 @@
 # Progress — 2026-10-24
 
-Goal ACTIVE: владелец возобновил работу; full2.0→3.0+backup/restore НЕ завершён.
-R04→R03/D03→D01/R04/R05; productionmigration/overlay/signing/release gates OPEN.
-UI/themeslater/Excelafterbackup/GitHubfirst. Russiancommits/nopush/targetedchecks.
+GoalACTIVE full2.0→3.0+backup/restore NOTDONE. R04→R03/D03→D01/R04/R05. Gates OPEN:
+prodDDL/realmigration/overlay/signing/release. UIlater/Excelafterbackup/GitHubfirst.
+Targetedchecks/Russiancommits/nopush. Preserve concurrentthemefiles/packagehunks.
+8d0031a userdecision bridge3.0 withimport2.0 thennormal3.x withoutimporter; keepbridge
+forlateusers, keep3.x data/precision/provenance/backup. No release claim.
 
-032b7e5 last completed canonicalExecution private staging:6tables, fullsharedtx with
-Client/Q/WorkData/exercises/livePlans/templates/archives. SourceFact account+client
-identity; graphonlyphysicalrefs/sharedfacts; allsegments/type/effort/RPE/precision
-preserved, ownership conflicts block. SourceSHA/reopenedtarget/stableID/parity/retry
-22failureboundaries;306/306 area+deps historic. D01factscreated0/finalizable:false.
-Earlier92d00bb Plans,74fa6cf templates,12381f4 archives. Prior nativebackup/restore
-35/12/13/24/3/Downloads20/SAF19/reinstall6/auto21/status3/missing19/actualkill15+14.
-Historicalfoundation1086/bundle5623/1185, not currentturn checks. Legacy restore
-NOTconnected; ExpoRestoreJobs only3.0. ProductionWorkData/registry/schema stillOPEN.
+Prior D01/fullsnapshot/GuardedRestore/return/15holders/closedrecovery/connected3.xUI.
+ExpoRestoreJobs3.0ONLY, legacy NOTconnected. Historicalnative35/12/13/24/3/Downloads20/
+SAF19/reinstall6/auto21/status3/missing19/actualkill15+14; fixtureCOMPLETE/2.0untouched.
+Historicalfoundation1086/bundle5623, not currentchecks. Profile37/Qhistory/exactversions/
+privateWorkData/registry/Plans92d00bb/templates74fa6cf/archives12381f4; prodownersOPEN.
+032b7e5 canonicalprivateExecution sourceFact account+client/physicalgraph/allsegments/
+precision/ownerisolation/parity/stableIDs. b64fac9 runtime nullabledates/undatedretained/
+no dateplotfake/bodyweightneedsdate/recordstablewithnochart.232training+39extra+4weekly,
+14newtests, types/ownlint/source73/arch510/secrets/diff +AndroidJS5626/1185 historicpass.
+e93a4c8 privateeditable values separatefromfacts/confirmedfalse/nullvs0/partialDROP/
+rawinvalid+review/no planfallback; version1 receipt.309/309historic,22boundaries.
+Runtime writing/editing/import notconnected.
 
-8d0031a userdecision: transitional3.0 importer2.0 then regular3.x withoutimporter.
-Keepbridgeartifactforlateusers; retain3.x facts/dateprecision/provenance/backup.
-Removal gate:2.0copy→bridge→3.xcopy→normal withoutimporter, verified data/IDs/parity.
-No release built by this decision. docs/decisions/TRANSITION_RELEASE_2_TO_3.md.
+NEW LegacyWorkoutContexts in sharedprivate tx. Added seventhExecutiontable contexts/
+CONTEXT IDs/newmodeV2/manifestcontextversion1. Current/archive/cache physical views
+independent of facts inclnotes-only/emptyfree. Exactworkoutnote/exercisediarynote vs
+planinstruction, no trim/truncate, typedpresence/null; D01compat flags. Parent/plan
+alias/sourcekeys preserved. Rootcycleonecontext/bothrawpaths/currentarchivevariants
+separate evenwithsharedfacts. Template/deleted retained/norevival; foreignarchive
+review/sessionnull, cacheforeignworkout blocked evenwithoutfacts. Storedstatus vs
+live2.0cardderived/counts/sourceSetKeys/basis/conflicts retained, targetOutcomeNULL.
+No extra performedfacts/sessions. Guardedcontextload verifies wholemanifest/canonical
+JSON/IDs/source; olderbinding/schema/version blocked. Caller mutations isolated.
+317/317r04:plans(30canonical/8new),23failureboundaries rollbackall/retry includingclient
+IDs. Readonlysource/reopen/reversedrows+properties/byteidentical/IDsreuse pass. Root/
+mobileTS/ownESLint/source73/secrets/diff pass. No newbundle/fullfoundation/APK/native/
+phone. Runtime/productionD01 unchanged. finalizable:false, goalnot100%. Contract
+R04_WORKOUT_CONTEXTS.md; handofftop updated.
 
-b64fac9 Runtime dates completed from75d5276: nullabledate/evidence +shared purecalendar,
-originaltimestamp precision preserved. Unknown/derived notimporttoday; zonereadprojection
-cache/races tested. Alltime/history/records retained, dategraphs/boundedperiodsexclude;
-bodyweightneedsdate. Fixedrecords hiddenbyemptychart +stableexerciseorder.14newtests.
-232training+39canonicalstage/backup/maintenance+4weekly pass (67direct overlaps).
-Root/mobileTS/ownlint/source73/arch510/secrets/diff pass. AndroidJS5626/1185 pass.
-Two tests import Node URL explicitly forfs typing. Concurrentthemeedits separate/
-preserve; initialglobalthemeerrors correctedbyotherwork beforeTS passed. Nofullsuite/
-APK/phone/native/personalfiles. Runtime dateevidence persistence and actual legacy
-restore NOTconnected, D01schema unchanged. Historicalbusinessdaypolicy/factdatevs
-sessiongraph identity stillOPEN. Contract R04_RUNTIME_DATE_EVIDENCE.md.
-
-Editablevalues now normalized inside existing private representations/context_json,
-no newtables/IDs/prodDDL. confirmed:false/hasInput/partials/segments/kind/effort/RPE;
-empty null/explicitzero/invalidraw+review/no planfallback. Version1 targetreceipt
-required; oldjob cannotclaimnewprojection.309/309r04:plans(22canonical/3new), existing
-22boundaries/retry/reopen/stableIDs/sourceparity pass. Root/mobileTS/ownlint/source73/
-secrets/diff pass. Runtimeunchanged/no newbundle/native/APK/phone/fullsuite.
-Legacyaudit showslive derivedstatus differs archive persistedstatus; diarynotes
-workoutdata.note/exercisedata.diaryNote differ planinstruction e.note. Next preserve
-these contexts evenwithoutfacts. Contract R04_EDITABLE_EXECUTION_VALUES.md.
-NEXT outcomes/notes/contextwithoutfacts/runtimeeditable/identity/factdates/owners/fullparity/
-connectedSQLite+JSONlegacyrestore/Android. Catalog/phase1archive/templatesextras/
-lineage/classification/preferences andbackupclock/DST/SAFgap/copydeletekill/ENOSPC/
-provider/UI/OS/first-run remainopen. Handofftop updated. No claim100%.
+NEXT finaloutcome+runtimeidentity/date reconciliation, runtime contexts/notes/draft
+binding/editing; remainingowners/fullparity/connectedSQLite+JSONlegacyrestore/Android.
+Catalog/phase1archives/templatevariation&extras/orphans/classification/preferences/
+lineage andbackupclock/DST/SAFgap/copydeletekill/ENOSPC/providers/UI/OS/first-run OPEN.
+Personaldata/2.0/scrcpy untouched/no pendingphoneaction. Do notclaimlegacyimportdone.

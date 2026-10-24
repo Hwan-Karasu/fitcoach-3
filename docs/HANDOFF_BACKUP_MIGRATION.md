@@ -1,4 +1,35 @@
-## Продолжение — editable execution values, 2026-10-24, базаb64fac9
+## Продолжение — workout contexts/notes/status evidence, базаe93a4c8
+
+Previous goal turn: status-only/NOPROGRESS; revalidated worktree and took nextsafe
+action. NowPROGRESS: LegacyWorkoutContexts→sharedstage→r04_execution_contexts,
+seventhprivateExecutiontable/CONTEXTstableIDs/TRAINING_EXECUTIONS_REHEARSAL_V2/
+contextProjectionVersion1. R04→R03; Product48.5.7/48.44/51–52/67/84–86/49–50/53–56/
+INT03–12; migration/productionDDL/overlay/signing/release gatesOPEN unchanged.
+
+Notes-only/emptyfreeworkout kept independently offacts. Workoutdata.note and
+exercisedata.diaryNote separatefrom e.note instruction, presence/null/empty exact,
+no trim/truncation; D01workoutnotefield/lengthlimits compatibilityflags. Physical
+source IDs, owner, planaliases; root/cycleonecontext/bothrawpaths; current/archive
+variants separateevenwhensharingfacts. Template/deleted lifecycle retained, no
+newfacts/session; archiveforeignprogram→OWNERSHIP_REVIEW/sessionnull. Cacheforeign
+reference withoutsets blocked. Allparents/raw unknownfields/sourceSHA retained.
+
+Storedstatus vs live2.0 derivedcardstate separate; counts/sourceSetKeys/basis and
+conflictissues. Canonicalcache notworkoutoutcome. targetOutcomeNULL; final mapping
+to runtimeidentity/independentfactdates remainsOPEN. No inventedCOMPLETED.
+loadExecutionDraftContexts guardedbywholePlan+Executionmanifest. ContextJSON columns
+canonicalized for stable retry when raw row propertyorder changes. Olderjobsblock.
+
+317/317r04:plans (30canonical/8new),23boundaries rollbackall/retry inclclientIDs;
+readonlysource/reopen/reorderproperties/byteidentical/stableIDs pass. Root/mobileTS/
+ownESLint/source73/secrets/diff pass. No newbundle/fullfoundation/APK/native/phone:
+onlyscripts/privateDDL changed, runtime/productionD01 untouched. Theme editsseparate.
+[Контракт](spikes/R04_WORKOUT_CONTEXTS.md). GoalACTIVEfullscope/not100%/finalizable:false.
+NEXT runtimebinding ofcontexts/notes/editablevalues +outcome reconciliation/factdate
+identity, remainingowners/fullparity, runtimeSQLite+JSON1/2 restore/Android. Do not
+claim this private projection is a connected legacy import.
+
+## Предыдущее продолжение — editable execution values, 2026-10-24, базаb64fac9
 
 GoalACTIVEfull2.0→3.0+backup/restore, не100%; previousPROGRESSb64fac9 runtime dates.
 R04→R03; Product48.5.7/48.44/48.52/49–50/53–56/INT03–12; gates OPEN unchanged.

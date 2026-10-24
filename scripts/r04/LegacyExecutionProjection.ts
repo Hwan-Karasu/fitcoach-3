@@ -2,16 +2,17 @@ import type { CandidateIdentityContext } from "./CandidateIdentityLedger.ts";
 import type { ExecutionOccurrence } from "./LegacyExecutionOccurrences.ts";
 import { mergeLegacyExecutionDates } from "./LegacyExecutionDates.ts";
 import type { PlanRow } from "./LegacyPlansProjection.ts";
+import type { LegacyWorkoutContext } from "./LegacyWorkoutContexts.ts";
 
-export const EXECUTION_TARGET_TABLES = ["r04_execution_sessions", "r04_execution_facts", "r04_execution_segments", "r04_execution_representations"] as const;
-export type ExecutionIdentityKind = "SESSION" | "FACT";
+export const EXECUTION_TARGET_TABLES = ["r04_execution_sessions", "r04_execution_facts", "r04_execution_segments", "r04_execution_representations", "r04_execution_contexts"] as const;
+export type ExecutionIdentityKind = "SESSION" | "FACT" | "CONTEXT";
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 const rank = { HISTORY: 0, SESSION: 1, ARCHIVE: 2, CURRENT: 3 } as const;
 function fail(code: string): never { throw new Error(`R04_ID_LEDGER_EXECUTION_${code}`); }
 /** One fact per account/client/explicit source identity; only proven shared fact
  * identity or a physical source-workout reference joins workout representations. */
 export function composeLegacyExecutions(context: CandidateIdentityContext, importedAt: string, occurrences: readonly ExecutionOccurrence[],
-  clients: ReadonlyMap<string, string>, identity: (kind: ExecutionIdentityKind, key: string) => string) {
+  clients: ReadonlyMap<string, string>, identity: (kind: ExecutionIdentityKind, key: string) => string, contexts: readonly LegacyWorkoutContext[]) {
   const groups = new Map<string, ExecutionOccurrence[]>(), seen = new Set<string>(), parents = new Map<string, string>();
   for (const row of occurrences) {
     if (seen.has(row.sourceKey) || !clients.has(row.client)) return fail("COVERAGE_INVALID"); seen.add(row.sourceKey);
@@ -84,7 +85,17 @@ export function composeLegacyExecutions(context: CandidateIdentityContext, impor
         editable: row.editable }),
       date_json: JSON.stringify(row.date) });
   }
+  const sourceSessions = new Map<string, string>();
+  for (const [node, keys] of sessionSources) for (const key of keys) sourceSessions.set(key, sessionIds.get(node)!);
+  for (const row of contexts) {
+    const client = clients.get(row.client); if (!client) return fail("CONTEXT_OWNER_INVALID");
+    tables.r04_execution_contexts.push({ id: identity("CONTEXT", row.sourceKey), source_key: row.sourceKey, workspace_id: context.targetWorkspaceId,
+      client_id: client, session_id: row.lifecycle === "ACTIVE" || row.lifecycle === "DELETED" ? sourceSessions.get(row.workoutKey) ?? null : null,
+      source_kind: row.kind, lifecycle: row.lifecycle, source_workout_key: row.workoutKey,
+      plan_json: JSON.stringify(row.plan), source_json: JSON.stringify(row.raw), diary_json: JSON.stringify(row.diary), state_json: JSON.stringify(row.state) });
+  }
   return { tables, performedFacts: tables.r04_execution_facts.length, canonicalSessions: tables.r04_execution_sessions.length,
+    executionContexts: tables.r04_execution_contexts.length,
     retainedRepresentations: tables.r04_execution_representations.filter((r) => r.disposition !== "PERFORMED").length,
     incompatibleFacts: tables.r04_execution_facts.filter((r) => r.compatibility_json !== "[]").length, finalizable: false as const };
 }

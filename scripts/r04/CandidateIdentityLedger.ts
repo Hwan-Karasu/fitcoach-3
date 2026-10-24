@@ -66,7 +66,7 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
       ...(questionnairesEnabled ? ["QUESTIONNAIRE_COMPOSITION_V1"] : []), ...(workDataEnabled ? ["WORK_DATA_REHEARSAL_V1"] : []),
       ...(exercisesEnabled ? ["EXERCISE_REGISTRY_REHEARSAL_V1"] : []), ...(plansEnabled ? ["TRAINING_PLANS_REHEARSAL_V1"] : []),
       ...(templatesEnabled ? ["TRAINING_TEMPLATES_REHEARSAL_V1"] : []), ...(archivesEnabled ? ["TRAINING_ARCHIVES_REHEARSAL_V1"] : []),
-      ...(executionsEnabled ? ["TRAINING_EXECUTIONS_REHEARSAL_V1"] : [])]);
+      ...(executionsEnabled ? ["TRAINING_EXECUTIONS_REHEARSAL_V2"] : [])]);
   const workspaceKey = JSON.stringify([binding.accountScope, binding.sourceWorkspaceId]);
   function inspect(): "new" | "owned" {
     const objects = db.prepare("SELECT type,name FROM sqlite_schema WHERE substr(name,1,7)<>'sqlite_' ORDER BY name").all();
@@ -373,5 +373,8 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
     if (!executionsEnabled || inspect() !== "owned") throw new Error("R04_ID_LEDGER_EXECUTION_NOT_ENABLED");
     loadStagedPlanMappings(db, true); return loadStagedExecutionFacts(db);
   }
-  return { reserveClientIds, loadClientDraftIds, loadExerciseDraftIds, loadPlanDraftMappings, loadExecutionDraftFacts, stageClientIdentities, stageClientCards, stageClientProfiles, stageClientQuestionnaires, stageClientWorkData, stageClientExerciseCatalog, stageClientPlans, stageClientExecutions };
+  function loadExecutionDraftContexts() {
+    loadExecutionDraftFacts(); return db.prepare("SELECT * FROM r04_execution_contexts ORDER BY source_key").all();
+  }
+  return { reserveClientIds, loadClientDraftIds, loadExerciseDraftIds, loadPlanDraftMappings, loadExecutionDraftFacts, loadExecutionDraftContexts, stageClientIdentities, stageClientCards, stageClientProfiles, stageClientQuestionnaires, stageClientWorkData, stageClientExerciseCatalog, stageClientPlans, stageClientExecutions };
 }

@@ -9,6 +9,7 @@ import { composeLegacyExecutionOccurrences } from "./LegacyExecutionOccurrences.
 import { composeLegacyExecutions, EXECUTION_TARGET_TABLES, type ExecutionIdentityKind } from "./LegacyExecutionProjection.ts";
 import { loadStagedPlanMappings } from "./LegacyPlansStage.ts";
 import { isExplicitTimestamp } from "./ExactScaledHundredth.ts";
+import { composeLegacyWorkoutContexts } from "./LegacyWorkoutContexts.ts";
 
 function fail(code: string): never { throw new Error(`R04_ID_LEDGER_EXECUTION_${code}`); }
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
@@ -25,7 +26,7 @@ export const executionRehearsalObjects: Readonly<Record<string, string>> = Objec
  * unknown/derived dates, all legacy metrics or DROP+failure yet. No production DDL. */
 export function createExecutionRehearsalSchema(db: DatabaseSync): void {
   if (!db.isTransaction) return fail("TRANSACTION_REQUIRED");
-  db.exec(`CREATE TABLE r04_execution_ids(kind TEXT NOT NULL CHECK(kind IN ('FACT','SESSION')),source_key TEXT NOT NULL,
+  db.exec(`CREATE TABLE r04_execution_ids(kind TEXT NOT NULL CHECK(kind IN ('FACT','SESSION','CONTEXT')),source_key TEXT NOT NULL,
       target_id TEXT NOT NULL UNIQUE,PRIMARY KEY(kind,source_key));
     CREATE TABLE r04_execution_sessions(id TEXT PRIMARY KEY NOT NULL,workspace_id TEXT NOT NULL,client_id TEXT NOT NULL,
       first_known_date TEXT,last_known_date TEXT,undated_facts INTEGER NOT NULL CHECK(undated_facts>=0),
@@ -55,10 +56,17 @@ export function createExecutionRehearsalSchema(db: DatabaseSync): void {
       FOREIGN KEY(client_id,workspace_id) REFERENCES clients(id,workspace_id) ON DELETE RESTRICT,
       FOREIGN KEY(fact_id,workspace_id,client_id) REFERENCES r04_execution_facts(id,workspace_id,client_id) ON DELETE RESTRICT,
       FOREIGN KEY(session_id,workspace_id,client_id) REFERENCES r04_execution_sessions(id,workspace_id,client_id) ON DELETE RESTRICT);
+    CREATE TABLE r04_execution_contexts(id TEXT PRIMARY KEY NOT NULL,source_key TEXT NOT NULL UNIQUE,workspace_id TEXT NOT NULL,client_id TEXT NOT NULL,
+      session_id TEXT,source_kind TEXT NOT NULL CHECK(source_kind IN ('CURRENT','ARCHIVE','SESSION')),
+      lifecycle TEXT NOT NULL CHECK(lifecycle IN ('ACTIVE','DELETED','TEMPLATE','OWNERSHIP_REVIEW')),source_workout_key TEXT NOT NULL,
+      plan_json TEXT NOT NULL CHECK(json_valid(plan_json)),source_json TEXT NOT NULL CHECK(json_valid(source_json)),
+      diary_json TEXT NOT NULL CHECK(json_valid(diary_json)),state_json TEXT NOT NULL CHECK(json_valid(state_json)),
+      FOREIGN KEY(client_id,workspace_id) REFERENCES clients(id,workspace_id) ON DELETE RESTRICT,
+      FOREIGN KEY(session_id,workspace_id,client_id) REFERENCES r04_execution_sessions(id,workspace_id,client_id) ON DELETE RESTRICT);
     CREATE TABLE r04_execution_receipt(id INTEGER PRIMARY KEY CHECK(id=1),source_json TEXT NOT NULL CHECK(json_valid(source_json)),target_json TEXT NOT NULL CHECK(json_valid(target_json)));`);
 }
 export type ExecutionStageCheckpoint = "after-execution-ids" | "after-execution-sessions" | "after-execution-facts" |
-  "after-execution-segments" | "after-execution-representations" | "after-execution-receipt";
+  "after-execution-segments" | "after-execution-representations" | "after-execution-contexts" | "after-execution-receipt";
 export function stageLegacyExecutionsInTransaction(db: DatabaseSync, context: CandidateIdentityContext, importedAt: string,
   cards: readonly LegacyClientCardCandidate[], ids: ClientDraftIdMap, plans: LegacyPlansSource, source: LegacyExecutionSource,
   allocate: () => string, checkpoint: (stage: ExecutionStageCheckpoint) => void) {
@@ -85,11 +93,13 @@ export function stageLegacyExecutionsInTransaction(db: DatabaseSync, context: Ca
     const linked = historyLinks.get(row.id as string);
     if (!linked || Object.keys(row).some((k) => canonical(row[k]) !== canonical(linked[k]))) return fail("HISTORY_SOURCE_MISMATCH");
   }
-  const occurrences = composeLegacyExecutionOccurrences(context, plans, source, clients, catalog, loadStagedPlanMappings(db, true));
+  const aliases = loadStagedPlanMappings(db, true);
+  const occurrences = composeLegacyExecutionOccurrences(context, plans, source, clients, catalog, aliases);
+  const contexts = composeLegacyWorkoutContexts(context, plans, source, clients, aliases);
   const cache = new Map<string, string>(), used = new Set<string>(), targets = new Set<string>();
   for (const row of db.prepare("SELECT * FROM r04_execution_ids").all()) {
     const parts = JSON.parse(row.source_key as string) as unknown;
-    if (!['FACT', 'SESSION'].includes(row.kind as string) || !Array.isArray(parts) || parts[0] !== context.accountScope
+    if (!['FACT', 'SESSION', 'CONTEXT'].includes(row.kind as string) || !Array.isArray(parts) || parts[0] !== context.accountScope
       || canonical(parts) !== row.source_key || typeof row.target_id !== "string" || !uuid.test(row.target_id) || targets.has(row.target_id)) return fail("IDENTITY_INVALID");
     cache.set(JSON.stringify([row.kind, row.source_key]), row.target_id); targets.add(row.target_id);
   }
@@ -100,18 +110,20 @@ export function stageLegacyExecutionsInTransaction(db: DatabaseSync, context: Ca
       || db.prepare("SELECT 1 FROM r04_work_ids WHERE target_id=?").get(id) || db.prepare("SELECT 1 FROM r04_plan_ids WHERE target_id=?").get(id)) return fail("IDENTITY_COLLISION");
     db.prepare("INSERT INTO r04_execution_ids VALUES(?,?,?)").run(kind, sourceKey, id); cache.set(k, id); targets.add(id); return id;
   }
-  const projected = composeLegacyExecutions(context, importedAt, occurrences, clients, identity);
+  const projected = composeLegacyExecutions(context, importedAt, occurrences, clients, identity, contexts);
   if (used.size !== cache.size) return fail("IDENTITY_INVALID"); checkpoint("after-execution-ids");
   const sourceJson = canonical({ plansSource: planSource, execution: { accountScope: source.accountScope,
     tables: Object.fromEntries(EXECUTION_SOURCE_TABLES.map((t) => [t, source.tables[t] === null ? null : source.tables[t].map(canonical).sort(compare)])) } });
   const identities = db.prepare("SELECT * FROM r04_execution_ids").all().map((r) => canonical({ ...r })).sort(compare);
   const tables = EXECUTION_TARGET_TABLES.map((name) => ({ name, rows: projected.tables[name].map((r) => canonical({ ...r,
     ...(name === "r04_execution_representations" ? { source_json: canonical(JSON.parse(r.source_json as string) as unknown),
-      context_json: canonical(JSON.parse(r.context_json as string) as unknown), date_json: canonical(JSON.parse(r.date_json as string) as unknown) } : {}) })).sort(compare) }));
-  const targetJson = canonical({ editableProjectionVersion: 1, tables, identities, sourceSha256: createHash("sha256").update(sourceJson).digest("hex") });
+      context_json: canonical(JSON.parse(r.context_json as string) as unknown), date_json: canonical(JSON.parse(r.date_json as string) as unknown) } : {}),
+    ...(name === "r04_execution_contexts" ? Object.fromEntries(["source_json", "diary_json", "state_json", "plan_json"]
+      .map((column) => [column, canonical(JSON.parse(r[column] as string) as unknown)])) : {}) })).sort(compare) }));
+  const targetJson = canonical({ contextProjectionVersion: 1, editableProjectionVersion: 1, tables, identities, sourceSha256: createHash("sha256").update(sourceJson).digest("hex") });
   const receipts = db.prepare("SELECT * FROM r04_execution_receipt").all();
   if (receipts.length > 1 || receipts.length === 1 && (receipts[0]?.id !== 1 || receipts[0]?.source_json !== sourceJson || receipts[0]?.target_json !== targetJson)) return fail("PARITY_MISMATCH");
-  const stages: readonly ExecutionStageCheckpoint[] = ["after-execution-sessions", "after-execution-facts", "after-execution-segments", "after-execution-representations"];
+  const stages: readonly ExecutionStageCheckpoint[] = ["after-execution-sessions", "after-execution-facts", "after-execution-segments", "after-execution-representations", "after-execution-contexts"];
   for (const [i, table] of tables.entries()) {
     if (!receipts.length) {
       if (db.prepare(`SELECT count(*) AS n FROM ${table.name}`).get()?.n !== 0) return fail("FOREIGN_TARGET");
@@ -126,7 +138,7 @@ export function stageLegacyExecutionsInTransaction(db: DatabaseSync, context: Ca
   if (!receipts.length) db.prepare("INSERT INTO r04_execution_receipt VALUES(1,?,?)").run(sourceJson, targetJson);
   checkpoint("after-execution-receipt");
   loadStagedExecutionFacts(db);
-  return { performedFacts: projected.performedFacts, canonicalSessions: projected.canonicalSessions, retainedExecutionRepresentations: projected.retainedRepresentations,
+  return { performedFacts: projected.performedFacts, canonicalSessions: projected.canonicalSessions, executionContexts: projected.executionContexts, retainedExecutionRepresentations: projected.retainedRepresentations,
     incompatibleExecutionFacts: projected.incompatibleFacts, executionRepresentations: occurrences.length, finalizable: false as const };
 }
 
@@ -135,7 +147,7 @@ export function loadStagedExecutionFacts(db: DatabaseSync) {
   let parsed: unknown; try { parsed = JSON.parse(receipts[0].target_json as string) as unknown; } catch { return fail("PARITY_MISMATCH"); }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return fail("PARITY_MISMATCH");
   const saved = parsed as Record<string, unknown>;
-  if (saved.editableProjectionVersion !== 1 || !Array.isArray(saved.tables) || saved.tables.length !== EXECUTION_TARGET_TABLES.length || !Array.isArray(saved.identities)
+  if (saved.contextProjectionVersion !== 1 || saved.editableProjectionVersion !== 1 || !Array.isArray(saved.tables) || saved.tables.length !== EXECUTION_TARGET_TABLES.length || !Array.isArray(saved.identities)
     || saved.sourceSha256 !== createHash("sha256").update(receipts[0].source_json as string).digest("hex")) return fail("PARITY_MISMATCH");
   const seen = new Set<string>();
   for (const item of saved.tables) {
