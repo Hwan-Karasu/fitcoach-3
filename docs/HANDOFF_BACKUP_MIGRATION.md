@@ -1,3 +1,25 @@
+## Продолжение — async client staging и общий Node/mobile write plan
+
+2026-10-24, база85c7e32, R04→R03/Product48.5.7/49–50/53–56/INT03–12.
+Private/synthetic/finalizable:false only; production/native/release gates OPEN.
+LegacyClientStagePlan +LegacyWritePlan shared Node/async SQLite: inspect/create/
+reserve/load/client-write/parity. Node full ledger сохраняет API/full binding и
+одну tx всех owners через after-clients checkpoint. ProjectClientIdentityDraft
+перенесён в client domain, script entry points kept. Production baseline не менялся.
+LegacyClientStaging использует existing isolated adapter/new physical writer handle,
+FK beforeBEGIN, inspection beforeWAL +underlock, raw capture/reprojection beforeawait,
+close/safeerrors. Client-only mode не расширяется сменой flags/не готов к cutover.
+10new tests: admittedsource→asyncwriter==host rows/IDs/payload; sourceSHA unchanged;
+rollback/retry/reopen/reorderedreplay/reservedIDs; COMMIT ack loss/close aftercommit;
+native IO/parity/schema failure; foreignDB/binding beforewrites; mutation/invalid
+input/allocator; handlesclosed. 459/459 owner/dependency profile PASS, initial44/8 PASS.
+Root/mobileTS/scopedlint/source73/arch548/secrets/staged diff PASS.
+Нет foundation/bundle/APK/Hermesruntime/Android/native Expo runtime proof.
+[Контракт и ограничения](spikes/R04_PORTABLE_CLIENT_STAGING.md).
+NEXT полный portable writer/remaining projections/permanent history/provenance/
+schemaadmission/composition/fullbackup/SQLite+JSON+other2.0/Android/removalproof.
+GoalACTIVE, не100%.
+
 ## Продолжение — мобильные Clients/Catalog/Questionnaire
 
 2026-10-24 R04/R03/Product48.5.7/49–50/53–56/INT03–12, база6bb28b7.

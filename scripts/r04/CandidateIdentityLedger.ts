@@ -1,8 +1,10 @@
+import { LEGACY_STAGE_UUID as uuid, legacyIdentityContextJson as contextJson, type CandidateIdentityContext, type LegacyIdentityStageBinding } from "../../apps/mobile/src/shared/migration/LegacyIdentityBinding.ts";
+import { legacyInspectIdentityPlan, legacyCreateIdentityPlan, legacyReserveClientIdsPlan, legacyLoadClientIdsPlan, legacyStageClientIdentitiesPlan } from "../../apps/mobile/src/features/clients/data/legacy-import/LegacyClientStagePlan.ts";
+import { runNodeLegacyWritePlan } from "./NodeLegacyWritePlan.ts";
 import type { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
-import { projectClientIdentityDrafts, type ClientDraftIdMap } from "./ProjectClientIdentityDraft.ts";
+import type { ClientDraftIdMap } from "./ProjectClientIdentityDraft.ts";
 import type { LegacyClientIdentityCandidate } from "./LegacyClientIdentitySourceReader.ts";
-import { clientsBaseline } from "../../apps/mobile/src/features/clients/data/ClientsBaseline.generated.ts";
 import { isExplicitTimestamp } from "./ExactScaledHundredth.ts";
 import { projectLegacyClientCard, type ClientCardFields, type LegacyClientCardCandidate } from "./LegacyClientCardProjection.ts";
 import { createProfileRehearsalSchema, profileRehearsalObjects, stageClientProfilesInTransaction } from "./LegacyClientProfileStage.ts";
@@ -26,30 +28,7 @@ import type { LegacyCalendarSnapshot } from "./LegacyCalendarSnapshot.ts";
 type FullStageCheckpoint = "after-ids" | "after-client" | "after-profile" | "after-work-data" | "before-commit" |
   ExerciseStageCheckpoint | PlanStageCheckpoint | ExecutionStageCheckpoint | MeasurementStageCheckpoint | NutritionStageCheckpoint | CalendarStageCheckpoint;
 
-export interface CandidateIdentityContext {
-  readonly sourceSha256: string;
-  readonly accountScope: string;
-  readonly sourceWorkspaceId: string;
-  readonly targetWorkspaceId: string;
-}
-const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
-const workspace = /^[a-zA-Z0-9][a-zA-Z0-9:_-]{0,127}$/u;
-function contextJson(context: CandidateIdentityContext): string {
-  if (!/^[0-9a-f]{64}$/u.test(context.sourceSha256) || !context.accountScope.trim()
-    || !context.sourceWorkspaceId.trim() || !workspace.test(context.targetWorkspaceId)) {
-    throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
-  }
-  return JSON.stringify([2, context.sourceSha256, context.accountScope, context.sourceWorkspaceId, context.targetWorkspaceId]);
-}
-function validateClientKey(key: string, scope: string): void {
-  let parts: unknown;
-  try { parts = JSON.parse(key) as unknown; } catch { throw new Error("R04_ID_LEDGER_SOURCE_KEY_INVALID"); }
-  if (!Array.isArray(parts) || parts.length !== 2 || parts[0] !== scope
-    || typeof parts[1] !== "string" || !parts[1].trim() || JSON.stringify(parts) !== key) {
-    throw new Error("R04_ID_LEDGER_SOURCE_KEY_INVALID");
-  }
-}
-
+export type { CandidateIdentityContext } from "../../apps/mobile/src/shared/migration/LegacyIdentityBinding.ts";
 /** R04 isolated synthetic staging contract. Never attach this schema to a source or runtime DB. */
 export function prepareCandidateIdentityLedger(db: DatabaseSync, context: CandidateIdentityContext,
   options?: { readonly clientIdentityRehearsal: { readonly createdAt: string; readonly profiles?: true; readonly questionnaires?: true; readonly workData?: true; readonly exercises?: true; readonly plans?: true; readonly templates?: true; readonly archives?: true; readonly executions?: true; readonly measurements?: { readonly referenceDay: string }; readonly nutrition?: true; readonly calendar?: true } }) {
@@ -84,55 +63,19 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
       ...(templatesEnabled ? ["TRAINING_TEMPLATES_REHEARSAL_V1"] : []), ...(archivesEnabled ? ["TRAINING_ARCHIVES_REHEARSAL_V1"] : []),
       ...(executionsEnabled ? ["TRAINING_EXECUTIONS_REHEARSAL_V3"] : []), ...(measurementsEnabled ? ["MEASUREMENTS_REHEARSAL_V2", measurementDay] : []),
       ...(nutritionEnabled ? ["NUTRITION_REHEARSAL_V3"] : []), ...(calendarEnabled ? ["CALENDAR_REHEARSAL_V1"] : [])]);
-  const workspaceKey = JSON.stringify([binding.accountScope, binding.sourceWorkspaceId]);
-  function inspect(): "new" | "owned" {
-    const objects = db.prepare("SELECT type,name FROM sqlite_schema WHERE substr(name,1,7)<>'sqlite_' ORDER BY name").all();
-    if (objects.length === 0) return "new";
-    const expectedTables = jobCreatedAt === undefined ? ["r04_candidate_identity", "r04_candidate_ids"]
-      : ["r04_candidate_identity", "r04_candidate_ids", "workspaces", "clients"];
-    const expectedObjects: Record<string, string> = Object.fromEntries(expectedTables.map((name) => [name, "table"]));
-    if (profilesEnabled) Object.assign(expectedObjects, profileRehearsalObjects);
-    if (workDataEnabled) Object.assign(expectedObjects, workDataRehearsalObjects);
-    if (exercisesEnabled) Object.assign(expectedObjects, exerciseRehearsalObjects);
-    if (plansEnabled) Object.assign(expectedObjects, plansRehearsalObjects);
-    if (executionsEnabled) Object.assign(expectedObjects, executionRehearsalObjects);
-    if (measurementsEnabled) Object.assign(expectedObjects, measurementRehearsalObjects);
-    if (nutritionEnabled) Object.assign(expectedObjects, nutritionRehearsalObjects);
-    if (calendarEnabled) Object.assign(expectedObjects, calendarRehearsalObjects);
-    if (objects.length !== Object.keys(expectedObjects).length || objects.some((row) => !Object.hasOwn(expectedObjects, String(row.name))
-      || row.type !== expectedObjects[String(row.name)])) {
-      throw new Error("R04_ID_LEDGER_FOREIGN_DATABASE");
-    }
-    const identities = db.prepare("SELECT id,context_json FROM r04_candidate_identity").all();
-    if (identities.length !== 1 || identities[0]?.id !== 1 || identities[0]?.context_json !== expectedContext) {
-      throw new Error("R04_ID_LEDGER_CONTEXT_MISMATCH");
-    }
-    const maps = db.prepare("SELECT kind,source_key,target_id FROM r04_candidate_ids").all();
-    const targets = new Set<string>(), keys = new Set<string>();
-    let workspaceRows = 0;
-    for (const row of maps) {
-      if (typeof row.source_key !== "string" || typeof row.target_id !== "string") throw new Error("R04_ID_LEDGER_CORRUPT");
-      if (row.kind === "WORKSPACE") {
-        workspaceRows += 1;
-        if (row.source_key !== workspaceKey || row.target_id !== binding.targetWorkspaceId) throw new Error("R04_ID_LEDGER_CORRUPT");
-      } else if (row.kind === "CLIENT") {
-        validateClientKey(row.source_key, binding.accountScope);
-        if (!uuid.test(row.target_id) || targets.has(row.target_id) || keys.has(row.source_key)) throw new Error("R04_ID_LEDGER_CORRUPT");
-        targets.add(row.target_id); keys.add(row.source_key);
-      } else throw new Error("R04_ID_LEDGER_CORRUPT");
-    }
-    if (workspaceRows !== 1) throw new Error("R04_ID_LEDGER_CORRUPT");
-    if (jobCreatedAt !== undefined) {
-      const workspaces = db.prepare("SELECT id,created_at FROM workspaces").all();
-      if (workspaces.length !== 1 || workspaces[0]?.id !== binding.targetWorkspaceId || workspaces[0]?.created_at !== jobCreatedAt) {
-        throw new Error("R04_ID_LEDGER_CORRUPT");
-      }
-      for (const client of db.prepare("SELECT id,workspace_id FROM clients").all()) {
-        if (client.workspace_id !== binding.targetWorkspaceId || !targets.has(String(client.id))) throw new Error("R04_ID_LEDGER_CORRUPT");
-      }
-    }
-    return "owned";
-  }
+  const expectedTables = jobCreatedAt === undefined ? ["r04_candidate_identity", "r04_candidate_ids"]
+    : ["r04_candidate_identity", "r04_candidate_ids", "workspaces", "clients"];
+  const expectedObjects: Record<string, string> = Object.fromEntries(expectedTables.map((name) => [name, "table"]));
+  if (profilesEnabled) Object.assign(expectedObjects, profileRehearsalObjects);
+  if (workDataEnabled) Object.assign(expectedObjects, workDataRehearsalObjects);
+  if (exercisesEnabled) Object.assign(expectedObjects, exerciseRehearsalObjects);
+  if (plansEnabled) Object.assign(expectedObjects, plansRehearsalObjects);
+  if (executionsEnabled) Object.assign(expectedObjects, executionRehearsalObjects);
+  if (measurementsEnabled) Object.assign(expectedObjects, measurementRehearsalObjects);
+  if (nutritionEnabled) Object.assign(expectedObjects, nutritionRehearsalObjects);
+  if (calendarEnabled) Object.assign(expectedObjects, calendarRehearsalObjects);
+  const stageBinding: LegacyIdentityStageBinding = { context: binding, contextJson: expectedContext, createdAt: jobCreatedAt, expectedObjects };
+  function inspect(): "new" | "owned" { return runNodeLegacyWritePlan(db, legacyInspectIdentityPlan(stageBinding)); }
   function transaction<T>(run: () => T): T {
     if (db.isTransaction) throw new Error("R04_ID_LEDGER_TRANSACTION_REQUIRED_EXCLUSIVE");
     db.exec("BEGIN IMMEDIATE");
@@ -152,21 +95,8 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
   }
   transaction(() => {
     if (inspect() === "owned") return;
-    db.exec(`CREATE TABLE r04_candidate_identity(id INTEGER PRIMARY KEY CHECK(id=1),context_json TEXT NOT NULL);
-      CREATE TABLE r04_candidate_ids(kind TEXT NOT NULL CHECK(kind IN ('WORKSPACE','CLIENT')),
-        source_key TEXT NOT NULL,target_id TEXT NOT NULL,
-        source_payload_json TEXT CHECK(source_payload_json IS NULL OR json_valid(source_payload_json)),
-        PRIMARY KEY(kind,source_key),UNIQUE(kind,target_id));`);
-    db.prepare("INSERT INTO r04_candidate_identity VALUES(1,?)").run(expectedContext);
-    db.prepare("INSERT INTO r04_candidate_ids(kind,source_key,target_id) VALUES('WORKSPACE',?,?)").run(workspaceKey, binding.targetWorkspaceId);
+    runNodeLegacyWritePlan(db, legacyCreateIdentityPlan(stageBinding));
     if (jobCreatedAt !== undefined) {
-      for (const name of ["workspaces", "clients"]) {
-        const sql = clientsBaseline[0]!.statements.find((statement) => statement.startsWith(`CREATE TABLE ${name} (`));
-        if (!sql) throw new Error("R04_ID_LEDGER_CLIENT_SCHEMA_UNAVAILABLE");
-        db.exec(sql);
-      }
-      db.prepare("INSERT INTO workspaces(id,display_name,created_at) VALUES(?,?,?)")
-        .run(binding.targetWorkspaceId, "R04 synthetic identity rehearsal", jobCreatedAt);
       if (profilesEnabled) createProfileRehearsalSchema(db);
       if (workDataEnabled) createWorkDataRehearsalSchema(db);
       if (exercisesEnabled) createExerciseRehearsalSchema(db);
@@ -178,90 +108,19 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
     }
   });
   function reserveInTransaction(sourceKeys: readonly string[], allocate: () => string): ReadonlyMap<string, string> {
-    const unique = new Set<string>();
-    for (const key of sourceKeys) {
-      validateClientKey(key, binding.accountScope);
-      if (unique.has(key)) throw new Error("R04_ID_LEDGER_DUPLICATE_SOURCE_KEY");
-      unique.add(key);
-    }
-      if (inspect() !== "owned") throw new Error("R04_ID_LEDGER_CORRUPT");
-      const result = new Map<string, string>();
-      for (const key of [...unique].sort()) {
-        const existing = db.prepare("SELECT target_id FROM r04_candidate_ids WHERE kind='CLIENT' AND source_key=?").get(key);
-        if (existing) { result.set(key, String(existing.target_id)); continue; }
-        const target = allocate();
-        if (!uuid.test(target)) throw new Error("R04_ID_LEDGER_INVALID_TARGET_ID");
-        if (db.prepare("SELECT 1 FROM r04_candidate_ids WHERE kind='CLIENT' AND target_id=?").get(target)) throw new Error("R04_ID_LEDGER_TARGET_COLLISION");
-        db.prepare("INSERT INTO r04_candidate_ids(kind,source_key,target_id) VALUES('CLIENT',?,?)").run(key, target);
-        result.set(key, target);
-      }
-      return result;
+    return runNodeLegacyWritePlan(db, legacyReserveClientIdsPlan(stageBinding, sourceKeys, allocate));
   }
   function reserveClientIds(sourceKeys: readonly string[], allocate: () => string = randomUUID): ReadonlyMap<string, string> {
     return transaction(() => reserveInTransaction(sourceKeys, allocate));
   }
-  function loadClientDraftIds(): ClientDraftIdMap {
-    if (inspect() !== "owned") throw new Error("R04_ID_LEDGER_CORRUPT");
-    const rows = db.prepare("SELECT source_key,target_id FROM r04_candidate_ids WHERE kind='CLIENT' ORDER BY source_key").all();
-    return { workspaces: new Map([[workspaceKey, binding.targetWorkspaceId]]),
-      clients: new Map(rows.map((row) => [String(row.source_key), String(row.target_id)])) };
-  }
+  function loadClientDraftIds(): ClientDraftIdMap { return runNodeLegacyWritePlan(db, legacyLoadClientIdsPlan(stageBinding)); }
   function stageClientIdentities(source: readonly LegacyClientIdentityCandidate[], allocate: () => string = randomUUID,
     checkpoint: (stage: "after-ids" | "after-client" | "before-commit") => void = () => undefined,
     cards?: ReadonlyMap<string, ClientCardFields>, sourcePayloads?: ReadonlyMap<string, string>, afterClients?: () => void) {
     if (jobCreatedAt === undefined) throw new Error("R04_ID_LEDGER_REHEARSAL_NOT_ENABLED");
-    return transaction(() => {
-      if (db.prepare("PRAGMA foreign_keys").get()?.foreign_keys !== 1) throw new Error("R04_ID_LEDGER_FOREIGN_KEYS_DISABLED");
-      if (source.some((row) => row.accountScope !== binding.accountScope || row.sourceWorkspaceId !== binding.sourceWorkspaceId)) {
-        throw new Error("R04_ID_LEDGER_CLIENT_SCOPE_MISMATCH");
-      }
-      reserveInTransaction(source.map((row) => row.sourceIdentityKey), allocate);
-      checkpoint("after-ids");
-      const projection = projectClientIdentityDrafts(source, loadClientDraftIds(), binding.targetWorkspaceId);
-      if (projection.status !== "projected-draft") throw new Error("R04_ID_LEDGER_CLIENT_PROJECTION_BLOCKED");
-      let inserted = 0, unchanged = 0;
-      for (const client of projection.rows) {
-        const payload = sourcePayloads?.get(client.sourceIdentityKey);
-        if (sourcePayloads !== undefined && payload === undefined) throw new Error("R04_ID_LEDGER_CLIENT_CARD_MISSING");
-        const savedPayload = db.prepare("SELECT source_payload_json FROM r04_candidate_ids WHERE kind='CLIENT' AND source_key=?")
-          .get(client.sourceIdentityKey)?.source_payload_json;
-        if (savedPayload != null && savedPayload !== payload) throw new Error("R04_ID_LEDGER_CLIENT_PARITY_MISMATCH");
-        const archivedAt = client.lifecycle === "ARCHIVED" ? client.sourceArchivedAt : null;
-        const card = cards?.get(client.sourceIdentityKey);
-        if (cards !== undefined && !card) throw new Error("R04_ID_LEDGER_CLIENT_CARD_MISSING");
-        const expected = [client.id, client.workspaceId, client.displayName, client.lifecycle, 1,
-          client.createdAt, client.updatedAt, archivedAt, card?.birthDate ?? null, card?.heightCmX10 ?? null,
-          card?.sex ?? null, card?.emoji ?? null];
-        const columns = ["id", "workspace_id", "display_name", "lifecycle", "revision", "created_at", "updated_at", "archived_at",
-          "birth_date", "height_cm_x10", "sex", "emoji"];
-        const existing = db.prepare("SELECT * FROM clients WHERE id=?").get(client.id);
-        if (existing) {
-          if (columns.some((column, index) => existing[column] !== expected[index])
-            || ["contact_phone", "contact_email"].some((column) => existing[column] !== null)) {
-            throw new Error("R04_ID_LEDGER_CLIENT_PARITY_MISMATCH");
-          }
-          unchanged += 1;
-        } else {
-          db.prepare(`INSERT INTO clients(${columns.join(",")}) VALUES(${columns.map(() => "?").join(",")})`).run(...expected);
-          inserted += 1;
-        }
-        const actual = db.prepare(`SELECT ${columns.join(",")} FROM clients WHERE id=?`).get(client.id);
-        if (!actual || columns.some((column, index) => actual[column] !== expected[index])) throw new Error("R04_ID_LEDGER_CLIENT_PARITY_MISMATCH");
-        if (payload !== undefined && savedPayload === null) db.prepare("UPDATE r04_candidate_ids SET source_payload_json=? WHERE kind='CLIENT' AND source_key=?")
-          .run(payload, client.sourceIdentityKey);
-        checkpoint("after-client");
-      }
-      afterClients?.();
-      if (db.prepare("SELECT count(*) AS count FROM clients").get()?.count !== projection.rows.length
-        || db.prepare("PRAGMA foreign_key_check").all().length > 0
-        || db.prepare("PRAGMA integrity_check").get()?.integrity_check !== "ok") {
-        throw new Error("R04_ID_LEDGER_CLIENT_PARITY_MISMATCH");
-      }
-      checkpoint("before-commit");
-      return { status: "identity-rehearsal-staged" as const, sourceRows: source.length,
-        targetRows: projection.rows.length, insertedRows: inserted, unchangedRows: unchanged,
-        sourceWrites: 0 as const };
-    });
+    return transaction(() => runNodeLegacyWritePlan(db, legacyStageClientIdentitiesPlan(stageBinding, source, allocate, cards, sourcePayloads), (phase) => {
+      if (phase === "after-clients") afterClients?.(); else checkpoint(phase);
+    }));
   }
   function stageClientCards(source: readonly LegacyClientCardCandidate[], allocate: () => string = randomUUID,
     checkpoint: (stage: "after-ids" | "after-client" | "before-commit") => void = () => undefined, afterClients?: () => void) {

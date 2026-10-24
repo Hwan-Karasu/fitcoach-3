@@ -53,17 +53,20 @@ integrity-FK/exactscope/privateverifiedlineage; 152area, notfullmappingadmission
 Training6bb28b7/R04_PORTABLE_TRAINING_SOURCE.md: Plans10/Execution6 sharedraw;
 admitted5owners/441profile/52/20PASS, projections/writer thenhost-only.
 
-CURRENT R04_PORTABLE_PROFILE_SOURCE.md: Client/Catalog/Questionnaire fullraw,
-shape/count/safeSQL/order/partial-change-only-view guards. Fileentry8owners one
-pinnedtx+SHA. Pure identity/card/profile/catalog/Q in ownerdomain/legacy-import;
-shared/migration contracts/values. Node wrappers samecode; boundaries unchanged.
-Existingnoble SHA256 keepsUTF8 IDs/epochs; no namejoin/classification invention.
-8newtests raw/BLOB/deletion/WAL/count/SHA/noNodeworker/admittedmobile→hoststage
-rollbackall/retry/replay/noallocator/zeroanswer/FK. 449profile/24focused/latest8 PASS;
-root/mobileTS/scopedlint/source73/arch543/secrets/diff PASS.
-No foundation/bundle/APK/phone/Hermesruntime/nativewriter/prodDDL.
+Profile85c7e32/R04_PORTABLE_PROFILE_SOURCE.md: raw8owners/pinnedtx/SHA,
+ownerprojections/nobleIDs. 8new/449profile/24/latest8PASS, thenwritershost-only.
 
-NEXT othercoverage/prefs/lineage/portable Plans-Execution/otherprojections-writer/
-permanentExecution-review-provenance/schemaadmission/composition/UI/deletion/full
-backup/SQLite+JSON+other2.0/fullrestore/Android/GC/powerloss/removal. JSONQprecision
-notproved byrawretention. AllpriorbackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.
+CURRENT R04_PORTABLE_CLIENT_STAGING.md: shared inspect/create/reserve/load/client
+write/parity generator Node+asyncSQLite. FullNode keepsallowner tx via after-clients;
+IdentityDraft nowclientdomain. Async LegacyClientStaging via isolatedadapter/new
+handles/FKbeforeBEGIN/inspectbeforeWAL+underlock/rawcapture-reproject beforeawait/
+safeerrors. Client-only finalizable:false/noflagupgrade/cutover. 10newtests:
+admitted→async==hostrowsIDs/sourceSHA/rollback/retry/reopen/reservedIDs/COMMITackloss/
+closeaftercommit/nativeIO/parity/schema/foreignbinding/mutation/allocator/handles.
+459profile/initial44-8 PASS; root/mobileTS/lint/source73/arch548/secrets PASS.
+No foundation/bundle/APK/phone/Hermesruntime/nativeExpo/prodDDL.
+
+NEXT fullportablewriter/otherprojections/coverage/prefs/lineage/permanentExecution-
+review-provenance/schemaadmission/composition/cutover/UI/deletion/fullbackup/
+SQLite+JSON+other2.0/Android/interruption/lowdisk/concurrency/GC/powerloss/removal.
+JSONQprecision notproved byrawretention. BackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.

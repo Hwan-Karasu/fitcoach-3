@@ -1,0 +1,23 @@
+import type { SqliteStatementPort, SqlValue } from "../db/SqlitePort.ts";
+
+export type LegacyStageRow = Readonly<Record<string, unknown>>;
+export type LegacyClientCheckpoint = "after-ids" | "after-client" | "after-clients" | "before-commit";
+export type LegacyWriteRequest = Readonly<{ kind: "all" | "run"; sql: string; bindings: readonly SqlValue[] }>
+  | Readonly<{ kind: "checkpoint"; phase: LegacyClientCheckpoint }>;
+/** Caller owns the entire exclusive transaction, including all delegated owners. */
+export type LegacyWritePlan<Result> = Generator<LegacyWriteRequest, Result, readonly LegacyStageRow[]>;
+export const legacyStageQuery = (sql: string, bindings: readonly SqlValue[] = []): LegacyWriteRequest => ({ kind: "all", sql, bindings });
+export const legacyStageRun = (sql: string, bindings: readonly SqlValue[] = []): LegacyWriteRequest => ({ kind: "run", sql, bindings });
+
+export async function runLegacyWritePlan<Result>(tx: SqliteStatementPort, plan: LegacyWritePlan<Result>, checkpoint: (phase: LegacyClientCheckpoint) => void = () => undefined): Promise<Result> {
+  let step = plan.next();
+  while (!step.done) {
+    const request = step.value;
+    let rows: readonly LegacyStageRow[] = [];
+    if (request.kind === "checkpoint") checkpoint(request.phase);
+    else if (request.kind === "all") rows = await tx.all<LegacyStageRow>(request.sql, request.bindings);
+    else await tx.run(request.sql, request.bindings);
+    step = plan.next(rows);
+  }
+  return step.value;
+}

@@ -44,7 +44,7 @@ AccountScope извлекается из источника. Это кандид
 строки, что ранее собирал Node reader. Новый файловый путь после admission
 читает программы и результаты в общем snapshot. Отсутствующие optional tables — null,
 пустые — []; partial session store и wrong kind не скрываются. Преобразования
-Plans/Execution и writer пока host-only: наличие raw mobile snapshots не означает готовую миграцию.
+Plans/Execution и полный writer пока host-only: наличие raw mobile snapshots не означает готовую миграцию.
 
 `LegacyProfileReadPlans` добавляет полные clients/exercise_catalog и все версии,
 ответы, указатели и change history анкеты. File entry после admission теперь
@@ -59,3 +59,13 @@ Plans/Execution и writer пока host-only: наличие raw mobile snapshot
 Эти файлы также относятся к удаляемому переходному импортёру, а не к обычным
 читателям 3.x. Raw JSON остаётся исходной строкой; это не утверждение точной
 переносимости всех числовых JSON-ответов в конечную модель.
+
+Первый асинхронный writer — внутренний
+`clients/data/legacy-import/LegacyClientStaging.ts`. Он использует общий с Node
+`LegacyClientStagePlan` и existing isolated SQLite adapter: новый handle,
+foreign keys до BEGIN IMMEDIATE, проверка принадлежности файла до WAL и повторно
+под lock, ID reservation/client write/parity в одной транзакции. Входные raw client
+rows копируются и перепроецируются до первого await. Чужой файл не пересоздаётся.
+Результат `finalizable:false`: это частный client-only candidate mode, его нельзя
+подключать как готовую восстановленную БД или расширять сменой binding flags.
+Полный writer/composition/cutover и Android proof остаются следующими этапами.
