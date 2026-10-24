@@ -8,6 +8,7 @@ import type { PlannedWorkout } from "../src/features/training/plans/domain/Simpl
 import type { SqliteConnectionPort } from "../src/shared/db/SqlitePort.ts";
 import { SharedSqliteDatabase } from "../src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "../../../scripts/support/node-sqlite-port.ts";
+import { previousWeekQueries } from "../src/features/training/execution/domain/PreviousWeekQueries.ts";
 
 // Стоимость чтения: число обращений к SQLite не должно расти с размером программы и числом занятий — на телефоне каждое
 // обращение идёт через мост Expo, и сотни последовательных запросов давали секунды задержки при открытии и переключении.
@@ -74,7 +75,7 @@ async function setup() {
   const measure = async <T>(task: () => Promise<T>) => { counter.reads = 0; const value = await task(); return { value, reads: counter.reads }; };
   /** Репозиторий с пустым кэшем: «холодное» чтение плана (подготовка теста уже прогрела кэш основного). */
   const coldPlans = async () => { const repo = new DevTrainingPlansRepository(shared, WS); await repo.initialize(); return repo; };
-  return { db, plans, coldPlans, execution, big, small, bigProgram: bigProgram.id, smallProgram: smallProgram.id, bigSlots, measure,
+  return { db, plans, coldPlans, execution, wrapped, big, small, bigProgram: bigProgram.id, smallProgram: smallProgram.id, bigSlots, measure,
     close: async () => { await shared.release(); await execution.close(); await plans.close(); await clients.close(); } };
 }
 
@@ -127,6 +128,55 @@ test("повторное чтение плана без записи — из к
   } finally {
     await env.close();
   }
+});
+
+test("дневник и Пред.: один снимок, пакетные чтения независимо от числа упражнений", async (t) => {
+  const env = await setup();
+  try {
+    const target = env.bigSlots.find((item) => item.weekIndex === 3)!;
+    const slot = { clientId: env.big, programId: env.bigProgram, weekIndex: target.weekIndex, plannedWorkoutId: target.workout.id };
+    const found = (await env.plans.findWorkout(env.big, env.bigProgram, target.workout.id, target.weekIndex))!;
+    const queries = previousWeekQueries(found.workout, found.previousWorkout ?? null);
+    const one = await env.measure(() => env.execution.getWorkoutWithPrevious(slot, queries.slice(0, 1)));
+    const many = await env.measure(() => env.execution.getWorkoutWithPrevious(slot, queries));
+    assert.equal(many.reads, one.reads);
+    assert.ok(many.reads <= 8, `combined diary reads: ${many.reads}`);
+    assert.deepEqual(many.value.previous, await env.execution.getPrevious(slot, queries));
+    assert.ok(many.value.previous.size > 0, "fixture has actual results in the preceding week");
+    t.diagnostic(`diary + previous: ${many.reads} reads for ${queries.length} exercises`);
+  } finally { await env.close(); }
+});
+
+test("одновременные чтения плана и группы объединяются", async () => {
+  const env = await setup();
+  try {
+    const cold = await env.coldPlans();
+    const single = await env.measure(() => cold.getPeriodizedPlan(env.big, env.bigProgram));
+    const second = await env.coldPlans();
+    const concurrent = await env.measure(() => Promise.all(Array.from({ length: 5 }, () => second.getPeriodizedPlan(env.big, env.bigProgram))));
+    assert.equal(concurrent.reads, single.reads);
+    for (const result of concurrent.value) assert.equal(result, concurrent.value[0]);
+    const cycleId = single.value!.mesocycles[0]!.id;
+    const group = await env.measure(() => cold.getMesocycleGroup(env.big, env.bigProgram, { mesocycleId: cycleId }));
+    const groups = await env.measure(() => Promise.all(Array.from({ length: 5 }, () => cold.getMesocycleGroup(env.big, env.bigProgram, { mesocycleId: cycleId }))));
+    assert.equal(groups.reads, group.reads);
+    for (const result of groups.value) assert.deepEqual(result, group.value);
+  } finally { await env.close(); }
+});
+
+test("ошибка чтения не превращается в закэшированное отсутствие программы", async () => {
+  const env = await setup();
+  try {
+    const cold = await env.coldPlans();
+    const first = env.wrapped.first;
+    let fail = true;
+    env.wrapped.first = (sql, bindings) => {
+      if (fail && sql.includes("FROM training_programs")) { fail = false; return Promise.reject(new Error("SYNTHETIC_READ_FAILURE")); }
+      return first(sql, bindings);
+    };
+    await assert.rejects(cold.getPeriodizedPlan(env.big, env.bigProgram), /SYNTHETIC_READ_FAILURE/u);
+    assert.equal((await cold.getPeriodizedPlan(env.big, env.bigProgram))!.program.id, env.bigProgram);
+  } finally { await env.close(); }
 });
 
 test("запись выбора мезоцикла оповещает как «только выбор» (экран не перезагружается), переименование — как обычное изменение", async () => {

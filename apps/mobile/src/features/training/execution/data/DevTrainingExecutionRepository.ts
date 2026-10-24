@@ -16,6 +16,7 @@ import type { RestTimer } from "../domain/RestTimerRules.ts";
 import { DEV_TRAINING_EXECUTION_LEDGER, devTrainingExecutionCatalog } from "./DevTrainingExecutionCatalog.ts";
 import { readStoredJson } from "../../../../shared/db/StoredJson.ts";
 import { storedOrigin } from "../domain/StoredOriginShape.ts";
+import { navigationPerformance } from "../../../../shared/diagnostics/NavigationPerformance.ts";
 import type { WeekExecutionParticipant, WorkoutCopyMapping } from "../domain/WeekCopyParticipant.ts";
 import type { WeekRenumberParticipant } from "../domain/WeekRenumberParticipant.ts";
 import type { ExecutionCleanupParticipant } from "../domain/ExecutionCleanupParticipant.ts";
@@ -326,58 +327,67 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       status: workoutStatus(row.outcome, row.started === 1) }));
   }
 
-  /**
-   * §37.8: последнее выполнение этой программы клиента не позже даты текущего, сначала с тем же слотом
-   * упражнения, затем то же упражнение в других днях. Подходы источника — только подтверждённые.
-   */
-  private async previousSource(port: SqliteStatementPort, slot: WorkoutSlot, date: string, startedBefore: string,
-    column: "planned_exercise_id" | "exercise_id", value: string):
-    Promise<Readonly<{ date: string; sets: readonly Readonly<{ setType: SetType; value: PreviousSet }>[] }> | null> {
-    const session = await port.first<{ id: string; date: string }>(`SELECT s.id, s.actual_date AS date
-      FROM training_sessions s
-      WHERE s.workspace_id = ? AND s.client_id = ? AND s.program_id = ?
-        AND (s.actual_date < ? OR (s.actual_date = ? AND s.created_at < ?))
-        AND NOT (s.week_index = ? AND s.planned_workout_id = ?)
-        AND EXISTS (SELECT 1 FROM training_performed_sets f WHERE f.workspace_id = s.workspace_id
-          AND f.session_id = s.id AND f.confirmed_at IS NOT NULL AND f.removed_at IS NULL AND f.${column} = ?)
-      ORDER BY s.actual_date DESC, s.week_index DESC, s.created_at DESC LIMIT 1`,
-    [this.workspaceId, slot.clientId, slot.programId, date, date, startedBefore, slot.weekIndex, slot.plannedWorkoutId, value]);
-    if (session === null) return null;
-    const rows = await port.all<FactRow>(`SELECT ${FACT_COLUMNS} FROM training_performed_sets
-      WHERE workspace_id = ? AND session_id = ? AND confirmed_at IS NOT NULL AND removed_at IS NULL AND ${column} = ?
-      ORDER BY rowid`,
-    [this.workspaceId, session.id, value]);
-    // Упражнение могло встречаться в тренировке дважды: берём одно его появление, а не смесь.
-    const slotId = rows[0]?.plannedExerciseId;
-    const chosen = rows.filter((row) => row.plannedExerciseId === slotId).sort((a, b) => a.position - b.position);
-    const drops = await dropsOf(port, this.workspaceId, chosen.filter((row) => row.setType === "DROP").map((row) => row.id));
-    const sides = await sidesOf(port, this.workspaceId, chosen.filter((row) => row.sided === 1).map((row) => row.id));
-    // §48.81 п. 3: только засчитанная сторона годится в «Пред.», другая не выдумывается.
-    const confirmedSide = (value: SideRow | undefined) => value?.confirmedAt != null ? valuesOf(value) : null;
-    const sets = chosen.map((row) => ({ setType: row.setType,
-      value: { values: valuesOf(row), drops: drops.get(row.id) ?? [], date: session.date,
-        sides: row.sided === 1 ? { left: confirmedSide(sides.get(row.id)?.L), right: confirmedSide(sides.get(row.id)?.R) } : null } }));
-    return { date: session.date, sets };
-  }
-
-  async getPrevious(slot: WorkoutSlot, queries: readonly PreviousQuery[], now: Date = new Date()):
+  async getPrevious(slot: WorkoutSlot, queries: readonly PreviousQuery[], _now?: Date):
     Promise<ReadonlyMap<string, PreviousSet>> {
     assertSlot(slot);
-    const { connection } = this.ready();
+    if (slot.weekIndex <= 1 || queries.length === 0 || queries.every((query) => query.source === null)) return new Map();
     const current = await this.getWorkout(slot);
-    if (current.session !== null && current.session.actualDate === null) return new Map();
-    const date = current.session?.actualDate ?? localDateOf(now);
-    // В тот же день «прошлое» — только начатое раньше текущего выполнения (ещё не начатое начнётся сейчас).
-    const startedBefore = current.session === null ? now.toISOString()
-      : (await connection.first<{ createdAt: string }>(`SELECT created_at AS createdAt FROM training_sessions
-        WHERE workspace_id = ? AND id = ?`, [this.workspaceId, current.session.id]))?.createdAt ?? now.toISOString();
+    return this.previousOf(slot, queries, current);
+  }
+
+  async getWorkoutWithPrevious(slot: WorkoutSlot, queries: readonly PreviousQuery[] | Promise<readonly PreviousQuery[]>, _now?: Date) {
+    assertSlot(slot);
+    const endCurrent = navigationPerformance.phase("execution");
+    const [current, requested] = await Promise.all([this.getWorkout(slot).finally(endCurrent), queries]);
+    const warmups = [...current.facts.values()].filter((fact) => fact.extra).sort((a, b) => a.position - b.position);
+    const expanded = requested.map((query) => ({ ...query, plannedSetIds: [...new Set([
+      ...warmups.filter((fact) => fact.plannedExerciseId === query.plannedExerciseId).map((fact) => fact.plannedSetId),
+      ...query.plannedSetIds])] }));
+    const endPrevious = navigationPerformance.phase("previous");
+    try { return { current, previous: await this.previousOf(slot, expanded, current) }; }
+    finally { endPrevious(); }
+  }
+
+  /** Owner correction 2026-10-24: only the same workout in the preceding week of this cycle; no history fallback. */
+  private async previousOf(slot: WorkoutSlot, queries: readonly PreviousQuery[], current: WorkoutExecution):
+    Promise<ReadonlyMap<string, PreviousSet>> {
+    const { connection } = this.ready();
+    if (slot.weekIndex <= 1 || queries.length === 0 || queries.every((query) => query.source === null)) return new Map();
+    const requested = queries.map((query) => ({ exerciseId: query.exerciseId,
+      sourceWorkoutId: query.source === null ? null : query.source?.plannedWorkoutId ?? slot.plannedWorkoutId,
+      sourceExerciseId: query.source === null ? null : query.source?.plannedExerciseId ?? query.plannedExerciseId }));
+    // A single bounded query for all requested exercises. There is exactly one source slot per query.
+    const rows = await connection.all<FactRow & { queryIndex: number; date: string }>(`WITH requested AS (
+        SELECT CAST(key AS INTEGER) AS queryIndex, json_extract(value, '$.exerciseId') AS exerciseId,
+          json_extract(value, '$.sourceWorkoutId') AS sourceWorkoutId,
+          json_extract(value, '$.sourceExerciseId') AS sourceExerciseId FROM json_each(?)
+      ), sourceFacts AS (
+        SELECT f.*, q.queryIndex, s.actual_date AS date
+        FROM requested q JOIN training_sessions s ON s.planned_workout_id = q.sourceWorkoutId
+          JOIN training_performed_sets f ON f.session_id = s.id AND f.workspace_id = s.workspace_id
+            AND f.planned_exercise_id = q.sourceExerciseId AND f.exercise_id = q.exerciseId
+        WHERE s.workspace_id = ? AND s.client_id = ? AND s.program_id = ? AND s.week_index = ?
+          AND s.plan_deleted_at IS NULL AND f.confirmed_at IS NOT NULL AND f.removed_at IS NULL
+      ) SELECT ${FACT_COLUMNS}, queryIndex, date FROM sourceFacts ORDER BY queryIndex, position`,
+    [JSON.stringify(requested), this.workspaceId, slot.clientId, slot.programId, slot.weekIndex - 1]);
+    const [drops, sides] = await Promise.all([
+      dropsOf(connection, this.workspaceId, [...new Set(rows.filter((row) => row.setType === "DROP").map((row) => row.id))]),
+      sidesOf(connection, this.workspaceId, [...new Set(rows.filter((row) => row.sided === 1).map((row) => row.id))]),
+    ]);
+    const sources = new Map<number, { setType: SetType; value: PreviousSet }[]>();
+    const confirmedSide = (value: SideRow | undefined) => value?.confirmedAt != null ? valuesOf(value) : null;
+    for (const row of rows) {
+      const source = sources.get(row.queryIndex) ?? [];
+      source.push({ setType: row.setType, value: { values: valuesOf(row), drops: drops.get(row.id) ?? [], date: row.date,
+        sides: row.sided === 1 ? { left: confirmedSide(sides.get(row.id)?.L), right: confirmedSide(sides.get(row.id)?.R) } : null } });
+      sources.set(row.queryIndex, source);
+    }
     const result = new Map<string, PreviousSet>();
-    for (const query of queries) {
-      const source = await this.previousSource(connection, slot, date, startedBefore, "planned_exercise_id", query.plannedExerciseId)
-        ?? await this.previousSource(connection, slot, date, startedBefore, "exercise_id", query.exerciseId);
-      if (source === null) continue;
+    for (const [index, query] of queries.entries()) {
+      const source = sources.get(index);
+      if (source === undefined) continue;
       const matched = matchPrevious(query.plannedSetIds.map((plannedSetId) => ({ plannedSetId,
-        setType: current.facts.get(plannedSetId)?.setType ?? "NORMAL" })), source.sets);
+        setType: current.facts.get(plannedSetId)?.setType ?? "NORMAL" })), source);
       for (const [plannedSetId, set] of matched) result.set(plannedSetId, set);
     }
     return result;

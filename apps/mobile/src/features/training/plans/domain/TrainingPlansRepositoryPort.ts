@@ -134,7 +134,9 @@ export interface TrainingPlansRepositoryPort {
     now?: Date): Promise<TrainingProgram>;
   /** Тренировка программы по ID — для дневника, в Простой и Расширенной программе одинаково. */
   findWorkout(clientId: string, programId: string, plannedWorkoutId: string, weekIndex?: number):
-    Promise<Readonly<{ program: TrainingProgram; workout: PlannedWorkout }> | null>;
+    Promise<Readonly<{ program: TrainingProgram; workout: PlannedWorkout;
+      /** Same workout lineage in the immediately preceding week of the same cycle; null in week 1. */
+      previousWorkout?: PlannedWorkout | null }> | null>;
   getSimpleWeeks(clientId: string, programId: string): Promise<readonly SimpleWeek[]>;
   getSimpleVersions(clientId: string, programId: string): Promise<readonly SimplePlanVersion[]>;
   previewSimpleWorkout(clientId: string, programId: string, expectedRevision: number, input: SimpleWorkoutEdit): Promise<WeekEditPreview>;

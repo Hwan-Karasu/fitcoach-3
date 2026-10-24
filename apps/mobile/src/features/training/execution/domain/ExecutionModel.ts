@@ -127,6 +127,9 @@ export interface PreviousQuery {
   readonly plannedExerciseId: string;
   readonly exerciseId: string;
   readonly plannedSetIds: readonly string[];
+  /** Corresponding exercise/workout in the immediately preceding week of this cycle.
+   * null means no counterpart. Omitted only for stable IDs in Simple programs. */
+  readonly source?: Readonly<{ plannedWorkoutId: string; plannedExerciseId: string }> | null;
 }
 
 /** Начатая и ещё не разобранная тренировка клиента (§48.83). */

@@ -153,7 +153,7 @@ test("T03 исходы: переключатель без потери факт�
   } finally { await close(); }
 });
 
-test("T03 «Пред.»: только подтверждённые факты этого клиента в этой программе, сначала тот же слот", async () => {
+test("T03 «Пред.»: только подтверждённые факты того же слота прошлой недели этого клиента и программы", async () => {
   const { clients, execution, close } = await stores();
   try {
     const a = await clients.create({ displayName: "SyntheticA" });
@@ -174,7 +174,7 @@ test("T03 «Пред.»: только подтверждённые факты э
     assert.equal(ownWeek.size, 0, "текущее выполнение — не своё «Пред.»");
     const otherDay = await execution.getPrevious(week(a.id, "program-a", 2, "w2"),
       [{ plannedExerciseId: "pe-bench-w2", exerciseId: BENCH, plannedSetIds: ["t1"] }], DAY2);
-    assert.equal(otherDay.get("t1")?.values.reps, 8, "без того же слота — то же упражнение в другом дне программы");
+    assert.equal(otherDay.size, 0, "нет соответствующей тренировки прошлой недели — другие дни не подставляются");
   } finally { await close(); }
 });
 
@@ -273,7 +273,7 @@ test("T03 миграция v2 сохраняет факты v1 и разреша
   }
 });
 
-test("T03 «Пред.» в тот же день: только выполнение, начатое раньше текущего", async () => {
+test("T03 «Пред.»: логическая предыдущая неделя, даже если обе тренировки проведены в один день", async () => {
   const { clients, execution, close } = await stores();
   try {
     const a = await clients.create({ displayName: "SyntheticA" });

@@ -68,6 +68,9 @@ export interface TrainingExecutionPort {
   /** Не ретроспективно: сохранённые факты и неподтверждённые значения остаются как есть (§48.53 п. 3). */
   setConfirmationMode(mode: ConfirmationMode): Promise<void>;
   getWorkout(slot: WorkoutSlot): Promise<WorkoutExecution>;
+  /** Один снимок для дневника и «Пред.». Promise запросов позволяет параллельно читать план; разминки включаются автоматически. */
+  getWorkoutWithPrevious(slot: WorkoutSlot, queries: readonly PreviousQuery[] | Promise<readonly PreviousQuery[]>, now?: Date):
+    Promise<Readonly<{ current: WorkoutExecution; previous: ReadonlyMap<string, PreviousSet> }>>;
   /** §48.83: начатые и не разобранные тренировки всех клиентов; последний ввод — первым. */
   listActiveWorkouts(): Promise<readonly ActiveWorkout[]>;
   /**
@@ -79,7 +82,8 @@ export interface TrainingExecutionPort {
   listClientExecutions(clientId: string): Promise<readonly ClientExecution[]>;
   /** Статусы всех начатых или разобранных тренировок программы клиента. */
   getProgramStatuses(clientId: string, programId: string): Promise<readonly SessionStatus[]>;
-  /** §48.74–48.75: прошлые подтверждённые подходы этого клиента в этой программе; ключ — плановый подход. */
+  /** Owner correction 2026-10-24: confirmed sets of the corresponding workout in week N-1 of this cycle/program.
+   * Week 1 or no counterpart/results: empty. No fallback to other weeks, workouts, cycles or programs. */
   getPrevious(slot: WorkoutSlot, queries: readonly PreviousQuery[], now?: Date): Promise<ReadonlyMap<string, PreviousSet>>;
   /** Ввод значений, «Пред.» или смена типа подхода: тот же факт по ID, подтверждение по режиму тренера. */
   saveSet(input: SaveSetInput, now?: Date): Promise<SetSaveResult>;

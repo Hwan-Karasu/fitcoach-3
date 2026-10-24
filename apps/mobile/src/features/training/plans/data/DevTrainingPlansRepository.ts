@@ -186,9 +186,25 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   }
 
   private readonly planCache = new Map<string, Promise<PeriodizedPlan | null>>();
+  private readonly planReads = new Map<string, Promise<PeriodizedPlan | null>>();
+  private readonly programReads = new Map<string, Promise<TrainingProgram | null>>();
+  private readonly groupReads = new Map<string, Promise<readonly GroupCopy[]>>();
+
+  private readOnce<T>(reads: Map<string, Promise<T>>, key: string, load: () => Promise<T>): Promise<T> {
+    const existing = reads.get(key);
+    if (existing !== undefined) return existing;
+    const pending = load();
+    reads.set(key, pending);
+    const clear = () => { if (reads.get(key) === pending) reads.delete(key); };
+    void pending.then(clear, clear);
+    return pending;
+  }
 
   private publish(change: TrainingPlansCommittedChange): void {
     this.planCache.clear();
+    this.planReads.clear();
+    this.programReads.clear();
+    this.groupReads.clear();
     for (const listener of this.listeners) {
       try { listener(change); } catch { /* Наблюдатель не превращает коммит в ошибку. */ }
     }
@@ -216,8 +232,13 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   }
 
   async getProgram(clientId: string, programId: string): Promise<TrainingProgram | null> {
-    const program = await programById(this.ready().connection, this.workspaceId, programId).catch(() => null);
-    return program !== null && program.memberClientIds.includes(clientId) ? program : null;
+    return this.readOnce(this.programReads, JSON.stringify([clientId, programId]), async () => {
+      const program = await programById(this.ready().connection, this.workspaceId, programId).catch((error: unknown) => {
+        if (error instanceof Error && error.message === "TARGET_NOT_FOUND") return null;
+        throw error;
+      });
+      return program !== null && program.memberClientIds.includes(clientId) ? program : null;
+    });
   }
 
   async createProgram(input: CreateProgramInput, now: Date = new Date()): Promise<TrainingProgram> {
@@ -532,11 +553,25 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     const program = await this.getProgram(clientId, programId);
     if (program === null) return null;
     if (program.kind === "SIMPLE" && weekIndex !== undefined) {
-      const workout = (await this.getSimpleWeeks(clientId, programId)).find((week) => week.index === weekIndex)
-        ?.workouts.find((item) => item.id === plannedWorkoutId);
-      return workout ? { program, workout } : null;
+      const weeks = await this.getSimpleWeeks(clientId, programId);
+      const workout = weeks.find((week) => week.index === weekIndex)?.workouts.find((item) => item.id === plannedWorkoutId);
+      const previousWorkout = weekIndex <= 1 ? null : weeks.find((week) => week.index === weekIndex - 1)
+        ?.workouts.find((item) => item.id === plannedWorkoutId) ?? null;
+      return workout ? { program, workout, previousWorkout } : null;
     }
-    // Расширенная: только тренировки своих мезоциклов этого клиента.
+    if (program.kind === "PERIODIZED") {
+      const plan = await this.getPeriodizedPlan(clientId, programId);
+      const cycle = plan?.mesocycles.find((cycle) => cycle.weeks.some((week) => (weekIndex === undefined || week.index === weekIndex)
+        && week.workouts.some((item) => item.id === plannedWorkoutId)));
+      const workout = cycle?.weeks
+        .filter((week) => weekIndex === undefined || week.index === weekIndex)
+        .flatMap((week) => week.workouts).find((item) => item.id === plannedWorkoutId);
+      if (workout === undefined || plan === null) return null;
+      const previous = weekIndex === undefined || weekIndex <= 1 ? [] : cycle?.weeks.find((week) => week.index === weekIndex - 1)
+        ?.workouts.filter((item) => (item.lineageId ?? item.id) === (workout.lineageId ?? workout.id)) ?? [];
+      return { program: plan.program, workout, previousWorkout: previous.length === 1 ? previous[0]! : null };
+    }
+    // Simple program without an explicit week (navigation): read its base workout.
     const row = await connection.first<{ weekId: string | null }>(`SELECT w.week_id AS weekId FROM training_workouts w
       WHERE w.workspace_id = ? AND w.program_id = ? AND w.id = ? AND (w.week_id IS NULL OR EXISTS (SELECT 1
         FROM training_weeks k JOIN training_mesocycles m ON m.id = k.mesocycle_id AND m.workspace_id = k.workspace_id
@@ -554,6 +589,10 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
    * стирает планы без оповещения плана, поэтому при чтении из кэша сверяется членство клиента в программе (один запрос).
    */
   async getPeriodizedPlan(clientId: string, programId: string): Promise<PeriodizedPlan | null> {
+    return this.readOnce(this.planReads, JSON.stringify([clientId, programId]), () => this.cachedPeriodizedPlan(clientId, programId));
+  }
+
+  private async cachedPeriodizedPlan(clientId: string, programId: string): Promise<PeriodizedPlan | null> {
     const key = `${clientId}:${programId}`;
     const cached = this.planCache.get(key);
     if (cached !== undefined) {
@@ -589,9 +628,11 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   }
 
   async getWorkoutWeekNavigation(clientId: string, programId: string, plannedWorkoutId: string) {
-    const found = await this.findWorkout(clientId, programId, plannedWorkoutId);
-    if (found === null) return null;
-    if (found.program.kind === "SIMPLE") {
+    const program = await this.getProgram(clientId, programId);
+    if (program === null) return null;
+    if (program.kind === "SIMPLE") {
+      const found = await this.findWorkout(clientId, programId, plannedWorkoutId);
+      if (found === null) return null;
       const plan = await this.getSimplePlan(clientId, programId);
       if (plan === null) return null;
       return { programTitle: found.program.title, mesocycleId: null,
@@ -600,8 +641,9 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     const plan = await this.getPeriodizedPlan(clientId, programId);
     const cycle = plan?.mesocycles.find((item) => item.weeks.some((week) => week.workouts.some((workout) => workout.id === plannedWorkoutId)));
     if (!cycle) return null;
-    const lineage = found.workout.lineageId ?? found.workout.id;
-    return { programTitle: found.program.title, mesocycleId: cycle.id,
+    const found = cycle.weeks.flatMap((week) => week.workouts).find((workout) => workout.id === plannedWorkoutId)!;
+    const lineage = found.lineageId ?? found.id;
+    return { programTitle: program.title, mesocycleId: cycle.id,
       weeks: cycle.weeks.map((week) => {
         const matches = week.workouts.filter((workout) => (workout.lineageId ?? workout.id) === lineage);
         return { index: week.index, caption: weekTypeLabels[week.type], type: week.type, workoutId: matches.length === 1 ? matches[0]!.id : null };
@@ -1481,9 +1523,11 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   async getMesocycleGroup(clientId: string, programId: string,
     ref: Readonly<{ mesocycleId: string } | { workoutId: string }>): Promise<readonly GroupCopy[]> {
-    const { connection } = this.ready();
-    const copy = await this.viewerCopy(connection, clientId, programId, ref);
-    return copy === null ? [] : groupOfCopy(connection, this.workspaceId, copy.mesocycleId);
+    return this.readOnce(this.groupReads, JSON.stringify([clientId, programId, ref]), async () => {
+      const { connection } = this.ready();
+      const copy = await this.viewerCopy(connection, clientId, programId, ref);
+      return copy === null ? [] : groupOfCopy(connection, this.workspaceId, copy.mesocycleId);
+    });
   }
 
   async getPlacementOptions(clientIds: readonly string[], hostProgramId: string | null): Promise<readonly ClientPlacementOptions[]> {
@@ -1561,6 +1605,9 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   async close(): Promise<void> {
     this.planCache.clear();
+    this.planReads.clear();
+    this.programReads.clear();
+    this.groupReads.clear();
     if (this.opening !== null) await this.opening.catch(() => undefined);
     if (this.connection === null) return;
     this.connection = null;
