@@ -121,6 +121,58 @@ test("warmups, DROP mini-sets, failure effort and unconfirmed draft values retai
   assert.equal(target.prepare("SELECT working_facts FROM r04_execution_sessions WHERE id=?").get(warmup.session_id!)?.working_facts, 1);
 }));
 
+test("explicit unconfirmed zero values remain editable zeros and never create a performed fact", () => fixture((source, target) => {
+  source.exec("UPDATE training_set_logs SET reps='0',weight='0',rpe='9' WHERE id='draft'");
+  const before = source.prepare("SELECT * FROM training_set_logs WHERE id='draft'").get();
+  const { result, ledger } = stage(source, target);
+  const row = target.prepare("SELECT * FROM r04_execution_representations WHERE source_key=?")
+    .get(JSON.stringify([context.accountScope, "training_set_logs", "draft"]))!;
+  const saved = JSON.parse(row.context_json as string) as { editable: { confirmed: boolean; hasInput: boolean; values: { reps: number; loadGrams: number }; rpe: number; issues: string[] } };
+  assert.equal(row.disposition, "UNCONFIRMED"); assert.equal(row.fact_id, null); assert.equal(row.session_id, null);
+  assert.deepEqual([saved.editable.confirmed, saved.editable.hasInput, saved.editable.values.reps, saved.editable.values.loadGrams, saved.editable.rpe], [false, true, 0, 0, 9]);
+  assert.deepEqual(saved.editable.issues, []); assert.equal(result.performedFacts, 5);
+  assert.equal(ledger.loadExecutionDraftFacts().length, 5);
+  assert.deepEqual(source.prepare("SELECT * FROM training_set_logs WHERE id='draft'").get(), before);
+}));
+
+test("partial DROP drafts retain separate effort/segments, invalid text stays reviewable and plan values never fill blank fields", () => fixture((source, target) => {
+  source.exec(`UPDATE training_set_logs SET reps='20',weight='10',set_kind='drop',effort_outcome='failure',rpe='8' WHERE id='draft';
+    INSERT INTO training_set_segments VALUES('draft-main','draft',0,'20','10',NULL);
+    INSERT INTO training_set_segments VALUES('draft-mini','draft',1,'','8',NULL);
+    INSERT INTO training_set_logs VALUES('invalid-draft','e-a0',3,'8x','1.2345','11',NULL,'{"factCompletionExplicit":true}',NULL,'working','normal');
+    INSERT INTO training_set_logs VALUES('blank-draft','e-a0',4,'','','',NULL,'{"factCompletionExplicit":true,"plannedReps":"100","plannedWeight":"100"}',NULL,'working','normal');`);
+  const { result, ledger } = stage(source, target);
+  const draft = (id: string) => {
+    const row = target.prepare("SELECT * FROM r04_execution_representations WHERE source_key=?")
+      .get(JSON.stringify([context.accountScope, "training_set_logs", id]))!;
+    assert.equal(row.disposition, "UNCONFIRMED"); assert.equal(row.fact_id, null);
+    return { row, data: JSON.parse(row.context_json as string) as { editable: { confirmed: boolean; hasInput: boolean; values: { reps: number | null; loadGrams: number | null };
+      segments: { reps: number | null; loadGrams: number | null }[]; kind: string; effort: string; rpe: number | null; issues: string[] } } };
+  };
+  const drop = draft("draft").data.editable;
+  assert.deepEqual([drop.confirmed, drop.kind, drop.effort, drop.rpe], [false, "drop", "failure", 8]);
+  assert.deepEqual(drop.segments.map((s) => [s.reps, s.loadGrams]), [[20, 10000], [null, 8000]]);
+  assert.deepEqual(drop.issues, [], "пустое поле — нормальное незавершённое состояние");
+  const invalid = draft("invalid-draft");
+  assert.deepEqual([invalid.data.editable.values.reps, invalid.data.editable.values.loadGrams, invalid.data.editable.rpe], [null, null, null]);
+  assert.deepEqual(invalid.data.editable.issues, ["BASE_INVALID_REPS", "BASE_INVALID_WEIGHT", "RPE_INVALID"]);
+  assert.equal(invalid.data.editable.hasInput, true);
+  assert.equal((JSON.parse(invalid.row.source_json as string) as { weight: string }).weight, "1.2345");
+  const blank = draft("blank-draft").data.editable;
+  assert.equal(blank.hasInput, false); assert.equal(blank.values.reps, null); assert.equal(blank.values.loadGrams, null);
+  assert.equal(result.performedFacts, 5); assert.equal(result.finalizable, false);
+  target.exec("UPDATE r04_execution_representations SET context_json=json_set(context_json,'$.editable.confirmed',1) WHERE disposition='UNCONFIRMED'");
+  assert.throws(() => ledger.loadExecutionDraftFacts(), /EXECUTION_PARITY_MISMATCH/u);
+}));
+
+test("an older execution receipt cannot claim verified editable projection without its version", () => fixture((source, target) => {
+  const { ledger } = stage(source, target);
+  target.exec("UPDATE r04_execution_receipt SET target_json=json_remove(target_json,'$.editableProjectionVersion')");
+  assert.throws(() => ledger.loadExecutionDraftFacts(), /EXECUTION_PARITY_MISMATCH/u);
+  const input = read(source);
+  assert.throws(() => ledger.stageClientExecutions(input.cards, null, input.catalog, input.refs, input.plans, input.executions, allocator()), /EXECUTION_PARITY_MISMATCH/u);
+}));
+
 test("imported-unknown markers override cached completion timestamps even when importedAt is missing", () => fixture((source, target) => {
   source.exec("UPDATE training_set_logs SET data_json=json_set(data_json,'$.historyDateStatus','imported-unknown') WHERE exercise_id='e-a0'");
   const { result } = stage(source, target), f = fact(target, "set-a0");

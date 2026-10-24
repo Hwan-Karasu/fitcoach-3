@@ -5,6 +5,7 @@ import type { PlanDraftMapping } from "./LegacyPlansStage.ts";
 import { legacyExecutionDate, type LegacyExecutionDate } from "./LegacyExecutionDates.ts";
 import { convertLegacySetMetrics } from "./LegacySetMetricCandidates.ts";
 import { isExplicitTimestamp } from "./ExactScaledHundredth.ts";
+import { projectLegacyEditableSet, type LegacyEditableSet } from "./LegacyEditableSet.ts";
 
 function fail(code: string): never { throw new Error(`R04_ID_LEDGER_EXECUTION_${code}`); }
 export function executionObject(value: unknown): Raw {
@@ -29,6 +30,7 @@ export interface ExecutionOccurrence {
   readonly type: "NORMAL" | "WARMUP" | "DROP" | "FAILURE"; readonly effort: "normal" | "failure";
   readonly segments: readonly ExecutionSegment[]; readonly rpe: number | null; readonly date: LegacyExecutionDate;
   readonly completionBasis: string; readonly plan: PlanDraftMapping | null; readonly raw: unknown;
+  readonly editable: LegacyEditableSet | null;
   readonly ownership: "CLIENT_BOUND" | "ARCHIVE_FOREIGN_PROGRAM";
 }
 interface Input {
@@ -85,6 +87,8 @@ export function composeLegacyExecutionOccurrences(context: CandidateIdentityCont
       position: typeof input.position === "number" && Number.isSafeInteger(input.position) && input.position >= 0 ? input.position : 0,
       type, effort: input.effort === "failure" ? "failure" as const : "normal" as const,
       segments: [] as ExecutionSegment[], rpe: null, date: legacyExecutionDate(null, undefined, undefined, undefined), completionBasis: basis,
+      editable: completion === "UNCONFIRMED" ? projectLegacyEditableSet({ reps: input.reps, weight: input.weight, rpe: input.rpe,
+        setKind: input.setKind, effort: input.effort, segments: implicitSegments.map(executionObject) }) : null,
       ownership: input.foreignArchiveProgram ? "ARCHIVE_FOREIGN_PROGRAM" : "CLIENT_BOUND",
       plan: input.planKey === undefined ? null : aliases.get(input.planKey) ?? null, raw: input.row } satisfies ExecutionOccurrence;
     if (completion !== "PERFORMED") { result.push(base); return; }

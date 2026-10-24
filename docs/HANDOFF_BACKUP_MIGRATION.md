@@ -1,4 +1,26 @@
-## Продолжение — даты в runtime, 2026-10-24, база75d5276
+## Продолжение — editable execution values, 2026-10-24, базаb64fac9
+
+GoalACTIVEfull2.0→3.0+backup/restore, не100%; previousPROGRESSb64fac9 runtime dates.
+R04→R03; Product48.5.7/48.44/48.52/49–50/53–56/INT03–12; gates OPEN unchanged.
+LegacyEditableSet подключён в composeLegacyExecutionOccurrences→context_json уже
+существующих private representations, без новых таблиц/IDs/журнала/productionDDL.
+Confirmed:false, hasInput; отдельные values/segments/kind/effort/RPE; пустое null,
+явный0 сохраняется0, invalid raw остаётся +review issue. Plan fields не становятся
+actual. Target manifest editableProjectionVersion1; older receipts cannot claim it.
+309/309 r04:plans (22canonical tests,3new);22boundaries rollback/retry +readonlysource/
+reopen/reorder/byteidentical/stableIDs pass. Root/mobileTS/ownlint/source73/secrets/diff
+pass. No newbundle/fullfoundation/APK/native/phone: изменены только R04 scripts.
+Theme work separate; сохранять его файлы и package hunks вне нашего commit.
+
+Exacte116b42 source audit: live activeProgramViewModel derives completion fromsets,
+archive completedWorkouts uses persistedstatus. Не считать одно доказательством
+другого/ручного исхода3.x. Workoutdata.note/exercisedata.diaryNote separatefrom
+exercise.note planinstruction. NEXT notes/outcomes and contexts withoutfacts,
+runtime binding/editing of drafts, remainingowners/fullparity/restore/Android.
+finalizable:false, legacyrestore NOTconnected, no completion claim.
+[Контракт/источники](spikes/R04_EDITABLE_EXECUTION_VALUES.md).
+
+## Предыдущее продолжение — даты в runtime, 2026-10-24, база75d5276
 
 Владелец возобновил работу: GoalACTIVE, предыдущая точка PROGRESS75d5276/WIP,
 не100%. R04→R03; Product48.5.7/48.84–48.86/49–50/53–56/INT03–12.

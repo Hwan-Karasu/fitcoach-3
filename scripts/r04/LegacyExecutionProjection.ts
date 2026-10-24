@@ -80,7 +80,8 @@ export function composeLegacyExecutions(context: CandidateIdentityContext, impor
     const disposition = review ? "OWNERSHIP_REVIEW" : row.disposition;
     tables.r04_execution_representations.push({ source_key: row.sourceKey, workspace_id: context.targetWorkspaceId, client_id: clients.get(row.client)!,
       fact_id: id, session_id: session, source_kind: row.kind, disposition, source_json: JSON.stringify(row.raw),
-      context_json: JSON.stringify({ workoutKey: row.workoutKey, sourceFactId: row.sourceFactId, plan: row.plan, snapshotName: row.name, position: row.position, completionBasis: row.completionBasis, ownership: row.ownership }),
+      context_json: JSON.stringify({ workoutKey: row.workoutKey, sourceFactId: row.sourceFactId, plan: row.plan, snapshotName: row.name, position: row.position, completionBasis: row.completionBasis, ownership: row.ownership,
+        editable: row.editable }),
       date_json: JSON.stringify(row.date) });
   }
   return { tables, performedFacts: tables.r04_execution_facts.length, canonicalSessions: tables.r04_execution_sessions.length,

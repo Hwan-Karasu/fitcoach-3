@@ -108,7 +108,7 @@ export function stageLegacyExecutionsInTransaction(db: DatabaseSync, context: Ca
   const tables = EXECUTION_TARGET_TABLES.map((name) => ({ name, rows: projected.tables[name].map((r) => canonical({ ...r,
     ...(name === "r04_execution_representations" ? { source_json: canonical(JSON.parse(r.source_json as string) as unknown),
       context_json: canonical(JSON.parse(r.context_json as string) as unknown), date_json: canonical(JSON.parse(r.date_json as string) as unknown) } : {}) })).sort(compare) }));
-  const targetJson = canonical({ tables, identities, sourceSha256: createHash("sha256").update(sourceJson).digest("hex") });
+  const targetJson = canonical({ editableProjectionVersion: 1, tables, identities, sourceSha256: createHash("sha256").update(sourceJson).digest("hex") });
   const receipts = db.prepare("SELECT * FROM r04_execution_receipt").all();
   if (receipts.length > 1 || receipts.length === 1 && (receipts[0]?.id !== 1 || receipts[0]?.source_json !== sourceJson || receipts[0]?.target_json !== targetJson)) return fail("PARITY_MISMATCH");
   const stages: readonly ExecutionStageCheckpoint[] = ["after-execution-sessions", "after-execution-facts", "after-execution-segments", "after-execution-representations"];
@@ -135,7 +135,7 @@ export function loadStagedExecutionFacts(db: DatabaseSync) {
   let parsed: unknown; try { parsed = JSON.parse(receipts[0].target_json as string) as unknown; } catch { return fail("PARITY_MISMATCH"); }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return fail("PARITY_MISMATCH");
   const saved = parsed as Record<string, unknown>;
-  if (!Array.isArray(saved.tables) || saved.tables.length !== EXECUTION_TARGET_TABLES.length || !Array.isArray(saved.identities)
+  if (saved.editableProjectionVersion !== 1 || !Array.isArray(saved.tables) || saved.tables.length !== EXECUTION_TARGET_TABLES.length || !Array.isArray(saved.identities)
     || saved.sourceSha256 !== createHash("sha256").update(receipts[0].source_json as string).digest("hex")) return fail("PARITY_MISMATCH");
   const seen = new Set<string>();
   for (const item of saved.tables) {

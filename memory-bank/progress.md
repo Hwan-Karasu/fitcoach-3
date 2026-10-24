@@ -19,7 +19,7 @@ Keepbridgeartifactforlateusers; retain3.x facts/dateprecision/provenance/backup.
 Removal gate:2.0copy→bridge→3.xcopy→normal withoutimporter, verified data/IDs/parity.
 No release built by this decision. docs/decisions/TRANSITION_RELEASE_2_TO_3.md.
 
-Runtime dates completed from75d5276: nullabledate/evidence +shared purecalendar,
+b64fac9 Runtime dates completed from75d5276: nullabledate/evidence +shared purecalendar,
 originaltimestamp precision preserved. Unknown/derived notimporttoday; zonereadprojection
 cache/races tested. Alltime/history/records retained, dategraphs/boundedperiodsexclude;
 bodyweightneedsdate. Fixedrecords hiddenbyemptychart +stableexerciseorder.14newtests.
@@ -31,7 +31,16 @@ APK/phone/native/personalfiles. Runtime dateevidence persistence and actual lega
 restore NOTconnected, D01schema unchanged. Historicalbusinessdaypolicy/factdatevs
 sessiongraph identity stillOPEN. Contract R04_RUNTIME_DATE_EVIDENCE.md.
 
-NEXT states/outcomes/notes/editablevalues/identity/factdates/remainingowners/fullparity/
+Editablevalues now normalized inside existing private representations/context_json,
+no newtables/IDs/prodDDL. confirmed:false/hasInput/partials/segments/kind/effort/RPE;
+empty null/explicitzero/invalidraw+review/no planfallback. Version1 targetreceipt
+required; oldjob cannotclaimnewprojection.309/309r04:plans(22canonical/3new), existing
+22boundaries/retry/reopen/stableIDs/sourceparity pass. Root/mobileTS/ownlint/source73/
+secrets/diff pass. Runtimeunchanged/no newbundle/native/APK/phone/fullsuite.
+Legacyaudit showslive derivedstatus differs archive persistedstatus; diarynotes
+workoutdata.note/exercisedata.diaryNote differ planinstruction e.note. Next preserve
+these contexts evenwithoutfacts. Contract R04_EDITABLE_EXECUTION_VALUES.md.
+NEXT outcomes/notes/contextwithoutfacts/runtimeeditable/identity/factdates/owners/fullparity/
 connectedSQLite+JSONlegacyrestore/Android. Catalog/phase1archive/templatesextras/
 lineage/classification/preferences andbackupclock/DST/SAFgap/copydeletekill/ENOSPC/
 provider/UI/OS/first-run remainopen. Handofftop updated. No claim100%.

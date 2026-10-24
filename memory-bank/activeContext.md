@@ -1,8 +1,8 @@
 # Active context — 2026-10-24
 
 Goal ACTIVE: владелец возобновил работу 2026-10-24. Full2.0→3.0+backup/restore НЕ DONE.
-«Дневник атлета», audit/training-fixes. Последний завершённый срез032b7e5, решение
-8d0031a. База75d5276 WIP dates теперь проверена; следующий commit закрывает этот срез.
+«Дневник атлета», audit/training-fixes. Canonical032b7e5, runtime b64fac9, решение
+8d0031a. b64fac9 closes75d5276 dates. Nextcommit: private editable values.
 R04→R03/D03→D01/R04/R05; Product48.5.7/33/39/46.6/46.19/49–50/53–56/INT03–12.
 Migration/overlay/signing/release OPEN: no newprodDDL/real migration/overlay.
 Targeted area+deps; fullsuite milestones. Russiancommits/nopush/no subagents.
@@ -44,11 +44,19 @@ evidencepersistence/realimport.14newtests registered datefile in training/founda
 Root/mobileTS/ownESLint/source73/arch510/secrets/diff pass. AndroidJSbundle5626/1185
 pass dist/r04-date-runtime. No fullfoundation/APK/native/phone. Concurrentthemeedits
 are separate, preserve; initial TS/lint themeerrors then TS passed afterupdates.
-Only own package date-test hunks tostage; theme generator hunks belong tootherwork.
 Contract docs/spikes/R04_RUNTIME_DATE_EVIDENCE.md. Single nullable sessiondate does
 NOT resolve independent dates ofcanonical facts/workoutgraph identity.
 
-NEXT: inspectworktree; missingstates/outcomes/notes/editablevalues/identity/factdates,
+NEW editable projection in existing private repr.context_json, no newtables/IDs:
+LegacyEditableSet→Occurrences→Projection; confirmed:false, hasInput, partialvalues/
+segments/kind/effort/RPE. Empty null, explicit0 preserved; invalidraw+reviewissues,
+no plan→actual. Receipt editableProjectionVersion1 required byguard; olderjobsblock.
+309/309r04:plans(22canonical/3new);22boundaries/retry/source/reopen/IDs/parity pass.
+Root/mobileTS/ownlint/source73/secrets/diff pass. No newbundle/APK/phone/fullsuite.
+Exacte116b42audit: activeProgramVM statusderivedfromsets vs archive persistedstatus;
+workoutdata.note/exercisedata.diaryNote differfrom exercise.note instruction.
+See R04_EDITABLE_EXECUTION_VALUES.md. Runtimeeditablewrite/binding stillOPEN.
+NEXT: inspectworktree; notes/outcomes/contextwithoutfacts/runtimeeditable/identity/factdates,
 remainingowners/fullparity/runtimeSQLite+JSONv1v2Restore/Android. Openlimits:
 unresolvedcatalogrefs/phase1archives/templatevariations&extras/orphanlibrary/state/
 view/preferences/annotations/classification/lineage. Backupclock/DST/SAFgap/
