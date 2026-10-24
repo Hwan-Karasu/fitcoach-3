@@ -1,3 +1,24 @@
+## Продолжение — async Questionnaire/Profile в общей клиентской транзакции
+
+2026-10-24, база76ab152; R04→R03/Product48.5.7/49–50/53–56/INT03–12.
+Private synthetic/finalizable:false; production/native/release gates OPEN.
+Q composition перенесён к владельцу, host profile writer теперь исполняет общий
+LegacyClientProfileStagePlan. Raw profile_json перепроецируется; прежние schema/
+receipts/parity/immutable version rules сохранены. Client owner создаёт свой index.
+Shared LegacyStageExtension задаёт tags/objects/schema до job initialization;
+LegacyClientStaging ждёт owner write и async checkpoints в той же tx после clients,
+до общей parity/COMMIT. Q extension захватывает raw/source доawait; mode не апгрейдится
+на месте. WorkData пока private candidates, не operational write.
+8new tests admittedsource→async==hostallrows/receipts, 7types/zero/false/epochs/
+historygaps/draft, rollbackall/retry/reopen/replay, COMMITackloss, capture/mutation,
+badsource/targetdrift/modebinding/schemafailure/sourceSHA/closedhandles.
+467ownerprofile/initial41-18 PASS; root/mobileTS/lint/source73/arch553/secrets PASS.
+Staged diff PASS; нет foundation/bundle/APK/Hermesruntime/Android.
+[Контракт, доказательства, открытый объём](spikes/R04_PORTABLE_QUESTIONNAIRE_STAGING.md).
+NEXT остальные portable writers/coverage/projections/permanent history/provenance/
+schemaadmission/composition/fullbackup/SQLite+JSON+other2.0/Android/removal.
+GoalACTIVE/fullscope, не100%.
+
 ## Продолжение — async client staging и общий Node/mobile write plan
 
 2026-10-24, база85c7e32, R04→R03/Product48.5.7/49–50/53–56/INT03–12.

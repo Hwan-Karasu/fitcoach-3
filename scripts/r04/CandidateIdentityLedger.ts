@@ -119,7 +119,9 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
     cards?: ReadonlyMap<string, ClientCardFields>, sourcePayloads?: ReadonlyMap<string, string>, afterClients?: () => void) {
     if (jobCreatedAt === undefined) throw new Error("R04_ID_LEDGER_REHEARSAL_NOT_ENABLED");
     return transaction(() => runNodeLegacyWritePlan(db, legacyStageClientIdentitiesPlan(stageBinding, source, allocate, cards, sourcePayloads), (phase) => {
-      if (phase === "after-clients") afterClients?.(); else checkpoint(phase);
+      if (phase === "after-clients") afterClients?.();
+      else if (phase === "after-profile") throw new Error("R04_ID_LEDGER_UNEXPECTED_CHECKPOINT");
+      else checkpoint(phase);
     }));
   }
   function stageClientCards(source: readonly LegacyClientCardCandidate[], allocate: () => string = randomUUID,

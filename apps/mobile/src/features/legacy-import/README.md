@@ -66,6 +66,16 @@ Plans/Execution и полный writer пока host-only: наличие raw mo
 foreign keys до BEGIN IMMEDIATE, проверка принадлежности файла до WAL и повторно
 под lock, ID reservation/client write/parity в одной транзакции. Входные raw client
 rows копируются и перепроецируются до первого await. Чужой файл не пересоздаётся.
-Результат `finalizable:false`: это частный client-only candidate mode, его нельзя
-подключать как готовую восстановленную БД или расширять сменой binding flags.
+Результат `finalizable:false`: по умолчанию это частный client-only candidate mode,
+его нельзя подключать как готовую восстановленную БД или расширять сменой binding flags.
 Полный writer/composition/cutover и Android proof остаются следующими этапами.
+
+`questionnaire/data/legacy-import/LegacyQuestionnaireStaging` предоставляет
+неизменяемое расширение, передаваемое при создании нового staging job. Его schema,
+mode tags и expected objects сразу входят в binding. Версии, draft, answers и
+profile receipt записываются в той же tx после clients/IDs, до итоговой parity и
+COMMIT. Client workspace index создаёт владелец клиентов; questionnaire writer не
+импортирует другой feature. Асинхронные checkpoints ожидаются до продолжения tx.
+Host profile writer использует тот же генератор, а composition перенесён в
+questionnaire/domain/legacy-import. Ни client-only, ни profile-only job не
+превращается в другой mode на месте. Полный набор остальных owners ещё не добавлен.

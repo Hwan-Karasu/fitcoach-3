@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DatabaseSync, type SQLInputValue } from "node:sqlite";
+import { DatabaseSync } from "node:sqlite";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { prepareLegacyClientStaging } from "../apps/mobile/src/features/clients/data/legacy-import/LegacyClientStaging.ts";
 import { readAdmittedLegacyDomainSnapshots } from "../apps/mobile/src/features/legacy-import/data/LegacySqliteSource.ts";
-import type { NativeSqliteDatabase } from "../apps/mobile/src/shared/db/IsolatedSqliteConnection.ts";
+import { nativeFactory } from "./support/legacy-staging-native.ts";
 import type { LegacyClientsSource } from "../apps/mobile/src/shared/migration/LegacyProfileSources.ts";
 import { projectLegacyClientIdentities } from "../apps/mobile/src/features/clients/domain/legacy-import/LegacyClientIdentity.ts";
 import { projectLegacyClientCards } from "../apps/mobile/src/features/clients/domain/legacy-import/LegacyClientCardProjection.ts";
@@ -18,34 +18,6 @@ const scope = "portable-client-writer", createdAt = "2026-10-24T12:00:00Z";
 const uuids = ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"];
 const allocate = () => { const values = [...uuids]; return () => values.shift()!; };
 const digest = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
-type Call = { kind: "open" | "all" | "first" | "run" | "exec" | "close"; sql: string; handle: number };
-function nativeFactory(path: string) {
-  const calls: Call[] = [], handles = new Set<number>(); let next = 0;
-  const state: { fail?: (call: Call) => boolean; after?: (call: Call, db: DatabaseSync) => void } = {};
-  function call(kind: Call["kind"], sql: string, handle: number) {
-    const value = { kind, sql, handle }; calls.push(value);
-    if (state.fail?.(value)) throw new Error("PRIVATE native SQLite detail");
-    return value;
-  }
-  const open = async (): Promise<NativeSqliteDatabase> => {
-    const handle = ++next; call("open", "", handle); const db = new DatabaseSync(path); handles.add(handle);
-    return {
-      getAllAsync: async <Row>(sql: string, ...bindings: unknown[]): Promise<Row[]> => {
-        const value = call("all", sql, handle); await Promise.resolve(); const result = db.prepare(sql).all(...bindings as SQLInputValue[]) as Row[]; state.after?.(value, db); return result;
-      },
-      getFirstAsync: async <Row>(sql: string, ...bindings: unknown[]): Promise<Row | null> => {
-        const value = call("first", sql, handle); await Promise.resolve(); const result = db.prepare(sql).get(...bindings as SQLInputValue[]) as Row | undefined; state.after?.(value, db); return result ?? null;
-      },
-      runAsync: async (sql: string, ...bindings: unknown[]) => {
-        const value = call("run", sql, handle); await Promise.resolve(); const result = db.prepare(sql).run(...bindings as SQLInputValue[]); state.after?.(value, db);
-        return { changes: Number(result.changes), lastInsertRowId: Number(result.lastInsertRowid) };
-      },
-      execAsync: async (sql) => { const value = call("exec", sql, handle); await Promise.resolve(); db.exec(sql); state.after?.(value, db); },
-      closeAsync: async () => { db.close(); handles.delete(handle); const value = call("close", "", handle); state.after?.(value, db); },
-    };
-  };
-  return { open, state, calls, handles };
-}
 async function fixture(run: (f: Awaited<ReturnType<typeof setup>>) => Promise<void>) {
   const dir = mkdtempSync(join(tmpdir(), "athlete-r04-client-stage-"));
   try { await run(await setup(dir)); }

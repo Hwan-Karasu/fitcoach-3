@@ -10,6 +10,12 @@ function* one(sql: string, bindings: readonly (string | number | null)[] = []): 
 }
 const workspaceKey = (binding: LegacyIdentityStageBinding) => JSON.stringify([binding.context.accountScope, binding.context.sourceWorkspaceId]);
 
+export function* legacyClientWorkspaceIndexPlan(): LegacyWritePlan<void> {
+  const index = clientsBaseline[0]!.statements.find((sql) => sql.startsWith("CREATE UNIQUE INDEX clients_id_workspace "));
+  if (!index) throw new Error("R04_ID_LEDGER_PROFILE_SCHEMA_UNAVAILABLE");
+  yield run(index);
+}
+
 /** Read before mutating an existing file; repeat under the writer lock. */
 export function* legacyInspectIdentityPlan(binding: LegacyIdentityStageBinding): LegacyWritePlan<"new" | "owned"> {
   const { context, expectedObjects, createdAt } = binding;

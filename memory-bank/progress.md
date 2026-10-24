@@ -56,15 +56,17 @@ admitted5owners/441profile/52/20PASS, projections/writer thenhost-only.
 Profile85c7e32/R04_PORTABLE_PROFILE_SOURCE.md: raw8owners/pinnedtx/SHA,
 ownerprojections/nobleIDs. 8new/449profile/24/latest8PASS, thenwritershost-only.
 
-CURRENT R04_PORTABLE_CLIENT_STAGING.md: shared inspect/create/reserve/load/client
-write/parity generator Node+asyncSQLite. FullNode keepsallowner tx via after-clients;
-IdentityDraft nowclientdomain. Async LegacyClientStaging via isolatedadapter/new
-handles/FKbeforeBEGIN/inspectbeforeWAL+underlock/rawcapture-reproject beforeawait/
-safeerrors. Client-only finalizable:false/noflagupgrade/cutover. 10newtests:
-admitted→async==hostrowsIDs/sourceSHA/rollback/retry/reopen/reservedIDs/COMMITackloss/
-closeaftercommit/nativeIO/parity/schema/foreignbinding/mutation/allocator/handles.
-459profile/initial44-8 PASS; root/mobileTS/lint/source73/arch548/secrets PASS.
-No foundation/bundle/APK/phone/Hermesruntime/nativeExpo/prodDDL.
+Client76ab152/R04_PORTABLE_CLIENT_STAGING.md: sharedNode/asyncclientwrite/IDs/parity,
+10new/459profile/44-8PASS; sourceSHA/rollback/ackloss/retryproof.
+
+CURRENT R04_PORTABLE_QUESTIONNAIRE_STAGING.md: ownerQ composition +sharedschema/
+write/parity. Hostfullledger sameplan. Immutable extensionmode/schema boundatinit;
+client-owned index; async Q/checkpoints awaitwithinclienttx. Rawprofile/Q reproject;
+versions/epochs/gaps/draft/receipts retained. No cutover; WorkData privatecandidates.
+8newtests admitted→async==hostrows/receipts, rollback/retry/reopen/COMMITackloss,
+capture/source-invalid/drift/binding/schema/unchangedSHA/closedhandles.
+467profile/initial41-18 PASS; root/mobileTS/lint/source73/arch553/secrets PASS.
+No foundation/bundle/APK/Hermes/Android/nativeExpo/prodDDL. Old10clienttestsPASS.
 
 NEXT fullportablewriter/otherprojections/coverage/prefs/lineage/permanentExecution-
 review-provenance/schemaadmission/composition/cutover/UI/deletion/fullbackup/
