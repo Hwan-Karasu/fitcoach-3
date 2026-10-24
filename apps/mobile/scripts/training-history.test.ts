@@ -15,6 +15,8 @@ import { createTrainingHistory } from "../src/read-models/trainingHistory.ts";
 import { createProgramDeleteWorkflow } from "../src/workflows/deleteTrainingProgram.ts";
 import { createPlanOnlyDeleteWorkflow } from "../src/workflows/deleteTrainingPlanOnly.ts";
 import { nodeSqlitePort } from "../../../scripts/support/node-sqlite-port.ts";
+import { workoutDayFromEvidence } from "../src/features/training/execution/domain/WorkoutDateEvidence.ts";
+import { legacyExecutionDate } from "../../../scripts/r04/LegacyExecutionDates.ts";
 
 // Read-model импортирует public.ts фич (там экраны .tsx), поэтому тест живёт здесь.
 const WS = "synthetic-workspace-a";
@@ -63,6 +65,80 @@ async function setup() {
     simpleWorkout, cycles, revision, deleteProgram,
     close: async () => { await shared.release(); await execution.close(); await plans.close(); await clients.close(); } };
 }
+
+test("будущий порт переноса: неизвестные/derived даты не скрывают историю, instant меняет только проекцию, факты и ID остаются", async () => {
+  const env = await setup();
+  try {
+    const { a, simple, simpleWorkout, complete, execution, plans } = env;
+    for (const weekIndex of [1, 2, 3]) await complete(a, simple, weekIndex, simpleWorkout, "2026-10-01");
+    const before = await execution.listClientExecutions(a);
+    const dates = [legacyExecutionDate("2026-10-01T23:30:00.123456789Z", "exact", null, null),
+      legacyExecutionDate("2026-10-24", "imported-unknown", null, "2026-10-24T12:00:00Z"),
+      legacyExecutionDate("2026-10-24", "derived", "derived-week", null)];
+    let zone = "Europe/Moscow";
+    let reads = 0;
+    // Только вход порта имеет будущий контракт импортированных дат; D01 schema не меняется.
+    const imported = { subscribeCommittedChanges: execution.subscribeCommittedChanges.bind(execution),
+      listClientExecutions: async (clientId: string) => {
+        reads += 1;
+        return (await execution.listClientExecutions(clientId)).map((item) => ({ ...item, execution: { ...item.execution,
+          session: item.execution.session === null ? null : { ...item.execution.session, dateEvidence: dates[item.weekIndex - 1]! } } }));
+      } };
+    const history = createTrainingHistory({ hasEnteredData, isWorkingSet, sessionDurationSec, workoutStatus, sortHistory,
+      workoutDayFromEvidence, dateContextKey: () => zone }, imported, plans);
+    const first = await history.list(a);
+    assert.equal(first.length, 3);
+    assert.deepEqual(first.map((entry) => entry.actualDate), ["2026-10-02", null, null]);
+    assert.deepEqual(first.slice(1).map((entry) => entry.key), first.slice(1).map((entry) => entry.key).sort());
+    assert.deepEqual(first.map((entry) => entry.key).sort(), before.map((item) => item.execution.session!.id).sort());
+    assert.equal(first.reduce((sum, entry) => sum + entry.workingSets, 0), 3);
+    assert.deepEqual(first.flatMap((entry) => entry.exercises.flatMap((exercise) => exercise.facts.map((fact) => fact.id))).sort(),
+      before.flatMap((item) => [...item.execution.facts.values()].map((fact) => fact.id)).sort());
+    assert.equal(await history.list(a), first);
+    assert.equal(reads, 1);
+    zone = "America/New_York";
+    const second = await history.list(a);
+    assert.equal(second[0]!.actualDate, "2026-10-01");
+    assert.deepEqual(second[0]!.dateEvidence, dates[0]);
+    assert.equal(reads, 2, "смена зоны сбрасывает кэш проекции");
+    assert.deepEqual(await execution.listClientExecutions(a), before, "чтение не переписывает исходные даты/время/факты");
+    assert.deepEqual(await history.list(env.b), [], "сведения не создают историю другого клиента");
+  } finally { await env.close(); }
+});
+
+for (const rejected of [false, true]) test(`кэш даты: ${rejected ? "отказ" : "завершение"} старого чтения не подменяет новую зону`, async () => {
+  const env = await setup();
+  let unblock!: () => void;
+  const barrier = new Promise<void>((resolve) => { unblock = resolve; });
+  try {
+    const { a, simple, simpleWorkout, complete, execution, plans } = env;
+    await complete(a, simple, 1, simpleWorkout, "2026-10-01");
+    const dateEvidence = legacyExecutionDate("2026-10-01T23:30:00Z", "exact", null, null);
+    let zone = "UTC";
+    let reads = 0;
+    const imported = { subscribeCommittedChanges: execution.subscribeCommittedChanges.bind(execution),
+      listClientExecutions: async (clientId: string) => {
+        const first = ++reads === 1;
+        const rows = await execution.listClientExecutions(clientId);
+        if (first) { await barrier; if (rejected) throw new Error("SYNTHETIC_READ_FAILED"); }
+        return rows.map((item) => ({ ...item, execution: { ...item.execution,
+          session: item.execution.session === null ? null : { ...item.execution.session, dateEvidence } } }));
+      } };
+    const history = createTrainingHistory({ hasEnteredData, isWorkingSet, sessionDurationSec, workoutStatus, sortHistory,
+      workoutDayFromEvidence, dateContextKey: () => zone }, imported, plans);
+    const stale = history.list(a);
+    const checked = rejected ? assert.rejects(stale, /SYNTHETIC_READ_FAILED/u) : stale.then((rows) => {
+      assert.equal(rows[0]!.actualDate, "2026-10-01", "зона захвачена до ожидания, а не читается посреди расчёта");
+    });
+    zone = "Europe/Moscow";
+    const current = await history.list(a);
+    assert.equal(current[0]!.actualDate, "2026-10-02");
+    unblock();
+    await checked;
+    assert.equal(await history.list(a), current);
+    assert.equal(reads, 2);
+  } finally { unblock(); await env.close(); }
+});
 
 test("§48.85.2 п. 1, 2, 5: общая хронология всех программ клиента, фильтры программа → мезоцикл, чужих занятий нет", async () => {
   const env = await setup();

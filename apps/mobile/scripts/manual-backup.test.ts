@@ -4,7 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL, URL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { ManualBackupService } from "../src/features/backup/application/ManualBackupService.ts";
 import { BackupStorageError, type BackupDestination, type PublishedBackup } from "../src/features/backup/domain/BackupPublication.ts";

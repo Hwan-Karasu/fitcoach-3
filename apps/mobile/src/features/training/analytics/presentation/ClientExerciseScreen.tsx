@@ -284,7 +284,7 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
         </View>
         {metric === null ? <EmptyState reason="no-data" title="Прогресс не строится"
           body="У этого упражнения нет величин для графика." /> : points.length === 0 ? <EmptyState reason="no-data" title="Нет данных"
-          body="За выбранный период нет засчитанных рабочих подходов с этой величиной. Разминка в прогресс не входит." /> : <>
+          body="Для графика нужны засчитанные рабочие подходы с этой величиной и известной датой. Разминка в прогресс не входит." /> : <>
           <View style={[styles.card, { backgroundColor: colors.surface }]}>
             <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{metricLabels[metric]}</Text>
             <View style={styles.tiles}>
@@ -315,7 +315,8 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
               {`${metricLabels[metric]}: ${formatMetric(metric, selectedPoint.value)} · ${dateText(selectedPoint.date)}`}</Text>
             <SessionCard session={selectedSession} onOpen={() => open(selectedSession)} />
           </View> : null}
-          {records.length > 0 ? <View style={[styles.card, { backgroundColor: colors.surface }]}>
+        </>}
+        {records.length > 0 ? <View style={[styles.card, { backgroundColor: colors.surface }]}>
             <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Рекорды по повторениям</Text>
             {records.map((record) => {
               const session = inPeriod.find((item) => item.entry.key === record.sessionKey);
@@ -330,7 +331,6 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
             {bestE1rm !== null ? <Text style={[styles.note, { color: colors.textMuted }]}>
               {`Оценка 1ПМ (расчёт): ${number(bestE1rm)} кг${records[0]?.reps === 1 ? "" : " — фактического 1ПМ нет"}`}</Text> : null}
           </View> : null}
-        </>}
       </ScrollView>
     </View>
   );

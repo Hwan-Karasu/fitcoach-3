@@ -1,8 +1,8 @@
-# Active context — 2026-10-23
+# Active context — 2026-10-24
 
-Goal PAUSED по явному «закругляйся, спать пора». Full2.0→3.0+backup/restore НЕ DONE.
+Goal ACTIVE: владелец возобновил работу 2026-10-24. Full2.0→3.0+backup/restore НЕ DONE.
 «Дневник атлета», audit/training-fixes. Последний завершённый срез032b7e5, решение
-8d0031a. Текущий WIP с nullable dates сохраняется отдельной рабочей точкой.
+8d0031a. База75d5276 WIP dates теперь проверена; следующий commit закрывает этот срез.
 R04→R03/D03→D01/R04/R05; Product48.5.7/33/39/46.6/46.19/49–50/53–56/INT03–12.
 Migration/overlay/signing/release OPEN: no newprodDDL/real migration/overlay.
 Targeted area+deps; fullsuite milestones. Russiancommits/nopush/no subagents.
@@ -33,21 +33,23 @@ fullvalues/noexplicitmarker/noplanfields. Ownershipconflicts block. Rawrepresent
 retained.22failureboundaries/retry/reopen/stableIDs/SHA/parity;306/306 targeted historic.
 D01factscreated0/finalizable:false. Outcomes/notes/editablevalues remain OPEN.
 
-WIP runtime dates: WorkoutSession/History.actualDate nullable +WorkoutDateEvidence.
-New pure shared calendarDay avoids TSX in Node tests. INSTANT read projection into
-explicitdeviceIANA zone, LOCAL/DAY recordedday, UNKNOWN/DERIVED null; timestamp stays.
-This does NOT close migration timezone policy. Readmodelcache capturedzone/context;
-normal sessions unchanged. Undated includedalltime/history/records, excludedbounded
-periods/dategraphs; all-undatedbuckets[] nottoday0. Bodyweightlookup requiresdate.
-History/program/exercise/week sorting/counts nullable; UIcaption; clockeditdisabled
-untildate, manualdateeditorallowed;Previousunknown guard. No productionDDL/persistence
-ofevidence/realimport.53/53 existinghistory/stats/groups/exercise/week tests passed.
-Newcase tests NOTwritten. Root/mobile TS passed beforelatestpatch, NOT after;
-latestlint/arch/source/bundle/native/fullsuite NOTrun. See handoff top for nextsteps.
+NEW runtime dates: nullable WorkoutSession/History +WorkoutDateEvidence/sharedcalendar.
+DAY/LOCAL recordedday, INSTANT explicitdeviceIANA readprojection; originaltimestamp
+unchanged, UNKNOWN/DERIVED null. Does NOT close historicalbusinessdaypolicy. Captured
+zone/cachecontext/races success+failure tested. Undated history/alltime/records retained,
+boundedperiod/dategraphs exclude; allundatedbuckets[] nottoday0. Bodyweightrequiresdate.
+Records table now visible whenchartempty; exerciseorder stableID ties. No D01schema/
+evidencepersistence/realimport.14newtests registered datefile in training/foundation.
+232training+39stage/backup/maintenance+4weekly pass;67direct overlaps, do notsumtwice.
+Root/mobileTS/ownESLint/source73/arch510/secrets/diff pass. AndroidJSbundle5626/1185
+pass dist/r04-date-runtime. No fullfoundation/APK/native/phone. Concurrentthemeedits
+are separate, preserve; initial TS/lint themeerrors then TS passed afterupdates.
+Only own package date-test hunks tostage; theme generator hunks belong tootherwork.
+Contract docs/spikes/R04_RUNTIME_DATE_EVIDENCE.md. Single nullable sessiondate does
+NOT resolve independent dates ofcanonical facts/workoutgraph identity.
 
-NEXT after explicitresume: inspectworktree; finishunknown/derived/local/instant/TZ/
-cache tests, verifyrecordtableevenwithoutchart, targetedchecks+types/lint/arch/source.
-Then missingstates/owners/fullparity/runtimeSQLite+JSONv1v2Restore/Android. Openlimits:
+NEXT: inspectworktree; missingstates/outcomes/notes/editablevalues/identity/factdates,
+remainingowners/fullparity/runtimeSQLite+JSONv1v2Restore/Android. Openlimits:
 unresolvedcatalogrefs/phase1archives/templatevariations&extras/orphanlibrary/state/
 view/preferences/annotations/classification/lineage. Backupclock/DST/SAFgap/
 copydeletekill/ENOSPC/providers/UI/OS/first-run OPEN. Do not claim100%.

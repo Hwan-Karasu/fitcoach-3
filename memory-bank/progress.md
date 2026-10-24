@@ -1,6 +1,6 @@
-# Progress — 2026-10-23
+# Progress — 2026-10-24
 
-Goal PAUSED по явному запросу владельца; full2.0→3.0+backup/restore НЕ завершён.
+Goal ACTIVE: владелец возобновил работу; full2.0→3.0+backup/restore НЕ завершён.
 R04→R03/D03→D01/R04/R05; productionmigration/overlay/signing/release gates OPEN.
 UI/themeslater/Excelafterbackup/GitHubfirst. Russiancommits/nopush/targetedchecks.
 
@@ -19,18 +19,19 @@ Keepbridgeartifactforlateusers; retain3.x facts/dateprecision/provenance/backup.
 Removal gate:2.0copy→bridge→3.xcopy→normal withoutimporter, verified data/IDs/parity.
 No release built by this decision. docs/decisions/TRANSITION_RELEASE_2_TO_3.md.
 
-WIP preserved at pause: nullable dates +dateEvidence runtime/readmodel/stats/history/
-week/format/manualdate/clockguards/Previous. Pure shared calendarDay fixes Node TSX
-import dependency. All-time includesundated, dateplots/boundedranges exclude;
-bodyweighttonnage requiresdate. ExplicitIANA readprojection/cachecontext, original
-instant unchanged; businessdaymigrationpolicy stillOPEN. No productionDDL/real
-import/evidence persistence. Existing53/53 history/stats/groups/exercise/week tests
-passed after importfix. Newcases notwritten; latest TS/lint/arch/source/bundle/native
-NOTverified. No fullfoundation/phone/personalfiles. Source2.0/scrcpy untouched.
+Runtime dates completed from75d5276: nullabledate/evidence +shared purecalendar,
+originaltimestamp precision preserved. Unknown/derived notimporttoday; zonereadprojection
+cache/races tested. Alltime/history/records retained, dategraphs/boundedperiodsexclude;
+bodyweightneedsdate. Fixedrecords hiddenbyemptychart +stableexerciseorder.14newtests.
+232training+39canonicalstage/backup/maintenance+4weekly pass (67direct overlaps).
+Root/mobileTS/ownlint/source73/arch510/secrets/diff pass. AndroidJS5626/1185 pass.
+Two tests import Node URL explicitly forfs typing. Concurrentthemeedits separate/
+preserve; initialglobalthemeerrors correctedbyotherwork beforeTS passed. Nofullsuite/
+APK/phone/native/personalfiles. Runtime dateevidence persistence and actual legacy
+restore NOTconnected, D01schema unchanged. Historicalbusinessdaypolicy/factdatevs
+sessiongraph identity stillOPEN. Contract R04_RUNTIME_DATE_EVIDENCE.md.
 
-NEXT onresume: testsunknown/derived/TZ/cache, recordtableevenwhenchartempty; area+deps
-checks, root/mobileTS/changedlint/arch/source/secrets/diff. Then outcomes/notes/editable
-values/remainingowners/fullparity/connectedSQLite+JSONlegacyrestore/Android. Catalog/
-phase1archive/templatesextras/lineage/classification/preferences remainopen. Backup
-clock/DST/SAFgap/copydeletekill/ENOSPC/provider/UI/OS/first-run remainopen.
-See docs/HANDOFF_BACKUP_MIGRATION.md top for exact pause state. No claim100%.
+NEXT states/outcomes/notes/editablevalues/identity/factdates/remainingowners/fullparity/
+connectedSQLite+JSONlegacyrestore/Android. Catalog/phase1archive/templatesextras/
+lineage/classification/preferences andbackupclock/DST/SAFgap/copydeletekill/ENOSPC/
+provider/UI/OS/first-run remainopen. Handofftop updated. No claim100%.

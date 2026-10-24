@@ -238,7 +238,7 @@ export function exerciseActivity(entries: readonly TrainingHistoryEntry[]): read
     }
   }
   return [...rows].map(([exerciseId, row]) => ({ exerciseId, sessions: row.sessions.size, workingSets: row.workingSets, lastDate: row.lastDate }))
-    .sort((a, b) => compareWorkoutDays(a.lastDate, b.lastDate) || b.workingSets - a.workingSets);
+    .sort((a, b) => compareWorkoutDays(a.lastDate, b.lastDate) || b.workingSets - a.workingSets || a.exerciseId.localeCompare(b.exerciseId));
 }
 
 export interface RecordEvent {

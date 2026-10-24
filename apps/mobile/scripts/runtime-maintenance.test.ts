@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { URL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { RuntimeCommandGate, RuntimeBusyError } from "../src/app/runtime/RuntimeCommandGate.ts";
 import { RuntimeMaintenance } from "../src/app/runtime/RuntimeMaintenance.ts";

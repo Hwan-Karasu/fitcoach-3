@@ -18,13 +18,28 @@ function fact(exerciseId: string, value: SetValues, options: Partial<Readonly<{ 
     setType: options.setType ?? "NORMAL", values: value, drops: [], rpe: null, confirmed: options.confirmed ?? true,
     sides: null, extra: false, origin: "INPUT", revision: 1 };
 }
-function entry(key: string, date: string, programId: string, facts: readonly SetFact[]): TrainingHistoryEntry {
+function entry(key: string, date: string | null, programId: string, facts: readonly SetFact[]): TrainingHistoryEntry {
   const groups = new Map<string, SetFact[]>();
   for (const item of facts) groups.set(item.exerciseId, [...(groups.get(item.exerciseId) ?? []), item]);
   return { key, programId, programTitle: programId, programKind: "SIMPLE", archived: false, planDeleted: false, mesocycleId: null, mesocycleIndex: null,
     mesocycleTitle: null, workoutTitle: "Тренировка 1", workoutKey: "w1", plannedWorkoutId: "w1", weekIndex: 1, actualDate: date, status: "COMPLETED", startedAt: null, finishedAt: null, durationSec: null,
     workingSets: facts.length, exercises: [...groups].map(([exerciseId, list]) => ({ exerciseId, facts: list, note: null })) };
 }
+
+test("рекорды и история без даты сохраняют факты, график не изобретает точку; равный вес берёт первую известную дату", () => {
+  const sessions = exerciseSessions([
+    entry("known2", "2026-10-08", "dated", [fact(BENCH, values(100, 5))]),
+    entry("known1", "2026-10-01", "dated", [fact(BENCH, values(100, 5))]),
+    entry("unknown", null, "undated", [fact(BENCH, values(120, 1)), fact(BENCH, values(100, 5))]),
+  ], BENCH);
+  assert.equal(sessions.length, 3);
+  assert.deepEqual(repRecords(sessions).map((record) => [record.reps, record.loadKg, record.date, record.sessionKey]),
+    [[1, 120, null, "unknown"], [5, 100, "2026-10-01", "known1"]]);
+  assert.deepEqual(progressSeries(sessions, "maxLoad").map((point) => point.key), ["known1", "known2"]);
+  assert.deepEqual(progressSeries(sessions.filter((session) => session.entry.actualDate === null), "maxLoad"), []);
+  assert.deepEqual(exerciseTree(sessions).map((program) => [program.programId, program.lastDate, program.sessionCount]),
+    [["dated", "2026-10-08", 2], ["undated", null, 1]]);
+});
 
 test("e1RM по Бжицки: 1–12 повторений, выше — не считается (§48.86.8)", () => {
   assert.equal(brzycki(100, 1), 100);

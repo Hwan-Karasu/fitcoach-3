@@ -28,13 +28,45 @@ function fact(exerciseId: string, value: SetValues, options: Partial<Readonly<{ 
   return { id: `f${n}`, plannedSetId: `p${n}`, plannedExerciseId: `pe${n}`, exerciseId, position: n, setType: options.setType ?? "NORMAL", values: value,
     drops: [], rpe: null, confirmed: options.confirmed ?? true, sides: null, extra: false, origin: "INPUT", revision: 1 };
 }
-function entry(key: string, date: string, status: WorkoutStatus, facts: readonly SetFact[], programId = "A"): TrainingHistoryEntry {
+function entry(key: string, date: string | null, status: WorkoutStatus, facts: readonly SetFact[], programId = "A"): TrainingHistoryEntry {
   const groups = new Map<string, SetFact[]>();
   for (const item of facts) groups.set(item.exerciseId, [...(groups.get(item.exerciseId) ?? []), item]);
   return { key, programId, programTitle: programId, programKind: "SIMPLE", archived: false, planDeleted: false, mesocycleId: null, mesocycleIndex: null, mesocycleTitle: null,
     workoutTitle: "Т", workoutKey: "w", plannedWorkoutId: "w", weekIndex: 1, actualDate: date, status, startedAt: null, finishedAt: null, durationSec: null, workingSets: facts.length,
     exercises: [...groups].map(([exerciseId, list]) => ({ exerciseId, facts: list, note: null })) };
 }
+
+test("перенесённые записи без даты: общие итоги сохранены, в ограниченный период и график не подставляется дата", () => {
+  const undated = entry("unknown", null, "COMPLETED", [fact(BENCH, values(120, 5))]);
+  const dated = entry("known", "2026-10-01", "COMPLETED", [fact(BENCH, values(100, 5))]);
+  const all = entriesInRange([undated, dated], { from: null, to: "2026-10-24" });
+  const summary = summarize(all, infoOf);
+  assert.deepEqual([summary.workouts, summary.completed, summary.workingSets, summary.tonnageKg], [2, 2, 2, 1100]);
+  assert.deepEqual(entriesInRange(all, { from: "2026-10-01", to: "2026-10-24" }).map((item) => item.key), ["known"]);
+  const chart = buckets(all, { from: null, to: "2026-10-24" }, () => 1, 0);
+  assert.equal(chart.items.reduce((sum, item) => sum + (item.value ?? 0), 0), 1);
+  assert.equal(bucketKeyOf(null, "week"), null);
+  assert.deepEqual(buckets([undated], { from: null, to: "2026-10-24" }, () => 1, 0).items, [], "не создаётся столбец на сегодня");
+  assert.deepEqual(recordsInRange(all, all, { from: null, to: "2026-10-24" }, infoOf), [], "лучший вес без даты не объявляется новым рекордом выбранного дня");
+});
+
+test("без даты занятия масса тела не выбирается, обычный тоннаж остаётся, неизвестный не становится нулём", () => {
+  const undated = entry("unknown", null, "COMPLETED", [fact(BENCH, values(100, 5)), fact(PULLUP, values(10, 8))]);
+  let lookups = 0;
+  const body = () => { lookups += 1; return { kg: 80, date: "2026-10-01" }; };
+  const summary = summarize([undated], infoOf, body);
+  assert.deepEqual([summary.tonnageKg, summary.incompleteSets, lookups], [500, 1, 0]);
+  assert.equal(summarize([{ ...undated, exercises: undated.exercises.filter((item) => item.exerciseId === PULLUP) }], infoOf, body).tonnageKg, null);
+});
+
+test("активность упражнений без даты остаётся видимой и имеет устойчивый порядок при перестановке входа", () => {
+  const all = [entry("curl", null, "IN_PROGRESS", [fact(CURL, values(10, 5))]),
+    entry("bench", null, "IN_PROGRESS", [fact(BENCH, values(100, 5))])];
+  const result = exerciseActivity(all);
+  assert.deepEqual(result.map((row) => [row.exerciseId, row.lastDate]), [[BENCH, null], [CURL, null]]);
+  assert.deepEqual(exerciseActivity([...all].reverse()), result);
+  assert.equal(exerciseActivity([...all, entry("dated", "2026-10-01", "COMPLETED", [fact(CURL, values(10, 5))])])[0]!.lastDate, "2026-10-01");
+});
 
 test("сводка: незавершённая тренировка даёт подходы, но не «проведено» (§48.86.25)", () => {
   const entries = [

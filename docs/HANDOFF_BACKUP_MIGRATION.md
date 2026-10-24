@@ -1,4 +1,32 @@
-## Пауза по просьбе владельца — 2026-10-23, база8d0031a
+## Продолжение — даты в runtime, 2026-10-24, база75d5276
+
+Владелец возобновил работу: GoalACTIVE, предыдущая точка PROGRESS75d5276/WIP,
+не100%. R04→R03; Product48.5.7/48.84–48.86/49–50/53–56/INT03–12.
+Migration/overlay/signing/release gates OPEN; no prodDDL/real migration/overlay.
+
+Nullable date/evidence из WIP проверены в истории/статистике/рекордах/недельной
+сводке. Исправлено скрытие таблицы рекордов при пустом графике; неизвестная дата
+не лишает пользователя рекорда. Порядок активности с равными датой/числом подходов
+устойчив по exerciseID. Добавлены14 тестов, date-evidence зарегистрирован в training
+и foundation. В двух backup tests явный Node URL устраняет конфликт fs/DOM типов.
+Тест future-порта использует настоящие репозитории без изменения D01, сохраняет
+ID/факты/исходник/owner isolation; zone/cache success+failure races проверены.
+
+Прошли232 training +39 Execution-stage/backup/maintenance +4 weekly tests (67 direct
+history/stats/date также пройдены, не складывать повторно). Root/mobile TS, own
+changedESLint, source73/arch510/secrets/diff pass. AndroidJSbundle5626/1185 pass,
+dist/r04-date-runtime/index.android.bundle. Fullfoundation/APK/native/phone NOTrun.
+Параллельные изменения тем исключены из нашего commit. Первые общие TS/lint падали
+на временных theme ID; после их обновления TS прошёл. Не откатывать/не присваивать
+theme edits, не смешивать их hunks package.json с регистрацией date-теста.
+
+Production storage/import/timezone businessday policy по-прежнему OPEN. Срез не
+подключает реальный legacy restore и не превращает private workout graph в число
+завершённых занятий. NEXT состояния/исходы/заметки/editable values, identity и
+собственные даты фактов; остальные owners/fullparity/runtimeSQLite+JSONv1v2/Android.
+[Контракт и предел проверки](spikes/R04_RUNTIME_DATE_EVIDENCE.md).
+
+## Историческая пауза по просьбе владельца — 2026-10-23, база8d0031a
 
 Goal PAUSED по явному «закругляйся, спать пора», не завершён. Следующий запуск
 начать с проверки worktree/этой рабочей точки. Не повторять проверки всего проекта

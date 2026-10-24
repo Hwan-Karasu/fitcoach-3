@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { weekStart, workoutsInWeek } from "../src/read-models/trainingWeek.ts";
 
-const entry = (actualDate: string, workingSets = 3) => ({ actualDate, workingSets });
+const entry = (actualDate: string | null, workingSets = 3) => ({ actualDate, workingSets });
+
+test("недельная сводка не превращает неизвестные даты в текущую неделю или достоверный ноль", () => {
+  assert.equal(workoutsInWeek([entry(null)], "2026-10-22"), null);
+  assert.equal(workoutsInWeek([entry(null), entry("2026-10-21", 0)], "2026-10-22"), null);
+  assert.equal(workoutsInWeek([entry(null), entry("2026-10-21")], "2026-10-22"), 1);
+  assert.equal(workoutsInWeek([entry(null), entry("2026-09-01")], "2026-10-22"), 0);
+});
 
 test("A02 неделя считается Пн–Вс: воскресенье относится к прошедшей неделе, понедельник начинает новую", () => {
   // 2026-10-22 — четверг; понедельник той недели — 2026-10-19.
