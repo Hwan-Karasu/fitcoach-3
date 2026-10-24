@@ -1,4 +1,33 @@
-## Продолжение — старые workout_logs, база3015bdd
+## Продолжение — staging обхватов тела, база60134d7
+
+2026-10-24, R04→R03/Product49.14–49.18/49–50/53–56/INT03–12; все release/
+migration/prodDDL gates OPEN. Предыдущий turn PROGRESS60134d7. Новая работа:
+full raw measurement snapshot→reparse→точная проекция→реальные D01 body_measurements
+в private job, IDs/receipt/parity. Optionalabsence vs empty; same-day наблюдения
+не сливаются, unsided типы остаются без стороны, localMinuteNULL/no guessedprimary.
+Target created/updated=importTime с явным basis; referenceDay закреплён в binding.
+Неподдерживаемые значения/даты сохраняются как raw/provenance review/targetIdNULL;
+их число возвращается, нет fabricated0/rounding/clipping/мнимого fullmapping.
+stageClientMeasurements после всех предыдущих владельцев в общей транзакции;
+mode requires dependencies, source frozen before callbacks. Private ID/receipt,
+существующая baseline только в synthetic file, новых productionDDL нет.
+
+440/440 area+deps: Plans/R04 +measurementprojection/preflight/extended/Navy.
+10new measurement tests+1fulltransactionwithnonemptypriorowners. 3newcheckpoints+
+beforecommit rollbackall/ClientIDs/retry; source readonly/reopen/reorder/byteidentical/
+IDreuse. Runtime repository читает скопированные D01rows в свежей обычной БД без
+importer tables, ambiguity/explicitprimary/correction sameID+revision checked.
+Root/mobileTS/ownESLint/source73/secrets/diff pass. Тест зарегистрирован R04/Plans/
+foundation; чужие theme hunks package не включены. No bundle/fullsuite/APK/native/phone.
+[Контракт](spikes/R04_MEASUREMENT_STAGING.md). finalizable:false/goalACTIVE/fullscope.
+
+Старые logs: найден legacyJSON importer+arbitrarydataJson schema; writer semantics
+не доказаны, консервативное сохранение без guessedmerge остаётся. NEXT bodyweight
+sources/reconciliation, прочие owners/fullparity, Execution runtime storage/identity/
+outcomes/precision, connectedSQLite/JSONlegacyrestore/Android. Обхваты не закрывают
+массу тела/процент жира, reviewUI или весь перенос. Реальная2.0/personaldata untouched.
+
+## Предыдущее продолжение — старые workout_logs, база3015bdd
 
 2026-10-24. Previous research: PROGRESS, найден source gap. Теперь implemented:
 optional6th Execution source training_workout_logs, full raw CONTEXT и физические

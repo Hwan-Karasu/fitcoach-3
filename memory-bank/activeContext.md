@@ -3,8 +3,8 @@
 «Дневник атлета», audit/training-fixes. GoalACTIVE full2.0→3.0+backup/restore, NOT100%.
 R04→R03/D03→D01/R04/R05; Product48.5.7/33/39/46.6/46.19/49–50/53–56/INT03–12,
 48.44/51–52/67/84–86. Migration/prodDDL/overlay/signing/releaseOPEN. No prodDDL/real
-migration/overlay untilgates. Previous research changednextaction: uncovered logs
-sourcegap; nowPROGRESS implementation below. Base3015bdd. Russiancommit/nopush/no agents.
+migration/overlay untilgates. PreviousPROGRESS60134d7; nowmeasurements staging.
+Base60134d7. Russiancommit/nopush/no agents.
 Targetedarea+deps/fullsuite milestones. Excelafterbackup/GitHubfirst. UserUIlater;
 concurrent THEME work in samefolder: preserve/exclude its files andpackage hunks.
 
@@ -25,8 +25,7 @@ account+client; graphonlyphysicalrefs/sharedfacts, notnames/metrics/logicalslots
 Exactsegments/type/effort/RPE/dateprecision, conflictsblock; sourceSHA/IDs/parity.
 b64fac9 nullable runtime date/evidence; alltime/history/records retainundated,
 boundedperiod/graphs exclude, bodyweightneedsdate. ExplicitIANA readprojection/cache
-races, businessdaypolicy stillOPEN.232training+39stage/backup+4weekly historicpass,
-14newtests; root/mobileTS/lint/source73/arch510/secrets/diff; AndroidJS5626/1185 pass.
+races, businessdaypolicy stillOPEN. Historic232training+39extra+4weekly/bundle5626 pass.
 e93a4c8 editablevalues insideprivate repr.context_json: confirmedfalse/hasInput/
 partials/segments/kind/effort/RPE, nullvs0/invalidraw+review/no planfallback; version1
 receipt.309/309historical,22boundaries. Runtimewrite/binding NOTconnected.
@@ -38,28 +37,31 @@ deleted/template no revival; foreignarchive review/sessionnull. Storedstatus vs 
 cardderivedcounts retained; cache notoutcome/targetOutcomeNULL. Contextguard checks
 wholemanifest.317/317historical/23boundaries/readonlyreopenbytes/IDsreuse pass.
 
-NEW training_workout_logs optional6thExecution source; fullcolumns/nullabsence/no
-sourceDDL. LegacyWorkoutSnapshots parsesexercisesarray/object &directsetarrays;
-escapedphysicalpaths/fullrawrow+data_json/CONTEXT IDs, deletedbadJSONretained. Active
-unknownshape/foreignowner/workout blockall. SNAPSHOT sourcekind inexistingprivate
-tables; no newtables/prodDDL. V3binding/snapshotProjectionVersion1 rejectolderjobs.
-Observed021 exactrefe116b42: cache source_set_id generatedlog:exercise:position,
-sessionmeta sourcePriority2/sourceVersionId. Require observedID+metadata+client+
-physicalworkout, notcomputedIDalone. Crosslogcoloncollisions disambiguatedbymeta;
-duplicateexerciseIDwithinsnapshotblocksambiguousalias. Exactmetrics/segments/type/
-effort/RPE agree; fallbackcatalogonlyfromproven cache, no names/value matching.
-Uncorroborated stayseditableconfirmedfalse/noactualdate, evencompletedAt/status;
-deletedcache/otherclient cannotconfirm. Fulloldnotes/status/date remainraw, no
-outcomeinference. NumericJSONmetrics/sessionssegments useNode24reviver sourcelexeme,
-no FP rounding; unsupportedexactprecision/form review/block, source retained.
-330/330r04:plans(43Execution/13new), all23boundariesnowwithprovenlog/cache rollbackall/
-retry/ClientIDs; readonlysource/reopen/reversedrows+properties/byteidentical target/
-allIDsreuse withlog/cache. Inputfreeze/drift/versionguards. Root/mobileTS/ownESLint/
-source73/secrets/diff pass. No bundle/fullfoundation/APK/native/phone: scriptsonly.
-Contract docs/spikes/R04_WORKOUT_LOG_SNAPSHOTS.md. finalizable:false.
+60134d7 logs optional6thExecution source, array/object/directsets/physicalpaths/raw
+CONTEXT. ObservedcacheID+sourcePriority2/sourceVersionId+client/workout provealias,
+notgeneratedID/names/values. Unknowncompletion editable/nodate; deletedbadJSONkept,
+foreignrefsblock. V3/snapshotversion1/Node24numeric tokens.330/330historical;23tx/
+readonly/reopen/reorder/byteidentical/IDsreuse. Extraaudit foundlegacyJSONimporter/
+arbitrarydataJson schema, notproofinnerwritersemantics. No guessedmerge.
 
-NEXT proveoldlogwriter/completion andrelations tocurrent/history/archive physicalIDs
-(021 isreader/cacheproducer, notproofsamefacts); no guessedmerge/doublecount. Then
+NEW MeasurementsSnapshot fullrows/extras/nullabsence→reparse→exact8circumferences.
+stageClientMeasurements sharedtx afterallpriorowners/frozeninputbeforecallbacks.
+ExistingD01baselineonlyprivatejob body_measurements/dailyprimary; privateIDs/receipt,
+MEASUREMENTS_REHEARSAL_V1+explicitreferenceDay binding. UUIDperphysicalrow/field,
+clientmapping, no same-day merge. Unsided staysunsided/localMinuteNULL/no primary;
+created/updatedimportTime withbasis. Unsupportedprecision/bounds/zero/baddate/future
+values retainedraw+provenancereview/targetIdNULL, notnormalfacts; counts explicit.
+SourceSHA/manifestSHA/rows/IDs/parity guards.440/440area+deps (R04Plans/measurement
+projection/preflight/extended/Navy),10newstage+1fulltxnonemptypriorowners.3newcheckpoints
++beforecommit rollbackall/ClientIDs/retry; readonlysource/reopen/reorder/bytes/IDreuse.
+Runtime repository reads copiedD01rows infreshregularDB withoutimporter tables;
+ambiguity/explicitprimary/sameIDcorrection+revision pass. Root/mobileTS/ownlint/
+source73/secrets/diff pass. RegisteredR04/Plans/foundation; themehunks excluded.
+No bundle/fullsuite/APK/native/phone. docs/spikes/R04_MEASUREMENT_STAGING.md.
+finalizable:false/legacyrestoreNOTconnected. Circumferences do notcoverbodyweight.
+
+NEXT bodyweight sources/reconciliation/remainingowners; oldlogsemantics unresolved.
+Then
 runtimecontexts/notes/drafts/outcomes/independentfactdates. Remainingowners/fullparity/
 runtimeSQLite+JSON1/2 restore/Android. Catalog/phase1archives/templateextras&variation/orphanlibrary/
 state/view/preferences/annotations/classification/lineage OPEN. Backupclock/DST/SAFgap/

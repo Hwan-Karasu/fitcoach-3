@@ -19,6 +19,33 @@ export interface LegacyMeasurementSource {
   readonly fieldRawValues: Readonly<Record<typeof legacyMeasurementFields[number], unknown>>;
 }
 
+export interface LegacyMeasurementsSnapshot {
+  readonly accountScope: string;
+  /** null means the optional source table is absent, not an observed empty table. */
+  readonly rows: readonly Readonly<Record<string, unknown>>[] | null;
+}
+export function readLegacyMeasurementsSnapshotInSnapshot(db: DatabaseSync, accountScope: string): LegacyMeasurementsSnapshot {
+  if (!accountScope.trim()) throw new Error("R04_ACCOUNT_SCOPE_REQUIRED");
+  if (!db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='client_measurements'").get()) return { accountScope, rows: null };
+  const columns = new Set(db.prepare("PRAGMA table_info('client_measurements')").all().map((r) => r.name));
+  if (["id", "client_id", "date_key", ...legacyMeasurementFields].some((field) => !columns.has(field))) throw new Error("R04_MEASUREMENT_SHAPE_UNSUPPORTED");
+  const rows = db.prepare("SELECT * FROM client_measurements").all().map((r) => ({ ...r }));
+  if (rows.length !== db.prepare("SELECT count(*) AS n FROM client_measurements").get()?.n) throw new Error("R04_MEASUREMENT_CARDINALITY_MISMATCH");
+  return { accountScope, rows };
+}
+
+/** Reparse a frozen physical row; caller-derived status flags are never trusted. */
+export function projectLegacyMeasurementSourceRow(accountScope: string, row: Readonly<Record<string, unknown>>, ownerFound: boolean): LegacyMeasurementSource {
+  if (!accountScope.trim() || typeof row.id !== "string" || !row.id.trim() || typeof row.client_id !== "string" || !row.client_id.trim()
+    || typeof row.date_key !== "string" || !row.date_key.trim() || legacyMeasurementFields.some((field) => !Object.hasOwn(row, field))) {
+    throw new Error("R04_MEASUREMENT_PROVENANCE_INCOMPLETE");
+  }
+  return { accountScope, sourceRowId: row.id, clientId: row.client_id, dateKey: row.date_key, ownerFound,
+    validLocalDate: isIsoLocalDate(row.date_key),
+    fieldStatuses: Object.fromEntries(legacyMeasurementFields.map((field) => [field, classifyValue(row[field])])) as LegacyMeasurementSource["fieldStatuses"],
+    fieldRawValues: Object.fromEntries(legacyMeasurementFields.map((field) => [field, row[field]])) as LegacyMeasurementSource["fieldRawValues"] };
+}
+
 function classifyValue(value: unknown): LegacyMeasurementValueStatus {
   if (value === null || value === "" || typeof value === "string" && !value.trim()) return "missing";
   if (typeof value !== "string" || !/^\d+(?:[.,]\d+)?$/u.test(value.trim())) return "invalid";

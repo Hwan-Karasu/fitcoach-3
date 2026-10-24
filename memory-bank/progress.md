@@ -35,21 +35,24 @@ mobileTS/ownESLint/source73/secrets/diff pass. No newbundle/fullfoundation/APK/n
 phone. Runtime/productionD01 unchanged. finalizable:false, goalnot100%. Contract
 R04_WORKOUT_CONTEXTS.md; handofftop updated.
 
-NEW workout_logs optional6thsource inExecution reader+private sharedstage. Fullrow/
-data_json inCONTEXT, physicalescapedsetpaths/SNAPSHOT kind; array/object/directsets.
-Provenalias requiresobservedcacheID+sourcePriority2/sourceVersionId+client/workout,
-notcomputedcolonIDalone; metadisambiguatescrosslogcollision, duplicateIDswithinlog
-blockambiguity. Exactvalues/segments/type/effort/RPE; no name/valuejoins. Unknown
-completion stayseditable/noactualdate; deletedcache/foreignclient cannotconfirm.
-DeletedbadJSON/sourceextras retained; malformedactive/foreignworkout rollbackall.
-Node24metricreviver retainsnumeric tokens incache segments/snapshots, no FP rounding.
-V3binding/snapshotversion1; no newtables/productionDDL.330/330r04:plans incl43Execution/
-13new;23boundaries &readonly/reopen/reorder/byteidentical/IDsreuse nowwithprovenlog/cache.
-Inputfreeze/drift/metadata/version tested. Root/mobileTS/ownlint/source73/secrets/diff
-pass. No bundle/fullsuite/APK/native/phone. LegacyrestoreNOTconnected/finalizable:false.
-Contract R04_WORKOUT_LOG_SNAPSHOTS.md. Exact021ref e116b42 audited, oldwriterunproven.
+60134d7 logs6thExecution source/fullraw/physicalpaths/proven cacheID+metadata+client/
+workout alias, no names/values merge. Unknowncompletion retainededitable/noactualdate;
+Node24numeric tokens/V3binding/snapshotversion.330/330historical. Extraauditfound
+legacyJSONimporter/arbitrarydataJson, notinnerwritersemantics. No guessedmerge.
 
-NEXT proveoldlogwriter &relationtootherphysicalfactIDs; fullsemanticdedup stillOPEN.
+NEW measurements fullsource→exact8circumferences→D01rows inprivate staging. Stable
+UUIDperphysicalfield/clientmapping, dateonly/no inventedside/time/primary, importTime
+explicitbasis. ReferenceDay fixedinbinding, frozeninputbeforepriorcallbacks. Common
+stageClientMeasurements tx includesallpriorowners. Unsupportedprecision/bounds/zero/
+dates retainedraw/provenance review/targetIdNULL +counts; notclaimednormalizedfacts.
+SourceSHA/manifestSHA/IDs/tableparity.440/440area+deps,10newstage+1crossowner.3newtx
+checkpoints+beforecommit rollbackall/ClientIDs/retry, readonly/reopen/reorder/bytes/
+IDreuse. Runtime repository reads copiedD01rows infreshDB withoutimporter tables,
+ambiguity/explicitprimary/sameID correction+revision. Root/mobileTS/ownlint/source73/
+secrets/diff pass. RegisteredR04/Plans/foundation; themehunks excluded. No bundle/
+fullfoundation/APK/native/phone. ContractR04_MEASUREMENT_STAGING.md/finalizable:false.
+
+NEXT bodyweight reconciliation/remainingowners; oldlogsemantics stillunproven.
 Then finaloutcome+runtimeidentity/date reconciliation, runtime contexts/notes/draft
 binding/editing; remainingowners/fullparity/connectedSQLite+JSONlegacyrestore/Android.
 Catalog/phase1archives/templatevariation&extras/orphans/classification/preferences/

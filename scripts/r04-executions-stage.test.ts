@@ -13,6 +13,7 @@ import { readLegacyClientCardsInSnapshot } from "./r04/LegacyClientCardProjectio
 import { readLegacyExerciseCatalogInSnapshot } from "./r04/LegacyExerciseCatalogSourceReader.ts";
 import { readLegacyExerciseReferencesInSnapshot } from "./r04/LegacyExerciseReferencePreflight.ts";
 import { legacyExecutionDate, mergeLegacyExecutionDates } from "./r04/LegacyExecutionDates.ts";
+import { readLegacyMeasurementsSnapshotInSnapshot } from "./r04/LegacyMeasurementSourceReader.ts";
 
 const context = { sourceSha256: "f".repeat(64), accountScope: "execution-synthetic", sourceWorkspaceId: "source-workspace", targetWorkspaceId: "local-trainer" };
 const date0 = "2026-03-01T12:00:00.000Z", date1 = "2026-03-08T12:00:00.000Z", imported = "2026-05-01T10:00:00Z";
@@ -117,6 +118,24 @@ const ownTables = ["clients", "questionnaire_versions", "questionnaire_answers",
   "r04_exercise_ids", "r04_exercise_registry", "exercise_overlay", "r04_exercise_links", "r04_exercise_receipt", "r04_plan_ids", "r04_plan_source", "r04_plan_receipt",
   "training_programs", "training_program_members", "training_mesocycles", "training_weeks", "training_workouts", "training_planned_exercises", "training_planned_sets", "training_simple_overrides", "training_templates",
   "r04_execution_ids", "r04_execution_sessions", "r04_execution_facts", "r04_execution_segments", "r04_execution_representations", "r04_execution_contexts", "r04_execution_receipt"];
+
+test("measurement failure rolls back nonempty questionnaire, work data, plans and performed facts; retry commits all owners together", async () => {
+  for (const phase of ["after-measurement-ids", "after-measurement-rows", "after-measurement-receipt", "before-commit"] as const) await fixture((source, target) => {
+    source.exec(`CREATE TABLE client_measurements(id TEXT PRIMARY KEY,client_id TEXT,date_key TEXT,neck TEXT,shoulders TEXT,chest TEXT,waist TEXT,hips TEXT,upper_arm TEXT,thigh TEXT,calf TEXT);
+      INSERT INTO client_measurements VALUES('measure','a','2026-03-01','35.5',NULL,NULL,NULL,NULL,NULL,NULL,NULL)`);
+    const data = read(source), measurements = readLegacyMeasurementsSnapshotInSnapshot(source, context.accountScope);
+    const ledger = prepareCandidateIdentityLedger(target, context, { clientIdentityRehearsal: { ...options.clientIdentityRehearsal, measurements: { referenceDay: "2026-05-01" } } });
+    assert.throws(() => ledger.stageClientMeasurements(data.cards, null, data.catalog, data.refs, data.plans, data.executions, measurements, allocator(), (p) => {
+      if (p === phase) throw new Error("injected");
+    }), /WRITE_FAILED/u);
+    for (const table of [...ownTables, "body_measurements", "measurement_daily_primary", "r04_measurement_ids", "r04_measurement_receipt"]) {
+      assert.equal(target.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n, 0, table);
+    }
+    assert.equal(target.prepare("SELECT count(*) AS n FROM r04_candidate_ids WHERE kind='CLIENT'").get()?.n, 0);
+    const result = ledger.stageClientMeasurements(data.cards, null, data.catalog, data.refs, data.plans, data.executions, measurements, allocator());
+    assert.equal(result.performedFacts, 5); assert.equal(result.measurementRows, 1); assert.equal(ledger.loadMeasurementDraftFacts().length, 1);
+  });
+});
 
 test("canonical facts deduplicate current/session/history/archive mirrors once per client, without merging identical other weeks", () => fixture((source, target) => {
   const { result, ledger } = stage(source, target);

@@ -21,6 +21,15 @@ exerciseId/id/ключа элемента и позиции подхода. В s
 его подтверждение подхода, set.id/sourceFactId и logged_at нельзя автоматически
 приравнять к современному факту/дате. Снимок не объявляется завершённой тренировкой.
 
+Дополнительная проверка 2026-10-24: в просмотренных первоначальном/current
+TrainingWorkoutRepository writer этой таблицы не найден. Найден
+[LegacyJsonBackupImporter, строки192–203](https://github.com/Hwan-Karasu/fitcoach/blob/e116b42e95f70a5a5e563420ab25394944c59ffd/apps/mobile/src/features/backup/services/LegacyJsonBackupImporter.ts#L192),
+который записывает workoutLogs.dataJson из резервной копии. Его
+[схема, строки107–114](https://github.com/Hwan-Karasu/fitcoach/blob/e116b42e95f70a5a5e563420ab25394944c59ffd/packages/validation/src/backup-schemas.ts#L107)
+допускает произвольные свойства dataJson и не доказывает completion/identity
+внутри них. Это объясняет путь появления строк, но не разрешает слияние их
+вложенных подходов с current/history/archive по значениям или позиции.
+
 ## Реализация
 
 - `training_workout_logs` — шестая optional Execution source table. Отсутствие

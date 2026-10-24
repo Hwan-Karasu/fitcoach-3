@@ -15,6 +15,9 @@ import { createPlansRehearsalSchema, loadStagedPlanMappings, plansRehearsalObjec
 import type { LegacyPlansSource } from "./LegacyPlansSourceReader.ts";
 import type { LegacyExecutionSource } from "./LegacyExecutionSourceReader.ts";
 import { createExecutionRehearsalSchema, executionRehearsalObjects, loadStagedExecutionFacts, stageLegacyExecutionsInTransaction, type ExecutionStageCheckpoint } from "./LegacyExecutionStage.ts";
+import { createMeasurementRehearsalSchema, measurementRehearsalObjects, stageLegacyMeasurementsInTransaction, loadStagedMeasurements, type MeasurementStageCheckpoint } from "./LegacyMeasurementStage.ts";
+import type { LegacyMeasurementsSnapshot } from "./LegacyMeasurementSourceReader.ts";
+import { isLocalDate } from "../../apps/mobile/src/features/measurements/domain/MeasurementRules.ts";
 
 export interface CandidateIdentityContext {
   readonly sourceSha256: string;
@@ -42,7 +45,7 @@ function validateClientKey(key: string, scope: string): void {
 
 /** R04 isolated synthetic staging contract. Never attach this schema to a source or runtime DB. */
 export function prepareCandidateIdentityLedger(db: DatabaseSync, context: CandidateIdentityContext,
-  options?: { readonly clientIdentityRehearsal: { readonly createdAt: string; readonly profiles?: true; readonly questionnaires?: true; readonly workData?: true; readonly exercises?: true; readonly plans?: true; readonly templates?: true; readonly archives?: true; readonly executions?: true } }) {
+  options?: { readonly clientIdentityRehearsal: { readonly createdAt: string; readonly profiles?: true; readonly questionnaires?: true; readonly workData?: true; readonly exercises?: true; readonly plans?: true; readonly templates?: true; readonly archives?: true; readonly executions?: true; readonly measurements?: { readonly referenceDay: string } } }) {
   // Snapshot caller input so a later caller mutation cannot change the ledger's binding.
   const binding = { ...context }, jobCreatedAt = options?.clientIdentityRehearsal.createdAt;
   const profilesEnabled = options?.clientIdentityRehearsal.profiles === true;
@@ -53,6 +56,7 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
   const templatesEnabled = options?.clientIdentityRehearsal.templates === true;
   const archivesEnabled = options?.clientIdentityRehearsal.archives === true;
   const executionsEnabled = options?.clientIdentityRehearsal.executions === true;
+  const measurementDay = options?.clientIdentityRehearsal.measurements?.referenceDay, measurementsEnabled = measurementDay !== undefined;
   if (questionnairesEnabled && !profilesEnabled) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
   if (workDataEnabled && !questionnairesEnabled) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
   if (exercisesEnabled && !workDataEnabled) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
@@ -60,13 +64,14 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
   if (templatesEnabled && !plansEnabled) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
   if (archivesEnabled && !templatesEnabled) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
   if (executionsEnabled && !archivesEnabled) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
+  if (options?.clientIdentityRehearsal.measurements !== undefined && (!measurementsEnabled || !isLocalDate(measurementDay) || !executionsEnabled)) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
   if (jobCreatedAt !== undefined && !isExplicitTimestamp(jobCreatedAt)) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
   const expectedContext = jobCreatedAt === undefined ? contextJson(binding)
     : JSON.stringify([contextJson(binding), "CLIENT_IDENTITY_REHEARSAL_V1", jobCreatedAt, ...(profilesEnabled ? ["PROFILE_REHEARSAL_V1"] : []),
       ...(questionnairesEnabled ? ["QUESTIONNAIRE_COMPOSITION_V1"] : []), ...(workDataEnabled ? ["WORK_DATA_REHEARSAL_V1"] : []),
       ...(exercisesEnabled ? ["EXERCISE_REGISTRY_REHEARSAL_V1"] : []), ...(plansEnabled ? ["TRAINING_PLANS_REHEARSAL_V1"] : []),
       ...(templatesEnabled ? ["TRAINING_TEMPLATES_REHEARSAL_V1"] : []), ...(archivesEnabled ? ["TRAINING_ARCHIVES_REHEARSAL_V1"] : []),
-      ...(executionsEnabled ? ["TRAINING_EXECUTIONS_REHEARSAL_V3"] : [])]);
+      ...(executionsEnabled ? ["TRAINING_EXECUTIONS_REHEARSAL_V3"] : []), ...(measurementsEnabled ? ["MEASUREMENTS_REHEARSAL_V1", measurementDay] : [])]);
   const workspaceKey = JSON.stringify([binding.accountScope, binding.sourceWorkspaceId]);
   function inspect(): "new" | "owned" {
     const objects = db.prepare("SELECT type,name FROM sqlite_schema WHERE substr(name,1,7)<>'sqlite_' ORDER BY name").all();
@@ -79,6 +84,7 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
     if (exercisesEnabled) Object.assign(expectedObjects, exerciseRehearsalObjects);
     if (plansEnabled) Object.assign(expectedObjects, plansRehearsalObjects);
     if (executionsEnabled) Object.assign(expectedObjects, executionRehearsalObjects);
+    if (measurementsEnabled) Object.assign(expectedObjects, measurementRehearsalObjects);
     if (objects.length !== Object.keys(expectedObjects).length || objects.some((row) => !Object.hasOwn(expectedObjects, String(row.name))
       || row.type !== expectedObjects[String(row.name)])) {
       throw new Error("R04_ID_LEDGER_FOREIGN_DATABASE");
@@ -152,6 +158,7 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
       if (exercisesEnabled) createExerciseRehearsalSchema(db);
       if (plansEnabled) createPlansRehearsalSchema(db);
       if (executionsEnabled) createExecutionRehearsalSchema(db);
+      if (measurementsEnabled) createMeasurementRehearsalSchema(db);
     }
   });
   function reserveInTransaction(sourceKeys: readonly string[], allocate: () => string): ReadonlyMap<string, string> {
@@ -336,16 +343,36 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
     checkpoint: (stage: "after-ids" | "after-client" | "after-profile" | "after-work-data" | "before-commit" | ExerciseStageCheckpoint | PlanStageCheckpoint) => void = () => undefined) {
     return stageClientPlansWithExecutions(source, questionnaire, catalog, refs, plans, allocate, checkpoint);
   }
+  function stageClientExecutionsWithMeasurements(source: readonly LegacyClientCardCandidate[], questionnaire: LegacyQuestionnaireSource | null,
+    catalog: readonly LegacyExerciseCatalogCandidate[], refs: readonly LegacyExerciseReferenceCandidate[], plans: LegacyPlansSource, executions: LegacyExecutionSource,
+    allocate: () => string = randomUUID,
+    checkpoint: (stage: "after-ids" | "after-client" | "after-profile" | "after-work-data" | "before-commit" | ExerciseStageCheckpoint | PlanStageCheckpoint | ExecutionStageCheckpoint) => void = () => undefined,
+    afterExecutions?: (snapshot: readonly LegacyClientCardCandidate[], ids: ClientDraftIdMap) => void) {
+    if (!executionsEnabled || jobCreatedAt === undefined) throw new Error("R04_ID_LEDGER_EXECUTION_NOT_ENABLED");
+    if (measurementsEnabled !== (afterExecutions !== undefined)) throw new Error("R04_ID_LEDGER_MEASUREMENTS_MODE_MISMATCH");
+    const frozen = structuredClone(executions); let rows: ReturnType<typeof stageLegacyExecutionsInTransaction> | null = null;
+    const result = stageClientPlansWithExecutions(source, questionnaire, catalog, refs, plans, allocate, checkpoint, (snapshot, ids, planSnapshot) => {
+      rows = stageLegacyExecutionsInTransaction(db, binding, jobCreatedAt, snapshot, ids, planSnapshot, frozen, allocate, checkpoint);
+      afterExecutions?.(snapshot, ids);
+    });
+    return { ...result, ...rows!, status: "training-executions-rehearsal-staged" as const };
+  }
   function stageClientExecutions(source: readonly LegacyClientCardCandidate[], questionnaire: LegacyQuestionnaireSource | null,
     catalog: readonly LegacyExerciseCatalogCandidate[], refs: readonly LegacyExerciseReferenceCandidate[], plans: LegacyPlansSource, executions: LegacyExecutionSource,
     allocate: () => string = randomUUID,
     checkpoint: (stage: "after-ids" | "after-client" | "after-profile" | "after-work-data" | "before-commit" | ExerciseStageCheckpoint | PlanStageCheckpoint | ExecutionStageCheckpoint) => void = () => undefined) {
-    if (!executionsEnabled || jobCreatedAt === undefined) throw new Error("R04_ID_LEDGER_EXECUTION_NOT_ENABLED");
-    const frozen = structuredClone(executions); let rows: ReturnType<typeof stageLegacyExecutionsInTransaction> | null = null;
-    const result = stageClientPlansWithExecutions(source, questionnaire, catalog, refs, plans, allocate, checkpoint, (snapshot, ids, planSnapshot) => {
-      rows = stageLegacyExecutionsInTransaction(db, binding, jobCreatedAt, snapshot, ids, planSnapshot, frozen, allocate, checkpoint);
+    return stageClientExecutionsWithMeasurements(source, questionnaire, catalog, refs, plans, executions, allocate, checkpoint);
+  }
+  function stageClientMeasurements(source: readonly LegacyClientCardCandidate[], questionnaire: LegacyQuestionnaireSource | null,
+    catalog: readonly LegacyExerciseCatalogCandidate[], refs: readonly LegacyExerciseReferenceCandidate[], plans: LegacyPlansSource, executions: LegacyExecutionSource,
+    measurements: LegacyMeasurementsSnapshot, allocate: () => string = randomUUID,
+    checkpoint: (stage: "after-ids" | "after-client" | "after-profile" | "after-work-data" | "before-commit" | ExerciseStageCheckpoint | PlanStageCheckpoint | ExecutionStageCheckpoint | MeasurementStageCheckpoint) => void = () => undefined) {
+    if (!measurementsEnabled || jobCreatedAt === undefined) throw new Error("R04_ID_LEDGER_MEASUREMENTS_NOT_ENABLED");
+    const frozen = structuredClone(measurements); let rows: ReturnType<typeof stageLegacyMeasurementsInTransaction> | null = null;
+    const result = stageClientExecutionsWithMeasurements(source, questionnaire, catalog, refs, plans, executions, allocate, checkpoint, (snapshot, ids) => {
+      rows = stageLegacyMeasurementsInTransaction(db, binding, jobCreatedAt, measurementDay, snapshot, ids, frozen, allocate, checkpoint);
     });
-    return { ...result, ...rows!, status: "training-executions-rehearsal-staged" as const };
+    return { ...result, ...rows!, status: "measurements-rehearsal-staged" as const };
   }
   function loadExerciseDraftIds(): ReadonlyMap<string, string> {
     if (!exercisesEnabled) throw new Error("R04_ID_LEDGER_EXERCISE_NOT_ENABLED");
@@ -376,5 +403,9 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
   function loadExecutionDraftContexts() {
     loadExecutionDraftFacts(); return db.prepare("SELECT * FROM r04_execution_contexts ORDER BY source_key").all();
   }
-  return { reserveClientIds, loadClientDraftIds, loadExerciseDraftIds, loadPlanDraftMappings, loadExecutionDraftFacts, loadExecutionDraftContexts, stageClientIdentities, stageClientCards, stageClientProfiles, stageClientQuestionnaires, stageClientWorkData, stageClientExerciseCatalog, stageClientPlans, stageClientExecutions };
+  function loadMeasurementDraftFacts() {
+    if (!measurementsEnabled || inspect() !== "owned") throw new Error("R04_ID_LEDGER_MEASUREMENTS_NOT_ENABLED");
+    loadExecutionDraftFacts(); return loadStagedMeasurements(db);
+  }
+  return { reserveClientIds, loadClientDraftIds, loadExerciseDraftIds, loadPlanDraftMappings, loadExecutionDraftFacts, loadExecutionDraftContexts, loadMeasurementDraftFacts, stageClientIdentities, stageClientCards, stageClientProfiles, stageClientQuestionnaires, stageClientWorkData, stageClientExerciseCatalog, stageClientPlans, stageClientExecutions, stageClientMeasurements };
 }
