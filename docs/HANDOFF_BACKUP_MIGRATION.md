@@ -1,3 +1,19 @@
+## Рабочая копия R04
+
+С 2026-10-24 дальнейшая работа этого goal ведётся в
+`E:\ProjectFitCoach\FitCoach_3_R04`, ветка `work/r04-legacy-restore`.
+Base `258ef27` включает Calendar code checkpoint `6d84461` и его R04 evidence.
+Основная `FitCoach_3`/`perf/week-participant-navigation` оставлена для параллельной
+UI/performance работы. Не переключать её ветку и не включать её текущие изменения
+в R04 commits. В isolated worktree node_modules root/mobile — junctions к уже
+установленным зависимостям; ignored `apps/mobile/assets/exercises` также связан
+с существующим каталогом основной копии. Lockfiles/dependencies не менялись.
+Проверка isolated worktree: Calendar+Nutrition 47/47, root/mobile TypeScript,
+source baseline 73 и arch 524 PASS. До подключения ignored assets arch обнаружил
+недостающие изображения; после подключения проверка прошла без изменения правил.
+Final merge ещё
+предстоит, production/native gates не меняют статус из-за создания worktree.
+
 ## Продолжение — Calendar/Accounting из поддерживаемого source, база 3c4d019
 
 2026-10-24 R04→R03/D01/Product13/22/48.35–39/49–50/53–56/INT03–12/15.

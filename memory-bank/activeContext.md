@@ -1,6 +1,6 @@
 # Active context — 2026-10-24
 
-«Дневник атлета», FitCoach_3/audit/training-fixes. Goal ACTIVE full2.0→3.0+
+«Дневник атлета», FitCoach_3_R04/work/r04-legacy-restore. Goal ACTIVE full2.0→3.0+
 backup/restore NOT100%. R04→R03; Product48.5.7/49–50/53–56/INT03–12.
 ProdDDL/realmigration/overlay/signing/release gates OPEN, no bypass. Private synthetic
 staging/finalizable:false only. Russiancommits/nopush/no agents. Pinned node.cmd24.3,

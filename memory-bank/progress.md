@@ -1,5 +1,7 @@
 # Progress — 2026-10-24
 
+Workdir E:\ProjectFitCoach\FitCoach_3_R04; branch work/r04-legacy-restore; base258ef27.
+
 Goal ACTIVE full2.0→3.0+backup/restore NOTDONE. R04→R03/Product49–50/53–56/INT03–12.
 ProdDDL/realmigration/overlay/signing/release gates OPEN; synthetic/finalizable:false.
 Russiancommits/nopush/no agents/targetedchecks. UIlater/Excelafterbackup/GitHubfirst.
