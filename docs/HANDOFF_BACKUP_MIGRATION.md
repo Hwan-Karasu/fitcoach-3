@@ -1,3 +1,23 @@
+## Продолжение — отдельная inspection copy перед SQLite
+
+2026-10-24 R04/R03/Product46.6/48.5.7/49–50/53–56/INT03–12, базаaad8901.
+InspectionCopy receipt/domain +LegacyInspectionCopy protocol +ExpoLegacyInspectionFiles.
+Source hash→freshUUIDslot/ownzero partial→copy→source rehash/private SHA/header/
+no sidecars→private file rename→receipt atomic rename/readback. No source SQLite/
+rename/delete, existing slot no overwrite. Read verifies closed private copy before
+and after shared3domain snapshot. Header/byte receipt NOTfull2.0 format admission;
+accountScope stillcaller-provided, manifest/binding/integrity/FK gates pending.
+PinnedSDK File.move async+fallbackcopy-delete; uses awaited legacy moveAsync
+file:// renameTo-or-fail in same private directory. No new native code/deps/UI.
+9newtests/realhostfiles/allcopyboundaries/retry/sourcebytes/drift/incompletepublish/
+readwithoutsource. Actual Expo driver freshWorker/SDKmocks with delayedasynccopy/
+rename exercises awaiting/privatepath/newconnection. NOTAndroid/nativeprovider proof.
+106/106 targeted+root/mobileTS/scopedlint/source73/arch531/secrets/diff PASS.
+No fullfoundation/687rerun/bundle/APK/phone. OrphanGC/powerloss/Androidkill open.
+[Протокол, SDK review и ограничения](spikes/R04_INSPECTION_COPY.md).
+NEXT format/account/integrity admission/othercollectors/permanentstorage/mobilewriter/
+schema/composition/fullbackup/fullrestore/Android/removalproof. GoalACTIVE/not100%.
+
 ## Продолжение — общий mobile/host SQLite source reader
 
 2026-10-24 R04/R03/Product48.5.7/49–50/53–56/INT03–12, база99c318f. Новый mobile

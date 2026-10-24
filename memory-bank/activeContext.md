@@ -49,21 +49,22 @@ notoutcomes/exactclientIDs/4templates/legacybypass1/UNTRACKED/no paidfacts.
 SourceJSON99c318f: R04_PORTABLE_SOURCE_JSON.md exacttokens/no context.source, all4
 projections/twoargWorker/normalreaderimportban; 8newtests. HermesHBCcompileonly.
 
-CURRENT R04_PORTABLE_SQL_SOURCE.md: mobile LegacySourceSnapshots/ReadPlans/SqliteSource.
-Samegeneratorplan usedbyNode Nutrition/MeasurementSnapshot/Calendar collectors.
-Fullrows/null-empty/rawJSON/unknownfields/BLOB/scopedsettings/shape/count/wrongkind.
-xinfo coversgenerated; unsafeSQLINTEGER/Infinity blockedbeforebridge: REJECT,
-NOTexactretention. Expo-compatiblePick getAll/exec/close/privatecopyONLY. Caller
-filecopy/admission/hash/ownership UNIMPLEMENTED. Pragmas query_only1/FK1/
-read_uncommitted0/trusted_schema0 verified. PinnedBEGIN/all3domains/ROLLBACK/close;
-fixedIOerrors/cleanupfailuresreported. 9source+1integration/WALconcurrentwriter/
-allnativefailureboundaries/unchangedbytes/retry/count/config/cleanup/generated.
-Asyncsnapshots->sharedstaging receiptfailure rollbackall/retry/replaystableIDs/
-noallocator/no credit/finalizablefalse. 687area/latest74 PASS. Root/mobileTS/
-scopedlint/source73/arch528/secrets/diff PASS. 3mobilemoduleshermescHBCcompile;
-NOHermesexecution/Android/foundation/bundle/APK/phone/sourcePII thisphase.
+PortableSQLaad8901/R04_PORTABLE_SQL_SOURCE.md: sharedNode/mobile3domainplans,
+fullraw/null-empty/xinfo/unsafeSQLnumberREJECT/WALsnapshot/pragmas/readtx/close.
+9source+1stageintegration/687area/latest74; source/account/admission pending.
 
-NEXT othercollectors/filecopy+admission/permanentExecution/review/provenance/
-portablewriter/schemaadmission/composition/UI/deletion/ordinarybackup/fullparity/
-appSQLite+JSONlegacyrestore/Android/fullremovalproof. AllpriorbackupedgecasesOPEN.
-HoststagingNOTmobileimporter. GoalACTIVE/not100%.
+CURRENT R04_INSPECTION_COPY.md: receipt/domain+LegacyInspectionCopy+ExpoFiles.
+SourceSHA->freshUUID/ownzeroPartial->copy->sourceRehash/privateSHA/header/no sidecars
+->privatefile rename->receipt rename/readback. Source neverSQLite/renamed/deleted.
+ExistingUUIDnooverwrite/retrynewslot. Readverifiesprivatebytes before+after common
+reader; receiptNOT2.0admission/scope stillcaller. Awaitlegacyfile://moveAsync
+renameTo-or-fail (File.move hasasync+copy-deletefallback). 9newtests: realhostfiles/
+allcopyfaults/sourcebytes/retry/drift/incompletepublish/readwithoutsource. Actual
+ExpoDriver freshWorker/SDKmocks delayedcopy+renames/privateonlySQL/newconnection.
+106targeted/root-mobileTS/scopedlint/source73/arch531/secrets/diff PASS.
+No Android/foundation/bundle/APK. OrphanGC/powerloss/kill OPEN. Phoneuntouched.
+
+NEXT format/manifest/binding/account/integrity/FK admission/othercollectors/
+permanentExecution/review/provenance/mobilewriter/schemaadmission/composition/
+UI/deletion/fullordinarybackup/appSQLite+JSONlegacyrestore/Android/fullremovalproof.
+AllpriorbackupedgecasesOPEN. GoalACTIVE/fullscope/NOT100%.
