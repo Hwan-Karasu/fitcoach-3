@@ -79,3 +79,14 @@ COMMIT. Client workspace index создаёт владелец клиентов;
 Host profile writer использует тот же генератор, а composition перенесён в
 questionnaire/domain/legacy-import. Ни client-only, ни profile-only job не
 превращается в другой mode на месте. Полный набор остальных owners ещё не добавлен.
+
+`clients/data/legacy-import/LegacyClientWorkDataStaging` добавляет заметки, метки,
+назначения и PENDING_REVIEW записи через общий `LegacyClientWorkDataStagePlan`.
+Он подключается после profile/Q расширения функцией `combineLegacyStageExtensions`;
+порядок, зависимости, tags/objects фиксируются до создания job. Неверный порядок
+или попытка добавить WorkData к существующей Q-only DB блокируются до записи.
+Все owner stages используют один allocator и одну tx. Общий bridge helper
+`LegacyProfileWorkData` извлекает прежние raw значения для Q receipt и client owner;
+правила full profile validation, нормализации меток и сохранения note text не менялись.
+WorkData пока записывается в private R04 owner-shaped tables. Это не утверждение,
+что постоянная production модель, обычный backup, UI или Android уже подключены.

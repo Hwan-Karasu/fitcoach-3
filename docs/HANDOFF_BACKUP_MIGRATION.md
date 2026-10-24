@@ -1,3 +1,23 @@
+## Продолжение — async WorkData после clients/Q
+
+2026-10-24, база3d094b4; R04→R03/Product48.5.7/49–50/53–56/INT03–12.
+Private synthetic/finalizable:false; production/native/release gates OPEN.
+Общий LegacyClientWorkDataStagePlan исполняется Node/async SQLite; script wrapper
+сохранён. Прежние schema/FK/IDs/receipts/parity, note text/time provenance, Unicode
+tag naming/labels/order и PENDING_REVIEW без активных ограничений сохранены.
+Shared raw profile WorkData extractor исключает feature-to-feature dependency.
+combineLegacyStageExtensions фиксирует order/dependencies/tags/objects до init;
+Q→WorkData с общим allocator в той же client tx. Нет upgrade existing Q-only mode.
+8new tests: admitted actualQ+clients+WorkData async==host rows/IDs/receipts,
+unchangedsourceSHA/FK/closedhandles; allboundaries/rollback/retry/reopen/replay,
+COMMITackloss/mutation/order/mode/invalidtags/IDcollision/drift/nativeIO/schemafailure.
+475/475 ownerprofile, initial40/7/latest8 PASS; root/mobileTS/scopedlint/source73/
+arch556/secrets/staged diff PASS.
+[Подробности, доказательства, оставшийся объём](spikes/R04_PORTABLE_WORK_DATA_STAGING.md).
+Нет foundation/bundle/APK/Hermesruntime/Android. Permanent WorkData/backup/UI ещё
+не доказаны; остальные portable writers/composition/fullrestore/native/removal OPEN.
+GoalACTIVE/fullscope/не100%.
+
 ## Продолжение — async Questionnaire/Profile в общей клиентской транзакции
 
 2026-10-24, база76ab152; R04→R03/Product48.5.7/49–50/53–56/INT03–12.

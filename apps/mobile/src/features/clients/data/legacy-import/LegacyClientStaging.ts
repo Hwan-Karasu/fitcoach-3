@@ -16,10 +16,11 @@ import { legacyClientWorkspaceIndexPlan, legacyCreateIdentityPlan, legacyInspect
  */
 export async function prepareLegacyClientStaging<Extra = undefined>(open: () => Promise<NativeSqliteDatabase>, context: CandidateIdentityContext, createdAt: string, extension?: LegacyStageExtension<Extra>) {
   const captured = Object.freeze({ ...context });
-  const owner = extension === undefined ? undefined : Object.freeze({ ...extension, modeTags: [...extension.modeTags], objects: { ...extension.objects } });
+  const owner = extension === undefined ? undefined : Object.freeze({ ...extension, modeTags: [...extension.modeTags], objects: { ...extension.objects }, requiredModeTags: [...(extension.requiredModeTags ?? [])] });
   const objects: Record<string, string> = { r04_candidate_identity: "table", r04_candidate_ids: "table", workspaces: "table", clients: "table" };
   if (owner) {
     if (!owner.modeTags.length || owner.modeTags.some((tag) => typeof tag !== "string" || !tag.trim()) || new Set(owner.modeTags).size !== owner.modeTags.length
+      || owner.requiredModeTags.some((tag) => !owner.modeTags.includes(tag))
       || Object.keys(owner.objects).some((key) => Object.hasOwn(objects, key))) throw new Error("R04_ID_LEDGER_CONTEXT_INVALID");
     Object.assign(objects, owner.objects);
   }
@@ -72,7 +73,7 @@ export async function prepareLegacyClientStaging<Extra = undefined>(open: () => 
         let extensionResult: Extra | undefined;
         const result = await runLegacyWritePlan(tx, legacyStageClientIdentitiesPlan(binding, identities, allocate, fields, payloads), async (phase) => {
           if (phase === "after-clients") {
-            if (owner) extensionResult = await runLegacyWritePlan(tx, owner.stage(captured, createdAt, cards, await runLegacyWritePlan(tx, legacyLoadClientIdsPlan(binding))), (at) => {
+            if (owner) extensionResult = await runLegacyWritePlan(tx, owner.stage(captured, createdAt, cards, await runLegacyWritePlan(tx, legacyLoadClientIdsPlan(binding)), allocate), (at) => {
               if (at !== "after-clients") return checkpoint(at);
             });
           } else await checkpoint(phase);

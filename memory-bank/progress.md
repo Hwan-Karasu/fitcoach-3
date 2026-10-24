@@ -50,23 +50,24 @@ no sourceSQLite/delete/nooverwrite; ExpoDriver delayedSDKmocks/realhostfiles.
 Admissione1d7484/R04_SOURCE_ADMISSION.md: canonical25 metadata/ledger/size/revision/
 integrity-FK/exactscope/privateverifiedlineage; 152area, notfullmappingadmission.
 
-Training6bb28b7/R04_PORTABLE_TRAINING_SOURCE.md: Plans10/Execution6 sharedraw;
-admitted5owners/441profile/52/20PASS, projections/writer thenhost-only.
+Training6bb28b7: R04_PORTABLE_TRAINING_SOURCE.md; 441/52/20PASS.
 
-Profile85c7e32/R04_PORTABLE_PROFILE_SOURCE.md: raw8owners/pinnedtx/SHA,
-ownerprojections/nobleIDs. 8new/449profile/24/latest8PASS, thenwritershost-only.
+Profile85c7e32: R04_PORTABLE_PROFILE_SOURCE.md; 449/24/8PASS.
 
-Client76ab152/R04_PORTABLE_CLIENT_STAGING.md: sharedNode/asyncclientwrite/IDs/parity,
-10new/459profile/44-8PASS; sourceSHA/rollback/ackloss/retryproof.
+Client76ab152: R04_PORTABLE_CLIENT_STAGING.md; 459/44/8PASS.
 
-CURRENT R04_PORTABLE_QUESTIONNAIRE_STAGING.md: ownerQ composition +sharedschema/
-write/parity. Hostfullledger sameplan. Immutable extensionmode/schema boundatinit;
-client-owned index; async Q/checkpoints awaitwithinclienttx. Rawprofile/Q reproject;
-versions/epochs/gaps/draft/receipts retained. No cutover; WorkData privatecandidates.
-8newtests admitted→async==hostrows/receipts, rollback/retry/reopen/COMMITackloss,
-capture/source-invalid/drift/binding/schema/unchangedSHA/closedhandles.
-467profile/initial41-18 PASS; root/mobileTS/lint/source73/arch553/secrets PASS.
-No foundation/bundle/APK/Hermes/Android/nativeExpo/prodDDL. Old10clienttestsPASS.
+Q3d094b4/R04_PORTABLE_QUESTIONNAIRE_STAGING.md: shared asyncQ/clienttx/epochs/draft/
+receipts, 8new/467profile/41-18PASS, thenWorkData onlyprivatecandidates.
+
+CURRENT R04_PORTABLE_WORK_DATA_STAGING.md: shared WorkData schema/write/parity
+Node+async; sharedrawextractor usedbyQandclientowner. Ordered extensioncombine/
+mode-deps/objects/allocator fixedatinit; Q→WorkData withinclienttx. Notes exact,
+import-time/unknown-note-time provenance, NFCtags/rawlabels/order, pendingreviews
+notACTIVE. Private R04 tables, NOTproductionmodel/ordinarybackup/UI. 8newtests:
+admitted actualQ+client+WorkData async==hostrowsIDsreceipts; SHA/rollbackall/retry/
+reopen/replay/ackloss/mutation/order/mode/invalidtags/collisions/drift/IO/schema.
+475profile/initial40-7/latest8 PASS; root/mobileTS/lint/source73/arch556/secrets PASS.
+No foundation/bundle/APK/Hermes/Android/nativeExpo/prodDDL.
 
 NEXT fullportablewriter/otherprojections/coverage/prefs/lineage/permanentExecution-
 review-provenance/schemaadmission/composition/cutover/UI/deletion/fullbackup/

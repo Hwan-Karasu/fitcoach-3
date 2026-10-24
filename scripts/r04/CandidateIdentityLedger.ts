@@ -120,7 +120,7 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
     if (jobCreatedAt === undefined) throw new Error("R04_ID_LEDGER_REHEARSAL_NOT_ENABLED");
     return transaction(() => runNodeLegacyWritePlan(db, legacyStageClientIdentitiesPlan(stageBinding, source, allocate, cards, sourcePayloads), (phase) => {
       if (phase === "after-clients") afterClients?.();
-      else if (phase === "after-profile") throw new Error("R04_ID_LEDGER_UNEXPECTED_CHECKPOINT");
+      else if (phase === "after-profile" || phase === "after-work-data") throw new Error("R04_ID_LEDGER_UNEXPECTED_CHECKPOINT");
       else checkpoint(phase);
     }));
   }

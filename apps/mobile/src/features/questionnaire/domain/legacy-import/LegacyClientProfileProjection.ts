@@ -1,5 +1,6 @@
 import type { Answers, QuestionnaireSchema } from "../QuestionnaireModel.ts";
 import { allFields, answerProblem, defaultQuestionnaireSchema, validateSchema } from "../QuestionnaireRules.ts";
+import { legacyProfileWorkData, type LegacyProfileWorkData } from "../../../../shared/migration/LegacyProfileWorkData.ts";
 
 /** Exact build120 ClientProfileFields → current system questions. No guessed labels,
  * synthetic measurements, inferred medical clearance or questionnaire-owned trainer notes. */
@@ -39,16 +40,10 @@ export interface LegacyProfileProjection {
   readonly answers: Answers | null;
   /** Shaped candidates for the separate WorkData owner. Not questionnaire answers or a
    * claim that notes/tags/safety have already been persisted to their final domain. */
-  readonly workData: {
-    readonly trainerNote: string | null; readonly manualTags: readonly string[]; readonly loadAvoidance: string | null;
-    readonly safety: readonly { readonly sourceField: string; readonly text: string }[];
-  };
+  readonly workData: LegacyProfileWorkData;
   readonly excludedByProduct: readonly { readonly sourceField: string; readonly value: unknown }[];
   readonly issues: readonly string[];
   readonly sourceFields: number;
-}
-function meaningful(text: string): boolean {
-  return !["", "-", "—", "нет", "нет.", "не указано", "n/a"].includes(text.trim().toLocaleLowerCase("ru-RU"));
 }
 export function projectLegacyClientProfile(raw: Readonly<Record<string, unknown>>): LegacyProfileProjection {
   const schema = legacyProfileQuestionnaireSchema();
@@ -92,10 +87,7 @@ export function projectLegacyClientProfile(raw: Readonly<Record<string, unknown>
   }
   // §10.15 visibility keeps populated health answers even with clearance=true.
   // Preserve both source facts; neither reject valid intake nor infer medical clearance.
-  const text = (key: string) => typeof raw[key] === "string" && raw[key].trim() ? raw[key] : null;
-  const manualTags = Array.isArray(raw.trainerTags) && raw.trainerTags.every((v: unknown) => typeof v === "string") ? [...raw.trainerTags] as string[] : [];
   return { answers: issues.length > 0 ? null : answers, sourceFields: Object.keys(raw).length, issues: [...new Set(issues)],
-    workData: { trainerNote: text("trainerNotes"), manualTags, loadAvoidance: text("unwantedLoad"),
-      safety: ["diagnoses", "injuries", "pain", "hardMovements"].flatMap((key) => typeof raw[key] === "string" && meaningful(raw[key]) ? [{ sourceField: key, text: raw[key] }] : []) },
+    workData: legacyProfileWorkData(raw),
     excludedByProduct: excludedFields.filter((key) => Object.hasOwn(raw, key)).map((key) => ({ sourceField: key, value: raw[key] })) };
 }
