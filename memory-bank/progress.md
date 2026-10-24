@@ -65,12 +65,14 @@ Exercisef7ccdf9: R04_PORTABLE_EXERCISE_STAGING.md; sharedcatalog/ref/read/IDs,
 
 Plans5332754: R04_PORTABLE_PLANS_STAGING.md; 8new/491profile PASS.
 
-CURRENT R04_PORTABLE_EXECUTION_STAGING.md: owner projections/commonNode-async
-schema/write/parity/read/shared exactJSON+DTO/verifiedPlansport. RealUUIDorder,
-pendingSQLreservations/nobleSHA unchanged. 9new admitted fullgraph/hostparity/
-rollback/retry/replay/ackloss/drift/capture/collision/mode/IO; sourceSHA/FK/handles.
-Old5332754writer==current all44tables/IDs/receipts in4cases. Fullproof in handoff/doc.
-500profile/54initial/9new PASS; root/mobileTS/lint/source73/arch581/secrets PASS.
+Execution61fbb4c: R04_PORTABLE_EXECUTION_STAGING.md; 9new/500profile PASS.
+
+CURRENT R04_PORTABLE_MEASUREMENT_STAGING.md: owner pure/commonNode-async writer/
+parity/read/fixedday/sourcecapture/sharedDTO. 9new fullchain async==host/exacttenths/
+unsided/sameday/noPrimary/profileUNKNOWN/rawreview/rollback/retry/replay/ackloss/
+drift/collision/mode/IO. Old61fbb4cwriter==current all48tables/IDs/receipts in2cases.
+509profile/27initial/92preflight/9new PASS; root/mobileTS/lint/source73/arch589/secrets PASS.
+Normalrepo/nativefieldbackup pass, NOTprivate provenance/review. Fullproof in doc.
 No foundation/bundle/Hermesruntime/APK/Android/prodDDL. Fullgoal NOTDONE.
 
 NEXT fullportablewriter/otherprojections/coverage/prefs/lineage/permanentExecution-

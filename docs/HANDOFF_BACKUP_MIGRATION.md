@@ -1,3 +1,21 @@
+## Продолжение — async замеры и дневной вес
+
+2026-10-24, база61fbb4c; R04→R03/Product49–50/53–56/INT-12.
+Private synthetic/finalizable:false; production/native/release gates OPEN.
+Pure measurement/source/value/reconciliation у владельца; shared source DTO и
+client-day projection, прежние Node API/re-exports. Common schema/write/parity/read
+generator, fixed referenceDay/mode/source capture, nobleSHA без новых dependencies.
+9new tests admitted full owner chain async==host; exacttenths/unsided/sameday/
+dateonly/noautoPrimary/profileUNKNOWN/rawreview; allboundaries rollback/retry/
+replay/ackloss/capture/collision/drift/daymode/IO/absence/sourceSHA/FK/handles.
+Старый writer из61fbb4c == новый по48tables/IDs/receipts в2syntheticcases.
+509ownerprofile/27initial/92preflight/9new PASS; root/mobileTS/lint/source73/arch589/secrets
+PASS. Старые normal repository/native-field backup tests зелёные; private
+provenance/review fullbackup не доказан. Нет foundation/bundle/APK/Android.
+[Контракт и оставшийся объём](spikes/R04_PORTABLE_MEASUREMENT_STAGING.md).
+NEXT Nutrition/Calendar portable writers/fullcomposition/permanentmodels/
+admission/backup/JSON/Android/removal. GoalACTIVE/fullscope/не100%.
+
 ## Продолжение — async выполненные тренировки
 
 2026-10-24, база5332754; R04→R03/Product48.5.7/49–50/53–56/INT03–12.
