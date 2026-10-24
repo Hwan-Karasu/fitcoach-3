@@ -38,6 +38,14 @@ function trainingStatus(value: unknown): LegacyClientDaySource["trainingStatus"]
   return normalized === "да" ? "yes" : normalized === "нет" ? "no" : "unknown";
 }
 
+export function projectLegacyClientDaySourceRow(accountScope: string, row: Readonly<Record<string, unknown>>, ownerFound: boolean): LegacyClientDaySource {
+  if (!accountScope.trim() || typeof row.client_id !== "string" || !row.client_id.trim() || typeof row.date_key !== "string" || !row.date_key.trim()
+    || ["weight", "steps", "training"].some((field) => !Object.hasOwn(row, field))) throw new Error("R04_CLIENT_DAY_PROVENANCE_INCOMPLETE");
+  return { accountScope, clientId: row.client_id, dateKey: row.date_key, ownerFound, validLocalDate: validDate(row.date_key),
+    weightStatus: numericStatus(row.weight, false), weightRaw: row.weight,
+    stepsStatus: numericStatus(row.steps, true), trainingStatus: trainingStatus(row.training) };
+}
+
 /** Legacy daily training text is not a performed WorkoutSession or credit fact. */
 export function readLegacyClientDayRowsInSnapshot(
   db: DatabaseSync, accountScope: string,

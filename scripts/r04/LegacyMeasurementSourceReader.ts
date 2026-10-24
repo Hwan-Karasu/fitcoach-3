@@ -23,15 +23,20 @@ export interface LegacyMeasurementsSnapshot {
   readonly accountScope: string;
   /** null means the optional source table is absent, not an observed empty table. */
   readonly rows: readonly Readonly<Record<string, unknown>>[] | null;
+  readonly clientDays: readonly Readonly<Record<string, unknown>>[] | null;
 }
 export function readLegacyMeasurementsSnapshotInSnapshot(db: DatabaseSync, accountScope: string): LegacyMeasurementsSnapshot {
   if (!accountScope.trim()) throw new Error("R04_ACCOUNT_SCOPE_REQUIRED");
-  if (!db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='client_measurements'").get()) return { accountScope, rows: null };
-  const columns = new Set(db.prepare("PRAGMA table_info('client_measurements')").all().map((r) => r.name));
-  if (["id", "client_id", "date_key", ...legacyMeasurementFields].some((field) => !columns.has(field))) throw new Error("R04_MEASUREMENT_SHAPE_UNSUPPORTED");
-  const rows = db.prepare("SELECT * FROM client_measurements").all().map((r) => ({ ...r }));
-  if (rows.length !== db.prepare("SELECT count(*) AS n FROM client_measurements").get()?.n) throw new Error("R04_MEASUREMENT_CARDINALITY_MISMATCH");
-  return { accountScope, rows };
+  function read(table: "client_measurements" | "client_day_facts", required: readonly string[]) {
+    if (!db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name=?").get(table)) return null;
+    const columns = new Set(db.prepare("SELECT name FROM pragma_table_info(?)").all(table).map((r) => r.name));
+    if (required.some((field) => !columns.has(field))) throw new Error("R04_MEASUREMENT_SHAPE_UNSUPPORTED");
+    const rows = db.prepare(`SELECT * FROM ${table}`).all().map((r) => ({ ...r }));
+    if (rows.length !== db.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n) throw new Error("R04_MEASUREMENT_CARDINALITY_MISMATCH");
+    return rows;
+  }
+  return { accountScope, rows: read("client_measurements", ["id", "client_id", "date_key", ...legacyMeasurementFields]),
+    clientDays: read("client_day_facts", ["client_id", "date_key", "weight", "steps", "training"]) };
 }
 
 /** Reparse a frozen physical row; caller-derived status flags are never trusted. */

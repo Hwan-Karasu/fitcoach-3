@@ -122,7 +122,9 @@ const ownTables = ["clients", "questionnaire_versions", "questionnaire_answers",
 test("measurement failure rolls back nonempty questionnaire, work data, plans and performed facts; retry commits all owners together", async () => {
   for (const phase of ["after-measurement-ids", "after-measurement-rows", "after-measurement-receipt", "before-commit"] as const) await fixture((source, target) => {
     source.exec(`CREATE TABLE client_measurements(id TEXT PRIMARY KEY,client_id TEXT,date_key TEXT,neck TEXT,shoulders TEXT,chest TEXT,waist TEXT,hips TEXT,upper_arm TEXT,thigh TEXT,calf TEXT);
-      INSERT INTO client_measurements VALUES('measure','a','2026-03-01','35.5',NULL,NULL,NULL,NULL,NULL,NULL,NULL)`);
+      INSERT INTO client_measurements VALUES('measure','a','2026-03-01','35.5',NULL,NULL,NULL,NULL,NULL,NULL,NULL);
+      CREATE TABLE client_day_facts(client_id TEXT,date_key TEXT,weight TEXT,steps TEXT,training TEXT);
+      INSERT INTO client_day_facts VALUES('a','2026-03-01','80.1','1234','Да')`);
     const data = read(source), measurements = readLegacyMeasurementsSnapshotInSnapshot(source, context.accountScope);
     const ledger = prepareCandidateIdentityLedger(target, context, { clientIdentityRehearsal: { ...options.clientIdentityRehearsal, measurements: { referenceDay: "2026-05-01" } } });
     assert.throws(() => ledger.stageClientMeasurements(data.cards, null, data.catalog, data.refs, data.plans, data.executions, measurements, allocator(), (p) => {
@@ -133,7 +135,7 @@ test("measurement failure rolls back nonempty questionnaire, work data, plans an
     }
     assert.equal(target.prepare("SELECT count(*) AS n FROM r04_candidate_ids WHERE kind='CLIENT'").get()?.n, 0);
     const result = ledger.stageClientMeasurements(data.cards, null, data.catalog, data.refs, data.plans, data.executions, measurements, allocator());
-    assert.equal(result.performedFacts, 5); assert.equal(result.measurementRows, 1); assert.equal(ledger.loadMeasurementDraftFacts().length, 1);
+    assert.equal(result.performedFacts, 5); assert.equal(result.measurementRows, 2); assert.equal(result.weightMeasurementRows, 1); assert.equal(ledger.loadMeasurementDraftFacts().length, 2);
   });
 });
 

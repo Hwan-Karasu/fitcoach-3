@@ -29,6 +29,26 @@ function tenths(value: string): number | null {
   return scaled <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(scaled) : null;
 }
 
+/** Shared exact conversion/validation for observed cm and kg values. */
+export function projectLegacyMeasurementValue(type: MeasurementType, normalizedDecimal: string | null, localDate: string,
+  sourceIssues: readonly (ProjectionIssue | "UNIT_UNVERIFIED")[], now: Date) {
+  if (Number.isNaN(now.valueOf())) throw new Error("R04_MEASUREMENT_REFERENCE_TIME_INVALID");
+  const issues: ProjectionIssue[] = sourceIssues.filter((issue) => issue !== "UNIT_UNVERIFIED");
+  const valueX10 = normalizedDecimal === null ? null : tenths(normalizedDecimal);
+  if (normalizedDecimal !== null && valueX10 === null) issues.push("PRECISION_NOT_REPRESENTABLE");
+  const proposed: MeasurementInput | null = valueX10 === null ? null : { type, valueX10, localDate, localMinute: null };
+  if (proposed !== null && !issues.includes("INVALID_DATE")) {
+    try { validateMeasurement(proposed, now); }
+    catch (error) {
+      if (!(error instanceof Error)) throw error;
+      if (error.message === "MEASUREMENT_VALUE_INVALID") issues.push("VALUE_OUTSIDE_TARGET_BOUNDS");
+      else if (error.message === "MEASUREMENT_DATE_INVALID") issues.push(isLocalDate(proposed.localDate) ? "FUTURE_DATE" : "INVALID_DATE");
+      else throw error;
+    }
+  }
+  return { input: issues.length === 0 ? proposed : null, issues };
+}
+
 /** Target-shaped inputs in memory only: keeps independent same-day and unsided observations. */
 export function projectLegacyMeasurementInputs(rows: readonly LegacyMeasurementSource[], now: Date): readonly MeasurementInputCandidate[] {
   if (Number.isNaN(now.valueOf())) throw new Error("R04_MEASUREMENT_REFERENCE_TIME_INVALID");
@@ -37,23 +57,9 @@ export function projectLegacyMeasurementInputs(rows: readonly LegacyMeasurementS
     rawValues.set(JSON.stringify([row.accountScope, row.sourceRowId, field]), value);
   }
   return buildMeasurementValueCandidates(rows).map((source) => {
-    const issues: ProjectionIssue[] = source.issues.filter((issue) => issue !== "UNIT_UNVERIFIED");
-    const valueX10 = source.normalizedDecimal === null ? null : tenths(source.normalizedDecimal);
-    if (source.normalizedDecimal !== null && valueX10 === null) issues.push("PRECISION_NOT_REPRESENTABLE");
-    const proposed: MeasurementInput | null = valueX10 === null ? null : {
-      type: types[source.sourceField], valueX10, localDate: source.localDate, localMinute: null,
-    };
-    if (proposed !== null && !issues.includes("INVALID_DATE")) {
-      try { validateMeasurement(proposed, now); }
-      catch (error) {
-        if (!(error instanceof Error)) throw error;
-        if (error.message === "MEASUREMENT_VALUE_INVALID") issues.push("VALUE_OUTSIDE_TARGET_BOUNDS");
-        else if (error.message === "MEASUREMENT_DATE_INVALID") issues.push(isLocalDate(proposed.localDate) ? "FUTURE_DATE" : "INVALID_DATE");
-        else throw error;
-      }
-    }
-    return { source, rawValue: rawValues.get(source.sourceAtomKey), unit: "cm", input: issues.length === 0 ? proposed : null,
-      issues, targetMeasurementId: null, dailyPrimaryId: null };
+    return { source, rawValue: rawValues.get(source.sourceAtomKey), unit: "cm",
+      ...projectLegacyMeasurementValue(types[source.sourceField], source.normalizedDecimal, source.localDate, source.issues, now),
+      targetMeasurementId: null, dailyPrimaryId: null };
   });
 }
 

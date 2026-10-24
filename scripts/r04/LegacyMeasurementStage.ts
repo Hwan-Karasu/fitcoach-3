@@ -8,6 +8,8 @@ import type { ClientDraftIdMap } from "./ProjectClientIdentityDraft.ts";
 import { projectLegacyMeasurementSourceRow, type LegacyMeasurementsSnapshot } from "./LegacyMeasurementSourceReader.ts";
 import { projectLegacyMeasurementInputs } from "./LegacyMeasurementProjection.ts";
 import { isExplicitTimestamp } from "./ExactScaledHundredth.ts";
+import { projectLegacyClientDaySourceRow } from "./LegacyClientDaySourceReader.ts";
+import { projectLegacyDailyWeightInputs, reconcileLegacyWeightSources } from "./LegacyWeightSourceReconciliation.ts";
 
 function fail(code: string): never { throw new Error(`R04_ID_LEDGER_MEASUREMENTS_${code}`); }
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
@@ -39,7 +41,8 @@ export function stageLegacyMeasurementsInTransaction(db: DatabaseSync, context: 
   cards: readonly LegacyClientCardCandidate[], ids: ClientDraftIdMap, source: LegacyMeasurementsSnapshot, allocate: () => string,
   checkpoint: (stage: MeasurementStageCheckpoint) => void) {
   if (!db.isTransaction || !isExplicitTimestamp(importedAt) || !isLocalDate(referenceDay)) return fail("CONTEXT_INVALID");
-  if (source.accountScope !== context.accountScope || source.rows !== null && !Array.isArray(source.rows)) return fail("SOURCE_INVALID");
+  if (source.accountScope !== context.accountScope || source.rows !== null && !Array.isArray(source.rows)
+    || source.clientDays !== null && !Array.isArray(source.clientDays)) return fail("SOURCE_INVALID");
   const clients = new Map<string, string>();
   for (const card of cards) {
     const id = ids.clients.get(card.identity.sourceIdentityKey);
@@ -50,10 +53,23 @@ export function stageLegacyMeasurementsInTransaction(db: DatabaseSync, context: 
     if (!row || typeof row !== "object" || Array.isArray(row) || typeof row.client_id !== "string" || !clients.has(row.client_id)) return fail("OWNER_INVALID");
     return projectLegacyMeasurementSourceRow(context.accountScope, row, true);
   });
+  const days = (source.clientDays ?? []).map((row) => {
+    if (!row || typeof row !== "object" || Array.isArray(row) || typeof row.client_id !== "string" || !clients.has(row.client_id)) return fail("OWNER_INVALID");
+    return projectLegacyClientDaySourceRow(context.accountScope, row, true);
+  });
   // Explicit calendar day, reconstructed at local noon only for the existing
   // validator. No host timezone or retry-time clock chooses the cutoff day.
-  const candidates = [...projectLegacyMeasurementInputs(rows, new Date(`${referenceDay}T12:00:00`))]
+  const referenceTime = new Date(`${referenceDay}T12:00:00`), dailyWeights = projectLegacyDailyWeightInputs(days, referenceTime);
+  const candidates = [...projectLegacyMeasurementInputs(rows, referenceTime), ...dailyWeights]
     .sort((a, b) => compare(a.source.sourceAtomKey, b.source.sourceAtomKey));
+  const profiles = cards.map((card) => ({ sourceKey: JSON.stringify([context.accountScope, "clients", card.identity.sourceClientId, "weight"]),
+    clientId: card.identity.sourceClientId, present: Object.hasOwn(card.raw, "weight"), value: Object.hasOwn(card.raw, "weight") ? card.raw.weight : null }))
+    .sort((a, b) => compare(a.sourceKey, b.sourceKey));
+  const profileSnapshots = profiles.filter((p) => p.present && !(p.value === null || typeof p.value === "string" && !p.value.trim()))
+    .map((p) => ({ sourceKey: p.sourceKey, clientId: clients.get(p.clientId)!, targetId: null, datePrecision: "UNKNOWN",
+      issues: ["PROFILE_WEIGHT_HAS_NO_MEASUREMENT_DATE"] }));
+  const weightReconciliation = reconcileLegacyWeightSources(profiles.filter((p) => p.present).map((p) => ({ accountScope: context.accountScope, clientId: p.clientId, weightRaw: p.value })),
+    dailyWeights.map((c) => c.source));
   const wanted = new Set(candidates.filter((c) => c.input !== null).map((c) => c.source.sourceAtomKey));
   const known = new Map<string, string>(), usedIds = new Set<string>();
   for (const row of db.prepare("SELECT * FROM r04_measurement_ids").all()) {
@@ -74,13 +90,15 @@ export function stageLegacyMeasurementsInTransaction(db: DatabaseSync, context: 
       type: input.type, value_x10: input.valueX10, local_date: input.localDate, local_minute: null, method: "MANUAL", revision: 1,
       created_at: importedAt, updated_at: importedAt });
     return { sourceKey: c.source.sourceAtomKey, clientId: clients.get(c.source.clientId)!, targetId: id,
-      input, issues: c.issues, unit: "cm", createdAtBasis: "IMPORT_TIME", datePrecision: "DATE", primaryChosen: false };
+      input, issues: c.issues, unit: c.unit, createdAtBasis: "IMPORT_TIME", datePrecision: "DATE", primaryChosen: false,
+      sourceSemantics: c.unit === "kg" ? "SAVED_DAY_VALUE_PROFILE_PREFILL_POSSIBLE" : "RECORDED_CIRCUMFERENCE" };
   });
   const projected: Readonly<Record<typeof targetTables[number], readonly Row[]>> = { body_measurements: measurements, measurement_daily_primary: [],
     r04_measurement_ids: [...known].map(([source_key, target_id]) => ({ source_key, target_id })) };
-  const sourceJson = canonical({ accountScope: source.accountScope, rows: source.rows === null ? null : source.rows.map(canonical).sort(compare) });
+  const sourceJson = canonical({ accountScope: source.accountScope, rows: source.rows === null ? null : source.rows.map(canonical).sort(compare),
+    clientDays: source.clientDays === null ? null : source.clientDays.map(canonical).sort(compare), profiles });
   const tables = targetTables.map((name) => ({ name, rows: projected[name].map(canonical).sort(compare) }));
-  const targetJson = canonical({ projectionVersion: 1, referenceDay, importedAt, provenance, tables,
+  const targetJson = canonical({ projectionVersion: 2, referenceDay, importedAt, provenance, profileSnapshots, weightReconciliation, tables,
     sourceSha256: createHash("sha256").update(sourceJson).digest("hex") });
   const receipts = db.prepare("SELECT * FROM r04_measurement_receipt").all();
   if (receipts.length > 1 || receipts.length === 1 && (receipts[0]?.id !== 1 || receipts[0]?.source_json !== sourceJson || receipts[0]?.target_json !== targetJson)) return fail("PARITY_MISMATCH");
@@ -96,7 +114,8 @@ export function stageLegacyMeasurementsInTransaction(db: DatabaseSync, context: 
   if (!receipts.length) db.prepare("INSERT INTO r04_measurement_receipt VALUES(1,?,?,?)").run(sourceJson, targetJson, createHash("sha256").update(targetJson).digest("hex"));
   loadStagedMeasurements(db); checkpoint("after-measurement-receipt");
   return { measurementSourceRows: rows.length, measurementSourceValues: candidates.length, measurementRows: measurements.length,
-    measurementReviewValues: candidates.length - measurements.length, finalizable: false as const };
+    measurementReviewValues: candidates.length - measurements.length, dailyWeightSourceRows: days.length,
+    weightMeasurementRows: measurements.filter((r) => r.type === "WEIGHT").length, undatedProfileWeightSnapshots: profileSnapshots.length, finalizable: false as const };
 }
 export function loadStagedMeasurements(db: DatabaseSync) {
   const receipts = db.prepare("SELECT * FROM r04_measurement_receipt").all();
@@ -105,7 +124,7 @@ export function loadStagedMeasurements(db: DatabaseSync) {
   let saved: unknown; try { saved = JSON.parse(receipts[0].target_json as string) as unknown; } catch { return fail("PARITY_MISMATCH"); }
   if (!saved || typeof saved !== "object" || Array.isArray(saved)) return fail("PARITY_MISMATCH");
   const value = saved as Record<string, unknown>;
-  if (value.projectionVersion !== 1 || !Array.isArray(value.tables) || value.tables.length !== targetTables.length
+  if (value.projectionVersion !== 2 || !Array.isArray(value.tables) || value.tables.length !== targetTables.length
     || value.sourceSha256 !== createHash("sha256").update(receipts[0].source_json as string).digest("hex")) return fail("PARITY_MISMATCH");
   const seen = new Set<string>();
   for (const raw of value.tables) {

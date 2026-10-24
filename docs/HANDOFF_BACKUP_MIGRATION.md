@@ -1,4 +1,34 @@
-## Продолжение — staging обхватов тела, база60134d7
+## Продолжение — дневной вес, базаc56c3f7
+
+2026-10-24 R04→R03/Product10/48.86.36/49.14–49.18/49–50/53–56/INT03–12;
+productionDDL/migration/overlay/signing/release gates OPEN. PreviousPROGRESSc56c3f7.
+MeasurementsSnapshot читает также полные client_day_facts строки/nullabsence.
+Дневной кг→точные десятые WEIGHT/DATE/localMinuteNULL/stableUUIDperclient+date+field.
+Одинаковые значения разных дат/клиентов не сливаются, primary не придумывается.
+Полные extras/steps/training сохраненыraw; trainingДа не становитсяWorkout/Credit.
+clients.weight остаётся недатированным source signal/UNKNOWN/targetIdNULL. Совпадение
+с дневным весом не добавляет факт/дату. Из legacySource доказан возможный prefill
+из профиля с сохранением наblur: provenance это отражает, не доказывает новое
+взвешивание. Параметры калькулятора ещё отдельный owner, не факты замеров.
+
+Shared measurement projector/validator, precision/bounds/date/zero review без
+round/clipping/фальшивых0; plus/negativezero exact. Старые preflight проверки
+сохранены. Общаяtx послеpriorowners, sourcefreeze/SHA/manifestSHA/tableparity/IDs.
+Новыхтаблиц/productionDDL нет. ModeV2/projectionVersion2 rejectolderprivatejobs.
+
+460/460area+deps: R04Plans/measurementprojection/preflight/extended/Navy/bodyweight/
+SQLitebackup;7newtests. Readonlysource/reopen/reorderrows+properties/bytes/IDsreuse
+теперьс2dailyweights/profile;3measurementphases+beforecommit с непустымиpriorowners
++circumference+weight rollbackall/retry. D01mappedmeasurements→fullregular3.xDB→
+.atbackup→restored3.x→regularrepo retainsallmeasurementrows/IDs безr04tables.
+Это НЕ proof всегоlegacyimport/privateprovenance/review storage илиAPKбезimporter.
+Root/mobileTS/ownlint/source73/secrets/diff pass; no bundle/fullsuite/APK/native/phone.
+[Контракт/точные источники](spikes/R04_BODYWEIGHT_STAGING.md). finalizable:false.
+NEXT remaining owners: dayssteps/Nutrition/calculator/foods/recipes/history/Calendar/
+Ledger, production provenance/reviewstorage &Execution identity/outcomes, connected
+SQLite/JSONrestore/Android. GoalACTIVEfullscope/NOT100%;2.0/personaldata untouched.
+
+## Предыдущее продолжение — staging обхватов тела, база60134d7
 
 2026-10-24, R04→R03/Product49.14–49.18/49–50/53–56/INT03–12; все release/
 migration/prodDDL gates OPEN. Предыдущий turn PROGRESS60134d7. Новая работа:

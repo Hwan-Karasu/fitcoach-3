@@ -1,5 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { LegacyClientDaySource } from "./LegacyClientDaySourceReader.ts";
+import { projectLegacyMeasurementValue } from "./LegacyMeasurementProjection.ts";
 
 export interface LegacyProfileWeightSource {
   readonly accountScope: string;
@@ -42,7 +43,8 @@ export function readLegacyProfileWeightsInSnapshot(
 function exactDecimal(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const text = value.trim();
-  return /^\d+(?:[.,]\d+)?$/u.test(text) ? text.replace(",", ".") : null;
+  if (/^-0+(?:[.,]0+)?$/u.test(text)) return "0";
+  return /^\+?\d+(?:[.,]\d+)?$/u.test(text) ? text.replace(/^\+/u, "").replace(",", ".") : null;
 }
 
 function positiveDecimal(value: string): boolean {
@@ -88,6 +90,15 @@ export function buildDailyWeightCandidates(
     });
   }
   return candidates;
+}
+
+/** Saved dated kg values only. A profile snapshot never enters this projection. */
+export function projectLegacyDailyWeightInputs(rows: readonly LegacyClientDaySource[], now: Date) {
+  if (Number.isNaN(now.valueOf())) throw new Error("R04_MEASUREMENT_REFERENCE_TIME_INVALID");
+  const raw = new Map(rows.map((row) => [JSON.stringify([row.accountScope, "client_day_facts", row.clientId, row.dateKey, "weight"]), row.weightRaw]));
+  return buildDailyWeightCandidates(rows).map((source) => ({ source, rawValue: raw.get(source.sourceAtomKey), unit: "kg" as const,
+    ...projectLegacyMeasurementValue("WEIGHT", source.normalizedDecimal, source.localDate, source.issues, now),
+    targetMeasurementId: null, dailyPrimaryId: null }));
 }
 
 export interface WeightSourceReconciliationReport {
