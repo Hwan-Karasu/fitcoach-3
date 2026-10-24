@@ -1,4 +1,6 @@
+import { useActiveWorkoutCards } from "./useActiveWorkoutCards.ts";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { navigationPerformance } from "../../../../shared/diagnostics/NavigationPerformance.ts";
 import { Image, Keyboard, Pressable, Text, View } from "react-native";
 import { KeyboardAwareScrollView, type KeyboardAwareScrollViewRef } from "react-native-keyboard-controller";
 import { useKeepAwake } from "expo-keep-awake";
@@ -19,7 +21,7 @@ import { useReportScreenTone } from "../../../../shared/ui/theme/ScreenTone.tsx"
 import { weekTypeTone, DiaryEditDialog, formatDuration, formatRange, supersetNumber, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookupState,
   type DiaryEdit, type ExerciseLookupPort, type PickedExercise, type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort,
   type WorkoutWeekNavigation } from "../../plans/public.ts";
-import { type ActiveWorkoutCard, type ActiveWorkoutsPort, type SetFact, type SetType, type SetValues, type Side, type TrackingMetric,
+import { type ActiveWorkoutsPort, type SetFact, type SetType, type SetValues, type Side, type TrackingMetric,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
 import { displayOrder, endInstantAfter, instantFromLocal, localDateOf, localMinuteOfDay, nextOutcome, sessionDurationSec } from "../domain/ExecutionRules.ts";
 import { durationText, timeText } from "../../../../shared/format/clockText.ts";
@@ -86,7 +88,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   /** «Обзор программы» и щипок — матрица недель (UI-OWN-037). */
   onOpenMatrix: () => void;
   /** UI-OWN-043: полоса участников группы; `finishInput` дописывает ввод перед переключением. */
-  renderParticipants?: (finishInput: () => Promise<boolean>) => ReactNode;
+  renderParticipants?: (finishInput: () => Promise<boolean>, mesocycleId: string | null | undefined, loading: boolean) => ReactNode;
   /** Каталог: добавить упражнения или (`replace`) заменить это. Результат приходит в `picked`. */
   onPickExercises: (replace?: string) => void;
   picked: PickedExercise | null;
@@ -121,6 +123,12 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   }, [clientName, lookup, restTimers, slot.clientId, slot.programId, slot.weekIndex, slot.plannedWorkoutId]);
   const unilateralOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.unilateral === true, [lookup]);
   const diary = useWorkoutDiary(slot, plans, execution, metricsOf, unilateralOf, startRest);
+  useEffect(() => {
+    if (diary.loadFailed) { navigationPerformance.finish("workout", false); return undefined; }
+    if (diary.switching || diary.workout === undefined || diary.state === null || lookup === null) return undefined;
+    const frame = requestAnimationFrame(navigationPerformance.ready("workout"));
+    return () => cancelAnimationFrame(frame);
+  }, [diary.loadFailed, diary.switching, diary.workout, diary.state, lookup, slot.clientId, slot.programId, slot.weekIndex, slot.plannedWorkoutId]);
   const pending = useRef(new PendingInputWrites()).current;
   const typeSheet = useRef<BottomSheetModal>(null);
   const rpeSheet = useRef<BottomSheetModal>(null);
@@ -131,14 +139,18 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const [timeEdit, setTimeEdit] = useState<"start" | "end" | null>(null);
   const [exitAction, setExitAction] = useState<Parameters<typeof navigation.dispatch>[0] | null>(null);
   const [busy, setBusy] = useState(false);
+  const changingWeek = useRef(false);
   const [restFor, setRestFor] = useState<PlannedExercise | null>(null);
   const [restError, setRestError] = useState<string | null>(null);
   const { saveSet, toggleSet, setOutcome, addWarmup, removeWarmup } = diary;
   const [removeWarm, setRemoveWarm] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const activeSheet = useRef<BottomSheetModal>(null);
-  const [others, setOthers] = useState<readonly ActiveWorkoutCard[]>([]);
+  const others = useActiveWorkoutCards(activeWorkouts, slot);
   const [weekNavigation, setWeekNavigation] = useState<WorkoutWeekNavigation | null>(null);
+  const [navigationOwner, setNavigationOwner] = useState("");
+  const navigationCurrent = navigationOwner === `${slot.clientId}:${slot.programId}`
+    && weekNavigation?.weeks.some((week) => week.workoutId === slot.plannedWorkoutId) === true;
   /** Недели программы прочитаны (`null` — их нет): до этого панель держит прежние стрелки, а не «стрелок нет». */
   const [navigationLoaded, setNavigationLoaded] = useState(false);
   const [navigationError, setNavigationError] = useState<string | null>(null);
@@ -165,26 +177,23 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   }, [picked]);
   useEffect(() => {
     let active = true;
-    const load = () => { void plans.getWorkoutWeekNavigation(slot.clientId, slot.programId, slot.plannedWorkoutId)
-      .then((value) => { if (active) { setWeekNavigation(value); setNavigationLoaded(true); } })
-      .catch(() => { if (active) setNavigationError("Не удалось загрузить недели программы."); }); };
-    load();
-    const unsubscribe = plans.subscribeCommittedChanges((change) => { if (change.clientIds.includes(slot.clientId)) load(); });
+    let request = 0;
+    const load = () => {
+      const latest = ++request;
+      void plans.getWorkoutWeekNavigation(slot.clientId, slot.programId, slot.plannedWorkoutId)
+        .then((value) => { if (active && latest === request) {
+          setWeekNavigation(value); setNavigationOwner(`${slot.clientId}:${slot.programId}`); setNavigationLoaded(true);
+        } })
+        .catch(() => { if (active && latest === request) setNavigationError("Не удалось загрузить недели программы."); });
+    };
+    // The navigation snapshot already contains every corresponding workout of this cycle.
+    if (!navigationCurrent) load();
+    const unsubscribe = plans.subscribeCommittedChanges((change) => {
+      if (change.selectionOnly !== true && change.orderOnly !== true && change.clientIds.includes(slot.clientId)) load();
+    });
     return () => { active = false; unsubscribe(); };
   }, [plans, slot.clientId, slot.programId, slot.plannedWorkoutId]);
-  useEffect(() => {
-    let active = true;
-    const load = () => {
-      activeWorkouts.list().then((cards) => {
-        if (!active) return;
-        setOthers(cards.filter((card) => !(card.slot.clientId === slot.clientId && card.slot.programId === slot.programId
-          && card.slot.weekIndex === slot.weekIndex && card.slot.plannedWorkoutId === slot.plannedWorkoutId)));
-      }).catch(() => undefined);
-    };
-    load();
-    const unsubscribe = activeWorkouts.subscribe(load);
-    return () => { active = false; unsubscribe(); };
-  }, [activeWorkouts, slot.clientId, slot.plannedWorkoutId, slot.programId, slot.weekIndex]);
+
 
   /** §48.56: отдых упражнения сохраняется в план — у каждого упражнения свой таймер. */
   const saveRest = (exercise: PlannedExercise, restSec: number | null) => {
@@ -195,20 +204,26 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   };
 
   const flushPending = useCallback(() => pending.flushAll(), [pending]);
-  const finishInput = async () => {
-    const inputsSaved = await flushPending();
-    const queueSaved = await diary.finishSaving();
+  const finishInput = useCallback(async () => {
+    const endFlush = navigationPerformance.phase("flush");
+    let inputsSaved: boolean;
+    let queueSaved: boolean;
+    try { inputsSaved = await flushPending(); queueSaved = await diary.finishSaving(); }
+    finally { endFlush(); }
     if (!inputsSaved || !queueSaved) {
       setNavigationError("Не удалось сохранить весь ввод. Проверьте поля и повторите переход — введённые значения оставлены на экране.");
+      navigationPerformance.finish("workout", false);
       return false;
     }
     setNavigationError(null);
     return true;
-  };
+  }, [flushPending, diary.finishSaving]);
   const changeWeek = async (index: number) => {
-    if (busy || index === slot.weekIndex) return;
+    if (busy || changingWeek.current || diary.switching || !navigationCurrent || index === slot.weekIndex) return;
     const targetWeek = weekNavigation?.weeks.find((week) => week.index === index);
     if (!targetWeek) return;
+    navigationPerformance.begin("workout-week");
+    changingWeek.current = true;
     setBusy(true);
     try {
       if (!await finishInput()) return;
@@ -216,9 +231,12 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
       if (targetWeek.workoutId === null) navigationAuthorized.current = true;
       Keyboard.dismiss();
       onChangeWeek(index, targetWeek.workoutId, weekNavigation?.mesocycleId ?? null);
-    } finally { setBusy(false); }
+    } finally { changingWeek.current = false; setBusy(false); }
   };
   const currentWeek = weekNavigation?.weeks.findIndex((week) => week.index === slot.weekIndex) ?? -1;
+  const changeWeekRef = useRef(changeWeek);
+  changeWeekRef.current = changeWeek;
+  const selectWeek = useCallback((index: number) => { void changeWeekRef.current(index); }, []);
   // Дневник в цвете типа своей недели (UI-OWN-039); «Индивидуальная» — цвет темы.
   const weekType = weekNavigation?.weeks[currentWeek]?.type;
   useReportScreenTone(weekType === undefined || weekType === "base" ? null : weekTypeTone(weekType, colors));
@@ -276,18 +294,24 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     void applyOutcome(next);
   };
 
-  if (lookup === null && lookupState.failed) return <View style={[styles.center, { backgroundColor: colors.canvas }]}>
+  const participants = renderParticipants?.(finishInput, navigationCurrent ? weekNavigation?.mesocycleId : undefined,
+    diary.switching || diary.loadFailed || diary.workout === undefined || !navigationCurrent);
+  if (lookup === null && lookupState.failed) return <>{participants}<View style={[styles.center, { backgroundColor: colors.canvas }]}>
       <InlineNotice kind="error">Справочник упражнений не загрузился. Данные не изменены.</InlineNotice>
       <AppButton variant="secondary" label="Повторить" onPress={lookupState.retry} />
-    </View>;
+    </View></>;
+  if (diary.loadFailed) return <>{participants}<View style={[styles.center, { backgroundColor: colors.canvas }]}>
+    <InlineNotice kind="error">Не удалось открыть тренировку. Повторите загрузку.</InlineNotice>
+    <AppButton variant="secondary" label="Повторить" onPress={diary.retry} />
+  </View></>;
   if (diary.workout === undefined || diary.state === null || diary.mode === null || lookup === null) {
-    return <View style={[styles.center, { backgroundColor: colors.canvas }]}><LoadingState label="Открываем тренировку…" /></View>;
+    return <>{participants}<View style={[styles.center, { backgroundColor: colors.canvas }]}><LoadingState label="Открываем тренировку…" /></View></>;
   }
   if (diary.workout === null) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.canvas }]}>
+      <>{participants}<View style={[styles.center, { backgroundColor: colors.canvas }]}>
         <InlineNotice kind="error">Тренировка не найдена в программе.</InlineNotice>
-      </View>
+      </View></>
     );
   }
   const { workout, state, previous, mode } = diary;
@@ -360,7 +384,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
 
   return (
     <>
-      {renderParticipants?.(finishInput)}
+      {participants}
       <GestureDetector gesture={pinch}>
       <KeyboardAwareScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} contentContainerStyle={[styles.content, { paddingBottom: timers > 0 ? 200 : 24 }]}
         keyboardShouldPersistTaps="handled" bottomOffset={24}>
@@ -439,7 +463,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
           </View>
           {weekNavigation !== null ? (
             <WeekCards weeks={weekNavigation.weeks} selected={slot.weekIndex} disabled={busy || diary.switching}
-              onSelect={(index) => { void changeWeek(index); }} />
+              onSelect={selectWeek} />
           ) : null}
         </View>
         {diary.message !== null ? <InlineNotice kind="error">{diary.message}</InlineNotice> : null}

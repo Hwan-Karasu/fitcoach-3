@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
-import type { PlannedExercise, PlannedSet, PlannedWorkout, TrainingPlansRepositoryPort } from "../../plans/public.ts";
-import type { ConfirmationMode, PreviousSet, SetFact, SetType, SetValues, Side, TrackingMetric, WorkoutExecution,
+import type { PlannedExercise, PlannedSet, TrainingPlansRepositoryPort } from "../../plans/public.ts";
+import type { SetFact, SetType, SetValues, Side, TrackingMetric, WorkoutExecution,
   WorkoutOutcome, WorkoutSlot } from "../domain/ExecutionModel.ts";
 import { EMPTY_VALUES } from "../domain/ExecutionModel.ts";
 import { dropsForType, hasEnteredData, workoutStatus } from "../domain/ExecutionRules.ts";
 import type { SaveSetInput, TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
+import { useWorkoutSnapshot } from "./useWorkoutSnapshot.ts";
 import { SerialWriteQueue } from "../application/SerialWriteQueue.ts";
 
 /** Добавленные разминочные подходы упражнения по порядку добавления. */
@@ -49,15 +50,10 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   unilateralOf: (exerciseId: string) => boolean,
   /** Новый переход «не выполнен → выполнен» при вводе в открытом дневнике — запуск таймера отдыха (§48.55). */
   onConfirmedNow: (exercise: PlannedExercise) => void) {
-  const { clientId, programId, weekIndex, plannedWorkoutId } = slot;
-  const stableSlot = useMemo<WorkoutSlot>(() => ({ clientId, programId, weekIndex, plannedWorkoutId }),
-    [clientId, programId, weekIndex, plannedWorkoutId]);
-  const [workout, setWorkout] = useState<PlannedWorkout | null | undefined>(undefined);
-  const [state, setState] = useState<WorkoutExecution | null>(null);
-  const [previous, setPrevious] = useState<ReadonlyMap<string, PreviousSet>>(new Map());
-  const [mode, setMode] = useState<ConfirmationMode | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const { clientId, programId } = slot;
   const [version, setVersion] = useState(0);
+  const { stableSlot, slotKey, slotKeyRef, loadedKey, loadedKeyRef, workout, state, setState,
+    previous, mode, setMode, message, setMessage, loadFailed } = useWorkoutSnapshot(slot, plans, execution, version);
   const stateRef = useRef<WorkoutExecution | null>(null);
   const confirmedRef = useRef(onConfirmedNow);
   confirmedRef.current = onConfirmedNow;
@@ -71,41 +67,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   /** Изменение пришло, пока экран был скрыт (поверх него матрица): перечитать при возврате. */
   const staleWhileHidden = useRef(false);
   stateRef.current = state;
-  // Неделя меняется без пересоздания экрана: пока данные новой недели не пришли, на экране прежние значения,
-  // и запись с ними недопустима (в Простой программе ID подходов во всех неделях одни и те же).
-  const slotKey = `${clientId}|${programId}|${weekIndex}|${plannedWorkoutId}`;
-  const slotKeyRef = useRef(slotKey);
-  slotKeyRef.current = slotKey;
-  const [loadedKey, setLoadedKey] = useState<string | null>(null);
-  const loadedKeyRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
-    const key = slotKey;
-    const loaded = () => { loadedKeyRef.current = key; setLoadedKey(key); };
-    void (async () => {
-      try {
-        const found = (await plans.findWorkout(clientId, programId, plannedWorkoutId, weekIndex))?.workout ?? null;
-        const [current, nextMode] = await Promise.all([execution.getWorkout(stableSlot), execution.getConfirmationMode()]);
-        // Добавленные разминки тоже получают «Пред.» — по типу и номеру среди разминок.
-        const nextPrevious = found === null ? new Map<string, PreviousSet>() : await execution.getPrevious(stableSlot,
-          found.exercises.map((exercise) => ({ plannedExerciseId: exercise.id, exerciseId: exercise.exerciseId,
-            plannedSetIds: [...extraWarmups(current, exercise.id).map((fact) => fact.plannedSetId),
-              ...exercise.sets.map((set) => set.id)] })));
-        if (!active) return;
-        setWorkout(found);
-        setState(current);
-        setMode(nextMode);
-        setPrevious(nextPrevious);
-        loaded();
-      } catch {
-        if (active) { setWorkout((value) => value === undefined ? null : value); setMessage("Не удалось открыть тренировку."); loaded(); }
-      }
-    })();
-    return () => { active = false; };
-  }, [clientId, execution, plannedWorkoutId, plans, programId, slotKey, stableSlot, version, weekIndex]);
-
-  // Режим подтверждения — общая настройка тренера (§48.54): после смены в настройках дневник берёт новый.
   useFocusEffect(useCallback(() => {
     let active = true;
     execution.getConfirmationMode().then((next) => { if (active) setMode(next); }).catch(() => undefined);
@@ -280,7 +242,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
 
   const started = state !== null && hasEnteredData(state.facts.values());
   return {
-    workout, state, previous, mode, message,
+    workout, state, previous, mode, message, loadFailed, retry: refresh,
     /** Открыта другая неделя, её данные ещё грузятся: на экране прежние значения, ввод закрыт. */
     switching: workout !== undefined && loadedKey !== slotKey,
     status: workoutStatus(state?.session?.outcome ?? null, started),

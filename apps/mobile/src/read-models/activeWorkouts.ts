@@ -1,4 +1,4 @@
-import type { ClientRepositoryPort } from "../features/clients/public.ts";
+import type { ClientChangePort, ClientRepositoryPort } from "../features/clients/public.ts";
 import type { ActiveWorkoutCard, ActiveWorkoutsPort, TrainingExecutionPort, TrainingPlansRepositoryPort } from
   "../features/training/public.ts";
 
@@ -7,7 +7,8 @@ import type { ActiveWorkoutCard, ActiveWorkoutsPort, TrainingExecutionPort, Trai
  * подписи — у клиентов и планов; архивный клиент и пропавшая из плана тренировка в список не попадают.
  */
 export function createActiveWorkouts(execution: Pick<TrainingExecutionPort, "listActiveWorkouts" | "subscribeCommittedChanges">,
-  plans: Pick<TrainingPlansRepositoryPort, "findWorkout">, clients: Pick<ClientRepositoryPort, "get">): ActiveWorkoutsPort {
+  plans: Pick<TrainingPlansRepositoryPort, "findWorkout" | "subscribeCommittedChanges">,
+  clients: Pick<ClientRepositoryPort, "get"> & ClientChangePort): ActiveWorkoutsPort {
   return {
     async list() {
       const active = await execution.listActiveWorkouts();
@@ -22,6 +23,13 @@ export function createActiveWorkouts(execution: Pick<TrainingExecutionPort, "lis
       }));
       return cards.filter((card): card is ActiveWorkoutCard => card !== null);
     },
-    subscribe: (listener) => execution.subscribeCommittedChanges(() => listener()),
+    subscribe: (listener) => {
+      const offExecution = execution.subscribeCommittedChanges(() => listener());
+      const offPlans = plans.subscribeCommittedChanges((change) => {
+        if (change.selectionOnly !== true && change.orderOnly !== true) listener();
+      });
+      const offClients = clients.subscribeCommittedChanges(() => listener());
+      return () => { offExecution(); offPlans(); offClients(); };
+    },
   };
 }

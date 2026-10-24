@@ -1,13 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
 import { Pressable, ScrollView, StyleSheet, Text, View, type NativeScrollEvent } from "react-native";
 import { TabBarDock } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../../shared/ui/theme/style.ts";
-import { counterpartOf, isGroupOfMesocycle, participantOrder, type CounterpartRef } from "../domain/ParticipantCounterpart.ts";
+import { counterpartOf, participantOrder, type CounterpartRef } from "../domain/ParticipantCounterpart.ts";
 import type { GroupCopy } from "../domain/Placement.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
+import { useParticipantGroup } from "./useParticipantGroup.ts";
+import type { PeriodizedPlan } from "../domain/PeriodizedModel.ts";
+import { navigationPerformance } from "../../../../shared/diagnostics/NavigationPerformance.ts";
 
 /**
  * Переключатель участников групповой программы (UI-OWN-043, как в 2.0): плавающая полоса с карточками
@@ -35,31 +38,14 @@ export function ParticipantSwitcher({ clientId, activeClientId = clientId, ancho
   /** Строка внутри нижней панели навигации: без собственных отступов и фона. */
   docked?: boolean;
 }>) {
-  /** `null` — состав группы ещё не прочитан: в нижней панели строка не показывается и не убирается (держится прежнее). */
-  const [read, setRead] = useState<readonly GroupCopy[] | null>(null);
-  const [version, setVersion] = useState(0);
-  const members = given === undefined ? read : given;
-  useEffect(() => {
-    if (given !== undefined) return undefined;
-    let active = true;
-    const ref = workoutId !== undefined ? { workoutId } : mesocycleId != null ? { mesocycleId } : null;
-    if (ref === null) { setRead([]); return () => { active = false; }; }
-    repository.getMesocycleGroup(clientId, programId, ref).then((copies) => { if (active) setRead(copies); }).catch(() => undefined);
-    return () => { active = false; };
-  }, [clientId, given, mesocycleId, programId, repository, version, workoutId]);
-  // Выбор и порядок мезоциклов состав группы не меняют: без лишнего перечитывания на каждую смену мезоцикла.
-  useEffect(() => given !== undefined ? undefined : repository.subscribeCommittedChanges((change) => {
-    if (change.selectionOnly !== true && change.orderOnly !== true) setVersion((value) => value + 1);
-  }), [given, repository]);
-  // Пока загружается состав нового мезоцикла, полоса показывает прежний и не нажимается: исчезни она на это время, весь экран под
-  // ней сдвинулся бы вверх и вернулся вниз. Нажимать нельзя, чтобы не перейти к участнику прежнего мезоцикла.
-  const fresh = workoutId !== undefined || mesocycleId == null || isGroupOfMesocycle(members ?? [], mesocycleId);
-  // Строка в нижней панели занимается, только когда группа есть: иначе панель ужала бы кнопки вкладок без переключателя. Пока состав
-  // не прочитан, ничего не регистрируется (панель держит прежнее); «группы нет» — готовая запись «строки нет».
+  const { members, fresh } = useParticipantGroup(repository, clientId, programId, mesocycleId, workoutId, given);
+  const selectRef = useRef(onSelect);
+  selectRef.current = onSelect;
+  const select = useCallback((copy: GroupCopy) => selectRef.current(copy), []);
   if (members === null) return null;
   if (members.length < 2) return docked ? <TabBarDock>{null}</TabBarDock> : null;
   const strip = <ParticipantStrip group={members} activeClientId={activeClientId} anchorClientId={anchorClientId} names={names}
-    busy={busy} fresh={fresh} onSelect={onSelect} docked={docked} />;
+    busy={busy} fresh={fresh} onSelect={select} docked={docked} />;
   return docked ? <TabBarDock>{strip}</TabBarDock> : strip;
 }
 
@@ -67,7 +53,7 @@ export function ParticipantSwitcher({ clientId, activeClientId = clientId, ancho
  * Сама строка карточек участников. Отдельный компонент: при `docked` она монтируется в нижней панели навигации, и её состояние
  * (прокрутка, метки у краёв) живёт там, а не в экране.
  */
-function ParticipantStrip({ group, activeClientId, anchorClientId, names, busy, fresh, onSelect, docked }: Readonly<{
+const ParticipantStrip = memo(function ParticipantStrip({ group, activeClientId, anchorClientId, names, busy, fresh, onSelect, docked }: Readonly<{
   group: readonly GroupCopy[];
   activeClientId: string;
   anchorClientId: string;
@@ -97,8 +83,8 @@ function ParticipantStrip({ group, activeClientId, anchorClientId, names, busy, 
   };
   const onScroll = (event: { nativeEvent: NativeScrollEvent }) => measure(event.nativeEvent.contentOffset.x);
   useEffect(() => { scroll.current?.scrollTo({ x: Math.max(0, (positions.current.get(activeClientId) ?? 0) - 16), animated: true }); }, [activeClientId]);
-  const byClient = new Map(group.map((copy) => [copy.clientId, copy]));
-  const ordered = participantOrder(group.map((copy) => copy.clientId), anchorClientId);
+  const byClient = useMemo(() => new Map(group.map((copy) => [copy.clientId, copy])), [group]);
+  const ordered = useMemo(() => participantOrder(group.map((copy) => copy.clientId), anchorClientId), [group, anchorClientId]);
   total.current = ordered.length;
   return (
     <View style={docked ? null : [styles.wrap, { backgroundColor: colors.canvas }]}>
@@ -126,7 +112,7 @@ function ParticipantStrip({ group, activeClientId, anchorClientId, names, busy, 
       </View>
     </View>
   );
-}
+});
 
 /** Метка у края полосы: за ним есть ещё карточки участников. Не нажимается — полоса листается жестом. */
 function EdgeMark({ side, count }: Readonly<{ side: "left" | "right"; count: number }>) {
@@ -145,11 +131,14 @@ function EdgeMark({ side, count }: Readonly<{ side: "left" | "right"; count: num
 
 /** Где у участника группы (его копия — в его программе) то же место плана, что открыто у `fromClientId`. */
 export async function participantTarget(repository: TrainingPlansRepositoryPort, from: Readonly<{ clientId: string; programId: string }>,
-  to: GroupCopy, ref: CounterpartRef) {
-  const [source, target] = await Promise.all([repository.getPeriodizedPlan(from.clientId, from.programId),
-    repository.getPeriodizedPlan(to.clientId, to.programId)]);
-  if (source === null || target === null) return null;
-  return { programId: to.programId, ...counterpartOf(source.mesocycles, target.mesocycles, to.mesocycleId, ref) };
+  to: GroupCopy, ref: CounterpartRef, sourcePlan?: PeriodizedPlan | null) {
+  const end = navigationPerformance.phase("counterpart");
+  try {
+    const [source, target] = await Promise.all([sourcePlan ?? repository.getPeriodizedPlan(from.clientId, from.programId),
+      repository.getPeriodizedPlan(to.clientId, to.programId)]);
+    if (source === null || target === null) return null;
+    return { programId: to.programId, ...counterpartOf(source.mesocycles, target.mesocycles, to.mesocycleId, ref) };
+  } finally { end(); }
 }
 
 const CHIP_WIDTH = 150;

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../theme/typography.ts";
@@ -12,7 +12,7 @@ export interface WeekCardItem {
 }
 
 /** Общая лента недель программы и дневника; выбранная карточка остаётся в поле зрения. */
-export function WeekCards({ weeks, selected, onSelect, disabled = false }: Readonly<{
+export const WeekCards = memo(function WeekCards({ weeks, selected, onSelect, disabled = false }: Readonly<{
   weeks: readonly WeekCardItem[]; selected: number; onSelect: (index: number) => void; disabled?: boolean;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -40,7 +40,7 @@ export function WeekCards({ weeks, selected, onSelect, disabled = false }: Reado
       {week.status ? <Text style={[styles.status, { color: selected === week.index ? colors.accentInk : colors.textSecondary }]}>{week.status}</Text> : null}
     </Pressable>)}
   </ScrollView>;
-}
+});
 
 const styles = StyleSheet.create({
   strip: { gap: 8, paddingBottom: 2 },

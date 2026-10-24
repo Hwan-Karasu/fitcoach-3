@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { navigationPerformance } from "../../../../shared/diagnostics/NavigationPerformance.ts";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { ChartColumnIncreasing, LayoutGrid } from "lucide-react-native";
@@ -71,27 +72,38 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: liveViews, execu
   if (data.key === currentKey) held.current = live;
   const { views, renderWeekActions, selectedWeek, header, afterCard } = held.current;
   const [version, setVersion] = useState(0);
+  const focused = useIsFocused();
+  const loadedStamp = useRef("");
+  const loadedExecution = useRef<TrainingExecutionPort | null>(null);
+  const onLoadedRef = useRef(onLoaded);
+  onLoadedRef.current = onLoaded;
+  const onSelectWeekRef = useRef(onSelectWeek);
+  onSelectWeekRef.current = onSelectWeek;
   const [chosen, setChosen] = useState<Readonly<{ key: string; week: number }> | null>(null);
   const selected = chosen !== null && chosen.key === resetKey ? chosen.week : null;
 
   useEffect(() => {
+    const stamp = JSON.stringify([clientId, programId, version]);
+    if (!focused || (loadedExecution.current === execution && loadedStamp.current === stamp)) return undefined;
     let active = true;
+    const endStatuses = navigationPerformance.phase("statuses");
     void Promise.all([execution.getProgramStatuses(clientId, programId), execution.listProgramExecutions(clientId, programId)])
       .then(([nextStatuses, items]) => {
         if (!active) return;
         setData({ key: `${clientId}:${programId}`, statuses: nextStatuses,
           executions: new Map(items.map((item) => [`${item.weekIndex}:${item.plannedWorkoutId}`, item.execution])) });
-        onLoaded?.(`${clientId}:${programId}`);
+        loadedStamp.current = stamp;
+        loadedExecution.current = execution;
+        onLoadedRef.current?.(`${clientId}:${programId}`);
       }).catch(() => {
         if (!active) return;
         setData({ key: `${clientId}:${programId}`, statuses: [], executions: new Map() });
-        onLoaded?.(`${clientId}:${programId}`);
-      });
+        onLoadedRef.current?.(`${clientId}:${programId}`);
+      }).finally(endStatuses);
     return () => { active = false; };
-  }, [clientId, execution, onLoaded, programId, version]);
+  }, [clientId, execution, focused, programId, version]);
 
   // Пока поверх открыт дневник или матрица, статусы не перечитываются на каждую запись: один раз при возврате на экран.
-  const focused = useIsFocused();
   const focusedRef = useRef(focused);
   focusedRef.current = focused;
   const staleWhileHidden = useRef(false);
@@ -114,18 +126,31 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: liveViews, execu
   const requested = selectedWeek ?? selected ?? firstOpen;
   const week = viewOf(requested) ? requested : views[0]?.index ?? 1;
   const workouts = viewOf(week)?.workouts ?? [];
-  const chooseWeek = (value: number) => { setChosen({ key: resetKey, week: value }); onSelectWeek?.(value); };
+  const chooseWeek = useCallback((value: number) => {
+    navigationPerformance.begin("program-week");
+    setChosen({ key: resetKey, week: value }); onSelectWeekRef.current?.(value);
+  }, [resetKey]);
+  useEffect(() => {
+    if (!focused || data.key !== currentKey) return undefined;
+    const frame = requestAnimationFrame(navigationPerformance.ready("program"));
+    return () => cancelAnimationFrame(frame);
+  }, [focused, data, currentKey, week]);
   const currentPosition = views.findIndex((view) => view.index === week);
   const previousWeek = views[currentPosition - 1];
   const nextWeek = views[currentPosition + 1];
   // «Индивидуальная» — цвет темы; остальные типы окрашивают экран (как в 2.0).
   const toneOf = (type: WeekType | undefined) => type === undefined || type === "base" ? null : weekTypeTone(type, colors);
+  const weekCards = useMemo(() => views.map((view) => ({ index: view.index, caption: view.caption,
+    tone: view.type === undefined ? null : toneOf(view.type) ?? colors.textMuted,
+    status: view.workouts.length === 0 ? "Пусто" : view.index === firstOpen ? "Текущая" : weekStatusLabels[weekOf(view.index)] })),
+  [views, statuses, colors, firstOpen]);
   useReportScreenTone(toneOf(viewOf(week)?.type));
   useWeekNavigation(weeks === 0 ? null : { week,
     previous: previousWeek ? () => chooseWeek(previousWeek.index) : null,
     next: nextWeek ? () => chooseWeek(nextWeek.index) : null });
 
-  const progress = workouts.map((workout) => workoutProgress(workout, executions.get(`${week}:${workout.id}`)));
+  const progress = useMemo(() => workouts.map((workout) => workoutProgress(workout, executions.get(`${week}:${workout.id}`))),
+    [workouts, executions, week]);
   const weekSets = progress.reduce((sum, item) => sum + item.sets, 0);
   const weekDone = progress.reduce((sum, item) => sum + item.done, 0);
   const completed = workouts.filter((item) => statusOf(week, item.id) === "COMPLETED").length;
@@ -166,9 +191,7 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: liveViews, execu
           <View style={[styles.track, { backgroundColor: colors.border }]}>
             <View style={[styles.fill, { width: `${percent(weekDone, weekSets)}%`, backgroundColor: colors.accentFill }]} />
           </View>
-          <WeekCards weeks={views.map((view) => ({ index: view.index, caption: view.caption,
-            tone: view.type === undefined ? null : toneOf(view.type) ?? colors.textMuted,
-            status: view.workouts.length === 0 ? "Пусто" : view.index === firstOpen ? "Текущая" : weekStatusLabels[weekOf(view.index)] }))}
+          <WeekCards weeks={weekCards}
             selected={week} onSelect={chooseWeek} />
           {renderWeekActions?.(week)}
       </View> : null}

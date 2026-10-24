@@ -1,5 +1,6 @@
 import type * as SQLite from "expo-sqlite";
 import type { SqliteConnectionPort, SqliteStatementPort, SqlValue } from "./SqlitePort.ts";
+import { navigationPerformance } from "../diagnostics/NavigationPerformance.ts";
 
 export type NativeSqliteDatabase = Pick<SQLite.SQLiteDatabase,
   "runAsync" | "getFirstAsync" | "getAllAsync" | "execAsync" | "closeAsync">;
@@ -10,8 +11,12 @@ function statements(native: NativeSqliteDatabase): SqliteStatementPort {
       const result = await native.runAsync(sql, ...bindings);
       return { changes: result.changes, lastInsertRowId: result.lastInsertRowId };
     },
-    first: <Row>(sql: string, bindings: readonly SqlValue[] = []) => native.getFirstAsync<Row>(sql, ...bindings),
-    all: <Row>(sql: string, bindings: readonly SqlValue[] = []) => native.getAllAsync<Row>(sql, ...bindings),
+    first: <Row>(sql: string, bindings: readonly SqlValue[] = []) => {
+      navigationPerformance.read(); return native.getFirstAsync<Row>(sql, ...bindings);
+    },
+    all: <Row>(sql: string, bindings: readonly SqlValue[] = []) => {
+      navigationPerformance.read(); return native.getAllAsync<Row>(sql, ...bindings);
+    },
   };
 }
 

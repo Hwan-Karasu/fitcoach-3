@@ -7,7 +7,7 @@ import type { SimpleWeek } from "../domain/SimpleWorkoutEdit.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 
 /** Что показано на экране программы: чьи данные (`shown`), план и группа выбранного мезоцикла. */
-export function useProgramData({ clientId, programId, repository, requestedMesocycle, requestedWeek, onRequestedWeek, onMessage }: Readonly<{
+export function useProgramData({ clientId, programId, repository, requestedMesocycle, requestedWeek, onRequestedWeek, onMessage, focused = true }: Readonly<{
   clientId: string;
   programId: string;
   repository: TrainingPlansRepositoryPort;
@@ -16,6 +16,7 @@ export function useProgramData({ clientId, programId, repository, requestedMesoc
   /** Неделя запрошенного места уже применена данными загрузки (ключ — мезоцикл или `simple`). */
   onRequestedWeek: (key: string, week: number) => void;
   onMessage: (text: string) => void;
+  focused?: boolean;
 }>) {
   const [program, setProgram] = useState<TrainingProgram | null | undefined>(undefined);
   const [plan, setPlan] = useState<SimplePlan | null>(null);
@@ -29,16 +30,22 @@ export function useProgramData({ clientId, programId, repository, requestedMesoc
   const callbacks = useRef({ onRequestedWeek, onMessage });
   callbacks.current = { onRequestedWeek, onMessage };
   const cycleKey = periodized?.selectedMesocycleId ?? periodized?.mesocycles[0]?.id ?? "simple";
+  const loadedStamp = useRef("");
+  const loadedRepository = useRef<TrainingPlansRepositoryPort | null>(null);
 
   useEffect(() => {
+    const stamp = JSON.stringify([clientId, programId, version]);
+    if (!focused || (loadedRepository.current === repository && loadedStamp.current === stamp)) return undefined;
     let active = true;
     repository.getProgram(clientId, programId).then(async (next) => {
       if (!active) return;
       if (next !== null) void repository.selectProgram(clientId, programId).catch(() => undefined);
       // Всё читается до отрисовки и ставится одним обновлением: экран не показывает смесь данных двух участников.
-      const simple = next?.kind === "SIMPLE" ? await repository.getSimplePlan(clientId, programId) : null;
-      const weeks = next?.kind === "SIMPLE" ? await repository.getSimpleWeeks(clientId, programId) : [];
-      const loaded = next?.kind === "PERIODIZED" ? await repository.getPeriodizedPlan(clientId, programId) : null;
+      const [simple, weeks, loaded] = await Promise.all([
+        next?.kind === "SIMPLE" ? repository.getSimplePlan(clientId, programId) : null,
+        next?.kind === "SIMPLE" ? repository.getSimpleWeeks(clientId, programId) : [],
+        next?.kind === "PERIODIZED" ? repository.getPeriodizedPlan(clientId, programId) : null,
+      ]);
       if (!active) return;
       setProgram(next);
       setPlan(simple?.draft.plan ?? null);
@@ -53,22 +60,25 @@ export function useProgramData({ clientId, programId, repository, requestedMesoc
         if (key != null) callbacks.current.onRequestedWeek(key, requestedWeek);
       }
       setShown({ clientId, programId });
+      loadedStamp.current = stamp;
+      loadedRepository.current = repository;
     }).catch(() => {
       if (active) { setProgram((current) => current === undefined ? null : current); callbacks.current.onMessage("Не удалось загрузить структуру программы."); }
     });
     return () => { active = false; };
-  }, [clientId, programId, repository, version]);
+  }, [clientId, focused, programId, repository, version]);
 
   // UI-OWN-044: участники — группа выбранного мезоцикла (копии в любых программах), а не участники программы. Одно чтение на экран:
   // его результат получают и «N участников» в карточке, и полоса участников.
   useEffect(() => {
+    if (!focused || shown === null || shown.clientId !== clientId || shown.programId !== programId) return undefined;
     if (cycleKey === "simple") { setGroup([]); return undefined; }
     let active = true;
     // Идентичность — показанных данных: мезоцикл `cycleKey` принадлежит им, а не новому участнику, пока тот не загружен.
     repository.getMesocycleGroup(shown?.clientId ?? clientId, shown?.programId ?? programId, { mesocycleId: cycleKey })
       .then((copies) => { if (active) setGroup(copies); }).catch(() => undefined);
     return () => { active = false; };
-  }, [clientId, cycleKey, programId, repository, shown, version]);
+  }, [clientId, cycleKey, focused, programId, repository, shown, version]);
 
   useEffect(() => repository.subscribeCommittedChanges((change) => {
     if (change.selectionOnly !== true && change.orderOnly !== true && change.clientIds.includes(clientId)) setVersion((value) => value + 1);

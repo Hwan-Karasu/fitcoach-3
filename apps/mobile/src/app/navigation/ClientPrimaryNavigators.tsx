@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Profiler, useEffect, useRef, useState, type ReactNode } from "react";
+import { navigationPerformance } from "../../shared/diagnostics/NavigationPerformance.ts";
 import { ConfirmDialog, TabBarPending } from "../../shared/ui/components/public.ts";
 import { CommonActions } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -194,6 +195,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
   const [participant, setParticipant] = useState<string | null>(null);
   const [names, setNames] = useState<ReadonlyMap<string, string>>(new Map());
   const [switching, setSwitching] = useState(false);
+  const switchingRef = useRef(false);
   // Поиск экрана выбора упражнения живёт в шапке (вместо имени клиента) и общий для шапки и списка; сбрасывается при выходе с экрана.
   const [pickQuery, setPickQuery] = useState("");
   useEffect(() => {
@@ -206,10 +208,13 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
   // `prepare` только вычисляет переход; участник и параметры маршрута меняются в одном такте — иначе экран на миг
   // получает программу нового участника с прежним клиентом (ошибка «Не удалось выбрать мезоцикл»).
   const switchTo = async (next: string, prepare: () => Promise<() => void>) => {
-    if (switching) return;
+    if (switchingRef.current) return;
+    switchingRef.current = true;
     setSwitching(true);
-    try { const apply = await prepare(); setParticipant(next === clientId ? null : next); apply(); } catch { /* Прежний участник остаётся. */ }
-    finally { setSwitching(false); }
+    try { const apply = await prepare(); setParticipant(next === clientId ? null : next); apply(); } catch {
+      navigationPerformance.finish("program", false); navigationPerformance.finish("workout", false);
+    }
+    finally { switchingRef.current = false; setSwitching(false); }
   };
   // Простая программа создаётся сразу в конструкторе; расширенная — пока через название и участников.
   const createRoute = (kind: ProgramKind) => kind === "SIMPLE" ? { name: "TrainingBuilder" as const, params: {} }
@@ -291,15 +296,16 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId } }] })} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingProgram">
-        {({ navigation, route }) => <><TabBarPending weeks dock /><ProgramScreen clientId={viewer} programId={route.params.programId}
+        {({ navigation, route }) => <><TabBarPending weeks dock /><Profiler id="TrainingProgram" onRender={navigationPerformance.onRender}><ProgramScreen clientId={viewer} programId={route.params.programId}
           requestedWeek={route.params.weekIndex} requestedMesocycle={route.params.mesocycleId}
           repository={repository} listCandidates={listCandidates} exercises={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap} planDelete={planDelete}
           onOpenMatrix={() => navigation.navigate("TrainingMatrix", { programId: route.params.programId })}
           onTabChange={(tab) => navigation.setOptions({ title: tab === "templates" ? "Шаблоны" : trainingTitles.TrainingProgram })}
-          renderParticipants={(current, shown, group) => <ParticipantSwitcher docked members={group} clientId={shown?.clientId ?? viewer} activeClientId={viewer}
+          renderParticipants={(current, shown, group, source) => <ParticipantSwitcher docked members={group} clientId={shown?.clientId ?? viewer} activeClientId={viewer}
             anchorClientId={clientId} programId={shown?.programId ?? route.params.programId} mesocycleId={current().mesocycleId}
-            repository={repository} names={names} busy={switching} onSelect={(next) => { void switchTo(next.clientId, async () => {
-              const target = await participantTarget(repository, { clientId: viewer, programId: route.params.programId }, next, current());
+            repository={repository} names={names} busy={switching || shown?.clientId !== viewer || shown?.programId !== route.params.programId} onSelect={(next) => { void switchTo(next.clientId, async () => {
+              navigationPerformance.begin("program-participant");
+              const target = await participantTarget(repository, { clientId: viewer, programId: route.params.programId }, next, current(), source);
               if (target === null) throw new Error("TARGET_NOT_FOUND");
               return () => navigation.setParams({ programId: target.programId, weekIndex: target.weekIndex,
                 ...(target.mesocycleId === null ? {} : { mesocycleId: target.mesocycleId }) });
@@ -319,7 +325,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
           onAddMesocycle={() => navigation.navigate("TrainingCreate", { kind: "PERIODIZED", programId: route.params.programId })}
           onEditWeek={(mesocycleId, weekIndex) => navigation.navigate("TrainingCreate", { kind: "PERIODIZED", programId: route.params.programId,
             mesocycleId, weekIndex })}
-          onArchived={() => navigation.popTo("TrainingIndex")} /></>}
+          onArchived={() => navigation.popTo("TrainingIndex")} /></Profiler></>}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingBuilder">
         {({ navigation, route }) => <SimpleProgramBuilderScreen clientId={viewer} programId={route.params?.programId ?? null}
@@ -382,11 +388,12 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
               params: { programId: route.params.programId, weekIndex: route.params.weekIndex, workoutId: route.params.workoutId } } })} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingWorkout">
-        {({ route, navigation }) => <><TabBarPending weeks dock /><WorkoutScreen slot={{ clientId: viewer, programId: route.params.programId, weekIndex: route.params.weekIndex,
+        {({ route, navigation }) => <><TabBarPending weeks dock /><Profiler id="TrainingWorkout" onRender={navigationPerformance.onRender}><WorkoutScreen slot={{ clientId: viewer, programId: route.params.programId, weekIndex: route.params.weekIndex,
           plannedWorkoutId: route.params.workoutId }} clientName={viewerName}
-          renderParticipants={(finishInput) => <ParticipantSwitcher docked clientId={viewer} anchorClientId={clientId} programId={route.params.programId}
-            workoutId={route.params.workoutId}
-            repository={repository} names={names} busy={switching} onSelect={(next) => { void switchTo(next.clientId, async () => {
+          renderParticipants={(finishInput, mesocycleId, loading) => <ParticipantSwitcher docked clientId={viewer} anchorClientId={clientId} programId={route.params.programId}
+            workoutId={route.params.workoutId} mesocycleId={mesocycleId}
+            repository={repository} names={names} busy={switching || loading} onSelect={(next) => { void switchTo(next.clientId, async () => {
+              navigationPerformance.begin("workout-participant");
               if (!await finishInput()) throw new Error("INPUT_NOT_SAVED");
               const target = await participantTarget(repository, { clientId: viewer, programId: route.params.programId }, next,
                 { mesocycleId: route.params.mesocycleId ?? null, weekIndex: route.params.weekIndex, workoutId: route.params.workoutId });
@@ -420,7 +427,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
             if (workoutId === null) navigation.popTo("TrainingProgram", context);
             // Тот же экран с другими параметрами: без анимации перехода и без пересоздания дневника.
             else navigation.setParams({ ...context, workoutId });
-          }} /></>}
+          }} /></Profiler></>}
       </TrainingStack.Screen>
     </TrainingStack.Navigator>
   );

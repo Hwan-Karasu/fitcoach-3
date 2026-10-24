@@ -42,8 +42,18 @@ test("T03 быстрый переход (§48.83): карточки «в раб�
     const cards = await active.list();
     assert.deepEqual(cards.map((card) => [card.clientName, card.programTitle, card.workoutTitle, card.slot.weekIndex]).sort(),
       [["SyntheticA", "База", "Тренировка 1", 2], ["SyntheticB", "Сила", "Тренировка 1", 2]]);
+    let invalidations = 0;
+    const off = active.subscribe(() => { invalidations += 1; });
     await clients.setArchived(b.id, b.revision, true);
+    assert.equal(invalidations, 1, "client lifecycle invalidates active cards without execution writes");
     assert.deepEqual((await active.list()).map((card) => card.clientName), ["SyntheticA"], "архивный клиент не показывается");
+    const current = (await plans.getProgram(a.id, programA.id))!;
+    await plans.renameProgram(programA.id, current.revision, "Synthetic renamed");
+    assert.equal(invalidations, 2, "plan titles invalidate cards");
+    assert.equal((await active.list())[0]!.programTitle, "Synthetic renamed");
+    off();
+    await clients.setArchived(b.id, b.revision + 1, false);
+    assert.equal(invalidations, 2, "unsubscribing removes all three observers");
   } finally {
     await execution.close();
     await plans.close();

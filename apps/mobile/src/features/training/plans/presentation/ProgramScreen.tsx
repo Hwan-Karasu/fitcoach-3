@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useIsFocused } from "@react-navigation/native";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import { Archive, ArrowLeftRight, Bookmark, CalendarDays, Copy, Ellipsis, LayoutGrid, Pencil, Plus, Trash2, TrendingUp } from "lucide-react-native";
@@ -14,7 +15,7 @@ import { WeekCopyFlow } from "./WeekCopyFlow.tsx";
 import type { WeekSwapPort } from "../domain/WeekSwap.ts";
 import { WeekSwapPanel } from "./WeekSwapPanel.tsx";
 import { ParticipantChips } from "./ParticipantChips.tsx";
-import { weekTypeLabels, type WeekType } from "../domain/PeriodizedModel.ts";
+import { weekTypeLabels, type PeriodizedPlan, type WeekType } from "../domain/PeriodizedModel.ts";
 import { setsSummary } from "../domain/SimplePlanRules.ts";
 import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidate.ts";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
@@ -87,7 +88,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   /** UI-OWN-043: полоса участников группы под шапкой; получает текущее место плана (мезоцикл и неделя). */
   /** `shown` — чьи данные сейчас на экране: состав группы читается по ним, а не по параметрам маршрута, которые меняются раньше. */
   renderParticipants?: (current: () => CounterpartRef, shown: Readonly<{ clientId: string; programId: string }> | null,
-    group: readonly GroupCopy[] | null) => ReactNode;
+    group: readonly GroupCopy[] | null, source: PeriodizedPlan | null) => ReactNode;
   /** §48.11, §50.3: удаление мезоцикла и программы у этого клиента; без порта пунктов нет. */
   planDelete?: MesocycleDeletePort & ProgramDeletePort;
 }>) {
@@ -111,8 +112,9 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   // Неделя запрошенного места (из дневника/матрицы), применённая данными загрузки: повторно её не применяет эффект ниже.
   const appliedContext = useRef<string | null>(null);
   const [weeksByCycle, setWeeksByCycle] = useState<Readonly<Record<string, number>>>({});
+  const focused = useIsFocused();
   const { program, setProgram, plan, simpleWeeks, periodized, setPeriodized, shown, group, cycleKey, refresh } = useProgramData({
-    clientId, programId, repository, requestedMesocycle, requestedWeek, onMessage: setMessage,
+    clientId, programId, repository, requestedMesocycle, requestedWeek, onMessage: setMessage, focused,
     onRequestedWeek: (key, week) => { appliedContext.current = `${key}:${week}`; setWeeksByCycle((current) => ({ ...current, [key]: week })); } });
   const loadedFor = shown === null ? null : `${shown.clientId}:${shown.programId}`;
   const currentKey = `${clientId}:${programId}`;
@@ -236,7 +238,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       selectedId={tab} onSelect={(next) => { setTab(next); onTabChange?.(next); }} />
   </View> : null;
   const participants = renderParticipants?.(() => ({ mesocycleId: selectedCycle()?.id ?? null,
-    weekIndex: weeksByCycle[cycleKey] ?? shownWeek.current, workoutId: null }), shown, group);
+    weekIndex: weeksByCycle[cycleKey] ?? shownWeek.current, workoutId: null }), shown, group, periodized);
   if (tab === "templates" && renderTemplates !== undefined) {
     return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{tabs}{renderTemplates()}</View>;
   }
