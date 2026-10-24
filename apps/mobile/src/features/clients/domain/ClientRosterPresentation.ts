@@ -173,6 +173,8 @@ export function presentClientRoster(input: Readonly<{
   dismissals: readonly BirthdayDismissal[];
   /** Начало ближайшей сегодняшней записи по клиенту; задано — фильтр «Сегодня» включён. */
   todayStarts?: ReadonlyMap<string, number> | null;
+  filters?: ClientRosterFilters;
+  overview?: RosterOverview | null;
 }>): PresentedRoster {
   if (dateEpoch(input.today) === null) throw new Error("ROSTER_TODAY_INVALID");
   const needle = input.search.trim().toLowerCase();
@@ -180,6 +182,7 @@ export function presentClientRoster(input: Readonly<{
   const dismissed = new Set(input.dismissals.map((row) => JSON.stringify([row.clientId, row.occurrenceDate])));
   const todayStarts = input.todayStarts ?? null;
   const presented = input.rows.filter((row) => row.lifecycle === "ACTIVE"
+    && matchesRosterFilters(row, input.overview?.get(row.id), input.filters ?? EMPTY_ROSTER_FILTERS)
     && (todayStarts === null || todayStarts.has(row.id))
     && [row.displayName, row.contactPhone, row.contactEmail]
       .some((value) => value?.toLowerCase().includes(needle)))
@@ -217,3 +220,5 @@ export function presentClientRoster(input: Readonly<{
     searching, todayOnly: false,
   };
 }
+import { EMPTY_ROSTER_FILTERS, matchesRosterFilters, type ClientRosterFilters } from "./ClientRosterFilters.ts";
+import type { RosterOverview } from "./ClientRosterOverview.ts";

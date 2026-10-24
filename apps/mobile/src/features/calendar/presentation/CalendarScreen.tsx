@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import * as Sharing from "expo-sharing";
 import { ScrollView } from "react-native-gesture-handler";
 import { captureRef } from "react-native-view-shot";
@@ -451,11 +451,13 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
       </> : null}
 
       {/* Запись открывается окном поверх календаря, а не отдельным экраном (решение владельца). */}
-      <Modal visible={editor !== null} transparent animationType="slide" statusBarTranslucent
+      <Modal visible={editor !== null} transparent animationType="fade" statusBarTranslucent
         onRequestClose={() => setEditor(null)}>
         <Pressable accessibilityLabel="Закрыть запись" style={[StyleSheet.absoluteFill, styles.sheetScrim]}
           onPress={() => setEditor(null)} />
-        <View style={[styles.sheet, { marginTop: insets.top + 40, backgroundColor: colors.canvas, borderColor: colors.border }]}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={[styles.sheetFrame, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]} pointerEvents="box-none">
+        <View accessibilityViewIsModal style={[styles.sheet, { backgroundColor: colors.canvas, borderColor: colors.border }]}>
           <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
             <Text accessibilityRole="header" style={[styles.sheetTitle, { color: colors.textPrimary }]}>
               {editor?.appointmentId ? "Запись" : "Новая запись"}
@@ -464,7 +466,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
               onPress={() => setEditor(null)} />
           </View>
           {editor !== null ? (
-            <View style={[styles.sheetBody, { paddingBottom: insets.bottom }]}>
+            <View style={styles.sheetBody}>
               <AppointmentEditorScreen repository={repository} participants={participants} credit={credit}
                 appointmentId={editor.appointmentId} localDate={editor.localDate} startMinute={editor.startMinute}
                 durationMinutes={editor.durationMinutes} onClose={() => setEditor(null)}
@@ -473,6 +475,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
             </View>
           ) : null}
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );
@@ -510,8 +513,9 @@ const styles = StyleSheet.create({
   hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, paddingHorizontal: 8 },
   helpButton: { width: 44, minHeight: 44, borderWidth: 2, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   sheetScrim: { backgroundColor: "rgba(0,0,0,0.45)" },
-  sheet: { flex: 1, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderWidth: 1, overflow: "hidden" },
-  sheetHeader: { minHeight: 52, paddingLeft: 16, paddingRight: 4, flexDirection: "row", alignItems: "center",
+  sheetFrame: { flex: 1, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
+  sheet: { height: "90%", width: "100%", maxWidth: 440, borderRadius: 20, borderWidth: 1, overflow: "hidden" },
+  sheetHeader: { minHeight: 44, paddingLeft: 12, paddingRight: 4, flexDirection: "row", alignItems: "center",
     justifyContent: "space-between", borderBottomWidth: 1 },
   sheetTitle: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
   sheetBody: { flex: 1 },

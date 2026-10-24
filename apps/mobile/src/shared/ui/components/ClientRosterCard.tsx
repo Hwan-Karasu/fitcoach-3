@@ -6,6 +6,10 @@ import { fonts } from "../theme/typography.ts";
 import { shadow, TOUCH_TARGET } from "../theme/style.ts";
 import { emojiFromInput } from "./emojiInput.ts";
 
+const shortMetricLabels: Readonly<Record<string, string>> = {
+  "Следующее занятие": "Занятие", "Последняя тренировка": "Тренировка", "Абонемент": "Абонемент",
+};
+
 /** Метрика карточки: значок и значение; `label` читает TalkBack. `value: null` — «нет данных» (§51.2.3). */
 export interface RosterMetric {
   readonly label: string;
@@ -53,6 +57,8 @@ export function ClientRosterCard({ clientId, displayName, mark, emoji = null, su
   const colors = palette.tokens;
   const spoken = [displayName, subtitle, restricted ? "есть ограничения" : null, highlight]
     .filter((part): part is string => typeof part === "string" && part.length > 0).join(", ");
+  const compactMetrics = metrics.length > 3;
+  const metricRows = [metrics.slice(0, 4)];
   return (
     <View style={inGroup ? styles.groupRow : [styles.card, shadow.card, { backgroundColor: colors.surface }]}>
       {highlight ? <View style={[styles.stripe, { backgroundColor: colors.accentFill }]} /> : null}
@@ -86,27 +92,32 @@ export function ClientRosterCard({ clientId, displayName, mark, emoji = null, su
         </Pressable>
       </View>
       {metrics.length > 0 && metricTiles ? (
-        <View style={styles.tiles}>
-          {metrics.slice(0, 3).map((metric) => (
+        <View>
+          {metricRows.map((row, rowIndex) => <View key={rowIndex} style={styles.tiles}>
+          {row.map((metric) => (
             <View key={metric.label} accessible accessibilityLabel={`${metric.label}: ${metric.value ?? "нет данных"}`}
-              style={[styles.tile, { backgroundColor: colors.surfaceRaised }]}>
-              <Text numberOfLines={2} style={[styles.tileLabel, { color: colors.textSecondary }]}>{metric.label}</Text>
-              <Text numberOfLines={1} style={[styles.tileValue, { color: metric.value === null ? colors.textMuted : colors.textPrimary }]}>
+              style={[styles.tile, compactMetrics ? styles.compactTile : null, { backgroundColor: colors.surfaceRaised }]}>
+              <Text numberOfLines={compactMetrics ? 1 : 2} adjustsFontSizeToFit minimumFontScale={0.85}
+                style={[styles.tileLabel, compactMetrics ? styles.compactTileLabel : null, { color: colors.textSecondary }]}>{compactMetrics ? shortMetricLabels[metric.label] ?? metric.label : metric.label}</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.tileValue, { color: metric.value === null ? colors.textMuted : colors.textPrimary }]}>
                 {metric.value ?? "—"}</Text>
             </View>
           ))}
+          </View>)}
         </View>
       ) : metrics.length > 0 ? (
-        <View style={styles.metrics}>
-          {metrics.slice(0, 3).map((metric, index) => (
+        <View>
+          {metricRows.map((row, rowIndex) => <View key={rowIndex} style={[styles.metrics, compactMetrics ? styles.compactMetrics : null]}>
+          {row.map((metric, index) => (
             <View key={metric.label} accessible accessibilityLabel={`${metric.label}: ${metric.value ?? "нет данных"}`}
-              style={[styles.metric, { flex: metricWeights[index] ?? 1 }]}>
+              style={[styles.metric, { flex: compactMetrics ? 1 : metricWeights[index] ?? 1 }]}>
               {metric.icon(colors.textSecondary)}
-              <Text numberOfLines={1} style={[styles.metricValue, { color: metric.value === null ? colors.textMuted : colors.textPrimary }]}>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[styles.metricValue, compactMetrics ? styles.compactMetricValue : null, { color: metric.value === null ? colors.textMuted : colors.textPrimary }]}>
                 {metric.value ?? "—"}
               </Text>
             </View>
           ))}
+          </View>)}
         </View>
       ) : null}
     </View>
@@ -177,6 +188,10 @@ function EmojiAvatar({ displayName, mark, emoji, onChange }: Readonly<{
 }
 
 const styles = StyleSheet.create({
+  compactTile: { minWidth: 0, paddingHorizontal: 6 },
+  compactTileLabel: { fontSize: 10, lineHeight: 14 },
+  compactMetrics: { paddingLeft: 16, gap: 6 },
+  compactMetricValue: { fontSize: 12, lineHeight: 17 },
   card: { borderRadius: 20, overflow: "hidden" },
   groupRow: { overflow: "hidden" },
   group: { borderRadius: 20, overflow: "hidden" },

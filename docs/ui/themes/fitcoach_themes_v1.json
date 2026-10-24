@@ -1,0 +1,368 @@
+{
+  "schemaVersion": "1.0.0",
+  "purpose": "Design tokens / visual reference, not drop-in React Native implementation",
+  "notes": [
+    "HEX палитры разработаны по визуальному направлению макета; не являются точным извлечением цветов из AI-изображения.",
+    "Ровно один из трёх акцентов активен в выбранной теме.",
+    "weekPaletteSlots — цветовые кандидаты, а не названия бизнес-типов; связывать с реальными категориями только после изучения Product Contract.",
+    "Значения цветов сначала сверить с актуальной реализацией и запустить контрастные и визуальные тесты."
+  ],
+  "themeOrder": [
+    "warm-sand",
+    "sage-milk",
+    "slate-blue",
+    "dusty-terracotta",
+    "graphite-latte",
+    "night-mocha"
+  ],
+  "themes": {
+    "warm-sand": {
+      "nameRu": "Тёплый песок",
+      "appearance": "light",
+      "colors": {
+        "background": "#F7F1E9",
+        "surface": "#FFFFFF",
+        "surfaceElevated": "#FFFCF8",
+        "surfaceSecondary": "#F1E8DD",
+        "navigation": "#FFFCF8",
+        "textPrimary": "#302820",
+        "textSecondary": "#64554B",
+        "textMuted": "#786B60",
+        "border": "#E4D7C9",
+        "divider": "#ECE2D7",
+        "iconPrimary": "#45382F",
+        "iconSecondary": "#736456",
+        "success": "#287147",
+        "warning": "#85590C",
+        "error": "#A23D36",
+        "info": "#265F9C"
+      },
+      "defaultAccentId": "caramel",
+      "accents": {
+        "caramel": {
+          "nameRu": "Карамельный",
+          "base": "#97531E",
+          "onAccent": "#FFFFFF",
+          "pressed": "#85491A",
+          "soft": "#E4D3C2",
+          "onSoft": "#884B1B",
+          "focusRing": "#97531E"
+        },
+        "chocolate": {
+          "nameRu": "Шоколадный",
+          "base": "#76503D",
+          "onAccent": "#FFFFFF",
+          "pressed": "#684636",
+          "soft": "#E0D3C7",
+          "onSoft": "#704C3A",
+          "focusRing": "#76503D"
+        },
+        "golden-sand": {
+          "nameRu": "Золотой песок",
+          "base": "#95610D",
+          "onAccent": "#FFFFFF",
+          "pressed": "#83550B",
+          "soft": "#E4D5C0",
+          "onSoft": "#7F520B",
+          "focusRing": "#95610D"
+        }
+      },
+      "weekPaletteSlots": {
+        "slot1": "#4B7667",
+        "slot2": "#9B7225",
+        "slot3": "#A05244",
+        "slot4": "#6D568A"
+      }
+    },
+    "sage-milk": {
+      "nameRu": "Шалфей и молоко",
+      "appearance": "light",
+      "colors": {
+        "background": "#F3F6F1",
+        "surface": "#FFFFFF",
+        "surfaceElevated": "#FBFDF9",
+        "surfaceSecondary": "#E8EFE4",
+        "navigation": "#FCFEFB",
+        "textPrimary": "#26362A",
+        "textSecondary": "#566658",
+        "textMuted": "#667468",
+        "border": "#D9E5D6",
+        "divider": "#E4EBDF",
+        "iconPrimary": "#3E5441",
+        "iconSecondary": "#647364",
+        "success": "#287147",
+        "warning": "#85590C",
+        "error": "#A23D36",
+        "info": "#265F9C"
+      },
+      "defaultAccentId": "sage",
+      "accents": {
+        "sage": {
+          "nameRu": "Шалфейный",
+          "base": "#496E50",
+          "onAccent": "#FFFFFF",
+          "pressed": "#406146",
+          "soft": "#D2DDCF",
+          "onSoft": "#426348",
+          "focusRing": "#496E50"
+        },
+        "olive": {
+          "nameRu": "Оливковый",
+          "base": "#66702E",
+          "onAccent": "#FFFFFF",
+          "pressed": "#5A6328",
+          "soft": "#D6DDCB",
+          "onSoft": "#5C6529",
+          "focusRing": "#66702E"
+        },
+        "pine": {
+          "nameRu": "Хвойный",
+          "base": "#286D68",
+          "onAccent": "#FFFFFF",
+          "pressed": "#23605C",
+          "soft": "#CDDDD3",
+          "onSoft": "#266863",
+          "focusRing": "#286D68"
+        }
+      },
+      "weekPaletteSlots": {
+        "slot1": "#5B7957",
+        "slot2": "#887633",
+        "slot3": "#A36548",
+        "slot4": "#6A6390"
+      }
+    },
+    "slate-blue": {
+      "nameRu": "Сланцевый синий",
+      "appearance": "light",
+      "colors": {
+        "background": "#F0F5FB",
+        "surface": "#FFFFFF",
+        "surfaceElevated": "#F8FBFF",
+        "surfaceSecondary": "#E5EEF8",
+        "navigation": "#F8FBFF",
+        "textPrimary": "#243449",
+        "textSecondary": "#5A6B7E",
+        "textMuted": "#607184",
+        "border": "#D8E3EF",
+        "divider": "#E7EEF7",
+        "iconPrimary": "#3A5270",
+        "iconSecondary": "#697B8F",
+        "success": "#287147",
+        "warning": "#85590C",
+        "error": "#A23D36",
+        "info": "#265F9C"
+      },
+      "defaultAccentId": "steel-blue",
+      "accents": {
+        "steel-blue": {
+          "nameRu": "Стальной синий",
+          "base": "#2E639D",
+          "onAccent": "#FFFFFF",
+          "pressed": "#28578A",
+          "soft": "#CBDBEB",
+          "onSoft": "#2C5E95",
+          "focusRing": "#2E639D"
+        },
+        "cobalt": {
+          "nameRu": "Кобальтовый",
+          "base": "#2354C3",
+          "onAccent": "#FFFFFF",
+          "pressed": "#1F4AAC",
+          "soft": "#CAD8F1",
+          "onSoft": "#2150B9",
+          "focusRing": "#2354C3"
+        },
+        "teal": {
+          "nameRu": "Бирюзовый",
+          "base": "#0B7376",
+          "onAccent": "#FFFFFF",
+          "pressed": "#0A6568",
+          "soft": "#C6DDE6",
+          "onSoft": "#0A686A",
+          "focusRing": "#0B7376"
+        }
+      },
+      "weekPaletteSlots": {
+        "slot1": "#4B807C",
+        "slot2": "#8C6F31",
+        "slot3": "#A25465",
+        "slot4": "#705DA0"
+      }
+    },
+    "dusty-terracotta": {
+      "nameRu": "Пыльная терракота",
+      "appearance": "light",
+      "colors": {
+        "background": "#FAF1EC",
+        "surface": "#FFFFFF",
+        "surfaceElevated": "#FFF9F6",
+        "surfaceSecondary": "#F5E4DA",
+        "navigation": "#FFFAF7",
+        "textPrimary": "#3C2A26",
+        "textSecondary": "#775D54",
+        "textMuted": "#816A60",
+        "border": "#EAD6CA",
+        "divider": "#F0E4DC",
+        "iconPrimary": "#66483E",
+        "iconSecondary": "#876D63",
+        "success": "#287147",
+        "warning": "#85590C",
+        "error": "#A23D36",
+        "info": "#265F9C"
+      },
+      "defaultAccentId": "terracotta",
+      "accents": {
+        "terracotta": {
+          "nameRu": "Терракотовый",
+          "base": "#A94C34",
+          "onAccent": "#FFFFFF",
+          "pressed": "#95432E",
+          "soft": "#EACFC3",
+          "onSoft": "#90412C",
+          "focusRing": "#A94C34"
+        },
+        "coral": {
+          "nameRu": "Коралловый",
+          "base": "#B74750",
+          "onAccent": "#FFFFFF",
+          "pressed": "#A13E46",
+          "soft": "#ECCEC7",
+          "onSoft": "#9C3C44",
+          "focusRing": "#B74750"
+        },
+        "copper": {
+          "nameRu": "Медный",
+          "base": "#97551D",
+          "onAccent": "#FFFFFF",
+          "pressed": "#854B1A",
+          "soft": "#E8D0C0",
+          "onSoft": "#884C1A",
+          "focusRing": "#97551D"
+        }
+      },
+      "weekPaletteSlots": {
+        "slot1": "#64816C",
+        "slot2": "#AF7929",
+        "slot3": "#A35344",
+        "slot4": "#8362A1"
+      }
+    },
+    "graphite-latte": {
+      "nameRu": "Графит и латте",
+      "appearance": "light",
+      "colors": {
+        "background": "#F3F1EE",
+        "surface": "#FFFFFF",
+        "surfaceElevated": "#FCFAF7",
+        "surfaceSecondary": "#E7E2DC",
+        "navigation": "#FBF9F6",
+        "textPrimary": "#302B28",
+        "textSecondary": "#6A5F57",
+        "textMuted": "#766B63",
+        "border": "#DED7CE",
+        "divider": "#EAE4DC",
+        "iconPrimary": "#4F453D",
+        "iconSecondary": "#796F65",
+        "success": "#287147",
+        "warning": "#85590C",
+        "error": "#A23D36",
+        "info": "#265F9C"
+      },
+      "defaultAccentId": "mocha",
+      "accents": {
+        "mocha": {
+          "nameRu": "Мокко",
+          "base": "#806044",
+          "onAccent": "#FFFFFF",
+          "pressed": "#71543C",
+          "soft": "#D9D0C7",
+          "onSoft": "#6D523A",
+          "focusRing": "#806044"
+        },
+        "taupe": {
+          "nameRu": "Тауп",
+          "base": "#756354",
+          "onAccent": "#FFFFFF",
+          "pressed": "#67574A",
+          "soft": "#D7D0C9",
+          "onSoft": "#635447",
+          "focusRing": "#756354"
+        },
+        "bronze": {
+          "nameRu": "Бронзовый",
+          "base": "#866019",
+          "onAccent": "#FFFFFF",
+          "pressed": "#765416",
+          "soft": "#D9D0C1",
+          "onSoft": "#725215",
+          "focusRing": "#866019"
+        }
+      },
+      "weekPaletteSlots": {
+        "slot1": "#56756A",
+        "slot2": "#A07B33",
+        "slot3": "#946050",
+        "slot4": "#72638C"
+      }
+    },
+    "night-mocha": {
+      "nameRu": "Ночной мокко",
+      "appearance": "dark",
+      "colors": {
+        "background": "#1D1715",
+        "surface": "#2A211D",
+        "surfaceElevated": "#3C3029",
+        "surfaceSecondary": "#342923",
+        "navigation": "#271F1B",
+        "textPrimary": "#F8F2EC",
+        "textSecondary": "#D2BFB1",
+        "textMuted": "#BFA99B",
+        "border": "#59483F",
+        "divider": "#463830",
+        "iconPrimary": "#F1E5D9",
+        "iconSecondary": "#CCB6A7",
+        "success": "#8ED0B1",
+        "warning": "#F1C76A",
+        "error": "#EF9D90",
+        "info": "#8FBFFD"
+      },
+      "defaultAccentId": "amber",
+      "accents": {
+        "amber": {
+          "nameRu": "Янтарный",
+          "base": "#EAA437",
+          "onAccent": "#24160D",
+          "pressed": "#EDAF4F",
+          "soft": "#624828",
+          "onSoft": "#F8F2EC",
+          "focusRing": "#EAA437"
+        },
+        "latte": {
+          "nameRu": "Латте",
+          "base": "#C28A63",
+          "onAccent": "#24160D",
+          "pressed": "#C99876",
+          "soft": "#584133",
+          "onSoft": "#F8F2EC",
+          "focusRing": "#C28A63"
+        },
+        "lavender": {
+          "nameRu": "Лавандовый",
+          "base": "#AA92E5",
+          "onAccent": "#24160D",
+          "pressed": "#B49FE8",
+          "soft": "#524354",
+          "onSoft": "#F8F2EC",
+          "focusRing": "#AA92E5"
+        }
+      },
+      "weekPaletteSlots": {
+        "slot1": "#8ED0B1",
+        "slot2": "#F1C76A",
+        "slot3": "#EF9D90",
+        "slot4": "#BBA9EE"
+      }
+    }
+  }
+}

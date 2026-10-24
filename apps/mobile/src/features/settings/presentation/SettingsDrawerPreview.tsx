@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { AccessibilityInfo, Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, View, findNodeHandle,
   useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { AppIconButton } from "../../../shared/ui/components/public.ts";
+import { Bell, ChevronRight, Palette, SlidersHorizontal, X, type LucideIcon } from "lucide-react-native";
+import { AppIconButton, BrandMark } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 
@@ -17,7 +18,7 @@ interface SettingsDrawerPreviewProps {
   readonly onOpenSqliteDev?: () => void;
 }
 
-function DrawerLink({ title, onPress }: Readonly<{ title: string; onPress: () => void }>) {
+function DrawerLink({ title, detail, icon: Icon, onPress }: Readonly<{ title: string; detail: string; icon: LucideIcon; onPress: () => void }>) {
   const [focused, setFocused] = useState(false);
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -31,13 +32,17 @@ function DrawerLink({ title, onPress }: Readonly<{ title: string; onPress: () =>
       style={({ pressed }) => [
         styles.link,
         {
-          borderColor: focused ? colors.focusRing : colors.border,
-          backgroundColor: focused || pressed ? colors.surfaceRaised : colors.surface,
+          borderColor: focused ? colors.focusRing : "transparent",
+          backgroundColor: focused || pressed ? colors.accentSoft : colors.surface,
         },
       ]}
     >
-      <Text style={[styles.linkText, { color: colors.textPrimary }]}>{title}</Text>
-      <Text style={[styles.linkArrow, { color: colors.accentInk }]}>›</Text>
+      <View style={[styles.linkIcon, { backgroundColor: colors.accentSoft }]}><Icon size={21} color={colors.onAccentSoft} strokeWidth={1.8} /></View>
+      <View style={styles.linkBody}>
+        <Text style={[styles.linkText, { color: colors.textPrimary }]}>{title}</Text>
+        <Text style={[styles.linkDetail, { color: colors.textSecondary }]}>{detail}</Text>
+      </View>
+      <ChevronRight size={17} color={colors.iconSecondary} />
     </Pressable>
   );
 }
@@ -49,57 +54,57 @@ export function SettingsDrawerPreview({
   onOpenSettings,
   onOpenAppearance,
   onOpenNotificationSettings,
-  onOpenWorkspaceDev,
-  onOpenSqliteDev,
 }: Readonly<SettingsDrawerPreviewProps>) {
   const titleRef = useRef<Text>(null);
-  const wasVisible = useRef(false);
-  const openedRoute = useRef(false);
+  const pendingRoute = useRef<(() => void) | null>(null);
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const { width } = useWindowDimensions();
-  const drawerWidth = Math.min(width * 0.84, 360);
+  const drawerWidth = Math.min(width * 0.9, 360);
   // Окно меню живёт, пока идёт анимация закрытия; выезд справа — со стороны кнопки меню.
   const [mounted, setMounted] = useState(visible);
+  const [shown, setShown] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
   const progress = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (visible) {
-      setMounted(true);
-      Animated.timing(progress, { toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-      return;
-    }
-    Animated.timing(progress, { toValue: 0, duration: 200, easing: Easing.in(Easing.cubic), useNativeDriver: true })
-      .start(({ finished }) => { if (finished) setMounted(false); });
-  }, [progress, visible]);
+    let active = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => { if (active) setReduceMotion(enabled); }).catch(() => undefined);
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
+    return () => { active = false; subscription.remove(); };
+  }, []);
+  useEffect(() => { if (visible) setMounted(true); }, [visible]);
+  useEffect(() => {
+    // Native Modal must be shown before starting; otherwise part of the opening is invisible.
+    if (!shown) return;
+    const animation = Animated.timing(progress, { toValue: visible ? 1 : 0,
+      duration: reduceMotion ? 0 : visible ? 320 : 240,
+      easing: visible ? Easing.bezier(0.22, 1, 0.36, 1) : Easing.inOut(Easing.cubic), useNativeDriver: true });
+    animation.start(({ finished }) => {
+      if (!finished || visible) return;
+      setMounted(false);
+      setShown(false);
+      const route = pendingRoute.current;
+      pendingRoute.current = null;
+      // Defer navigation until the closing frame is committed, avoiding simultaneous screen work.
+      requestAnimationFrame(() => {
+        if (route) route();
+        else {
+          const handle = findNodeHandle(returnFocusTo.current);
+          if (handle !== null) AccessibilityInfo.setAccessibilityFocus(handle);
+        }
+      });
+    });
+    return () => animation.stop();
+  }, [progress, visible, shown, reduceMotion, returnFocusTo]);
   const dismiss = () => {
-    if (openedRoute.current) return;
-    openedRoute.current = false;
+    if (!visible || pendingRoute.current) return;
     onClose();
   };
   const open = (route: () => void) => {
-    if (openedRoute.current) return;
-    openedRoute.current = true;
+    if (!visible || pendingRoute.current) return;
+    pendingRoute.current = route;
     onClose();
-    route();
   };
-
-  useEffect(() => {
-    if (visible) {
-      wasVisible.current = true;
-      return;
-    }
-    if (!wasVisible.current) return;
-    wasVisible.current = false;
-    if (openedRoute.current) {
-      openedRoute.current = false;
-      return;
-    }
-    const timer = setTimeout(() => {
-      const handle = findNodeHandle(returnFocusTo.current);
-      if (handle !== null) AccessibilityInfo.setAccessibilityFocus(handle);
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [visible, returnFocusTo]);
 
   return (
     <Modal
@@ -109,6 +114,7 @@ export function SettingsDrawerPreview({
       statusBarTranslucent
       onRequestClose={dismiss}
       onShow={() => {
+        setShown(true);
         const handle = findNodeHandle(titleRef.current);
         if (handle !== null) AccessibilityInfo.setAccessibilityFocus(handle);
       }}
@@ -117,29 +123,23 @@ export function SettingsDrawerPreview({
         <Animated.View style={[styles.scrim, { opacity: progress }]}>
           <Pressable accessible={false} importantForAccessibility="no" onPress={dismiss} style={StyleSheet.absoluteFill} />
         </Animated.View>
-        <Animated.View style={{ width: drawerWidth, transform: [{ translateX: progress.interpolate({
+        <Animated.View pointerEvents={visible ? "auto" : "none"} style={{ width: drawerWidth, transform: [{ translateX: progress.interpolate({
           inputRange: [0, 1], outputRange: [drawerWidth, 0] }) }] }}>
         <SafeAreaView
           accessibilityViewIsModal
           edges={["top", "bottom"]}
-          style={[styles.drawer, { backgroundColor: colors.surface }]}
+          style={[styles.drawer, { backgroundColor: colors.canvas }]}
         >
           <ScrollView contentContainerStyle={styles.drawerContent}>
             <View style={styles.drawerHeader}>
-              <Text ref={titleRef} accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>Меню</Text>
-              <AppIconButton icon={<Text style={[styles.closeGlyph, { color: colors.accentInk }]}>×</Text>} label="Закрыть меню" onPress={dismiss} />
+              <View style={[styles.brand, { backgroundColor: colors.accentSoft }]}><BrandMark size={25} color={colors.onAccentSoft} /></View>
+              <Text ref={titleRef} accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>Дневник атлета</Text>
+              <AppIconButton icon={<X size={20} color={colors.iconPrimary} />} label="Закрыть меню" onPress={dismiss} />
             </View>
-            <Text style={[styles.groupLabel, { color: colors.textMuted }]}>ИНТЕРФЕЙС</Text>
-            <DrawerLink title="Оформление" onPress={() => open(onOpenAppearance)} />
-            <Text style={[styles.groupLabel, { color: colors.textMuted }]}>СИСТЕМА</Text>
-            <DrawerLink title="Настройки" onPress={() => open(onOpenSettings)} />
-            <DrawerLink title="Настройки уведомлений" onPress={() => open(onOpenNotificationSettings)} />
-            {__DEV__ && onOpenWorkspaceDev && onOpenSqliteDev ? <>
-              <Text style={[styles.groupLabel, { color: colors.textMuted }]}>ДЕМОНСТРАЦИЯ</Text>
-              <DrawerLink title="Карточка клиента · демо" onPress={() => open(onOpenWorkspaceDev)} />
-              <DrawerLink title="SQLite · диагностика" onPress={() => open(onOpenSqliteDev)} />
-            </> : null}
-            {__DEV__ ? <Text style={[styles.footnote, { color: colors.textMuted }]}>Аккаунты и облачная синхронизация не входят в offline V1.</Text> : null}
+            <Text style={[styles.groupLabel, { color: colors.textSecondary }]}>Меню</Text>
+            <DrawerLink icon={Palette} title="Оформление" detail="Темы и панель навигации" onPress={() => open(onOpenAppearance)} />
+            <DrawerLink icon={SlidersHorizontal} title="Настройки" detail="Параметры приложения" onPress={() => open(onOpenSettings)} />
+            <DrawerLink icon={Bell} title="Уведомления" detail="Напоминания и тихие часы" onPress={() => open(onOpenNotificationSettings)} />
           </ScrollView>
         </SafeAreaView>
         </Animated.View>
@@ -151,14 +151,15 @@ export function SettingsDrawerPreview({
 const styles = StyleSheet.create({
   modalRoot: { flex: 1, flexDirection: "row", justifyContent: "flex-end" },
   scrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.48)" },
-  drawer: { height: "100%" },
-  drawerContent: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 32 },
-  drawerHeader: { minHeight: 48, flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  title: { fontSize: 18, lineHeight: 23, fontFamily: fonts.bold, flexShrink: 1 },
-  closeGlyph: { fontFamily: fonts.regular, fontSize: 20, lineHeight: 26 },
-  groupLabel: { fontSize: 11, lineHeight: 14, fontFamily: fonts.bold, letterSpacing: 0.8, marginTop: 18, marginBottom: 6 },
-  link: { minHeight: 56, borderBottomWidth: 2, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 },
-  linkText: { flex: 1, flexShrink: 1, fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
-  linkArrow: { minWidth: 20, fontFamily: fonts.regular, fontSize: 20, lineHeight: 26, textAlign: "right" },
-  footnote: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, marginTop: 24 },
+  drawer: { height: "100%", borderTopLeftRadius: 26, borderBottomLeftRadius: 26, overflow: "hidden" },
+  drawerContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24 },
+  drawerHeader: { minHeight: 56, flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 24 },
+  brand: { width: 42, height: 42, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  title: { flex: 1, fontSize: 16, lineHeight: 21, fontFamily: fonts.bold },
+  groupLabel: { fontSize: 13, lineHeight: 18, fontFamily: fonts.semibold, marginBottom: 10, paddingLeft: 4 },
+  link: { minHeight: 74, borderWidth: 2, borderRadius: 18, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
+  linkIcon: { width: 40, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  linkBody: { flex: 1, minWidth: 0, gap: 3 },
+  linkText: { fontSize: 14, lineHeight: 19, fontFamily: fonts.bold },
+  linkDetail: { fontSize: 11, lineHeight: 15, fontFamily: fonts.regular },
 });

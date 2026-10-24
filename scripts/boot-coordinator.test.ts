@@ -8,7 +8,7 @@ const preference: ThemePreference = { themeId: "slate-blue", accentId: "violet" 
 
 test("R06 interrupted restore recovery precedes workspace/database creation and failure blocks all normal boot work", async () => {
   const events: string[] = []; let failed = true;
-  const boot = new BootCoordinator({ fallbackThemeId: "graphite-teal",
+  const boot = new BootCoordinator({ fallbackThemeId: "night-mocha",
     recoverBeforeOpen: async () => { events.push("recover"); if (failed) throw new Error("PRIVATE_RECOVERY_PATH"); },
     prepareWorkspace: async () => { events.push("workspace"); return { id: "local" }; },
     openDatabase: async () => { events.push("database"); },
@@ -26,7 +26,7 @@ test("critical DB and theme gate precedes APP_READY; background starts afterward
   let releasePreference: (value: ThemePreference) => void = () => {};
   const waitingPreference = new Promise<ThemePreference>((resolve) => { releasePreference = resolve; });
   const dependencies: BootDependencies = {
-    fallbackThemeId: "graphite-teal",
+    fallbackThemeId: "night-mocha",
     prepareWorkspace: async () => { events.push("workspace"); return { id: "local-workspace" }; },
     openDatabase: async () => { events.push("database"); },
     loadThemePreference: async () => { events.push("preference"); return await waitingPreference; },
@@ -49,7 +49,7 @@ test("critical DB and theme gate precedes APP_READY; background starts afterward
   assert.equal(ready.kind, "APP_READY");
   if (ready.kind !== "APP_READY") return;
   assert.equal(ready.palette.themeId, "slate-blue");
-  assert.equal(ready.palette.accentId, "violet");
+  assert.equal(ready.palette.accentId, "cobalt");
   assert.deepEqual(states, ["BOOT_PENDING", "BOOT_PENDING", "DB_READY", "APP_READY"]);
   await new Promise<void>((resolve) => setImmediate(resolve));
   assert.deepEqual(events, ["workspace", "database", "preference", "background"]);
@@ -58,7 +58,7 @@ test("critical DB and theme gate precedes APP_READY; background starts afterward
 test("fatal DB error is typed and retry does not delete data", async () => {
   let attempts = 0;
   const gate = new BootCoordinator({
-    fallbackThemeId: "graphite-teal",
+    fallbackThemeId: "night-mocha",
     prepareWorkspace: async () => ({ id: "local-workspace" }),
     openDatabase: async () => {
       attempts += 1;
@@ -80,7 +80,7 @@ test("fatal DB error is typed and retry does not delete data", async () => {
 test("background failure and observer failure cannot roll back a ready boot", async () => {
   const reports: string[] = [];
   const gate = new BootCoordinator({
-    fallbackThemeId: "graphite-teal",
+    fallbackThemeId: "night-mocha",
     prepareWorkspace: async () => ({ id: "local-workspace" }),
     openDatabase: async () => {},
     loadThemePreference: async () => ({ themeId: "retired-theme", accentId: "retired-accent" }),

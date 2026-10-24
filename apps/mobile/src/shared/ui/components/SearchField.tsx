@@ -24,7 +24,7 @@ export function SearchField({ query, onChangeQuery, accessibilityLabel, placehol
     <View style={styles.row}>
       <View style={[styles.field, {
         backgroundColor: colors.input,
-        borderColor: focused ? colors.focusRing : colors.border,
+        borderColor: focused ? colors.focusRing : colors.controlBorder,
         borderWidth: focused ? 2 : 1,
       }]}>
         <Search size={20} color={colors.textMuted} strokeWidth={2} />

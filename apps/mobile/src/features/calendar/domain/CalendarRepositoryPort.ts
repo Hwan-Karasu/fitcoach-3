@@ -59,6 +59,8 @@ export interface CalendarRepositoryPort {
   createSessionType(input: SessionTypeInput): Promise<SessionType>;
   /** Snapshots of existing appointments stay; requiresCredit is locked once the type is used. */
   updateSessionType(id: string, input: SessionTypeInput): Promise<SessionType>;
+  /** Delete an unused non-default template. Referenced types keep their stable identity/history. */
+  deleteSessionType(id: string): Promise<void>;
   /** Archive hides the type from new bookings; the default type cannot be archived. */
   setSessionTypeArchived(id: string, archived: boolean): Promise<void>;
   setDefaultSessionType(id: string): Promise<void>;

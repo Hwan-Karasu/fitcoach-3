@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { AppButton, ConfirmDialog, InlineNotice, LoadingState, SearchField, SelectionChip, StatusTag,
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { AppButton, ChoiceSegments, ConfirmDialog, InlineNotice, LoadingState, SearchField, SelectionChip, StatusTag,
   TextField } from "../../../shared/ui/components/public.ts";
 import { PrototypeScreen, SectionHeading } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -22,6 +22,27 @@ interface Loaded {
   readonly people: readonly CalendarParticipant[];
   readonly existing: Appointment | null;
   readonly firstFree: number;
+}
+
+function ParticipantSearch({ query, onQuery, matches, selectedId, onSelect, label, disabled = false }: Readonly<{
+  query: string; onQuery: (value: string) => void; matches: readonly CalendarParticipant[];
+  selectedId: string | null; onSelect: (id: string) => void; label: string; disabled?: boolean;
+}>) {
+  const { palette: { tokens: colors } } = usePrototypeTheme();
+  return <View style={styles.search} pointerEvents={disabled ? "none" : "auto"}>
+    <SearchField accessibilityLabel={label} query={query} onChangeQuery={onQuery} />
+    {query.trim().length > 0 ? <View style={[styles.results, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={styles.resultScroll}>
+        {matches.map((person) => <Pressable key={person.id} accessibilityRole="button"
+          accessibilityLabel={person.displayName} accessibilityState={{ selected: selectedId === person.id }}
+          onPress={() => { onSelect(person.id); Keyboard.dismiss(); }}
+          style={({ pressed }) => [styles.result, { backgroundColor: pressed || selectedId === person.id ? colors.accentSoft : "transparent" }]}>
+          <Text style={[styles.resultText, { color: colors.textPrimary }]}>{person.emoji ? `${person.emoji} ` : ""}{person.displayName}</Text>
+        </Pressable>)}
+        {matches.length === 0 ? <Text style={[styles.resultText, styles.result, { color: colors.textSecondary }]}>Никто не найден</Text> : null}
+      </ScrollView>
+    </View> : null}
+  </View>;
 }
 
 function creditLine(info: CalendarBookingCredit | null, existing: CalendarAppointmentCredit): string | null {
@@ -138,6 +159,7 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
         setClientId(existing.clientId);
         setGuestMode(existing.clientId === null);
         setGuestName(existing.guestName ?? "");
+        setQuery(existing.guestName ?? "");
         setTypeId(existing.sessionTypeId);
         setNote(existing.note ?? "");
         setBypass(existing.creditBypass);
@@ -231,48 +253,14 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
   const tag = existing === null ? null : outcomeTag(existing, now);
 
   return (
-    <PrototypeScreen>
+    <View style={styles.editor}>
+    <PrototypeScreen compact>
       {!editable ? <InlineNotice kind="info">
         {canCorrect ? "Прошедшая запись: время и тип не меняются. Отметьте исход или исправьте клиента."
           : "Прошедшая запись: время, тип и участник не меняются."}
       </InlineNotice> : null}
-      <View style={styles.stepper}>
-        <AppButton variant="ghost" label="‹" accessibilityLabel="Предыдущий день" disabled={!editable}
-          onPress={() => setDate(addDays(date, -1))} />
-        <Text style={[styles.stepperValue, { color: colors.textPrimary }]}>{dayTitle(date)}</Text>
-        <AppButton variant="ghost" label="›" accessibilityLabel="Следующий день" disabled={!editable}
-          onPress={() => setDate(addDays(date, 1))} />
-      </View>
-      <View style={styles.stepper}>
-        <AppButton variant="secondary" label="−30" accessibilityLabel="Начало на 30 минут раньше"
-          disabled={!editable || start - SLOT_MINUTES < settings.dayStartMinute}
-          onPress={() => setStart(start - SLOT_MINUTES)} />
-        <Text accessibilityLiveRegion="polite" style={[styles.stepperValue, { color: colors.textPrimary }]}>
-          {formatMinute(start)}–{formatMinute(start + duration)}
-        </Text>
-        <AppButton variant="secondary" label="+30" accessibilityLabel="Начало на 30 минут позже"
-          disabled={!editable || start + SLOT_MINUTES + duration > settings.dayEndMinute}
-          onPress={() => setStart(start + SLOT_MINUTES)} />
-      </View>
-      <SectionHeading>Длительность</SectionHeading>
-      <View style={styles.chips}>
-        {[...new Set([...APPOINTMENT_DURATIONS, duration])].sort((a, b) => a - b).map((minutes) => (
-          <SelectionChip key={minutes} group="Длительность" label={`${minutes} мин`}
-            selected={duration === minutes} disabled={!editable}
-            onPress={() => setDuration(minutes)} />
-        ))}
-      </View>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <SectionHeading>Участник</SectionHeading>
-      <View style={styles.chips}>
-        <SelectionChip group="Участник" label="Клиент" selected={!guestMode} disabled={!editable}
-          onPress={() => setGuestMode(false)} />
-        <SelectionChip group="Участник" label="Гость" selected={guestMode} disabled={!editable}
-          onPress={() => setGuestMode(true)} />
-      </View>
-      {guestMode ? (
-        <TextField label="Имя гостя" value={guestName} onChangeText={setGuestName} required
-          disabled={!editable} placeholder="Как подписать запись" />
-      ) : <>
         {selectedPerson !== null ? (
           <Text style={[styles.selected, { color: colors.textPrimary }]}>
             {selectedPerson.emoji ? `${selectedPerson.emoji} ` : ""}{selectedPerson.displayName}
@@ -282,19 +270,13 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
           <Text style={[styles.selected, { color: colors.textSecondary }]}>Удалённый клиент</Text>
         ) : null}
         {editable ? <>
-          <SearchField accessibilityLabel="Поиск клиента для записи" query={query} onChangeQuery={setQuery} />
-          <View style={styles.chips}>
-            {matches.map((person) => (
-              <SelectionChip key={person.id} group="Клиент"
-                label={`${person.emoji ? `${person.emoji} ` : ""}${person.displayName}`}
-                selected={clientId === person.id} onPress={() => setClientId(person.id)} />
-            ))}
-          </View>
-          {matches.length === 0 ? <Text style={[styles.hint, { color: colors.textSecondary }]}>
-            {loaded.people.some((person) => person.active) ? "Никто не найден." : "Активных клиентов пока нет — запишите гостя."}
-          </Text> : null}
+          <ParticipantSearch label="Имя участника записи" query={query} onQuery={(value) => {
+            setQuery(value); setGuestName(value); setGuestMode(true); setClientId(null);
+          }} matches={matches} selectedId={clientId} onSelect={(id) => {
+            setClientId(id); setGuestMode(false); setGuestName(""); setQuery("");
+          }} disabled={busy} />
         </> : null}
-      </>}
+      {!editable && guestMode && guestName !== "" ? <Text style={[styles.selected, { color: colors.textPrimary }]}>{guestName}</Text> : null}
       {creditText !== null && !bypass ? (
         <Text accessibilityLiveRegion="polite" style={[styles.hint, { color: colors.textSecondary }]}>
           {creditText}
@@ -302,23 +284,50 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
       ) : null}
       {!guestMode && clientId !== null && requiresCredit && editable && existingCredit !== "USED" ? (
         <View style={styles.chips}>
-          <SelectionChip group="Учёт" label="Записать без списания" selected={bypass}
+          <SelectionChip compact fill group="Учёт" label="Записать без списания" selected={bypass} disabled={busy}
             onPress={() => setBypass(!bypass)} />
         </View>
       ) : null}
+      </View>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={styles.stepper}>
+        <AppButton compact size="small" variant="ghost" label="‹" accessibilityLabel="Предыдущий день" disabled={!editable || busy}
+          onPress={() => setDate(addDays(date, -1))} />
+        <Text style={[styles.stepperValue, { color: colors.textPrimary }]}>{dayTitle(date)}</Text>
+        <AppButton compact size="small" variant="ghost" label="›" accessibilityLabel="Следующий день" disabled={!editable || busy}
+          onPress={() => setDate(addDays(date, 1))} />
+      </View>
+      <View style={styles.stepper}>
+        <AppButton compact size="small" variant="secondary" label="−30" accessibilityLabel="Начало на 30 минут раньше"
+          disabled={!editable || busy || start - SLOT_MINUTES < settings.dayStartMinute}
+          onPress={() => setStart(start - SLOT_MINUTES)} />
+        <Text accessibilityLiveRegion="polite" style={[styles.stepperValue, { color: colors.textPrimary }]}>
+          {formatMinute(start)}–{formatMinute(start + duration)}
+        </Text>
+        <AppButton compact size="small" variant="secondary" label="+30" accessibilityLabel="Начало на 30 минут позже"
+          disabled={!editable || busy || start + SLOT_MINUTES + duration > settings.dayEndMinute}
+          onPress={() => setStart(start + SLOT_MINUTES)} />
+      </View>
+      <ChoiceSegments label="Длительность" value={String(duration)} disabled={!editable || busy}
+        items={[...new Set([...APPOINTMENT_DURATIONS, duration])].sort((a, b) => a - b)
+          .map((minutes) => ({ id: String(minutes), label: `${minutes} мин` }))}
+        onChange={(minutes) => setDuration(Number(minutes))} />
+      </View>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <SectionHeading>Тип занятия</SectionHeading>
-      <View style={styles.chips}>
-        {types.map((type) => (
-          <SelectionChip key={type.id} group="Тип занятия" label={type.name}
-            selected={typeId === type.id} disabled={!editable}
+      {Array.from({ length: Math.ceil(types.length / 2) }, (_, row) => <View key={row} style={styles.row}>
+        {types.slice(row * 2, row * 2 + 2).map((type) => (
+          <SelectionChip compact fill key={type.id} group="Тип занятия" label={type.name}
+            selected={typeId === type.id} disabled={!editable || busy}
             onPress={() => {
               setTypeId(type.id);
               if (existing === null) setDuration(type.defaultDurationMinutes);
             }} />
         ))}
-      </View>
-      <TextField label="Заметка" value={note} onChangeText={setNote} disabled={!editable}
+      </View>)}
+      <TextField compact label="Заметка" value={note} onChangeText={setNote} disabled={!editable || busy}
         placeholder="Необязательно" />
+      </View>
       {outcomeOpen ? <>
         <SectionHeading>Исход занятия</SectionHeading>
         <View style={styles.chips}>
@@ -352,14 +361,9 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
           Тренировка вернётся прежнему клиенту и спишется у выбранного, если их учёт ведётся в приложении.
           История списаний не переписывается.
         </Text>
-        <SearchField accessibilityLabel="Поиск клиента для исправления" query={query} onChangeQuery={setQuery} />
-        <View style={styles.chips}>
-          {matches.filter((person) => person.id !== existing.clientId).map((person) => (
-            <SelectionChip key={person.id} group="Новый клиент"
-              label={`${person.emoji ? `${person.emoji} ` : ""}${person.displayName}`}
-              selected={correctionId === person.id} onPress={() => setCorrectionId(person.id)} />
-          ))}
-        </View>
+        <ParticipantSearch label="Поиск клиента для исправления" query={query} onQuery={setQuery}
+          matches={matches.filter((person) => person.id !== existing.clientId)} selectedId={correctionId} onSelect={(id) => { setCorrectionId(id); setQuery(""); }} disabled={busy} />
+        {correctionId !== null ? <Text style={[styles.selected, { color: colors.textPrimary }]}>{loaded.people.find((person) => person.id === correctionId)?.displayName}</Text> : null}
         <AppButton label="Исправить клиента" busy={busy} disabled={correctionId === null}
           onPress={() => {
             if (correctionId !== null) void act((row) => repository.correctClient(row.id, row.revision, correctionId));
@@ -390,14 +394,9 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
         {!linking ? (
           <AppButton variant="secondary" label="Привязать к клиенту" disabled={busy} onPress={() => setLinking(true)} />
         ) : <>
-          <SearchField accessibilityLabel="Поиск клиента для привязки" query={query} onChangeQuery={setQuery} />
-          <View style={styles.chips}>
-            {matches.map((person) => (
-              <SelectionChip key={person.id} group="Клиент для привязки"
-                label={`${person.emoji ? `${person.emoji} ` : ""}${person.displayName}`}
-                selected={linkId === person.id} onPress={() => setLinkId(person.id)} />
-            ))}
-          </View>
+          <ParticipantSearch label="Поиск клиента для привязки" query={query} onQuery={setQuery}
+            matches={matches} selectedId={linkId} onSelect={(id) => { setLinkId(id); setQuery(""); }} disabled={busy} />
+          {linkId !== null ? <Text style={[styles.selected, { color: colors.textPrimary }]}>{loaded.people.find((person) => person.id === linkId)?.displayName}</Text> : null}
           <AppButton label="Привязать" busy={busy} disabled={linkId === null} onPress={() => {
             if (linkId !== null) {
               void act((row) => repository.linkGuestToClient(row.id, row.revision, linkId,
@@ -408,17 +407,22 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
             onPress={() => { setLinking(false); setLinkId(null); }} />
         </>}
       </> : null}
+    </PrototypeScreen>
+    <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
       {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
-      {editable ? <AppButton label={existing === null ? "Записать" : "Сохранить изменения"} busy={busy}
-        onPress={() => { void save(); }} /> : null}
+      <View style={styles.row}>
       {existing !== null && editable ? (
-        <AppButton variant="destructive" label="Удалить запись" disabled={busy}
+        <View style={styles.cell}><AppButton compact size="small" variant="destructive" label="Удалить" disabled={busy}
           onPress={() => {
             if (existingCredit === "RESERVED" || existingCredit === "USED") setSettling(true);
             else void remove("RETURN");
-          }} />
+          }} /></View>
       ) : null}
-      <AppButton variant="ghost" label="Отмена" disabled={busy} onPress={onClose} />
+      <View style={styles.cell}><AppButton compact size="small" variant="secondary" label={editable ? "Отмена" : "Закрыть"} disabled={busy} onPress={onClose} /></View>
+      {editable ? <View style={styles.cell}><AppButton compact size="small" label={existing === null ? "Записать" : "Сохранить"} busy={busy}
+        onPress={() => { void save(); }} /></View> : null}
+      </View>
+    </View>
       <ConfirmDialog visible={settling} confirmBusy={busy} title="Удалить запись"
         description={existingCredit === "USED"
           ? "Тренировка по этой записи уже списана. Вернуть её клиенту или оставить списанной?"
@@ -426,13 +430,23 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
         confirmLabel="Вернуть тренировку клиенту" tertiaryLabel="Списать тренировку"
         onConfirm={() => { void remove("RETURN"); }} onTertiary={() => { void remove("CHARGE"); }}
         onCancel={() => setSettling(false)} />
-    </PrototypeScreen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  stepperValue: { flex: 1, textAlign: "center", fontSize: 15, lineHeight: 22, fontFamily: fonts.bold },
+  editor: { flex: 1 },
+  section: { borderWidth: 1, borderRadius: 16, padding: 10, gap: 7 },
+  row: { flexDirection: "row", gap: 6, alignItems: "stretch" },
+  cell: { flex: 1, minWidth: 0 },
+  footer: { borderTopWidth: 1, padding: 10, gap: 6 },
+  search: { gap: 4 },
+  results: { borderWidth: 1, borderRadius: 12, overflow: "hidden" },
+  resultScroll: { maxHeight: 176 },
+  result: { minHeight: 44, paddingHorizontal: 10, paddingVertical: 8, justifyContent: "center" },
+  resultText: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
+  stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6 },
+  stepperValue: { flex: 1, textAlign: "center", fontSize: 13, lineHeight: 18, fontFamily: fonts.bold },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   selected: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
   hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },

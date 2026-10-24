@@ -59,7 +59,7 @@ export function TextField({
   const [focused, setFocused] = useState(false);
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const borderColor = error ? colors.danger : focused ? colors.focusRing : colors.border;
+  const borderColor = error ? colors.danger : focused ? colors.focusRing : colors.controlBorder;
   const helpText = error ?? (disabled ? disabledReason : hint);
   return (
     <View style={[styles.field, compact && styles.compactField]}>

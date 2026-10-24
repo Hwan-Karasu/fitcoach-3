@@ -46,7 +46,8 @@ export function AppButton({
   const unavailable = disabled || busy;
   const backgroundColor = variant === "primary" ? colors.accentFill : variant === "secondary" ? colors.accentSoft
     : variant === "destructive" ? withAlpha(colors.danger, 0.1) : "transparent";
-  const foregroundColor = variant === "primary" ? colors.onAccentFill : variant === "destructive" ? colors.danger : colors.accentInk;
+  const foregroundColor = variant === "primary" ? colors.onAccentFill : variant === "destructive" ? colors.danger
+    : variant === "secondary" ? colors.onAccentSoft : colors.accentInk;
   const borderColor = focused ? colors.focusRing : "transparent";
 
   return (
@@ -65,9 +66,10 @@ export function AppButton({
         compact ? styles.compact : null,
         size === "small" ? styles.small : null,
         {
-          backgroundColor: pressed && variant === "ghost" ? colors.surfaceRaised : backgroundColor,
+          backgroundColor: pressed && variant === "primary" ? colors.accentPressed
+            : pressed && variant === "ghost" ? colors.surfaceRaised : backgroundColor,
           borderColor,
-          opacity: unavailable ? 0.5 : pressed ? 0.85 : 1,
+          opacity: unavailable ? 0.5 : pressed && variant !== "primary" ? 0.85 : 1,
         },
       ]}
     >

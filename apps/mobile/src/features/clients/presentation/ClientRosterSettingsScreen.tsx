@@ -1,16 +1,17 @@
 import { useCallback, useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Switch, Text, View } from "react-native";
 import { AppButton, NumericField, SelectionChip } from "../../../shared/ui/components/public.ts";
 import { PrototypeScreen, SectionHeading } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { ClientRosterPort, RosterBirthdaySettings } from "../domain/ClientRosterPort.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
+import { CLIENT_METRICS, CLIENT_START_SECTIONS } from "../../../shared/domain/ClientCardPreference.ts";
 
 export function ClientRosterSettingsScreen({ repository }: Readonly<{
   repository: ClientRosterPort;
 }>) {
-  const { palette } = usePrototypeTheme();
+  const { palette, clientCards, setClientCards, navigationAppearance, setNavigationAppearance } = usePrototypeTheme();
   const colors = palette.tokens;
   const [saved, setSaved] = useState<RosterBirthdaySettings | null>(null);
   const [pinEnabled, setPinEnabled] = useState(true);
@@ -55,7 +56,49 @@ export function ClientRosterSettingsScreen({ repository }: Readonly<{
   };
 
   return (
-    <PrototypeScreen description="Настройки списка клиентов в этом рабочем пространстве.">
+    <PrototypeScreen compact>
+      <View style={[styles.block, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <SectionHeading>При входе в карточку</SectionHeading>
+      {Array.from({ length: Math.ceil(CLIENT_START_SECTIONS.length / 2) }, (_, row) => <View key={row} style={styles.choices}>
+        {CLIENT_START_SECTIONS.slice(row * 2, row * 2 + 2).map((option) => <SelectionChip compact fill key={option.id}
+          group="Начальный раздел карточки" label={option.label} selected={clientCards.startSection === option.id}
+          onPress={() => setClientCards({ startSection: option.id })} />)}
+      </View>)}
+      </View>
+      <View style={[styles.block, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <SectionHeading>Плитки в списке · {clientCards.metricIds.length}/4</SectionHeading>
+      {Array.from({ length: Math.ceil(CLIENT_METRICS.length / 2) }, (_, row) => <View key={row} style={styles.choices}>
+        {CLIENT_METRICS.slice(row * 2, row * 2 + 2).map((option) => <SelectionChip compact fill key={option.id}
+          group="Плитки клиента" label={option.label} selected={clientCards.metricIds.includes(option.id)}
+          disabled={!clientCards.metricIds.includes(option.id) && clientCards.metricIds.length >= 4}
+          disabledReason="Можно выбрать до четырёх плиток"
+          onPress={() => setClientCards({ metricIds: clientCards.metricIds.includes(option.id)
+            ? clientCards.metricIds.filter((id) => id !== option.id) : [...clientCards.metricIds, option.id] })} />)}
+      </View>)}
+      <Text style={[styles.message, { color: colors.textSecondary }]}>Порядок плиток — по порядку включения.</Text>
+      <View style={styles.toggleRow}>
+        <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Значок ограничений здоровья</Text>
+        <Switch accessibilityLabel="Показывать ограничения здоровья" value={clientCards.showHealthBadge}
+          onValueChange={(showHealthBadge) => setClientCards({ showHealthBadge })}
+          trackColor={{ false: colors.border, true: colors.accentFill }} thumbColor={colors.surface} />
+      </View>
+      </View>
+      <View style={[styles.block, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <SectionHeading>Навигация карточки</SectionHeading>
+      <View style={styles.toggleRow}>
+        <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>К списку клиентов</Text>
+        <Switch accessibilityLabel="Показывать кнопку К списку клиентов" value={navigationAppearance.showClientListShortcut}
+          onValueChange={(enabled) => setNavigationAppearance("showClientListShortcut", enabled)}
+          trackColor={{ false: colors.border, true: colors.accentFill }} thumbColor={colors.surface} />
+      </View>
+      <View style={styles.toggleRow}>
+        <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Подписи кнопок навигации</Text>
+        <Switch accessibilityLabel="Показывать подписи кнопок навигации" value={!navigationAppearance.hideNavigationLabels}
+          onValueChange={(enabled) => setNavigationAppearance("hideNavigationLabels", !enabled)}
+          trackColor={{ false: colors.border, true: colors.accentFill }} thumbColor={colors.surface} />
+      </View>
+      </View>
+      <View style={[styles.block, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <SectionHeading>Дни рождения</SectionHeading>
       {saved === null && error === null ? (
         <Text style={[styles.message, { color: colors.textSecondary }]}>Загружаем настройки…</Text>
@@ -72,9 +115,9 @@ export function ClientRosterSettingsScreen({ repository }: Readonly<{
       {saved !== null ? <>
         <Text style={[styles.label, { color: colors.textPrimary }]}>Закреплять перед днём рождения</Text>
         <View style={styles.choices}>
-          <SelectionChip group="Закрепление дня рождения" label="Включено" selected={pinEnabled}
+          <SelectionChip fill group="Закрепление дня рождения" label="Включено" selected={pinEnabled}
             onPress={() => setPinEnabled(true)} />
-          <SelectionChip group="Закрепление дня рождения" label="Выключено" selected={!pinEnabled}
+          <SelectionChip fill group="Закрепление дня рождения" label="Выключено" selected={!pinEnabled}
             onPress={() => setPinEnabled(false)} />
         </View>
         <NumericField label="Закреплять за" unit="дней до дня рождения"
@@ -83,9 +126,9 @@ export function ClientRosterSettingsScreen({ repository }: Readonly<{
           error={leadError} />
         <Text style={[styles.label, { color: colors.textPrimary }]}>Показывать короткий значок «ДР»</Text>
         <View style={styles.choices}>
-          <SelectionChip group="Значок дня рождения" label="Включено" selected={badgeEnabled}
+          <SelectionChip fill group="Значок дня рождения" label="Включено" selected={badgeEnabled}
             onPress={() => setBadgeEnabled(true)} />
-          <SelectionChip group="Значок дня рождения" label="Выключено" selected={!badgeEnabled}
+          <SelectionChip fill group="Значок дня рождения" label="Выключено" selected={!badgeEnabled}
             onPress={() => setBadgeEnabled(false)} />
         </View>
         <Text style={[styles.message, { color: colors.textSecondary }]}>
@@ -94,12 +137,16 @@ export function ClientRosterSettingsScreen({ repository }: Readonly<{
         <AppButton label="Сохранить" disabled={!dirty || leadError !== undefined || busy}
           onPress={() => { void save(); }} />
       </> : null}
+      </View>
     </PrototypeScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  choices: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  block: { borderWidth: 1, borderRadius: 18, padding: 12, gap: 8, marginBottom: 4 },
+  toggleRow: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44 },
+  toggleLabel: { flex: 1, fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
+  choices: { flexDirection: "row", gap: 8 },
   label: { fontSize: 13, lineHeight: 18, fontFamily: fonts.bold },
   message: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
 });

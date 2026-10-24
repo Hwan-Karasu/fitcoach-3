@@ -368,6 +368,65 @@ test("§13.8 session types: create, edit keeps snapshots, credit locked once use
   } finally { await close(); }
 });
 
+test("session type deletion removes unused custom and seed types and does not resurrect them on initialize", async () => {
+  const { calendar, personal, close } = await stores();
+  try {
+    const seed = (await calendar.listSessionTypes()).find((type) => type.id !== personal.id)!;
+    const custom = await calendar.createSessionType({ name: "Удаляемый", category: "OTHER", defaultDurationMinutes: 60, requiresCredit: false, color: null });
+    await calendar.setSessionTypeArchived(custom.id, true);
+    let changes = 0;
+    const unsubscribe = calendar.subscribeCommittedChanges(() => { changes += 1; });
+    await calendar.deleteSessionType(custom.id);
+    await calendar.deleteSessionType(seed.id);
+    assert.equal(changes, 2);
+    await assert.rejects(calendar.deleteSessionType(custom.id), { message: "CALENDAR_SESSION_TYPE_UNAVAILABLE" });
+    assert.equal(changes, 2, "rejected delete emits no committed event");
+    unsubscribe();
+    await calendar.close();
+    await calendar.initialize();
+    const remaining = await calendar.listSessionTypes();
+    assert.equal(remaining.some((type) => type.id === custom.id || type.name === seed.name), false);
+    await assert.rejects(calendar.createAppointment(slot({ sessionTypeId: seed.id })), { message: "CALENDAR_SESSION_TYPE_UNAVAILABLE" });
+  } finally { await close(); }
+});
+
+test("session type deletion protects default, used/cancelled history and references owned by other modules", async () => {
+  const { calendar, db, personal, close } = await stores();
+  try {
+    await assert.rejects(calendar.deleteSessionType(personal.id), { message: "CALENDAR_DEFAULT_TYPE_DELETE" });
+    const used = await calendar.createSessionType({ name: "С историей", category: "OTHER", defaultDurationMinutes: 60, requiresCredit: false, color: null });
+    const appointment = await calendar.createAppointment(slot({ sessionTypeId: used.id }));
+    await calendar.cancelAppointment(appointment.id, appointment.revision);
+    const history = await calendar.getAppointment(appointment.id);
+    await assert.rejects(calendar.deleteSessionType(used.id), { message: "CALENDAR_SESSION_TYPE_IN_USE" });
+    assert.deepEqual(await calendar.getAppointment(appointment.id), history);
+    const referenced = await calendar.createSessionType({ name: "Внешняя ссылка", category: "OTHER", defaultDurationMinutes: 60, requiresCredit: false, color: null });
+    db.exec("CREATE TABLE synthetic_type_reference (type_id TEXT NOT NULL REFERENCES session_types(id) ON DELETE RESTRICT)");
+    db.prepare("INSERT INTO synthetic_type_reference VALUES (?)").run(referenced.id);
+    await assert.rejects(calendar.deleteSessionType(referenced.id), { message: "CALENDAR_SESSION_TYPE_IN_USE" });
+    assert.ok((await calendar.listSessionTypes()).some((type) => type.id === referenced.id));
+    assert.equal((await calendar.getSettings()).defaultSessionTypeId, personal.id);
+  } finally { await close(); }
+});
+
+test("booking racing with type deletion cannot leave an appointment with a missing template", async () => {
+  const { calendar, close } = await stores();
+  try {
+    const used = await calendar.createSessionType({ name: "Запись первой", category: "OTHER", defaultDurationMinutes: 60, requiresCredit: false, color: null });
+    const booked = await Promise.allSettled([
+      calendar.createAppointment(slot({ sessionTypeId: used.id })), calendar.deleteSessionType(used.id),
+    ]);
+    assert.equal(booked[0]!.status, "fulfilled");
+    assert.equal(booked[1]!.status, "rejected");
+    const removed = await calendar.createSessionType({ name: "Удаление первым", category: "OTHER", defaultDurationMinutes: 60, requiresCredit: false, color: null });
+    const deleted = await Promise.allSettled([
+      calendar.deleteSessionType(removed.id), calendar.createAppointment(slot({ sessionTypeId: removed.id, startMinute: 720 })),
+    ]);
+    assert.equal(deleted[0]!.status, "fulfilled");
+    assert.equal(deleted[1]!.status, "rejected");
+  } finally { await close(); }
+});
+
 test("§13.12/§13.17 copy/clear policies drive the week commands; reset restores safe defaults only", async () => {
   const { calendar, personal, close } = await stores();
   try {

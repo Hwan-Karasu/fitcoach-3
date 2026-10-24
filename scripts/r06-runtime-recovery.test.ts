@@ -195,7 +195,7 @@ test("R06 cold boot routes PREPARED rollback before workspace/database initializ
       await f.storage.copyExclusive("LIVE", "SAFETY"); await f.storage.saveGuard({ ...f.plan, version: 1, phase: "PREPARED" });
       await f.storage.moveExclusive("LIVE", "PREVIOUS"); await f.storage.moveExclusive("INCOMING", "LIVE");
     });
-    const boot = new BootCoordinator({ fallbackThemeId: "zefirka",
+    const boot = new BootCoordinator({ fallbackThemeId: "warm-sand",
       recoverBeforeOpen: async () => { events.push("recover"); await f.recover(); },
       prepareWorkspace: async () => { events.push("workspace"); assert.deepEqual(readFileSync(f.storage.path("LIVE")), before); return { id: "local-trainer" }; },
       openDatabase: async () => { events.push("database"); }, loadThemePreference: async () => ({ themeId: null, accentId: null }) });
@@ -219,7 +219,7 @@ for (const missing of [false, true]) test(`R06 journal without guard and ${missi
   try {
     if (missing) renameSync(f.storage.path("LIVE"), join(f.directory, "preserved.db"));
     else { const db = new DatabaseSync(f.storage.path("LIVE")); db.exec("UPDATE workspaces SET display_name='UNEXPECTED CHANGE'"); db.close(); }
-    const boot = new BootCoordinator({ fallbackThemeId: "zefirka", recoverBeforeOpen: f.recover,
+    const boot = new BootCoordinator({ fallbackThemeId: "warm-sand", recoverBeforeOpen: f.recover,
       prepareWorkspace: async () => ({ id: "local-trainer" }), openDatabase: async () => { opened = true; },
       loadThemePreference: async () => ({ themeId: null, accentId: null }) });
     assert.deepEqual(await boot.start(), { kind: "BOOT_FAILED", attempt: 1, code: "RESTORE_RECOVERY_REQUIRED" });

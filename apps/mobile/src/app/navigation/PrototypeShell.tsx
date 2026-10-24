@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { NavigationContainer, StackActions, createNavigationContainerRef } from "@react-navigation/native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { DefaultTheme, NavigationContainer, StackActions, createNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
@@ -13,7 +13,8 @@ import { SettingsPreview, ThemeCatalogPreview } from "../../features/settings/pu
 import { ClientRosterSettingsScreen } from "../../features/clients/public.ts";
 import { AppointmentOutcomeDialog, CalendarUndoProvider, type GuestLinkRequest } from "../../features/calendar/public.ts";
 import { ClientAccountingScreen } from "../../features/accounting/public.ts";
-import { ClientMeasurementsScreen } from "../../features/measurements/public.ts";
+import { ClientMeasurementsScreen, latestPoint } from "../../features/measurements/public.ts";
+import { sumNutrients } from "../../features/nutrition/public.ts";
 import { QuestionnaireBuilderScreen } from "../../features/questionnaire/public.ts";
 import { CustomExerciseEditorScreen, ExerciseDetailScreen, ExerciseLibraryScreen } from "../../features/exercises/public.ts";
 import { useAppointmentOutcomeQueue } from "../bootstrap/useAppointmentOutcomeQueue.ts";
@@ -28,6 +29,8 @@ import { createRosterOverviewSource } from "../../read-models/rosterOverview.ts"
 import { homeSummaryRules } from "../../read-models/useClientHomeSummary.ts";
 import type { RosterOverviewPort } from "../../features/clients/public.ts";
 import { RootTabs } from "./RootTabs.tsx";
+import { ClientsListNavigationProvider } from "./ClientsListShortcut.tsx";
+import { clientsListAction } from "./clientsListAction.ts";
 import { SqliteDiagnosticsScreen } from "./SqliteDiagnosticsScreen.tsx";
 import { BottomDockLayoutProvider, ScreenHeader } from "../../shared/ui/components/public.ts";
 import { DataReadNotice } from "../../shared/ui/components/DataReadNotice.tsx";
@@ -63,6 +66,10 @@ type RootStackRoutes = {
 
 const Stack = createNativeStackNavigator<RootStackRoutes>();
 const navigationRef = createNavigationContainerRef<RootStackRoutes>();
+
+function openClientsList(): void {
+  if (navigationRef.isReady()) navigationRef.dispatch(clientsListAction());
+}
 
 /**
  * Переход по нажатию на уведомление, строку центра или панель таймера. Календарь — вкладка корня; «Тренировки» клиента и его тренировка —
@@ -101,14 +108,21 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const developmentTools = services.developmentTools;
+  const navigationTheme = useMemo(() => ({ ...DefaultTheme, dark: palette.tone === "dark", colors: {
+    ...DefaultTheme.colors, primary: colors.accentInk, background: colors.canvas, card: colors.navigation,
+    text: colors.textPrimary, border: colors.border, notification: colors.danger,
+  } }), [colors, palette.tone]);
   return (
-    <NavigationContainer ref={navigationRef} initialState={initialBackup ? { index: 1, routes: [{ name: "Root" }, { name: "Backup" }] } : undefined}>
+    <ClientsListNavigationProvider onOpen={openClientsList}>
+    <NavigationContainer ref={navigationRef} theme={navigationTheme} initialState={initialBackup ? { index: 1, routes: [{ name: "Root" }, { name: "Backup" }] } : undefined}>
       <Stack.Navigator
         screenOptions={{
           // Единая шапка-карточка одной высоты (UI-OWN-035).
           header: ({ navigation, options, back }) => <ScreenHeader title={options.title}
             onBack={back !== undefined ? () => navigation.goBack() : undefined} />,
           contentStyle: { backgroundColor: colors.canvas },
+          statusBarStyle: palette.tone === "dark" ? "light" : "dark",
+          navigationBarColor: colors.navigation,
         }}
       >
         <Stack.Screen name="Root" options={{ headerShown: false }}>
@@ -120,7 +134,7 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
               onOpenNotifications={() => navigation.navigate("Notifications")}
               onOpenWorkspaceDev={developmentTools ? () => navigation.navigate("WorkspaceDev") : undefined}
               onOpenCreate={() => navigation.navigate("ClientEditorDev")}
-              onOpenClient={(clientId) => navigation.navigate("ClientWorkspace", { clientId })}
+                onOpenClient={(clientId) => navigation.navigate("ClientWorkspace", { clientId })}
               onOpenSqliteDev={developmentTools ? () => navigation.navigate("SqliteDev") : undefined}
               clients={services.clients}
               clientLists={clientLists}
@@ -158,7 +172,7 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
         <Stack.Screen name="TrainingSettings" options={{ title: "Тренировки" }}>
           {() => <TrainingSettingsScreen execution={services.trainingExecution} />}
         </Stack.Screen>
-        <Stack.Screen name="ClientRosterSettings" options={{ title: "Список клиентов" }}>
+        <Stack.Screen name="ClientRosterSettings" options={{ title: "Список и карточки клиентов" }}>
           {() => <ClientRosterSettingsScreen repository={services.clients} />}
         </Stack.Screen>
         <Stack.Screen name="QuestionnaireBuilder" options={{ title: "Конструктор анкеты" }}>
@@ -202,7 +216,7 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
             onOpenEdit={(clientId) => navigation.navigate("ClientEditorDev", { clientId })}
             onOpenAccounting={(clientId) => navigation.navigate("ClientAccounting", { clientId })}
             onOpenMeasurements={(clientId) => navigation.navigate("ClientMeasurements", { clientId })}
-            onClose={() => navigation.goBack()} onOpenClients={() => navigation.popTo("Root")}
+            onClose={() => navigation.goBack()} onOpenClients={openClientsList}
             onOpenExercise={(exerciseId) => navigation.navigate("ClientExercise", { clientId: route.params.clientId, exerciseId })} />}
         </Stack.Screen>
         <Stack.Screen name="ClientExercise" options={{ title: "Упражнение" }}>
@@ -240,8 +254,10 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
         </Stack.Screen> : null}
       </Stack.Navigator>
     </NavigationContainer>
+    </ClientsListNavigationProvider>
   );
 }
+
 
 /** Ended appointments without an outcome pop up over any screen (§48.35.3). */
 function OutcomeQueueHost({ services }: Readonly<{ services: ApplicationServices }>) {
@@ -255,7 +271,10 @@ export function PrototypeShell({ services, workspaceId, manualBackup, restoreAct
 }>) {
   const [clientLists] = useState(() => new ClientListController(services.clients, workspaceId));
   const [rosterOverview] = useState(() => createRosterOverviewSource({ rules: homeSummaryRules,
-    calendar: services.calendar, accounting: services.accounting, questionnaire: services.questionnaire }));
+    calendar: services.calendar, accounting: services.accounting, questionnaire: services.questionnaire,
+    measurements: services.measurements, diary: services.nutrition.diary, calc: services.nutrition.calc,
+    history: services.trainingHistory, latestPoint, sumNutrients,
+    onTrainingChange: (listener) => services.trainingExecution.subscribeCommittedChanges(() => listener()) }));
   const users = useRef(0);
   useEffect(() => {
     users.current += 1;

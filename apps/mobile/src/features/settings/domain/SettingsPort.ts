@@ -1,7 +1,13 @@
+import { normalizeClientCards, type ClientCardPreference } from "../../../shared/domain/ClientCardPreference.ts";
 /** Выбранные тема и акцент; допустимость id проверяет каталог тем, не хранилище. */
 export interface AppearanceSetting {
   readonly themeId: string;
   readonly accentId: string | null;
+  readonly showClientListShortcut?: boolean;
+  readonly hideNavigationLabels?: boolean;
+  readonly dutyColor?: string | null;
+  readonly hiddenSessionTypeIds?: readonly string[];
+  readonly clientCards?: ClientCardPreference;
 }
 
 /**
@@ -24,7 +30,16 @@ export function parseAppearance(json: string): AppearanceSetting | null {
     const { themeId, accentId } = value as Record<string, unknown>;
     if (typeof themeId !== "string" || themeId === "") return null;
     if (accentId !== null && typeof accentId !== "string") return null;
-    return { themeId, accentId };
+    const options = value as Record<string, unknown>;
+    return { themeId, accentId,
+      ...(options.clientCards !== undefined ? { clientCards: normalizeClientCards(options.clientCards) } : {}),
+      ...(typeof options.showClientListShortcut === "boolean" ? { showClientListShortcut: options.showClientListShortcut } : {}),
+      ...(typeof options.hideNavigationLabels === "boolean" ? { hideNavigationLabels: options.hideNavigationLabels } : {}),
+      ...(options.dutyColor === null || (typeof options.dutyColor === "string" && /^#[0-9a-f]{6}$/iu.test(options.dutyColor))
+        ? { dutyColor: options.dutyColor as string | null } : {}),
+      ...(Array.isArray(options.hiddenSessionTypeIds) && options.hiddenSessionTypeIds.every((id) => typeof id === "string" && id.length > 0)
+        ? { hiddenSessionTypeIds: [...new Set(options.hiddenSessionTypeIds as string[])] } : {}),
+    };
   } catch {
     return null;
   }

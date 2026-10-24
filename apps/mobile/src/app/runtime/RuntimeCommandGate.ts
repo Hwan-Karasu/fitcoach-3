@@ -23,7 +23,7 @@ export class RuntimeCommandGate {
    * Synchronous observers remain usable for unmount cleanup; async methods always return
    * a Promise, including a rejected admission, so existing catch handlers keep working. */
   port<T extends object>(target: T, synchronous: readonly PropertyKey[] = []): T {
-    const sync = new Set<PropertyKey>(["subscribe", "subscribeCommittedChanges", ...synchronous]);
+    const sync = new Set<PropertyKey>(["subscribe", "subscribeCommittedChanges", "subscribeSavedMealChanges", ...synchronous]);
     const methods = new Map<PropertyKey, unknown>();
     return new Proxy(target, { get: (object, key) => {
       const value: unknown = Reflect.get(object, key, object);

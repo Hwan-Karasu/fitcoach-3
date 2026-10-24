@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildRosterOverview, hasRestrictions } from "../src/read-models/rosterOverview.ts";
+import { buildRosterOverview, createRosterOverviewSource, hasRestrictions } from "../src/read-models/rosterOverview.ts";
+import { latestPoint } from "../src/features/measurements/domain/MeasurementRules.ts";
+import { sumNutrients } from "../src/features/nutrition/domain/DiaryRules.ts";
 import type { HomeSummaryRules } from "../src/read-models/clientHomeSummary.ts";
 import type { Appointment } from "../src/features/calendar/public.ts";
 import type { ClientAccountingSnapshot } from "../src/features/accounting/public.ts";
@@ -38,6 +40,8 @@ test("GetRosterMetrics: следующее занятие, «Сегодня» д
     answers: new Map(),
   });
   const a = overview.get("A");
+  assert.equal(a?.creditStatus, "AVAILABLE");
+  assert.equal(overview.get("B")?.creditStatus, "UNKNOWN");
   assert.equal(a?.todayStartMinute, 10 * 60);
   assert.equal(a?.todayEndMinute, 11 * 60);
   assert.deepEqual(a?.metrics, [
@@ -58,4 +62,39 @@ test("Индикатор ограничений: явное «есть прот�
   assert.equal(hasRestrictions({ "sys:health.noContra": false }), true);
   assert.equal(hasRestrictions({ "sys:health.injuries": "  " }), false);
   assert.equal(hasRestrictions({ "sys:health.injuries": "колено" }), true);
+});
+
+test("optional roster tiles use owner facts, retain zero, and skip reads for unselected metrics", async () => {
+  type Ports = Parameters<typeof createRosterOverviewSource>[0];
+  let measurementReads = 0;
+  let foodReads = 0;
+  let stepReads = 0;
+  const source = createRosterOverviewSource({ rules,
+    calendar: { listRange: async () => ({ appointments: [], intervals: [] }) } as unknown as Ports["calendar"],
+    accounting: { getClientSnapshot: async () => null } as unknown as Ports["accounting"],
+    questionnaire: { getAnswers: async () => null } as unknown as Ports["questionnaire"],
+    measurements: { listForClient: async (id: string) => {
+      measurementReads += 1;
+      return { measurements: id === "A" ? [{ id: "mass", clientId: id, type: "WEIGHT", valueX10: 805, localDate: "2026-10-17", localMinute: null, method: "MANUAL", revision: 1 }] : [], primaries: [] };
+    } } as unknown as Ports["measurements"],
+    diary: { listEatenEntries: async (id: string) => {
+      foodReads += 1;
+      return id === "A" ? [{ snapshot: { eaten: { kcalX10: 0, proteinX10: null, fatX10: null, carbsX10: null } } }] : [];
+    } } as unknown as Ports["diary"],
+    calc: { listSteps: async (id: string) => { stepReads += 1; return id === "A" ? [{ localDate: "2026-10-17", steps: 0 }] : []; } } as unknown as Ports["calc"],
+    latestPoint, sumNutrients,
+  });
+  const now = new Date(2026, 9, 17, 12);
+  await source.load(["A", "B"], now, ["credits"]);
+  assert.deepEqual([measurementReads, foodReads, stepReads], [0, 0, 0]);
+  const result = await source.load(["A", "B"], now, ["weight", "fatPercent", "calories", "steps"]);
+  const value = (client: string, metric: string) => result.get(client)?.metrics.find((item) => item.id === metric)?.value;
+  assert.equal(value("A", "weight"), "80,5 кг");
+  assert.equal(value("A", "calories"), "0 ккал");
+  assert.equal(value("A", "steps"), "0");
+  assert.equal(value("A", "fatPercent"), null);
+  assert.equal(value("B", "weight"), null);
+  assert.equal(value("B", "calories"), null);
+  assert.equal(value("B", "steps"), null);
+  assert.deepEqual([measurementReads, foodReads, stepReads], [2, 2, 2]);
 });

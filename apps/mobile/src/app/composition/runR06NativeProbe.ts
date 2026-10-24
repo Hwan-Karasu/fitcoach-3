@@ -96,7 +96,7 @@ async function recoverInterruptedProbe(): Promise<R06NativeReport> {
   const check = (name: string, passed: boolean) => { checks.push({ name, passed }); if (!passed) throw new Error("R06_RECOVERY_CHECK_FAILED"); };
   try {
     const events: string[] = [];
-    const boot = new BootCoordinator({ fallbackThemeId: "graphite-teal", recoverBeforeOpen: async () => {
+    const boot = new BootCoordinator({ fallbackThemeId: "night-mocha", recoverBeforeOpen: async () => {
       events.push("recovery");
       await recoverLocalRestore(runtime.maintenance, journal, storage.file("LIVE"));
       check("native_cold_recovery_before_runtime_open", runtime.opens === 0 && runtime.handles === 0);

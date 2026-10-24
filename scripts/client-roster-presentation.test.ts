@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { EMPTY_ROSTER_FILTERS, matchesRosterFilters, rosterFilterCount } from "../apps/mobile/src/features/clients/domain/ClientRosterFilters.ts";
+import type { RosterClientOverview } from "../apps/mobile/src/features/clients/domain/ClientRosterOverview.ts";
 import { birthdayOccurrenceForYear, formatArchivedSince, permanentDeleteDescription,
   presentArchivedClients, presentClientRoster } from
   "../apps/mobile/src/features/clients/domain/ClientRosterPresentation.ts";
@@ -9,6 +11,40 @@ import type { ClientRosterRow, RosterBirthdaySettings } from
 const settings: RosterBirthdaySettings = {
   birthdayPinEnabled: true, birthdayPinLeadDays: 14, showBirthdayBadge: true,
 };
+
+test("structured sex, health and credit filters intersect before birthday/recent priority, search and Today ordering", () => {
+  const a = { ...row("a", "Клиент А", "2000-10-18"), sex: "MALE" as const };
+  const b = { ...row("b", "Клиент Б", null), sex: "MALE" as const };
+  const excluded = { ...row("excluded", "Клиент В", "2000-10-17", "2026-10-17T12:00:00Z"), sex: "FEMALE" as const };
+  const fact: RosterClientOverview = { metrics: [], restricted: true, restrictionsKnown: true, creditStatus: "AVAILABLE", todayStartMinute: 600, todayEndMinute: 660 };
+  const overview = new Map([[a.id, fact], [b.id, fact], [excluded.id, fact]]);
+  const filters = { sex: "MALE", health: "RESTRICTED", credit: "AVAILABLE" } as const;
+  const base = { rows: [a, b, excluded], sort: "NAME" as const, today: "2026-10-17", birthday: settings, dismissals: [], overview, filters };
+  const normal = presentClientRoster({ ...base, search: "" });
+  assert.deepEqual(normal.birthday.map((entry) => entry.client.id), ["a"]);
+  assert.equal(normal.recent, null);
+  assert.deepEqual(normal.regular.map((entry) => entry.client.id), ["b"]);
+  const today = presentClientRoster({ ...base, search: "Клиент", todayStarts: new Map([[a.id, 900], [b.id, 800], [excluded.id, 700]]) });
+  assert.deepEqual(today.regular.map((entry) => entry.client.id), ["b", "a"]);
+  assert.deepEqual(today.birthday, []);
+  assert.equal(today.recent, null);
+  assert.equal(rosterFilterCount(filters), 3);
+  assert.equal(rosterFilterCount(EMPTY_ROSTER_FILTERS), 0);
+});
+
+test("unknown facts do not masquerade as unmarked health or an empty pack; unspecified sex is explicit", () => {
+  const client = row("a", "А", null);
+  assert.equal(matchesRosterFilters(client, undefined, { ...EMPTY_ROSTER_FILTERS, sex: "UNSPECIFIED" }), true);
+  assert.equal(matchesRosterFilters(client, undefined, { ...EMPTY_ROSTER_FILTERS, sex: "MALE" }), false);
+  assert.equal(matchesRosterFilters(client, undefined, { ...EMPTY_ROSTER_FILTERS, health: "UNMARKED" }), false);
+  const unknown: RosterClientOverview = { metrics: [], restricted: false, restrictionsKnown: false, creditStatus: "UNKNOWN", todayStartMinute: null, todayEndMinute: null };
+  assert.equal(matchesRosterFilters(client, unknown, { ...EMPTY_ROSTER_FILTERS, health: "UNMARKED" }), false);
+  assert.equal(matchesRosterFilters(client, unknown, { ...EMPTY_ROSTER_FILTERS, credit: "EMPTY" }), false);
+  assert.equal(matchesRosterFilters(client, { ...unknown, restrictionsKnown: true }, { ...EMPTY_ROSTER_FILTERS, health: "UNMARKED" }), true);
+  for (const credit of ["AVAILABLE", "EMPTY", "NO_PACK", "NOT_TRACKED"] as const) {
+    assert.equal(matchesRosterFilters(client, { ...unknown, creditStatus: credit }, { ...EMPTY_ROSTER_FILTERS, credit }), true);
+  }
+});
 
 function row(id: string, displayName: string, birthDate: string | null,
   lastOpenedAt: string | null = null): ClientRosterRow {

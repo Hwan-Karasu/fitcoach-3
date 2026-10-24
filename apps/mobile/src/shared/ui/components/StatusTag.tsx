@@ -22,16 +22,16 @@ const statusMeaning: Readonly<Record<StatusKind, string>> = {
   error: "Ошибка",
 };
 
-export function StatusTag({ kind, label }: Readonly<{ kind: StatusKind; label: string }>) {
+export function StatusTag({ kind, label, fill = false }: Readonly<{ kind: StatusKind; label: string; fill?: boolean }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const ink = kind === "warning" ? colors.warning : kind === "action_required" || kind === "error" ? colors.danger
-    : kind === "success" ? colors.success : kind === "info" ? colors.accentInk : colors.textSecondary;
+    : kind === "success" ? colors.success : kind === "info" ? colors.info : colors.textSecondary;
   return (
     <View
       accessible
       accessibilityLabel={`${statusMeaning[kind]}: ${label}`}
-      style={[styles.tag, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}
+      style={[styles.tag, fill ? styles.fill : null, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}
     >
       <Text style={[styles.marker, { color: ink }]}>{statusMarker[kind]}</Text>
       <Text style={[styles.label, { color: colors.textPrimary }]}>{label}</Text>
@@ -40,6 +40,7 @@ export function StatusTag({ kind, label }: Readonly<{ kind: StatusKind; label: s
 }
 
 const styles = StyleSheet.create({
+  fill: { flex: 1, minWidth: 0, alignSelf: "stretch", justifyContent: "center", alignItems: "center" },
   tag: { minHeight: 28, borderWidth: 1, borderRadius: 14, paddingHorizontal: 8, paddingVertical: 3, flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 5 },
   marker: { fontSize: 12, lineHeight: 16, fontFamily: fonts.bold },
   label: { fontSize: 11, lineHeight: 14, fontFamily: fonts.bold, flexShrink: 1 },

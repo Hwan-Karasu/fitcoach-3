@@ -408,7 +408,7 @@ export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOOD
         </Pressable>
       </ScreenHeader>
       <View style={styles.header}>
-        <SegmentedControl scroll compact items={filters} selectedId={filter} onSelect={(id) => { restoreScroll.current = true; setFilter(id); setOpenKey(null); }} />
+        <SegmentedControl scroll compact scrollItemGap={10} items={filters} selectedId={filter} onSelect={(id) => { restoreScroll.current = true; setFilter(id); setOpenKey(null); }} />
         <SearchField query={query} onChangeQuery={(text) => { restoreScroll.current = false; setQuery(text); }} onSubmitSearch={() => rememberQuery()} accessibilityLabel="Поиск продукта или рецепта" placeholder="Поиск продукта или рецепта" />
         {filter === "RECIPES" || filter === "COOKBOOK" ? <RecipeBrowseControls filters={recipeFilters} sort={recipeSort} onFilters={setRecipeFilters} onSort={setRecipeSort} /> : null}
         {notice !== null ? <InlineNotice kind="success">{notice}</InlineNotice> : null}

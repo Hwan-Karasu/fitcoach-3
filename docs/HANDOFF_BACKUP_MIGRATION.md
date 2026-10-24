@@ -1,4 +1,46 @@
-## Продолжение — самостоятельный Nutrition history reader/storage candidate, база 522369a
+## Продолжение — Calendar/Accounting из поддерживаемого source, база 3c4d019
+
+2026-10-24 R04→R03/D01/Product13/22/48.35–39/49–50/53–56/INT03–12/15.
+Входы full calendar_appointments +Calendar-owned app_settings key/clientIDmap/
+priorowners throughNutritionV3. ProductionDDL/migration/overlay/signing/release
+OPEN, private synthetic/finalizable:false. LegacyCalendarSnapshot/Projection/Stage.
+stageClientCalendar общийtx/frozenbeforepriorcallbacks/IDs/sourceSHA/manifestSHA/
+fullnativeCalendar+Accounting tables/receipt. ModeCALENDAR_REHEARSAL_V1 requires
+Nutrition, older/incomplete jobs blocked; loadCalendarDraftAppointments guardsallprior.
+
+Active→SCHEDULED/outcomeNULL evenpast; deleted→hiddenCANCELLED/outcomeNULL, exact
+soft-delete timestamp/basis NOTconfirmedCancelled outcome. No Workout/date joins.
+Client exactsourceID/guestnotnamejoin, notes/guestnames untrimmed; type enums→standard
+3.x seed IDs/4newsetupdefaults, originaltype labels inappointmentsnapshots. No dupes
+afterruntimeinit (configuredcalendar skipsseeding, all4typesmustalreadyexist).
+Personal newcatalogpolicy1 with importedcredit_bypass1; source hasno financecapability.
+NewAccountingdefaultUNTRACKED, no packs/payments/reserves/USED; unexpectedfinancial
+tables block evenempty. NativefutureFITCOACH/newpack5+reconcile/explicitoutcome do not
+retrocharge protectedoldrecords. Sourcehistoricalclient_name/raw/provenance retainedprivate.
+
+Plannerend22inclusive→23:00, Sunday0→Mondaybits; exacttruehourflags→DUTY/BLOCKED,
+false→nofact; malformedJSON/precision/shape retainedreview, independentfacts survive.
+Overlaps keptdistinct; midnightend1440valid, overnightnotsplit. Unknownsourcevalues,
+status/billingextensions, orphan/ambiguousparticipants rawreview/no defaults/fakeoutcomes.
+Longnote/guest/durationbeyondcurrenteditor preservednative+review, UIeditingstillpending.
+
+669/669 area+deps inclCalendar/Accountingstores,12newCalendar tests, latest57combined
+withExecution. EveryCalendarboundary+beforecommit rollback/retry; combined5facts/
+3components/worknotes/weight/nutrition/calc/archive/calendar receiptfailures both
+Nutrition/Calendar phases rollbackall, no newWorkout/credit. Readonly/reopen/reorder/
+bytes/IDreuse/drift/guards. Nativefacts→fullordinary3.xDB→actual.atbackup→restore→
+ordinaryCalendar/Accounting repos retainsIDs/settings/snapshots/NULLoutcomes/no r04tables.
+Proofcoversnativefields ONLY, notprivate source/review/provenance/unsupportedrows.
+Root/mobileTS/scopedlint/source73/secrets/arch/diff pass. No fullsuite/bundle/APK/
+native/phone/personaldata. ConcurrentUI/theme/packagehunks preserved.
+[Контракт/источники/границы](spikes/R04_CALENDAR_STAGING.md).
+
+NEXT whole-sourcecoverage/preferences/lineage/retention/Executionstorage, portable
+mobile source+JSONrawtoken adapters (Node-onlyhoststaging isnotExpoimporter), schema
+admission/composition/UI/deletion/ordinarybackup/Android/fullparity/legacySQLite+JSON
+restore/release-removalproof. GoalACTIVE/fullscope/NOT100%.
+
+## Предыдущее продолжение — самостоятельный Nutrition history reader/storage candidate, база 522369a
 
 2026-10-24 R04→R03/D01/Product46.6/46.19/49–50/53–56/INT03–12/15.
 Входы validated archive snapshots/receipt/IDmap +nativefacts+SnapshotEngine.

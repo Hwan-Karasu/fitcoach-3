@@ -17,7 +17,7 @@ export function createDevBootDependencies(
   initializeClientStore?: () => Promise<void>,
 ): BootDependencies {
   return {
-    fallbackThemeId: "zefirka",
+    fallbackThemeId: "warm-sand",
     prepareWorkspace: async () => ({ id: DEV_WORKSPACE_ID }),
     openDatabase: async (workspaceId) => {
       if (workspaceId !== DEV_WORKSPACE_ID) throw new BootGateError("WORKSPACE_UNAVAILABLE");
@@ -38,6 +38,6 @@ export function createDevBootDependencies(
       }
     },
     // Dev preview theme is intentionally session-only until the Settings repository exists.
-    loadThemePreference: async () => ({ themeId: "zefirka", accentId: null }),
+    loadThemePreference: async () => ({ themeId: "warm-sand", accentId: null }),
   };
 }

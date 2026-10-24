@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { AppState, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import { Cake, CalendarClock, CalendarDays, Dumbbell, PinOff, Plus, Ticket } from "lucide-react-native";
+import { Cake, CalendarClock, CalendarDays, Dumbbell, Flame, Footprints, Percent, PinOff, Plus, Scale, Ticket } from "lucide-react-native";
 import { AppButton, AppIconButton, ClientRosterCard, RosterGroup, ConfirmDialog, EmptyState, FilterPill, FloatingActionButton,
   InlineNotice,
   ListSectionHeader, DropdownMenu, SkeletonList, useHeaderScrollHandler, useHeaderSearch,
@@ -16,6 +16,8 @@ import type { RosterMetricId, RosterOverview, RosterOverviewPort } from "../doma
 import { ageOn, formatArchivedSince, formatYears, localCalendarDate, permanentDeleteDescription, presentArchivedClients,
   presentClientRoster } from "../domain/ClientRosterPresentation.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
+import { EMPTY_ROSTER_FILTERS, rosterFilterCount, type ClientRosterFilters } from "../domain/ClientRosterFilters.ts";
+import { ClientRosterFiltersDialog } from "./ClientRosterFiltersDialog.tsx";
 
 function initialsOf(displayName: string): string {
   return displayName.trim().split(/\s+/u).slice(0, 2)
@@ -61,6 +63,10 @@ const archiveSortOptions: readonly DropdownOption<ArchiveSortMode>[] = [
 ];
 
 const metricLook: Readonly<Record<RosterMetricId, Readonly<{ label: string; icon: (color: string) => ReactNode }>>> = {
+  weight: { label: "Вес", icon: (color) => <Scale size={16} color={color} /> },
+  calories: { label: "Калории", icon: (color) => <Flame size={16} color={color} /> },
+  steps: { label: "Шаги", icon: (color) => <Footprints size={16} color={color} /> },
+  fatPercent: { label: "% жира", icon: (color) => <Percent size={16} color={color} /> },
   nextAppointment: { label: "Следующее занятие", icon: (color) => <CalendarClock size={16} color={color} strokeWidth={1.8} /> },
   lastTraining: { label: "Последняя тренировка", icon: (color) => <Dumbbell size={16} color={color} strokeWidth={1.8} /> },
   credits: { label: "Абонемент", icon: (color) => <Ticket size={16} color={color} strokeWidth={1.8} /> },
@@ -71,16 +77,18 @@ const metricLook: Readonly<Record<RosterMetricId, Readonly<{ label: string; icon
  * когда закончится ближайшая сегодняшняя запись (GetNextEligibilityTransitionAt без частого опроса).
  */
 function useRosterOverview(port: RosterOverviewPort, clientIds: readonly string[], today: string): RosterOverview | null {
+  const { clientCards } = usePrototypeTheme();
+  const metricKey = clientCards.metricIds.join("|");
   const [overview, setOverview] = useState<RosterOverview | null>(null);
   const [tick, setTick] = useState(0);
   const generation = useRef(0);
   const key = clientIds.join("|");
   useEffect(() => {
     const request = ++generation.current;
-    port.load(key === "" ? [] : key.split("|"), new Date()).then((value) => {
+    port.load(key === "" ? [] : key.split("|"), new Date(), clientCards.metricIds).then((value) => {
       if (request === generation.current) setOverview(value);
     }, () => undefined);
-  }, [port, key, today, tick]);
+  }, [port, key, today, tick, metricKey, clientCards.metricIds]);
   useEffect(() => port.subscribe(() => setTick((value) => value + 1)), [port]);
   useEffect(() => {
     if (overview === null) return undefined;
@@ -96,7 +104,6 @@ function useRosterOverview(port: RosterOverviewPort, clientIds: readonly string[
   return overview;
 }
 
-const groupOptions: readonly DropdownOption<"ALL">[] = [{ value: "ALL", label: "Все клиенты" }];
 
 /** Экран «Клиенты» — эталон UI (docs/ui/screens/CLIENTS.md). */
 export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, readModel, overviewSource }: Readonly<{
@@ -114,9 +121,11 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
   const groupAnchor = useRef<View>(null);
   const sortAnchor = useRef<View>(null);
   const [todayOnly, setTodayOnly] = useState(false);
+  const [filters, setFilters] = useState<ClientRosterFilters>(EMPTY_ROSTER_FILTERS);
+  const filterCount = rosterFilterCount(filters);
   const onScroll = useHeaderScrollHandler();
   const [today, setToday] = useState(() => localCalendarDate(new Date()));
-  const { palette } = usePrototypeTheme();
+  const { palette, clientCards } = usePrototypeTheme();
   const colors = palette.tokens;
   const snapshot = useSyncExternalStore(readModel.subscribe, readModel.getSnapshot,
     readModel.getSnapshot);
@@ -158,10 +167,12 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
     for (const [id, row] of overview ?? []) if (row.todayStartMinute !== null) starts.set(id, row.todayStartMinute);
     return starts;
   }, [overview, todayOnly]);
-  const roster = useMemo(() => data === null ? null : presentClientRoster({
+  const factsPending = overview === null && (filters.health !== "ALL" || filters.credit !== "ALL");
+  const roster = useMemo(() => data === null || factsPending ? null : presentClientRoster({
     rows: data.rows, search: query, sort: activeSort, today,
     birthday: birthdaySettings, dismissals: data.dismissals, todayStarts,
-  }), [activeSort, birthdaySettings, data, query, today, todayStarts]);
+    filters, overview,
+  }), [activeSort, birthdaySettings, data, query, today, todayStarts, filters, overview, factsPending]);
   const visibleCount = (roster?.birthday.length ?? 0) + (roster?.recent ? 1 : 0)
     + (roster?.regular.length ?? 0);
 
@@ -198,10 +209,10 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
     const facts = overview?.get(row.id);
     return (
       <ClientRosterCard key={row.id} clientId={row.id} displayName={row.displayName} mark={clientMark(row)}
-        subtitle={age === null ? null : formatYears(age)} restricted={facts?.restricted ?? false}
+        subtitle={age === null ? null : formatYears(age)} restricted={clientCards.showHealthBadge && (facts?.restricted ?? false)}
         highlight={birthdayText} highlightIcon={(color) => <Cake size={14} color={color} strokeWidth={2} />}
-        metrics={facts?.metrics.map((metric) => ({ label: metricLook[metric.id].label, value: metric.value,
-          icon: metricLook[metric.id].icon })) ?? []}
+        metrics={clientCards.metricIds.map((id) => ({ label: metricLook[id].label,
+          value: facts?.metrics.find((metric) => metric.id === id)?.value ?? null, icon: metricLook[id].icon }))}
         onOpen={onOpenClient} emoji={row.emoji} inGroup={!pinned} metricTiles={pinned}
         onChangeEmoji={(_, emoji) => { void changeEmoji(row, emoji); }}
         action={birthdayOccurrence === null ? undefined : (
@@ -223,7 +234,8 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
             accessibilityLabel={todayOnly ? "Сегодня по расписанию, включён" : "Сегодня по расписанию"}
             icon={(color) => <CalendarDays size={16} color={color} strokeWidth={1.8} />}
             onPress={() => setTodayOnly((value) => !value)} />
-          <FilterPill grow menu expanded={menu === "group"} anchorRef={groupAnchor} label={"Все\nклиенты"} accessibilityLabel="Группа клиентов: все клиенты"
+          <FilterPill grow menu selected={filterCount > 0} expanded={menu === "group"} anchorRef={groupAnchor}
+            label={filterCount > 0 ? `Фильтры · ${filterCount}` : "Все\nклиенты"} accessibilityLabel={`Фильтры клиентов: ${filterCount === 0 ? "все клиенты" : `выбрано ${filterCount}`}`}
             onPress={() => setMenu("group")} />
           <FilterPill menu expanded={menu === "sort"} anchorRef={sortAnchor} label={todayOnly ? "Время" : sortLabel}
             accessibilityLabel={todayOnly ? "Сортировка: по времени записи" : `Сортировка: ${sortLabel}`}
@@ -236,8 +248,12 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
         <ListLoadState snapshot={snapshot} error={error}
           onRetry={() => { setError(null); readModel.refresh(); }} />
         {snapshot.status === "loading" ? <SkeletonList label="Загружаем клиентов" /> : null}
+        {factsPending ? <SkeletonList label="Загружаем данные фильтров" /> : null}
         {roster !== null && visibleCount === 0 ? (
-          roster.todayOnly
+          filterCount > 0
+            ? <EmptyState reason="no-match" title="Никого не найдено" body="Нет клиентов, подходящих под выбранные условия."
+              action={{ label: "Сбросить фильтры", onPress: () => { setFilters(EMPTY_ROSTER_FILTERS); setTodayOnly(false); setQuery(""); } }} />
+            : roster.todayOnly
             ? <EmptyState reason="no-match" title="Сегодня по расписанию никого"
               body="Нет записей, которые ещё не закончились." action={{ label: "Все клиенты", onPress: () => setTodayOnly(false) }} />
             : query.trim()
@@ -255,7 +271,7 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
         {roster?.recent ? renderRow(roster.recent.client, roster.recent.birthdayBadge === null ? null
           : roster.recent.birthdayText, null, true) : null}
         {roster && !roster.searching && !roster.todayOnly && roster.regular.length > 0
-          ? <ListSectionHeader title="Все клиенты" count={roster.regular.length} /> : null}
+          ? <ListSectionHeader title={filterCount > 0 ? "Клиенты" : "Все клиенты"} count={roster.regular.length} /> : null}
         <RosterGroup>{roster?.regular.map((entry) => renderRow(entry.client, entry.birthdayBadge === null ? null : entry.birthdayText))}</RosterGroup>
       </ScrollView>
       <FloatingActionButton label="Создать карточку клиента" onPress={onOpenCreate}
@@ -263,9 +279,7 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
       <DropdownMenu visible={menu === "sort"} anchor={sortAnchor} title="Сортировка" options={sortOptions} selected={activeSort}
         note={todayOnly ? "Пока включён «Сегодня», список идёт по времени записи." : undefined}
         onSelect={(mode) => { void chooseActiveSort(mode); }} onClose={() => setMenu(null)} />
-      <DropdownMenu visible={menu === "group"} anchor={groupAnchor} title="Клиенты" options={groupOptions} selected="ALL"
-        note="Фильтры по полу и меткам появятся, когда эти поля будут в карточке клиента."
-        onSelect={() => undefined} onClose={() => setMenu(null)} />
+      <ClientRosterFiltersDialog visible={menu === "group"} filters={filters} onApply={setFilters} onClose={() => setMenu(null)} />
     </View>
   );
 }

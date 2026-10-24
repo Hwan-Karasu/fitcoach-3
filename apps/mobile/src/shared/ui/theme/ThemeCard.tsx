@@ -10,56 +10,69 @@ export function ThemeCard({
   selected,
   selectedAccentId,
   onPress,
-}: Readonly<{ theme: CatalogTheme; selected: boolean; selectedAccentId?: string; onPress: () => void }>) {
+  onSelectAccent,
+}: Readonly<{ theme: CatalogTheme; selected: boolean; selectedAccentId?: string; onPress: () => void;
+  onSelectAccent: (accentId: string) => void }>) {
   const [focused, setFocused] = useState(false);
   const previewAccent = theme.accentSwatches.find(
     (accent) => accent.id === (selectedAccentId ?? theme.accentDefault),
   ) ?? theme.accentSwatches[0];
   return (
+    <View style={[styles.card, { backgroundColor: theme.surface,
+      borderColor: focused || selected ? previewAccent.focusRing : theme.border }]}>
     <Pressable
       accessibilityRole="radio"
       accessibilityLabel={`Тема ${theme.name}`}
-      accessibilityHint="Выбрать тему и показать её совместимые акценты"
+      accessibilityHint="Применить тему"
       accessibilityState={{ selected }}
       onPress={onPress}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
-      style={({ pressed }) => [styles.card, {
-        backgroundColor: pressed ? theme.raised : theme.surface,
-        borderColor: focused || selected ? previewAccent.resolvedInk : theme.border,
+      style={({ pressed }) => [styles.preview, {
+        backgroundColor: pressed ? theme.raised : theme.canvas,
       }]}
       testID={`theme-${theme.id}`}
     >
       <View style={styles.top}>
         <View style={styles.nameColumn}>
           <Text style={[styles.name, { color: theme.text }]}>{theme.name}</Text>
-          <Text style={[styles.tone, { color: theme.secondary }]}>
-            {theme.tone === "dark" ? "Тёмная схема" : "Светлая схема"}
-          </Text>
         </View>
-        <Text style={[styles.selectedText, { color: previewAccent.resolvedInk }]}>
-          {selected ? "✓ Выбрана" : "Выбрать"}
+        <Text accessible={false} style={[styles.selectedText, { color: previewAccent.resolvedInk }]}>
+          {selected ? "✓" : ""}
         </Text>
       </View>
-      <View style={styles.swatches} accessible={false}>
-        <View style={[styles.surfaceSwatch, { backgroundColor: theme.canvas, borderColor: theme.border }]} />
-        <View style={[styles.surfaceSwatch, { backgroundColor: theme.raised, borderColor: theme.border }]} />
-        {theme.accentSwatches.map((accent) => (
-          <View key={accent.id} style={[styles.colorSwatch, { backgroundColor: accent.hex, borderColor: theme.border }]} />
-        ))}
-      </View>
     </Pressable>
+      <View style={styles.swatches}>
+        {theme.accentSwatches.map((accent) => {
+          const active = selected && accent.id === selectedAccentId;
+          return <Pressable key={accent.id} accessibilityRole="radio"
+            accessibilityLabel={`${theme.name}, акцент ${accent.name}`} accessibilityState={{ selected: active }}
+            onPress={() => onSelectAccent(accent.id)}
+            onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+            testID={`theme-${theme.id}-accent-${accent.id}`}
+            style={({ pressed }) => [styles.accentButton, { opacity: pressed ? 0.7 : 1 }]}>
+            <View style={[styles.accentRing, { borderColor: active ? accent.focusRing : "transparent" }]}>
+              <View style={[styles.colorSwatch, { backgroundColor: accent.hex }]}>
+                {active ? <Text style={[styles.check, { color: accent.resolvedOnFill }]}>✓</Text> : null}
+              </View>
+            </View>
+          </Pressable>;
+        })}
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { minHeight: 96, borderWidth: 2, borderRadius: 12, padding: 12, gap: 12 },
-  top: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
-  nameColumn: { flex: 1, flexShrink: 1, gap: 3 },
-  name: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
-  tone: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  selectedText: { fontSize: 12, lineHeight: 16, fontFamily: fonts.bold, flexShrink: 1, textAlign: "right" },
-  swatches: { flexDirection: "row", alignItems: "center", gap: 8 },
-  surfaceSwatch: { width: 32, height: 20, borderRadius: 5, borderWidth: 1 },
-  colorSwatch: { width: 22, height: 22, borderRadius: 11, borderWidth: 1 },
+  card: { flex: 1, minWidth: 0, borderWidth: 2, borderRadius: 12, padding: 4 },
+  preview: { flex: 1, minHeight: 44, borderRadius: 7, padding: 4, justifyContent: "center" },
+  top: { flexDirection: "row", alignItems: "flex-start", gap: 2 },
+  nameColumn: { flex: 1, minWidth: 0, gap: 3 },
+  name: { fontSize: 12, lineHeight: 16, fontFamily: fonts.bold },
+  selectedText: { width: 14, fontSize: 12, lineHeight: 16, fontFamily: fonts.bold, textAlign: "right" },
+  swatches: { flexDirection: "row", alignItems: "center" },
+  accentButton: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 8 },
+  accentRing: { borderWidth: 2, borderRadius: 17, padding: 3 },
+  colorSwatch: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  check: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 18 },
 });

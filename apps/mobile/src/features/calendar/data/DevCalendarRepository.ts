@@ -243,6 +243,9 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
         const workspace = await tx.first<{ id: string }>(
           "SELECT id FROM workspaces WHERE id = ?", [this.workspaceId]);
         if (workspace === null) throw new Error("CALENDAR_WORKSPACE_UNAVAILABLE");
+        // Seeds belong to first setup only; explicitly deleted unused templates must not reappear on restart.
+        const configured = await tx.first<{ id: string }>("SELECT workspace_id AS id FROM calendar_settings WHERE workspace_id = ?", [this.workspaceId]);
+        if (configured !== null) return;
         const now = new Date().toISOString();
         for (const seed of seedSessionTypes) {
           const existing = await tx.first<{ id: string }>(`SELECT id FROM session_types
@@ -577,6 +580,22 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
     });
     this.publish({ dates: "ALL" });
     return updated;
+  }
+
+  async deleteSessionType(id: string): Promise<void> {
+    await this.ready().writer.write(async (tx) => {
+      const current = await this.sessionTypeById(tx, id);
+      if ((await this.settings(tx)).defaultSessionTypeId === id) throw new Error("CALENDAR_DEFAULT_TYPE_DELETE");
+      if (current.inUse) throw new Error("CALENDAR_SESSION_TYPE_IN_USE");
+      try {
+        await tx.run("DELETE FROM session_types WHERE workspace_id = ? AND id = ?", [this.workspaceId, id]);
+      } catch (error) {
+        // Foreign-key owners (e.g. credit packs) retain the type without Calendar querying their tables.
+        if (error instanceof Error && /foreign key/iu.test(error.message)) throw new Error("CALENDAR_SESSION_TYPE_IN_USE", { cause: error });
+        throw error;
+      }
+    });
+    this.publish({ dates: "ALL" });
   }
 
   async setSessionTypeArchived(id: string, archived: boolean): Promise<void> {

@@ -1,5 +1,6 @@
-import { mix } from "./colorAlpha.ts";
 import { appThemes as catalogThemes } from "./themes.ts";
+import { migrateThemePreference } from "./themePreference.ts";
+import { readableInk } from "./colorAlpha.ts";
 
 export type ThemeId = typeof catalogThemes[number]["id"];
 export type ThemePreference = Readonly<{ themeId: string | null; accentId: string | null }>;
@@ -13,6 +14,11 @@ export interface PaletteTokens {
   readonly surfaceRaised: string;
   readonly input: string;
   readonly border: string;
+  readonly controlBorder: string;
+  readonly navigation: string;
+  readonly divider: string;
+  readonly iconPrimary: string;
+  readonly iconSecondary: string;
   readonly textPrimary: string;
   readonly textSecondary: string;
   readonly textMuted: string;
@@ -21,10 +27,13 @@ export interface PaletteTokens {
   readonly accentInk: string;
   /** Мягкий фон акцента (brandSoft «Зефирки»): второстепенные кнопки, плашки, выбранное. */
   readonly accentSoft: string;
+  readonly onAccentSoft: string;
+  readonly accentPressed: string;
   readonly focusRing: string;
   readonly success: string;
   readonly warning: string;
   readonly danger: string;
+  readonly info: string;
   readonly charts: readonly [string, string, string, string];
 }
 
@@ -40,12 +49,15 @@ export interface ResolvedPalette {
 }
 
 export function resolvePalette(preference: ThemePreference, fallbackThemeId: ThemeId): ResolvedPalette {
+  const migrated = migrateThemePreference(preference);
   const fallback = findTheme(fallbackThemeId);
   if (!fallback) throw new Error(`Invalid application fallback theme ID: ${fallbackThemeId}`);
-  const requested = preference.themeId === null ? undefined : findTheme(preference.themeId);
+  const requested = migrated.themeId === null ? undefined : findTheme(migrated.themeId);
   const theme = requested ?? fallback;
-  const accent = findAccent(theme, preference.accentId) ?? findAccent(theme, theme.accentDefault);
+  const accent = findAccent(theme, migrated.accentId) ?? findAccent(theme, theme.accentDefault);
   if (!accent) throw new Error(`Theme catalog has no default accent for ${theme.id}`);
+  const backgrounds = [theme.canvas, theme.surface, theme.raised, theme.input, theme.navigation];
+  const neutralBackgrounds = [...backgrounds, ...theme.accentSwatches.map((candidate) => candidate.soft)];
   return {
     themeId: theme.id as ThemeId,
     accentId: accent.id,
@@ -60,17 +72,26 @@ export function resolvePalette(preference: ThemePreference, fallbackThemeId: The
       surfaceRaised: theme.raised,
       input: theme.input,
       border: theme.border,
+      controlBorder: theme.iconSecondary,
+      // A denser theme surface separates the floating bar from the page and white cards.
+      navigation: theme.input,
+      divider: theme.divider,
+      iconPrimary: theme.iconPrimary,
+      iconSecondary: theme.iconSecondary,
       textPrimary: theme.text,
-      textSecondary: theme.secondary,
-      textMuted: theme.muted,
+      textSecondary: readableInk(theme.secondary, neutralBackgrounds, theme.text),
+      textMuted: readableInk(theme.muted, neutralBackgrounds, theme.text),
       accentFill: accent.hex,
       onAccentFill: accent.resolvedOnFill,
-      accentInk: accent.resolvedInk,
-      focusRing: accent.resolvedInk,
-      accentSoft: "soft" in accent ? accent.soft : mix(theme.surface, accent.hex, theme.tone === "light" ? 0.13 : 0.22),
+      accentInk: readableInk(accent.resolvedInk, [...backgrounds, accent.soft], theme.text),
+      focusRing: accent.focusRing,
+      accentSoft: accent.soft,
+      onAccentSoft: readableInk(accent.onSoft, [accent.soft], theme.text),
+      accentPressed: accent.pressed,
       success: theme.status.success,
       warning: theme.status.warning,
       danger: theme.status.danger,
+      info: theme.status.info,
       charts: theme.charts as [string, string, string, string],
     },
   };

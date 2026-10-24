@@ -12,15 +12,15 @@ export function SettingsPreview({
   onOpenClientRosterSettings: () => void; onOpenQuestionnaireBuilder: () => void; onOpenExerciseCatalog: () => void;
   onOpenTrainingSettings: () => void; onOpenBackup: () => void }>) {
   return (
-    <PrototypeScreen description="Локальные настройки тренера">
+    <PrototypeScreen>
       <SectionHeading>Внешний вид</SectionHeading>
       <PrototypeLink
         title="Оформление"
-        detail="Девять тем и акценты — выбор сохраняется"
+        detail="Темы и акценты — выбор сохраняется"
         onPress={onOpenAppearance}
       />
       <SectionHeading>Рабочее пространство</SectionHeading>
-      <PrototypeLink title="Список клиентов" detail="Дни рождения и закрепление"
+      <PrototypeLink title="Список и карточки клиентов" detail="Начальный раздел, плитки и дни рождения"
         onPress={onOpenClientRosterSettings} />
       <PrototypeLink title="Конструктор анкеты" detail="Разделы, вопросы, предпросмотр и публикация версий"
         onPress={onOpenQuestionnaireBuilder} />

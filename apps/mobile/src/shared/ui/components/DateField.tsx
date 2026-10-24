@@ -40,7 +40,7 @@ export function DateField({ label, value, onChange, placeholder = "Выбери�
   return (
     <View style={styles.field}>
       <Text style={[styles.label, { color: colors.textPrimary }]}>{label}{required ? " *" : ""}</Text>
-      <View style={[styles.box, { backgroundColor: colors.input, borderColor: error ? colors.danger : colors.border, opacity: disabled ? 0.6 : 1 }]}>
+      <View style={[styles.box, { backgroundColor: colors.input, borderColor: error ? colors.danger : colors.controlBorder, opacity: disabled ? 0.6 : 1 }]}>
         <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${shown === "" ? "не выбрана" : shown}. Выбрать дату`}
           accessibilityHint={helpText} disabled={disabled} onPress={open} style={styles.main}>
           <CalendarDays size={18} color={colors.textMuted} />

@@ -7,7 +7,7 @@ import { BootGateError, type BootDependencies } from "./BootCoordinator.ts";
 export function createProductionBootDependencies(database: SharedSqliteDatabase, initializeRepositories: () => Promise<void>,
   loadAppearance: () => Promise<ThemePreference | null>): BootDependencies {
   return {
-    fallbackThemeId: "zefirka",
+    fallbackThemeId: "warm-sand",
     prepareWorkspace: async () => ({ id: PRODUCTION_WORKSPACE_ID }),
     openDatabase: async (workspaceId) => {
       if (workspaceId !== PRODUCTION_WORKSPACE_ID) throw new BootGateError("WORKSPACE_UNAVAILABLE");

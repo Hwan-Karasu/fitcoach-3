@@ -9,7 +9,7 @@ interface SegmentItem<Id extends string> {
 }
 
 /** Переключатель из 2–3 равных сегментов во всю ширину (UI-OWN-026); «Зефирка»: дорожка, выбранный — белый с тенью. */
-export function SegmentedControl<Id extends string>({ items, selectedId, onSelect, compact = false, fit = false, scroll = false }: Readonly<{
+export function SegmentedControl<Id extends string>({ items, selectedId, onSelect, compact = false, fit = false, scroll = false, scrollItemGap = 2 }: Readonly<{
   items: readonly SegmentItem<Id>[];
   selectedId: Id;
   onSelect: (id: Id) => void;
@@ -19,6 +19,8 @@ export function SegmentedControl<Id extends string>({ items, selectedId, onSelec
   fit?: boolean;
   /** Много пунктов: один контейнер с горизонтальной прокруткой, сегменты по ширине подписи. */
   scroll?: boolean;
+  /** Отступ между пунктами горизонтального меню. */
+  scrollItemGap?: number;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -34,7 +36,7 @@ export function SegmentedControl<Id extends string>({ items, selectedId, onSelec
   });
   return (
     <View accessibilityRole="tablist" style={[styles.track, compact ? styles.trackCompact : null, scroll ? styles.trackScroll : null, { backgroundColor: colors.border }]}>
-      {scroll ? <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scrollContent}>{segments}</ScrollView> : segments}
+      {scroll ? <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.scrollContent, { gap: scrollItemGap }]}>{segments}</ScrollView> : segments}
     </View>
   );
 }

@@ -1,0 +1,71 @@
+# Z01 — contrast corrections
+
+Original JSON is unchanged. Text inks mix toward the primary text until reaching 4.5:1 on their supported surfaces. Neutral text uses all three soft accents, so changing accent does not change neutral text. Control boundaries use the supplied iconSecondary token (3:1); decorative border stays unchanged. Accent base, pressed and soft fills stay exact. Week-context ink uses the same formula separately.
+
+| Combination | Role | Source | Runtime |
+|---|---|---|---|
+| warm-sand / caramel | textMuted | #786B60 | #665b50 |
+| warm-sand / caramel | accentInk | #97531E | #8a4e1e |
+| warm-sand / caramel | controlBorder | #E4D7C9 | #736456 |
+| warm-sand / chocolate | textMuted | #786B60 | #665b50 |
+| warm-sand / chocolate | controlBorder | #E4D7C9 | #736456 |
+| warm-sand / golden-sand | textMuted | #786B60 | #665b50 |
+| warm-sand / golden-sand | accentInk | #95610D | #805511 |
+| warm-sand / golden-sand | controlBorder | #E4D7C9 | #736456 |
+| sage-milk / sage | textSecondary | #566658 | #536355 |
+| sage-milk / sage | textMuted | #667468 | #546357 |
+| sage-milk / sage | accentInk | #496E50 | #45674c |
+| sage-milk / sage | controlBorder | #D9E5D6 | #647364 |
+| sage-milk / olive | textSecondary | #566658 | #536355 |
+| sage-milk / olive | textMuted | #667468 | #546357 |
+| sage-milk / olive | accentInk | #66702E | #5a652d |
+| sage-milk / olive | onAccentSoft | #5C6529 | #5b6429 |
+| sage-milk / olive | controlBorder | #D9E5D6 | #647364 |
+| sage-milk / pine | textSecondary | #566658 | #536355 |
+| sage-milk / pine | textMuted | #667468 | #546357 |
+| sage-milk / pine | accentInk | #286D68 | #286964 |
+| sage-milk / pine | controlBorder | #D9E5D6 | #647364 |
+| slate-blue / steel-blue | textSecondary | #5A6B7E | #4f5f73 |
+| slate-blue / steel-blue | textMuted | #607184 | #4f5f73 |
+| slate-blue / steel-blue | accentInk | #2E639D | #2e619a |
+| slate-blue / steel-blue | controlBorder | #D8E3EF | #697B8F |
+| slate-blue / cobalt | textSecondary | #5A6B7E | #4f5f73 |
+| slate-blue / cobalt | textMuted | #607184 | #4f5f73 |
+| slate-blue / cobalt | controlBorder | #D8E3EF | #697B8F |
+| slate-blue / teal | textSecondary | #5A6B7E | #4f5f73 |
+| slate-blue / teal | textMuted | #607184 | #4f5f73 |
+| slate-blue / teal | accentInk | #0B7376 | #0f696f |
+| slate-blue / teal | controlBorder | #D8E3EF | #697B8F |
+| dusty-terracotta / terracotta | textSecondary | #775D54 | #6f564e |
+| dusty-terracotta / terracotta | textMuted | #816A60 | #6d574f |
+| dusty-terracotta / terracotta | accentInk | #A94C34 | #944531 |
+| dusty-terracotta / terracotta | controlBorder | #EAD6CA | #876D63 |
+| dusty-terracotta / coral | textSecondary | #775D54 | #6f564e |
+| dusty-terracotta / coral | textMuted | #816A60 | #6d574f |
+| dusty-terracotta / coral | accentInk | #B74750 | #984045 |
+| dusty-terracotta / coral | controlBorder | #EAD6CA | #876D63 |
+| dusty-terracotta / copper | textSecondary | #775D54 | #6f564e |
+| dusty-terracotta / copper | textMuted | #816A60 | #6d574f |
+| dusty-terracotta / copper | accentInk | #97551D | #884e1e |
+| dusty-terracotta / copper | controlBorder | #EAD6CA | #876D63 |
+| graphite-latte / mocha | textSecondary | #6A5F57 | #635851 |
+| graphite-latte / mocha | textMuted | #766B63 | #625852 |
+| graphite-latte / mocha | accentInk | #806044 | #70553e |
+| graphite-latte / mocha | controlBorder | #DED7CE | #796F65 |
+| graphite-latte / taupe | textSecondary | #6A5F57 | #635851 |
+| graphite-latte / taupe | textMuted | #766B63 | #625852 |
+| graphite-latte / taupe | accentInk | #756354 | #67574b |
+| graphite-latte / taupe | controlBorder | #DED7CE | #796F65 |
+| graphite-latte / bronze | textSecondary | #6A5F57 | #635851 |
+| graphite-latte / bronze | textMuted | #766B63 | #625852 |
+| graphite-latte / bronze | accentInk | #866019 | #73551c |
+| graphite-latte / bronze | controlBorder | #DED7CE | #796F65 |
+| night-mocha / amber | textMuted | #BFA99B | #ccbaad |
+| night-mocha / amber | accentInk | #EAA437 | #edb359 |
+| night-mocha / amber | controlBorder | #59483F | #CCB6A7 |
+| night-mocha / latte | textMuted | #BFA99B | #ccbaad |
+| night-mocha / latte | accentInk | #C28A63 | #d3ab8e |
+| night-mocha / latte | controlBorder | #59483F | #CCB6A7 |
+| night-mocha / lavender | textMuted | #BFA99B | #ccbaad |
+| night-mocha / lavender | accentInk | #AA92E5 | #c0ade7 |
+| night-mocha / lavender | controlBorder | #59483F | #CCB6A7 |

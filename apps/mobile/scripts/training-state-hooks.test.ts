@@ -9,6 +9,8 @@ import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant }
 import type { ExerciseLookupPort } from "../src/features/training/plans/domain/ExerciseLookupPort.ts";
 import { addExercise, fillSets, newDraft } from "../src/features/training/plans/domain/SimplePlanEdits.ts";
 import { useExerciseLookupState } from "../src/features/training/plans/presentation/useExerciseLookup.ts";
+import { useSortableFocusReset } from "../src/features/training/plans/presentation/useSortableFocusReset.ts";
+import { isCompleteMesocycleOrder } from "../src/features/training/plans/domain/MesocycleOrder.ts";
 import { SharedSqliteDatabase } from "../src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "../../../scripts/support/node-sqlite-port.ts";
 
@@ -17,6 +19,30 @@ import { nodeSqlitePort } from "../../../scripts/support/node-sqlite-port.ts";
 
 const WS = "synthetic-workspace-a";
 const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+
+test("returning from the editor rebuilds sortable layout without rebuilding on ordinary renders", async () => {
+  let version = -1;
+  function Probe({ focused }: { focused: boolean }) {
+    version = useSortableFocusReset(focused);
+    return null;
+  }
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => { renderer = TestRenderer.create(createElement(Probe, { focused: true })); });
+  assert.equal(version, 0);
+  for (const [focused, expected] of [[true, 0], [false, 0], [true, 1], [true, 1], [false, 1], [true, 2]] as const) {
+    await act(async () => { renderer.update(createElement(Probe, { focused })); });
+    assert.equal(version, expected);
+  }
+  await act(async () => { renderer.unmount(); });
+});
+
+test("transient sortable orders cannot remove mesocycles from the displayed plan", () => {
+  const current = ["cycle-a", "cycle-b", "cycle-c"];
+  assert.equal(isCompleteMesocycleOrder(current, ["cycle-c", "cycle-a", "cycle-b"]), true);
+  for (const next of [[], ["cycle-a"], ["cycle-a", "cycle-b", "cycle-b"], ["cycle-a", "cycle-b", "unknown"]]) {
+    assert.equal(isCompleteMesocycleOrder(current, next), false);
+  }
+});
 
 test("TRN-013 справочник упражнений: отказ чтения — failed с повтором, а не вечная загрузка", async () => {
   let fail = true;

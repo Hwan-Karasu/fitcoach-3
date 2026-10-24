@@ -58,7 +58,7 @@ function MoreNavigator({ client, history, bodyweight, exerciseLookup, onClose, o
   const { palette } = usePrototypeTheme();
   const clientId = client.id;
   return (
-    <MoreStack.Navigator
+    <MoreStack.Navigator initialRouteName="MoreIndex"
       screenOptions={{
         contentStyle: { backgroundColor: palette.tokens.canvas },
         // Шапка клиента (UI-OWN-035): подзаголовок — раздел; «←» — назад по стеку или из клиента.
@@ -136,7 +136,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   onOpenClients: () => void;
   onOpenExercise?: (exerciseId: string) => void;
 }>) {
-  const { palette } = usePrototypeTheme();
+  const { palette, clientCards } = usePrototypeTheme();
   const colors = palette.tokens;
   const [selection, setSelection] = useState<{
     clientId: string; result: ClientRecord | null | "ERROR";
@@ -213,7 +213,8 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       {activityErrorFor === clientId ? <Text style={[styles.warning, { color: colors.danger }]}>
         Не удалось обновить «Недавно открытые»; карточка доступна.
       </Text> : null}
-    <TabBarSlotsProvider><ScreenToneProvider><Tabs.Navigator
+    <TabBarSlotsProvider><ScreenToneProvider><Tabs.Navigator key={client.id}
+      initialRouteName={clientCards.startSection}
       backBehavior="history"
       tabBar={(props) => <RootTabBar {...props} />}
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.canvas } }}

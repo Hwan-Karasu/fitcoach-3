@@ -144,11 +144,15 @@ test("R06 workflow failed acquire is not cached; close drains and releases its r
 test("R06 command facade preserves synchronous subscriptions/meta/list and bound method identity", async () => {
   const gate = new RuntimeCommandGate(); let unsubscriptions = 0;
   const raw = { value: 7, async get() { return this.value; }, meta() { return this.value; }, list() { return [this.value]; },
-    subscribe() { return () => { unsubscriptions++; }; } };
+    subscribe() { return () => { unsubscriptions++; }; },
+    subscribeSavedMealChanges() { return () => { unsubscriptions++; }; } };
   const port = gate.port(raw, ["meta", "list"]);
   assert.strictEqual(port.get, port.get); assert.equal(await port.get(), 7);
   gate.pause(); assert.equal(port.meta(), 7); assert.deepEqual(port.list(), [7]);
   const off = port.subscribe(); off(); assert.equal(unsubscriptions, 1);
+  const offMeals = port.subscribeSavedMealChanges();
+  assert.equal(typeof offMeals, "function", "saved-meal screen cleanup must not receive a Promise");
+  offMeals(); assert.equal(unsubscriptions, 2);
   await assert.rejects(port.get(), RuntimeBusyError);
 });
 

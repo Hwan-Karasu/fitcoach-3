@@ -22,6 +22,7 @@ import { useParticipantScrollRestore } from "./useParticipantScrollRestore.ts";
 import { useProgramData } from "./useProgramData.ts";
 import type { GroupCopy } from "../domain/Placement.ts";
 import { MesocycleBook } from "./MesocycleBook.tsx";
+import { isCompleteMesocycleOrder } from "../domain/MesocycleOrder.ts";
 import { cycleTypeLabels, weekRangeLabel } from "../domain/MesocycleBuilder.ts";
 import type { CounterpartRef } from "../domain/ParticipantCounterpart.ts";
 import type { MesocycleDeletePort, ProgramDeletePort } from "../domain/PlanDeletion.ts";
@@ -469,6 +470,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
               void repository.selectMesocycle(clientId, programId, id).catch(() => refresh());
             }}
             onReorder={(ids) => {
+              if (!isCompleteMesocycleOrder(periodized.mesocycles.map((cycle) => cycle.id), ids)) return;
               setMessage(null);
               // Порядок показывается сразу, не дожидаясь записи и перечитывания: без прыжка назад при быстром повторном перетаскивании.
               setPeriodized((current) => current === null ? current : { ...current,

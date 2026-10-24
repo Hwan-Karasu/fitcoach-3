@@ -15,6 +15,7 @@ import { readLegacyExerciseReferencesInSnapshot } from "./r04/LegacyExerciseRefe
 import { legacyExecutionDate, mergeLegacyExecutionDates } from "./r04/LegacyExecutionDates.ts";
 import { readLegacyMeasurementsSnapshotInSnapshot } from "./r04/LegacyMeasurementSourceReader.ts";
 import { readLegacyNutritionInSnapshot } from "./r04/LegacyNutritionSourceReader.ts";
+import { readLegacyCalendarSnapshot } from "./r04/LegacyCalendarSnapshot.ts";
 
 const context = { sourceSha256: "f".repeat(64), accountScope: "execution-synthetic", sourceWorkspaceId: "source-workspace", targetWorkspaceId: "local-trainer" };
 const date0 = "2026-03-01T12:00:00.000Z", date1 = "2026-03-08T12:00:00.000Z", imported = "2026-05-01T10:00:00Z";
@@ -120,7 +121,8 @@ const ownTables = ["clients", "questionnaire_versions", "questionnaire_answers",
   "training_programs", "training_program_members", "training_mesocycles", "training_weeks", "training_workouts", "training_planned_exercises", "training_planned_sets", "training_simple_overrides", "training_templates",
   "r04_execution_ids", "r04_execution_sessions", "r04_execution_facts", "r04_execution_segments", "r04_execution_representations", "r04_execution_contexts", "r04_execution_receipt"];
 
-test("nutrition receipt failure rolls back nonempty training facts, plans, work data, weight and calculator; clean retry adds no new workout", () => fixture((source, target) => {
+test("nutrition/calendar receipt failures roll back all nonempty owners and clean retry adds no new workout or credit", async () => {
+  for (const failurePoint of ["after-nutrition-receipt", "after-calendar-receipt"]) await fixture((source, target) => {
   source.exec(`CREATE TABLE food_products(id TEXT PRIMARY KEY,name TEXT,brand TEXT,barcode TEXT,serving_mode TEXT,calories REAL,protein REAL,fat REAL,carbs REAL,favorite INTEGER,created_at TEXT,updated_at TEXT);
     CREATE TABLE nutrition_days(client_id TEXT,date_key TEXT,meals_json TEXT,water_ml INTEGER,updated_at TEXT);
     CREATE TABLE client_day_facts(client_id TEXT,date_key TEXT,weight TEXT,steps TEXT,training TEXT);
@@ -130,21 +132,26 @@ test("nutrition receipt failure rolls back nonempty training facts, plans, work 
   source.prepare("INSERT INTO client_kbju_state VALUES('a',?,'{}',?)").run(JSON.stringify({ goal: "Поддержание", activity: "Умеренный", workouts: "0", workoutDuration: "60", workoutIntensity: "Средняя", deficit: "0" }), date0);
   source.exec("CREATE TABLE nutrition_archive_weeks(id TEXT,client_id TEXT,start_date TEXT,end_date TEXT,label TEXT,saved_at TEXT,days_json TEXT)");
   source.prepare("INSERT INTO nutrition_archive_weeks VALUES('week','a','2026-02-23','2026-03-01','',?,'{}')").run(date0);
+  source.exec("CREATE TABLE calendar_appointments(id TEXT,date_key TEXT,start_time TEXT,end_time TEXT,duration_minutes INTEGER,client_id TEXT,guest_name TEXT,client_name TEXT,appointment_type TEXT,note TEXT,created_at TEXT,updated_at TEXT,deleted_at TEXT)");
+  source.prepare("INSERT INTO calendar_appointments VALUES('appointment','2026-03-01','10:00','11:00',60,'a','','Имя','training','',?,?,NULL)").run(date0, date0);
   source.prepare("INSERT INTO nutrition_days VALUES('a','2026-03-01',?,500,?)").run(JSON.stringify({ breakfast: [{ id: "meal", productId: "p", productSnapshot: {
     id: "p", name: "Исторический продукт", brand: "", barcode: "", servingMode: "grams", gramsPerPiece: 0, calories: 100, protein: 2, fat: 1, carbs: 10 },
     grams: "100", unit: "grams", pieceCount: "", calories: 100, protein: 2, fat: 1, carbs: 10, createdAt: date0 }], lunch: [], dinner: [], snack: [] }), date0);
   const data = read(source), measurements = readLegacyMeasurementsSnapshotInSnapshot(source, context.accountScope), nutrition = readLegacyNutritionInSnapshot(source, context.accountScope);
-  const ledger = prepareCandidateIdentityLedger(target, context, { clientIdentityRehearsal: { ...options.clientIdentityRehearsal, measurements: { referenceDay: "2026-05-01" }, nutrition: true } });
-  assert.throws(() => ledger.stageClientNutrition(data.cards, null, data.catalog, data.refs, data.plans, data.executions, measurements, nutrition, allocator(), (phase) => {
-    if (phase === "after-nutrition-receipt") throw new Error("injected");
+  const calendar = readLegacyCalendarSnapshot(source, context.accountScope);
+  const ledger = prepareCandidateIdentityLedger(target, context, { clientIdentityRehearsal: { ...options.clientIdentityRehearsal, measurements: { referenceDay: "2026-05-01" }, nutrition: true, calendar: true } });
+  assert.throws(() => ledger.stageClientCalendar(data.cards, null, data.catalog, data.refs, data.plans, data.executions, measurements, nutrition, calendar, allocator(), (phase) => {
+    if (phase === failurePoint) throw new Error("injected");
   }), /WRITE_FAILED/u);
-  for (const name of [...ownTables, "body_measurements", "food_products", "food_diary_entries", "nutrition_calc_profiles", "r04_nutrition_archive_weeks", "r04_nutrition_ids", "r04_nutrition_receipt"]) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${name}`).get()?.n, 0, name);
-  const result = ledger.stageClientNutrition(data.cards, null, data.catalog, data.refs, data.plans, data.executions, measurements, nutrition, allocator());
+  for (const name of [...ownTables, "body_measurements", "food_products", "food_diary_entries", "nutrition_calc_profiles", "r04_nutrition_archive_weeks", "r04_nutrition_ids", "r04_nutrition_receipt", "calendar_appointments", "r04_calendar_ids", "r04_calendar_receipt", "credit_ledger"]) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${name}`).get()?.n, 0, name);
+  const result = ledger.stageClientCalendar(data.cards, null, data.catalog, data.refs, data.plans, data.executions, measurements, nutrition, calendar, allocator());
   assert.deepEqual([result.performedFacts, result.canonicalSessions, result.weightMeasurementRows, result.nutritionEntryRows], [5, 3, 1, 1]);
   assert.equal(result.nutritionCalcProfileRows, 1);
   assert.equal(result.nutritionArchiveWeekRows, 1);
+  assert.equal(result.calendarAppointmentRows, 1); assert.equal(result.creditSettlementsCreated, 0);
   assert.equal(ledger.loadNutritionDraftEntries()[0]!.per_kcal_x10, 1000);
-}));
+  });
+});
 
 test("measurement failure rolls back nonempty questionnaire, work data, plans and performed facts; retry commits all owners together", async () => {
   for (const phase of ["after-measurement-ids", "after-measurement-rows", "after-measurement-receipt", "before-commit"] as const) await fixture((source, target) => {

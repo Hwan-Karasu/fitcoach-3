@@ -11,7 +11,7 @@ import type { ClientListController } from "../../read-models/ClientListControlle
 import { HeaderScrollReporter, HeaderSearchProvider, type HeaderSearchState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { CalendarNavigator, type CalendarStackRoutes } from "./CalendarNavigator.tsx";
-import type { NavigatorScreenParams } from "@react-navigation/native";
+import { getFocusedRouteNameFromRoute, StackActions, type NavigatorScreenParams } from "@react-navigation/native";
 import { RootHeader, type RootHeaderSearch } from "./RootHeader.tsx";
 import { ArchiveNavigator, ClientsNavigator } from "./RootSectionNavigators.tsx";
 import { rootTabs } from "./routeCatalog.ts";
@@ -108,12 +108,19 @@ export function RootTabs({
         screenOptions={{
           sceneStyle: { backgroundColor: colors.canvas },
           // Заголовок корневой вкладки — в одной строке с колокольчиком и меню (UI-OWN-002).
-          header: ({ route, options, navigation }) => <RootHeader title={options.title ?? ""}
+          header: ({ route, options, navigation }) => {
+            const calendarSettings = route.name === "Calendar" && getFocusedRouteNameFromRoute(route) === "CalendarSettings";
+            return <RootHeader title={calendarSettings ? "Настройки календаря" : options.title ?? ""}
+            onBack={calendarSettings ? () => {
+              const key = navigation.getState().routes.find((item) => item.key === route.key)?.state?.key;
+              if (key) navigation.dispatch({ ...StackActions.popToTop(), target: key });
+            } : undefined}
             onOpenSettings={route.name === "Calendar"
               ? () => navigation.navigate("Calendar", { screen: "CalendarSettings" }) : undefined}
             collapsed={scrolled[route.name as keyof RootTabRoutes]} search={headerSearch(route.name as keyof RootTabRoutes)}
             onOpenNotifications={onOpenNotifications}
-            onOpenMenu={() => setMenuVisible(true)} menuButtonRef={menuButtonRef} />,
+            onOpenMenu={() => setMenuVisible(true)} menuButtonRef={menuButtonRef} />;
+          },
         }}
       >
         <Tabs.Screen name="Clients" options={{ title: rootTabs.Clients, tabBarLabel: rootTabs.Clients,

@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import type { Appointment, CalendarInterval, CalendarSettings, LocalDate, SessionTypeColor } from "../domain/CalendarModel.ts";
+import type { Appointment, CalendarInterval, CalendarSettings, LocalDate } from "../domain/CalendarModel.ts";
 import type { CalendarParticipant, CalendarParticipantDirectoryPort } from
   "../domain/CalendarParticipantDirectoryPort.ts";
 import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
 import { addDays, isPendingOutcome, weekdayIndex } from "../domain/CalendarRules.ts";
+import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
+import { resolveDutyColor, resolveTypeColors, sessionTypeColorHex } from "./calendarTypeColors.ts";
+export { sessionTypeColorHex } from "./calendarTypeColors.ts";
 
 export const weekdayShort = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"] as const;
 const weekdayLong = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота",
@@ -21,26 +24,26 @@ export function monthTitle(date: LocalDate): string {
   return `${monthNominative[Number(date.slice(5, 7)) - 1]} ${date.slice(0, 4)}`;
 }
 
-/** Dark enough for white text in light and dark themes; colour is never the only marker (§13.16). */
-export const sessionTypeColorHex: Readonly<Record<SessionTypeColor, string>> = {
-  teal: "#0E6E73", blue: "#2456A6", violet: "#6A3FA0", amber: "#8A5A00", rose: "#A3324F", slate: "#4A5563",
-};
-
-/** Session type id → block colour for the timeline; types without a colour follow the theme accent. */
+/** Session type id → block colour; legacy automatic colours use distinct available swatches. */
 export function useSessionTypeColors(repository: CalendarRepositoryPort):
   Readonly<{ colors: ReadonlyMap<string, string>; loaded: boolean }> {
   const [map, setMap] = useState<ReadonlyMap<string, string>>(new Map());
   const [loaded, setLoaded] = useState(false);
   const [tick, setTick] = useState(0);
+  const { dutyColor } = usePrototypeTheme();
   useEffect(() => {
     let active = true;
     void repository.listSessionTypes().then((types) => {
       if (!active) return;
-      setMap(new Map(types.flatMap((type) => (type.color === null ? [] : [[type.id, sessionTypeColorHex[type.color]] as const]))));
+      const resolved = resolveTypeColors(types, resolveDutyColor(dutyColor));
+      setMap(new Map(types.flatMap((type) => {
+        const color = resolved.get(type.id) ?? type.color;
+        return color === null ? [] : [[type.id, sessionTypeColorHex[color]] as const];
+      })));
       setLoaded(true);
     }, () => { if (active) setLoaded(true); });
     return () => { active = false; };
-  }, [repository, tick]);
+  }, [repository, tick, dutyColor]);
   useEffect(() => repository.subscribeCommittedChanges((change) => {
     if (change.dates === "ALL") setTick((value) => value + 1);
   }), [repository]);
@@ -64,6 +67,8 @@ export function calendarErrorMessage(error: unknown): string {
     case "CALENDAR_SESSION_TYPE_INVALID": return "Проверьте тип: название до 60 символов, длительность от 30 до 240 минут с шагом 30.";
     case "CALENDAR_SESSION_TYPE_CREDIT_LOCKED": return "Тип уже используется в записях: списание не меняется задним числом. Создайте новый тип.";
     case "CALENDAR_DEFAULT_TYPE_ARCHIVE": return "Сначала выберите другой тип по умолчанию, затем убирайте этот в архив.";
+    case "CALENDAR_DEFAULT_TYPE_DELETE": return "Сначала выберите другой тип по умолчанию, затем удаляйте этот.";
+    case "CALENDAR_SESSION_TYPE_IN_USE": return "Тип связан с записями или абонементами. Его можно убрать в архив; история сохранится.";
     case "CALENDAR_GUEST_LINK_INVALID": return "Запись уже не гостевая или отменена.";
     case "CALENDAR_RESTORE_INVALID": return "Эту запись уже нельзя вернуть.";
     case "CALENDAR_OUTCOME_TOO_EARLY": return "Занятие ещё не началось. Исход можно отметить после начала.";

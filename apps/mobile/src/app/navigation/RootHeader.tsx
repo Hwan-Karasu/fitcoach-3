@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from "react";
-import { Animated, BackHandler, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { Animated, BackHandler, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Bell, Menu, Search, Settings, X } from "lucide-react-native";
 import { AppIconButton, BrandMark, ScreenHeader, SCREEN_HEADER_HEIGHT } from "../../shared/ui/components/public.ts";
 import { useUnreadNotifications } from "./NotificationsHost.tsx";
@@ -31,10 +31,11 @@ export function RootHeader({
   onOpenMenu,
   menuButtonRef,
   onOpenSettings,
+  onBack,
 }: Readonly<{ title: string; collapsed: boolean; search?: RootHeaderSearch; onOpenNotifications: () => void;
   onOpenMenu: () => void; menuButtonRef: RefObject<View | null>;
   /** Настройки раздела (шестерёнка календаря) — в одном ряду с колокольчиком и меню. */
-  onOpenSettings?: () => void }>) {
+  onOpenSettings?: () => void; onBack?: () => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const unreadNotifications = useUnreadNotifications();
@@ -78,7 +79,7 @@ export function RootHeader({
   }
 
   return (
-    <ScreenHeader insetTop={false} right={<>
+    <ScreenHeader insetTop={false} onBack={onBack} right={<>
       {onOpenSettings ? (
         <AppIconButton compact label={`Настройки: ${title.toLowerCase()}`}
           icon={<Settings size={20} color={colors.textPrimary} strokeWidth={1.8} />} onPress={onOpenSettings} />
@@ -104,7 +105,7 @@ export function RootHeader({
         testID="open-menu"
       />
     </>}>
-      <View accessible accessibilityRole="header" accessibilityLabel={`${appBrandName}, ${title}`} style={styles.titleSlot}>
+      {onBack ? <Text accessibilityRole="header" numberOfLines={2} style={[styles.nestedTitle, { color: colors.textPrimary }]}>{title}</Text> : <View accessible accessibilityRole="header" accessibilityLabel={`${appBrandName}, ${title}`} style={styles.titleSlot}>
         <Animated.View style={[styles.layer, brandStyle]}>
           <BrandMark size={24} color={colors.accentInk} />
           <Animated.Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.brand, { color: colors.textPrimary }]}>{appBrandName}</Animated.Text>
@@ -112,12 +113,13 @@ export function RootHeader({
         <Animated.View style={[styles.layer, titleStyle]}>
           <Animated.Text numberOfLines={1} style={[styles.title, { color: colors.textPrimary }]}>{title}</Animated.Text>
         </Animated.View>
-      </View>
+      </View>}
     </ScreenHeader>
   );
 }
 
 const styles = StyleSheet.create({
+  nestedTitle: { flex: 1, minWidth: 0, fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
   titleSlot: { flex: 1, height: SCREEN_HEADER_HEIGHT - 2, marginLeft: 4 },
   layer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, flexDirection: "row", alignItems: "center", gap: 8 },
   brand: { flexShrink: 1, fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },

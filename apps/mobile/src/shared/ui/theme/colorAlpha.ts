@@ -36,3 +36,12 @@ export function contrastRatio(a: string, b: string): number {
   const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
   return (light + 0.05) / (dark + 0.05);
 }
+
+/** Central contrast correction for text roles; original fills stay exactly as supplied. */
+export function readableInk(ink: string, backgrounds: readonly string[], target: string, minimum = 4.5): string {
+  for (let step = 0; step <= 255; step += 1) {
+    const candidate = step === 0 ? ink : mix(ink, target, step / 255);
+    if (backgrounds.every((background) => contrastRatio(candidate, background) >= minimum)) return candidate;
+  }
+  return target;
+}

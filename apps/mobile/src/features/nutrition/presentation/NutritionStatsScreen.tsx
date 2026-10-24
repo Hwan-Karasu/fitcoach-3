@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
+import { CalendarDays, Dumbbell, Footprints } from "lucide-react-native";
 import { AppButton, BarChart, DateRangeCalendar, EmptyState, InlineNotice, LineChart, LoadingState, SegmentedControl } from "../../../shared/ui/components/public.ts";
 import type { DateRange } from "../../../shared/ui/components/DateRangeCalendar.tsx";
 import { dailyPoints, type ClientMeasurements, type MeasurementRepositoryPort } from "../../measurements/public.ts";
@@ -112,6 +113,8 @@ export function NutritionStatsScreen({ clientId, body, diary, targets, measureme
   const weekGroups = useMemo(() => weeklyAverages(stats?.days ?? []), [stats]);
   const selected = selectedDate ?? graph.at(-1)?.key ?? to;
   const selectedDay = stats?.days.find((day) => day.localDate === selected);
+  const selectedSteps = data?.steps.find((row) => row.localDate === selected)?.steps;
+  const selectedWorkout = data?.workouts.find((row) => row.localDate === selected)?.done;
   const rangeDays = draftRange.from === null || draftRange.to === null ? 0 : Math.round((Date.parse(draftRange.to) - Date.parse(draftRange.from)) / 86400000) + 1;
 
   const control = <>
@@ -168,10 +171,35 @@ export function NutritionStatsScreen({ clientId, body, diary, targets, measureme
         <SegmentedControl compact items={[{ id: "weight", label: "Вес" }, { id: "fat", label: "% жира" }, { id: "steps", label: "Шаги" }] as const} selectedId={trend} onSelect={(id) => { setTrend(id); setSelectedDate(null); }} />
         {graph.length === 0 ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Нет данных за период.</Text> :
           <LineChart points={graph} format={(value) => String(Math.round(value * 10) / 10)} formatValue={(value) => `${Math.round(value * 10) / 10} ${trend === "weight" ? "кг" : trend === "fat" ? "%" : "шагов"}`} accessibilityLabel="Динамика по известным значениям" onSelect={(point) => setSelectedDate(point.key)} />}
-        <Text style={[styles.heading, { color: colors.textPrimary }]}>{selected}</Text>
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>{`К ${wholeText(selectedDay?.valuesX10.kcal ?? null)} · Б ${wholeText(selectedDay?.valuesX10.protein ?? null)} · Ж ${wholeText(selectedDay?.valuesX10.fat ?? null)} · У ${wholeText(selectedDay?.valuesX10.carbs ?? null)}`}</Text>
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Шаги: ${data?.steps.find((row) => row.localDate === selected)?.steps ?? "—"} · Отметка тренировки: ${data?.workouts.find((row) => row.localDate === selected)?.done === true ? "Да" : data?.workouts.find((row) => row.localDate === selected)?.done === false ? "Нет" : "—"}`}</Text>
-        <AppButton label="Открыть день в дневнике" compact onPress={() => onOpenDay(selected)} />
+        <View style={[styles.daySummary, { borderColor: colors.border }]}>
+          <View style={styles.dayHeader}>
+            <CalendarDays size={18} color={colors.accentInk} />
+            <Text style={[styles.heading, { color: colors.textPrimary }]}>{`${shortDate(selected)}.${selected.slice(0, 4)}`}</Text>
+          </View>
+          <View style={styles.dayMacros}>
+            {TARGET_METRICS.map((metric) => <View key={metric} accessible
+              accessibilityLabel={`${metricLabels[metric]}: ${wholeText(selectedDay?.valuesX10[metric] ?? null)} ${unitOf[metric]}`}
+              style={[styles.dayMacro, { backgroundColor: colors.surfaceRaised }]}>
+              <Text style={[styles.metricTitle, { color: macroColors[metric] }]}>{metric === "kcal" ? "Ккал" : metric === "protein" ? "Б" : metric === "fat" ? "Ж" : "У"}</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}
+                style={[styles.dayValue, { color: colors.textPrimary }]}>{wholeText(selectedDay?.valuesX10[metric] ?? null)}</Text>
+              <Text style={[styles.dayUnit, { color: colors.textSecondary }]}>{unitOf[metric]}</Text>
+            </View>)}
+          </View>
+          <View style={styles.dayActivity}>
+            <View style={[styles.activityTile, { backgroundColor: colors.surfaceRaised }]}>
+              <View style={styles.activityLabel}><Footprints size={16} color={colors.accentInk} />
+                <Text style={[styles.meta, styles.activityText, { color: colors.textSecondary }]}>Шаги</Text></View>
+              <Text style={[styles.dayValue, { color: colors.textPrimary }]}>{selectedSteps === undefined ? "—" : String(selectedSteps).replace(/\B(?=(\d{3})+(?!\d))/gu, " ")}</Text>
+            </View>
+            <View style={[styles.activityTile, { backgroundColor: colors.surfaceRaised }]}>
+              <View style={styles.activityLabel}><Dumbbell size={16} color={colors.accentInk} />
+                <Text style={[styles.meta, styles.activityText, { color: colors.textSecondary }]}>Отметка тренировки</Text></View>
+              <Text style={[styles.dayValue, { color: colors.textPrimary }]}>{selectedWorkout === true ? "Да" : selectedWorkout === false ? "Нет" : "—"}</Text>
+            </View>
+          </View>
+          <AppButton label="Открыть день в дневнике" compact onPress={() => onOpenDay(selected)} />
+        </View>
       </View>
       {weekGroups.length > 0 ? <WeeklyAveragesCard weeks={weekGroups} /> : null}
       </>}
@@ -192,6 +220,16 @@ const styles = StyleSheet.create({
   periodText: { textAlign: "center" },
   metricTitle: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
   metricValue: { fontFamily: fonts.bold, fontSize: 22, lineHeight: 28 },
+  daySummary: { marginTop: 10, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, gap: 10 },
+  dayHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  dayMacros: { flexDirection: "row", gap: 6 },
+  dayMacro: { flex: 1, minWidth: 0, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 4, alignItems: "center", gap: 2 },
+  dayValue: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 24, fontVariant: ["tabular-nums"] },
+  dayUnit: { fontFamily: fonts.regular, fontSize: 10, lineHeight: 13 },
+  dayActivity: { flexDirection: "row", gap: 6 },
+  activityTile: { flex: 1, minWidth: 0, borderRadius: 12, padding: 10, gap: 6, justifyContent: "space-between" },
+  activityLabel: { flexDirection: "row", alignItems: "center", gap: 6 },
+  activityText: { flex: 1 },
   backdrop: { flex: 1, padding: 16, justifyContent: "center", backgroundColor: "rgba(0,0,0,0.45)" },
   dialog: { padding: 12, borderRadius: 20, gap: 8 },
 });

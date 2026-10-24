@@ -10,6 +10,7 @@ import { clipToWindow, columnAtX, dragRange, minuteAtY, moveVerdict, slotAtY, yO
 import { appointmentEnded, appointmentLabel, formatMinute, localDateOf, weekdayIndex } from "../domain/CalendarRules.ts";
 import type { CalendarParticipant } from "../domain/CalendarParticipantDirectoryPort.ts";
 import { weekdayShort } from "./calendarPresentation.ts";
+import { resolveDutyColor } from "./calendarTypeColors.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 const LONG_PRESS_MS = 350;
@@ -70,7 +71,7 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
   height: number;
   handlers: TimelineHandlers;
 }>) {
-  const { palette } = usePrototypeTheme();
+  const { palette, dutyColor } = usePrototypeTheme();
   const colors = palette.tokens;
   const [width, setWidth] = useState(0);
   const [preview, setPreview] = useState<Readonly<{ mode: number; index: number; label: string; invalid: boolean }> | null>(null);
@@ -339,7 +340,7 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
                 }]}>
                   {/* Прозрачна только подложка: подпись и ползунок остаются чёткими. */}
                   <View style={[StyleSheet.absoluteFill, {
-                    backgroundColor: blocked ? colors.danger : colors.charts[1], opacity: blocked ? 0.22 : 0.14 }]} />
+                    backgroundColor: blocked ? colors.danger : resolveDutyColor(dutyColor), opacity: blocked ? 0.22 : 0.14 }]} />
                   {!dense ? <Text style={[styles.bandText, { color: blocked ? colors.danger : colors.textPrimary }]}>
                     {blocked ? "Заблокировано" : "Дежурство"}</Text> : null}
                   <View style={[styles.handle, { backgroundColor: blocked ? colors.danger : colors.textSecondary, opacity: 0.8 }]} />

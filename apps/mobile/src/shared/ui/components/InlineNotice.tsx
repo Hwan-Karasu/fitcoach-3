@@ -21,7 +21,7 @@ export function InlineNotice({ kind = "info", children }: Readonly<{ kind?: Noti
       ? colors.warning
       : kind === "success"
         ? colors.success
-        : colors.accentInk;
+        : colors.info;
   return (
     <View
       accessibilityLiveRegion={kind === "error" ? "assertive" : "polite"}

@@ -1,5 +1,6 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { memo, useCallback, useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { CalendarPager } from "../../../shared/ui/components/CalendarPager.tsx";
 import { Undo2 } from "lucide-react-native";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { LocalDate } from "../domain/CalendarModel.ts";
@@ -105,43 +106,19 @@ const MonthPage = memo(function MonthPage({ month, width, selected, today, count
 export function MonthGrid({ initialWidth = 0, viewMonth, selected, today, counts, onBrowse, onSelect, onToday }: Props) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const [width, setWidth] = useState(initialWidth);
   const [base] = useState(() => `${today.slice(0, 7)}-01`);
-  const list = useRef<FlatList<number>>(null);
-  const shown = useRef(monthIndex(base, viewMonth));
-  const data = useMemo(() => Array.from({ length: SPAN * 2 + 1 }, (_, at) => at), []);
   const target = monthIndex(base, viewMonth);
   const atToday = selected === today && viewMonth.slice(0, 7) === today.slice(0, 7);
-  const renderMonth = useCallback(({ item }: Readonly<{ item: number }>) => (
+  const renderMonth = useCallback((item: number, width: number) => (
     <MonthPage month={addMonths(base, item - SPAN)} width={width} selected={selected} today={today}
       counts={counts} onSelect={onSelect} onBrowse={onBrowse} />
-  ), [base, counts, onBrowse, onSelect, selected, today, width]);
-
-  // Месяц сменился не свайпом (тап по соседней дате, «Сегодня») — прокручиваем ленту к нему.
-  useEffect(() => {
-    if (width === 0 || target === shown.current) return;
-    shown.current = target;
-    list.current?.scrollToIndex({ index: target, animated: true });
-  }, [target, width]);
+  ), [base, counts, onBrowse, onSelect, selected, today]);
 
   return (
     <View style={[styles.card, shadow.card, { backgroundColor: colors.surface }]}>
       {/* Ширина страницы = точная ширина области ленты: иначе доли пикселя копятся по страницам и месяц съезжает. */}
-      <View onLayout={(event) => { const next = event.nativeEvent.layout.width; setWidth((current) => Math.abs(current - next) < 0.5 ? current : next); }}>
-      {width > 0 ? (
-        <FlatList ref={list} data={data} horizontal pagingEnabled showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => String(item)} initialScrollIndex={target} windowSize={3}
-          initialNumToRender={1} maxToRenderPerBatch={2}
-          getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
-          onMomentumScrollEnd={(event) => {
-            const index = Math.round(event.nativeEvent.contentOffset.x / width);
-            if (index === shown.current) return;
-            shown.current = index;
-            onBrowse(addMonths(base, index - SPAN));
-          }}
-          renderItem={renderMonth} />
-      ) : null}
-      </View>
+      <CalendarPager page={target} pageCount={SPAN * 2 + 1} initialWidth={initialWidth}
+        onPageChange={(index) => onBrowse(addMonths(base, index - SPAN))} renderPage={renderMonth} />
       {/* «Сегодня» стоит на месте в строке заголовка, а название месяца листается со страницей. */}
       <Pressable accessibilityRole="button" accessibilityLabel="Вернуться к текущему месяцу и сегодняшнему дню"
         disabled={atToday} onPress={onToday} hitSlop={6}

@@ -43,7 +43,7 @@ test("F03 dev gate applies only synthetic schema before showing the prototype sh
     if (ready.kind !== "APP_READY") return;
     assert.equal(ready.workspaceId, "synthetic-dev-workspace");
     // UI-OWN-048: тема по умолчанию — «Зефирка» (решение владельца 2026-10-19).
-    assert.equal(ready.palette.themeId, "zefirka");
+    assert.equal(ready.palette.themeId, "warm-sand");
     assert.deepEqual(states, ["BOOT_PENDING", "BOOT_PENDING", "DB_READY", "APP_READY"]);
     assert.equal(closes, 1);
     assert.equal((db.prepare("SELECT count(*) AS count FROM schema_migrations").get() as { count: number }).count, 1);

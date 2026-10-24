@@ -171,7 +171,7 @@ test("D01-4 обновление своей baseline-базы: сбой JSON v2 
     } finally { reader.close(); }
     const ready = await boot.retry();
     assert.equal(ready.kind, "APP_READY");
-    if (ready.kind === "APP_READY") assert.equal(ready.palette.themeId, "zefirka", "сбой необязательных настроек не закрывает дневник");
+    if (ready.kind === "APP_READY") assert.equal(ready.palette.themeId, "warm-sand", "сбой необязательных настроек не закрывает дневник");
     assert.equal(initialized, true);
   } finally { f.cleanup(); }
 });

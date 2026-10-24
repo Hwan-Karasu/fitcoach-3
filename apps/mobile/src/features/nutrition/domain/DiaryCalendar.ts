@@ -41,3 +41,21 @@ export function monthRange(month: string): Readonly<{ from: string; to: string }
   const [year, number] = month.split("-").map(Number) as [number, number];
   return { from: `${month}-01`, to: `${month}-${pad(new Date(Date.UTC(year, number, 0)).getUTCDate())}` };
 }
+
+/** Six complete weeks, including neighbouring months, so swiping never changes page height. */
+export function monthPage(month: string): readonly (readonly string[])[] {
+  const first = utc(`${month}-01`);
+  const lead = (first.getUTCDay() + 6) % 7;
+  return Array.from({ length: 6 }, (_, row) => Array.from({ length: 7 }, (_, column) =>
+    iso(new Date(first.getTime() + (row * 7 + column - lead) * 86_400_000))));
+}
+
+export function monthOffset(base: string, month: string): number {
+  return (Number(month.slice(0, 4)) - Number(base.slice(0, 4))) * 12
+    + Number(month.slice(5, 7)) - Number(base.slice(5, 7));
+}
+
+/** Week page offset; date arithmetic is UTC and independent of device timezone/DST. */
+export function weekOffset(base: string, date: string): number {
+  return Math.round((utc(weekOf(date)[0]!).getTime() - utc(weekOf(base)[0]!).getTime()) / (7 * 86_400_000));
+}

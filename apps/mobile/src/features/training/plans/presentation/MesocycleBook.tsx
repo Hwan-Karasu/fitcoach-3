@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useIsFocused } from "@react-navigation/native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
@@ -8,6 +9,8 @@ import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../../shared/ui/theme/style.ts";
 import { weeksWord } from "../domain/MesocycleBuilder.ts";
 import type { Mesocycle } from "../domain/PeriodizedModel.ts";
+import { useSortableFocusReset } from "./useSortableFocusReset.ts";
+import { isCompleteMesocycleOrder } from "../domain/MesocycleOrder.ts";
 
 /**
  * Книга мезоциклов клиента (UI-OWN-040, как в 2.0): квадратные карточки одной ширины, длинное название переносится
@@ -27,6 +30,8 @@ export function MesocycleBook({ mesocycles, selectedId, resetKey, onSelect, onRe
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const bookRef = useAnimatedRef<Animated.ScrollView>();
+  const focused = useIsFocused();
+  const focusVersion = useSortableFocusReset(focused);
   // Sortable.Flex не растягивает элементы по высоте ряда — высоту самой высокой карточки замеряем сами.
   // Замер привязан к набору названий: сброс эффектом опаздывал бы — onLayout приходит раньше эффекта.
   // Порядок в подписи не участвует: перестановка не меняет высоту карточек, а сброс замера на кадр сжимал бы их (мерцание).
@@ -41,8 +46,12 @@ export function MesocycleBook({ mesocycles, selectedId, resetKey, onSelect, onRe
 
   return (
     <Animated.ScrollView ref={bookRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.book}>
-      <Sortable.Flex key={resetKey} gap={8} flexWrap="nowrap" activeItemScale={1.03} scrollableRef={bookRef}
-        onDragEnd={({ order }) => onReorder(order(mesocycles.map((item) => item.id)))}>
+      <Sortable.Flex key={`${resetKey}:${focusVersion}`} gap={8} flexWrap="nowrap" activeItemScale={1.03} scrollableRef={bookRef}
+        onDragEnd={({ order }) => {
+          const current = mesocycles.map((item) => item.id);
+          const next = order(current);
+          if (isCompleteMesocycleOrder(current, next)) onReorder(next);
+        }}>
         {mesocycles.map((item) => {
           const selected = item.id === selectedId;
           return (
