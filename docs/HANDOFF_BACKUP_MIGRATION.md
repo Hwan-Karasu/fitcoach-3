@@ -1,4 +1,40 @@
-## Продолжение — дневной вес, базаc56c3f7
+## Продолжение — продукты, рецепты и пищевой дневник, база f0a241f
+
+2026-10-24, R04→R03; Product49.3–5/49.22–24/49–50/53–56/INT03–12.
+Production DDL/migration/overlay/signing/release gates OPEN; synthetic only,
+finalizable:false. Новые LegacyNutritionSourceReader/Values/Projection/Stage,
+stageClientNutrition после всех предыдущих владельцев в общей транзакции.
+Полные raw шести stores/nullabsence, frozen inputs, client_day_facts совпадает
+с Measurements snapshot; account-scoped ID, sourceSHA/manifestSHA/fullrow parity.
+NUTRITION_REHEARSAL_V1, существующая Nutrition baseline в private job, не app import.
+
+Продукты/представимые рецепты/исторические пищевые записи/вода/положительные steps/
+Да–Нет отметки питания попадают в D01. Исторические snapshot/итоги порций независимы
+от текущего каталога; старое округление удерживает штатный override. Удалённый
+продукт не создаёт фантомную строку каталога. Legacy recipe разворачивался в
+продуктовые записи: дополнительный факт рецепта не создаётся. Missing JSON mode/unit
+→ grams только по доказанному legacy default. Нет догадок о времени правки порции.
+Water-only не пищевой день; training mark не Workout/Calendar/Credit.
+
+Остаются raw/review: версии/округление/дубли ингредиентов рецепта, unknown totals
+при известных snapshot, дополнительные нутриенты с неизвестными единицами, 0 steps,
+неверная точность/JSON/неподтверждённые формы. Calculator/manual targets и недельные
+архивы сохранены raw, ещё не перенесены в их production representations.
+
+550/550 area+deps, 16 новых тестов (15 Nutrition + cross-owner Execution).
+Каждый write boundary/beforecommit rollback всех priorowners/IDs + retry;
+readonly/reopen/reorder/byteidentity/IDreuse, collision/source/target/provenance guards.
+D01 нормализованные факты→полная обычная 3.x DB→.atbackup→restore→обычные repos:
+все Nutrition/Measurement rows/IDs сохранены без r04 tables, изменение каталога
+не меняет прошлый дневник. Не proof private review/provenance/fulllegacy/APK removal.
+Root/mobileTS/scopedlint/source73/secrets/arch/diff pass. No fullsuite/bundle/APK/
+Android/phone. [Контракт и источники](spikes/R04_NUTRITION_STAGING.md).
+
+NEXT calculator/targets/weekly archives; другие owners/production review/provenance,
+Execution storage/identity/outcomes/precision, connected SQLite/JSON legacy restore,
+Android/removal proof. Goal ACTIVE fullscope/NOT100%; personal2.0 untouched.
+
+## Предыдущее продолжение — дневной вес, базаc56c3f7
 
 2026-10-24 R04→R03/Product10/48.86.36/49.14–49.18/49–50/53–56/INT03–12;
 productionDDL/migration/overlay/signing/release gates OPEN. PreviousPROGRESSc56c3f7.

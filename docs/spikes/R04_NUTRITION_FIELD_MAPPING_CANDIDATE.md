@@ -1,5 +1,11 @@
 # R04 — кандидат сопоставления пищевой записи build120 → 3.0
 
+Исторический source-only кандидат ниже не описывает текущую реализацию.
+С 2026-10-24 есть [частичный synthetic Nutrition staging](R04_NUTRITION_STAGING.md)
+на существующей D01 с масштабом ×10, ID/parity и проверкой обычной копии 3.x.
+Review/provenance и полный legacy restore ещё не подключены; production gates OPEN.
+Старые ×100/targetWrites=0 ниже относятся только к первоначальному аудиту.
+
 **Статус: FIELD-MAPPING CANDIDATE / NOT APPROVED / NO TARGET WRITES.**
 Источник истины: Product §§49.1–49.7, 49.22–49.24; Stage 3 Technical
 Design §06 и `reference-only/sql/001_reference_schema.sql`. Последний SQL —
