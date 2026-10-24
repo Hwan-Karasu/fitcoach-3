@@ -69,7 +69,7 @@ export function stageLegacyNutritionInTransaction(db: DatabaseSync, context: Can
   const tables = [...nutritionTargetTables.map((name) => ({ name,
     rows: (projected.tables[name as keyof typeof projected.tables] ?? []).map(canonical).sort(compare) })),
     { name: "r04_nutrition_ids", rows: db.prepare("SELECT * FROM r04_nutrition_ids").all().map((r) => canonical({ ...r })).sort(compare) }];
-  const targetJson = canonical({ projectionVersion: 1, importedAt, tables, representations: projected.representations,
+  const targetJson = canonical({ projectionVersion: 2, importedAt, tables, representations: projected.representations,
     sourceSha256: createHash("sha256").update(sourceJson).digest("hex") });
   const receipts = db.prepare("SELECT * FROM r04_nutrition_receipt").all();
   if (receipts.length > 1 || receipts.length === 1 && (receipts[0]?.id !== 1 || receipts[0]?.source_json !== sourceJson || receipts[0]?.target_json !== targetJson)) return fail("PARITY_MISMATCH");
@@ -88,6 +88,7 @@ export function stageLegacyNutritionInTransaction(db: DatabaseSync, context: Can
   return { nutritionFoodRows: projected.tables.food_products.length, nutritionRecipeRows: projected.tables.recipes.length,
     nutritionEntryRows: projected.tables.food_diary_entries.length, nutritionWaterRows: projected.tables.water_days.length,
     nutritionStepRows: projected.tables.nutrition_daily_steps.length, nutritionWorkoutMarkRows: projected.tables.nutrition_daily_workout_marks.length,
+    nutritionCalcProfileRows: projected.tables.nutrition_calc_profiles.length,
     nutritionReviewRepresentations: projected.representations.filter((r) => r.issues.length > 0).length, finalizable: false as const };
 }
 export function loadStagedNutrition(db: DatabaseSync) {
@@ -98,7 +99,7 @@ export function loadStagedNutrition(db: DatabaseSync) {
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return fail("PARITY_MISMATCH");
   const manifest = parsed as Record<string, unknown>, seen = new Set<string>();
   const expected = [...nutritionTargetTables, "r04_nutrition_ids"];
-  if (manifest.projectionVersion !== 1 || manifest.sourceSha256 !== createHash("sha256").update(receipts[0].source_json as string).digest("hex")
+  if (manifest.projectionVersion !== 2 || manifest.sourceSha256 !== createHash("sha256").update(receipts[0].source_json as string).digest("hex")
     || !Array.isArray(manifest.tables) || manifest.tables.length !== expected.length) return fail("PARITY_MISMATCH");
   for (const raw of manifest.tables) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return fail("PARITY_MISMATCH");

@@ -1,4 +1,37 @@
-## Продолжение — продукты, рецепты и пищевой дневник, база f0a241f
+## Продолжение — параметры калькулятора, база 800ebb1
+
+2026-10-24, R04→R03/Product49.8–12/49–50/53–56/INT03–12. Frozen
+client_kbju_state + priorowners/IDmap/existingNutrition baseline; productionDDL/
+migration/overlay/signing/release gates OPEN, synthetic/finalizable:false.
+LegacyNutritionCalculator переводит saved goal/activity/intensity и точные целые
+workouts/duration/deficit в nutrition_calc_profiles. Явные 0/0 сохраняются;
+пустые/неизвестные/дробные/out-of-range значения не получают defaults/clamping.
+Sharedtx/sourceSHA/manifestSHA/fullrowparity теперь охватывают профили. Binding
+NUTRITION_REHEARSAL_V2/projectionVersion2 rejectolderjobs; новых DDL нет.
+
+Антропометрия калькулятора остаётся undated input snapshot/raw/review, не меняет
+Client/Measurements. Manual БЖУ — недатированные входы вычисления, не доказанные
+датированные Nutrition Targets. Исходные дроби/0/null/presence/unknown fields
+сохранены, effectiveFrom/targetVersionId=null; вычисленные kcal не подставляются.
+Profile/manual JSON независимы: ошибка одного не обнуляет другой. Параметры с
+sourceUpdatedAt/raw, технический targetUpdatedAt=importTime с явным basis.
+
+593/593 area+deps incl NutritionTargets/Calc;7 новых tests,22 Nutrition total.
+После расширения crossownerfixture 67/67 Nutrition+Execution: сбой receipt откатывает
+5trainingfacts/3sessions/weight/food/calc и всеpriorowners, retry без новых Workout.
+Все Nutrition writeboundaries проверены с 2непустыми calcprofiles. Readonly/reopen/
+reorder/byteidentity сохраняет профили. Обычная 3.xbackup→restore→обычный CalcRepo
+читает точные saved parameters. Это не proof private review/provenance/fulllegacy/
+APKremoval. Root/mobileTS/scopedlint/source73/secrets/arch pass; no fullsuite/
+bundle/APK/native/phone. Concurrentcalendar/theme files не менялись этим срезом.
+
+Недельные архивы пока raw/review. Readonly primarysources показывают days_json vs
+residual aggregate и overlap priorities; средние не разворачиваются в 7dailyfacts,
+физические версии не сливаются по startDate. NEXT archivehistoricalrepresentation,
+остальные owners/productionreview+provenance/Executionstorage/apprestore/Android.
+Goal ACTIVE/fullscope/NOT100%. [Текущий контракт и источники](spikes/R04_NUTRITION_STAGING.md).
+
+## Предыдущее продолжение — продукты, рецепты и пищевой дневник, база f0a241f
 
 2026-10-24, R04→R03; Product49.3–5/49.22–24/49–50/53–56/INT03–12.
 Production DDL/migration/overlay/signing/release gates OPEN; synthetic only,

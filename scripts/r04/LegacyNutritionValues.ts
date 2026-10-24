@@ -66,7 +66,7 @@ export function legacyQuantity(row: Raw, food: FoodInput): number {
 export function nutritionAttempt<T>(run: () => T): { value: T; issues: readonly string[] } | { value: null; issues: readonly string[] } {
   try { return { value: run(), issues: [] }; } catch (error) {
     if (error instanceof Error && error.message === "R04_ID_LEDGER_NUTRITION_IDENTITY_COLLISION") throw error;
-    if (error instanceof Error && /^(R04_ID_LEDGER_NUTRITION_|FOOD_|RECIPE_|DIARY_|INVALID_PORTION)/u.test(error.message)
+    if (error instanceof Error && /^(R04_ID_LEDGER_NUTRITION_|FOOD_|RECIPE_|DIARY_|CALC_PROFILE_INVALID$|INVALID_PORTION)/u.test(error.message)
       && /^[A-Z0-9_]+$/u.test(error.message)) return { value: null, issues: [error.message] };
     throw error;
   }

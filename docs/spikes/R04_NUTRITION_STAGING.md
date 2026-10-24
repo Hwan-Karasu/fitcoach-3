@@ -1,5 +1,8 @@
 # R04: продукты, рецепты и исторические пищевые записи
 
+Первый срез ниже соответствует `800ebb1`. Актуальное продолжение по калькулятору,
+Nutrition mode V2 и дополнительным проверкам находится в конце документа.
+
 2026-10-24, база `f0a241f`. Задача R04 → R03; Product §§49.3–49.5,
 49.22–49.24, 49–50, 53–56; INT-03–12. Входы: immutable snapshots клиентов,
 замеров и шести legacy Nutrition stores; проверенная карта клиентов и существующая
@@ -129,3 +132,68 @@ boundaries и diff check прошли. Full foundation, bundle/APK, Android/phon
 Следующий участок: калькулятор/цели и недельные архивы; затем остальные owners,
 production representations/review storage, полная сверка и подключённое восстановление
 SQLite/JSON legacy, Android и доказательство переходного/обычного релизов.
+
+## Продолжение: профиль калькулятора (R04, база 800ebb1)
+
+Входы/зависимости прежние: frozen client_kbju_state, карта клиентов и Nutrition
+baseline после всех предыдущих владельцев. Product §§49.8–49.12, 49–50, 53–56,
+INT-03–12. Все production/migration/release gates OPEN; только synthetic staging.
+Реализован перенос подтверждённых параметров расчёта в nutrition_calc_profiles.
+LegacyNutritionCalculator сопоставляет точные enums goal/activity/intensity и
+проверенные целые workouts/duration/deficit через действующий validateCalcProfile.
+Явные 0 тренировок/0 поправки сохраняются. Пустое/missing значение не становится 0;
+неизвестные enums, дроби и выход за диапазон остаются raw/review. Числовые строки
+с точным целым значением вроде 03.00/90,0 сохраняют значение, не округляются.
+
+Источники read-only на том же exact ref:
+
+- [ClientKbjuStateRepository](https://github.com/Hwan-Karasu/fitcoach/blob/e116b42e95f70a5a5e563420ab25394944c59ffd/apps/mobile/src/features/kbju/data/ClientKbjuStateRepository.ts)
+  хранит текущие profile_json/manual_kbju_json и время правки всей строки.
+  Его fallback/default merge не переносится как доказательство сохранённых полей.
+- [kbjuTypes](https://github.com/Hwan-Karasu/fitcoach/blob/e116b42e95f70a5a5e563420ab25394944c59ffd/apps/mobile/src/features/kbju/model/kbjuTypes.ts)
+  доказывает набор полей, единицы и точные labels.
+- [kbjuProfileSeed](https://github.com/Hwan-Karasu/fitcoach/blob/e116b42e95f70a5a5e563420ab25394944c59ffd/apps/mobile/src/features/kbju/model/kbjuProfileSeed.ts)
+  и [kbjuScreenActions](https://github.com/Hwan-Karasu/fitcoach/blob/e116b42e95f70a5a5e563420ab25394944c59ffd/apps/mobile/src/features/kbju/application/kbjuScreenActions.ts#L70)
+  могли подставить антропометрию из карточки. Это не отдельный замер/изменение карточки.
+- [deriveKbjuMetrics](https://github.com/Hwan-Karasu/fitcoach/blob/e116b42e95f70a5a5e563420ab25394944c59ffd/apps/mobile/src/features/kbju/model/engine/deriveKbjuMetrics.ts)
+  и [macroMath](https://github.com/Hwan-Karasu/fitcoach/blob/e116b42e95f70a5a5e563420ab25394944c59ffd/apps/mobile/src/features/kbju/model/engine/macroMath.ts)
+  применяли manual БЖУ как входы расчёта, с округлением и заполнением отсутствующих
+  макросов. Сохранённый ввод не доказывает итоговый датированный Nutrition Target.
+
+Антропометрические поля калькулятора остаются отдельным snapshot с UNKNOWN date,
+без targetMeasurementIds/перезаписи карточки. Частичное присутствие и неизвестные
+поля отражены явно. Manual JSON разбирается независимо от profile JSON: повреждение
+одного не уничтожает другой. Исходные строки, дроби, нули, null и неизвестные поля
+сохраняются; непустой ввод требует storage решения. Не вычисляются калории из БЖУ,
+не создаются версии целей/исключения или guessed effectiveFrom из updated_at/дня
+импорта. Технический updated_at профиля = importTime с явным basis.
+
+Новые representations входят в общий SHA/manifest parity. Binding
+NUTRITION_REHEARSAL_V2 и projectionVersion2 отклоняют старые private jobs без
+автоматической пересборки. Новых таблиц/production DDL нет; все обычные Nutrition
+tables уже входят в rollback/target guards. Результат сообщает nutritionCalcProfileRows.
+
+593/593 area+deps (предыдущий набор + Nutrition Targets/Calc), 22 Nutrition tests,
+семь новых calculator tests. После расширения cross-owner fixture дополнительно
+67/67 Nutrition+Execution: сбой receipt откатывает также 5 выполненных фактов,
+3 компонента тренировок, вес, пищу и профиль расчёта; retry не создаёт Workout.
+Все write boundaries теперь выполняются с непустыми
+профилями двух клиентов, включая 0/0; полный rollback/retry проверен. Readonly/
+reopen/reorder/byteidentity proof включает профили. Обычная 3.x .atbackup→restore
+сверяет все строки, и обычный DevNutritionCalcRepository читает исходные параметры.
+Это по-прежнему proof нормализованных фактов, не private snapshots/provenance/полного
+legacy restore/APK removal. Root/mobile TypeScript, scoped ESLint, source73,
+secrets и arch pass. Во время первой mobile проверки параллельно редактировался
+AppointmentEditorScreen; после появления недостающих styles mobile TypeScript
+перепроверен успешно. Этот чужой UI-файл не правился в данном срезе. Fullsuite/
+bundle/APK/Android/phone не запускались.
+
+Недельные архивы ещё требуют сопоставления. Проверены read-only
+[NutritionHistoryRepository](https://github.com/Hwan-Karasu/fitcoach/blob/e116b42e95f70a5a5e563420ab25394944c59ffd/apps/mobile/src/features/kbju/data/NutritionHistoryRepository.ts)
+и [nutritionHistory](https://github.com/Hwan-Karasu/fitcoach/blob/e116b42e95f70a5a5e563420ab25394944c59ffd/apps/mobile/src/features/kbju/model/nutritionHistory.ts):
+days_json и недельные residual aggregates различны; более поздние архивные снимки
+могли перекрывать дневные поля, текущий дневник/дневные факты имели свой приоритет.
+Нельзя распределять средние по семи дням, объединять физические версии по startDate
+или создавать пищевые записи из summary. Следом нужны их историческое представление
+и правила overlap, production review/provenance storage, остальные owners/полный
+legacy restore и Android. Неподдержанные значения не считаются завершённым переносом.

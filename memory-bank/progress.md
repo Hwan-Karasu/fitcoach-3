@@ -1,63 +1,58 @@
 # Progress — 2026-10-24
 
 Goal ACTIVE full2.0→3.0+backup/restore NOTDONE. R04→R03/Product49–50/53–56/INT03–12.
-ProductionDDL/realmigration/overlay/signing/release gates OPEN; private synthetic
-staging/finalizable:false. Russiancommits/nopush/no agents/targetedchecks. UIlater/
-Excelafterbackup/GitHubfirst. Preserve concurrenttheme/calendar paths/packagehunks.
-User8d0031a bridge3.0→normal3.x withoutimporter, keepbridgeforlateusers +3.xdata/
-precision/provenance/regularbackup. Fullremovalproof stillrequired.
+ProdDDL/realmigration/overlay/signing/release gates OPEN; synthetic/finalizable:false.
+Russiancommits/nopush/no agents/targetedchecks. UIlater/Excelafterbackup/GitHubfirst.
+Preserve concurrenttheme/calendar/packagehunks. User8d0031a bridge3.0→normal3.x
+withoutimporter, keepbridge lateusers +3.xdata/precision/provenance/regularbackup.
+Fullremovalproof required. ExpoRestoreJobsONLY3.x NOTlegacy. BackupD01/fullsnapshot/
+GuardedRestore/return15holders/closedrecovery/WAL/capacity/generation/GC priorwork.
+Historicalnative35/12/13/24/3/Downloads20/SAF19/reinstall6/auto21/status3/missing19/
+actualkill15+14; fixtureCOMPLETE/noarmedpause/2.0safe. No currentphone/PID proof.
 
-Backup: D01/fullsnapshot/hash/media/GuardedRestore/return15holders/closedrecovery/UI/
-WAL/capacity/generation/GC. ExpoRestoreJobsONLY3.x, NOTlegacy. Historicalnative35/12/
-13/24/3/Downloads20/SAF19/reinstall6/auto21/status3/missing19/actualkill15+14; fixture
-COMPLETE/noarmedpause/2.0safe. No phone/PID revalidation thissession, no fullfoundation.
+Prior Profile37/Qhistory/epochs/privateWorkData/registry/Plans92d00bb/templates74fa6cf/
+archives12381f4. 032b7e5 canonicalExecution account+client/physicalgraph/exactsegments/
+date/SHA/no name-value-slotmerges. b64fac9 undatedruntimehistory/records retained,
+no fakegraphs/weightdate; IANA/cache. e93a4c8 editablepartials/nullvs0/DROP/effort/RPE.
+3015bdd contexts/exactnotes/rootcyclealiases/statusvsderived/targetOutcomeNULL.
+60134d7 logs6thsource/raw+paths/cacheID+metadata aliases/unknowncompletioneditable;
+V3binding/Node24tokens/arbitraryJSONimporter notwriterproof. Runtimewrite pending.
+c56c3f7 circumference/f0a241f dailyweight→D01private/stablefieldIDs/dateonly/unsided/
+no guessedprimary. Dailyweight possibleprofileprefill+blur save provenance, notnew
+weighinproof. Profileweight UNKNOWN/targetIdNULL/no guesseddate/equalitymerge.
+Calculatorweight/fatPercent notfacts; outlier/zero/negativezero/future/precision
+rawreview/no rounding/clipping/fake0. MeasurementV2,460historicaltests.
 
-Prior R04 Profile37/Qhistory/epochs/privateWorkData/health/registry/LOAD_REPS/IDs;
-Plans92d00bb/templates74fa6cf/archives12381f4. Canonical032b7e5 account+client/physical
-refs/sharedfactgraph/exactsegments/date/SHA/parity, no name/value/slot merges.
-b64fac9 undatedruntimehistory/records/alltime retained/no fakegraphs/weightdate,
-IANAprojection/cache. e93a4c8 editablepartial/nullvs0/DROP/kind/effort/RPE/rawreview.
-3015bdd contexts inclnotes-only/emptyfree/exactnotes vsinstruction/rootcyclealiases/
-statusvsderived/targetOutcomeNULL. 60134d7 logs6thsource/fullraw+paths/proven cacheID+
-metadata+client/workout aliases; unknowncompletion editable/nodate, V3binding/Node24
-tokens. ArbitraryJSONimporter notproofinnerwriter; runtimelegacywrite notconnected.
+800ebb1 Nutrition→existingD01private: sixfullrawstores/nullabsence, frozen/sharedtx,
+daysource==Measurementsreceipt, accountIDs/sourceSHA/manifestSHA/fullrowparity.
+Products/representableRecipes/diary/water/positiveSteps/Да–НетNutritionmarks.
+Historicalsnapshot+savedtotals nativeoverride/no catalogrewrite/phantomfood. Expanded
+recipeingredients/no doublecount. ProvedJSONmissingmode/unit→grams only. ExactX10/
+JSONtokens/nullvs0; explicitcreatedtimebasis/updatedimportTime. Water-only unaccounted,
+marks notWorkout/Credit.550historicaltests. Recipeversions/rounding/duplicates/
+unknownactualtotals/extrasunits/0steps/badJSON stillrawreview/notfullmigration.
 
-c56c3f7 circumference→D01measurementrows privatejob, stablephysicalfieldIDs/dateonly/
-unsided/no guessedprimary; fullraw/parity/retry/sourcebytes. f0a241f dailyweight→
-exacttenths WEIGHT/DATE/localMinuteNULL/stableUUID scope/table/client/date/field.
-Equalvalues acrossdates/clients retained. Savedday possibleprofileprefill+blursave
-explicitprovenance/notnewweighinproof. Profileweight UNKNOWN/targetIdNULL, no guessed
-created/updated/importdate/equalitymerge. Calculatorweight/fatPercent notfacts.
-Precision/bounds/zero/negativezero/future review, no round/clipping/fake0.
-MeasurementmodeV2/projectionVersion2; normalizedfacts normal3.xbackup proof.460historical.
+CURRENT LegacyNutritionCalculator.ts: saved goal/activity/intensity +wholeworkouts/
+duration/deficit→nutrition_calc_profiles via validateCalcProfile. Explicit0/0kept,
+no default/clamping missing/blank/fraction/unknown/outofrange. Undatedbodyinputs
+snapshot notClient/Measurements. ManualJSON independent: originalfractions/0/null/
+presence/unknownfields kept; undatedCALCINPUT notTargetSchedule/effectiveFrom/version
+NULL/no computedkcal. TargetupdatedimportTime explicitbasis. Sharedtx/source/target/
+provenanceguards, NutritionbindingV2/projectionVersion2 rejectoldjobs/no newDDL.
+CountnutritionCalcProfileRows.7newtests/22Nutritiontotal.593/593 area+deps inclTargets/
+Calc; latest67/67 Nutrition+Execution aftercrossownerfixtureupdate: receiptfailure
+rollbackpriorowners/5facts/3components/weight/food/calc, retry withoutnewWorkout.
+EveryNutritionboundary now2nonemptyprofiles. Readonly/reopen/reorder/byteidentity
+includesprofiles. Normal3.xDB→.atbackup→restore→normalCalcRepo exactparameters +all
+Nutrition/Measurementrows/IDs preserved withoutprivate r04tables. NOTproof private
+productionprovenance/review/fulllegacy/APKremoval. Root/mobileTS/scopedlint/source73/
+secrets/arch/diff pass. Initialforeigncalendarstylesmissing resolvedbyotherthread/
+mobile recheckedpass. No fullsuite/bundle/APK/native/phone. Contract NutritionSTAGING/
+handofftop updated. Real2.0/personaldata/scrcpy untouched, finalizable:false.
 
-CURRENT Nutrition: LegacyNutritionSourceReader/Values/Projection/Stage +ledger
-stageClientNutrition/loadNutritionDraftEntries. Sixfullraw stores/nullabsence,
-frozeninputs/sharedtx, daysource==Measurementsreceipt. StableaccountscopedIDs,
-sourceSHA/manifestSHA/fulltableparity, NUTRITION_REHEARSAL_V1. ExistingNutrition
-baseline onlyprivatejob; no newprodDDL/appimport. Products/representableRecipes/
-diary/water/positiveSteps/Да–Нетnutritionmarks→D01. Historicalsnapshot+savedtotals
-via nativeoverride, no currentcatalogrewrite/phantomfood. Recipeexpandedingredients
-notdoublecounted. ProvedJSONmissingmode/unit→grams only. ExactX10/JSONtokens,
-nullvs0 retained. SourceCreatedAt elseimportTime withbasis; updatedimportTime
-explicitbasis notfakelegacyedittime. Water-only notfoodday; marks notWorkout/Credit.
-Rawreview pending recipeingredientversions/rounding/duplicates, unknownactualtotals,
-extrasunits/0steps/precision/badJSON/unsupportedshapes. Calc/manualtargets/weekly
-archives RAW ONLY, no fakegoals/7days/bodyfatmeasurements.
-
-550/550 area+deps: R04Plans,measurementprojection/preflight,SQLitebackup,nutrition
-catalog/recipe/diary/edit/energy/stats/calcstore.16new=15Nutrition+crossownerExecution.
-EveryNutritionwriteboundary+beforecommit rollbackpriorowners+IDs/retry; readonly/
-reopen/reorder/byteidentity/IDsreuse, frozen/source/target/provenance/collisionguards.
-NormalizedD01facts→fullnormal3.xDB→.atbackup→restore→normalrepos retainsallNutrition/
-Measurementrows/IDs withoutprivate r04tables. Historicaltotals unchangedcatalogedit.
-Provesnormalizedfacts only, notprivateproductionprovenance/review/fulllegacy/APKremoval.
-Root/mobileTS/ownlint/source73/secrets/arch/diff pass; no bundle/fullsuite/APK/native/
-phone. Contract R04_NUTRITION_STAGING.md +historicalcandidatecrosslink/handofftop.
-Real2.0/personaldata/scrcpy untouched. finalizable:false/goalACTIVE.
-
-NEXT calc/targets/weeklyarchives, Calendar/Ledger, productionreview/provenance,
-Executionstorage/identity/outcomes/precision/notes/drafts, connectedSQLite+JSONlegacy
-restore/fullparity/Android/removalproof. Catalog/phase1archives/templateextras&variation/
-orphans/preferences/lineage OPEN. Backupclock/DST/SAFgap/copydeletekill/ENOSPC/providers/
-UI/OS/first-run OPEN. Neverclaim100% fromprivateprojectiontests.
+NEXT weeklyarchives historicalrepresentation: days_json vsresidualaggregate/overlap
+priorities proved, rawonly; no averages→7days/mergephysicalversions. Calendar/Ledger/
+productionreview+provenance/Executionstorage/identity/outcomes/precision/notes/drafts,
+fullparity/appSQLite+JSONlegacyrestore/Android/removalproof. Catalog/phase1archives/
+templateextras&variation/orphans/preferences/lineage OPEN. Backupclock/DST/SAFgap/
+copydeletekill/ENOSPC/providers/UI/OS/first-run OPEN. Neverclaim100% fromprivateproofs.

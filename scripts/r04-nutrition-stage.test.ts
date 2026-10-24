@@ -18,6 +18,7 @@ import { prepareProductionDatabase } from "../apps/mobile/src/app/composition/pr
 import { DevFoodCatalogRepository } from "../apps/mobile/src/features/nutrition/data/DevFoodCatalogRepository.ts";
 import { DevRecipeCatalogRepository } from "../apps/mobile/src/features/nutrition/data/DevRecipeCatalogRepository.ts";
 import { DevNutritionDiaryRepository } from "../apps/mobile/src/features/nutrition/data/DevNutritionDiaryRepository.ts";
+import { DevNutritionCalcRepository } from "../apps/mobile/src/features/nutrition/data/DevNutritionCalcRepository.ts";
 import { summarizeDay } from "../apps/mobile/src/features/nutrition/domain/DiaryRules.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
 import { createSqliteBackup, prepareBackupForRestore } from "./r06/SqliteBackup.ts";
@@ -35,6 +36,12 @@ function snapshot(id = "p", historical = false) { return { id, name: historical 
 function meal(id: string, historical = true) { return { id, productId: "p", productSnapshot: snapshot("p", historical), grams: historical ? "17.4" : "100", unit: "grams", pieceCount: "",
   calories: historical ? 17 : 300, protein: historical ? 0.9 : 10, fat: historical ? 0.2 : 5, carbs: historical ? 1.7 : 30, createdAt: time }; }
 const emptyMeals = () => ({ breakfast: [] as unknown[], lunch: [] as unknown[], dinner: [] as unknown[], snack: [] as unknown[] });
+const calcProfile = () => ({ goal: "Похудение", activity: "Очень активный", workouts: "3", workoutDuration: "90", workoutIntensity: "Тяжелая", deficit: "300" });
+function seedCalculator(db: DatabaseSync) {
+  db.exec("CREATE TABLE client_kbju_state(client_id TEXT PRIMARY KEY,profile_json TEXT,manual_kbju_json TEXT,updated_at TEXT)");
+  for (const client of ["a", "b"]) db.prepare("INSERT INTO client_kbju_state VALUES(?,?,?,?)").run(client,
+    JSON.stringify(client === "a" ? calcProfile() : { ...calcProfile(), goal: "Поддержание", workouts: "0", deficit: "0" }), '{"protein":"","fat":"","carbs":""}', time);
+}
 function seed(db: DatabaseSync) {
   db.exec(`CREATE TABLE clients(id TEXT PRIMARY KEY,workspace_id TEXT,name TEXT,created_at TEXT,updated_at TEXT,archived_at TEXT,deleted_at TEXT,birthdate TEXT,height TEXT,gender TEXT,avatar_emoji TEXT,profile_json TEXT,weight TEXT);
     CREATE TABLE food_products(id TEXT PRIMARY KEY,name TEXT,brand TEXT,barcode TEXT,serving_mode TEXT,grams_per_piece REAL,calories REAL,protein REAL,fat REAL,carbs REAL,favorite INTEGER,created_at TEXT,updated_at TEXT,fiber REAL,sugar REAL,sodium REAL,cholesterol REAL);
@@ -121,7 +128,7 @@ test("calculator/weekly aggregates and uncertain extra nutrient units remain exp
     INSERT INTO client_kbju_state VALUES('a','{"weight":"99","fatPercent":"12"}','{}','${time}');
     CREATE TABLE nutrition_archive_weeks(id TEXT,client_id TEXT,avg_weight REAL,details_json TEXT);
     INSERT INTO nutrition_archive_weeks VALUES('week','a',80.1,'{"days":[]}'); UPDATE food_products SET sodium=100`);
-  const { result } = stage(source, target); assert.equal(result.nutritionReviewRepresentations, 3);
+  const { result } = stage(source, target); assert.equal(result.nutritionReviewRepresentations, 4);
   for (const name of ["nutrition_calc_profiles", "nutrition_target_versions", "nutrition_target_days"]) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${name}`).get()?.n, 0);
   assert.equal(target.prepare("SELECT count(*) AS n FROM body_measurements").get()?.n, 1);
   assert.match(receipt(target).target_json as string, /EXTRA_NUTRIENT_UNITS_UNPROVEN/u);
@@ -142,12 +149,14 @@ test("source identity collisions, foreign owners and mixed-time daily snapshots 
 test("each nutrition write boundary rolls back prior owners, IDs and all nutrition tables, then permits clean retry", async () => {
   const phases = ["after-nutrition-ids", ...nutritionTargetTables.map(() => "after-nutrition-rows"), "after-nutrition-receipt", "before-commit"];
   for (const [index, phase] of phases.entries()) await fixture((source, target) => {
+    seedCalculator(source);
     const data = input(source), ledger = prepareCandidateIdentityLedger(target, context, options), occurrence = phases.slice(0, index + 1).filter((p) => p === phase).length; let seen = 0;
     assert.throws(() => ledger.stageClientNutrition(data.cards, null, [], [], plans, executions, data.measurements, data.nutrition, allocator(), (p) => {
       if (p === phase && ++seen === occurrence) throw new Error("injected");
     }), /WRITE_FAILED/u);
     for (const name of ["clients", "body_measurements", "r04_work_notes", "r04_measurement_ids", "r04_measurement_receipt", "r04_nutrition_ids", "r04_nutrition_receipt", ...nutritionTargetTables]) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${name}`).get()?.n, 0, name);
-    assert.equal(ledger.stageClientNutrition(data.cards, null, [], [], plans, executions, data.measurements, data.nutrition, allocator()).nutritionEntryRows, 4);
+    const retried = ledger.stageClientNutrition(data.cards, null, [], [], plans, executions, data.measurements, data.nutrition, allocator());
+    assert.equal(retried.nutritionEntryRows, 4); assert.equal(retried.nutritionCalcProfileRows, 2);
   });
 });
 
@@ -177,7 +186,7 @@ test("read-only source, reopened target and reordered rows/properties retain byt
   const dir = mkdtempSync(join(tmpdir(), "athlete-r04-nutrition-")), sourcePath = join(dir, "source.db"), targetPath = join(dir, "target.db");
   const hash = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex"); let source: DatabaseSync | null = null, target: DatabaseSync | null = null;
   try {
-    source = new DatabaseSync(sourcePath); seed(source); source.close(); source = null; const before = hash(sourcePath);
+    source = new DatabaseSync(sourcePath); seed(source); seedCalculator(source); source.close(); source = null; const before = hash(sourcePath);
     source = new DatabaseSync(sourcePath, { readOnly: true }); source.exec("PRAGMA query_only=ON; BEGIN"); const data = input(source), exact = { ...context, sourceSha256: before };
     target = new DatabaseSync(targetPath); const ledger = prepareCandidateIdentityLedger(target, exact, options);
     ledger.stageClientNutrition(data.cards, null, [], [], plans, executions, data.measurements, data.nutrition, allocator()); const entries = ledger.loadNutritionDraftEntries();
@@ -192,6 +201,7 @@ test("read-only source, reopened target and reordered rows/properties retain byt
 });
 
 test("ordinary 3.x backup restores mapped catalog/recipe/food facts; catalog editing preserves historic totals and water-only days remain unaccounted", () => fixture(async (source, target) => {
+  seedCalculator(source);
   const { ledger } = stage(source, target), client = ledger.loadClientDraftIds().clients.get(JSON.stringify([context.accountScope, "a"]))!;
   const dir = mkdtempSync(join(tmpdir(), "athlete-r04-nutrition-backup-")), live = join(dir, "live.db"), restored = join(dir, "restored.db"), backup = join(dir, "copy.atbackup");
   try {
@@ -215,18 +225,20 @@ test("ordinary 3.x backup restores mapped catalog/recipe/food facts; catalog edi
       }
     } finally { candidate.close(); }
     const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(new DatabaseSync(restored))), foods = new DevFoodCatalogRepository(shared, context.targetWorkspaceId),
-      recipes = new DevRecipeCatalogRepository(shared, context.targetWorkspaceId), diary = new DevNutritionDiaryRepository(shared, context.targetWorkspaceId);
-    for (const store of [foods, recipes, diary]) await store.initialize();
+      recipes = new DevRecipeCatalogRepository(shared, context.targetWorkspaceId), diary = new DevNutritionDiaryRepository(shared, context.targetWorkspaceId),
+      calculator = new DevNutritionCalcRepository(shared, context.targetWorkspaceId);
+    for (const store of [foods, recipes, diary, calculator]) await store.initialize();
     try {
       const entries = await diary.listEntries(client, day, "2026-03-03"), summary = summarizeDay(day, entries);
       assert.equal(entries.length, 3); assert.equal(summary.totals.kcalX10, 3370);
       assert.deepEqual(await diary.listAccountedDates(client, day, "2026-03-03"), [day]); assert.equal((await diary.listWater(client, day, "2026-03-03")).length, 2);
       assert.equal((await recipes.search())[0]!.ingredients.length, 1);
+      assert.deepEqual(await calculator.getProfile(client), { revision: 1, profile: { goal: "LOSS", activity: "VERY_ACTIVE", workoutsPerWeek: 3, minutes: 90, intensity: "HEAVY", stepKcal: 300 } });
       const food = (await foods.search())[0]!; await foods.update(food.id, food.revision, { ...food, name: "Переименовано после переноса", kcalX10: 9000 }, new Date(imported));
       assert.equal(summarizeDay(day, await diary.listEntries(client, day, day)).totals.kcalX10, 3370);
       const check = new DatabaseSync(restored, { readOnly: true });
       try { assert.equal(check.prepare("SELECT count(*) AS n FROM sqlite_schema WHERE name LIKE 'r04_%'").get()?.n, 0); } finally { check.close(); }
-    } finally { for (const store of [diary, recipes, foods]) await store.close(); }
+    } finally { for (const store of [calculator, diary, recipes, foods]) await store.close(); }
   } finally { removeFixtureDirectory(dir, "athlete-r04-nutrition-backup-"); }
 }));
 
@@ -272,4 +284,98 @@ test("ID allocation collisions abort every owner instead of being converted into
   }), /IDENTITY_COLLISION/u);
   assert.equal(injected, true);
   for (const name of ["clients", "body_measurements", "food_products", "r04_nutrition_ids"]) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${name}`).get()?.n, 0);
+}));
+
+test("saved calculator parameters map by owner with explicit zero, without creating targets or anthropometric facts", () => fixture((source, target) => {
+  seedCalculator(source);
+  source.prepare("UPDATE client_kbju_state SET profile_json=? WHERE client_id='a'").run(JSON.stringify({ ...calcProfile(),
+    gender: "Женский", age: "39", height: "170", weight: "99.9", fatPercent: "17.3" }));
+  const { result, ledger } = stage(source, target);
+  assert.equal(result.nutritionCalcProfileRows, 2); assert.equal(result.nutritionReviewRepresentations, 1);
+  const clients = ledger.loadClientDraftIds().clients, a = clients.get(JSON.stringify([context.accountScope, "a"]))!, b = clients.get(JSON.stringify([context.accountScope, "b"]))!;
+  assert.equal(target.prepare("SELECT goal FROM nutrition_calc_profiles WHERE client_id=?").get(a)?.goal, "LOSS");
+  assert.equal(target.prepare("SELECT step_kcal FROM nutrition_calc_profiles WHERE client_id=?").get(b)?.step_kcal, 0);
+  assert.equal(target.prepare("SELECT workouts_per_week FROM nutrition_calc_profiles WHERE client_id=?").get(b)?.workouts_per_week, 0);
+  assert.equal(target.prepare("SELECT count(*) AS n FROM body_measurements").get()?.n, 1);
+  assert.equal(target.prepare("SELECT value_x10 FROM body_measurements").get()?.value_x10, 801);
+  for (const name of ["nutrition_target_versions", "nutrition_target_days", "nutrition_target_exceptions"]) assert.equal(target.prepare(`SELECT count(*) AS n FROM ${name}`).get()?.n, 0);
+  const representations = JSON.parse(receipt(target).target_json as string).representations as { issues: string[]; metadata: Record<string, unknown> }[];
+  const body = representations.find((r) => r.issues.includes("UNDATED_CALCULATOR_BODY_INPUT_STORAGE_REQUIRED"))!;
+  assert.deepEqual(body.metadata.inputs, { gender: "Женский", age: "39", height: "170", weight: "99.9", fatPercent: "17.3" });
+  assert.equal(body.metadata.datePrecision, "UNKNOWN"); assert.deepEqual(body.metadata.targetMeasurementIds, []);
+}));
+
+test("unknown, blank, missing, fractional and out-of-range calculator parameters stay review instead of receiving defaults or clamping", async () => {
+  for (const patch of [{ workouts: "" }, { workouts: null }, { workouts: "3.1" }, { workouts: "22" }, { workoutDuration: "0" },
+    { workoutDuration: "601" }, { deficit: "1001" }, { deficit: "-300" }, { activity: "Новая активность" }, { goal: "Рекомпозиция" },
+    { workoutIntensity: "Другая" }, { workouts: 3 }, { workouts: "9007199254740993" }]) await fixture((source, target) => {
+    seedCalculator(source); source.prepare("UPDATE client_kbju_state SET profile_json=? WHERE client_id='a'").run(JSON.stringify({ ...calcProfile(), ...patch }));
+    const { result } = stage(source, target); assert.equal(result.nutritionCalcProfileRows, 1); assert.equal(result.nutritionReviewRepresentations, 1);
+    assert.equal(target.prepare("SELECT count(*) AS n FROM food_diary_entries").get()?.n, 4);
+    assert.match(receipt(target).source_json as string, /profile_json/u);
+  });
+});
+
+test("all proved calculator enum values and exact integer decimal forms retain their values", async () => {
+  for (const [goal, activity, workoutIntensity, expected] of [
+    ["Похудение", "Сидячий", "Легкая", ["LOSS", "SEDENTARY", "LIGHT"]],
+    ["Поддержание", "Умеренный", "Средняя", ["MAINTENANCE", "MODERATE", "MEDIUM"]],
+    ["Набор", "Активный", "Тяжелая", ["GAIN", "ACTIVE", "HEAVY"]],
+  ] as const) await fixture((source, target) => {
+    seedCalculator(source); source.prepare("UPDATE client_kbju_state SET profile_json=? WHERE client_id='a'").run(JSON.stringify({ ...calcProfile(),
+      goal, activity, workoutIntensity, workouts: "03.00", workoutDuration: "90,0", deficit: "000300" }));
+    const { ledger } = stage(source, target), client = ledger.loadClientDraftIds().clients.get(JSON.stringify([context.accountScope, "a"]))!;
+    const row = target.prepare("SELECT * FROM nutrition_calc_profiles WHERE client_id=?").get(client)!;
+    assert.deepEqual([row.goal, row.activity, row.intensity], expected); assert.deepEqual([row.workouts_per_week, row.workout_minutes, row.step_kcal], [3, 90, 300]);
+    assert.equal(row.updated_at, imported);
+  });
+});
+
+test("manual macro inputs retain original fractions/zero/partial presence without rounding or inventing effective dates and calories", () => fixture((source, target) => {
+  seedCalculator(source);
+  const manual = '{"protein":"120.55","fat":"0","other":"retain","carbs":null}';
+  source.prepare("UPDATE client_kbju_state SET manual_kbju_json=? WHERE client_id='a'").run(manual);
+  const { result } = stage(source, target); assert.equal(result.nutritionCalcProfileRows, 2);
+  const manifest = JSON.parse(receipt(target).target_json as string), items = manifest.representations as { issues: string[]; metadata: Record<string, unknown> }[];
+  const representation = items.find((r) => r.issues.includes("UNDATED_MANUAL_MACRO_STORAGE_REQUIRED"))!;
+  assert.deepEqual(representation.metadata.values, { protein: "120.55", fat: "0", carbs: null });
+  assert.deepEqual(representation.metadata.unknownFields, ["other"]); assert.equal(representation.metadata.effectiveFrom, null);
+  assert.equal(representation.metadata.targetVersionId, null); assert.ok(representation.issues.includes("MANUAL_MACRO_FIELDS_UNSUPPORTED"));
+  const raw = JSON.parse(receipt(target).source_json as string); assert.ok(raw.tables.client_kbju_state.some((r: string) => JSON.parse(r).manual_kbju_json === manual));
+  assert.equal(target.prepare("SELECT count(*) AS n FROM nutrition_target_versions").get()?.n, 0);
+}));
+
+test("broken calculator JSON and manual JSON are independent and never reset valid saved parameters", async () => {
+  for (const brokenProfile of [true, false]) await fixture((source, target) => {
+    seedCalculator(source);
+    source.prepare(`UPDATE client_kbju_state SET ${brokenProfile ? "profile_json" : "manual_kbju_json"}=? WHERE client_id='a'`).run("{broken");
+    if (brokenProfile) source.prepare("UPDATE client_kbju_state SET manual_kbju_json=? WHERE client_id='a'").run('{"protein":"100"}');
+    const { result } = stage(source, target); assert.equal(result.nutritionCalcProfileRows, brokenProfile ? 1 : 2);
+    assert.match(receipt(target).target_json as string, /NUTRITION_JSON_INVALID/u);
+    if (brokenProfile) assert.match(receipt(target).target_json as string, /UNDATED_MANUAL_MACRO_STORAGE_REQUIRED/u);
+    assert.equal(target.prepare("SELECT count(*) AS n FROM nutrition_target_versions").get()?.n, 0);
+  });
+});
+
+test("calculator input is frozen with the owner snapshot and subsequent source/target edits are rejected", () => fixture((source, target) => {
+  seedCalculator(source);
+  const data = input(source), ledger = prepareCandidateIdentityLedger(target, context, options);
+  ledger.stageClientNutrition(data.cards, null, [], [], plans, executions, data.measurements, data.nutrition, allocator(), (phase) => {
+    if (phase === "after-ids") Object.assign(data.nutrition.tables.client_kbju_state![0]!, { profile_json: "injected" });
+  });
+  assert.doesNotMatch(receipt(target).source_json as string, /injected/u);
+  source.prepare("UPDATE client_kbju_state SET manual_kbju_json=? WHERE client_id='a'").run('{"fat":"50"}');
+  const changed = input(source);
+  assert.throws(() => ledger.stageClientNutrition(changed.cards, null, [], [], plans, executions, changed.measurements, changed.nutrition, allocator()), /PARITY_MISMATCH/u);
+  target.exec("UPDATE nutrition_calc_profiles SET step_kcal=123"); assert.throws(() => ledger.loadNutritionDraftEntries(), /PARITY_MISMATCH/u);
+}));
+
+test("calculator V2 rejects an older nutrition job and unsupported manifest versions", () => fixture((source, target) => {
+  seedCalculator(source); const { ledger } = stage(source, target);
+  target.exec("UPDATE r04_candidate_identity SET context_json=replace(context_json,'NUTRITION_REHEARSAL_V2','NUTRITION_REHEARSAL_V1')");
+  assert.throws(() => prepareCandidateIdentityLedger(target, context, options), /CONTEXT_MISMATCH/u);
+  target.exec("UPDATE r04_candidate_identity SET context_json=replace(context_json,'NUTRITION_REHEARSAL_V1','NUTRITION_REHEARSAL_V2')");
+  const manifest = JSON.parse(receipt(target).target_json as string); manifest.projectionVersion = 1; const json = JSON.stringify(manifest);
+  target.prepare("UPDATE r04_nutrition_receipt SET target_json=?,target_sha256=?").run(json, createHash("sha256").update(json).digest("hex"));
+  assert.throws(() => ledger.loadNutritionDraftEntries(), /PARITY_MISMATCH/u);
 }));

@@ -8,10 +8,11 @@ import { assertDate, assertOverride, assertQuantity, assertWater } from "../../a
 import { validateRecipe } from "../../apps/mobile/src/features/nutrition/domain/RecipeRules.ts";
 import { sumNutrients } from "../../apps/mobile/src/features/nutrition/domain/EnergyRules.ts";
 import { isExplicitTimestamp } from "./ExactScaledHundredth.ts";
+import { legacyCalcInputSnapshot, legacyCalcProfile, legacyManualMacroSnapshot } from "./LegacyNutritionCalculator.ts";
 
 export type NutritionIdentityKind = "FOOD" | "RECIPE" | "ENTRY";
 export type NutritionRow = Record<string, string | number | null>;
-export const NUTRITION_CORE_TABLES = ["food_products", "recipes", "recipe_ingredients", "food_diary_entries", "water_days", "nutrition_daily_steps", "nutrition_daily_workout_marks"] as const;
+export const NUTRITION_CORE_TABLES = ["food_products", "recipes", "recipe_ingredients", "food_diary_entries", "water_days", "nutrition_daily_steps", "nutrition_daily_workout_marks", "nutrition_calc_profiles"] as const;
 interface Representation { readonly sourceKey: string; readonly targetIds: readonly string[]; readonly issues: readonly string[]; readonly metadata: unknown }
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 const flag = (v: unknown) => v === 0 || v === 1 ? v : fail("FLAG_INVALID");
@@ -146,8 +147,27 @@ export function composeLegacyNutrition(context: CandidateIdentityContext, import
       client_id: clients.get(id(row.client_id))!, local_date: id(row.date_key), [field === "steps" ? "steps" : "done"]: value, updated_at: importedAt });
     return [];
   }, { targetUpdatedAtBasis: "IMPORT_TIME", workoutSessionCreated: false });
-  for (const table of ["client_kbju_state", "nutrition_archive_weeks"] as const) for (const { sourceKey } of ordered(table, true)) {
-    representations.push({ sourceKey, targetIds: [], issues: [table === "client_kbju_state" ? "CALCULATOR_MAPPING_REQUIRED" : "ARCHIVE_AGGREGATE_MAPPING_REQUIRED"], metadata: null });
+  for (const { row, sourceKey } of ordered("client_kbju_state", true)) {
+    const parsed = nutritionAttempt(() => object(nutritionJson(row.profile_json)));
+    if (parsed.value === null) representations.push({ sourceKey, targetIds: [], issues: parsed.issues, metadata: null });
+    else {
+      const profile = parsed.value, input = legacyCalcInputSnapshot(profile);
+      retain(sourceKey, () => legacyCalcProfile(profile), (valid) => {
+        tables.nutrition_calc_profiles.push({ workspace_id: context.targetWorkspaceId, client_id: clients.get(id(row.client_id))!,
+          goal: valid.goal, activity: valid.activity, workouts_per_week: valid.workoutsPerWeek, workout_minutes: valid.minutes,
+          intensity: valid.intensity, step_kcal: valid.stepKcal, revision: 1, updated_at: importedAt });
+        return [];
+      }, { sourceUpdatedAt: row.updated_at, targetUpdatedAtBasis: "IMPORT_TIME", valuesBasis: "SAVED_CALCULATOR_PARAMETERS" });
+      representations.push({ sourceKey: key("client_kbju_state", id(row.client_id), "inputs"), targetIds: [],
+        issues: [...(input.hasBodyInputs ? ["UNDATED_CALCULATOR_BODY_INPUT_STORAGE_REQUIRED"] : []), ...(input.unknownFields.length ? ["CALCULATOR_FIELDS_UNSUPPORTED"] : [])], metadata: input });
+    }
+    const manual = nutritionAttempt(() => legacyManualMacroSnapshot(row.manual_kbju_json));
+    representations.push({ sourceKey: key("client_kbju_state", id(row.client_id), "manual"), targetIds: [],
+      issues: manual.value === null ? manual.issues : [...(manual.value.hasValues ? ["UNDATED_MANUAL_MACRO_STORAGE_REQUIRED"] : []),
+        ...(manual.value.unknownFields.length ? ["MANUAL_MACRO_FIELDS_UNSUPPORTED"] : [])], metadata: manual.value });
+  }
+  for (const { sourceKey } of ordered("nutrition_archive_weeks", true)) {
+    representations.push({ sourceKey, targetIds: [], issues: ["ARCHIVE_AGGREGATE_MAPPING_REQUIRED"], metadata: null });
   }
   return { tables, representations: representations.sort((a, b) => compare(a.sourceKey, b.sourceKey)) };
 }
