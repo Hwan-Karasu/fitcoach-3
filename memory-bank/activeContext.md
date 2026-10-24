@@ -48,8 +48,7 @@ PortableSQLaad8901/R04_PORTABLE_SQL_SOURCE.md: rawplans/safeSQLnumbers/WAL/close
 
 Copy229e880: R04_INSPECTION_COPY.md; private slots/SHA/source untouched.
 
-Admissione1d7484/R04_SOURCE_ADMISSION.md: canonical25 metadata/ledger/size/revision/
-integrity-FK/exactscope/privateverifiedlineage; 152area, notfullmappingadmission.
+Admissione1d7484: R04_SOURCE_ADMISSION.md; strictcanonical25/privateverifiedlineage.
 
 Training6bb28b7: R04_PORTABLE_TRAINING_SOURCE.md; 441/52/20PASS.
 
@@ -62,18 +61,20 @@ Q3d094b4: R04_PORTABLE_QUESTIONNAIRE_STAGING.md; 467/41-18PASS.
 Workfa44bc3: R04_PORTABLE_WORK_DATA_STAGING.md; sharedprivateWorkData,
 8new/475profile/40-7-8PASS, notproduction/ordinarybackup/UI.
 
-CURRENT R04_PORTABLE_EXERCISE_STAGING.md: sharedReadPlan extracted/re-exported;
-reference readplan/exactphysicaljoins; alias-shadow/duplicateowners/workouts reject.
-Owner catalog schema/write/parity/domainread/IDload shared Node+async; extension
-requiresQ/WorkData/sameclienttx. LOAD_REPS/unknownmetadata/archives/raw kept;
-no namejoins. Private registryproposal only. 8newtests admitted actualQ+clients+
-WorkData+catalog async==hostrowsIDsreceipts/domainmodel; sourceSHA/FK/handles/
-rollback/retry/reopen/ackloss/capture/badrefs/collision/aliasguards/drift/IO/schema.
-483profile/initial55/focused8 PASS; root/mobileTS/lint/source73/arch562/secrets PASS.
-No foundation/bundle/APK/Hermes/Android/nativeExpo/prodDDL. Remainingwriters/
-permanentmodels/composition OPEN.
+Exercisef7ccdf9: R04_PORTABLE_EXERCISE_STAGING.md; sharedcatalog/ref/read/IDs,
+8new/483profile/55-8PASS, source alias collisions reject/no shadowing.
+
+CURRENT R04_PORTABLE_PLANS_STAGING.md: purePlans/Templates/Archives+prescription
+atplanowner; sharedsourceDTO/exactkgmetrics. CommonNode/asyncschema-write-parity-
+mappingread. Real IDs inoldorder/dependentparentkeys; pendingSQLcollision/reserve
+before rows, no fakeIDs/reprojectloops. Fullmode/raw captured atinit/requiresregistry.
+8newtests actualQ+WorkData+registry+simple/periodized/template/archives async==host
+rowsIDsreceipts/domainreaders; weeklyoverride/noactual-as-plan/nofacts/crossclient
+archive/rollback/retry/reopen/replay/ackloss/capture/collision/mode/drift/IO/schema.
+491profile/initial45/latest8 PASS; root/mobileTS/lint/source73/arch569/secrets PASS.
+No foundation/bundle/APK/Hermes/Android/nativeExpo/prodDDL. Fullgoal NOTDONE.
 
 NEXT fullportablewriter/otherprojections/coverage/prefs/lineage/permanentExecution-
 review-provenance/schemaadmission/composition/cutover/UI/deletion/fullbackup/
 SQLite+JSON+other2.0/Android/interruption/lowdisk/concurrency/GC/powerloss/removal.
-JSONQprecision notproved byrawretention. BackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.
+JSONQ/Planprecision notproved byrawretention. BackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.

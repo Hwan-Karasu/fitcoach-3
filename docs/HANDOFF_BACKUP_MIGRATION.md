@@ -1,3 +1,24 @@
+## Продолжение — async Plans/Templates/Archives
+
+2026-10-24, базаf7ccdf9; R04→R03/Product48.5.7/49–50/53–56/INT03–12.
+Private synthetic/finalizable:false; production/native/release gates OPEN.
+Pure projections/prescription у plans owner; shared source contracts и exact text
+metrics converter без feature dependency. Общий schema/write/parity/mappings-read
+generator Node+async. Real IDs в прежнем projection order, dependent templatekeys
+с настоящим parent ID; только SQL collision-check/reservation отложены до окончания
+projection, перед rows/checkpoints в той же tx. Нет placeholders/reproject loops.
+Async extension boundatinit/full templates+archives mode/raw capture, requiresregistry.
+8new tests admitted actualQ+WorkData+registry+simple/periodized/template/archives
+async==host allrowsIDsreceipts; actual plan readers/overrides/no fact creation;
+cross-client archive ownership/dependentkeys; allboundaries rollback/retry/reopen/
+replay/ackloss/capture/badsource/collision/mode/drift/IO/schema/sourceSHA/FK/handles.
+491ownerprofile/initial45/latest8 PASS; root/mobileTS/lint/source73/arch569/secrets
+PASS; staged diff PASS. Нет foundation/bundle/APK/Android.
+[Контракт, доказательства, открытый объём](spikes/R04_PORTABLE_PLANS_STAGING.md).
+NEXT Execution/Measurement/Nutrition/Calendar portable writers/projections,
+coverage/permanentmodels/admission/fullcomposition/backup/JSON/Android/removal.
+Q/Plan JSON numeric-token parity audit OPEN. GoalACTIVE/fullscope/не100%.
+
 ## Продолжение — async registry/reference ownership
 
 2026-10-24, базаfa44bc3; R04→R03/Product48.5.7/49–50/53–56/INT03–12.

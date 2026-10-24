@@ -100,3 +100,14 @@ exercises/history из того же admitted snapshot. Общие read/table gu
 Общий registry write/parity/ID-read/candidate catalog-read plan использует и Node.
 Неизвестные категории/оборудование не угадываются, используется LOAD_REPS.
 Registry остаётся private R04 candidate, не production custom_exercises или cutover.
+
+`training/plans/data/legacy-import/LegacyPlansStaging` добавляет Plans/Templates/
+Archives после registry в ту же tx. Чистые projections/prescription находятся у
+владельца plans; shared legacy kg→grams converter не зависит от execution feature.
+Новые настоящие IDs назначаются в прежнем порядке pure projection, включая keys
+дочерних template slots с реальным parent ID. Затем generator проверяет collisions
+и сохраняет pending ID rows в SQLite до записи структуры. Placeholder/reproject
+passes нет. Общий schema/write/parity/mapping-read plan исполняется также Node.
+Опции templates/archives фиксируются при создании новой job; archive требует templates.
+Структура не становится выполненной работой; неподключённый полный writer/cutover,
+production admission и Android proof по-прежнему открыты.

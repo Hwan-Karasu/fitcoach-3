@@ -2,7 +2,8 @@ import type { SqliteStatementPort, SqlValue } from "../db/SqlitePort.ts";
 
 export type LegacyStageRow = Readonly<Record<string, unknown>>;
 export type LegacyExerciseCheckpoint = "after-exercise-ids" | "after-exercise-registry" | "after-exercise-overlay" | "after-exercise-links" | "after-exercise-receipt";
-export type LegacyClientCheckpoint = "after-ids" | "after-client" | "after-clients" | "after-profile" | "after-work-data" | "before-commit" | LegacyExerciseCheckpoint;
+export type LegacyPlanCheckpoint = "after-plan-ids" | "after-plan-rows" | "after-plan-source" | "after-plan-receipt" | "after-archive-plans";
+export type LegacyClientCheckpoint = "after-ids" | "after-client" | "after-clients" | "after-profile" | "after-work-data" | "before-commit" | LegacyExerciseCheckpoint | LegacyPlanCheckpoint;
 export type LegacyWriteRequest = Readonly<{ kind: "all" | "run"; sql: string; bindings: readonly SqlValue[] }>
   | Readonly<{ kind: "checkpoint"; phase: LegacyClientCheckpoint }>;
 /** Caller owns the entire exclusive transaction, including all delegated owners. */
