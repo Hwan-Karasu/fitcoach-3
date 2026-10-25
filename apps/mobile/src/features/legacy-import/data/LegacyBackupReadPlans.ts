@@ -41,6 +41,37 @@ function* columns(table: string): LegacySourceReadPlan<Set<string>> {
   return new Set(rows.filter((row) => row.hidden === 0 && typeof row.name === "string").map((row) => row.name as string));
 }
 
+/** Explicit namespace fields from pinned migrations 018/027, never labels,
+ * actor IDs or JSON payloads. An unused questionnaire can outlive all clients.
+ * Aggregate inventory still reports client counts; this resolves private scope.
+ */
+function* sourceWorkspacePlan(tables: ReadonlySet<string>, clientWorkspace: string | null): LegacySourceReadPlan<{
+  sourceWorkspaceId: string | null; ambiguous: boolean; missing: string[];
+}> {
+  const observed = new Set(clientWorkspace === null ? [] : [clientWorkspace]), missing: string[] = [];
+  let ambiguous = false;
+  for (const [table, field, where] of [
+    ["questionnaire_templates", "workspace_id", ""],
+    ["questionnaire_revisions", "workspace_id", ""],
+    ["training_programs", "template_workspace_id", " WHERE is_template=1"],
+  ] as const) {
+    if (!tables.has(table)) continue;
+    const names = yield* columns(table);
+    // template_workspace_id did not exist before migration 027. The owner
+    // projector separately checks representability when templates are present.
+    if (!names.has(field)) { if (!where) missing.push(`${table}.${field}`); continue; }
+    if (where && !names.has("is_template")) { missing.push(`${table}.is_template`); continue; }
+    // Shield non-text storage before crossing the native bridge. BINARY avoids
+    // source NOCASE collations merging different owners; JS validates whitespace.
+    const rows = yield q(`SELECT DISTINCT CASE WHEN typeof(${field})='text' THEN ${field} ELSE NULL END COLLATE BINARY AS workspace_id FROM ${table}${where} LIMIT 2`);
+    for (const row of rows) {
+      if (!text(row.workspace_id)) ambiguous = true;
+      else observed.add(row.workspace_id);
+    }
+  }
+  return { sourceWorkspaceId: observed.size === 1 ? [...observed][0]! : null, ambiguous: ambiguous || observed.size > 1, missing };
+}
+
 /** Shared historical inventory; this alone is not strict file admission. */
 export function* legacyBackupInspectionPlan(): LegacySourceReadPlan<{
   inventory: LegacyBackupInventory; manifest: LegacySourceRow | null; accountScope: string | null;
@@ -120,7 +151,15 @@ export function* legacyBackupAdmissionPlan(fileBytes: number): LegacySourceReadP
     const state = yield q("SELECT CASE WHEN typeof(id)='integer' AND id=1 THEN 1 ELSE NULL END AS id,database_id,CASE WHEN typeof(data_revision)='integer' AND data_revision BETWEEN 0 AND 9007199254740991 THEN data_revision ELSE NULL END AS data_revision FROM backup_state LIMIT 2");
     if (state.length !== 1 || state[0]!.id !== 1 || !text(state[0]!.database_id) || state[0]!.database_id !== m?.databaseId || state[0]!.data_revision !== dataRevision || dataRevision === null) reasons.push("BACKUP_REVISION_MISMATCH");
   }
+  let sourceWorkspaceId = inspected.sourceWorkspaceId;
+  if (!reasons.length) {
+    const scope = yield* sourceWorkspacePlan(tables, sourceWorkspaceId);
+    sourceWorkspaceId = scope.sourceWorkspaceId;
+    missing.push(...scope.missing);
+    if (scope.missing.length) reasons.push("UNSUPPORTED_SHAPE");
+    if (scope.ambiguous) reasons.push("WORKSPACE_AMBIGUOUS");
+  }
   if (reasons.length || inspected.accountScope === null) throw new LegacySourceAdmissionError({ ...inventory, missingRequiredShape: missing, status: "blocked", reasons: [...new Set(reasons)] });
-  return { inventory, accountScope: inspected.accountScope, sourceWorkspaceId: inspected.sourceWorkspaceId,
+  return { inventory, accountScope: inspected.accountScope, sourceWorkspaceId,
     sourceDatabaseId: m!.databaseId as string, sourceDataRevision: dataRevision!, sourceBackupId: m!.backupId as string, sourceCreatedAt: m!.createdAt as string };
 }

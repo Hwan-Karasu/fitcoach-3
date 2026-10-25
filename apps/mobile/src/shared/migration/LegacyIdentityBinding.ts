@@ -1,7 +1,7 @@
 export interface CandidateIdentityContext {
   readonly sourceSha256: string;
   readonly accountScope: string;
-  /** null only when the admitted source contains no observed client workspace. */
+  /** null only when the admitted source contains no observed source workspace. */
   readonly sourceWorkspaceId: string | null;
   readonly targetWorkspaceId: string;
 }

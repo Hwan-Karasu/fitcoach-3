@@ -50,39 +50,24 @@ Copy229e880: R04_INSPECTION_COPY.md; private slots/SHA/source untouched.
 
 Admissione1d7484: R04_SOURCE_ADMISSION.md; strictcanonical25/privateverifiedlineage.
 
-Training6bb28b7: R04_PORTABLE_TRAINING_SOURCE.md; 441/52/20PASS.
-
-Profile85c7e32: R04_PORTABLE_PROFILE_SOURCE.md; 449/24/8PASS.
-
-Client76ab152: R04_PORTABLE_CLIENT_STAGING.md; 459/44/8PASS.
-
-Q3d094b4: R04_PORTABLE_QUESTIONNAIRE_STAGING.md; 467/41-18PASS.
-
-Workfa44bc3: R04_PORTABLE_WORK_DATA_STAGING.md; 8new/475profile PASS.
-
-Exercisef7ccdf9: R04_PORTABLE_EXERCISE_STAGING.md; 8new/483profile PASS.
-
-Plans5332754: R04_PORTABLE_PLANS_STAGING.md; 8new/491profile PASS.
-
-Execution61fbb4c: R04_PORTABLE_EXECUTION_STAGING.md; 9new/500profile PASS.
-
-Measurementd854a31: R04_PORTABLE_MEASUREMENT_STAGING.md; 9new/509profile PASS.
-
-Nutritionc53985c: R04_PORTABLE_NUTRITION_STAGING.md; 10new/519profile PASS.
-
-Calendar12c94c3: R04_PORTABLE_CALENDAR_STAGING.md; appallowners/531profile PASS.
-
-Inspectiondcac694: R04_INSPECTION_STAGING.md; copy/allowners/empty;542profile PASS.
+Portable source/writers chain6bb28b7->12c94c3: phase proof in docs/handoff;
+Clients/Q/WorkData/Exercise/Plans/Execution/Measurements/Nutrition/Calendar.
+Node+async common schema/write/parity, 531profile atCalendar; notAndroid.
+Inspectiondcac694 R04_INSPECTION_STAGING.md: sealedcopy/allowners/empty;542profile.
 
 Jobs9ec7615: R04_CANDIDATE_JOBS.md; request/Expo resume/IDs/terminationproof;
 553profile/11new/10copy PASS. NotAndroid.
 
-CURRENT R04_JSON_NUMBER_PARITY.md: exact decimal/JSON/integer guard for Q/Plans/
-archives; rawretention/reparse/allownerrollback/retry/IDs/sourceSHA/twoargWorker.
-No rounding/overflow/underflow/-0; decimals/exponents/stringtypes preserved.
-9new/33targeted/562profile PASS; root/mobileTS/lint/source73/arch609 PASS.
-No foundation/bundle/Hermesruntime/APK/Android/prodDDL/UI. Permanent review OPEN.
+JSONfb0442d: R04_JSON_NUMBER_PARITY.md; decimal/native guard Q/Plans/archives;
+9new/33targeted/562profile PASS. No Android.
 
-NEXT coverage/prefs/lineage/sourceQnamespace/permanentExecution/
+CURRENT R04_SOURCE_WORKSPACE.md: strict namespace clients/Q/templatebindings;
+zero-client Q keeps pubs/draft/IDs/catalog; empty stores retain raw/presence/
+profileanswers; no inventedowner/client. BINARY/shape/types/conflicts beforedomain.
+Allownerrollback/retry/parity/sourceSHA; Expo start/resume twoWorkers SDKmock.
+10new/56targeted/25dependencies PASS; root/mobileTS/lint/source73/arch609 PASS.
+No foundation/fullprofile/bundle/Hermesruntime/APK/phone/prodDDL/UI. GoalACTIVE.
+
+NEXT coverage/prefs/lineage/permanentExecution/
 provenance/review/schemaadmission/UI/cutover/fullbackup/Android/GC/removal.
 JSONguard notfullvariantproof. BackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.

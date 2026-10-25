@@ -1,3 +1,20 @@
+## Продолжение — анкета без клиентов / source namespace
+
+2026-10-25, базаfb0442d; R04→R03/Product49–50/53–56/INT03–12.
+Private synthetic/finalizable:false; production/native/release gates OPEN.
+Strict admission сверяет явные clients/Q/template workspace fields в том же
+pinned snapshot, BINARY/type/shape/whitespace guards; конфликт до domain reads
+и target creation. Q без clients сохраняет pubs/draft/IDs/raw + custom catalog.
+Пустые Q stores сохраняют physical presence в receipt и profile answers;
+нет выдуманного source namespace/клиента/старой публикации.
+10new/56targeted/25dependencies PASS; root/mobileTS/lint/source73/arch609 PASS.
+Before-commit rollback/retry/parity/sourceSHA и actual Expo runtime start/resume
+в fresh Workers через SDK mocks. Не Android/Hermesruntime/powerloss proof.
+Нет foundation/fullR04profile/bundle/APK/phone; полный goal не100%.
+[Контракт, pinned 2.0 sources и проверки](spikes/R04_SOURCE_WORKSPACE.md).
+NEXT coverage/prefs/lineage/permanentmodels/admission/UI/cutover/fullbackup/
+Android/GC/removal. GoalACTIVE/fullscope.
+
 ## Продолжение — точность JSON анкет и планов
 
 2026-10-25, база9ec7615; R04→R03/Product49–50/53–56/INT03–12.

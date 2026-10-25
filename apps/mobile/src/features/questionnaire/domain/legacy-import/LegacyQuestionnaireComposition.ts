@@ -110,9 +110,27 @@ function retainAnswered(schema: QuestionnaireSchema, answers: readonly Questionn
  * Source draft is never promoted to published. No source normalizer or latest fallback. */
 export function composeLegacyQuestionnaires(context: CandidateIdentityContext, createdAt: string,
   profiles: readonly ProfileAnswerSource[], source: LegacyQuestionnaireSource) {
+  if (source.accountScope !== context.accountScope || !isExplicitTimestamp(createdAt)) return fail("SCOPE_MISMATCH");
+  if (context.sourceWorkspaceId === null && profiles.length) return fail("SCOPE_MISMATCH");
+  const clients = new Map(profiles.map((p) => [p.sourceClientId, p]));
+  if (clients.size !== profiles.length) return fail("CLIENT_DUPLICATE");
+  // Physically present, unused stores are distinct from absent stores in the
+  // receipt. They contain no historical publication to import or promote.
+  if (!source.templates.length && !source.revisions.length && !source.answers.length && !source.changes?.length) {
+    const schemaJson = JSON.stringify(legacyProfileQuestionnaireSchema());
+    const answers: QuestionnaireAnswerRow[] = profiles.flatMap((profile) => Object.entries(profile.answers).map(([field, value]) => ({
+      workspace_id: context.targetWorkspaceId, client_id: profile.targetClientId, field_id: field, value_json: JSON.stringify(value),
+      schema_version: 1, updated_at: profile.updatedAt,
+    }))).sort((a, b) => compare(a.client_id, b.client_id) || compare(a.field_id, b.field_id));
+    return { versions: [{ workspace_id: context.targetWorkspaceId, version: 1, format_version: 1 as const, schema_json: schemaJson,
+      base_version: null, published_at: createdAt }], drafts: [{ workspace_id: context.targetWorkspaceId, base_version: 1, revision: 1,
+      schema_json: schemaJson, updated_at: createdAt }], answers,
+      provenance: { revisionMaps: [], answerMaps: [], migrationVersion: 1, sourceChanges: source.changes },
+      sourceRaw: { accountScope: source.accountScope, templates: [], revisions: [], answers: [], changes: source.changes } };
+  }
   const sourceWorkspaceId = context.sourceWorkspaceId;
   if (sourceWorkspaceId === null) return fail("SCOPE_MISMATCH");
-  if (source.accountScope !== context.accountScope || source.templates.length !== 1 || !isExplicitTimestamp(createdAt)) return fail("SCOPE_MISMATCH");
+  if (source.templates.length !== 1) return fail("SCOPE_MISMATCH");
   const changes = source.changes === null ? null : [...source.changes].sort((a, b) => compare(text(a.id), text(b.id)));
   const changeIds = new Set<string>();
   for (const row of changes ?? []) {
@@ -122,8 +140,6 @@ export function composeLegacyQuestionnaires(context: CandidateIdentityContext, c
   }
   const template = source.templates[0]!.raw;
   if (template.workspace_id !== sourceWorkspaceId || !isExplicitTimestamp(template.updated_at)) return fail("SCOPE_MISMATCH");
-  const clients = new Map(profiles.map((p) => [p.sourceClientId, p]));
-  if (clients.size !== profiles.length) return fail("CLIENT_DUPLICATE");
   const epochs = new Map<string, { family: string; epoch: string | undefined }>();
   const revisionIds = new Set<string>(), revisionNumbers = new Set<number>(); const revisions: Revision[] = [];
   const rawRevisions = [...source.revisions].sort((a, b) => integer(a.raw.revision) - integer(b.raw.revision));

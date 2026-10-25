@@ -27,7 +27,7 @@ export interface LegacyBackupAdmission {
   readonly sourceBackupId: string;
   /** Export metadata only; never a date for imported facts. */
   readonly sourceCreatedAt: string;
-  /** null for a genuinely empty clients table; never invent a source workspace. */
+  /** null only if clients, questionnaire and explicit template bindings supply no namespace. */
   readonly sourceWorkspaceId: string | null;
 }
 export class LegacySourceAdmissionError extends Error {
