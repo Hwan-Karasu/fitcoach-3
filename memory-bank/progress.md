@@ -52,11 +52,8 @@ Inspectiondcac694 R04_INSPECTION_STAGING.md: sealedcopy/allowners/empty;542profi
 Jobs9ec7615: R04_CANDIDATE_JOBS.md; request/Expo resume/IDs/terminationproof;
 553profile/11new/10copy PASS. NotAndroid.
 
-JSONfb0442d: R04_JSON_NUMBER_PARITY.md; decimal/native guard Q/Plans/archives;
-9new/33targeted/562profile PASS. No Android.
-
-Workspace8bd28a1: R04_SOURCE_WORKSPACE.md; namespace/no-client Q/empty stores;
-10new/56targeted/25dependencies PASS. NotAndroid.
+JSONfb0442d/R04_JSON_NUMBER_PARITY.md: exact decimal/native guards;562profile PASS.
+Workspace8bd28a1/R04_SOURCE_WORKSPACE.md: namespace/no-client Q;10new PASS.
 
 Settingsa3120c9: R04_SETTINGS_STAGING.md nativeprefs/raw review;12new/584profile.
 Native3.x backup/ordinary reader isolate PASS.
@@ -67,13 +64,16 @@ Builders6fcde02/R04_BUILDER_DRAFTS.md: native recovery;13final/596earlierprofile
 Coveragef59c228/R04_SOURCE_COVERAGE.md: full tagged ordinary SQL rows;84tables.
 77targeted/8final/33reader PASS. No semantic/fullbackup claim.
 
-CURRENT R04_PROGRAM_VIEW_SELECTIONS.md: bound trainer actor/native per-book page;
-current book/pin unchanged. Legacy actor unproven/other actor/conflicts retained.
-Node/mobile mode+receipt; no newDDL/IDs/facts. 53dependency/66targeted incl10new
-PASS; root/mobileTS/lint/source73/arch618. ExpoSDKmock restart/hostKill;
-native3.x snapshot/restore/ordinary read+edit with importer-ban PASS.
-NotfullUI/Execution/provenance/review backup/Android. GoalACTIVE.
+Viewsc5efd03/R04_PROGRAM_VIEW_SELECTIONS.md: trainer/page selection;66targeted/
+10new/ordinary3.x snapshot+reader PASS.
 
-NEXT semanticCoverage/legacyActor/unsupportedRecovery/prefs/lineage/permanentExecution/
+CURRENT R04_SCOPE_LINEAGES.md: unambiguous v2 selectors + reciprocal shared sets
+-> native edit groups; physical plan/fact IDs separate; ambiguity review.
+142targeted incl12new PASS; root/mobileTS/lint/source73/arch619. Ordinary3.x
+snapshot/restore/importer-ban: week/member edits + personal override PASS.
+ExpoSDKmock restart/hostKill/replay PASS. Not full migration/UI/Android.
+Pending restSeconds/default120/zero-off mapping (currently restSec only).
+
+NEXT restSeconds/semanticCoverage/legacyActor/unsupportedRecovery/prefs/permanentExecution/
 provenance/review/schemaadmission/UI/cutover/fullbackup/Android/GC/removal.
 JSONguard notfullvariantproof. BackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.

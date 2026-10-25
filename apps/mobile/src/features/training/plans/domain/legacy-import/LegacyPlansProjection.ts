@@ -8,6 +8,7 @@ import { storedTemplate, storedWorkout } from "../StoredPlanShape.ts";
 import type { TemplatePayload } from "../TemplateModel.ts";
 import type { WeekType } from "../PeriodizedModel.ts";
 import { restoreLegacyPlanViewSelections } from "./LegacyPlanViewSelections.ts";
+import { legacyScopeLineages } from "./LegacyScopeLineages.ts";
 
 type Raw = Readonly<Record<string, unknown>>;
 export type { PlanTargetRow as PlanRow } from "../../../../../shared/migration/LegacyPlanMappings.ts";
@@ -95,6 +96,34 @@ export function composeLegacyPlans(context: CandidateIdentityContext, importedAt
     }
   }
   const children = (table: PlanSourceTable, p: Raw): readonly Raw[] => byParent.get(table)?.get(p) ?? [];
+  const sharedPages = new Map<Raw, string | null>(), sharedOwners = new Set<string>(), sharedMembership = new Map<string, string>();
+  for (const p of rows("training_programs").filter((p) => eligible(p) && p.mode === "periodized")) {
+    const data = json.get(p)!, client = owner.get(p)!;
+    const shared = data.sharedGroupId === undefined || data.sharedGroupId === null || data.sharedGroupId === "" ? null : text(data.sharedGroupId).trim();
+    sharedPages.set(p, shared);
+    if (!shared) continue;
+    if (data.participantIds !== undefined && data.participantIds !== null && (!Array.isArray(data.participantIds)
+      || data.participantIds.some((id: unknown) => typeof id !== "string" || !id.trim()))) return fail("SHARED_MEMBERSHIP_INVALID");
+    // A common gid is insufficient after a participant leaves: require the same
+    // reciprocal declared set, including each owner, before linking descendants.
+    const members = [...new Set([client, ...((data.participantIds as readonly string[] | null | undefined) ?? [])])].sort(compare);
+    const signature = JSON.stringify(members), existing = sharedMembership.get(shared);
+    if (existing !== undefined && existing !== signature) return fail("SHARED_MEMBERSHIP_CONFLICT"); sharedMembership.set(shared, signature);
+    const groupOwner = JSON.stringify([shared, client]);
+    if (sharedOwners.has(groupOwner)) return fail("SHARED_PAGE_AMBIGUOUS"); sharedOwners.add(groupOwner);
+    metadata.push({ sourceProgramId: p.id, sharedGroupId: shared, declaredParticipants: members, absentDeclaredClients: members.filter((id) => !clientIds.has(id)) });
+  }
+  const scopeLineages = legacyScopeLineages(rows("training_workouts").filter((w) => eligible(w) && programOf.get(w)!.mode === "periodized").map((w) => ({
+    id: text(w.id), program: text(programOf.get(w)!.id), scope: JSON.stringify(sharedPages.get(programOf.get(w)!)
+      ? ["SHARED_PAGE", sharedPages.get(programOf.get(w)!)] : ["PAGE", programOf.get(w)!.id]),
+    shared: Boolean(sharedPages.get(programOf.get(w)!)),
+    week: text(w.week_id), weekIndex: pos(parent.get(w)!.week_index), name: text(w.name), position: pos(w.sort_index),
+    exercises: children("training_exercises", w).map((e) => {
+      const link = exerciseLinks.get(sourceKey("training_exercises", e));
+      if (!link || link.clientId !== owner.get(e) || Object.keys(e).some((k) => !same(e[k], link.raw[k]))) return fail("EXERCISE_LINK_MISMATCH");
+      return { id: text(e.id), catalogId: link.exerciseId };
+    }),
+  })));
   const library = new Map<string, Raw>();
   for (const row of rows("training_library_programs")) {
     const client = text(row.client_id), id = text(row.id); if (!clientIds.has(client)) return fail("OWNER_MISSING");
@@ -109,8 +138,7 @@ export function composeLegacyPlans(context: CandidateIdentityContext, importedAt
     const k = JSON.stringify([owner.get(p), root]); const group = groups.get(k) ?? []; group.push(p); groups.set(k, group);
   }
   const programTargets = new Map<Raw, string>(), cycleTargets = new Map<Raw, string>(), rootTargets = new Map<string, string>();
-  const sharedOwners = new Set<string>(); const planBases: unknown[] = [];
-  const sharedMembership = new Map<string, string>();
+  const planBases: unknown[] = [];
   const rowId = (kind: PlanIdentityKind, table: PlanSourceTable, row: Raw) => identity(kind, sourceKey(table, row));
   function mark(table: PlanSourceTable, row: Raw, id: string | null, programId: string, weekIndex: number | null) {
     const template = programOf.get(row)?.is_template === 1;
@@ -158,10 +186,10 @@ export function composeLegacyPlans(context: CandidateIdentityContext, importedAt
         supersets.set(group, supersetId);
       }
       return { id: eId, exerciseId: link.exerciseId, restSec: rest, instruction: e.note.trim() ? e.note : null, rir, sets,
-        ...(p.mode === "periodized" && p.is_template !== 1 ? { lineageId: identity("LINEAGE", JSON.stringify([scope, "exercise-lineage", e.id])) } : {}), ...(supersetId ? { supersetId } : {}) };
+        ...(p.mode === "periodized" && p.is_template !== 1 ? { lineageId: identity("LINEAGE", JSON.stringify([scope, "exercise-lineage", scopeLineages.exercises.get(text(e.id)) ?? e.id])) } : {}), ...(supersetId ? { supersetId } : {}) };
     });
     const result: PlannedWorkout = { id, title: title(w.name), exercises,
-      ...(p.mode === "periodized" && p.is_template !== 1 ? { lineageId: identity("LINEAGE", JSON.stringify([scope, "workout-lineage", w.id])) } : {}) };
+      ...(p.mode === "periodized" && p.is_template !== 1 ? { lineageId: identity("LINEAGE", JSON.stringify([scope, "workout-lineage", scopeLineages.workouts.get(text(w.id)) ?? w.id])) } : {}) };
     if (!storedWorkout(result)) return fail("TARGET_SHAPE_INVALID");
     return result;
   }
@@ -215,20 +243,7 @@ export function composeLegacyPlans(context: CandidateIdentityContext, importedAt
         }
       } else {
         const mesocycleId = rowId("MESOCYCLE", "training_programs", p); cycleTargets.set(p, mesocycleId); mark("training_programs", p, mesocycleId, programId, null);
-        const shared = data.sharedGroupId === undefined || data.sharedGroupId === null || data.sharedGroupId === "" ? null : text(data.sharedGroupId).trim();
-        if (shared) {
-          if (data.participantIds !== undefined && data.participantIds !== null && (!Array.isArray(data.participantIds)
-            || data.participantIds.some((id: unknown) => typeof id !== "string" || !id.trim()))) return fail("SHARED_MEMBERSHIP_INVALID");
-          // The legacy accessor adds the owner. Equal group IDs alone do not prove
-          // current reciprocal participation after somebody has left the group.
-          const members = [...new Set([client, ...((data.participantIds as readonly string[] | null | undefined) ?? [])])].sort(compare);
-          const signature = JSON.stringify(members), existing = sharedMembership.get(shared);
-          if (existing !== undefined && existing !== signature) return fail("SHARED_MEMBERSHIP_CONFLICT"); sharedMembership.set(shared, signature);
-          metadata.push({ sourceProgramId: p.id, sharedGroupId: shared, declaredParticipants: members,
-            absentDeclaredClients: members.filter((id) => !clientIds.has(id)) });
-        }
-        const groupOwner = JSON.stringify([shared, client]);
-        if (shared && sharedOwners.has(groupOwner)) return fail("SHARED_PAGE_AMBIGUOUS"); if (shared) sharedOwners.add(groupOwner);
+        const shared = sharedPages.get(p) ?? null;
         const lineageId = identity("LINEAGE", JSON.stringify([scope, shared ? "shared-page" : "page", shared ?? p.id]));
         const repRange = sourcePlanRange(data.repRange, 1, 100);
         const cycle = p.cycle_type === "" ? null : p.cycle_type;
@@ -317,7 +332,7 @@ export function composeLegacyPlans(context: CandidateIdentityContext, importedAt
   }
   sourceRows.sort((a, b) => compare(String(a.source_key), String(b.source_key)));
   const viewSelections = restoreLegacyPlanViewSelections(context, source, clientIds, sourceRows, tables);
-  return { tables, sourceRows, metadata, planBases, viewSelections,
+  return { tables, sourceRows, metadata, planBases, viewSelections, scopeLineages,
     deferredArchiveRows: rows("training_archive_entries").length, deferredTemplatePages: rows("training_programs").filter((p) => p.is_template === 1 && (!templatesEnabled || !active(p))).length,
     deferredLibraryRows: [...library.keys()].filter((k) => !groups.has(k)).length,
     deferredWorkspaceStateRows: rows("training_workspaces").filter((r) => Object.keys(sourceObject(r.week_state_json)).length > 0).length,

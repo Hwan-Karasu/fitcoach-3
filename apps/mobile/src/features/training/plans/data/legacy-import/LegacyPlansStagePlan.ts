@@ -18,6 +18,7 @@ export interface LegacyPlansStageResult {
   readonly deferredViewRows: number; readonly deferredPreferenceRows: number; readonly finalizable: false;
   readonly builderDraftRows?: number; readonly builderDraftReviewRows?: number;
   readonly restoredViewSelections: number; readonly viewSelectionReviewRows: number;
+  readonly linkedWorkoutGroups: number; readonly linkedExerciseGroups: number; readonly lineageReviewGroups: number;
 }
 
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
@@ -115,6 +116,7 @@ export function* legacyPlansStagePlan(context: CandidateIdentityContext, importe
     identities,
     metadata: projection.metadata.map(canonical).sort(compare), planBases: projection.planBases.map(canonical).sort(compare),
     viewSelectionProjectionVersion: 1, viewSelections: projection.viewSelections.representations.map(canonical).sort(compare),
+    scopeLineageProjectionVersion: 1, scopeLineages: projection.scopeLineages.metadata.map(canonical).sort(compare),
     deferredArchiveRows: projection.deferredArchiveRows, deferredTemplatePages: projection.deferredTemplatePages,
     ...(archives ? { archivedProgramRows: archives.archivedProgramRows, mirroredArchiveAliasRows: archives.mirroredAliasRows } : {}),
     ...(builders && drafts ? { builderRepresentations: builders.representations, builderFactsCreated: builders.factsCreated,
@@ -149,6 +151,7 @@ export function* legacyPlansStagePlan(context: CandidateIdentityContext, importe
     deferredLibraryRows: projection.deferredLibraryRows, deferredWorkspaceStateRows: projection.deferredWorkspaceStateRows,
     deferredViewRows: projection.deferredViewRows, deferredPreferenceRows: projection.deferredPreferenceRows,
     restoredViewSelections: projection.viewSelections.restoredSelections, viewSelectionReviewRows: projection.viewSelections.reviewRows,
+    linkedWorkoutGroups: projection.scopeLineages.linkedWorkoutGroups, linkedExerciseGroups: projection.scopeLineages.linkedExerciseGroups, lineageReviewGroups: projection.scopeLineages.reviewGroups,
     ...(builders ? { builderDraftRows: builders.editableDraftRows, builderDraftReviewRows: builders.reviewRows } : {}), finalizable: false as const };
 }
 

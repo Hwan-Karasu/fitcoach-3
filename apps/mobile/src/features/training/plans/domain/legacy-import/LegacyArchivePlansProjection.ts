@@ -179,6 +179,15 @@ export function composeLegacyArchivePlans(context: CandidateIdentityContext, imp
     if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, originalBasis(v)]));
     return value;
   }
+  if (projected.scopeLineages.metadata.length) metadata.push({ scopeLineageProjectionVersion: 1,
+    archiveScopeLineages: originalBasis(projected.scopeLineages.metadata.map((group) => ({ status: group.status, issues: group.issues,
+      sourceProgramKeys: group.sourceProgramIds.map((id) => sourceKey("training_programs", id)),
+      sourceWorkoutKeys: group.sourceWorkoutIds.map((id) => sourceKey("training_workouts", id)),
+      workoutAnchorKey: group.workoutAnchorId === null ? null : sourceKey("training_workouts", group.workoutAnchorId),
+      exercises: group.exercises.map((e) => ({ registryExerciseId: e.catalogId, status: e.status,
+        sourceExerciseKeys: e.sourceExerciseIds.map((id) => sourceKey("training_exercises", id)),
+        anchorKey: e.anchorId === null ? null : sourceKey("training_exercises", e.anchorId) })),
+    }))) });
   return { tables: projected.tables, sourceRows, metadata, planBases: projected.planBases.map(originalBasis),
     archivedProgramRows: archivedRows, deferredArchiveRows: deletedRows, mirroredAliasRows: mirrorOccurrences,
     targetFactsCreated: 0 as const, finalizable: false as const };

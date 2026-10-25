@@ -1,3 +1,23 @@
+## Продолжение — lineage областей правки недель и участников
+
+2026-10-25, базаc5efd03; R04→R03/Product48.5.7/48.6/48.8/49–50/53–56/INT03–12.
+Private synthetic/finalizable:false; production/migration/release gates OPEN.
+Материализовано однозначное пересечение v2 builder/persisted scope selectors;
+внутри page и verified reciprocal shared family. Native workout/exercise edit
+lineages общие, physical plan/set/fact IDs самостоятельны. Catalog/name/position
+не дедуплицируют факты. Ambiguous duplicate/selector/shared-name gap → review.
+Shared checks вынесены до descendants; removed member не реактивируется.
+Plans receipt/version + Node/mobile mode; old candidate до-WAL reject;84tables,
+нет новых DDL/UUID kinds/facts. Archive basis → original JSON paths, не fake IDs.
+142targeted incl12new PASS; root/mobileTS/lint/source73/arch619. SDKmock restart/
+hostKill/replay; ordinary3.x snapshot/restore + importer-ban positive probe:
+multiweek/member edit и personal conflict/ID preservation PASS. Не full runtime
+Execution/provenance/review backup/UI/Android. [Контракт и источники](spikes/R04_SCOPE_LINEAGES.md).
+NEXT actual restSeconds mapping: source writes0…1859,0off, getter default120;
+current mapper reads restSec. Preserve exact/zero/default, not native90. Затем
+rest semanticfields/permanentmodels/admission/UI/cutover/fullbackup/Android/GC/
+removal. GoalACTIVE/fullscope/не100%.
+
 ## Продолжение — выбранный мезоцикл неактивной книги
 
 2026-10-25, базаf59c228; R04→R03/Product48.1–48.5.7/49–50/53–56/INT03–12.
