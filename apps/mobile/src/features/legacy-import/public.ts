@@ -2,3 +2,5 @@
 export type { LegacyImportSourceSnapshots } from "./domain/LegacySourceSnapshots.ts";
 export { InspectionCopyError, parseInspectionReceipt } from "./domain/InspectionCopy.ts";
 export type { LegacyInspectionReceipt } from "./domain/InspectionCopy.ts";
+export { LegacyCandidateJobError, parseLegacyCandidateJob } from "./domain/LegacyCandidateJob.ts";
+export type { LegacyCandidateJob } from "./domain/LegacyCandidateJob.ts";

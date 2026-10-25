@@ -72,14 +72,15 @@ Nutritionc53985c: R04_PORTABLE_NUTRITION_STAGING.md; 10new/519profile PASS.
 
 Calendar12c94c3: R04_PORTABLE_CALENDAR_STAGING.md; appallowners/531profile PASS.
 
-CURRENT R04_INSPECTION_STAGING.md: verifiedcopy/admission=>allowner staging,
-derivedSHA/scope/workspace/capturedports/clocks; pre+postcommit reverify.
-Copychange rollsback or retains unverified privatecandidate, replay stableIDs.
-Empty nullsourceworkspace supported; no clientrows/reservations/corruptCLIENTmap.
-Q/templates w/o clients source namespace OPEN. 11new/10copy/542profile PASS;
-root/mobileTS/lint/source73/arch604/secrets PASS. Fullproof doc. No Android/
-foundation/bundle/Hermes/APK/prodDDL/UI/cutover; fullgoalNOTDONE.
+Inspectiondcac694: R04_INSPECTION_STAGING.md; copy/allowners/empty;542profile PASS.
 
-NEXT durablejobs/Expo stagingrouting/coverage/prefs/lineage/JSONaudit/permanent-
-Execution/provenance/review/schemaadmission/UI/cutover/fullbackup/Android/removal.
+CURRENT R04_CANDIDATE_JOBS.md: immutable request/atomicrename/readback/nooverwrite;
+actual Expo private SQLite factory + app start/resume, fixed disk clocks/IDs;
+request not completion. SDKmock realfiles/SQLite restart/Workerterminate/ACKloss/
+partials/drift/WAL/guard/sourceSHA proofs. 553profile/11new/10copy PASS;
+root/mobileTS/lint/source73/arch609/secrets PASS. No Android/powerloss/fullgoal100%.
+Fullproof doc; UI/cutover/prodDDL/foundation/bundle/Hermes/APK NOTdone.
+
+NEXT coverage/prefs/lineage/JSONaudit/sourceQnamespace/permanentExecution/
+provenance/review/schemaadmission/UI/cutover/fullbackup/Android/GC/removal.
 JSONQ/Planprecision notproved byrawretention. BackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.

@@ -1,3 +1,19 @@
+## Продолжение — persistent candidate jobs / Expo runtime
+
+2026-10-25, базаdcac694; R04→R03/Product49–50/53–56/INT03–12.
+Private synthetic/finalizable:false; production/native/release gates OPEN.
+Immutable V1 request (job/source IDs/target/importedAt/referenceDay), canonical
+partial→rename/readback, no overwrite. Actual Expo job/file/SQLite factory opens
+only own candidate.sqlite; list isolates incomplete/corrupt slots, no cleanup.
+App runtime start/resume preserves disk params; source+job+SQL reverified, request
+not completion. Same-instance live guard/finally, no stale RUNNING file.
+11new SDK-mock realfiles/SQLite/Worker restart+actualtermination/ACKloss/partials/
+drift/capture/route/WAL/noallocation/handle/sourceSHA proofs. 553profile/11new/10copy
+PASS; root/mobileTS/lint/source73/arch609/secrets PASS. Not Android/powerloss proof.
+[Контракт и оставшийся объём](spikes/R04_CANDIDATE_JOBS.md).
+NEXT coverage/prefs/lineage/JSON/sourceQnamespace/permanentmodels/admission/UI/
+cutover/fullbackup/Android/GC/removal. GoalACTIVE/fullscope/не100%.
+
 ## Продолжение — sealed copy → admitted all-owner candidate
 
 2026-10-25, база12c94c3; R04→R03/Product49–50/53–56/INT03–12.

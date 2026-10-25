@@ -20,6 +20,19 @@ Genuine empty source сохраняет `sourceWorkspaceId:null`, без выд�
 такая identity не разрешает client rows/reservations. Workspace-specific Q/template
 без наблюдённого workspace всё ещё требует отдельного разрешения source identity.
 
+`domain/LegacyCandidateJob.ts` задаёт immutable request для продолжения после
+перезапуска. `ExpoLegacyCandidateJobs` хранит его через partial → atomic rename
+в `Paths.document/legacy-import-jobs/<job UUID>/request.json`, открывает исключительно
+соседний `candidate.sqlite` с новым соединением. Незавершённые/повреждённые запросы
+отличаются от готовых request; чужие пути не читаются и не удаляются.
+
+`createLegacyCandidateRuntime`/`runLegacyCandidateJob` собирают реальные Expo
+adapters: start сохраняет параметры, resume повторно читает request/copy/SQLite
+receipts, сохраняет import time/reference day и committed IDs. Request не является
+completed-state. Проверки request перед открытием, до commit и после него
+не допускают verified результата при изменении параметров во время работы.
+Это внутренняя Android-композиция, не пользовательский restore/cutover API.
+
 `domain/SourceJson.ts` реэкспортирует общий `shared/migration/SourceJson.ts`.
 Он использует стандартный JSON.parse для проверки синтаксиса
 и создания объектов. Временные числовые теги выбираются без совпадений с исходными
