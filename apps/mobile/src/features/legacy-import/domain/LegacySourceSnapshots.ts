@@ -1,4 +1,4 @@
-import type { LegacyClientsSource, LegacyExerciseCatalogSource, LegacyQuestionnaireSource } from "../../../shared/migration/LegacyProfileSources.ts";
+import type { LegacyClientsSource, LegacyExerciseCatalogSource, LegacyQuestionnaireSource, LegacySourceRow } from "../../../shared/migration/LegacyProfileSources.ts";
 export type { LegacySourceRow, LegacyClientsSource, LegacyExerciseCatalogSource, LegacyQuestionnaireSource } from "../../../shared/migration/LegacyProfileSources.ts";
 
 import type { LegacyPlansSource } from "../../../shared/migration/LegacyPlanSources.ts";
@@ -30,6 +30,22 @@ export interface LegacyProfileSnapshots {
   readonly questionnaire: LegacyQuestionnaireSource | null;
 }
 import type { LegacySettingsSource } from "../../../shared/migration/LegacySettingsSource.ts";
+export interface LegacySourceCoverageObject {
+  readonly name: string;
+  readonly type: "table" | "view";
+  readonly sql: string | null;
+  readonly columns: readonly LegacySourceRow[];
+  readonly disposition: "CAPTURED" | "METADATA" | "REVIEW_REQUIRED" | "SQLITE_INTERNAL";
+  readonly rowCount: number | null;
+  readonly rowsSha256: string | null;
+  /** Canonical tagged SQL cells, not JSON parsed from source text. */
+  readonly retainedRows: string | null;
+}
+export interface LegacySourceCoverage {
+  readonly accountScope: string;
+  readonly objects: readonly LegacySourceCoverageObject[];
+}
 export interface LegacyImportSourceSnapshots extends LegacyDomainSnapshots, LegacyTrainingSnapshots, LegacyProfileSnapshots {
   readonly settings: LegacySettingsSource;
+  readonly coverage: LegacySourceCoverage;
 }

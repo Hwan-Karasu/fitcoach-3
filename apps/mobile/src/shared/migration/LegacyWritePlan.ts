@@ -8,7 +8,7 @@ export type LegacyMeasurementCheckpoint = "after-measurement-ids" | "after-measu
 export type LegacyNutritionCheckpoint = "after-nutrition-ids" | "after-nutrition-rows" | "after-nutrition-receipt";
 export type LegacyCalendarCheckpoint = "after-calendar-ids" | "after-calendar-rows" | "after-calendar-receipt";
 export type LegacySettingsCheckpoint = "after-settings-rows" | "after-settings-source" | "after-settings-receipt";
-export type LegacyClientCheckpoint = "after-ids" | "after-client" | "after-clients" | "after-profile" | "after-work-data" | "before-commit" | LegacyExerciseCheckpoint | LegacyPlanCheckpoint | LegacyExecutionCheckpoint | LegacyMeasurementCheckpoint | LegacyNutritionCheckpoint | LegacyCalendarCheckpoint | LegacySettingsCheckpoint;
+export type LegacyClientCheckpoint = "after-ids" | "after-client" | "after-clients" | "after-profile" | "after-work-data" | "before-commit" | "after-source-coverage-rows" | "after-source-coverage-receipt" | LegacyExerciseCheckpoint | LegacyPlanCheckpoint | LegacyExecutionCheckpoint | LegacyMeasurementCheckpoint | LegacyNutritionCheckpoint | LegacyCalendarCheckpoint | LegacySettingsCheckpoint;
 export type LegacyWriteRequest = Readonly<{ kind: "all" | "run"; sql: string; bindings: readonly SqlValue[] }>
   | Readonly<{ kind: "checkpoint"; phase: LegacyClientCheckpoint }>;
 /** Caller owns the entire exclusive transaction, including all delegated owners. */

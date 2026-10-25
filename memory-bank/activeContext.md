@@ -67,14 +67,16 @@ Workspace8bd28a1: R04_SOURCE_WORKSPACE.md; namespace/no-client Q/empty stores;
 Settingsa3120c9: R04_SETTINGS_STAGING.md nativeprefs/raw review;12new/584profile.
 Native3.x backup/ordinary reader isolate PASS.
 
-CURRENT R04_BUILDER_DRAFTS.md: native new/edit SIMPLE+PERIODIZED recovery,
-base/baseWeeks; exact owner/scope/revision/IDs/catalog/metrics. Scoped-v2 precedence;
-pendingfacts/actions/incomplete forms stay review, nofake0. Plans owns draft
-parity/mode/reader; Settings delegates. No new facts. Final13/targeted36/earlier596
-PASS; root/mobileTS/lint/source73/arch614. ExpoSDKmock resume/Workertermination;
-native3.x snapshot/ordinary repository isolate/edit+publish Simple PASS.
-UI/catalog/private-review/Execution/Android/release remain open. GoalACTIVE.
+Builders6fcde02/R04_BUILDER_DRAFTS.md: native recovery;13final/596earlierprofile,
+3.x snapshot/ordinary repository isolate PASS.
 
-NEXT unsupportedRecovery/coverage/prefs/lineage/permanentExecution/
+CURRENT R04_SOURCE_COVERAGE.md: pinned census/count/columns/SQLcell SHA;
+full tagged raw ordinary tables in private ledger, unknown stores REVIEW,
+views notexecuted, virtual rejected. 84tables/same tx/mode/parity/sourceSHA.
+77targeted/8final/33earlier reader tests PASS; root/mobileTS/lint/source73/arch617.
+ExpoSDKmock restart/hostWorker kill PASS. Raw capture is not semantic mapping/
+3.x backup/UI/cutover/Android proof. GoalACTIVE.
+
+NEXT semanticCoverage/unsupportedRecovery/prefs/lineage/permanentExecution/
 provenance/review/schemaadmission/UI/cutover/fullbackup/Android/GC/removal.
 JSONguard notfullvariantproof. BackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.

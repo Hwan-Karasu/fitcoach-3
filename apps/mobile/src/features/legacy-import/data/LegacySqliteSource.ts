@@ -5,6 +5,7 @@ import { legacyCalendarReadPlan, legacyMeasurementsReadPlan, legacyNutritionRead
 import { legacyBackupAdmissionPlan } from "./LegacyBackupReadPlans.ts";
 import { legacyExecutionReadPlan, legacyPlansReadPlan } from "./LegacyTrainingReadPlans.ts";
 import { legacyClientsReadPlan, legacyExerciseCatalogReadPlan, legacyQuestionnaireReadPlan, legacySettingsReadPlan } from "./LegacyProfileReadPlans.ts";
+import { legacySourceCoverageReadPlan } from "./LegacySourceCoverageReadPlan.ts";
 
 export type NativeLegacySourceDatabase = Pick<SQLiteDatabase, "getAllAsync" | "execAsync" | "closeAsync">;
 
@@ -21,8 +22,9 @@ export async function readLegacyDomainSnapshots(open: () => Promise<NativeLegacy
 export async function readAdmittedLegacyDomainSnapshots(open: () => Promise<NativeLegacySourceDatabase>, fileBytes: number) {
   return withLegacySourceSnapshot(open, async (reader) => {
     const admission = await runLegacyReadPlan(reader, legacyBackupAdmissionPlan(fileBytes));
-    const snapshots: LegacyImportSourceSnapshots = { ...await collectLegacyDomainSnapshots(reader, admission.accountScope), ...await collectLegacyTrainingSnapshots(reader, admission.accountScope), ...await collectLegacyProfileSnapshots(reader, admission.accountScope),
+    const source: Omit<LegacyImportSourceSnapshots, "coverage"> = { ...await collectLegacyDomainSnapshots(reader, admission.accountScope), ...await collectLegacyTrainingSnapshots(reader, admission.accountScope), ...await collectLegacyProfileSnapshots(reader, admission.accountScope),
       settings: await runLegacyReadPlan(reader, legacySettingsReadPlan(admission.accountScope)) };
+    const snapshots: LegacyImportSourceSnapshots = { ...source, coverage: await runLegacyReadPlan(reader, legacySourceCoverageReadPlan(admission.accountScope, source)) };
     return { admission, snapshots };
   });
 }

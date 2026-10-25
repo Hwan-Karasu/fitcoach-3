@@ -8,7 +8,7 @@ const fail = (code: string): never => { throw new Error(code); };
 const quoted = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
 function* present(table: string, shapeError: string): LegacySourceReadPlan<boolean> {
-  const rows = yield query("SELECT type FROM sqlite_schema WHERE lower(name)=?", [table]);
+  const rows = yield query("SELECT type FROM sqlite_schema WHERE name=? COLLATE NOCASE", [table]);
   if (rows.length && (rows.length !== 1 || rows[0]!.type !== "table")) return fail(shapeError);
   return rows.length === 1;
 }

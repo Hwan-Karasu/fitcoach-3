@@ -1,3 +1,23 @@
+## Продолжение — полный source table coverage / raw SQL retention
+
+2026-10-25, база6fcde02; R04→R03/Product46.6/48.5.7/49–50/53–56/INT03–12.
+Private synthetic/finalizable:false; production/migration/release gates OPEN.
+Все tables/views перечисляются в том же pinned snapshot. Whole collectors
+сверяются с physical counts/columns; полные raw tagged SQL cells всех обычных
+таблиц, включая неизвестные поля/stores, сохраняются в private coverage ledger.
+Metadata отдельно, остальные stores REVIEW; views не исполняются, virtual/shadow
+пока rejected. SQLite internal stores только schema/count. Нет ложного MAPPED.
+SourceCoverage последний в общей app tx; два private tables/mode/parity/receipt/
+sourceSHA, теперь84tables. Old candidates не расширяются на месте. IDs прежние.
+Новые tests: полный census/source-vs-stage values/Node+async/duplicates/BLOB/TEXT/
+safe numbers/rollback/retry/IO/tamper; actual ExpoSDKmock restart и host Worker kill.
+77targeted/8final/33earlier-reader PASS; root/mobileTS/lint/source73/arch617/secrets.
+Финальные8 покрывают Unicode ordering JS/SQLite; staged diff PASS.
+Android/полный обычный backup/removal ещё открыты; детали в phase doc.
+[Контракт, pinned source refs и ограничения](spikes/R04_SOURCE_COVERAGE.md).
+NEXT semantic coverage/preferences/lineage/permanentmodels/admission/UI/cutover/
+fullbackup/Android/GC/removal. GoalACTIVE/fullscope/не100%.
+
 ## Продолжение — native recovery черновиков конструкторов
 
 2026-10-25, базаa3120c9; R04→R03/Product48.5.7/49–50/53–56/INT03–12.
