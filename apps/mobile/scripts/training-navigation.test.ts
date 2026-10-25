@@ -79,10 +79,11 @@ test("group is retained between weeks of a cycle, invalidated on membership chan
 test("diary starts independent reads together and cannot unlock a failed or superseded week", async () => {
   const calls: string[] = [];
   const reads = new Map<number, ReturnType<typeof deferred<{ workout: PlannedWorkout } | null>>>();
-  const plans = { findWorkout: async (_client: string, _program: string, _workout: string, week: number) => {
+  const plans = { subscribeCommittedChanges: () => () => undefined, findWorkout: async (_client: string, _program: string, _workout: string, week: number) => {
     calls.push(`plan:${week}`); const pending = deferred<{ workout: PlannedWorkout } | null>(); reads.set(week, pending); return pending.promise;
   } } as unknown as TrainingPlansRepositoryPort;
   const execution = {
+    subscribeCommittedChanges: () => () => undefined,
     getWorkoutWithPrevious: async (_slot: unknown, queries: Promise<unknown>) => {
       calls.push("execution"); await queries; return { current: empty, previous: new Map() };
     }, getConfirmationMode: async () => { calls.push("mode"); return "AUTO"; },
@@ -116,8 +117,8 @@ test("diary starts independent reads together and cannot unlock a failed or supe
 
 test("initial diary failure is retryable and missing workouts complete without a stale result", async () => {
   let fail = true;
-  const plans = { findWorkout: async () => { if (fail) throw new Error("synthetic"); return null; } } as unknown as TrainingPlansRepositoryPort;
-  const execution = { getWorkoutWithPrevious: async (_slot: unknown, queries: Promise<unknown>) => {
+  const plans = { subscribeCommittedChanges: () => () => undefined, findWorkout: async () => { if (fail) throw new Error("synthetic"); return null; } } as unknown as TrainingPlansRepositoryPort;
+  const execution = { subscribeCommittedChanges: () => () => undefined, getWorkoutWithPrevious: async (_slot: unknown, queries: Promise<unknown>) => {
     await queries; return { current: empty, previous: new Map() };
   }, getConfirmationMode: async () => "AUTO" } as unknown as TrainingExecutionPort;
   let latest!: ReturnType<typeof useWorkoutSnapshot>;

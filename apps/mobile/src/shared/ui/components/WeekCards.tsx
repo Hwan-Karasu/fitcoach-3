@@ -1,4 +1,5 @@
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useLayoutEffect, useRef } from "react";
+import { navigationPerformance } from "../../diagnostics/NavigationPerformance.ts";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../theme/typography.ts";
@@ -19,6 +20,7 @@ export const WeekCards = memo(function WeekCards({ weeks, selected, onSelect, di
   const colors = palette.tokens;
   const scroll = useRef<ScrollView>(null);
   const positions = useRef(new Map<number, number>());
+  useLayoutEffect(() => { navigationPerformance.selection(); }, [selected]);
   useEffect(() => { scroll.current?.scrollTo({ x: positions.current.get(selected) ?? 0, animated: true }); }, [selected]);
   return <ScrollView ref={scroll} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip}>
     {weeks.map((week) => <Pressable key={week.index} accessibilityRole="button"

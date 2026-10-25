@@ -10,6 +10,7 @@ import { fonts } from "../../shared/ui/theme/typography.ts";
 import { shadow } from "../../shared/ui/theme/style.ts";
 import { ClientsListShortcut } from "./ClientsListShortcut.tsx";
 import { navigationBorder } from "../../shared/ui/theme/navigationBorder.ts";
+import { navigationPerformance } from "../../shared/diagnostics/NavigationPerformance.ts";
 
 /** Значки всех наборов вкладок: корень (Клиенты/Календарь/Архив) и карточка клиента (Главная/Питание/…). */
 const tabIcons: Readonly<Record<string, LucideIcon>> = { Clients: Users, Calendar: CalendarDays, Archive,
@@ -20,6 +21,7 @@ const tabIcons: Readonly<Record<string, LucideIcon>> = { Clients: Users, Calenda
  * кнопки. «Зефирка» (UI-OWN-048): белая, радиус 26, тень; активная вкладка — мягкий фон акцента.
  */
 export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTabBarProps>) {
+  navigationPerformance.render("RootTabBar");
   const { palette, navigationAppearance } = usePrototypeTheme();
   const colors = palette.tokens;
   const insets = useSafeAreaInsets();

@@ -1,6 +1,7 @@
 import { useActiveWorkoutCards } from "./useActiveWorkoutCards.ts";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { navigationPerformance } from "../../../../shared/diagnostics/NavigationPerformance.ts";
+import { workoutNavigationProbe } from "../../../../shared/diagnostics/WorkoutNavigationProbe.ts";
 import { Image, Keyboard, Pressable, Text, View } from "react-native";
 import { KeyboardAwareScrollView, type KeyboardAwareScrollViewRef } from "react-native-keyboard-controller";
 import { useKeepAwake } from "expo-keep-awake";
@@ -223,39 +224,57 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     const targetWeek = weekNavigation?.weeks.find((week) => week.index === index);
     if (!targetWeek) return;
     navigationPerformance.begin("workout-week");
+    const openTarget = () => {
+      if (targetWeek.workoutId !== null && diary.isCached({ ...slot, weekIndex: index, plannedWorkoutId: targetWeek.workoutId })) {
+        reportWeekTone(targetWeek.type === undefined || targetWeek.type === "base" ? null : weekTypeTone(targetWeek.type, colors));
+      }
+      if (targetWeek.workoutId === null) navigationAuthorized.current = true;
+      Keyboard.dismiss();
+      onChangeWeek(index, targetWeek.workoutId, weekNavigation?.mesocycleId ?? null);
+    };
+    // No input/queue to settle: keep this in the press event's batch instead of a busy/await/busy cascade.
+    if (!pending.dirty && !diary.needsSaving()) {
+      setNavigationError(null); openTarget(); return;
+    }
     changingWeek.current = true;
     setBusy(true);
     try {
       if (!await finishInput()) return;
       // Без соответствующей тренировки — уход к списку недели (экран закрывается); иначе тот же экран, другая неделя.
-      if (targetWeek.workoutId === null) navigationAuthorized.current = true;
-      Keyboard.dismiss();
-      onChangeWeek(index, targetWeek.workoutId, weekNavigation?.mesocycleId ?? null);
+      openTarget();
     } finally { changingWeek.current = false; setBusy(false); }
   };
   const currentWeek = weekNavigation?.weeks.findIndex((week) => week.index === slot.weekIndex) ?? -1;
   const changeWeekRef = useRef(changeWeek);
   changeWeekRef.current = changeWeek;
   const selectWeek = useCallback((index: number) => { void changeWeekRef.current(index); }, []);
+  useEffect(() => {
+    workoutNavigationProbe.update({ week: slot.weekIndex, available: weekNavigation?.weeks.filter((week) => week.workoutId !== null).map((week) => week.index) ?? [],
+      ready: !busy && !diary.switching && navigationCurrent, select: selectWeek });
+  });
+  useEffect(() => () => workoutNavigationProbe.clear(), []);
   // Дневник в цвете типа своей недели (UI-OWN-039); «Индивидуальная» — цвет темы.
-  const weekType = weekNavigation?.weeks[currentWeek]?.type;
-  useReportScreenTone(weekType === undefined || weekType === "base" ? null : weekTypeTone(weekType, colors));
+  const weekType = weekNavigation?.weeks.find((week) => week.index === diary.displayedSlot.weekIndex)?.type;
+  const reportWeekTone = useReportScreenTone(weekType === undefined || weekType === "base" ? null : weekTypeTone(weekType, colors));
   const previousWeek = weekNavigation?.weeks[currentWeek - 1];
   const nextWeek = weekNavigation?.weeks[currentWeek + 1];
   useWeekNavigation(weekNavigation === null ? null : { week: slot.weekIndex, busy,
     previous: previousWeek ? () => { void changeWeek(previousWeek.index); } : null,
     next: nextWeek ? () => { void changeWeek(nextWeek.index); } : null }, navigationLoaded);
 
+  const saveSetRef = useRef(saveSet); saveSetRef.current = saveSet;
+  const toggleSetRef = useRef(toggleSet); toggleSetRef.current = toggleSet;
+  const scopeRef = useRef(diary.displayedKey); scopeRef.current = diary.displayedKey;
   const onSave = useCallback((item: SetTarget, patch: SetPatch) =>
-    saveSet(item.exercise, item.set, item.position, patch), [saveSet]);
+    saveSetRef.current(item.exercise, item.set, item.position, patch), []);
   // Перед отметкой дописываются только ячейки этого подхода: ошибка в другом подходе её не блокирует.
   const onToggle = useCallback((item: SetTarget, side?: Side) => {
-    void pending.flushPrefix(`${item.set.id}:`).then((saved) => {
-      if (saved) { setNavigationError(null); void toggleSet(item.exercise, item.set, item.position, side); return; }
+    void pending.flushPrefix(`${scopeRef.current}|${item.set.id}:`).then((saved) => {
+      if (saved) { setNavigationError(null); void toggleSetRef.current(item.exercise, item.set, item.position, side); return; }
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
       setNavigationError("В этом подходе неверное значение — исправьте подсвеченную ячейку и отметьте снова.");
     });
-  }, [pending, toggleSet]);
+  }, [pending]);
   const onPickType = useCallback((item: SetTarget) => {
     Keyboard.dismiss();
     setTarget(item);
@@ -320,14 +339,14 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     .reduce((sum, fact) => sum + factVolume(fact), 0);
   const workoutVolume = workout.exercises.reduce((sum, exercise) => sum + volumeOf(exercise.id), 0);
   const kg = (value: number) => `${Math.round(value).toLocaleString("ru-RU")} кг`;
-  const shareRows = workout.exercises.map((exercise) => {
+  const shareRows = sharing ? workout.exercises.map((exercise) => {
     const fields = diaryFields(lookup.get(exercise.exerciseId)?.metrics ?? []);
     return { name: lookup.get(exercise.exerciseId)?.name ?? "Упражнение", sets: exercise.sets.map((set) => {
       const fact = state.facts.get(set.id);
       return fact !== undefined && hasValues(fact.values) ? labeledWithDrops(fact.values, fact.drops, fields, rawOf)
         : `план: ${labeledPlan(planText(set, fields), fields)}`;
     }) };
-  });
+  }) : [];
   const share = () => {
     if (sharing) return;
     setNotice(null);
@@ -399,7 +418,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
           </View>
           <View style={styles.metaRow}>
             <View style={styles.dateRow}>
-              <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Неделя ${slot.weekIndex}`}</Text>
+              <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Неделя ${diary.displayedSlot.weekIndex}`}</Text>
               {state.session !== null ? (
                 // §48.84: дата проведения — по умолчанию день первого ввода, можно указать прошедший день.
                 <Pressable accessibilityRole="button" hitSlop={8}
@@ -564,7 +583,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                 {mode === "MANUAL" ? <View style={styles.side} /> : null}
               </View>
               {rows.map(({ item, number }) => (
-                <SetRow key={extraIds.has(item.set.id) ? item.set.id : `p:${item.position}`} exercise={exercise} set={item.set} position={item.position} number={number}
+                <SetRow key={extraIds.has(item.set.id) ? item.set.id : `p:${item.position}`} scopeKey={diary.displayedKey}
+                  exercise={exercise} set={item.set} position={item.position} number={number}
                   fact={state.facts.get(item.set.id)} previous={previous.get(item.set.id)} fields={fields} mode={mode}
                   sided={info?.unilateral === true}
                   pending={pending} onSave={onSave} onToggle={onToggle} onPickType={onPickType} onPickRpe={onPickRpe} />
@@ -575,7 +595,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                 <Plus size={15} color={colors.accentInk} strokeWidth={2.2} />
                 <Text style={[styles.addSetText, { color: colors.accentInk }]}>Подход</Text>
               </Pressable>
-              <NoteField noteKey={`note:${exercise.id}`} value={state.notes.get(exercise.id) ?? ""} pending={pending}
+              <NoteField noteKey={`${diary.displayedKey}|note:${exercise.id}`} value={state.notes.get(exercise.id) ?? ""} pending={pending}
                 onCommit={(text) => diary.saveNote(exercise.id, text)} />
             </View>
           );

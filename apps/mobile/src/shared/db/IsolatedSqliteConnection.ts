@@ -12,10 +12,10 @@ function statements(native: NativeSqliteDatabase): SqliteStatementPort {
       return { changes: result.changes, lastInsertRowId: result.lastInsertRowId };
     },
     first: <Row>(sql: string, bindings: readonly SqlValue[] = []) => {
-      navigationPerformance.read(); return native.getFirstAsync<Row>(sql, ...bindings);
+      const end = navigationPerformance.read(sql); return native.getFirstAsync<Row>(sql, ...bindings).finally(end);
     },
     all: <Row>(sql: string, bindings: readonly SqlValue[] = []) => {
-      navigationPerformance.read(); return native.getAllAsync<Row>(sql, ...bindings);
+      const end = navigationPerformance.read(sql); return native.getAllAsync<Row>(sql, ...bindings).finally(end);
     },
   };
 }

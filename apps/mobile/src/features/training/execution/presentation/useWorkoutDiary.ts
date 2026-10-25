@@ -53,7 +53,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   const { clientId, programId } = slot;
   const [version, setVersion] = useState(0);
   const { stableSlot, slotKey, slotKeyRef, loadedKey, loadedKeyRef, workout, state, setState,
-    previous, mode, setMode, message, setMessage, loadFailed } = useWorkoutSnapshot(slot, plans, execution, version);
+    previous, mode, setMode, message, setMessage, loadFailed, displayedSlot, displayedKey, isCached } = useWorkoutSnapshot(slot, plans, execution, version);
   const stateRef = useRef<WorkoutExecution | null>(null);
   const confirmedRef = useRef(onConfirmedNow);
   confirmedRef.current = onConfirmedNow;
@@ -110,6 +110,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   }, [queue]);
 
   const finishSaving = useCallback((): Promise<boolean> => queue.settle(), [queue]);
+  const needsSaving = useCallback(() => queue.unsettled, [queue]);
 
   const identityOf = useCallback((exercise: PlannedExercise, set: PlannedSet, position: number) => {
     const fact = stateRef.current?.facts.get(set.id) ?? null;
@@ -242,11 +243,11 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
 
   const started = state !== null && hasEnteredData(state.facts.values());
   return {
-    workout, state, previous, mode, message, loadFailed, retry: refresh,
+    workout, state, previous, mode, message, loadFailed, displayedSlot, displayedKey, isCached, retry: refresh,
     /** Открыта другая неделя, её данные ещё грузятся: на экране прежние значения, ввод закрыт. */
     switching: workout !== undefined && loadedKey !== slotKey,
     status: workoutStatus(state?.session?.outcome ?? null, started),
-    saveSet, toggleSet, setOutcome, addWarmup, removeWarmup, setActualDate, setTimes, saveNote, deleteExecution, finishSaving,
+    saveSet, toggleSet, setOutcome, addWarmup, removeWarmup, setActualDate, setTimes, saveNote, deleteExecution, finishSaving, needsSaving,
     dismissMessage: () => setMessage(null),
   };
 }

@@ -11,6 +11,8 @@ import { compactValues, compactWithDrops, fieldNames, parseField, planText, rawO
 import { type SetPatch } from "./useWorkoutDiary.ts";
 import { PendingInputWrites } from "../domain/PendingInputWrites.ts";
 import { styles } from "./workoutStyles.ts";
+import { navigationPerformance } from "../../../../shared/diagnostics/NavigationPerformance.ts";
+import { useInputDraft } from "./useInputDraft.ts";
 
 /** Пауза после последнего нажатия, после которой значение ячейки записывается. */
 const SAVE_DELAY_MS = 700;
@@ -29,12 +31,13 @@ const ValueCell = forwardRef(function ValueCell({ cellKey, field, value, pending
   onNext: (() => void) | null;
   onCommit: (value: number | null) => Promise<unknown>;
 }>, ref: Ref<TextInput>) {
+  navigationPerformance.render("ValueCell");
+  useEffect(() => { navigationPerformance.mount("ValueCell"); return () => navigationPerformance.unmount("ValueCell"); }, []);
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const raw = rawOf({ ...EMPTY_VALUES, [field]: value }, field);
-  const [text, setText] = useState(raw);
-  const [invalid, setInvalid] = useState(false);
   const focused = useRef(false);
+  const { text, invalid, change } = useInputDraft(cellKey, raw, focused.current || pending.has(cellKey));
   const textRef = useRef(raw);
   const valueRef = useRef(value);
   const commitRef = useRef(onCommit);
@@ -42,12 +45,7 @@ const ValueCell = forwardRef(function ValueCell({ cellKey, field, value, pending
   valueRef.current = value;
   commitRef.current = onCommit;
 
-  useEffect(() => {
-    if (focused.current || pending.has(cellKey)) return;
-    textRef.current = raw;
-    setText(raw);
-    setInvalid(false);
-  }, [raw, pending, cellKey]);
+  textRef.current = text;
 
   const flush = useCallback(() => {
     if (timer.current !== null) clearTimeout(timer.current);
@@ -68,11 +66,10 @@ const ValueCell = forwardRef(function ValueCell({ cellKey, field, value, pending
       onChangeText={(typed) => {
         const next = sanitizeField(field, typed);
         textRef.current = next;
-        setText(next);
         if (timer.current !== null) clearTimeout(timer.current);
         timer.current = null;
         const parsed = parseField(field, next);
-        setInvalid(parsed === "invalid");
+        change(next, parsed === "invalid");
         pending.set(cellKey, async () => {
           if (parsed === "invalid") return false;
           if (parsed === valueRef.current) return true;
@@ -92,23 +89,22 @@ const ValueCell = forwardRef(function ValueCell({ cellKey, field, value, pending
 export function NoteField({ noteKey, value, pending, onCommit }: Readonly<{
   noteKey: string; value: string; pending: PendingRegistry; onCommit: (text: string) => Promise<unknown>;
 }>) {
+  navigationPerformance.render("NoteField");
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const [text, setText] = useState(value);
-  const [open, setOpen] = useState(value !== "");
   const focused = useRef(false);
+  const { text, change } = useInputDraft(noteKey, value, focused.current || pending.has(noteKey));
+  const [openFor, setOpenFor] = useState({ key: noteKey, open: value !== "" });
+  const open = openFor.key === noteKey ? openFor.open || value !== "" : value !== "";
+  if (openFor.key !== noteKey) setOpenFor({ key: noteKey, open });
+  const setOpen = (next: boolean) => setOpenFor({ key: noteKey, open: next });
   const textRef = useRef(value);
   const valueRef = useRef(value);
   const commitRef = useRef(onCommit);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   valueRef.current = value;
   commitRef.current = onCommit;
-  useEffect(() => {
-    if (focused.current || pending.has(noteKey)) return;
-    textRef.current = value;
-    setText(value);
-    if (value !== "") setOpen(true);
-  }, [value, pending, noteKey]);
+  textRef.current = text;
   const flush = useCallback(() => {
     if (timer.current !== null) clearTimeout(timer.current);
     timer.current = null;
@@ -132,7 +128,7 @@ export function NoteField({ noteKey, value, pending, onCommit }: Readonly<{
       onBlur={() => { focused.current = false; flush(); if (textRef.current.trim() === "") setOpen(false); }}
       onChangeText={(next) => {
         textRef.current = next;
-        setText(next);
+        change(next);
         if (timer.current !== null) clearTimeout(timer.current);
         pending.set(noteKey, async () => next.trim() === valueRef.current.trim() || await commitRef.current(next) !== null);
         timer.current = setTimeout(flush, SAVE_DELAY_MS);
@@ -145,9 +141,10 @@ export function NoteField({ noteKey, value, pending, onCommit }: Readonly<{
  * Строка подхода. Тип красит строку (разминка — жёлтым, отказ — красным, дроп — синим), номер у рабочих
  * подходов не меняется; под дроп-сетом — строки мини-сетов (§48.60), их состав заморожен, пока подход выполнен.
  */
-export const SetRow = memo(function SetRow({ exercise, set, position, number, fact, previous, fields, mode, sided, pending,
+export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, number, fact, previous, fields, mode, sided, pending,
   onSave, onToggle, onPickType, onPickRpe }: Readonly<{
   exercise: PlannedExercise; set: PlannedSet; position: number; number: number | null; fact: SetFact | undefined; previous: PreviousSet | undefined;
+  scopeKey: string;
   fields: readonly SetField[]; mode: ConfirmationMode;
   /** Одностороннее упражнение: две строки «Л» / «П» со своими значениями и отметками (§48.66, §48.70). */
   sided: boolean;
@@ -160,6 +157,7 @@ export const SetRow = memo(function SetRow({ exercise, set, position, number, fa
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   // Цель строки собирается из примитивов и неизменных объектов: пропсы строки стабильны, memo срабатывает.
+  navigationPerformance.render("SetRow");
   const target = useMemo<SetTarget>(() => ({ exercise, set, position }), [exercise, set, position]);
   const confirmed = fact?.confirmed === true;
   const type: SetType = fact?.setType ?? "NORMAL";
@@ -175,7 +173,7 @@ export const SetRow = memo(function SetRow({ exercise, set, position, number, fa
     fields.map((field, index) => {
       const next = fields[index + 1];
       return (
-        <ValueCell key={field} ref={(node) => { inputs.set(`${prefix}:${field}`, node); }} cellKey={`${prefix}:${field}`}
+        <ValueCell key={field} ref={(node) => { inputs.set(`${prefix}:${field}`, node); }} cellKey={`${scopeKey}|${prefix}:${field}`}
           field={field} value={valueOf(field)} pending={pending}
           onNext={next === undefined ? null : () => inputs.get(`${prefix}:${next}`)?.focus()}
           onCommit={(value) => commit(field, value)} />

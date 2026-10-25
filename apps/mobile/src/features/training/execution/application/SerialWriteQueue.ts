@@ -12,6 +12,8 @@ export class SerialWriteQueue {
   get busy(): boolean {
     return this.inFlight > 0;
   }
+  /** A failed command must still be acknowledged by settle, even after its Promise has completed. */
+  get unsettled(): boolean { return this.busy || this.failed; }
 
   /** Результат команды; при ошибке — `null`, `onError` вызывается, а `settle()` вернёт `false`. */
   run<T>(task: () => Promise<T>, handlers: Readonly<{ onSuccess?: () => void; onError?: (error: unknown) => void }> = {}): Promise<T | null> {

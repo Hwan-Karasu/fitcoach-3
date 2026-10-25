@@ -4,6 +4,7 @@ export class PendingInputWrites {
   private readonly running = new Map<string, Promise<boolean>>();
 
   has(key: string): boolean { return this.entries.has(key); }
+  get dirty(): boolean { return this.entries.size > 0 || this.running.size > 0; }
   set(key: string, save: () => Promise<boolean>): void { this.entries.set(key, save); }
 
   flush(key: string): Promise<boolean> {

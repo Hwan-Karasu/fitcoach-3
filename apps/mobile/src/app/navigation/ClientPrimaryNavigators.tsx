@@ -1,7 +1,7 @@
 import { Profiler, useEffect, useRef, useState, type ReactNode } from "react";
 import { navigationPerformance } from "../../shared/diagnostics/NavigationPerformance.ts";
 import { ConfirmDialog, TabBarPending } from "../../shared/ui/components/public.ts";
-import { CommonActions } from "@react-navigation/native";
+import { CommonActions, useIsFocused } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { AccountingRepositoryPort } from "../../features/accounting/public.ts";
 import { ClientHomePreview, type ClientRecord } from "../../features/clients/public.ts";
@@ -15,10 +15,13 @@ import { ArchivedProgramsPanel, ParticipantSwitcher, participantTarget, ProgramM
   type TrainingPlansRepositoryPort, ProgramWeeksPanel, WorkoutScreen, type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort,
   type WorkoutSlot } from "../../features/training/public.ts";
 import { CustomExerciseEditorScreen, ExerciseLibraryScreen, type ExerciseCatalogPort } from "../../features/exercises/public.ts";
-import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
+import { RetainedScreenTheme, usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { ClientHeader } from "./ClientHeader.tsx";
 
 type HomeRoutes = { HomeIndex: undefined };
+function RetainedTrainingProgram({ children }: Readonly<{ children: ReactNode }>) {
+  return <RetainedScreenTheme active={useIsFocused()}>{children}</RetainedScreenTheme>;
+}
 type NutritionRoutes = {
   NutritionIndex: { section: "calc"; requestKey: number } | undefined;
   NutritionAdd: { localDate: string; slot: MealSlot; filter?: CatalogFilter };
@@ -192,6 +195,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
 }>) {
   const { palette } = usePrototypeTheme();
   // UI-OWN-043: участник группы, чьи данные открыты (как в 2.0); `null` — клиент карточки. Экраны стека получают его.
+  navigationPerformance.render("TrainingNavigator");
   const [participant, setParticipant] = useState<string | null>(null);
   const [names, setNames] = useState<ReadonlyMap<string, string>>(new Map());
   const [switching, setSwitching] = useState(false);
@@ -296,7 +300,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId } }] })} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingProgram">
-        {({ navigation, route }) => <><TabBarPending weeks dock /><Profiler id="TrainingProgram" onRender={navigationPerformance.onRender}><ProgramScreen clientId={viewer} programId={route.params.programId}
+        {({ navigation, route }) => <RetainedTrainingProgram><TabBarPending weeks dock /><Profiler id="TrainingProgram" onRender={navigationPerformance.onRender}><ProgramScreen clientId={viewer} programId={route.params.programId}
           requestedWeek={route.params.weekIndex} requestedMesocycle={route.params.mesocycleId}
           repository={repository} listCandidates={listCandidates} exercises={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap} planDelete={planDelete}
           onOpenMatrix={() => navigation.navigate("TrainingMatrix", { programId: route.params.programId })}
@@ -325,7 +329,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
           onAddMesocycle={() => navigation.navigate("TrainingCreate", { kind: "PERIODIZED", programId: route.params.programId })}
           onEditWeek={(mesocycleId, weekIndex) => navigation.navigate("TrainingCreate", { kind: "PERIODIZED", programId: route.params.programId,
             mesocycleId, weekIndex })}
-          onArchived={() => navigation.popTo("TrainingIndex")} /></Profiler></>}
+          onArchived={() => navigation.popTo("TrainingIndex")} /></Profiler></RetainedTrainingProgram>}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingBuilder">
         {({ navigation, route }) => <SimpleProgramBuilderScreen clientId={viewer} programId={route.params?.programId ?? null}

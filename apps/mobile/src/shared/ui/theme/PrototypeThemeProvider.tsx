@@ -108,6 +108,14 @@ export function usePrototypeTheme(): PrototypeThemeState {
   return context;
 }
 
+/** Keep hidden screens' palette and element stable; adopt the latest props/theme together on focus. */
+export function RetainedScreenTheme({ active, children }: Readonly<{ active: boolean; children: ReactNode }>) {
+  const current = usePrototypeTheme();
+  const retained = useRef({ theme: current, children });
+  if (active) retained.current = { theme: current, children };
+  return <ThemeContext.Provider value={retained.current.theme}>{retained.current.children}</ThemeContext.Provider>;
+}
+
 /**
  * Палитра поддерева подменена (цвет недели, UI-OWN-039): дочерние экраны получают ту же тему с другими токенами.
  * `tokens === null` — без подмены.
