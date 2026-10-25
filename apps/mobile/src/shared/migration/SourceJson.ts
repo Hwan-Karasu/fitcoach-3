@@ -59,3 +59,33 @@ export function parseSourceJson(text: string, number: (key: string, source: stri
   }
   return root[""];
 }
+
+/** Decimal identity without converting the source coefficient or exponent to a double. */
+function decimalIdentity(source: string): string {
+  const match = /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/u.exec(source)!;
+  const digits = (match[2]! + (match[3] ?? "")).replace(/^0+/u, "");
+  if (!digits) return "0";
+  const trailing = /0*$/u.exec(digits)![0].length;
+  const exponent = match[4] ?? "0", magnitude = exponent.replace(/^[+-]?0*/u, "") || "0";
+  const power = BigInt(magnitude) * (exponent.startsWith("-") ? -1n : 1n)
+    - BigInt(match[3]?.length ?? 0) + BigInt(trailing);
+  return `${match[1]}${digits.slice(0, digits.length - trailing)}e${power}`;
+}
+
+/** For owners whose target JSON uses native numbers. Accept only numbers whose
+ * decimal value survives native JSON serialization; strings keep their types.
+ * Native integers must also have the exact source value: shortest double spelling
+ * alone can disguise integer rounding (1000000000000000100 becomes ...0128).
+ * Other owners can retain arbitrary precision with parseSourceJson callbacks.
+ */
+export function parseRoundTripSourceJson(text: string): unknown {
+  return parseSourceJson(text, (_key, source) => {
+    const value = Number(source);
+    const invalid = (): never => { throw new RangeError("IMPORT_SOURCE_JSON_NUMBER_UNREPRESENTABLE"); };
+    if (!Number.isFinite(value) || Object.is(value, -0)) return invalid();
+    const exact = decimalIdentity(source);
+    if (exact !== decimalIdentity(JSON.stringify(value))) return invalid();
+    if (Number.isInteger(value) && exact !== decimalIdentity(BigInt(value).toString())) return invalid();
+    return value;
+  });
+}

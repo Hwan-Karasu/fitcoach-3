@@ -1,5 +1,6 @@
 import type { CandidateIdentityContext } from "../../../../../shared/migration/LegacyIdentityBinding.ts";
 import { isExplicitTimestamp } from "../../../../../shared/migration/LegacyValues.ts";
+import { parseRoundTripSourceJson } from "../../../../../shared/migration/SourceJson.ts";
 import { PLAN_SOURCE_TABLES, type LegacyPlansSource, type PlanSourceTable } from "../../../../../shared/migration/LegacyPlanSources.ts";
 import { composeLegacyPlans, type ExercisePlanLink, type PlanIdentityKind, type PlanRow } from "./LegacyPlansProjection.ts";
 
@@ -60,7 +61,9 @@ export function composeLegacyArchivePlans(context: CandidateIdentityContext, imp
       || row.deleted_at !== null && !isExplicitTimestamp(row.deleted_at)) return fail("LIFECYCLE_UNOBSERVED");
     if (row.deleted_at !== null) { deletedRows++; continue; }
     text(row.title);
-    let parsed: unknown; try { parsed = typeof row.data_json === "string" ? JSON.parse(row.data_json) as unknown : null; } catch { return fail("JSON_INVALID"); }
+    let parsed: unknown;
+    try { parsed = typeof row.data_json === "string" ? parseRoundTripSourceJson(row.data_json) : null; }
+    catch (error) { return fail(error instanceof RangeError ? "NUMBER_UNREPRESENTABLE" : "JSON_INVALID"); }
     const root = snapshot(parsed), cycles = root.cycles === undefined || root.cycles === null ? [] : array(root.cycles);
     if (cycles.length && root.mode !== "periodized") return fail("CYCLES_MODE_CONFLICT");
     const pages = cycles.length ? cycles.map((c, i) => {

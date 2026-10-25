@@ -1,11 +1,16 @@
 import type { PlanRange } from "../SimplePlanModel.ts";
 import { convertLegacySetMetrics } from "../../../../../shared/migration/LegacySetMetricConversion.ts";
+import { parseRoundTripSourceJson } from "../../../../../shared/migration/SourceJson.ts";
 
-function fail(): never { throw new Error("R04_ID_LEDGER_PLANS_PRESCRIPTION_INVALID"); }
+function fail(code = "PRESCRIPTION_INVALID"): never { throw new Error(`R04_ID_LEDGER_PLANS_${code}`); }
 export function sourceObject(value: unknown): Readonly<Record<string, unknown>> {
   if (typeof value !== "string") return fail();
   let parsed: unknown;
-  try { parsed = JSON.parse(value) as unknown; } catch { return fail(); }
+  try { parsed = parseRoundTripSourceJson(value); }
+  catch (error) {
+    if (error instanceof RangeError) return fail("NUMBER_UNREPRESENTABLE");
+    return fail();
+  }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return fail();
   return parsed as Readonly<Record<string, unknown>>;
 }

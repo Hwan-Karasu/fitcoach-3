@@ -1,3 +1,19 @@
+## Продолжение — точность JSON анкет и планов
+
+2026-10-25, база9ec7615; R04→R03/Product49–50/53–56/INT03–12.
+Private synthetic/finalizable:false; production/native/release gates OPEN.
+Общий parser сверяет исходный десятичный токен с целевым JSON и точным native
+integer; сохраняет обычные дроби/экспоненты/типы строк, блокирует округление,
+overflow/underflow/-0. Q candidate сохраняет raw+issue, composition перечитывает
+raw; Plans/Archive Plans проверяют структуру и неизвестные числовые metadata.
+Неподдерживаемое значение откатывает весь candidate, не портит исходную копию.
+9new/33targeted/562profile PASS; root/mobileTS/lint/source73/arch609 PASS.
+Постоянное review-хранение и UI ещё открыты; коды внутренние, не пользовательский UI.
+Нет Android/Hermesruntime/APK/fullfoundation; полный goal не100%.
+[Контракт, проверки и оставшийся объём](spikes/R04_JSON_NUMBER_PARITY.md).
+NEXT coverage/prefs/lineage/sourceQnamespace/permanentmodels/admission/UI/
+cutover/fullbackup/Android/GC/removal. GoalACTIVE/fullscope.
+
 ## Продолжение — persistent candidate jobs / Expo runtime
 
 2026-10-25, базаdcac694; R04→R03/Product49–50/53–56/INT03–12.

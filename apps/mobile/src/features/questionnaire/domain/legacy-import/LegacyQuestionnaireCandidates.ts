@@ -1,13 +1,17 @@
 import { isExplicitTimestamp } from "../../../../shared/migration/LegacyValues.ts";
+import { parseRoundTripSourceJson } from "../../../../shared/migration/SourceJson.ts";
 import type { LegacyQuestionnaireSource } from "../../../../shared/migration/LegacyProfileSources.ts";
 import { projectLegacyQuestionnaireSchema, projectLegacyQuestionnaireAnswer,
   type QuestionnaireProjection } from "./LegacyQuestionnaireProjection.ts";
 
 type SourceRow = Readonly<Record<string, unknown>>;
 function text(value: unknown): string | null { return typeof value === "string" && value.trim() ? value : null; }
+// Parser errors may contain source text; retain only the fixed diagnostic code.
+function fail(reason: string): never { throw new Error(`R04_QUESTIONNAIRE_${reason}`); }
 function parse(raw: unknown): unknown {
   if (typeof raw !== "string") throw new Error("R04_QUESTIONNAIRE_JSON_INVALID");
-  try { return JSON.parse(raw) as unknown; } catch { throw new Error("R04_QUESTIONNAIRE_JSON_INVALID"); }
+  try { return parseRoundTripSourceJson(raw); }
+  catch (error) { return fail(error instanceof RangeError ? "NUMBER_UNREPRESENTABLE" : "JSON_INVALID"); }
 }
 function code(error: unknown): string {
   return error instanceof Error && /^R04_QUESTIONNAIRE_[A-Z_]+$/u.test(error.message)

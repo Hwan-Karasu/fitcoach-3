@@ -1,6 +1,7 @@
 import type { Answers, QuestionField, QuestionnaireSchema, QuestionSection, QuestionType } from "../QuestionnaireModel.ts";
 import { allFields, validateSchema } from "../QuestionnaireRules.ts";
 import { isExplicitTimestamp } from "../../../../shared/migration/LegacyValues.ts";
+import { parseRoundTripSourceJson } from "../../../../shared/migration/SourceJson.ts";
 import { legacyProfileQuestionnaireSchema } from "./LegacyClientProfileProjection.ts";
 import { legacyQuestionnaireId, projectLegacyQuestionnaireAnswer, projectLegacyQuestionnaireSchema, type QuestionnaireProjection } from "./LegacyQuestionnaireProjection.ts";
 import type { projectLegacyQuestionnaire } from "./LegacyQuestionnaireCandidates.ts";
@@ -30,7 +31,10 @@ function record(value: unknown): Record<string, unknown> {
 }
 function text(value: unknown): string { if (typeof value !== "string" || !value.trim()) return fail("INVALID"); return value; }
 function integer(value: unknown): number { if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) return fail("INVALID"); return value; }
-function json(value: unknown): unknown { try { return JSON.parse(text(value)) as unknown; } catch { return fail("INVALID_JSON"); } }
+function json(value: unknown): unknown {
+  try { return parseRoundTripSourceJson(text(value)); }
+  catch (error) { return fail(error instanceof RangeError ? "NUMBER_UNREPRESENTABLE" : "INVALID_JSON"); }
+}
 function family(type: QuestionType): string { return type === "SHORT_TEXT" || type === "LONG_TEXT" ? "TEXT" : type; }
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 
@@ -156,8 +160,9 @@ export function composeLegacyQuestionnaires(context: CandidateIdentityContext, c
     if (!isExplicitTimestamp(row.updated_at) || row.deleted_at !== null && !isExplicitTimestamp(row.deleted_at)) return fail("ANSWER_TIME_INVALID");
     const revision = published.find((r) => r.version === row.template_revision);
     if (!revision) return fail("ANSWER_REVISION_UNRESOLVED");
+    const value = json(row.value_json);
     let projected: ReturnType<typeof projectLegacyQuestionnaireAnswer>;
-    try { projected = projectLegacyQuestionnaireAnswer(revision.projection, questionId, json(row.value_json)); } catch { return fail("ANSWER_INVALID"); }
+    try { projected = projectLegacyQuestionnaireAnswer(revision.projection, questionId, value); } catch { return fail("ANSWER_INVALID"); }
     const disposition = row.deleted_at !== null ? "DELETED" : projected.value === null ? "NULL" : "ANSWER";
     answerMaps.push({ sourceKey: expectedKey, targetClientId: client.targetClientId, fieldId: projected.fieldId, schemaVersion: revision.version, disposition });
     if (disposition === "ANSWER") answers.push({ workspace_id: context.targetWorkspaceId, client_id: client.targetClientId,

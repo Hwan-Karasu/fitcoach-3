@@ -73,13 +73,15 @@ Calendar12c94c3: R04_PORTABLE_CALENDAR_STAGING.md; appallowners/531profile PASS.
 
 Inspectiondcac694: R04_INSPECTION_STAGING.md; copy/allowners/empty;542profile PASS.
 
-CURRENT R04_CANDIDATE_JOBS.md: immutable request/atomicrename/readback/nooverwrite;
-actual Expo private SQLite factory + app start/resume, fixed disk clocks/IDs;
-request not completion. SDKmock realfiles/SQLite restart/Workerterminate/ACKloss/
-partials/drift/WAL/guard/sourceSHA proofs. 553profile/11new/10copy PASS;
-root/mobileTS/lint/source73/arch609/secrets PASS. No Android/powerloss/fullgoal100%.
-Fullproof doc; UI/cutover/prodDDL/foundation/bundle/Hermes/APK NOTdone.
+Jobs9ec7615: R04_CANDIDATE_JOBS.md; request/Expo resume/IDs/terminationproof;
+553profile/11new/10copy PASS. NotAndroid.
 
-NEXT coverage/prefs/lineage/JSONaudit/sourceQnamespace/permanentExecution/
+CURRENT R04_JSON_NUMBER_PARITY.md: exact decimal/JSON/integer guard for Q/Plans/
+archives; rawretention/reparse/allownerrollback/retry/IDs/sourceSHA/twoargWorker.
+No rounding/overflow/underflow/-0; decimals/exponents/stringtypes preserved.
+9new/33targeted/562profile PASS; root/mobileTS/lint/source73/arch609 PASS.
+No foundation/bundle/Hermesruntime/APK/Android/prodDDL/UI. Permanent review OPEN.
+
+NEXT coverage/prefs/lineage/sourceQnamespace/permanentExecution/
 provenance/review/schemaadmission/UI/cutover/fullbackup/Android/GC/removal.
-JSONQ/Planprecision notproved byrawretention. BackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.
+JSONguard notfullvariantproof. BackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.
