@@ -1,0 +1,2854 @@
+{
+  "label": "baseline",
+  "environment": "physical-android-expo-dev",
+  "samples": [
+    {
+      "kind": "workout-week",
+      "totalMs": 868.7055200338364,
+      "reads": 6,
+      "commits": 8,
+      "reactMs": 377.73520612716675,
+      "phases": {
+        "flush": 3.30276095867157,
+        "execution": 13.967708945274353,
+        "plan": 382.1161450147629,
+        "previous": 7.768905997276306
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 6,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 345.883776307106
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 31.85142982006073
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 13.154218077659607
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 16.64302098751068
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 12.127395987510681
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.960363984107971
+        }
+      },
+      "maxJsFrameGapMs": 649.1607290506363,
+      "selectionMs": 187.23791706562042
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 718.4526040554047,
+      "reads": 6,
+      "commits": 5,
+      "reactMs": 376.84621357917786,
+      "phases": {
+        "flush": 0.23093700408935547,
+        "execution": 6.637082934379578,
+        "plan": 314.7036979198456,
+        "previous": 2.3126559257507324
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 72,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 3,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 341.1836128234863
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 35.66260075569153
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.580572962760925
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 7.966354012489319
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 5.1178120374679565
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 3.853749990463257
+        }
+      },
+      "maxJsFrameGapMs": 541.1590620279312,
+      "selectionMs": 200.2072390317917
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 749.4450520277023,
+      "reads": 7,
+      "commits": 7,
+      "reactMs": 382.1436188220978,
+      "phases": {
+        "flush": 0.23838496208190918,
+        "plan": 311.6965100765228,
+        "execution": 8.643437027931213,
+        "previous": 0.013020992279052734
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 347.97063863277435
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 34.172980189323425
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.502135992050171
+        },
+        "training_sessions": {
+          "reads": 1,
+          "ms": 4.488905906677246
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.570363998413086
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 3.2267709970474243
+        },
+        "training_performed_sets": {
+          "reads": 1,
+          "ms": 2.2574479579925537
+        },
+        "training_exercise_notes": {
+          "reads": 1,
+          "ms": 0.9742189645767212
+        }
+      },
+      "maxJsFrameGapMs": 546.1344270706177,
+      "selectionMs": 205.41380202770233
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 768.03125,
+      "reads": 6,
+      "commits": 7,
+      "reactMs": 384.6682050228119,
+      "phases": {
+        "flush": 0.38593804836273193,
+        "execution": 6.104843020439148,
+        "plan": 320.85328102111816,
+        "previous": 3.400468945503235
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 350.49415624141693
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 34.17404878139496
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 5.036823034286499
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 8.51619803905487
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.83968710899353
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.5560940504074097
+        }
+      },
+      "maxJsFrameGapMs": 580.6252080202103,
+      "selectionMs": 229.14192700386047
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 734.9548439979553,
+      "reads": 6,
+      "commits": 5,
+      "reactMs": 374.4111145734787,
+      "phases": {
+        "flush": 0.23177099227905273,
+        "execution": 6.513906955718994,
+        "plan": 312.8039059638977,
+        "previous": 2.1519789695739746
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 72,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 3,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 342.6945562362671
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 31.71655833721161
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.986354947090149
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 7.742292046546936
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 5.3121360540390015
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.836979031562805
+        }
+      },
+      "maxJsFrameGapMs": 546.1784899234772,
+      "selectionMs": 205.29187500476837
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 746.6961979866028,
+      "reads": 7,
+      "commits": 7,
+      "reactMs": 380.487673997879,
+      "phases": {
+        "flush": 0.25328099727630615,
+        "plan": 312.042967915535,
+        "execution": 8.124635934829712,
+        "previous": 0.012395977973937988
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 345.6229317188263
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 34.864742279052734
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.52078104019165
+        },
+        "training_sessions": {
+          "reads": 1,
+          "ms": 4.431562900543213
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.315260052680969
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.8234379291534424
+        },
+        "training_performed_sets": {
+          "reads": 1,
+          "ms": 1.9233859777450562
+        },
+        "training_exercise_notes": {
+          "reads": 1,
+          "ms": 0.8300520181655884
+        }
+      },
+      "maxJsFrameGapMs": 544.9655729532242,
+      "selectionMs": 204.3474999666214
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 804.2131769657135,
+      "reads": 6,
+      "commits": 7,
+      "reactMs": 389.0194754600525,
+      "phases": {
+        "flush": 0.19427096843719482,
+        "execution": 6.129426956176758,
+        "plan": 319.76968801021576,
+        "previous": 3.117448091506958
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 354.1330690383911
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 34.88640642166138
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.747342944145203
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 8.276977896690369
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.541301965713501
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.89239501953125
+        }
+      },
+      "maxJsFrameGapMs": 610.5621349811554,
+      "selectionMs": 263.1389060020447
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 718.5443750619888,
+      "reads": 6,
+      "commits": 5,
+      "reactMs": 369.10884034633636,
+      "phases": {
+        "flush": 0.25562500953674316,
+        "execution": 5.4599480628967285,
+        "plan": 313.54427003860474,
+        "previous": 2.4770309925079346
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 72,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 3,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 337.9413068294525
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 31.16753351688385
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.324218988418579
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 7.026042103767395
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.097499966621399
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.6927599906921387
+        }
+      },
+      "maxJsFrameGapMs": 536.2311980724335,
+      "selectionMs": 193.3843230009079
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 886.7649480104446,
+      "reads": 7,
+      "commits": 7,
+      "reactMs": 507.17844438552856,
+      "phases": {
+        "flush": 0.21411395072937012,
+        "plan": 321.6165099143982,
+        "execution": 9.003437995910645,
+        "previous": 0.013802051544189453
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 471.19766771793365
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 35.98077666759491
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.901355028152466
+        },
+        "training_sessions": {
+          "reads": 1,
+          "ms": 4.816770911216736
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.470782041549683
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 3.182031035423279
+        },
+        "training_performed_sets": {
+          "reads": 1,
+          "ms": 2.0853129625320435
+        },
+        "training_exercise_notes": {
+          "reads": 1,
+          "ms": 1.141822099685669
+        }
+      },
+      "maxJsFrameGapMs": 674.6147400140762,
+      "selectionMs": 323.1508860588074
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 808.1884900331497,
+      "reads": 11,
+      "commits": 7,
+      "reactMs": 384.095049738884,
+      "phases": {
+        "flush": 0.5388020277023315,
+        "execution": 13.498854994773865,
+        "plan": 328.1139580011368,
+        "previous": 11.896615028381348
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 349.49401593208313
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 34.60103380680084
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 8.562083005905151
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 24.416144967079163
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 15.021613955497742
+        },
+        "other": {
+          "reads": 3,
+          "ms": 27.585313081741333
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 4.8416138887405396
+        },
+        "clients": {
+          "reads": 2,
+          "ms": 24.540624976158142
+        }
+      },
+      "maxJsFrameGapMs": 605.2270309925079,
+      "selectionMs": 251.4106249809265
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 742.9295830726624,
+      "reads": 6,
+      "commits": 5,
+      "reactMs": 370.27445900440216,
+      "phases": {
+        "flush": 0.2404160499572754,
+        "execution": 5.815312027931213,
+        "plan": 325.4170309305191,
+        "previous": 2.2333850860595703
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 72,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 3,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 337.3687525987625
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 32.90570640563965
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.554167032241821
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 6.953541994094849
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.193490028381348
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.4351049661636353
+        }
+      },
+      "maxJsFrameGapMs": 563.9098440408707,
+      "selectionMs": 209.7418750524521
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 759.5654690265656,
+      "reads": 7,
+      "commits": 7,
+      "reactMs": 396.5746270418167,
+      "phases": {
+        "flush": 0.21921896934509277,
+        "plan": 314.35182297229767,
+        "execution": 7.956928014755249,
+        "previous": 0.012292027473449707
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 363.33411276340485
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 33.240514278411865
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.3563549518585205
+        },
+        "training_sessions": {
+          "reads": 1,
+          "ms": 4.284322023391724
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 3.9530210494995117
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.7036980390548706
+        },
+        "training_performed_sets": {
+          "reads": 1,
+          "ms": 1.8387500047683716
+        },
+        "training_exercise_notes": {
+          "reads": 1,
+          "ms": 0.8920830488204956
+        }
+      },
+      "maxJsFrameGapMs": 539.0191669464111,
+      "selectionMs": 195.9800000190735
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 846.5789060592651,
+      "reads": 6,
+      "commits": 7,
+      "reactMs": 379.1270372867584,
+      "phases": {
+        "flush": 0.2411971092224121,
+        "execution": 6.538280963897705,
+        "plan": 321.96213603019714,
+        "previous": 3.266561985015869
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 347.13135826587677
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 31.995679020881653
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 5.216874957084656
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 8.816249012947083
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 5.017657041549683
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.752447009086609
+        }
+      },
+      "maxJsFrameGapMs": 654.8530730009079,
+      "selectionMs": 305.192134976387
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 762.4815100431442,
+      "reads": 6,
+      "commits": 5,
+      "reactMs": 389.9085249900818,
+      "phases": {
+        "flush": 0.26484405994415283,
+        "execution": 5.622448086738586,
+        "plan": 308.46432292461395,
+        "previous": 2.343958020210266
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 72,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 3,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 355.1582326889038
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 34.75029230117798
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.521615028381348
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 7.006301999092102
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.3286460638046265
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.577082872390747
+        }
+      },
+      "maxJsFrameGapMs": 586.0955200195312,
+      "selectionMs": 252.30104100704193
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 908.3062499761581,
+      "reads": 7,
+      "commits": 7,
+      "reactMs": 467.5821256637573,
+      "phases": {
+        "flush": 0.30255210399627686,
+        "execution": 8.016303062438965,
+        "plan": 310.9519270658493,
+        "previous": 0.011562943458557129
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 435.52627754211426
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 32.055848121643066
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.365363955497742
+        },
+        "training_sessions": {
+          "reads": 1,
+          "ms": 4.010625004768372
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 3.8330209255218506
+        },
+        "training_performed_sets": {
+          "reads": 1,
+          "ms": 2.1589059829711914
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 3.1168229579925537
+        },
+        "training_exercise_notes": {
+          "reads": 1,
+          "ms": 0.9329689741134644
+        }
+      },
+      "maxJsFrameGapMs": 546.596822977066,
+      "selectionMs": 206.99510407447815
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 763.2271869182587,
+      "reads": 6,
+      "commits": 7,
+      "reactMs": 383.539675951004,
+      "phases": {
+        "flush": 0.2458341121673584,
+        "execution": 5.1839070320129395,
+        "plan": 329.10843801498413,
+        "previous": 4.279010057449341
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 350.5787572860718
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 32.96091866493225
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 3.888124942779541
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 8.485417008399963
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.240885019302368
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 4.279634952545166
+        }
+      },
+      "maxJsFrameGapMs": 566.7447910308838,
+      "selectionMs": 208.6758849620819
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 734.490415930748,
+      "reads": 6,
+      "commits": 5,
+      "reactMs": 362.89526665210724,
+      "phases": {
+        "flush": 0.19880199432373047,
+        "execution": 5.472290992736816,
+        "plan": 311.3205209970474,
+        "previous": 2.170989990234375
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 72,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 3,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 328.5328047275543
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 34.36246192455292
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.355156064033508
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 6.687344074249268
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.159011006355286
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.7575000524520874
+        }
+      },
+      "maxJsFrameGapMs": 559.941978931427,
+      "selectionMs": 220.3051040172577
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 834.8929159641266,
+      "reads": 7,
+      "commits": 7,
+      "reactMs": 395.87517762184143,
+      "phases": {
+        "flush": 0.2115110158920288,
+        "plan": 334.3309370279312,
+        "execution": 7.890051960945129,
+        "previous": 0.012811899185180664
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 363.1468585729599
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 32.72831904888153
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.388542056083679
+        },
+        "training_sessions": {
+          "reads": 1,
+          "ms": 4.275573015213013
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.035989999771118
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.6906241178512573
+        },
+        "training_performed_sets": {
+          "reads": 1,
+          "ms": 1.7764590978622437
+        },
+        "training_exercise_notes": {
+          "reads": 1,
+          "ms": 0.8632290363311768
+        }
+      },
+      "maxJsFrameGapMs": 632.4190620183945,
+      "selectionMs": 270.27864503860474
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 777.5425519943237,
+      "reads": 6,
+      "commits": 7,
+      "reactMs": 392.73729050159454,
+      "phases": {
+        "flush": 0.2242189645767212,
+        "execution": 5.474948048591614,
+        "plan": 322.99354100227356,
+        "previous": 3.5715630054473877
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 356.7391674518585
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 35.99812304973602
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.708594083786011
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 8.08276104927063
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.30276095867157
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.8170310258865356
+        }
+      },
+      "maxJsFrameGapMs": 568.1281770467758,
+      "selectionMs": 215.60046899318695
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 722.8544789552689,
+      "reads": 6,
+      "commits": 5,
+      "reactMs": 356.30132257938385,
+      "phases": {
+        "flush": 0.3596869707107544,
+        "execution": 5.3995829820632935,
+        "plan": 312.72041606903076,
+        "previous": 2.1498440504074097
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 72,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 3,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 321.71085250377655
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 34.5904700756073
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.663645029067993
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 6.62807297706604
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.125207901000977
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.7693750858306885
+        }
+      },
+      "maxJsFrameGapMs": 545.6685419082642,
+      "selectionMs": 204.4411460161209
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 752.2281249761581,
+      "reads": 7,
+      "commits": 7,
+      "reactMs": 393.4446966648102,
+      "phases": {
+        "flush": 0.22661399841308594,
+        "execution": 7.87192702293396,
+        "plan": 315.28349006175995,
+        "previous": 0.011822938919067383
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 357.47218120098114
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 35.97251546382904
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.606717944145203
+        },
+        "training_sessions": {
+          "reads": 1,
+          "ms": 4.430155992507935
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.303645968437195
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.565364956855774
+        },
+        "training_performed_sets": {
+          "reads": 1,
+          "ms": 1.647812008857727
+        },
+        "training_exercise_notes": {
+          "reads": 1,
+          "ms": 0.7603120803833008
+        }
+      },
+      "maxJsFrameGapMs": 548.9365619421005,
+      "selectionMs": 204.9776040315628
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 913.9986449480057,
+      "reads": 6,
+      "commits": 7,
+      "reactMs": 480.0929046869278,
+      "phases": {
+        "flush": 0.24182307720184326,
+        "execution": 5.878907084465027,
+        "plan": 436.8601040840149,
+        "previous": 3.823490023612976
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 445.06466591358185
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 35.02823877334595
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.646355032920837
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 8.646926879882812
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.454843997955322
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.651250123977661
+        }
+      },
+      "maxJsFrameGapMs": 715.6041139364243,
+      "selectionMs": 248.91213500499725
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 742.7295830249786,
+      "reads": 6,
+      "commits": 5,
+      "reactMs": 349.36776781082153,
+      "phases": {
+        "flush": 0.20906198024749756,
+        "execution": 7.7518230676651,
+        "plan": 314.90281307697296,
+        "previous": 2.329686999320984
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 72,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 3,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 317.74691927433014
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 31.620848536491394
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 6.928228974342346
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 9.101563096046448
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 6.386093974113464
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.8329161405563354
+        }
+      },
+      "maxJsFrameGapMs": 554.4049479961395,
+      "selectionMs": 213.94713604450226
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 775.9913020133972,
+      "reads": 7,
+      "commits": 7,
+      "reactMs": 389.99335515499115,
+      "phases": {
+        "flush": 0.2834889888763428,
+        "execution": 9.089270949363708,
+        "plan": 315.81354200839996,
+        "previous": 0.012916922569274902
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 354.901486992836
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 35.09186816215515
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 6.78765606880188
+        },
+        "training_sessions": {
+          "reads": 1,
+          "ms": 4.9994789361953735
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.7442710399627686
+        },
+        "training_performed_sets": {
+          "reads": 1,
+          "ms": 2.0453649759292603
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.903178095817566
+        },
+        "training_exercise_notes": {
+          "reads": 1,
+          "ms": 1.0789579153060913
+        }
+      },
+      "maxJsFrameGapMs": 564.6346349716187,
+      "selectionMs": 223.03869795799255
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 849.9068230390549,
+      "reads": 6,
+      "commits": 7,
+      "reactMs": 419.96684765815735,
+      "phases": {
+        "flush": 0.22057294845581055,
+        "execution": 5.90802001953125,
+        "plan": 312.25468695163727,
+        "previous": 3.839740037918091
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 385.007994055748
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 34.95885360240936
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.342395901679993
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 8.727396965026855
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.303802013397217
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 3.7558330297470093
+        }
+      },
+      "maxJsFrameGapMs": 623.6938019990921,
+      "selectionMs": 284.98432302474976
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 802.3697919845581,
+      "reads": 6,
+      "commits": 5,
+      "reactMs": 365.5881062746048,
+      "phases": {
+        "flush": 0.30687499046325684,
+        "execution": 5.639217972755432,
+        "plan": 308.04525995254517,
+        "previous": 2.5551559925079346
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 72,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 3,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 334.5076961517334
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 31.0804101228714
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 6.3884899616241455
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 7.2266669273376465
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.235417008399963
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 3.27817702293396
+        }
+      },
+      "maxJsFrameGapMs": 609.2710939645767,
+      "selectionMs": 278.98031306266785
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 756.8755729198456,
+      "reads": 7,
+      "commits": 7,
+      "reactMs": 386.35358822345734,
+      "phases": {
+        "flush": 0.6042709350585938,
+        "plan": 314.4373959302902,
+        "execution": 7.63630211353302,
+        "previous": 0.012134909629821777
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 351.7885411977768
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 34.56504702568054
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.184322953224182
+        },
+        "training_sessions": {
+          "reads": 1,
+          "ms": 4.070157051086426
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.090625047683716
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.5836470127105713
+        },
+        "training_performed_sets": {
+          "reads": 1,
+          "ms": 1.837448000907898
+        },
+        "training_exercise_notes": {
+          "reads": 1,
+          "ms": 0.6973960399627686
+        }
+      },
+      "maxJsFrameGapMs": 553.0007809400558,
+      "selectionMs": 209.6707810163498
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 889.03005194664,
+      "reads": 6,
+      "commits": 7,
+      "reactMs": 502.8535043001175,
+      "phases": {
+        "flush": 0.24229204654693604,
+        "execution": 6.435417056083679,
+        "plan": 333.81026005744934,
+        "previous": 3.546823024749756
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 467.1861426830292
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 35.66736161708832
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.792760968208313
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 8.578333020210266
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.608228921890259
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.8634889125823975
+        }
+      },
+      "maxJsFrameGapMs": 595.6519269943237,
+      "selectionMs": 232.39999997615814
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 774.532968044281,
+      "reads": 6,
+      "commits": 5,
+      "reactMs": 366.7708295583725,
+      "phases": {
+        "flush": 0.22333407402038574,
+        "execution": 4.280156970024109,
+        "plan": 330.6810930967331,
+        "previous": 2.1664059162139893
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 72,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 3,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 334.0226492881775
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 32.74818027019501
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 3.3921879529953003
+        },
+        "training_sessions": {
+          "reads": 2,
+          "ms": 5.397186994552612
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 2.911510944366455
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.6909890174865723
+        }
+      },
+      "maxJsFrameGapMs": 599.2653120756149,
+      "selectionMs": 239.67281210422516
+    },
+    {
+      "kind": "workout-week",
+      "totalMs": 775.8714579343796,
+      "reads": 7,
+      "commits": 7,
+      "reactMs": 397.79783391952515,
+      "phases": {
+        "flush": 0.21916699409484863,
+        "plan": 315.81812500953674,
+        "execution": 8.42244803905487,
+        "previous": 0.012969017028808594
+      },
+      "ok": true,
+      "components": {
+        "ClientHeader": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 6,
+          "ms": 0
+        },
+        "SetRow": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 36,
+          "ms": 0
+        },
+        "ValueCell": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 75,
+          "ms": 0
+        },
+        "NoteField": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 12,
+          "ms": 0
+        },
+        "RootTabBar": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 4,
+          "ms": 0
+        },
+        "TrainingWorkout": {
+          "commits": 5,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 364.9860646724701
+        },
+        "TrainingNavigator": {
+          "commits": 0,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 1,
+          "ms": 0
+        },
+        "TrainingProgram": {
+          "commits": 2,
+          "mounts": 0,
+          "unmounts": 0,
+          "renders": 0,
+          "ms": 32.811769247055054
+        }
+      },
+      "sql": {
+        "training_programs": {
+          "reads": 1,
+          "ms": 4.707655906677246
+        },
+        "training_sessions": {
+          "reads": 1,
+          "ms": 4.609218001365662
+        },
+        "training_execution_settings": {
+          "reads": 1,
+          "ms": 4.105520009994507
+        },
+        "training_program_members": {
+          "reads": 2,
+          "ms": 2.9128639698028564
+        },
+        "training_performed_sets": {
+          "reads": 1,
+          "ms": 2.047657012939453
+        },
+        "training_exercise_notes": {
+          "reads": 1,
+          "ms": 0.7937500476837158
+        }
+      },
+      "maxJsFrameGapMs": 555.2196350097656,
+      "selectionMs": 210.46723997592926
+    }
+  ]
+}

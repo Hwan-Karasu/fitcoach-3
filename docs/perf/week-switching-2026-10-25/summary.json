@@ -1,0 +1,186 @@
+{
+  "environment": {
+    "device": "realme RMX3706",
+    "androidApi": 36,
+    "expoGo": "57.0.9",
+    "sdk": 57,
+    "mode": "development",
+    "participants": 3,
+    "plannedSets": 12,
+    "measurement": "React Profiler + native SQLite await timings + next JS frame callback",
+    "samplesPerCapture": 30,
+    "warmupExcluded": 3
+  },
+  "results": {
+    "before": {
+      "warmSamples": 27,
+      "firstThree": [
+        {
+          "totalMs": 868.7055200338364,
+          "reads": 6
+        },
+        {
+          "totalMs": 718.4526040554047,
+          "reads": 6
+        },
+        {
+          "totalMs": 749.4450520277023,
+          "reads": 7
+        }
+      ],
+      "metrics": {
+        "totalMs": {
+          "median": 774.533,
+          "p95": 908.306
+        },
+        "selectionMs": {
+          "median": 220.305,
+          "p95": 305.192
+        },
+        "reads": {
+          "median": 6,
+          "p95": 7
+        },
+        "commits": {
+          "median": 7,
+          "p95": 7
+        },
+        "reactMs": {
+          "median": 386.354,
+          "p95": 502.854
+        },
+        "maxJsFrameGapMs": {
+          "median": 566.745,
+          "p95": 674.615
+        }
+      },
+      "components": {
+        "TrainingWorkout": {
+          "rendersMedian": 0,
+          "commitsMedian": 5,
+          "mounts": 0
+        },
+        "TrainingProgram": {
+          "rendersMedian": 0,
+          "commitsMedian": 2,
+          "mounts": 0
+        },
+        "TrainingNavigator": {
+          "rendersMedian": 1,
+          "commitsMedian": 0,
+          "mounts": 0
+        },
+        "ClientHeader": {
+          "rendersMedian": 6,
+          "commitsMedian": 0,
+          "mounts": 0
+        },
+        "RootTabBar": {
+          "rendersMedian": 4,
+          "commitsMedian": 0,
+          "mounts": 0
+        },
+        "SetRow": {
+          "rendersMedian": 36,
+          "commitsMedian": 0,
+          "mounts": 0
+        },
+        "ValueCell": {
+          "rendersMedian": 75,
+          "commitsMedian": 0,
+          "mounts": 0
+        },
+        "NoteField": {
+          "rendersMedian": 12,
+          "commitsMedian": 0,
+          "mounts": 0
+        }
+      }
+    },
+    "after": {
+      "warmSamples": 27,
+      "firstThree": [
+        {
+          "totalMs": 690.3135410547256,
+          "reads": 6
+        },
+        {
+          "totalMs": 743.2540099620819,
+          "reads": 6
+        },
+        {
+          "totalMs": 389.89296901226044,
+          "reads": 0
+        }
+      ],
+      "metrics": {
+        "totalMs": {
+          "median": 355.81,
+          "p95": 520.418
+        },
+        "selectionMs": {
+          "median": 271.078,
+          "p95": 364.329
+        },
+        "reads": {
+          "median": 0,
+          "p95": 1
+        },
+        "commits": {
+          "median": 2,
+          "p95": 2
+        },
+        "reactMs": {
+          "median": 128.527,
+          "p95": 148.051
+        },
+        "maxJsFrameGapMs": {
+          "median": 355.707,
+          "p95": 520.318
+        }
+      },
+      "components": {
+        "TrainingWorkout": {
+          "rendersMedian": 0,
+          "commitsMedian": 2,
+          "mounts": 0
+        },
+        "TrainingProgram": {
+          "rendersMedian": 0,
+          "commitsMedian": 0,
+          "mounts": 0
+        },
+        "TrainingNavigator": {
+          "rendersMedian": 1,
+          "commitsMedian": 0,
+          "mounts": 0
+        },
+        "ClientHeader": {
+          "rendersMedian": 1,
+          "commitsMedian": 0,
+          "mounts": 0
+        },
+        "RootTabBar": {
+          "rendersMedian": 2,
+          "commitsMedian": 0,
+          "mounts": 0
+        },
+        "SetRow": {
+          "rendersMedian": 12,
+          "commitsMedian": 0,
+          "mounts": 0
+        },
+        "ValueCell": {
+          "rendersMedian": 48,
+          "commitsMedian": 0,
+          "mounts": 0
+        },
+        "NoteField": {
+          "rendersMedian": 8,
+          "commitsMedian": 0,
+          "mounts": 0
+        }
+      }
+    }
+  }
+}
