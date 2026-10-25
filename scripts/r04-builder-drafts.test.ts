@@ -102,7 +102,7 @@ test("existing supersets, explicitly declared plan slots, rest and instructions 
   });
   const before = rows(f.stagePath); await stage(f); assert.deepEqual(rows(f.stagePath), before);
 }, (db) => {
-  db.exec("UPDATE training_exercises SET note='Keep original instruction',data_json=json_set(data_json,'$.supersetGroupId','group','$.restSec',120) WHERE id='e-a0'");
+  db.exec("UPDATE training_exercises SET note='Keep original instruction',data_json=json_set(data_json,'$.supersetGroupId','group','$.restSeconds',120) WHERE id='e-a0'");
   db.exec("INSERT INTO training_exercises VALUES('e-extra','w-a0',1,'Second','','x','{\"catalogId\":\"x\",\"setCount\":2,\"supersetGroupId\":\"group\"}',NULL)");
   const key = slot("a", "simple", "p-a"), value = JSON.parse(db.prepare("SELECT value FROM app_settings WHERE key=?").get(key)!.value as string);
   value.draft.workouts[0].exercises[0].supersetGroupId = "group";

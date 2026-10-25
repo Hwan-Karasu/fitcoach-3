@@ -73,7 +73,7 @@ function seed(db: DatabaseSync) {
       const key = `${id}-${week}`;
       db.prepare("INSERT INTO training_weeks(id,program_id,week_index,week_type,data_json,deleted_at) VALUES(?,?,?,'','{}',NULL)").run(`week-${key}`, id, week);
       db.prepare("INSERT INTO training_workouts(id,client_id,program_id,week_id,sort_index,name,data_json,created_at,updated_at,deleted_at) VALUES(?,?,?,?,0,'Original workout','{}',?,?,NULL)").run(`workout-${key}`, client, id, `week-${key}`, sourceTime, sourceTime);
-      db.prepare("INSERT INTO training_exercises(id,workout_id,sort_index,name,note,template_exercise_id,data_json,deleted_at) VALUES(?,?,0,'Old instance','Original instruction','x',?,NULL)").run(`exercise-${key}`, `workout-${key}`, '{"catalogId":"x","rir":"1-2","restSec":120}');
+      db.prepare("INSERT INTO training_exercises(id,workout_id,sort_index,name,note,template_exercise_id,data_json,deleted_at) VALUES(?,?,0,'Old instance','Original instruction','x',?,NULL)").run(`exercise-${key}`, `workout-${key}`, '{"catalogId":"x","rir":"1-2","restSeconds":120}');
       db.prepare("INSERT INTO training_set_logs(id,exercise_id,set_index,reps,weight,rpe,completed_at,data_json,deleted_at,set_kind) VALUES(?,?,0,'20','15','8',?,?,NULL,'working')").run(`set-${key}`, `exercise-${key}`, sourceTime, JSON.stringify({ plannedReps: week ? "15" : "8-12", plannedWeight: "2,5" }));
     }
   }

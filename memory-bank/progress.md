@@ -9,8 +9,7 @@ Preserve concurrenttheme/calendar/packagehunks. User8d0031a bridge3.0→normal3.
 withoutimporter, keepbridge lateusers +3.xdata/precision/provenance/regularbackup.
 Fullremovalproof required. ExpoRestoreJobsONLY3.x NOTlegacy. BackupD01/fullsnapshot/
 GuardedRestore/return15holders/closedrecovery/WAL/capacity/generation/GC priorwork.
-Historicalnative35/12/13/24/3/Downloads20/SAF19/reinstall6/auto21/status3/missing19/
-actualkill15+14; fixtureCOMPLETE/noarmedpause/2.0safe. No currentphone/PID proof.
+Historical Android proofs: handoff. FixtureCOMPLETE/2.0safe; no currentphone proof.
 
 Prior R04 Profile/Q/WorkData/Exercise/Plans/templates/archives: docs/handoff.
 032b7e5 canonicalExecution account+client/physicalgraph/exactsegments/
@@ -33,7 +32,7 @@ coversnativeNutrition+Measurementrows/IDs, NOTprivateprovenance/review/archives.
 
 522369a privatearchives: stableIDs/exactdecimals/dateprecision/raw/overlap/NutritionV3.
 
-3c4d019 retainedNutrition domain/reader/candidatebackup/isolate proof, notproduction.
+3c4d019 retainedNutrition: handoff; notproduction.
 
 Calendar6d84461/258ef27: R04_CALENDAR_STAGING.md. V1 sharedtx/IDs/parity; schedules
 notoutcomes/exactclientIDs/4templates/legacybypass1/UNTRACKED/no paidfacts.
@@ -67,13 +66,13 @@ Coveragef59c228/R04_SOURCE_COVERAGE.md: full tagged ordinary SQL rows;84tables.
 Viewsc5efd03/R04_PROGRAM_VIEW_SELECTIONS.md: trainer/page selection;66targeted/
 10new/ordinary3.x snapshot+reader PASS.
 
-CURRENT R04_SCOPE_LINEAGES.md: unambiguous v2 selectors + reciprocal shared sets
--> native edit groups; physical plan/fact IDs separate; ambiguity review.
-142targeted incl12new PASS; root/mobileTS/lint/source73/arch619. Ordinary3.x
-snapshot/restore/importer-ban: week/member edits + personal override PASS.
-ExpoSDKmock restart/hostKill/replay PASS. Not full migration/UI/Android.
-Pending restSeconds/default120/zero-off mapping (currently restSec only).
+Scope3c3be01/R04_SCOPE_LINEAGES.md: native edit groups;142targeted incl12new PASS.
 
-NEXT restSeconds/semanticCoverage/legacyActor/unsupportedRecovery/prefs/permanentExecution/
+CURRENT R04_REST_SETTINGS.md: restSeconds0off/1..1859/default120; ambiguity rejects.
+All Plans/archive/templates/drafts; olddraft120/nativeNew90/baseoff preserved.
+Receipt+Node/mobile mode; oldcandidate before-WAL reject.85targeted incl7new PASS;
+root/mobileTS/lint/source73/arch619. SDKmock hostkill/replay + native3.x backup/
+ordinary reader/edit/draftpublish with importer-ban PASS. Not full UI/Android.
+NEXT semanticCoverage/legacyActor/unsupportedRecovery/prefs/permanentExecution/
 provenance/review/schemaadmission/UI/cutover/fullbackup/Android/GC/removal.
 JSONguard notfullvariantproof. BackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.

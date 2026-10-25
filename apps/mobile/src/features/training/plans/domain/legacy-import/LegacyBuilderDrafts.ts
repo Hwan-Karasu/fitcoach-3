@@ -3,7 +3,7 @@ import type { LegacySettingsSource } from "../../../../../shared/migration/Legac
 import type { LegacyPlansSource } from "../../../../../shared/migration/LegacyPlanSources.ts";
 import type { LegacySourceRow } from "../../../../../shared/migration/LegacyProfileSources.ts";
 import { parseRoundTripSourceJson } from "../../../../../shared/migration/SourceJson.ts";
-import { projectLegacyPlanPrescription, sourcePlanRange } from "./LegacyPlanPrescription.ts";
+import { LEGACY_REST_DEFAULT, projectLegacyPlanPrescription, sourcePlanRange } from "./LegacyPlanPrescription.ts";
 import type { PlanIdentityKind, PlanRow } from "./LegacyPlansProjection.ts";
 import type { PlannedExercise, PlannedSet, PlannedWorkout, SimpleProgramDraft } from "../SimplePlanModel.ts";
 import { storedBuilderDraft, storedMesocycleBuilder } from "../StoredPlanShape.ts";
@@ -166,7 +166,7 @@ export function composeLegacyBuilderDrafts(context: CandidateIdentityContext, im
               key: JSON.stringify(wr.existing ? [context.accountScope, wk, group] : [context.accountScope, "builder-draft", currentScope, wk, group]), existing: null }; supersets.set(group, superset); }
             const base = tables.training_planned_exercises!.find((r) => r.id === er.existing);
             return { ref: er, catalog: exercise, sets, superset, rir: sourcePlanRange(e.rir, 0, 10),
-              restSec: base ? base.rest_sec as number | null : 90, instruction: base ? base.instruction as string | null : null,
+              restSec: base ? base.rest_sec as number | null : LEGACY_REST_DEFAULT, instruction: base ? base.instruction as string | null : null,
               lineage: base?.lineage_id as string | null ?? null };
           }) };
       });

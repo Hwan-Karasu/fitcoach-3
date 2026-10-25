@@ -114,7 +114,7 @@ export function* legacyPlansStagePlan(context: CandidateIdentityContext, importe
   const identities = [...cache.values()].map((r) => ({ kind: r.kind, source_key: r.sourceKey, target_id: r.id })).sort((a, b) => compare(canonical(a), canonical(b)));
   const targetJson = canonical({ tables: tables.map((table) => ({ name: table.name, rows: table.rows.map(canonical).sort(compare) })), sourceRows,
     identities,
-    metadata: projection.metadata.map(canonical).sort(compare), planBases: projection.planBases.map(canonical).sort(compare),
+    metadata: projection.metadata.map(canonical).sort(compare), planBases: projection.planBases.map(canonical).sort(compare), restProjectionVersion: 1,
     viewSelectionProjectionVersion: 1, viewSelections: projection.viewSelections.representations.map(canonical).sort(compare),
     scopeLineageProjectionVersion: 1, scopeLineages: projection.scopeLineages.metadata.map(canonical).sort(compare),
     deferredArchiveRows: projection.deferredArchiveRows, deferredTemplatePages: projection.deferredTemplatePages,

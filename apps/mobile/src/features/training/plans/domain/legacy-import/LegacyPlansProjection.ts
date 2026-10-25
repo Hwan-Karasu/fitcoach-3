@@ -1,7 +1,7 @@
 import type { PlanTargetRow as PlanRow } from "../../../../../shared/migration/LegacyPlanMappings.ts";
 import type { CandidateIdentityContext } from "../../../../../shared/migration/LegacyIdentityBinding.ts";
 import { PLAN_SOURCE_TABLES, type LegacyPlansSource, type PlanSourceTable } from "../../../../../shared/migration/LegacyPlanSources.ts";
-import { projectLegacyPlanPrescription, sourceObject, sourcePlanRange } from "./LegacyPlanPrescription.ts";
+import { projectLegacyPlanPrescription, projectLegacyRest, sourceObject, sourcePlanRange } from "./LegacyPlanPrescription.ts";
 import { isExplicitTimestamp } from "../../../../../shared/migration/LegacyValues.ts";
 import type { PlannedExercise, PlannedSet, PlannedWorkout } from "../SimplePlanModel.ts";
 import { storedTemplate, storedWorkout } from "../StoredPlanShape.ts";
@@ -155,12 +155,12 @@ export function composeLegacyPlans(context: CandidateIdentityContext, importedAt
       if (!link || link.clientId !== owner.get(e) || Object.keys(e).some((k) => !same(e[k], link.raw[k]))) return fail("EXERCISE_LINK_MISMATCH");
       mark("training_exercises", e, eId, programId, weekIndex);
       if (typeof e.note !== "string" || e.note.trim().length > 500) return fail("INSTRUCTION_UNREPRESENTABLE");
-      let rest: number | null = null;
-      if (data.restSec !== undefined && data.restSec !== null) { rest = pos(data.restSec); if (rest < 1 || rest > 3600) return fail("PRESCRIPTION_INVALID"); }
+      const rest = projectLegacyRest(data);
       const logs = children("training_set_logs", e);
       const exerciseRir = data.rir !== undefined && data.rir !== null && data.rir !== "";
       const rir = sourcePlanRange(exerciseRir ? data.rir : logs[0] === undefined ? undefined : json.get(logs[0])!.rir, 0, 10);
-      planBases.push({ sourceKey: sourceKey("training_exercises", e), rir: exerciseRir ? "exercise.rir" : logs[0] === undefined ? "ABSENT" : `${sourceKey("training_set_logs", logs[0])}.rir` });
+      planBases.push({ sourceKey: sourceKey("training_exercises", e), rir: exerciseRir ? "exercise.rir" : logs[0] === undefined ? "ABSENT" : `${sourceKey("training_set_logs", logs[0])}.rir`,
+        rest: rest.basis, restIssues: rest.issues });
       const sets: PlannedSet[] = [];
       for (const set of logs) {
         const setData = json.get(set)!; const kind = set.set_kind ?? "working";
@@ -185,7 +185,7 @@ export function composeLegacyPlans(context: CandidateIdentityContext, importedAt
           ? JSON.stringify([scope, w.id, group]) : JSON.stringify([scope, "template-superset-slot", templateSlot, ei]));
         supersets.set(group, supersetId);
       }
-      return { id: eId, exerciseId: link.exerciseId, restSec: rest, instruction: e.note.trim() ? e.note : null, rir, sets,
+      return { id: eId, exerciseId: link.exerciseId, restSec: rest.seconds, instruction: e.note.trim() ? e.note : null, rir, sets,
         ...(p.mode === "periodized" && p.is_template !== 1 ? { lineageId: identity("LINEAGE", JSON.stringify([scope, "exercise-lineage", scopeLineages.exercises.get(text(e.id)) ?? e.id])) } : {}), ...(supersetId ? { supersetId } : {}) };
     });
     const result: PlannedWorkout = { id, title: title(w.name), exercises,

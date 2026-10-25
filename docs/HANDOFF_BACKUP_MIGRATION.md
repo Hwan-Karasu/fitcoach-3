@@ -1,3 +1,24 @@
+## Продолжение — настройки отдыха из 2.0
+
+2026-10-25, база3c3be01; R04→R03/Product48.5.7/49–50/53–56/INT03–12.
+Private synthetic/finalizable:false; production/migration/release gates OPEN.
+Подтверждённое source поле restSeconds:0→native off/null,1…1859 точно, absent→120.
+restSec не source alias; raw/issue сохранены. Source display и completion handler
+расходятся на null/string/bool: неоднозначные/invalid значения останавливают
+подготовку с фиксированной причиной, без округления/обрезки/случайного default.
+Все Plans/weekly overrides/archives/templates; new recovered draft120, existing
+base/off сохранены. Новый обычный 3.x default90. Source facts/IDs не меняются.
+Receipt basis/version и одинаковый Node/mobile mode; old candidate до-WAL reject.
+Нет новых DDL/tables/UUID kinds; private84tables. Physical Plans source JSON прежний.
+85targeted incl7new PASS; root/mobileTS/lint/source73/arch619. SDKmock actual host
+kill/restart/replay; ordinary3.x snapshot/restore/importer-ban positive probe:
+native rest read/edit/draft publish PASS. Не full Execution/provenance/review/UI/
+Android/removal proof. Foundation/fullprofile/APK/phone не запускались.
+[Контракт, pinned источники и ограничения](spikes/R04_REST_SETTINGS.md).
+Этот срез решает restSeconds gap из предыдущего раздела; прочие semanticfields/
+legacyActor/unsupportedRecovery/permanentmodels/admission/UI/cutover/fullbackup/
+Android/GC/removal открыты. GoalACTIVE/fullscope/не100%.
+
 ## Продолжение — lineage областей правки недель и участников
 
 2026-10-25, базаc5efd03; R04→R03/Product48.5.7/48.6/48.8/49–50/53–56/INT03–12.

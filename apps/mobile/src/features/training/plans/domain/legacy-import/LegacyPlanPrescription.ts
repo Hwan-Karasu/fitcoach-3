@@ -3,6 +3,19 @@ import { convertLegacySetMetrics } from "../../../../../shared/migration/LegacyS
 import { parseRoundTripSourceJson } from "../../../../../shared/migration/SourceJson.ts";
 
 function fail(code = "PRESCRIPTION_INVALID"): never { throw new Error(`R04_ID_LEDGER_PLANS_${code}`); }
+export const LEGACY_REST_DEFAULT = 120;
+
+/** Pinned v2 getter/setter semantics. The similarly named restSec property was
+ * never read by that getter. A new 3.x exercise's default is a separate policy. */
+export function projectLegacyRest(exercise: Readonly<Record<string, unknown>>) {
+  const value = exercise.restSeconds, issues: string[] = [];
+  if (Object.hasOwn(exercise, "restSec")) issues.push("REST_SEC_NOT_SOURCE_FIELD");
+  if (value === undefined) return { seconds: LEGACY_REST_DEFAULT, basis: "LEGACY_DEFAULT_120", issues };
+  // The v2 card checked typeof number, while its completion handler coerced with
+  // Number(). Null/strings/booleans can therefore disagree about enabled/time.
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || Object.is(value, -0) || value < 0 || value > 1859) return fail("REST_UNREPRESENTABLE");
+  return { seconds: value === 0 ? null : value, basis: "exercise.restSeconds", issues };
+}
 export function sourceObject(value: unknown): Readonly<Record<string, unknown>> {
   if (typeof value !== "string") return fail();
   let parsed: unknown;

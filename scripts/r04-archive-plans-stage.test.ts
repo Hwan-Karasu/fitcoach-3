@@ -30,7 +30,7 @@ function page(programId: string, mode: "free" | "periodized", count: number) {
     workouts: Array.from({ length: count }, (_, i) => ({ name: `Тренировка ${i + 1}`, weekIndex: i, sortIndex: 3,
       status: "completed", loadType: "old-load", colorToken: "old-color", scheduledAt: null, data: { oldAnnotation: "Сохранить" },
       exercises: [{ name: "Снимок упражнения", note: "Плановое указание", sortIndex: 2, templateExerciseId: "catalog-x",
-        data: { catalogId: "catalog-x", rir: "1-2", restSec: 120 }, sets: [
+        data: { catalogId: "catalog-x", rir: "1-2", restSeconds: 120 }, sets: [
           { sourceFactId: `${programId}:${i}:warmup`, setIndex: 0, reps: "5", weight: "0", rpe: "", setKind: "warmup",
             completedAt: null, segments: [], data: { plannedReps: "5" } },
           { sourceFactId: `${programId}:${i}:working`, setIndex: 1, reps: "20", weight: "10", rpe: "8", setKind: "working",
