@@ -1,3 +1,21 @@
+## Продолжение — async Calendar и candidate composition
+
+2026-10-24–25, базаc53985c; R04→R03/Product49–50/53–56/INT03–12.
+Private synthetic/finalizable:false; production/native/release gates OPEN.
+Owner Calendar projection/common Node-async schema/write/parity/read; Accounting
+предоставляет existing schema через composition, без cross-feature import.
+App stageLegacyImportCandidate собирает все owners в одну tx, захват raw/context/
+clocks/factory/allocator до await; source public contract type-only. Не UI/cutover.
+12new (Calendar9/composition3), profile531/targeted31/initial21 PASS; root/mobileTS/lint/
+source73/arch603/secrets PASS. Old c53985cwriter==current all79tables/IDs/receipts
+в3cases. Every tableboundary rollback/retry/replay/ackloss/capture/drift/collision/
+mode/IO/FK/sourceSHA/handles; schedules не outcomes/credits, guest no namejoin.
+Усилены beforeWAL assertions с реальным native SQL spacing и positive controls.
+Нет foundation/bundle/Hermesruntime/APK/Android.
+[Контракт и оставшийся объём](spikes/R04_PORTABLE_CALENDAR_STAGING.md).
+NEXT coverage/preferences/lineage/JSON/permanentmodels/admission/sourceworkflow/
+UI/cutover/fullbackup/Android/removal. GoalACTIVE/fullscope/не100%.
+
 ## Продолжение — async питание и архивы
 
 2026-10-24, базаd854a31; R04→R03/Product49–50/53–56/INT03–12.

@@ -1,39 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { DatabaseSync } from "node:sqlite";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { prepareLegacyClientStaging } from "../apps/mobile/src/features/clients/data/legacy-import/LegacyClientStaging.ts";
-import { legacyMeasurementStagingExtension } from "../apps/mobile/src/features/measurements/data/legacy-import/LegacyMeasurementStaging.ts";
 import { legacyNutritionStagingExtension } from "../apps/mobile/src/features/nutrition/data/legacy-import/LegacyNutritionStaging.ts";
-import { legacyLoadNutritionPlan, legacyLoadNutritionArchivesPlan, nutritionRehearsalObjects, nutritionTargetTables } from "../apps/mobile/src/features/nutrition/data/legacy-import/LegacyNutritionStagePlan.ts";
+import { legacyLoadNutritionPlan, legacyLoadNutritionArchivesPlan, nutritionTargetTables } from "../apps/mobile/src/features/nutrition/data/legacy-import/LegacyNutritionStagePlan.ts";
 import { combineLegacyStageExtensions } from "../apps/mobile/src/shared/migration/LegacyStageExtension.ts";
 import { isLegacyLocalDate } from "../apps/mobile/src/shared/migration/LegacyValues.ts";
 import { runLegacyWritePlan, type LegacyNutritionCheckpoint } from "../apps/mobile/src/shared/migration/LegacyWritePlan.ts";
 import { openIsolatedSqliteConnection } from "../apps/mobile/src/shared/db/IsolatedSqliteConnection.ts";
-import type { LegacyImportSourceSnapshots } from "../apps/mobile/src/features/legacy-import/domain/LegacySourceSnapshots.ts";
 import { projectLegacyClientIdentities } from "../apps/mobile/src/features/clients/domain/legacy-import/LegacyClientIdentity.ts";
 import { projectLegacyClientCards } from "../apps/mobile/src/features/clients/domain/legacy-import/LegacyClientCardProjection.ts";
 import { projectLegacyQuestionnaire } from "../apps/mobile/src/features/questionnaire/domain/legacy-import/LegacyQuestionnaireCandidates.ts";
 import { prepareCandidateIdentityLedger } from "./r04/CandidateIdentityLedger.ts";
 import { readLegacyExerciseCatalogInSnapshot } from "./r04/LegacyExerciseCatalogSourceReader.ts";
 import { readLegacyExerciseReferencesInSnapshot } from "./r04/LegacyExerciseReferencePreflight.ts";
-import { seedMeasurementSource } from "./support/legacy-measurement-source.ts";
-import { seedLegacyNutritionSource, seedCalculator, seedArchives } from "./support/legacy-nutrition-source.ts";
-import { scope, importedAt, allocator, digest, extension as training, inspect, records as trainingRecords, empty as trainingEmpty, fixture as trainingFixture } from "./support/legacy-training-staging.ts";
+import { scope, importedAt, allocator, digest, inspect } from "./support/legacy-training-staging.ts";
 
-const referenceDay = "2026-10-24";
-const extraTables = ["body_measurements", "measurement_daily_primary", "r04_measurement_ids", "r04_measurement_receipt", ...Object.entries(nutritionRehearsalObjects).filter(([, kind]) => kind === "table").map(([name]) => name)];
+import { referenceDay, beforeNutrition, extension, records, empty, fixture } from "./support/legacy-nutrition-staging.ts";
+
 const phases: readonly LegacyNutritionCheckpoint[] = ["after-nutrition-ids", "after-nutrition-rows", "after-nutrition-receipt"];
-const beforeNutrition = (s: LegacyImportSourceSnapshots) => combineLegacyStageExtensions(training(s), legacyMeasurementStagingExtension(s.measurements, referenceDay));
-const extension = (s: LegacyImportSourceSnapshots) => combineLegacyStageExtensions(beforeNutrition(s), legacyNutritionStagingExtension(s.nutrition));
-const records = (path: string) => [...trainingRecords(path), ...inspect(path, (db) => extraTables.map((table) => [table, db.prepare(`SELECT * FROM ${table}`).all()]))];
-function empty(path: string) { trainingEmpty(path); inspect(path, (db) => { for (const table of extraTables) assert.equal(db.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n, 0, table); }); }
-function seed(db: DatabaseSync) {
-  seedMeasurementSource(db); seedLegacyNutritionSource(db, { existingOwners: true, existingDays: true }); seedCalculator(db); seedArchives(db);
-  db.prepare("UPDATE client_day_facts SET training=? WHERE client_id='a' AND date_key='2026-03-01'").run("\u0414\u0430");
-}
-const fixture = (run: Parameters<typeof trainingFixture>[0], amend: (db: DatabaseSync) => void = () => undefined) => trainingFixture(run, (db) => { seed(db); amend(db); });
 
 test("admitted complete source reaches async nutrition staging with host-identical snapshots, facts, recipes, archives and IDs", () => fixture(async (f) => {
   const stage = await prepareLegacyClientStaging(f.native.open, f.context, importedAt, extension(f.snapshots)); const result = await stage.stageClients(f.snapshots.clients, allocator());
@@ -114,7 +100,8 @@ test("nutrition mode cannot bypass measurements or claim an existing earlier-own
   assert.throws(() => combineLegacyStageExtensions(legacyNutritionStagingExtension(f.snapshots.nutrition)), /EXTENSION_ORDER_INVALID/u);
   await prepareLegacyClientStaging(f.native.open, f.context, importedAt, beforeNutrition(f.snapshots)); const before = digest(f.stagePath), count = f.native.calls.length;
   await assert.rejects(prepareLegacyClientStaging(f.native.open, f.context, importedAt, extension(f.snapshots)), /FOREIGN_DATABASE/u); assert.equal(digest(f.stagePath), before);
-  assert.equal(f.native.calls.slice(count).some((call) => call.sql === "PRAGMA journal_mode=WAL"), false);
+  assert.equal(f.native.calls.slice(count).some((call) => /^PRAGMA\s+journal_mode\s*=\s*WAL$/iu.test(call.sql)), false);
+  assert.ok(f.native.calls.slice(0, count).some((call) => /^PRAGMA\s+journal_mode\s*=\s*WAL$/iu.test(call.sql)));
 }));
 
 test("nutrition schema and native row failures rollback every preceding owner and close all handles", async () => {

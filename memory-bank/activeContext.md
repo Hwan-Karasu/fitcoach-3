@@ -1,4 +1,4 @@
-# Active context — 2026-10-24
+# Active context — 2026-10-25
 
 «Дневник атлета», FitCoach_3_R04/work/r04-legacy-restore. Goal ACTIVE full2.0→3.0+
 backup/restore NOT100%. R04→R03; Product48.5.7/49–50/53–56/INT03–12.
@@ -68,13 +68,14 @@ Execution61fbb4c: R04_PORTABLE_EXECUTION_STAGING.md; 9new/500profile PASS.
 
 Measurementd854a31: R04_PORTABLE_MEASUREMENT_STAGING.md; 9new/509profile PASS.
 
-CURRENT R04_PORTABLE_NUTRITION_STAGING.md: owner/commonNode-async writer/read,
-sharedDTO/date/realUUIDorder/pendingSQL. 10new fullchain async==host/snapshots/
-savedtotals/exactarchives/rollback/retry/replay/ackloss/drift/collision/mode/IO.
-Oldd854a31writer==current all65tables/IDs/receipts in3cases. Fullproof in doc.
-519profile/43initial/10new PASS; root/mobileTS/lint/source73/arch596.
-Nativefieldbackup/historyisolate pass, NOTfull privateprovenance/review backup.
-No foundation/bundle/Hermesruntime/APK/Android/prodDDL. Fullgoal NOTDONE.
+Nutritionc53985c: R04_PORTABLE_NUTRITION_STAGING.md; 10new/519profile PASS.
+
+CURRENT R04_PORTABLE_CALENDAR_STAGING.md: owner Node/async writer/accountingschema
+port; app stageLegacyImportCandidate allowners/oneTx/capture beforeawait.
+12new Calendar9/app3; 31targeted/21initial/531profile PASS; root/mobileTS/lint/
+source73/arch603/secrets PASS. Oldc53985c all79tables/IDs/receipts equal3cases.
+WALassertions actualSQL+positivecontrol fixed. NoUI/sourceworkflow/cutover.
+Fullproof doc; no foundation/bundle/Hermes/APK/Android/prodDDL; fullgoalNOTDONE.
 
 NEXT fullportablewriter/otherprojections/coverage/prefs/lineage/permanentExecution-
 review-provenance/schemaadmission/composition/cutover/UI/deletion/fullbackup/

@@ -1,4 +1,4 @@
-import type { LegacySourceRow, LegacyClientsSource, LegacyExerciseCatalogSource, LegacyQuestionnaireSource } from "../../../shared/migration/LegacyProfileSources.ts";
+import type { LegacyClientsSource, LegacyExerciseCatalogSource, LegacyQuestionnaireSource } from "../../../shared/migration/LegacyProfileSources.ts";
 export type { LegacySourceRow, LegacyClientsSource, LegacyExerciseCatalogSource, LegacyQuestionnaireSource } from "../../../shared/migration/LegacyProfileSources.ts";
 
 import type { LegacyPlansSource } from "../../../shared/migration/LegacyPlanSources.ts";
@@ -16,14 +16,8 @@ export { NUTRITION_SOURCE_TABLES, type LegacyNutritionSource } from "../../../sh
 import type { LegacyMeasurementsSnapshot } from "../../../shared/migration/LegacyMeasurementSources.ts";
 export { legacyMeasurementFields, type LegacyMeasurementsSnapshot } from "../../../shared/migration/LegacyMeasurementSources.ts";
 
-export const LEGACY_CALENDAR_COLUMNS = ["id", "date_key", "start_time", "end_time", "duration_minutes", "client_id", "guest_name", "client_name", "appointment_type", "note", "created_at", "updated_at", "deleted_at"] as const;
-export interface LegacyCalendarSnapshot {
-  readonly accountScope: string;
-  readonly appointments: readonly LegacySourceRow[] | null;
-  /** Calendar-owned key only; other settings need separate coverage. */
-  readonly plannerRows: readonly LegacySourceRow[] | null;
-  readonly unsupportedAccountingTables: readonly string[];
-}
+import type { LegacyCalendarSnapshot } from "../../../shared/migration/LegacyCalendarSources.ts";
+export { LEGACY_CALENDAR_COLUMNS, type LegacyCalendarSnapshot } from "../../../shared/migration/LegacyCalendarSources.ts";
 
 export interface LegacyDomainSnapshots {
   readonly nutrition: LegacyNutritionSource;

@@ -6,7 +6,8 @@ export type LegacyPlanCheckpoint = "after-plan-ids" | "after-plan-rows" | "after
 export type LegacyExecutionCheckpoint = "after-execution-ids" | "after-execution-sessions" | "after-execution-facts" | "after-execution-segments" | "after-execution-representations" | "after-execution-contexts" | "after-execution-receipt";
 export type LegacyMeasurementCheckpoint = "after-measurement-ids" | "after-measurement-rows" | "after-measurement-receipt";
 export type LegacyNutritionCheckpoint = "after-nutrition-ids" | "after-nutrition-rows" | "after-nutrition-receipt";
-export type LegacyClientCheckpoint = "after-ids" | "after-client" | "after-clients" | "after-profile" | "after-work-data" | "before-commit" | LegacyExerciseCheckpoint | LegacyPlanCheckpoint | LegacyExecutionCheckpoint | LegacyMeasurementCheckpoint | LegacyNutritionCheckpoint;
+export type LegacyCalendarCheckpoint = "after-calendar-ids" | "after-calendar-rows" | "after-calendar-receipt";
+export type LegacyClientCheckpoint = "after-ids" | "after-client" | "after-clients" | "after-profile" | "after-work-data" | "before-commit" | LegacyExerciseCheckpoint | LegacyPlanCheckpoint | LegacyExecutionCheckpoint | LegacyMeasurementCheckpoint | LegacyNutritionCheckpoint | LegacyCalendarCheckpoint;
 export type LegacyWriteRequest = Readonly<{ kind: "all" | "run"; sql: string; bindings: readonly SqlValue[] }>
   | Readonly<{ kind: "checkpoint"; phase: LegacyClientCheckpoint }>;
 /** Caller owns the entire exclusive transaction, including all delegated owners. */

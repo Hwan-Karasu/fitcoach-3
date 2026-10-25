@@ -97,7 +97,8 @@ test("execution mode requires every preceding owner and cannot claim a plan-only
   assert.throws(() => combineLegacyStageExtensions(legacyExecutionStagingExtension(f.snapshots.plans, f.snapshots.executions, () => legacyLoadPlanMappingsPlan(true))), /EXTENSION_ORDER_INVALID/u);
   await prepareLegacyClientStaging(f.native.open, f.context, importedAt, owners(f.snapshots)); const before = digest(f.stagePath), callCount = f.native.calls.length;
   await assert.rejects(prepareLegacyClientStaging(f.native.open, f.context, importedAt, extension(f.snapshots)), /FOREIGN_DATABASE/u); assert.equal(digest(f.stagePath), before);
-  assert.equal(f.native.calls.slice(callCount).some((call) => call.sql === "PRAGMA journal_mode=WAL"), false);
+  assert.equal(f.native.calls.slice(callCount).some((call) => /^PRAGMA\s+journal_mode\s*=\s*WAL$/iu.test(call.sql)), false);
+  assert.ok(f.native.calls.slice(0, callCount).some((call) => /^PRAGMA\s+journal_mode\s*=\s*WAL$/iu.test(call.sql)));
 }));
 
 test("asynchronous execution reads and replay reject drift in every retained target and identity store", async () => {
