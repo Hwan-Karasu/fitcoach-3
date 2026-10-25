@@ -19,6 +19,8 @@ export interface LegacyInspectionReader extends LegacyInspectionFiles {
   /** Only the private sealed copy; never the external source. */
   openReady(operationId: string): Promise<NativeLegacySourceDatabase>;
 }
+/** Reading or resuming a sealed copy never needs access to the external source. */
+export type LegacyInspectionReadyReader = Pick<LegacyInspectionReader, "inspectReady" | "openReady">;
 function fail(code: "SOURCE_COPY_INVALID" | "SOURCE_COPY_CHANGED"): never { throw new InspectionCopyError(code); }
 function validDigest(value: InspectionDigest): boolean { return typeof value.sha256 === "string" && /^[0-9a-f]{64}$/u.test(value.sha256) && Number.isSafeInteger(value.bytes) && value.bytes >= 100; }
 function equalDigest(a: InspectionDigest, b: InspectionDigest): boolean { return a.bytes === b.bytes && a.sha256 === b.sha256; }
@@ -33,11 +35,12 @@ async function io<T>(run: () => Promise<T>): Promise<T> {
     throw new InspectionCopyError("SOURCE_COPY_IO_FAILED");
   }
 }
-async function verifyReady(files: LegacyInspectionFiles, expected: LegacyInspectionReceipt): Promise<void> {
-  const state = await io(() => files.inspectReady(expected.operationId));
+export async function verifyLegacyInspectionCopy(files: Pick<LegacyInspectionFiles, "inspectReady">, expected: LegacyInspectionReceipt): Promise<void> {
+  const receipt = parseInspectionReceipt(expected);
+  const state = await io(() => files.inspectReady(receipt.operationId));
   const actual = parseInspectionReceipt(state.receipt);
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) fail("SOURCE_COPY_CHANGED");
-  verifyFile(state, expected);
+  if (JSON.stringify(actual) !== JSON.stringify(receipt)) fail("SOURCE_COPY_CHANGED");
+  verifyFile(state, receipt);
 }
 
 /** Byte-copy preparation only: a matching hash/header is not v2 format admission. */
@@ -52,17 +55,17 @@ export async function prepareLegacyInspectionCopy(files: LegacyInspectionFiles, 
   verifyFile(await io(() => files.inspectPartial(operationId)), before);
   const receipt = parseInspectionReceipt({ kind: "athlete-diary-source-copy", version: 1, operationId, ...before });
   await io(() => files.seal(operationId, receipt));
-  await verifyReady(files, receipt);
+  await verifyLegacyInspectionCopy(files, receipt);
   return receipt;
 }
 
 /** Format/owner admission and collectors share one snapshot. Mapping/parity and
  * cutover gates remain separate. Recheck the closed file before returning data.
  */
-export async function readLegacyInspectionCopy(files: LegacyInspectionReader, expected: LegacyInspectionReceipt) {
+export async function readLegacyInspectionCopy(files: LegacyInspectionReadyReader, expected: LegacyInspectionReceipt) {
   const receipt = parseInspectionReceipt(expected);
-  await verifyReady(files, receipt);
+  await verifyLegacyInspectionCopy(files, receipt);
   const result = await readAdmittedLegacyDomainSnapshots(() => files.openReady(receipt.operationId), receipt.bytes);
-  await verifyReady(files, receipt);
+  await verifyLegacyInspectionCopy(files, receipt);
   return { receipt, ...result };
 }

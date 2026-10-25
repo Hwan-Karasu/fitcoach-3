@@ -1,3 +1,21 @@
+## Продолжение — sealed copy → admitted all-owner candidate
+
+2026-10-25, база12c94c3; R04→R03/Product49–50/53–56/INT03–12.
+Private synthetic/finalizable:false; production/native/release gates OPEN.
+stageLegacyInspectionCandidate derives SHA/scope/workspace from verified copy,
+captures receipt/methods/clocks/factory/allocator beforeawait; precommit+postcommit
+reverification. Beforecommit copy/IO failure rolls back all owners with safe code;
+late change retains private candidate without verified return, replay keeps IDs.
+ReadyReader needs no external source access. Genuine empty source null workspace
+supported without invented ID; no clients/reservations/corrupt mapping allowed.
+Workspace-specific Q/templates without clients still need namespace resolution.
+11new/10oldcopy/542profile PASS; root/mobileTS/lint/source73/arch604/secrets PASS.
+Actual Expo copy-driver old SDK-mock test passes; new workflow real-file port,
+not Android. No foundation/bundle/Hermesruntime/APK.
+[Контракт и оставшийся объём](spikes/R04_INSPECTION_STAGING.md).
+NEXT durablejobs/Exporouting/coverage/prefs/lineage/JSON/permanentmodels/admission/
+UI/cutover/fullbackup/Android/removal. GoalACTIVE/fullscope/не100%.
+
 ## Продолжение — async Calendar и candidate composition
 
 2026-10-24–25, базаc53985c; R04→R03/Product49–50/53–56/INT03–12.

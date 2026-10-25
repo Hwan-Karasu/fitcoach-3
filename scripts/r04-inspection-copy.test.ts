@@ -1,13 +1,14 @@
+import { createInspectionFiles } from "./support/legacy-inspection-files.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DatabaseSync, type SQLInputValue } from "node:sqlite";
+import { DatabaseSync } from "node:sqlite";
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { Worker } from "node:worker_threads";
-import { InspectionCopyError, inspectionOperationId, parseInspectionReceipt } from "../apps/mobile/src/features/legacy-import/domain/InspectionCopy.ts";
-import { prepareLegacyInspectionCopy, readLegacyInspectionCopy, type LegacyInspectionReader } from "../apps/mobile/src/features/legacy-import/data/LegacyInspectionCopy.ts";
+import { parseInspectionReceipt } from "../apps/mobile/src/features/legacy-import/domain/InspectionCopy.ts";
+import { prepareLegacyInspectionCopy, readLegacyInspectionCopy } from "../apps/mobile/src/features/legacy-import/data/LegacyInspectionCopy.ts";
 import { inspectionExpoMock } from "./support/inspection-expo-mock.ts";
 import { seedLegacyBackupMetadata } from "./support/legacy-backup-metadata.ts";
 import { LegacySourceAdmissionError } from "../apps/mobile/src/features/legacy-import/domain/LegacyBackupInventory.ts";
@@ -28,38 +29,7 @@ function setup() {
     INSERT INTO client_day_facts VALUES('a','2026-10-19','80.1',NULL,'Нет');
     CREATE TABLE source_data_not_yet_projected(payload TEXT); INSERT INTO source_data_not_yet_projected VALUES('untouched full-file data');`);
   seedLegacyBackupMetadata(db, scope); db.close();
-  const calls: string[] = [], opened: string[] = [], queries: string[] = [];
-  const state: { hook: ((phase: string) => void) | null } = { hook: null };
-  const point = (phase: string) => { calls.push(phase); state.hook?.(phase); };
-  const path = (op: string, name: string) => { assert.ok(inspectionOperationId(op)); return join(root, op, name); };
-  const inspect = (file: string) => {
-    if (!existsSync(file)) throw new InspectionCopyError("SOURCE_COPY_INVALID");
-    return { digest: digest(file), header: readFileSync(file).subarray(0, 16), hasSidecars: ["-wal", "-shm", "-journal"].some((suffix) => existsSync(file + suffix)) };
-  };
-  const files: LegacyInspectionReader = {
-    async hashSource() { point("hash-source"); return digest(source); },
-    async reserve(op) {
-      point("reserve"); if (existsSync(join(root, op))) throw new InspectionCopyError("SOURCE_COPY_EXISTS");
-      mkdirSync(root, { recursive: true }); mkdirSync(join(root, op)); writeFileSync(path(op, "source.partial"), "", { flag: "wx" }); point("after-reserve");
-    },
-    async copyToPartial(op) { point("copy"); copyFileSync(source, path(op, "source.partial")); point("after-copy"); },
-    async inspectPartial(op) { point("inspect-partial"); return inspect(path(op, "source.partial")); },
-    async seal(op, receipt) {
-      point("seal"); renameSync(path(op, "source.partial"), path(op, "source.sqlite")); point("after-file-publish");
-      writeFileSync(path(op, "receipt.partial"), JSON.stringify(receipt), { flag: "wx" }); point("after-receipt-write");
-      renameSync(path(op, "receipt.partial"), path(op, "receipt.json")); point("after-receipt-publish");
-    },
-    async inspectReady(op) {
-      point("inspect-ready"); if (!existsSync(path(op, "receipt.json"))) throw new InspectionCopyError("SOURCE_COPY_INVALID");
-      return { ...inspect(path(op, "source.sqlite")), receipt: JSON.parse(readFileSync(path(op, "receipt.json"), "utf8")) as unknown };
-    },
-    async openReady(op) {
-      point("open-sqlite"); const file = path(op, "source.sqlite"); opened.push(file); const connection = new DatabaseSync(file);
-      return { getAllAsync: async <Row>(sql: string, ...bindings: unknown[]): Promise<Row[]> => { queries.push(sql); return connection.prepare(sql).all(...bindings as SQLInputValue[]) as Row[]; },
-        execAsync: async (sql: string) => { connection.exec(sql); }, closeAsync: async () => { connection.close(); point("after-sqlite-close"); } };
-    },
-  };
-  return { dir, root, source, files, calls, opened, queries, state, path };
+  return { dir, ...createInspectionFiles(source, root) };
 }
 
 test("prepared SQLite copy is byte-identical, sealed, and the only file opened by the source collector", () => fixture(async (f) => {

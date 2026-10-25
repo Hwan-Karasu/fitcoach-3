@@ -62,6 +62,7 @@ export async function prepareLegacyClientStaging<Extra = undefined>(open: () => 
       // Capture and reproject raw SQL rows before the first await. Caller-derived
       // candidate fields never authorize the values written to the staging file.
       if (source.accountScope !== captured.accountScope) throw new Error("R04_ID_LEDGER_CLIENT_SCOPE_MISMATCH");
+      if (captured.sourceWorkspaceId === null && source.rows.length > 0) throw new Error("R04_ID_LEDGER_CLIENT_SCOPE_MISMATCH");
       const snapshot = { accountScope: source.accountScope, rows: source.rows.map(captureLegacySourceRow) };
       const identities = projectLegacyClientIdentities(snapshot), cards = projectLegacyClientCards(snapshot, identities);
       const fields = new Map<string, ClientCardFields>(), payloads = new Map<string, string>();

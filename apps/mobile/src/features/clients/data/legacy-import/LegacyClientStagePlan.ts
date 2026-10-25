@@ -32,6 +32,7 @@ export function* legacyInspectIdentityPlan(binding: LegacyIdentityStageBinding):
       workspaceRows++;
       if (row.source_key !== workspaceKey(binding) || row.target_id !== context.targetWorkspaceId) throw new Error("R04_ID_LEDGER_CORRUPT");
     } else if (row.kind === "CLIENT") {
+      if (context.sourceWorkspaceId === null) throw new Error("R04_ID_LEDGER_CORRUPT");
       validateLegacyClientKey(row.source_key, context.accountScope);
       if (!LEGACY_STAGE_UUID.test(row.target_id) || targets.has(row.target_id) || keys.has(row.source_key)) throw new Error("R04_ID_LEDGER_CORRUPT");
       targets.add(row.target_id); keys.add(row.source_key);
@@ -68,6 +69,7 @@ export function* legacyCreateIdentityPlan(binding: LegacyIdentityStageBinding): 
 }
 
 export function* legacyReserveClientIdsPlan(binding: LegacyIdentityStageBinding, sourceKeys: readonly string[], allocate: () => string): LegacyWritePlan<ReadonlyMap<string, string>> {
+  if (binding.context.sourceWorkspaceId === null && sourceKeys.length > 0) throw new Error("R04_ID_LEDGER_CLIENT_SCOPE_MISMATCH");
   const unique = new Set<string>();
   for (const key of sourceKeys) {
     validateLegacyClientKey(key, binding.context.accountScope);

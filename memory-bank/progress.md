@@ -69,14 +69,16 @@ Measurementd854a31: R04_PORTABLE_MEASUREMENT_STAGING.md; 9new/509profile PASS.
 
 Nutritionc53985c: R04_PORTABLE_NUTRITION_STAGING.md; 10new/519profile PASS.
 
-CURRENT R04_PORTABLE_CALENDAR_STAGING.md: owner Node/async writer/accountingschema
-port; app stageLegacyImportCandidate allowners/oneTx/capture beforeawait.
-12new Calendar9/app3; 31targeted/21initial/531profile PASS; root/mobileTS/lint/
-source73/arch603/secrets PASS. Oldc53985c all79tables/IDs/receipts equal3cases.
-WALassertions actualSQL+positivecontrol fixed. NoUI/sourceworkflow/cutover.
-Fullproof doc; no foundation/bundle/Hermes/APK/Android/prodDDL; fullgoalNOTDONE.
+Calendar12c94c3: R04_PORTABLE_CALENDAR_STAGING.md; appallowners/531profile PASS.
 
-NEXT fullportablewriter/otherprojections/coverage/prefs/lineage/permanentExecution-
-review-provenance/schemaadmission/composition/cutover/UI/deletion/fullbackup/
-SQLite+JSON+other2.0/Android/interruption/lowdisk/concurrency/GC/powerloss/removal.
+CURRENT R04_INSPECTION_STAGING.md: verifiedcopy/admission=>allowner staging,
+derivedSHA/scope/workspace/capturedports/clocks; pre+postcommit reverify.
+Copychange rollsback or retains unverified privatecandidate, replay stableIDs.
+Empty nullsourceworkspace supported; no clientrows/reservations/corruptCLIENTmap.
+Q/templates w/o clients source namespace OPEN. 11new/10copy/542profile PASS;
+root/mobileTS/lint/source73/arch604/secrets PASS. Fullproof doc. No Android/
+foundation/bundle/Hermes/APK/prodDDL/UI/cutover; fullgoalNOTDONE.
+
+NEXT durablejobs/Expo stagingrouting/coverage/prefs/lineage/JSONaudit/permanent-
+Execution/provenance/review/schemaadmission/UI/cutover/fullbackup/Android/removal.
 JSONQ/Planprecision notproved byrawretention. BackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.

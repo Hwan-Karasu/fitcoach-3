@@ -3,12 +3,22 @@
 Отдельная граница для будущего мобильного импортёра 2.0. Здесь переносимый разбор
 точных чисел JSON, общее чтение Nutrition/Measurements/Calendar/Plans/Execution,
 Clients/ExerciseCatalog/Questionnaire и
-подготовка отдельной файловой копии. `public.ts` экспортирует только source contract.
+подготовка отдельной файловой копии. `public.ts` экспортирует source/copy contracts,
+валидатор receipt и безопасную доменную ошибку, без SQL API.
 Внутренняя `app/composition/stageLegacyImportCandidate.ts` собирает всех владельцев
 в одну запись private staging, всегда `finalizable:false`. Пользовательский экран
 и переключение активной БД ещё не подключены. Host-проверки R04 используют тот же
 код; это не доказательство полного импорта на Android. Production migration/release
 gates OPEN.
+
+`app/composition/stageLegacyInspectionCandidate.ts` связывает sealed copy,
+source admission и общий writer. Scope/workspace/SHA берутся из проверенного
+источника; копия повторно проверяется до commit и после него. Возобновление
+использует только private copy, без повторного обращения к выбранному файлу.
+Изменение после commit оставляет исключительно неактивный private candidate.
+Genuine empty source сохраняет `sourceWorkspaceId:null`, без выдуманного source ID;
+такая identity не разрешает client rows/reservations. Workspace-specific Q/template
+без наблюдённого workspace всё ещё требует отдельного разрешения source identity.
 
 `domain/SourceJson.ts` реэкспортирует общий `shared/migration/SourceJson.ts`.
 Он использует стандартный JSON.parse для проверки синтаксиса

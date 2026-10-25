@@ -37,6 +37,8 @@ const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 /** Preserve wrapper metadata/order by explicit legacySectionId, never by the section's label.
  * Missing legacy profile wrappers stay hidden; existing answers are still retained. */
 function composeSchema(context: CandidateIdentityContext, raw: Record<string, unknown>, projection: QuestionnaireProjection): QuestionnaireSchema {
+  const sourceWorkspaceId = context.sourceWorkspaceId;
+  if (sourceWorkspaceId === null) return fail("SCOPE_MISMATCH");
   const base = legacyProfileQuestionnaireSchema();
   const extras = base.sections.find((section) => section.id === "legacy:profile:additional")!.fields;
   const systems = new Map(base.sections.filter((s) => s.origin === "SYSTEM").map((s) => [s.id, { ...s, fields: [...s.fields,
@@ -45,7 +47,7 @@ function composeSchema(context: CandidateIdentityContext, raw: Record<string, un
   const used = new Set<string>(); const sections: QuestionSection[] = [];
   for (const item of raw.sections as unknown[]) {
     const source = record(item); const sourceId = text(source.id);
-    const id = legacyQuestionnaireId([context.accountScope, context.sourceWorkspaceId, "section", sourceId]);
+    const id = legacyQuestionnaireId([context.accountScope, sourceWorkspaceId, "section", sourceId]);
     const custom = customs.get(id);
     if (source.legacySectionId === "billing" || source.legacySectionId === "notes") continue;
     const systemId = typeof source.legacySectionId === "string" ? `sys:${source.legacySectionId}` : "";
@@ -104,16 +106,18 @@ function retainAnswered(schema: QuestionnaireSchema, answers: readonly Questionn
  * Source draft is never promoted to published. No source normalizer or latest fallback. */
 export function composeLegacyQuestionnaires(context: CandidateIdentityContext, createdAt: string,
   profiles: readonly ProfileAnswerSource[], source: LegacyQuestionnaireSource) {
+  const sourceWorkspaceId = context.sourceWorkspaceId;
+  if (sourceWorkspaceId === null) return fail("SCOPE_MISMATCH");
   if (source.accountScope !== context.accountScope || source.templates.length !== 1 || !isExplicitTimestamp(createdAt)) return fail("SCOPE_MISMATCH");
   const changes = source.changes === null ? null : [...source.changes].sort((a, b) => compare(text(a.id), text(b.id)));
   const changeIds = new Set<string>();
   for (const row of changes ?? []) {
     const id = text(row.id);
-    if (changeIds.has(id) || Object.hasOwn(row, "workspace_id") && row.workspace_id !== context.sourceWorkspaceId) return fail("SCOPE_MISMATCH");
+    if (changeIds.has(id) || Object.hasOwn(row, "workspace_id") && row.workspace_id !== sourceWorkspaceId) return fail("SCOPE_MISMATCH");
     changeIds.add(id);
   }
   const template = source.templates[0]!.raw;
-  if (template.workspace_id !== context.sourceWorkspaceId || !isExplicitTimestamp(template.updated_at)) return fail("SCOPE_MISMATCH");
+  if (template.workspace_id !== sourceWorkspaceId || !isExplicitTimestamp(template.updated_at)) return fail("SCOPE_MISMATCH");
   const clients = new Map(profiles.map((p) => [p.sourceClientId, p]));
   if (clients.size !== profiles.length) return fail("CLIENT_DUPLICATE");
   const epochs = new Map<string, { family: string; epoch: string | undefined }>();
@@ -121,18 +125,18 @@ export function composeLegacyQuestionnaires(context: CandidateIdentityContext, c
   const rawRevisions = [...source.revisions].sort((a, b) => integer(a.raw.revision) - integer(b.raw.revision));
   for (const candidate of rawRevisions) {
     const row = candidate.raw; const id = text(row.id); const version = integer(row.revision);
-    if (candidate.sourceKey !== JSON.stringify([context.accountScope, "questionnaire_revisions", id]) || row.workspace_id !== context.sourceWorkspaceId) return fail("SCOPE_MISMATCH");
+    if (candidate.sourceKey !== JSON.stringify([context.accountScope, "questionnaire_revisions", id]) || row.workspace_id !== sourceWorkspaceId) return fail("SCOPE_MISMATCH");
     if (revisionIds.has(id) || revisionNumbers.has(version)) return fail("REVISION_AMBIGUOUS"); revisionIds.add(id); revisionNumbers.add(version);
     if (row.status !== "draft" && row.status !== "published" || !isExplicitTimestamp(row.created_at) ||
       (row.status === "published" ? !isExplicitTimestamp(row.published_at) : row.published_at !== null)) return fail("REVISION_INVALID");
     const raw = record(json(row.schema_json));
     let plain: QuestionnaireProjection;
-    try { plain = projectLegacyQuestionnaireSchema(context.accountScope, context.sourceWorkspaceId, raw); } catch { return fail("SCHEMA_INVALID"); }
+    try { plain = projectLegacyQuestionnaireSchema(context.accountScope, sourceWorkspaceId, raw); } catch { return fail("SCHEMA_INVALID"); }
     for (const [key, field] of plain.fields) {
       const old = epochs.get(key); const currentFamily = family(field.type);
       epochs.set(key, { family: currentFamily, epoch: old && old.family !== currentFamily ? id : old?.epoch });
     }
-    const projection = projectLegacyQuestionnaireSchema(context.accountScope, context.sourceWorkspaceId, raw,
+    const projection = projectLegacyQuestionnaireSchema(context.accountScope, sourceWorkspaceId, raw,
       new Map([...plain.fields.keys()].flatMap((key) => epochs.get(key)?.epoch === undefined ? [] : [[key, epochs.get(key)!.epoch!]])));
     revisions.push({ id, version, status: row.status, publishedAt: row.published_at as string | null, schema: raw, projection,
       composed: composeSchema(context, raw, projection) });
@@ -178,7 +182,7 @@ export function composeLegacyQuestionnaires(context: CandidateIdentityContext, c
         const section = record(value); const legacy = section.legacySectionId;
         const system = typeof legacy === "string" && ["goals", "health", "lifestyle", "nutrition", "motivation", "extra"].includes(legacy);
         return { sourceSectionId: text(section.id), targetSectionId: legacy === "billing" || legacy === "notes" ? null
-          : system ? `sys:${legacy}` : legacyQuestionnaireId([context.accountScope, context.sourceWorkspaceId, "section", text(section.id)]) };
+          : system ? `sys:${legacy}` : legacyQuestionnaireId([context.accountScope, sourceWorkspaceId, "section", text(section.id)]) };
       }),
       fieldMaps: [...r.projection.fields].sort(([a], [b]) => compare(a, b)).map(([sourceQuestionId, field]) => ({ sourceQuestionId, targetFieldId: field.id,
         options: [...r.projection.legacyOptionIds.get(sourceQuestionId)!].sort(([a], [b]) => compare(a, b)).map(([sourceLabel, targetId]) => ({ sourceLabel, targetId })) })) })),
