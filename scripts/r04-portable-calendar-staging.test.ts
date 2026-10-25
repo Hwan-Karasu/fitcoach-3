@@ -132,7 +132,7 @@ test("application composition stages every owner identically to the manual chain
   assert.equal(result.sourceRows, 2); assert.equal(result.owners.executions.performedFacts, 6); assert.equal(result.owners.measurements.measurementRows, 12);
   assert.equal(result.owners.nutrition.nutritionEntryRows, 4); assert.equal(result.owners.calendar.calendarAppointmentRows, 4); assert.equal(result.finalizable, false);
   const manualPath = join(f.dir, "manual.sqlite"), manual = nativeFactory(manualPath);
-  const stage = await prepareLegacyClientStaging(manual.open, f.context, importedAt, combineLegacyStageExtensions(extension(f.snapshots), legacySettingsStagingExtension(f.snapshots.settings))); await stage.stageClients(f.snapshots.clients, allocator());
+  const stage = await prepareLegacyClientStaging(manual.open, f.context, importedAt, combineLegacyStageExtensions(nutrition(f.snapshots, true), legacyCalendarStagingExtension(f.snapshots.calendar, legacyAccountingStagingStatements), legacySettingsStagingExtension(f.snapshots.settings))); await stage.stageClients(f.snapshots.clients, allocator());
   assert.deepEqual(applicationRecords(f.stagePath), applicationRecords(manualPath)); const before = applicationRecords(f.stagePath);
   await stageLegacyImportCandidate({ openStaging: f.native.open, context: f.context, source: f.snapshots, importedAt, referenceDay, allocate: () => assert.fail("application replay allocated") });
   assert.deepEqual(applicationRecords(f.stagePath), before); assert.equal(f.native.handles.size, 0); assert.equal(manual.handles.size, 0); assert.equal(digest(f.sourcePath), f.sha);

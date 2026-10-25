@@ -63,14 +63,17 @@ JSONfb0442d: R04_JSON_NUMBER_PARITY.md; decimal/native guard Q/Plans/archives;
 Workspace8bd28a1: R04_SOURCE_WORKSPACE.md; namespace/no-client Q/empty stores;
 10new/56targeted/25dependencies PASS. NotAndroid.
 
-CURRENT R04_SETTINGS_STAGING.md: all app_settings pinned rows; native appearance/
-card/nav aliases + raw per-key disposition/review. Common Node/async plan, app
-allowners same tx/82tables. Drafts/backup/unknown prefs retained, NOTworkingyet.
-12new/584profile PASS; root/mobileTS/lint/source73/arch613 PASS. Everycheckpoint/
-ackloss/capture/drift/binding/IO/sourceSHA + ExpoSDKmock start/resume. Actual3.x
-snapshotrestore/nativeSettings ordinaryReader isolate blocksimporter PASS;
-private reviews notbackupproved. No foundation/bundle/APK/Android/prodDDL/UI.
+Settingsa3120c9: R04_SETTINGS_STAGING.md nativeprefs/raw review;12new/584profile.
+Native3.x backup/ordinary reader isolate PASS.
 
-NEXT builderdrafts/coverage/prefs/lineage/permanentExecution/
+CURRENT R04_BUILDER_DRAFTS.md: native new/edit SIMPLE+PERIODIZED recovery,
+base/baseWeeks; exact owner/scope/revision/IDs/catalog/metrics. Scoped-v2 precedence;
+pendingfacts/actions/incomplete forms stay review, nofake0. Plans owns draft
+parity/mode/reader; Settings delegates. No new facts. Final13/targeted36/earlier596
+PASS; root/mobileTS/lint/source73/arch614. ExpoSDKmock resume/Workertermination;
+native3.x snapshot/ordinary repository isolate/edit+publish Simple PASS.
+UI/catalog/private-review/Execution/Android/release remain open. GoalACTIVE.
+
+NEXT unsupportedRecovery/coverage/prefs/lineage/permanentExecution/
 provenance/review/schemaadmission/UI/cutover/fullbackup/Android/GC/removal.
 JSONguard notfullvariantproof. BackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.

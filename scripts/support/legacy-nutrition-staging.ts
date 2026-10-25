@@ -10,8 +10,8 @@ import { seedLegacyNutritionSource, seedCalculator, seedArchives } from "./legac
 import { extension as training, inspect, records as trainingRecords, empty as trainingEmpty, fixture as trainingFixture } from "./legacy-training-staging.ts";
 export const referenceDay = "2026-10-24";
 const extraTables = ["body_measurements", "measurement_daily_primary", "r04_measurement_ids", "r04_measurement_receipt", ...Object.entries(nutritionRehearsalObjects).filter(([, kind]) => kind === "table").map(([name]) => name)];
-export const beforeNutrition = (s: LegacyImportSourceSnapshots) => combineLegacyStageExtensions(training(s), legacyMeasurementStagingExtension(s.measurements, referenceDay));
-export const extension = (s: LegacyImportSourceSnapshots) => combineLegacyStageExtensions(beforeNutrition(s), legacyNutritionStagingExtension(s.nutrition));
+export const beforeNutrition = (s: LegacyImportSourceSnapshots, builders = false) => combineLegacyStageExtensions(training(s, builders), legacyMeasurementStagingExtension(s.measurements, referenceDay));
+export const extension = (s: LegacyImportSourceSnapshots, builders = false) => combineLegacyStageExtensions(beforeNutrition(s, builders), legacyNutritionStagingExtension(s.nutrition));
 export const records = (path: string) => [...trainingRecords(path), ...inspect(path, (db) => extraTables.map((table) => [table, db.prepare(`SELECT * FROM ${table}`).all()]))];
 export function empty(path: string) { trainingEmpty(path); inspect(path, (db) => { for (const table of extraTables) assert.equal(db.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n, 0, table); }); }
 export function seed(db: DatabaseSync) {

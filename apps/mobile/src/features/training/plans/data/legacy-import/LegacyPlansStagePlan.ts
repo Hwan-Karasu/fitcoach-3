@@ -7,6 +7,7 @@ import { PLAN_SOURCE_TABLES, type LegacyPlansSource } from "../../../../../share
 import { legacyStageQuery as query, legacyStageRun as run, type LegacyWritePlan } from "../../../../../shared/migration/LegacyWritePlan.ts";
 import { composeLegacyPlans, PLAN_TARGET_TABLES, TEMPLATE_TARGET_TABLES, type ExercisePlanLink, type PlanIdentityKind, type PlanRow } from "../../domain/legacy-import/LegacyPlansProjection.ts";
 import { composeLegacyArchivePlans } from "../../domain/legacy-import/LegacyArchivePlansProjection.ts";
+import { composeLegacyBuilderDrafts, isLegacyBuilderDraftKey, type LegacyBuilderDraftInput } from "../../domain/legacy-import/LegacyBuilderDrafts.ts";
 
 export interface LegacyPlansStageResult {
   readonly programRows: number; readonly mesocycleRows: number;
@@ -15,6 +16,7 @@ export interface LegacyPlansStageResult {
   readonly mirroredArchiveAliasRows: number; readonly targetFactsCreated: 0; readonly deferredArchiveRows: number;
   readonly deferredTemplatePages: number; readonly deferredLibraryRows: number; readonly deferredWorkspaceStateRows: number;
   readonly deferredViewRows: number; readonly deferredPreferenceRows: number; readonly finalizable: false;
+  readonly builderDraftRows?: number; readonly builderDraftReviewRows?: number;
 }
 
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
@@ -44,7 +46,7 @@ export function* legacyPlansSchemaPlan(): LegacyWritePlan<void> {
 export type { LegacyPlanCheckpoint as PlanStageCheckpoint } from "../../../../../shared/migration/LegacyWritePlan.ts";
 export function* legacyPlansStagePlan(context: CandidateIdentityContext, importedAt: string,
   cards: readonly LegacyStageClient[], clients: LegacyStageClientIds, source: LegacyPlansSource, allocate: () => string,
-  templatesEnabled = false, archivesEnabled = false): LegacyWritePlan<LegacyPlansStageResult> {
+  templatesEnabled = false, archivesEnabled = false, drafts?: LegacyBuilderDraftInput): LegacyWritePlan<LegacyPlansStageResult> {
   const clientIds = new Map<string, string>();
   for (const card of cards) {
     const id = clients.clients.get(card.identity.sourceIdentityKey);
@@ -78,7 +80,7 @@ export function* legacyPlansStagePlan(context: CandidateIdentityContext, importe
   };
   const projection = composeLegacyPlans(context, importedAt, source, clientIds, links, identity, templatesEnabled);
   const archiveCatalog = new Map<string, string>();
-  if (archivesEnabled) for (const row of (yield query("SELECT source_catalog_id,id FROM r04_exercise_registry WHERE workspace_id=?", [context.targetWorkspaceId]))) {
+  if (archivesEnabled || drafts) for (const row of (yield query("SELECT source_catalog_id,id FROM r04_exercise_registry WHERE workspace_id=?", [context.targetWorkspaceId]))) {
     archiveCatalog.set(row.source_catalog_id as string, row.id as string);
   }
   const archives = archivesEnabled ? composeLegacyArchivePlans(context, importedAt, source, clientIds, archiveCatalog, identity) : null;
@@ -91,6 +93,8 @@ export function* legacyPlansStagePlan(context: CandidateIdentityContext, importe
     projection.deferredArchiveRows = archives.deferredArchiveRows;
     projection.retainedSourceRows += archives.sourceRows.filter((r) => r.disposition === "RETAINED_DELETED_ARCHIVE_SOURCE" || r.disposition === "ARCHIVE_WARMUP_SOURCE").length;
   }
+  const builders = drafts === undefined ? null : composeLegacyBuilderDrafts(context, importedAt, drafts.settings, source, drafts.facts, clientIds,
+    archiveCatalog, projection.tables, projection.sourceRows, identity);
   for (const item of pendingIds) {
     if ((yield query("SELECT 1 FROM r04_candidate_ids WHERE target_id=?", [item.id])).length
       || (yield query("SELECT 1 FROM r04_work_ids WHERE target_id=?", [item.id])).length) return fail("IDENTITY_COLLISION");
@@ -99,8 +103,9 @@ export function* legacyPlansStagePlan(context: CandidateIdentityContext, importe
   if (archives) yield { kind: "checkpoint", phase: "after-archive-plans" } as const;
   if (used.size !== cache.size) return fail("IDENTITY_MISMATCH");
   yield { kind: "checkpoint", phase: "after-plan-ids" } as const;
-  const targetTables: readonly string[] = templatesEnabled ? TEMPLATE_TARGET_TABLES : PLAN_TARGET_TABLES;
+  const targetTables: readonly string[] = [...templatesEnabled ? TEMPLATE_TARGET_TABLES : PLAN_TARGET_TABLES, ...builders ? ["training_builder_drafts", "training_periodized_drafts"] : []];
   const tables: { name: string; rows: readonly PlanRow[] }[] = (templatesEnabled ? TEMPLATE_TARGET_TABLES : PLAN_TARGET_TABLES).map((name) => ({ name, rows: projection.tables[name] }));
+  if (builders) tables.push({ name: "training_builder_drafts", rows: builders.rows }, { name: "training_periodized_drafts", rows: [] });
   const sourceRows = projection.sourceRows.map((row) => ({ ...row, source_json: canonical(JSON.parse(row.source_json as string) as unknown) }));
   const sourceJson = canonical({ accountScope: source.accountScope, tables: Object.fromEntries(PLAN_SOURCE_TABLES.map((table) => [table,
     source.tables[table] === null ? null : source.tables[table].map((r) => canonical(r)).sort(compare)])) });
@@ -110,6 +115,8 @@ export function* legacyPlansStagePlan(context: CandidateIdentityContext, importe
     metadata: projection.metadata.map(canonical).sort(compare), planBases: projection.planBases.map(canonical).sort(compare),
     deferredArchiveRows: projection.deferredArchiveRows, deferredTemplatePages: projection.deferredTemplatePages,
     ...(archives ? { archivedProgramRows: archives.archivedProgramRows, mirroredArchiveAliasRows: archives.mirroredAliasRows } : {}),
+    ...(builders && drafts ? { builderRepresentations: builders.representations, builderFactsCreated: builders.factsCreated,
+      builderSource: { accountScope: drafts.settings.accountScope, rows: drafts.settings.rows === null ? null : drafts.settings.rows.filter((r) => isLegacyBuilderDraftKey(r.key)).map(canonical).sort(compare) } } : {}),
     deferredLibraryRows: projection.deferredLibraryRows, deferredWorkspaceStateRows: projection.deferredWorkspaceStateRows,
     deferredViewRows: projection.deferredViewRows, deferredPreferenceRows: projection.deferredPreferenceRows });
   const receipts = (yield query("SELECT * FROM r04_plan_receipt"));
@@ -138,18 +145,19 @@ export function* legacyPlansStagePlan(context: CandidateIdentityContext, importe
     archivedProgramRows: archives?.archivedProgramRows ?? 0, mirroredArchiveAliasRows: archives?.mirroredAliasRows ?? 0, targetFactsCreated: 0 as const,
     deferredArchiveRows: projection.deferredArchiveRows, deferredTemplatePages: projection.deferredTemplatePages,
     deferredLibraryRows: projection.deferredLibraryRows, deferredWorkspaceStateRows: projection.deferredWorkspaceStateRows,
-    deferredViewRows: projection.deferredViewRows, deferredPreferenceRows: projection.deferredPreferenceRows, finalizable: false as const };
+    deferredViewRows: projection.deferredViewRows, deferredPreferenceRows: projection.deferredPreferenceRows,
+    ...(builders ? { builderDraftRows: builders.editableDraftRows, builderDraftReviewRows: builders.reviewRows } : {}), finalizable: false as const };
 }
 
 /** Downstream fact/archive adapters consume source aliases, never deduplicate facts
  * by a logical simple-workout ID shared by several weeks. Read verifies plan parity. */
-export function* legacyLoadPlanMappingsPlan(templatesEnabled = false): LegacyWritePlan<ReadonlyMap<string, PlanDraftMapping>> {
+export function* legacyLoadPlanMappingsPlan(templatesEnabled = false, buildersEnabled = false): LegacyWritePlan<ReadonlyMap<string, PlanDraftMapping>> {
   const receipts = (yield query("SELECT * FROM r04_plan_receipt"));
   if (receipts.length !== 1 || receipts[0]?.id !== 1) return fail("NOT_STAGED");
   let manifest: unknown; try { manifest = JSON.parse(receipts[0].target_json as string) as unknown; } catch { return fail("PARITY_MISMATCH"); }
   if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) return fail("PARITY_MISMATCH");
   const saved = manifest as Record<string, unknown>;
-  const targetTables: readonly string[] = templatesEnabled ? TEMPLATE_TARGET_TABLES : PLAN_TARGET_TABLES;
+  const targetTables: readonly string[] = [...templatesEnabled ? TEMPLATE_TARGET_TABLES : PLAN_TARGET_TABLES, ...buildersEnabled ? ["training_builder_drafts", "training_periodized_drafts"] : []];
   if (!Array.isArray(saved.tables) || saved.tables.length !== targetTables.length || !Array.isArray(saved.sourceRows) || !Array.isArray(saved.identities)) return fail("PARITY_MISMATCH");
   const names = new Set<string>();
   for (const item of saved.tables) {

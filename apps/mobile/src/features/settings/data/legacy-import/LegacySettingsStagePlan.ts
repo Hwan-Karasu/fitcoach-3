@@ -49,5 +49,5 @@ export function* legacySettingsStagePlan(context: CandidateIdentityContext, impo
   if (saved?.id !== 1 || saved.source_json !== sourceJson || saved.target_json !== targetJson) return fail("PARITY_MISMATCH");
   yield { kind: "checkpoint", phase: "after-settings-receipt" };
   return { settingsRows: settings.length, sourceSettingRows: sources.length, settingsReviewRows: projection.sourceRows.filter((r) => r.issues.length || r.disposition === "REVIEW_REQUIRED").length,
-    settingsResetRows: projection.sourceRows.filter((r) => r.disposition === "TECHNICAL_RESET").length, delegatedSettingRows: projection.sourceRows.filter((r) => r.disposition === "DELEGATED_CALENDAR").length, finalizable: false };
+    settingsResetRows: projection.sourceRows.filter((r) => r.disposition === "TECHNICAL_RESET").length, delegatedSettingRows: projection.sourceRows.filter((r) => r.disposition === "DELEGATED_CALENDAR" || r.disposition === "DELEGATED_TRAINING_DRAFT").length, finalizable: false };
 }

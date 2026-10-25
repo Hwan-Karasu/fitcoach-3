@@ -59,14 +59,16 @@ function empty(f: Fixture) {
 test("all app settings are read and accounted for; supported preferences reach native Settings and raw drafts stay explicit review", () => fixture(async (f) => {
   assert.equal(f.snapshots.settings.rows!.length, 9);
   assert.deepEqual(inspect(f.sourcePath, (db) => runNodeLegacyReadPlan(db, legacySettingsReadPlan(f.context.accountScope))), f.snapshots.settings);
-  const result = await stage(f); assert.deepEqual(result.owners.settings, { settingsRows: 1, sourceSettingRows: 9, settingsReviewRows: 6, settingsResetRows: 1, delegatedSettingRows: 1, finalizable: false });
+  const result = await stage(f); assert.deepEqual(result.owners.settings, { settingsRows: 1, sourceSettingRows: 9, settingsReviewRows: 4, settingsResetRows: 1, delegatedSettingRows: 3, finalizable: false });
   inspect(f.stagePath, (db) => {
     const row = db.prepare("SELECT * FROM settings").get()!; assert.equal(row.updated_at, importedAt); assert.equal(row.workspace_id, f.context.targetWorkspaceId);
     assert.deepEqual(parseAppearance(row.value_json as string), { themeId: "polar-teal", accentId: null, showClientListShortcut: true, hideNavigationLabels: true,
       clientCards: { startSection: "Training", metricIds: ["credits", "weight", "lastTraining"], showHealthBadge: false } });
     const source = db.prepare("SELECT * FROM r04_settings_source WHERE source_setting_key='training_builder_draft:a'").get()!;
-    assert.equal(source.disposition, "REVIEW_REQUIRED"); assert.match(source.source_json as string, /Original draft/u);
-    assert.match(source.issues_json as string, /BUILDER_DRAFT_REQUIRES_MAPPING/u);
+    assert.equal(source.disposition, "DELEGATED_TRAINING_DRAFT"); assert.match(source.source_json as string, /Original draft/u);
+    const plans = JSON.parse(db.prepare("SELECT target_json FROM r04_plan_receipt").get()!.target_json as string);
+    assert.equal(plans.builderRepresentations.find((r: { sourceKey: string }) => r.sourceKey === source.source_key).disposition, "SHADOWED");
+    assert.ok(plans.builderRepresentations.some((r: { disposition: string }) => r.disposition === "REVIEW_REQUIRED"));
     assert.equal(db.prepare("SELECT count(*) AS n FROM r04_settings_source").get()!.n, f.snapshots.settings.rows!.length);
     assert.equal((row.value_json as string).includes("SYNTHETIC-OS-ID"), false);
     assert.equal(db.prepare("SELECT disposition FROM r04_settings_source WHERE source_setting_key='rest_timer_state_v1'").get()!.disposition, "TECHNICAL_RESET");
@@ -154,7 +156,7 @@ test("ambiguous settings identities and wrong scope roll back earlier owners; in
     else if (mode === "duplicate") Object.assign(source.settings, { rows: [...source.settings.rows!, source.settings.rows![0]!] });
     else Object.assign(source.settings.rows![0]!, { key: null });
     await assert.rejects(stageLegacyImportCandidate({ openStaging: f.native.open, context: f.context, source, importedAt, referenceDay, allocate: allocator() }),
-      mode === "scope" ? /SETTINGS_SCOPE_MISMATCH/u : /SETTINGS_IDENTITY_INVALID/u); empty(f);
+      mode === "scope" ? /BUILDER_SCOPE_MISMATCH/u : /SETTINGS_IDENTITY_INVALID/u); empty(f);
   });
   await fixture(async (f) => {
     await prepareLegacyClientStaging(f.native.open, f.context, importedAt); const before = digest(f.stagePath), count = f.native.calls.length;

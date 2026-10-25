@@ -3,7 +3,7 @@ import type { AppearanceSetting } from "../SettingsPort.ts";
 import { DEFAULT_CLIENT_CARDS, type ClientCardPreference, type ClientMetricId, type ClientStartSection } from "../../../../shared/domain/ClientCardPreference.ts";
 import { parseRoundTripSourceJson } from "../../../../shared/migration/SourceJson.ts";
 
-export type LegacySettingDisposition = "APPLIED" | "APPLIED_WITH_REVIEW" | "REVIEW_REQUIRED" | "DELEGATED_CALENDAR" | "TECHNICAL_RESET";
+export type LegacySettingDisposition = "APPLIED" | "APPLIED_WITH_REVIEW" | "REVIEW_REQUIRED" | "DELEGATED_CALENDAR" | "DELEGATED_TRAINING_DRAFT" | "TECHNICAL_RESET";
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 const metrics: Readonly<Record<string, ClientMetricId>> = { weight: "weight", pack: "credits", program: "credits", calories: "calories", visit: "lastTraining", steps: "steps", fatPercent: "fatPercent" };
 const sections: Readonly<Record<string, ClientStartSection>> = { home: "Home", kbju: "Nutrition", training: "Training", profile: "More", archive: "More" };
@@ -66,7 +66,7 @@ export function projectLegacySettings(source: LegacySettingsSource) {
       } catch { issues.push("CARD_SETTINGS_INVALID"); }
     } else if (key === "calendar_planner_settings") disposition = "DELEGATED_CALENDAR";
     else if (resets.has(key)) disposition = "TECHNICAL_RESET";
-    else if (/^training_builder_draft(?:_v2)?:/u.test(key)) issues.push("BUILDER_DRAFT_REQUIRES_MAPPING");
+    else if (/^training_builder_draft(?:_v2)?:/u.test(key)) disposition = "DELEGATED_TRAINING_DRAFT";
     else issues.push("SETTING_REQUIRES_MAPPING");
     if (Object.keys(raw).some((column) => !["key", "value", "updated_at"].includes(column))) issues.push("SOURCE_COLUMNS_RETAINED");
     if (disposition === "APPLIED" && issues.length) disposition = "APPLIED_WITH_REVIEW";

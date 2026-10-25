@@ -1,3 +1,22 @@
+## Продолжение — native recovery черновиков конструкторов
+
+2026-10-25, базаa3120c9; R04→R03/Product48.5.7/49–50/53–56/INT03–12.
+Private synthetic/finalizable:false; production/native/release gates OPEN.
+Plans optional builder mode пишет existing native recovery table без новых DDL.
+Новые/редактируемые Simple+Periodized, явные owner/scope/catalog/revision/IDs;
+base/baseWeeks, declared slots/supersets/rest/instruction, exact planned metrics.
+Scoped-v2 precedence/shadow raw, неподтверждённые facts/actions/incomplete forms
+остаются review; пустой count не становится нулём. Новых performed facts нет.
+Plans строгий reader/parity владеет draft tables; Settings делегирует source keys.
+36targeted/596profile PASS до финальных узких guards; final13/root/mobileTS/
+lint/source73/arch614/secrets PASS, детали в phase doc.
+ExpoSDKmock start/resume + actual host Worker termination/retry; native 3.x
+snapshot/restore + ordinary repository isolate блокирует importer, читает/правит/
+публикует Simple. Не full UI/catalog/private-review/Execution/Android proof.
+[Контракт, pinned source refs и проверки](spikes/R04_BUILDER_DRAFTS.md).
+NEXT unsupported recovery/coverage/prefs/lineage/permanentmodels/admission/UI/
+cutover/fullbackup/Android/GC/removal. GoalACTIVE/fullscope/не100%.
+
 ## Продолжение — Settings / полный app_settings source
 
 2026-10-25, база8bd28a1; R04→R03/Product49–50/53–56/INT03–12.
