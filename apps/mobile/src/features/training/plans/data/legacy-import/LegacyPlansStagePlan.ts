@@ -17,6 +17,7 @@ export interface LegacyPlansStageResult {
   readonly deferredTemplatePages: number; readonly deferredLibraryRows: number; readonly deferredWorkspaceStateRows: number;
   readonly deferredViewRows: number; readonly deferredPreferenceRows: number; readonly finalizable: false;
   readonly builderDraftRows?: number; readonly builderDraftReviewRows?: number;
+  readonly restoredViewSelections: number; readonly viewSelectionReviewRows: number;
 }
 
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
@@ -113,6 +114,7 @@ export function* legacyPlansStagePlan(context: CandidateIdentityContext, importe
   const targetJson = canonical({ tables: tables.map((table) => ({ name: table.name, rows: table.rows.map(canonical).sort(compare) })), sourceRows,
     identities,
     metadata: projection.metadata.map(canonical).sort(compare), planBases: projection.planBases.map(canonical).sort(compare),
+    viewSelectionProjectionVersion: 1, viewSelections: projection.viewSelections.representations.map(canonical).sort(compare),
     deferredArchiveRows: projection.deferredArchiveRows, deferredTemplatePages: projection.deferredTemplatePages,
     ...(archives ? { archivedProgramRows: archives.archivedProgramRows, mirroredArchiveAliasRows: archives.mirroredAliasRows } : {}),
     ...(builders && drafts ? { builderRepresentations: builders.representations, builderFactsCreated: builders.factsCreated,
@@ -146,6 +148,7 @@ export function* legacyPlansStagePlan(context: CandidateIdentityContext, importe
     deferredArchiveRows: projection.deferredArchiveRows, deferredTemplatePages: projection.deferredTemplatePages,
     deferredLibraryRows: projection.deferredLibraryRows, deferredWorkspaceStateRows: projection.deferredWorkspaceStateRows,
     deferredViewRows: projection.deferredViewRows, deferredPreferenceRows: projection.deferredPreferenceRows,
+    restoredViewSelections: projection.viewSelections.restoredSelections, viewSelectionReviewRows: projection.viewSelections.reviewRows,
     ...(builders ? { builderDraftRows: builders.editableDraftRows, builderDraftReviewRows: builders.reviewRows } : {}), finalizable: false as const };
 }
 

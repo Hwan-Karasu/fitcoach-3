@@ -13,7 +13,7 @@ export function legacyPlansStagingExtension(source: LegacyPlansSource, options: 
   const draftSnapshot = drafts === undefined ? undefined : { settings: { accountScope: drafts.settings.accountScope, rows: drafts.settings.rows?.map(captureLegacySourceRow) ?? null },
     facts: { accountScope: drafts.facts.accountScope, segments: drafts.facts.segments?.map(captureLegacySourceRow) ?? null } };
   return Object.freeze<LegacyStageExtension<LegacyPlansStageResult>>({
-    modeTags: Object.freeze(["TRAINING_PLANS_REHEARSAL_V1", ...(templates ? ["TRAINING_TEMPLATES_REHEARSAL_V1"] : []), ...(archives ? ["TRAINING_ARCHIVES_REHEARSAL_V1"] : []), ...(drafts ? ["TRAINING_BUILDER_DRAFTS_REHEARSAL_V1"] : [])]),
+    modeTags: Object.freeze(["TRAINING_PLANS_REHEARSAL_V1", "TRAINING_VIEW_SELECTIONS_REHEARSAL_V1", ...(templates ? ["TRAINING_TEMPLATES_REHEARSAL_V1"] : []), ...(archives ? ["TRAINING_ARCHIVES_REHEARSAL_V1"] : []), ...(drafts ? ["TRAINING_BUILDER_DRAFTS_REHEARSAL_V1"] : [])]),
     requiredModeTags: Object.freeze(["PROFILE_REHEARSAL_V1", "QUESTIONNAIRE_COMPOSITION_V1", "WORK_DATA_REHEARSAL_V1", "EXERCISE_REGISTRY_REHEARSAL_V1"]),
     objects: Object.freeze({ ...plansRehearsalObjects }), clientWorkspaceIndex: true,
     createSchema: legacyPlansSchemaPlan,

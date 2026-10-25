@@ -60,7 +60,7 @@ export function prepareCandidateIdentityLedger(db: DatabaseSync, context: Candid
   const expectedContext = jobCreatedAt === undefined ? contextJson(binding)
     : JSON.stringify([contextJson(binding), "CLIENT_IDENTITY_REHEARSAL_V1", jobCreatedAt, ...(profilesEnabled ? ["PROFILE_REHEARSAL_V1"] : []),
       ...(questionnairesEnabled ? ["QUESTIONNAIRE_COMPOSITION_V1"] : []), ...(workDataEnabled ? ["WORK_DATA_REHEARSAL_V1"] : []),
-      ...(exercisesEnabled ? ["EXERCISE_REGISTRY_REHEARSAL_V1"] : []), ...(plansEnabled ? ["TRAINING_PLANS_REHEARSAL_V1"] : []),
+      ...(exercisesEnabled ? ["EXERCISE_REGISTRY_REHEARSAL_V1"] : []), ...(plansEnabled ? ["TRAINING_PLANS_REHEARSAL_V1", "TRAINING_VIEW_SELECTIONS_REHEARSAL_V1"] : []),
       ...(templatesEnabled ? ["TRAINING_TEMPLATES_REHEARSAL_V1"] : []), ...(archivesEnabled ? ["TRAINING_ARCHIVES_REHEARSAL_V1"] : []),
       ...(executionsEnabled ? ["TRAINING_EXECUTIONS_REHEARSAL_V3"] : []), ...(measurementsEnabled ? ["MEASUREMENTS_REHEARSAL_V2", measurementDay] : []),
       ...(nutritionEnabled ? ["NUTRITION_REHEARSAL_V3"] : []), ...(calendarEnabled ? ["CALENDAR_REHEARSAL_V1"] : [])]);

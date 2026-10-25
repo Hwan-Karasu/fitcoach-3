@@ -1,3 +1,21 @@
+## Продолжение — выбранный мезоцикл неактивной книги
+
+2026-10-25, базаf59c228; R04→R03/Product48.1–48.5.7/49–50/53–56/INT03–12.
+Private synthetic/finalizable:false; production/migration/release gates OPEN.
+Явный trainer:actor:workspace namespace восстанавливает per-book выбранную page
+по source→native aliases в existing training_mesocycle_selection. Текущая книга
+не меняется; preferred pin/last_opened_at не переключают выбор. Чужой actor не
+заимствуется; legacy actor без binding не угадывается. Duplicate/foreign/deleted/
+book/active conflict остаются review. Архив не реактивируется; Simple/NULL не fake.
+Plans receipt/version/native parity, новый mode у Node/mobile; before-WAL отказ
+старому private candidate. Нет новых DDL/UUID kinds/facts, по-прежнему84tables.
+53dependency/66targeted PASS, в том числе10new; root/mobileTS/lint/source73/arch618.
+Actual ExpoSDKmock restart/hostWorker termination; ordinary3.x snapshot+restore+
+native reader/edit с importer-ban positive probe PASS. Не fullbackup/UI/Android.
+[Контракт, pinned источники и ограничения](spikes/R04_PROGRAM_VIEW_SELECTIONS.md).
+NEXT rest semanticfields/legacy-actor resolution/permanentmodels/admission/UI/
+cutover/fullbackup/Android/GC/removal. GoalACTIVE/fullscope/не100%.
+
 ## Продолжение — полный source table coverage / raw SQL retention
 
 2026-10-25, база6fcde02; R04→R03/Product46.6/48.5.7/49–50/53–56/INT03–12.

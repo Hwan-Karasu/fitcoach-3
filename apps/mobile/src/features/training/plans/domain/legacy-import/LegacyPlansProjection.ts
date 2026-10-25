@@ -7,6 +7,7 @@ import type { PlannedExercise, PlannedSet, PlannedWorkout } from "../SimplePlanM
 import { storedTemplate, storedWorkout } from "../StoredPlanShape.ts";
 import type { TemplatePayload } from "../TemplateModel.ts";
 import type { WeekType } from "../PeriodizedModel.ts";
+import { restoreLegacyPlanViewSelections } from "./LegacyPlanViewSelections.ts";
 
 type Raw = Readonly<Record<string, unknown>>;
 export type { PlanTargetRow as PlanRow } from "../../../../../shared/migration/LegacyPlanMappings.ts";
@@ -315,7 +316,8 @@ export function composeLegacyPlans(context: CandidateIdentityContext, importedAt
       target_id: d.targetId, target_program_id: d.targetProgramId, week_index: d.weekIndex, disposition: d.disposition, source_json: JSON.stringify(row) });
   }
   sourceRows.sort((a, b) => compare(String(a.source_key), String(b.source_key)));
-  return { tables, sourceRows, metadata, planBases,
+  const viewSelections = restoreLegacyPlanViewSelections(context, source, clientIds, sourceRows, tables);
+  return { tables, sourceRows, metadata, planBases, viewSelections,
     deferredArchiveRows: rows("training_archive_entries").length, deferredTemplatePages: rows("training_programs").filter((p) => p.is_template === 1 && (!templatesEnabled || !active(p))).length,
     deferredLibraryRows: [...library.keys()].filter((k) => !groups.has(k)).length,
     deferredWorkspaceStateRows: rows("training_workspaces").filter((r) => Object.keys(sourceObject(r.week_state_json)).length > 0).length,

@@ -17,8 +17,7 @@ return15holders/closedrecovery/UI/WAL/capacity/generation/GC. Historicalnative35
 24/3/Downloads20/SAF19/reinstall6/auto21/status3/missing19/actualkill15+14; fixture
 COMPLETE/noarmedpause/2.0build128safe. No currentphone/PID proof thisphase.
 
-Prior R04 Profile37/Qhistory/epochs/privateWorkData/registry/LOAD_REPS/IDs;
-Plans92d00bb/templates74fa6cf/archives12381f4 physicalstructure/owners/aliases.
+Prior R04 Profile/Q/WorkData/Exercise/Plans/templates/archives: docs/handoff.
 Execution032b7e5/b64fac9/e93a4c8/3015bdd/60134d7: physicalfacts/owner/SHA,
 exactsegments/undatedhistory/partials/nullvs0/contexts/notes/logs6thstore/cachealiases;
 no name-value-slotmerges/fakedate/outcome. IANA/cache/businessday/permanentwriter
@@ -43,12 +42,8 @@ notoutcomes/exactclientIDs/4templates/legacybypass1/UNTRACKED/no paidfacts.
 SourceJSON99c318f: R04_PORTABLE_SOURCE_JSON.md exacttokens/no context.source, all4
 projections/twoargWorker/normalreaderimportban; 8newtests. HermesHBCcompileonly.
 
-PortableSQLaad8901/R04_PORTABLE_SQL_SOURCE.md: rawplans/safeSQLnumbers/WAL/close.
-9source+1stageintegration/687area/latest74PASS; admission later e1d7484.
-
-Copy229e880: R04_INSPECTION_COPY.md; private slots/SHA/source untouched.
-
-Admissione1d7484: R04_SOURCE_ADMISSION.md; strictcanonical25/privateverifiedlineage.
+Sourceaad8901/229e880/e1d7484: portableSQL/sealedcopy/strictcanonical25;
+phase proofs in docs/handoff; no arbitrary source paths or production admission.
 
 Portable source/writers chain6bb28b7->12c94c3: phase proof in docs/handoff;
 Clients/Q/WorkData/Exercise/Plans/Execution/Measurements/Nutrition/Calendar.
@@ -70,13 +65,16 @@ Native3.x backup/ordinary reader isolate PASS.
 Builders6fcde02/R04_BUILDER_DRAFTS.md: native recovery;13final/596earlierprofile,
 3.x snapshot/ordinary repository isolate PASS.
 
-CURRENT R04_SOURCE_COVERAGE.md: pinned census/count/columns/SQLcell SHA;
-full tagged raw ordinary tables in private ledger, unknown stores REVIEW,
-views notexecuted, virtual rejected. 84tables/same tx/mode/parity/sourceSHA.
-77targeted/8final/33earlier reader tests PASS; root/mobileTS/lint/source73/arch617.
-ExpoSDKmock restart/hostWorker kill PASS. Raw capture is not semantic mapping/
-3.x backup/UI/cutover/Android proof. GoalACTIVE.
+Coveragef59c228/R04_SOURCE_COVERAGE.md: full tagged ordinary SQL rows;84tables.
+77targeted/8final/33reader PASS. No semantic/fullbackup claim.
 
-NEXT semanticCoverage/unsupportedRecovery/prefs/lineage/permanentExecution/
+CURRENT R04_PROGRAM_VIEW_SELECTIONS.md: bound trainer actor/native per-book page;
+current book/pin unchanged. Legacy actor unproven/other actor/conflicts retained.
+Node/mobile mode+receipt; no newDDL/IDs/facts. 53dependency/66targeted incl10new
+PASS; root/mobileTS/lint/source73/arch618. ExpoSDKmock restart/hostKill;
+native3.x snapshot/restore/ordinary read+edit with importer-ban PASS.
+NotfullUI/Execution/provenance/review backup/Android. GoalACTIVE.
+
+NEXT semanticCoverage/legacyActor/unsupportedRecovery/prefs/lineage/permanentExecution/
 provenance/review/schemaadmission/UI/cutover/fullbackup/Android/GC/removal.
 JSONguard notfullvariantproof. BackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.
