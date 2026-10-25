@@ -29,4 +29,7 @@ export interface LegacyProfileSnapshots {
   readonly exerciseCatalog: LegacyExerciseCatalogSource;
   readonly questionnaire: LegacyQuestionnaireSource | null;
 }
-export interface LegacyImportSourceSnapshots extends LegacyDomainSnapshots, LegacyTrainingSnapshots, LegacyProfileSnapshots {}
+import type { LegacySettingsSource } from "../../../shared/migration/LegacySettingsSource.ts";
+export interface LegacyImportSourceSnapshots extends LegacyDomainSnapshots, LegacyTrainingSnapshots, LegacyProfileSnapshots {
+  readonly settings: LegacySettingsSource;
+}

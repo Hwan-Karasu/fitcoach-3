@@ -61,13 +61,17 @@ Jobs9ec7615: R04_CANDIDATE_JOBS.md; request/Expo resume/IDs/terminationproof;
 JSONfb0442d: R04_JSON_NUMBER_PARITY.md; decimal/native guard Q/Plans/archives;
 9new/33targeted/562profile PASS. No Android.
 
-CURRENT R04_SOURCE_WORKSPACE.md: strict namespace clients/Q/templatebindings;
-zero-client Q keeps pubs/draft/IDs/catalog; empty stores retain raw/presence/
-profileanswers; no inventedowner/client. BINARY/shape/types/conflicts beforedomain.
-Allownerrollback/retry/parity/sourceSHA; Expo start/resume twoWorkers SDKmock.
-10new/56targeted/25dependencies PASS; root/mobileTS/lint/source73/arch609 PASS.
-No foundation/fullprofile/bundle/Hermesruntime/APK/phone/prodDDL/UI. GoalACTIVE.
+Workspace8bd28a1: R04_SOURCE_WORKSPACE.md; namespace/no-client Q/empty stores;
+10new/56targeted/25dependencies PASS. NotAndroid.
 
-NEXT coverage/prefs/lineage/permanentExecution/
+CURRENT R04_SETTINGS_STAGING.md: all app_settings pinned rows; native appearance/
+card/nav aliases + raw per-key disposition/review. Common Node/async plan, app
+allowners same tx/82tables. Drafts/backup/unknown prefs retained, NOTworkingyet.
+12new/584profile PASS; root/mobileTS/lint/source73/arch613 PASS. Everycheckpoint/
+ackloss/capture/drift/binding/IO/sourceSHA + ExpoSDKmock start/resume. Actual3.x
+snapshotrestore/nativeSettings ordinaryReader isolate blocksimporter PASS;
+private reviews notbackupproved. No foundation/bundle/APK/Android/prodDDL/UI.
+
+NEXT builderdrafts/coverage/prefs/lineage/permanentExecution/
 provenance/review/schemaadmission/UI/cutover/fullbackup/Android/GC/removal.
 JSONguard notfullvariantproof. BackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.

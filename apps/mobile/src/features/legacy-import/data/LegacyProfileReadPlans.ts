@@ -1,9 +1,16 @@
 import type { LegacyClientsSource, LegacyExerciseCatalogSource, LegacyQuestionnaireSource } from "../domain/LegacySourceSnapshots.ts";
 import { legacySourceTablePresent, readLegacySourceTable as read, type LegacySourceReadPlan } from "./LegacySourceReadPlans.ts";
+import type { LegacySettingsSource } from "../../../shared/migration/LegacySettingsSource.ts";
 
 const identityColumns = ["id", "workspace_id", "name", "created_at", "updated_at", "archived_at", "deleted_at"];
 const cardColumns = ["id", "workspace_id", "birthdate", "height", "gender", "avatar_emoji", "profile_json"];
 function scope(value: string) { if (!value.trim()) throw new Error("R04_ACCOUNT_SCOPE_REQUIRED"); }
+
+export function* legacySettingsReadPlan(accountScope: string): LegacySourceReadPlan<LegacySettingsSource> {
+  scope(accountScope);
+  return { accountScope, rows: yield* read("app_settings", ["key", "value", "updated_at"],
+    "R04_SETTINGS_SHAPE_UNSUPPORTED", "R04_SETTINGS_COVERAGE_MISMATCH", undefined, ["key"]) };
+}
 
 /** Full raw rows for all clients, including archived/deleted owners and unknown fields. */
 export function* legacyClientsReadPlan(accountScope: string, shape: "identity" | "card" | "full" = "full"): LegacySourceReadPlan<LegacyClientsSource> {

@@ -16,6 +16,7 @@ import { legacyMeasurementStagingExtension } from "../../features/measurements/d
 import { legacyNutritionStagingExtension } from "../../features/nutrition/data/legacy-import/LegacyNutritionStaging.ts";
 import { legacyCalendarStagingExtension } from "../../features/calendar/data/legacy-import/LegacyCalendarStaging.ts";
 import { legacyAccountingStagingStatements } from "../../features/accounting/data/legacy-import/LegacyAccountingStaging.ts";
+import { legacySettingsStagingExtension } from "../../features/settings/data/legacy-import/LegacySettingsStaging.ts";
 
 export interface LegacyImportCandidateInput {
   /** Independent native handles to one private staging file; never source/inspection/live DB. */
@@ -47,10 +48,11 @@ export async function stageLegacyImportCandidate(input: LegacyImportCandidateInp
     legacyMeasurementStagingExtension(source.measurements, referenceDay),
     legacyNutritionStagingExtension(source.nutrition),
     legacyCalendarStagingExtension(source.calendar, legacyAccountingStagingStatements),
+    legacySettingsStagingExtension(source.settings),
   );
   const staging = await prepareLegacyClientStaging(openStaging, context, importedAt, owners);
   const { extensionResult, ...result } = await staging.stageClients(clients, allocate, checkpoint);
   if (!extensionResult) throw new Error("R04_ID_LEDGER_EXTENSION_RESULT_MISSING");
-  const [profileAndQuestionnaire, workData, exercises, plans, executions, measurements, nutrition, calendar] = extensionResult;
-  return { ...result, owners: { profileAndQuestionnaire, workData, exercises, plans, executions, measurements, nutrition, calendar }, finalizable: false as const };
+  const [profileAndQuestionnaire, workData, exercises, plans, executions, measurements, nutrition, calendar, settings] = extensionResult;
+  return { ...result, owners: { profileAndQuestionnaire, workData, exercises, plans, executions, measurements, nutrition, calendar, settings }, finalizable: false as const };
 }

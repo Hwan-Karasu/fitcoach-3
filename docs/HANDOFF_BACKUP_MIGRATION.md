@@ -1,3 +1,22 @@
+## Продолжение — Settings / полный app_settings source
+
+2026-10-25, база8bd28a1; R04→R03/Product49–50/53–56/INT03–12.
+Private synthetic/finalizable:false; production/native/release gates OPEN.
+Все app_settings rows читаются в pinned snapshot. Settings owner пишет native
+appearance и per-row raw disposition/review/receipt, общий Node/async plan.
+App composition добавляет владельца в ту же tx; 82tables/all-row manual parity.
+light/dark через существующие aliases, карточки/metrics/starttab/nav; невалидная
+optional карточка не меняется частично. Drafts/backup/unknown prefs сохранены raw,
+ещё требуют mapping; OS/navigation state reset не воскрешает старые IDs.
+12new/584profile PASS; root/mobileTS/lint/source73/arch613 PASS.
+Everycheckpoint rollback/retry/ackloss/capture/drift/IO/binding/sourceSHA, Expo
+start/resume через SDK mocks. Native Settings проходят actual 3.x snapshot restore
+и fresh ordinary reader с блокировкой импортёра; private reviews этим не покрыты.
+Нет foundation/bundle/APK/Android; полный goal не100%.
+[Контракт, source refs, проверки и оставшийся объём](spikes/R04_SETTINGS_STAGING.md).
+NEXT builderdrafts/preferences/coverage/lineage/permanentmodels/admission/UI/
+cutover/fullbackup/Android/GC/removal. GoalACTIVE/fullscope.
+
 ## Продолжение — анкета без клиентов / source namespace
 
 2026-10-25, базаfb0442d; R04→R03/Product49–50/53–56/INT03–12.

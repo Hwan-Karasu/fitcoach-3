@@ -21,10 +21,13 @@ import { scope, importedAt, allocator, digest, inspect } from "./support/legacy-
 import { referenceDay, extension as nutrition, records as nutritionRecords, empty as nutritionEmpty, fixture as nutritionFixture } from "./support/legacy-nutrition-staging.ts";
 import { stageLegacyImportCandidate } from "../apps/mobile/src/app/composition/stageLegacyImportCandidate.ts";
 import { nativeFactory } from "./support/legacy-staging-native.ts";
+import { legacySettingsStagingExtension } from "../apps/mobile/src/features/settings/data/legacy-import/LegacySettingsStaging.ts";
 
 const calendarTables = calendarTargetTablesFor(legacyAccountingStagingStatements), extraTables = [...calendarTables, "r04_calendar_ids", "r04_calendar_receipt"];
 const extension = (s: LegacyImportSourceSnapshots, schema: readonly string[] = legacyAccountingStagingStatements) => combineLegacyStageExtensions(nutrition(s), legacyCalendarStagingExtension(s.calendar, schema));
 const records = (path: string) => [...nutritionRecords(path), ...inspect(path, (db) => extraTables.map((table) => [table, db.prepare(`SELECT * FROM ${table}`).all()]))];
+const applicationRecords = (path: string) => inspect(path, (db) => db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND substr(name,1,7)<>'sqlite_' ORDER BY name").all()
+  .map(({ name }) => [name, db.prepare(`SELECT * FROM ${name as string}`).all()]));
 function empty(path: string) { nutritionEmpty(path); inspect(path, (db) => { for (const table of extraTables) assert.equal(db.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n, 0, table); }); }
 const fixture = (run: Parameters<typeof nutritionFixture>[0], amend: Parameters<typeof nutritionFixture>[1] = () => undefined) => nutritionFixture(run, (db) => {
   seedLegacyCalendarSource(db, { existingOwners: true, existingDays: true, existingSettings: true });
@@ -129,10 +132,10 @@ test("application composition stages every owner identically to the manual chain
   assert.equal(result.sourceRows, 2); assert.equal(result.owners.executions.performedFacts, 6); assert.equal(result.owners.measurements.measurementRows, 12);
   assert.equal(result.owners.nutrition.nutritionEntryRows, 4); assert.equal(result.owners.calendar.calendarAppointmentRows, 4); assert.equal(result.finalizable, false);
   const manualPath = join(f.dir, "manual.sqlite"), manual = nativeFactory(manualPath);
-  const stage = await prepareLegacyClientStaging(manual.open, f.context, importedAt, extension(f.snapshots)); await stage.stageClients(f.snapshots.clients, allocator());
-  assert.deepEqual(records(f.stagePath), records(manualPath)); const before = records(f.stagePath);
+  const stage = await prepareLegacyClientStaging(manual.open, f.context, importedAt, combineLegacyStageExtensions(extension(f.snapshots), legacySettingsStagingExtension(f.snapshots.settings))); await stage.stageClients(f.snapshots.clients, allocator());
+  assert.deepEqual(applicationRecords(f.stagePath), applicationRecords(manualPath)); const before = applicationRecords(f.stagePath);
   await stageLegacyImportCandidate({ openStaging: f.native.open, context: f.context, source: f.snapshots, importedAt, referenceDay, allocate: () => assert.fail("application replay allocated") });
-  assert.deepEqual(records(f.stagePath), before); assert.equal(f.native.handles.size, 0); assert.equal(manual.handles.size, 0); assert.equal(digest(f.sourcePath), f.sha);
+  assert.deepEqual(applicationRecords(f.stagePath), before); assert.equal(f.native.handles.size, 0); assert.equal(manual.handles.size, 0); assert.equal(digest(f.sourcePath), f.sha);
 }));
 
 test("application composition captures clients, owner sources, context, clocks and callbacks before its first await", () => fixture(async (f) => {
@@ -146,13 +149,14 @@ test("application composition captures clients, owner sources, context, clocks a
   await pending;
   const expectedPath = join(f.dir, "expected.sqlite"), expected = nativeFactory(expectedPath);
   await stageLegacyImportCandidate({ openStaging: expected.open, context: f.context, source: f.snapshots, importedAt, referenceDay, allocate: allocator() });
-  assert.deepEqual(records(f.stagePath), records(expectedPath)); assert.equal(f.native.handles.size, 0); assert.equal(expected.handles.size, 0);
+  assert.deepEqual(applicationRecords(f.stagePath), applicationRecords(expectedPath)); assert.equal(f.native.handles.size, 0); assert.equal(expected.handles.size, 0);
 }));
 
 test("application composition rolls back early and final owner interruption and retries the complete candidate", async () => {
-  for (const phase of ["after-plan-receipt", "after-calendar-receipt"] as const) await fixture(async (f) => {
+  for (const phase of ["after-plan-receipt", "after-calendar-receipt", "after-settings-receipt"] as const) await fixture(async (f) => {
     const run = (checkpoint?: Parameters<typeof stageLegacyImportCandidate>[1]) => stageLegacyImportCandidate({ openStaging: f.native.open, context: f.context, source: f.snapshots, importedAt, referenceDay, allocate: allocator() }, checkpoint);
     await assert.rejects(run(async (at) => { if (at === phase) { await Promise.resolve(); throw new Error("PRIVATE application interruption"); } }), /WRITE_FAILED/u); empty(f.stagePath);
+    inspect(f.stagePath, (db) => { for (const table of ["settings", "r04_settings_source", "r04_settings_receipt"]) assert.equal(db.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n, 0); });
     const result = await run(); assert.equal(result.owners.calendar.calendarAppointmentRows, 4); assert.equal(result.finalizable, false); assert.equal(f.native.handles.size, 0); assert.equal(digest(f.sourcePath), f.sha);
   });
 });
