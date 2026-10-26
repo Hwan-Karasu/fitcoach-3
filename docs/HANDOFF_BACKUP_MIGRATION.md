@@ -1,3 +1,26 @@
+## Продолжение — native WorkData candidate без зависимости от импортёра
+
+2026-10-26, базаd3ea65a; R04→R03/Product20.2/22.2–22.3/48.5.7/49–50/53–56/INT03–12.
+Production/admission/migration/overlay/signing/release gates OPEN; только synthetic.
+Обычный ClientWorkDataPort/Sqlite repository: Notes create/edit/pin/search/CAS,
+shared Tags rename/lifecycle/assign, archive read-only, pending safety reviews.
+ID/context/createdAt сохраняются; новое создание клиента с Notes/Tags — одна tx.
+Per-client immutable native evidence сохраняет raw card/source SHA/unknown note
+time/source labels/initial IDs. Deletion participant удаляет только данные клиента,
+workspace tags остаются. Corrupt JSON row skip + existing content-free ReadIssues.
+Native seed выводится из private stage с повторным owner parity, writes/allocator
+запрещены. Initial installer capture/parity/retry без overwrite изменённых записей.
+Новый schema candidate ТОЛЬКО scripts/r04, не runtime registry/production DDL.
+Production identity закономерно rejected; старый allowner84table stage не менялся.
+50targeted incl13new PASS; final13 PASS; root/mobileTS/lint/source73/arch624.
+EXPLAIN scoped indexes, actual host Worker kill/rollback/restart, snapshot engine
+с candidate registry/restore + fresh ordinary reader/edit with importer-ban probe.
+Это не текущий production backup/schema admission/Android/fullremoval proof.
+Новый owner не подключён в createServices/workflows/UI/restore holders/deletion.
+Safety resolution/ACTIVE model, permanent Exercise/Execution/provenance/reviews,
+remaining semantics/admission/cutover/fullbackup/Android/GC/removal OPEN. GoalACTIVE.
+[Контракт, файлы, проверки и границы](spikes/R04_NATIVE_WORK_DATA.md).
+
 ## Продолжение — настройки отдыха из 2.0
 
 2026-10-25, база3c3be01; R04→R03/Product48.5.7/49–50/53–56/INT03–12.

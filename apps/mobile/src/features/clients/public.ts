@@ -15,5 +15,6 @@ export type { ArchiveSortMode, ClientArchivePort, ClientDeletionManifest,
 export type { ClientHomeSummary, HomePackSummary, HomePackTone } from "./domain/ClientHomeSummary.ts";
 export { TRAINER_TAG_NAME_POLICY, trainerTagName } from "./domain/ClientWorkDataModel.ts";
 export type { TrainerNote, TrainerTag, ClientTagAssignment, SafetyImportReview } from "./domain/ClientWorkDataModel.ts";
+export type { ClientWorkDataPort, ClientWorkDataCreationParticipant, StoredTrainerNote, StoredTrainerTag, ClientWorkImportEvidence } from "./domain/ClientWorkDataPort.ts";
 export type { RosterClientOverview, RosterMetricId, RosterMetricValue, RosterOverview,
   RosterOverviewPort } from "./domain/ClientRosterOverview.ts";

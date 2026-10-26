@@ -32,8 +32,6 @@ coversnativeNutrition+Measurementrows/IDs, NOTprivateprovenance/review/archives.
 
 522369a privatearchives: stableIDs/exactdecimals/dateprecision/raw/overlap/NutritionV3.
 
-3c4d019 retainedNutrition: handoff; notproduction.
-
 Calendar6d84461/258ef27: R04_CALENDAR_STAGING.md. V1 sharedtx/IDs/parity; schedules
 notoutcomes/exactclientIDs/4templates/legacybypass1/UNTRACKED/no paidfacts.
 669historical/normalbackup nativefieldsONLY, notprivateprovenance/reviews.
@@ -68,11 +66,14 @@ Viewsc5efd03/R04_PROGRAM_VIEW_SELECTIONS.md: trainer/page selection;66targeted/
 
 Scope3c3be01/R04_SCOPE_LINEAGES.md: native edit groups;142targeted incl12new PASS.
 
-CURRENT R04_REST_SETTINGS.md: restSeconds0off/1..1859/default120; ambiguity rejects.
-All Plans/archive/templates/drafts; olddraft120/nativeNew90/baseoff preserved.
-Receipt+Node/mobile mode; oldcandidate before-WAL reject.85targeted incl7new PASS;
-root/mobileTS/lint/source73/arch619. SDKmock hostkill/replay + native3.x backup/
-ordinary reader/edit/draftpublish with importer-ban PASS. Not full UI/Android.
-NEXT semanticCoverage/legacyActor/unsupportedRecovery/prefs/permanentExecution/
+Restd3ea65a/R04_REST_SETTINGS.md: restSeconds/off/default120;85targeted incl7new PASS.
+
+CURRENT R04_NATIVE_WORK_DATA.md: ordinary Notes/Tags/reviews/evidence owner;
+stable IDs/context/CAS + card creation/deletion participants. Candidate schema
+ONLY scripts/r04, not production registry/app wiring;84table oldstage unchanged.
+50targeted incl13new/final13/TS/lint/source73/arch624 PASS. HostWorker kill/retry,
+candidate-registry snapshot/restore + fresh reader/edit with importer-ban PASS.
+Not current production backup/admission/Android/fullremoval. GoalACTIVE.
+NEXT WorkDataAdmission/runtime/Exercise/semanticCoverage/legacyActor/unsupportedRecovery/prefs/permanentExecution/
 provenance/review/schemaadmission/UI/cutover/fullbackup/Android/GC/removal.
 JSONguard notfullvariantproof. BackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.
