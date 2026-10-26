@@ -1,3 +1,15 @@
+## Приоритет после замечания владельца о сроках — 2026-10-26
+
+Предыдущий этап PROGRESS4fe0abe. Полная цель ACTIVE, не готова и не сужается.
+Проверен фактический путь: private staging есть, обычный app restore только3.x;
+первый существенный разрыв — native imported catalog/полный Execution. Дальше
+закрывать этот разрыв, собрать все native owners в одну DB, пройти целый backup/
+restore без импортёра, затем admission/app workflow/holders/cutover/Android.
+Отчёт по работающим этапам, не по количеству локальных tests. Не давать очередной
+точный срок без измеренного остатка. Полные source semantics/variants/reviews,
+постоянные evidence и release gates остаются обязательными, не отложены за цель.
+[Критический путь и фактические доказательства](LEGACY_RESTORE_DELIVERY.md).
+
 ## Продолжение — native WorkData candidate без зависимости от импортёра
 
 2026-10-26, базаd3ea65a; R04→R03/Product20.2/22.2–22.3/48.5.7/49–50/53–56/INT03–12.

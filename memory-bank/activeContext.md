@@ -61,19 +61,18 @@ Builders6fcde02/R04_BUILDER_DRAFTS.md: native recovery;13final/596earlierprofile
 Coveragef59c228/R04_SOURCE_COVERAGE.md: full tagged ordinary SQL rows;84tables.
 77targeted/8final/33reader PASS. No semantic/fullbackup claim.
 
-Viewsc5efd03/R04_PROGRAM_VIEW_SELECTIONS.md: trainer/page selection;66targeted/
-10new/ordinary3.x snapshot+reader PASS.
-
-Scope3c3be01/R04_SCOPE_LINEAGES.md: native edit groups;142targeted incl12new PASS.
+Views/Scope: phase docs/handoff.
 
 Restd3ea65a/R04_REST_SETTINGS.md: restSeconds/off/default120;85targeted incl7new PASS.
 
-CURRENT R04_NATIVE_WORK_DATA.md: ordinary Notes/Tags/reviews/evidence owner;
+Current4fe0abe/R04_NATIVE_WORK_DATA.md: ordinary Notes/Tags/reviews/evidence owner;
 stable IDs/context/CAS + card creation/deletion participants. Candidate schema
 ONLY scripts/r04, not production registry/app wiring;84table oldstage unchanged.
 50targeted incl13new/final13/TS/lint/source73/arch624 PASS. HostWorker kill/retry,
 candidate-registry snapshot/restore + fresh reader/edit with importer-ban PASS.
 Not current production backup/admission/Android/fullremoval. GoalACTIVE.
+User2026-10-26: taking3-4days; deliver end-to-end milestones.
+PRIORITY LEGACY_RESTORE_DELIVERY.md: native catalog/Execution -> unifiedDB -> fullbackup -> app/Android.
 NEXT WorkDataAdmission/runtime/Exercise/semanticCoverage/legacyActor/unsupportedRecovery/prefs/permanentExecution/
 provenance/review/schemaadmission/UI/cutover/fullbackup/Android/GC/removal.
 JSONguard notfullvariantproof. BackupedgesOPEN. GoalACTIVE/fullscope/NOT100%.
