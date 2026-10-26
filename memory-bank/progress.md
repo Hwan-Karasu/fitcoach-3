@@ -1,4 +1,4 @@
-# Progress — 2026-10-25
+# Progress — 2026-10-26
 
 Workdir E:\ProjectFitCoach\FitCoach_3_R04; branch work/r04-legacy-restore; base258ef27.
 
@@ -65,12 +65,11 @@ Views/Scope: phase docs/handoff.
 
 Restd3ea65a/R04_REST_SETTINGS.md: restSeconds/off/default120;85targeted incl7new PASS.
 
-Current4fe0abe/R04_NATIVE_WORK_DATA.md: ordinary Notes/Tags/reviews/evidence owner;
-stable IDs/context/CAS + card creation/deletion participants. Candidate schema
-ONLY scripts/r04, not production registry/app wiring;84table oldstage unchanged.
-50targeted incl13new/final13/TS/lint/source73/arch624 PASS. HostWorker kill/retry,
-candidate-registry snapshot/restore + fresh reader/edit with importer-ban PASS.
-Not current production backup/admission/Android/fullremoval. GoalACTIVE.
+WorkData4fe0abe: R04_NATIVE_WORK_DATA.md; ordinary candidate owner, not prod/app.
+AUDIT2026-10-26:11/26 DONE,9PARTIAL,6OPEN;42.3% criteria,not effort.
+LEGACY_RESTORE_AUDIT_2026-10-26.md;104targeted verified2runs,14crash EPERM rerunapproved.
+WIP catalog7dirtyfiles/uncommitted/NOtests;mobileTS PASS,arch1 boundary fail:
+readNativeLegacyExerciseSeed -> Clients domain. Continue native Exercise/Execution.
 User2026-10-26: taking3-4days; deliver end-to-end milestones.
 PRIORITY LEGACY_RESTORE_DELIVERY.md: native catalog/Execution -> unifiedDB -> fullbackup -> app/Android.
 NEXT WorkDataAdmission/runtime/Exercise/semanticCoverage/legacyActor/unsupportedRecovery/prefs/permanentExecution/
