@@ -7,6 +7,19 @@ import { TRAINER_TAG_NAME_POLICY, type SafetyImportReview, type TrainerNote, typ
 import { checkWorkDataRow, WORK_DATA_TABLES, workDataTime, type WorkDataRows, type WorkDataRow } from "../ClientWorkDataRows.ts";
 
 const fail = (): never => { throw Error("R04_ID_LEDGER_WORK_DATA_NATIVE_PARITY_MISMATCH"); };
+/** Owner boundary for composition: reuse the verified WorkData projection;
+ * consumers do not reach into the Clients identity domain or parse it themselves. */
+export async function readVerifiedLegacyWorkDataClients(tx: SqliteStatementPort, input: CandidateIdentityContext) {
+  const context = { ...input };
+  const binding = JSON.parse((await tx.first<{ context_json: string }>("SELECT context_json FROM r04_candidate_identity WHERE id=1"))!.context_json) as unknown[];
+  if (typeof binding[2] !== "string") return fail();
+  await readLegacyNativeWorkData(tx, context, binding[2]);
+  const source = JSON.parse((await tx.first<{ source_json: string }>("SELECT source_json FROM r04_work_receipt WHERE id=1"))!.source_json) as { raw: Record<string, unknown> }[];
+  const identities = projectLegacyClientIdentities({ accountScope: context.accountScope, rows: source.map((c) => c.raw) });
+  const maps = await tx.all<{ source_key: string; target_id: string }>("SELECT source_key,target_id FROM r04_candidate_ids WHERE kind='CLIENT'");
+  return { clients: identities.map((identity, i) => ({ identity, raw: source[i]!.raw })),
+    ids: { workspaces: new Map<string, string>(), clients: new Map(maps.map((r) => [r.source_key, r.target_id])) } };
+}
 /** Bridges already-verified private rows to a self-contained 3.x owner seed.
  * Never called by an ordinary repository; no source file is opened here. */
 export async function readLegacyNativeWorkData(tx: SqliteStatementPort, input: CandidateIdentityContext, importedAt: string): Promise<WorkDataRows> {

@@ -3,6 +3,8 @@ import { DevAccountingRepository, devAccountingCalendarHook, devAccountingClient
 import { DevCalendarRepository, devCalendarClientDeletionParticipant } from "../../features/calendar/data/DevCalendarRepository.ts";
 import { DevClientRepository } from "../../features/clients/data/DevClientRepository.ts";
 import { DevExerciseCatalogRepository } from "../../features/exercises/data/DevExerciseCatalogRepository.ts";
+import { importedExerciseDeletionParticipant } from "../../features/exercises/data/ImportedExerciseStore.ts";
+import { hasTrainingExerciseFacts } from "../../features/training/execution/data/TrainingExerciseUsage.ts";
 import type { SystemCatalog } from "../../features/exercises/public.ts";
 import { DevMeasurementRepository, devMeasurementClientDeletionParticipant } from "../../features/measurements/data/DevMeasurementRepository.ts";
 import { DevNotificationRepository, devNotificationClientDeletionParticipant } from "../../features/notifications/data/DevNotificationRepository.ts";
@@ -21,7 +23,7 @@ import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParti
  * single inventory so adding a repository cannot silently leave a handle open at restore. */
 export function createLocalRepositories(database: SharedSqliteDatabase, workspaceId: string, system: SystemCatalog) {
   const clients = new DevClientRepository(database, workspaceId,
-    [devAccountingClientDeletionParticipant, devCalendarClientDeletionParticipant, devNotificationClientDeletionParticipant,
+    [importedExerciseDeletionParticipant, devAccountingClientDeletionParticipant, devCalendarClientDeletionParticipant, devNotificationClientDeletionParticipant,
       devMeasurementClientDeletionParticipant, devNutritionCalcClientDeletionParticipant, devNutritionClientDeletionParticipant,
       devNutritionTargetsClientDeletionParticipant, devQuestionnaireClientDeletionParticipant,
       devTrainingPlansClientDeletionParticipant, devTrainingExecutionClientDeletionParticipant]);
@@ -36,7 +38,7 @@ export function createLocalRepositories(database: SharedSqliteDatabase, workspac
   const notifications = new DevNotificationRepository(database, workspaceId);
   const trainingPlans = new DevTrainingPlansRepository(database, workspaceId);
   const trainingExecution = new DevTrainingExecutionRepository(database, workspaceId);
-  const exercises = new DevExerciseCatalogRepository(database, workspaceId, system);
+  const exercises = new DevExerciseCatalogRepository(database, workspaceId, system, (tx, id) => hasTrainingExerciseFacts(tx, workspaceId, id));
   const owners = [clients, calendar, accounting, measurements, nutrition.foods, nutrition.recipes, nutrition.diary,
     nutrition.targets, nutrition.calc, questionnaire, settings, notifications, trainingPlans, trainingExecution, exercises] as const;
   calendar.subscribeCommittedChanges(() => accounting.notifyExternalChange());

@@ -8,6 +8,8 @@ import { type BodyPart, type ExerciseDefinition, type SystemCatalog,
   type SystemCatalogMeta, type TrackingProfileId } from "../domain/ExerciseModel.ts";
 import { EMPTY_OVERLAY, EXERCISE_NAME_MAX, normalizeAliases, validateCustom, type CatalogEntry,
   type CustomExerciseInput, type ExerciseOverlay } from "../domain/ExerciseRules.ts";
+import { hasImportedExerciseStore, readImportedExercise, type ImportedExerciseRow } from "./ImportedExerciseStore.ts";
+import { readStoredJson } from "../../../shared/db/StoredJson.ts";
 
 import { exercisesBaseline as devExerciseCatalog } from "./ExercisesBaseline.generated.ts";
 export { devExerciseCatalog };
@@ -25,7 +27,8 @@ function customDefinition(row: CustomRow): ExerciseDefinition {
 
 function overlayOf(row: OverlayRow | undefined): ExerciseOverlay {
   if (row === undefined) return EMPTY_OVERLAY;
-  const aliases = JSON.parse(row.aliasesJson) as unknown;
+  const aliases = readStoredJson(row.aliasesJson, (v): v is string[] => Array.isArray(v) && v.every((item: unknown) => typeof item === "string"), "exercises.overlay");
+  if (aliases === null) return EMPTY_OVERLAY;
   return { favorite: row.favorite === 1, hidden: row.hidden === 1, displayName: row.displayName,
     aliases: Array.isArray(aliases) ? aliases.filter((item): item is string => typeof item === "string") : [] };
 }
@@ -41,13 +44,16 @@ export class DevExerciseCatalogRepository implements ExerciseCatalogPort {
   private readonly systemById: ReadonlyMap<string, ExerciseDefinition>;
   private readonly workspaceId: string;
   private readonly system: SystemCatalog;
+  private imported = false;
+  private readonly hasFacts?: (tx: SqliteStatementPort, exerciseId: string) => Promise<boolean>;
 
   constructor(database: SharedSqliteDatabase | (() => Promise<SqliteConnectionPort>), workspaceId: string,
-    system: SystemCatalog) {
+    system: SystemCatalog, hasFacts?: (tx: SqliteStatementPort, exerciseId: string) => Promise<boolean>) {
     this.database = database instanceof SharedSqliteDatabase ? database : new SharedSqliteDatabase(database);
     this.workspaceId = workspaceId;
     this.system = system;
     this.systemById = new Map(system.exercises.map((exercise) => [exercise.id, exercise]));
+    this.hasFacts = hasFacts;
   }
 
   initialize(): Promise<void> {
@@ -63,6 +69,10 @@ export class DevExerciseCatalogRepository implements ExerciseCatalogPort {
     if (!this.workspaceId.trim()) throw new Error("EXERCISE_WORKSPACE_REQUIRED");
     const { connection, writer } = await this.database.acquire();
     try {
+      this.imported = await hasImportedExerciseStore(connection);
+      if (this.imported) for (const row of await connection.all<{ id: string }>("SELECT id FROM imported_exercises WHERE workspace_id=?", [this.workspaceId])) {
+        if (this.systemById.has(row.id) || await connection.first("SELECT 1 FROM custom_exercises WHERE id=?", [row.id])) throw Error("EXERCISE_IMPORT_ID_COLLISION");
+      }
       await runMigrations(writer, devExerciseCatalog, DEV_EXERCISES_LEDGER);
       this.connection = connection;
       this.writer = writer;
@@ -99,7 +109,8 @@ export class DevExerciseCatalogRepository implements ExerciseCatalogPort {
         aliases_json AS aliasesJson FROM exercise_overlay WHERE workspace_id = ?`, [this.workspaceId]),
     ]);
     const byId = new Map(overlays.map((row) => [row.exerciseId, row]));
-    return [...this.system.exercises, ...custom.map(customDefinition)]
+    const imported = await this.importedDefinitions(connection, false);
+    return [...this.system.exercises, ...custom.map(customDefinition), ...imported]
       .map((definition) => ({ definition, overlay: overlayOf(byId.get(definition.id)) }));
   }
 
@@ -112,7 +123,14 @@ export class DevExerciseCatalogRepository implements ExerciseCatalogPort {
         aliases_json AS aliasesJson FROM exercise_overlay WHERE workspace_id = ?`, [this.workspaceId]),
     ]);
     const byId = new Map(overlays.map((row) => [row.exerciseId, row]));
-    return custom.map((row) => ({ definition: customDefinition(row), overlay: overlayOf(byId.get(row.id)) }));
+    return [...custom.map(customDefinition), ...await this.importedDefinitions(connection, true)]
+      .map((definition) => ({ definition, overlay: overlayOf(byId.get(definition.id)) }));
+  }
+
+  private async importedDefinitions(tx: SqliteStatementPort, archived: boolean): Promise<readonly ExerciseDefinition[]> {
+    if (!this.imported) return [];
+    return (await tx.all<ImportedExerciseRow>(`SELECT * FROM imported_exercises WHERE workspace_id=? AND archived_at IS ${archived ? "NOT " : ""}NULL ORDER BY id`, [this.workspaceId]))
+      .map(readImportedExercise).filter((row): row is ExerciseDefinition => row !== null);
   }
 
   private async definition(tx: SqliteStatementPort, id: string): Promise<ExerciseDefinition | null> {
@@ -120,7 +138,9 @@ export class DevExerciseCatalogRepository implements ExerciseCatalogPort {
     if (system !== undefined) return system;
     const row = await tx.first<CustomRow>(`SELECT ${customColumns} FROM custom_exercises
       WHERE workspace_id = ? AND id = ? AND archived_at IS NULL`, [this.workspaceId, id]);
-    return row === null ? null : customDefinition(row);
+    if (row !== null) return customDefinition(row);
+    const imported = this.imported ? await tx.first<ImportedExerciseRow>("SELECT * FROM imported_exercises WHERE workspace_id=? AND id=? AND archived_at IS NULL", [this.workspaceId, id]) : null;
+    return imported === null ? null : readImportedExercise(imported);
   }
 
   async get(id: string): Promise<CatalogEntry | null> {
@@ -136,7 +156,8 @@ export class DevExerciseCatalogRepository implements ExerciseCatalogPort {
   async revisionOf(id: string): Promise<number | null> {
     const row = await this.ready().connection.first<{ revision: number }>(`SELECT revision FROM custom_exercises
       WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]);
-    return row?.revision ?? null;
+    if (row) return row.revision;
+    return this.imported ? (await this.ready().connection.first<{ revision: number }>("SELECT revision FROM imported_exercises WHERE workspace_id=? AND id=? AND origin='CUSTOM'", [this.workspaceId, id]))?.revision ?? null : null;
   }
 
   async createCustom(input: CustomExerciseInput, now: Date = new Date()): Promise<ExerciseDefinition> {
@@ -145,6 +166,7 @@ export class DevExerciseCatalogRepository implements ExerciseCatalogPort {
       const uuid = (await tx.first<{ id: string }>(UUID_V4_SQL))?.id;
       if (!uuid) throw new Error("EXERCISE_ID_UNAVAILABLE");
       const id = `usr:${uuid}`;
+      if (this.imported && await tx.first("SELECT 1 FROM imported_exercises WHERE id=?", [id])) throw Error("EXERCISE_IMPORT_ID_COLLISION");
       const stamp = now.toISOString();
       await tx.run(`INSERT INTO custom_exercises (id, workspace_id, name, body_part, equipment, tracking_profile,
           revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
@@ -162,11 +184,19 @@ export class DevExerciseCatalogRepository implements ExerciseCatalogPort {
     if (this.systemById.has(id)) throw new Error("EXERCISE_SYSTEM_READ_ONLY");
     const valid = validateCustom(input);
     const updated = await this.ready().writer.write(async (tx) => {
-      // Профиль учёта менять можно, пока нет тренировочных фактов (§39.3); фактов в V1-dev пока нет.
-      const result = await tx.run(`UPDATE custom_exercises SET name = ?, body_part = ?, equipment = ?,
+      const imported = this.imported ? await tx.first<ImportedExerciseRow>("SELECT * FROM imported_exercises WHERE workspace_id=? AND id=?", [this.workspaceId, id]) : null;
+      if (imported?.origin === "SYSTEM") throw Error("EXERCISE_SYSTEM_READ_ONLY");
+      const current = await this.definition(tx, id);
+      if (current && current.trackingProfile !== valid.trackingProfile) {
+        if (imported && !this.hasFacts) throw Error("EXERCISE_USAGE_UNAVAILABLE");
+        if (imported && await tx.first("SELECT 1 FROM imported_exercise_fact_use WHERE workspace_id=? AND exercise_id=? LIMIT 1", [this.workspaceId, id])
+          || this.hasFacts && await this.hasFacts(tx, id)) throw Error("EXERCISE_PROFILE_IN_USE");
+      }
+      const result = await tx.run(`UPDATE ${imported ? "imported_exercises" : "custom_exercises"} SET name = ?, body_part = ?, equipment = ?,
           tracking_profile = ?, revision = revision + 1, updated_at = ?
+          ${imported ? ", equipment_unspecified = CASE WHEN equipment IS ? THEN equipment_unspecified ELSE 0 END" : ""}
         WHERE workspace_id = ? AND id = ? AND revision = ? AND archived_at IS NULL`,
-      [valid.name, valid.bodyPart, valid.equipment, valid.trackingProfile, now.toISOString(), this.workspaceId, id,
+      [valid.name, valid.bodyPart, valid.equipment, valid.trackingProfile, now.toISOString(), ...(imported ? [valid.equipment] : []), this.workspaceId, id,
         expectedRevision]);
       if (result.changes !== 1) {
         throw new Error((await this.definition(tx, id)) === null ? "EXERCISE_NOT_FOUND" : "EXERCISE_STALE");
@@ -182,7 +212,9 @@ export class DevExerciseCatalogRepository implements ExerciseCatalogPort {
   async archiveCustom(id: string, now: Date = new Date()): Promise<void> {
     if (this.systemById.has(id)) throw new Error("EXERCISE_SYSTEM_READ_ONLY");
     await this.ready().writer.write(async (tx) => {
-      const result = await tx.run(`UPDATE custom_exercises SET archived_at = ?, revision = revision + 1, updated_at = ?
+      const imported = this.imported ? await tx.first<{ origin: string }>("SELECT origin FROM imported_exercises WHERE workspace_id=? AND id=?", [this.workspaceId, id]) : null;
+      if (imported?.origin === "SYSTEM") throw Error("EXERCISE_SYSTEM_READ_ONLY");
+      const result = await tx.run(`UPDATE ${imported ? "imported_exercises" : "custom_exercises"} SET archived_at = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND archived_at IS NULL`, [now.toISOString(), now.toISOString(), this.workspaceId, id]);
       if (result.changes !== 1) throw new Error("EXERCISE_NOT_FOUND");
     });
