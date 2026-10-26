@@ -9,6 +9,7 @@ export { weekTypeTone } from "./presentation/weekTypeTone.ts";
 export { cycleTypeLabels, weekDates } from "./domain/MesocycleBuilder.ts";
 export { ProgramScreen } from "./presentation/ProgramScreen.tsx";
 export { SimpleProgramBuilderScreen } from "./presentation/SimpleProgramBuilderScreen.tsx";
+export { WorkoutsReview } from "./presentation/WorkoutsEditor.tsx";
 export { WeekEditorScreen } from "./presentation/WeekEditorScreen.tsx";
 export { TemplateLibraryScreen } from "./presentation/TemplateLibraryScreen.tsx";
 export { TemplateEditorScreen } from "./presentation/TemplateEditorScreen.tsx";
@@ -34,3 +35,4 @@ export type { SimplePlanSavePlansParticipant, SimplePlanSavePort, SimplePlanSave
 export type { MesocycleDeletePort, MesocycleDeleteRequest, PlanDeletePlansParticipant, PlanOnlyDeletePort, PlanOrigins, ProgramDeletePort,
   ProgramDeleteRequest } from "./domain/PlanDeletion.ts";
 export type { WeekCopyRequest, WeekCopyMode, WeekCopyPort, WeekCopyPreview, WeekPlansParticipant } from "./domain/WeekCopy.ts";
+export type { BuilderExcelDraft } from "./domain/BuilderExcelDraft.ts";

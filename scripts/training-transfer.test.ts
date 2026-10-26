@@ -1,0 +1,387 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { createRequire } from "node:module";
+import { DatabaseSync } from "node:sqlite";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { createSqliteBackup, prepareBackupForRestore } from "./r06/SqliteBackup.ts";
+import { readTrainingWorkbook, readWorkbook, writeTrainingWorkbook } from "../apps/mobile/src/features/import/data/TrainingWorkbook.ts";
+import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
+import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
+import { prepareProductionDatabase } from "../apps/mobile/src/app/composition/productionDatabase.ts";
+import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
+import { DevTrainingPlansRepository } from "../apps/mobile/src/features/training/plans/data/DevTrainingPlansRepository.ts";
+import { DevTrainingExecutionRepository } from "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionRepository.ts";
+import { createTrainingTransfer, remapTrainingTransfer } from "../apps/mobile/src/app/composition/createTrainingTransfer.ts";
+import { DevExerciseCatalogRepository } from "../apps/mobile/src/features/exercises/data/DevExerciseCatalogRepository.ts";
+import type { SystemCatalog } from "../apps/mobile/src/features/exercises/domain/ExerciseModel.ts";
+import { trainingTransferFixture } from "./training-transfer-fixture.ts";
+import { previousWeekQueries } from "../apps/mobile/src/features/training/execution/domain/PreviousWeekQueries.ts";
+import { importTrainingExecutions } from "../apps/mobile/src/features/training/execution/data/TrainingExecutionTransfer.ts";
+import { flattenLegacyMatrix } from "../apps/mobile/src/features/import/domain/LegacyMatrix.ts";
+import { detectLegacyMapping, normalizeLegacyTable } from "../apps/mobile/src/features/import/domain/LegacyExcel.ts";
+import { correctTransferIssue } from "../apps/mobile/src/features/import/domain/IssueCorrections.ts";
+import { TRANSFER_OWNER } from "../apps/mobile/src/features/import/data/TransferReceiptStore.ts";
+import { ExerciseImportMatchStore } from "../apps/mobile/src/features/import/data/ExerciseImportMatchStore.ts";
+import { runMigrationsInTransaction } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
+import { startWorkbookReview, setWorkbookNameMatch, workbookMatchesToRemember } from "../apps/mobile/src/features/import/domain/WorkbookReviewSession.ts";
+import { prepareWholeWorkbook, compileWholeWorkbook } from "../apps/mobile/src/features/import/domain/WholeWorkbookImport.ts";
+import { SCHEMA_OWNERS } from "../apps/mobile/src/app/composition/schema.ts";
+import { devTrainingExecutionCatalog, DEV_TRAINING_EXECUTION_LEDGER } from "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionCatalog.ts";
+
+test("I05 whole workbook writes one programme with all cycles, plans and results atomically and repeats without duplicates", async () => {
+  const f = await fixture();
+  try {
+    const base = trainingTransferFixture(); const cycle = base.programs[0]!.mesocycles[0]!;
+    const value = { ...base, programs: [{ ...base.programs[0]!, mesocycles: [cycle, { ...cycle, id: "second", title: "Второй цикл",
+      weeks: cycle.weeks.map((w) => ({ ...w, workouts: w.workouts.map((item) => ({ ...item, id: `second:${item.id}` })) })) }] }],
+      sessions: [...base.sessions, ...base.sessions.map((s) => ({ ...s, id: `second:${s.id}`, plannedWorkoutId: `second:${s.plannedWorkoutId}` }))] };
+    let session = prepareWholeWorkbook(startWorkbookReview({ kind: "TRANSFER", value }, false), []);
+    session = setWorkbookNameMatch(session, base.exercises[0]!.name, f.mapping.press!);
+    const whole = compileWholeWorkbook(session);
+    const matches = workbookMatchesToRemember(session, true);
+    f.native.exec("CREATE TRIGGER fail_second_cycle BEFORE INSERT ON training_mesocycles WHEN NEW.title = 'Второй цикл' BEGIN SELECT RAISE(ABORT, 'test whole book rollback'); END");
+    await assert.rejects(f.transfer.importClient(f.client.id, whole.value, whole.mapping, { rememberMatches: matches }), /rollback/);
+    for (const table of ["training_programs", "training_mesocycles", "training_sessions", "training_performed_sets", "training_import_exercise_matches"]) {
+      assert.equal(f.native.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n, 0, table);
+    }
+    f.native.exec("DROP TRIGGER fail_second_cycle");
+    await f.transfer.importClient(f.client.id, whole.value, whole.mapping, { rememberMatches: matches });
+    await f.transfer.importClient(f.client.id, whole.value, whole.mapping, { rememberMatches: matches });
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_programs").get()!.n, 1);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_mesocycles").get()!.n, 2);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_sessions").get()!.n, 6);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 4);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_planned_sets").get()!.n, 12);
+    assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
+    const ids = (await f.plans.getLibrary(f.client.id)).active.map((p) => p.id);
+    const exported = await f.transfer.exportClient(f.client.id, ids);
+    assert.deepEqual(exported.programs[0]!.mesocycles.map((c) => c.title), [cycle.title, "Второй цикл"]);
+    assert.deepEqual(exported.sessions.map((s) => String(s.actualDate)).sort(), whole.value.sessions.map((s) => String(s.actualDate)).sort());
+    assert.equal(exported.sessions.flatMap((s) => s.notes).length, 4);
+    const factualValues = (v: ReturnType<typeof trainingTransferFixture>) => v.sessions.flatMap((s) => s.facts.map((f) => JSON.stringify([s.weekIndex, f.values]))).sort();
+    assert.deepEqual(factualValues(exported), factualValues(whole.value));
+    const plannedValues = (v: ReturnType<typeof trainingTransferFixture>) => v.programs.flatMap((p) => p.mesocycles.flatMap((c) => c.weeks.flatMap((w) => w.workouts.flatMap((item) => item.exercises.flatMap((e) => e.sets.map((s) => [s.reps, s.repsMax, s.loadGrams, s.durationSec, s.distanceM]))))));
+    assert.deepEqual(plannedValues(exported), plannedValues(whole.value));
+    // Previously saved partial imports belong to a different import namespace and remain independent.
+    await f.transfer.importClient(f.client.id, base, f.mapping);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_programs").get()!.n, 2);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 6);
+    await f.transfer.importClient(f.client.id, whole.value, whole.mapping, { rememberMatches: matches });
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 6);
+  } finally { await f.close(); }
+});
+
+test("I06 every imported workout is completed, including empty undated slots; rename preserves plans and facts", async () => {
+  const f = await fixture();
+  try {
+    const base = trainingTransferFixture();
+    const input = { ...base, sessions: base.sessions.map((s) => ({ ...s, actualDate: null })) };
+    const session = prepareWholeWorkbook(startWorkbookReview({ kind: "TRANSFER", value: input }, false), [{ id: f.mapping.press!, name: base.exercises[0]!.name, available: true }]);
+    const whole = compileWholeWorkbook(session);
+    assert.equal(whole.value.sessions.length, 3);
+    assert.ok(whole.value.sessions.every((s) => s.outcome === "COMPLETED" && s.actualDate === null));
+    await f.transfer.importClient(f.client.id, whole.value, whole.mapping);
+    await f.transfer.importClient(f.client.id, whole.value, whole.mapping);
+    const program = (await f.plans.getLibrary(f.client.id)).active[0]!;
+    const statuses = await f.execution.getProgramStatuses(f.client.id, program.id);
+    assert.equal(statuses.length, 3); assert.ok(statuses.every((s) => s.status === "COMPLETED"));
+    assert.deepEqual(await f.execution.listActiveWorkouts(), []);
+    const mapped = remapTrainingTransfer(whole.value, f.client.id, whole.mapping);
+    const weeks = mapped.programs[0]!.mesocycles[0]!.weeks;
+    const previousWorkout = weeks[0]!.workouts[0]!; const currentWorkout = weeks[1]!.workouts[0]!;
+    const previous = await f.execution.getPrevious({ clientId: f.client.id, programId: program.id, weekIndex: 2, plannedWorkoutId: currentWorkout.id }, previousWeekQueries(currentWorkout, previousWorkout));
+    assert.equal(previous.get(currentWorkout.exercises[0]!.sets[0]!.id)?.values.reps, 8);
+    assert.equal(previous.get(currentWorkout.exercises[0]!.sets[0]!.id)?.date, null);
+    const rows = () => ["training_mesocycles", "training_workouts", "training_planned_sets", "training_sessions", "training_performed_sets"].map((table) => f.native.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
+    const before = rows();
+    await f.plans.renameProgram(program.id, program.revision, "Новое имя программы");
+    assert.deepEqual(rows(), before);
+    assert.equal((await f.plans.getLibrary(f.client.id)).active[0]!.title, "Новое имя программы");
+    const exported = await f.transfer.exportClient(f.client.id, [program.id]);
+    assert.equal(exported.sessions.length, 3);
+    assert.equal(exported.sessions.flatMap((s) => s.facts).length, 2);
+    assert.ok(exported.sessions.every((s) => s.outcome === "COMPLETED" && s.actualDate === null && s.startedAt === null && s.finishedAt === null));
+    assert.deepEqual(readTrainingWorkbook(readWorkbook(writeTrainingWorkbook(exported))).sessions, exported.sessions);
+  } finally { await f.close(); }
+});
+
+test("I06 upgrading populated execution v2 preserves every row and guard and rolls back on failure", async () => {
+  const f = await fixture(); const native = new DatabaseSync(":memory:"); const port = nodeSqlitePort(native);
+  try {
+    const value = trainingTransferFixture();
+    await f.transfer.importClient(f.client.id, { ...value, sessions: value.sessions.map((s) => ({ ...s, facts: s.facts.map((fact) => ({ ...fact, setType: "DROP" as const, drops: [fact.values], sides: { left: { values: fact.values, confirmed: true }, right: { values: fact.values, confirmed: false } } })) })) }, f.mapping);
+    await port.exclusive(async (tx) => {
+      for (const owner of SCHEMA_OWNERS) await runMigrationsInTransaction(tx, owner.owner === "training_execution" ? owner.chain.slice(0, 2) : owner.chain, owner.ledger);
+    });
+    const tables = ["workspaces", "clients", "training_sessions", "training_performed_sets", "training_performed_drops", "training_performed_sides", "training_exercise_notes"];
+    for (const table of tables) for (const row of f.native.prepare(`SELECT * FROM ${table}`).all()) {
+      const keys = Object.keys(row); native.prepare(`INSERT INTO ${table} (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")})`).run(...Object.values(row));
+    }
+    const snapshot = () => tables.map((table) => native.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
+    const before = snapshot();
+    const objects = () => native.prepare("SELECT type,name,sql FROM sqlite_master WHERE type IN ('trigger','index') AND sql IS NOT NULL ORDER BY name").all();
+    const guards = objects();
+    const failing = devTrainingExecutionCatalog.map((s) => s.version === 3 ? { ...s, statements: [...s.statements, "INSERT INTO i06_no_table VALUES(1)"] } : s);
+    await assert.rejects(port.exclusive((tx) => runMigrationsInTransaction(tx, failing, DEV_TRAINING_EXECUTION_LEDGER)));
+    assert.deepEqual(snapshot(), before); assert.deepEqual(objects(), guards);
+    assert.equal(native.prepare("PRAGMA table_info(training_sessions)").all().find((c) => c.name === "actual_date")!.notnull, 1);
+    await port.exclusive((tx) => runMigrationsInTransaction(tx, devTrainingExecutionCatalog, DEV_TRAINING_EXECUTION_LEDGER));
+    assert.deepEqual(snapshot(), before); assert.deepEqual(objects(), guards);
+    assert.equal(native.prepare("PRAGMA table_info(training_sessions)").all().find((c) => c.name === "actual_date")!.notnull, 0);
+    assert.deepEqual(native.prepare("PRAGMA foreign_key_check").all(), []);
+    assert.equal(native.prepare("PRAGMA integrity_check").get()!.integrity_check, "ok");
+    assert.equal(native.prepare("SELECT count(*) AS n FROM sqlite_temp_master").get()!.n, 0);
+    await port.exclusive((tx) => runMigrationsInTransaction(tx, devTrainingExecutionCatalog, DEV_TRAINING_EXECUTION_LEDGER));
+    assert.deepEqual(snapshot(), before);
+  } finally { native.close(); await f.close(); }
+});
+
+async function fixture() {
+  const native = new DatabaseSync(":memory:"); const database = new SharedSqliteDatabase(async () => nodeSqlitePort(native));
+  await database.acquire(); await prepareProductionDatabase(database);
+  const clients = new DevClientRepository(database, "local-trainer", []);
+  const plans = new DevTrainingPlansRepository(database, "local-trainer"); const execution = new DevTrainingExecutionRepository(database, "local-trainer");
+  const system = { meta: { version: "test", source: "REPDB", license: "test", exerciseCount: 0 }, exercises: [] } as unknown as SystemCatalog;
+  const exercises = new DevExerciseCatalogRepository(database, "local-trainer", system);
+  await clients.initialize(); await plans.initialize(); await execution.initialize(); await exercises.initialize();
+  const client = await clients.create({ displayName: "Тест переноса" }); const exercise = await exercises.createCustom({ name: "Жим штанги лёжа", bodyPart: "chest", trackingProfile: "LOAD_REPS", equipment: "barbell" });
+  const transfer = createTrainingTransfer(database, "local-trainer", plans, execution, exercises);
+  return { native, database, plans, execution, clients, exercises, client, mapping: { press: exercise.id }, transfer,
+    async close() { await clients.close(); await plans.close(); await execution.close(); await exercises.close(); await database.release(); } };
+}
+
+test("I02 unresolved factual ranges cannot write; explicit corrections import atomically through owners", async () => {
+  const f = await fixture();
+  try {
+    const table = flattenLegacyMatrix({ name: "Спорные результаты", rows: [["Упражнение", "Подход", "Неделя 1"],
+      ["", "", "План", "Пред.", "Повт.", "Кг", "Дата"], ["Тренировка А"],
+      ["Жим штанги лёжа", 1, "8–10 × 62,5 кг", "", "8-10", "42,5", "2026-10-20"],
+      ["", 2, "8–10 × 62,5 кг", "", "8-10", "", "2026-10-20"]] })!;
+    const found = detectLegacyMapping(table);
+    const input = normalizeLegacyTable(table, "i02-owner-fixture", found.header, found.mapping);
+    const mapping = Object.fromEntries(input.exercises.map((exercise) => [exercise.id, f.mapping.press]));
+    await assert.rejects(f.transfer.importClient(f.client.id, input, mapping), /проверить/);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_programs").get()!.n, 0);
+    let corrected = correctTransferIssue(input, input.issues![0]!.id, "10");
+    corrected = correctTransferIssue(corrected, corrected.issues![0]!.id, "пусто");
+    await f.transfer.importClient(f.client.id, corrected, mapping);
+    const facts = f.native.prepare("SELECT reps, load_grams, confirmed_at FROM training_performed_sets ORDER BY position").all();
+    assert.equal(facts.length, 2);
+    assert.equal(facts[0]!.reps, 10); assert.equal(facts[0]!.load_grams, 42500);
+    assert.equal(facts[1]!.reps, null); assert.equal(facts[1]!.load_grams, null); assert.equal(facts[1]!.confirmed_at, null);
+    await f.transfer.importClient(f.client.id, corrected, mapping);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 2);
+    assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
+  } finally { await f.close(); }
+});
+
+test("2.0 visible-only workbook imports through 3.0 owners with plans, facts and repeat protection", async () => {
+  const require = createRequire(new URL("../apps/mobile/package.json", import.meta.url));
+  const XLSX = require("xlsx") as typeof import("../apps/mobile/node_modules/xlsx/types/index.d.ts");
+  const book = readWorkbook(new Uint8Array(readFileSync(new URL("./fixtures/v2-visible-training-matrix.xlsx", import.meta.url))));
+  const name = book.SheetNames[0]!; const rows = XLSX.utils.sheet_to_json<unknown[]>(book.Sheets[name]!, { header: 1, defval: "", raw: false });
+  const table = flattenLegacyMatrix({ name, rows })!; const found = detectLegacyMapping(table); const value = normalizeLegacyTable(table, "visible-v2-fixture", found.header, found.mapping);
+  const f = await fixture();
+  try {
+    const mapping = Object.fromEntries(value.exercises.map((e) => [e.id, f.mapping.press]));
+    await f.transfer.importClient(f.client.id, value, mapping); await f.transfer.importClient(f.client.id, value, mapping);
+    assert.equal(f.native.prepare("SELECT count(*) n FROM training_planned_sets").get()?.n, 2);
+    assert.equal(f.native.prepare("SELECT count(*) n FROM training_performed_sets").get()?.n, 2);
+    assert.equal(f.native.prepare("SELECT load_grams FROM training_performed_sets LIMIT 1").get()?.load_grams, 62500);
+    assert.equal(f.native.prepare("SELECT actual_date FROM training_sessions LIMIT 1").get()?.actual_date, "2026-10-20");
+  } finally { await f.close(); }
+});
+
+test("I04 remembered source names are exact, workspace scoped and persist when services are recreated", async () => {
+  const f = await fixture();
+  try {
+    const second = await f.exercises.createCustom({ name: "Другая тяга", bodyPart: "back", equipment: "cable", trackingProfile: "LOAD_REPS" });
+    await f.transfer.rememberExerciseMatches([{ sourceName: "Тяга", targetId: f.mapping.press! }, { sourceName: "тяга", targetId: second.id }]);
+    const next = createTrainingTransfer(f.database, "local-trainer", f.plans, f.execution, f.exercises);
+    assert.deepEqual(await next.getExerciseMatches(["Тяга", "тяга", "ТЯГА"]), [
+      { sourceName: "Тяга", targetId: f.mapping.press, available: true }, { sourceName: "тяга", targetId: second.id, available: true }]);
+    assert.deepEqual(await new ExerciseImportMatchStore("other-workspace").read(nodeSqlitePort(f.native), ["Тяга"]), []);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_programs").get()!.n, 0);
+  } finally { await f.close(); }
+});
+
+test("I04 unavailable remembered targets are reported for a fresh choice and cannot be silently imported", async () => {
+  const f = await fixture();
+  try {
+    const match = { sourceName: "Жим", targetId: f.mapping.press! };
+    await f.transfer.rememberExerciseMatches([match]);
+    await f.exercises.setHidden(match.targetId, true);
+    assert.deepEqual(await f.transfer.getExerciseMatches(["Жим"]), [{ ...match, available: false }]);
+    await assert.rejects(f.transfer.importClient(f.client.id, trainingTransferFixture(), f.mapping), /скрыто/);
+    await assert.rejects(f.transfer.rememberExerciseMatches([match]), /скрыто/);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_programs").get()!.n, 0);
+    await f.exercises.setHidden(match.targetId, false);
+    await f.exercises.archiveCustom(match.targetId);
+    assert.deepEqual(await f.transfer.getExerciseMatches(["Жим"]), [{ ...match, available: false }]);
+    f.native.prepare("UPDATE training_import_exercise_matches SET target_id = 'missing-target'").run();
+    assert.equal((await f.transfer.getExerciseMatches(["Жим"]))[0]!.available, false);
+  } finally { await f.close(); }
+});
+
+test("I04 import and new remembered matches commit atomically and never edit previous cycles or results", async () => {
+  const f = await fixture();
+  try {
+    const input = trainingTransferFixture();
+    const match = { sourceName: input.exercises[0]!.name, targetId: f.mapping.press! };
+    f.native.exec("CREATE TRIGGER qa_fail_remember BEFORE INSERT ON training_import_exercise_matches BEGIN SELECT RAISE(ABORT, 'QA_REMEMBER_FAILURE'); END");
+    await assert.rejects(f.transfer.importClient(f.client.id, input, f.mapping, { rememberMatches: [match] }), /QA_REMEMBER_FAILURE/);
+    for (const table of ["training_programs", "training_sessions", "training_performed_sets", "training_transfer_receipts", "training_import_exercise_matches"]) {
+      assert.equal(f.native.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n, 0);
+    }
+    f.native.exec("DROP TRIGGER qa_fail_remember");
+    await f.transfer.importClient(f.client.id, input, f.mapping, { rememberMatches: [match] });
+    const tables = ["training_programs", "training_mesocycles", "training_workouts", "training_planned_exercises", "training_planned_sets", "training_sessions", "training_performed_sets"];
+    const protectedRows = () => tables.map((table) => f.native.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
+    const before = protectedRows();
+    const second = await f.exercises.createCustom({ name: "Новый вариант жима", bodyPart: "chest", equipment: "dumbbell", trackingProfile: "LOAD_REPS" });
+    await f.transfer.rememberExerciseMatches([{ ...match, targetId: second.id }]);
+    assert.deepEqual(protectedRows(), before);
+    assert.deepEqual(await f.transfer.getExerciseMatches([match.sourceName]), [{ ...match, targetId: second.id, available: true }]);
+    await assert.rejects(f.transfer.importClient(f.client.id, input, f.mapping, { rememberMatches: [{ sourceName: "Не из этой книги", targetId: second.id }] }), /открытому листу/);
+    assert.deepEqual(protectedRows(), before);
+  } finally { await f.close(); }
+});
+
+test("I04 alias migration only adds storage; failed migration rolls back DDL and the ledger", async () => {
+  const f = await fixture();
+  try {
+    await f.transfer.importClient(f.client.id, trainingTransferFixture(), f.mapping);
+    f.native.exec("DROP TABLE training_import_exercise_matches; DELETE FROM training_transfer_schema_migrations WHERE version = 2");
+    const tables = f.native.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((row) => String(row.name));
+    const protectedRows = () => tables.map((table) => f.native.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
+    const before = protectedRows();
+    const failing = TRANSFER_OWNER.chain.map((step) => step.version === 2 ? { ...step, statements: [...step.statements, "INSERT INTO qa_missing_table VALUES (1)"] } : step);
+    await assert.rejects(nodeSqlitePort(f.native).exclusive((tx) => runMigrationsInTransaction(tx, failing, TRANSFER_OWNER.ledger)));
+    assert.deepEqual(protectedRows(), before);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name='training_import_exercise_matches'").get()!.n, 0);
+    await nodeSqlitePort(f.native).exclusive((tx) => runMigrationsInTransaction(tx, TRANSFER_OWNER.chain, TRANSFER_OWNER.ledger));
+    assert.deepEqual(tables.filter((table) => table !== TRANSFER_OWNER.ledger).map((table) => f.native.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()),
+      tables.map((table, index) => ({ table, rows: before[index] })).filter(({ table }) => table !== TRANSFER_OWNER.ledger).map(({ rows }) => rows));
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_import_exercise_matches").get()!.n, 0);
+    assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
+  } finally { await f.close(); }
+});
+
+test("transactional Excel import persists actual owner data, computes previous, skips repeats and rejects conflicts", async () => {
+  const f = await fixture();
+  try {
+    const input = trainingTransferFixture(); await f.transfer.importClient(f.client.id, input, f.mapping);
+    const mapped = remapTrainingTransfer(input, f.client.id, f.mapping); const p = mapped.programs[0]!;
+    const plan = await f.plans.getPeriodizedPlan(f.client.id, p.id);
+    assert.equal(plan?.mesocycles[0]?.weeks[0]?.workouts[0]?.exercises[0]?.sets[0]?.loadGrams, 62500);
+    const w = p.mesocycles[0]!.weeks[1]!.workouts[0]!; const e = w.exercises[0]!;
+    const slot = { clientId: f.client.id, programId: p.id, weekIndex: 2, plannedWorkoutId: w.id };
+    const previous = await f.execution.getPrevious(slot, [{ plannedExerciseId: e.id, exerciseId: e.exerciseId, plannedSetIds: e.sets.map((s) => s.id), source: { plannedWorkoutId: p.mesocycles[0]!.weeks[0]!.workouts[0]!.id, plannedExerciseId: p.mesocycles[0]!.weeks[0]!.workouts[0]!.exercises[0]!.id } }]);
+    assert.equal(previous.get(e.sets[0]!.id)?.values.reps, 8);
+    await f.transfer.importClient(f.client.id, input, f.mapping);
+    assert.equal((await f.plans.getLibrary(f.client.id)).active.length, 1);
+    const exported = await f.transfer.exportClient(f.client.id, [p.id]);
+    assert.equal(exported.sessions.length, 2); assert.equal(exported.sessions[0]?.facts[0]?.values.loadGrams, 62500);
+    await assert.rejects(f.transfer.importClient(f.client.id, { ...input, programs: [{ ...input.programs[0]!, title: "Изменено" }] }, f.mapping), /Конфликт/u);
+    await f.plans.renameProgram(p.id, 1, "Локальная правка");
+    await assert.rejects(f.transfer.importClient(f.client.id, input, f.mapping), /Конфликт/u);
+  } finally { await f.close(); }
+});
+test("unresolved source values block import before any plans, sessions or receipts are written", async () => {
+  const f = await fixture();
+  try {
+    const value = trainingTransferFixture(); const session = value.sessions[0]!; const fact = session.facts[0]!;
+    const input = { ...value, issues: [{ id: "pending-source", programId: session.programId, scope: "FACT" as const, targetId: fact.id, field: "reps" as const, raw: "10-15" }] };
+    await assert.rejects(f.transfer.importClient(f.client.id, input, f.mapping), /Нужно проверить/u);
+    for (const table of ["training_programs", "training_sessions", "training_transfer_receipts"]) assert.equal(f.native.prepare(`SELECT count(*) n FROM ${table}`).get()?.n, 0);
+  } finally { await f.close(); }
+});
+test("a late invalid fact rolls back plans, sessions and receipts together", async () => {
+  const f = await fixture();
+  try {
+    f.native.exec("CREATE TRIGGER fail_transfer BEFORE INSERT ON training_performed_sets WHEN NEW.reps=10 BEGIN SELECT RAISE(ABORT,'SYNTHETIC_TRANSFER_FAILURE'); END");
+    await assert.rejects(f.transfer.importClient(f.client.id, trainingTransferFixture(), f.mapping), /SYNTHETIC_TRANSFER_FAILURE/u);
+    assert.equal((await f.plans.getLibrary(f.client.id)).active.length, 0);
+    assert.equal(f.native.prepare("SELECT count(*) n FROM training_transfer_receipts").get()?.n, 0);
+    assert.equal(f.native.prepare("SELECT count(*) n FROM training_sessions").get()?.n, 0);
+  } finally { await f.close(); }
+});
+test("3.0 Excel round trip to a clean database preserves every planned and actual value", async () => {
+  const source = await fixture(); const target = await fixture();
+  try {
+    const input = trainingTransferFixture(); await source.transfer.importClient(source.client.id, input, source.mapping);
+    const programs = (await source.plans.getLibrary(source.client.id)).active.map((p) => p.id);
+    const exported = await source.transfer.exportClient(source.client.id, programs);
+    const parsed = readTrainingWorkbook(readWorkbook(writeTrainingWorkbook(exported)));
+    const mapping = Object.fromEntries(parsed.exercises.map((e) => [e.id, target.mapping.press]));
+    await target.transfer.importClient(target.client.id, parsed, mapping);
+    const actual = await target.transfer.exportClient(target.client.id, (await target.plans.getLibrary(target.client.id)).active.map((p) => p.id));
+    const expected = remapTrainingTransfer(parsed, target.client.id, mapping);
+    assert.deepEqual(actual.programs, expected.programs); assert.deepEqual([...actual.sessions].sort((a, b) => a.id.localeCompare(b.id)), [...expected.sessions].sort((a, b) => a.id.localeCompare(b.id)));
+  } finally { await source.close(); await target.close(); }
+});
+test("2.0's generated matrix imports into clean 3.0 and reconstructs plans and previous results", async () => {
+  const f = await fixture();
+  try {
+    const bytes = readFileSync(new URL("./fixtures/v2-training-matrix.xlsx", import.meta.url));
+    const input = readTrainingWorkbook(readWorkbook(bytes)); const mapping = Object.fromEntries(input.exercises.map((e) => [e.id, f.mapping.press]));
+    await f.transfer.importClient(f.client.id, input, mapping);
+    const actual = await f.transfer.exportClient(f.client.id, (await f.plans.getLibrary(f.client.id)).active.map((p) => p.id));
+    assert.deepEqual(actual.programs, remapTrainingTransfer(input, f.client.id, mapping).programs);
+    assert.equal(actual.sessions.length, 2); assert.equal(actual.sessions[0]?.facts[0]?.values.loadGrams, 62500);
+    assert.equal(actual.programs[0]?.mesocycles[0]?.weeks[0]?.workouts[0]?.exercises[0]?.sets[0]?.repsMax, 10);
+    const p = actual.programs[0]!; const first = p.mesocycles[0]!.weeks[0]!.workouts[0]!; const second = p.mesocycles[0]!.weeks[1]!.workouts[0]!;
+    assert.equal(first.exercises[0]?.lineageId, second.exercises[0]?.lineageId);
+    const previous = await f.execution.getPrevious({ clientId: f.client.id, programId: p.id, weekIndex: 2, plannedWorkoutId: second.id }, previousWeekQueries(second, first));
+    assert.equal(previous.get(second.exercises[0]!.sets[0]!.id)?.values.loadGrams, 62500);
+  } finally { await f.close(); }
+});
+test("native 3.0 backup includes Excel receipts so restoring cannot enable duplicate imports", async () => {
+  const f = await fixture(); const dir = mkdtempSync(join(tmpdir(), "transfer-backup-"));
+  try {
+    const base = trainingTransferFixture();
+    const whole = compileWholeWorkbook(prepareWholeWorkbook(startWorkbookReview({ kind: "TRANSFER", value: base }, false),
+      [{ id: f.mapping.press!, name: base.exercises[0]!.name, available: true }]));
+    await f.transfer.importClient(f.client.id, whole.value, whole.mapping);
+    await f.transfer.rememberExerciseMatches([{ sourceName: "Название в исходном Excel", targetId: f.mapping.press! }]);
+    const destination = join(dir, "copy.atbackup"); const staging = join(dir, "stage.db");
+    await createSqliteBackup(f.native, join(dir, "partial.db"), destination, { backupId: randomUUID(), createdAt: new Date().toISOString() });
+    await prepareBackupForRestore(destination, staging);
+    const restored = new DatabaseSync(staging);
+    try {
+      assert.equal(restored.prepare("SELECT count(*) n FROM training_transfer_receipts").get()?.n, 1);
+      assert.deepEqual(restored.prepare("SELECT source_name, target_id FROM training_import_exercise_matches").all(),
+        f.native.prepare("SELECT source_name, target_id FROM training_import_exercise_matches").all());
+      assert.equal(restored.prepare("SELECT count(*) n FROM training_sessions").get()?.n, 3);
+      assert.equal(restored.prepare("SELECT count(*) n FROM training_sessions WHERE outcome='COMPLETED'").get()?.n, 3);
+      assert.equal(restored.prepare("SELECT count(*) n FROM training_sessions WHERE actual_date IS NULL").get()?.n, 1);
+      assert.equal(restored.prepare("SELECT load_grams FROM training_planned_sets WHERE load_grams IS NOT NULL LIMIT 1").get()?.load_grams, 62500);
+    } finally { restored.close(); }
+  } finally { await f.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+test("old-format history stays in storage but is excluded from the current matrix export", async () => {
+  const f = await fixture();
+  try {
+    const base = trainingTransferFixture(); const history = { id: "version", programId: "program", validFrom: "2026-09-01T00:00:00.000Z", validTo: "2026-10-01T00:00:00.000Z", simple: null, mesocycle: { ...base.programs[0]!.mesocycles[0]!, title: "Прежняя структура" } };
+    const value = { ...base, planHistory: [history] }; await f.transfer.importClient(f.client.id, value, f.mapping);
+    const actual = await f.transfer.exportClient(f.client.id, (await f.plans.getLibrary(f.client.id)).active.map((p) => p.id));
+    assert.deepEqual(actual.planHistory, []);
+    await f.transfer.importClient(f.client.id, value, f.mapping);
+    assert.equal(f.native.prepare("SELECT count(*) n FROM training_structure_versions").get()?.n, 1);
+  } finally { await f.close(); }
+});
+test("results of a deleted plan stay in storage and do not create phantom matrix rows", async () => {
+  const f = await fixture();
+  try {
+    const input = remapTrainingTransfer(trainingTransferFixture(), f.client.id, f.mapping);
+    const lease = await f.database.acquire();
+    try { await lease.writer.write((tx) => importTrainingExecutions(tx, "local-trainer", f.client.id, input.sessions.map((s) => ({ ...s, origin: { programTitle: "Удалённый план", programKind: "PERIODIZED", mesocycleTitle: "Цикл", workoutTitle: "Тренировка 1" } })))); }
+    finally { await f.database.release(); }
+    const exported = await f.transfer.exportClient(f.client.id, [input.programs[0]!.id]);
+    assert.equal(exported.programs.length, 0); assert.equal(exported.sessions.length, 0);
+    assert.equal(f.native.prepare("SELECT count(*) n FROM training_sessions").get()?.n, 2);
+  } finally { await f.close(); }
+});

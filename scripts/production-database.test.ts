@@ -41,7 +41,7 @@ function fixture() {
     cleanup: () => rmSync(directory, { recursive: true, force: true }) };
 }
 
-test("D01-4 обычный boot: 64 таблицы без тестовых клиентов; dev-файл не открывается; повтор сохраняет клиента и тему", async () => {
+test("D01-4 обычный boot: 78 таблиц без тестовых клиентов; dev-файл не открывается; повтор сохраняет клиента и тему", async () => {
   const f = fixture();
   const source = join(f.directory, "fitcoach_f04_clients_dev.db");
   const legacy = new DatabaseSync(source);
@@ -62,7 +62,7 @@ test("D01-4 обычный boot: 64 таблицы без тестовых кл�
     const lease = await f.database.acquire();
     try {
       assert.equal(await inspectProductionDatabase(lease.connection), "OWNED");
-      assert.equal((await lease.connection.first<{ n: number }>("SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"))?.n, 76);
+      assert.equal((await lease.connection.first<{ n: number }>("SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"))?.n, 81);
       assert.equal((await lease.connection.first<{ n: number }>("SELECT count(*) AS n FROM sqlite_master WHERE name LIKE 'dev_%'"))?.n, 0);
     } finally { await f.database.release(); }
     const client = await clients.create({ displayName: "Synthetic Persisted" });

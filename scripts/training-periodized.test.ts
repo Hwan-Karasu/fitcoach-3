@@ -332,7 +332,7 @@ test("T04 копия мезоцикла: текущие исключения, н
   } finally { await execution.close(); await close(); }
 });
 
-test("T04 суперсеты сохраняются участникам независимо; новая тренировка копируется один раз", async () => {
+test("P01 суперсеты и новые тренировки распространяются только по собственным неделям", async () => {
   const { plans, a, b, programId, mesocycleId, close } = await sharedProgram();
   try {
     const plan = (await plans.getPeriodizedPlan(a.id, programId))!;
@@ -342,11 +342,11 @@ test("T04 суперсеты сохраняются участникам нез�
     draft = addWorkout(draft, "extra-workout");
     draft = addExercise(draft, "extra-workout", "extra-exercise", ROW, ids("extra-set"));
     await plans.saveWeek(a.id, programId, plan.program.revision, { mesocycleId, weekIndex: 1, type: "base", scope: "ALL",
-      clientIds: [a.id, b.id], workouts: draft.plan.workouts });
+      clientIds: [a.id], workouts: draft.plan.workouts });
     const afterA = (await plans.getPeriodizedPlan(a.id, programId))!.mesocycles[0]!;
     const afterB = (await plans.getPeriodizedPlan(b.id, programId))!.mesocycles[0]!;
-    const allWeeks = [...afterA.weeks, ...afterB.weeks];
-    assert.equal(new Set(allWeeks.map((value) => value.workouts[0]!.exercises[0]!.supersetId)).size, 8);
+    const allWeeks = afterA.weeks;
+    assert.equal(new Set(allWeeks.map((value) => value.workouts[0]!.exercises[0]!.supersetId)).size, 4);
     for (const value of allWeeks) {
       const [first, second] = value.workouts[0]!.exercises;
       assert.ok(first!.supersetId);
@@ -357,78 +357,59 @@ test("T04 суперсеты сохраняются участникам нез�
     assert.equal(afterA.weeks[0]!.workouts[0]!.exercises[0]!.id, week.workouts[0]!.exercises[0]!.id);
     assert.deepEqual(afterA.weeks[0]!.workouts[0]!.exercises[0]!.sets, week.workouts[0]!.exercises[0]!.sets);
     assert.equal((await plans.getMesocycleVersions(a.id, programId, mesocycleId)).length, 2);
-    assert.equal((await plans.getMesocycleVersions(b.id, programId, afterB.id)).length, 2);
+    assert.equal((await plans.getMesocycleVersions(b.id, programId, afterB.id)).length, 1);
   } finally { await close(); }
 });
 
-test("T04 предпросмотр: персональная замена сохраняется по умолчанию, явное применение адресно", async () => {
+test("P01 scope conflicts preserve personal changes in another week of the same client", async () => {
   const { plans, a, b, programId, mesocycleId, close } = await sharedProgram();
   try {
-    const planB = (await plans.getPeriodizedPlan(b.id, programId))!;
-    const cycleB = planB.mesocycles[0]!;
-    const personal = edit(cycleB.weeks[0]!.workouts, (draft) => replaceExercise(draft,
-      cycleB.weeks[0]!.workouts[0]!.exercises[0]!.id, "personal-row", ROW, ["reps", "loadGrams"], ids("personal-set")));
-    await plans.saveWeek(b.id, programId, planB.program.revision, { mesocycleId: cycleB.id, weekIndex: 1,
-      workouts: personal, type: "base", scope: "CURRENT", clientIds: [b.id] });
-    const current = (await plans.getPeriodizedPlan(a.id, programId))!;
-    const week = current.mesocycles[0]!.weeks[0]!;
-    const input = { mesocycleId, weekIndex: 1, type: "base" as const, scope: "ALL" as const, clientIds: [a.id, b.id],
-      workouts: edit(week.workouts, (draft) => fillSets(draft, week.workouts[0]!.exercises[0]!.id, "reps", 8)) };
-    const preview = await plans.previewWeekEdit(a.id, programId, current.program.revision, input);
-    assert.deepEqual(await plans.getPeriodizedPlan(a.id, programId), current, "предпросмотр не пишет структуру/ревизию");
-    assert.equal(preview.conflicts.length, 1);
-    assert.equal(preview.conflicts[0]!.clientId, b.id);
-    assert.equal(preview.conflicts[0]!.weekIndex, 1);
-    assert.equal(preview.conflicts[0]!.reason, "PERSONAL_CHANGE");
-    assert.equal(preview.conflicts[0]!.currentExercise!.exerciseId, ROW);
-    assert.equal(preview.conflicts[0]!.proposedExercise!.exerciseId, BENCH);
-    const kept = await plans.saveWeek(a.id, programId, current.program.revision, input);
-    assert.equal(kept.skipped, 1);
-    const afterB = (await plans.getPeriodizedPlan(b.id, programId))!.mesocycles[0]!;
-    assert.deepEqual(afterB.weeks[0]!.workouts, personal);
-    assert.equal(afterB.weeks[1]!.workouts[0]!.exercises[0]!.sets[0]!.reps, 8, "конфликт одной недели не блокирует остальные");
-    const afterA = (await plans.getPeriodizedPlan(a.id, programId))!;
-    const next = { ...input, workouts: edit(afterA.mesocycles[0]!.weeks[0]!.workouts, (draft) =>
-      fillSets(draft, week.workouts[0]!.exercises[0]!.id, "reps", 6)) };
-    const second = await plans.previewWeekEdit(a.id, programId, kept.program.revision, next);
-    await plans.saveWeek(a.id, programId, kept.program.revision, { ...next,
-      replaceConflicts: second.conflicts.map((conflict) => conflict.key) });
-    const replaced = (await plans.getPeriodizedPlan(b.id, programId))!.mesocycles[0]!.weeks[0]!.workouts[0]!;
-    assert.equal(replaced.exercises[0]!.exerciseId, BENCH);
-    assert.notEqual(replaced.exercises[0]!.id, "personal-row", "факты тяги не присваиваются жиму");
-    assert.equal(replaced.exercises[0]!.sets[0]!.reps, 6);
-    assert.deepEqual(replaced.exercises[1], personal[0]!.exercises[1], "соседнее упражнение не перезаписывается");
-    await assert.rejects(plans.saveWeek(a.id, programId, kept.program.revision, next), message("PROGRAM_REVISION_CONFLICT"));
-  } finally { await close(); }
-});
-
-test("T04 конфликты: пропавшее упражнение восстанавливается явно, персональный тип недели не затирается", async () => {
-  const { plans, a, b, programId, mesocycleId, close } = await sharedProgram();
-  try {
-    const planB = (await plans.getPeriodizedPlan(b.id, programId))!;
-    const cycleB = planB.mesocycles[0]!;
-    await plans.saveWeek(b.id, programId, planB.program.revision, { mesocycleId: cycleB.id, weekIndex: 1, type: "heavy",
-      scope: "CURRENT", clientIds: [b.id], workouts: edit(cycleB.weeks[0]!.workouts,
-        (draft) => removeExercise(draft, cycleB.weeks[0]!.workouts[0]!.exercises[0]!.id)) });
+    const beforeB = (await plans.getPeriodizedPlan(b.id, programId))!.mesocycles;
     const plan = (await plans.getPeriodizedPlan(a.id, programId))!;
-    const week = plan.mesocycles[0]!.weeks[0]!;
-    const input = { mesocycleId, weekIndex: 1, type: "base" as const, scope: "CURRENT" as const, clientIds: [a.id, b.id],
-      workouts: edit(week.workouts, (draft) => fillSets(draft, week.workouts[0]!.exercises[0]!.id, "reps", 5)) };
-    const preview = await plans.previewWeekEdit(a.id, programId, plan.program.revision, input);
+    const cycle = plan.mesocycles[0]!;
+    const personal = edit(cycle.weeks[1]!.workouts, (draft) => replaceExercise(draft,
+      cycle.weeks[1]!.workouts[0]!.exercises[0]!.id, "personal-row", ROW, ["reps", "loadGrams"], ids("personal-set")));
+    const first = await plans.saveWeek(a.id, programId, plan.program.revision, { mesocycleId, weekIndex: 2,
+      workouts: personal, type: "heavy", scope: "CURRENT", clientIds: [a.id] });
+    const input = { mesocycleId, weekIndex: 1, type: "base" as const, scope: "ALL" as const, clientIds: [a.id],
+      workouts: edit(cycle.weeks[0]!.workouts, (draft) => fillSets(draft, cycle.weeks[0]!.workouts[0]!.exercises[0]!.id, "reps", 8)) };
+    const preview = await plans.previewWeekEdit(a.id, programId, first.program.revision, input);
     assert.equal(preview.conflicts.length, 1);
+    assert.equal(preview.conflicts[0]!.clientId, a.id);
+    assert.equal(preview.conflicts[0]!.weekIndex, 2);
+    const saved = await plans.saveWeek(a.id, programId, first.program.revision, input);
+    assert.equal(saved.skipped, 1);
+    assert.deepEqual((await plans.getPeriodizedPlan(a.id, programId))!.mesocycles[0]!.weeks[1]!.workouts, personal);
+    const current = (await plans.getPeriodizedPlan(a.id, programId))!;
+    const next = { ...input, workouts: edit(current.mesocycles[0]!.weeks[0]!.workouts, (draft) =>
+      fillSets(draft, cycle.weeks[0]!.workouts[0]!.exercises[0]!.id, "reps", 6)) };
+    const second = await plans.previewWeekEdit(a.id, programId, saved.program.revision, next);
+    await plans.saveWeek(a.id, programId, saved.program.revision, { ...next, replaceConflicts: second.conflicts.map((item) => item.key) });
+    const replaced = (await plans.getPeriodizedPlan(a.id, programId))!.mesocycles[0]!.weeks[1]!;
+    assert.equal(replaced.workouts[0]!.exercises[0]!.exerciseId, BENCH);
+    assert.notEqual(replaced.workouts[0]!.exercises[0]!.id, "personal-row");
+    assert.equal(replaced.type, "heavy");
+    assert.deepEqual((await plans.getPeriodizedPlan(b.id, programId))!.mesocycles, beforeB);
+  } finally { await close(); }
+});
+
+test("P01 missing exercise in another own week requires explicit conflict replacement", async () => {
+  const { plans, a, programId, mesocycleId, close } = await sharedProgram();
+  try {
+    const plan = (await plans.getPeriodizedPlan(a.id, programId))!;
+    const cycle = plan.mesocycles[0]!;
+    const ownWeek = cycle.weeks[1]!;
+    const first = await plans.saveWeek(a.id, programId, plan.program.revision, { mesocycleId, weekIndex: 2, type: "heavy", scope: "CURRENT", clientIds: [a.id],
+      workouts: edit(ownWeek.workouts, (draft) => removeExercise(draft, ownWeek.workouts[0]!.exercises[0]!.id)) });
+    const input = { mesocycleId, weekIndex: 1, type: "base" as const, scope: "ALL" as const, clientIds: [a.id],
+      workouts: edit(cycle.weeks[0]!.workouts, (draft) => fillSets(draft, cycle.weeks[0]!.workouts[0]!.exercises[0]!.id, "reps", 5)) };
+    const preview = await plans.previewWeekEdit(a.id, programId, first.program.revision, input);
     assert.equal(preview.conflicts[0]!.reason, "MISSING_EXERCISE");
-    const applied = await plans.saveWeek(a.id, programId, plan.program.revision, { ...input,
-      replaceConflicts: preview.conflicts.map((conflict) => conflict.key) });
-    const restored = (await plans.getPeriodizedPlan(b.id, programId))!.mesocycles[0]!.weeks[0]!;
-    assert.equal(restored.type, "heavy", "тип А не изменён — нельзя перезаписывать тип Б");
+    await plans.saveWeek(a.id, programId, first.program.revision, { ...input, replaceConflicts: preview.conflicts.map((item) => item.key) });
+    const restored = (await plans.getPeriodizedPlan(a.id, programId))!.mesocycles[0]!.weeks[1]!;
+    assert.equal(restored.type, "heavy");
     assert.equal(restored.workouts[0]!.exercises[0]!.exerciseId, BENCH);
-    assert.equal(restored.workouts[0]!.exercises[0]!.sets[0]!.reps, 5);
-    assert.notEqual(restored.workouts[0]!.exercises[0]!.id, cycleB.weeks[0]!.workouts[0]!.exercises[0]!.id);
-    const typeInput = { ...input, type: "light" as const };
-    const types = await plans.previewWeekEdit(a.id, programId, applied.program.revision, typeInput);
-    assert.deepEqual(types.conflicts.map((conflict) => conflict.operation), ["Тип недели"]);
-    await plans.saveWeek(a.id, programId, applied.program.revision, typeInput);
-    assert.equal((await plans.getPeriodizedPlan(b.id, programId))!.mesocycles[0]!.weeks[0]!.type, "heavy");
+    assert.notEqual(restored.workouts[0]!.exercises[0]!.id, ownWeek.workouts[0]!.exercises[0]!.id);
   } finally { await close(); }
 });
 
@@ -540,7 +521,7 @@ test("T04 правка недели: «все недели этого типа»
   }
 });
 
-test("T04 правка «эта и следующие» двум участникам: у B — по родству в его неделях 3–4", async () => {
+test("P01 правка «эта и следующие» меняет свои недели 3–4; у B план сохраняется", async () => {
   const { plans, a, b, programId, mesocycleId, revision, close } = await sharedProgram();
   try {
     const weeksOf = async (clientId: string) => (await plans.getPeriodizedPlan(clientId, programId))!.mesocycles[0]!.weeks;
@@ -548,10 +529,10 @@ test("T04 правка «эта и следующие» двум участни�
     const after = edit(week3.workouts, (draft) => replaceExercise(draft, week3.workouts[0]!.exercises[0]!.id, "row-a3", ROW,
       ["reps", "loadGrams"], ids("rs")));
     await plans.saveWeek(a.id, programId, revision, { mesocycleId, weekIndex: 3, workouts: after, type: "base",
-      scope: "FOLLOWING", clientIds: [a.id, b.id] });
+      scope: "FOLLOWING", clientIds: [a.id] });
     const exercisesOf = (weeks: Awaited<ReturnType<typeof weeksOf>>) => weeks.map((week) => week.workouts[0]!.exercises[0]!.exerciseId);
     assert.deepEqual(exercisesOf(await weeksOf(a.id)), [BENCH, BENCH, ROW, ROW]);
-    assert.deepEqual(exercisesOf(await weeksOf(b.id)), [BENCH, BENCH, ROW, ROW]);
+    assert.deepEqual(exercisesOf(await weeksOf(b.id)), [BENCH, BENCH, BENCH, BENCH]);
     assert.equal((await weeksOf(a.id))[2]!.workouts[0]!.exercises[0]!.id, "row-a3", "открытая неделя — ровно как отредактирована");
   } finally {
     await close();

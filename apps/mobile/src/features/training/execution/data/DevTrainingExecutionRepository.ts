@@ -154,6 +154,20 @@ export const devTrainingExecutionClientDeletionParticipant = {
 
 /** Явно dev-хранилище новой установки в общем dev-файле клиентов. */
 export class DevTrainingExecutionRepository implements TrainingExecutionPort, RestTimerStorePort {
+  /** Transaction-bound export, including executions whose original plan was removed. */
+  async exportTransfer(tx: SqliteStatementPort, clientId: string, programIds: readonly string[]): Promise<import("../../../../shared/training-transfer/TrainingTransfer.ts").TransferSession[]> {
+    const rows = await tx.all<WorkoutSession & { originJson: string | null }>(`SELECT ${SESSION_COLUMNS}, origin_json AS originJson FROM training_sessions WHERE workspace_id=? AND client_id=? ORDER BY id`, [this.workspaceId, clientId]);
+    const result: import("../../../../shared/training-transfer/TrainingTransfer.ts").TransferSession[] = [];
+    for (const row of rows.filter((r) => programIds.includes(r.programId))) {
+      const execution = await this.readWorkout(tx, row);
+      result.push({ id: row.id, programId: row.programId, weekIndex: row.weekIndex, plannedWorkoutId: row.plannedWorkoutId,
+        outcome: row.outcome, actualDate: row.actualDate, startedAt: row.startedAt, finishedAt: row.finishedAt,
+        origin: row.originJson === null ? null : readStoredJson(row.originJson, storedOrigin, "excel-origin"),
+        facts: [...execution.facts.values()], notes: [...execution.notes].map(([plannedExerciseId, text]) => ({ plannedExerciseId, text })) });
+    }
+    return result;
+  }
+  notifyTransfer(clientId: string, programId: string): void { this.publish({ clientId, programId }); }
   private connection: SqliteConnectionPort | null = null;
   private writer: WriterCoordinator | null = null;
   private opening: Promise<void> | null = null;
@@ -329,6 +343,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
 
   async getPrevious(slot: WorkoutSlot, queries: readonly PreviousQuery[], _now?: Date):
     Promise<ReadonlyMap<string, PreviousSet>> {
+    void _now; // Kept for the public port; matching uses recorded weeks rather than the clock.
     assertSlot(slot);
     if (slot.weekIndex <= 1 || queries.length === 0 || queries.every((query) => query.source === null)) return new Map();
     const current = await this.getWorkout(slot);
@@ -336,6 +351,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
   }
 
   async getWorkoutWithPrevious(slot: WorkoutSlot, queries: readonly PreviousQuery[] | Promise<readonly PreviousQuery[]>, _now?: Date) {
+    void _now;
     assertSlot(slot);
     const endCurrent = navigationPerformance.phase("execution");
     const [current, requested] = await Promise.all([this.getWorkout(slot).finally(endCurrent), queries]);
@@ -357,7 +373,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       sourceWorkoutId: query.source === null ? null : query.source?.plannedWorkoutId ?? slot.plannedWorkoutId,
       sourceExerciseId: query.source === null ? null : query.source?.plannedExerciseId ?? query.plannedExerciseId }));
     // A single bounded query for all requested exercises. There is exactly one source slot per query.
-    const rows = await connection.all<FactRow & { queryIndex: number; date: string }>(`WITH requested AS (
+    const rows = await connection.all<FactRow & { queryIndex: number; date: string | null }>(`WITH requested AS (
         SELECT CAST(key AS INTEGER) AS queryIndex, json_extract(value, '$.exerciseId') AS exerciseId,
           json_extract(value, '$.sourceWorkoutId') AS sourceWorkoutId,
           json_extract(value, '$.sourceExerciseId') AS sourceExerciseId FROM json_each(?)

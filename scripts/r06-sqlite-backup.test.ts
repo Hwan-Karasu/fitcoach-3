@@ -12,6 +12,7 @@ import { prepareProductionDatabase, inspectProductionDatabase, PRODUCTION_WORKSP
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
+import { DevTrainingPlansRepository } from "../apps/mobile/src/features/training/plans/data/DevTrainingPlansRepository.ts";
 import { DevMeasurementRepository } from "../apps/mobile/src/features/measurements/data/DevMeasurementRepository.ts";
 import { DevSettingsRepository } from "../apps/mobile/src/features/settings/data/DevSettingsRepository.ts";
 import { DevFoodCatalogRepository } from "../apps/mobile/src/features/nutrition/data/DevFoodCatalogRepository.ts";
@@ -59,6 +60,40 @@ async function seed(shared: SharedSqliteDatabase) {
     return { clientId: client.id };
   } finally { for (const store of stores.reverse()) await store.close(); }
 }
+
+test("P01 native .atbackup preserves navigation links including archived participants", async () => {
+  const f = await fixture();
+  const clients = new DevClientRepository(f.shared, WS, []);
+  const plans = new DevTrainingPlansRepository(f.shared, WS);
+  try {
+    await clients.initialize(); await plans.initialize();
+    const a = await clients.create({ displayName: "Synthetic navigation A" });
+    const b = await clients.create({ displayName: "Synthetic navigation B" });
+    const workout = { id: "qa-workout", title: "Workout", exercises: [{ id: "qa-exercise", exerciseId: "sys:qa", rir: null, restSec: null, instruction: null,
+      sets: [{ id: "qa-set", reps: 10, repsMax: null, loadGrams: 20000, durationSec: null, distanceM: null }] }] };
+    const program = await plans.createPeriodizedProgram({ title: "Navigation", clientIds: [a.id, b.id],
+      placements: [{ clientId: b.id, target: { kind: "new" } }], mesocycle: { title: "Block", cycleType: null,
+        repRange: null, startDate: null, weeks: [{ type: "base", workouts: [workout] }] } });
+    const cycle = (await plans.getPeriodizedPlan(a.id, program.id))!.mesocycles[0]!;
+    const members = await plans.getMesocycleGroup(a.id, program.id, { mesocycleId: cycle.id });
+    await plans.archiveForClient(b.id, members.find((item) => item.clientId === b.id)!.programId);
+    const source = new DatabaseSync(f.file);
+    try {
+      const expected = canonicalContentSha256(source);
+      await createSqliteBackup(source, f.partial, f.destination, metadata());
+      await prepareBackupForRestore(f.destination, f.staging);
+      const restored = new DatabaseSync(f.staging, { readOnly: true });
+      try {
+        assert.equal(canonicalContentSha256(restored), expected);
+        for (const table of ["training_navigation_groups", "training_navigation_members"]) {
+          assert.deepEqual(restored.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all(), source.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
+        }
+        assert.equal(restored.prepare("SELECT count(*) AS n FROM training_navigation_members").get()!.n, 2);
+        assert.deepEqual(restored.prepare("PRAGMA foreign_key_check").all(), []);
+      } finally { restored.close(); }
+    } finally { source.close(); }
+  } finally { await plans.close(); await clients.close(); f.cleanup(); }
+});
 
 test("R06 single real SQLite .atbackup roundtrips populated facts/settings and stays independent of source", async () => {
   const f = await fixture();

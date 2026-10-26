@@ -1,17 +1,37 @@
-import { useState, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useRef, useState, type ReactNode } from "react";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
 import { CalendarDays, ChartColumnIncreasing, ChevronRight, CircleMinus, Clock, FileText, LayoutGrid, Plus, RefreshCw, Rocket,
-  FileSpreadsheet, SlidersHorizontal, TrendingUp, Users, Zap } from "lucide-react-native";
-import { AppButton, FloatingActionButton, InlineNotice, ListSectionHeader, LoadingState, SegmentedControl } from "../../../../shared/ui/components/public.ts";
+  Archive, Ellipsis, Trash2, FileSpreadsheet, Pencil, SlidersHorizontal, TrendingUp, Users, Zap } from "lucide-react-native";
+import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, FloatingActionButton, InlineNotice, ListSectionHeader, LoadingState, SegmentedControl, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../../shared/ui/theme/style.ts";
 import type { ProgramCard, ProgramKind } from "../domain/ProgramModel.ts";
-import { membersWord, programKindLabels } from "../domain/ProgramRules.ts";
+import { membersWord, programKindLabels, PROGRAM_TITLE_MAX } from "../domain/ProgramRules.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import { useProgramLibrary } from "./useProgramLibrary.ts";
+import type { ProgramDeletePort } from "../domain/PlanDeletion.ts";
+
+function ProgramCardMenu({ card, busy, onExport, onArchive, onDelete, onRename }: Readonly<{
+  card: ProgramCard; busy: boolean; onExport?: () => void; onArchive: () => void; onDelete?: () => void; onRename: () => void;
+}>) {
+  const { palette } = usePrototypeTheme(); const anchor = useRef<View>(null); const [open, setOpen] = useState(false);
+  return <>
+    <View style={{ position: "absolute", top: 14, right: 12 }}>
+      <AppIconButton label={`Действия программы: ${card.title}`} buttonRef={anchor} disabled={busy}
+        icon={<Ellipsis size={22} color={palette.tokens.textPrimary} />} onPress={() => setOpen(true)} />
+    </View>
+    <DropdownMenu anchor={anchor} visible={open} title={card.title} selected="" onClose={() => setOpen(false)}
+      options={[
+        { value: "rename", label: "Переименовать программу", icon: (color: string) => <Pencil size={18} color={color} /> },
+        ...(onExport ? [{ value: "export", label: "Экспорт в Excel", icon: (color: string) => <FileSpreadsheet size={18} color={color} /> }] : []),
+        { value: "archive", label: "Архивировать", icon: (color: string) => <Archive size={18} color={color} /> },
+        ...(onDelete ? [{ value: "delete", label: "Удалить", danger: true, icon: (color: string) => <Trash2 size={18} color={color} /> }] : [])
+      ]} onSelect={(action) => { if (action === "rename") onRename(); else if (action === "export") onExport?.(); else if (action === "archive") onArchive(); else if (action === "delete") onDelete?.(); }} />
+  </>;
+}
 
 type IconRender = (color: string) => ReactNode;
 const icon = (Icon: typeof Rocket, size = 20): IconRender => (color) => <Icon size={size} color={color} strokeWidth={1.8} />;
@@ -89,7 +109,9 @@ function ProgramModeChooser({ onChoose }: Readonly<{ onChoose: (kind: ProgramKin
  * Отдельный экран выбора конструктора (из «+ Создать программу»): два конструктора и «Дополнительно».
  * Плотная вёрстка — всё помещается на один экран телефона (просьба владельца 2026-10-18).
  */
-export function ProgramModeChooserScreen({ onChoose, onOpenTemplates }: Readonly<{
+export function ProgramModeChooserScreen({ onChoose, onOpenTemplates, onOpenExcel, renderExcelImport }: Readonly<{
+  renderExcelImport?: (renderTrigger: (onPress: () => void, disabled: boolean) => ReactNode) => ReactNode;
+  onOpenExcel?: () => void;
   onChoose: (kind: ProgramKind) => void;
   /** §48.16: программа из шаблона. */
   onOpenTemplates?: () => void;
@@ -102,14 +124,15 @@ export function ProgramModeChooserScreen({ onChoose, onOpenTemplates }: Readonly
       <ListSectionHeader title="Дополнительно" />
       {onOpenTemplates !== undefined ? <FeatureRow title="Создать из шаблона" detail="Готовые варианты программ"
         icon={icon(FileText, 18)} onPress={onOpenTemplates} /> : null}
-      {/* Импорт исключён из V1 (UI-OWN-024); владелец оставил место под будущую функцию — строка неактивна. */}
-      <FeatureRow title="Импортировать из Excel" detail="Будет в следующих версиях" icon={icon(FileSpreadsheet, 18)} soon />
+      {renderExcelImport ? renderExcelImport((onPress, disabled) => <FeatureRow title="Импортировать из Excel" detail="Планы и фактические результаты"
+        icon={icon(FileSpreadsheet, 18)} onPress={onPress} disabled={disabled} />)
+        : <FeatureRow title="Импортировать из Excel" detail="Планы и фактические результаты" icon={icon(FileSpreadsheet, 18)} onPress={onOpenExcel} />}
     </ScrollView>
   );
 }
 
-function ProgramCardRow({ card, selected, onPress, onRestore }: Readonly<{
-  card: ProgramCard; selected: boolean; onPress?: () => void; onRestore?: () => void;
+function ProgramCardRow({ card, selected, onPress, onRestore, hasMenu = false }: Readonly<{
+  card: ProgramCard; selected: boolean; onPress?: () => void; onRestore?: () => void; hasMenu?: boolean;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -120,7 +143,7 @@ function ProgramCardRow({ card, selected, onPress, onRestore }: Readonly<{
   return (
     <Pressable accessibilityRole={onPress === undefined ? undefined : "button"} disabled={onPress === undefined}
       accessibilityLabel={`${card.title}. ${meta}${selected ? ". Текущая" : ""}`} onPress={onPress}
-      style={({ pressed }) => [styles.card, styles.program, shadow.card, { borderColor: selected ? colors.accentInk : "transparent",
+      style={({ pressed }) => [styles.card, styles.program, shadow.card, { paddingRight: hasMenu ? 68 : 16, borderColor: selected ? colors.accentInk : "transparent",
         backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
       <View style={styles.grow}>
         <Text numberOfLines={2} style={[styles.title, { color: colors.textPrimary, opacity: onRestore ? 0.6 : 1 }]}>{card.title}</Text>
@@ -137,14 +160,14 @@ function ProgramCardRow({ card, selected, onPress, onRestore }: Readonly<{
 }
 
 /** Строка раздела «Дополнительно»; `soon` — будущая функция: неактивна, с плашкой «Скоро». */
-function FeatureRow({ icon: renderIcon, title, detail, onPress, soon = false }: Readonly<{
-  icon: IconRender; title: string; detail: string; onPress?: () => void; soon?: boolean;
+function FeatureRow({ icon: renderIcon, title, detail, onPress, soon = false, disabled = false }: Readonly<{
+  icon: IconRender; title: string; detail: string; onPress?: () => void; soon?: boolean; disabled?: boolean;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${title}. ${detail}`} accessibilityState={{ disabled: soon }}
-      disabled={soon} onPress={onPress}
+    <Pressable accessibilityRole="button" accessibilityLabel={`${title}. ${detail}`} accessibilityState={{ disabled: soon || disabled }}
+      disabled={soon || disabled} onPress={onPress}
       style={({ pressed }) => [styles.card, styles.feature, shadow.card, { borderColor: "transparent",
         backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
       <View style={[styles.featureIcon, { backgroundColor: colors.surfaceRaised }]}>{renderIcon(soon ? colors.textMuted : colors.accentInk)}</View>
@@ -169,7 +192,10 @@ export const programLibraryTabTitles: Readonly<Record<ProgramLibraryTab, string>
   programs: "Программы", templates: "Шаблоны", archive: "Архив программ" };
 
 export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate, onOpenProgram, onOpenTemplates, renderTemplates, renderArchive,
-  onTabChange }: Readonly<{
+  onTabChange, onExport, planDelete, renderExcelImport }: Readonly<{
+  renderExcelImport?: (renderTrigger: (onPress: () => void, disabled: boolean) => ReactNode) => ReactNode;
+  onExport?: (programId: string) => Promise<void>;
+  planDelete?: ProgramDeletePort;
   clientId: string;
   repository: TrainingPlansRepositoryPort;
   /** Пустая библиотека: конструктор выбран прямо здесь. */
@@ -190,6 +216,15 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const [orderError, setOrderError] = useState(false);
   const [orderReset, setOrderReset] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const [pending, setPending] = useState<{ kind: "archive" | "delete"; card: ProgramCard } | null>(null);
+  const [renaming, setRenaming] = useState<{ card: ProgramCard; title: string } | null>(null);
+  const run = async (task: () => Promise<void>) => {
+    if (busy) return; setBusy(true); setActionError("");
+    try { await task(); } catch (cause) { setActionError(cause instanceof Error && cause.message === "PROGRAM_REVISION_CONFLICT" ? "Программа изменилась. Повторите действие после обновления." : "Не удалось завершить действие. Повторите попытку."); reload(); }
+    finally { setBusy(false); setPending(null); }
+  };
 
   if (library === null) {
     return (
@@ -203,7 +238,7 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
   }
 
   if (library.active.length === 0 && library.archived.length === 0) {
-    return <ProgramModeChooserScreen onChoose={onChoose} onOpenTemplates={onOpenTemplates} />;
+    return <ProgramModeChooserScreen onChoose={onChoose} onOpenTemplates={onOpenTemplates} renderExcelImport={renderExcelImport} />;
   }
 
   const tabItems = [{ id: "programs" as const, label: programLibraryTabTitles.programs },
@@ -224,6 +259,8 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
       {tabs}
       <Animated.ScrollView ref={scrollRef} contentContainerStyle={[styles.content, styles.withFab]}>
         {failed ? <InlineNotice kind="error">Не удалось обновить список. Показан последний загруженный.</InlineNotice> : null}
+        {!!actionError && <InlineNotice kind="error">{actionError}</InlineNotice>}
+        {busy && <InlineNotice>Подготавливаем данные…</InlineNotice>}
         {orderError ? <InlineNotice kind="error">Не удалось сохранить порядок. Повторите перетаскивание.</InlineNotice> : null}
         {onOpenTemplates !== undefined && renderTemplates === undefined
           ? <AppButton compact variant="secondary" label="Шаблоны" onPress={onOpenTemplates} /> : null}
@@ -235,14 +272,18 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
           <Sortable.Grid key={orderReset} data={[...library.active]} keyExtractor={(card) => card.id} columns={1} rowGap={10}
             scrollableRef={scrollRef} activeItemScale={1.03}
             renderItem={({ item }: Readonly<{ item: ProgramCard }>) => (
-              <Sortable.Touchable onTap={() => onOpenProgram(item.id)} accessibilityRole="button"
+              <View><Sortable.Touchable onTap={() => onOpenProgram(item.id)} accessibilityRole="button"
                 accessible accessibilityLabel={`${item.title}. ${programKindLabels[item.kind]}${item.id === library.selectedProgramId ? ". Текущая" : ""}`}
                 onAccessibilityTap={() => onOpenProgram(item.id)}
                 accessibilityHint="Долгое нажатие — перетащить">
                 <View pointerEvents="none" importantForAccessibility="no-hide-descendants">
-                  <ProgramCardRow card={item} selected={item.id === library.selectedProgramId} />
+                  <ProgramCardRow card={item} selected={item.id === library.selectedProgramId} hasMenu />
                 </View>
               </Sortable.Touchable>
+                <ProgramCardMenu card={item} busy={busy} onRename={() => { setActionError(""); setRenaming({ card: item, title: item.title }); }} onArchive={() => setPending({ kind: "archive", card: item })}
+                  {...(onExport ? { onExport: () => { void run(() => onExport(item.id)); } } : {})}
+                  {...(planDelete ? { onDelete: () => setPending({ kind: "delete", card: item }) } : {})} />
+              </View>
             )}
             onDragEnd={({ data }) => {
               setOrderError(false);
@@ -263,6 +304,28 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
       </Animated.ScrollView>
       <FloatingActionButton label="Создать программу" icon={(color) => <Plus size={26} color={color} strokeWidth={2} />}
         onPress={onCreate} />
+      <Modal visible={renaming !== null} transparent animationType="fade" onRequestClose={() => { if (!busy) setRenaming(null); }}>
+        <View style={{ flex: 1, justifyContent: "center", padding: 24, backgroundColor: "rgba(0,0,0,0.4)" }}>
+          <View accessibilityViewIsModal style={{ backgroundColor: colors.surface, padding: 20, borderRadius: 20, gap: 14 }}>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>Переименовать программу</Text>
+            <TextField label="Название программы" required value={renaming?.title ?? ""} disabled={busy}
+              hint={`До ${PROGRAM_TITLE_MAX} символов. Названия циклов не изменятся.`}
+              onChangeText={(title) => setRenaming((form) => form ? { ...form, title } : null)} />
+            {(renaming?.card.memberCount ?? 0) > 1 && <Text style={[styles.body, { color: colors.textSecondary }]}>Название изменится у всех участников этой программы.</Text>}
+            {!!actionError && <InlineNotice kind="error">{actionError}</InlineNotice>}
+            <AppButton label="Сохранить" busy={busy} disabled={!renaming?.title.trim() || renaming.title.trim().length > PROGRAM_TITLE_MAX}
+              onPress={() => { if (!renaming) return; const form = renaming; void run(async () => {
+                await repository.renameProgram(form.card.id, form.card.revision, form.title); setRenaming(null); reload();
+              }); }} />
+            <AppButton label="Отмена" variant="secondary" disabled={busy} onPress={() => setRenaming(null)} />
+          </View>
+        </View>
+      </Modal>
+      <ConfirmDialog visible={pending !== null} destructive={pending?.kind === "delete"} confirmBusy={busy}
+        title={pending?.kind === "delete" ? `Удалить «${pending.card.title}»?` : `Архивировать «${pending?.card.title ?? ""}»?`}
+        description={pending?.kind === "delete" ? "Программа и все её результаты будут удалены у этого клиента. Копии других участников останутся." : "Программа переместится в архив этого клиента. Её можно вернуть вместе с результатами."}
+        confirmLabel={pending?.kind === "delete" ? "Удалить" : "Архивировать"} onCancel={() => setPending(null)}
+        onConfirm={() => { if (!pending) return; const { card, kind } = pending; void run(() => kind === "archive" ? repository.archiveForClient(clientId, card.id) : planDelete!.deleteProgram({ clientId, programId: card.id, expectedRevision: card.revision })); }} />
     </View>
   );
 }

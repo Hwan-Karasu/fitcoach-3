@@ -1,11 +1,12 @@
 /**
- * Куда ляжет общий мезоцикл у добавляемого клиента (UI-OWN-044, как в 2.0): в его Расширенную программу, участием
- * в этой программе или в новой. Группа — копии мезоцикла одного родства в любых программах участников.
+ * P01: независимая копия в программе клиента либо ссылка на его существующий цикл.
+ * join сохранён для прежних команд и черновиков; новый интерфейс предлагает личную или новую программу.
  */
 export type PlacementTarget =
   | Readonly<{ kind: "program"; programId: string }>
   | Readonly<{ kind: "join" }>
-  | Readonly<{ kind: "new" }>;
+  | Readonly<{ kind: "new" }>
+  | Readonly<{ kind: "existing"; programId: string; mesocycleId: string; expectedRevision: number; expectedGroupId: string | null; confirmReassignment?: boolean; label?: string }>;
 
 export interface Placement {
   readonly clientId: string;
@@ -30,12 +31,13 @@ export interface ClientPlacementOptions {
   readonly clientId: string;
   /** Расширенные программы клиента (кроме этой), новые первыми; `current` — выбранная у клиента. */
   readonly programs: readonly Readonly<{ id: string; title: string; current: boolean }>[];
+  readonly cycles?: readonly Readonly<{ programId: string; programTitle: string; mesocycleId: string; title: string; revision: number; groupId: string | null; grouped: boolean }>[];
   readonly preferred: PlacementTarget;
 }
 
 /**
  * Вариант по умолчанию, как в 2.0: текущая программа клиента, если она Расширенная; иначе его последняя
- * Расширенная; иначе — участие в этой программе.
+ * Расширенная; иначе — новая личная программа.
  */
 export function preferredPlacement(programs: readonly PlacementProgram[], selectedProgramId: string | null,
   hostProgramId: string | null): PlacementTarget {
@@ -43,5 +45,5 @@ export function preferredPlacement(programs: readonly PlacementProgram[], select
   const current = periodized.find((program) => program.id === selectedProgramId);
   if (current !== undefined) return { kind: "program", programId: current.id };
   const latest = [...periodized].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-  return latest === undefined ? { kind: "join" } : { kind: "program", programId: latest.id };
+  return latest === undefined ? { kind: "new" } : { kind: "program", programId: latest.id };
 }

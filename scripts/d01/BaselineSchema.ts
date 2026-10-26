@@ -57,7 +57,7 @@ const HISTORY: Readonly<Record<string, readonly MigrationStep[]>> = {
 };
 
 /** Runtime owner registry plus the archived chains used to verify baseline equivalence. */
-export const SCHEMA_OWNERS: readonly SchemaOwner[] = DEV_SCHEMA_OWNERS.map((owner) => ({ ...owner, chain: HISTORY[owner.owner]!, ...FILES[owner.owner]! }));
+export const SCHEMA_OWNERS: readonly SchemaOwner[] = DEV_SCHEMA_OWNERS.filter((owner) => HISTORY[owner.owner] !== undefined && FILES[owner.owner] !== undefined).map((owner) => ({ ...owner, chain: HISTORY[owner.owner]!, ...FILES[owner.owner]! }));
 
 export interface SchemaObject {
   readonly type: "table" | "index" | "trigger";

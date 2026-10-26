@@ -35,10 +35,15 @@ import { SqliteDiagnosticsScreen } from "./SqliteDiagnosticsScreen.tsx";
 import { BottomDockLayoutProvider, ScreenHeader } from "../../shared/ui/components/public.ts";
 import { DataReadNotice } from "../../shared/ui/components/DataReadNotice.tsx";
 import { BackupScreen } from "./BackupScreen.tsx";
+import { TrainingTransferScreen } from "./TrainingTransferScreen.tsx";
+import { TrainingTransferContext } from "./TrainingTransferContext.tsx";
+import type { TrainingTransferPort } from "../../features/import/public.ts";
+import { expoWorkbookFiles } from "../composition/workbookFiles.ts";
 import { AutomaticBackupNotice } from "./AutomaticBackupSection.tsx";
 import type { ManualBackupPort, RestoreActionsPort, AutomaticBackupPort } from "../../features/backup/public.ts";
 
 type RootStackRoutes = {
+  Excel: { clientId?: string } | undefined;
   Root: undefined;
   Notifications: undefined;
   NotificationSettings: undefined;
@@ -102,7 +107,8 @@ function openTarget(target: NotificationTarget): void {
   ] } } } as never));
 }
 
-function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, restoreActions, automaticBackup, initialBackup }: Readonly<{
+function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, restoreActions, automaticBackup, initialBackup, trainingTransfer }: Readonly<{
+  trainingTransfer: TrainingTransferPort;
   services: ApplicationServices; clientLists: ClientListController; rosterOverview: RosterOverviewPort; manualBackup: ManualBackupPort; restoreActions: RestoreActionsPort; automaticBackup: AutomaticBackupPort; initialBackup: boolean;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -168,6 +174,9 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
         </Stack.Screen>
         <Stack.Screen name="Backup" options={{ title: "Резервные копии" }}>
           {() => <BackupScreen backup={manualBackup} restore={restoreActions} automatic={automaticBackup} />}
+        </Stack.Screen>
+        <Stack.Screen name="Excel" options={{ title: "Excel", headerShown: false }}>
+          {({ route, navigation }) => <TrainingTransferScreen clients={services.clients} plans={services.trainingPlans} execution={services.trainingExecution} exercises={services.exercises} transfer={trainingTransfer} files={expoWorkbookFiles} initialClientId={route.params?.clientId} onClose={() => navigation.goBack()} />}
         </Stack.Screen>
         <Stack.Screen name="TrainingSettings" options={{ title: "Тренировки" }}>
           {() => <TrainingSettingsScreen execution={services.trainingExecution} />}
@@ -266,7 +275,8 @@ function OutcomeQueueHost({ services }: Readonly<{ services: ApplicationServices
     repository={services.calendar} participants={services.calendarParticipants} credit={services.accounting} />;
 }
 
-export function PrototypeShell({ services, workspaceId, manualBackup, restoreActions, automaticBackup, initialBackup }: Readonly<{
+export function PrototypeShell({ services, workspaceId, manualBackup, restoreActions, automaticBackup, initialBackup, trainingTransfer }: Readonly<{
+  trainingTransfer: TrainingTransferPort;
   services: ApplicationServices; workspaceId: string; manualBackup: ManualBackupPort; restoreActions: RestoreActionsPort; automaticBackup: AutomaticBackupPort; initialBackup: boolean;
 }>) {
   const [clientLists] = useState(() => new ClientListController(services.clients, workspaceId));
@@ -294,9 +304,9 @@ export function PrototypeShell({ services, workspaceId, manualBackup, restoreAct
         <BottomDockLayoutProvider>
         <BottomSheetModalProvider>
         <CalendarUndoProvider repository={services.calendar}>
-          <NotificationsHost center={services.notifications} calendar={services.calendar} sync={services.notificationSync}>
-            <ShellNavigator services={services} clientLists={clientLists} rosterOverview={rosterOverview} manualBackup={manualBackup} restoreActions={restoreActions} automaticBackup={automaticBackup} initialBackup={initialBackup} />
-          </NotificationsHost>
+          <TrainingTransferContext.Provider value={trainingTransfer}><NotificationsHost center={services.notifications} calendar={services.calendar} sync={services.notificationSync}>
+            <ShellNavigator trainingTransfer={trainingTransfer} services={services} clientLists={clientLists} rosterOverview={rosterOverview} manualBackup={manualBackup} restoreActions={restoreActions} automaticBackup={automaticBackup} initialBackup={initialBackup} />
+          </NotificationsHost></TrainingTransferContext.Provider>
           <OutcomeQueueHost services={services} />
           <RestTimerDock timers={services.restTimers} onOpen={(timer) => openTarget(timerTarget(timer))} />
           <NotificationOpenHost navigationRef={navigationRef} onTarget={openTarget} />

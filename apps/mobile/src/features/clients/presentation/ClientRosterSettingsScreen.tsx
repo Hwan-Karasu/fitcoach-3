@@ -84,7 +84,7 @@ export function ClientRosterSettingsScreen({ repository }: Readonly<{
       </View>
       </View>
       <View style={[styles.block, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <SectionHeading>Навигация карточки</SectionHeading>
+      <SectionHeading>Панель навигации</SectionHeading>
       <View style={styles.toggleRow}>
         <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>К списку клиентов</Text>
         <Switch accessibilityLabel="Показывать кнопку К списку клиентов" value={navigationAppearance.showClientListShortcut}

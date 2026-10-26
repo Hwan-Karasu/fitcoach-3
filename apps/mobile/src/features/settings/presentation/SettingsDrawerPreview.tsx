@@ -137,7 +137,7 @@ export function SettingsDrawerPreview({
               <AppIconButton icon={<X size={20} color={colors.iconPrimary} />} label="Закрыть меню" onPress={dismiss} />
             </View>
             <Text style={[styles.groupLabel, { color: colors.textSecondary }]}>Меню</Text>
-            <DrawerLink icon={Palette} title="Оформление" detail="Темы и панель навигации" onPress={() => open(onOpenAppearance)} />
+            <DrawerLink icon={Palette} title="Оформление" detail="Темы и акценты" onPress={() => open(onOpenAppearance)} />
             <DrawerLink icon={SlidersHorizontal} title="Настройки" detail="Параметры приложения" onPress={() => open(onOpenSettings)} />
             <DrawerLink icon={Bell} title="Уведомления" detail="Напоминания и тихие часы" onPress={() => open(onOpenNotificationSettings)} />
           </ScrollView>

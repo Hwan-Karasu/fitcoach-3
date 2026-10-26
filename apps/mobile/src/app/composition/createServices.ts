@@ -33,7 +33,8 @@ import { expoNotificationAdapter } from "../../features/notifications/data/ExpoN
 import { SCHEDULE_HORIZON_DAYS, candidateFromReminder, diffSchedule, dueReminders, outcomeDueCandidates, planReminders, reminderIdentifier, withinHorizon,
   type NotificationCenterPort, type PlatformNotificationPort } from "../../features/notifications/public.ts";
 import { createNotificationSync, type NotificationSync } from "../../workflows/syncNotifications.ts";
-import { importLegacyDevDatabase } from "./legacyDevImport.ts";
+import { createTrainingTransfer } from "./createTrainingTransfer.ts";
+import type { TrainingTransferPort } from "../../features/import/public.ts";
 import { prepareDevSchema } from "./devSchema.ts";
 import { createClientCardWorkflow, type ClientCardWithAnswersPort } from "../../workflows/saveClientCard.ts";
 import { createCalcProfileWorkflow, type CalcProfileWithBodyPort } from "../../workflows/saveCalcProfile.ts";
@@ -204,6 +205,7 @@ export function createServices(clients: LocalClientServices, calendar: CalendarR
 }
 
 export interface ApplicationRuntime {
+  readonly trainingTransfer: TrainingTransferPort;
   readonly development: boolean;
   readonly boot: BootCoordinator;
   readonly services: ApplicationServices;
@@ -247,7 +249,6 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
   const dependencies = development ? createDevBootDependencies(
     () => openExpoSqliteConnection("fitcoach_f03_dev_gate.db"), async () => {
       await prepareDevSchema(database);
-      await importLegacyDevDatabase(database);
       await initializeRepositories();
     }) : createProductionBootDependencies(database, initializeRepositories, () => settings.readAppearance());
   const boot: BootCoordinator = new BootCoordinator({ ...dependencies,
@@ -286,5 +287,7 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
   const manualBackup = createManualBackup(development, commands, boot);
   const restoreActions = createRestoreActions(development, commands, boot, maintenance);
   const automaticBackup = createAutomaticBackup(development, commands, boot);
-  return { development, boot, services, maintenance, manualBackup, restoreActions, automaticBackup };
+  const transfer = createTrainingTransfer(database, workspaceId, trainingPlans, trainingExecution, exercises);
+  const trainingTransfer = commands.port(transfer);
+  return { development, boot, services, maintenance, manualBackup, restoreActions, automaticBackup, trainingTransfer };
 }

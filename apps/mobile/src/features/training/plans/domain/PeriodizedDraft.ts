@@ -1,3 +1,4 @@
+import type { Placement } from "./Placement.ts";
 import type { PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
 import type { BuilderWeek, CycleType, WeekScope, WeekType } from "./PeriodizedModel.ts";
 
@@ -31,6 +32,7 @@ export interface MesocycleBuilderDraft {
   readonly weeks: readonly BuilderWeek[];
   readonly editing: number;
   readonly members: readonly string[];
+  readonly placements?: readonly Placement[];
   /** Недели правимого мезоцикла на момент начала правки: если мезоцикл изменился, правки переносятся на текущий план по ним. */
   readonly baseWeeks: readonly BuilderWeek[] | null;
 }

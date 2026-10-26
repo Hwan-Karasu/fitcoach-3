@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Svg, { Circle, Path, Rect, SvgXml } from "react-native-svg";
+import { approvedEquipmentGlyphs } from "./approvedEquipmentGlyphs.generated.ts";
 
 /**
  * Значки оборудования (UI-OWN-031). Основа — открытые наборы IconOven (© Appic Marketing, iconoven.com) и
@@ -56,6 +57,8 @@ const aliases: Readonly<Record<string, string>> = {
 };
 
 export function EquipmentGlyph({ id, color, size = 24 }: Readonly<{ id: string; color: string; size?: number }>) {
+  const approved = approvedEquipmentGlyphs[id];
+  if (approved !== undefined) return <SvgXml xml={approved.split("currentColor").join(color)} width={size} height={size} />;
   const key = aliases[id] ?? id;
   const xml = library[key];
   const custom = own[key];

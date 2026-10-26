@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AccessibilityInfo, BackHandler, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, View } from "react-native";
+import { AccessibilityInfo, BackHandler, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { appThemes as catalogThemes } from "../../../shared/ui/theme/themes.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -9,7 +9,7 @@ import { fonts } from "../../../shared/ui/theme/typography.ts";
 
 export function ThemeCatalogPreview({ onClose }: Readonly<{ onClose: () => void }>) {
   const [backFocused, setBackFocused] = useState(false);
-  const { palette, selectTheme, navigationAppearance, setNavigationAppearance } = usePrototypeTheme();
+  const { palette, selectTheme } = usePrototypeTheme();
   const colors = palette.tokens;
   const chooseTheme = (theme: typeof catalogThemes[number]) => {
     if (theme.id === palette.themeId) return;
@@ -71,23 +71,6 @@ export function ThemeCatalogPreview({ onClose }: Readonly<{ onClose: () => void 
             ))}
             </View>)}
           </View>
-          <View style={[styles.navigationSettings, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.textPrimary }]}>Панель навигации</Text>
-            <View style={styles.settingRow}>
-              <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>К списку клиентов</Text>
-              <Switch accessibilityLabel="Показывать кнопку К списку клиентов" testID="appearance-clients-shortcut"
-                value={navigationAppearance.showClientListShortcut}
-                onValueChange={(enabled) => setNavigationAppearance("showClientListShortcut", enabled)}
-                trackColor={{ false: colors.border, true: colors.accentFill }} thumbColor={colors.surface} />
-            </View>
-            <View style={styles.settingRow}>
-              <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Скрыть подписи кнопок</Text>
-              <Switch accessibilityLabel="Скрыть подписи кнопок навигации" testID="appearance-hide-navigation-labels"
-                value={navigationAppearance.hideNavigationLabels}
-                onValueChange={(enabled) => setNavigationAppearance("hideNavigationLabels", enabled)}
-                trackColor={{ false: colors.border, true: colors.accentFill }} thumbColor={colors.surface} />
-            </View>
-          </View>
         </ScrollView>
       </SafeAreaView>
   );
@@ -103,7 +86,4 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 13, lineHeight: 18, fontFamily: fonts.bold },
   themeList: { gap: 6 },
   themeRow: { flexDirection: "row", alignItems: "stretch", gap: 6 },
-  navigationSettings: { borderWidth: 1, borderRadius: 12, padding: 10, gap: 2 },
-  settingRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 8 },
-  settingLabel: { flex: 1, fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
 });

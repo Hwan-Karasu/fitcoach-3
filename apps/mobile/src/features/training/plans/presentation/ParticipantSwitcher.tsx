@@ -134,10 +134,16 @@ export async function participantTarget(repository: TrainingPlansRepositoryPort,
   to: GroupCopy, ref: CounterpartRef, sourcePlan?: PeriodizedPlan | null) {
   const end = navigationPerformance.phase("counterpart");
   try {
+    const refGroup = ref.workoutId !== null ? { workoutId: ref.workoutId }
+      : ref.mesocycleId === null ? null : { mesocycleId: ref.mesocycleId };
+    if (refGroup === null) return null;
+    const members = await repository.getMesocycleGroup(from.clientId, from.programId, refGroup);
+    if (!members.some((member) => member.clientId === to.clientId && member.programId === to.programId && member.mesocycleId === to.mesocycleId)) return null;
     const [source, target] = await Promise.all([sourcePlan ?? repository.getPeriodizedPlan(from.clientId, from.programId),
       repository.getPeriodizedPlan(to.clientId, to.programId)]);
     if (source === null || target === null) return null;
-    return { programId: to.programId, ...counterpartOf(source.mesocycles, target.mesocycles, to.mesocycleId, ref) };
+    const counterpart = counterpartOf(source.mesocycles, target.mesocycles, to.mesocycleId, ref);
+    return counterpart === null ? null : { programId: to.programId, ...counterpart };
   } finally { end(); }
 }
 

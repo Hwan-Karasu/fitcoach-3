@@ -35,3 +35,7 @@ keystore.properties
 
 # Картинки RepDB Free: собираются npm run catalog:build, не публикуются (лицензия, п. 3)
 apps/mobile/assets/exercises/
+
+# Local verification output and generated distributables.
+/artifacts/
+*.log

@@ -37,10 +37,18 @@ export const storedPeriodizedDraft = (value: unknown): value is PeriodizedDraft 
   && storedSimpleDraft(value.draft) && strings(value.clientIds) && (value.kind === "MESOCYCLE" || value.kind === "WEEK"
     && id(value.mesocycleId) && integer(value.weekIndex) && weekType(value.type) && WEEK_SCOPES.some((scope) => scope === value.scope)
     && (value.replaceConflicts === undefined || strings(value.replaceConflicts)) && (value.baseWorkouts === undefined || workouts(value.baseWorkouts)));
+const storedPlacement = (value: unknown): value is import("./Placement.ts").Placement => object(value) && id(value.clientId)
+  && object(value.target) && (value.target.kind === "join" || value.target.kind === "new"
+    || value.target.kind === "program" && id(value.target.programId)
+    || value.target.kind === "existing" && id(value.target.programId) && id(value.target.mesocycleId)
+      && integer(value.target.expectedRevision) && nullableText(value.target.expectedGroupId)
+      && (value.target.label === undefined || text(value.target.label))
+      && (value.target.confirmReassignment === undefined || typeof value.target.confirmReassignment === "boolean"));
 export const storedMesocycleBuilder = (value: unknown): value is MesocycleBuilderDraft => object(value) && nullableInteger(value.baseRevision)
   && text(value.programTitle) && text(value.title) && ["hypertrophy", "strength", "power", "endurance", "recomp", "custom"].includes(String(value.cycleType))
   && text(value.repsText) && text(value.startDate) && integer(value.editing) && strings(value.members) && arrayOf(value.weeks, builderWeek)
-  && (value.baseWeeks === null || arrayOf(value.baseWeeks, builderWeek));
+  && (value.baseWeeks === null || arrayOf(value.baseWeeks, builderWeek))
+  && (value.placements === undefined || arrayOf(value.placements, storedPlacement));
 export const storedMesocycle = (value: unknown): value is Mesocycle => object(value) && id(value.id) && id(value.lineageId) && text(value.title)
   && arrayOf(value.weeks, (item): item is Mesocycle["weeks"][number] => week(item) && object(item) && id(item.id) && weekType(item.type))
   && (value.repRange === undefined || range(value.repRange)) && (value.startDate === undefined || nullableText(value.startDate))

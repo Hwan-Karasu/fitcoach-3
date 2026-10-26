@@ -1,4 +1,8 @@
 import { Profiler, useEffect, useRef, useState, type ReactNode } from "react";
+import { BuilderExcelImport } from "./BuilderExcelImport.tsx";
+import { expoWorkbookFiles } from "../composition/workbookFiles.ts";
+import { useTrainingTransfer } from "./TrainingTransferContext.tsx";
+import { selectTransferCycle } from "../../features/import/public.ts";
 import { navigationPerformance } from "../../shared/diagnostics/NavigationPerformance.ts";
 import { ConfirmDialog, TabBarPending } from "../../shared/ui/components/public.ts";
 import { CommonActions, useIsFocused } from "@react-navigation/native";
@@ -170,7 +174,7 @@ export function NutritionNavigator({ clientId, clientName, clientEmoji, body, on
  * Шапка — общая строка карточки клиента (UI-OWN-001), назад — системной кнопкой.
  */
 export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExercise, repository, execution, restTimers, activeWorkouts, onOpenWorkout, onOpenClientPrograms,
-  listCandidates, exercises, exerciseLookup, weekCopy, weekSwap, mesocycleSave, planDelete, onExitClient, onOpenClients }: Readonly<{
+  listCandidates, exercises, exerciseLookup, mesocycleSave, planDelete, onExitClient, onOpenClients }: Readonly<{
   clientId: string;
   clientName: string;
   clientEmoji: string | null;
@@ -196,6 +200,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
   const { palette } = usePrototypeTheme();
   // UI-OWN-043: участник группы, чьи данные открыты (как в 2.0); `null` — клиент карточки. Экраны стека получают его.
   navigationPerformance.render("TrainingNavigator");
+  const trainingTransfer = useTrainingTransfer();
   const [participant, setParticipant] = useState<string | null>(null);
   const [names, setNames] = useState<ReadonlyMap<string, string>>(new Map());
   const [switching, setSwitching] = useState(false);
@@ -246,6 +251,9 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
     })}>
       <TrainingStack.Screen name="TrainingIndex" listeners={{ focus: () => setParticipant(null) }}>
         {({ navigation }) => <ProgramLibraryScreen clientId={clientId} repository={repository}
+          renderExcelImport={(renderTrigger) => <BuilderExcelImport memory={trainingTransfer} renderTrigger={renderTrigger} files={expoWorkbookFiles} exercises={exercises} label="Импортировать из Excel" clientName={clientName}
+            onImport={async (value, mapping, rememberMatches) => { await trainingTransfer.importClient(clientId, value, mapping, { rememberMatches }); }} />}
+          planDelete={planDelete} onExport={async (programId) => { await expoWorkbookFiles.share(await trainingTransfer.exportClient(clientId, [programId])); }}
           onChoose={(kind) => { const route = createRoute(kind); navigation.navigate(route.name, route.params as never); }}
           onCreate={() => navigation.navigate("TrainingChooser")}
           onOpenTemplates={() => navigation.navigate("TrainingTemplates")}
@@ -278,7 +286,9 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingChooser">
         {({ navigation }) => <ProgramModeChooserScreen onChoose={(kind) => { const route = createRoute(kind); navigation.navigate(route.name, route.params as never); }}
-          onOpenTemplates={() => navigation.navigate("TrainingTemplates")} />}
+          onOpenTemplates={() => navigation.navigate("TrainingTemplates")}
+          renderExcelImport={(renderTrigger) => <BuilderExcelImport memory={trainingTransfer} renderTrigger={renderTrigger} files={expoWorkbookFiles} exercises={exercises} label="Импортировать из Excel" clientName={viewerName}
+            onImport={async (value, mapping, rememberMatches) => { await trainingTransfer.importClient(viewer, value, mapping, { rememberMatches }); navigation.popTo("TrainingIndex"); }} />} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingCreate" options={({ route }) => ({ title: route.params.mesocycleId !== undefined ? "Изменение мезоцикла"
         : route.params.programId !== undefined ? "Новый мезоцикл" : trainingTitles.TrainingCreate })}>
@@ -286,6 +296,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
         {({ navigation, route }) => <PeriodizedBuilderScreen clientId={viewer} repository={repository} exercises={exerciseLookup}
           programId={route.params.programId} mesocycleId={route.params.mesocycleId} initialWeek={route.params.weekIndex}
           mesocycleSave={mesocycleSave}
+          renderExcel={(onApply) => <BuilderExcelImport memory={trainingTransfer} files={expoWorkbookFiles} exercises={exercises} onApply={onApply} />}
           onSaved={(mesocycleId) => navigation.popTo("TrainingProgram", { programId: route.params.programId!, mesocycleId })}
           listCandidates={listCandidates} picked={route.params.picked ?? null} onCancel={() => navigation.goBack()}
           onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId,
@@ -302,7 +313,8 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
       <TrainingStack.Screen name="TrainingProgram">
         {({ navigation, route }) => <RetainedTrainingProgram><TabBarPending weeks dock /><Profiler id="TrainingProgram" onRender={navigationPerformance.onRender}><ProgramScreen clientId={viewer} programId={route.params.programId}
           requestedWeek={route.params.weekIndex} requestedMesocycle={route.params.mesocycleId}
-          repository={repository} listCandidates={listCandidates} exercises={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap} planDelete={planDelete}
+          repository={repository} listCandidates={listCandidates} exercises={exerciseLookup} planDelete={planDelete}
+          onExport={async (mesocycleId) => { const value = await trainingTransfer.exportClient(viewer, [route.params.programId]); await expoWorkbookFiles.share(mesocycleId ? selectTransferCycle(value, route.params.programId, mesocycleId) : value); }}
           onOpenMatrix={() => navigation.navigate("TrainingMatrix", { programId: route.params.programId })}
           onTabChange={(tab) => navigation.setOptions({ title: tab === "templates" ? "Шаблоны" : trainingTitles.TrainingProgram })}
           renderParticipants={(current, shown, group, source) => <ParticipantSwitcher docked members={group} clientId={shown?.clientId ?? viewer} activeClientId={viewer}
@@ -333,6 +345,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingBuilder">
         {({ navigation, route }) => <SimpleProgramBuilderScreen clientId={viewer} programId={route.params?.programId ?? null}
+          renderExcel={(onApply) => <BuilderExcelImport memory={trainingTransfer} files={expoWorkbookFiles} exercises={exercises} simple onApply={onApply} />}
           onCancel={() => navigation.goBack()}
           repository={repository} simplePlanSave={mesocycleSave} exercises={exerciseLookup} picked={route.params?.picked ?? null}
           onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId,

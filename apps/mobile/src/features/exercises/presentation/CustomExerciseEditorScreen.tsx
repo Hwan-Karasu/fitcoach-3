@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { AppButton, StickyEditorFooter, TrainingEditorLayout, TextField } from "../../../shared/ui/components/public.ts";
+import { AppButton, SearchField, StickyEditorFooter, TrainingEditorLayout, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import type { ExerciseCatalogPort } from "../domain/ExerciseCatalogPort.ts";
@@ -10,7 +10,8 @@ import { EXERCISE_NAME_MAX } from "../domain/ExerciseRules.ts";
 import { OptionTile, profileExamples, ProfileTile, TileGrid } from "./choiceTiles.tsx";
 import { EquipmentGlyph } from "./equipmentGlyphs.tsx";
 import { BodyPartIcon } from "./exerciseIcons.tsx";
-import { COMMON_EQUIPMENT, equipmentFilterLabel } from "./ExerciseLibraryScreen.tsx";
+import { equipmentFilterLabel } from "./ExerciseLibraryScreen.tsx";
+import { equipmentChoices } from "../domain/EquipmentSearch.ts";
 import { useExerciseCatalog } from "./useExerciseCatalog.ts";
 
 const errors: Readonly<Record<string, string>> = {
@@ -41,19 +42,12 @@ export function CustomExerciseEditorScreen({ exerciseId, initialName, repository
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const saving = useRef(false);
-  // Оборудование: сначала 12 самых частых и выбранное, остальное — по кнопке (60 плиток — слишком длинно).
+  // В редакторе сначала 12 вариантов и выбранное; поиск сразу охватывает весь список.
   const [allEquipment, setAllEquipment] = useState(false);
-  // Оборудование: всё, что встречается в каталоге, частое — первым; выбранное всегда в списке.
+  const [equipmentQuery, setEquipmentQuery] = useState("");
+  // Весь справочник и оборудование каталога, независимо от выбранной группы мышц.
   const { entries } = useExerciseCatalog(repository);
-  const equipmentOptions = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const entry of entries ?? []) {
-      const key = entry.definition.equipment ?? "none";
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return [...new Set([...COMMON_EQUIPMENT, ...counts.keys(), equipment])]
-      .sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0));
-  }, [entries, equipment]);
+  const equipmentOptions = useMemo(() => equipmentChoices(entries ?? [], [equipment], equipmentQuery).filter((id) => id !== ""), [entries, equipment, equipmentQuery]);
 
   useEffect(() => {
     if (exerciseId === undefined) return undefined;
@@ -109,12 +103,14 @@ export function CustomExerciseEditorScreen({ exerciseId, initialName, repository
           example={profileExamples[item]} selected={profile === item} onPress={() => setProfile(item)} />)}
       </TileGrid>
       {section("Оборудование", equipment === "none" ? null : equipmentLabel(equipment))}
+      <SearchField query={equipmentQuery} onChangeQuery={setEquipmentQuery} placeholder="Поиск оборудования" accessibilityLabel="Поиск оборудования" />
+      {equipmentOptions.length === 0 ? <Text style={{ color: colors.textSecondary }}>Оборудование не найдено. Измените запрос.</Text> : null}
       <TileGrid>
-        {(allEquipment ? equipmentOptions : equipmentOptions.filter((item, index) => index < 12 || item === equipment)).map((item) => <OptionTile key={item} radio compact label={equipmentFilterLabel(item)}
-          icon={(color) => <EquipmentGlyph id={item} color={color} size={28} />}
+        {(allEquipment || equipmentQuery.trim() ? equipmentOptions : equipmentOptions.filter((item, index) => index < 12 || item === equipment)).map((item) => <OptionTile key={item} radio compact label={equipmentFilterLabel(item)}
+          icon={(color) => <EquipmentGlyph id={item} color={color} size={36} />}
           selected={equipment === item} onPress={() => setEquipment(item)} />)}
       </TileGrid>
-      {equipmentOptions.length > 12 ? <AppButton compact variant="ghost"
+      {equipmentOptions.length > 12 && !equipmentQuery.trim() ? <AppButton compact variant="ghost"
         label={allEquipment ? "Свернуть" : `Всё оборудование (${equipmentOptions.length})`}
         onPress={() => setAllEquipment((value) => !value)} /> : null}
     </ScrollView>

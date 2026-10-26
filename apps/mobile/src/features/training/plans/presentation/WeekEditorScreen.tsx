@@ -14,7 +14,6 @@ import { StructureEditPreview } from "./StructureEditPreview.tsx";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import type { RemovedResultsAction, WeekEditSavePort } from "../domain/WeekEditSave.ts";
 import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidate.ts";
-import { ParticipantChips } from "./ParticipantChips.tsx";
 import { useExerciseLookup } from "./useExerciseLookup.ts";
 import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
 import { WorkoutsEditor } from "./WorkoutsEditor.tsx";
@@ -27,7 +26,7 @@ import { newPlanId } from "./WorkoutsEditor.tsx";
 const errors: Readonly<Record<string, string>> = {
   DRAFT_INVALID: "Неделя не сохранилась: проверьте тренировки.",
   PROGRAM_REVISION_CONFLICT: "Программа изменилась в другом месте. Откройте неделю заново.",
-  PROGRAM_ARCHIVED: "У кого-то из выбранных участников программа в архиве — снимите отметку.",
+  PROGRAM_ARCHIVED: "Программа в архиве. Восстановите её перед изменением недели.",
   TARGET_NOT_FOUND: "Неделя или участник не найдены.",
   };
 
@@ -61,7 +60,6 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
   const [type, setType] = useState<WeekType>("base");
   const [scope, setScope] = useState<WeekScope>("CURRENT");
   const [revision, setRevision] = useState<number | null>(null);
-  const [members, setMembers] = useState<readonly string[]>([]);
   // §48.6.3: правка только своей недели не заставляет выбирать других клиентов.
   const [selected, setSelected] = useState<readonly string[]>([clientId]);
   const [names, setNames] = useState<ReadonlyMap<string, string>>(new Map());
@@ -99,12 +97,10 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
       setBaseWorkouts(stale || week0?.baseWorkouts === undefined ? week.workouts : week0.baseWorkouts);
       setRevision(stale ? plan.program.revision : saved?.baseRevision ?? plan.program.revision);
       // UI-OWN-044: участники правки — группа мезоцикла (их копии могут лежать в их собственных программах).
-      void repository.getMesocycleGroup(clientId, programId, { mesocycleId })
-        .then((copies) => { if (active) setMembers(copies.map((copy) => copy.clientId)); }).catch(() => undefined);
       setType(saved?.kind === "WEEK" ? saved.type : week.type);
       setScope(saved?.kind === "WEEK" ? saved.scope : "CURRENT");
       setReplaceConflicts(saved?.kind === "WEEK" && !stale ? saved.replaceConflicts ?? [] : []);
-      setSelected(saved?.clientIds ?? [clientId]);
+      setSelected([clientId]);
       setDraft(saved === null ? { title: found.title, plan: { weeks: 1, workouts: week.workouts } }
         : stale && week0?.baseWorkouts !== undefined
           ? { ...saved.draft, plan: { ...saved.draft.plan, workouts: rebaseDraft(week0.baseWorkouts, saved.draft.plan.workouts,
@@ -206,9 +202,6 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
         <Text style={[styles.meta, { color: colors.textSecondary }]}>
           {`Изменятся недели: ${affected.join(", ")}. Результаты тренировок не переносятся.`}
         </Text>
-        <ParticipantChips clientId={clientId} memberIds={members} names={names} selected={selected}
-          onChange={(ids) => { setDirty(true); setSelected(ids); setReplaceConflicts([]); }}
-          note="Правка у выбранных — в их собственных копиях этого мезоцикла." />
         {previewError ? <InlineNotice kind="error">{previewError}</InlineNotice> : preview === null
           ? <Text style={[styles.meta, { color: colors.textMuted }]}>{issues.length > 0 ? "Исправьте поля для проверки изменений." : "Проверяем персональные отличия…"}</Text>
           : <StructureEditPreview preview={preview} names={names} lookup={lookup} replace={replaceConflicts}
@@ -227,7 +220,7 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
       <StickyEditorFooter actionLabel="Сохранить неделю" busy={busy} disabled={preview === null} onAction={() => { void save(); }}
         onCancel={onCancel}
         message={recovery.error ?? message} messageKind={message?.startsWith("Сохранено") === true ? "info" : "error"}
-        note={selected.length > 1 ? "Тип недели меняется у этой недели — у вас и у выбранных участников" : "Тип недели меняется только у этой недели"} />
+        note="Тип недели меняется только у этой недели" />
     </TrainingEditorLayout>
   );
 }

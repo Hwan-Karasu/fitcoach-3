@@ -1,18 +1,17 @@
-import { Directory, File } from "expo-file-system";
-import { defaultDatabaseDirectory } from "expo-sqlite";
+import { Directory } from "expo-file-system";
 import { expoBackupLocationStore } from "../../features/backup/data/ExpoBackupLocationStore.ts";
 import { expoManualSnapshotJobs } from "../../features/backup/data/ExpoManualSnapshotJobs.ts";
 import { nativeBackupPublisher } from "../../features/backup/data/NativeBackupPublisher.ts";
 import { ManualBackupService, ManualBackupError, type ManualBackupPort } from "../../features/backup/public.ts";
 import type { RuntimeCommandGate } from "../runtime/RuntimeCommandGate.ts";
 import type { BootCoordinator } from "../bootstrap/BootCoordinator.ts";
-import { PRODUCTION_DATABASE, PRODUCTION_IDENTITY } from "./productionDatabase.ts";
+import { PRODUCTION_IDENTITY } from "./productionDatabase.ts";
 import { SCHEMA_OWNERS } from "./schema.ts";
-import { sqliteDirectoryUri } from "../../shared/db/SqliteDirectoryUri.ts";
+import { productionLiveFile } from "./productionFiles.ts";
 
 export function createManualBackup(development: boolean, commands: RuntimeCommandGate, boot: BootCoordinator): ManualBackupPort {
   let jobs: ReturnType<typeof expoManualSnapshotJobs> | null = null;
-  const getJobs = () => jobs ??= expoManualSnapshotJobs(new File(new Directory(sqliteDirectoryUri(defaultDatabaseDirectory)), PRODUCTION_DATABASE),
+  const getJobs = () => jobs ??= expoManualSnapshotJobs(productionLiveFile(),
     { identity: PRODUCTION_IDENTITY, owners: SCHEMA_OWNERS });
   return new ManualBackupService({ enabled: !development, publisher: nativeBackupPublisher(), locations: expoBackupLocationStore(),
     prepare: () => getJobs().prepare(), cleanup: (snapshot) => getJobs().cleanup(snapshot),

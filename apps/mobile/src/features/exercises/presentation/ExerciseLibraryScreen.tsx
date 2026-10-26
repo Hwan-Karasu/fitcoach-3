@@ -1,5 +1,5 @@
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { BackHandler, FlatList, Image, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
+import { BackHandler, FlatList, Image, Keyboard, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, type BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronRight, Dumbbell, Plus, SlidersHorizontal, Star, X } from "lucide-react-native";
@@ -17,6 +17,8 @@ import { BodyPartIcon } from "./exerciseIcons.tsx";
 import { OptionTile, profileExamples, ProfileTile } from "./choiceTiles.tsx";
 import { thumbnailOf } from "./exerciseImage.ts";
 import { useExerciseCatalog } from "./useExerciseCatalog.ts";
+import { equipmentChoices } from "../domain/EquipmentSearch.ts";
+import { useCatalogBack, type CatalogBackHandle } from "./useCatalogBack.ts";
 
 const modes: readonly Readonly<{ id: CatalogMode; label: string }>[] = [
   { id: "ALL", label: "Все" }, { id: "FAVORITES", label: "Избранное" }, { id: "MINE", label: "Мои" },
@@ -127,8 +129,9 @@ function CatalogSheet({ visible, title, onClose, onReset, children }: Readonly<{
  * активных фильтров, плотный список. Нет совпадений — «Создать «запрос»». В выборе для тренировки можно
  * отметить несколько упражнений: номер на строке — порядок добавления (UI-OWN-029).
  */
-export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, picking = false, multiPick = false, query: externalQuery,
-  onQueryChange }: Readonly<{
+export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, picking = false, multiPick = false, initialQuery = "", query: externalQuery,
+  onQueryChange, backRef }: Readonly<{
+  backRef?: Ref<CatalogBackHandle>;
   repository: ExerciseCatalogPort;
   /** Каталог: открыть карточку (§31.9 один каталог, разные режимы). */
   onOpen?: (exerciseId: string) => void;
@@ -138,6 +141,7 @@ export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, pi
   onCreate: (name: string, selected: readonly string[]) => void;
   picking?: boolean;
   multiPick?: boolean;
+  initialQuery?: string;
   /** Поиск живёт в шапке экрана (выбор упражнения для тренировки): строка поиска на самом экране не показывается. */
   query?: string;
   onQueryChange?: (query: string) => void;
@@ -145,14 +149,17 @@ export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, pi
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const { entries, failed, reload } = useExerciseCatalog(repository);
-  const [ownQuery, setOwnQuery] = useState("");
+  const [ownQuery, setOwnQuery] = useState(initialQuery);
   const headerSearch = externalQuery !== undefined && onQueryChange !== undefined;
   const query = headerSearch ? externalQuery : ownQuery;
   const setQuery = headerSearch ? onQueryChange : setOwnQuery;
   const [mode, setMode] = useState<CatalogMode>("ALL");
   const [filters, setFilters] = useState<CatalogFilters>(NO_FILTERS);
   const [sheet, setSheet] = useState<SheetKind | null>(null);
-  const closeSheet = useCallback(() => setSheet(null), []);
+  const closeSheet = useCallback(() => { Keyboard.dismiss(); setSheet(null); }, []);
+  useCatalogBack(backRef, sheet !== null, closeSheet);
+  const [equipmentQuery, setEquipmentQuery] = useState("");
+  useEffect(() => { if (sheet !== "equipment") setEquipmentQuery(""); }, [sheet]);
   // Одно нижнее окно на экран: несколько BottomSheetModal путались у провайдера. Содержимое держится, пока окно уезжает.
   const [lastSheet, setLastSheet] = useState<SheetKind>("muscles");
   useEffect(() => { if (sheet !== null) setLastSheet(sheet); }, [sheet]);
@@ -222,9 +229,7 @@ export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, pi
     : picked.length === 1 ? picked[0]! : `${picked[0]} +${picked.length - 1}`;
   const muscleLabel = summary([...filters.bodyParts].map((part) => bodyPartLabels[part]), "Все мышцы");
   const equipmentPicked = summary([...filters.equipment].map(equipmentFilterLabel), "Всё оборудование");
-  const equipmentOptions = [...new Set([...COMMON_EQUIPMENT, ...optionCounts.keys(), ...filters.equipment])]
-    .filter((item) => (optionCounts.get(item) ?? 0) > 0 || filters.equipment.has(item))
-    .sort((a, b) => (optionCounts.get(b) ?? 0) - (optionCounts.get(a) ?? 0));
+  const equipmentOptions = equipmentChoices(entries, [...filters.equipment], equipmentQuery);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.canvas }]}>
@@ -304,8 +309,10 @@ export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, pi
           selected={filters.bodyParts.has(part)} onPress={() => setFilters({ ...filters, bodyParts: toggled(filters.bodyParts, part) })} />)}
         </View>
         </> : kind === "equipment" ? <>
+        <SearchField query={equipmentQuery} onChangeQuery={setEquipmentQuery} placeholder="Поиск оборудования" accessibilityLabel="Поиск оборудования" />
+        {equipmentOptions.length === 0 ? <Text style={{ color: colors.textSecondary }}>Оборудование не найдено. Измените запрос.</Text> : null}
         <View style={styles.optionWrap}>
-        {equipmentOptions.map((item) => <OptionTile key={item} compact icon={(color) => <EquipmentGlyph id={item} color={color} size={28} />} label={equipmentFilterLabel(item)} count={optionCounts.get(item) ?? 0}
+        {equipmentOptions.map((item) => <OptionTile key={item} compact dimWhenEmpty={false} icon={(color) => <EquipmentGlyph id={item} color={color} size={36} />} label={equipmentFilterLabel(item)} count={optionCounts.get(item) ?? 0}
           selected={filters.equipment.has(item)} onPress={() => setFilters({ ...filters, equipment: toggled(filters.equipment, item) })} />)}
         </View>
         </> : <>

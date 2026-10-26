@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useIsFocused } from "@react-navigation/native";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
-import { Archive, ArrowLeftRight, Bookmark, CalendarDays, Copy, Ellipsis, LayoutGrid, Pencil, Plus, Trash2, TrendingUp } from "lucide-react-native";
+import { Archive, Bookmark, CalendarDays, Ellipsis, FileSpreadsheet, LayoutGrid, Pencil, Plus, Trash2, TrendingUp } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, InlineNotice, LoadingState, SegmentedControl, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
@@ -10,10 +10,6 @@ import { membersWord, PROGRAM_TITLE_MAX, programKindLabels } from "../domain/Pro
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
 import type { PlannedWorkout } from "../domain/SimplePlanModel.ts";
-import type { WeekCopyPort, WeekCopyRequest } from "../domain/WeekCopy.ts";
-import { WeekCopyFlow } from "./WeekCopyFlow.tsx";
-import type { WeekSwapPort } from "../domain/WeekSwap.ts";
-import { WeekSwapPanel } from "./WeekSwapPanel.tsx";
 import { ParticipantChips } from "./ParticipantChips.tsx";
 import { weekTypeLabels, type PeriodizedPlan, type WeekType } from "../domain/PeriodizedModel.ts";
 import { setsSummary } from "../domain/SimplePlanRules.ts";
@@ -56,7 +52,8 @@ export interface ProgramWeeksView {
  * и «Изменить неделю» (T04).
  */
 export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, renderTemplates, renderParticipants, planDelete, onTabChange, onEditStructure,
-  onAddMesocycle, onEditWeek, onArchived, requestedWeek, requestedMesocycle, weekCopy, weekSwap, onOpenProgram, onOpenMatrix }: Readonly<{
+  onAddMesocycle, onEditWeek, onArchived, requestedWeek, requestedMesocycle, onOpenProgram, onOpenMatrix, onExport }: Readonly<{
+  onExport?: (mesocycleId?: string) => Promise<void>;
   clientId: string;
   programId: string;
   repository: TrainingPlansRepositoryPort;
@@ -72,10 +69,6 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   onEditWeek: (mesocycleId: string, weekIndex: number) => void;
   onArchived: () => void;
   requestedWeek?: number;
-  /** Копирование недели мезоцикла (§48.21); без порта кнопки нет. */
-  weekCopy?: WeekCopyPort;
-  /** Перестановка недель мезоцикла (§48.21 п. 5); без порта пункта меню нет. */
-  weekSwap?: WeekSwapPort;
   /** Открыть другую программу (созданную на основе этой, §48.17). */
   onOpenProgram?: (programId: string) => void;
   /** T05: матрица недель (обзор программы). */
@@ -102,13 +95,11 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [swapping, setSwapping] = useState(false);
   // §48.17: новая Расширенная на основе этой Простой — название и участники.
   const [upgrade, setUpgrade] = useState<Readonly<{ title: string; clientIds: readonly string[] }> | null>(null);
   // §48.14–48.15: сохранение плана этого клиента как шаблона; название по умолчанию — из программы/мезоцикла.
   const [templateForm, setTemplateForm] = useState<Readonly<{ kind: "program" | "mesocycle"; mesocycleId: string | null;
     title: string }> | null>(null);
-  const [copyRequest, setCopyRequest] = useState<Omit<WeekCopyRequest, "sourceWeek"> | null>(null);
   // Неделя запрошенного места (из дневника/матрицы), применённая данными загрузки: повторно её не применяет эффект ниже.
   const appliedContext = useRef<string | null>(null);
   const [weeksByCycle, setWeeksByCycle] = useState<Readonly<Record<string, number>>>({});
@@ -259,17 +250,12 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       </View><AppIconButton label="Действия программы" buttonRef={menuAnchor}
         icon={<Ellipsis size={24} color={colors.textPrimary} />} onPress={() => setMenuOpen(true)} /></View> : null}
       <DropdownMenu visible={menuOpen} anchor={menuAnchor} title="Программа" selected=""
-        options={[{ value: "rename", label: "Переименовать", icon: (color: string) => <Pencil size={18} color={color} strokeWidth={2} /> },
-          ...(weekSwap !== undefined && program.kind === "PERIODIZED" ? [{ value: "swap", label: "Поменять недели местами",
-            icon: (color: string) => <ArrowLeftRight size={18} color={color} strokeWidth={2} /> }] : []),
+        options={[{ value: "rename", label: "Переименовать программу", icon: (color: string) => <Pencil size={18} color={color} strokeWidth={2} /> },
+          ...(onExport !== undefined ? [{ value: "export", label: program.kind === "PERIODIZED" ? "Экспорт цикла в Excel" : "Экспорт в Excel", icon: (color: string) => <FileSpreadsheet size={18} color={color} strokeWidth={2} /> }] : []),
           ...(onOpenMatrix !== undefined ? [{ value: "matrix", label: "Матрица недель", icon: (color: string) => <LayoutGrid size={18} color={color} strokeWidth={2} /> }] : []),
-          { value: "save-program", label: "Сохранить как шаблон", icon: (color: string) => <Bookmark size={18} color={color} strokeWidth={2} /> },
+          ...(program.kind === "PERIODIZED" ? [{ value: "save-program", label: "Всю программу в шаблоны", icon: (color: string) => <Bookmark size={18} color={color} strokeWidth={2} /> }] : []),
           ...(program.kind === "SIMPLE" && onOpenProgram !== undefined ? [{ value: "upgrade", label: "Создать расширенную на основе",
             icon: (color: string) => <TrendingUp size={18} color={color} strokeWidth={2} /> }] : []),
-          ...(program.kind === "PERIODIZED" && weekCopy !== undefined && (selectedCycle()?.weeks.length ?? 0) > 1
-            ? [{ value: "copy-week", label: "Копировать неделю", icon: (color: string) => <Copy size={18} color={color} strokeWidth={2} /> }] : []),
-          ...(program.kind === "PERIODIZED" && (periodized?.mesocycles.length ?? 0) > 0
-            ? [{ value: "save-mesocycle", label: "Сохранить мезоцикл как шаблон", icon: (color: string) => <Bookmark size={18} color={color} strokeWidth={2} /> }] : []),
           { value: "archive", label: "В архив", icon: (color: string) => <Archive size={18} color={color} strokeWidth={2} /> },
           ...(planDelete !== undefined && program.kind === "PERIODIZED" && (periodized?.mesocycles.length ?? 0) > 1
             ? [{ value: "delete-mesocycle", label: "Удалить мезоцикл", danger: true,
@@ -278,27 +264,20 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
             icon: (color: string) => <Trash2 size={18} color={color} strokeWidth={2} /> }] : [])]}
         onClose={() => setMenuOpen(false)} onSelect={(value) => {
           if (value === "rename") setRenaming(program.title); else if (value === "archive") setConfirmArchive(true);
+          else if (value === "export" && onExport && !busy) {
+            const cycleId = program.kind === "PERIODIZED" ? selectedCycle()?.id : undefined;
+            if (program.kind === "PERIODIZED" && !cycleId) return;
+            setBusy(true); setMessage(null); setNotice(null);
+            void onExport(cycleId).then(() => setNotice("Excel подготовлен."), (cause: unknown) => setMessage(cause instanceof Error ? cause.message : "Не удалось экспортировать Excel.")).finally(() => setBusy(false));
+          }
           else if (value === "delete-program") setConfirmDelete(true);
           else if (value === "delete-mesocycle") setDeletingCycle(selectedCycle() ?? null);
-          else if (value === "swap") { setNotice(null); setMessage(null); setSwapping(true); }
           else if (value === "matrix") onOpenMatrix?.();
           else if (value === "upgrade") {
             setNotice(null); setMessage(null);
             setUpgrade({ title: `${program.title} — расширенная`.slice(0, 80), clientIds: [clientId] });
           }
           else if (value === "save-program") { setNotice(null); setTemplateForm({ kind: "program", mesocycleId: null, title: program.title }); }
-          else if (value === "save-mesocycle") {
-            const cycle = selectedCycle();
-            if (cycle !== undefined) { setNotice(null); setTemplateForm({ kind: "mesocycle", mesocycleId: cycle.id, title: cycle.title }); }
-          }
-          else if (value === "copy-week") {
-            const cycle = selectedCycle();
-            if (cycle !== undefined && periodized !== null) {
-              setNotice(null); setMessage(null);
-              setCopyRequest({ clientId, programId, mesocycleId: cycle.id, targetWeek: shownWeek.current,
-                expectedRevision: periodized.program.revision });
-            }
-          }
         }} />
       {message !== null ? <InlineNotice kind="error">{message}</InlineNotice> : null}
       {notice !== null ? <InlineNotice kind="success">{notice}</InlineNotice> : null}
@@ -398,26 +377,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       </> : periodized === null ? <LoadingState label="Открываем мезоциклы…" /> : (() => {
         const selected = periodized.mesocycles.find((item) => item.id === periodized.selectedMesocycleId) ?? periodized.mesocycles[0];
         return <>
-          {swapping && weekSwap !== undefined && selected !== undefined ? <WeekSwapPanel scrollRef={scrollRef}
-            weeks={selected.weeks.map((week) => ({ id: week.id, index: week.index, caption: weekTypeLabels[week.type],
-              workouts: week.workouts.length }))}
-            onDone={() => setSwapping(false)}
-            onSwap={async (first, second) => {
-              setMessage(null);
-              try {
-                await weekSwap.swap({ clientId, programId, mesocycleId: selected.id, first, second,
-                  expectedRevision: periodized.program.revision });
-                setNotice(`Недели ${first} и ${second} поменялись местами.`);
-                return true;
-              } catch (error) {
-                const code = error instanceof Error ? error.message : "";
-                setMessage(code === "PROGRAM_REVISION_CONFLICT" ? "Программа изменилась — показан новый порядок, повторите."
-                  : code === "WEEK_SWAP_NO_SLOT" ? "В мезоцикле 52 недели — перестановка недоступна."
-                    : "Не удалось поменять недели местами. Порядок прежний.");
-                refresh();
-                return false;
-              }
-            }} /> : selected === undefined ? (
+          {selected === undefined ? (
             <InlineNotice kind="info">Мезоциклов пока нет. Создайте первый: план первой недели скопируется во все недели.</InlineNotice>
           ) : renderWeeks?.({ key: selected.lineageId, onLoaded: setPanelFor, mesocycleId: selected.id, selectedWeek: weeksByCycle[selected.id],
             onSelectWeek: (week) => selectWeek(selected.id, week),
@@ -461,10 +421,6 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
                 </View>
               </View>;
             } })}
-          {weekCopy !== undefined ? <WeekCopyFlow port={weekCopy} request={copyRequest}
-            weeks={selected?.weeks.map((week) => ({ index: week.index, caption: weekTypeLabels[week.type] })) ?? []}
-            onClose={() => setCopyRequest(null)}
-            onDone={(result) => { if (result.ok) setNotice(result.text); else setMessage(result.text); }} /> : null}
           <MesocycleBook mesocycles={periodized.mesocycles} selectedId={selected?.id} resetKey={orderReset} onAdd={onAddMesocycle}
             onDelete={planDelete === undefined ? undefined : setDeletingCycle}
             onSelect={(id) => {
@@ -487,7 +443,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       })()}
       {renaming !== null ? (
         <View style={styles.rename}>
-          <TextField label="Название" required value={renaming} onChangeText={setRenaming} />
+          <TextField label="Название программы" required value={renaming} onChangeText={setRenaming} />
           {others.length > 0 ? <Text style={[styles.meta, { color: colors.textSecondary }]}>
             {`Название общее: сменится у всех участников программы (${others.length + 1}).`}
           </Text> : null}

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { BuilderExcelDraft } from "../domain/BuilderExcelDraft.ts";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import { Minus, Plus } from "lucide-react-native";
@@ -37,7 +38,8 @@ const errors: Readonly<Record<string, string>> = {
  * Компоновка 2.0 (UI-OWN-026): вкладки «Программа | Шаблоны», карточка «Настройки программы», внизу «Создать»,
  * «В шаблон» и «Отмена».
  */
-export function SimpleProgramBuilderScreen({ clientId, programId, repository, simplePlanSave, exercises, picked, onPickExercise, onSaved, onCancel }: Readonly<{
+export function SimpleProgramBuilderScreen({ clientId, programId, repository, simplePlanSave, exercises, picked, onPickExercise, onSaved, onCancel, renderExcel }: Readonly<{
+  renderExcel?: (onApply: (draft: BuilderExcelDraft) => void) => ReactNode;
   clientId: string;
   programId: string | null;
   repository: TrainingPlansRepositoryPort;
@@ -187,6 +189,7 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, si
         </Animated.ScrollView>
       ) : <>
       <Animated.ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {programId === null && renderExcel?.((imported) => { change({ title: imported.title, plan: { weeks: imported.weeks.length, workouts: imported.weeks[0]!.workouts } }); setShowIssues(false); setMessage(null); setSaved(null); })}
         {restored ? (
           <InlineNotice kind="info">{rebased ? REBASED_NOTICE : "Восстановлен несохранённый черновик."}</InlineNotice>
         ) : null}

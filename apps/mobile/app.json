@@ -2,10 +2,20 @@
   "expo": {
     "name": "Дневник атлета",
     "slug": "fitcoach-3-development",
-    "version": "0.0.1",
+    "version": "3.0.0",
+    "icon": "./assets/brand/icon.png",
+    "splash": { "backgroundColor": "#0C171C" },
     "orientation": "portrait",
     "android": {
-      "package": "com.fitcoach.v3dev"
+      "package": "com.fitcoach.v3",
+      "versionCode": 15,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/brand/adaptive-foreground.png",
+        "backgroundImage": "./assets/brand/background.png",
+        "monochromeImage": "./assets/brand/adaptive-monochrome.png",
+        "backgroundColor": "#0C171C"
+      },
+      "allowBackup": false
     },
     "plugins": [
       "expo-sqlite",

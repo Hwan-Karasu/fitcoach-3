@@ -1,13 +1,12 @@
-import { Directory, File, Paths } from "expo-file-system";
-import { defaultDatabaseDirectory } from "expo-sqlite";
+import { Directory, Paths } from "expo-file-system";
 import { AutomaticBackupService, AutomaticBackupError, type AutomaticBackupFiles } from "../../features/backup/public.ts";
 import { expoAutomaticBackupStore } from "../../features/backup/data/ExpoAutomaticBackupStore.ts";
 import { ExpoAutomaticBackupFiles, nativeAutomaticBackupAvailable } from "../../features/backup/data/ExpoAutomaticBackupFiles.ts";
 import { expoBackupLocationStore } from "../../features/backup/data/ExpoBackupLocationStore.ts";
-import { sqliteDirectoryUri } from "../../shared/db/SqliteDirectoryUri.ts";
+import { productionLiveFile } from "./productionFiles.ts";
 import type { BootCoordinator } from "../bootstrap/BootCoordinator.ts";
 import type { RuntimeCommandGate } from "../runtime/RuntimeCommandGate.ts";
-import { PRODUCTION_DATABASE, PRODUCTION_IDENTITY } from "./productionDatabase.ts";
+import { PRODUCTION_IDENTITY } from "./productionDatabase.ts";
 import { SCHEMA_OWNERS } from "./schema.ts";
 
 export function createAutomaticBackup(development: boolean, commands: RuntimeCommandGate, boot: BootCoordinator) {
@@ -15,7 +14,7 @@ export function createAutomaticBackup(development: boolean, commands: RuntimeCom
   const root = () => new Directory(Paths.document, "runtime-backup", "production");
   const getStore = () => store ??= expoAutomaticBackupStore(root());
   const getJobs = () => jobs ??= new ExpoAutomaticBackupFiles({ root: root(),
-    live: new File(new Directory(sqliteDirectoryUri(defaultDatabaseDirectory)), PRODUCTION_DATABASE),
+    live: productionLiveFile(),
     schema: { identity: PRODUCTION_IDENTITY, owners: SCHEMA_OWNERS }, images: new Directory(Paths.document, "local-images"),
     pendingIds: () => getStore().protectedJobIds() });
   const files: AutomaticBackupFiles = { available: !development && nativeAutomaticBackupAvailable(),

@@ -51,10 +51,11 @@ export class ExpoAutomaticBackupFiles implements AutomaticBackupFiles {
   }
   async prepare(previousContentSha256: string | null): Promise<PendingAutomatic | null> {
     await this.cleanOrphans(); const id = uuid.v4(); const job = this.job(id); let created = false; let handedOff = false;
+    let stage = "source";
     try {
       const { live, schema, images } = this.options;
       if (!live.exists || live.size < 100 || Paths.availableDiskSpace < live.size * 3 + 4 * 1024 * 1024) throw new Error();
-      job.create({ intermediates: true }); created = true; new File(job, "owner.json").write(owner(id));
+      stage = "job"; job.create({ intermediates: true }); created = true; new File(job, "owner.json").write(owner(id));
       const current = new File(job, "current.db"); current.create();
       const source = await SQLite.openDatabaseAsync(live.name, { useNewConnection: true }, live.parentDirectory.uri);
       let contentSha256: string;
@@ -62,10 +63,10 @@ export class ExpoAutomaticBackupFiles implements AutomaticBackupFiles {
         await source.execAsync("PRAGMA query_only=ON; PRAGMA foreign_keys=ON");
         const copy = await SQLite.openDatabaseAsync(current.name, { useNewConnection: true }, job.uri);
         try {
-          await SQLite.backupDatabaseAsync({ sourceDatabase: source, destDatabase: copy });
+          stage = "copy"; await SQLite.backupDatabaseAsync({ sourceDatabase: source, destDatabase: copy });
           await copy.execAsync("PRAGMA journal_mode=DELETE; PRAGMA foreign_keys=ON");
           if (await inspectDatabaseIdentity(expoSnapshotSql(copy), schema.identity, schema.owners) !== "OWNED") throw new Error();
-          contentSha256 = await snapshotContentSha256(expoSnapshotSql(copy));
+          stage = "hash"; contentSha256 = await snapshotContentSha256(expoSnapshotSql(copy));
         } finally { await copy.closeAsync(); }
       } finally { await source.closeAsync(); }
       if (contentSha256 === previousContentSha256) return null;
@@ -73,13 +74,16 @@ export class ExpoAutomaticBackupFiles implements AutomaticBackupFiles {
       const createdAt = new Date(this.options.now?.() ?? Date.now()).toISOString(); const snapshot = new File(job, "snapshot.atbackup");
       try {
         await from.execAsync("PRAGMA query_only=ON; PRAGMA foreign_keys=ON");
-        const manifest = await this.driver.createSnapshot(from, new File(job, "snapshot.partial"), snapshot,
+        stage = "snapshot"; const manifest = await this.driver.createSnapshot(from, new File(job, "snapshot.partial"), snapshot,
           { backupId: id, createdAt }, { files: expoSnapshotMedia(images) });
         if (manifest.contentSha256 !== contentSha256) throw new Error();
       } finally { await from.closeAsync(); }
-      const result = { backupId: id, createdAt, contentSha256, ...await expoFileSha256(snapshot) };
+      stage = "digest"; const result = { backupId: id, createdAt, contentSha256, ...await expoFileSha256(snapshot) };
       handedOff = true; return result;
-    } catch { throw new AutomaticBackupError("AUTO_SOURCE_UNAVAILABLE"); }
+    } catch (error) {
+      console.warn("AUTOMATIC_SNAPSHOT_PREPARE_FAILED", stage, error instanceof Error ? error.name : "UNKNOWN");
+      throw new AutomaticBackupError("AUTO_SOURCE_UNAVAILABLE");
+    }
     finally { if (created && !handedOff) try { await this.cleanup(id); } catch { /* Retryable own orphan. */ } }
   }
   async publish(pending: PendingAutomatic, destination: BackupDestination) {

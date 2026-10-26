@@ -105,7 +105,7 @@ test("D01 перенос из прежнего dev-файла: все строк
   assert.equal(result.status, "IMPORTED");
   const before = counts(legacy, "dev_");
   const after = counts(db, "");
-  assert.equal(result.tables, 64);
+  assert.equal(result.tables, 68);
   for (const [table, rows] of Object.entries(before)) assert.equal(after[table], rows, `таблица ${table}`);
   const contents = (database: DatabaseSync, table: string) => database.prepare(`SELECT * FROM ${table}`).all()
     .map((row) => JSON.stringify(Object.entries(row).sort(([a], [b]) => a.localeCompare(b)))).sort();

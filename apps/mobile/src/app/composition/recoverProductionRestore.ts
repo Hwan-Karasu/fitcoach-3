@@ -1,10 +1,9 @@
 import { Directory, File, FileMode, Paths } from "expo-file-system";
-import { defaultDatabaseDirectory } from "expo-sqlite";
 import { ExpoRestoreStorage } from "../../features/backup/data/ExpoRestoreStorage.ts";
 import type { RuntimeMaintenance } from "../runtime/RuntimeMaintenance.ts";
 import { recoverRuntimeRestore } from "../bootstrap/recoverRuntimeRestore.ts";
-import { inspectProductionDatabase, PRODUCTION_DATABASE, PRODUCTION_IDENTITY } from "./productionDatabase.ts";
-import { sqliteDirectoryUri } from "../../shared/db/SqliteDirectoryUri.ts";
+import { inspectProductionDatabase, PRODUCTION_IDENTITY } from "./productionDatabase.ts";
+import { productionLiveFile } from "./productionFiles.ts";
 import { ExpoRuntimeRestoreJournal } from "./ExpoRuntimeRestoreJournal.ts";
 import { ExpoReturnPointStore } from "../../features/backup/data/ExpoReturnPointStore.ts";
 import { ReturnPointCompletion } from "../../features/backup/public.ts";
@@ -16,7 +15,7 @@ import { SCHEMA_OWNERS } from "./schema.ts";
 export async function recoverProductionRestore(maintenance: RuntimeMaintenance): Promise<void> {
   const root = new Directory(Paths.document, "runtime-restore", "production");
   if (!new File(root, "pending.json").exists) return;
-  const live = new File(new Directory(sqliteDirectoryUri(defaultDatabaseDirectory)), PRODUCTION_DATABASE);
+  const live = productionLiveFile();
   await recoverLocalRestore(maintenance, root, live);
 }
 

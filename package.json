@@ -4,6 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "equipment:prepare": "node --experimental-strip-types scripts/prepare-equipment-icons.ts",
+    "icons:prepare": "node --experimental-strip-types scripts/prepare-launcher-icons.ts",
+    "excel:test": "node --experimental-strip-types --test-isolation=none --test scripts/training-workbook.test.ts scripts/training-transfer.test.ts scripts/legacy-excel.test.ts scripts/training-transfer-review.test.ts scripts/visible-matrix-workbook.test.ts scripts/workbook-review-session.test.ts apps/mobile/scripts/import-catalog.test.ts",
+    "excel:example": "node --experimental-strip-types scripts/export-matrix-example.ts",
+    "excel:sync-v2": "node --experimental-strip-types scripts/sync-v2-workbook.ts",
     "source:verify": "node --experimental-strip-types ./scripts/verify-source-baseline.ts",
     "source:ui-matrix": "node --experimental-strip-types ./scripts/build-screen-approval-matrix.ts",
     "source:stage-audit": "node --experimental-strip-types ./scripts/audit-stage-sync.ts",

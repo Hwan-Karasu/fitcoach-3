@@ -8,3 +8,6 @@ export { ProgramMatrixScreen, ProgramWeeksPanel, RestTimerDock, RestTimerService
   hasEnteredData, sessionDurationSec, workoutStatus, workoutDayFromEvidence, type WorkoutDateEvidence } from "./execution/public.ts";
 export { ExecutionDetailsScreen, HistoryProgramScreen, TrainingArchiveScreen, retainHistoryView, sortHistory, type TrainingHistoryEntry } from "./archive/public.ts";
 export { ClientExerciseScreen, ExerciseHistoryList, MonthlyReportScreen, TrainingStatisticsScreen, isWorkingSet, retainStatsFilters } from "./analytics/public.ts";
+export type { ProgramCard } from "./plans/public.ts";
+export { WorkoutsReview } from "./plans/public.ts";
+export type { BuilderExcelDraft } from "./plans/public.ts";

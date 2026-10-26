@@ -45,7 +45,37 @@ test("changing a diary week filters global cards without rereading every client"
   await act(async () => { renderer.unmount(); });
 });
 
-test("group is retained between weeks of a cycle, invalidated on membership changes and rejects stale identities", async () => {
+test("P01 programme switcher refreshes on another participant archive and restore without reloading the displayed plan", async () => {
+  let archived = false;
+  let programReads = 0;
+  let notify!: (change: TrainingPlansCommittedChange) => void;
+  const own = { clientId: "client", programId: "program", mesocycleId: "own-cycle" };
+  const other = { clientId: "other", programId: "other-program", mesocycleId: "other-cycle" };
+  const program = { id: "program", title: "Synthetic", kind: "PERIODIZED", revision: 1, createdAt: "2026-10-26", memberClientIds: ["client"] };
+  const plans = {
+    getProgram: async () => { programReads += 1; return program; }, selectProgram: async () => undefined,
+    getPeriodizedPlan: async () => ({ program, selectedMesocycleId: "own-cycle", mesocycles: [{ id: "own-cycle", lineageId: "own-lineage", title: "Own", weeks: [] }] }),
+    getMesocycleGroup: async () => archived ? [own] : [own, other],
+    subscribeCommittedChanges: (listener: typeof notify) => { notify = listener; return () => undefined; },
+  } as unknown as TrainingPlansRepositoryPort;
+  let latest!: ReturnType<typeof useProgramData>;
+  function Probe() { latest = useProgramData({ clientId: "client", programId: "program", repository: plans,
+    onRequestedWeek: () => undefined, onMessage: () => undefined }); return null; }
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => { renderer = TestRenderer.create(createElement(Probe)); });
+  assert.deepEqual(latest.group, [own, other]);
+  archived = true;
+  await act(async () => { notify({ clientIds: ["other"] }); });
+  assert.deepEqual(latest.group, [own]);
+  assert.equal(programReads, 1);
+  archived = false;
+  await act(async () => { notify({ clientIds: ["other"] }); });
+  assert.deepEqual(latest.group, [own, other]);
+  assert.equal(programReads, 1);
+  await act(async () => { renderer.unmount(); });
+});
+
+test("P01 diary group availability refreshes for each workout, membership and order change; stale identities are blocked", async () => {
   let reads = 0;
   let notify!: (change: TrainingPlansCommittedChange) => void;
   let hold = false;
@@ -62,11 +92,13 @@ test("group is retained between weeks of a cycle, invalidated on membership chan
   await act(async () => { renderer = TestRenderer.create(createElement(Probe, { workout: "week-1-workout" })); });
   assert.equal(latest.fresh, true);
   await act(async () => { renderer.update(createElement(Probe, { workout: "week-2-workout" })); });
-  assert.equal(reads, 1);
-  await act(async () => { notify({ clientIds: ["client"], selectionOnly: true }); });
-  assert.equal(reads, 1);
-  await act(async () => { notify({ clientIds: ["client"] }); });
   assert.equal(reads, 2);
+  await act(async () => { notify({ clientIds: ["client"], selectionOnly: true }); });
+  assert.equal(reads, 2);
+  await act(async () => { notify({ clientIds: ["client"] }); });
+  assert.equal(reads, 3);
+  await act(async () => { notify({ clientIds: ["other"], orderOnly: true }); });
+  assert.equal(reads, 4, "reordering invalidates ordinal availability");
   hold = true;
   await act(async () => { renderer.update(createElement(Probe, { workout: "other-workout", client: "other" })); });
   assert.equal(latest.fresh, false, "old group's buttons cannot switch a newly selected participant");

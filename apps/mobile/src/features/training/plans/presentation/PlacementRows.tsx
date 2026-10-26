@@ -58,7 +58,6 @@ export function PlacementRows({ options, values, names, hostTitle, onChange }: R
         title="Куда добавить мезоцикл" selected={current === undefined ? "" : keyOf(values.get(current.clientId) ?? current.preferred)}
         options={current === undefined ? [] : [
           ...current.programs.map((program) => ({ value: `program:${program.id}`, label: program.current ? `${program.title} (текущая)` : program.title })),
-          { value: "join", label: `В «${host}»` },
           { value: "new", label: "Новая программа" },
         ]}
         onClose={() => setOpen(null)}

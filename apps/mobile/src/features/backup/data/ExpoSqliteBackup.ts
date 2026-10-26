@@ -57,22 +57,26 @@ export class ExpoSqliteBackup {
   }
   async createSnapshot(source: SQLite.SQLiteDatabase, partial: File, destination: File,
     metadata: Pick<SnapshotManifest, "backupId" | "createdAt">, settings: SnapshotMediaSettings = {}): Promise<SnapshotManifest> {
+    let stage = "identity";
     try {
       assertSnapshotPrivateUri(destination.uri);
       if (partial.uri === destination.uri || destination.exists) throw new SnapshotError("SNAPSHOT_DESTINATION_EXISTS");
       if (await inspectDatabaseIdentity(expoSnapshotSql(source), this.schema.identity, this.schema.owners) !== "OWNED") throw new SnapshotError("SNAPSHOT_INVALID");
-      reserve(partial);
+      stage = "reserve"; reserve(partial);
       const copy = await this.open(partial, false);
       try {
-        await SQLite.backupDatabaseAsync({ sourceDatabase: source, destDatabase: copy });
+        stage = "copy"; await SQLite.backupDatabaseAsync({ sourceDatabase: source, destDatabase: copy });
         await copy.execAsync("PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON");
-        await this.engine.sealSnapshot(expoSnapshotSql(copy), metadata, settings);
+        stage = "seal"; await this.engine.sealSnapshot(expoSnapshotSql(copy), metadata, settings);
       } finally { await copy.closeAsync(); }
-      const manifest = await this.inspectPrivate(partial);
+      stage = "verify"; const manifest = await this.inspectPrivate(partial);
       if (destination.exists) throw new SnapshotError("SNAPSHOT_DESTINATION_EXISTS");
       await moveAsync({ from: partial.uri, to: destination.uri });
       return manifest;
-    } catch (error) { return typed(error); }
+    } catch (error) {
+      console.warn("SNAPSHOT_PREPARE_FAILED", stage, error instanceof SnapshotError ? error.code : "IO");
+      return typed(error);
+    }
   }
   /** privateCopy is a fresh inspection slot retained for this operation, not the external source. */
   async validateExternal(source: File, privateCopy: File): Promise<SnapshotManifest> {

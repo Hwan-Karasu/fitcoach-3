@@ -8,9 +8,9 @@ export function useParticipantGroup(repository: TrainingPlansRepositoryPort, cli
   const [read, setRead] = useState<Readonly<{ key: string; members: readonly GroupCopy[] }> | null>(null);
   const [version, setVersion] = useState(0);
   const members = given === undefined ? read?.members ?? null : given;
-  const refKind = mesocycleId != null ? "mesocycleId" : "workoutId";
-  const refId = mesocycleId ?? workoutId ?? null;
-  const readKey = JSON.stringify([clientId, programId, refKind, refId]);
+  const refKind = workoutId !== undefined ? "workoutId" : "mesocycleId";
+  const refId = workoutId ?? mesocycleId ?? null;
+  const readKey = JSON.stringify([clientId, programId, refKind, refId, version]);
   useEffect(() => {
     if (given !== undefined) return undefined;
     let active = true;
@@ -21,7 +21,7 @@ export function useParticipantGroup(repository: TrainingPlansRepositoryPort, cli
     return () => { active = false; };
   }, [clientId, given, programId, readKey, refId, refKind, repository, version]);
   useEffect(() => given !== undefined ? undefined : repository.subscribeCommittedChanges((change) => {
-    if (change.selectionOnly !== true && change.orderOnly !== true) setVersion((value) => value + 1);
+    if (change.selectionOnly !== true) setVersion((value) => value + 1);
   }), [given, repository]);
   const fresh = given === undefined ? read?.key === readKey
     : mesocycleId == null || isGroupOfMesocycle(members ?? [], mesocycleId);

@@ -22,7 +22,8 @@ const faded = (count: number | undefined, selected: boolean) => count === 0 && !
  * Плитка 3 в ряд: крупный значок (силуэт тела или оборудование), подпись, число. Выбранная — акцентная рамка и
  * галочка; фон светлый, чтобы силуэт оставался виден. `radio` — одиночный выбор (редактор).
  */
-export function OptionTile({ icon, label, count, selected, onPress, compact = false, radio = false }: Readonly<{
+export function OptionTile({ icon, label, count, selected, onPress, compact = false, radio = false, dimWhenEmpty = true }: Readonly<{
+  dimWhenEmpty?: boolean;
   icon: (color: string) => ReactNode; label: string; count?: number; selected: boolean; onPress: () => void;
   /** Оборудование: значок меньше силуэта — плитка ниже, мышцы не меняются. */
   compact?: boolean;
@@ -35,7 +36,7 @@ export function OptionTile({ icon, label, count, selected, onPress, compact = fa
       accessibilityLabel={count === undefined ? label : `${label}, упражнений: ${count}`}
       onPress={onPress} style={({ pressed }) => [styles.tile, compact ? styles.tileCompact : null, {
         borderColor: selected ? colors.accentInk : colors.border, borderWidth: selected ? 2 : 1,
-        backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: faded(count, selected) }]}>
+        backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: dimWhenEmpty ? faded(count, selected) : 1 }]}>
       <View style={[styles.tileIcon, compact ? styles.tileIconCompact : null]}>{icon(selected ? colors.accentInk : colors.textSecondary)}</View>
       <Text numberOfLines={2} style={[styles.tileLabel, { color: selected ? colors.accentInk : colors.textPrimary }]}>{label}</Text>
       {count !== undefined ? <Text style={[styles.count, { color: colors.textMuted }]}>{count}</Text> : null}

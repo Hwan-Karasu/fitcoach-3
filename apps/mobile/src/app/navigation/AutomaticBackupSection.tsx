@@ -1,5 +1,6 @@
 import { useCallback, useSyncExternalStore } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { AutomaticBackupErrorCode, AutomaticBackupPort } from "../../features/backup/public.ts";
 import { AppButton, InlineNotice } from "../../shared/ui/components/public.ts";
 import { SectionHeading } from "../../shared/ui/prototype/ScreenPieces.tsx";
@@ -41,11 +42,11 @@ export function AutomaticBackupNotice({ backup, onOpen }: Readonly<{ backup: Aut
   const snapshot = useCallback(() => backup.state, [backup]); const state = useSyncExternalStore(subscribe, snapshot);
   const { palette } = usePrototypeTheme();
   if (!state.available || state.error === null || state.error === "AUTO_NOT_READY") return null;
-  return <View accessibilityRole="alert" style={{ borderWidth: 1, borderColor: palette.tokens.warning,
+  return <SafeAreaView edges={["top"]} accessibilityRole="alert" style={{ borderWidth: 1, borderColor: palette.tokens.warning,
     backgroundColor: palette.tokens.surface, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 8 }}>
     <Text style={{ flex: 1, fontFamily: fonts.regular, fontSize: 13, color: palette.tokens.textPrimary }}>Резервные копии требуют внимания.</Text>
     <Pressable accessibilityRole="button" onPress={onOpen} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 8 }}>
       <Text style={{ color: palette.tokens.textPrimary }}>Подробнее</Text>
     </Pressable>
-  </View>;
+  </SafeAreaView>;
 }

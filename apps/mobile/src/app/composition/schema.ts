@@ -11,6 +11,7 @@ import { DEV_QUESTIONNAIRE_LEDGER, devQuestionnaireCatalog } from "../../feature
 import { DEV_SETTINGS_LEDGER, devSettingsCatalog } from "../../features/settings/data/DevSettingsCatalog.ts";
 import { DEV_TRAINING_EXECUTION_LEDGER, devTrainingExecutionCatalog } from "../../features/training/execution/data/DevTrainingExecutionCatalog.ts";
 import { DEV_TRAINING_PLANS_LEDGER, devTrainingPlansCatalog } from "../../features/training/plans/data/DevTrainingPlansCatalog.ts";
+import { TRANSFER_OWNER } from "../../features/import/data/TransferReceiptStore.ts";
 
 /** Владельцы схемы в порядке зависимостей: журнал каждого и runtime-каталог, начиная с baseline v1. */
 export const SCHEMA_OWNERS: readonly Readonly<{ owner: string; ledger: string; chain: readonly MigrationStep[] }>[] = [
@@ -25,6 +26,7 @@ export const SCHEMA_OWNERS: readonly Readonly<{ owner: string; ledger: string; c
   { owner: "exercises", ledger: DEV_EXERCISES_LEDGER, chain: devExerciseCatalog },
   { owner: "settings", ledger: DEV_SETTINGS_LEDGER, chain: devSettingsCatalog },
   { owner: "notifications", ledger: DEV_NOTIFICATION_LEDGER, chain: devNotificationCatalog },
+  TRANSFER_OWNER,
 ];
 
 /**

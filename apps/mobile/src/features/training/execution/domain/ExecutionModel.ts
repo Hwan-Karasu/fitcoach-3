@@ -119,7 +119,7 @@ export interface PreviousSet {
   readonly drops: readonly SetValues[];
   /** Засчитанные стороны прошлого подхода; незасчитанной стороны нет (§48.81 п. 3). */
   readonly sides: Readonly<{ left: SetValues | null; right: SetValues | null }> | null;
-  readonly date: string;
+  readonly date: string | null;
 }
 
 /** Текущее упражнение тренировки глазами «Пред.»: слот плана и плановые подходы по порядку. */
@@ -134,7 +134,7 @@ export interface PreviousQuery {
 
 /** Начатая и ещё не разобранная тренировка клиента (§48.83). */
 export interface ActiveWorkout extends WorkoutSlot {
-  readonly actualDate: string;
+  readonly actualDate: string | null;
 }
 
 /** Карточка быстрого перехода: кто и что сейчас тренирует. */

@@ -1,0 +1,208 @@
+{
+  "decisionDate": "2026-10-26",
+  "source": "Explicit owner instructions in this conversation",
+  "supersedes": [
+    "Mandatory direct v2-to-v3 migration",
+    "Overlay installation of v3 over v2",
+    "Excel excluded from V1"
+  ],
+  "tasks": [
+    {
+      "id": "I01-CONSTRUCTOR-EXCEL",
+      "state": "HOST_AND_DEVICE_VERIFIED",
+      "acceptance": "Builder-local file and worksheet selection; workout-card matching via shared catalog; unsaved draft application; whole-program export from library and single-cycle export inside program",
+      "evidence": "27 Excel tests, 249 training tests, typecheck/lint/boundaries; device new-program and new-cycle import; saved workbooks contain two cycles versus one with exact selected-plan comparison",
+      "remaining": "Full owner-data parity remains I01-USER-PARITY"
+    },
+    {
+      "id": "R06-INDEPENDENT",
+      "state": "HOST_AND_DEVICE_VERIFIED",
+      "acceptance": "Independent package; native-only backup; no legacy import during boot; native backup/restore regression checks pass",
+      "remaining": "Public-release failure-injection coverage remains separate; clean-state restore and foreign v2 backup rejection passed"
+    },
+    {
+      "id": "I01-MATRIX",
+      "state": "CODE_IMPLEMENTED_HOST_VERIFIED",
+      "acceptance": "Visible Excel matrices; plan/fact/history separation; atomic import; legacy adapters; repeated import and conflict checks",
+      "remaining": "Complete owner data correction and full device round trip; synthetic device import passed"
+    },
+    {
+      "id": "I01-V2-EXPORT",
+      "state": "HOST_AND_DEVICE_VERIFIED",
+      "acceptance": "Isolated branch from build120; client/program selection; live and archive export; read-only source transaction",
+      "remaining": "Owner data review/parity tracked by I01-USER-PARITY; build131 installed, native export saved and exact source-table comparison passed"
+    },
+    {
+      "id": "REL-ANDROID",
+      "state": "APKS_BUILT_INSTALLED_DEVICE_SMOKE_VERIFIED",
+      "acceptance": "Build APKs, verify package/version/signature, install v3 alongside v2 and check independent storage",
+      "remaining": "Public release signing audit and full owner-data parity; current APKs are local test candidates"
+    },
+    {
+      "id": "I01-USER-PARITY",
+      "state": "OPEN",
+      "acceptance": "Compare every selected user program, planned value, date and performed set across v2 Excel and v3; keep source backup"
+    },
+    {
+      "id": "R04-RETIRE",
+      "state": "WAITING_FOR_USER_PARITY",
+      "deps": [
+        "I01-USER-PARITY"
+      ],
+      "acceptance": "Delete migration-only code, commands and tests; preserve SQLite/restore infrastructure, historical Git and old Excel support"
+    },
+    {
+      "id": "P01-INDEPENDENT-PARTICIPANTS",
+      "state": "IMPLEMENTED_HOST_VERIFIED_DEVICE_SMOKE_BUILD9",
+      "acceptance": "Independent cycle navigation groups; copy or attach via participant pill; exact week/workout ordinal; individual edits only; transactional persistence and additive migration",
+      "gates": [
+        "Host migration/rollback and identity retention",
+        "Ordinal and individual-edit regressions",
+        "Backup includes navigation tables",
+        "Android build and QA smoke"
+      ],
+      "evidence": "docs/PARTICIPANT_GROUPS_VALIDATION.md; 258 training, 248 backup, 26 schema and 32 Excel tests; root/mobile types, lint, boundaries and source checks; build10 arm64 APK and compatible certificate",
+      "remaining": "Owner will install final build10; no installation after explicit owner request. General release and owner-data transfer gates remain separate."
+    },
+    {
+      "id": "I02-EXCEL-REVIEW",
+      "state": "HOST_VERIFIED_APK_BUILT",
+      "acceptance": "Horizontal sheet tabs above constructor; per-sheet review state; explained two-column dropdown mapping; inline explicit numeric corrections; first v2 worksheet opens without guessing values",
+      "deps": [
+        "I01-CONSTRUCTOR-EXCEL",
+        "I01-MATRIX"
+      ],
+      "gates": [
+        "Actual v2 sheet regression",
+        "Per-sheet state and correction tests",
+        "Types/lint/source/Android build"
+      ],
+      "refs": [
+        "Owner approved Excel import repair plan 2026-10-26",
+        "docs/INDEPENDENT_V3_AND_EXCEL.md"
+      ],
+      "constraints": [
+        "No database schema change",
+        "Do not install APK on phone"
+      ],
+      "evidence": "docs/EXCEL_REVIEW_VALIDATION.md; 43 Excel and 258 training tests; 25 books / 62 nonempty sheets verified, 129 source-cell issues retained; types/lint/boundaries/source checks; build11 APK certificate verified",
+      "remaining": "Device visual smoke after owner installs APK; no installation performed as explicitly requested."
+    },
+    {
+      "id": "I03-EXCEL-TRIGGER",
+      "state": "HOST_VERIFIED_APK_BUILT",
+      "inputs": [
+        "Owner screenshot and instruction to restore only the Excel import button"
+      ],
+      "deps": [
+        "I02-EXCEL-REVIEW"
+      ],
+      "refs": [
+        "Product 48.4 programme mode chooser",
+        "Owner clarification 2026-10-26"
+      ],
+      "acceptance": "Reuse the original FeatureRow beside Create from template, including icon, subtitle and chevron; preserve the existing file picker and all import logic",
+      "gates": [
+        "Mobile typecheck",
+        "Targeted lint",
+        "Android APK"
+      ],
+      "constraints": [
+        "Only import trigger presentation",
+        "Do not install on phone"
+      ],
+      "evidence": "Only trigger presentation changed; mobile typecheck, targeted lint, boundaries and source checks passed; arm64 build12 package/name/certificate verified",
+      "apk": "artifacts/apk/athlete-diary-3.0.0-build12.apk",
+      "sha256": "001EE0816CBD9E4A9D00BB203A49DCAEE3DF1753DB0CCFB2D87C66BAFA61EE40",
+      "remaining": "Owner installs APK; no phone installation performed."
+    },
+    {
+      "id": "I04-IMPORT-CATALOG",
+      "state": "HOST_VERIFIED_APK_BUILT",
+      "inputs": [
+        "Approved catalogue and import matching plan 2026-10-26"
+      ],
+      "deps": [
+        "I02-EXCEL-REVIEW"
+      ],
+      "refs": [
+        "Product catalogue 31 and exercise registry 39",
+        "Owner approved exact-name matching across pending Excel sheets only"
+      ],
+      "acceptance": "Filter-first back navigation; searchable complete equipment lists; workbook-wide exact-name mapping; confirmed suggestions from past imports; additive alias migration and backup",
+      "gates": [
+        "Synthetic migration and atomic rollback",
+        "Exact-name and overlay navigation tests",
+        "Equipment and backup tests",
+        "Types/lint/source and Android build"
+      ],
+      "constraints": [
+        "No edits to saved cycles or results",
+        "No APK installation on phone"
+      ],
+      "evidence": "docs/IMPORT_CATALOG_VALIDATION.md; 56 Excel/catalogue, 258 training, 248 backup, 26 schema and 9 catalogue tests; root/mobile types and lint; build13 signature verified",
+      "apk": "artifacts/apk/athlete-diary-3.0.0-build13.apk",
+      "sha256": "7123220F055B9829303F029A67A60B3FFCADCAC02859C287184EF523DDD1DAF6",
+      "remaining": "Owner device visual/gesture smoke after manual installation; no phone installation performed."
+    },
+    {
+      "id": "I05-WHOLE-WORKBOOK",
+      "state": "IMPLEMENTED",
+      "inputs": [
+        "Owner correction: one workbook is one programme; each worksheet is a cycle"
+      ],
+      "deps": [
+        "I04-IMPORT-CATALOG"
+      ],
+      "refs": [
+        "Owner override 2026-10-26, whole workbook import"
+      ],
+      "acceptance": "One confirmation validates all sheets and atomically imports one programme with every nonempty worksheet as a cycle; active tab does not limit import; remember all applied mappings",
+      "gates": [
+        "Multi-cycle owner import roundtrip",
+        "Errors on inactive sheet block all writes",
+        "Repeat import and rollback",
+        "Types/lint/Android build"
+      ],
+      "constraints": [
+        "No recovery of prior review requested",
+        "No overwrite of previously saved single-cycle imports",
+        "No phone installation"
+      ],
+      "evidence": "docs/WHOLE_WORKBOOK_VALIDATION.md; 62 Excel/catalogue tests; root/mobile types; lint; boundaries; sources; signed Android build14",
+      "apk": "artifacts/apk/athlete-diary-3.0.0-build14.apk",
+      "sha256": "EFB87D0FFB88E1EFAB34A868EEDB4923FF6C3C6414DEAF0324B8161275170D75",
+      "remaining": "Owner device check after manual installation; no phone installation performed."
+    },
+    {
+      "id": "I06-IMPORT-COMPLETION-RENAME",
+      "state": "IMPLEMENTED",
+      "inputs": [
+        "Owner: all workouts of all imported workbook cycles completed; empty sets stay empty",
+        "Owner: rename whole programme from its card menu"
+      ],
+      "deps": [
+        "I05-WHOLE-WORKBOOK"
+      ],
+      "refs": [
+        "Owner clarification 2026-10-26; workout outcomes and unknown-date preservation; existing renameProgram command"
+      ],
+      "acceptance": "Whole-book import closes all workout slots without inventing facts/dates; programme card exposes rename",
+      "gates": [
+        "Atomic nullable-date migration preserves execution IDs and every child row",
+        "Whole-book completed statuses, empty sets, repeat import, backup roundtrip",
+        "Programme rename keeps cycles and facts intact",
+        "Types, profile tests, Android APK signature"
+      ],
+      "constraints": [
+        "No phone installation",
+        "No fabricated actual dates or results",
+        "No automatic edits of earlier imports"
+      ],
+      "evidence": "docs/IMPORT_COMPLETION_RENAME_VALIDATION.md; 64 Excel, 258 training, 26 schema, 248 backup tests; types/lint/source checks; signed Android build15",
+      "apk": "artifacts/apk/athlete-diary-3.0.0-build15.apk",
+      "sha256": "86461335A18821F09C4D0997C4F9174073ABC09A27509615FFFDBFFA0557CD30",
+      "remaining": "Owner device visual check after manual installation. No phone installation performed."
+    }
+  ]
+}

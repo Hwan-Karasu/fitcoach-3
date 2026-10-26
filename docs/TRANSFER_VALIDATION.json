@@ -1,0 +1,110 @@
+{
+    "date":  "2026-10-26",
+    "data":  "Synthetic device fixtures and private copies of owner backups; personal data kept outside both repositories. Aggregate evidence only.",
+    "v3":  {
+               "excelTests":  {
+                                  "passed":  32,
+                                  "failed":  0
+                              },
+               "backupRestoreTests":  {
+                                          "passed":  247,
+                                          "failed":  0
+                                      },
+               "trainingTests":  {
+                                     "passed":  249,
+                                     "failed":  0
+                                 },
+               "productionBootTests":  {
+                                           "passed":  5,
+                                           "failed":  0
+                                       },
+               "typecheck":  "PASS",
+               "moduleBoundaries":  "PASS",
+               "sourceBaseline":  "PASS_73_ENTRIES",
+               "sensitiveFilesCheck":  "PASS",
+               "productionJavaScriptBundle":  "PASS",
+               "nativePackageGenerated":  "com.fitcoach.v3",
+               "apkBuild":  "PASS_ARM64_RELEASE_CANDIDATE",
+               "versionCode":  8,
+               "launcher":  "Owner-supplied artwork; standard and adaptive icons with mask margins",
+               "installedAlongsideV2":  true,
+               "deviceExcelImport":  "PASS_V2_FIXTURE_1_PROGRAM_2_SESSIONS_2_FACTS",
+               "deviceManualBackup":  "PASS_INCLUDING_HOST_RESTORE_INTEGRITY_AND_RECEIPT_CHECK",
+               "deviceAutomaticBackup":  "PASS_AFTER_PRIVATE_PATH_ALIAS_FIX",
+               "deviceRestoreAndReturn":  "PASS_RESTORE_1_CLIENT_RETURN_POINT_2_CLIENTS_SINGLE_USE_RETURN",
+               "deviceFreshInstallRestore":  "PASS_AFTER_OWNER_DATA_CLEAR_EMPTY_ROSTER_THEN_NATIVE_RESTORE_1_QA_CLIENT",
+               "apkSha256":  "0D449A680FE91C838B1E5197A624526D83D6E58F7EFE93AE747D12FDAC369C8E",
+               "deviceV2BackupRejection":  "PASS_VALID_SYNTHETIC_V2_BACKUP_REJECTED_BEFORE_CHANGING_FRESH_LIVE",
+               "signing":  "LOCAL_TEST_CANDIDATE_CERTIFICATE_PUBLIC_RELEASE_SIGNING_NOT_AUDITED",
+               "deviceBuilderExcel":  "PASS_NEW_PERIODIZED_PROGRAM_AND_NEW_CYCLE_SHEET_REVIEW_CATALOG_MAPPING_AND_OWNER_SAVE; SIMPLE_BUILDER_BUTTON_VERIFIED",
+               "deviceScopedExcelExport":  "PASS_WHOLE_BOOK_2_CYCLES_VS_SELECTED_1_CYCLE_EVERY_SELECTED_PLANNED_VALUE_IDENTICAL",
+               "deviceProgramMenu":  "PASS_BUILD5_NO_SWAP_COPY_WEEK_OR_DUPLICATE_CYCLE_TEMPLATE; FULL_PROGRAM_TEMPLATE_AND_CYCLE_EXPORT_PRESENT",
+               "build7Interface":  "PASS_DEVICE_BOOT_ANIMATION_DIRECT_CLIENT_FILE_PICK_SHEET_REVIEW_OWNER_IMPORT_2_SESSIONS_READABLE_EXPORT_FILENAME_NAVIGATION_SETTINGS_BACKUP_ONLY_DATA_AND_SVG_RENDERING; FINAL_BUILD8_INSTALLED_AND_STARTED",
+               "equipmentSvg":  "18_OWNER_SUPPLIED_VECTORS_INTEGRATED; 42_URL_ONLY_ORIGINALS_UNAVAILABLE_HTTP_403; EXISTING_GLYPHS_RETAINED",
+               "currentName":  "Дневник атлета"
+           },
+    "v2":  {
+               "baseCommit":  "e116b42e95f70a5a5e563420ab25394944c59ffd",
+               "branch":  "feature/excel-export-v1",
+               "candidateVersionCode":  133,
+               "excelTests":  {
+                                  "passed":  11,
+                                  "failed":  0
+                              },
+               "existingUnitTestStages":  [
+                                              7,
+                                              65,
+                                              5,
+                                              215,
+                                              1,
+                                              240
+                                          ],
+               "existingUnitTestResult":  "PASS",
+               "typecheck":  "PASS",
+               "sourceAudit":  "PASS",
+               "documentationCheck":  "PASS",
+               "productionJavaScriptBundle":  "PASS",
+               "apkBuild":  "PASS_ARM64_RELEASE_CANDIDATE",
+               "installedCertificate":  "MATCH_05a1a1b022e6f2a7bce4db3fb55d70dbb9ca505117013ebc4f9bfa702099cb43",
+               "originalInstalledVersionCode":  128,
+               "installedVersionCode":  131,
+               "preUpdateBackup":  "SAVED_INTEGRITY_OK_FOREIGN_KEY_ERRORS_0",
+               "schemaMigrationRehearsal":  "PASS_25_TO_29_TRAINING_ROW_HASHES_UNCHANGED",
+               "deviceStartup":  "PASS_AFTER_REMOVING_BACKGROUND_PERMISSION_REQUEST_LOOP",
+               "deviceExcelExport":  "PASS_SAVED_TO_DOWNLOAD_EXACT_COMPARISON_1_PROGRAM_56_SESSIONS_2066_FACTS",
+               "postUpdateSourceComparison":  "PASS_12_CLIENT_TRAINING_ARCHIVE_AND_CATALOG_TABLES_IDENTICAL_ROW_HASHES",
+               "sourceWorkingSchema":  29,
+               "portableCompatibilitySchema":  25,
+               "schema29Support":  "Original migration and backup compatibility backported from codex/smart-import-stage-c; no old parser/UI imported",
+               "deviceBackup":  "PASS_302182400_BYTES_INTEGRITY_OK_FOREIGN_KEY_ERRORS_0",
+               "apkSha256":  "2AA0AB051E46751291CD4936B5E3CB25FF57C0C13EFA78A9CB2D3129D004DA5A",
+               "candidateApkSha256":  "45CF23218B6D2BD32930FFED47119142FFFC794C92580635D5980611F873385E"
+           },
+    "onDevice":  "BOTH_FINAL_CANDIDATES_INSTALLED_BACKUP_RESTORE_RETURN_FRESH_RESTORE_EXCEL_IMPORT_AND_V2_EXPORT_VERIFIED",
+    "userDataParity":  "PARTIAL_REQUIRES_OWNER_CORRECTION_OF_INVALID_VALUES_AND_UNKNOWN_DATES",
+    "migrationOnlyCodeDeletion":  "WAITING_FOR_SUCCESSFUL_USER_DATA_PARITY",
+    "releaseReady":  false,
+    "privateSourceRehearsal":  {
+                                   "workbooksWrittenAndRead":  25,
+                                   "failed":  0,
+                                   "exportedSessions":  719,
+                                   "canonicalNonTemplateSessionsCovered":  695,
+                                   "excludedTemplateSessions":  10,
+                                   "cleanV3ImportsCompared":  9,
+                                   "sessionsCompared":  57,
+                                   "factsCompared":  1324,
+                                   "programsDatesNotesAndEveryFactCompared":  "PASS",
+                                   "repeatedImport":  "PASS_NO_DUPLICATES",
+                                   "valuesNeedingExplicitCorrection":  544,
+                                   "sessionsWithoutReliableDate":  243
+                               },
+    "visibleSnapshotParity":  {
+                                  "clients":  25,
+                                  "sheets":  65,
+                                  "liveMatrices":  62,
+                                  "repsAndWeightCellsCompared":  47626,
+                                  "failures":  0,
+                                  "hiddenWorksheets":  0,
+                                  "technicalExerciseNames":  0
+                              }
+}

@@ -316,6 +316,45 @@ export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scro
   </>;
 }
 
+/** The constructor's cards in import-review mode. Choosing a catalog match is the only edit. */
+export function WorkoutsReview({ workouts, names, matches, onMatch, disabled = false }: Readonly<{
+  workouts: readonly PlannedWorkout[]; names: ReadonlyMap<string, string>; matches: ReadonlyMap<string, ExerciseInfo>;
+  onMatch: (sourceExerciseId: string) => void; disabled?: boolean;
+}>) {
+  const { palette } = usePrototypeTheme(); const colors = palette.tokens;
+  const planText = (set: PlannedExercise["sets"][number]) => [
+    set.reps === null ? null : formatRange({ min: set.reps, max: set.repsMax }),
+    set.loadGrams === null ? null : `${(set.loadGrams / 1000).toLocaleString("ru-RU")} кг`,
+    set.durationSec === null ? null : `${set.durationSec} с`, set.distanceM === null ? null : `${set.distanceM} м`,
+  ].filter(Boolean).join(" × ") || "План не задан";
+  return <View style={{ gap: 12 }}>{workouts.map((workout) => <View key={workout.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={styles.workoutHead}>
+      <View style={[styles.stripe, { backgroundColor: colors.accentFill }]} />
+      <Text style={[styles.grow, styles.exerciseName, { color: colors.textPrimary }]}>{workout.title}</Text>
+    </View>
+    <View style={[styles.exercises, { gap: 8, paddingBottom: 10 }]}>{workout.exercises.map((item) => {
+      const match = matches.get(item.exerciseId); const name = names.get(item.exerciseId) ?? item.exerciseId; const group = supersetNumber(workout, item);
+      return <View key={item.id} style={[styles.exerciseRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+        <View style={[styles.exerciseHead, { paddingHorizontal: 8 }]}>
+          <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>{match?.thumbnail != null ? <Image source={match.thumbnail} style={styles.thumbImage} /> : <Dumbbell size={16} color={colors.accentInk} />}</View>
+          <View style={styles.grow}>
+            <Text style={[styles.exerciseName, { color: colors.textPrimary }]}>{name}</Text>
+            <Text style={[styles.hint, { color: match ? colors.accentInk : colors.danger }]}>{match ? `Каталог: ${match.name}` : "Выберите упражнение из каталога"}</Text>
+            {group !== null && <Text style={[styles.supersetTag, { color: colors.accentInk }]}>Суперсет {group}</Text>}
+          </View>
+          <AppIconButton compact disabled={disabled} label={`${match ? "Заменить" : "Выбрать"}: ${name}`} icon={<ArrowLeftRight size={19} color={colors.accentInk} />} onPress={() => onMatch(item.exerciseId)} />
+        </View>
+        <View style={[styles.exerciseBody, { backgroundColor: colors.surfaceRaised, borderTopColor: colors.border }]}>
+          <Text style={[styles.hint, { color: colors.textSecondary }]}>{item.sets.length ? `Подходов: ${item.sets.length}${item.rir ? ` · RIR ${formatRange(item.rir)}` : ""}` : "Сохранено в истории"}</Text>
+          {item.sets.map((set, i) => <Text key={set.id} style={[styles.exerciseName, { color: colors.textPrimary, paddingVertical: 3 }]}>{i + 1}. {planText(set)}</Text>)}
+          {!!item.instruction && <Text style={[styles.hint, { color: colors.textSecondary }]}>{item.instruction}</Text>}
+        </View>
+        {group !== null && <View pointerEvents="none" style={[styles.supersetStripe, { backgroundColor: colors.accentInk }]} />}
+      </View>;
+    })}</View>
+  </View>)}</View>;
+}
+
 const styles = StyleSheet.create({
   grow: { flex: 1, minWidth: 0 },
   card: { borderWidth: 1, borderRadius: 12, overflow: "hidden" },

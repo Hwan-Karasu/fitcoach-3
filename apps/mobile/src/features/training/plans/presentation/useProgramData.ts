@@ -25,6 +25,7 @@ export function useProgramData({ clientId, programId, repository, requestedMesoc
   /** Чьи данные сейчас на экране (`клиент:программа`): при переключении участника до загрузки они прежние — тогда экран приглушён. */
   const [shown, setShown] = useState<Readonly<{ clientId: string; programId: string }> | null>(null);
   const [version, setVersion] = useState(0);
+  const [groupVersion, setGroupVersion] = useState(0);
   /** `null` — группа выбранного мезоцикла ещё не прочитана (переключатель участников её не показывает и не прячет). */
   const [group, setGroup] = useState<readonly GroupCopy[] | null>(null);
   const callbacks = useRef({ onRequestedWeek, onMessage });
@@ -78,9 +79,10 @@ export function useProgramData({ clientId, programId, repository, requestedMesoc
     repository.getMesocycleGroup(shown?.clientId ?? clientId, shown?.programId ?? programId, { mesocycleId: cycleKey })
       .then((copies) => { if (active) setGroup(copies); }).catch(() => undefined);
     return () => { active = false; };
-  }, [clientId, cycleKey, focused, programId, repository, shown, version]);
+  }, [clientId, cycleKey, focused, programId, repository, shown, version, groupVersion]);
 
   useEffect(() => repository.subscribeCommittedChanges((change) => {
+    if (change.selectionOnly !== true) setGroupVersion((value) => value + 1);
     if (change.selectionOnly !== true && change.orderOnly !== true && change.clientIds.includes(clientId)) setVersion((value) => value + 1);
   }), [clientId, repository]);
 

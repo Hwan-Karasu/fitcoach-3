@@ -25,13 +25,16 @@ import type { PlannedWorkout, PlanRange, SimpleProgramDraft } from "../domain/Si
 import { formatRange, parseRange, setFieldsOf, validateDraft } from "../domain/SimplePlanRules.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidate.ts";
-import { ParticipantChips } from "./ParticipantChips.tsx";
+import { ParticipantAssignments } from "./ParticipantAssignments.tsx";
 import { useExerciseLookupState } from "./useExerciseLookup.ts";
 import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
 import { weekTypeTone } from "./weekTypeTone.ts";
 import { newPlanId, WorkoutsEditor } from "./WorkoutsEditor.tsx";
+import type { BuilderExcelDraft } from "../domain/BuilderExcelDraft.ts";
 
 const errors: Readonly<Record<string, string>> = {
+  NAVIGATION_GROUP_CONFLICT: "Группа выбранного цикла изменилась. Выберите цикл ещё раз.",
+  NAVIGATION_REASSIGNMENT_REQUIRED: "Подтвердите перенос выбранного цикла из другой группы.",
   DRAFT_INVALID: `Проверьте названия (до ${PROGRAM_TITLE_MAX} символов), повторения и тренировки — хотя бы одна неделя с упражнениями.`,
   TARGET_NOT_FOUND: "Клиент не найден или в архиве. Обновите список участников.",
   PROGRAM_REVISION_CONFLICT: "Программа изменилась в другом месте. Откройте конструктор ещё раз.",
@@ -63,7 +66,8 @@ function Section({ title, children }: Readonly<{ title: string; children: ReactN
  * «+ Мезоцикл» (UI-OWN-041); в правке после изменения недели всплывает меню области.
  */
 export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, initialWeek, mesocycleSave, repository, exercises, listCandidates, picked,
-  onPickExercise, onCreated, onSaved, onCancel, renderTemplates }: Readonly<{
+  onPickExercise, onCreated, onSaved, onCancel, renderTemplates, renderExcel }: Readonly<{
+  renderExcel?: (onApply: (draft: BuilderExcelDraft) => void) => ReactNode;
   clientId: string;
   /** Существующая программа: «+ Мезоцикл» или правка (`mesocycleId`). */
   programId?: string;
@@ -115,12 +119,14 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
   const [memberBusy, setMemberBusy] = useState(false);
   // UI-OWN-044: группа мезоцикла в правке и размещение копии у добавляемых клиентов (как в 2.0).
   const [group, setGroup] = useState<readonly string[]>([clientId]);
+  const [groupCycles, setGroupCycles] = useState<ReadonlyMap<string, string>>(new Map());
   const [placementOptions, setPlacementOptions] = useState<ReadonlyMap<string, ClientPlacementOptions>>(new Map());
   const [placements, setPlacements] = useState<ReadonlyMap<string, PlacementTarget>>(new Map());
   const refreshGroup = useCallback(async () => {
     if (programId === undefined || mesocycleId === undefined) return;
     const copies = await repository.getMesocycleGroup(clientId, programId, { mesocycleId });
     setGroup(copies.map((copy) => copy.clientId));
+    setGroupCycles(new Map(copies.map((copy) => [copy.clientId, copy.mesocycleId])));
   }, [clientId, mesocycleId, programId, repository]);
 
   // Recovery Draft (§48.29): несохранённая работа переживает «Назад», выгрузку экрана и смерть процесса; публикация — только «Сохранить».
@@ -136,9 +142,9 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
   const restoreDone = useRef(false);
   const loadedRevision = program !== null && program !== "ERROR" ? program.revision : null;
   useEffect(() => {
-    if (dirty) schedule({ baseRevision: loadedRevision, programTitle, title, cycleType, repsText, startDate, weeks, editing, members,
+    if (dirty) schedule({ baseRevision: loadedRevision, programTitle, title, cycleType, repsText, startDate, weeks, editing, members, placements: [...placements].map(([clientId, target]) => ({ clientId, target })),
       baseWeeks: baseWeeks.current });
-  }, [dirty, schedule, loadedRevision, programTitle, title, cycleType, repsText, startDate, weeks, editing, members]);
+  }, [dirty, schedule, loadedRevision, programTitle, title, cycleType, repsText, startDate, weeks, editing, members, placements]);
   useEffect(() => {
     if (restoreDone.current || (mode !== "create" && (program === null || program === "ERROR"))) return;
     restoreDone.current = true;
@@ -149,6 +155,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
       const nextWeeks = stale ? rebaseBuilderWeeks(saved.baseWeeks!, saved.weeks, weeksRef.current, () => newPlanId("r")) : saved.weeks;
       setProgramTitle(saved.programTitle); setTitle(saved.title); setCycleType(saved.cycleType); setRepsText(saved.repsText);
       setStartDate(saved.startDate); setWeeks(nextWeeks); setEditing(Math.min(saved.editing, nextWeeks.length - 1));
+      setPlacements(new Map((saved.placements ?? []).map((item) => [item.clientId, item.target])));
       setMembers(saved.members.includes(clientId) ? saved.members : [clientId, ...saved.members]);
       // Восстановленное считается уже выбранной областью: меню области не всплывает само.
       baselines.current = new Map(nextWeeks.map((week, index) => [index, week.workouts]));
@@ -181,7 +188,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
   }, [clientId, initialWeek, mesocycleId, programId, refreshGroup, repository]);
   // Добавленные клиенты вне этой программы: куда ляжет их копия.
   const outsiders = useMemo(() => mode === "edit" ? joining?.ids ?? []
-    : members.filter((id) => id !== clientId && !(mode === "add" && program !== null && program !== "ERROR" && program.members.includes(id))),
+    : members.filter((id) => id !== clientId),
   [clientId, joining, members, mode, program]);
   useEffect(() => {
     const missing = outsiders.filter((id) => !placementOptions.has(id));
@@ -193,11 +200,11 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
     return () => { active = false; };
   }, [outsiders, placementOptions, programId, repository]);
   const placementsFor = (ids: readonly string[]): readonly Placement[] => ids.map((id) => ({ clientId: id,
-    target: placements.get(id) ?? placementOptions.get(id)?.preferred ?? { kind: "join" } }));
+    target: placements.get(id) ?? placementOptions.get(id)?.preferred ?? { kind: "new" } }));
   const placementRows = (hostTitle: string) => <PlacementRows hostTitle={hostTitle}
-    options={outsiders.flatMap((id) => placementOptions.get(id) ?? [])} values={placements}
+    options={outsiders.filter((id) => placements.get(id)?.kind !== "existing").flatMap((id) => placementOptions.get(id) ?? [])} values={placements}
     names={new Map(candidates.map((item) => [item.id, item.displayName]))}
-    onChange={(id, target) => setPlacements((current) => new Map(current).set(id, target))} />;
+    onChange={(id, target) => { setPlacements((current) => new Map(current).set(id, target)); touch(); }} />;
 
   useEffect(() => {
     let active = true;
@@ -388,16 +395,11 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
     <TrainingEditorLayout>
       {tabs}
       <Animated.ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {/* Импорт из Excel в V1 исключён (UI-OWN-024); место под будущую функцию, как на экране выбора конструктора. */}
-        <View style={styles.row}>
-          {["Импорт Excel", "Скачать шаблон"].map((label) => (
-            <View key={label} accessible accessibilityLabel={`${label}. Скоро`} accessibilityState={{ disabled: true }}
-              style={[styles.soon, { borderColor: colors.border }]}>
-              <Text style={[styles.soonText, { color: colors.textMuted }]}>{label}</Text>
-              <Text style={[styles.soonBadge, { color: colors.textMuted }]}>скоро</Text>
-            </View>
-          ))}
-        </View>
+        {mode !== "edit" && renderExcel?.((imported) => { setWeeks(imported.weeks); setEditing(0); setTitle(imported.title); if (mode === "create") setProgramTitle(imported.title);
+          if (imported.settings?.cycleType) setCycleType(imported.settings.cycleType);
+          if (imported.settings?.repRange) setRepsText(formatRange(imported.settings.repRange));
+          if (imported.settings?.startDate) setStartDate(imported.settings.startDate);
+          baselines.current = new Map(imported.weeks.map((week, index) => [index, week.workouts])); setShowIssues(false); touch(); })}
         {restored ? <InlineNotice kind="info">{rebased ? REBASED_NOTICE : "Восстановлен несохранённый черновик."}</InlineNotice> : null}
         {restored ? <AppButton compact variant="secondary" label="Отбросить черновик и выйти" disabled={busy !== null} onPress={() => { void discard(); }} /> : null}
         {dirty ? <Text style={[styles.dirty, { color: colors.warning }]}>Есть несохранённые изменения</Text> : null}
@@ -406,7 +408,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
             onChangeText={(value) => { setProgramTitle(value); touch(); }} />
             : <Text style={[styles.hint, { color: colors.textSecondary }]}>{`Программа «${program?.title ?? ""}»`}</Text>}
           {mode === "edit" ? <Text style={[styles.hint, { color: colors.textSecondary }]}>
-            Правка меняет только мезоцикл этого клиента. Чтобы изменить неделю у всей группы, откройте «Изменить неделю» в дневнике тренировки.
+            Правка меняет только цикл этого клиента. У остальных участников сохраняются собственные планы и результаты.
           </Text> : null}
           <TextField label="Название мезоцикла" required value={title} onChangeText={(value) => { setTitle(value); touch(); }} />
           <Text style={[styles.label, { color: colors.textPrimary }]}>Тип цикла</Text>
@@ -438,19 +440,24 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
             </View>
           </View>
           {mode === "edit" && program !== null ? <>
-            <ParticipantChips clientId={clientId} memberIds={[...group,
+            <ParticipantAssignments repository={repository} hostProgramId={programId ?? null} values={placements} currentCycles={groupCycles}
+              onAssign={(id, target) => {
+                setPlacements((current) => new Map(current).set(id, target)); touch();
+                if (mode === "edit") setJoining((current) => ({ ids: [...new Set([...(current?.ids ?? []), id])], source: current?.source ?? clientId }));
+              }} clientId={clientId} memberIds={[...group,
               ...candidates.map((item) => item.id).filter((id) => !group.includes(id))]}
-              names={new Map(candidates.map((item) => [item.id, item.displayName]))} selected={group}
+              names={new Map(candidates.map((item) => [item.id, item.displayName]))} selected={[...new Set([...group, ...(joining?.ids ?? [])])]}
               note="Убранный участник сохранит программу, план и результаты — он лишь выйдет из группы."
               onChange={(ids) => {
                 const removed = group.find((id) => !ids.includes(id));
                 if (removed !== undefined) { setLeaving(removed); return; }
-                const added = ids.filter((id) => !group.includes(id));
+                const added = ids.filter((id) => !group.includes(id) || joining?.ids.includes(id));
+                if (added.length === 0) setJoining(null);
                 if (added.length > 0) setJoining({ ids: added, source: joining?.source ?? clientId });
               }} />
             {joining !== null ? <View style={[styles.join, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
               <Text style={[styles.label, { color: colors.textPrimary }]}>
-                {`План для «${joining.ids.map(nameOf).join("», «")}» скопировать у:`}
+                {`Подключить: ${joining.ids.map(nameOf).join(", ")}. Источник плана для новых копий:`}
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.copyRow}>
                 {group.map((id) => <SelectionChip key={id} group="Источник плана" label={nameOf(id)}
@@ -461,15 +468,19 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
               <View style={styles.row}>
                 <View style={styles.grow}><AppButton compact variant="secondary" label="Отмена" disabled={memberBusy}
                   onPress={() => setJoining(null)} /></View>
-                <View style={styles.grow}><AppButton compact label="Добавить" busy={memberBusy}
+                <View style={styles.grow}><AppButton compact label="Применить участников" busy={memberBusy}
                   onPress={() => { void changeMembers((revision) => repository.addParticipants(clientId, programId!, revision,
                     mesocycleId!, joining.source, placementsFor(joining.ids))); }} /></View>
               </View>
             </View> : null}
           </> : mode === "edit" ? null : <>
-            <ParticipantChips clientId={clientId} memberIds={[clientId, ...candidates.map((item) => item.id).filter((id) => id !== clientId)]}
+            <ParticipantAssignments repository={repository} hostProgramId={programId ?? null} values={placements}
+              onAssign={(id, target) => {
+                setPlacements((current) => new Map(current).set(id, target)); touch();
+
+              }} clientId={clientId} memberIds={[clientId, ...candidates.map((item) => item.id).filter((id) => id !== clientId)]}
               names={new Map(candidates.map((item) => [item.id, item.displayName]))} selected={members}
-              onChange={(ids) => { setMembers(ids); touch(); }} note="Каждый получит свою копию; результаты у всех свои." />
+              onChange={(ids) => { setMembers(ids); touch(); }} note="Копия создаст независимый цикл. Нажмите на участника, чтобы подключить существующий." />
             {placementRows(mode === "add" && program !== null ? program.title : programTitle)}
           </>}
         </Section>

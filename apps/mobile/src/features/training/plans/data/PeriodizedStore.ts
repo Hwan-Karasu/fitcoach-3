@@ -1,3 +1,4 @@
+import { registerNavigationCopy } from "./NavigationGroupStore.ts";
 import type { SqliteStatementPort } from "../../../../shared/db/SqlitePort.ts";
 import type { CycleType, Mesocycle, PlanWeek, WeekType } from "../domain/PeriodizedModel.ts";
 import type { PlannedWorkout } from "../domain/SimplePlanModel.ts";
@@ -64,6 +65,7 @@ export async function insertMesocycle(tx: SqliteStatementPort, workspaceId: stri
     cycle_type, rep_min, rep_max, start_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [mesocycle.id, workspaceId, programId, clientId,
     mesocycle.lineageId, (last?.position ?? -1) + 1, mesocycle.title.trim(), now.toISOString(), mesocycle.cycleType ?? null,
     mesocycle.repRange?.min ?? null, mesocycle.repRange?.max ?? null, mesocycle.startDate ?? null]);
+  await registerNavigationCopy(tx, workspaceId, { clientId, programId, mesocycleId: mesocycle.id }, mesocycle.lineageId);
   for (const week of mesocycle.weeks) {
     await tx.run(`INSERT INTO training_weeks (id, workspace_id, mesocycle_id, position, week_type) VALUES (?, ?, ?, ?, ?)`,
       [week.id, workspaceId, mesocycle.id, week.index - 1, week.type]);
