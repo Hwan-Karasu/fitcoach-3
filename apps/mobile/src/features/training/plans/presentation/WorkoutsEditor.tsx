@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useRef, useState, type Ref } from "react";
+import { forwardRef, memo, useEffect, useRef, useState, type Ref } from "react";
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type Animated from "react-native-reanimated";
 import type { AnimatedRef } from "react-native-reanimated";
@@ -199,7 +199,7 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, s
  * Редактор тренировок одной недели: общий для Простого и Расширенного конструкторов. Упражнения
  * перетаскиваются внутри тренировки, тренировки — в режиме «Порядок тренировок».
  */
-export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scrollRef, onPickExercise, onReplaceExercise, singleWorkout = false }: Readonly<{
+export const WorkoutsEditor = memo(function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scrollRef, onPickExercise, onReplaceExercise, singleWorkout = false }: Readonly<{
   draft: SimpleProgramDraft;
   change: (next: SimpleProgramDraft) => void;
   lookup: ReadonlyMap<string, ExerciseInfo>;
@@ -314,7 +314,7 @@ export function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scro
         setDissolving(null);
       }} />
   </>;
-}
+});
 
 /** The constructor's cards in import-review mode. Choosing a catalog match is the only edit. */
 export function WorkoutsReview({ workouts, names, matches, onMatch, disabled = false }: Readonly<{

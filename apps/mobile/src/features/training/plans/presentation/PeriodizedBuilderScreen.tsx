@@ -23,7 +23,7 @@ import { MESOCYCLE_WEEKS_MAX, WEEK_TYPES, weekTypeLabels, type WeekType } from "
 import { PROGRAM_TITLE_MAX } from "../domain/ProgramRules.ts";
 import { setRepsRange } from "../domain/SimplePlanEdits.ts";
 import type { PlannedWorkout, PlanRange, SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
-import { formatRange, parseRange, setFieldsOf, validateDraft } from "../domain/SimplePlanRules.ts";
+import { formatRange, parseRange, setFieldsOf, validateDraft, type PlanIssue } from "../domain/SimplePlanRules.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidate.ts";
 import { ParticipantAssignments } from "./ParticipantAssignments.tsx";
@@ -67,6 +67,7 @@ function Section({ title, children }: Readonly<{ title: string; children: ReactN
  * создаются одной записью. Тот же конструктор открывает «Изменить» (мезоцикл этого клиента целиком) и
  * «+ Мезоцикл» (UI-OWN-041); в правке после изменения недели всплывает меню области.
  */
+const NO_ISSUES: readonly PlanIssue[] = [];
 export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, initialWeek, mesocycleSave, repository, exercises, listCandidates, picked,
   onPickExercise, onCreated, onSaved, onCancel, renderTemplates, renderExcel, workbookSave, loadWeekStatuses }: Readonly<{
   workbookSave?: BuilderWorkbookSavePort;
@@ -303,13 +304,17 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
     next.forEach((item, index) => { if (index === at || item !== weeks[index]) baselines.current.set(index, item.workouts); });
     setScopeFor(null);
   };
+  // Стабильные колбэки: редактор недели (memo) не перерисовывается из-за несвязанных обновлений экрана.
+  const pickRef = useRef(onPickExercise); pickRef.current = onPickExercise;
+  const pickExercise = useCallback((workoutId: string) => pickRef.current(workoutId), []);
+  const replaceExercise = useCallback((workoutId: string, plannedId: string) => pickRef.current(workoutId, plannedId), []);
   const metricsOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.metrics ?? null, [lookup]);
   // Плановые значения, которых профиль упражнения не отслеживает (вес из Excel у «только повторов»), в редакторе не видны:
   // проверяются и сохраняются уже очищенными, чтобы их нельзя было не заметить и не исправить.
   const cleanWeeks = useMemo(() => lookup === null ? weeks : cleanBuilderWeeks(weeks, metricsOf), [lookup, metricsOf, weeks]);
   const issues = useMemo(() => lookup === null ? [] : cleanWeeks.flatMap((item) => item.workouts.length === 0 ? []
     : validateDraft({ title: title || "Мезоцикл", plan: { weeks: 1, workouts: item.workouts } }, metricsOf)), [cleanWeeks, lookup, metricsOf, title]);
-  const weekIssues = useMemo(() => lookup === null || week.workouts.length === 0 ? []
+  const weekIssues = useMemo(() => lookup === null || week.workouts.length === 0 ? NO_ISSUES
     : validateDraft({ title: draft.title, plan: { weeks: 1, workouts: cleanWeeks[editing]?.workouts ?? week.workouts } }, metricsOf),
   [cleanWeeks, draft.title, editing, lookup, metricsOf, week.workouts]);
 
@@ -620,8 +625,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
             </Text>
           ) : null}
           <WorkoutsEditor draft={draft} change={change} lookup={lookup} issues={weekIssues} showIssues={showIssues} scrollRef={scrollRef}
-            onPickExercise={(workoutId) => onPickExercise(workoutId)}
-            onReplaceExercise={(workoutId, plannedId) => onPickExercise(workoutId, plannedId)} />
+            onPickExercise={pickExercise} onReplaceExercise={replaceExercise} />
         </Section>
       </Animated.ScrollView>
       <ConfirmDialog visible={leaving !== null} destructive confirmBusy={memberBusy}
