@@ -19,6 +19,7 @@
 | `docs/adr/F06_READ_MODELS_CANDIDATE.md` | Task F06: scoped subscriptions, post-commit invalidation и открытые production/Android gates |
 | `docs/adr/F07_THEME_CANDIDATE.md` | Task F07: runtime-снимок 9×3 палитр, типизированный resolver, частичные тесты и открытый UI/Android gate |
 | `docs/CODE_AUDIT_2026-10-27.md` | Технический аудит всего приложения: реестр CA-01…CA-24, очистка, зависимости, ограничения |
+| `docs/IMPORT_ENGINE_V2.md` | Новый движок импорта и экспорта Excel: решения владельца, конвейер, срезы S1–S5, риски |
 | `docs/PROJECT_STATUS.md` | Текущее состояние нового репозитория и следующий task |
 
 Нормативные документы не дублируются в этом репозитории. Единственная актуальная
