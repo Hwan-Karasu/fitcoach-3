@@ -11,7 +11,7 @@
 - EDITOR-FIX-1: очистка плановых значений и статусы недель в редакторе (7deb80e).
 
 ## Открыто / техдолг
-- EDITOR-FIX-1/2: торможение конструктора мезоцикла (вход, смена недели) — причина рендер, не логика (замер на ПК); правки рендера не сделаны: WorkoutsEditor.tsx:264 (перемонтаж Sortable.Grid по неделям), PeriodizedBuilderScreen.tsx.
+- Смена недели в конструкторе мезоцикла медленная (создание ~23 карточек, WorkoutsEditor.tsx / Sortable.Grid) — решено оставить; варианты в docs/PROJECT_STATUS.md.
 - Решения владельца из POLISH-1 (P-01…P-07 в CODE_AUDIT): разрешения Android RECORD_AUDIO/CAMERA/SYSTEM_ALERT_WINDOW
   (app.json), icon.png 2,2 МБ, токен scrim ×26, CI arch:check без assets/exercises, flash-list, отчёты docs/ui, старые APK.
 - AUD26-01 удаление клиента (training_transfer_receipts); AUD26-04 sync-v2-workbook.ts читает соседнюю папку FitCoach_2_Excel.
