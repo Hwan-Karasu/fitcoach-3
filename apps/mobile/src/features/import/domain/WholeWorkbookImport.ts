@@ -3,7 +3,14 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { autoMatchWorkbookEntry, selectWorkbookSheet, type WorkbookReviewSession } from "./WorkbookReviewSession.ts";
 
-const identity = (parts: readonly unknown[]) => `workbook:${bytesToHex(sha256(utf8ToBytes(JSON.stringify(parts))))}`;
+/**
+ * Стабильный ID листа и строки (лист, неделя, вид, исходный ID): один и тот же лист получает один и тот же ID при любом выборе листов.
+ * Хеш нужен только для длинных ключей: короткие остаются читаемой строкой, и книга не тратит секунды на SHA-256 на телефоне.
+ */
+const identity = (parts: readonly unknown[]) => {
+  const key = JSON.stringify(parts);
+  return key.length <= 200 ? `workbook:${key}` : `workbook:${bytesToHex(sha256(utf8ToBytes(key)))}`;
+};
 
 export function prepareWholeWorkbook(session: WorkbookReviewSession,
   candidates: readonly Readonly<{ id: string; name: string; available: boolean }>[]): WorkbookReviewSession {
