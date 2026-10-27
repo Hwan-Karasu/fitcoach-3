@@ -6,15 +6,12 @@ import { transferSummary, type TrainingTransfer, type TransferWorkout } from "..
 import { visibleTrainingTransfer } from "../../shared/training-transfer/VisibleTrainingTransfer.ts";
 import type { TrainingTransferPort, ExerciseImportMatch } from "../../features/import/public.ts";
 import { ExerciseImportMatchStore, validateExerciseMatches } from "../../features/import/data/ExerciseImportMatchStore.ts";
-import { TransferReceiptStore } from "../../features/import/data/TransferReceiptStore.ts";
-import { readTrainingWorkbook, readWorkbook, writeTrainingWorkbook } from "../../features/import/data/TrainingWorkbook.ts";
 import { exportTrainingPlans, importTrainingPlans, exportTrainingPlanHistory, importTrainingPlanHistory } from "../../features/training/plans/data/TrainingPlanTransfer.ts";
 import { importTrainingExecutions } from "../../features/training/execution/data/TrainingExecutionTransfer.ts";
 import type { DevTrainingExecutionRepository } from "../../features/training/execution/data/DevTrainingExecutionRepository.ts";
 import type { DevTrainingPlansRepository } from "../../features/training/plans/data/DevTrainingPlansRepository.ts";
 import type { DevExerciseCatalogRepository } from "../../features/exercises/data/DevExerciseCatalogRepository.ts";
 import type { BuilderWorkbookCycle } from "../../shared/training-transfer/BuilderWorkbook.ts";
-import { workbookCycleSnapshot } from "../../shared/training-transfer/WorkbookSheetIdentity.ts";
 import { canonicalJson } from "../../shared/training-transfer/CanonicalJson.ts";
 import { UUID_V4_BATCH_SQL } from "../../shared/db/SqlIds.ts";
 import { assertValidTransfer, reidTransfer, transferSourceIds } from "../../features/import/public.ts";
@@ -49,17 +46,8 @@ function resultsOfRemovedWorkouts(cycle: BuilderWorkbookCycle) {
 }
 
 export function createTrainingTransfer(database: SharedSqliteDatabase, workspace: string, plans: DevTrainingPlansRepository, execution: DevTrainingExecutionRepository, exercises: Pick<DevExerciseCatalogRepository, "get" | "list">): TrainingTransferPort {
-  const receipts = new TransferReceiptStore(workspace);
   const matches = new ExerciseImportMatchStore(workspace);
   const activeExerciseIds = async () => new Set((await exercises.list()).filter((entry) => !entry.overlay.hidden).map((entry) => entry.definition.id));
-  /** Программы нет совсем: ни самой программы, ни результатов клиента по ней (удалена «с результатами»). */
-  const programsGone = async (tx: SqliteStatementPort, clientId: string, ids: readonly string[]) => {
-    for (const id of ids) {
-      if (await tx.first(`SELECT 1 AS found FROM training_programs WHERE workspace_id=? AND id=?`, [workspace, id]) !== null) return false;
-      if (await tx.first(`SELECT 1 AS found FROM training_sessions WHERE workspace_id=? AND client_id=? AND program_id=?`, [workspace, clientId, id]) !== null) return false;
-    }
-    return ids.length > 0;
-  };
   const checkMatches = async (input: readonly ExerciseImportMatch[]) => {
     const valid = validateExerciseMatches(input);
     if (!valid.length) return valid;
@@ -93,8 +81,6 @@ export function createTrainingTransfer(database: SharedSqliteDatabase, workspace
     const catalog = await Promise.all([...needed].sort().map(async (id) => { const entry = await exercises.get(id); if (!entry) throw new Error("Не найдено упражнение из истории. Экспорт остановлен."); return { id, name: entry.overlay.displayName?.trim() || entry.definition.name }; }));
     return { format: "athlete-training", version: 1, sourceId: "athlete-diary-3", client: { id: clientId, name: client.name }, programs, sessions, exercises: catalog, ...(planHistory.length ? { planHistory } : {}) };
   };
-  // Local fingerprint includes all owner data but excludes display-only catalog labels.
-  const fingerprint = (value: TrainingTransfer) => hash({ programs: value.programs, sessions: value.sessions, planHistory: value.planHistory ?? [] });
   return {
     async getExerciseMatches(sourceNames) {
       const available = await activeExerciseIds();
@@ -109,31 +95,14 @@ export function createTrainingTransfer(database: SharedSqliteDatabase, workspace
       }
       if (!request.resultsAction && request.cycles.some((c) => resultsOfRemovedWorkouts(c).length > 0)) throw new Error("WEEK_HAS_RESULTS");
       const remembered = await checkMatches(request.cycles.flatMap((c) => c.imported?.matches ?? []));
-      const batchKey = hash(["builder-batch", request.clientId, request.cycles.map((c) => c.key)]);
-      const batchHash = hash(request);
+      // Повтор разрешён (решение владельца 2026-10-27): ни квитанций, ни хешей, ни круга через XLSX; каждый цикл получает новые UUID.
       const saved = await transaction(async (tx) => {
         const now = new Date();
-        if (request.scope.programId === null) {
-          let receipt = await receipts.read(tx, request.clientId, batchKey);
-          if (receipt && await programsGone(tx, request.clientId, JSON.parse(receipt.programIds) as string[])) {
-            await receipts.forget(tx, request.clientId, [batchKey]); receipt = null; // программу удалили целиком: квитанция устарела
-          }
-          if (receipt) {
-            const ids = JSON.parse(receipt.programIds) as string[]; const local = await exportInTransaction(tx, request.clientId, ids);
-            if (receipt.sourceHash !== batchHash || receipt.localHash !== fingerprint(local)) throw new Error("Конфликт ранее сохранённого импорта. Автоматическая перезапись отключена.");
-            await plans.workbookSaveParticipant.clear(tx, request.clientId, request.scope);
-            return { programId: ids[0]!, mesocycleId: local.programs[0]!.mesocycles[0]!.id };
-          }
-        }
         const program = request.scope.programId === null
           ? await plans.workbookSaveParticipant.create(tx, { title: request.programTitle, clientIds: request.clientIds, placements: request.placements }, now)
           : await plans.workbookSaveParticipant.check(tx, request.clientId, request.scope.programId, request.expectedRevision ?? -1);
         let revision = program.revision; let firstId = ""; let appended = false;
         let placements = request.placements;
-        const cycleState = async (id: string) => {
-          const local = await exportInTransaction(tx, request.clientId, [program.id]);
-          return hash(workbookCycleSnapshot(local, id));
-        };
         for (const [index, draft] of request.cycles.entries()) {
           if (draft.key === request.existingCycleKey && request.scope.mesocycleId !== null) {
             const edit = { clientId: request.clientId, programId: program.id, expectedRevision: revision,
@@ -171,28 +140,19 @@ export function createTrainingTransfer(database: SharedSqliteDatabase, workspace
                 mesocycles: [{ id: item.key, lineageId: item.key, title: item.title, ...item.settings,
                   weeks: item.weeks.map((w, at) => ({ ...w, id: `${item.key}:week:${at}`, index: at + 1 })) }] }], sessions };
           };
-          const input = readTrainingWorkbook(readWorkbook(writeTrainingWorkbook(cycleTransfer(draft))));
-          const mapped = remapTrainingTransfer(input, request.clientId, Object.fromEntries(input.exercises.map((e) => [e.id, e.id])));
+          const source = cycleTransfer(draft); assertValidTransfer(source);
+          const sourceIds = transferSourceIds(source);
+          const fresh = await tx.all<{ id: string }>(UUID_V4_BATCH_SQL, [sourceIds.length]);
+          const mapped = reidTransfer(source, request.clientId, Object.fromEntries(source.exercises.map((e) => [e.id, e.id])), new Map(sourceIds.map((id, at) => [id, fresh[at]!.id])));
           const cycle = mapped.programs[0]!.mesocycles[0]!;
-          const key = hash(["builder-sheet", program.id, draft.imported?.sourceId ?? "manual", draft.key]);
-          const sourceHash = draft.imported?.sourceHash ?? hash(draft);
-          const receipt = await receipts.read(tx, request.clientId, key);
-          if (receipt) {
-            const localId = receipt.cycleId ?? cycle.id; firstId ||= localId;
-            if (receipt.sourceHash !== sourceHash || receipt.localHash !== await cycleState(localId)) throw new Error(`Конфликт цикла «${draft.title}»: данные изменились после импорта.`);
-            continue;
-          }
           firstId ||= cycle.id;
           placements = await plans.workbookSaveParticipant.append(tx, { clientId: request.clientId, programId: program.id, cycle,
             clientIds: request.clientIds, placements, first: index === 0, imported: !!draft.imported }, now);
-          await importTrainingExecutions(tx, workspace, request.clientId, mapped.sessions.map((s) => ({ ...s, programId: program.id })));
-          await receipts.save(tx, request.clientId, key, { sourceHash, localHash: await cycleState(cycle.id), programIds: JSON.stringify([program.id]), cycleId: cycle.id }); appended = true;
+          await importTrainingExecutions(tx, workspace, request.clientId, mapped.sessions.map((s) => ({ ...s, programId: program.id }))); appended = true;
         }
         if (appended && request.scope.programId !== null && revision === program.revision) await plans.workbookSaveParticipant.bump(tx, program.id, revision, now);
         await matches.save(tx, remembered);
         await plans.workbookSaveParticipant.clear(tx, request.clientId, request.scope);
-        if (request.scope.programId === null) await receipts.save(tx, request.clientId, batchKey, { sourceHash: batchHash,
-          localHash: fingerprint(await exportInTransaction(tx, request.clientId, [program.id])), programIds: JSON.stringify([program.id]) });
         return { programId: program.id, mesocycleId: firstId };
       });
       plans.mesocycleSaveParticipant.notify(request.clientIds); execution.notifyTransfer(request.clientId, saved.programId);

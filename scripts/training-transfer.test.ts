@@ -94,13 +94,17 @@ test("I07 selected workbook cycles and their results save atomically with a manu
     assert.equal((await f.execution.getProgramStatuses(other.id, result.programId)).length, 0, "other clients receive only plans");
     assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 6);
     assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_import_exercise_matches").get()!.n, 1);
-    assert.deepEqual(await f.transfer.saveBuilderWorkbook(request), result);
-    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_programs").get()!.n, 1);
+    // Повтор разрешён (решение владельца 2026-10-27): то же сохранение создаёт новую программу, прежняя остаётся нетронутой.
+    const again = await f.transfer.saveBuilderWorkbook(request);
+    assert.notEqual(again.programId, result.programId);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_programs").get()!.n, 2);
+    assert.equal((await f.plans.getPeriodizedPlan(f.client.id, result.programId))!.mesocycles.length, 4);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_transfer_receipts").get()!.n, 0, "the builder keeps no receipts");
     assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
   } finally { await f.close(); }
 });
 
-test("I07 importing additional sheets into the same programme skips repeats and rejects changed saved cycles", async () => {
+test("I07 importing additional sheets into the same programme appends them, repeats included, and never touches saved cycles", async () => {
   const f = await fixture();
   try {
     const full = multiBook(f.mapping.press!);
@@ -108,17 +112,17 @@ test("I07 importing additional sheets into the same programme skips repeats and 
     const input: BuilderWorkbookSaveRequest = { clientId: f.client.id, scope: { programId: null, mesocycleId: null }, expectedRevision: null,
       programTitle: "Выбор", cycles: first.cycles!, clientIds: [f.client.id], existingCycleKey: null, placements: [] };
     const created = await f.transfer.saveBuilderWorkbook(input);
-    const all = builderWorkbookImport(full);
     const library = () => f.plans.getProgram(f.client.id, created.programId);
-    const append = { ...input, scope: { programId: created.programId, mesocycleId: null }, expectedRevision: (await library())!.revision, cycles: all.cycles! };
-    await f.transfer.saveBuilderWorkbook(append);
-    assert.equal((await f.plans.getPeriodizedPlan(f.client.id, created.programId))!.mesocycles.length, 3);
-    const before = f.native.prepare("SELECT * FROM training_performed_sets ORDER BY id").all();
-    await f.transfer.saveBuilderWorkbook({ ...append, expectedRevision: (await library())!.revision });
-    assert.deepEqual(f.native.prepare("SELECT * FROM training_performed_sets ORDER BY id").all(), before);
+    const titles = async () => (await f.plans.getPeriodizedPlan(f.client.id, created.programId))!.mesocycles.map((c) => c.title);
+    const savedFirst = (await f.plans.getPeriodizedPlan(f.client.id, created.programId))!.mesocycles[0]!;
     f.native.prepare("UPDATE training_mesocycles SET title='Локальная правка' WHERE id=?").run(created.mesocycleId);
-    await assert.rejects(f.transfer.saveBuilderWorkbook({ ...append, expectedRevision: (await library())!.revision }), /Конфликт/);
-    assert.deepEqual(f.native.prepare("SELECT * FROM training_performed_sets ORDER BY id").all(), before);
+    const append = { ...input, scope: { programId: created.programId, mesocycleId: null }, expectedRevision: (await library())!.revision, cycles: builderWorkbookImport(full).cycles! };
+    await f.transfer.saveBuilderWorkbook(append);
+    // Все три выбранных листа добавлены, в том числе уже импортированный первый: повтор разрешён. Сохранённые циклы и их правки не тронуты.
+    assert.deepEqual(await titles(), ["Локальная правка", "Цикл 1", "Цикл 2", "Цикл 3"]);
+    assert.equal(savedFirst.id, (await f.plans.getPeriodizedPlan(f.client.id, created.programId))!.mesocycles[0]!.id);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 8);
+    assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
   } finally { await f.close(); }
 });
 
