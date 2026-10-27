@@ -108,3 +108,56 @@ Zod, серверной синхронизации и очередей в реп
 - Причина падения при импорте выбранных листов (CA-23) не установлена: нужны данные владельца (число листов, размер файла, вид сборки, как падает).
 - Ревьюер по Excel-работе не успел просмотреть `WorkbookReviewSession.ts`, `WholeWorkbookImport.ts` (смена вывода id), `TransferReceiptStore.ts` (миграция v3) и доступность новых кнопок.
 - Файл `E:package.json` (корень диска, вне репозитория) — моя случайная копия манифеста; защитная проверка не дала удалить, удалить вручную.
+
+## Проход 2 — полировка «ничего лишнего» (POLISH-1, 2026-10-27, HEAD `90ea329`)
+
+База до правок (рабочее дерево чистое): `typecheck`, `lint`, `arch:check` (580 файлов), `source:verify`, `secrets:check` — зелёные; `test:foundation` **966/966**, `excel:test` **96/96**; в чистом worktree `training:test` 258, `r06:test` 248, `d01:test` 26 — зелёные.
+Метод: граф имён по всем текстовым файлам (скрипт во временной папке) для файлов и экспортов `apps/mobile/src`; разбор JSX через TS API (нажимаемые элементы без подписи); поиск цветов; состав APK `build18` по ZIP-каталогу; сверка картинок упражнений с картой `exerciseImages.generated.ts`.
+
+### Удалено / перенесено
+
+| Что | Доказательство | Проверка |
+|---|---|---|
+| 35 документов `docs/spikes/R02…R04_*.md` и `docs/HANDOFF_BACKUP_MIGRATION.md` (≈ 92 КБ) → `docs/archive/migration-2.0/` (`git mv`, история сохранена) | Описывают код отменённой миграции (ADR-043), удалённый в R04-RETIRE; входящих ссылок вне документов — 6 (две строки `docs/README.md`, две `PROJECT_STATUS.md`, внутренние в самом HANDOFF); все исправлены, проверка относительных ссылок архива даёт только 4 уже мёртвые ссылки на удалённый `scripts/r03` | скрипт проверки ссылок; в `docs/spikes` остались 27 файлов (R01, R06, R07, R08) |
+| CI: добавлен шаг «Feature suites» (`excel:test`, `training:test`, `r06:test`, `d01:test`) — закрывает AUD26-03 | В чистом worktree на HEAD с общим `node_modules` все четыре набора зелёные (96 + 258 + 248 + 26), им нужны только фикстуры из репозитория | прогон в worktree; **сам CI не запускался** |
+
+### Проверено: лишнего нет
+
+- **Зависимости:** все прямые зависимости `apps/mobile` (кроме `@shopify/flash-list`) импортируются; `expo-notifications` — точечные lazy-импорты `build/*`, `@noble/hashes` — подпути `sha2.js`/`utils.js`, `expo-linear-gradient` — peer.
+- **Файлы и экспорты:** без ссылок только `useQuerySnapshot.ts` и `assets.d.ts` (оба в списке «оставлено»); экспорты без единой внешней ссылки — пять типов (`RootTabName`, `WorkspaceTabName`, `MoreDestinationName`, `ClientSectionName` в `routeCatalog.ts`, `CalcRuleError` в `CalcRules.ts`) — оставлены, это пары к используемым значениям.
+- **Ассеты:** все 1138 `webp` упражнений есть в карте и в APK; `assets/equipment/*.svg` и `source-*.png` подключаются через `prepare-*` по шаблону имени (поиск по имени файла их не видит — не удалять).
+- **Доступность:** из 192 `Pressable` без подписи и текста 9, и все — подложки с `accessible={false}`/`importantForAccessibility="no"` намеренно.
+- **Отладка в release:** `SqliteDiagnosticsScreen` недостижим: `App.tsx:11` выбирает `createDevRuntime()` только при `__DEV__`, `developmentTools` задаётся лишь в dev-рантайме (`createServices.ts:260`), маршрут `SqliteDev` и кнопка в настройках (`PrototypeShell.tsx:144,261`) зарегистрированы только при его наличии. Код экрана при этом остаётся в bundle (статический импорт, `PrototypeShell.tsx:34`) — мелочь, без замера не трогал. `installWorkoutNavigationProbe` выходит при `!__DEV__`.
+- **Зависимость `arch:check` от картинок:** в чистом клоне он падает `UNRESOLVED_LOCAL_IMPORT` на `assets/exercises/*` (каталог в `.gitignore`, лицензия RepDB) — тот же шаг есть в `foundation.yml`, значит CI на чистом клоне должен быть красным (см. «на решение»).
+
+### Оставлено
+
+Цвета подложек с фиксированной прозрачностью в постерах `ShareWeekPoster`/`WorkoutSharePoster` — осознанно: картинка для отправки всегда на белой бумаге, не зависит от темы. Остальное — по списку «Оставлено сознательно» выше (`workbookSheetHash`/`CanonicalJson`, `training_transfer_receipts`, `useQuerySnapshot`, `space`/`fontSize`, `scripts/r06`, `spikes/*`).
+
+### На решение владельца
+
+| ID | Находка | Цифры и места | Предложение |
+|---|---|---|---|
+| P-01 | Разрешения Android без причины в офлайн-приложении | Итоговый манифест `build18`: `RECORD_AUDIO`, `CAMERA`, `SYSTEM_ALERT_WINDOW` (+ `RECEIVE_BOOT_COMPLETED`, `c2dm.permission.RECEIVE` от `expo-notifications`). Из `expo-image-picker` используется только `launchImageLibraryAsync` (`RecipeEditorScreen.tsx:136`); микрофона и камеры нет. `apps/mobile/android` в `.gitignore` (создаётся prebuild), править надо в `app.json` | `android.blockedPermissions: [RECORD_AUDIO, CAMERA, SYSTEM_ALERT_WINDOW]`; **требует сборки и проверки на телефоне**, поэтому не правил. `app.json` сейчас ещё и содержит чужую незакоммиченную правку |
+| P-02 | `assets/brand/icon.png` 1254×1254, 2,2 МБ; в APK как `res/N5.png` 2,0 МБ, а на экране запуска показывается 154 dp (`LaunchAnimation.tsx:41`) | ≈ 2 МБ из 70 МБ APK | Уменьшить до ~512 px (≈ −1,7 МБ) — вид тот же, но это ваш бренд-ассет; `background.png` 2,7 МБ нужен только генератору, в APK его вес 0,4 МБ |
+| P-03 | 26 копий чёрной подложки диалогов с разной прозрачностью (0,35–0,48) | `rgba(0,0,0,…)` в 26 `.tsx` (список: `grep rgba`; в т. ч. `BuilderDraftExitDialog.tsx:10`, `ProgramLibraryScreen.tsx:343` без токена) | Один токен `scrim` в теме и одна прозрачность — **меняет вид** (UI), поэтому не делал |
+| P-04 | CI на чистом клоне (см. выше): `arch:check` и `android:bundle` ждут `assets/exercises/*` | `foundation.yml` | Либо шаг `catalog:fetch` + `catalog:build`, либо исключить сгенерированный `exerciseImages.generated.ts` из проверки; статус реальных запусков CI не смотрел (`gh` недоступен) |
+| P-05 | `@shopify/flash-list` 2.0.2 | нигде не импортируется, остался от T05 | Удалить (`npx expo install` не нужен, правка манифеста и lock) или применить к длинным спискам |
+| P-06 | Пять отчётов `docs/ui/*_2026-10-24.md` без входящих ссылок; `PROJECT_STATUS.md` ≈ 412 КиБ; два генератора вне `package.json` (`refresh-source-manifest.ts`, `navigation-theme-audit.ts`) | CA-18 | Архив или подключение; без сверки с `PROJECT_STATUS.md` не удалял |
+| P-07 | `artifacts/apk`: три APK, 134 МБ (build17 и build18, ещё один) | вне git (`artifacts/` не отслеживается), только место на диске | Удалить старые вручную |
+
+### Цифры до и после
+
+| Показатель | До | После |
+|---|---|---|
+| Отслеживаемых файлов | 1023 | 1023 (перенос, не удаление) |
+| `docs/spikes` (файлов) | 62 | 27 |
+| `docs/` корень, HANDOFF | 92 КБ в корне | в `docs/archive/migration-2.0` |
+| npm-скриптов / зависимостей `apps/mobile` | 46 / 38 | 46 / 38 |
+| `test:foundation` / `excel:test` | 966 / 96 | 966 / 96 (код не менялся) |
+| Шагов CI с проверками | 6 | 7 (+ четыре набора) |
+| APK `build18`, МБ | 70,2 | не пересобирался. Состав: `lib/arm64-v8a` 24,2; `res` 22,9 (картинки упражнений 20,0; `icon.png` 2,0); JS bundle 11,2; dex 9,7; `resources.arsc` 1,6 |
+
+### Не проверено
+
+CI на GitHub (нет `gh`), сборка APK и проверка разрешений на телефоне, время старта (CA-24), реальный размер bundle после правок — правок кода приложения в этом проходе нет.

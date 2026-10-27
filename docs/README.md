@@ -10,8 +10,8 @@
 | `docs/LEGACY_REFERENCE.md` | Task S04: внешний read-only build120 reference и fixture policy |
 | `docs/spikes/R07_SQLITE_STATUS.md` | Task R07: TypeScript SQLite spike, полученные проверки и открытый Android gate |
 | `docs/spikes/R01_ANDROID_IDENTITY.md` | Task R01: package/signing/versionCode установленного APK и открытое сравнение с кандидатом |
-| `docs/spikes/R02_LEGACY_BACKUP_INVENTORY.md` | Task R02: read-only inventory переданного SQLite `.atbackup`, без PII и без cutover |
-| `docs/spikes/R03_SYNTHETIC_MIGRATION_FIXTURES.md` | Task R03: synthetic SQLite fixtures, counts/hashes и открытые migration gates |
+| `docs/archive/migration-2.0/R02_LEGACY_BACKUP_INVENTORY.md` | Task R02: read-only inventory переданного SQLite `.atbackup`, без PII и без cutover (прекращено, ADR-043) |
+| `docs/archive/migration-2.0/R03_SYNTHETIC_MIGRATION_FIXTURES.md` | Task R03: synthetic SQLite fixtures, counts/hashes и открытые migration gates (прекращено, ADR-043) |
 | `docs/spikes/R08_NAVIGATION_STATUS.md` | Task R08: TypeScript React Navigation spike, Expo Go device evidence и открытый custom APK gate |
 | `docs/adr/F01_STACK_CANDIDATE.md` | Task F01: запускаемый mobile TypeScript candidate, проверенные версии и открытые native/security gates |
 | `docs/adr/F02_CHECKS_CANDIDATE.md` | Task F02: частичные автоматические проверки и ещё не закрытые CI/native/security gates |

@@ -35,7 +35,7 @@ ordinaryCalendar/Accounting repos retainsIDs/settings/snapshots/NULLoutcomes/no 
 Proofcoversnativefields ONLY, notprivate source/review/provenance/unsupportedrows.
 Root/mobileTS/scopedlint/source73/secrets/arch/diff pass. No fullsuite/bundle/APK/
 native/phone/personaldata. ConcurrentUI/theme/packagehunks preserved.
-[Контракт/источники/границы](spikes/R04_CALENDAR_STAGING.md).
+[Контракт/источники/границы](R04_CALENDAR_STAGING.md).
 
 Code/test registrations/docs вошли в общий checkpoint6d84461, созданный параллельной
 UI-работой. Текущий R04 commit добавляет final evidence/memory, не переписывает
@@ -74,7 +74,7 @@ shape skipsafe; Adelete leavesB/rawAabsentglobalsources. Root/mobileTS/scopedlin
 source73/secrets/arch/diff pass; no fullsuite/bundle/APK/native/phone/personaldata.
 Samephysicalfile черездругоесоединение отвергаетсядозаписи; separatefilepositive
 и неизменность исходника проверены. Latest35/35 послерасширения fixture.
-[Контракт/границы](spikes/R04_NUTRITION_HISTORY_STORAGE_CANDIDATE.md).
+[Контракт/границы](R04_NUTRITION_HISTORY_STORAGE_CANDIDATE.md).
 
 IMPORTANT candidateengine usesexplicitowner catalog; currentproduction backup
 rejectscandidateDB bydesign. Ordinaryapp integration/admission/Android stillOPEN.
@@ -106,7 +106,7 @@ rollbackallowners/IDs/retry; crossownerreceipt failure с5facts/3components/weig
 food/calc/archive; retry без новых Workout. Readonly/reopen/reorder/bytes/IDsreuse
 включает archive guardedreads. Root/mobileTS/scopedlint/source73/secrets/arch/diff
 pass; no fullsuite/bundle/APK/native/phone. Source2.0/personaldata/concurrentUI untouched.
-[Контракт и источники](spikes/R04_NUTRITION_ARCHIVE_STAGING.md).
+[Контракт и источники](R04_NUTRITION_ARCHIVE_STAGING.md).
 
 NEXT productionrepresentations/review/provenance retention inclarchive +normal3.x
 backup/restore; Calendar/Ledger/otherowners/fullparity/appSQLite+JSONlegacyrestore/
@@ -143,7 +143,7 @@ bundle/APK/native/phone. Concurrentcalendar/theme files не менялись э
 residual aggregate и overlap priorities; средние не разворачиваются в 7dailyfacts,
 физические версии не сливаются по startDate. NEXT archivehistoricalrepresentation,
 остальные owners/productionreview+provenance/Executionstorage/apprestore/Android.
-Goal ACTIVE/fullscope/NOT100%. [Текущий контракт и источники](spikes/R04_NUTRITION_STAGING.md).
+Goal ACTIVE/fullscope/NOT100%. [Текущий контракт и источники](R04_NUTRITION_STAGING.md).
 
 ## Предыдущее продолжение — продукты, рецепты и пищевой дневник, база f0a241f
 
@@ -175,7 +175,7 @@ D01 нормализованные факты→полная обычная 3.x 
 все Nutrition/Measurement rows/IDs сохранены без r04 tables, изменение каталога
 не меняет прошлый дневник. Не proof private review/provenance/fulllegacy/APK removal.
 Root/mobileTS/scopedlint/source73/secrets/arch/diff pass. No fullsuite/bundle/APK/
-Android/phone. [Контракт и источники](spikes/R04_NUTRITION_STAGING.md).
+Android/phone. [Контракт и источники](R04_NUTRITION_STAGING.md).
 
 NEXT calculator/targets/weekly archives; другие owners/production review/provenance,
 Execution storage/identity/outcomes/precision, connected SQLite/JSON legacy restore,
@@ -206,7 +206,7 @@ SQLitebackup;7newtests. Readonlysource/reopen/reorderrows+properties/bytes/IDsre
 .atbackup→restored3.x→regularrepo retainsallmeasurementrows/IDs безr04tables.
 Это НЕ proof всегоlegacyimport/privateprovenance/review storage илиAPKбезimporter.
 Root/mobileTS/ownlint/source73/secrets/diff pass; no bundle/fullsuite/APK/native/phone.
-[Контракт/точные источники](spikes/R04_BODYWEIGHT_STAGING.md). finalizable:false.
+[Контракт/точные источники](R04_BODYWEIGHT_STAGING.md). finalizable:false.
 NEXT remaining owners: dayssteps/Nutrition/calculator/foods/recipes/history/Calendar/
 Ledger, production provenance/reviewstorage &Execution identity/outcomes, connected
 SQLite/JSONrestore/Android. GoalACTIVEfullscope/NOT100%;2.0/personaldata untouched.
@@ -232,7 +232,7 @@ IDreuse. Runtime repository читает скопированные D01rows в �
 importer tables, ambiguity/explicitprimary/correction sameID+revision checked.
 Root/mobileTS/ownESLint/source73/secrets/diff pass. Тест зарегистрирован R04/Plans/
 foundation; чужие theme hunks package не включены. No bundle/fullsuite/APK/native/phone.
-[Контракт](spikes/R04_MEASUREMENT_STAGING.md). finalizable:false/goalACTIVE/fullscope.
+[Контракт](R04_MEASUREMENT_STAGING.md). finalizable:false/goalACTIVE/fullscope.
 
 Старые logs: найден legacyJSON importer+arbitrarydataJson schema; writer semantics
 не доказаны, консервативное сохранение без guessedmerge остаётся. NEXT bodyweight
@@ -263,7 +263,7 @@ pass. No bundle/fullfoundation/APK/native/phone. Concurrent UI/theme edits exclu
 NEXT oldwriter/completion/relations tocurrent/history/archive IDs stillneedproof;
 021 proves cacheconstruction, not unknown writersemantics. Then runtime binding,
 remainingowners/fullparity/SQLite+JSON1/2 legacyrestore/Android. finalizable:false,
-goalACTIVEfullscope. [Контракт/точные источники](spikes/R04_WORKOUT_LOG_SNAPSHOTS.md).
+goalACTIVEfullscope. [Контракт/точные источники](R04_WORKOUT_LOG_SNAPSHOTS.md).
 
 ## Предыдущее продолжение — workout contexts/notes/status evidence, базаe93a4c8
 
@@ -291,7 +291,7 @@ canonicalized for stable retry when raw row propertyorder changes. Olderjobsbloc
 readonlysource/reopen/reorderproperties/byteidentical/stableIDs pass. Root/mobileTS/
 ownESLint/source73/secrets/diff pass. No newbundle/fullfoundation/APK/native/phone:
 onlyscripts/privateDDL changed, runtime/productionD01 untouched. Theme editsseparate.
-[Контракт](spikes/R04_WORKOUT_CONTEXTS.md). GoalACTIVEfullscope/not100%/finalizable:false.
+[Контракт](R04_WORKOUT_CONTEXTS.md). GoalACTIVEfullscope/not100%/finalizable:false.
 NEXT runtimebinding ofcontexts/notes/editablevalues +outcome reconciliation/factdate
 identity, remainingowners/fullparity, runtimeSQLite+JSON1/2 restore/Android. Do not
 claim this private projection is a connected legacy import.
@@ -316,7 +316,7 @@ archive completedWorkouts uses persistedstatus. Не считать одно д�
 exercise.note planinstruction. NEXT notes/outcomes and contexts withoutfacts,
 runtime binding/editing of drafts, remainingowners/fullparity/restore/Android.
 finalizable:false, legacyrestore NOTconnected, no completion claim.
-[Контракт/источники](spikes/R04_EDITABLE_EXECUTION_VALUES.md).
+[Контракт/источники](R04_EDITABLE_EXECUTION_VALUES.md).
 
 ## Предыдущее продолжение — даты в runtime, 2026-10-24, база75d5276
 
@@ -344,7 +344,7 @@ Production storage/import/timezone businessday policy по-прежнему OPEN
 подключает реальный legacy restore и не превращает private workout graph в число
 завершённых занятий. NEXT состояния/исходы/заметки/editable values, identity и
 собственные даты фактов; остальные owners/fullparity/runtimeSQLite+JSONv1v2/Android.
-[Контракт и предел проверки](spikes/R04_RUNTIME_DATE_EVIDENCE.md).
+[Контракт и предел проверки](R04_RUNTIME_DATE_EVIDENCE.md).
 
 ## Историческая пауза по просьбе владельца — 2026-10-23, база8d0031a
 
@@ -397,7 +397,7 @@ parity и реальное подключение legacy restore/Android. Produc
 Переходную сборку сохранить для позднего обновления. Данные и копии 3.x,
 созданные после переноса, должны открываться без преобразователя 2.0.
 Неизвестные даты/исторические факты/происхождение остаются частью модели 3.x.
-Реализация и release gates не закрыты. [Решение и критерии удаления](decisions/TRANSITION_RELEASE_2_TO_3.md).
+Реализация и release gates не закрыты. [Решение и критерии удаления](../../decisions/TRANSITION_RELEASE_2_TO_3.md).
 
 ## Последнее продолжение — R04 canonical Execution, база12381f4
 
@@ -433,7 +433,7 @@ retry inclclientIDs; readonlysourceSHAunchanged,targetreopenreorderbyteidentical
 allocatornotcalled. Readverifiesallprivate rows/IDs/sourceSHA256; source/targetdrift,
 corruption/ownership/shape/cloning/exactdate/labels. Root/mobileTS/changedESLint/
 source73/arch506/secrets/diff pass.
-No fullfoundation/bundle/APK/native/phone/personalfiles. [Контракт](spikes/R04_CANONICAL_EXECUTIONS_STAGING.md).
+No fullfoundation/bundle/APK/native/phone/personalfiles. [Контракт](R04_CANONICAL_EXECUTIONS_STAGING.md).
 NEXT runtimeproposal fordateprecision/identity/effort withinOPENgates, complete
 states/owners/fullparity/restoreSQLite+JSONv1v2/Android. Allpreviouslimitsbelowpersist.
 
@@ -464,7 +464,7 @@ allIDsreuse. Productionreadhelpers verifyarchivedmesos/typedweeks/SIMPLEoverride
 owner/count/JSON/catalog/rootcycle/deleted/optionalabsence/drift/modes. Root/mobile
 TS/changedESLint/source73/arch506/secrets/diff pass. No fullfoundation/APK/bundle/
 native(phone/runtimeunchanged).
-[Контракт](spikes/R04_ARCHIVE_PLANS_STAGING.md).
+[Контракт](R04_ARCHIVE_PLANS_STAGING.md).
 
 NEXT canonicalTrainingfacts/sourceFactIddedup/session-current-history-archive/
 segments/dateprecision+planviewcontexts. Facts notdedup bylogicalworkout/metrics/name.
@@ -498,7 +498,7 @@ rollbackall/retry; sourceSHA unchanged, reopen/reorder target byte-identical,
 drift/mode/owner/unclaimedtable protections. Root/mobileTS/changedESLint/source73/
 arch506/secrets/diff pass.
 No fullfoundation/APK/bundle/native/phone actions; runtime unchanged.
-[Контракт](spikes/R04_TRAINING_TEMPLATES_STAGING.md).
+[Контракт](R04_TRAINING_TEMPLATES_STAGING.md).
 
 LIMITS: SIMPLE differing week plans not representable in current TemplatePayload,
 book-bound templates unsupported; both block without source mutation. Other settings
@@ -574,7 +574,7 @@ copiesinindependentprograms, simpleweeklyvariation, customQhistory+allowners.
 byteidentical, drift/missingIDs/membershipconflict/callermutation. Root/mobileTS,
 changedESLint/source/arch506/secrets/diff pass. No fullfoundation/APK/bundle/Android
 thisturn(runtimeunchanged). Testsregisteredr04/foundation. Detailedcontract
-docs/spikes/R04_TRAINING_PLANS_STAGING.md. finalizable:false; private r04_* DB cannot
+docs/archive/migration-2.0/R04_TRAINING_PLANS_STAGING.md. finalizable:false; private r04_* DB cannot
 publish throughcommonengine asfitcoach_v3.db. ProductionWorkData/importedregistry
 store/DDL/commands/backup/deletion alsoOPEN, ExpoRestoreJobsonly3.0.
 
@@ -626,7 +626,7 @@ draft/answer version1.6 new rollback boundaries, byteidenticalfile replay/source
 unchanged, source/targetdrift/FK/collision/stalederived/callermutation. Root/mobileTS,
 changedESLint/source/arch506/secrets/diff. AndroidJS/Hermesbundle5623/1185 passed.
 Fullfoundation/newAPK/Androidfixture/phonechanges NOTrun. Contract
-docs/spikes/R04_EXERCISE_REGISTRY_STAGING.md. finalizable:false; partialr04_* DB
+docs/archive/migration-2.0/R04_EXERCISE_REGISTRY_STAGING.md. finalizable:false; partialr04_* DB
 cannotpublishasfitcoach_v3.db or feedcommonRestore.
 
 NEXT R04 structure/program/library/archive→Plans using stableClient/Exercise maps,
@@ -711,7 +711,7 @@ source file SHA unchanged; reopen/reordered target retry byte-identical; drift
 blocked;5 injected failures rollback all/new retry succeeds. Not Android kill.
 Root/mobile TS, changed ESLint, source/arch505/secrets/diff pass. No fullfoundation,
 APK/bundle or phone changes (runtime untouched). Tests registered r04/foundation.
-Details docs/spikes/R04_QUESTIONNAIRE_STAGING.md. Partial rehearsal DB has r04_*
+Details docs/archive/migration-2.0/R04_QUESTIONNAIRE_STAGING.md. Partial rehearsal DB has r04_*
 objects and cannot be fitcoach_v3.db or published by common snapshot engine.
 
 NEXT: final WorkData Notes/ManualTags/Safety owners (currently retained candidates,
@@ -747,7 +747,7 @@ unchanged; byte-identical target after reopen/reordered retry;6injected failure
 checkpoints roll back IDs/cards/schema/answers/receipt. Not Android process kill.
 Root/mobile TS, changedscript lint, source/arch505/secrets/diff. Fullfoundation and
 APK/bundle not rerun (runtime untouched). Registered newtests in r04/foundation.
-docs/spikes/R04_CLIENT_PROFILE_STAGING.md includes exact mappings/sources/limits.
+docs/archive/migration-2.0/R04_CLIENT_PROFILE_STAGING.md includes exact mappings/sources/limits.
 
 NEXT: compose typed profile schema/answers with custom legacy questionnaire revisions
 and their exact version/IDs. Persist final WorkData owner candidates to Notes/Tags/
@@ -814,8 +814,8 @@ actually deleted nonrecursively/recreated by same Publisher; all3clients in snap
 Real default directory untouched; marker/receipt/owner/path protect isolated fixture.
 Initial fixture required row to remain after unlink and stopped; device removed row,
 fixture now records actual result. **Stale-row/stat path not exercised here.**
-[Report](spikes/R06_AUTOMATIC_MISSING_ANDROID_REPORT.json),
-[contract](spikes/R06_AUTOMATIC_BACKUP.md).
+[Report](../../spikes/R06_AUTOMATIC_MISSING_ANDROID_REPORT.json),
+[contract](../../spikes/R06_AUTOMATIC_BACKUP.md).
 
 NEXT: safe timezone/DST re-anchor/fallback technical acceptance, real automatic
 SIGKILL/catalog/delete and SAF rename→receipt gap, ENOSPC/providers; ordinary UI/
@@ -842,8 +842,8 @@ export hash intact, all5clients+embeddedPNG после потери originals,15
 После status change focused3/3 за448ms на той же fixture, без повторного full setup.
 Host auto15/scheduler4/manual12/restore15 passed. Target command45/45 до finalclock
 test; final scheduler4/4 отдельно. Fullfoundation НЕ запускался. TS/lint/arch503/
-source/secrets/diff; bundle5622/1185. [Контракт](spikes/R06_AUTOMATIC_BACKUP.md),
-[реальные отчёты](spikes/R06_AUTOMATIC_ANDROID_REPORT.json).
+source/secrets/diff; bundle5622/1185. [Контракт](../../spikes/R06_AUTOMATIC_BACKUP.md),
+[реальные отчёты](../../spikes/R06_AUTOMATIC_ANDROID_REPORT.json).
 
 Следующий конкретный дефект: deleted old/default-folder files дают verification
 failure и не позволяют автоматически воссоздать default folder. Нужен owner-bound
@@ -875,8 +875,8 @@ pruned. GeneratedmediaGCтолькоclosedruntime сallrecipe refs/архив/ve
 pointembeddedmediaнезависимыотстарыхURI. NativeACTIONS24/24проверяеттотжеадаптер/
 controller/core/15holders+workflow, включаяstale/cancel/orphan/Restore/Return/photos/
 GC/latewrites/nextRestore/delete/noresurrection. Lastreceiptchange focused3/3(6463ms)
-провереннапрежнейfixture безповторногобольшогоsetup. [Отчёт](spikes/R06_RESTORE_ACTIONS_ANDROID_REPORT.json),
-[контракт](spikes/R06_APPLICATION_RESTORE.md).
+провереннапрежнейfixture безповторногобольшогоsetup. [Отчёт](../../spikes/R06_RESTORE_ACTIONS_ANDROID_REPORT.json),
+[контракт](../../spikes/R06_APPLICATION_RESTORE.md).
 
 OSrestsignals: suspenddrainslatejobs; actualOSkindfilterpreservescalendar/otherkinds/
 launchresponse, importedIDsnottrusted. Boot/reopen sameendAt/paused/expired/noprompt,
@@ -910,9 +910,9 @@ closed-LIVE pin с harmless WAL checkpoint, rawincomingpin/capacity callback.
 Ожидаемый отказ reopen исходной здоровой LIVE; uncertain protocol recovery до reopen.
 Foundation1076/1076, TS/lint/arch490/source/secrets/diff, Android JS/Hermes
 bundle5607modules1185assets. Это не native proof нового coordinator/ordinary UI.
-Документы: [core](spikes/R06_RESTORE_ACTIONS.md),
-[Android protocol](spikes/R06_MANAGED_ANDROID_REPORT.json),
-[reinstall](spikes/R06_PUBLICATION_ANDROID_REPORT.json).
+Документы: [core](../../spikes/R06_RESTORE_ACTIONS.md),
+[Android protocol](../../spikes/R06_MANAGED_ANDROID_REPORT.json),
+[reinstall](../../spikes/R06_PUBLICATION_ANDROID_REPORT.json).
 
 Следующий шаг: native ExpoRestoreJobs/createRestoreActions в composition:
 File.pickFileAsync→privatejob→validate/stage→summary+stablelogicalpin; actual
@@ -952,7 +952,7 @@ Host32/32: 30→25→30 с точным восстановленным фото 
 SIGKILL Restore/Return проходят через общий writer/reader/finalizer и новые storage
 objects. Foundation1051/1051, root/mobile/spike typecheck, lint/arch487/source/secrets/
 diff прошли; Android JS/Hermes bundle5605modules/1185assets. Все данные synthetic.
-[Подробно](spikes/R06_RETURN_POINT.md).
+[Подробно](../../spikes/R06_RETURN_POINT.md).
 
 Следующее без APK: единый Restore/Return/delete controller и публичный UI port,
 file picker/preview/logical state pin с WAL, явное подтверждение полной замены,
@@ -977,7 +977,7 @@ Downloads **20/20**, SAF **19/19**, в том числе восстановле�
 input negatives. SAF grant повторно использован в новом процессе без picker.
 Реальный defect Directory.uri с завершающим `/` исправлен на JS boundary; encoded
 ID сохраняется, native всё ещё требует точного persisted grant.
-[Отчёт](spikes/R06_PUBLICATION_ANDROID_REPORT.json), [границы](spikes/R06_ANDROID_PUBLICATION.md).
+[Отчёт](../../spikes/R06_PUBLICATION_ANDROID_REPORT.json), [границы](../../spikes/R06_ANDROID_PUBLICATION.md).
 
 Удаление только тестовой APK подтверждено, публичная synthetic Downloads-копия
 пережила uninstall. **Reinstall/picked-file restore не выполнен**; native writer
@@ -992,7 +992,7 @@ await, terminal replay не теряет поздние записи. Пять �
 проходят через writer и cold reader, сохраняя точные bytes и последующие записи.
 Целевой runtime recovery файл **33/33**, полный foundation **1019/1019**;
 root/mobile/spike typecheck, lint/arch483/source/secrets/diff зелёные.
-[Контракт и ограничения](spikes/R06_JOURNALED_RESTORE.md).
+[Контракт и ограничения](../../spikes/R06_JOURNALED_RESTORE.md).
 
 Далее без телефона: Restore controller с preview/подтверждением, private Return
 snapshot с фото и устойчивым завершением после COMMITTED; scheduler/дневная
@@ -1013,7 +1013,7 @@ offline8096/reverse и scrcpy оставлены для следующего т�
 `fitcoach_dev_baseline_v3.db` получила 64 таблицы/1150 строк из наполненного
 prefixed dev-источника; пустой переходный файл и все прежние журналы сохранены.
 При переносе выполняется проверка содержимого до commit; unsafe integer не
-округляется. Подробно [R06_MANUAL_BACKUP.md](spikes/R06_MANUAL_BACKUP.md).
+округляется. Подробно [R06_MANUAL_BACKUP.md](../../spikes/R06_MANUAL_BACKUP.md).
 
 Следующее: нативная компиляция и реальная публикация MediaStore/SAF в изолированной
 APK; restore controller/confirmation и atomic journal writer, Return с фото,
@@ -1029,7 +1029,7 @@ mobile/spike typecheck/lint/arch/source/secrets/diff. Autolinking app/spike modu
 видит. **Native compile не дошла до Kotlin**, Gradle foojay plugin не закеширован,
 прямые Java Maven-запросы дают SocketException Permission denied; PowerShell HEAD
 того же POM HTTP 200. Агентский HTTPS_PROXY — заглушка. TLS не отключать и framework
-не ослаблять. Подробно [R06_ANDROID_PUBLICATION.md](spikes/R06_ANDROID_PUBLICATION.md).
+не ослаблять. Подробно [R06_ANDROID_PUBLICATION.md](../../spikes/R06_ANDROID_PUBLICATION.md).
 Нужны доступные зависимости/компиляция/изолированная APK и native IO proof.
 Manual controller/UI подключены следующим срезом выше; R06/D05 OPEN.
 
@@ -1041,7 +1041,7 @@ reopen очищает кеши и заново открывает экраны. 
 journal recovery до workspace/DB, development file остаётся отдельным.
 Completed receipt допускает последующие записи/WAL; отсутствующий LIVE или
 повреждённый journal не подменяется пустой базой. Подробно:
-[R06_RUNTIME_LIFECYCLE.md](spikes/R06_RUNTIME_LIFECYCLE.md).
+[R06_RUNTIME_LIFECYCLE.md](../../spikes/R06_RUNTIME_LIFECYCLE.md).
 
 Текущие проверки: **973/973** foundation, typecheck/lint/arch/source/secrets/diff,
 Android production JS bundle **5582 modules/1185 assets**. Native rehearsal с той
@@ -1049,7 +1049,7 @@ Android production JS bundle **5582 modules/1185 assets**. Native rehearsal с �
 reader в отдельном namespace: normal **25/25**, deliberate force-stop до COMMITTED
 и recovery нового процесса через BootCoordinator **11/11**. Все holders закрыты
 до файлов; точные прежние bytes/SAFETY и поздние записи после replay сохранены.
-[Фактический отчёт](spikes/R06_RUNTIME_ANDROID_REPORT.json). Это не обычный UI E2E,
+[Фактический отчёт](../../spikes/R06_RUNTIME_ANDROID_REPORT.json). Это не обычный UI E2E,
 не заполненная история каждого owner и не проверка OS scheduler/SAF/low-storage.
 Намеренное завершение тестовых процессов не является обнаруженным падением.
 
@@ -1084,8 +1084,8 @@ private данных: **19/19**, включая Node scalar oracle, embedded pho
 recovery **7/7**, точные прежние bytes/client/SAFETY и idempotent replay.
 Время normal run включает dozing телефона, не является performance SLA.
 
-Доказательства: [R06_PORTABLE_SNAPSHOT.md](spikes/R06_PORTABLE_SNAPSHOT.md),
-[R06_FULL_SNAPSHOT_REPORT.json](spikes/R06_FULL_SNAPSHOT_REPORT.json).
+Доказательства: [R06_PORTABLE_SNAPSHOT.md](../../spikes/R06_PORTABLE_SNAPSHOT.md),
+[R06_FULL_SNAPSHOT_REPORT.json](../../spikes/R06_FULL_SNAPSHOT_REPORT.json).
 Metro стенда остановлен; ADB reverse tcp:8096 снят после проверки.
 Установленная 2.0.0 (128) не заменялась; её БД и личные backup-файлы не открывались.
 
@@ -1130,7 +1130,7 @@ Product §§46, 52–56. Не отмечать R06/D05/D03 готовыми по
 После завершения backup/restore: импорт таблиц как в 2.0 и экспорт тренировки
 в Excel. Сначала GitHub-исследование готовых решений/библиотек, затем сверка с
 2.0 как образцом. Исследование ещё не выполнено, реализация не начата.
-[Зафиксированные требования](EXCEL_IMPORT_EXPORT_PLAN.md). UI/темы остаются позже.
+[Зафиксированные требования](../../EXCEL_IMPORT_EXPORT_PLAN.md). UI/темы остаются позже.
 
 WorkData follow-up inspected: runtime has no ClientWorkData owner/port/store yet.
 Reference SQL client_work_data blob is NOT production and conflicts with approved

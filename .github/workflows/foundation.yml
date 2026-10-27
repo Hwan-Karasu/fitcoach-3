@@ -32,6 +32,12 @@ jobs:
         run: npm run lint
       - name: Foundation contracts, including real SQLite integration
         run: npm run test:foundation
+      - name: Feature suites (Excel import, training, backup, production database)
+        run: |
+          npm run excel:test
+          npm run training:test
+          npm run r06:test
+          npm run d01:test
       - name: Architecture graph and generated theme catalog
         run: |
           npm run arch:check
