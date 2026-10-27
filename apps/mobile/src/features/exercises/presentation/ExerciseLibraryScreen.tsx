@@ -59,7 +59,7 @@ const ExerciseRow = memo(function ExerciseRow({ entry, onPressId, order, favorit
       onPress={() => onPressId(definition.id)} style={({ pressed }) => [styles.row, { borderColor: order === null ? colors.border : colors.accentInk,
         backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: overlay.hidden ? 0.55 : 1 }]}>
       <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>
-        {thumbnail !== null ? <Image source={thumbnail} style={styles.thumbImage} accessibilityIgnoresInvertColors />
+        {thumbnail !== null ? <Image source={thumbnail} resizeMethod="resize" style={styles.thumbImage} accessibilityIgnoresInvertColors />
           : <Dumbbell size={18} color={colors.accentInk} strokeWidth={1.8} />}
       </View>
       <View style={styles.grow}>

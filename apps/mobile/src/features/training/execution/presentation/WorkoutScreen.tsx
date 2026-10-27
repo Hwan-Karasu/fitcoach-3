@@ -560,7 +560,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
             <View key={exercise.lineageId ?? exercise.id} onLayout={(event) => focusExercise(exercise.id, event.nativeEvent.layout.y)} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               {group !== null ? <Text style={[styles.meta, { color: colors.accentInk }]}>{`Суперсет ${group}`}</Text> : null}
               <View style={styles.cardHead}>
-                {info?.thumbnail != null ? <Image source={info.thumbnail} style={[styles.thumb, { backgroundColor: colors.input }]} /> : null}
+                {info?.thumbnail != null ? <Image source={info.thumbnail} resizeMethod="resize" style={[styles.thumb, { backgroundColor: colors.input }]} /> : null}
                 <View style={styles.exerciseText}>
                   <Pressable accessibilityRole={onOpenExercise === undefined ? undefined : "button"} disabled={onOpenExercise === undefined}
                     accessibilityLabel={`${info?.name ?? "Упражнение"}. Открыть карточку упражнения`} hitSlop={4}

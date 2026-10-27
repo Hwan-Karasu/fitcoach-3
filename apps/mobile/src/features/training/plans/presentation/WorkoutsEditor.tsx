@@ -144,7 +144,7 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, s
           </View>
         </Sortable.Handle>
         <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>
-          {info?.thumbnail != null ? <Image source={info.thumbnail} style={styles.thumbImage} />
+          {info?.thumbnail != null ? <Image source={info.thumbnail} resizeMethod="resize" style={styles.thumbImage} />
             : <Dumbbell size={14} color={colors.accentInk} strokeWidth={1.8} />}
         </View>
         <View style={styles.grow}>
@@ -336,7 +336,7 @@ export function WorkoutsReview({ workouts, names, matches, onMatch, disabled = f
       const match = matches.get(item.exerciseId); const name = names.get(item.exerciseId) ?? item.exerciseId; const group = supersetNumber(workout, item);
       return <View key={item.id} style={[styles.exerciseRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
         <View style={[styles.exerciseHead, { paddingHorizontal: 8 }]}>
-          <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>{match?.thumbnail != null ? <Image source={match.thumbnail} style={styles.thumbImage} /> : <Dumbbell size={16} color={colors.accentInk} />}</View>
+          <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>{match?.thumbnail != null ? <Image source={match.thumbnail} resizeMethod="resize" style={styles.thumbImage} /> : <Dumbbell size={16} color={colors.accentInk} />}</View>
           <View style={styles.grow}>
             <Text style={[styles.exerciseName, { color: colors.textPrimary }]}>{name}</Text>
             <Text style={[styles.hint, { color: match ? colors.accentInk : colors.danger }]}>{match ? `Каталог: ${match.name}` : "Выберите упражнение из каталога"}</Text>
