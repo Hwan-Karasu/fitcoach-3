@@ -358,15 +358,24 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
   }
 
   async updateAppointment(id: string, expectedRevision: number,
-    input: AppointmentInput): Promise<Appointment> {
+    input: AppointmentInput, now: Date = new Date()): Promise<Appointment> {
     if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
       throw new Error("CALENDAR_STALE_APPOINTMENT");
     }
     let previousDate = "";
     const updated = await this.ready().writer.write(async (tx) => {
       const current = await this.appointmentById(tx, id);
-      if (current.lifecycle !== "SCHEDULED" || current.revision !== expectedRevision) {
+      if (current.lifecycle === "CANCELLED" || current.revision !== expectedRevision) {
         throw new Error("CALENDAR_STALE_APPOINTMENT");
+      }
+      // Начавшаяся запись правится как будущая (время, тип, заметка), но учёт не трогается: клиент меняется только
+      // через correctClient, а USED не переписывается (§22.1.4).
+      const started = appointmentStarted(current, now);
+      if (started && current.clientId !== (input.clientId?.trim() || null)) {
+        throw new Error("CALENDAR_CORRECTION_INVALID");
+      }
+      if (current.lifecycle === "COMPLETED" && !appointmentStarted(input, now)) {
+        throw new Error("CALENDAR_OUTCOME_TOO_EARLY");
       }
       previousDate = current.localDate;
       const moved = current.localDate !== input.localDate || current.startMinute !== input.startMinute
@@ -383,8 +392,14 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       const keepSnapshot = type.id === current.sessionTypeId;
       const currentRequires = (await tx.first<{ r: number }>(`SELECT session_type_requires_credit AS r
         FROM calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, id]))?.r === 1;
+      if (started && !keepSnapshot && (type.requiresCredit === 1) !== currentRequires) {
+        throw new Error("CALENDAR_STARTED_TYPE_CREDIT");
+      }
       const next = booking(valid, keepSnapshot ? currentRequires : type.requiresCredit === 1);
-      const creditChanged = current.clientId !== valid.clientId || current.sessionTypeId !== valid.sessionTypeId
+      // Начавшаяся запись не получает новый резерв: смена «без списания» у неё закрыта.
+      if (started && current.creditBypass !== (valid.creditBypass === true)) throw new Error("ACCOUNTING_ALREADY_SETTLED");
+      // Тип начавшейся записи с тем же учётом (проверено выше) не трогает ни резерв, ни USED.
+      const creditChanged = current.clientId !== valid.clientId || (!started && current.sessionTypeId !== valid.sessionTypeId)
         || current.creditBypass !== (valid.creditBypass === true);
       let packId: string | null = null;
       if (this.accounting !== null && creditChanged) {
@@ -399,7 +414,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
         session_type_category = CASE WHEN ? THEN session_type_category ELSE ? END,
         session_type_requires_credit = CASE WHEN ? THEN session_type_requires_credit ELSE ? END,
         note = ?, credit_bypass = ?, revision = revision + 1, updated_at = ?
-        WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle = 'SCHEDULED'`,
+        WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle <> 'CANCELLED'`,
       [valid.localDate, valid.startMinute, valid.durationMinutes, valid.clientId, valid.guestName,
         type.id, keepSnapshot ? 1 : 0, type.name, keepSnapshot ? 1 : 0, type.category,
         keepSnapshot ? 1 : 0, type.requiresCredit, valid.note, valid.creditBypass === true ? 1 : 0,

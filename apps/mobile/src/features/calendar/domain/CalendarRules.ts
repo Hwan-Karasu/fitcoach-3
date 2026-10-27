@@ -123,6 +123,21 @@ export function validateInterval(input: IntervalInput): IntervalInput {
   return input;
 }
 
+/**
+ * Дежурство из окна дня: новый диапазон сливается с пересекающимися и соседними дежурствами дня; правимое
+ * (`editingId`) заменяется, его прежние границы в итог не входят. Вызывающий передаёт результат в `reshapeIntervals`.
+ */
+export function mergeDutyRange(duties: readonly CalendarInterval[], localDate: LocalDate, startMinute: number,
+  endMinute: number, editingId: string | null): Readonly<{ removeIds: readonly string[]; create: IntervalInput }> {
+  const touched = duties.filter((row) => row.kind === "DUTY" && row.localDate === localDate && row.id !== editingId
+    && row.startMinute <= endMinute && row.endMinute >= startMinute);
+  return {
+    removeIds: [...(editingId === null ? [] : [editingId]), ...touched.map((row) => row.id)],
+    create: { kind: "DUTY", localDate, startMinute: Math.min(startMinute, ...touched.map((row) => row.startMinute)),
+      endMinute: Math.max(endMinute, ...touched.map((row) => row.endMinute)) },
+  };
+}
+
 type Timed = Pick<Appointment, "localDate" | "startMinute" | "durationMinutes">;
 
 /** Wall-clock comparison: the local date and minute of `now` against the appointment slot. */

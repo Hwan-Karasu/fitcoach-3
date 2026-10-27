@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useRef, useState, type ReactNode } 
 import { appThemes as catalogThemes, DEFAULT_THEME_ID } from "./themes.ts";
 import { resolvePalette, type ResolvedPalette, type ThemeId } from "./resolver.ts";
 import { normalizeClientCards, type ClientCardPreference } from "../../domain/ClientCardPreference.ts";
+import { normalizeDutyPresets, type DutyPreset } from "../../domain/DutyPreset.ts";
 
 const previewFallbackThemeId: ThemeId = DEFAULT_THEME_ID;
 
@@ -16,6 +17,8 @@ interface PrototypeThemeState {
   readonly palette: ResolvedPalette;
   readonly dutyColor: string | null;
   readonly setDutyColor: (color: string | null) => void;
+  readonly dutyPresets: readonly DutyPreset[];
+  readonly setDutyPresets: (presets: readonly DutyPreset[]) => void;
   readonly hiddenSessionTypeIds: readonly string[];
   readonly hideSessionType: (id: string) => void;
   readonly navigationAppearance: NavigationAppearance;
@@ -28,8 +31,8 @@ const ThemeContext = createContext<PrototypeThemeState | null>(null);
 
 /** Сохранённый выбор; запись вызывает владелец настроек, провайдер хранилища не знает. */
 export interface ThemePersistence {
-  readonly initial: Readonly<{ themeId: string; accentId: string | null; dutyColor?: string | null; hiddenSessionTypeIds?: readonly string[]; clientCards?: ClientCardPreference } & Partial<NavigationAppearance>> | null;
-  readonly onChange: (value: Readonly<{ themeId: string; accentId: string | null; dutyColor?: string | null; hiddenSessionTypeIds?: readonly string[]; clientCards?: ClientCardPreference } & Partial<NavigationAppearance>>) => void;
+  readonly initial: Readonly<{ themeId: string; accentId: string | null; dutyColor?: string | null; dutyPresets?: readonly DutyPreset[]; hiddenSessionTypeIds?: readonly string[]; clientCards?: ClientCardPreference } & Partial<NavigationAppearance>> | null;
+  readonly onChange: (value: Readonly<{ themeId: string; accentId: string | null; dutyColor?: string | null; dutyPresets?: readonly DutyPreset[]; hiddenSessionTypeIds?: readonly string[]; clientCards?: ClientCardPreference } & Partial<NavigationAppearance>>) => void;
 }
 
 export function PrototypeThemeProvider({ children, persistence }: Readonly<{ children: ReactNode; persistence?: ThemePersistence }>) {
@@ -40,6 +43,7 @@ export function PrototypeThemeProvider({ children, persistence }: Readonly<{ chi
       showClientListShortcut: initial?.showClientListShortcut === true,
       hideNavigationLabels: initial?.hideNavigationLabels === true,
       dutyColor: initial?.dutyColor ?? null,
+      dutyPresets: normalizeDutyPresets(initial?.dutyPresets),
       hiddenSessionTypeIds: initial?.hiddenSessionTypeIds ?? [] as readonly string[],
       clientCards: normalizeClientCards(initial?.clientCards) };
   });
@@ -75,6 +79,12 @@ export function PrototypeThemeProvider({ children, persistence }: Readonly<{ chi
       setSelection(latestSelection.current);
       onChange?.(latestSelection.current);
     },
+    dutyPresets: selection.dutyPresets,
+    setDutyPresets: (presets) => {
+      latestSelection.current = { ...latestSelection.current, dutyPresets: normalizeDutyPresets(presets) };
+      setSelection(latestSelection.current);
+      onChange?.(latestSelection.current);
+    },
     navigationAppearance,
     setNavigationAppearance: (key, enabled) => {
       latestSelection.current = { ...latestSelection.current, [key]: enabled };
@@ -97,7 +107,7 @@ export function PrototypeThemeProvider({ children, persistence }: Readonly<{ chi
         onChange?.(latestSelection.current);
       }
     },
-  }), [palette, themeId, navigationAppearance, selection.dutyColor, selection.hiddenSessionTypeIds, selection.clientCards, onChange]);
+  }), [palette, themeId, navigationAppearance, selection.dutyColor, selection.dutyPresets, selection.hiddenSessionTypeIds, selection.clientCards, onChange]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

@@ -78,6 +78,25 @@ test("Z01 navigation settings survive restart with theme/accent and rapid writes
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("пресеты дежурства переживают перезапуск вместе с оформлением, битые отбрасываются при чтении", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "fc-duty-presets-"));
+  const file = join(dir, "settings.db");
+  try {
+    const first = open(new DatabaseSync(file));
+    await first.initialize();
+    const dutyPresets = [{ id: "morning", name: "Утро", startMinute: 480, endMinute: 720 }];
+    await first.saveAppearance({ themeId: "warm-sand", accentId: "caramel", dutyPresets });
+    await first.close();
+    const second = open(new DatabaseSync(file));
+    await second.initialize();
+    assert.deepEqual((await second.readAppearance())?.dutyPresets, dutyPresets);
+    await second.close();
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+  const old = { themeId: "warm-sand", accentId: "caramel" };
+  assert.deepEqual(parseAppearance(JSON.stringify({ ...old, dutyPresets: [{ id: "x", name: "", startMinute: 0, endMinute: 60 }] })),
+    { ...old, dutyPresets: [] });
+});
+
 test("Z01 old appearance and corrupt navigation fields retain the usable theme", () => {
   const old = { themeId: "warm-sand", accentId: "caramel" };
   assert.deepEqual(parseAppearance(JSON.stringify(old)), old);

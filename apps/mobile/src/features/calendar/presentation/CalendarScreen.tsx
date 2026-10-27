@@ -19,6 +19,7 @@ import { addDays, formatMinute, localDateOf, mondayOf, templateSize,
 import { AppointmentEditorScreen } from "./AppointmentEditorScreen.tsx";
 import { calendarErrorMessage, dayTitle, useCalendarWeek, useMonthCounts,
   useParticipants, useSessionTypeColors, weekdayShort } from "./calendarPresentation.ts";
+import { DutyDaySheet } from "./DutyDaySheet.tsx";
 import { CARD_PADDING as MONTH_CARD_PADDING, MonthGrid } from "./MonthGrid.tsx";
 import { ShareWeekPoster } from "./ShareWeekPoster.tsx";
 import { TIMELINE_GUTTER, TIMELINE_HEADER, type TimelineHandlers } from "./TimelineGrid.tsx";
@@ -118,6 +119,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
   const [sharing, setSharing] = useState(false);
   const [timePicker, setTimePicker] = useState<"start" | "end" | null>(null);
   const [editor, setEditor] = useState<OpenAppointmentParams | null>(null);
+  const [dutyDay, setDutyDay] = useState<LocalDate | null>(null);
   const [showHint, setShowHint] = useState(false);
   const posterRef = useRef<View>(null);
   const monday = mondayOf(selected);
@@ -225,6 +227,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
 
   const latest: TimelineHandlers = {
     onTapSlot: (date, startMinute) => setEditor({ localDate: date, startMinute }),
+    onTapDay: (date) => { setSelected(date); setDutyDay(date); },
     onTapBlocked: (interval) => {
       setError(null);
       setNotice(`Заблокировано ${formatMinute(interval.startMinute)}–${formatMinute(interval.endMinute)}. Удержите, чтобы снять.`);
@@ -266,6 +269,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
   latestRef.current = latest;
   const handlers = useMemo<TimelineHandlers>(() => ({
     onTapSlot: (...args) => latestRef.current.onTapSlot(...args),
+    onTapDay: (...args) => latestRef.current.onTapDay(...args),
     onTapBlocked: (...args) => latestRef.current.onTapBlocked(...args),
     onLongPressBlocked: (...args) => latestRef.current.onLongPressBlocked(...args),
     onResizeInterval: (...args) => latestRef.current.onResizeInterval(...args),
@@ -386,7 +390,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
         </View>
         {showHint ? (
           <Text style={[styles.hint, { color: colors.textSecondary }]}>
-            Касание — запись. Зажать и протянуть — дежурство, протянуть и подержать — блокировка. Долгое нажатие на
+            Касание — запись. Касание дня в шапке — дежурство с пресетами. Зажать и протянуть — дежурство, протянуть и подержать — блокировка. Долгое нажатие на
             записи — перенос; полоска у нижнего края записи, дежурства или блокировки — длительность. Протянуть по дежурству —
             снять его; удержать блокировку — снять её. Свайп влево-вправо — другая неделя.
           </Text>
@@ -449,6 +453,8 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
           min={settings.dayStartMinute + 60} max={1440} onClose={() => setTimePicker(null)}
           onConfirm={(minute) => saveDisplay({ dayEndMinute: minute })} />
       </> : null}
+
+      <DutyDaySheet date={dutyDay} repository={repository} window={dayWindow} onClose={() => setDutyDay(null)} />
 
       {/* Запись открывается окном поверх календаря, а не отдельным экраном (решение владельца). */}
       <Modal visible={editor !== null} transparent animationType="fade" statusBarTranslucent

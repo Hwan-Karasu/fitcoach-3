@@ -35,11 +35,11 @@ export interface MatrixHtmlView {
   readonly y: number;
 }
 
-const LABEL = 92;
-const PLAN = 40;
-const PREV = 40;
-const REPS = 32;
-const LOAD = 38;
+const LABEL = 112;
+const PLAN = 44;
+const PREV = 44;
+const REPS = 38;
+const LOAD = 44;
 const CELL = PLAN + PREV + REPS + LOAD;
 
 export const kgText = (grams: number | null) => grams === null ? "" : (grams / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 2 });
@@ -129,17 +129,17 @@ export function buildMatrixHtml(matrix: ProgramMatrix, names: (exerciseId: strin
               : `${valueCell(`${key}:reps`, "reps", canEdit && set.hasReps)}${valueCell(`${key}:load`, "load", canEdit && set.hasLoad)}`}
           </div>`;
         }).join("");
-        return `<div class="row" style="grid-template-columns:${grid}"><div class="lab set-lab">${label === "Р" ? "Разминка" : `Подход ${escapeHtml(label)}`}</div>${cells}</div>`;
+        return `<div class="row" style="grid-template-columns:${grid}"><div class="lab set-lab">${label === "Р" ? "Разм." : escapeHtml(label)}</div>${cells}</div>`;
       }).join("");
       const volume = weeks.map((week) => `<div class="wcell vol" ${weekAttr(week)}><span data-k="${escapeHtml(`v:${row.key}:${week.index}`)}">${text(`v:${row.key}:${week.index}`)}</span></div>`).join("");
-      return `<div class="row" style="grid-template-columns:${grid}"><div class="lab ex">${escapeHtml(names(row.exerciseId))}</div>${weeks.map((week) => `<div class="wcell" ${weekAttr(week)}></div>`).join("")}</div>
+      return `<div class="row exrow" style="grid-template-columns:${grid}"><div class="lab ex">${escapeHtml(names(row.exerciseId))}</div>${weeks.map((week) => `<div class="wcell" ${weekAttr(week)}></div>`).join("")}</div>
         ${sets}
-        <div class="row" style="grid-template-columns:${grid}"><div class="lab muted">Объём</div>${volume}</div>`;
+        <div class="row volrow" style="grid-template-columns:${grid}"><div class="lab muted">Объём</div>${volume}</div>`;
     }).join("");
     const totals = weeks.map((week) => `<div class="wcell vol strong" ${weekAttr(week)}><span data-k="${escapeHtml(`t:${section.key}:${week.index}`)}">${text(`t:${section.key}:${week.index}`)}</span></div>`).join("");
     return `<section><div class="section" style="grid-template-columns:${grid}"><div class="lab section-title">${escapeHtml(section.title)}</div></div>
       ${rows}
-      <div class="row" style="grid-template-columns:${grid}"><div class="lab strong">Объём тренировки</div>${totals}</div></section>`;
+      <div class="row totrow" style="grid-template-columns:${grid}"><div class="lab strong">Объём тренировки</div>${totals}</div></section>`;
   }).join("");
 
   const totalRow = matrix.sections.length === 0 ? `<div class="empty">В этой версии нет упражнений.</div>` : `<div class="row" style="grid-template-columns:${grid}">
@@ -154,38 +154,42 @@ export function buildMatrixHtml(matrix: ProgramMatrix, names: (exerciseId: strin
   :root { --canvas:${colors.canvas}; --surface:${colors.surface}; --border:${colors.border}; --text:${colors.text}; --secondary:${colors.textSecondary};
     --muted:${colors.textMuted}; --ink:${colors.accentInk}; --success:${colors.success}; --input:${colors.input}; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; height: 100%; background: var(--canvas); color: var(--text); font: 10px/12px -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust: 100%; }
+  html, body { margin: 0; height: 100%; background: var(--canvas); color: var(--text); font: 12px/15px -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust: 100%; }
   #viewport { height: 100%; overflow: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; background: var(--canvas); }
   .layer { min-width: ${canvas}px; }
   #header-layer { position: sticky; top: 0; z-index: 40; display: grid; grid-template-columns: ${grid}; background: var(--canvas); border-bottom: 1px solid var(--border); }
   .corner { position: sticky; left: 0; z-index: 50; background: var(--canvas); padding: 3px 4px 2px 0; font-weight: 600; color: var(--muted); }
-  .head { border-left: 1px solid var(--border); border-bottom: 2px solid var(--tone); background: var(--head); padding: 3px 0 2px; text-align: center; }
-  .head-title { font-weight: 600; }
-  .caption { font-size: 9px; line-height: 11px; }
+  .head { border-left: 1px solid var(--border); border-bottom: 3px solid var(--tone); background: var(--head); padding: 5px 0 3px; text-align: center; }
+  .head-title { font-weight: 700; font-size: 12px; }
+  .caption { font-size: 11px; line-height: 14px; font-weight: 600; }
   .subhead, .sets { display: grid; grid-template-columns: ${PLAN}px ${PREV}px ${REPS}px ${LOAD}px; }
-  .subhead { margin-top: 2px; font-size: 9px; line-height: 11px; font-weight: 500; color: var(--muted); }
+  .subhead { margin-top: 3px; font-size: 11px; line-height: 14px; font-weight: 500; color: var(--muted); }
   .row, .section { display: grid; min-width: ${canvas}px; border-bottom: 1px solid var(--border); }
-  .lab { position: sticky; left: 0; z-index: 20; background: var(--canvas); padding: 2px 4px 2px 0; font-weight: 500; }
-  .ex { font-weight: 600; font-size: 11px; line-height: 13px; padding-top: 4px; }
-  .set-lab { font-weight: 400; display: flex; align-items: center; color: var(--secondary); }
-  .muted { font-weight: 400; color: var(--secondary); }
-  .strong { font-weight: 600; }
-  .section { margin-top: 3px; }
-  .section-title { grid-column: 1; width: ${LABEL}px; background: var(--surface); border-radius: 4px; padding: 3px 4px; font-weight: 600; font-size: 11px; line-height: 13px; }
-  .wcell { width: ${CELL}px; min-height: 18px; border-left: 1px solid var(--border); background: var(--tint); }
-  .sets { min-height: 24px; align-items: center; }
-  .dash { display: flex; align-items: center; justify-content: center; color: var(--muted); min-height: 24px; }
+  .lab { position: sticky; left: 0; z-index: 20; background: var(--canvas); padding: 3px 6px 3px 0; font-weight: 500; }
+  .ex { font-weight: 700; font-size: 13px; line-height: 16px; padding: 6px 6px 4px 0; }
+  .exrow { margin-top: 6px; border-top: 1px solid var(--border); }
+  .exrow .wcell { background: var(--tint); }
+  .set-lab { font-weight: 500; display: flex; align-items: center; color: var(--secondary); padding-left: 8px; }
+  .muted { font-weight: 500; font-size: 11px; color: var(--muted); text-align: right; padding-right: 8px; }
+  .strong { font-weight: 700; }
+  .volrow .wcell { min-height: 22px; }
+  .totrow .lab, .totrow .wcell { background: var(--surface); }
+  .section { margin-top: 8px; }
+  .section-title { grid-column: 1 / -1; width: ${canvas}px; background: var(--surface); padding: 6px 6px; font-weight: 700; font-size: 13px; line-height: 16px; }
+  .wcell { width: ${CELL}px; min-height: 22px; border-left: 1px solid var(--border); background: var(--tint); }
+  .sets { min-height: 32px; align-items: center; }
+  .dash { display: flex; align-items: center; justify-content: center; color: var(--muted); min-height: 32px; }
   .sub { text-align: center; padding: 0 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .plan { color: var(--secondary); }
+  .plan { color: var(--secondary); font-weight: 500; }
   .prev { color: var(--muted); }
   .fact { grid-column: span 2; color: var(--text); }
   .fact.done { color: var(--success); }
-  .val-plain { font-weight: 500; }
-  .val, .inp { width: calc(100% - 2px); margin: 0 1px; height: 20px; min-width: 0; border: 1px solid var(--border); border-radius: 4px; background: var(--input); color: var(--text);
-    font: 500 10px/12px -apple-system, "Segoe UI", Roboto, sans-serif; text-align: center; padding: 0; appearance: none; -webkit-appearance: none; }
+  .val-plain { font-weight: 600; }
+  .val, .inp { width: calc(100% - 4px); margin: 0 2px; height: 26px; min-width: 0; border: 1px solid var(--border); border-radius: 6px; background: var(--input); color: var(--text);
+    font: 600 12px/14px -apple-system, "Segoe UI", Roboto, sans-serif; text-align: center; padding: 0; appearance: none; -webkit-appearance: none; }
   .inp { outline: none; border-color: var(--ink); }
-  .vol { display: flex; align-items: center; justify-content: center; color: var(--ink); }
-  .vol.strong { color: var(--text); }
+  .vol { display: flex; align-items: center; justify-content: center; color: var(--ink); font-size: 11px; }
+  .vol.strong { color: var(--text); font-size: 12px; }
   .empty { padding: 12px 0; color: var(--secondary); font-size: 11px; }
   .failed { outline: 2px solid #d34256; }
 </style></head>

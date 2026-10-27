@@ -15,8 +15,8 @@ const matrix: ProgramMatrix = {
   totals: new Map([[1, 1000]]),
 };
 
-test("пределы масштаба как в 2.0: 0,5–1,5, старт 0,72", () => {
-  assert.deepEqual([MATRIX_ZOOM.min, MATRIX_ZOOM.max, MATRIX_ZOOM.initial], [0.5, 1.5, 0.72]);
+test("пределы масштаба как в 2.0: 0,5–1,5, старт 0,9", () => {
+  assert.deepEqual([MATRIX_ZOOM.min, MATRIX_ZOOM.max, MATRIX_ZOOM.initial], [0.5, 1.5, 0.9]);
 });
 
 test("тексты матрицы: повторы, вес в кг и объём с неразрывной группировкой", () => {

@@ -177,7 +177,7 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
     type === undefined || type === "base" ? "transparent" : withAlpha(weekTypeTone(type, colors), alpha), [colors]);
   const htmlWeeks: readonly MatrixHtmlWeek[] = useMemo(() => (matrix?.weeks ?? []).map((week) => ({ index: week.index, caption: week.caption,
     tone: week.type === undefined || week.type === "base" ? null : weekTypeTone(week.type, colors),
-    tint: tintOf(week.type, 0.07), headTint: tintOf(week.type, 0.14) })), [colors, matrix?.weeks, tintOf]);
+    tint: tintOf(week.type, 0.1), headTint: tintOf(week.type, 0.18) })), [colors, matrix?.weeks, tintOf]);
 
   // Страница собирается заново только при смене структуры, цветов или позиции; значения обновляются через patch.
   const structureKey = matrix === null ? "" : `${positionKey}|${matrixStructureKey(matrix, editable)}|${colors.canvas}|${colors.accentInk}`;

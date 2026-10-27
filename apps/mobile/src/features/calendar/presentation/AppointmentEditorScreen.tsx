@@ -4,14 +4,14 @@ import { AppButton, ChoiceSegments, ConfirmDialog, InlineNotice, LoadingState, S
   TextField } from "../../../shared/ui/components/public.ts";
 import { PrototypeScreen, SectionHeading } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
-import { APPOINTMENT_DURATIONS, SLOT_MINUTES, type Appointment, type AppointmentOutcome, type CalendarSettings,
+import { APPOINTMENT_DURATIONS, SLOT_MINUTES, type Appointment, type AppointmentInput, type AppointmentOutcome, type CalendarSettings,
   type CancelSettlement, type GuestLinkRequest, type LocalDate, type SessionType } from "../domain/CalendarModel.ts";
 import type { CalendarAppointmentCredit, CalendarBookingCredit, CalendarCreditPort } from
   "../domain/CalendarCreditPort.ts";
 import type { CalendarParticipant, CalendarParticipantDirectoryPort } from
   "../domain/CalendarParticipantDirectoryPort.ts";
 import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
-import { addDays, appointmentEnded, appointmentStarted, formatMinute, overlaps } from "../domain/CalendarRules.ts";
+import { addDays, appointmentStarted, formatMinute, overlaps } from "../domain/CalendarRules.ts";
 import { calendarErrorMessage, dayTitle, outcomeTag } from "./calendarPresentation.ts";
 import { useOfferCancelUndo } from "./CancelUndo.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
@@ -94,8 +94,6 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
   const [existingCredit, setExistingCredit] = useState<CalendarAppointmentCredit>("NONE");
   const [settling, setSettling] = useState(false);
   const offerUndo = useOfferCancelUndo();
-  const [correcting, setCorrecting] = useState(false);
-  const [correctionId, setCorrectionId] = useState<string | null>(null);
   const [sameGuest, setSameGuest] = useState(0);
   const [includeSameGuest, setIncludeSameGuest] = useState(true);
   const [linking, setLinking] = useState(false);
@@ -174,10 +172,10 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
 
   const existing = loaded?.existing ?? null;
   const now = new Date();
-  // An ended record is history: outcome and «Исправить клиента» replace ordinary editing (§22.1.4).
-  const editable = existing === null || (existing.lifecycle === "SCHEDULED" && !appointmentEnded(existing, now));
+  // Прошедшая запись правится так же, как будущая; к ней добавляется блок исхода. Смена клиента у неё идёт
+  // через «исправление» с компенсацией списания (§22.1.4), остальное — обычная правка без изменения учёта.
+  const editable = existing === null || existing.lifecycle !== "CANCELLED";
   const outcomeOpen = existing !== null && existing.lifecycle !== "CANCELLED" && appointmentStarted(existing, now);
-  const canCorrect = outcomeOpen && !editable && existing.clientId !== null;
   const guestRecord = existing !== null && existing.guestName !== null && existing.lifecycle !== "CANCELLED"
     ? existing : null;
   const matches = useMemo(() => {
@@ -199,6 +197,24 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
   const settings = loaded.settings;
   const types = loaded.types.filter((type) => !type.archived || type.id === existing?.sessionTypeId);
 
+  // Прошедшая запись: клиент меняется отдельной командой (компенсация списания или привязка гостя), затем время,
+  // тип и заметка — обычным обновлением по свежей ревизии; без других изменений второй записи нет.
+  const saveStarted = async (row: Appointment, input: AppointmentInput) => {
+    let current = row;
+    if (input.clientId !== null && input.clientId !== row.clientId) {
+      if (row.clientId === null) await repository.linkGuestToClient(row.id, row.revision, input.clientId, false);
+      else await repository.correctClient(row.id, row.revision, input.clientId);
+      const fresh = await repository.getAppointment(row.id);
+      if (fresh === null) throw new Error("CALENDAR_STALE_APPOINTMENT");
+      current = fresh;
+    }
+    const same = current.localDate === input.localDate && current.startMinute === input.startMinute
+      && current.durationMinutes === input.durationMinutes && current.sessionTypeId === input.sessionTypeId
+      && (current.note ?? "") === (input.note ?? "").trim() && current.creditBypass === (input.creditBypass === true)
+      && current.guestName === input.guestName;
+    if (!same) await repository.updateAppointment(current.id, current.revision, input);
+  };
+
   const save = async () => {
     if (busy || typeId === null) {
       if (typeId === null) setError(calendarErrorMessage(new Error("CALENDAR_SESSION_TYPE_REQUIRED")));
@@ -211,11 +227,18 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
       sessionTypeId: typeId, note, creditBypass: !guestMode && bypass };
     try {
       if (existing === null) await repository.createAppointment(input);
+      else if (outcomeOpen) await saveStarted(existing, input);
       else await repository.updateAppointment(existing.id, existing.revision, input);
       onClose();
     } catch (failure) {
       setError(calendarErrorMessage(failure));
       setBusy(false);
+      // Клиент мог смениться до сбоя следующего шага: берём свежую запись, чтобы повтор не шёл со старой ревизией.
+      if (existing !== null && outcomeOpen) {
+        void repository.getAppointment(existing.id).then((fresh) => {
+          if (fresh !== null) setLoaded((value) => value === null ? value : { ...value, existing: fresh });
+        }, () => undefined);
+      }
     }
   };
 
@@ -255,10 +278,7 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
   return (
     <View style={styles.editor}>
     <PrototypeScreen compact>
-      {!editable ? <InlineNotice kind="info">
-        {canCorrect ? "Прошедшая запись: время и тип не меняются. Отметьте исход или исправьте клиента."
-          : "Прошедшая запись: время, тип и участник не меняются."}
-      </InlineNotice> : null}
+      {!editable ? <InlineNotice kind="info">Запись отменена: время, тип и участник не меняются.</InlineNotice> : null}
       <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <SectionHeading>Участник</SectionHeading>
         {selectedPerson !== null ? (
@@ -335,42 +355,33 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
             <Text style={[styles.hint, { color: colors.textSecondary }]}>Занятие идёт — исход можно отметить сейчас.</Text>
           )}
         </View>
-        {existing.outcome === null ? <>
-          <AppButton label="Завершить тренировку" disabled={busy} onPress={() => { void resolve("COMPLETED"); }} />
-          <AppButton variant="secondary" label="Пропущена" disabled={busy} onPress={() => { void resolve("MISSED"); }} />
-        </> : <>
-          <AppButton variant="secondary" disabled={busy}
-            label={existing.outcome === "COMPLETED" ? "Отменить завершение" : "Отменить пропуск"}
-            onPress={() => { void act((row) => repository.clearOutcome(row.id, row.revision)); }} />
-          <AppButton variant="secondary" disabled={busy}
-            label={existing.outcome === "COMPLETED" ? "Отметить пропущенной" : "Отметить проведённой"}
-            onPress={() => { void resolve(existing.outcome === "COMPLETED" ? "MISSED" : "COMPLETED"); }} />
-        </>}
-        <AppButton variant="secondary" label="Отменена" disabled={busy} onPress={() => { void resolve("CANCELLED"); }} />
+        <View style={styles.row}>
+          {existing.outcome === null ? <>
+            <View style={styles.cell}><AppButton compact size="small" label="Завершить" disabled={busy}
+              onPress={() => { void resolve("COMPLETED"); }} /></View>
+            <View style={styles.cell}><AppButton compact size="small" variant="secondary" label="Пропущена" disabled={busy}
+              onPress={() => { void resolve("MISSED"); }} /></View>
+          </> : <>
+            <View style={styles.cell}><AppButton compact size="small" variant="secondary" disabled={busy}
+              label={existing.outcome === "COMPLETED" ? "Отменить завершение" : "Отменить пропуск"}
+              onPress={() => { void act((row) => repository.clearOutcome(row.id, row.revision)); }} /></View>
+            <View style={styles.cell}><AppButton compact size="small" variant="secondary" disabled={busy}
+              label={existing.outcome === "COMPLETED" ? "Отметить пропущенной" : "Отметить проведённой"}
+              onPress={() => { void resolve(existing.outcome === "COMPLETED" ? "MISSED" : "COMPLETED"); }} /></View>
+          </>}
+          <View style={styles.cell}><AppButton compact size="small" variant="secondary" label="Отменена" disabled={busy}
+            onPress={() => { void resolve("CANCELLED"); }} /></View>
+        </View>
         <Text style={[styles.hint, { color: colors.textSecondary }]}>
           Списание по времени не подтверждает проведение. «Отменена» уберёт запись из календаря
           {existingCredit === "USED" || existingCredit === "RESERVED" ? " и вернёт тренировку клиенту" : ""}.
         </Text>
       </> : null}
-      {canCorrect && !correcting ? (
-        <AppButton variant="secondary" label="Исправить клиента" disabled={busy} onPress={() => setCorrecting(true)} />
-      ) : null}
-      {canCorrect && correcting ? <>
-        <SectionHeading>Исправить клиента</SectionHeading>
+      {outcomeOpen && existing.clientId !== null && existingCredit !== "NONE" ? (
         <Text style={[styles.hint, { color: colors.textSecondary }]}>
-          Тренировка вернётся прежнему клиенту и спишется у выбранного, если их учёт ведётся в приложении.
-          История списаний не переписывается.
+          Смена клиента вернёт тренировку прежнему и спишет у выбранного, если их учёт ведётся в приложении.
         </Text>
-        <ParticipantSearch label="Поиск клиента для исправления" query={query} onQuery={setQuery}
-          matches={matches.filter((person) => person.id !== existing.clientId)} selectedId={correctionId} onSelect={(id) => { setCorrectionId(id); setQuery(""); }} disabled={busy} />
-        {correctionId !== null ? <Text style={[styles.selected, { color: colors.textPrimary }]}>{loaded.people.find((person) => person.id === correctionId)?.displayName}</Text> : null}
-        <AppButton label="Исправить клиента" busy={busy} disabled={correctionId === null}
-          onPress={() => {
-            if (correctionId !== null) void act((row) => repository.correctClient(row.id, row.revision, correctionId));
-          }} />
-        <AppButton variant="ghost" label="Не исправлять" disabled={busy}
-          onPress={() => { setCorrecting(false); setCorrectionId(null); }} />
-      </> : null}
+      ) : null}
       {guestRecord !== null && guestRecord.guestName !== null ? <>
         <SectionHeading>Гость без карточки</SectionHeading>
         <Text style={[styles.hint, { color: colors.textSecondary }]}>
@@ -411,7 +422,7 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
     <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
       {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       <View style={styles.row}>
-      {existing !== null && editable ? (
+      {existing !== null && editable && !outcomeOpen ? (
         <View style={styles.cell}><AppButton compact size="small" variant="destructive" label="Удалить" disabled={busy}
           onPress={() => {
             if (existingCredit === "RESERVED" || existingCredit === "USED") setSettling(true);

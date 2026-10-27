@@ -81,7 +81,8 @@ export class DevSettingsRepository implements SettingsPort {
   saveAppearance(value: AppearanceSetting): Promise<void> {
     return this.write("appearance", JSON.stringify({ themeId: value.themeId, accentId: value.accentId,
       showClientListShortcut: value.showClientListShortcut, hideNavigationLabels: value.hideNavigationLabels,
-      dutyColor: value.dutyColor, hiddenSessionTypeIds: value.hiddenSessionTypeIds, clientCards: value.clientCards }));
+      dutyColor: value.dutyColor, hiddenSessionTypeIds: value.hiddenSessionTypeIds, clientCards: value.clientCards,
+      dutyPresets: value.dutyPresets }));
   }
 
   async readMeasurementGroups(): Promise<readonly string[] | null> {

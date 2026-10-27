@@ -72,6 +72,7 @@ export function calendarErrorMessage(error: unknown): string {
     case "CALENDAR_GUEST_LINK_INVALID": return "Запись уже не гостевая или отменена.";
     case "CALENDAR_RESTORE_INVALID": return "Эту запись уже нельзя вернуть.";
     case "CALENDAR_OUTCOME_TOO_EARLY": return "Занятие ещё не началось. Исход можно отметить после начала.";
+    case "CALENDAR_STARTED_TYPE_CREDIT": return "У прошедшей записи нельзя выбрать тип с другим учётом занятий: списание уже зафиксировано.";
     case "CALENDAR_CORRECTION_INVALID": return "Выберите другого клиента: исправление доступно только для начавшейся записи.";
     case "ACCOUNTING_ALREADY_SETTLED":
       return "Тренировка по записи уже списана: клиента, тип и учёт здесь изменить нельзя.";

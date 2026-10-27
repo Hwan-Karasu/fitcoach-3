@@ -326,6 +326,40 @@ test("L02 early outcome uses the reservation once; early Отменена releas
   } finally { await close(); }
 });
 
+test("правка завершённой записи: время и заметка меняются, USED и исход остаются; клиент, будущее и учёт типа закрыты", async () => {
+  const { clients, calendar, accounting, personal, consultation, close } = await stores();
+  try {
+    const fit = await clients.create({ displayName: "Fit" });
+    await accounting.setClientMode(fit.id, "FITCOACH");
+    await accounting.createPack(fit.id, pack(3));
+    const booked = await calendar.createAppointment(slot(fit.id, personal.id));
+    await accounting.reconcileDue(at(11));
+    const done = await calendar.resolveOutcome(booked.id, booked.revision, "COMPLETED", at(11));
+    const blocker = await calendar.createAppointment(slot(null, personal.id, { startMinute: 840 }));
+    const moved = await calendar.updateAppointment(done.id, done.revision,
+      slot(fit.id, personal.id, { startMinute: 720, durationMinutes: 90, note: "сдвиг" }), at(14));
+    assert.deepEqual([moved.startMinute, moved.durationMinutes, moved.note, moved.lifecycle, moved.outcome],
+      [720, 90, "сдвиг", "COMPLETED", "COMPLETED"]);
+    assert.equal(await usedCount(accounting, fit.id), 1);
+    assert.equal(await usedCount(accounting, fit.id, "RETURNED"), 0);
+    await assert.rejects(calendar.updateAppointment(moved.id, moved.revision, slot(fit.id, personal.id, { startMinute: 900 }), at(14)),
+      { message: "CALENDAR_OUTCOME_TOO_EARLY" });
+    await assert.rejects(calendar.updateAppointment(moved.id, moved.revision, slot(fit.id, personal.id, { startMinute: 810 }), at(14)),
+      { message: "CALENDAR_TIME_OVERLAP" });
+    const other = await clients.create({ displayName: "Other" });
+    await assert.rejects(calendar.updateAppointment(moved.id, moved.revision, slot(other.id, personal.id, { startMinute: 720 }), at(14)),
+      { message: "CALENDAR_CORRECTION_INVALID" });
+    await assert.rejects(calendar.updateAppointment(moved.id, moved.revision, slot(fit.id, consultation.id, { startMinute: 720 }), at(14)),
+      { message: "CALENDAR_STARTED_TYPE_CREDIT" });
+    await assert.rejects(calendar.updateAppointment(moved.id, moved.revision,
+      slot(fit.id, personal.id, { startMinute: 720, creditBypass: true }), at(14)), { message: "ACCOUNTING_ALREADY_SETTLED" });
+    assert.equal(await usedCount(accounting, fit.id), 1);
+    const cancelled = await calendar.resolveOutcome(blocker.id, blocker.revision, "CANCELLED", at(14));
+    await assert.rejects(calendar.updateAppointment(cancelled.id, cancelled.revision, slot(null, personal.id, { startMinute: 840 }), at(14)),
+      { message: "CALENDAR_STALE_APPOINTMENT" });
+  } finally { await close(); }
+});
+
 test("ACC-05 Исправить клиента: RETURNED for A and USED for B in one tx; untracked side untouched", async () => {
   const { db, clients, calendar, accounting, personal, close } = await stores();
   try {

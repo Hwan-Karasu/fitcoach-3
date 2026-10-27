@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, Text, Vibration, View } from "react-native";
+import { Pressable, StyleSheet, Text, Vibration, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
@@ -9,7 +9,7 @@ import { clipToWindow, columnAtX, dragRange, minuteAtY, moveVerdict, slotAtY, yO
   type TimeWindow } from "../domain/CalendarGeometry.ts";
 import { appointmentEnded, appointmentLabel, formatMinute, localDateOf, weekdayIndex } from "../domain/CalendarRules.ts";
 import type { CalendarParticipant } from "../domain/CalendarParticipantDirectoryPort.ts";
-import { weekdayShort } from "./calendarPresentation.ts";
+import { dayTitle, weekdayShort } from "./calendarPresentation.ts";
 import { resolveDutyColor } from "./calendarTypeColors.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 
@@ -18,7 +18,7 @@ const EDGE_PX = 14;
 /** Ширина неподвижной колонки часов слева от ленты дней. */
 export const TIMELINE_GUTTER = 40;
 /** Высота строки заголовков дней — на неё же отступает колонка часов. */
-export const TIMELINE_HEADER = 36;
+export const TIMELINE_HEADER = 44;
 /** Протянул и подержал столько — интервал становится блокировкой; быстро отпустил — дежурство. */
 const HOLD_MS = 600;
 
@@ -40,6 +40,8 @@ interface Block {
 
 export interface TimelineHandlers {
   readonly onTapSlot: (date: LocalDate, startMinute: number) => void;
+  /** Касание дня в шапке — окно дежурства этого дня. */
+  readonly onTapDay: (date: LocalDate) => void;
   readonly onTapBlocked: (interval: CalendarInterval) => void;
   /** Удержание на блокировке — снять её сразу. */
   readonly onLongPressBlocked: (interval: CalendarInterval) => void;
@@ -299,14 +301,16 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
     <View>
       <View style={styles.headerRow}>
         {dates.map((date) => (
-          <View key={date} style={[styles.headerCell, { borderColor: colors.border,
-            borderLeftWidth: dates.indexOf(date) === 0 ? 0 : StyleSheet.hairlineWidth,
-            backgroundColor: date === todayDate ? colors.surfaceRaised : "transparent" }]}>
+          <Pressable key={date} accessibilityRole="button" accessibilityLabel={`Дежурство: ${dayTitle(date)}`}
+            onPress={() => handlers.onTapDay(date)}
+            style={({ pressed }) => [styles.headerCell, { borderColor: colors.border,
+              borderLeftWidth: dates.indexOf(date) === 0 ? 0 : StyleSheet.hairlineWidth,
+              backgroundColor: pressed || date === todayDate ? colors.surfaceRaised : "transparent" }]}>
             <Text style={[styles.headerDay, { color: date === todayDate ? colors.accentInk : colors.textSecondary }]}>
               {weekdayShort[weekdayIndex(date)]}</Text>
             <Text style={[styles.headerDate, { color: date === todayDate ? colors.accentInk : colors.textPrimary }]}>
               {Number(date.slice(8, 10))}</Text>
-          </View>
+          </Pressable>
         ))}
       </View>
       <View style={[styles.body, { height }]}>
@@ -340,7 +344,8 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
                 }]}>
                   {/* Прозрачна только подложка: подпись и ползунок остаются чёткими. */}
                   <View style={[StyleSheet.absoluteFill, {
-                    backgroundColor: blocked ? colors.danger : resolveDutyColor(dutyColor), opacity: blocked ? 0.22 : 0.14 }]} />
+                    backgroundColor: blocked ? colors.danger : resolveDutyColor(dutyColor), opacity: blocked ? 0.22 : 0.32 }]} />
+                  {blocked ? null : <View style={[styles.dutyStripe, { backgroundColor: resolveDutyColor(dutyColor) }]} />}
                   {!dense ? <Text style={[styles.bandText, { color: blocked ? colors.danger : colors.textPrimary }]}>
                     {blocked ? "Заблокировано" : "Дежурство"}</Text> : null}
                   <View style={[styles.handle, { backgroundColor: blocked ? colors.danger : colors.textSecondary, opacity: 0.8 }]} />
@@ -362,7 +367,8 @@ export function TimelineGrid({ dates, window, appointments, intervals, people, t
                   backgroundColor: closed ? colors.surfaceRaised : typeColors.get(row.sessionTypeId) ?? colors.accentFill,
                   borderColor: row.lifecycle === "SCHEDULED" && closed ? colors.warning
                     : typeColors.get(row.sessionTypeId) ?? colors.accentFill,
-                  opacity: active ? 0.35 : 1,
+                  // Карточка полупрозрачна, чтобы дежурство под ней оставалось видно (как в 2.0).
+                  opacity: active ? 0.35 : 0.82,
                 }]}>
                   <Text numberOfLines={Math.max(1, Math.floor(blockHeight / 13))}
                     style={[dense ? styles.blockTextDense : styles.blockText, { color: closed ? colors.textPrimary
@@ -417,6 +423,7 @@ export function TimelineHours({ window, height }: Readonly<{ window: TimeWindow;
 }
 
 const styles = StyleSheet.create({
+  dutyStripe: { position: "absolute", top: 0, bottom: 0, left: 0, width: 4 },
   headerRow: { flexDirection: "row", height: TIMELINE_HEADER },
   headerCell: { flex: 1, alignItems: "center", justifyContent: "center" },
   headerDay: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14 },

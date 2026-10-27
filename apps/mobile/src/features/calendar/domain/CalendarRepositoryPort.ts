@@ -21,8 +21,13 @@ export interface CalendarRepositoryPort {
   summarize(from: LocalDate, to: LocalDate): Promise<readonly DaySummary[]>;
   getAppointment(id: string): Promise<Appointment | null>;
   createAppointment(input: AppointmentInput): Promise<Appointment>;
-  /** Reschedule/edit of a SCHEDULED appointment keeps its stable ID. */
-  updateAppointment(id: string, expectedRevision: number, input: AppointmentInput): Promise<Appointment>;
+  /**
+   * Reschedule/edit keeps the stable ID. A started (also COMPLETED) record is editable too: time, type and note
+   * change, the ledger and the outcome stay; the client changes only via correctClient (CALENDAR_CORRECTION_INVALID),
+   * a type that flips «requires credit» is refused (CALENDAR_STARTED_TYPE_CREDIT), a COMPLETED record cannot move
+   * into the future (CALENDAR_OUTCOME_TOO_EARLY).
+   */
+  updateAppointment(id: string, expectedRevision: number, input: AppointmentInput, now?: Date): Promise<Appointment>;
   /**
    * Removes a SCHEDULED appointment from the active schedule; the settlement returns the credit
    * to the client or charges it. Ignored when no credit is involved.

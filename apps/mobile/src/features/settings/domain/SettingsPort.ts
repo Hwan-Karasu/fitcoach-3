@@ -1,4 +1,5 @@
 import { normalizeClientCards, type ClientCardPreference } from "../../../shared/domain/ClientCardPreference.ts";
+import { normalizeDutyPresets, type DutyPreset } from "../../../shared/domain/DutyPreset.ts";
 /** Выбранные тема и акцент; допустимость id проверяет каталог тем, не хранилище. */
 export interface AppearanceSetting {
   readonly themeId: string;
@@ -8,6 +9,7 @@ export interface AppearanceSetting {
   readonly dutyColor?: string | null;
   readonly hiddenSessionTypeIds?: readonly string[];
   readonly clientCards?: ClientCardPreference;
+  readonly dutyPresets?: readonly DutyPreset[];
 }
 
 /**
@@ -39,6 +41,7 @@ export function parseAppearance(json: string): AppearanceSetting | null {
         ? { dutyColor: options.dutyColor as string | null } : {}),
       ...(Array.isArray(options.hiddenSessionTypeIds) && options.hiddenSessionTypeIds.every((id) => typeof id === "string" && id.length > 0)
         ? { hiddenSessionTypeIds: [...new Set(options.hiddenSessionTypeIds as string[])] } : {}),
+      ...(Array.isArray(options.dutyPresets) ? { dutyPresets: normalizeDutyPresets(options.dutyPresets) } : {}),
     };
   } catch {
     return null;
