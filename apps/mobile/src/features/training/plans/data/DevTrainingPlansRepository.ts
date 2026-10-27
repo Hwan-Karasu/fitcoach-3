@@ -693,7 +693,8 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       const plan = await this.getSimplePlan(clientId, programId);
       if (plan === null) return null;
       return { programTitle: found.program.title, mesocycleId: null,
-        weeks: Array.from({ length: plan.draft.plan.weeks }, (_, index) => ({ index: index + 1, caption: null, workoutId: plannedWorkoutId })) };
+        weeks: Array.from({ length: plan.draft.plan.weeks }, (_, index) => ({ index: index + 1, caption: null, workoutId: plannedWorkoutId,
+          workoutIds: plan.draft.plan.workouts.map((workout) => workout.id) })) };
     }
     const plan = await this.getPeriodizedPlan(clientId, programId);
     const cycle = plan?.mesocycles.find((item) => item.weeks.some((week) => week.workouts.some((workout) => workout.id === plannedWorkoutId)));
@@ -703,7 +704,8 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     return { programTitle: program.title, mesocycleId: cycle.id,
       weeks: cycle.weeks.map((week) => {
         const matches = week.workouts.filter((workout) => (workout.lineageId ?? workout.id) === lineage);
-        return { index: week.index, caption: weekTypeLabels[week.type], type: week.type, workoutId: matches.length === 1 ? matches[0]!.id : null };
+        return { index: week.index, caption: weekTypeLabels[week.type], type: week.type, workoutId: matches.length === 1 ? matches[0]!.id : null,
+          workoutIds: week.workouts.map((workout) => workout.id) };
       }) };
   }
 

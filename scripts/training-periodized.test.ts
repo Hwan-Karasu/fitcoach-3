@@ -218,6 +218,7 @@ test("T03 недели дневника: lineage только своего ме�
     const navigation = (await plans.getWorkoutWeekNavigation(a.id, programId, source.id))!;
     assert.equal(navigation.mesocycleId, mesocycleId);
     assert.equal(navigation.weeks[2]!.workoutId, cycle.weeks[2]!.workouts[0]!.id);
+    assert.deepEqual(navigation.weeks[2]!.workoutIds, cycle.weeks[2]!.workouts.map((workout) => workout.id), "all workouts of the week, for its status");
     assert.equal(await plans.getWorkoutWeekNavigation(b.id, programId, source.id), null);
     await plans.saveWeek(a.id, programId, plan.program.revision, { mesocycleId, weekIndex: 2,
       workouts: addExercise(newDraft("replacement-workout"), "replacement-workout", "replacement-e", BENCH, ids("replacement-s")).plan.workouts, type: "base", scope: "CURRENT", clientIds: [a.id] });
@@ -228,6 +229,7 @@ test("T03 недели дневника: lineage только своего ме�
     const simpleNavigation = (await plans.getWorkoutWeekNavigation(a.id, simple.id, "w1"))!;
     assert.equal(simpleNavigation.mesocycleId, null);
     assert.deepEqual(simpleNavigation.weeks.map((week) => week.workoutId), ["w1", "w1", "w1"]);
+    assert.deepEqual(simpleNavigation.weeks.map((week) => week.workoutIds), Array(3).fill(firstWeek().map((workout) => workout.id)));
   } finally { await close(); }
 });
 

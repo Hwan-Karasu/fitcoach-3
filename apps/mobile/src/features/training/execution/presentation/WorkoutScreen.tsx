@@ -22,7 +22,7 @@ import { useReportScreenTone } from "../../../../shared/ui/theme/ScreenTone.tsx"
 import { weekTypeTone, DiaryEditDialog, formatDuration, formatRange, supersetNumber, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookupState,
   type DiaryEdit, type ExerciseLookupPort, type PickedExercise, type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort,
   type WorkoutWeekNavigation } from "../../plans/public.ts";
-import { type ActiveWorkoutsPort, type SetFact, type SetType, type SetValues, type Side, type TrackingMetric,
+import { type ActiveWorkoutsPort, type SessionStatus, type SetFact, type SetType, type SetValues, type Side, type TrackingMetric,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
 import { displayOrder, endInstantAfter, instantFromLocal, localDateOf, localMinuteOfDay, nextOutcome, sessionDurationSec } from "../domain/ExecutionRules.ts";
 import { durationText, timeText } from "../../../../shared/format/clockText.ts";
@@ -32,7 +32,8 @@ import { ActiveWorkoutsSheet, ExerciseMenuSheet, RpeSheet, SetTypeSheet, Superse
 import { factVolume } from "./programMatrix.ts";
 import { WorkoutSharePoster } from "./WorkoutSharePoster.tsx";
 import { labeledPlan, labeledWithDrops } from "./shareFormat.ts";
-import { diaryFields, fieldHeaders, planText, rawOf, shortDate, workoutStatusLabels } from "./setFormat.ts";
+import { diaryFields, fieldHeaders, planText, rawOf, shortDate, weekCardLabels, workoutStatusLabels } from "./setFormat.ts";
+import { weekCardStates } from "../domain/WeekCardStatus.ts";
 import { extraWarmups, useWorkoutDiary, type SetPatch } from "./useWorkoutDiary.ts";
 import { PendingInputWrites } from "../domain/PendingInputWrites.ts";
 import { NoteField, SetRow, type SetTarget } from "./WorkoutSetRow.tsx";
@@ -152,6 +153,24 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const [navigationOwner, setNavigationOwner] = useState("");
   const navigationCurrent = navigationOwner === `${slot.clientId}:${slot.programId}`
     && weekNavigation?.weeks.some((week) => week.workoutId === slot.plannedWorkoutId) === true;
+  // Статусы тренировок программы для ленты недель: перечитываются после записей этой программы; чужая программа статусов не получает.
+  const [weekStatuses, setWeekStatuses] = useState<Readonly<{ key: string; statuses: readonly SessionStatus[] }> | null>(null);
+  useEffect(() => {
+    let active = true;
+    let request = 0;
+    const key = `${slot.clientId}:${slot.programId}`;
+    const load = () => {
+      const latest = ++request;
+      void execution.getProgramStatuses(slot.clientId, slot.programId)
+        .then((statuses) => { if (active && latest === request) setWeekStatuses({ key, statuses }); })
+        .catch(() => undefined);
+    };
+    load();
+    const unsubscribe = execution.subscribeCommittedChanges((change) => {
+      if (change.clientId === slot.clientId && change.programId === slot.programId) load();
+    });
+    return () => { active = false; unsubscribe(); };
+  }, [execution, slot.clientId, slot.programId]);
   /** Недели программы прочитаны (`null` — их нет): до этого панель держит прежние стрелки, а не «стрелок нет». */
   const [navigationLoaded, setNavigationLoaded] = useState(false);
   const [navigationError, setNavigationError] = useState<string | null>(null);
@@ -258,6 +277,14 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const reportWeekTone = useReportScreenTone(weekType === undefined || weekType === "base" ? null : weekTypeTone(weekType, colors));
   const previousWeek = weekNavigation?.weeks[currentWeek - 1];
   const nextWeek = weekNavigation?.weeks[currentWeek + 1];
+  // Статус недели в ленте — как в панели программы; пока статусы этой программы не пришли, карточки без статуса.
+  const weekCards = useMemo(() => {
+    if (weekNavigation === null) return [];
+    const states = weekStatuses?.key === `${slot.clientId}:${slot.programId}`
+      ? weekCardStates(weekNavigation.weeks, weekStatuses.statuses).states : null;
+    return weekNavigation.weeks.map((week) => ({ index: week.index, caption: week.caption,
+      ...(states === null ? {} : { status: weekCardLabels[states.get(week.index)!] }) }));
+  }, [slot.clientId, slot.programId, weekNavigation, weekStatuses]);
   useWeekNavigation(weekNavigation === null ? null : { week: slot.weekIndex, busy,
     previous: previousWeek ? () => { void changeWeek(previousWeek.index); } : null,
     next: nextWeek ? () => { void changeWeek(nextWeek.index); } : null }, navigationLoaded);
@@ -481,7 +508,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
             ))}
           </View>
           {weekNavigation !== null ? (
-            <WeekCards weeks={weekNavigation.weeks} selected={slot.weekIndex} disabled={busy || diary.switching}
+            <WeekCards weeks={weekCards} selected={slot.weekIndex} disabled={busy || diary.switching}
               onSelect={selectWeek} />
           ) : null}
         </View>

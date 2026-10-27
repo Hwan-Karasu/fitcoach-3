@@ -1,6 +1,7 @@
 import type { PaletteTokens } from "../../../../shared/ui/theme/resolver.ts";
 import { formatDuration, formatRange, parseDuration, parseLoad, type PlannedSet } from "../../plans/public.ts";
 import type { SetType, SetValues, TrackingMetric, WeekStatus, WorkoutStatus } from "../domain/ExecutionModel.ts";
+import type { WeekCardState } from "../domain/WeekCardStatus.ts";
 import { fieldsOf, inLimits, type SetField } from "../domain/ExecutionRules.ts";
 import { isCalendarDay } from "../../../../shared/format/calendarDay.ts";
 
@@ -103,6 +104,9 @@ export const workoutStatusLabels: Readonly<Record<WorkoutStatus, string>> = {
 export const weekStatusLabels: Readonly<Record<WeekStatus, string>> = {
   NOT_STARTED: "Не начата", IN_PROGRESS: "В работе", COMPLETED: "Завершена", CLOSED_WITH_DEVIATIONS: "Закрыта с отклонениями",
 };
+
+/** Подпись карточки недели в ленте (панель программы и дневник). */
+export const weekCardLabels: Readonly<Record<WeekCardState, string>> = { ...weekStatusLabels, EMPTY: "Пусто", CURRENT: "Текущая" };
 
 const MONTHS = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 

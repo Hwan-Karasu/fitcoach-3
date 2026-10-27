@@ -10,9 +10,9 @@ import { shadow } from "../../../../shared/ui/theme/style.ts";
 import { weekTypeTone, type PlannedWorkout, type WeekType } from "../../plans/public.ts";
 import { useReportScreenTone } from "../../../../shared/ui/theme/ScreenTone.tsx";
 import type { SessionStatus, WorkoutExecution, WorkoutStatus } from "../domain/ExecutionModel.ts";
-import { weekStatus } from "../domain/ExecutionRules.ts";
+import { weekCardStates } from "../domain/WeekCardStatus.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
-import { weekStatusLabels, workoutStatusLabels } from "./setFormat.ts";
+import { weekCardLabels, workoutStatusLabels } from "./setFormat.ts";
 import { workoutProgress } from "./workoutProgress.ts";
 
 const statusKinds: Readonly<Record<WorkoutStatus, StatusKind>> = {
@@ -119,10 +119,10 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: liveViews, execu
   }, [statuses]);
   const weeks = views.length;
   const viewOf = (week: number) => views.find((view) => view.index === week);
-  const weekOf = (week: number) => weekStatus((viewOf(week)?.workouts ?? []).map((workout) => statusOf(week, workout.id)));
+  const cardStates = useMemo(() => weekCardStates(views.map((view) => ({ index: view.index, workoutIds: view.workouts.map((workout) => workout.id) })), statuses),
+    [views, statuses]);
   // По умолчанию — первая неделя, которая ещё не закрыта.
-  const firstOpen = views.map((view) => view.index)
-    .find((week) => { const status = weekOf(week); return status === "NOT_STARTED" || status === "IN_PROGRESS"; }) ?? weeks;
+  const firstOpen = cardStates.firstOpen;
   const requested = selectedWeek ?? selected ?? firstOpen;
   const week = viewOf(requested) ? requested : views[0]?.index ?? 1;
   const workouts = viewOf(week)?.workouts ?? [];
@@ -142,8 +142,8 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: liveViews, execu
   const toneOf = (type: WeekType | undefined) => type === undefined || type === "base" ? null : weekTypeTone(type, colors);
   const weekCards = useMemo(() => views.map((view) => ({ index: view.index, caption: view.caption,
     tone: view.type === undefined ? null : toneOf(view.type) ?? colors.textMuted,
-    status: view.workouts.length === 0 ? "Пусто" : view.index === firstOpen ? "Текущая" : weekStatusLabels[weekOf(view.index)] })),
-  [views, statuses, colors, firstOpen]);
+    status: weekCardLabels[cardStates.states.get(view.index)!] })),
+  [views, cardStates, colors]);
   useReportScreenTone(toneOf(viewOf(week)?.type));
   useWeekNavigation(weeks === 0 ? null : { week,
     previous: previousWeek ? () => chooseWeek(previousWeek.index) : null,

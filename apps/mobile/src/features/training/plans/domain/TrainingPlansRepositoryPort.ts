@@ -23,7 +23,8 @@ export interface TrainingPlansCommittedChange {
 export interface WorkoutWeekNavigation {
   readonly programTitle: string;
   readonly mesocycleId: string | null;
-  readonly weeks: readonly Readonly<{ index: number; caption: string | null; workoutId: string | null; type?: WeekType }>[];
+  /** `workoutIds` — все тренировки недели: по ним считается статус недели в ленте. */
+  readonly weeks: readonly Readonly<{ index: number; caption: string | null; workoutId: string | null; workoutIds: readonly string[]; type?: WeekType }>[];
 }
 
 /**
