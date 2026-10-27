@@ -1,3 +1,8 @@
+## 2026-10-27 — EDITOR-FIX-2: статусы недель в дневнике; замер логики конструктора
+
+- Лента недель экрана «Дневник тренировки» (`WorkoutScreen`) теперь показывает статус недели («Пусто», «Текущая», «Не начата», «В работе», «Завершена», «Закрыта с отклонениями») так же, как панель программы. Расчёт вынесен в чистую функцию `execution/domain/WeekCardStatus.ts` (`weekCardStates`), её используют и `ProgramWeeksPanel`, и дневник; подписи — `weekCardLabels` (`setFormat.ts`). `getWorkoutWeekNavigation` отдаёт `workoutIds` всех тренировок недели; дневник читает `getProgramStatuses` и обновляет статусы по `subscribeCommittedChanges` (с отпиской). Тесты: `week-card-status.test.ts` (6), ожидания `training-periodized.test.ts`; `test:foundation` 976/976, `training:test` 258/258.
+- Микрофриз при «Изменить» и торможение смены недели: на ПК (Node 24, 1536 подходов = 12 недель × 4 тренировки × 8 упражнений × 4 подхода) `validateDraft` по всем неделям 0,40 мс, `cleanBuilderWeeks` 0,2 мс, `JSON.stringify(weeks)` 0,56 мс, `diffWeek` 0,08 мс. Чистая логика (валидация, очистка, черновик) на секунды не тянет даже при запасе ×30 для Hermes; гипотеза «дорогая валидация/запись черновика» опровергнута. Остаётся рендер: полный перемонтаж `Sortable.Grid` и `ExerciseCard` при смене недели (`WorkoutsEditor.tsx`) и первый рендер конструктора. Замер на телефоне и правки рендера — следующий шаг.
+
 ## 2026-10-27 — POLISH-1: аудит «ничего лишнего», документы отменённой миграции в архив, CI
 
 - База: typecheck, lint, arch:check (580), source:verify, secrets:check зелёные; `test:foundation` 966/966, `excel:test` 96/96; в чистом worktree `training:test` 258, `r06:test` 248, `d01:test` 26.
