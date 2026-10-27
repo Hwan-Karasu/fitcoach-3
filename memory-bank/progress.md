@@ -11,6 +11,7 @@
 - IMPORT-V2: S1 (69e48e1), S2 (f357369) готовы.
 
 ## Открыто / техдолг
+- EDITOR-FIX-1: торможение редактора мезоцикла (вход, смена недели) не замерено/не исправлено — PeriodizedBuilderScreen.tsx, WorkoutsEditor.tsx:264 (перемонтаж Sortable.Grid по неделям).
 - IMPORT-V2 S3–S5; AUD26-01 удаление клиента (training_transfer_receipts); AUD26-03/04 CI не гоняет excel:test,
   тест 2.0 читает соседнюю папку FitCoach_2_Excel.
 - CA-23 импорт больших книг падает (ждём владельца); CA-24 inline requires; CA-15 DevTrainingExecutionRepository.ts:158 N+1;
