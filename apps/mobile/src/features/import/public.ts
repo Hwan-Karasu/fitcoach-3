@@ -15,3 +15,4 @@ export { selectWorkbookImportSheets, emptyWorkbookSheet } from "./domain/Workboo
 export { builderWorkbookImport } from "./domain/BuilderWorkbookImport.ts";
 export { assertValidTransfer } from "./domain/TransferValidation.ts";
 export { reidTransfer, transferSourceIds } from "./domain/TransferIds.ts";
+export { hasRecord, settleImportedSessions } from "./domain/TransferCompletion.ts";

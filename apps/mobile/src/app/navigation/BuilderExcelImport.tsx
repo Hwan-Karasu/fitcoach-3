@@ -140,7 +140,7 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
           <Text style={{ color: colors.textPrimary, fontSize: 18 }}>Программа «{session.programTitle}»</Text>
           <Text style={{ color: colors.textPrimary }}>Будет добавлено {status?.cycles ?? 0} циклов</Text>
           {selectedLabels.map((name) => <Text key={name} style={{ color: colors.textSecondary }}>• {name}</Text>)}
-          <Text style={{ color: colors.textSecondary }}>{target.kind === "BUILDER" ? "Циклы добавятся в черновик. Сохранение программы выполняется общей кнопкой конструктора." : "Все циклы сохранятся одной операцией."} Все импортируемые тренировки будут завершены; пустые результаты и неизвестные даты сохранятся.</Text>
+          <Text style={{ color: colors.textSecondary }}>{target.kind === "BUILDER" ? "Циклы добавятся в черновик. Сохранение программы выполняется общей кнопкой конструктора." : "Все циклы сохранятся одной операцией."} Тренировки с результатами и пустые тренировки недель, где результаты есть, отметятся завершёнными; недели без результатов останутся «не начаты». Неизвестные даты сохранятся.</Text>
           {!!error && <InlineNotice kind="error">{error}</InlineNotice>}
           <AppButton label={target.kind === "BUILDER" ? "Добавить циклы в черновик" : "Импортировать выбранные листы"} busy={busy} disabled={!status?.cycles || !!status.problems.length} onPress={confirm} />
           <AppButton label="Вернуться к сверке" variant="secondary" disabled={committing} onPress={back} />

@@ -28,6 +28,7 @@ import { ExerciseImportMatchStore } from "../apps/mobile/src/features/import/dat
 import { runMigrationsInTransaction } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
 import { startWorkbookReview, setWorkbookNameMatch, workbookMatchesToRemember, selectWorkbookImportSheets } from "../apps/mobile/src/features/import/domain/WorkbookReviewSession.ts";
 import type { TrainingTransfer } from "../apps/mobile/src/shared/training-transfer/TrainingTransfer.ts";
+import { weekStatus } from "../apps/mobile/src/features/training/execution/domain/ExecutionRules.ts";
 import { reidTransfer, transferSourceIds } from "../apps/mobile/src/features/import/domain/TransferIds.ts";
 import { builderWorkbookImport } from "../apps/mobile/src/features/import/domain/BuilderWorkbookImport.ts";
 import type { BuilderWorkbookSaveRequest } from "../apps/mobile/src/features/training/plans/domain/BuilderWorkbookSave.ts";
@@ -89,7 +90,8 @@ test("I07 selected workbook cycles and their results save atomically with a manu
       assert.equal((await reopened.getPeriodizedPlan(other.id, result.programId))!.mesocycles.length, 4);
       assert.equal(await reopened.getMesocycleBuilderDraft(f.client.id, scope), null);
     } finally { await reopened.close(); }
-    assert.equal((await f.execution.getProgramStatuses(f.client.id, result.programId)).length, 9);
+    // Третья неделя каждого листа без записей не начата (ADR-043): занятий для неё нет, статусов 3 листа × 2 недели.
+    assert.equal((await f.execution.getProgramStatuses(f.client.id, result.programId)).length, 6);
     assert.ok((await f.execution.getProgramStatuses(f.client.id, result.programId)).every((s) => s.status === "COMPLETED"));
     assert.equal((await f.execution.getProgramStatuses(other.id, result.programId)).length, 0, "other clients receive only plans");
     assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 6);
@@ -252,7 +254,7 @@ test("I07 participant copies use one destination programme for all imported cycl
     const targetId = library.active[0]!.id; assert.notEqual(targetId, saved.programId);
     assert.equal((await f.plans.getPeriodizedPlan(other.id, targetId))!.mesocycles.length, 3);
     assert.equal((await f.execution.getProgramStatuses(other.id, targetId)).length, 0);
-    assert.equal((await f.execution.getProgramStatuses(f.client.id, saved.programId)).length, 9);
+    assert.equal((await f.execution.getProgramStatuses(f.client.id, saved.programId)).length, 6, "week 3 of every sheet has no records and stays not started");
   } finally { await f.close(); }
 });
 
@@ -276,7 +278,7 @@ test("I05 whole workbook writes one programme with all cycles, plans and results
     await f.transfer.importClient(f.client.id, whole.value, whole.mapping, { rememberMatches: matches });
     assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_programs").get()!.n, 1);
     assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_mesocycles").get()!.n, 2);
-    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_sessions").get()!.n, 6);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_sessions").get()!.n, 4, "weeks without records get no sessions");
     assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 4);
     assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_planned_sets").get()!.n, 12);
     assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
@@ -373,22 +375,28 @@ test("I07 a workbook saved as a new programme can be saved again after that prog
   } finally { await f.close(); }
 });
 
-test("I06 every imported workout is completed, including empty undated slots; rename preserves plans and facts", async () => {
+test("I06 imported workouts are completed by their records, a week without records stays not started; rename preserves plans and facts", async () => {
   const f = await fixture();
   try {
-    const base = trainingTransferFixture();
-    const input = { ...base, sessions: base.sessions.map((s) => ({ ...s, actualDate: null })) };
+    const base = trainingTransferFixture(); const cycle = base.programs[0]!.mesocycles[0]!; const first = cycle.weeks[0]!; const w1 = first.workouts[0]!;
+    // Неделя 1 получает вторую тренировку без записей: неделя с результатами, значит она завершена; неделя 3 пуста целиком.
+    const second = { ...w1, id: "w1-second", title: "Тренировка 2", exercises: w1.exercises.map((e) => ({ ...e, id: `x-${e.id}`, sets: e.sets.map((s) => ({ ...s, id: `x-${s.id}` })) })) };
+    const weeks = cycle.weeks.map((w, at) => (at === 0 ? { ...first, workouts: [w1, second] } : w));
+    const input = { ...base, programs: [{ ...base.programs[0]!, mesocycles: [{ ...cycle, weeks }] }], sessions: base.sessions.map((s) => ({ ...s, actualDate: null })) };
     const session = prepareWholeWorkbook(startWorkbookReview({ kind: "TRANSFER", value: input }, false), [{ id: f.mapping.press!, name: base.exercises[0]!.name, available: true }]);
     const whole = compileWholeWorkbook(session);
-    assert.equal(whole.value.sessions.length, 3);
+    assert.equal(whole.value.sessions.length, 3, "two with results and one empty workout of a week with results; none for the empty week 3");
     assert.ok(whole.value.sessions.every((s) => s.outcome === "COMPLETED" && s.actualDate === null));
     await f.transfer.importClient(f.client.id, whole.value, whole.mapping);
     const program = (await f.plans.getLibrary(f.client.id)).active[0]!;
     const statuses = await f.execution.getProgramStatuses(f.client.id, program.id);
     assert.equal(statuses.length, 3); assert.ok(statuses.every((s) => s.status === "COMPLETED"));
+    const planWeeks = (await f.plans.getPeriodizedPlan(f.client.id, program.id))!.mesocycles[0]!.weeks;
+    const statusOf = (week: number, workoutId: string) => statuses.find((s) => s.weekIndex === week && s.plannedWorkoutId === workoutId)?.status ?? "NOT_STARTED";
+    assert.deepEqual(planWeeks.map((w) => weekStatus(w.workouts.map((x) => statusOf(w.index, x.id)))), ["COMPLETED", "COMPLETED", "NOT_STARTED"]);
     assert.deepEqual(await f.execution.listActiveWorkouts(), []);
-    const weeks = (await f.plans.getPeriodizedPlan(f.client.id, program.id))!.mesocycles[0]!.weeks;
-    const previousWorkout = weeks[0]!.workouts[0]!; const currentWorkout = weeks[1]!.workouts[0]!;
+    const weeks2 = planWeeks;
+    const previousWorkout = weeks2[0]!.workouts[0]!; const currentWorkout = weeks2[1]!.workouts[0]!;
     const previous = await f.execution.getPrevious({ clientId: f.client.id, programId: program.id, weekIndex: 2, plannedWorkoutId: currentWorkout.id }, previousWeekQueries(currentWorkout, previousWorkout));
     assert.equal(previous.get(currentWorkout.exercises[0]!.sets[0]!.id)?.values.reps, 8);
     assert.equal(previous.get(currentWorkout.exercises[0]!.sets[0]!.id)?.date, null);
@@ -402,6 +410,20 @@ test("I06 every imported workout is completed, including empty undated slots; re
     assert.equal(exported.sessions.flatMap((s) => s.facts).length, 2);
     assert.ok(exported.sessions.every((s) => s.outcome === "COMPLETED" && s.actualDate === null && s.startedAt === null && s.finishedAt === null));
     assert.deepEqual(readTrainingWorkbook(readWorkbook(writeTrainingWorkbook(exported))).sessions, exported.sessions);
+  } finally { await f.close(); }
+});
+
+test("an outcome written in a 3.0 file survives the import: missed stays missed, the rule decides only where there is none", async () => {
+  const f = await fixture();
+  try {
+    const base = trainingTransferFixture();
+    const input = { ...base, sessions: base.sessions.map((s) => (s.weekIndex === 2 ? { ...s, outcome: "MISSED" as const } : s)) };
+    const session = prepareWholeWorkbook(startWorkbookReview({ kind: "TRANSFER", value: input }, false), [{ id: f.mapping.press!, name: base.exercises[0]!.name, available: true }]);
+    const whole = compileWholeWorkbook(session);
+    await f.transfer.importClient(f.client.id, whole.value, whole.mapping);
+    const program = (await f.plans.getLibrary(f.client.id)).active[0]!;
+    const statuses = await f.execution.getProgramStatuses(f.client.id, program.id);
+    assert.deepEqual(statuses.map((s) => [s.weekIndex, s.status]).sort(), [[1, "COMPLETED"], [2, "MISSED"]]);
   } finally { await f.close(); }
 });
 
@@ -676,9 +698,9 @@ test("native 3.0 backup keeps an Excel-imported programme with its results and t
       assert.equal(restored.prepare("SELECT count(*) n FROM training_performed_sets").get()?.n, 2);
       assert.deepEqual(restored.prepare("SELECT source_name, target_id FROM training_import_exercise_matches").all(),
         f.native.prepare("SELECT source_name, target_id FROM training_import_exercise_matches").all());
-      assert.equal(restored.prepare("SELECT count(*) n FROM training_sessions").get()?.n, 3);
-      assert.equal(restored.prepare("SELECT count(*) n FROM training_sessions WHERE outcome='COMPLETED'").get()?.n, 3);
-      assert.equal(restored.prepare("SELECT count(*) n FROM training_sessions WHERE actual_date IS NULL").get()?.n, 1);
+      assert.equal(restored.prepare("SELECT count(*) n FROM training_sessions").get()?.n, 2);
+      assert.equal(restored.prepare("SELECT count(*) n FROM training_sessions WHERE outcome='COMPLETED'").get()?.n, 2);
+      assert.equal(restored.prepare("SELECT count(*) n FROM training_sessions WHERE actual_date IS NULL").get()?.n, 0);
       assert.equal(restored.prepare("SELECT load_grams FROM training_planned_sets WHERE load_grams IS NOT NULL LIMIT 1").get()?.load_grams, 62500);
     } finally { restored.close(); }
   } finally { await f.close(); rmSync(dir, { recursive: true, force: true }); }

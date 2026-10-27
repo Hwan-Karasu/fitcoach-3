@@ -2,6 +2,7 @@ import type { TrainingTransfer, TransferCycle, TransferSession } from "../../../
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { autoMatchWorkbookEntry, selectWorkbookSheet, type WorkbookReviewSession } from "./WorkbookReviewSession.ts";
+import { settleImportedSessions } from "./TransferCompletion.ts";
 
 /**
  * Стабильный ID листа и строки (лист, неделя, вид, исходный ID): один и тот же лист получает один и тот же ID при любом выборе листов.
@@ -87,16 +88,16 @@ export function compileWholeWorkbook(session: WorkbookReviewSession): Readonly<{
             lineageId: rowId(0, "exercise-lineage", exercise.lineageId ?? exercise.id),
             supersetId: exercise.supersetId ? rowId(week.index, "superset", exercise.supersetId) : undefined,
             sets: exercise.sets.map((set) => ({ ...set, id: rowId(week.index, "set", set.id) })) })) })) })) });
-    for (const s of value.sessions) sessions.push({ ...s, outcome: "COMPLETED", id: rowId(s.weekIndex, "session", s.id), programId,
+    // Исход по записям (ADR-043): завершены тренировки с результатами и пустые тренировки недели, где результаты есть; неделя без записей не начата.
+    const settled = settleImportedSessions(original.weeks, value.sessions);
+    for (const s of settled.sessions) sessions.push({ ...s, id: rowId(s.weekIndex, "session", s.id), programId,
       plannedWorkoutId: rowId(s.weekIndex, "workout", s.plannedWorkoutId),
       facts: s.facts.map((f) => ({ ...f, id: rowId(s.weekIndex, "fact", f.id), plannedSetId: rowId(s.weekIndex, "set", f.plannedSetId),
         plannedExerciseId: rowId(s.weekIndex, "exercise", f.plannedExerciseId) })),
       notes: s.notes.map((n) => ({ ...n, plannedExerciseId: rowId(s.weekIndex, "exercise", n.plannedExerciseId) })) });
-    const represented = new Set(value.sessions.map((s) => JSON.stringify([s.weekIndex, s.plannedWorkoutId])));
-    for (const week of original.weeks) for (const workout of week.workouts) {
-      if (represented.has(JSON.stringify([week.index, workout.id]))) continue;
-      sessions.push({ id: rowId(week.index, "empty-session", workout.id), programId, weekIndex: week.index,
-        plannedWorkoutId: rowId(week.index, "workout", workout.id), outcome: "COMPLETED", actualDate: null,
+    for (const { weekIndex, workoutId } of settled.bare) {
+      sessions.push({ id: rowId(weekIndex, "empty-session", workoutId), programId, weekIndex,
+        plannedWorkoutId: rowId(weekIndex, "workout", workoutId), outcome: "COMPLETED", actualDate: null,
         startedAt: null, finishedAt: null, origin: null, facts: [], notes: [] });
     }
   }

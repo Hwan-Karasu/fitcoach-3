@@ -11,7 +11,7 @@ import type { DevTrainingPlansRepository } from "../../features/training/plans/d
 import type { DevExerciseCatalogRepository } from "../../features/exercises/data/DevExerciseCatalogRepository.ts";
 import type { BuilderWorkbookCycle } from "../../shared/training-transfer/BuilderWorkbook.ts";
 import { UUID_V4_BATCH_SQL } from "../../shared/db/SqlIds.ts";
-import { assertValidTransfer, reidTransfer, transferSourceIds } from "../../features/import/public.ts";
+import { assertValidTransfer, reidTransfer, settleImportedSessions, transferSourceIds } from "../../features/import/public.ts";
 
 /** Импортированные результаты, чья тренировка убрана из плана при правке цикла до первого сохранения. */
 function resultsOfRemovedWorkouts(cycle: BuilderWorkbookCycle) {
@@ -99,15 +99,15 @@ export function createTrainingTransfer(database: SharedSqliteDatabase, workspace
             revision = result.program.revision; firstId ||= result.mesocycleId; continue;
           }
           const cycleTransfer = (item: BuilderWorkbookCycle): TrainingTransfer => {
-            const removed = new Set(resultsOfRemovedWorkouts(item));
+            const slot = (s: Readonly<{ weekIndex: number; plannedWorkoutId: string }>) => JSON.stringify([s.weekIndex, s.plannedWorkoutId]);
+            const removed = new Set(resultsOfRemovedWorkouts(item).map(slot));
             const history = { programTitle: program.title, programKind: "PERIODIZED" as const, mesocycleTitle: item.title, workoutTitle: null };
-            const sessions = [...item.imported?.sessions ?? []].filter((s) => !(removed.has(s) && request.resultsAction === "DELETE"))
-              .map((s) => ({ ...s, programId: "builder-program", outcome: "COMPLETED" as const, ...(removed.has(s) ? { origin: history } : {}) }));
-            const represented = new Set(sessions.map((s) => JSON.stringify([s.weekIndex, s.plannedWorkoutId])));
-            if (item.imported) for (const [weekIndex, week] of item.weeks.entries()) for (const workout of week.workouts) {
-              if (!represented.has(JSON.stringify([weekIndex + 1, workout.id]))) sessions.push({ id: `empty:${workout.id}`, programId: "builder-program", weekIndex: weekIndex + 1,
-                plannedWorkoutId: workout.id, outcome: "COMPLETED", actualDate: null, startedAt: null, finishedAt: null, origin: null, facts: [], notes: [] });
-            }
+            // Исход по записям (ADR-043): завершены тренировки с результатами и пустые тренировки недели, где результаты есть; неделя без записей не начата.
+            const settled = settleImportedSessions(item.weeks.map((w, at) => ({ index: at + 1, workouts: w.workouts })), item.imported?.sessions ?? []);
+            const sessions = settled.sessions.filter((s) => !(removed.has(slot(s)) && request.resultsAction === "DELETE"))
+              .map((s) => ({ ...s, programId: "builder-program", ...(removed.has(slot(s)) ? { origin: history } : {}) }));
+            for (const { weekIndex, workoutId } of settled.bare) sessions.push({ id: `empty:${workoutId}`, programId: "builder-program", weekIndex,
+              plannedWorkoutId: workoutId, outcome: "COMPLETED", actualDate: null, startedAt: null, finishedAt: null, origin: null, facts: [], notes: [] });
             const ids = [...new Set([...item.weeks.flatMap((w) => w.workouts.flatMap((x) => x.exercises.map((e) => e.exerciseId))), ...sessions.flatMap((s) => s.facts.map((f) => f.exerciseId))])];
             return { format: "athlete-training", version: 1, sourceId: `builder:${program.id}`, client: { id: request.clientId, name: "Конструктор" }, exercises: ids.map((id) => ({ id, name: id })),
               programs: [{ id: "builder-program", title: program.title, kind: "PERIODIZED", createdAt: program.createdAt, archivedAt: null, simple: null, simpleWeeks: [],
