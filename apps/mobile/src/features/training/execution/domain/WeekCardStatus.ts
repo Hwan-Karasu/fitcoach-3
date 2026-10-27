@@ -21,3 +21,17 @@ export function weekCardStates(weeks: readonly Readonly<{ index: number; workout
   return { firstOpen, states: new Map(weeks.map((week): [number, WeekCardState] => [week.index,
     week.workoutIds.length === 0 ? "EMPTY" : week.index === firstOpen ? "CURRENT" : own.get(week.index)!])) };
 }
+
+/** Смысл цвета карточки недели; сам цвет подбирает экран по токенам темы. */
+export type WeekTone = "success" | "info" | "warning" | "accent" | "neutral";
+
+/** Завершена — зелёный, в работе — синий, закрыта с отклонениями — янтарный (как у статусов тренировок), текущая — акцент темы. */
+export function weekCardTone(state: WeekCardState): WeekTone {
+  switch (state) {
+    case "COMPLETED": return "success";
+    case "IN_PROGRESS": return "info";
+    case "CLOSED_WITH_DEVIATIONS": return "warning";
+    case "CURRENT": return "accent";
+    default: return "neutral";
+  }
+}

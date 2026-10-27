@@ -16,7 +16,7 @@ import { AddFoodScreen, type CalcClientBody, type CatalogFilter, type SaveCalcPr
 import { ArchivedProgramsPanel, ParticipantSwitcher, participantTarget, ProgramMatrixScreen, PeriodizedBuilderScreen, ProgramLibraryScreen, ProgramModeChooserScreen, programLibraryTabTitles, ProgramScreen, SimpleProgramBuilderScreen,
   WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type SimplePlanSavePort, type WeekEditSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort,
   type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
-  type TrainingPlansRepositoryPort, ProgramWeeksPanel, weekStatus, weekStatusLabels, WorkoutScreen, type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort,
+  type TrainingPlansRepositoryPort, ProgramWeeksPanel, weekCardMarkers, weekCardTone, weekStatus, weekStatusLabels, WorkoutScreen, type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort,
   type WorkoutSlot } from "../../features/training/public.ts";
 import { CustomExerciseEditorScreen, ExerciseLibraryScreen, type ExerciseCatalogPort } from "../../features/exercises/public.ts";
 import { RetainedScreenTheme, usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -299,7 +299,10 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
           loadWeekStatuses={async (programId, weeks) => {
             const statuses = await execution.getProgramStatuses(viewer, programId);
             const byKey = new Map(statuses.map((item) => [`${item.weekIndex}:${item.plannedWorkoutId}`, item.status]));
-            return weeks.map((week) => weekStatusLabels[weekStatus(week.workoutIds.map((id) => byKey.get(`${week.index}:${id}`) ?? "NOT_STARTED"))]);
+            return weeks.map((week) => {
+              const status = weekStatus(week.workoutIds.map((id) => byKey.get(`${week.index}:${id}`) ?? "NOT_STARTED"));
+              return { label: weekStatusLabels[status], marker: weekCardMarkers[status], tone: weekCardTone(status) };
+            });
           }}
           renderExcel={(onApply, title) => <BuilderExcelImport memory={trainingTransfer} files={expoWorkbookFiles} exercises={exercises} clientName={viewerName} target={{ kind: "BUILDER", title, apply: onApply }} />}
           onSaved={(mesocycleId) => navigation.popTo("TrainingProgram", { programId: route.params.programId!, mesocycleId })}

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { SessionStatus, WorkoutStatus } from "../apps/mobile/src/features/training/execution/domain/ExecutionModel.ts";
-import { weekCardStates } from "../apps/mobile/src/features/training/execution/domain/WeekCardStatus.ts";
+import { weekCardStates, weekCardTone } from "../apps/mobile/src/features/training/execution/domain/WeekCardStatus.ts";
 
 const status = (weekIndex: number, plannedWorkoutId: string, value: WorkoutStatus): SessionStatus => ({ weekIndex, plannedWorkoutId, status: value });
 const week = (index: number, ...workoutIds: string[]) => ({ index, workoutIds });
@@ -42,4 +42,9 @@ test("when every week is closed the last one stays the current card (as in the p
 test("statuses of another week or another workout do not leak into the week", () => {
   const result = weekCardStates([week(1, "a"), week(2, "a")], [status(1, "a", "COMPLETED"), status(2, "zzz", "COMPLETED")]);
   assert.deepEqual(states(result, 2), ["CURRENT"]);
+});
+
+test("цвет состояния недели: зелёный, синий, янтарный, акцент; «не начата» и «пусто» не красятся", () => {
+  assert.deepEqual((["COMPLETED", "IN_PROGRESS", "CLOSED_WITH_DEVIATIONS", "CURRENT", "NOT_STARTED", "EMPTY"] as const).map(weekCardTone),
+    ["success", "info", "warning", "accent", "neutral", "neutral"]);
 });

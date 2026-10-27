@@ -108,6 +108,11 @@ export const weekStatusLabels: Readonly<Record<WeekStatus, string>> = {
 /** Подпись карточки недели в ленте (панель программы и дневник). */
 export const weekCardLabels: Readonly<Record<WeekCardState, string>> = { ...weekStatusLabels, EMPTY: "Пусто", CURRENT: "Текущая" };
 
+/** Значок перед подписью состояния недели: цвет не единственный признак. Без значка — нейтральные состояния. */
+export const weekCardMarkers: Readonly<Record<WeekCardState, string | null>> = {
+  COMPLETED: "✓", IN_PROGRESS: "●", CLOSED_WITH_DEVIATIONS: "!", CURRENT: "▸", NOT_STARTED: null, EMPTY: null,
+};
+
 const MONTHS = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 
 /** `2026-10-17` → «17 окт». */

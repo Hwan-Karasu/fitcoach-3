@@ -32,8 +32,9 @@ import { ActiveWorkoutsSheet, ExerciseMenuSheet, RpeSheet, SetTypeSheet, Superse
 import { factVolume } from "./programMatrix.ts";
 import { WorkoutSharePoster } from "./WorkoutSharePoster.tsx";
 import { labeledPlan, labeledWithDrops } from "./shareFormat.ts";
-import { diaryFields, fieldHeaders, planText, rawOf, shortDate, weekCardLabels, workoutStatusLabels } from "./setFormat.ts";
-import { weekCardStates } from "../domain/WeekCardStatus.ts";
+import { diaryFields, fieldHeaders, planText, rawOf, shortDate, weekCardLabels, weekCardMarkers, workoutStatusLabels } from "./setFormat.ts";
+import { weekCardStates, weekCardTone } from "../domain/WeekCardStatus.ts";
+import { statusToneColor } from "../../../../shared/ui/theme/statusTone.ts";
 import { diaryTimeNote } from "../domain/DiaryTimeNote.ts";
 import { extraWarmups, useWorkoutDiary, type SetPatch } from "./useWorkoutDiary.ts";
 import { PendingInputWrites } from "../domain/PendingInputWrites.ts";
@@ -283,8 +284,9 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     const states = weekStatuses?.key === `${slot.clientId}:${slot.programId}`
       ? weekCardStates(weekNavigation.weeks, weekStatuses.statuses).states : null;
     return weekNavigation.weeks.map((week) => ({ index: week.index, caption: week.caption,
-      ...(states === null ? {} : { status: weekCardLabels[states.get(week.index)!] }) }));
-  }, [slot.clientId, slot.programId, weekNavigation, weekStatuses]);
+      ...(states === null ? {} : { status: weekCardLabels[states.get(week.index)!],
+        statusTone: statusToneColor(weekCardTone(states.get(week.index)!), colors), statusMarker: weekCardMarkers[states.get(week.index)!] }) }));
+  }, [colors, slot.clientId, slot.programId, weekNavigation, weekStatuses]);
   useWeekNavigation(weekNavigation === null ? null : { week: slot.weekIndex, busy,
     previous: previousWeek ? () => { void changeWeek(previousWeek.index); } : null,
     next: nextWeek ? () => { void changeWeek(nextWeek.index); } : null }, navigationLoaded);

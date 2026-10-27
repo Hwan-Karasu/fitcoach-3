@@ -10,9 +10,10 @@ import { shadow } from "../../../../shared/ui/theme/style.ts";
 import { weekTypeTone, type PlannedWorkout, type WeekType } from "../../plans/public.ts";
 import { useReportScreenTone } from "../../../../shared/ui/theme/ScreenTone.tsx";
 import type { SessionStatus, WorkoutExecution, WorkoutStatus } from "../domain/ExecutionModel.ts";
-import { weekCardStates } from "../domain/WeekCardStatus.ts";
+import { weekCardStates, weekCardTone } from "../domain/WeekCardStatus.ts";
+import { statusToneColor } from "../../../../shared/ui/theme/statusTone.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
-import { weekCardLabels, workoutStatusLabels } from "./setFormat.ts";
+import { weekCardLabels, weekCardMarkers, workoutStatusLabels } from "./setFormat.ts";
 import { workoutProgress } from "./workoutProgress.ts";
 
 const statusKinds: Readonly<Record<WorkoutStatus, StatusKind>> = {
@@ -142,7 +143,8 @@ export function ProgramWeeksPanel({ clientId, programId, weeks: liveViews, execu
   const toneOf = (type: WeekType | undefined) => type === undefined || type === "base" ? null : weekTypeTone(type, colors);
   const weekCards = useMemo(() => views.map((view) => ({ index: view.index, caption: view.caption,
     tone: view.type === undefined ? null : toneOf(view.type) ?? colors.textMuted,
-    status: weekCardLabels[cardStates.states.get(view.index)!] })),
+    status: weekCardLabels[cardStates.states.get(view.index)!],
+    statusTone: statusToneColor(weekCardTone(cardStates.states.get(view.index)!), colors), statusMarker: weekCardMarkers[cardStates.states.get(view.index)!] })),
   [views, cardStates, colors]);
   useReportScreenTone(toneOf(viewOf(week)?.type));
   useWeekNavigation(weeks === 0 ? null : { week,

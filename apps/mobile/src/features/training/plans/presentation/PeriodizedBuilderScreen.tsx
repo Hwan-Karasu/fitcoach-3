@@ -4,7 +4,8 @@ import Animated, { useAnimatedRef } from "react-native-reanimated";
 import { CalendarDays, Minus, Plus } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, LoadingState, pickDate, SelectionChip, SegmentedControl, StickyEditorFooter, TextField,
   TrainingEditorLayout } from "../../../../shared/ui/components/public.ts";
-import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
+import { readableInk, withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
+import { statusToneColor, type StatusTone } from "../../../../shared/ui/theme/statusTone.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
@@ -68,11 +69,22 @@ function Section({ title, children }: Readonly<{ title: string; children: ReactN
  * «+ Мезоцикл» (UI-OWN-041); в правке после изменения недели всплывает меню области.
  */
 const NO_ISSUES: readonly PlanIssue[] = [];
+
+/** Статус сохранённой недели в редакторе: подпись, значок и смысл цвета (подаёт навигация из данных выполнения). */
+export type BuilderWeekStatus = Readonly<{ label: string; marker: string | null; tone: StatusTone }>;
+
+function WeekStatusLine({ status }: Readonly<{ status: BuilderWeekStatus }>) {
+  const { palette } = usePrototypeTheme();
+  const colors = palette.tokens;
+  const tone = statusToneColor(status.tone, colors);
+  const ink = tone === null ? colors.textSecondary : readableInk(tone, [colors.surface, colors.surfaceRaised], colors.textPrimary);
+  return <Text style={[styles.weekStatus, { color: ink }]}>{status.marker === null ? status.label : `${status.marker} ${status.label}`}</Text>;
+}
 export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, initialWeek, mesocycleSave, repository, exercises, listCandidates, picked,
   onPickExercise, onCreated, onSaved, onCancel, renderTemplates, renderExcel, workbookSave, loadWeekStatuses }: Readonly<{
   workbookSave?: BuilderWorkbookSavePort;
   /** Правка: подписи статуса недель сохранённого мезоцикла («Не начата», «В работе», …) в порядке `weeks`; номер — неделя программы. */
-  loadWeekStatuses?: (programId: string, weeks: readonly Readonly<{ index: number; workoutIds: readonly string[] }>[]) => Promise<readonly string[]>;
+  loadWeekStatuses?: (programId: string, weeks: readonly Readonly<{ index: number; workoutIds: readonly string[] }>[]) => Promise<readonly BuilderWeekStatus[]>;
   renderExcel?: (onApply: (draft: BuilderExcelDraft) => void, targetTitle?: string) => ReactNode;
   clientId: string;
   /** Существующая программа: «+ Мезоцикл» или правка (`mesocycleId`). */
@@ -109,7 +121,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
   const [weeks, setWeeks] = useState<readonly BuilderWeek[]>(() => resizeBuilderWeeks([{ type: "base", workouts: [] }], 4));
   const [editing, setEditing] = useState(0);
   // Статусы недель сохранённого мезоцикла по порядку недель; правки структуры их не меняют, новые недели без подписи.
-  const [weekStatuses, setWeekStatuses] = useState<readonly string[]>([]);
+  const [weekStatuses, setWeekStatuses] = useState<readonly BuilderWeekStatus[]>([]);
   const [dirty, setDirty] = useState(false);
   const [workbook, setWorkbook] = useState<BuilderWorkbookState | null>(null);
   const initialCycleKey = useRef(mesocycleId ? `existing:${mesocycleId}` : newPlanId("cycle"));
@@ -583,13 +595,13 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
               const selected = index === editing;
               return (
                 <Pressable key={index} accessibilityRole="button" accessibilityState={{ selected }}
-                  accessibilityLabel={`Неделя ${index + 1}, ${weekTypeLabels[item.type]}${weekStatuses[index] !== undefined ? `, ${weekStatuses[index]}` : ""}${item.workouts.length === 0 ? ", пусто" : ""}`}
+                  accessibilityLabel={`Неделя ${index + 1}, ${weekTypeLabels[item.type]}${weekStatuses[index] !== undefined ? `, ${weekStatuses[index]!.label}` : ""}${item.workouts.length === 0 ? ", пусто" : ""}`}
                   onPress={() => openWeek(index)}
                   style={[styles.weekCard, { borderColor: selected ? tone : withAlpha(tone, 0.45), borderWidth: selected ? 2 : 1,
                     backgroundColor: withAlpha(tone, selected ? 0.14 : 0.06) }]}>
                   <Text style={[styles.weekTitle, { color: colors.textPrimary }]}>{`Неделя ${index + 1}`}</Text>
                   <Text style={[styles.weekType, { color: tone }]}>{weekTypeLabels[item.type]}</Text>
-                  {weekStatuses[index] !== undefined ? <Text style={[styles.weekStatus, { color: colors.textSecondary }]}>{weekStatuses[index]}</Text> : null}
+                  {weekStatuses[index] !== undefined ? <WeekStatusLine status={weekStatuses[index]!} /> : null}
                   <View style={styles.dots}>
                     {WEEK_TYPES.map((type: WeekType) => (
                       <Pressable key={type} accessibilityRole="radio" accessibilityState={{ selected: item.type === type }}
