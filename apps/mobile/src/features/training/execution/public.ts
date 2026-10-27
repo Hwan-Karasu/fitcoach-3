@@ -5,6 +5,7 @@ export { WorkoutScreen } from "./presentation/WorkoutScreen.tsx";
 export { TrainingSettingsScreen } from "./presentation/TrainingSettingsScreen.tsx";
 export { ProgramMatrixScreen } from "./presentation/ProgramMatrixScreen.tsx";
 export { ProgramWeeksPanel, type ProgramWeekView } from "./presentation/ProgramWeeksPanel.tsx";
+export { weekStatusLabels } from "./presentation/setFormat.ts";
 export { RestTimerDock } from "./presentation/RestTimerDock.tsx";
 export { RestTimerService } from "./application/RestTimerService.ts";
 export type { RestSignalPort, RestTimerStorePort, RestTimersPort } from "./domain/RestTimerPorts.ts";

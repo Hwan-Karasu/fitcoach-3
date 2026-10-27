@@ -1,6 +1,7 @@
 import type { BuilderWeek, CycleType, WeekScope } from "./PeriodizedModel.ts";
 import { applyWeekOps, diffWeek, targetWeeks, withLineage } from "./PeriodizedRules.ts";
 import type { PlannedWorkout, PlanRange } from "./SimplePlanModel.ts";
+import { dropUntrackedValues, type TrackingMetric } from "./SimplePlanRules.ts";
 import { remapSupersets } from "./SupersetRules.ts";
 
 /**
@@ -55,6 +56,19 @@ export function applyBuilderScope(weeks: readonly BuilderWeek[], editing: number
   const targets = new Set(targetWeeks(indexed, editing + 1, scope, open.type));
   return weeks.map((week, at) => at === editing || !targets.has(at + 1) ? week
     : { type: week.type, workouts: applyWeekOps(week.workouts, ops, newId).workouts });
+}
+
+/** Недели без плановых значений, которых профиль упражнения не отслеживает; нечего чистить — тот же массив. */
+export function cleanBuilderWeeks(weeks: readonly BuilderWeek[],
+  metricsOf: (exerciseId: string) => readonly TrackingMetric[] | null): readonly BuilderWeek[] {
+  let changed = false;
+  const result = weeks.map((week) => {
+    const workouts = dropUntrackedValues(week.workouts, metricsOf);
+    if (workouts === week.workouts) return week;
+    changed = true;
+    return { ...week, workouts };
+  });
+  return changed ? result : weeks;
 }
 
 /** Число недель: новые — пустые «Индивидуальные», лишние убираются с конца. */

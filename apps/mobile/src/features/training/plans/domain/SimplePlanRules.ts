@@ -1,5 +1,5 @@
 import { normalizeTitle } from "./ProgramRules.ts";
-import { INSTRUCTION_MAX, REST_MAX_SEC, REST_MIN_SEC, RIR_MAX, WEEKS_MAX, WEEKS_MIN, type PlannedExercise, type PlannedSet, type PlanRange, type SimpleProgramDraft } from "./SimplePlanModel.ts";
+import { INSTRUCTION_MAX, REST_MAX_SEC, REST_MIN_SEC, RIR_MAX, WEEKS_MAX, WEEKS_MIN, type PlannedExercise, type PlannedSet, type PlannedWorkout, type PlanRange, type SimpleProgramDraft } from "./SimplePlanModel.ts";
 
 /** §33.2 Величины подхода (тот же контракт, что у каталога упражнений; профиль упражнения даёт каталог). */
 export type TrackingMetric = "reps" | "load" | "addedLoad" | "assistance" | "duration" | "distance";
@@ -10,6 +10,39 @@ export type SetField = "reps" | "loadGrams" | "durationSec" | "distanceM";
 export function setFieldsOf(metrics: readonly TrackingMetric[]): readonly SetField[] {
   return metrics.map((metric): SetField => metric === "reps" ? "reps" : metric === "duration" ? "durationSec"
     : metric === "distance" ? "distanceM" : "loadGrams");
+}
+
+/**
+ * Плановые значения, которых профиль упражнения не отслеживает (например, вес из Excel у упражнения «только повторы»),
+ * в конструкторе не видны и не правятся, но `validateDraft` считает их ошибкой. Здесь они обнуляются; всё остальное
+ * (id, порядок, отдых, указание, RIR) не меняется. Нечего чистить — возвращается тот же массив. Неизвестное упражнение
+ * остаётся как есть: его ловит проверка каталога.
+ */
+export function dropUntrackedValues(workouts: readonly PlannedWorkout[],
+  metricsOf: (exerciseId: string) => readonly TrackingMetric[] | null): readonly PlannedWorkout[] {
+  let changed = false;
+  const result = workouts.map((workout) => {
+    let workoutChanged = false;
+    const exercises = workout.exercises.map((exercise) => {
+      const metrics = metricsOf(exercise.exerciseId);
+      if (metrics === null) return exercise;
+      const allowed = new Set(setFieldsOf(metrics));
+      let exerciseChanged = false;
+      const sets = exercise.sets.map((set) => {
+        const stray = (Object.keys(SET_LIMITS) as SetField[]).filter((field) => set[field] !== null && !allowed.has(field));
+        if (stray.length === 0) return set;
+        exerciseChanged = true;
+        return { ...set, ...Object.fromEntries(stray.map((field) => [field, null])), ...(allowed.has("reps") ? {} : { repsMax: null }) };
+      });
+      if (!exerciseChanged) return exercise;
+      workoutChanged = true;
+      return { ...exercise, sets };
+    });
+    if (!workoutChanged) return workout;
+    changed = true;
+    return { ...workout, exercises };
+  });
+  return changed ? result : workouts;
 }
 
 export const SET_LIMITS: Readonly<Record<SetField, Readonly<{ min: number; max: number }>>> = {

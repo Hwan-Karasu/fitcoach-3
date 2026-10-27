@@ -8,7 +8,7 @@ import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
-import { applyBuilderScope, copyWeekPlan, CYCLE_TYPES, resizeBuilderWeeks, type BuilderWeek, type CycleType } from "../domain/MesocycleBuilder.ts";
+import { applyBuilderScope, cleanBuilderWeeks, copyWeekPlan, CYCLE_TYPES, resizeBuilderWeeks, type BuilderWeek, type CycleType } from "../domain/MesocycleBuilder.ts";
 import type { MesocycleSavePort } from "../domain/MesocycleSave.ts";
 import { diffWeek, targetWeeks } from "../domain/PeriodizedRules.ts";
 import { ScopeMenu } from "./ScopeMenu.tsx";
@@ -68,8 +68,10 @@ function Section({ title, children }: Readonly<{ title: string; children: ReactN
  * «+ Мезоцикл» (UI-OWN-041); в правке после изменения недели всплывает меню области.
  */
 export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, initialWeek, mesocycleSave, repository, exercises, listCandidates, picked,
-  onPickExercise, onCreated, onSaved, onCancel, renderTemplates, renderExcel, workbookSave }: Readonly<{
+  onPickExercise, onCreated, onSaved, onCancel, renderTemplates, renderExcel, workbookSave, loadWeekStatuses }: Readonly<{
   workbookSave?: BuilderWorkbookSavePort;
+  /** Правка: подписи статуса недель сохранённого мезоцикла («Не начата», «В работе», …) в порядке `weeks`; номер — неделя программы. */
+  loadWeekStatuses?: (programId: string, weeks: readonly Readonly<{ index: number; workoutIds: readonly string[] }>[]) => Promise<readonly string[]>;
   renderExcel?: (onApply: (draft: BuilderExcelDraft) => void, targetTitle?: string) => ReactNode;
   clientId: string;
   /** Существующая программа: «+ Мезоцикл» или правка (`mesocycleId`). */
@@ -105,6 +107,8 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
   const [candidates, setCandidates] = useState<readonly TrainingParticipantCandidate[]>([]);
   const [weeks, setWeeks] = useState<readonly BuilderWeek[]>(() => resizeBuilderWeeks([{ type: "base", workouts: [] }], 4));
   const [editing, setEditing] = useState(0);
+  // Статусы недель сохранённого мезоцикла по порядку недель; правки структуры их не меняют, новые недели без подписи.
+  const [weekStatuses, setWeekStatuses] = useState<readonly string[]>([]);
   const [dirty, setDirty] = useState(false);
   const [workbook, setWorkbook] = useState<BuilderWorkbookState | null>(null);
   const initialCycleKey = useRef(mesocycleId ? `existing:${mesocycleId}` : newPlanId("cycle"));
@@ -194,12 +198,16 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
       setRepsText(cycle.repRange == null ? "" : formatRange(cycle.repRange).replace("–", "-"));
       if (cycle.startDate != null) setStartDate(cycle.startDate);
       setWeeks(cycle.weeks.map((week) => ({ type: week.type, workouts: week.workouts })));
+      if (loadWeekStatuses !== undefined && mesocycleId !== undefined) {
+        loadWeekStatuses(programId, cycle.weeks.map((week) => ({ index: week.index, workoutIds: week.workouts.map((workout) => workout.id) })))
+          .then((labels) => { if (active) setWeekStatuses(labels); }).catch(() => undefined);
+      }
       baselines.current = new Map(cycle.weeks.map((week, index) => [index, week.workouts]));
       baseWeeks.current = cycle.weeks.map((week) => ({ type: week.type, workouts: week.workouts }));
       if (initialWeek !== undefined) setEditing(Math.min(Math.max(initialWeek - 1, 0), cycle.weeks.length - 1));
     }).catch(() => { if (active) setProgram("ERROR"); });
     return () => { active = false; };
-  }, [clientId, initialWeek, mesocycleId, programId, refreshGroup, repository]);
+  }, [clientId, initialWeek, loadWeekStatuses, mesocycleId, programId, refreshGroup, repository]);
   // Добавленные клиенты вне этой программы: куда ляжет их копия.
   const outsiders = useMemo(() => mode === "edit" ? joining?.ids ?? []
     : members.filter((id) => id !== clientId),
@@ -296,10 +304,14 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
     setScopeFor(null);
   };
   const metricsOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.metrics ?? null, [lookup]);
-  const issues = useMemo(() => lookup === null ? [] : weeks.flatMap((item) => item.workouts.length === 0 ? []
-    : validateDraft({ title: title || "Мезоцикл", plan: { weeks: 1, workouts: item.workouts } }, metricsOf)), [lookup, metricsOf, title, weeks]);
-  const weekIssues = useMemo(() => lookup === null || week.workouts.length === 0 ? [] : validateDraft(draft, metricsOf),
-    [draft, lookup, metricsOf, week.workouts.length]);
+  // Плановые значения, которых профиль упражнения не отслеживает (вес из Excel у «только повторов»), в редакторе не видны:
+  // проверяются и сохраняются уже очищенными, чтобы их нельзя было не заметить и не исправить.
+  const cleanWeeks = useMemo(() => lookup === null ? weeks : cleanBuilderWeeks(weeks, metricsOf), [lookup, metricsOf, weeks]);
+  const issues = useMemo(() => lookup === null ? [] : cleanWeeks.flatMap((item) => item.workouts.length === 0 ? []
+    : validateDraft({ title: title || "Мезоцикл", plan: { weeks: 1, workouts: item.workouts } }, metricsOf)), [cleanWeeks, lookup, metricsOf, title]);
+  const weekIssues = useMemo(() => lookup === null || week.workouts.length === 0 ? []
+    : validateDraft({ title: draft.title, plan: { weeks: 1, workouts: cleanWeeks[editing]?.workouts ?? week.workouts } }, metricsOf),
+  [cleanWeeks, draft.title, editing, lookup, metricsOf, week.workouts]);
 
   if (program === "ERROR") {
     return <View style={[styles.center, { backgroundColor: colors.canvas }]}>
@@ -314,7 +326,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
     return <View style={[styles.center, { backgroundColor: colors.canvas }]}><LoadingState label="Открываем конструктор…" /></View>;
   }
 
-  const input = () => ({ title, cycleType, repRange: reps === "invalid" ? null : reps, startDate, weeks });
+  const input = () => ({ title, cycleType, repRange: reps === "invalid" ? null : reps, startDate, weeks: cleanWeeks });
   const openCycle = (cycle: BuilderWorkbookCycle, state = currentWorkbook()) => {
     if (state) setWorkbook({ ...state, activeKey: cycle.key });
     setTitle(cycle.title); setWeeks(cycle.weeks); setEditing(Math.min(cycle.editing ?? 0, cycle.weeks.length - 1));
@@ -342,7 +354,8 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
   const saveWorkbook = async (resultsAction?: RemovedResultsAction) => {
     if (reps === "invalid") { setMessage("Проверьте диапазон повторений текущего цикла."); return; }
     if (!workbookSave || !workbook) { setMessage("Сохранение книги недоступно."); return; }
-    const state = currentWorkbook()!;
+    const current = currentWorkbook()!;
+    const state: BuilderWorkbookState = { ...current, cycles: current.cycles.map((c) => ({ ...c, weeks: cleanBuilderWeeks(c.weeks, metricsOf) })) };
     const invalid = state.cycles.find((c) => !c.title.trim() || c.title.length > PROGRAM_TITLE_MAX || (c.repsText !== undefined && parseRange(c.repsText) === "invalid") || !c.weeks.some((w) => w.workouts.length)
       || c.weeks.some((w) => w.workouts.length > 0 && validateDraft({ title: c.title, plan: { weeks: 1, workouts: w.workouts } }, metricsOf).length > 0));
     if (invalid) { openCycle(invalid, state); setShowIssues(true); setMessage(`Проверьте цикл «${invalid.title}».`); return; }
@@ -565,12 +578,13 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
               const selected = index === editing;
               return (
                 <Pressable key={index} accessibilityRole="button" accessibilityState={{ selected }}
-                  accessibilityLabel={`Неделя ${index + 1}, ${weekTypeLabels[item.type]}${item.workouts.length === 0 ? ", пусто" : ""}`}
+                  accessibilityLabel={`Неделя ${index + 1}, ${weekTypeLabels[item.type]}${weekStatuses[index] !== undefined ? `, ${weekStatuses[index]}` : ""}${item.workouts.length === 0 ? ", пусто" : ""}`}
                   onPress={() => openWeek(index)}
                   style={[styles.weekCard, { borderColor: selected ? tone : withAlpha(tone, 0.45), borderWidth: selected ? 2 : 1,
                     backgroundColor: withAlpha(tone, selected ? 0.14 : 0.06) }]}>
                   <Text style={[styles.weekTitle, { color: colors.textPrimary }]}>{`Неделя ${index + 1}`}</Text>
                   <Text style={[styles.weekType, { color: tone }]}>{weekTypeLabels[item.type]}</Text>
+                  {weekStatuses[index] !== undefined ? <Text style={[styles.weekStatus, { color: colors.textSecondary }]}>{weekStatuses[index]}</Text> : null}
                   <View style={styles.dots}>
                     {WEEK_TYPES.map((type: WeekType) => (
                       <Pressable key={type} accessibilityRole="radio" accessibilityState={{ selected: item.type === type }}
@@ -658,6 +672,7 @@ const styles = StyleSheet.create({
   weekCard: { width: "48.5%", borderRadius: 14, padding: 10, gap: 3 },
   weekTitle: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 18 },
   weekType: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 15 },
+  weekStatus: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 15 },
   dots: { flexDirection: "row", gap: 6, marginTop: 6 },
   dot: { flex: 1, maxWidth: 22, aspectRatio: 1, borderRadius: 999 },
   copyRow: { gap: 6 },
