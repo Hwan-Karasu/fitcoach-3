@@ -63,7 +63,15 @@ export function compileWholeWorkbook(session: WorkbookReviewSession): Readonly<{
       exercises.set(e.id, e); mapping[e.id] = entry.mapping[e.id]!;
     }
     const original = value.programs[0]!.mesocycles[0]!;
-    const rowId = (week: number, kind: string, id: string) => identity([first.sourceId, original.id, week, kind, id]);
+    const remembered = new Map<string, string>();
+    const rowId = (week: number, kind: string, id: string) => {
+      const key = `${week}|${kind}|${id}`;
+      const known = remembered.get(key);
+      if (known !== undefined) return known;
+      const made = identity([first.sourceId, original.id, week, kind, id]);
+      remembered.set(key, made);
+      return made;
+    };
     cycles.push({ ...original, id: rowId(0, "cycle", original.id), lineageId: rowId(0, "cycle", original.lineageId), title: sheet.label,
       weeks: original.weeks.map((week) => ({ ...week, id: rowId(week.index, "week", week.id),
         workouts: week.workouts.map((workout) => ({ ...workout, id: rowId(week.index, "workout", workout.id),

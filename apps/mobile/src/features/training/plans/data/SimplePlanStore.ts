@@ -1,4 +1,5 @@
-import type { SqliteStatementPort } from "../../../../shared/db/SqlitePort.ts";
+import type { SqlValue, SqliteStatementPort } from "../../../../shared/db/SqlitePort.ts";
+import { assertIdsFree, insertRows } from "../../../../shared/db/BatchInsert.ts";
 import type { PlannedExercise, PlannedSet, PlannedWorkout, SimplePlan } from "../domain/SimplePlanModel.ts";
 
 /**
@@ -121,6 +122,36 @@ export async function writeWorkouts(tx: SqliteStatementPort, workspaceId: string
   for (const id of owned.sets) if (!keep.sets.has(id)) await tx.run("DELETE FROM training_planned_sets WHERE id = ?", [id]);
   for (const id of owned.exercises) if (!keep.exercises.has(id)) await tx.run("DELETE FROM training_planned_exercises WHERE id = ?", [id]);
   for (const id of owned.workouts) if (!keep.workouts.has(id)) await tx.run("DELETE FROM training_workouts WHERE id = ?", [id]);
+}
+
+/**
+ * Тренировки только что созданных недель (в них ничего ещё нет, поэтому нечего обновлять и удалять). То же, что
+ * `writeWorkouts` для пустой недели, но пачками: на телефоне построчная запись книги из тысяч подходов занимала десятки секунд.
+ * Занятые или повторяющиеся ID отклоняются так же, как там (`DRAFT_INVALID`).
+ */
+export async function insertWorkoutsOfNewWeeks(tx: SqliteStatementPort, workspaceId: string, programId: string,
+  weeks: readonly Readonly<{ id: string; workouts: readonly PlannedWorkout[] }>[]): Promise<void> {
+  const workouts: SqlValue[][] = []; const exercises: SqlValue[][] = []; const sets: SqlValue[][] = [];
+  for (const week of weeks) {
+    for (const [workoutIndex, workout] of week.workouts.entries()) {
+      workouts.push([workout.id, workspaceId, programId, workoutIndex, workout.title.trim(), week.id, workout.lineageId ?? null]);
+      for (const [exerciseIndex, exercise] of workout.exercises.entries()) {
+        exercises.push([exercise.id, workspaceId, workout.id, exerciseIndex, exercise.exerciseId, exercise.restSec, exercise.instruction,
+          exercise.rir?.min ?? null, exercise.rir?.max ?? null, exercise.lineageId ?? null, exercise.supersetId ?? null]);
+        for (const [setIndex, set] of exercise.sets.entries()) {
+          sets.push([set.id, workspaceId, exercise.id, setIndex, set.reps, set.repsMax, set.loadGrams, set.durationSec, set.distanceM]);
+        }
+      }
+    }
+  }
+  await assertIdsFree(tx, "training_workouts", workouts.map((row) => row[0] as string), "DRAFT_INVALID");
+  await assertIdsFree(tx, "training_planned_exercises", exercises.map((row) => row[0] as string), "DRAFT_INVALID");
+  await assertIdsFree(tx, "training_planned_sets", sets.map((row) => row[0] as string), "DRAFT_INVALID");
+  await insertRows(tx, "training_workouts", ["id", "workspace_id", "program_id", "position", "title", "week_id", "lineage_id"], workouts);
+  await insertRows(tx, "training_planned_exercises", ["id", "workspace_id", "workout_id", "position", "exercise_id", "rest_sec",
+    "instruction", "rir_min", "rir_max", "lineage_id", "superset_id"], exercises);
+  await insertRows(tx, "training_planned_sets", ["id", "workspace_id", "planned_exercise_id", "position", "reps", "reps_max",
+    "load_grams", "duration_sec", "distance_m"], sets);
 }
 
 export async function writeStructure(tx: SqliteStatementPort, workspaceId: string, programId: string, plan: SimplePlan): Promise<void> {

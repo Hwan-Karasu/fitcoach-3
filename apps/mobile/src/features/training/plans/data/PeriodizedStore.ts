@@ -2,7 +2,9 @@ import { registerNavigationCopy } from "./NavigationGroupStore.ts";
 import type { SqliteStatementPort } from "../../../../shared/db/SqlitePort.ts";
 import type { CycleType, Mesocycle, PlanWeek, WeekType } from "../domain/PeriodizedModel.ts";
 import type { PlannedWorkout } from "../domain/SimplePlanModel.ts";
-import { plannedWorkoutOf, writeWorkouts, type ExerciseRow, type SetRow, type WorkoutRow } from "./SimplePlanStore.ts";
+import type { SqlValue } from "../../../../shared/db/SqlitePort.ts";
+import { insertRows } from "../../../../shared/db/BatchInsert.ts";
+import { insertWorkoutsOfNewWeeks, plannedWorkoutOf, writeWorkouts, type ExerciseRow, type SetRow, type WorkoutRow } from "./SimplePlanStore.ts";
 
 /**
  * Мезоциклы Расширенной программы (T04): у каждого участника свои строки мезоциклов, недель и тренировок
@@ -66,11 +68,10 @@ export async function insertMesocycle(tx: SqliteStatementPort, workspaceId: stri
     mesocycle.lineageId, (last?.position ?? -1) + 1, mesocycle.title.trim(), now.toISOString(), mesocycle.cycleType ?? null,
     mesocycle.repRange?.min ?? null, mesocycle.repRange?.max ?? null, mesocycle.startDate ?? null]);
   await registerNavigationCopy(tx, workspaceId, { clientId, programId, mesocycleId: mesocycle.id }, mesocycle.lineageId);
-  for (const week of mesocycle.weeks) {
-    await tx.run(`INSERT INTO training_weeks (id, workspace_id, mesocycle_id, position, week_type) VALUES (?, ?, ?, ?, ?)`,
-      [week.id, workspaceId, mesocycle.id, week.index - 1, week.type]);
-    await writeWorkouts(tx, workspaceId, programId, week.id, week.workouts);
-  }
+  // Недели новые, поэтому тренировки пишутся пачками, а не по строке (мост Expo: каждый запрос стоит времени).
+  const weeks: SqlValue[][] = mesocycle.weeks.map((week) => [week.id, workspaceId, mesocycle.id, week.index - 1, week.type]);
+  await insertRows(tx, "training_weeks", ["id", "workspace_id", "mesocycle_id", "position", "week_type"], weeks);
+  await insertWorkoutsOfNewWeeks(tx, workspaceId, programId, mesocycle.weeks);
 }
 
 export async function writeWeek(tx: SqliteStatementPort, workspaceId: string, programId: string, week: PlanWeek): Promise<void> {

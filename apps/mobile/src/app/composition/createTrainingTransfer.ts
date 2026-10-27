@@ -15,17 +15,19 @@ import type { DevTrainingPlansRepository } from "../../features/training/plans/d
 import type { DevExerciseCatalogRepository } from "../../features/exercises/data/DevExerciseCatalogRepository.ts";
 import type { BuilderWorkbookCycle } from "../../shared/training-transfer/BuilderWorkbook.ts";
 import { workbookCycleSnapshot, workbookSheetHash } from "../../shared/training-transfer/WorkbookSheetIdentity.ts";
+import { canonicalJson } from "../../shared/training-transfer/CanonicalJson.ts";
 
-function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  if (value && typeof value === "object") return `{${Object.entries(value).filter(([, v]) => v !== undefined).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(",")}}`;
-  return JSON.stringify(value);
-}
-const hash = (value: unknown) => bytesToHex(sha256(utf8ToBytes(canonical(value))));
+const hash = (value: unknown) => bytesToHex(sha256(utf8ToBytes(canonicalJson(value))));
 export function remapTrainingTransfer(value: TrainingTransfer, clientId: string, mapping: Readonly<Record<string, string>>): TrainingTransfer {
+  // Один исходный ID встречается много раз (подход в плане и в каждом результате); хеш чистый, поэтому считается один раз.
+  const remembered = new Map<string, string>();
   const id = (source: string): string => {
+    const known = remembered.get(source);
+    if (known !== undefined) return known;
     const hex = hash([value.sourceId, value.client.id, clientId, source]);
-    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+    const made = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+    remembered.set(source, made);
+    return made;
   };
   const exerciseId = (source: string) => { const target = mapping[source]; if (!target) throw new Error("Сопоставьте все упражнения перед импортом."); return target; };
   const workouts = (items: readonly TransferWorkout[]) => items.map((w) => ({ ...w, id: id(w.id), ...(w.lineageId ? { lineageId: id(w.lineageId) } : {}), exercises: w.exercises.map((e) => ({ ...e, id: id(e.id), exerciseId: exerciseId(e.exerciseId), ...(e.lineageId ? { lineageId: id(e.lineageId) } : {}), ...(e.supersetId ? { supersetId: id(e.supersetId) } : {}), sets: e.sets.map((s) => ({ ...s, id: id(s.id) })) })) }));

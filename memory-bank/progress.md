@@ -2,6 +2,7 @@
 
 CA-аудит (docs/CODE_AUDIT_2026-10-27.md), этапы A–C сделаны; I07 Excel закоммичен 2e7e0fe, дерево чистое,
 test:foundation 1392/1392, excel:test 87+1 todo. Закрыто: CA-10, CA-11 (shared/domain/LocalDate.ts).
+CA-25 импорт ускорен ≈72→30 с на устройстве (пакетная запись, CanonicalJson, ADR-041); CA-26 круг через XLSX ≈12 с остаётся (решение владельца).
 Этапы D–E: CA-13 закрыт (TS 6.0.3 везде, ADR-039). Открыто: CA-23 импорт больших книг падает (27912 SQL, ~600 МБ на 7200 результатов; ждём данные владельца), CA-24 inline requires не включены (нужен замер на телефоне).
 Техдолг: CA-22 закрыт (вариант А, createTrainingTransfer.ts); CA-12 решено не трогать DevTrainingPlansRepository.ts
 1711 строк; CA-15 DevTrainingExecutionRepository.ts:158 N+1; CA-13 TS 5.8/6.0; CA-19 нет react-hooks lint.
