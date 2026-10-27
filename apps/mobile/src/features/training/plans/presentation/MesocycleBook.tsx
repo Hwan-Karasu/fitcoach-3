@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useIsFocused } from "@react-navigation/native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
@@ -43,10 +43,26 @@ export function MesocycleBook({ mesocycles, selectedId, resetKey, onSelect, onRe
     return value > base + 0.5 ? { signature, height: value } : current;
   });
   const deletable = onDelete !== undefined && mesocycles.length > 1;
+  // Лента при входе прокручивается к выбранному мезоциклу (как лента недель): иначе при длинной книге он за краем экрана.
+  // Карточки одной ширины с одним интервалом, поэтому смещение считается по номеру; прокрутка — один раз на выбранный мезоцикл
+  // и только когда ширина содержимого уже известна (до раскладки прокрутка ничего не делает).
+  const contentWidth = useRef(0);
+  const alignedFor = useRef<string | undefined>(undefined);
+  const align = useCallback(() => {
+    const at = mesocycles.findIndex((item) => item.id === selectedId);
+    if (selectedId === undefined || at < 0 || contentWidth.current === 0 || alignedFor.current === selectedId) return;
+    alignedFor.current = selectedId;
+    bookRef.current?.scrollTo({ x: at * (CARD_WIDTH + CARD_GAP), animated: false });
+  }, [bookRef, mesocycles, selectedId]);
+  useEffect(align, [align]);
+  // Выбор нажатием не двигает ленту: карточка и так на виду.
+  const choose = (id: string) => { alignedFor.current = id; onSelect(id); };
+
 
   return (
-    <Animated.ScrollView ref={bookRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.book}>
-      <Sortable.Flex key={`${resetKey}:${focusVersion}`} gap={8} flexWrap="nowrap" activeItemScale={1.03} scrollableRef={bookRef}
+    <Animated.ScrollView ref={bookRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.book}
+      onContentSizeChange={(width) => { contentWidth.current = width; align(); }}>
+      <Sortable.Flex key={`${resetKey}:${focusVersion}`} gap={CARD_GAP} flexWrap="nowrap" activeItemScale={1.03} scrollableRef={bookRef}
         onDragEnd={({ order }) => {
           const current = mesocycles.map((item) => item.id);
           const next = order(current);
@@ -57,7 +73,7 @@ export function MesocycleBook({ mesocycles, selectedId, resetKey, onSelect, onRe
           return (
             <Sortable.Touchable key={item.id} accessibilityHint="Долгое нажатие — перетащить"
               accessible accessibilityRole="button" accessibilityLabel={`Мезоцикл: ${item.title}, ${weeksWord(item.weeks.length)}`}
-              accessibilityState={{ selected }} onAccessibilityTap={() => onSelect(item.id)} onTap={() => onSelect(item.id)}>
+              accessibilityState={{ selected }} onAccessibilityTap={() => choose(item.id)} onTap={() => choose(item.id)}>
               <View onLayout={(event) => measure(event.nativeEvent.layout.height)}
                 style={[styles.card, selected ? null : shadow.card, { minHeight: Math.max(height, MIN_HEIGHT), backgroundColor: selected ? colors.accentSoft : colors.surface,
                   borderColor: selected ? colors.accentInk : "transparent" }]}>
@@ -86,11 +102,13 @@ export function MesocycleBook({ mesocycles, selectedId, resetKey, onSelect, onRe
 }
 
 const MIN_HEIGHT = 88;
+const CARD_WIDTH = 150;
+const CARD_GAP = 8;
 
 const styles = StyleSheet.create({
-  book: { flexDirection: "row", alignItems: "flex-start", gap: 8, paddingTop: 4, paddingBottom: 4 },
+  book: { flexDirection: "row", alignItems: "flex-start", gap: CARD_GAP, paddingTop: 4, paddingBottom: 4 },
   // Рамка одной толщины: смена толщины меняла бы высоту и замер самой высокой.
-  card: { width: 150, borderRadius: 18, borderWidth: 2, padding: 12 },
+  card: { width: CARD_WIDTH, borderRadius: 18, borderWidth: 2, padding: 12 },
   body: { gap: 4 },
   // Без lineHeight: интервал уменьшается вместе со шрифтом (adjustsFontSizeToFit).
   title: { fontFamily: fonts.bold, fontSize: 15 },
