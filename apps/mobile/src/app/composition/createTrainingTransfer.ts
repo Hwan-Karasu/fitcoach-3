@@ -38,6 +38,12 @@ export function remapTrainingTransfer(value: TrainingTransfer, clientId: string,
     sessions: value.sessions.map((s) => ({ ...s, id: id(s.id), programId: id(s.programId), plannedWorkoutId: id(s.plannedWorkoutId),
       facts: s.facts.map((f) => ({ ...f, id: id(f.id), plannedSetId: id(f.plannedSetId), plannedExerciseId: id(f.plannedExerciseId), exerciseId: exerciseId(f.exerciseId) })), notes: s.notes.map((n) => ({ ...n, plannedExerciseId: id(n.plannedExerciseId) })) })) };
 }
+/** Импортированные результаты, чья тренировка убрана из плана при правке цикла до первого сохранения. */
+function resultsOfRemovedWorkouts(cycle: BuilderWorkbookCycle) {
+  const present = new Set(cycle.weeks.flatMap((week, at) => week.workouts.map((workout) => JSON.stringify([at + 1, workout.id]))));
+  return (cycle.imported?.sessions ?? []).filter((session) => !present.has(JSON.stringify([session.weekIndex, session.plannedWorkoutId])));
+}
+
 export function createTrainingTransfer(database: SharedSqliteDatabase, workspace: string, plans: DevTrainingPlansRepository, execution: DevTrainingExecutionRepository, exercises: Pick<DevExerciseCatalogRepository, "get" | "list">): TrainingTransferPort {
   const receipts = new TransferReceiptStore(workspace);
   const matches = new ExerciseImportMatchStore(workspace);
@@ -89,6 +95,7 @@ export function createTrainingTransfer(database: SharedSqliteDatabase, workspace
         ...cycle.imported?.sessions.flatMap((s) => s.facts.map((f) => f.exerciseId)) ?? []]) {
         if (!available.has(id)) throw new Error("Выбранное упражнение удалено, скрыто или находится в архиве. Выберите замену.");
       }
+      if (!request.resultsAction && request.cycles.some((c) => resultsOfRemovedWorkouts(c).length > 0)) throw new Error("WEEK_HAS_RESULTS");
       const remembered = await checkMatches(request.cycles.flatMap((c) => c.imported?.matches ?? []));
       const batchKey = hash(["builder-batch", request.clientId, request.cycles.map((c) => c.key)]);
       const batchHash = hash(request);
@@ -134,7 +141,10 @@ export function createTrainingTransfer(database: SharedSqliteDatabase, workspace
             revision = result.program.revision; firstId ||= result.mesocycleId; continue;
           }
           const cycleTransfer = (item: BuilderWorkbookCycle): TrainingTransfer => {
-            const sessions = [...item.imported?.sessions ?? []].map((s) => ({ ...s, programId: "builder-program", outcome: "COMPLETED" as const }));
+            const removed = new Set(resultsOfRemovedWorkouts(item));
+            const history = { programTitle: program.title, programKind: "PERIODIZED" as const, mesocycleTitle: item.title, workoutTitle: null };
+            const sessions = [...item.imported?.sessions ?? []].filter((s) => !(removed.has(s) && request.resultsAction === "DELETE"))
+              .map((s) => ({ ...s, programId: "builder-program", outcome: "COMPLETED" as const, ...(removed.has(s) ? { origin: history } : {}) }));
             const represented = new Set(sessions.map((s) => JSON.stringify([s.weekIndex, s.plannedWorkoutId])));
             if (item.imported) for (const [weekIndex, week] of item.weeks.entries()) for (const workout of week.workouts) {
               if (!represented.has(JSON.stringify([weekIndex + 1, workout.id]))) sessions.push({ id: `empty:${workout.id}`, programId: "builder-program", weekIndex: weekIndex + 1,

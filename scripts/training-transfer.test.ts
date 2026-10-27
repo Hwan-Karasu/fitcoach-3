@@ -589,33 +589,58 @@ test("results of a deleted plan stay in storage and do not create phantom matrix
   } finally { await f.close(); }
 });
 
-async function savedImportedCycleEdit(edit: "REPLACE_EXERCISE" | "REMOVE_WORKOUT") {
+/** Импортированный цикл, правленый в конструкторе до первого сохранения. */
+async function importedCycleEdit(edit: "REPLACE_EXERCISE" | "REMOVE_WORKOUT") {
   const f = await fixture();
   const first = builderWorkbookImport(selectWorkbookImportSheets(multiBook(f.mapping.press!), ["0"])); const cycle0 = first.cycles![0]!;
   const edited = { ...cycle0, weeks: cycle0.weeks.map((w, at) => ({ ...w, workouts: at !== 0 ? w.workouts : edit === "REMOVE_WORKOUT" ? []
     : w.workouts.map((x) => ({ ...x, exercises: x.exercises.map((e) => ({ ...e, id: `${e.id}-replaced`, sets: e.sets.map((s) => ({ ...s, id: `${s.id}-replaced` })) })) })) })) };
-  const saved = await f.transfer.saveBuilderWorkbook({ clientId: f.client.id, scope: { programId: null, mesocycleId: null }, expectedRevision: null,
-    programTitle: "Правка до сохранения", cycles: [edited], clientIds: [f.client.id], existingCycleKey: null, placements: [] });
-  const planned = new Set((await f.plans.getPeriodizedPlan(f.client.id, saved.programId))!.mesocycles.flatMap((c) => c.weeks.flatMap((w) => w.workouts.map((x) => x.id))));
-  const statuses = await f.execution.getProgramStatuses(f.client.id, saved.programId);
-  return { f, planned, statuses, sets: f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n as number };
+  const request: BuilderWorkbookSaveRequest = { clientId: f.client.id, scope: { programId: null, mesocycleId: null }, expectedRevision: null,
+    programTitle: "Правка до сохранения", cycles: [edited], clientIds: [f.client.id], existingCycleKey: null, placements: [] };
+  const count = (table: string) => f.native.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n as number;
+  return { f, request, count };
+}
+async function plannedAndStatuses(f: Awaited<ReturnType<typeof fixture>>, programId: string) {
+  const planned = new Set((await f.plans.getPeriodizedPlan(f.client.id, programId))!.mesocycles.flatMap((c) => c.weeks.flatMap((w) => w.workouts.map((x) => x.id))));
+  return { planned, statuses: await f.execution.getProgramStatuses(f.client.id, programId) };
 }
 
 test("I07 replacing an exercise of an imported cycle before its first save keeps every imported result", async () => {
-  const { f, planned, statuses, sets } = await savedImportedCycleEdit("REPLACE_EXERCISE");
+  const { f, request, count } = await importedCycleEdit("REPLACE_EXERCISE");
   try {
-    assert.equal(sets, 2, "both imported results of the cycle are stored");
+    const saved = await f.transfer.saveBuilderWorkbook(request); const { planned, statuses } = await plannedAndStatuses(f, saved.programId);
+    assert.equal(count("training_performed_sets"), 2, "both imported results of the cycle are stored");
     assert.ok(statuses.every((s) => planned.has(s.plannedWorkoutId)), "every status belongs to a workout of the plan");
     assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
   } finally { await f.close(); }
 });
 
-// CA-22: удаление тренировки с импортированными результатами до первого сохранения оставляет сессию COMPLETED без тренировки в плане.
-// Нужное поведение (спросить как при правке сохранённого цикла или пометить историей удалённого плана) решает владелец.
-test("I07 removing a workout that has imported results leaves no status for a workout missing from the plan", { todo: "CA-22: политика не выбрана" }, async () => {
-  const { f, planned, statuses, sets } = await savedImportedCycleEdit("REMOVE_WORKOUT");
+// CA-22 (решение владельца 2026-10-27, вариант А): как при правке сохранённого цикла — сначала вопрос, затем выбранное действие.
+test("I07 removing a workout that has imported results asks first and writes nothing", async () => {
+  const { f, request, count } = await importedCycleEdit("REMOVE_WORKOUT");
   try {
-    assert.equal(sets, 2, "imported results are not destroyed");
-    assert.ok(statuses.every((s) => planned.has(s.plannedWorkoutId)), "no phantom status for a removed workout");
+    await assert.rejects(f.transfer.saveBuilderWorkbook(request), /WEEK_HAS_RESULTS/);
+    for (const table of ["training_programs", "training_sessions", "training_performed_sets", "training_transfer_receipts"]) assert.equal(count(table), 0, table);
+  } finally { await f.close(); }
+});
+
+test("I07 deleting the results of a removed imported workout keeps the other results and leaves no phantom status", async () => {
+  const { f, request, count } = await importedCycleEdit("REMOVE_WORKOUT");
+  try {
+    const saved = await f.transfer.saveBuilderWorkbook({ ...request, resultsAction: "DELETE" }); const { planned, statuses } = await plannedAndStatuses(f, saved.programId);
+    assert.equal(count("training_performed_sets"), 1, "only the result of the removed workout is deleted");
+    assert.ok(statuses.length > 0 && statuses.every((s) => planned.has(s.plannedWorkoutId)));
+    assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
+  } finally { await f.close(); }
+});
+
+test("I07 keeping the results of a removed imported workout stores them as history of the removed plan", async () => {
+  const { f, request, count } = await importedCycleEdit("REMOVE_WORKOUT");
+  try {
+    const saved = await f.transfer.saveBuilderWorkbook({ ...request, resultsAction: "KEEP_HISTORY" }); const { planned, statuses } = await plannedAndStatuses(f, saved.programId);
+    assert.equal(count("training_performed_sets"), 2, "no result is destroyed");
+    assert.equal(count("training_sessions WHERE plan_deleted_at IS NOT NULL"), 1, "the removed workout's session is history");
+    assert.ok(statuses.every((s) => planned.has(s.plannedWorkoutId)), "history sessions are not statuses of the plan");
+    assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
   } finally { await f.close(); }
 });
