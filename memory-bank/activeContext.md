@@ -17,11 +17,9 @@ return15holders/closedrecovery/UI/WAL/capacity/generation/GC. Historicalnative35
 24/3/Downloads20/SAF19/reinstall6/auto21/status3/missing19/actualkill15+14; fixture
 COMPLETE/noarmedpause/2.0build128safe. No currentphone/PID proof thisphase.
 
-Аудит 2026-10-27 (docs/CODE_AUDIT_2026-10-27.md): этап A сделан (недостижимые файлы,
-мёртвые экспорты, Inter). Дерево красное из-за чужого WIP импорта Excel: CA-10
-(import/domain→training/public.ts, TS6142, TS2367 PeriodizedBuilderScreen:352).
-Этап B: CA-11 isLocalDate x5→shared/domain/LocalDate.ts сделан. Открыто: CA-12 DevTrainingPlansRepository 1711 строк, CA-13 TS 5.8/6.0.
-Дальше: после CA-10 полный typecheck/arch:check; решения владельца — flash-list, spikes.
+Аудит 2026-10-27 (docs/CODE_AUDIT_2026-10-27.md): этапы A–C сделаны, дерево чистое и зелёное
+(Excel I07 = 2e7e0fe). Дальше этап D (перф, статически: замеров на телефоне нет), затем E (CA-12).
+Решения владельца: CA-22 политика, CA-19 react-hooks lint (новая зависимость), flash-list, spikes.
 Prior R04 перенесён в archive/activeContext-prior-r04-2026-10-24.md.
 
 800ebb1 Nutrition nativefacts; b048d05 calculator profiles. Historic snapshots/
