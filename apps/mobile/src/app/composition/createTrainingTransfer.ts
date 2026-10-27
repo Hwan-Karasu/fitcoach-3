@@ -14,8 +14,10 @@ import type { DevTrainingExecutionRepository } from "../../features/training/exe
 import type { DevTrainingPlansRepository } from "../../features/training/plans/data/DevTrainingPlansRepository.ts";
 import type { DevExerciseCatalogRepository } from "../../features/exercises/data/DevExerciseCatalogRepository.ts";
 import type { BuilderWorkbookCycle } from "../../shared/training-transfer/BuilderWorkbook.ts";
-import { workbookCycleSnapshot, workbookSheetHash } from "../../shared/training-transfer/WorkbookSheetIdentity.ts";
+import { workbookCycleSnapshot } from "../../shared/training-transfer/WorkbookSheetIdentity.ts";
 import { canonicalJson } from "../../shared/training-transfer/CanonicalJson.ts";
+import { UUID_V4_BATCH_SQL } from "../../shared/db/SqlIds.ts";
+import { assertValidTransfer, reidTransfer, transferSourceIds } from "../../features/import/public.ts";
 
 const hash = (value: unknown) => bytesToHex(sha256(utf8ToBytes(canonicalJson(value))));
 export function remapTrainingTransfer(value: TrainingTransfer, clientId: string, mapping: Readonly<Record<string, string>>): TrainingTransfer {
@@ -201,60 +203,36 @@ export function createTrainingTransfer(database: SharedSqliteDatabase, workspace
       await transaction((tx) => matches.save(tx, valid));
     },
     exportClient: (clientId, ids) => transaction(async (tx) => visibleTrainingTransfer(await exportInTransaction(tx, clientId, ids, true))),
+    /**
+     * Книга целиком одной транзакцией. Каждый импорт создаёт НОВУЮ программу (решение владельца: повтор разрешён), поэтому нет ни
+     * квитанций, ни отпечатков, ни хеша каждой строки: проверка — прямо над моделью, ID — случайные UUID одним запросом.
+     */
     async importClient(clientId, input, mapping, options) {
-      const value = readTrainingWorkbook(readWorkbook(writeTrainingWorkbook(input)));
-      if (value.issues?.length) throw new Error(`Нужно проверить ${value.issues.length} значений. Исправьте их в блоке «Проверьте значения» перед подтверждением импорта.`);
+      if (input.issues?.length) throw new Error(`Нужно проверить ${input.issues.length} значений. Исправьте их в блоке «Проверьте значения» перед подтверждением импорта.`);
+      assertValidTransfer(input);
       const available = await activeExerciseIds();
       for (const id of new Set(Object.values(mapping))) if (!available.has(id)) throw new Error("Выбранное упражнение удалено, скрыто или находится в архиве. Выберите замену.");
-      const mapped = remapTrainingTransfer(value, clientId, mapping);
       const remembered = await checkMatches(options?.rememberMatches ?? []);
       for (const match of remembered) {
-        const sources = value.exercises.filter((exercise) => exercise.name.trim() === match.sourceName);
+        const sources = input.exercises.filter((exercise) => exercise.name.trim() === match.sourceName);
         if (!sources.length || sources.some((exercise) => mapping[exercise.id] !== match.targetId)) throw new Error("Сопоставление не относится к открытому листу.");
       }
-      let added = false;
-      await transaction(async (tx) => {
+      const mapped = await transaction(async (tx) => {
         const target = await tx.first<{ lifecycle: string }>(`SELECT lifecycle FROM clients WHERE workspace_id=? AND id=?`, [workspace, clientId]);
         if (target?.lifecycle !== "ACTIVE") throw new Error("Выберите действующего клиента.");
-        // Per-program receipts support overlapping selections and repeated exports.
-        for (const [index, source] of value.programs.entries()) {
-          const program = mapped.programs[index]!;
-          const key = hash([value.sourceId, value.client.id, source.id]);
-          const fragment = { ...mapped, programs: [program], sessions: mapped.sessions.filter((s) => s.programId === program.id) };
-          const sourceSessions = value.sessions.filter((s) => s.programId === source.id);
-          const used = new Set(sourceSessions.flatMap((s) => s.facts.map((f) => f.exerciseId)));
-          const collect = (items: readonly TransferWorkout[]) => items.forEach((w) => w.exercises.forEach((e) => used.add(e.exerciseId)));
-          if (source.simple) collect(source.simple.workouts); source.simpleWeeks.forEach((w) => collect(w.workouts)); source.mesocycles.forEach((c) => c.weeks.forEach((w) => collect(w.workouts)));
-          const history = value.planHistory?.filter((h) => h.programId === source.id) ?? [];
-          history.forEach((h) => { h.simple?.weeks.forEach((w) => collect(w.workouts)); h.mesocycle?.weeks.forEach((w) => collect(w.workouts)); });
-          const sourceHash = hash({ source, sessions: sourceSessions, history, mapping: Object.fromEntries([...used].sort().map((id) => [id, mapping[id]])) });
-          let receipt = await receipts.read(tx, clientId, key);
-          if (receipt && await programsGone(tx, clientId, [program.id])) {
-            // Программу удалили целиком (с результатами): квитанция устарела и не должна блокировать повторный импорт.
-            await receipts.forget(tx, clientId, [key, ...source.mesocycles.map((cycle) => hash(["builder-sheet", program.id, value.sourceId, cycle.id]))]);
-            receipt = null;
-          }
-          if (receipt) {
-            if (receipt.sourceHash !== sourceHash || receipt.localHash !== fingerprint(await exportInTransaction(tx, clientId, [program.id]))) throw new Error(`Конфликт программы «${source.title}»: данные изменились после импорта. Автоматическая перезапись отключена.`);
-            continue;
-          }
-          await importTrainingPlans(tx, workspace, clientId, fragment.programs);
-          await importTrainingPlanHistory(tx, workspace, clientId, mapped.planHistory?.filter((h) => h.programId === program.id) ?? []);
-          await importTrainingExecutions(tx, workspace, clientId, fragment.sessions);
-          const local = await exportInTransaction(tx, clientId, [program.id]);
-          for (const [at, cycle] of source.mesocycles.entries()) {
-            const localCycle = program.mesocycles[at]!;
-            await receipts.save(tx, clientId, hash(["builder-sheet", program.id, value.sourceId, cycle.id]), {
-              sourceHash: workbookSheetHash(cycle, sourceSessions, mapping), localHash: hash(workbookCycleSnapshot(local, localCycle.id)),
-              programIds: JSON.stringify([program.id]), cycleId: localCycle.id });
-          }
-          await receipts.save(tx, clientId, key, { sourceHash, localHash: fingerprint(local), programIds: JSON.stringify([program.id]) });
-          added = true;
+        const sourceIds = transferSourceIds(input);
+        const fresh = await tx.all<{ id: string }>(UUID_V4_BATCH_SQL, [sourceIds.length]);
+        const result = reidTransfer(input, clientId, mapping, new Map(sourceIds.map((id, at) => [id, fresh[at]!.id])));
+        for (const program of result.programs) {
+          await importTrainingPlans(tx, workspace, clientId, [program]);
+          await importTrainingPlanHistory(tx, workspace, clientId, result.planHistory?.filter((h) => h.programId === program.id) ?? []);
+          await importTrainingExecutions(tx, workspace, clientId, result.sessions.filter((s) => s.programId === program.id));
         }
         await matches.save(tx, remembered);
+        return result;
       });
-      if (added) { plans.notifyTransfer(clientId); for (const p of mapped.programs) execution.notifyTransfer(clientId, p.id); }
-      return transferSummary(value);
+      plans.notifyTransfer(clientId); for (const p of mapped.programs) execution.notifyTransfer(clientId, p.id);
+      return transferSummary(input);
     },
   };
 }

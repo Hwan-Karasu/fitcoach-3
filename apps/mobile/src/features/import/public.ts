@@ -13,3 +13,5 @@ export type { ExerciseImportMatchesPort, ExerciseImportMatch } from "./domain/Ex
 export { prepareWholeWorkbook, prepareWorkbookResponsive, wholeWorkbookStatus, compileWholeWorkbook } from "./domain/WholeWorkbookImport.ts";
 export { selectWorkbookImportSheets, emptyWorkbookSheet } from "./domain/WorkbookReviewSession.ts";
 export { builderWorkbookImport } from "./domain/BuilderWorkbookImport.ts";
+export { assertValidTransfer } from "./domain/TransferValidation.ts";
+export { reidTransfer, transferSourceIds } from "./domain/TransferIds.ts";

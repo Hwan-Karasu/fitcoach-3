@@ -27,6 +27,8 @@ import { TRANSFER_OWNER } from "../apps/mobile/src/features/import/data/Transfer
 import { ExerciseImportMatchStore } from "../apps/mobile/src/features/import/data/ExerciseImportMatchStore.ts";
 import { runMigrationsInTransaction } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
 import { startWorkbookReview, setWorkbookNameMatch, workbookMatchesToRemember, selectWorkbookImportSheets } from "../apps/mobile/src/features/import/domain/WorkbookReviewSession.ts";
+import type { TrainingTransfer } from "../apps/mobile/src/shared/training-transfer/TrainingTransfer.ts";
+import { reidTransfer, transferSourceIds } from "../apps/mobile/src/features/import/domain/TransferIds.ts";
 import { builderWorkbookImport } from "../apps/mobile/src/features/import/domain/BuilderWorkbookImport.ts";
 import type { BuilderWorkbookSaveRequest } from "../apps/mobile/src/features/training/plans/domain/BuilderWorkbookSave.ts";
 import type { MesocycleBuilderDraft } from "../apps/mobile/src/features/training/plans/domain/PeriodizedDraft.ts";
@@ -35,6 +37,22 @@ import { SCHEMA_OWNERS } from "../apps/mobile/src/app/composition/schema.ts";
 import { devTrainingExecutionCatalog, DEV_TRAINING_EXECUTION_LEDGER } from "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionCatalog.ts";
 import { devTrainingPlansCatalog, DEV_TRAINING_PLANS_LEDGER } from "../apps/mobile/src/features/training/plans/data/DevTrainingPlansCatalog.ts";
 import { plansIntegrityMigration } from "../apps/mobile/src/features/training/plans/data/PlansIntegrityMigration.ts";
+
+/** Идентификаторы по порядку первого появления: сравнение структуры и значений без привязки к случайным UUID нового движка. */
+function anonymizeIds<T>(value: T): T {
+  const tokens = new Map<string, string>();
+  const walk = (item: unknown, key = ""): unknown => {
+    if (Array.isArray(item)) return item.map((entry) => walk(entry, key));
+    if (item && typeof item === "object") return Object.fromEntries(Object.entries(item).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)).map(([k, v]) => [k, walk(v, k)]));
+    if (typeof item === "string" && key !== "exerciseId" && /(^id$|Id$)/u.test(key)) { if (!tokens.has(item)) tokens.set(item, "#" + (tokens.size + 1)); return tokens.get(item); }
+    return item;
+  };
+  return walk(value) as T;
+}
+/** Тот же перенос без смены идентификаторов: ожидаемый результат для сравнения. */
+const sameIds = (value: TrainingTransfer, clientId: string, mapping: Readonly<Record<string, string>>) =>
+  reidTransfer(value, clientId, mapping, new Map(transferSourceIds(value).map((id) => [id, id])));
+const bySlot = <T extends { weekIndex: number }>(sessions: readonly T[]) => [...sessions].sort((a, b) => a.weekIndex - b.weekIndex);
 
 function multiBook(targetId: string) {
   const base = trainingTransferFixture(); const p = base.programs[0]!; const cycle = p.mesocycles[0]!;
@@ -187,7 +205,7 @@ test("I07 native backup preserves selected cycles, current week and imported fac
   } finally { await f.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("I07 importing from the programme chooser and later from the builder shares per-sheet bindings", async () => {
+test("I07 sheets imported from the programme chooser are not remembered: the builder adds every selected sheet", async () => {
   const f = await fixture();
   try {
     const review = multiBook(f.mapping.press!); const first = selectWorkbookImportSheets(review, ["0"]);
@@ -196,16 +214,18 @@ test("I07 importing from the programme chooser and later from the builder shares
     const p = (await f.plans.getLibrary(f.client.id)).active[0]!;
     await f.transfer.saveBuilderWorkbook({ clientId: f.client.id, scope: { programId: p.id, mesocycleId: null }, expectedRevision: p.revision,
       programTitle: p.title, cycles: builderWorkbookImport(review).cycles!, existingCycleKey: null, clientIds: [f.client.id], placements: [] });
-    assert.equal((await f.plans.getPeriodizedPlan(f.client.id, p.id))!.mesocycles.length, 3);
-    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 6);
-    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_transfer_receipts WHERE cycle_id IS NOT NULL").get()!.n, 3);
+    // Повтор разрешён (решение владельца 2026-10-27), привязок листов библиотека не хранит: первый лист уже есть, конструктор добавляет все три.
+    assert.equal((await f.plans.getPeriodizedPlan(f.client.id, p.id))!.mesocycles.length, 4);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 8);
   } finally { await f.close(); }
 });
 
 test("I07 sheet binding migration preserves old programme receipts and rolls back on failure", async () => {
   const f = await fixture();
   try {
-    await f.transfer.importClient(f.client.id, trainingTransferFixture(), f.mapping);
+    // Квитанции прежних импортов остаются в базе (движок их больше не пишет и не читает): кладём такую напрямую.
+    f.native.prepare("INSERT INTO training_transfer_receipts(workspace_id,client_id,source_key,source_hash,local_hash,program_ids_json,cycle_id) VALUES(?,?,?,?,?,?,NULL)")
+      .run("local-trainer", f.client.id, "old-program-key", "old-source-hash", "old-local-hash", "[]");
     f.native.exec("DELETE FROM training_transfer_receipts WHERE cycle_id IS NOT NULL; ALTER TABLE training_transfer_receipts DROP COLUMN cycle_id; DELETE FROM training_transfer_schema_migrations WHERE version=3");
     const rows = () => f.native.prepare("SELECT workspace_id,client_id,source_key,source_hash,local_hash,program_ids_json FROM training_transfer_receipts ORDER BY source_key").all();
     const before = rows();
@@ -232,7 +252,7 @@ test("I07 participant copies use one destination programme for all imported cycl
   } finally { await f.close(); }
 });
 
-test("I05 whole workbook writes one programme with all cycles, plans and results atomically and repeats without duplicates", async () => {
+test("I05 whole workbook writes one programme with all cycles, plans and results atomically; a repeat creates a new programme", async () => {
   const f = await fixture();
   try {
     const base = trainingTransferFixture(); const cycle = base.programs[0]!.mesocycles[0]!;
@@ -249,7 +269,6 @@ test("I05 whole workbook writes one programme with all cycles, plans and results
       assert.equal(f.native.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n, 0, table);
     }
     f.native.exec("DROP TRIGGER fail_second_cycle");
-    await f.transfer.importClient(f.client.id, whole.value, whole.mapping, { rememberMatches: matches });
     await f.transfer.importClient(f.client.id, whole.value, whole.mapping, { rememberMatches: matches });
     assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_programs").get()!.n, 1);
     assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_mesocycles").get()!.n, 2);
@@ -270,8 +289,10 @@ test("I05 whole workbook writes one programme with all cycles, plans and results
     await f.transfer.importClient(f.client.id, base, f.mapping);
     assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_programs").get()!.n, 2);
     assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 6);
+    // Тот же импорт ещё раз создаёт новую программу (решение владельца 2026-10-27): 4 результата книги сверх прежних 6.
     await f.transfer.importClient(f.client.id, whole.value, whole.mapping, { rememberMatches: matches });
-    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 6);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_programs").get()!.n, 3);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 10);
   } finally { await f.close(); }
 });
 
@@ -332,13 +353,11 @@ test("I06 every imported workout is completed, including empty undated slots; re
     assert.equal(whole.value.sessions.length, 3);
     assert.ok(whole.value.sessions.every((s) => s.outcome === "COMPLETED" && s.actualDate === null));
     await f.transfer.importClient(f.client.id, whole.value, whole.mapping);
-    await f.transfer.importClient(f.client.id, whole.value, whole.mapping);
     const program = (await f.plans.getLibrary(f.client.id)).active[0]!;
     const statuses = await f.execution.getProgramStatuses(f.client.id, program.id);
     assert.equal(statuses.length, 3); assert.ok(statuses.every((s) => s.status === "COMPLETED"));
     assert.deepEqual(await f.execution.listActiveWorkouts(), []);
-    const mapped = remapTrainingTransfer(whole.value, f.client.id, whole.mapping);
-    const weeks = mapped.programs[0]!.mesocycles[0]!.weeks;
+    const weeks = (await f.plans.getPeriodizedPlan(f.client.id, program.id))!.mesocycles[0]!.weeks;
     const previousWorkout = weeks[0]!.workouts[0]!; const currentWorkout = weeks[1]!.workouts[0]!;
     const previous = await f.execution.getPrevious({ clientId: f.client.id, programId: program.id, weekIndex: 2, plannedWorkoutId: currentWorkout.id }, previousWeekQueries(currentWorkout, previousWorkout));
     assert.equal(previous.get(currentWorkout.exercises[0]!.sets[0]!.id)?.values.reps, 8);
@@ -420,13 +439,13 @@ test("I02 unresolved factual ranges cannot write; explicit corrections import at
     assert.equal(facts.length, 2);
     assert.equal(facts[0]!.reps, 10); assert.equal(facts[0]!.load_grams, 42500);
     assert.equal(facts[1]!.reps, null); assert.equal(facts[1]!.load_grams, null); assert.equal(facts[1]!.confirmed_at, null);
-    await f.transfer.importClient(f.client.id, corrected, mapping);
-    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 2);
+    await f.transfer.importClient(f.client.id, corrected, mapping); // повтор создаёт новую программу
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 4);
     assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
   } finally { await f.close(); }
 });
 
-test("2.0 visible-only workbook imports through 3.0 owners with plans, facts and repeat protection", async () => {
+test("2.0 visible-only workbook imports through 3.0 owners with plans and facts", async () => {
   const require = createRequire(new URL("../apps/mobile/package.json", import.meta.url));
   const XLSX = require("xlsx") as typeof import("../apps/mobile/node_modules/xlsx/types/index.d.ts");
   const book = readWorkbook(new Uint8Array(readFileSync(new URL("./fixtures/v2-visible-training-matrix.xlsx", import.meta.url))));
@@ -435,7 +454,7 @@ test("2.0 visible-only workbook imports through 3.0 owners with plans, facts and
   const f = await fixture();
   try {
     const mapping = Object.fromEntries(value.exercises.map((e) => [e.id, f.mapping.press]));
-    await f.transfer.importClient(f.client.id, value, mapping); await f.transfer.importClient(f.client.id, value, mapping);
+    await f.transfer.importClient(f.client.id, value, mapping);
     assert.equal(f.native.prepare("SELECT count(*) n FROM training_planned_sets").get()?.n, 2);
     assert.equal(f.native.prepare("SELECT count(*) n FROM training_performed_sets").get()?.n, 2);
     assert.equal(f.native.prepare("SELECT load_grams FROM training_performed_sets LIMIT 1").get()?.load_grams, 62500);
@@ -519,24 +538,45 @@ test("I04 alias migration only adds storage; failed migration rolls back DDL and
   } finally { await f.close(); }
 });
 
-test("transactional Excel import persists actual owner data, computes previous, skips repeats and rejects conflicts", async () => {
+test("transactional Excel import persists actual owner data, computes previous results and a repeat adds a new programme", async () => {
   const f = await fixture();
   try {
     const input = trainingTransferFixture(); await f.transfer.importClient(f.client.id, input, f.mapping);
-    const mapped = remapTrainingTransfer(input, f.client.id, f.mapping); const p = mapped.programs[0]!;
-    const plan = await f.plans.getPeriodizedPlan(f.client.id, p.id);
-    assert.equal(plan?.mesocycles[0]?.weeks[0]?.workouts[0]?.exercises[0]?.sets[0]?.loadGrams, 62500);
-    const w = p.mesocycles[0]!.weeks[1]!.workouts[0]!; const e = w.exercises[0]!;
+    const p = (await f.plans.getLibrary(f.client.id)).active[0]!;
+    const plan = (await f.plans.getPeriodizedPlan(f.client.id, p.id))!;
+    assert.equal(plan.mesocycles[0]?.weeks[0]?.workouts[0]?.exercises[0]?.sets[0]?.loadGrams, 62500);
+    const weeks = plan.mesocycles[0]!.weeks; const first = weeks[0]!.workouts[0]!; const w = weeks[1]!.workouts[0]!; const e = w.exercises[0]!;
     const slot = { clientId: f.client.id, programId: p.id, weekIndex: 2, plannedWorkoutId: w.id };
-    const previous = await f.execution.getPrevious(slot, [{ plannedExerciseId: e.id, exerciseId: e.exerciseId, plannedSetIds: e.sets.map((s) => s.id), source: { plannedWorkoutId: p.mesocycles[0]!.weeks[0]!.workouts[0]!.id, plannedExerciseId: p.mesocycles[0]!.weeks[0]!.workouts[0]!.exercises[0]!.id } }]);
+    const previous = await f.execution.getPrevious(slot, [{ plannedExerciseId: e.id, exerciseId: e.exerciseId, plannedSetIds: e.sets.map((s) => s.id),
+      source: { plannedWorkoutId: first.id, plannedExerciseId: first.exercises[0]!.id } }]);
     assert.equal(previous.get(e.sets[0]!.id)?.values.reps, 8);
-    await f.transfer.importClient(f.client.id, input, f.mapping);
-    assert.equal((await f.plans.getLibrary(f.client.id)).active.length, 1);
     const exported = await f.transfer.exportClient(f.client.id, [p.id]);
     assert.equal(exported.sessions.length, 2); assert.equal(exported.sessions[0]?.facts[0]?.values.loadGrams, 62500);
-    await assert.rejects(f.transfer.importClient(f.client.id, { ...input, programs: [{ ...input.programs[0]!, title: "Изменено" }] }, f.mapping), /Конфликт/u);
-    await f.plans.renameProgram(p.id, 1, "Локальная правка");
-    await assert.rejects(f.transfer.importClient(f.client.id, input, f.mapping), /Конфликт/u);
+    await f.transfer.importClient(f.client.id, input, f.mapping);
+    assert.equal((await f.plans.getLibrary(f.client.id)).active.length, 2, "a repeat is a new programme (owner decision 2026-10-27)");
+    assert.equal(f.native.prepare("SELECT count(*) n FROM training_performed_sets").get()?.n, 4);
+  } finally { await f.close(); }
+});
+test("the new engine keeps no receipts: every import is a new programme with fresh ids", async () => {
+  const f = await fixture();
+  try {
+    const input = trainingTransferFixture();
+    await f.transfer.importClient(f.client.id, input, f.mapping); await f.transfer.importClient(f.client.id, input, f.mapping);
+    const programs = (await f.plans.getLibrary(f.client.id)).active.map((p) => p.id);
+    assert.equal(programs.length, 2); assert.notEqual(programs[0], programs[1]);
+    assert.ok(programs.every((id) => id !== "program"), "source ids are never reused");
+    assert.equal(f.native.prepare("SELECT count(*) n FROM training_transfer_receipts").get()?.n, 0);
+    assert.equal(f.native.prepare("SELECT count(*) n FROM training_sessions").get()?.n, 4);
+    assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
+  } finally { await f.close(); }
+});
+test("an inconsistent transfer is refused before anything is written, naming the problem", async () => {
+  const f = await fixture();
+  try {
+    const input = trainingTransferFixture(); const cycle = input.programs[0]!.mesocycles[0]!; const workout = cycle.weeks[0]!.workouts[0]!;
+    const broken = { ...input, programs: [{ ...input.programs[0]!, mesocycles: [{ ...cycle, weeks: [{ ...cycle.weeks[0]!, workouts: [workout, workout] }, ...cycle.weeks.slice(1)] }] }] };
+    await assert.rejects(f.transfer.importClient(f.client.id, broken, f.mapping), /Повтор идентификатора тренировки/u);
+    for (const table of ["training_programs", "training_sessions", "training_performed_sets"]) assert.equal(f.native.prepare(`SELECT count(*) n FROM ${table}`).get()?.n, 0, table);
   } finally { await f.close(); }
 });
 test("unresolved source values block import before any plans, sessions or receipts are written", async () => {
@@ -568,8 +608,9 @@ test("3.0 Excel round trip to a clean database preserves every planned and actua
     const mapping = Object.fromEntries(parsed.exercises.map((e) => [e.id, target.mapping.press]));
     await target.transfer.importClient(target.client.id, parsed, mapping);
     const actual = await target.transfer.exportClient(target.client.id, (await target.plans.getLibrary(target.client.id)).active.map((p) => p.id));
-    const expected = remapTrainingTransfer(parsed, target.client.id, mapping);
-    assert.deepEqual(actual.programs, expected.programs); assert.deepEqual([...actual.sessions].sort((a, b) => a.id.localeCompare(b.id)), [...expected.sessions].sort((a, b) => a.id.localeCompare(b.id)));
+    const expected = sameIds(parsed, target.client.id, mapping);
+    assert.deepEqual(anonymizeIds(actual.programs), anonymizeIds(expected.programs));
+    assert.deepEqual(anonymizeIds({ sessions: bySlot(actual.sessions), programs: actual.programs }).sessions, anonymizeIds({ sessions: bySlot(expected.sessions), programs: expected.programs }).sessions);
   } finally { await source.close(); await target.close(); }
 });
 test("2.0's generated matrix imports into clean 3.0 and reconstructs plans and previous results", async () => {
@@ -579,7 +620,7 @@ test("2.0's generated matrix imports into clean 3.0 and reconstructs plans and p
     const input = readTrainingWorkbook(readWorkbook(bytes)); const mapping = Object.fromEntries(input.exercises.map((e) => [e.id, f.mapping.press]));
     await f.transfer.importClient(f.client.id, input, mapping);
     const actual = await f.transfer.exportClient(f.client.id, (await f.plans.getLibrary(f.client.id)).active.map((p) => p.id));
-    assert.deepEqual(actual.programs, remapTrainingTransfer(input, f.client.id, mapping).programs);
+    assert.deepEqual(anonymizeIds(actual.programs), anonymizeIds(sameIds(input, f.client.id, mapping).programs));
     assert.equal(actual.sessions.length, 2); assert.equal(actual.sessions[0]?.facts[0]?.values.loadGrams, 62500);
     assert.equal(actual.programs[0]?.mesocycles[0]?.weeks[0]?.workouts[0]?.exercises[0]?.sets[0]?.repsMax, 10);
     const p = actual.programs[0]!; const first = p.mesocycles[0]!.weeks[0]!.workouts[0]!; const second = p.mesocycles[0]!.weeks[1]!.workouts[0]!;
@@ -588,7 +629,7 @@ test("2.0's generated matrix imports into clean 3.0 and reconstructs plans and p
     assert.equal(previous.get(second.exercises[0]!.sets[0]!.id)?.values.loadGrams, 62500);
   } finally { await f.close(); }
 });
-test("native 3.0 backup includes Excel receipts so restoring cannot enable duplicate imports", async () => {
+test("native 3.0 backup keeps an Excel-imported programme with its results and the remembered exercise matches", async () => {
   const f = await fixture(); const dir = mkdtempSync(join(tmpdir(), "transfer-backup-"));
   try {
     const base = trainingTransferFixture();
@@ -601,8 +642,8 @@ test("native 3.0 backup includes Excel receipts so restoring cannot enable dupli
     await prepareBackupForRestore(destination, staging);
     const restored = new DatabaseSync(staging);
     try {
-      assert.equal(restored.prepare("SELECT count(*) n FROM training_transfer_receipts WHERE cycle_id IS NULL").get()?.n, 1);
-      assert.equal(restored.prepare("SELECT count(*) n FROM training_transfer_receipts WHERE cycle_id IS NOT NULL").get()?.n, 1);
+      assert.equal(restored.prepare("SELECT count(*) n FROM training_programs").get()?.n, 1);
+      assert.equal(restored.prepare("SELECT count(*) n FROM training_performed_sets").get()?.n, 2);
       assert.deepEqual(restored.prepare("SELECT source_name, target_id FROM training_import_exercise_matches").all(),
         f.native.prepare("SELECT source_name, target_id FROM training_import_exercise_matches").all());
       assert.equal(restored.prepare("SELECT count(*) n FROM training_sessions").get()?.n, 3);
@@ -619,7 +660,6 @@ test("old-format history stays in storage but is excluded from the current matri
     const value = { ...base, planHistory: [history] }; await f.transfer.importClient(f.client.id, value, f.mapping);
     const actual = await f.transfer.exportClient(f.client.id, (await f.plans.getLibrary(f.client.id)).active.map((p) => p.id));
     assert.deepEqual(actual.planHistory, []);
-    await f.transfer.importClient(f.client.id, value, f.mapping);
     assert.equal(f.native.prepare("SELECT count(*) n FROM training_structure_versions").get()?.n, 1);
   } finally { await f.close(); }
 });
