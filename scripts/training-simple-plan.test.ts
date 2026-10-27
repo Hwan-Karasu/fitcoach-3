@@ -409,3 +409,23 @@ test("тренировка без упражнений недопустима: �
     assert.deepEqual((await plans.getLibrary(a.id)).active, [], "программа с пустой тренировкой не создана");
   } finally { await close(); }
 });
+
+test("отдых из дневника у Простой программы: область «только эта неделя» меняет один слот, «эта и следующие» — хвост", async () => {
+  const { plans, clients, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticRest" });
+    const draft = sampleDraft();
+    const program = await plans.createSimpleProgram(client.id, draft);
+    const withRest = (workout: typeof draft.plan.workouts[number], restSec: number | null) =>
+      setRest({ title: "База", plan: { weeks: 1, workouts: [workout] } }, workout.exercises[0]!.id, restSec).plan.workouts[0]!;
+    const rests = async () => (await plans.getSimpleWeeks(client.id, program.id)).map((week) => week.workouts[0]!.exercises[0]!.restSec);
+    const initial = (await rests())[0]!;
+    const local = await plans.saveSimpleWorkout(client.id, program.id, program.revision,
+      { weekIndex: 2, workoutId: "w1", workout: withRest(draft.plan.workouts[0]!, 135), scope: "CURRENT", replaceConflicts: [] });
+    assert.deepEqual(await rests(), [initial, 135, initial, initial]);
+    const weeks = await plans.getSimpleWeeks(client.id, program.id);
+    await plans.saveSimpleWorkout(client.id, program.id, local.revision,
+      { weekIndex: 3, workoutId: "w1", workout: withRest(weeks[2]!.workouts[0]!, null), scope: "FOLLOWING", replaceConflicts: [] });
+    assert.deepEqual(await rests(), [initial, 135, null, null], "хвост получил «без таймера», предыдущие недели прежние");
+  } finally { await close(); }
+});

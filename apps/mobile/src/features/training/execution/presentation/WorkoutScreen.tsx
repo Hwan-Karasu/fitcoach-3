@@ -146,7 +146,6 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const [busy, setBusy] = useState(false);
   const changingWeek = useRef(false);
   const [restFor, setRestFor] = useState<PlannedExercise | null>(null);
-  const [restError, setRestError] = useState<string | null>(null);
   const { saveSet, toggleSet, setOutcome, addWarmup, removeWarmup } = diary;
   const [removeWarm, setRemoveWarm] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -218,12 +217,10 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   }, [plans, slot.clientId, slot.programId, slot.plannedWorkoutId]);
 
 
-  /** §48.56: отдых упражнения сохраняется в план — у каждого упражнения свой таймер. */
-  const saveRest = (exercise: PlannedExercise, restSec: number | null) => {
-    setRestError(null);
-    void plans.setExerciseRest(slot.clientId, slot.programId, exercise.id, restSec).catch(() => {
-      setRestError("Не удалось изменить отдых. План не изменён — повторите.");
-    });
+  /** §48.56: отдых упражнения — правка плана, как остальные правки из дневника: окно выбирает область (эта неделя / все и т. д.). */
+  const editRest = (exercise: PlannedExercise, restSec: number | null) => {
+    flushPending();
+    setEdit({ kind: "rest", exerciseId: exercise.id, restSec });
   };
 
   const flushPending = useCallback(() => pending.flushAll(), [pending]);
@@ -515,7 +512,6 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         </View>
         {diary.message !== null ? <InlineNotice kind="error">{diary.message}</InlineNotice> : null}
         {navigationError !== null ? <InlineNotice kind="error">{navigationError}</InlineNotice> : null}
-        {restError !== null ? <InlineNotice kind="error">{restError}</InlineNotice> : null}
         {notice !== null ? <InlineNotice kind="success">{notice}</InlineNotice> : null}
         {ordering !== null ? <>
           <Text style={[styles.meta, { color: colors.textSecondary }]}>Перетащите упражнения за ручку, затем «Готово».</Text>
@@ -675,8 +671,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
       <DurationWheelPicker visible={restFor !== null} title="Отдых после подхода"
         value={restFor?.restSec ?? REST_DEFAULT_SEC} min={REST_MIN_SEC} max={REST_MAX_SEC}
         clearLabel={restFor?.restSec === null ? undefined : "Без таймера"}
-        onConfirm={(seconds) => { if (restFor !== null) saveRest(restFor, seconds); }}
-        onClear={() => { if (restFor !== null) saveRest(restFor, null); }}
+        onConfirm={(seconds) => { if (restFor !== null) editRest(restFor, seconds); }}
+        onClear={() => { if (restFor !== null) editRest(restFor, null); }}
         onClose={() => setRestFor(null)} />
       <ActiveWorkoutsSheet ref={activeSheet} cards={others}
         onOpen={(card) => {

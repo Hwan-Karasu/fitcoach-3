@@ -1,4 +1,4 @@
-import { addExercises, addSet, removeExercise, reorderExercises, replaceExercise, SETS_MAX } from "./SimplePlanEdits.ts";
+import { addExercises, addSet, removeExercise, reorderExercises, replaceExercise, SETS_MAX, setRest } from "./SimplePlanEdits.ts";
 import type { PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
 import type { SetField } from "./SimplePlanRules.ts";
 import { applySupersetPress } from "./SupersetRules.ts";
@@ -14,12 +14,14 @@ export type DiaryEdit =
   | Readonly<{ kind: "superset"; exerciseIds: readonly string[] }>
   | Readonly<{ kind: "leaveSuperset"; exerciseId: string }>
   | Readonly<{ kind: "addExercises"; exerciseIds: readonly string[] }>
-  | Readonly<{ kind: "addSet"; exerciseId: string }>;
+  | Readonly<{ kind: "addSet"; exerciseId: string }>
+  /** §48.56: отдых упражнения в секундах; `null` выключает таймер. */
+  | Readonly<{ kind: "rest"; exerciseId: string; restSec: number | null }>;
 
 /** Заголовок окна выбора области. */
 export const diaryEditTitles: Readonly<Record<DiaryEdit["kind"], string>> = {
   remove: "Удалить упражнение", replace: "Заменить упражнение", reorder: "Изменить порядок", superset: "Объединить в суперсет",
-  leaveSuperset: "Убрать из суперсета", addExercises: "Добавить упражнения", addSet: "Добавить подход",
+  leaveSuperset: "Убрать из суперсета", addExercises: "Добавить упражнения", addSet: "Добавить подход", rest: "Изменить отдых",
 };
 
 export function applyDiaryEdit(workout: PlannedWorkout, edit: DiaryEdit, newId: (prefix: string) => string,
@@ -34,6 +36,7 @@ export function applyDiaryEdit(workout: PlannedWorkout, edit: DiaryEdit, newId: 
       case "superset": return applySupersetPress(draft, workout.id, { type: "commit", ids: edit.exerciseIds });
       case "leaveSuperset": return applySupersetPress(draft, workout.id, { type: "extract", id: edit.exerciseId });
       case "addExercises": return addExercises(draft, workout.id, edit.exerciseIds, newId);
+      case "rest": return setRest(draft, edit.exerciseId, edit.restSec);
       case "addSet": {
         const count = workout.exercises.find((item) => item.id === edit.exerciseId)?.sets.length ?? SETS_MAX;
         return count >= SETS_MAX ? draft : addSet(draft, edit.exerciseId, newId("s"));

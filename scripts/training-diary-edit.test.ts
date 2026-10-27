@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { applyDiaryEdit } from "../apps/mobile/src/features/training/plans/domain/DiaryEdit.ts";
+import { applyWeekOps, diffWeek } from "../apps/mobile/src/features/training/plans/domain/PeriodizedRules.ts";
 import type { PlannedExercise, PlannedWorkout } from "../apps/mobile/src/features/training/plans/domain/SimplePlanModel.ts";
 
 const set = (id: string) => ({ id, reps: 10, repsMax: null, loadGrams: null, durationSec: null, distanceM: null });
@@ -34,4 +35,26 @@ test("UI-OWN-037 правка из дневника: замена — новое
   assert.deepEqual(joined.exercises.map((item) => item.supersetId ?? null), [null, group, group]);
   const left = applyDiaryEdit(joined, { kind: "leaveSuperset", exerciseId: "c" }, newId, () => []);
   assert.deepEqual(left.exercises.map((item) => item.supersetId ?? null), [null, null, null], "из пары — сета нет");
+});
+
+test("отдых из дневника проходит тем же путём, что другие правки: значение упражнения, остальное не тронуто", () => {
+  const changed = applyDiaryEdit(workout, { kind: "rest", exerciseId: "b", restSec: 135 }, newId, () => []);
+  assert.deepEqual(changed.exercises.map((item) => item.restSec), [90, 135, 90]);
+  assert.deepEqual(ids(changed), ["a", "b", "c"]);
+  assert.deepEqual(changed.exercises[1]!.sets.map((item) => item.id), ["bs0", "bs1", "bs2"], "подходы те же");
+  const off = applyDiaryEdit(workout, { kind: "rest", exerciseId: "a", restSec: null }, newId, () => []);
+  assert.equal(off.exercises[0]!.restSec, null, "null выключает таймер");
+  assert.equal(applyDiaryEdit(workout, { kind: "rest", exerciseId: "b", restSec: 99999 }, newId, () => []).exercises[1]!.restSec, 3600, "не больше 60 минут");
+  assert.equal(workout.exercises[1]!.restSec, 90, "исходная тренировка не изменилась");
+});
+
+test("отдых — часть правки недели: при области «все недели» значение переносится в одноимённые упражнения", () => {
+  const changed = applyDiaryEdit(workout, { kind: "rest", exerciseId: "b", restSec: 135 }, newId, () => []);
+  const other: PlannedWorkout = { id: "w2", title: "Т", exercises: [exercise("a2", 2), exercise("b2", 3), exercise("c2", 1)]
+    .map((item, at) => ({ ...item, lineageId: ["a", "b", "c"][at]! })) };
+  const lineaged: PlannedWorkout = { ...workout, exercises: workout.exercises.map((item) => ({ ...item, lineageId: item.id })) };
+  const edited: PlannedWorkout = { ...changed, exercises: changed.exercises.map((item) => ({ ...item, lineageId: item.id })) };
+  const ops = diffWeek([lineaged], [edited]);
+  const applied = applyWeekOps([other], ops, () => newId("n")).workouts[0]!;
+  assert.deepEqual(applied.exercises.map((item) => item.restSec), [90, 135, 90]);
 });
