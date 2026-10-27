@@ -2,8 +2,7 @@
 
 CA-аудит (docs/CODE_AUDIT_2026-10-27.md), этапы A–C сделаны; I07 Excel закоммичен 2e7e0fe, дерево чистое,
 test:foundation 1392/1392, excel:test 87+1 todo. Закрыто: CA-10, CA-11 (shared/domain/LocalDate.ts).
-Техдолг: CA-22 createTrainingTransfer.ts:136-163 фантомный статус при удалении тренировки с
-импортированными результатами (todo-тест, политику выбирает владелец); CA-12 DevTrainingPlansRepository.ts
+Техдолг: CA-22 закрыт (вариант А, createTrainingTransfer.ts); CA-12 DevTrainingPlansRepository.ts
 1711 строк; CA-15 DevTrainingExecutionRepository.ts:158 N+1; CA-13 TS 5.8/6.0; CA-19 нет react-hooks lint.
 
 # (ниже — состояние на 2026-10-24)

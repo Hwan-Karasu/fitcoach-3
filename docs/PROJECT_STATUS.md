@@ -1,5 +1,6 @@
 ## 2026-10-27 — CA: технический аудит приложения, этапы A (очистка) и B (дублирование)
 
+- CA-22 (решение владельца, вариант А): удаление тренировки с импортированными результатами из несохранённого цикла теперь спрашивает (`WEEK_HAS_RESULTS`; «Удалить с результатами» / «Сохранить в истории»), фантомных статусов нет. Excel I07 закоммичен `2e7e0fe`; `excel:test` 90/90.
 - Этап B, CA-11: пять реализаций `isLocalDate` заменены одной в `shared/domain/LocalDate.ts`; на 18 307 входах прежние версии совпадали, расходились лишь годы 0000–0099 (случайность `Date.UTC`). Тест `scripts/local-date.test.ts`; на чистом HEAD `4f69bc9` с патчем: typecheck, lint, test:foundation 1392/1392, R04-наборы, measurements, accounting, calendar, training зелёные.
 
 - Полный отчёт и реестр: [CODE_AUDIT_2026-10-27.md](CODE_AUDIT_2026-10-27.md). Удалены недостижимые файлы (`DevBootGate`, `FoundationScreen`, `createDevServices`, `AccentSwatch`, `MesocycleCopyScreen`, `WeekCopyFlow`, `WeekSwapPanel`, `MetricTile`, `QuestionnairePreview`), восемь неиспользуемых экспортов и зависимость `@expo-google-fonts/inter`.
