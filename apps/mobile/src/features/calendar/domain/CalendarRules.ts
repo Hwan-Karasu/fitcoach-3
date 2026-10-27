@@ -1,4 +1,4 @@
-import { APPOINTMENT_DURATIONS, DAY_MINUTES, SESSION_TYPE_COLORS, SLOT_MINUTES, type Appointment, type AppointmentInput,
+import { DAY_MINUTES, SESSION_TYPE_COLORS, SLOT_MINUTES, type Appointment, type AppointmentInput,
   type CalendarInterval, type CalendarSettings, type IntervalInput, type LocalDate, type SessionTypeInput,
   type WeekTemplate } from "./CalendarModel.ts";
 
@@ -185,8 +185,4 @@ export function appointmentLabel(row: Pick<Appointment, "guestName" | "participa
   clientName: string | null): string {
   if (row.participantDeleted) return "Удалённый клиент";
   return clientName ?? row.guestName ?? "Клиент";
-}
-
-export function isStandardDuration(minutes: number): boolean {
-  return (APPOINTMENT_DURATIONS as readonly number[]).includes(minutes);
 }

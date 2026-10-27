@@ -1,13 +1,12 @@
 # AppShell
 
-Здесь уже есть диагностический `bootstrap/`; затем появятся `navigation/` и
-`composition/`: готовность приложения,
-маршруты trainer-only, темы, обработка app-level ошибок и сборка публичных API.
+`bootstrap/`, `navigation/` и `composition/`: готовность приложения, маршруты
+trainer-only, темы, обработка app-level ошибок и сборка публичных API.
 AppShell не владеет бизнес-фактами, SQL или логикой соседних фич.
 
-`bootstrap/BootCoordinator.ts` — F03 candidate критического boot contract.
-Пока он не подключён к SQLite/Settings adapters и не заменяет диагностический
-F01 экран. APP_READY production UI запрещён до реальной готовности БД/темы.
+`App.tsx` выбирает `createDevRuntime()` (`__DEV__`) или `createProductionRuntime()`;
+оба отдают `ApplicationBootGate` зависимости загрузки и сервисы, собранные в
+`composition/createServices.ts` (composition root).
 
-`composition/createDevServices.ts` — F05 candidate явной dev-сборки F04 probe.
-Production bindings и реальные публичные feature APIs ещё не созданы.
+`bootstrap/BootCoordinator.ts` — критический boot contract: APP_READY production UI
+запрещён до реальной готовности БД и темы.

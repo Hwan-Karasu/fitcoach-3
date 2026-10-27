@@ -24,11 +24,6 @@ const modes: readonly Readonly<{ id: CatalogMode; label: string }>[] = [
   { id: "ALL", label: "Все" }, { id: "FAVORITES", label: "Избранное" }, { id: "MINE", label: "Мои" },
 ];
 
-/** Частое оборудование для фильтра; остальное находится поиском. */
-export const COMMON_EQUIPMENT: readonly string[] = ["none", "barbell", "dumbbell", "kettlebell", "cable", "smith_machine",
-  "ez_bar", "plates", "pull_up_bar", "dip_station", "rings", "resistance_band", "loop_band", "suspension_trainer",
-  "stability_ball", "flat_bench", "leg_press"];
-
 /** Подпись варианта фильтра — с заглавной буквы (в строке упражнения оборудование идёт строчными). */
 export function equipmentFilterLabel(id: string): string {
   if (id === "") return "Не указано";

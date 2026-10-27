@@ -35,7 +35,7 @@ expo-sqlite, RNGH + Reanimated 4 + worklets. Новые библиотеки —
 - Чужая фича — только через её `public.ts`. Кросс-модульная запись — в
   `workflows/`, производное чтение — в `read-models/`.
 - UI не импортирует SQLite и `data/`. Сервисы получает из composition root
-  (`app/composition/createDevServices.ts`).
+  (`app/composition/createServices.ts`).
 
 **Данные**
 - Запись — только `WriterCoordinator.write(tx => …)`, одна транзакция на
@@ -48,7 +48,7 @@ expo-sqlite, RNGH + Reanimated 4 + worklets. Новые библиотеки —
 - Факты не уничтожаются: отмена/исправление — новой записью или статусом.
 
 **UI**
-- Шрифт Inter: начертание только через `fontFamily: fonts.*`
+- Шрифт Manrope (UI-OWN-048, раньше Inter): начертание только через `fontFamily: fonts.*`
   (`shared/ui/theme/typography.ts`), не `fontWeight`. Иконки — `lucide-react-native`.
 - Цвета только из токенов темы (`usePrototypeTheme()`), никаких hex в экранах.
 - Сначала искать компонент в `shared/ui/components/public.ts`; новый общий

@@ -30,12 +30,6 @@ function exerciseOf(draft: Draft<SimpleProgramDraft>, plannedId: string) {
   return undefined;
 }
 
-function move<T>(items: T[], index: number, target: number): void {
-  if (index < 0 || target < 0 || target >= items.length || index === target) return;
-  const [item] = items.splice(index, 1);
-  items.splice(target, 0, item as T);
-}
-
 export const setTitle = (draft: SimpleProgramDraft, title: string) => produce(draft, (d) => { d.title = title; });
 
 export const setWeeks = (draft: SimpleProgramDraft, weeks: number) => produce(draft, (d) => { d.plan.weeks = weeks; });
@@ -51,11 +45,6 @@ export const renameWorkout = (draft: SimpleProgramDraft, workoutId: string, titl
 
 export const removeWorkout = (draft: SimpleProgramDraft, workoutId: string) => produce(draft, (d) => {
   d.plan.workouts = d.plan.workouts.filter((workout) => workout.id !== workoutId);
-});
-
-export const moveWorkout = (draft: SimpleProgramDraft, workoutId: string, direction: -1 | 1) => produce(draft, (d) => {
-  const index = d.plan.workouts.findIndex((workout) => workout.id === workoutId);
-  move(d.plan.workouts, index, index + direction);
 });
 
 /** Новое упражнение в конец тренировки с подходами по умолчанию (пустые плановые значения). */

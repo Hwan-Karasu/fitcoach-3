@@ -1,4 +1,4 @@
-# Active context — 2026-10-24
+# Active context — 2026-10-27
 
 «Дневник атлета», FitCoach_3/audit/training-fixes. Goal ACTIVE full2.0→3.0+
 backup/restore NOT100%. R04→R03; Product48.5.7/49–50/53–56/INT03–12.
@@ -17,21 +17,12 @@ return15holders/closedrecovery/UI/WAL/capacity/generation/GC. Historicalnative35
 24/3/Downloads20/SAF19/reinstall6/auto21/status3/missing19/actualkill15+14; fixture
 COMPLETE/noarmedpause/2.0build128safe. No currentphone/PID proof thisphase.
 
-Prior R04 Profile37/Qhistory/epochs/privateWorkData/registry/LOAD_REPS/IDs;
-Plans92d00bb/templates74fa6cf/archives12381f4 physicalstructure/owners/aliases.
-032b7e5 canonicalaccount+client/physicalgraph/sharedfacts/exactsegments/date/SHA,
-notname/value/slotmerges. b64fac9 undatedruntimehistory/records/alltime retained,
-no fakegraphs/weightdates; IANA/cache/businessdayOPEN. e93a4c8 editablepartial/nullvs0/
-DROP/kind/effort/RPE/rawreview. 3015bdd contexts/notes-only/emptyfree/exactnotes versus
-instructions/rootcyclealias/statusvsderived/targetOutcomeNULL. 60134d7 logs6thsource/
-raw+paths/cacheID+metadata provealias; unknowncompletion editable/nodate/no guessedmerge.
-ExecutionV3/Node24tokens; arbitraryJSONimporter notwriterproof. Runtimewrite pending.
-c56c3f7 circumference/f0a241f dailyweight→D01private exacttenths/dateonly/unsided/
-localMinuteNULL/stablefieldUUID/no primary. Equalvalues acrossdates/clients retained.
-Dailyweight possibleprofileprefill+blur explicitprovenance/notnewweighinproof.
-Profileweight UNKNOWN/targetIdNULL/no guesseddate/equalitymerge. Calculatorweight/
-fatPercent notfacts. Outlier/zero/negativezero/future/precision review/no rounding/
-clipping/fake0. MeasurementmodeV2/projectionVersion2.460historicaltests.
+Аудит 2026-10-27 (docs/CODE_AUDIT_2026-10-27.md): этап A сделан (недостижимые файлы,
+мёртвые экспорты, Inter). Дерево красное из-за чужого WIP импорта Excel: CA-10
+(import/domain→training/public.ts, TS6142, TS2367 PeriodizedBuilderScreen:352).
+Открыто: CA-11 пять isLocalDate, CA-12 DevTrainingPlansRepository 1711 строк, CA-13 TS 5.8/6.0.
+Дальше: после CA-10 полный typecheck/arch:check; решения владельца — flash-list, spikes.
+Prior R04 перенесён в archive/activeContext-prior-r04-2026-10-24.md.
 
 800ebb1 Nutrition nativefacts; b048d05 calculator profiles. Historic snapshots/
 savedportiontotals via override, no catalogrewrite/phantomfood/doublecountedrecipe.

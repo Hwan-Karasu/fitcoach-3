@@ -1,8 +1,7 @@
 import type { MealSlot } from "../domain/DiaryModel.ts";
 import { formatDecimalX10 } from "../domain/FoodRules.ts";
 import type { FoodBasis, FoodBasisUnit, Nutrients } from "../domain/FoodModel.ts";
-import type { RangeVerdict, TargetMetric, TargetRange } from "../domain/TargetModel.ts";
-import type { StatusKind } from "../../../shared/ui/components/public.ts";
+import type { TargetMetric, TargetRange } from "../domain/TargetModel.ts";
 
 export const slotLabels: Readonly<Record<MealSlot, string>> = { BREAKFAST: "Завтрак", LUNCH: "Обед", DINNER: "Ужин", SNACK: "Перекус" };
 
@@ -26,9 +25,6 @@ export const quantityText = (basis: FoodBasis, quantityX10: number): string => `
 
 export const rangeText = (range: TargetRange | null): string | null =>
   range === null ? null : range.minX10 === range.maxX10 ? wholeText(range.minX10) : `${wholeText(range.minX10)}–${wholeText(range.maxX10)}`;
-
-export const verdictLabels: Readonly<Record<RangeVerdict, string>> = { BELOW: "Ниже", IN: "В коридоре", ABOVE: "Выше", UNKNOWN: "" };
-export const verdictKinds: Readonly<Record<RangeVerdict, StatusKind>> = { BELOW: "warning", IN: "success", ABOVE: "warning", UNKNOWN: "neutral" };
 
 const pad = (value: number) => String(value).padStart(2, "0");
 

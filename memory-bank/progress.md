@@ -1,4 +1,13 @@
-# Progress — 2026-10-24
+# Progress — 2026-10-27
+
+CA-аудит (docs/CODE_AUDIT_2026-10-27.md), этап A: удалено 9 недостижимых файлов, 8 экспортов,
+@expo-google-fonts/inter; проверено на чистом HEAD e284cb7: test:foundation 1389/1389.
+Техдолг: CA-10 import/domain/BuilderWorkbookImport.ts→training/public.ts (WIP, красит tsc/arch);
+CA-11 isLocalDate x5 (AccountingRules.ts:3, CalendarRules.ts:27, MeasurementRules.ts:74,
+DiaryRules.ts:22, ExecutionRules.ts:265); CA-12 DevTrainingPlansRepository.ts 1711 строк;
+CA-15 DevTrainingExecutionRepository.ts:158 exportTransfer N+1; CA-13 TypeScript 5.8/6.0.
+
+# (ниже — состояние на 2026-10-24)
 
 Goal ACTIVE full2.0→3.0+backup/restore NOTDONE. R04→R03/Product49–50/53–56/INT03–12.
 ProdDDL/realmigration/overlay/signing/release gates OPEN; synthetic/finalizable:false.

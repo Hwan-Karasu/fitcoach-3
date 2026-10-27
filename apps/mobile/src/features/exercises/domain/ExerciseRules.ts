@@ -74,10 +74,6 @@ export function matchesQuery(entry: CatalogEntry, query: string): boolean {
   return matchesWords(entry, queryWords(query));
 }
 
-export function activeFilterCount(filters: CatalogFilters): number {
-  return filters.bodyParts.size + filters.equipment.size + filters.profiles.size + (filters.showHidden ? 1 : 0);
-}
-
 /**
  * Число упражнений у каждого варианта фильтра (UI-OWN-030): с учётом поиска, режима и остальных фильтров, но без
  * выбора в этом же измерении — иначе отмеченные варианты скрыли бы остальные.

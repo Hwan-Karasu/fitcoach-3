@@ -18,6 +18,7 @@
 | `docs/adr/F03_BOOT_CANDIDATE.md` | Task F03: чистая boot state machine, её тесты и открытая интеграция SQLite/UI |
 | `docs/adr/F06_READ_MODELS_CANDIDATE.md` | Task F06: scoped subscriptions, post-commit invalidation и открытые production/Android gates |
 | `docs/adr/F07_THEME_CANDIDATE.md` | Task F07: runtime-снимок 9×3 палитр, типизированный resolver, частичные тесты и открытый UI/Android gate |
+| `docs/CODE_AUDIT_2026-10-27.md` | Технический аудит всего приложения: реестр CA-01…CA-18, очистка, зависимости, ограничения |
 | `docs/PROJECT_STATUS.md` | Текущее состояние нового репозитория и следующий task |
 
 Нормативные документы не дублируются в этом репозитории. Единственная актуальная

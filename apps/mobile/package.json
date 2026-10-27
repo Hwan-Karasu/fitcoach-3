@@ -16,7 +16,6 @@
     "mobile": "node --experimental-strip-types ./scripts/mobile.ts"
   },
   "dependencies": {
-    "@expo-google-fonts/inter": "0.4.2",
     "@expo-google-fonts/manrope": "0.4.2",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@noble/hashes": "2.4.0",

@@ -62,8 +62,6 @@ export const weekScopeLabels: Readonly<Record<WeekScope, string>> = {
   ALL: "Все недели мезоцикла",
 };
 
-export const MESOCYCLE_TITLE_MAX = 80;
-
 /** Расширенная программа глазами одного участника: его копии мезоциклов и его выбор (§48.10). */
 export interface PeriodizedPlan {
   readonly program: TrainingProgram;

@@ -14,7 +14,6 @@ export { TabBarDock, TabBarPending, TabBarSlotsProvider, useTabBarSlots, useWeek
 export { TextField } from "./TextField.tsx";
 export { NumericField } from "./NumericField.tsx";
 export { parseNumericDraft, type DecimalPolicy, type NumericDraft } from "./numeric-draft.ts";
-export { MetricTile, type MetricTileData } from "./MetricTile.tsx";
 export { StatusTag, type StatusKind } from "./StatusTag.tsx";
 export { EmptyState, LoadingState, type EmptyReason } from "./AsyncStates.tsx";
 export { ClientRosterCard, RosterGroup, type ClientRosterCardData, type RosterMetric } from "./ClientRosterCard.tsx";

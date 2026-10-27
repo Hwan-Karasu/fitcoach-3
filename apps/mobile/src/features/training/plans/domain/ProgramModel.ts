@@ -1,8 +1,6 @@
 /** §48.2: два самостоятельных конструктора — простой (один клиент) и расширенный (мезоциклы, участники). */
 export type ProgramKind = "SIMPLE" | "PERIODIZED";
 
-export const PROGRAM_KINDS: readonly ProgramKind[] = ["SIMPLE", "PERIODIZED"];
-
 export interface TrainingProgram {
   readonly id: string;
   readonly kind: ProgramKind;

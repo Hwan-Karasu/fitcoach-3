@@ -20,9 +20,9 @@ FitCoach_3/
   docs/ui/               UI-решения владельца, спецификации экранов, матрица
   scripts/               проверки и тесты (*.test.ts), source/secrets/arch
   apps/mobile/
-    App.tsx              __DEV__ → DevBootGate, иначе FoundationScreen
+    App.tsx              __DEV__ → createDevRuntime, иначе createProductionRuntime → ApplicationBootGate
     scripts/             mobile.ts (запуск Metro), тесты с импортом .tsx
-    src/app/             bootstrap, composition (createDevServices), navigation
+    src/app/             bootstrap, composition (createServices), navigation
     src/features/<f>/    domain/ data/ presentation/ public.ts README.md
     src/workflows/       кросс-модульные команды в одной транзакции
     src/read-models/     QueryRegistry, производные запросы (только чтение)
