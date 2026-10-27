@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compareWorkoutDays, isWorkoutDay, workoutDayFromEvidence, type WorkoutDateEvidence } from
   "../apps/mobile/src/features/training/execution/domain/WorkoutDateEvidence.ts";
-import { legacyExecutionDate } from "./r04/LegacyExecutionDates.ts";
 
 const evidence = (overrides: Partial<WorkoutDateEvidence> = {}): WorkoutDateEvidence => ({
   precision: "DAY", actualDate: "2026-10-01", timestamp: null, estimatedDate: null, importedAt: null, ...overrides,
@@ -16,19 +15,19 @@ test("календарная дата: високосный день допус�
 });
 
 test("точный день и местное время сохраняют день источника независимо от зоны чтения", () => {
-  const day = legacyExecutionDate("2026-10-01", "exact", "explicit", null);
-  const local = legacyExecutionDate("2026-10-01 23:59:59.123456789", "exact", null, null);
+  const day = evidence();
+  const local = evidence({ precision: "LOCAL_DATETIME", timestamp: "2026-10-01T23:59:59.123456789" });
   for (const zone of ["Europe/Moscow", "Pacific/Honolulu", "Pacific/Kiritimati"])
     for (const item of [day, local]) assert.equal(workoutDayFromEvidence(item, zone), "2026-10-01");
   assert.equal(local.timestamp, "2026-10-01T23:59:59.123456789");
 });
 
 test("instant: явная зона проекции меняет день, точность/offset источника остаются неизменными", () => {
-  const source = Object.freeze(legacyExecutionDate("2026-10-01T23:30:00.123456789Z", "exact", null, null));
+  const source = Object.freeze(evidence({ precision: "INSTANT", timestamp: "2026-10-01T23:30:00.123456789Z" }));
   const before = structuredClone(source);
   assert.equal(workoutDayFromEvidence(source, "Europe/Moscow"), "2026-10-02");
   assert.equal(workoutDayFromEvidence(source, "America/New_York"), "2026-10-01");
-  const offset = legacyExecutionDate("2026-10-02T02:30:00.123456789+03:00", "exact", null, null);
+  const offset = evidence({ precision: "INSTANT", actualDate: "2026-10-02", timestamp: "2026-10-02T02:30:00.123456789+03:00" });
   assert.equal(workoutDayFromEvidence(offset, "UTC"), "2026-10-01");
   assert.equal(offset.timestamp, "2026-10-02T02:30:00.123456789+03:00");
   assert.deepEqual(source, before);
@@ -41,13 +40,13 @@ test("проекция instant около смены DST и через гран�
     ["2026-10-24T22:30:00Z", "Europe/Berlin", "2026-10-25"],
     ["2026-10-25T23:30:00Z", "Europe/Berlin", "2026-10-26"],
     ["2026-12-31T23:30:00Z", "Europe/Moscow", "2027-01-01"],
-  ] as const) assert.equal(workoutDayFromEvidence(legacyExecutionDate(timestamp, "exact", null, null), zone), expected);
+  ] as const) assert.equal(workoutDayFromEvidence(evidence({ precision: "INSTANT", actualDate: timestamp.slice(0, 10), timestamp }), zone), expected);
 });
 
 test("неизвестная/вычисленная дата не становится днём импорта или предположенным днём занятия", () => {
   const imported = "2026-10-24T12:00:00Z";
-  const unknown = legacyExecutionDate("2026-10-01T10:00:00Z", "imported-unknown", null, imported);
-  const derived = legacyExecutionDate("2026-10-01", "derived", "derived-week", imported);
+  const unknown = evidence({ precision: "UNKNOWN", actualDate: null, importedAt: imported });
+  const derived = evidence({ precision: "DERIVED", actualDate: null, estimatedDate: "2026-10-01", importedAt: imported });
   assert.equal(workoutDayFromEvidence(unknown, "Europe/Moscow"), null);
   assert.equal(workoutDayFromEvidence(derived, "Europe/Moscow"), null);
   assert.equal(derived.estimatedDate, "2026-10-01");
@@ -65,5 +64,5 @@ test("противоречивое свидетельство или невер�
     evidence({ precision: "INSTANT", timestamp: "2026-10-02T10:00:00Z" }),
     evidence({ precision: "INSTANT", timestamp: "2026-10-01T10:00:00+24:00" }),
   ]) assert.equal(workoutDayFromEvidence(item, "UTC"), null, JSON.stringify(item));
-  assert.equal(workoutDayFromEvidence(legacyExecutionDate("2026-10-01T10:00:00Z", "exact", null, null), "invalid-zone"), null);
+  assert.equal(workoutDayFromEvidence(evidence({ precision: "INSTANT", timestamp: "2026-10-01T10:00:00Z" }), "invalid-zone"), null);
 });

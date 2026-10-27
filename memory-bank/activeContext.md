@@ -1,57 +1,24 @@
 # Active context — 2026-10-27
 
-«Дневник атлета», FitCoach_3/audit/training-fixes. Goal ACTIVE full2.0→3.0+
-backup/restore NOT100%. R04→R03; Product48.5.7/49–50/53–56/INT03–12.
-ProdDDL/realmigration/overlay/signing/release gates OPEN, no bypass. Private synthetic
-staging/finalizable:false only. Russiancommits/nopush/no agents. Pinned node.cmd24.3,
-strictTS/UTF8/rg. Targetedchecks/fullfoundation milestones. Memory≤5000chars/bytes.
-ConcurrentTHEME/calendar samefolder: preserve/exclude its paths/packagehunks.
-UIlater/Excelafterbackup/GitHubfirst. No personalDB/backups/secrets/key reads;
-real2.0/phone/scrcpy untouched. Sourceoftruth synced2026-10-14 package.
+«Дневник атлета», FitCoach_3, ветка perf/week-participant-navigation. Русские коммиты, без push по умолчанию,
+закреплённый Node 24.3, строгий TS. Параллельные правки в дереве: коммитить поимённо, чужое не трогать.
 
-User8d0031a: bridge3.0 separate2.0 importer→normal3.x withoutimporter. Keep signed
-bridge/tag/checksum/instructions lateusers +imported3.x data/precision/provenance/
-regularbackup. Fullproof2.0copy→bridge→3.xcopy→normalwithoutimporter required.
-ExpoRestoreJobs3.xONLY NOTlegacy. Priorbackup D01/fullsnapshot/hash/media/GuardedRestore/
-return15holders/closedrecovery/UI/WAL/capacity/generation/GC. Historicalnative35/12/13/
-24/3/Downloads20/SAF19/reinstall6/auto21/status3/missing19/actualkill15+14; fixture
-COMPLETE/noarmedpause/2.0build128safe. No currentphone/PID proof thisphase.
+**Решение владельца 2026-10-27 (ADR-043, R04-RETIRE):** прямая миграция 2.0 → 3.0 и установка поверх 2.0
+отменены, код R02–R04 удалён. 3.0 ставится отдельно (`com.fitcoach.v3`), бэкап только собственного формата
+(R06), перенос — только тренировки через Excel-импорт/экспорт. Питание, замеры, оплаты, календарь 2.0 не
+переносятся. Контракт: docs/INDEPENDENT_V3_AND_EXCEL.md, задачи: docs/TRANSFER_BACKLOG.json.
 
-Аудит 2026-10-27 (docs/CODE_AUDIT_2026-10-27.md): этапы A–C сделаны, дерево чистое и зелёное
-(Excel I07 = 2e7e0fe). Этапы D–E сделаны в пределах без телефона (TS 6.0.3 везде, ADR-039/040). Дальше этап F (финальная проверка).
-Ждём владельца: CA-23 (импорт больших книг падает: листов, файл, release/Expo Go, как падает), CA-24 (inline requires, замер старта).
-Решения владельца: CA-19 react-hooks lint (новая зависимость), flash-list, spikes. CA-22 закрыт.
-Prior R04 перенесён в archive/activeContext-prior-r04-2026-10-24.md.
+Аудит готовности переноса (2026-10-27): путь Excel ≈ 55–60 %, осталось ≈ 40–45 %.
 
-800ebb1 Nutrition nativefacts; b048d05 calculator profiles. Historic snapshots/
-savedportiontotals via override, no catalogrewrite/phantomfood/doublecountedrecipe.
-Water-only unaccounted; marks notWorkout/Credit. Manual/bodyinputs undated snapshots
-notTargets/Measurements, no guesseddate/derivedkcal. Existingnormal3.x backup proof
-coversnativeNutrition+Measurementrows/IDs, NOTprivateprovenance/review/archives.
+## Фокус и следующий шаг
+1. IMPORT-V2 (ADR-042, docs/IMPORT_ENGINE_V2.md): S1, S2 готовы (f357369); дальше S3 saveBuilderWorkbook без
+   квитанций → S4 экспорт и круговой тест → S5 удалить старый движок, участники бэкапа и удаления клиента.
+2. AUD26-01 (P1): окончательное удаление клиента блокируется таблицей training_transfer_receipts — нет среди
+   участников (createLocalRepositories.ts, DevClientRepository.ts:193); закрывается в S5.
+3. CA-23: падение импорта больших книг (27912 SQL) — ждём данные владельца. CA-24: замер inline requires.
+4. I01-USER-PARITY: 544 значения исправляет владелец, затем 25 книг и сверка с 2.0.
+5. Выпуск: подпись не debug (REL-ANDROID), проверка последних APK на телефоне (build17).
 
-522369a privatearchives: stableIDs/exactdecimals/dateprecision/raw/overlap/NutritionV3.
-
-3c4d019 retainedNutrition domain/reader/candidatebackup/isolate proof, notproduction.
-
-CURRENT Calendar/code6d84461 (R04_CALENDAR_STAGING.md): fullcalendarrows/Calendar-ownedsettings;
-unknownshape/view blocked. CalendarV1 requiresNutritionV3/allpriorowners; frozen/shared
-tx/IDs/sourceSHA/manifestSHA/fullCalendar+Accountingparity/guards. Enums->standardseed
-IDs/all4new3.xdefaults, oldtype labels snapshots. ActiveSCHEDULED/outcomeNULL evenpast;
-softdelete hiddenCANCELLED/outcomeNULL/sourceDeleteTime+basis NOTconfirmedcancelled.
-No Workout/datejoin. ExactclientID/guestnotnamejoin. End22inclusive->23:00/Sunday0->
-Mondaybits/truehourflags DUTY-BLOCKED, false nofact. Overlaps retained/midnightendvalid;
-overnight/statusbilling/orphans/unknownforms rawreview/no guessing. Longtext/durations
-beyondeditor keptnative+review. NewAccountingUNTRACKED, no paidfacts. Unexpectedfinance
-source tables blockevenempty. Personalnewcatalogpolicy1/importedbypass1 preventsold
-retrocharge afterFITCOACH/newpack5/explicitoutcome. No duplicatecatalogtypes oninit.
-669/669 area+deps/12newCalendar/latest57combinedExecution. Allboundaries+beforecommit
-rollback/retry including5facts/3components/notes/weight/nutrition/calc/archive/calendar.
-Readonly/reopen/reorder/bytes/IDsreuse/drift. Nativefacts->normal3.xDB->.atbackup->restore
-->normalCalendar/Accounting repos. NOTprivateprovenance/unsupportedrows/client_name
-backup. Root/mobileTS/scopedlint/source73/secrets/arch/diff pass; no fullsuite/bundle/
-APK/native/phone/personaldata/concurrentUI. finalizable:false/productiongatesOPEN.
-
-NEXT fullsourcecoverage/prefs/lineage/permanentExecution/review/provenance retention;
-portablemobile source/exactJSONnumber adapters (Nodehost isnotExpoimporter), schema
-admission/composition/UI/deletion/ordinarybackup/fullparity/appSQLite+JSONlegacyrestore/
-Android/release-removalproof. Keepallpriorbackup edgecases OPEN. GoalACTIVE/not100%.
+Gates: production DDL, подпись, release — OPEN. Не открывать *.atbackup/*.jks/*.pem/keystore.properties;
+SmokeA/B/C не удалять. Папка FitCoach_3_R04 вне репозитория не менялась (удалять только владельцу).
+Архив прежнего контекста: memory-bank/archive/activeContext-before-retire-2026-10-27.md.

@@ -15,8 +15,7 @@ import { createTrainingHistory } from "../src/read-models/trainingHistory.ts";
 import { createProgramDeleteWorkflow } from "../src/workflows/deleteTrainingProgram.ts";
 import { createPlanOnlyDeleteWorkflow } from "../src/workflows/deleteTrainingPlanOnly.ts";
 import { nodeSqlitePort } from "../../../scripts/support/node-sqlite-port.ts";
-import { workoutDayFromEvidence } from "../src/features/training/execution/domain/WorkoutDateEvidence.ts";
-import { legacyExecutionDate } from "../../../scripts/r04/LegacyExecutionDates.ts";
+import { workoutDayFromEvidence, type WorkoutDateEvidence } from "../src/features/training/execution/domain/WorkoutDateEvidence.ts";
 
 // Read-model импортирует public.ts фич (там экраны .tsx), поэтому тест живёт здесь.
 const WS = "synthetic-workspace-a";
@@ -72,9 +71,10 @@ test("будущий порт переноса: неизвестные/derived �
     const { a, simple, simpleWorkout, complete, execution, plans } = env;
     for (const weekIndex of [1, 2, 3]) await complete(a, simple, weekIndex, simpleWorkout, "2026-10-01");
     const before = await execution.listClientExecutions(a);
-    const dates = [legacyExecutionDate("2026-10-01T23:30:00.123456789Z", "exact", null, null),
-      legacyExecutionDate("2026-10-24", "imported-unknown", null, "2026-10-24T12:00:00Z"),
-      legacyExecutionDate("2026-10-24", "derived", "derived-week", null)];
+    const dates: WorkoutDateEvidence[] = [
+      { precision: "INSTANT", actualDate: "2026-10-01", timestamp: "2026-10-01T23:30:00.123456789Z", estimatedDate: null, importedAt: null },
+      { precision: "UNKNOWN", actualDate: null, timestamp: null, estimatedDate: null, importedAt: "2026-10-24T12:00:00Z" },
+      { precision: "DERIVED", actualDate: null, timestamp: null, estimatedDate: "2026-10-24", importedAt: null }];
     let zone = "Europe/Moscow";
     let reads = 0;
     // Только вход порта имеет будущий контракт импортированных дат; D01 schema не меняется.
@@ -113,7 +113,7 @@ for (const rejected of [false, true]) test(`кэш даты: ${rejected ? "от�
   try {
     const { a, simple, simpleWorkout, complete, execution, plans } = env;
     await complete(a, simple, 1, simpleWorkout, "2026-10-01");
-    const dateEvidence = legacyExecutionDate("2026-10-01T23:30:00Z", "exact", null, null);
+    const dateEvidence: WorkoutDateEvidence = { precision: "INSTANT", actualDate: "2026-10-01", timestamp: "2026-10-01T23:30:00Z", estimatedDate: null, importedAt: null };
     let zone = "UTC";
     let reads = 0;
     const imported = { subscribeCommittedChanges: execution.subscribeCommittedChanges.bind(execution),

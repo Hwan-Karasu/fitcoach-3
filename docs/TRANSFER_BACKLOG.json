@@ -45,11 +45,10 @@
     },
     {
       "id": "R04-RETIRE",
-      "state": "WAITING_FOR_USER_PARITY",
-      "deps": [
-        "I01-USER-PARITY"
-      ],
-      "acceptance": "Delete migration-only code, commands and tests; preserve SQLite/restore infrastructure, historical Git and old Excel support"
+      "state": "DONE",
+      "acceptance": "Delete migration-only code, commands and tests; preserve SQLite/restore infrastructure, historical Git and old Excel support",
+      "evidence": "Owner decision 2026-10-27: direct 2.0 to 3.0 migration and overlay install abandoned, no wait for I01-USER-PARITY. Removed scripts/r02, r03, r04 (+29 r0x scripts and tests), r02-r04 npm commands, nutrition history reader/port/snapshot, ClientWorkDataModel; typecheck, lint, arch, source, secrets, foundation 955, excel 95, r06 248, d01 26, training 258 pass",
+      "remaining": "FitCoach_3_R04 sibling folder outside the repository is left to the owner"
     },
     {
       "id": "P01-INDEPENDENT-PARTICIPANTS",
