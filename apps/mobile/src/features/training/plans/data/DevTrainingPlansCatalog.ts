@@ -3,5 +3,6 @@ import { trainingPlansBaseline } from "./TrainingPlansBaseline.generated.ts";
 import { plansIntegrityMigration } from "./PlansIntegrityMigration.ts";
 import { navigationGroupsMigration } from "./NavigationGroupsMigration.ts";
 import { workbookDraftMigration } from "./WorkbookDraftMigration.ts";
-export const devTrainingPlansCatalog = [...trainingPlansBaseline, plansIntegrityMigration, navigationGroupsMigration, workbookDraftMigration];
+import { cycleRestMigration } from "./CycleRestMigration.ts";
+export const devTrainingPlansCatalog = [...trainingPlansBaseline, plansIntegrityMigration, navigationGroupsMigration, workbookDraftMigration, cycleRestMigration];
 export const DEV_TRAINING_PLANS_LEDGER = "training_plans_schema_migrations";

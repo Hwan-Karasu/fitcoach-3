@@ -3,6 +3,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { autoMatchWorkbookEntry, selectWorkbookSheet, type WorkbookReviewSession } from "./WorkbookReviewSession.ts";
 import { settleImportedSessions } from "./TransferCompletion.ts";
+import { fillRestWhenAbsent } from "./TransferRest.ts";
 
 /**
  * Стабильный ID листа и строки (лист, неделя, вид, исходный ID): один и тот же лист получает один и тот же ID при любом выборе листов.
@@ -103,7 +104,7 @@ export function compileWholeWorkbook(session: WorkbookReviewSession): Readonly<{
   }
   return { mapping, value: { ...first, client: { ...first.client, id: `${first.sourceId}:workbook:${session.picked.kind === "TRANSFER" ? session.picked.value.client.id : "client"}:${programId}` },
     exercises: [...exercises.values()], sessions, issues: [], planHistory: [],
-    programs: [{ ...first.programs[0]!, id: programId, title: session.programTitle.trim(), kind: "PERIODIZED", simple: null, simpleWeeks: [], mesocycles: cycles }] } };
+    programs: [{ ...first.programs[0]!, id: programId, title: session.programTitle.trim(), kind: "PERIODIZED", simple: null, simpleWeeks: [], mesocycles: fillRestWhenAbsent(cycles) }] } };
 }
 
 export async function prepareWorkbookResponsive(session: WorkbookReviewSession,

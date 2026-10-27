@@ -1,6 +1,8 @@
 import type { BuilderWeek, CycleType, WeekScope } from "./PeriodizedModel.ts";
 import { applyWeekOps, diffWeek, targetWeeks, withLineage } from "./PeriodizedRules.ts";
-import type { PlannedWorkout, PlanRange } from "./SimplePlanModel.ts";
+import { CYCLE_REST_SEC } from "../../../../shared/training-transfer/CycleRest.ts";
+import { setRest } from "./SimplePlanEdits.ts";
+import { REST_DEFAULT_SEC, type PlannedWorkout, type PlanRange, type SimpleProgramDraft } from "./SimplePlanModel.ts";
 import { dropUntrackedValues, type TrackingMetric } from "./SimplePlanRules.ts";
 import { remapSupersets } from "./SupersetRules.ts";
 
@@ -10,14 +12,27 @@ import { remapSupersets } from "./SupersetRules.ts";
  */
 export type { BuilderWeek, CycleType, MesocycleSettings } from "./PeriodizedModel.ts";
 
-export const CYCLE_TYPES: readonly Readonly<{ id: CycleType; label: string; reps: PlanRange }>[] = [
-  { id: "hypertrophy", label: "Гипертрофия", reps: { min: 8, max: 12 } },
-  { id: "strength", label: "Сила", reps: { min: 3, max: 6 } },
-  { id: "power", label: "Мощность", reps: { min: 1, max: 5 } },
-  { id: "endurance", label: "Выносливость", reps: { min: 12, max: 20 } },
-  { id: "recomp", label: "Рекомпозиция", reps: { min: 8, max: 12 } },
-  { id: "custom", label: "Свой", reps: { min: 8, max: 12 } },
+export const CYCLE_TYPES: readonly Readonly<{ id: CycleType; label: string; reps: PlanRange; restSec: number }>[] = [
+  { id: "hypertrophy", label: "Гипертрофия", reps: { min: 8, max: 12 }, restSec: CYCLE_REST_SEC.hypertrophy },
+  { id: "strength", label: "Сила", reps: { min: 3, max: 6 }, restSec: CYCLE_REST_SEC.strength },
+  { id: "power", label: "Мощность", reps: { min: 1, max: 5 }, restSec: CYCLE_REST_SEC.power },
+  { id: "endurance", label: "Выносливость", reps: { min: 12, max: 20 }, restSec: CYCLE_REST_SEC.endurance },
+  { id: "recomp", label: "Рекомпозиция", reps: { min: 8, max: 12 }, restSec: CYCLE_REST_SEC.recomp },
+  { id: "custom", label: "Свой", reps: { min: 8, max: 12 }, restSec: CYCLE_REST_SEC.custom },
 ];
+
+/**
+ * Упражнения, добавленные в цикл, получают отдых типа цикла (как повторения мезоцикла). Меняется только отдых по умолчанию:
+ * заданное вручную и выключенное таймером остаётся как есть.
+ */
+export function restForNewExercises(draft: SimpleProgramDraft, isNew: (exerciseId: string) => boolean, restSec: number): SimpleProgramDraft {
+  if (restSec === REST_DEFAULT_SEC) return draft;
+  let result = draft;
+  for (const workout of draft.plan.workouts) {
+    for (const exercise of workout.exercises) if (isNew(exercise.id) && exercise.restSec === REST_DEFAULT_SEC) result = setRest(result, exercise.id, restSec);
+  }
+  return result;
+}
 
 export const cycleTypeLabels = Object.fromEntries(CYCLE_TYPES.map((item) => [item.id, item.label])) as Readonly<Record<CycleType, string>>;
 
@@ -65,6 +80,27 @@ export function cleanBuilderWeeks(weeks: readonly BuilderWeek[],
   const result = weeks.map((week) => {
     const workouts = dropUntrackedValues(week.workouts, metricsOf);
     if (workouts === week.workouts) return week;
+    changed = true;
+    return { ...week, workouts };
+  });
+  return changed ? result : weeks;
+}
+
+/**
+ * Смена типа цикла в конструкторе: упражнения, у которых отдых прежнего типа (то есть не менявшийся вручную), получают отдых нового
+ * типа во всех неделях; заданное вручную и выключенное таймером не меняются. Нечего менять — те же недели.
+ */
+export function retuneBuilderRest(weeks: readonly BuilderWeek[], fromSec: number, toSec: number): readonly BuilderWeek[] {
+  if (fromSec === toSec) return weeks;
+  let changed = false;
+  const result = weeks.map((week) => {
+    let weekChanged = false;
+    const workouts = week.workouts.map((workout) => {
+      if (!workout.exercises.some((exercise) => exercise.restSec === fromSec)) return workout;
+      weekChanged = true;
+      return { ...workout, exercises: workout.exercises.map((exercise) => exercise.restSec === fromSec ? { ...exercise, restSec: toSec } : exercise) };
+    });
+    if (!weekChanged) return week;
     changed = true;
     return { ...week, workouts };
   });

@@ -9,7 +9,7 @@ import { statusToneColor, type StatusTone } from "../../../../shared/ui/theme/st
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
-import { applyBuilderScope, cleanBuilderWeeks, copyWeekPlan, CYCLE_TYPES, resizeBuilderWeeks, type BuilderWeek, type CycleType } from "../domain/MesocycleBuilder.ts";
+import { applyBuilderScope, cleanBuilderWeeks, copyWeekPlan, CYCLE_TYPES, resizeBuilderWeeks, restForNewExercises, retuneBuilderRest, type BuilderWeek, type CycleType } from "../domain/MesocycleBuilder.ts";
 import type { MesocycleSavePort } from "../domain/MesocycleSave.ts";
 import { diffWeek, targetWeeks } from "../domain/PeriodizedRules.ts";
 import { ScopeMenu } from "./ScopeMenu.tsx";
@@ -23,7 +23,7 @@ import type { ClientPlacementOptions, Placement, PlacementTarget } from "../doma
 import { MESOCYCLE_WEEKS_MAX, WEEK_TYPES, weekTypeLabels, type WeekType } from "../domain/PeriodizedModel.ts";
 import { PROGRAM_TITLE_MAX } from "../domain/ProgramRules.ts";
 import { setRepsRange } from "../domain/SimplePlanEdits.ts";
-import type { PlannedWorkout, PlanRange, SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
+import { REST_DEFAULT_SEC, type PlannedWorkout, type PlanRange, type SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
 import { formatRange, parseRange, setFieldsOf, validateDraft, type PlanIssue } from "../domain/SimplePlanRules.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidate.ts";
@@ -69,6 +69,7 @@ function Section({ title, children }: Readonly<{ title: string; children: ReactN
  * «+ Мезоцикл» (UI-OWN-041); в правке после изменения недели всплывает меню области.
  */
 const NO_ISSUES: readonly PlanIssue[] = [];
+const restOfType = (type: CycleType) => CYCLE_TYPES.find((item) => item.id === type)?.restSec ?? REST_DEFAULT_SEC;
 
 /** Статус сохранённой недели в редакторе: подпись, значок и смысл цвета (подаёт навигация из данных выполнения). */
 export type BuilderWeekStatus = Readonly<{ label: string; marker: string | null; tone: StatusTone }>;
@@ -273,8 +274,10 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
         }
       }
     }
+    // Отдых новых упражнений — по типу цикла (гипертрофия 2:00, сила 3:00 …); заданный вручную не трогается.
+    result = restForNewExercises(result, (id) => !before.has(id), restOfType(cycleType));
     updateWeek(editing, { type: week.type, workouts: result.plan.workouts });
-  }, [editing, lookup, reps, updateWeek, week.type, week.workouts]);
+  }, [cycleType, editing, lookup, reps, updateWeek, week.type, week.workouts]);
   usePickedExercise(picked, draft, lookup, change);
   const latest = useRef({ weeks, editing });
   latest.current = { weeks, editing };
@@ -510,7 +513,12 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
             {CYCLE_TYPES.map((item) => (
               <Pressable key={item.id} accessibilityRole="radio" accessibilityState={{ selected: cycleType === item.id }}
                 accessibilityLabel={`${item.label}, повторения ${formatRange(item.reps)}`}
-                onPress={() => { setCycleType(item.id); setRepsText(formatRange(item.reps).replace("–", "-")); touch(); }}
+                onPress={() => {
+                  // Отдых упражнений следует типу цикла: не менявшийся вручную переходит на отдых нового типа во всех неделях.
+                  const next = retuneBuilderRest(weeks, restOfType(cycleType), item.restSec);
+                  if (next !== weeks) { setWeeks(next); baselines.current = new Map(next.map((value, at) => [at, value.workouts])); }
+                  setCycleType(item.id); setRepsText(formatRange(item.reps).replace("–", "-")); touch();
+                }}
                 style={chip(cycleType === item.id)}>
                 <Text style={[styles.choiceText, { color: cycleType === item.id ? colors.accentInk : colors.textPrimary }]}>{item.label}</Text>
               </Pressable>
