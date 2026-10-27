@@ -2,7 +2,8 @@
 
 CA-аудит (docs/CODE_AUDIT_2026-10-27.md), этапы A–C сделаны; I07 Excel закоммичен 2e7e0fe, дерево чистое,
 test:foundation 1392/1392, excel:test 87+1 todo. Закрыто: CA-10, CA-11 (shared/domain/LocalDate.ts).
-Техдолг: CA-22 закрыт (вариант А, createTrainingTransfer.ts); CA-12 DevTrainingPlansRepository.ts
+Этапы D–E: CA-13 закрыт (TS 6.0.3 везде, ADR-039). Открыто: CA-23 импорт больших книг падает (27912 SQL, ~600 МБ на 7200 результатов; ждём данные владельца), CA-24 inline requires не включены (нужен замер на телефоне).
+Техдолг: CA-22 закрыт (вариант А, createTrainingTransfer.ts); CA-12 решено не трогать DevTrainingPlansRepository.ts
 1711 строк; CA-15 DevTrainingExecutionRepository.ts:158 N+1; CA-13 TS 5.8/6.0; CA-19 нет react-hooks lint.
 
 # (ниже — состояние на 2026-10-24)
@@ -17,18 +18,7 @@ GuardedRestore/return15holders/closedrecovery/WAL/capacity/generation/GC priorwo
 Historicalnative35/12/13/24/3/Downloads20/SAF19/reinstall6/auto21/status3/missing19/
 actualkill15+14; fixtureCOMPLETE/noarmedpause/2.0safe. No currentphone/PID proof.
 
-Prior Profile37/Qhistory/epochs/privateWorkData/registry/Plans92d00bb/templates74fa6cf/
-archives12381f4. 032b7e5 canonicalExecution account+client/physicalgraph/exactsegments/
-date/SHA/no name-value-slotmerges. b64fac9 undatedruntimehistory/records retained,
-no fakegraphs/weightdate; IANA/cache. e93a4c8 editablepartials/nullvs0/DROP/effort/RPE.
-3015bdd contexts/exactnotes/rootcyclealiases/statusvsderived/targetOutcomeNULL.
-60134d7 logs6thsource/raw+paths/cacheID+metadata aliases/unknowncompletioneditable;
-V3binding/Node24tokens/arbitraryJSONimporter notwriterproof. Runtimewrite pending.
-c56c3f7 circumference/f0a241f dailyweight→D01private/stablefieldIDs/dateonly/unsided/
-no guessedprimary. Dailyweight possibleprofileprefill+blur save provenance, notnew
-weighinproof. Profileweight UNKNOWN/targetIdNULL/no guesseddate/equalitymerge.
-Calculatorweight/fatPercent notfacts; outlier/zero/negativezero/future/precision
-rawreview/no rounding/clipping/fake0. MeasurementV2,460historicaltests.
+Prior R04 перенесён в archive/progress-prior-r04-2026-10-24.md.
 
 800ebb1 Nutrition nativefacts; b048d05 calculator profiles. Historic snapshots/
 savedportiontotals via override, no catalogrewrite/phantomfood/doublecountedrecipe.

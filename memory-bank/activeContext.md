@@ -18,7 +18,8 @@ return15holders/closedrecovery/UI/WAL/capacity/generation/GC. Historicalnative35
 COMPLETE/noarmedpause/2.0build128safe. No currentphone/PID proof thisphase.
 
 Аудит 2026-10-27 (docs/CODE_AUDIT_2026-10-27.md): этапы A–C сделаны, дерево чистое и зелёное
-(Excel I07 = 2e7e0fe). Дальше этап D (перф, статически: замеров на телефоне нет), затем E (CA-12).
+(Excel I07 = 2e7e0fe). Этапы D–E сделаны в пределах без телефона (TS 6.0.3 везде, ADR-039/040). Дальше этап F (финальная проверка).
+Ждём владельца: CA-23 (импорт больших книг падает: листов, файл, release/Expo Go, как падает), CA-24 (inline requires, замер старта).
 Решения владельца: CA-19 react-hooks lint (новая зависимость), flash-list, spikes. CA-22 закрыт.
 Prior R04 перенесён в archive/activeContext-prior-r04-2026-10-24.md.
 
