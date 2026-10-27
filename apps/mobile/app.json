@@ -8,7 +8,7 @@
     "orientation": "portrait",
     "android": {
       "package": "com.fitcoach.v3",
-      "versionCode": 22,
+      "versionCode": 23,
       "adaptiveIcon": {
         "foregroundImage": "./assets/brand/adaptive-foreground.png",
         "backgroundImage": "./assets/brand/background.png",

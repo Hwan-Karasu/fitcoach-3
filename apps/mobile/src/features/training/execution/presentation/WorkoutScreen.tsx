@@ -24,8 +24,8 @@ import { weekTypeTone, DiaryEditDialog, formatDuration, formatRange, supersetNum
   type WorkoutWeekNavigation } from "../../plans/public.ts";
 import { type ActiveWorkoutsPort, type SessionStatus, type SetFact, type SetType, type SetValues, type Side, type TrackingMetric,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
-import { displayOrder, endInstantAfter, instantFromLocal, localDateOf, localMinuteOfDay, nextOutcome, sessionDurationSec } from "../domain/ExecutionRules.ts";
-import { durationText, timeText } from "../../../../shared/format/clockText.ts";
+import { displayOrder, endInstantAfter, instantFromLocal, localDateOf, localMinuteOfDay, nextOutcome } from "../domain/ExecutionRules.ts";
+import { timeText } from "../../../../shared/format/clockText.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
 import { ActiveWorkoutsSheet, ExerciseMenuSheet, RpeSheet, SetTypeSheet, SupersetPickSheet, type ExerciseMenuAction } from "./SetPickers.tsx";
@@ -34,6 +34,7 @@ import { WorkoutSharePoster } from "./WorkoutSharePoster.tsx";
 import { labeledPlan, labeledWithDrops } from "./shareFormat.ts";
 import { diaryFields, fieldHeaders, planText, rawOf, shortDate, weekCardLabels, workoutStatusLabels } from "./setFormat.ts";
 import { weekCardStates } from "../domain/WeekCardStatus.ts";
+import { diaryTimeNote } from "../domain/DiaryTimeNote.ts";
 import { extraWarmups, useWorkoutDiary, type SetPatch } from "./useWorkoutDiary.ts";
 import { PendingInputWrites } from "../domain/PendingInputWrites.ts";
 import { NoteField, SetRow, type SetTarget } from "./WorkoutSetRow.tsx";
@@ -53,6 +54,8 @@ const hasValues = (values: SetValues) => Object.values(values).some((value) => v
 
 /** Величины упражнения, которого нет в справочнике: один и тот же массив, чтобы колонки не пересоздавались. */
 const NO_METRICS: readonly TrackingMetric[] = [];
+/** Неделя без занятия: шапка показывается теми же строками, но неактивными. */
+const NO_SESSION = { actualDate: null, startedAt: null, finishedAt: null } as const;
 
 const extraSets = new WeakMap<SetFact, PlannedSet>();
 /** Плановая строка добавленной разминки; для одного факта — один и тот же объект (стабильные пропсы строки). */
@@ -446,10 +449,11 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
           <View style={styles.metaRow}>
             <View style={styles.dateRow}>
               <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Неделя ${diary.displayedSlot.weekIndex}`}</Text>
-              {state.session !== null ? (
+              {/* Шапка одной высоты в любой неделе: без занятия дата и время показываются неактивными, иначе при смене недели содержимое «прыгает». */}
+              {(
                 // §48.84: дата проведения — по умолчанию день первого ввода, можно указать прошедший день.
-                <Pressable accessibilityRole="button" hitSlop={8}
-                  accessibilityLabel={`Дата тренировки ${shortDate(state.session.actualDate)}. Изменить`}
+                <Pressable accessibilityRole="button" hitSlop={8} disabled={state.session === null}
+                  accessibilityLabel={`Дата тренировки ${shortDate(state.session?.actualDate ?? null)}. Изменить`}
                   onPress={() => {
                     const current = state.session?.actualDate;
                     if (current === undefined) return;
@@ -457,11 +461,11 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                       if (date !== null && date !== current) void diary.setActualDate(date);
                     });
                   }}
-                  style={[styles.dateButton, { backgroundColor: colors.surfaceRaised }]}>
+                  style={[styles.dateButton, { backgroundColor: colors.surfaceRaised }, state.session === null && styles.dim]}>
                   <CalendarDays size={15} color={colors.accentInk} strokeWidth={2} />
-                  <Text style={[styles.dateText, { color: colors.accentInk }]}>{shortDate(state.session.actualDate)}</Text>
+                  <Text style={[styles.dateText, { color: colors.accentInk }]}>{shortDate(state.session?.actualDate ?? null)}</Text>
                 </Pressable>
-              ) : null}
+              )}
               {others.length > 0 ? (
                 <Pressable accessibilityRole="button" accessibilityLabel={`Другие тренировки в работе: ${others.length}. Перейти`}
                   hitSlop={6} onPress={() => { flushPending(); Keyboard.dismiss(); activeSheet.current?.present(); }}
@@ -473,25 +477,22 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
             </View>
             <StatusTag kind={statusKinds[diary.status]} label={workoutStatusLabels[diary.status]} />
           </View>
-          {state.session !== null ? (
+          {(
             // PC §48.86.13: начало ставится по первому подтверждённому подходу, окончание — при «Завершить»; обе отметки можно исправить.
             <View style={styles.timeRow}>
-              {([["start", "Начало", state.session.startedAt], ["end", "Окончание", state.session.finishedAt]] as const).map(([kind, label, instant]) => (
+              {([["start", "Начало", state.session?.startedAt ?? null], ["end", "Окончание", state.session?.finishedAt ?? null]] as const).map(([kind, label, instant]) => (
                 <Pressable key={kind} accessibilityRole="button" hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
-                  disabled={state.session?.actualDate === null}
+                  disabled={(state.session?.actualDate ?? null) === null}
                   accessibilityLabel={`${label} тренировки ${instant === null ? "не указано" : timeText(instant)}. Изменить`}
                   onPress={() => { flushPending(); Keyboard.dismiss(); setTimeEdit(kind); }}
-                  style={[styles.dateButton, { backgroundColor: colors.surfaceRaised }]}>
+                  style={[styles.dateButton, { backgroundColor: colors.surfaceRaised }, (state.session?.actualDate ?? null) === null && styles.dim]}>
                   <Clock size={15} color={colors.accentInk} strokeWidth={2} />
                   <Text style={[styles.dateText, { color: colors.accentInk }]}>{`${label} ${instant === null ? "—" : timeText(instant)}`}</Text>
                 </Pressable>
               ))}
-              {state.session.actualDate === null ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Для времени сначала укажите дату</Text> : null}
-              {state.session.startedAt !== null && state.session.finishedAt !== null
-                ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{sessionDurationSec(state.session.startedAt, state.session.finishedAt) === null
-                  ? "Длительность: нет данных" : durationText(sessionDurationSec(state.session.startedAt, state.session.finishedAt)!)}</Text> : null}
             </View>
-          ) : null}
+          )}
+          <Text numberOfLines={1} style={[styles.meta, { color: colors.textSecondary }]}>{diaryTimeNote(state.session ?? NO_SESSION) || " "}</Text>
           <View style={styles.actions}>
             {([
               { label: "Добавить упражнение", icon: <Plus size={16} color={colors.accentInk} strokeWidth={2.2} />,
