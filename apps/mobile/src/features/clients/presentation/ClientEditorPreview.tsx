@@ -305,9 +305,6 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
         onScroll={(event) => syncSectionWithScroll(event.nativeEvent.contentOffset.y)}
         contentContainerStyle={styles.formContent}
       >
-        <InlineNotice kind="warning">
-          Данные сохраняются в отдельной локальной dev-базе. Бэкап и восстановление пока не готовы; не полагайтесь на эту установку как на единственную копию важных данных.
-        </InlineNotice>
         {recoveredDraft ? <InlineNotice kind="info">Несохранённый черновик восстановлен из этого устройства.</InlineNotice> : null}
         <View
           onLayout={(event) => { basicOffset.current = event.nativeEvent.layout.y; }}
