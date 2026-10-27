@@ -12,6 +12,10 @@ export class TransferReceiptStore {
   read(tx: SqliteStatementPort, client: string, key: string): Promise<TransferReceipt | null> {
     return tx.first<TransferReceipt>(`SELECT source_hash AS sourceHash, local_hash AS localHash, program_ids_json AS programIds, cycle_id AS cycleId FROM training_transfer_receipts WHERE workspace_id=? AND client_id=? AND source_key=?`, [this.workspace, client, key]);
   }
+  /** Устаревшие квитанции: программа, по которой они выданы, удалена целиком. */
+  async forget(tx: SqliteStatementPort, client: string, keys: readonly string[]): Promise<void> {
+    for (const key of keys) await tx.run(`DELETE FROM training_transfer_receipts WHERE workspace_id=? AND client_id=? AND source_key=?`, [this.workspace, client, key]);
+  }
   async save(tx: SqliteStatementPort, client: string, key: string, receipt: TransferReceipt): Promise<void> {
     await tx.run(`INSERT INTO training_transfer_receipts(workspace_id,client_id,source_key,source_hash,local_hash,program_ids_json,cycle_id) VALUES(?,?,?,?,?,?,?)`, [this.workspace, client, key, receipt.sourceHash, receipt.localHash, receipt.programIds, receipt.cycleId ?? null]);
   }

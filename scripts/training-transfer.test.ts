@@ -275,6 +275,53 @@ test("I05 whole workbook writes one programme with all cycles, plans and results
   } finally { await f.close(); }
 });
 
+test("I07 a book can be imported again after its programme was deleted with results, and a leftover receipt never blocks it", async () => {
+  const f = await fixture();
+  try {
+    const base = trainingTransferFixture();
+    let session = prepareWholeWorkbook(startWorkbookReview({ kind: "TRANSFER", value: base }, false), []);
+    session = setWorkbookNameMatch(session, base.exercises[0]!.name, f.mapping.press!);
+    const whole = compileWholeWorkbook(session); const matches = workbookMatchesToRemember(session, true);
+    await f.transfer.importClient(f.client.id, whole.value, whole.mapping, { rememberMatches: matches });
+    const programId = (await f.plans.getLibrary(f.client.id)).active[0]!.id; const revision = (await f.plans.getProgram(f.client.id, programId))!.revision;
+    const lease = await f.database.acquire();
+    try {
+      await lease.writer.write(async (tx) => {
+        await f.execution.cleanupParticipant.remove(tx, f.client.id, programId, null);
+        await f.plans.deleteParticipant.deleteProgram(tx, { clientId: f.client.id, programId, expectedRevision: revision }, new Date());
+      });
+    } finally { await f.database.release(); }
+    for (const table of ["training_programs", "training_sessions", "training_performed_sets"]) assert.equal(f.native.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n, 0, `${table} after delete`);
+    await f.transfer.importClient(f.client.id, whole.value, whole.mapping, { rememberMatches: matches });
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_programs").get()!.n, 1);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 2, "the results come back with the book");
+    assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
+  } finally { await f.close(); }
+});
+
+test("I07 a workbook saved as a new programme can be saved again after that programme was deleted with results", async () => {
+  const f = await fixture();
+  try {
+    const imported = builderWorkbookImport(selectWorkbookImportSheets(multiBook(f.mapping.press!), ["0"]));
+    const request: BuilderWorkbookSaveRequest = { clientId: f.client.id, scope: { programId: null, mesocycleId: null }, expectedRevision: null,
+      programTitle: "Книга", cycles: imported.cycles!, clientIds: [f.client.id], existingCycleKey: null, placements: [] };
+    const first = await f.transfer.saveBuilderWorkbook(request);
+    const revision = (await f.plans.getProgram(f.client.id, first.programId))!.revision; const lease = await f.database.acquire();
+    try {
+      await lease.writer.write(async (tx) => {
+        await f.execution.cleanupParticipant.remove(tx, f.client.id, first.programId, null);
+        await f.plans.deleteParticipant.deleteProgram(tx, { clientId: f.client.id, programId: first.programId, expectedRevision: revision }, new Date());
+      });
+    } finally { await f.database.release(); }
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_programs").get()!.n, 0);
+    const again = await f.transfer.saveBuilderWorkbook(request);
+    assert.ok(again.programId.length > 0);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_programs").get()!.n, 1);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 2);
+    assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
+  } finally { await f.close(); }
+});
+
 test("I06 every imported workout is completed, including empty undated slots; rename preserves plans and facts", async () => {
   const f = await fixture();
   try {

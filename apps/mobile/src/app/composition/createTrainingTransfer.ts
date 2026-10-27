@@ -50,6 +50,14 @@ export function createTrainingTransfer(database: SharedSqliteDatabase, workspace
   const receipts = new TransferReceiptStore(workspace);
   const matches = new ExerciseImportMatchStore(workspace);
   const activeExerciseIds = async () => new Set((await exercises.list()).filter((entry) => !entry.overlay.hidden).map((entry) => entry.definition.id));
+  /** Программы нет совсем: ни самой программы, ни результатов клиента по ней (удалена «с результатами»). */
+  const programsGone = async (tx: SqliteStatementPort, clientId: string, ids: readonly string[]) => {
+    for (const id of ids) {
+      if (await tx.first(`SELECT 1 AS found FROM training_programs WHERE workspace_id=? AND id=?`, [workspace, id]) !== null) return false;
+      if (await tx.first(`SELECT 1 AS found FROM training_sessions WHERE workspace_id=? AND client_id=? AND program_id=?`, [workspace, clientId, id]) !== null) return false;
+    }
+    return ids.length > 0;
+  };
   const checkMatches = async (input: readonly ExerciseImportMatch[]) => {
     const valid = validateExerciseMatches(input);
     if (!valid.length) return valid;
@@ -104,7 +112,10 @@ export function createTrainingTransfer(database: SharedSqliteDatabase, workspace
       const saved = await transaction(async (tx) => {
         const now = new Date();
         if (request.scope.programId === null) {
-          const receipt = await receipts.read(tx, request.clientId, batchKey);
+          let receipt = await receipts.read(tx, request.clientId, batchKey);
+          if (receipt && await programsGone(tx, request.clientId, JSON.parse(receipt.programIds) as string[])) {
+            await receipts.forget(tx, request.clientId, [batchKey]); receipt = null; // программу удалили целиком: квитанция устарела
+          }
           if (receipt) {
             const ids = JSON.parse(receipt.programIds) as string[]; const local = await exportInTransaction(tx, request.clientId, ids);
             if (receipt.sourceHash !== batchHash || receipt.localHash !== fingerprint(local)) throw new Error("Конфликт ранее сохранённого импорта. Автоматическая перезапись отключена.");
@@ -217,7 +228,12 @@ export function createTrainingTransfer(database: SharedSqliteDatabase, workspace
           const history = value.planHistory?.filter((h) => h.programId === source.id) ?? [];
           history.forEach((h) => { h.simple?.weeks.forEach((w) => collect(w.workouts)); h.mesocycle?.weeks.forEach((w) => collect(w.workouts)); });
           const sourceHash = hash({ source, sessions: sourceSessions, history, mapping: Object.fromEntries([...used].sort().map((id) => [id, mapping[id]])) });
-          const receipt = await receipts.read(tx, clientId, key);
+          let receipt = await receipts.read(tx, clientId, key);
+          if (receipt && await programsGone(tx, clientId, [program.id])) {
+            // Программу удалили целиком (с результатами): квитанция устарела и не должна блокировать повторный импорт.
+            await receipts.forget(tx, clientId, [key, ...source.mesocycles.map((cycle) => hash(["builder-sheet", program.id, value.sourceId, cycle.id]))]);
+            receipt = null;
+          }
           if (receipt) {
             if (receipt.sourceHash !== sourceHash || receipt.localHash !== fingerprint(await exportInTransaction(tx, clientId, [program.id]))) throw new Error(`Конфликт программы «${source.title}»: данные изменились после импорта. Автоматическая перезапись отключена.`);
             continue;
