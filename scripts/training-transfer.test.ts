@@ -14,7 +14,7 @@ import { prepareProductionDatabase } from "../apps/mobile/src/app/composition/pr
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { DevTrainingPlansRepository } from "../apps/mobile/src/features/training/plans/data/DevTrainingPlansRepository.ts";
 import { DevTrainingExecutionRepository } from "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionRepository.ts";
-import { createTrainingTransfer, remapTrainingTransfer } from "../apps/mobile/src/app/composition/createTrainingTransfer.ts";
+import { createTrainingTransfer } from "../apps/mobile/src/app/composition/createTrainingTransfer.ts";
 import { DevExerciseCatalogRepository } from "../apps/mobile/src/features/exercises/data/DevExerciseCatalogRepository.ts";
 import type { SystemCatalog } from "../apps/mobile/src/features/exercises/domain/ExerciseModel.ts";
 import { trainingTransferFixture } from "./training-transfer-fixture.ts";
@@ -696,7 +696,7 @@ test("old-format history stays in storage but is excluded from the current matri
 test("results of a deleted plan stay in storage and do not create phantom matrix rows", async () => {
   const f = await fixture();
   try {
-    const input = remapTrainingTransfer(trainingTransferFixture(), f.client.id, f.mapping);
+    const input = sameIds(trainingTransferFixture(), f.client.id, f.mapping);
     const lease = await f.database.acquire();
     try { await lease.writer.write((tx) => importTrainingExecutions(tx, "local-trainer", f.client.id, input.sessions.map((s) => ({ ...s, origin: { programTitle: "Удалённый план", programKind: "PERIODIZED", mesocycleTitle: "Цикл", workoutTitle: "Тренировка 1" } })))); }
     finally { await f.database.release(); }

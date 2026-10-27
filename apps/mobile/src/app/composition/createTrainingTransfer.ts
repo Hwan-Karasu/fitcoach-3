@@ -1,5 +1,3 @@
-import { sha256 } from "@noble/hashes/sha2.js";
-import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import type { SharedSqliteDatabase } from "../../shared/db/SharedSqliteDatabase.ts";
 import type { SqliteStatementPort } from "../../shared/db/SqlitePort.ts";
 import { transferSummary, type TrainingTransfer, type TransferWorkout } from "../../shared/training-transfer/TrainingTransfer.ts";
@@ -12,33 +10,9 @@ import type { DevTrainingExecutionRepository } from "../../features/training/exe
 import type { DevTrainingPlansRepository } from "../../features/training/plans/data/DevTrainingPlansRepository.ts";
 import type { DevExerciseCatalogRepository } from "../../features/exercises/data/DevExerciseCatalogRepository.ts";
 import type { BuilderWorkbookCycle } from "../../shared/training-transfer/BuilderWorkbook.ts";
-import { canonicalJson } from "../../shared/training-transfer/CanonicalJson.ts";
 import { UUID_V4_BATCH_SQL } from "../../shared/db/SqlIds.ts";
 import { assertValidTransfer, reidTransfer, transferSourceIds } from "../../features/import/public.ts";
 
-const hash = (value: unknown) => bytesToHex(sha256(utf8ToBytes(canonicalJson(value))));
-export function remapTrainingTransfer(value: TrainingTransfer, clientId: string, mapping: Readonly<Record<string, string>>): TrainingTransfer {
-  // Один исходный ID встречается много раз (подход в плане и в каждом результате); хеш чистый, поэтому считается один раз.
-  const remembered = new Map<string, string>();
-  const id = (source: string): string => {
-    const known = remembered.get(source);
-    if (known !== undefined) return known;
-    const hex = hash([value.sourceId, value.client.id, clientId, source]);
-    const made = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
-    remembered.set(source, made);
-    return made;
-  };
-  const exerciseId = (source: string) => { const target = mapping[source]; if (!target) throw new Error("Сопоставьте все упражнения перед импортом."); return target; };
-  const workouts = (items: readonly TransferWorkout[]) => items.map((w) => ({ ...w, id: id(w.id), ...(w.lineageId ? { lineageId: id(w.lineageId) } : {}), exercises: w.exercises.map((e) => ({ ...e, id: id(e.id), exerciseId: exerciseId(e.exerciseId), ...(e.lineageId ? { lineageId: id(e.lineageId) } : {}), ...(e.supersetId ? { supersetId: id(e.supersetId) } : {}), sets: e.sets.map((s) => ({ ...s, id: id(s.id) })) })) }));
-  return { ...value, client: { ...value.client, id: clientId }, exercises: value.exercises.map((e) => ({ ...e, id: exerciseId(e.id) })),
-    ...(value.planHistory ? { planHistory: value.planHistory.map((h) => ({ ...h, id: id(h.id), programId: id(h.programId), simple: h.simple ? { ...h.simple, weeks: h.simple.weeks.map((w) => ({ ...w, workouts: workouts(w.workouts) })) } : null,
-      mesocycle: h.mesocycle ? { ...h.mesocycle, id: id(h.mesocycle.id), lineageId: id(h.mesocycle.lineageId), weeks: h.mesocycle.weeks.map((w) => ({ ...w, id: id(w.id), workouts: workouts(w.workouts) })) } : null })) } : {}),
-    programs: value.programs.map((p) => ({ ...p, id: id(p.id), simple: p.simple ? { ...p.simple, workouts: workouts(p.simple.workouts) } : null,
-      simpleWeeks: p.simpleWeeks.map((w) => ({ ...w, workouts: workouts(w.workouts) })),
-      mesocycles: p.mesocycles.map((c) => ({ ...c, id: id(c.id), lineageId: id(c.lineageId), weeks: c.weeks.map((w) => ({ ...w, id: id(w.id), workouts: workouts(w.workouts) })) })) })),
-    sessions: value.sessions.map((s) => ({ ...s, id: id(s.id), programId: id(s.programId), plannedWorkoutId: id(s.plannedWorkoutId),
-      facts: s.facts.map((f) => ({ ...f, id: id(f.id), plannedSetId: id(f.plannedSetId), plannedExerciseId: id(f.plannedExerciseId), exerciseId: exerciseId(f.exerciseId) })), notes: s.notes.map((n) => ({ ...n, plannedExerciseId: id(n.plannedExerciseId) })) })) };
-}
 /** Импортированные результаты, чья тренировка убрана из плана при правке цикла до первого сохранения. */
 function resultsOfRemovedWorkouts(cycle: BuilderWorkbookCycle) {
   const present = new Set(cycle.weeks.flatMap((week, at) => week.workouts.map((workout) => JSON.stringify([at + 1, workout.id]))));
