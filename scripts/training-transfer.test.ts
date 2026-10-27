@@ -300,6 +300,32 @@ test("I05 whole workbook writes one programme with all cycles, plans and results
   } finally { await f.close(); }
 });
 
+test("export reads results in a bounded number of queries however many sessions exist (CA-15)", async () => {
+  const manyWeeks = (count: number) => {
+    const base = trainingTransferFixture(); const cycle = base.programs[0]!.mesocycles[0]!; const first = cycle.weeks[0]!; const session = base.sessions[0]!;
+    const weeks = Array.from({ length: count }, (_, at) => { const n = at + 1; return { ...first, id: `week${n}`, index: n, workouts: first.workouts.map((w) => ({ ...w, id: `w${n}`,
+      exercises: w.exercises.map((e) => ({ ...e, id: `e${n}`, sets: e.sets.map((s, k) => ({ ...s, id: `s${n}-${k}` })) })) })) }; });
+    const sessions = weeks.map((w) => { const workout = w.workouts[0]!; const exercise = workout.exercises[0]!;
+      return { ...session, id: `session${w.index}`, weekIndex: w.index, plannedWorkoutId: workout.id, notes: [{ plannedExerciseId: exercise.id, text: "Без боли" }],
+        facts: [{ ...session.facts[0]!, id: `fact${w.index}`, plannedSetId: exercise.sets[0]!.id, plannedExerciseId: exercise.id }] }; });
+    return { ...base, programs: [{ ...base.programs[0]!, mesocycles: [{ ...cycle, weeks }] }], sessions };
+  };
+  const statementsToExport = async (weeks: number) => {
+    const f = await fixture();
+    try {
+      await f.transfer.importClient(f.client.id, manyWeeks(weeks), f.mapping);
+      const ids = (await f.plans.getLibrary(f.client.id)).active.map((p) => p.id);
+      let count = 0; const db = f.native as unknown as { prepare: (sql: string) => unknown }; const original = db.prepare.bind(f.native);
+      db.prepare = (sql: string) => { count += 1; return original(sql); };
+      const exported = await f.transfer.exportClient(f.client.id, ids);
+      db.prepare = original;
+      assert.equal(exported.sessions.length, weeks);
+      return count;
+    } finally { await f.close(); }
+  };
+  const few = await statementsToExport(3); const many = await statementsToExport(30);
+  assert.equal(many, few, `3 sessions: ${few} queries, 30 sessions: ${many} queries`);
+});
 test("I07 a book can be imported again after its programme was deleted with results, and a leftover receipt never blocks it", async () => {
   const f = await fixture();
   try {

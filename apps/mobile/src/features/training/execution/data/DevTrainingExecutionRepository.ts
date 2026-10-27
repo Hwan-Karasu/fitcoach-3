@@ -154,18 +154,18 @@ export const devTrainingExecutionClientDeletionParticipant = {
 
 /** Явно dev-хранилище новой установки в общем dev-файле клиентов. */
 export class DevTrainingExecutionRepository implements TrainingExecutionPort, RestTimerStorePort {
-  /** Transaction-bound export, including executions whose original plan was removed. */
+  /**
+   * Transaction-bound export, including executions whose original plan was removed. Results are read in one batch per kind of data
+   * (`readExecutions`), not a query per session: on a phone every statement is a round trip through the Expo bridge.
+   */
   async exportTransfer(tx: SqliteStatementPort, clientId: string, programIds: readonly string[]): Promise<import("../../../../shared/training-transfer/TrainingTransfer.ts").TransferSession[]> {
-    const rows = await tx.all<WorkoutSession & { originJson: string | null }>(`SELECT ${SESSION_COLUMNS}, origin_json AS originJson FROM training_sessions WHERE workspace_id=? AND client_id=? ORDER BY id`, [this.workspaceId, clientId]);
-    const result: import("../../../../shared/training-transfer/TrainingTransfer.ts").TransferSession[] = [];
-    for (const row of rows.filter((r) => programIds.includes(r.programId))) {
-      const execution = await this.readWorkout(tx, row);
-      result.push({ id: row.id, programId: row.programId, weekIndex: row.weekIndex, plannedWorkoutId: row.plannedWorkoutId,
-        outcome: row.outcome, actualDate: row.actualDate, startedAt: row.startedAt, finishedAt: row.finishedAt,
-        origin: row.originJson === null ? null : readStoredJson(row.originJson, storedOrigin, "excel-origin"),
-        facts: [...execution.facts.values()], notes: [...execution.notes].map(([plannedExerciseId, text]) => ({ plannedExerciseId, text })) });
-    }
-    return result;
+    const wanted = new Set(programIds);
+    const rows = (await this.readExecutions(tx, "s.client_id = ?", [clientId])).filter(({ session }) => wanted.has(session.programId))
+      .sort((a, b) => (a.session.id < b.session.id ? -1 : a.session.id > b.session.id ? 1 : 0));
+    return rows.map(({ session, originJson, execution }) => ({ id: session.id, programId: session.programId, weekIndex: session.weekIndex, plannedWorkoutId: session.plannedWorkoutId,
+      outcome: session.outcome, actualDate: session.actualDate, startedAt: session.startedAt, finishedAt: session.finishedAt,
+      origin: originJson === null ? null : readStoredJson(originJson, storedOrigin, "excel-origin"),
+      facts: [...execution.facts.values()], notes: [...execution.notes].map(([plannedExerciseId, text]) => ({ plannedExerciseId, text })) }));
   }
   notifyTransfer(clientId: string, programId: string): void { this.publish({ clientId, programId }); }
   private connection: SqliteConnectionPort | null = null;
