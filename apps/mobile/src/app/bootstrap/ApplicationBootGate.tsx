@@ -7,6 +7,7 @@ import type { BootErrorCode } from "./BootCoordinator.ts";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 import { AutomaticBackupHost } from "./AutomaticBackupHost.tsx";
 import { LaunchAnimation } from "./LaunchAnimation.tsx";
+import { useMaintenanceView } from "./useMaintenanceView.ts";
 
 const errorLabels: Record<BootErrorCode, string> = {
   WORKSPACE_UNAVAILABLE: "Не удалось открыть локальные данные.",
@@ -22,13 +23,10 @@ const errorLabels: Record<BootErrorCode, string> = {
 /** Screens receive repositories only after the critical database gate succeeds. */
 export function ApplicationBootGate({ boot, services, development, maintenance, manualBackup, restoreActions, automaticBackup, trainingTransfer }: Readonly<ApplicationRuntime>) {
   const [state, setState] = useState(boot.state);
-  const [maintenanceView, setMaintenanceView] = useState({ phase: maintenance.state, generation: 0 });
+  const maintenanceView = useMaintenanceView(boot, maintenance);
   const [retrying, setRetrying] = useState(false);
   const [introVisible, setIntroVisible] = useState(true);
   const finishIntro = useCallback(() => setIntroVisible(false), []);
-  useEffect(() => maintenance.subscribe((phase) => setMaintenanceView((before) => ({ phase,
-    generation: before.generation + (phase === "DRAINING" && before.phase === "ACTIVE" ? 1 : 0),
-  }))), [maintenance]);
   const maintenanceState = maintenanceView.phase;
 
   useEffect(() => {
@@ -42,7 +40,7 @@ export function ApplicationBootGate({ boot, services, development, maintenance, 
   const maintaining = maintenanceState !== "ACTIVE";
   const ready = state.kind === "APP_READY" && maintenanceState === "ACTIVE";
   const content = state.kind === "APP_READY" && maintenanceState === "ACTIVE" ? <><AutomaticBackupHost backup={automaticBackup} /><PrototypeShell key={maintenanceView.generation} services={services}
-    workspaceId={state.workspaceId} trainingTransfer={trainingTransfer} manualBackup={manualBackup} restoreActions={restoreActions} automaticBackup={automaticBackup} initialBackup={maintenanceView.generation > 0} /></> : (
+    workspaceId={state.workspaceId} trainingTransfer={trainingTransfer} manualBackup={manualBackup} restoreActions={restoreActions} automaticBackup={automaticBackup} initialBackup={maintenanceView.initialBackup} /></> : (
     <SafeAreaProvider>
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="dark-content" />

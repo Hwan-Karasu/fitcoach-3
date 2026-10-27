@@ -1,6 +1,8 @@
 # Progress — 2026-10-27
 
 ## Сделано
+- BOOT-ROUTE-1: отделён стартовый маршрут от generation обслуживания. Проверка журнала/повтор запуска ведут на главный экран, операция из APP_READY возвращает к копиям. 47/47 целевых тестов PASS; в build29 не входит.
+- UI-HEADER-WRAP: метаданные дневника переносятся целыми элементами, длинный текст пилюль ограничен карточкой; подпись программы без многоточия. Typecheck/lint/source/diff PASS. Собран build29 arm64; aapt/apksigner PASS, сертификат совпадает с build28. Визуальная проверка ширин и шрифта открыта (docs/PROJECT_STATUS.md).
 - R04-RETIRE (ADR-043): удалены scripts/r02, r03, r04 и 29 файлов r0x-*, команды r02–r04 в package.json,
   nutrition history reader/port/snapshot, ClientWorkDataModel. Два теста (workout-date-evidence,
   training-history) переписаны на литералы WorkoutDateEvidence.

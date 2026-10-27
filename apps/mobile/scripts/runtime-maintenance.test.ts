@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { act, createElement } from "react";
+import TestRenderer from "react-test-renderer";
+import { BootCoordinator } from "../src/app/bootstrap/BootCoordinator.ts";
+import { useMaintenanceView } from "../src/app/bootstrap/useMaintenanceView.ts";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -24,6 +28,39 @@ function latch() { let release!: () => void; const promise = new Promise<void>((
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 const catalog = JSON.parse(readFileSync(new URL("../src/features/exercises/data/system-catalog.generated.json", import.meta.url), "utf8")) as SystemCatalog;
 const hash = (file: string) => createHash("sha256").update(readFileSync(file)).digest("hex");
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+test("startup journal checks keep the home route; later user restoration returns to backups", async () => {
+  const f = await fixture();
+  const boot = new BootCoordinator({ fallbackThemeId: "night-mocha",
+    recoverBeforeOpen: async () => { f.cold(); await f.maintenance.withClosedDatabase(async () => undefined); },
+    prepareWorkspace: async () => ({ id: WS }), openDatabase: async () => { await f.owners.initialize(); },
+    loadThemePreference: async () => ({ themeId: "slate-blue", accentId: "violet" }),
+  });
+  let view!: ReturnType<typeof useMaintenanceView>;
+  function Probe() { view = useMaintenanceView(boot, f.maintenance); return null; }
+  let renderer: TestRenderer.ReactTestRenderer | undefined;
+  try {
+    await act(async () => { renderer = TestRenderer.create(createElement(Probe)); });
+    assert.equal(view.initialBackup, false);
+    // APP_READY is published before React flushes the queued maintenance updates.
+    await act(async () => { await boot.start(); });
+    assert.equal(boot.state.kind, "APP_READY");
+    assert.equal(view.phase, "ACTIVE");
+    assert.equal(view.generation, 1, "startup still invalidates old repository views");
+    assert.equal(view.initialBackup, false, "a completed journal check must open home");
+    await act(async () => { await f.maintenance.withClosedDatabase(async () => undefined); });
+    assert.equal(view.phase, "ACTIVE");
+    assert.equal(view.generation, 2);
+    assert.equal(view.initialBackup, true, "an operation started in the app returns to backups");
+    await act(async () => { renderer!.unmount(); renderer = TestRenderer.create(createElement(Probe)); });
+    assert.equal(view.initialBackup, false, "a fresh launch does not retain the backup route");
+  } finally {
+    await act(async () => { renderer?.unmount(); });
+    await f.close();
+  }
+});
 
 async function fixture() {
   const directory = mkdtempSync(join(tmpdir(), "athlete-runtime-"));
@@ -50,6 +87,40 @@ async function fixture() {
     waitReopen: (gate: Promise<void>) => { reopenGate = gate; },
     async close() { await owners.close(); await workflow.close(); rmSync(directory, { recursive: true, force: true }); } };
 }
+
+test("startup recovery failure stays blocked; successful retry opens home instead of backups", async () => {
+  const f = await fixture();
+  let fail = true;
+  const boot = new BootCoordinator({ fallbackThemeId: "night-mocha",
+    recoverBeforeOpen: async () => {
+      f.cold();
+      await f.maintenance.withClosedDatabase(async () => { if (fail) throw new Error("SYNTHETIC_RECOVERY_FAILURE"); });
+    },
+    prepareWorkspace: async () => ({ id: WS }), openDatabase: async () => { await f.owners.initialize(); },
+    loadThemePreference: async () => ({ themeId: "slate-blue", accentId: "violet" }),
+  });
+  let view!: ReturnType<typeof useMaintenanceView>;
+  function Probe() { view = useMaintenanceView(boot, f.maintenance); return null; }
+  let renderer: TestRenderer.ReactTestRenderer | undefined;
+  try {
+    await act(async () => { renderer = TestRenderer.create(createElement(Probe)); });
+    await act(async () => { await boot.start(); });
+    assert.equal(boot.state.kind, "BOOT_FAILED");
+    assert.equal(view.phase, "RECOVERY_REQUIRED");
+    assert.equal(view.initialBackup, false);
+    fail = false;
+    await act(async () => {
+      await f.maintenance.withClosedDatabase(async () => undefined);
+      await boot.retry();
+    });
+    assert.equal(boot.state.kind, "APP_READY");
+    assert.equal(view.phase, "ACTIVE");
+    assert.equal(view.initialBackup, false);
+  } finally {
+    await act(async () => { renderer?.unmount(); });
+    await f.close();
+  }
+});
 
 test("R06 runtime drains an admitted multi-await operation before owner close; new calls reject as Promises", async () => {
   const f = await fixture(); const read = latch(); const fileTask = latch(); const reopening = latch();

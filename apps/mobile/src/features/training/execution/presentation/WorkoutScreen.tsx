@@ -446,35 +446,35 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
             </View>
           </View>
           <View style={styles.metaRow}>
-            <View style={styles.dateRow}>
-              <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Неделя ${diary.displayedSlot.weekIndex}`}</Text>
-              {/* Шапка одной высоты в любой неделе: без занятия дата и время показываются неактивными, иначе при смене недели содержимое «прыгает». */}
-              {(
-                // §48.84: дата проведения — по умолчанию день первого ввода, можно указать прошедший день.
-                <Pressable accessibilityRole="button" hitSlop={8} disabled={state.session === null}
-                  accessibilityLabel={`Дата тренировки ${shortDate(state.session?.actualDate ?? null)}. Изменить`}
-                  onPress={() => {
-                    const current = state.session?.actualDate;
-                    if (current === undefined) return;
-                    void pickDate({ value: current ?? localDateOf(new Date()), max: localDateOf(new Date()) }).then((date) => {
-                      if (date !== null && date !== current) void diary.setActualDate(date);
-                    });
-                  }}
-                  style={[styles.dateButton, { backgroundColor: colors.surfaceRaised }, state.session === null && styles.dim]}>
-                  <CalendarDays size={15} color={colors.accentInk} strokeWidth={2} />
-                  <Text style={[styles.dateText, { color: colors.accentInk }]}>{shortDate(state.session?.actualDate ?? null)}</Text>
-                </Pressable>
-              )}
-              {others.length > 0 ? (
-                <Pressable accessibilityRole="button" accessibilityLabel={`Другие тренировки в работе: ${others.length}. Перейти`}
-                  hitSlop={6} onPress={() => { flushPending(); Keyboard.dismiss(); activeSheet.current?.present(); }}
-                  style={[styles.othersButton, { backgroundColor: colors.surfaceRaised }]}>
-                  <Users size={14} color={colors.accentInk} strokeWidth={2} />
-                  <Text style={[styles.othersText, { color: colors.accentInk }]}>{`ещё ${others.length}`}</Text>
-                </Pressable>
-              ) : null}
+            <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Неделя ${diary.displayedSlot.weekIndex}`}</Text>
+            {/* Без занятия дата и время показываются неактивными; метаданные переносятся целыми элементами. */}
+            {(
+              // §48.84: дата проведения — по умолчанию день первого ввода, можно указать прошедший день.
+              <Pressable accessibilityRole="button" hitSlop={8} disabled={state.session === null}
+                accessibilityLabel={`Дата тренировки ${shortDate(state.session?.actualDate ?? null)}. Изменить`}
+                onPress={() => {
+                  const current = state.session?.actualDate;
+                  if (current === undefined) return;
+                  void pickDate({ value: current ?? localDateOf(new Date()), max: localDateOf(new Date()) }).then((date) => {
+                    if (date !== null && date !== current) void diary.setActualDate(date);
+                  });
+                }}
+                style={[styles.dateButton, { backgroundColor: colors.surfaceRaised }, state.session === null && styles.dim]}>
+                <CalendarDays size={15} color={colors.accentInk} strokeWidth={2} />
+                <Text style={[styles.dateText, { color: colors.accentInk }]}>{shortDate(state.session?.actualDate ?? null)}</Text>
+              </Pressable>
+            )}
+            {others.length > 0 ? (
+              <Pressable accessibilityRole="button" accessibilityLabel={`Другие тренировки в работе: ${others.length}. Перейти`}
+                hitSlop={6} onPress={() => { flushPending(); Keyboard.dismiss(); activeSheet.current?.present(); }}
+                style={[styles.othersButton, { backgroundColor: colors.surfaceRaised }]}>
+                <Users size={14} color={colors.accentInk} strokeWidth={2} />
+                <Text style={[styles.othersText, { color: colors.accentInk }]}>{`ещё ${others.length}`}</Text>
+              </Pressable>
+            ) : null}
+            <View style={styles.statusTag}>
+              <StatusTag kind={statusKinds[diary.status]} label={workoutStatusLabels[diary.status]} />
             </View>
-            <StatusTag kind={statusKinds[diary.status]} label={workoutStatusLabels[diary.status]} />
           </View>
           {(
             // PC §48.86.13: начало ставится по первому подтверждённому подходу, окончание — при «Завершить»; обе отметки можно исправить.

@@ -389,7 +389,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
               return <View style={styles.cardHead}>
                 <View>
                   <Text accessibilityRole="header" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6} style={[styles.cardTitle, styles.cardTitleFixed, { color: colors.textPrimary }]}>{selected.title}</Text>
-                  <Text numberOfLines={1} style={[styles.meta, { color: colors.textSecondary }]}>
+                  <Text style={[styles.meta, { color: colors.textSecondary }]}>
                     {`${program.title} · ${membersWord(Math.max(1, group?.length ?? 1))}`}
                   </Text>
                 </View>
