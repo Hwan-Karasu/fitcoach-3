@@ -203,6 +203,35 @@
       "apk": "artifacts/apk/athlete-diary-3.0.0-build15.apk",
       "sha256": "86461335A18821F09C4D0997C4F9174073ABC09A27509615FFFDBFFA0557CD30",
       "remaining": "Owner device visual check after manual installation. No phone installation performed."
+    },
+    {
+      "id": "I07-WORKBOOK-DRAFTS",
+      "state": "IMPLEMENTED",
+      "inputs": [
+        "Owner approved multi-sheet import, responsive review and explicit draft lifecycle plan 2026-10-27"
+      ],
+      "deps": [
+        "I06-IMPORT-COMPLETION-RENAME"
+      ],
+      "refs": [
+        "Owner approved plan; recovery drafts PC48.29; independent v3 Excel override"
+      ],
+      "acceptance": "Explicit selected sheets become cycles in one programme or its builder draft; single import host; preserve and discard drafts deliberately; atomic plans/results/matches/receipts save",
+      "gates": [
+        "Selection and repeated opening regression",
+        "Multi-cycle builder save and rollback",
+        "Draft restore/discard queue and old payload compatibility",
+        "Types/lint/schema/backup and Android build16"
+      ],
+      "constraints": [
+        "No phone installation",
+        "No edits to 2.0 or R04",
+        "No fabricated results or dates"
+      ],
+      "evidence": "docs/WORKBOOK_DRAFTS_VALIDATION.md; 84 import/UI/draft, 258 training, 26 schema and 248 backup tests; root/mobile types, lint, boundaries, sources and secret checks; signed Android build16",
+      "apk": "artifacts/apk/athlete-diary-3.0.0-build16.apk",
+      "sha256": "6D633E178A74A8260AD9A75E81E7A0312C5F716F74A40428CD73BFCC651A468D",
+      "remaining": "Owner physical Android UI/window-focus validation after manual installation. No phone installation performed."
     }
   ]
 }

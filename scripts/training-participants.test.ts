@@ -338,10 +338,10 @@ test("P01 migration reconstructs old active copy groups without rewriting any ex
     const { plans, a, b, ownB, db } = env;
     const { programId, mesocycleId } = await createGroup(env);
     await plans.archiveForClient(b, ownB);
-    db.exec("DROP TABLE training_navigation_members; DROP TABLE training_navigation_groups; DELETE FROM training_plans_schema_migrations WHERE version = 3");
+    db.exec("DROP TABLE training_navigation_members; DROP TABLE training_navigation_groups; DELETE FROM training_plans_schema_migrations WHERE version >= 3");
     const exclude = [DEV_TRAINING_PLANS_LEDGER, "training_navigation_members", "training_navigation_groups"];
     const before = snapshot(db, exclude);
-    await nodeSqlitePort(db).exclusive((tx) => runMigrationsInTransaction(tx, devTrainingPlansCatalog, DEV_TRAINING_PLANS_LEDGER));
+    await nodeSqlitePort(db).exclusive((tx) => runMigrationsInTransaction(tx, devTrainingPlansCatalog.slice(0, 3), DEV_TRAINING_PLANS_LEDGER));
     assert.deepEqual(snapshot(db, exclude), before);
     assert.equal(db.prepare("SELECT count(*) AS n FROM training_navigation_members WHERE mesocycle_id = ?").get(mesocycleId)!.n, 1);
     assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);

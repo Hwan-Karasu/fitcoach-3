@@ -26,10 +26,211 @@ import { correctTransferIssue } from "../apps/mobile/src/features/import/domain/
 import { TRANSFER_OWNER } from "../apps/mobile/src/features/import/data/TransferReceiptStore.ts";
 import { ExerciseImportMatchStore } from "../apps/mobile/src/features/import/data/ExerciseImportMatchStore.ts";
 import { runMigrationsInTransaction } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
-import { startWorkbookReview, setWorkbookNameMatch, workbookMatchesToRemember } from "../apps/mobile/src/features/import/domain/WorkbookReviewSession.ts";
+import { startWorkbookReview, setWorkbookNameMatch, workbookMatchesToRemember, selectWorkbookImportSheets } from "../apps/mobile/src/features/import/domain/WorkbookReviewSession.ts";
+import { builderWorkbookImport } from "../apps/mobile/src/features/import/domain/BuilderWorkbookImport.ts";
+import type { BuilderWorkbookSaveRequest } from "../apps/mobile/src/features/training/plans/domain/BuilderWorkbookSave.ts";
+import type { MesocycleBuilderDraft } from "../apps/mobile/src/features/training/plans/domain/PeriodizedDraft.ts";
 import { prepareWholeWorkbook, compileWholeWorkbook } from "../apps/mobile/src/features/import/domain/WholeWorkbookImport.ts";
 import { SCHEMA_OWNERS } from "../apps/mobile/src/app/composition/schema.ts";
 import { devTrainingExecutionCatalog, DEV_TRAINING_EXECUTION_LEDGER } from "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionCatalog.ts";
+import { devTrainingPlansCatalog, DEV_TRAINING_PLANS_LEDGER } from "../apps/mobile/src/features/training/plans/data/DevTrainingPlansCatalog.ts";
+import { plansIntegrityMigration } from "../apps/mobile/src/features/training/plans/data/PlansIntegrityMigration.ts";
+
+function multiBook(targetId: string) {
+  const base = trainingTransferFixture(); const p = base.programs[0]!; const cycle = p.mesocycles[0]!;
+  const value = { ...base, programs: [{ ...p, mesocycles: [0, 1, 2].map((n) => ({ ...cycle, id: `cycle:${n}`, title: `Цикл ${n + 1}`,
+    weeks: cycle.weeks.map((w) => ({ ...w, workouts: w.workouts.map((x) => ({ ...x, id: `${n}:${x.id}` })) })) })) }],
+    sessions: [0, 1, 2].flatMap((n) => base.sessions.map((s) => ({ ...s, id: `${n}:${s.id}`, plannedWorkoutId: `${n}:${s.plannedWorkoutId}` }))) };
+  return setWorkbookNameMatch(prepareWholeWorkbook(startWorkbookReview({ kind: "TRANSFER", value }, false), []), base.exercises[0]!.name, targetId);
+}
+
+test("I07 selected workbook cycles and their results save atomically with a manual draft and survive reopening", async () => {
+  const f = await fixture();
+  try {
+    const imported = builderWorkbookImport(multiBook(f.mapping.press!));
+    const manual = { key: "manual", title: "Мой цикл", weeks: trainingTransferFixture().programs[0]!.mesocycles[0]!.weeks.map((w) => ({ type: w.type,
+      workouts: w.workouts.map((x) => ({ ...x, exercises: x.exercises.map((e) => ({ ...e, exerciseId: f.mapping.press! })) })) })) };
+    const other = await f.clients.create({ displayName: "Другой синтетический участник" });
+    const cycles = [manual, ...imported.cycles!]; const scope = { programId: null, mesocycleId: null };
+    const draft: MesocycleBuilderDraft = { baseRevision: null, baseWeeks: null, programTitle: "Книга", title: manual.title, cycleType: "custom", repsText: "", startDate: "",
+      weeks: manual.weeks, editing: 1, members: [f.client.id, other.id], workbook: { version: 1, cycles, activeKey: manual.key } };
+    await f.plans.saveMesocycleBuilderDraft(f.client.id, scope, draft);
+    assert.deepEqual(await f.plans.getMesocycleBuilderDraft(f.client.id, scope), JSON.parse(JSON.stringify(draft)));
+    const request: BuilderWorkbookSaveRequest = { clientId: f.client.id, scope, expectedRevision: null, programTitle: "Книга", cycles,
+      clientIds: [f.client.id, other.id], existingCycleKey: null, placements: [] };
+    f.native.exec("CREATE TRIGGER i07_failure BEFORE INSERT ON training_mesocycles WHEN NEW.title='Цикл 2' BEGIN SELECT RAISE(ABORT, 'I07_FAILURE'); END");
+    await assert.rejects(f.transfer.saveBuilderWorkbook(request), /I07_FAILURE/);
+    for (const table of ["training_programs", "training_mesocycles", "training_sessions", "training_transfer_receipts", "training_import_exercise_matches"]) assert.equal(f.native.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n, 0, table);
+    assert.deepEqual(await f.plans.getMesocycleBuilderDraft(f.client.id, scope), JSON.parse(JSON.stringify(draft)));
+    f.native.exec("DROP TRIGGER i07_failure");
+    const result = await f.transfer.saveBuilderWorkbook(request);
+    const reopened = new DevTrainingPlansRepository(f.database, "local-trainer"); await reopened.initialize();
+    try {
+      const plan = await reopened.getPeriodizedPlan(f.client.id, result.programId);
+      assert.deepEqual(plan!.mesocycles.map((c) => c.title), ["Мой цикл", "Цикл 1", "Цикл 2", "Цикл 3"]);
+      assert.equal((await reopened.getPeriodizedPlan(other.id, result.programId))!.mesocycles.length, 4);
+      assert.equal(await reopened.getMesocycleBuilderDraft(f.client.id, scope), null);
+    } finally { await reopened.close(); }
+    assert.equal((await f.execution.getProgramStatuses(f.client.id, result.programId)).length, 9);
+    assert.ok((await f.execution.getProgramStatuses(f.client.id, result.programId)).every((s) => s.status === "COMPLETED"));
+    assert.equal((await f.execution.getProgramStatuses(other.id, result.programId)).length, 0, "other clients receive only plans");
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 6);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_import_exercise_matches").get()!.n, 1);
+    assert.deepEqual(await f.transfer.saveBuilderWorkbook(request), result);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_programs").get()!.n, 1);
+    assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
+  } finally { await f.close(); }
+});
+
+test("I07 importing additional sheets into the same programme skips repeats and rejects changed saved cycles", async () => {
+  const f = await fixture();
+  try {
+    const full = multiBook(f.mapping.press!);
+    const first = builderWorkbookImport(selectWorkbookImportSheets(full, ["0"]));
+    const input: BuilderWorkbookSaveRequest = { clientId: f.client.id, scope: { programId: null, mesocycleId: null }, expectedRevision: null,
+      programTitle: "Выбор", cycles: first.cycles!, clientIds: [f.client.id], existingCycleKey: null, placements: [] };
+    const created = await f.transfer.saveBuilderWorkbook(input);
+    const all = builderWorkbookImport(full);
+    const library = () => f.plans.getProgram(f.client.id, created.programId);
+    const append = { ...input, scope: { programId: created.programId, mesocycleId: null }, expectedRevision: (await library())!.revision, cycles: all.cycles! };
+    await f.transfer.saveBuilderWorkbook(append);
+    assert.equal((await f.plans.getPeriodizedPlan(f.client.id, created.programId))!.mesocycles.length, 3);
+    const before = f.native.prepare("SELECT * FROM training_performed_sets ORDER BY id").all();
+    await f.transfer.saveBuilderWorkbook({ ...append, expectedRevision: (await library())!.revision });
+    assert.deepEqual(f.native.prepare("SELECT * FROM training_performed_sets ORDER BY id").all(), before);
+    f.native.prepare("UPDATE training_mesocycles SET title='Локальная правка' WHERE id=?").run(created.mesocycleId);
+    await assert.rejects(f.transfer.saveBuilderWorkbook({ ...append, expectedRevision: (await library())!.revision }), /Конфликт/);
+    assert.deepEqual(f.native.prepare("SELECT * FROM training_performed_sets ORDER BY id").all(), before);
+  } finally { await f.close(); }
+});
+
+test("I07 editing an existing cycle and adding imported sheets preserves result-removal safeguards and one transaction", async () => {
+  const f = await fixture();
+  try {
+    const book = multiBook(f.mapping.press!); const first = builderWorkbookImport(selectWorkbookImportSheets(book, ["0"]));
+    const base: BuilderWorkbookSaveRequest = { clientId: f.client.id, scope: { programId: null, mesocycleId: null }, expectedRevision: null,
+      programTitle: "Правка", cycles: first.cycles!, clientIds: [f.client.id], existingCycleKey: null, placements: [] };
+    const created = await f.transfer.saveBuilderWorkbook(base); const plan = (await f.plans.getPeriodizedPlan(f.client.id, created.programId))!;
+    const cycle = plan.mesocycles[0]!; const additional = builderWorkbookImport(selectWorkbookImportSheets(book, ["1"]));
+    const request: BuilderWorkbookSaveRequest = { ...base, scope: { programId: created.programId, mesocycleId: cycle.id }, expectedRevision: plan.program.revision,
+      existingCycleKey: "existing", cycles: [{ key: "existing", title: "Изменённый цикл", settings: cycle,
+        weeks: cycle.weeks.map((w) => ({ type: w.type, workouts: w.index === 1 ? [] : w.workouts })) }, ...additional.cycles!] };
+    const before = f.native.prepare("SELECT * FROM training_performed_sets ORDER BY id").all();
+    await assert.rejects(f.transfer.saveBuilderWorkbook(request), /WEEK_HAS_RESULTS/);
+    assert.equal((await f.plans.getPeriodizedPlan(f.client.id, created.programId))!.mesocycles.length, 1);
+    assert.deepEqual(f.native.prepare("SELECT * FROM training_performed_sets ORDER BY id").all(), before);
+    await f.transfer.saveBuilderWorkbook({ ...request, resultsAction: "KEEP_HISTORY" });
+    assert.deepEqual((await f.plans.getPeriodizedPlan(f.client.id, created.programId))!.mesocycles.map((c) => c.title), ["Изменённый цикл", "Цикл 2"]);
+    assert.ok(f.native.prepare("SELECT count(*) AS n FROM training_sessions WHERE plan_deleted_at IS NOT NULL").get()!.n as number > 0);
+    assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
+  } finally { await f.close(); }
+});
+
+test("I07 legacy drafts survive the guard migration and failed migrations restore their rows and guards", async () => {
+  const f = await fixture();
+  try {
+    const c = builderWorkbookImport(multiBook(f.mapping.press!)).cycles![0]!;
+    const legacy: MesocycleBuilderDraft = { baseRevision: null, baseWeeks: null, programTitle: "Старый черновик", title: "Цикл", cycleType: "custom", repsText: "", startDate: "", weeks: c.weeks, editing: 1, members: [f.client.id] };
+    const scope = { programId: null, mesocycleId: null };
+    await f.plans.saveMesocycleBuilderDraft(f.client.id, scope, legacy);
+    f.native.exec("DROP TRIGGER training_builder_drafts_json_shape_insert; DROP TRIGGER training_builder_drafts_json_shape_update");
+    for (const sql of plansIntegrityMigration.statements.filter((s) => s.startsWith("CREATE TRIGGER training_builder_drafts_json_shape"))) f.native.exec(sql);
+    f.native.exec("DELETE FROM training_plans_schema_migrations WHERE version=4");
+    const rows = () => f.native.prepare("SELECT * FROM training_builder_drafts ORDER BY draft_key").all();
+    const guards = () => f.native.prepare("SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name LIKE 'training_builder_drafts_json_shape%' ORDER BY name").all();
+    const before = rows(); const beforeGuards = guards();
+    const failing = devTrainingPlansCatalog.map((s) => s.version === 4 ? { ...s, statements: [...s.statements, "INSERT INTO i07_missing_table VALUES(1)"] } : s);
+    await assert.rejects(nodeSqlitePort(f.native).exclusive((tx) => runMigrationsInTransaction(tx, failing, DEV_TRAINING_PLANS_LEDGER)));
+    assert.deepEqual(rows(), before); assert.deepEqual(guards(), beforeGuards);
+    await nodeSqlitePort(f.native).exclusive((tx) => runMigrationsInTransaction(tx, devTrainingPlansCatalog, DEV_TRAINING_PLANS_LEDGER));
+    assert.deepEqual(rows(), before); assert.deepEqual(await f.plans.getMesocycleBuilderDraft(f.client.id, scope), JSON.parse(JSON.stringify(legacy)));
+    await f.plans.saveMesocycleBuilderDraft(f.client.id, scope, { ...legacy, workbook: { version: 1, cycles: [c], activeKey: c.key } });
+    assert.throws(() => f.native.prepare("UPDATE training_builder_drafts SET draft_json=json_set(draft_json,'$.workbook.version',99)").run(), /TRAINING_JSON_INVALID/);
+    assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
+  } finally { await f.close(); }
+});
+
+test("I07 simple draft promotion is atomic and refuses to overwrite an existing extended draft", async () => {
+  const f = await fixture();
+  try {
+    const cycles = builderWorkbookImport(multiBook(f.mapping.press!)).cycles!;
+    const simple = { title: "Моя простая", plan: { weeks: 3, workouts: cycles[0]!.weeks[0]!.workouts } };
+    await f.plans.saveBuilderDraft(f.client.id, "new:SIMPLE", null, simple);
+    const next: MesocycleBuilderDraft = { baseRevision: null, baseWeeks: null, programTitle: simple.title, title: cycles[0]!.title, cycleType: "custom", repsText: "", startDate: "",
+      weeks: cycles[0]!.weeks, editing: 0, members: [f.client.id], workbook: { version: 1, cycles, activeKey: cycles[0]!.key } };
+    await f.plans.promoteSimpleBuilderDraft(f.client.id, next);
+    assert.equal(await f.plans.getBuilderDraft(f.client.id, "new:SIMPLE"), null);
+    const scope = { programId: null, mesocycleId: null };
+    assert.deepEqual(await f.plans.getMesocycleBuilderDraft(f.client.id, scope), JSON.parse(JSON.stringify(next)));
+    await f.plans.saveBuilderDraft(f.client.id, "new:SIMPLE", null, simple);
+    await assert.rejects(f.plans.promoteSimpleBuilderDraft(f.client.id, next), /PERIODIZED_DRAFT_EXISTS/);
+    assert.ok(await f.plans.getBuilderDraft(f.client.id, "new:SIMPLE"));
+    assert.deepEqual(await f.plans.getMesocycleBuilderDraft(f.client.id, scope), JSON.parse(JSON.stringify(next)));
+  } finally { await f.close(); }
+});
+
+test("I07 native backup preserves selected cycles, current week and imported facts of an unpublished workbook draft", async () => {
+  const f = await fixture(); const dir = mkdtempSync(join(tmpdir(), "i07-draft-backup-"));
+  try {
+    const cycles = builderWorkbookImport(multiBook(f.mapping.press!)).cycles!;
+    const draft: MesocycleBuilderDraft = { baseRevision: null, baseWeeks: null, programTitle: "Черновик книги", title: cycles[1]!.title, cycleType: "custom", repsText: "", startDate: "",
+      weeks: cycles[1]!.weeks, editing: 2, members: [f.client.id], workbook: { version: 1, cycles, activeKey: cycles[1]!.key } };
+    await f.plans.saveMesocycleBuilderDraft(f.client.id, { programId: null, mesocycleId: null }, draft);
+    const destination = join(dir, "draft.atbackup"); const staging = join(dir, "stage.db");
+    await createSqliteBackup(f.native, join(dir, "partial.db"), destination, { backupId: randomUUID(), createdAt: new Date().toISOString() });
+    await prepareBackupForRestore(destination, staging);
+    const restored = new DatabaseSync(staging);
+    try {
+      assert.deepEqual(JSON.parse(String(restored.prepare("SELECT draft_json FROM training_builder_drafts").get()!.draft_json)), JSON.parse(JSON.stringify(draft)));
+      assert.equal(restored.prepare("SELECT count(*) AS n FROM training_programs").get()!.n, 0);
+    } finally { restored.close(); }
+  } finally { await f.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("I07 importing from the programme chooser and later from the builder shares per-sheet bindings", async () => {
+  const f = await fixture();
+  try {
+    const review = multiBook(f.mapping.press!); const first = selectWorkbookImportSheets(review, ["0"]);
+    const full = compileWholeWorkbook(first);
+    await f.transfer.importClient(f.client.id, full.value, full.mapping);
+    const p = (await f.plans.getLibrary(f.client.id)).active[0]!;
+    await f.transfer.saveBuilderWorkbook({ clientId: f.client.id, scope: { programId: p.id, mesocycleId: null }, expectedRevision: p.revision,
+      programTitle: p.title, cycles: builderWorkbookImport(review).cycles!, existingCycleKey: null, clientIds: [f.client.id], placements: [] });
+    assert.equal((await f.plans.getPeriodizedPlan(f.client.id, p.id))!.mesocycles.length, 3);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 6);
+    assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_transfer_receipts WHERE cycle_id IS NOT NULL").get()!.n, 3);
+  } finally { await f.close(); }
+});
+
+test("I07 sheet binding migration preserves old programme receipts and rolls back on failure", async () => {
+  const f = await fixture();
+  try {
+    await f.transfer.importClient(f.client.id, trainingTransferFixture(), f.mapping);
+    f.native.exec("DELETE FROM training_transfer_receipts WHERE cycle_id IS NOT NULL; ALTER TABLE training_transfer_receipts DROP COLUMN cycle_id; DELETE FROM training_transfer_schema_migrations WHERE version=3");
+    const rows = () => f.native.prepare("SELECT workspace_id,client_id,source_key,source_hash,local_hash,program_ids_json FROM training_transfer_receipts ORDER BY source_key").all();
+    const before = rows();
+    const failing = TRANSFER_OWNER.chain.map((s) => s.version === 3 ? { ...s, statements: [...s.statements, "INSERT INTO i07_missing VALUES(1)"] } : s);
+    await assert.rejects(nodeSqlitePort(f.native).exclusive((tx) => runMigrationsInTransaction(tx, failing, TRANSFER_OWNER.ledger)));
+    assert.deepEqual(rows(), before); assert.ok(!f.native.prepare("PRAGMA table_info(training_transfer_receipts)").all().some((c) => c.name === "cycle_id"));
+    await nodeSqlitePort(f.native).exclusive((tx) => runMigrationsInTransaction(tx, TRANSFER_OWNER.chain, TRANSFER_OWNER.ledger));
+    assert.deepEqual(rows(), before); assert.equal(f.native.prepare("SELECT cycle_id FROM training_transfer_receipts").get()!.cycle_id, null);
+  } finally { await f.close(); }
+});
+
+test("I07 participant copies use one destination programme for all imported cycles and never copy actual results", async () => {
+  const f = await fixture();
+  try {
+    const other = await f.clients.create({ displayName: "Другой участник книги" });
+    const cycles = builderWorkbookImport(multiBook(f.mapping.press!)).cycles!;
+    const saved = await f.transfer.saveBuilderWorkbook({ clientId: f.client.id, scope: { programId: null, mesocycleId: null }, expectedRevision: null,
+      programTitle: "Копии книги", cycles, existingCycleKey: null, clientIds: [f.client.id, other.id], placements: [{ clientId: other.id, target: { kind: "new" } }] });
+    const library = await f.plans.getLibrary(other.id); assert.equal(library.active.length, 1);
+    const targetId = library.active[0]!.id; assert.notEqual(targetId, saved.programId);
+    assert.equal((await f.plans.getPeriodizedPlan(other.id, targetId))!.mesocycles.length, 3);
+    assert.equal((await f.execution.getProgramStatuses(other.id, targetId)).length, 0);
+    assert.equal((await f.execution.getProgramStatuses(f.client.id, saved.programId)).length, 9);
+  } finally { await f.close(); }
+});
 
 test("I05 whole workbook writes one programme with all cycles, plans and results atomically and repeats without duplicates", async () => {
   const f = await fixture();
@@ -254,15 +455,16 @@ test("I04 alias migration only adds storage; failed migration rolls back DDL and
   const f = await fixture();
   try {
     await f.transfer.importClient(f.client.id, trainingTransferFixture(), f.mapping);
-    f.native.exec("DROP TABLE training_import_exercise_matches; DELETE FROM training_transfer_schema_migrations WHERE version = 2");
+    f.native.exec("DROP TABLE training_import_exercise_matches; DELETE FROM training_transfer_schema_migrations WHERE version >= 2");
     const tables = f.native.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((row) => String(row.name));
     const protectedRows = () => tables.map((table) => f.native.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
     const before = protectedRows();
-    const failing = TRANSFER_OWNER.chain.map((step) => step.version === 2 ? { ...step, statements: [...step.statements, "INSERT INTO qa_missing_table VALUES (1)"] } : step);
+    const aliasChain = TRANSFER_OWNER.chain.slice(0, 2);
+    const failing = aliasChain.map((step) => step.version === 2 ? { ...step, statements: [...step.statements, "INSERT INTO qa_missing_table VALUES (1)"] } : step);
     await assert.rejects(nodeSqlitePort(f.native).exclusive((tx) => runMigrationsInTransaction(tx, failing, TRANSFER_OWNER.ledger)));
     assert.deepEqual(protectedRows(), before);
     assert.equal(f.native.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name='training_import_exercise_matches'").get()!.n, 0);
-    await nodeSqlitePort(f.native).exclusive((tx) => runMigrationsInTransaction(tx, TRANSFER_OWNER.chain, TRANSFER_OWNER.ledger));
+    await nodeSqlitePort(f.native).exclusive((tx) => runMigrationsInTransaction(tx, aliasChain, TRANSFER_OWNER.ledger));
     assert.deepEqual(tables.filter((table) => table !== TRANSFER_OWNER.ledger).map((table) => f.native.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()),
       tables.map((table, index) => ({ table, rows: before[index] })).filter(({ table }) => table !== TRANSFER_OWNER.ledger).map(({ rows }) => rows));
     assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_import_exercise_matches").get()!.n, 0);
@@ -352,7 +554,8 @@ test("native 3.0 backup includes Excel receipts so restoring cannot enable dupli
     await prepareBackupForRestore(destination, staging);
     const restored = new DatabaseSync(staging);
     try {
-      assert.equal(restored.prepare("SELECT count(*) n FROM training_transfer_receipts").get()?.n, 1);
+      assert.equal(restored.prepare("SELECT count(*) n FROM training_transfer_receipts WHERE cycle_id IS NULL").get()?.n, 1);
+      assert.equal(restored.prepare("SELECT count(*) n FROM training_transfer_receipts WHERE cycle_id IS NOT NULL").get()?.n, 1);
       assert.deepEqual(restored.prepare("SELECT source_name, target_id FROM training_import_exercise_matches").all(),
         f.native.prepare("SELECT source_name, target_id FROM training_import_exercise_matches").all());
       assert.equal(restored.prepare("SELECT count(*) n FROM training_sessions").get()?.n, 3);
@@ -383,5 +586,36 @@ test("results of a deleted plan stay in storage and do not create phantom matrix
     const exported = await f.transfer.exportClient(f.client.id, [input.programs[0]!.id]);
     assert.equal(exported.programs.length, 0); assert.equal(exported.sessions.length, 0);
     assert.equal(f.native.prepare("SELECT count(*) n FROM training_sessions").get()?.n, 2);
+  } finally { await f.close(); }
+});
+
+async function savedImportedCycleEdit(edit: "REPLACE_EXERCISE" | "REMOVE_WORKOUT") {
+  const f = await fixture();
+  const first = builderWorkbookImport(selectWorkbookImportSheets(multiBook(f.mapping.press!), ["0"])); const cycle0 = first.cycles![0]!;
+  const edited = { ...cycle0, weeks: cycle0.weeks.map((w, at) => ({ ...w, workouts: at !== 0 ? w.workouts : edit === "REMOVE_WORKOUT" ? []
+    : w.workouts.map((x) => ({ ...x, exercises: x.exercises.map((e) => ({ ...e, id: `${e.id}-replaced`, sets: e.sets.map((s) => ({ ...s, id: `${s.id}-replaced` })) })) })) })) };
+  const saved = await f.transfer.saveBuilderWorkbook({ clientId: f.client.id, scope: { programId: null, mesocycleId: null }, expectedRevision: null,
+    programTitle: "Правка до сохранения", cycles: [edited], clientIds: [f.client.id], existingCycleKey: null, placements: [] });
+  const planned = new Set((await f.plans.getPeriodizedPlan(f.client.id, saved.programId))!.mesocycles.flatMap((c) => c.weeks.flatMap((w) => w.workouts.map((x) => x.id))));
+  const statuses = await f.execution.getProgramStatuses(f.client.id, saved.programId);
+  return { f, planned, statuses, sets: f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n as number };
+}
+
+test("I07 replacing an exercise of an imported cycle before its first save keeps every imported result", async () => {
+  const { f, planned, statuses, sets } = await savedImportedCycleEdit("REPLACE_EXERCISE");
+  try {
+    assert.equal(sets, 2, "both imported results of the cycle are stored");
+    assert.ok(statuses.every((s) => planned.has(s.plannedWorkoutId)), "every status belongs to a workout of the plan");
+    assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
+  } finally { await f.close(); }
+});
+
+// CA-22: удаление тренировки с импортированными результатами до первого сохранения оставляет сессию COMPLETED без тренировки в плане.
+// Нужное поведение (спросить как при правке сохранённого цикла или пометить историей удалённого плана) решает владелец.
+test("I07 removing a workout that has imported results leaves no status for a workout missing from the plan", { todo: "CA-22: политика не выбрана" }, async () => {
+  const { f, planned, statuses, sets } = await savedImportedCycleEdit("REMOVE_WORKOUT");
+  try {
+    assert.equal(sets, 2, "imported results are not destroyed");
+    assert.ok(statuses.every((s) => planned.has(s.plannedWorkoutId)), "no phantom status for a removed workout");
   } finally { await f.close(); }
 });

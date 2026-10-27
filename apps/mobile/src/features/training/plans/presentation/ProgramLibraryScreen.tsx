@@ -1,5 +1,6 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useIsFocused } from "@react-navigation/native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
 import { CalendarDays, ChartColumnIncreasing, ChevronRight, CircleMinus, Clock, FileText, LayoutGrid, Plus, RefreshCw, Rocket,
@@ -109,7 +110,8 @@ function ProgramModeChooser({ onChoose }: Readonly<{ onChoose: (kind: ProgramKin
  * Отдельный экран выбора конструктора (из «+ Создать программу»): два конструктора и «Дополнительно».
  * Плотная вёрстка — всё помещается на один экран телефона (просьба владельца 2026-10-18).
  */
-export function ProgramModeChooserScreen({ onChoose, onOpenTemplates, onOpenExcel, renderExcelImport }: Readonly<{
+export function ProgramModeChooserScreen({ onChoose, onOpenTemplates, onOpenExcel, renderExcelImport, repository, clientId }: Readonly<{
+  repository?: TrainingPlansRepositoryPort; clientId?: string;
   renderExcelImport?: (renderTrigger: (onPress: () => void, disabled: boolean) => ReactNode) => ReactNode;
   onOpenExcel?: () => void;
   onChoose: (kind: ProgramKind) => void;
@@ -118,9 +120,42 @@ export function ProgramModeChooserScreen({ onChoose, onOpenTemplates, onOpenExce
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
+  const [drafts, setDrafts] = useState<readonly { kind: ProgramKind; title: string }[] | null>(repository && clientId ? null : []);
+  const [startingNew, setStartingNew] = useState(false);
+  const [replaceKind, setReplaceKind] = useState<ProgramKind | null>(null);
+  const [draftError, setDraftError] = useState(""); const [draftBusy, setDraftBusy] = useState(false); const [retry, setRetry] = useState(0);
+  const focused = useIsFocused();
+  useEffect(() => {
+    if (!repository || !clientId || !focused) return;
+    let active = true; setDraftError(""); setDrafts(null); setStartingNew(false);
+    void Promise.all([repository.getBuilderDraft(clientId, "new:SIMPLE"), repository.getMesocycleBuilderDraft(clientId, { programId: null, mesocycleId: null })]).then(([simple, advanced]) => {
+      if (!active) return;
+      const found: { kind: ProgramKind; title: string }[] = [];
+      if (simple) found.push({ kind: "SIMPLE", title: simple.draft.title || "Простая программа" });
+      if (advanced) found.push({ kind: "PERIODIZED", title: advanced.programTitle || "Расширенная программа" });
+      setDrafts(found);
+    }).catch(() => { if (active) setDraftError("Не удалось проверить черновики. Повторите попытку."); });
+    return () => { active = false; };
+  }, [clientId, repository, retry, focused]);
+  const choose = (kind: ProgramKind) => { if (drafts?.some((d) => d.kind === kind)) setReplaceKind(kind); else onChoose(kind); };
+  if (!drafts) return <View style={{ padding: 20, gap: 12 }}>{draftError ? <><InlineNotice kind="error">{draftError}</InlineNotice><AppButton label="Повторить" onPress={() => setRetry((v) => v + 1)} /></> : <LoadingState label="Проверяем черновики…" />}</View>;
+  if (drafts.length && !startingNew) return <View style={{ padding: 20, gap: 14 }}>
+    <Text style={[styles.title, { color: colors.textPrimary }]}>Продолжить черновик?</Text>
+    {drafts.map((draft) => <AppButton key={draft.kind} label={`Продолжить: ${draft.title} · ${programKindLabels[draft.kind]}`} onPress={() => onChoose(draft.kind)} />)}
+    <AppButton label="Начать новую программу" variant="secondary" onPress={() => setStartingNew(true)} />
+  </View>;
   return (
     <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.chooser}>
-      <ProgramModeChooser onChoose={onChoose} />
+      <ProgramModeChooser onChoose={choose} />
+      {!!draftError && <InlineNotice kind="error">{draftError}</InlineNotice>}
+      <ConfirmDialog visible={replaceKind !== null} destructive confirmBusy={draftBusy} title="Удалить прежний черновик?"
+        description="Будет удалён только черновик создания выбранного типа. Сохранённые программы и результаты останутся."
+        confirmLabel="Удалить и начать новую" cancelLabel="Вернуться" onCancel={() => setReplaceKind(null)} onConfirm={() => {
+          if (!replaceKind || !repository || !clientId) return;
+          const kind = replaceKind; setDraftBusy(true);
+          const remove = kind === "SIMPLE" ? repository.clearBuilderDraft(clientId, "new:SIMPLE") : repository.clearMesocycleBuilderDraft(clientId, { programId: null, mesocycleId: null });
+          void remove.then(() => { setReplaceKind(null); onChoose(kind); }).catch(() => { setReplaceKind(null); setDraftError("Не удалось удалить черновик. Попробуйте снова."); }).finally(() => setDraftBusy(false));
+        }} />
       <ListSectionHeader title="Дополнительно" />
       {onOpenTemplates !== undefined ? <FeatureRow title="Создать из шаблона" detail="Готовые варианты программ"
         icon={icon(FileText, 18)} onPress={onOpenTemplates} /> : null}
@@ -238,7 +273,7 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
   }
 
   if (library.active.length === 0 && library.archived.length === 0) {
-    return <ProgramModeChooserScreen onChoose={onChoose} onOpenTemplates={onOpenTemplates} renderExcelImport={renderExcelImport} />;
+    return <ProgramModeChooserScreen repository={repository} clientId={clientId} onChoose={onChoose} onOpenTemplates={onOpenTemplates} renderExcelImport={renderExcelImport} />;
   }
 
   const tabItems = [{ id: "programs" as const, label: programLibraryTabTitles.programs },

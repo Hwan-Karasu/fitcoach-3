@@ -1,53 +1,41 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigation, usePreventRemove } from "@react-navigation/native";
+import { RecoveryDraftQueue } from "../domain/RecoveryDraftQueue.ts";
 
-/** Отложенный Recovery Draft: очередь завершается перед Back/Cancel и перед публикацией структуры. */
-export function useRecoveryDraftSave<T>(write: (value: T) => Promise<void>) {
+export function useRecoveryDraftSave<T>(write: (value: T) => Promise<void>, options?: Readonly<{
+  hasDraft: boolean; remove: () => Promise<void>; busy?: boolean;
+}>) {
   const navigation = useNavigation();
-  const writer = useRef(write);
-  writer.current = write;
-  const pending = useRef<{ value: T } | null>(null);
-  const queue = useRef<Promise<void>>(Promise.resolve());
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const paused = useRef(false);
-  // Черновик не записался: второе «Назад» выпускает с экрана без него — иначе при сбое базы выйти нельзя.
-  const leaveAnyway = useRef(false);
+  const writer = useRef(write); writer.current = write;
+  const settings = useRef(options); settings.current = options;
   const [error, setError] = useState<string | null>(null);
-  const flush = useCallback(async () => {
-    if (timer.current !== null) clearTimeout(timer.current);
-    timer.current = null;
-    const entry = pending.current;
-    if (entry === null) { await queue.current; return; }
-    pending.current = null;
-    const operation = queue.current.catch(() => undefined).then(() => writer.current(entry.value));
-    queue.current = operation;
-    try { await operation; setError(null); }
-    catch (failure) {
-      pending.current ??= entry;
-      setError("Не удалось сохранить черновик. Изменения на экране — повторите выход или сохранение.");
-      throw failure;
-    }
-  }, []);
-  const schedule = useCallback((value: T) => {
-    if (paused.current) return;
-    leaveAnyway.current = false;
-    pending.current = { value };
-    if (timer.current !== null) clearTimeout(timer.current);
-    timer.current = setTimeout(() => { void flush().catch(() => undefined); }, 800);
-  }, [flush]);
-  useEffect(() => () => {
-    if (timer.current !== null) clearTimeout(timer.current);
-    if (!paused.current) void flush().catch(() => undefined);
-  }, [flush]);
+  const [exitAction, setExitAction] = useState<Parameters<typeof navigation.dispatch>[0] | null>(null);
+  const [exitBusy, setExitBusy] = useState(false);
+  const bypass = useRef(false);
+  const queue = useRef<RecoveryDraftQueue<T> | null>(null);
+  queue.current ??= new RecoveryDraftQueue((value) => writer.current(value), () => setError("Не удалось сохранить черновик. Повторите действие."));
+  const flush = useCallback(async () => { await queue.current!.flush(); setError(null); }, []);
+  const schedule = useCallback((value: T) => queue.current!.schedule(value), []);
+  useEffect(() => () => queue.current!.dispose(), []);
   usePreventRemove(true, ({ data }) => {
-    if (paused.current || leaveAnyway.current) { navigation.dispatch(data.action); return; }
-    void flush().then(() => navigation.dispatch(data.action)).catch(() => {
-      leaveAnyway.current = true;
-      setError("Не удалось сохранить черновик. Нажмите «Назад» ещё раз, чтобы выйти без него.");
-    });
+    if (bypass.current) { navigation.dispatch(data.action); return; }
+    if (settings.current?.busy) return;
+    if (settings.current?.hasDraft) { setError(null); setExitAction(data.action); return; }
+    void flush().then(() => { bypass.current = true; navigation.dispatch(data.action); }).catch(() => setError("Не удалось сохранить черновик. Повторите выход."));
   });
-  return { schedule, error, flush,
-    beforePublish: async () => { await flush(); paused.current = true; },
-    resume: () => { paused.current = false; },
+  const leave = async (discard: boolean) => {
+    if (!exitAction || exitBusy) return;
+    setExitBusy(true); setError(null);
+    try {
+      if (discard) await queue.current!.discard(() => settings.current!.remove()); else await queue.current!.publish();
+      bypass.current = true; const action = exitAction; setExitAction(null); navigation.dispatch(action);
+    } catch { setError(discard ? "Не удалось удалить черновик. Попробуйте ещё раз." : "Не удалось сохранить черновик. Попробуйте ещё раз."); }
+    finally { setExitBusy(false); }
+  };
+  return { schedule, flush, error, exitVisible: exitAction !== null, exitBusy,
+    cancelExit: () => setExitAction(null), saveAndLeave: () => { void leave(false); }, discardAndLeave: () => { void leave(true); },
+    beforePublish: async () => { await queue.current!.publish(); bypass.current = true; },
+    discard: async (remove: () => Promise<void>) => { await queue.current!.discard(remove); bypass.current = true; },
+    resume: () => { queue.current!.resume(); bypass.current = false; },
   };
 }

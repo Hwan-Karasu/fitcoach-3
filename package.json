@@ -6,7 +6,7 @@
   "scripts": {
     "equipment:prepare": "node --experimental-strip-types scripts/prepare-equipment-icons.ts",
     "icons:prepare": "node --experimental-strip-types scripts/prepare-launcher-icons.ts",
-    "excel:test": "node --experimental-strip-types --test-isolation=none --test scripts/training-workbook.test.ts scripts/training-transfer.test.ts scripts/legacy-excel.test.ts scripts/training-transfer-review.test.ts scripts/visible-matrix-workbook.test.ts scripts/workbook-review-session.test.ts apps/mobile/scripts/import-catalog.test.ts",
+    "excel:test": "node --experimental-strip-types --test-isolation=none --test scripts/training-workbook.test.ts scripts/training-transfer.test.ts scripts/legacy-excel.test.ts scripts/training-transfer-review.test.ts scripts/visible-matrix-workbook.test.ts scripts/workbook-review-session.test.ts apps/mobile/scripts/import-catalog.test.ts apps/mobile/scripts/workbook-ui.test.ts scripts/recovery-draft-queue.test.ts",
     "excel:example": "node --experimental-strip-types scripts/export-matrix-example.ts",
     "excel:sync-v2": "node --experimental-strip-types scripts/sync-v2-workbook.ts",
     "source:verify": "node --experimental-strip-types ./scripts/verify-source-baseline.ts",

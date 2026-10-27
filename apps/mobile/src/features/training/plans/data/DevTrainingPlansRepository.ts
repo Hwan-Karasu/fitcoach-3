@@ -295,6 +295,56 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     return created;
   }
 
+  /** Shared transaction participant for a builder containing several imported cycles. */
+  readonly workbookSaveParticipant = {
+    create: async (tx: SqliteStatementPort, input: Readonly<{ title: string; clientIds: readonly string[]; placements: readonly Placement[] }>, now: Date) => {
+      await this.validateAttachments(tx, input.placements);
+      const targets = new Map(input.placements.map((p) => [p.clientId, p.target]));
+      const members = input.clientIds.filter((id, at) => at === 0 || (targets.get(id)?.kind ?? "join") === "join");
+      return this.insertProgram(tx, validateCreate({ kind: "PERIODIZED", title: input.title, clientIds: members }), now, null);
+    },
+    check: async (tx: SqliteStatementPort, clientId: string, programId: string, expectedRevision: number) => {
+      await this.assertTargets(tx, clientId, programId, [clientId]);
+      const p = await programById(tx, this.workspaceId, programId);
+      if (p.revision !== expectedRevision) throw new Error("PROGRAM_REVISION_CONFLICT");
+      if (p.kind !== "PERIODIZED") throw new Error("DRAFT_INVALID");
+      return p;
+    },
+    append: async (tx: SqliteStatementPort, input: Readonly<{ clientId: string; programId: string; cycle: Mesocycle;
+      clientIds: readonly string[]; placements: readonly Placement[]; first: boolean; imported: boolean }>, now: Date) => {
+      const { clientId, programId } = input;
+      const cycle = input.imported ? input.cycle : { ...input.cycle, weeks: (await this.builderWeeks(tx, {
+        title: input.cycle.title, cycleType: input.cycle.cycleType ?? null, repRange: input.cycle.repRange ?? null, startDate: input.cycle.startDate ?? null,
+        weeks: input.cycle.weeks })).map((w, at) => ({ ...w, id: input.cycle.weeks[at]!.id })) };
+      const title = normalizeTitle(cycle.title);
+      if (!cycle.weeks.length || cycle.weeks.length > 52 || !cycle.weeks.some((w) => w.workouts.length)) throw new Error("DRAFT_INVALID");
+      assertSettings({ cycleType: cycle.cycleType ?? null, repRange: cycle.repRange ?? null, startDate: cycle.startDate ?? null });
+      for (const week of cycle.weeks) if (week.workouts.length) assertWeek(title, week.workouts);
+      await this.validateAttachments(tx, input.placements);
+      await insertMesocycle(tx, this.workspaceId, programId, clientId, { ...cycle, title }, now);
+      const targets = new Map(input.placements.map((p) => [p.clientId, p.target]));
+      const others = input.clientIds.filter((id) => id !== clientId);
+      const resolved: Placement[] = [];
+      const take = await this.idPool(tx, Math.max(1, others.length * (1 + weekRowCount(cycle.weeks))));
+      for (const memberId of others) {
+        const target = targets.get(memberId) ?? { kind: "join" as const };
+        if (target.kind === "existing" && input.first) {
+          await this.attachExisting(tx, memberId, target, `copy:${cycle.lineageId}`);
+          resolved.push({ clientId: memberId, target: target.programId === programId ? { kind: "join" } : { kind: "program", programId: target.programId } }); continue;
+        }
+        const destination = await this.placeCopy(tx, memberId, target.kind === "existing" ? { kind: "program", programId: target.programId } : target,
+          programId, { ...cycle, id: take(), weeks: copyWeeks(cycle.weeks, take) }, now);
+        resolved.push({ clientId: memberId, target: destination === programId ? { kind: "join" } : { kind: "program", programId: destination } });
+      }
+      if (input.first) await saveSelection(tx, this.workspaceId, programId, clientId, cycle.id);
+      return resolved;
+    },
+    bump: async (tx: SqliteStatementPort, programId: string, revision: number, now: Date) => this.bumpRevision(tx, programId, revision, now),
+    clear: async (tx: SqliteStatementPort, clientId: string, scope: MesocycleBuilderScope) => {
+      await tx.run("DELETE FROM training_builder_drafts WHERE workspace_id=? AND client_id=? AND draft_key=?", [this.workspaceId, clientId, mesocycleBuilderDraftKey(scope)]);
+    },
+  };
+
   async saveBuilderAsTemplate(input: Readonly<{ title: string; mesocycle: BuilderMesocycleInput }>, now: Date = new Date()): Promise<ProgramTemplate> {
     const title = normalizeTitle(input.mesocycle.title);
     let local = 0;
@@ -1392,6 +1442,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   }
 
   async saveMesocycleBuilderDraft(clientId: string, scope: MesocycleBuilderScope, draft: MesocycleBuilderDraft): Promise<void> {
+    if (!storedMesocycleBuilder(draft)) throw new Error("DRAFT_INVALID");
     await this.ready().writer.write(async (tx) => {
       if (scope.programId !== null) {
         if ((await membership(tx, this.workspaceId, clientId, scope.programId)).archivedAt !== null) throw new Error("PROGRAM_ARCHIVED");
@@ -1406,6 +1457,17 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
 
   async clearMesocycleBuilderDraft(clientId: string, scope: MesocycleBuilderScope): Promise<void> {
     await this.clearBuilderDraft(clientId, mesocycleBuilderDraftKey(scope));
+  }
+
+  async promoteSimpleBuilderDraft(clientId: string, draft: MesocycleBuilderDraft): Promise<void> {
+    if (!storedMesocycleBuilder(draft)) throw new Error("DRAFT_INVALID");
+    await this.ready().writer.write(async (tx) => {
+      const prior = await tx.first("SELECT 1 AS present FROM training_builder_drafts WHERE workspace_id=? AND client_id=? AND draft_key='new:PERIODIZED'", [this.workspaceId, clientId]);
+      if (prior) throw new Error("PERIODIZED_DRAFT_EXISTS");
+      await tx.run("INSERT INTO training_builder_drafts(workspace_id,client_id,draft_key,base_revision,draft_json,updated_at) VALUES(?,?,'new:PERIODIZED',NULL,?,?)",
+        [this.workspaceId, clientId, JSON.stringify(draft), new Date().toISOString()]);
+      await tx.run("DELETE FROM training_builder_drafts WHERE workspace_id=? AND client_id=? AND draft_key='new:SIMPLE'", [this.workspaceId, clientId]);
+    });
   }
 
   async clearPeriodizedDraft(clientId: string, programId: string, key: string): Promise<void> {
@@ -1506,7 +1568,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   }
 
   private async placeCopy(tx: SqliteStatementPort, memberId: string, target: PlacementTarget, hostProgramId: string,
-    cycle: Mesocycle, now: Date): Promise<void> {
+    cycle: Mesocycle, now: Date): Promise<string> {
     if (target.kind === "existing") throw new Error("DRAFT_INVALID");
     const client = await tx.first<{ lifecycle: string }>("SELECT lifecycle FROM clients WHERE workspace_id = ? AND id = ?",
       [this.workspaceId, memberId]);
@@ -1534,6 +1596,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     }
     await insertMesocycle(tx, this.workspaceId, programId, memberId, cycle, now);
     await saveSelection(tx, this.workspaceId, programId, memberId, cycle.id);
+    return programId;
   }
 
   /** Копия открывшего клиента: `mesocycleId` или мезоцикл тренировки `workoutId` в этой программе. */

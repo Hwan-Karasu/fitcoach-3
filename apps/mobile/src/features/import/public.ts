@@ -10,4 +10,6 @@ export { startWorkbookReview, selectWorkbookSheet, updateWorkbookEntry, applyWor
   type WorkbookReviewSession, type WorkbookReviewEntry } from "./domain/WorkbookReviewSession.ts";
 export { applyWorkbookNameMappings, autoMatchWorkbookEntry, setWorkbookNameMatch, workbookSourceNames, workbookMatchesToRemember, requireWorkbookNameChoices } from "./domain/WorkbookReviewSession.ts";
 export type { ExerciseImportMatchesPort, ExerciseImportMatch } from "./domain/ExerciseImportMatches.ts";
-export { prepareWholeWorkbook, wholeWorkbookStatus, compileWholeWorkbook } from "./domain/WholeWorkbookImport.ts";
+export { prepareWholeWorkbook, prepareWorkbookResponsive, wholeWorkbookStatus, compileWholeWorkbook } from "./domain/WholeWorkbookImport.ts";
+export { selectWorkbookImportSheets, emptyWorkbookSheet } from "./domain/WorkbookReviewSession.ts";
+export { builderWorkbookImport } from "./domain/BuilderWorkbookImport.ts";

@@ -10,7 +10,7 @@ export interface ImportTable {
 }
 export type PickedWorkbook = Readonly<{ filename?: string }> & (Readonly<{ kind: "TRANSFER"; value: TrainingTransfer; planSheets?: readonly { readonly name: string; readonly scopeId: string }[] }> | Readonly<{ kind: "TABLES"; sourceId: string; tables: readonly ImportTable[] }>);
 export interface WorkbookFilesPort {
-  pick(): Promise<PickedWorkbook | null>;
+  pick(options?: Readonly<{ onReading?: () => Promise<void>; active?: () => boolean }>): Promise<PickedWorkbook | null>;
   share(value: TrainingTransfer): Promise<void>;
   template(): Promise<void>;
 }

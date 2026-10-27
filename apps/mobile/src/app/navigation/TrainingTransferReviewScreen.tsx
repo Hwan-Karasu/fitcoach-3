@@ -10,7 +10,10 @@ import { transferSummary } from "../../shared/training-transfer/TrainingTransfer
 import { TransferIssuesEditor } from "./TransferIssuesEditor.tsx";
 
 export function TrainingTransferReviewScreen({ value, mapping, catalog, clientName, busy, error, onMatch, onConfirm, onBack, onShare, planOnly = false,
-  controls, controlsExpanded = false, onCorrectIssue, onParameters, parametersLabel, blocked = false, sheetMode = false, actionLabel, footerNote, blockedReason, allowUnknownDates = false }: Readonly<{
+  controls, controlsExpanded = false, onCorrectIssue, onParameters, parametersLabel, blocked = false, sheetMode = false, actionLabel, footerNote, blockedReason, allowUnknownDates = false,
+  selectedValidation = false, viewWeek, onViewWeek, issueInputs, onIssueInputs }: Readonly<{
+  selectedValidation?: boolean; viewWeek?: number; onViewWeek?: (week: number) => void;
+  issueInputs?: Readonly<Record<string, string>>; onIssueInputs?: (inputs: Readonly<Record<string, string>>) => void;
   allowUnknownDates?: boolean;
   actionLabel?: string; footerNote?: string; blockedReason?: string;
   planOnly?: boolean;
@@ -25,7 +28,9 @@ export function TrainingTransferReviewScreen({ value, mapping, catalog, clientNa
   useEffect(() => { if (controlsExpanded) scroll.current?.scrollTo({ y: 0, animated: true }); }, [controlsExpanded]);
   const scopes = useMemo(() => transferReviewScopes(value), [value]);
   const [scopeId, setScopeId] = useState(scopes[0]?.id ?? "");
-  const [weekIndex, setWeekIndex] = useState(scopes[0]?.weeks[0]?.index ?? 1);
+  const [localWeek, setLocalWeek] = useState(scopes[0]?.weeks[0]?.index ?? 1);
+  const weekIndex = viewWeek ?? localWeek;
+  const setWeekIndex = (index: number) => { if (onViewWeek) onViewWeek(index); else setLocalWeek(index); };
   const scope = scopes.find((s) => s.id === scopeId) ?? scopes[0];
   const week = scope?.weeks.find((w) => w.index === weekIndex) ?? scope?.weeks[0];
   const names = useMemo(() => new Map(value.exercises.map((e) => [e.id, e.name])), [value]);
@@ -51,7 +56,7 @@ export function TrainingTransferReviewScreen({ value, mapping, catalog, clientNa
       {!!error && <InlineNotice kind="error">{error}</InlineNotice>}
       <InlineNotice kind={unresolved ? "warning" : "success"}>{unresolved ? `Нужно выбрать упражнений: ${unresolved} из ${value.exercises.length}.` : `Сопоставлены все упражнения: ${value.exercises.length}.`}</InlineNotice>
       {!clientName && <InlineNotice>Выберите или создайте клиента в параметрах импорта.</InlineNotice>}
-      {onCorrectIssue ? <TransferIssuesEditor value={value} busy={busy} onCorrect={onCorrectIssue} />
+      {onCorrectIssue ? <TransferIssuesEditor value={value} busy={busy} onCorrect={onCorrectIssue} inputs={issueInputs} onInputs={onIssueInputs} />
         : !!value.issues?.length && <InlineNotice>Значений для проверки: {value.issues.length}. Исправьте лист «Проверить значения» в сохранённой матрице и выберите исправленный файл.</InlineNotice>}
       {!!missingDates && <InlineNotice>{allowUnknownDates ? `Занятий с неизвестной датой: ${missingDates}. Даты останутся неизвестными.` : `Занятий с неизвестной датой: ${missingDates}. Для переноса фактических результатов укажите даты в Excel. План без дат можно загрузить через конструктор.`}</InlineNotice>}
       {!!(value.issues?.length || missingDates) && <AppButton label="Сохранить матрицу для проверки" variant="secondary" disabled={busy} onPress={onShare} />}
@@ -65,7 +70,7 @@ export function TrainingTransferReviewScreen({ value, mapping, catalog, clientNa
       {!scopes.length && <InlineNotice>В файле нет упражнений для сверки.</InlineNotice>}
     </ScrollView>
     <StickyEditorFooter actionLabel={actionLabel ?? (planOnly ? "Открыть в конструкторе" : "Подтвердить импорт")} onAction={onConfirm} busy={busy}
-      disabled={blocked || !clientName || !value.programs.length || unresolved > 0 || (!allowUnknownDates && missingDates > 0) || !!value.issues?.length}
+      disabled={blocked || !clientName || (!selectedValidation && (!value.programs.length || unresolved > 0 || (!allowUnknownDates && missingDates > 0) || !!value.issues?.length))}
       note={blocked ? blockedReason ?? "Примените настройки столбцов перед импортом." : footerNote ?? (planOnly ? "Программа появится после сохранения в конструкторе." : sheetMode ? "Будет импортирован только открытый лист." : "Выбор упражнения применяется ко всем его вхождениям в этой книге.")}
       secondaryAction={{ label: parametersLabel ?? (planOnly ? "Выбрать другой лист" : "Параметры импорта"), onPress: onParameters ?? onBack }} />
   </TrainingEditorLayout>;

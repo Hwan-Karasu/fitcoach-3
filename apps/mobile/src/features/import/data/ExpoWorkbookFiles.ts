@@ -23,9 +23,11 @@ async function share(bytes: Uint8Array, filename: string): Promise<void> {
   await Sharing.shareAsync(file.uri, { mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", dialogTitle: "Сохранить тренировки Excel" });
 }
 export const expoWorkbookFiles: WorkbookFilesPort = {
-  async pick() {
+  async pick(options) {
     const result = await getDocumentAsync({ type: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel", "application/octet-stream"], copyToCacheDirectory: true });
     if (result.canceled) return null;
+    if (options?.active && !options.active()) return null;
+    await options?.onReading?.();
     const asset = result.assets[0]!;
     const file = new File(asset.uri);
     try {
@@ -40,7 +42,14 @@ export const expoWorkbookFiles: WorkbookFilesPort = {
         planSheets.sort((a, b) => position(a.name) - position(b.name));
         return { kind: "TRANSFER", value, planSheets, filename: asset.name };
       }
-      return { kind: "TABLES", filename: asset.name, sourceId: `excel:${bytesToHex(sha256(bytes))}`, tables: book.SheetNames.map((name) => { const table = { name, rows: XLSX.utils.sheet_to_json<unknown[]>(book.Sheets[name]!, { header: 1, defval: "", raw: false }) }; return flattenLegacyMatrix(table) ?? table; }) };
+      const tables = [];
+      for (const name of book.SheetNames) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        if (options?.active && !options.active()) return null;
+        const table = { name, rows: XLSX.utils.sheet_to_json<unknown[]>(book.Sheets[name]!, { header: 1, defval: "", raw: false }) };
+        tables.push(flattenLegacyMatrix(table) ?? table);
+      }
+      return { kind: "TABLES", filename: asset.name, sourceId: `excel:${bytesToHex(sha256(bytes))}`, tables };
     } finally { if (file.uri.startsWith(`${Paths.cache.uri.replace(/\/$/u, "")}/`) && file.exists) file.delete(); }
   },
   share: (value) => share(writeVisibleTrainingWorkbook(value), trainingWorkbookFilename(value)),

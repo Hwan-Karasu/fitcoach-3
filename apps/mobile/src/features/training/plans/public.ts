@@ -36,3 +36,5 @@ export type { MesocycleDeletePort, MesocycleDeleteRequest, PlanDeletePlansPartic
   ProgramDeleteRequest } from "./domain/PlanDeletion.ts";
 export type { WeekCopyRequest, WeekCopyMode, WeekCopyPort, WeekCopyPreview, WeekPlansParticipant } from "./domain/WeekCopy.ts";
 export type { BuilderExcelDraft } from "./domain/BuilderExcelDraft.ts";
+export type { BuilderWorkbookCycle, BuilderWorkbookState } from "./domain/BuilderExcelDraft.ts";
+export type { BuilderWorkbookSavePort, BuilderWorkbookSaveRequest } from "./domain/BuilderWorkbookSave.ts";

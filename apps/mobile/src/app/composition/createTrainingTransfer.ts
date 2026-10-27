@@ -13,6 +13,8 @@ import { importTrainingExecutions } from "../../features/training/execution/data
 import type { DevTrainingExecutionRepository } from "../../features/training/execution/data/DevTrainingExecutionRepository.ts";
 import type { DevTrainingPlansRepository } from "../../features/training/plans/data/DevTrainingPlansRepository.ts";
 import type { DevExerciseCatalogRepository } from "../../features/exercises/data/DevExerciseCatalogRepository.ts";
+import type { BuilderWorkbookCycle } from "../../shared/training-transfer/BuilderWorkbook.ts";
+import { workbookCycleSnapshot, workbookSheetHash } from "../../shared/training-transfer/WorkbookSheetIdentity.ts";
 
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -80,6 +82,97 @@ export function createTrainingTransfer(database: SharedSqliteDatabase, workspace
       const available = await activeExerciseIds();
       return (await transaction((tx) => matches.read(tx, sourceNames))).map((match) => ({ ...match, available: available.has(match.targetId) }));
     },
+    async saveBuilderWorkbook(request) {
+      if (!request.cycles.length || new Set(request.cycles.map((c) => c.key)).size !== request.cycles.length || request.clientIds[0] !== request.clientId || new Set(request.clientIds).size !== request.clientIds.length) throw new Error("DRAFT_INVALID");
+      const available = await activeExerciseIds();
+      for (const cycle of request.cycles) for (const id of [...cycle.weeks.flatMap((w) => w.workouts.flatMap((x) => x.exercises.map((e) => e.exerciseId))),
+        ...cycle.imported?.sessions.flatMap((s) => s.facts.map((f) => f.exerciseId)) ?? []]) {
+        if (!available.has(id)) throw new Error("Выбранное упражнение удалено, скрыто или находится в архиве. Выберите замену.");
+      }
+      const remembered = await checkMatches(request.cycles.flatMap((c) => c.imported?.matches ?? []));
+      const batchKey = hash(["builder-batch", request.clientId, request.cycles.map((c) => c.key)]);
+      const batchHash = hash(request);
+      const saved = await transaction(async (tx) => {
+        const now = new Date();
+        if (request.scope.programId === null) {
+          const receipt = await receipts.read(tx, request.clientId, batchKey);
+          if (receipt) {
+            const ids = JSON.parse(receipt.programIds) as string[]; const local = await exportInTransaction(tx, request.clientId, ids);
+            if (receipt.sourceHash !== batchHash || receipt.localHash !== fingerprint(local)) throw new Error("Конфликт ранее сохранённого импорта. Автоматическая перезапись отключена.");
+            await plans.workbookSaveParticipant.clear(tx, request.clientId, request.scope);
+            return { programId: ids[0]!, mesocycleId: local.programs[0]!.mesocycles[0]!.id };
+          }
+        }
+        const program = request.scope.programId === null
+          ? await plans.workbookSaveParticipant.create(tx, { title: request.programTitle, clientIds: request.clientIds, placements: request.placements }, now)
+          : await plans.workbookSaveParticipant.check(tx, request.clientId, request.scope.programId, request.expectedRevision ?? -1);
+        let revision = program.revision; let firstId = ""; let appended = false;
+        let placements = request.placements;
+        const cycleState = async (id: string) => {
+          const local = await exportInTransaction(tx, request.clientId, [program.id]);
+          return hash(workbookCycleSnapshot(local, id));
+        };
+        for (const [index, draft] of request.cycles.entries()) {
+          if (draft.key === request.existingCycleKey && request.scope.mesocycleId !== null) {
+            const edit = { clientId: request.clientId, programId: program.id, expectedRevision: revision,
+              mesocycleId: request.scope.mesocycleId, clientIds: [request.clientId], mesocycle: { title: draft.title,
+                cycleType: draft.settings?.cycleType ?? null, repRange: draft.settings?.repRange ?? null, startDate: draft.settings?.startDate ?? null, weeks: draft.weeks },
+              ...(request.resultsAction ? { resultsAction: request.resultsAction } : {}) };
+            const removed = await plans.mesocycleSaveParticipant.removedWorkouts(tx, edit);
+            const executions = await execution.weekCopyParticipant.read(tx, removed.map((r) => ({ clientId: request.clientId, programId: program.id, weekIndex: r.weekIndex, plannedWorkoutId: r.plannedWorkoutId })));
+            const withResults = removed.filter((_, at) => executions[at]?.session !== null && executions[at]?.session !== undefined || (executions[at]?.facts.size ?? 0) > 0);
+            if (withResults.length) {
+              if (!request.resultsAction) throw new Error("WEEK_HAS_RESULTS");
+              const ids = withResults.map((r) => r.plannedWorkoutId);
+              if (request.resultsAction === "DELETE") await execution.cleanupParticipant.remove(tx, request.clientId, program.id, ids);
+              else await execution.cleanupParticipant.keepAsHistory(tx, request.clientId, program.id, (weekIndex, id) => {
+                const r = withResults.find((r) => r.weekIndex === weekIndex && r.plannedWorkoutId === id)!;
+                return { programTitle: r.programTitle, programKind: "PERIODIZED", mesocycleTitle: r.mesocycleTitle, workoutTitle: r.workoutTitle };
+              }, now, ids);
+            }
+            const result = await plans.mesocycleSaveParticipant.save(tx, edit, now);
+            revision = result.program.revision; firstId ||= result.mesocycleId; continue;
+          }
+          const cycleTransfer = (item: BuilderWorkbookCycle): TrainingTransfer => {
+            const sessions = [...item.imported?.sessions ?? []].map((s) => ({ ...s, programId: "builder-program", outcome: "COMPLETED" as const }));
+            const represented = new Set(sessions.map((s) => JSON.stringify([s.weekIndex, s.plannedWorkoutId])));
+            if (item.imported) for (const [weekIndex, week] of item.weeks.entries()) for (const workout of week.workouts) {
+              if (!represented.has(JSON.stringify([weekIndex + 1, workout.id]))) sessions.push({ id: `empty:${workout.id}`, programId: "builder-program", weekIndex: weekIndex + 1,
+                plannedWorkoutId: workout.id, outcome: "COMPLETED", actualDate: null, startedAt: null, finishedAt: null, origin: null, facts: [], notes: [] });
+            }
+            const ids = [...new Set([...item.weeks.flatMap((w) => w.workouts.flatMap((x) => x.exercises.map((e) => e.exerciseId))), ...sessions.flatMap((s) => s.facts.map((f) => f.exerciseId))])];
+            return { format: "athlete-training", version: 1, sourceId: `builder:${program.id}`, client: { id: request.clientId, name: "Конструктор" }, exercises: ids.map((id) => ({ id, name: id })),
+              programs: [{ id: "builder-program", title: program.title, kind: "PERIODIZED", createdAt: program.createdAt, archivedAt: null, simple: null, simpleWeeks: [],
+                mesocycles: [{ id: item.key, lineageId: item.key, title: item.title, ...item.settings,
+                  weeks: item.weeks.map((w, at) => ({ ...w, id: `${item.key}:week:${at}`, index: at + 1 })) }] }], sessions };
+          };
+          const input = readTrainingWorkbook(readWorkbook(writeTrainingWorkbook(cycleTransfer(draft))));
+          const mapped = remapTrainingTransfer(input, request.clientId, Object.fromEntries(input.exercises.map((e) => [e.id, e.id])));
+          const cycle = mapped.programs[0]!.mesocycles[0]!;
+          const key = hash(["builder-sheet", program.id, draft.imported?.sourceId ?? "manual", draft.key]);
+          const sourceHash = draft.imported?.sourceHash ?? hash(draft);
+          const receipt = await receipts.read(tx, request.clientId, key);
+          if (receipt) {
+            const localId = receipt.cycleId ?? cycle.id; firstId ||= localId;
+            if (receipt.sourceHash !== sourceHash || receipt.localHash !== await cycleState(localId)) throw new Error(`Конфликт цикла «${draft.title}»: данные изменились после импорта.`);
+            continue;
+          }
+          firstId ||= cycle.id;
+          placements = await plans.workbookSaveParticipant.append(tx, { clientId: request.clientId, programId: program.id, cycle,
+            clientIds: request.clientIds, placements, first: index === 0, imported: !!draft.imported }, now);
+          await importTrainingExecutions(tx, workspace, request.clientId, mapped.sessions.map((s) => ({ ...s, programId: program.id })));
+          await receipts.save(tx, request.clientId, key, { sourceHash, localHash: await cycleState(cycle.id), programIds: JSON.stringify([program.id]), cycleId: cycle.id }); appended = true;
+        }
+        if (appended && request.scope.programId !== null && revision === program.revision) await plans.workbookSaveParticipant.bump(tx, program.id, revision, now);
+        await matches.save(tx, remembered);
+        await plans.workbookSaveParticipant.clear(tx, request.clientId, request.scope);
+        if (request.scope.programId === null) await receipts.save(tx, request.clientId, batchKey, { sourceHash: batchHash,
+          localHash: fingerprint(await exportInTransaction(tx, request.clientId, [program.id])), programIds: JSON.stringify([program.id]) });
+        return { programId: program.id, mesocycleId: firstId };
+      });
+      plans.mesocycleSaveParticipant.notify(request.clientIds); execution.notifyTransfer(request.clientId, saved.programId);
+      return saved;
+    },
     async rememberExerciseMatches(input) {
       const valid = await checkMatches(input);
       await transaction((tx) => matches.save(tx, valid));
@@ -121,6 +214,12 @@ export function createTrainingTransfer(database: SharedSqliteDatabase, workspace
           await importTrainingPlanHistory(tx, workspace, clientId, mapped.planHistory?.filter((h) => h.programId === program.id) ?? []);
           await importTrainingExecutions(tx, workspace, clientId, fragment.sessions);
           const local = await exportInTransaction(tx, clientId, [program.id]);
+          for (const [at, cycle] of source.mesocycles.entries()) {
+            const localCycle = program.mesocycles[at]!;
+            await receipts.save(tx, clientId, hash(["builder-sheet", program.id, value.sourceId, cycle.id]), {
+              sourceHash: workbookSheetHash(cycle, sourceSessions, mapping), localHash: hash(workbookCycleSnapshot(local, localCycle.id)),
+              programIds: JSON.stringify([program.id]), cycleId: localCycle.id });
+          }
           await receipts.save(tx, clientId, key, { sourceHash, localHash: fingerprint(local), programIds: JSON.stringify([program.id]) });
           added = true;
         }

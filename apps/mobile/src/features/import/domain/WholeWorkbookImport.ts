@@ -27,6 +27,7 @@ export function wholeWorkbookStatus(session: WorkbookReviewSession): Readonly<{
   const emptySheets: string[] = [];
   for (const sheet of session.sheets) {
     if (emptySheet(session, sheet.id)) { emptySheets.push(sheet.label); continue; }
+    if (!session.selectedSheetIds.has(sheet.id)) continue;
     const entry = session.entries[sheet.id];
     const missing = entry?.value?.exercises.filter((e) => !entry.mapping[e.id]).length ?? 0;
     const reason = !entry?.value ? entry?.error || "Лист ещё не прочитан"
@@ -35,7 +36,7 @@ export function wholeWorkbookStatus(session: WorkbookReviewSession): Readonly<{
           : entry.value.issues?.length ? `Проверьте значения: ${entry.value.issues.length}` : "";
     if (reason) problems.push({ ...sheet, reason });
   }
-  return { problems, emptySheets, cycles: session.sheets.length - emptySheets.length };
+  return { problems, emptySheets, cycles: session.sheets.filter((s) => session.selectedSheetIds.has(s.id) && !emptySheet(session, s.id)).length };
 }
 
 /** One workbook is one new programme. IDs include sheet/week context, even for repeated simple plans. */
@@ -46,10 +47,10 @@ export function compileWholeWorkbook(session: WorkbookReviewSession): Readonly<{
   if (status.problems.length) throw new Error(status.problems.map((p) => `${p.label}: ${p.reason}`).join("\n"));
   if (!status.cycles) throw new Error("В книге нет тренировок для импорта.");
   if (!session.programTitle.trim() || session.programTitle.trim().length > 80) throw new Error("Название программы должно содержать от 1 до 80 символов.");
-  const entries = session.sheets.filter((s) => !emptySheet(session, s.id));
+  const entries = session.sheets.filter((s) => session.selectedSheetIds.has(s.id) && !emptySheet(session, s.id));
   const first = session.entries[entries[0]!.id]!.value!;
   const sourcePrograms = [...new Set(entries.flatMap((s) => session.entries[s.id]!.value!.programs.map((p) => p.id)))].sort();
-  const programId = identity([first.sourceId, sourcePrograms]);
+  const programId = identity([first.sourceId, sourcePrograms, entries.map((s) => s.id)]);
   const exercises = new Map<string, { id: string; name: string }>();
   const mapping: Record<string, string> = {};
   const cycles: TransferCycle[] = []; const sessions: TransferSession[] = [];
@@ -62,7 +63,7 @@ export function compileWholeWorkbook(session: WorkbookReviewSession): Readonly<{
       exercises.set(e.id, e); mapping[e.id] = entry.mapping[e.id]!;
     }
     const original = value.programs[0]!.mesocycles[0]!;
-    const rowId = (week: number, kind: string, id: string) => identity([programId, sheet.id, week, kind, id]);
+    const rowId = (week: number, kind: string, id: string) => identity([first.sourceId, original.id, week, kind, id]);
     cycles.push({ ...original, id: rowId(0, "cycle", original.id), lineageId: rowId(0, "cycle", original.lineageId), title: sheet.label,
       weeks: original.weeks.map((week) => ({ ...week, id: rowId(week.index, "week", week.id),
         workouts: week.workouts.map((workout) => ({ ...workout, id: rowId(week.index, "workout", workout.id),
@@ -84,7 +85,20 @@ export function compileWholeWorkbook(session: WorkbookReviewSession): Readonly<{
         startedAt: null, finishedAt: null, origin: null, facts: [], notes: [] });
     }
   }
-  return { mapping, value: { ...first, client: { ...first.client, id: `${first.sourceId}:workbook:${session.picked.kind === "TRANSFER" ? session.picked.value.client.id : "client"}` },
+  return { mapping, value: { ...first, client: { ...first.client, id: `${first.sourceId}:workbook:${session.picked.kind === "TRANSFER" ? session.picked.value.client.id : "client"}:${programId}` },
     exercises: [...exercises.values()], sessions, issues: [], planHistory: [],
     programs: [{ ...first.programs[0]!, id: programId, title: session.programTitle.trim(), kind: "PERIODIZED", simple: null, simpleWeeks: [], mesocycles: cycles }] } };
+}
+
+export async function prepareWorkbookResponsive(session: WorkbookReviewSession,
+  candidates: readonly Readonly<{ id: string; name: string; available: boolean }>[],
+  active: () => boolean, progress: (done: number, total: number) => void): Promise<WorkbookReviewSession | null> {
+  let result = session;
+  for (const [index, sheet] of session.sheets.entries()) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    if (!active()) return null;
+    result = autoMatchWorkbookEntry(selectWorkbookSheet(result, sheet.id), candidates);
+    progress(index + 1, session.sheets.length);
+  }
+  return active() ? { ...result, activeId: session.activeId } : null;
 }

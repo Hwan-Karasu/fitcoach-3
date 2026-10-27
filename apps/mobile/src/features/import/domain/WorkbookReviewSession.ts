@@ -5,6 +5,8 @@ import { transferReviewScopes, type TransferReviewScope } from "./TrainingTransf
 import type { PickedWorkbook } from "./WorkbookFilesPort.ts";
 
 export interface WorkbookReviewEntry {
+  readonly viewWeek?: number;
+  readonly issueInputs?: Readonly<Record<string, string>>;
   readonly header: number;
   readonly columns: LegacyMapping;
   readonly settingsOpen: boolean;
@@ -16,6 +18,7 @@ export interface WorkbookReviewEntry {
   readonly error: string;
 }
 export interface WorkbookReviewSession {
+  readonly selectedSheetIds: ReadonlySet<string>;
   readonly programTitle: string;
   readonly manualRequiredNames: ReadonlySet<string>;
   readonly nameMappings: ReadonlyMap<string, Readonly<{ targetId: string; origin: "MANUAL" | "HISTORY" }>>;
@@ -77,7 +80,12 @@ export function startWorkbookReview(picked: PickedWorkbook, planOnly: boolean): 
   if (!sheets.length) throw new Error("В файле нет листов с программами тренировок.");
   const programTitle = picked.filename?.replace(/\.xlsx?$/iu, "").trim()
     || (picked.kind === "TRANSFER" && picked.value.programs.length === 1 ? picked.value.programs[0]!.title : "Программа из Excel");
-  const result: WorkbookReviewSession = { picked, planOnly, sheets, programTitle, activeId: sheets[0]!.id, entries: {}, nameMappings: new Map(), manualRequiredNames: new Set() };
+  const selectedSheetIds = new Set(sheets.filter(({ id }) => {
+    if (picked.kind !== "TABLES") return true;
+    const table = picked.tables[Number(id)]!;
+    return !(table.matrixSource && table.rows.length <= 1) && table.rows.some((row) => row.some((v) => v != null && String(v).trim() !== ""));
+  }).map((s) => s.id));
+  const result: WorkbookReviewSession = { picked, planOnly, sheets, selectedSheetIds, programTitle, activeId: sheets[0]!.id, entries: {}, nameMappings: new Map(), manualRequiredNames: new Set() };
   return { ...result, entries: { [result.activeId]: prepare(result, result.activeId) } };
 }
 
@@ -147,10 +155,21 @@ export function workbookSourceNames(session: WorkbookReviewSession): readonly st
 }
 
 export function workbookMatchesToRemember(session: WorkbookReviewSession, wholeBook = false): readonly Readonly<{ sourceName: string; targetId: string }>[] {
-  const entries = wholeBook ? Object.values(session.entries) : [session.entries[session.activeId]];
+  const entries = wholeBook ? session.sheets.filter((s) => session.selectedSheetIds.has(s.id)).map((s) => session.entries[s.id]) : [session.entries[session.activeId]];
   const names = new Set(entries.flatMap((entry) => entry?.value?.exercises.map((e) => e.name.trim()) ?? []));
   return [...session.nameMappings].filter(([name, match]) => names.has(name) && match.origin === "MANUAL")
     .map(([sourceName, { targetId }]) => ({ sourceName, targetId }));
+}
+
+export function selectWorkbookImportSheets(session: WorkbookReviewSession, ids: readonly string[]): WorkbookReviewSession {
+  const selectedSheetIds = new Set(ids.filter((id) => session.sheets.some((s) => s.id === id) && !emptyWorkbookSheet(session, id)));
+  return { ...session, selectedSheetIds };
+}
+
+export function emptyWorkbookSheet(session: WorkbookReviewSession, id: string): boolean {
+  if (session.picked.kind !== "TABLES") return false;
+  const table = session.picked.tables[Number(id)];
+  return !!table && (!!table.matrixSource && table.rows.length <= 1 || table.rows.every((row) => row.every((v) => v == null || String(v).trim() === "")));
 }
 
 export function correctWorkbookValue(session: WorkbookReviewSession, id: string, correction: string): WorkbookReviewSession {

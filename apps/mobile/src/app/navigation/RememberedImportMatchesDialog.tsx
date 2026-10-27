@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppButton } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
@@ -14,8 +13,7 @@ export function RememberedImportMatchesDialog({ matches, catalog, onApply, onDec
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   useEffect(() => { setSelected(new Set(matches?.filter((match) => match.available !== false).map((match) => match.sourceName) ?? [])); }, [matches]);
-  return <Modal visible={matches !== null} animationType="slide" onRequestClose={onDecline}>
-    <SafeAreaView style={[styles.root, { backgroundColor: colors.canvas }]}>
+  return matches === null ? null : <View style={[styles.root, { backgroundColor: colors.canvas }]}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>Использовать прошлые сопоставления?</Text>
         <Text style={[styles.body, { color: colors.textSecondary }]}>Эти названия уже встречались в других импортах. Выберите пары для всей текущей книги. Сохранённые программы не изменятся.</Text>
@@ -36,8 +34,7 @@ export function RememberedImportMatchesDialog({ matches, catalog, onApply, onDec
         <AppButton label="Применить выбранные" onPress={() => onApply((matches ?? []).filter((match) => match.available !== false && selected.has(match.sourceName)))} />
         <AppButton variant="secondary" label="Не использовать" onPress={onDecline} />
       </View>
-    </SafeAreaView>
-  </Modal>;
+  </View>;
 }
 const styles = StyleSheet.create({ root: { flex: 1 }, content: { padding: 16, gap: 12 }, heading: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 26 },
   body: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 }, name: { fontFamily: fonts.semibold, fontSize: 15 },

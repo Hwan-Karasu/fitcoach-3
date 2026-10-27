@@ -22,6 +22,7 @@ export function periodizedDraftKey(draft: PeriodizedDraft): string {
  * действующего плана и не создаёт версий; привязан к клиенту, программе и мезоциклу.
  */
 export interface MesocycleBuilderDraft {
+  readonly workbook?: import("./BuilderExcelDraft.ts").BuilderWorkbookState;
   /** Ревизия программы, по которой начат черновик; `null` — программа ещё не создана. */
   readonly baseRevision: number | null;
   readonly programTitle: string;

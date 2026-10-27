@@ -178,5 +178,6 @@ export interface TrainingPlansRepositoryPort {
   getMesocycleBuilderDraft(clientId: string, scope: MesocycleBuilderScope): Promise<MesocycleBuilderDraft | null>;
   saveMesocycleBuilderDraft(clientId: string, scope: MesocycleBuilderScope, draft: MesocycleBuilderDraft): Promise<void>;
   clearMesocycleBuilderDraft(clientId: string, scope: MesocycleBuilderScope): Promise<void>;
+  promoteSimpleBuilderDraft(clientId: string, draft: MesocycleBuilderDraft): Promise<void>;
   subscribeCommittedChanges(listener: (change: TrainingPlansCommittedChange) => void): () => void;
 }

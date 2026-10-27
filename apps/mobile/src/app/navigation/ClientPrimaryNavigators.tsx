@@ -252,7 +252,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
       <TrainingStack.Screen name="TrainingIndex" listeners={{ focus: () => setParticipant(null) }}>
         {({ navigation }) => <ProgramLibraryScreen clientId={clientId} repository={repository}
           renderExcelImport={(renderTrigger) => <BuilderExcelImport memory={trainingTransfer} renderTrigger={renderTrigger} files={expoWorkbookFiles} exercises={exercises} label="Импортировать из Excel" clientName={clientName}
-            onImport={async (value, mapping, rememberMatches) => { await trainingTransfer.importClient(clientId, value, mapping, { rememberMatches }); }} />}
+            target={{ kind: "PROGRAM", save: async (value, mapping, rememberMatches) => { await trainingTransfer.importClient(clientId, value, mapping, { rememberMatches }); } }} />}
           planDelete={planDelete} onExport={async (programId) => { await expoWorkbookFiles.share(await trainingTransfer.exportClient(clientId, [programId])); }}
           onChoose={(kind) => { const route = createRoute(kind); navigation.navigate(route.name, route.params as never); }}
           onCreate={() => navigation.navigate("TrainingChooser")}
@@ -285,18 +285,18 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId } }] })} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingChooser">
-        {({ navigation }) => <ProgramModeChooserScreen onChoose={(kind) => { const route = createRoute(kind); navigation.navigate(route.name, route.params as never); }}
+        {({ navigation }) => <ProgramModeChooserScreen repository={repository} clientId={viewer} onChoose={(kind) => { const route = createRoute(kind); navigation.navigate(route.name, route.params as never); }}
           onOpenTemplates={() => navigation.navigate("TrainingTemplates")}
           renderExcelImport={(renderTrigger) => <BuilderExcelImport memory={trainingTransfer} renderTrigger={renderTrigger} files={expoWorkbookFiles} exercises={exercises} label="Импортировать из Excel" clientName={viewerName}
-            onImport={async (value, mapping, rememberMatches) => { await trainingTransfer.importClient(viewer, value, mapping, { rememberMatches }); navigation.popTo("TrainingIndex"); }} />} />}
+            target={{ kind: "PROGRAM", save: async (value, mapping, rememberMatches) => { await trainingTransfer.importClient(viewer, value, mapping, { rememberMatches }); navigation.popTo("TrainingIndex"); } }} />} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingCreate" options={({ route }) => ({ title: route.params.mesocycleId !== undefined ? "Изменение мезоцикла"
         : route.params.programId !== undefined ? "Новый мезоцикл" : trainingTitles.TrainingCreate })}>
         {/* Расширенная — конструктор 2.0 (UI-OWN-038): программа, участники и первый мезоцикл одной записью. */}
         {({ navigation, route }) => <PeriodizedBuilderScreen clientId={viewer} repository={repository} exercises={exerciseLookup}
           programId={route.params.programId} mesocycleId={route.params.mesocycleId} initialWeek={route.params.weekIndex}
-          mesocycleSave={mesocycleSave}
-          renderExcel={(onApply) => <BuilderExcelImport memory={trainingTransfer} files={expoWorkbookFiles} exercises={exercises} onApply={onApply} />}
+          mesocycleSave={mesocycleSave} workbookSave={trainingTransfer}
+          renderExcel={(onApply, title) => <BuilderExcelImport memory={trainingTransfer} files={expoWorkbookFiles} exercises={exercises} clientName={viewerName} target={{ kind: "BUILDER", title, apply: onApply }} />}
           onSaved={(mesocycleId) => navigation.popTo("TrainingProgram", { programId: route.params.programId!, mesocycleId })}
           listCandidates={listCandidates} picked={route.params.picked ?? null} onCancel={() => navigation.goBack()}
           onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId,
@@ -345,7 +345,8 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingBuilder">
         {({ navigation, route }) => <SimpleProgramBuilderScreen clientId={viewer} programId={route.params?.programId ?? null}
-          renderExcel={(onApply) => <BuilderExcelImport memory={trainingTransfer} files={expoWorkbookFiles} exercises={exercises} simple onApply={onApply} />}
+          onOpenExtended={() => navigation.replace("TrainingCreate", { kind: "PERIODIZED" })}
+          renderExcel={(onApply, title) => <BuilderExcelImport memory={trainingTransfer} files={expoWorkbookFiles} exercises={exercises} clientName={viewerName} target={{ kind: "BUILDER", title, apply: onApply }} />}
           onCancel={() => navigation.goBack()}
           repository={repository} simplePlanSave={mesocycleSave} exercises={exerciseLookup} picked={route.params?.picked ?? null}
           onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId,

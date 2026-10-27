@@ -11,3 +11,5 @@ export { ClientExerciseScreen, ExerciseHistoryList, MonthlyReportScreen, Trainin
 export type { ProgramCard } from "./plans/public.ts";
 export { WorkoutsReview } from "./plans/public.ts";
 export type { BuilderExcelDraft } from "./plans/public.ts";
+export type { BuilderWorkbookCycle, BuilderWorkbookState } from "./plans/public.ts";
+export type { BuilderWorkbookSavePort, BuilderWorkbookSaveRequest } from "./plans/public.ts";

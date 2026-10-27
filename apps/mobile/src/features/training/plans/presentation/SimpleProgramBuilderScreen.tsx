@@ -18,8 +18,10 @@ import { useExerciseLookupState } from "./useExerciseLookup.ts";
 import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
 import { newPlanId, WorkoutsEditor } from "./WorkoutsEditor.tsx";
 import { useRecoveryDraftSave } from "./useRecoveryDraftSave.ts";
+import { BuilderDraftExitDialog } from "./BuilderDraftExitDialog.tsx";
 import { SimpleTemplatesPanel } from "./SimpleTemplatesPanel.tsx";
 import { workoutsFromTemplate } from "../domain/TemplateModel.ts";
+import { independentWeeks } from "../domain/PlanCopy.ts";
 
 export { newPlanId } from "./WorkoutsEditor.tsx";
 
@@ -38,8 +40,9 @@ const errors: Readonly<Record<string, string>> = {
  * Компоновка 2.0 (UI-OWN-026): вкладки «Программа | Шаблоны», карточка «Настройки программы», внизу «Создать»,
  * «В шаблон» и «Отмена».
  */
-export function SimpleProgramBuilderScreen({ clientId, programId, repository, simplePlanSave, exercises, picked, onPickExercise, onSaved, onCancel, renderExcel }: Readonly<{
-  renderExcel?: (onApply: (draft: BuilderExcelDraft) => void) => ReactNode;
+export function SimpleProgramBuilderScreen({ clientId, programId, repository, simplePlanSave, exercises, picked, onPickExercise, onSaved, onCancel, renderExcel, onOpenExtended }: Readonly<{
+  onOpenExtended?: () => void;
+  renderExcel?: (onApply: (draft: BuilderExcelDraft) => void, targetTitle?: string) => ReactNode;
   clientId: string;
   programId: string | null;
   repository: TrainingPlansRepositoryPort;
@@ -65,6 +68,8 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, si
   const [rebased, setRebased] = useState(false);
   const [confirmRemoved, setConfirmRemoved] = useState(false);
   const [restored, setRestored] = useState(false);
+  const [changed, setChanged] = useState(false);
+  const [pendingExcel, setPendingExcel] = useState<BuilderExcelDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [showIssues, setShowIssues] = useState(false);
@@ -74,7 +79,8 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, si
   const [saved, setSaved] = useState<string | null>(null);
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const recovery = useRecoveryDraftSave<Readonly<{ draft: SimpleProgramDraft; revision: number | null; base: SimpleProgramDraft | null }>>(
-    (value) => repository.saveBuilderDraft(clientId, key, value.revision, value.draft, value.base));
+    (value) => repository.saveBuilderDraft(clientId, key, value.revision, value.draft, value.base),
+    { hasDraft: changed || restored, busy, remove: () => repository.clearBuilderDraft(clientId, key) });
   const { schedule } = recovery;
 
   // Загрузка: сохранённый план и, если есть, восстановленный черновик поверх него (§48.29 п. 2).
@@ -102,6 +108,7 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, si
   }, [clientId, key, programId, repository]);
 
   const change = useCallback((next: SimpleProgramDraft) => {
+    setChanged(true);
     setDraft(next);
     schedule({ draft: next, revision, base });
   }, [schedule, revision, base]);
@@ -164,11 +171,10 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, si
     try {
       const saved = programId === null ? null : await repository.getSimplePlan(clientId, programId);
       if (programId !== null && saved === null) throw new Error("TARGET_NOT_FOUND");
-      await recovery.beforePublish();
-      await repository.clearBuilderDraft(clientId, key);
+      await recovery.discard(() => repository.clearBuilderDraft(clientId, key));
       setDraft(saved?.draft ?? newDraft(newPlanId("w")));
       setRevision(saved?.program.revision ?? null); setBase(saved?.draft ?? null); setRebased(false);
-      setRestored(false); setMessage(null);
+      setRestored(false); setChanged(false); setMessage(null);
     } catch { setMessage("Не удалось загрузить сохранённый план. Изменения остаются в редакторе."); }
     finally { recovery.resume(); setBusy(false); }
   };
@@ -188,8 +194,8 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, si
           }} />
         </Animated.ScrollView>
       ) : <>
-      <Animated.ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {programId === null && renderExcel?.((imported) => { change({ title: imported.title, plan: { weeks: imported.weeks.length, workouts: imported.weeks[0]!.workouts } }); setShowIssues(false); setMessage(null); setSaved(null); })}
+      <Animated.ScrollView ref={scrollRef} pointerEvents={busy ? "none" : "auto"} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {programId === null && renderExcel?.((imported) => setPendingExcel(imported), draft.title || undefined)}
         {restored ? (
           <InlineNotice kind="info">{rebased ? REBASED_NOTICE : "Восстановлен несохранённый черновик."}</InlineNotice>
         ) : null}
@@ -227,6 +233,29 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, si
         onConfirm={() => { setConfirmRemoved(false); void save(true); }} />
       </>}
 
+      <BuilderDraftExitDialog visible={recovery.exitVisible} busy={recovery.exitBusy} error={recovery.error}
+        onSave={recovery.saveAndLeave} onDiscard={recovery.discardAndLeave} onContinue={recovery.cancelExit} />
+      <ConfirmDialog visible={pendingExcel !== null} confirmBusy={busy} title="Открыть расширенный конструктор?"
+        description="Выбранные листы станут циклами одной программы вместе с историей результатов. Заполненный текущий черновик сохранится отдельным циклом."
+        confirmLabel="Продолжить" cancelLabel="Вернуться" onCancel={() => setPendingExcel(null)} onConfirm={() => {
+          if (!pendingExcel || !draft || !onOpenExtended) return;
+          const incoming = pendingExcel.cycles ?? [{ key: newPlanId("excel"), title: pendingExcel.title, weeks: pendingExcel.weeks }];
+          const manual = draft.plan.workouts.some((w) => w.exercises.length) ? [{ key: newPlanId("manual"), title: draft.title || "Мой цикл",
+            weeks: independentWeeks(Array.from({ length: draft.plan.weeks }, (_, at) => ({ id: `week:${at}`, index: at + 1, type: "base" as const, workouts: draft.plan.workouts })), () => newPlanId("copy")) }] : [];
+          const cycles = [...manual, ...incoming]; const first = cycles[0]!; setBusy(true); setMessage(null);
+          void (async () => {
+            try {
+              await recovery.beforePublish();
+              await repository.promoteSimpleBuilderDraft(clientId, { baseRevision: null, baseWeeks: null, programTitle: draft.title || pendingExcel.title,
+                title: first.title, cycleType: "custom", repsText: "", startDate: "", weeks: first.weeks, editing: 0, members: [clientId],
+                workbook: { version: 1, cycles, activeKey: first.key } });
+              setPendingExcel(null); onOpenExtended();
+            } catch (cause) {
+              recovery.resume(); setPendingExcel(null);
+              setMessage(cause instanceof Error && cause.message === "PERIODIZED_DRAFT_EXISTS" ? "У клиента уже есть черновик расширенной программы. Продолжите или удалите его перед переносом." : "Не удалось перенести черновик. Прежняя работа сохранена.");
+            } finally { setBusy(false); }
+          })();
+        }} />
     </TrainingEditorLayout>
   );
 }

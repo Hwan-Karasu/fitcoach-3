@@ -8,7 +8,8 @@ import { readWorkbook, readTrainingWorkbook, writeTrainingWorkbook } from "../ap
 import type { ImportTable, PickedWorkbook } from "../apps/mobile/src/features/import/domain/WorkbookFilesPort.ts";
 import { trainingTransferFixture } from "./training-transfer-fixture.ts";
 import { compileWholeWorkbook, prepareWholeWorkbook, wholeWorkbookStatus } from "../apps/mobile/src/features/import/domain/WholeWorkbookImport.ts";
-import { setWorkbookNameMatch, workbookMatchesToRemember } from "../apps/mobile/src/features/import/domain/WorkbookReviewSession.ts";
+import { setWorkbookNameMatch, workbookMatchesToRemember, selectWorkbookImportSheets } from "../apps/mobile/src/features/import/domain/WorkbookReviewSession.ts";
+import { prepareWorkbookResponsive } from "../apps/mobile/src/features/import/domain/WholeWorkbookImport.ts";
 
 function matrix(name = "Первый лист", actual: unknown = "8-10", weight: unknown = "42,5"): ImportTable {
   return flattenLegacyMatrix({ name, rows: [
@@ -90,7 +91,35 @@ test("I05 large books use compact stable IDs and overlapping exports cannot coll
   assert.ok(all.programs[0]!.id.length < 100);
   assert.equal(readTrainingWorkbook(readWorkbook(writeTrainingWorkbook(all))).programs[0]!.mesocycles.length, 20);
   const subset = compileWholeWorkbook(prepareWholeWorkbook(startWorkbookReview({ kind: "TRANSFER", value: { ...value, programs: [programs[0]!] } }, false), candidates)).value;
-  assert.notEqual(all.programs[0]!.mesocycles[0]!.weeks[0]!.workouts[0]!.id, subset.programs[0]!.mesocycles[0]!.weeks[0]!.workouts[0]!.id);
+  assert.equal(all.programs[0]!.mesocycles[0]!.weeks[0]!.workouts[0]!.id, subset.programs[0]!.mesocycles[0]!.weeks[0]!.workouts[0]!.id);
+  assert.notEqual(all.client.id, subset.client.id, "programme namespace isolates persisted rows while the sheet keeps its source identity");
+});
+
+test("I07 unchecked errors do not block selected sheets and reselection preserves corrections and view state", () => {
+  let session = prepareWholeWorkbook(startWorkbookReview(picked([matrix("Ошибка"), matrix("Готовый", "9")]), false),
+    [{ id: "target", name: "Жим штанги лёжа", available: true }]);
+  assert.equal(wholeWorkbookStatus(session).problems.length, 1);
+  session = updateWorkbookEntry(session, { viewWeek: 1, issueInputs: { pending: "9" }, settingsOpen: true });
+  const first = session.entries["0"]!;
+  session = selectWorkbookImportSheets(session, ["1"]);
+  assert.equal(wholeWorkbookStatus(session).problems.length, 0);
+  assert.deepEqual(compileWholeWorkbook(session).value.programs[0]!.mesocycles.map((c) => c.title), ["Готовый"]);
+  session = selectWorkbookSheet(session, "1"); session = selectWorkbookImportSheets(session, ["0", "1"]); session = selectWorkbookSheet(session, "0");
+  assert.equal(session.entries["0"], first);
+  session = correctWorkbookValue(session, session.entries["0"]!.value!.issues![0]!.id, "9");
+  session = selectWorkbookImportSheets(session, []);
+  assert.equal(wholeWorkbookStatus(session).cycles, 0); assert.throws(() => compileWholeWorkbook(session));
+  session = selectWorkbookImportSheets(session, ["0", "1"]);
+  assert.equal(compileWholeWorkbook(session).value.programs[0]!.mesocycles.length, 2);
+  assert.deepEqual(session.entries["0"]!.issueInputs, { pending: "9" });
+});
+
+test("I07 preparation yields between sheets and cancellation prevents late progress or a stale session", async () => {
+  const input = startWorkbookReview(picked([matrix("Один", "8"), matrix("Два", "8"), matrix("Три", "8")]), false);
+  let active = true; const progress: number[] = [];
+  const result = await prepareWorkbookResponsive(input, [], () => active, (done) => { progress.push(done); active = false; });
+  assert.equal(result, null); assert.deepEqual(progress, [1]);
+  assert.equal(Object.keys(input.entries).length, 1, "cancelled preparation never mutates the original session");
 });
 
 test("I02 first-sheet factual range opens review with original Excel coordinates and intact plans", () => {

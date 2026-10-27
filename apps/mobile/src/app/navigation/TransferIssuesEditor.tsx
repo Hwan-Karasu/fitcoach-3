@@ -7,11 +7,13 @@ import type { TrainingTransfer } from "../../features/import/public.ts";
 import { excelColumnName } from "./WorkbookColumnSettings.tsx";
 
 const labels = { reps: "Фактические повторения", loadGrams: "Вес, кг", durationSec: "Время, сек", distanceM: "Расстояние, м", rpe: "RPE" };
-export function TransferIssuesEditor({ value, busy, onCorrect }: Readonly<{
+export function TransferIssuesEditor({ value, busy, onCorrect, inputs: storedInputs, onInputs }: Readonly<{
+  inputs?: Readonly<Record<string, string>>; onInputs?: (value: Readonly<Record<string, string>>) => void;
   value: TrainingTransfer; busy: boolean; onCorrect: (id: string, correction: string) => void;
 }>) {
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
-  const [inputs, setInputs] = useState<Readonly<Record<string, string>>>({});
+  const [localInputs, setInputs] = useState<Readonly<Record<string, string>>>({});
+  const inputs = storedInputs ?? localInputs;
   if (!value.issues?.length) return null;
   return <View style={styles.block}>
     <Text style={[styles.heading, { color: colors.textPrimary }]}>Проверьте значения ({value.issues.length})</Text>
@@ -33,7 +35,7 @@ export function TransferIssuesEditor({ value, busy, onCorrect }: Readonly<{
         {!!location && <Text style={[styles.body, { color: colors.textSecondary }]}>{location}</Text>}
         <Text style={[styles.body, { color: colors.textPrimary }]}>{`${labels[issue.field]}: «${issue.raw}»`}</Text>
         <TextField label="Корректное число" hint={`${title}. ${labels[issue.field]}`} keyboardType="decimal-pad"
-          value={inputs[issue.id] ?? ""} onChangeText={(text) => setInputs((current) => ({ ...current, [issue.id]: text }))} />
+          value={inputs[issue.id] ?? ""} onChangeText={(text) => { const next = { ...inputs, [issue.id]: text }; if (onInputs) onInputs(next); else setInputs(next); }} />
         <View style={styles.row}>
           <View style={styles.grow}><AppButton compact label="Применить" disabled={busy || !inputs[issue.id]?.trim()} onPress={() => onCorrect(issue.id, inputs[issue.id]!)} /></View>
           <View style={styles.grow}><AppButton compact variant="secondary" label="Оставить пустым" disabled={busy} onPress={() => onCorrect(issue.id, "пусто")} /></View>

@@ -4,6 +4,7 @@ import type { MesocycleBuilderDraft, PeriodizedDraft } from "./PeriodizedDraft.t
 import type { PlannedExercise, PlannedSet, PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
 import type { SimpleWorkoutDraft, SimpleWeek } from "./SimpleWorkoutEdit.ts";
 import type { TemplateMesocycle, TemplatePayload } from "./TemplateModel.ts";
+import { storedWorkbook } from "./StoredWorkbookShape.ts";
 
 const strings = (value: unknown): value is string[] => arrayOf(value, text);
 const range = (value: unknown): boolean => value === null || object(value) && integer(value.min) && nullableInteger(value.max);
@@ -48,7 +49,8 @@ export const storedMesocycleBuilder = (value: unknown): value is MesocycleBuilde
   && text(value.programTitle) && text(value.title) && ["hypertrophy", "strength", "power", "endurance", "recomp", "custom"].includes(String(value.cycleType))
   && text(value.repsText) && text(value.startDate) && integer(value.editing) && strings(value.members) && arrayOf(value.weeks, builderWeek)
   && (value.baseWeeks === null || arrayOf(value.baseWeeks, builderWeek))
-  && (value.placements === undefined || arrayOf(value.placements, storedPlacement));
+  && (value.placements === undefined || arrayOf(value.placements, storedPlacement))
+  && (value.workbook === undefined || storedWorkbook(value.workbook, builderWeek));
 export const storedMesocycle = (value: unknown): value is Mesocycle => object(value) && id(value.id) && id(value.lineageId) && text(value.title)
   && arrayOf(value.weeks, (item): item is Mesocycle["weeks"][number] => week(item) && object(item) && id(item.id) && weekType(item.type))
   && (value.repRange === undefined || range(value.repRange)) && (value.startDate === undefined || nullableText(value.startDate))

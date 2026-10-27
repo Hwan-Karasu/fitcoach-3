@@ -2,5 +2,6 @@
 import { trainingPlansBaseline } from "./TrainingPlansBaseline.generated.ts";
 import { plansIntegrityMigration } from "./PlansIntegrityMigration.ts";
 import { navigationGroupsMigration } from "./NavigationGroupsMigration.ts";
-export const devTrainingPlansCatalog = [...trainingPlansBaseline, plansIntegrityMigration, navigationGroupsMigration];
+import { workbookDraftMigration } from "./WorkbookDraftMigration.ts";
+export const devTrainingPlansCatalog = [...trainingPlansBaseline, plansIntegrityMigration, navigationGroupsMigration, workbookDraftMigration];
 export const DEV_TRAINING_PLANS_LEDGER = "training_plans_schema_migrations";
