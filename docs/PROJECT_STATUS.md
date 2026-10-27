@@ -1,4 +1,6 @@
-## 2026-10-27 — CA: технический аудит приложения, этап A (очистка)
+## 2026-10-27 — CA: технический аудит приложения, этапы A (очистка) и B (дублирование)
+
+- Этап B, CA-11: пять реализаций `isLocalDate` заменены одной в `shared/domain/LocalDate.ts`; на 18 307 входах прежние версии совпадали, расходились лишь годы 0000–0099 (случайность `Date.UTC`). Тест `scripts/local-date.test.ts`; на чистом HEAD `4f69bc9` с патчем: typecheck, lint, test:foundation 1392/1392, R04-наборы, measurements, accounting, calendar, training зелёные.
 
 - Полный отчёт и реестр: [CODE_AUDIT_2026-10-27.md](CODE_AUDIT_2026-10-27.md). Удалены недостижимые файлы (`DevBootGate`, `FoundationScreen`, `createDevServices`, `AccentSwatch`, `MesocycleCopyScreen`, `WeekCopyFlow`, `WeekSwapPanel`, `MetricTile`, `QuestionnairePreview`), восемь неиспользуемых экспортов и зависимость `@expo-google-fonts/inter`.
 - Проверено на чистом HEAD `e284cb7` с патчем (git worktree): `typecheck`, `lint` зелёные; `test:foundation` 1389/1389, `arch:test` 11/11, `theme:test` 30/30. Поведение не менялось.

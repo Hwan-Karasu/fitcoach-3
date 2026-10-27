@@ -1,3 +1,4 @@
+import { isLocalDate } from "../../../shared/domain/LocalDate.ts";
 import { FOOD_BASIS_UNITS, type Nutrients } from "./FoodModel.ts";
 import { entryNutrients, sumNutrients } from "./EnergyRules.ts";
 import { scaleNutrients } from "./FoodRules.ts";
@@ -19,11 +20,7 @@ const QUANTITY_MAX_X10 = 10_000_000;
 /** Больше 20 л воды за день — опечатка. */
 export const WATER_MAX_ML = 20_000;
 
-export function isLocalDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
-  const parsed = new Date(`${value}T00:00:00.000Z`);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
-}
+export { isLocalDate };
 
 export function assertDate(value: string): void {
   if (!isLocalDate(value)) fail("DIARY_DATE_INVALID");

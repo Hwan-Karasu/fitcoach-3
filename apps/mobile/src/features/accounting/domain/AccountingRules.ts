@@ -1,11 +1,5 @@
 import type { CreditScope, LedgerEntry, NewPackInput, NewPaymentInput } from "./AccountingModel.ts";
-
-function isLocalDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
-  const [year, month, day] = value.split("-").map(Number) as [number, number, number];
-  const check = new Date(Date.UTC(year, month - 1, day));
-  return check.getUTCFullYear() === year && check.getUTCMonth() === month - 1 && check.getUTCDate() === day;
-}
+import { isLocalDate } from "../../../shared/domain/LocalDate.ts";
 
 /** Exact rubles → kopeks: "8000", "8 000", "1700,50"; never rounds a third decimal. */
 export function parseRublesToKopeks(raw: string): number | "empty" | "invalid" {

@@ -1,3 +1,4 @@
+import { isLocalDate } from "../../../shared/domain/LocalDate.ts";
 import { DAY_MINUTES, SESSION_TYPE_COLORS, SLOT_MINUTES, type Appointment, type AppointmentInput,
   type CalendarInterval, type CalendarSettings, type IntervalInput, type LocalDate, type SessionTypeInput,
   type WeekTemplate } from "./CalendarModel.ts";
@@ -14,17 +15,14 @@ export type CalendarRuleError =
 function fail(code: CalendarRuleError): never { throw new Error(code); }
 
 function utcEpoch(date: LocalDate): number | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/u.test(date)) return null;
+  if (!isLocalDate(date)) return null;
   const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  if (year < 1) return null;
   const value = new Date(0);
   value.setUTCFullYear(year, month - 1, day);
-  value.setUTCHours(0, 0, 0, 0);
-  return value.getUTCFullYear() === year && value.getUTCMonth() === month - 1
-    && value.getUTCDate() === day ? value.getTime() : null;
+  return value.getTime();
 }
 
-export function isLocalDate(date: string): boolean { return utcEpoch(date) !== null; }
+export { isLocalDate };
 
 /** Pure calendar arithmetic in UTC, so DST transitions cannot shift a wall-clock day. */
 export function addDays(date: LocalDate, days: number): LocalDate {

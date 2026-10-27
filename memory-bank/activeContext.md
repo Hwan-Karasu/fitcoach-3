@@ -20,7 +20,7 @@ COMPLETE/noarmedpause/2.0build128safe. No currentphone/PID proof thisphase.
 Аудит 2026-10-27 (docs/CODE_AUDIT_2026-10-27.md): этап A сделан (недостижимые файлы,
 мёртвые экспорты, Inter). Дерево красное из-за чужого WIP импорта Excel: CA-10
 (import/domain→training/public.ts, TS6142, TS2367 PeriodizedBuilderScreen:352).
-Открыто: CA-11 пять isLocalDate, CA-12 DevTrainingPlansRepository 1711 строк, CA-13 TS 5.8/6.0.
+Этап B: CA-11 isLocalDate x5→shared/domain/LocalDate.ts сделан. Открыто: CA-12 DevTrainingPlansRepository 1711 строк, CA-13 TS 5.8/6.0.
 Дальше: после CA-10 полный typecheck/arch:check; решения владельца — flash-list, spikes.
 Prior R04 перенесён в archive/activeContext-prior-r04-2026-10-24.md.
 

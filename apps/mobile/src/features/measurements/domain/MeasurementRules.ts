@@ -1,3 +1,4 @@
+import { isLocalDate } from "../../../shared/domain/LocalDate.ts";
 import { MEASUREMENT_TYPES, type DailyPoint, type DailyPrimary, type Measurement, type MeasurementInput,
   type MeasurementType } from "./MeasurementModel.ts";
 
@@ -71,13 +72,7 @@ export function formatTime(minute: number | null): string {
   return `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
 }
 
-export function isLocalDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
-  const [year, month, day] = value.split("-").map(Number) as [number, number, number];
-  const probe = new Date(Date.UTC(year, month - 1, day));
-  return year > 0 && probe.getUTCFullYear() === year && probe.getUTCMonth() === month - 1
-    && probe.getUTCDate() === day;
-}
+export { isLocalDate };
 
 export function localDateOf(at: Date): string {
   return `${String(at.getFullYear()).padStart(4, "0")}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`;
