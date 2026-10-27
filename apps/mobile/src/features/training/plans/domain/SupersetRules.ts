@@ -50,6 +50,17 @@ export function remapSupersets(workout: PlannedWorkout): PlannedWorkout {
   }) };
 }
 
+/** Пробеги упражнений для рамки: подряд идущие с одним `supersetId` — один пробег, остальные — по одному. */
+export function supersetRuns<T extends Readonly<{ supersetId?: string | undefined }>>(exercises: readonly T[]): readonly (readonly T[])[] {
+  const runs: T[][] = [];
+  for (const item of exercises) {
+    const last = runs[runs.length - 1];
+    if (last !== undefined && item.supersetId !== undefined && last[0]?.supersetId === item.supersetId) last.push(item);
+    else runs.push([item]);
+  }
+  return runs;
+}
+
 /** Состав групп сравнивается по родству, а не по ID группы другого участника или недели. */
 export function supersetGroups(workout: PlannedWorkout): readonly (readonly string[])[] {
   const groups = new Map<string, string[]>();

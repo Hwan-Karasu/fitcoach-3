@@ -22,7 +22,7 @@ export type { ExerciseInfo, ExerciseLookupPort } from "./domain/ExerciseLookupPo
 export type { PlannedExercise, PlannedSet, PlannedWorkout } from "./domain/SimplePlanModel.ts";
 export type { MesocycleVersion } from "./domain/StructureVersion.ts";
 export { weekTypeLabels, type Mesocycle, type WeekType } from "./domain/PeriodizedModel.ts";
-export { supersetNumber } from "./domain/SupersetRules.ts";
+export { supersetNumber, supersetRuns } from "./domain/SupersetRules.ts";
 export { formatDuration, formatRange, parseDuration, parseLoad } from "./domain/SimplePlanRules.ts";
 export { INSTRUCTION_MAX, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC } from "./domain/SimplePlanModel.ts";
 export type { ClientProgramLibrary, CreateProgramInput, ProgramCard, ProgramKind,

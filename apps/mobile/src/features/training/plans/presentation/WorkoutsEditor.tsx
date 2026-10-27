@@ -4,7 +4,7 @@ import type Animated from "react-native-reanimated";
 import type { AnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
 import { ArrowLeftRight, ArrowUpDown, Check, Dumbbell, GripVertical, Link2, Plus, X } from "lucide-react-native";
-import { AppButton, AppIconButton, ConfirmDialog, TextField } from "../../../../shared/ui/components/public.ts";
+import { AppButton, AppIconButton, ConfirmDialog, SupersetBorder, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseInfo } from "../domain/ExerciseLookupPort.ts";
@@ -132,9 +132,8 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, s
   ];
   const name = info?.name ?? "упражнение";
   const active = setState !== "idle";
-  return (
-    // Каждое упражнение — своя карточка (как в 2.0); участники суперсета — с акцентной полосой слева. Полоса —
-    // отдельный слой: смена толщины рамки на лету у скруглённой карточки на Android оставляла её пустой.
+  const card = (
+    // Каждое упражнение — своя карточка (как в 2.0); участники суперсета обводятся бегущей рамкой (SupersetBorder).
     <View style={[styles.exerciseRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
       {/* Название и действия — на фоне карточки; поля ввода ниже — отдельной полосой другого тона (UI-OWN-028). */}
       <View style={styles.exerciseHead}>
@@ -190,9 +189,9 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, s
           </Pressable>
         )}
       </View>
-      {group !== null ? <View pointerEvents="none" style={[styles.supersetStripe, { backgroundColor: colors.accentInk }]} /> : null}
     </View>
   );
+  return group !== null ? <SupersetBorder radius={10}>{card}</SupersetBorder> : card;
 }
 
 /**

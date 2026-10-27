@@ -15,11 +15,11 @@ import * as Sharing from "expo-sharing";
 import Sortable from "react-native-sortables";
 import { CalendarDays, ChevronRight, Clock, EllipsisVertical, GripVertical, LayoutGrid, Plus, Share2, Timer, Trash2,
   Users } from "lucide-react-native";
-import { AppButton, ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, StatusTag, TimeWheelPicker, WeekCards, useWeekNavigation,
+import { AppButton, ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, StatusTag, SupersetBorder, TimeWheelPicker, WeekCards, useWeekNavigation,
   type StatusKind } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { useReportScreenTone } from "../../../../shared/ui/theme/ScreenTone.tsx";
-import { weekTypeTone, DiaryEditDialog, formatDuration, formatRange, supersetNumber, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookupState,
+import { weekTypeTone, DiaryEditDialog, formatDuration, formatRange, supersetNumber, supersetRuns, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookupState,
   type DiaryEdit, type ExerciseLookupPort, type PickedExercise, type PlannedExercise, type PlannedSet, type TrainingPlansRepositoryPort,
   type WorkoutWeekNavigation } from "../../plans/public.ts";
 import { type ActiveWorkoutsPort, type SessionStatus, type SetFact, type SetType, type SetValues, type Side, type TrackingMetric,
@@ -545,7 +545,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         </> : null}
         {/* Смена недели — тот же экран: пока грузится новая неделя, прежние значения приглушены и не нажимаются. */}
         {ordering === null ? <View onLayout={(event) => { bodyY.current = event.nativeEvent.layout.y; }} pointerEvents={diary.switching ? "none" : "auto"} style={[styles.body, diary.switching && styles.switching]}>
-        {workout.exercises.map((exercise) => {
+        {supersetRuns(workout.exercises).map((run) => {
+        const cards = run.map((exercise) => {
           const info = lookup.get(exercise.exerciseId);
           const group = supersetNumber(workout, exercise);
           const fields = diaryFields(info?.metrics ?? NO_METRICS);
@@ -625,6 +626,9 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                 onCommit={(text) => diary.saveNote(exercise.id, text)} />
             </View>
           );
+        });
+        // Суперсет — одна бегущая рамка вокруг всех его карточек (как в 2.0).
+        return run.length > 1 ? <SupersetBorder key={run[0]!.lineageId ?? run[0]!.id} radius={22} gap={12}>{cards}</SupersetBorder> : cards[0];
         })}
         <View style={styles.outcomes}>
           {(["COMPLETED", "MISSED", "CANCELLED"] as const).map((item) => {
