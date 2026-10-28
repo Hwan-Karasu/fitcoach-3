@@ -1,6 +1,7 @@
 import { Directory, File, Paths } from "expo-file-system";
 import { getDocumentAsync } from "expo-document-picker";
 import * as Sharing from "expo-sharing";
+import * as Clipboard from "expo-clipboard";
 import * as XLSX from "xlsx";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { sha256 } from "@noble/hashes/sha2.js";
@@ -69,6 +70,9 @@ export const expoWorkbookFiles: WorkbookFilesPort = {
     XLSX.utils.book_append_sheet(book, sheet, "Программа");
     const bytes: unknown = XLSX.write(book, { type: "array", bookType: "xlsx" });
     await share(new Uint8Array(bytes as ArrayBuffer), "Шаблон программы тренировок.xlsx");
+  },
+  async copyText(text) {
+    if (!await Clipboard.setStringAsync(text)) throw new Error("Не удалось скопировать текст.");
   },
   async aiTemplate() {
     const book = XLSX.utils.book_new();

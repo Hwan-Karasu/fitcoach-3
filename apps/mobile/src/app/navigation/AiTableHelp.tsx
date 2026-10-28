@@ -7,9 +7,11 @@ import { fonts } from "../../shared/ui/theme/typography.ts";
 import { AI_WORKBOOK_PROMPT } from "../../features/import/public.ts";
 
 /** EXCEL-AI: чужая таблица переделывается внешним ИИ по образцу и промпту; приложение остаётся офлайн. */
-export function AiTableHelp({ busy, onTemplate }: Readonly<{ busy: boolean; onTemplate: () => void }>) {
+export function AiTableHelp({ busy, onTemplate, onCopy }: Readonly<{ busy: boolean; onTemplate: () => void; onCopy: (text: string) => Promise<void> }>) {
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
   const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState<"" | "done" | "failed">("");
+  const copy = () => { onCopy(AI_WORKBOOK_PROMPT).then(() => setCopied("done"), () => setCopied("failed")); };
   const Chevron = open ? ChevronUp : ChevronDown;
   return <View style={[styles.box, { borderColor: colors.border, backgroundColor: colors.surface }]}>
     <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)} style={styles.head}>
@@ -24,7 +26,8 @@ export function AiTableHelp({ busy, onTemplate }: Readonly<{ busy: boolean; onTe
       <View style={[styles.prompt, { borderColor: colors.border, backgroundColor: colors.input }]}>
         <Text selectable style={[styles.text, { color: colors.textPrimary }]}>{AI_WORKBOOK_PROMPT}</Text>
       </View>
-      <Text style={[styles.hint, { color: colors.textMuted }]}>Удерживайте текст, чтобы выделить и скопировать его.</Text>
+      <AppButton compact variant="secondary" label={copied === "done" ? "Скопировано" : "Скопировать промпт"} onPress={copy} />
+      {copied === "failed" && <Text style={[styles.hint, { color: colors.danger }]}>Не удалось скопировать — удерживайте текст, чтобы выделить его.</Text>}
     </View>}
   </View>;
 }

@@ -19,4 +19,6 @@ export interface WorkbookFilesPort {
   template(): Promise<void>;
   /** Плоский образец «строка = подход» для переделки чужой таблицы через ИИ (EXCEL-AI). */
   aiTemplate(): Promise<void>;
+  /** Текст в буфер обмена (промпт для ИИ). */
+  copyText(text: string): Promise<void>;
 }

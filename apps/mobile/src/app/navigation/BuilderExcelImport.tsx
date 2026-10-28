@@ -159,7 +159,7 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "ÐšÐ
       {otherProblems.map((p) => { const issue = session.entries[p.id]?.value?.issues?.[0];
         return <AppButton key={p.id} compact variant="ghost" label={`${p.label}: ${p.reason}`} disabled={busy}
           onPress={() => issue ? focusCard(p.id, null, `issue:${issue.id}`) : select(p.id)} />; })}</View>}
-    {session.picked.kind === "TABLES" && !fromText && <AiTableHelp busy={busy} onTemplate={() => { void run(async () => files.aiTemplate()); }} />}
+    {session.picked.kind === "TABLES" && !fromText && <AiTableHelp busy={busy} onTemplate={() => { void run(async () => files.aiTemplate()); }} onCopy={files.copyText} />}
     {session.picked.kind === "TABLES" && !fromText && current && <WorkbookColumnSettings table={session.picked.tables[Number(session.activeId)]!} entry={current} busy={busy} onChange={patch}
       onApply={() => setSession(match(applyWorkbookColumns(session)))} />}
   </> : null;
