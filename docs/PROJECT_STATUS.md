@@ -1,3 +1,15 @@
+## 2026-10-28 — build33: импорт из заметок, техдолг, expo-clipboard
+
+- Техдолг: I07 «legacy drafts survive the guard migration» — тест удалял из журнала только v4 при наличии v5, теперь «до v4» целиком
+  (`187b10f`, excel:test 99/99); `ExerciseCard` собран из `ExerciseCardShell` (`4f4c9af`); кнопка «Скопировать промпт» через
+  `expo-clipboard ~57.0.2` (npx expo install, решение владельца), копирование в порту `WorkbookFilesPort.copyText` (`4561331`).
+- Правки параллельной сессии UI-CHART-SUPERSET и build32 закоммичены по просьбе владельца (`4418c51`).
+- Проверки: typecheck, lint, arch:check, source:verify, secrets:check PASS; test:foundation 1028/1028, excel:test 99/99, training:test 265/265.
+- Собран `artifacts/apk/athlete-diary-3.0.0-build33.apk`: `com.fitcoach.v3`, 3.0.0, versionCode 33, arm64-v8a, 70 411 984 байт; assembleRelease PASS
+  (2 мин 23 с; Node 24.3, JDK17, IPv4, без prebuild). Сертификат SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`
+  совпадает с build32. SHA-256 APK `1491ddcb6258a858d0d388936f7c2e7c6acb819bd00996a848e09b66e48fff64`. В dex есть модуль expo-clipboard,
+  в бандле — строки импорта заметок, фактов и промпта. На телефон не устанавливался.
+
 ## 2026-10-28 — Импорт из заметок, подсказки с прокруткой, Excel через ИИ, факты в конструкторе (ADR-045, ADR-046)
 
 - **IMPORT-HINT-SCROLL** (`b2066e1`): подсказка сверки — на каждое несопоставленное название (лист · неделя · упражнение, первое
