@@ -67,13 +67,13 @@ test("TEXT-LOG-3 номер дальше последней тренировки
   log = assignLogExercise(log, "3", 3);
   assert.deepEqual(logExercises(log).map((item) => [item.exercise.id, item.workout]), [["1", 0], ["3", 3]]);
   assert.deepEqual(log.workouts.map((w) => [w.title, w.exercises.length]), [["Тренировка 1", 1], ["Тренировка 2", 0], ["Тренировка 3", 0], ["Тренировка 4", 1]]);
-  assert.deepEqual(logStats(log), { weeks: 2, workouts: 2, exercises: 2, sets: 2 });
-  const [table] = workoutLogTables(log, { name: "Заметки", reps: null, perWeek: 4 });
+  assert.deepEqual(logStats(log), { weeks: 1, workouts: 2, exercises: 2, sets: 2 });
+  const [table] = workoutLogTables(log, { name: "Заметки", reps: null });
   assert.deepEqual(parse(table!).programs[0]!.mesocycles[0]!.weeks[0]!.workouts.map((w) => w.title), ["Тренировка 1", "Тренировка 4"]);
   assert.equal(assignLogExercise(log, "нет", 1), log);
 });
 
-test("TEXT-LOG-5 неделя — следствие даты: из дат хронологически, без дат — по порядку и «тренировок в неделю»", () => {
+test("TEXT-LOG-5 неделя — следствие даты: из дат хронологически, без дат — все тренировки в одной неделе", () => {
   // 8 записей (даты синтетические): календарные недели с понедельника — 7 недель, в четвёртой две тренировки.
   const days = ["26.07.2026", "31.07.2026", "03.08.2026", "04.09.2026", "06.09.2026", "14.09.2026", "21.09.2026", "28.09.2026"];
   let log = parseWorkoutLog(days.map((day) => `фуллбоди ${day}\nприсед\n60 на 8`).join("\n"), "2026-10-28");
@@ -86,20 +86,17 @@ test("TEXT-LOG-5 неделя — следствие даты: из дат хр�
   log = editLogWorkout(log, 3, { date: "2026-07-27" });
   assert.deepEqual([...logWeeks(log)], [[0, 0], [3, 1], [1, 1], [2, 2], [4, 3], [5, 4], [6, 5], [7, 6]]);
   assert.equal(logStats(log).weeks, 7);
-  // Без дат — по порядку, `perWeek` тренировок в неделю; пустые тренировки недель не создают.
+  // Без дат — сколько распределили тренировок, столько и в неделе; пустые тренировки не считаются.
   let plain = parseWorkoutLog("присед\n60 на 8\nжим\n40 на 10\nтяга\n50 на 10", "2026-10-28");
   plain = assignLogExercise(assignLogExercise(plain, "3", 1), "5", 2);
-  assert.deepEqual([...logWeeks(plain)], [[0, 0], [1, 1], [2, 2]]);
-  assert.deepEqual([...logWeeks(plain, 2)], [[0, 0], [1, 0], [2, 1]]);
-  assert.deepEqual(logStats(plain, 2), { weeks: 2, workouts: 3, exercises: 3, sets: 3 });
-  assert.equal(logStats(assignLogExercise(plain, "5", 6), 1).weeks, 3);
+  assert.deepEqual([...logWeeks(plain)], [[0, 0], [1, 0], [2, 0]]);
+  assert.deepEqual(logStats(plain), { weeks: 1, workouts: 3, exercises: 3, sets: 3 });
+  assert.deepEqual(logStats(assignLogExercise(plain, "5", 6)), { weeks: 1, workouts: 3, exercises: 3, sets: 3 });
   // Новая тренировка без даты среди датированных остаётся в неделе предыдущей, а не ломает календарные недели.
   const mixed = duplicateLogExercise(parseWorkoutLog("день 26.07.2026\nприсед\n60 на 8\nдень 03.08.2026\nжим\n40 на 10", "2026-10-28"), "5")!.log;
   assert.deepEqual([...logWeeks(mixed)], [[0, 0], [1, 1], [2, 1]]);
-  // Таблица: недели идут подряд; `perWeek` попадает в расчёт листа.
-  const weeks = (perWeek: number) => parse(workoutLogTables(plain, { name: "Заметки", reps: null, perWeek })[0]!).programs[0]!.mesocycles[0]!.weeks.map((w) => [w.index, w.workouts.length]);
-  assert.deepEqual(weeks(1), [[1, 1], [2, 1], [3, 1]]);
-  assert.deepEqual(weeks(2), [[1, 2], [2, 1]]);
+  // Таблица: все три тренировки одной недели.
+  assert.deepEqual(parse(workoutLogTables(plain, { name: "Заметки", reps: null })[0]!).programs[0]!.mesocycles[0]!.weeks.map((w) => [w.index, w.workouts.length]), [[1, 3]]);
 });
 
 test("TEXT-LOG-3 дубликат — плановая строка без фактов в следующей тренировке; копирование подходов переносит факты", () => {
@@ -113,9 +110,9 @@ test("TEXT-LOG-3 дубликат — плановая строка без фа�
   assert.deepEqual(logExercises(assignLogExercise(log, "1+1", 4)).map((item) => [item.exercise.id, item.workout]), [["1", 0], ["1+1", 4]]);
   assert.equal(copySetsSource(log, "1+1")!.id, "1");
   assert.equal(copySetsSource(log, "1"), null);
-  assert.deepEqual(logStats(log), { weeks: 2, workouts: 2, exercises: 2, sets: 6 });
+  assert.deepEqual(logStats(log), { weeks: 1, workouts: 2, exercises: 2, sets: 6 });
   // Копия без фактов даёт одну плановую строку «3 подхода»: подходы создаются, фактов нет.
-  const value = parse(workoutLogTables(log, { name: "Заметки", reps: { min: 8, max: 12 }, perWeek: 2 })[0]!);
+  const value = parse(workoutLogTables(log, { name: "Заметки", reps: { min: 8, max: 12 } })[0]!);
   assertValidTransfer(value);
   const planned = value.programs[0]!.mesocycles[0]!.weeks[0]!.workouts[1]!.exercises[0]!;
   assert.deepEqual(planned.sets.map((s) => [s.reps, s.repsMax]), [[8, 12], [8, 12], [8, 12]]);
@@ -125,7 +122,7 @@ test("TEXT-LOG-3 дубликат — плановая строка без фа�
   const copied = copyLogSets(log, "1+1", "1");
   assert.deepEqual(copied.workouts[1]!.exercises[0]!.sets.map((s) => [s.loadKg, s.reps]), [[60, 8], [60, 8], [50, 10]]);
   assert.equal(copied.workouts[1]!.exercises[0]!.planSets, undefined);
-  assert.deepEqual(logStats(copied), { weeks: 2, workouts: 2, exercises: 2, sets: 6 });
+  assert.deepEqual(logStats(copied), { weeks: 1, workouts: 2, exercises: 2, sets: 6 });
   // Источник — только с тем же названием; существующие факты не затираются.
   const other = parseWorkoutLog("жим\n60 на 8\nтяга\n50 на 10\nприсед", "2026-10-28");
   assert.equal(copySetsSource(other, "7"), null);

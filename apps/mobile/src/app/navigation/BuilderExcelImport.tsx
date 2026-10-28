@@ -47,7 +47,6 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
   const [similar, setSimilar] = useState<readonly (readonly [string, string])[]>([]); const [merged, setMerged] = useState<ReadonlySet<number>>(new Set());
   const [recognized, setRecognized] = useState({ weeks: 0, workouts: 0, exercises: 0, sets: 0, dated: false });
   /** Без дат в заметках недели идут по порядку: столько тренировок в неделю (по умолчанию одна). */
-  const [perWeek, setPerWeek] = useState(1);
   /** Одни и те же названия в списке и в итоговой книге: отмеченные пары объединены, исходный журнал не меняется. */
   const view = useMemo(() => log && mergeLogNames(log, similar.filter((_, i) => merged.has(i))), [log, similar, merged]);
   const updateLog = useCallback<LogUpdate>((change) => setLog((current) => current && change(current)), []);
@@ -117,12 +116,12 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
     const parsed = parseWorkoutLog(logText, localToday());
     if (!parsed.workouts.some((w) => w.exercises.length)) { setError("Не нашёл упражнений. Название — строка с буквами, подход — «22 на 15»."); return; }
     const pairs = similarLogNames(parsed);
-    setLog(parsed); setPerWeek(1); setRecognized({ ...logStats(parsed), dated: parsed.workouts.some((w) => w.date) }); setSimilar(pairs); setMerged(new Set(pairs.map((_, i) => i))); setError(""); setPage("distribute");
+    setLog(parsed);setRecognized({ ...logStats(parsed), dated: parsed.workouts.some((w) => w.date) }); setSimilar(pairs); setMerged(new Set(pairs.map((_, i) => i))); setError(""); setPage("distribute");
   };
   const continueText = () => { void run(async (id) => {
     if (!view) return;
     const reps = CYCLE_TYPES.find((item) => item.id === cycleType)!.reps;
-    const picked = workoutLogWorkbook(view, { name: "Заметки", cycleType, reps, perWeek });
+    const picked = workoutLogWorkbook(view, { name: "Заметки", cycleType, reps });
     await open(picked, id);
   }); };
   const patch = (change: Partial<WorkbookReviewEntry>) => setSession((s) => s ? updateWorkbookEntry(s, change) : null);
@@ -182,9 +181,8 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
         <ScreenHeader insetTop={false} title={page === "catalog" ? "Выбрать упражнение" : page === "create" ? "Своё упражнение" : page === "sheets" ? "Листы для импорта" : page === "text" || page === "distribute" || page === "workouts" || fromText ? "Импорт из заметок" : "Импорт Excel"} onBack={back} />
         {!!notice && <InlineNotice>{notice}</InlineNotice>}
         {page === "text" && <TextLogInput text={logText} error={error} busy={busy} onText={setLogText} onParse={parseText} />}
-        {page === "distribute" && view && <TextLogDistribution log={view} recognized={recognized} onUpdate={updateLog} cycleType={cycleType} onCycleType={setCycleType} perWeek={perWeek} onPerWeek={setPerWeek}
-          similar={similar} merged={merged} busy={busy} error={error} onContinue={() => { setError(""); setPage("workouts"); }} onToggleMerge={toggleMerge} />}
-        {page === "workouts" && view && <TextLogWorkouts log={view} perWeek={perWeek} onUpdate={updateLog} busy={busy} error={error} onContinue={continueText} />}
+        {page === "distribute" && view && <TextLogDistribution log={view} recognized={recognized} onUpdate={updateLog} cycleType={cycleType} onCycleType={setCycleType}          similar={similar} merged={merged} busy={busy} error={error} onContinue={() => { setError(""); setPage("workouts"); }} onToggleMerge={toggleMerge} />}
+        {page === "workouts" && view && <TextLogWorkouts log={view} onUpdate={updateLog} busy={busy} error={error} onContinue={continueText} />}
         {page === "reading" && <View style={{ padding: 24, gap: 16 }}>{error ? <InlineNotice kind="error">{error}</InlineNotice> : <LoadingState label={progress} />}<AppButton label="Отменить" variant="secondary" onPress={close} /></View>}
         {page === "history" && <RememberedImportMatchesDialog matches={proposals} catalog={catalog} onApply={chooseMatches} onDecline={() => chooseMatches([])} />}
         {page === "sheets" && session && <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>

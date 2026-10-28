@@ -112,12 +112,10 @@ test("TEXT-LOG-3 заметки: единый список с пикером т�
   assert.match(textOf(renderer), /Упражнения \(2\)/);
   const slotChip = (label: string, card: number) => nodes(renderer, "SelectionChip").filter((n) => String(n.props.group).startsWith("Тренировка для") && n.props.label === label)[card]!;
   await act(async () => (slotChip("2", 1).props.onPress as () => void)());
-  // Без дат недели идут по порядку: одна тренировка в неделю → 2 недели; «Тренировок в неделю: 2» → одна неделя.
-  assert.match(textOf(renderer), /Будет создано: 2 тренировки в 2 неделях/);
-  assert.match(textOf(renderer), /Распознано: 1 тренировка,/);
-  assert.match(textOf(renderer), /Тренировок в неделю/);
-  await press(renderer, "+");
+  // Без дат сколько тренировок распределили, столько их в неделе; степпера «Тренировок в неделю» нет.
   assert.match(textOf(renderer), /Будет создано: 2 тренировки в 1 неделе/);
+  assert.match(textOf(renderer), /Распознано: 1 тренировка,/);
+  assert.ok(!/Тренировок в неделю/.test(textOf(renderer)));
   // Дубль встаёт сразу под исходной карточкой и сразу получает свой номер тренировки.
   // «Дублировать» и корзина — прямо на карточке, не в меню.
   const labelled = (label: string) => r().root.findAll((n) => n.props.accessibilityLabel === label || n.props.label === label)[0]!;

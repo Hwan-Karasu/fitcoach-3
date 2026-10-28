@@ -18,7 +18,6 @@ export const localToday = (now = new Date()) => `${now.getFullYear()}-${String(n
 const PICKER_MIN = 4;
 /** Ширина кнопки номера и промежуток — для прокрутки к выбранному. */
 const PICK_STEP = 50;
-const PER_WEEK_MAX = 7;
 const range = (reps: (typeof CYCLE_TYPES)[number]["reps"]) => reps === null ? null : reps.max === null ? String(reps.min) : `${reps.min}–${reps.max}`;
 /** Попадает ли упражнение в импорт: есть подходы или это плановая копия. */
 const isIncluded = (exercise: LogExercise) => exercise.sets.length > 0 || (exercise.planSets ?? 0) > 0;
@@ -107,18 +106,15 @@ const ExercisePlacement = memo(function ExercisePlacement({ exercise, workout, c
  * Шаг 2 макета: тип цикла, похожие названия, единый список упражнений с пикером тренировки и нижняя панель. Недель здесь нет:
  * неделя — следствие даты тренировки, без дат — «тренировок в неделю».
  */
-export function TextLogDistribution({ log, recognized, onUpdate, cycleType, onCycleType, perWeek, onPerWeek, similar, merged, onToggleMerge, busy, error, onContinue }: Readonly<{
+export function TextLogDistribution({ log, recognized, onUpdate, cycleType, onCycleType, similar, merged, onToggleMerge, busy, error, onContinue }: Readonly<{
   /** Итог первичного разбора; недели в нём показываются только если в заметках есть даты (иначе зависят от степпера). */
   log: WorkoutLog; recognized: LogStats & Readonly<{ dated: boolean }>; onUpdate: LogUpdate; cycleType: LogCycleType; onCycleType: (type: LogCycleType) => void;
-  perWeek: number; onPerWeek: (count: number) => void;
   similar: readonly (readonly [string, string])[]; merged: ReadonlySet<number>; onToggleMerge: (index: number) => void;
   busy: boolean; error: string; onContinue: () => void;
 }>) {
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
   const items = useMemo(() => logExercises(log), [log]);
-  const stats = useMemo(() => logStats(log, perWeek), [log, perWeek]);
-  // Даты смотрим у тех же непустых тренировок, что и `logWeeks`: степпер нужен ровно тогда, когда недели считаются по порядку.
-  const dated = log.workouts.some((w) => w.date && w.exercises.some(isIncluded));
+  const stats = useMemo(() => logStats(log), [log]);
   const count = log.workouts.length;
   const clashes = useMemo(() => {
     const seen = new Map<string, number>(); const key = (item: (typeof items)[number]) => `${item.workout}:${item.exercise.name.toLowerCase().replace(/ё/gu, "е").replace(/\s+/gu, " ").trim()}`;
@@ -145,12 +141,6 @@ export function TextLogDistribution({ log, recognized, onUpdate, cycleType, onCy
       {cycleRows.map((row, i) => <View key={i} style={styles.gridRow}>{row.map((item) => <SelectionChip key={item.id} compact fill group="Тип цикла" label={item.label}
         selected={item.id === cycleType} onPress={() => onCycleType(item.id)} />)}</View>)}
       <Text style={[styles.hint, { color: colors.textSecondary }]}>{repsText === null ? "Свой: план повторений останется пустым." : `${selectedType.label}: ${repsText} повторений.`}</Text>
-      {!dated && <View style={styles.stepper}>
-        <Text style={[styles.body, styles.stepperText, { color: colors.textPrimary }]}>Тренировок в неделю</Text>
-        <AppButton compact variant="secondary" label="−" accessibilityLabel="Меньше тренировок в неделю" disabled={perWeek <= 1} onPress={() => onPerWeek(perWeek - 1)} />
-        <Text style={[styles.heading, { color: colors.textPrimary }]}>{perWeek}</Text>
-        <AppButton compact variant="secondary" label="+" accessibilityLabel="Больше тренировок в неделю" disabled={perWeek >= PER_WEEK_MAX} onPress={() => onPerWeek(perWeek + 1)} />
-      </View>}
     </View>
     {!!similar.length && <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <Text style={[styles.heading, { color: colors.textPrimary }]}>Похожие названия</Text>
@@ -185,11 +175,11 @@ export function TextLogDistribution({ log, recognized, onUpdate, cycleType, onCy
 const Separator = () => <View style={styles.separator} />;
 
 /** Шаг 3: название (обязательное) и дата (из заметок или пусто) каждой тренировки, когда упражнения уже разложены. */
-export function TextLogWorkouts({ log, perWeek, onUpdate, busy, error, onContinue }: Readonly<{
-  log: WorkoutLog; perWeek: number; onUpdate: LogUpdate; busy: boolean; error: string; onContinue: () => void;
+export function TextLogWorkouts({ log, onUpdate, busy, error, onContinue }: Readonly<{
+  log: WorkoutLog; onUpdate: LogUpdate; busy: boolean; error: string; onContinue: () => void;
 }>) {
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
-  const weeks = useMemo(() => logWeeks(log, perWeek), [log, perWeek]);
+  const weeks = useMemo(() => logWeeks(log), [log]);
   // Порядок — как в расчёте недель (при полных датах хронологический), чтобы подписи «неделя N» не шли вразнобой.
   const rows = [...weeks.keys()].map((index) => ({ workout: log.workouts[index]!, index }));
   const missing = rows.some(({ workout }) => !workout.title.trim());
