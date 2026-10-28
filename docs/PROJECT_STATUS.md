@@ -1,3 +1,12 @@
+## 2026-10-28 — build41: исправления аудита дня
+
+- Собран `artifacts/apk/athlete-diary-3.0.0-build41.apk`: `com.fitcoach.v3`, 3.0.0, versionCode 41, arm64-v8a, 70 350 416 байт; assembleRelease PASS
+  (`-PreactNativeArchitectures=arm64-v8a`; 48 с после первой сборки; Node 24.3 для процессов Windows, JDK17, IPv4, без prebuild). Сертификат SHA-256
+  `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c` совпадает с build33–40 (apksigner verify PASS, aapt: package/version/ABI). SHA-256 APK
+  `93bff710fd3ea2c08588822f5595722e8fe25822e2165ea6b2ba17805658ddab`. Входит сверх build40: AUDIT-FIX-1 (21f05d0) и AUDIT-FIX-2 (63ee487) — уведомление календаря за день записи,
+  сброс кэша календаря при удалении клиента, чистка черновиков удалённого шаблона, откат списания при «Отменить завершение». Подпись по-прежнему debug (REL-ANDROID).
+  На телефон не устанавливался.
+
 ## 2026-10-28 — AUDIT-FIX-2: «Отменить завершение» возвращает списание (AUD28-04, ADR-052)
 
 Решение владельца: откатывать. В календарной транзакции `clearIfCompleted` вызывает hook `unsettle`: действующее USED компенсируется
