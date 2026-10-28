@@ -159,7 +159,8 @@ test("I07 legacy drafts survive the guard migration and failed migrations restor
     await f.plans.saveMesocycleBuilderDraft(f.client.id, scope, legacy);
     f.native.exec("DROP TRIGGER training_builder_drafts_json_shape_insert; DROP TRIGGER training_builder_drafts_json_shape_update");
     for (const sql of plansIntegrityMigration.statements.filter((s) => s.startsWith("CREATE TRIGGER training_builder_drafts_json_shape"))) f.native.exec(sql);
-    f.native.exec("DELETE FROM training_plans_schema_migrations WHERE version=4");
+    // Состояние «до v4»: журнал без v4 и всех последующих (v5 отдыха по типу цикла появилась позже теста).
+    f.native.exec("DELETE FROM training_plans_schema_migrations WHERE version>=4");
     const rows = () => f.native.prepare("SELECT * FROM training_builder_drafts ORDER BY draft_key").all();
     const guards = () => f.native.prepare("SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name LIKE 'training_builder_drafts_json_shape%' ORDER BY name").all();
     const before = rows(); const beforeGuards = guards();
