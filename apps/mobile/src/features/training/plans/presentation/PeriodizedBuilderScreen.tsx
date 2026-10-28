@@ -16,6 +16,7 @@ import { ScopeMenu } from "./ScopeMenu.tsx";
 import { useRecoveryDraftSave } from "./useRecoveryDraftSave.ts";
 import { BuilderDraftExitDialog } from "./BuilderDraftExitDialog.tsx";
 import type { MesocycleBuilderDraft } from "../domain/PeriodizedDraft.ts";
+import { importedFactRows, isValidFactPatch, setImportedFact, type ImportedFactPatch } from "../domain/ImportedFacts.ts";
 import type { RemovedResultsAction } from "../domain/WeekEditSave.ts";
 import { REBASED_NOTICE, rebaseBuilderWeeks } from "../domain/DraftRebase.ts";
 import { PlacementRows } from "./PlacementRows.tsx";
@@ -324,6 +325,16 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
   const pickExercise = useCallback((workoutId: string) => pickRef.current(workoutId), []);
   const replaceExercise = useCallback((workoutId: string, plannedId: string) => pickRef.current(workoutId, plannedId), []);
   const metricsOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.metrics ?? null, [lookup]);
+  // BUILDER-FACTS: результаты импортированного цикла видны и правятся в карточках до сохранения; sourceHash не меняется.
+  const imported = workbook?.cycles.find((c) => c.key === workbook.activeKey)?.imported;
+  const facts = useMemo(() => imported ? importedFactRows(imported.sessions) : undefined, [imported]);
+  const editFact = useCallback((factId: string, patch: ImportedFactPatch) => {
+    if (!isValidFactPatch(patch)) return false;
+    setWorkbook((state) => state && { ...state, cycles: state.cycles.map((c) => c.key === state.activeKey && c.imported
+      ? { ...c, imported: { ...c.imported, sessions: setImportedFact(c.imported.sessions, factId, patch) } } : c) });
+    setDirty(true); setSaved(null); setMessage(null);
+    return true;
+  }, []);
   // Плановые значения, которых профиль упражнения не отслеживает (вес из Excel у «только повторов»), в редакторе не видны:
   // проверяются и сохраняются уже очищенными, чтобы их нельзя было не заметить и не исправить.
   const cleanWeeks = useMemo(() => lookup === null ? weeks : cleanBuilderWeeks(weeks, metricsOf), [lookup, metricsOf, weeks]);
@@ -645,7 +656,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
             </Text>
           ) : null}
           <WorkoutsEditor draft={draft} change={change} lookup={lookup} issues={weekIssues} showIssues={showIssues} scrollRef={scrollRef}
-            onPickExercise={pickExercise} onReplaceExercise={replaceExercise} />
+            onPickExercise={pickExercise} onReplaceExercise={replaceExercise} {...(facts ? { facts, onFact: editFact } : {})} />
         </Section>
       </Animated.ScrollView>
       <ConfirmDialog visible={leaving !== null} destructive confirmBusy={memberBusy}

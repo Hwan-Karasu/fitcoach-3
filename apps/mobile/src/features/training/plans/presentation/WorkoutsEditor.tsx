@@ -11,8 +11,9 @@ import type { ExerciseInfo } from "../domain/ExerciseLookupPort.ts";
 import { addWorkout, fillSets, removeExercise, removeWorkout, renameWorkout, reorderExercises, reorderWorkouts,
   setInstruction, setRepsRange, setRir, setSetCount } from "../domain/SimplePlanEdits.ts";
 import { INSTRUCTION_MAX, type PlannedExercise, type PlannedWorkout, type SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
-import { formatDuration, formatRange, parseDuration, parseRange, sanitizeRange, setFieldsOf, type PlanIssue } from
+import { formatDuration, formatRange, parseDuration, parseLoad, parseRange, sanitizeRange, setFieldsOf, type PlanIssue } from
   "../domain/SimplePlanRules.ts";
+import type { ImportedFactPatch, ImportedFactRow } from "../domain/ImportedFacts.ts";
 import { applySupersetPress, IDLE_SUPERSET_PICK, pressSuperset, supersetNumber, type SupersetPick } from "../domain/SupersetRules.ts";
 
 let counter = 0;
@@ -22,12 +23,13 @@ export function newPlanId(prefix: string): string {
   return `${prefix}:${Date.now().toString(36)}${counter.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-type FieldKind = "count" | "range" | "duration" | "number";
+type FieldKind = "count" | "range" | "duration" | "number" | "decimal";
 
 /** Только допустимые символы: буквы в поля конструктора не вводятся (решение владельца 2026-10-18). */
 function sanitize(kind: FieldKind, text: string): string {
   if (kind === "range") return sanitizeRange(text);
   if (kind === "duration") return text.replace(/[^\d:]/gu, "");
+  if (kind === "decimal") return text.replace(/[^\d.,]/gu, "");
   return text.replace(/\D/gu, "");
 }
 
@@ -35,8 +37,8 @@ function sanitize(kind: FieldKind, text: string): string {
  * Поле карточки упражнения (как в 2.0): правится на месте. Свой текст ввода, пока поле в фокусе; кнопка
  * клавиатуры «Далее» переводит в следующее поле карточки, на последнем — «Готово».
  */
-const InlineField = forwardRef(function InlineField({ label, value, placeholder, kind, last, onNext, onCommit }: Readonly<{
-  label: string; value: string; placeholder: string; kind: FieldKind; last: boolean; onNext: () => void;
+const InlineField = forwardRef(function InlineField({ label, value, placeholder, kind, last, onNext, onCommit, accessibilityLabel }: Readonly<{
+  label: string; value: string; placeholder: string; kind: FieldKind; last: boolean; onNext: () => void; accessibilityLabel?: string;
   /** Возвращает false, если ввод пока не годится (подсветка ошибкой). */
   onCommit: (text: string) => boolean;
 }>, ref: Ref<TextInput>) {
@@ -50,7 +52,7 @@ const InlineField = forwardRef(function InlineField({ label, value, placeholder,
     <View style={styles.field}>
       <Text numberOfLines={1} style={[styles.fieldLabel, { color: colors.textMuted }]}>{label}</Text>
       <TextInput ref={ref} value={text} placeholder={placeholder} placeholderTextColor={colors.textMuted} selectTextOnFocus
-        accessibilityLabel={label} keyboardType={kind === "duration" || kind === "range" ? "numbers-and-punctuation" : "number-pad"}
+        accessibilityLabel={accessibilityLabel ?? label} keyboardType={kind === "duration" || kind === "range" ? "numbers-and-punctuation" : kind === "decimal" ? "decimal-pad" : "number-pad"}
         returnKeyType={last ? "done" : "next"} submitBehavior={last ? "blurAndSubmit" : "submit"}
         onSubmitEditing={() => { if (!last) onNext(); }}
         onFocus={() => { focused.current = true; }}
@@ -77,9 +79,11 @@ function shared(values: readonly string[]): Readonly<{ value: string; placeholde
  * «⇄» — заменить из каталога, «×» — убрать из тренировки. Вес и отдых в конструкторе не задаются: вес —
  * результат дневника, отдых — в самой тренировке (решение владельца 2026-10-18).
  */
-function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, setState, onSet }: Readonly<{
+function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, setState, onSet, facts, onFact }: Readonly<{
   item: PlannedExercise; info: ExerciseInfo | null; broken: boolean; draft: SimpleProgramDraft;
   workout: PlannedWorkout;
+  /** BUILDER-FACTS: результаты импортированного цикла по подходам; правка — в черновике до сохранения. */
+  facts?: readonly ImportedFactRow[]; onFact?: (factId: string, patch: ImportedFactPatch) => boolean;
   change: (next: SimpleProgramDraft) => void; onReplace: () => void;
   /** Кнопка «Сет» (UI-OWN-028): выбрано / можно собрать / обычное состояние. */
   setState: "idle" | "picked" | "ready"; onSet: () => void;
@@ -91,6 +95,8 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, s
   const withReps = fields.includes("reps");
   const [showInstruction, setShowInstruction] = useState(item.instruction !== null);
   const refs = useRef<(TextInput | null)[]>([]);
+  const factRefs = useRef<(TextInput | null)[]>([]);
+  const factLoad = setFieldsOf(metrics).includes("loadGrams");
   const group = supersetNumber(workout, item);
   const inputs: Readonly<{ key: string; label: string; kind: FieldKind; value: string; placeholder: string;
     commit: (text: string) => boolean }>[] = [
@@ -176,6 +182,25 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, s
             </Pressable>
           </View>
         </View>
+        {facts?.length && onFact ? (
+          <View style={styles.facts}>
+            <Text style={[styles.setHint, styles.factTitle, { color: colors.textSecondary }]}>Факт по подходам</Text>
+            {facts.map((fact, row) => (
+              <View key={fact.id} style={styles.fields}>
+                <Text style={[styles.factIndex, { color: colors.textMuted }]}>{row + 1}</Text>
+                {factLoad || facts.some((f) => f.loadGrams !== null) ? <InlineField ref={(node) => { factRefs.current[row * 2] = node; }} label="Кг"
+                  accessibilityLabel={`${name}, подход ${row + 1}, вес факт`} kind="decimal" placeholder="—" last={false}
+                  value={fact.loadGrams === null ? "" : String(fact.loadGrams / 1000).replace(".", ",")}
+                  onNext={() => factRefs.current[row * 2 + 1]?.focus()}
+                  onCommit={(text) => { const grams = parseLoad(text); return grams !== "invalid" && onFact(fact.id, { loadGrams: grams }); }} /> : null}
+                {withReps || facts.some((f) => f.reps !== null) ? <InlineField ref={(node) => { factRefs.current[row * 2 + 1] = node; }} label="Повт."
+                  accessibilityLabel={`${name}, подход ${row + 1}, повторения факт`} kind="count" placeholder="—" last={row === facts.length - 1}
+                  value={fact.reps === null ? "" : String(fact.reps)} onNext={() => factRefs.current[row * 2 + 2]?.focus()}
+                  onCommit={(text) => onFact(fact.id, { reps: text === "" ? null : Number(text) })} /> : null}
+              </View>
+            ))}
+          </View>
+        ) : null}
         {showInstruction ? (
           <TextInput defaultValue={item.instruction ?? ""} multiline maxLength={INSTRUCTION_MAX} accessibilityLabel="Указание к упражнению"
             placeholder="Указание: темп, на что обратить внимание" placeholderTextColor={colors.textMuted}
@@ -225,8 +250,11 @@ export function ExerciseCardShell({ name, subtitle, thumbnail = null, actions, c
  * Редактор тренировок одной недели: общий для Простого и Расширенного конструкторов. Упражнения
  * перетаскиваются внутри тренировки, тренировки — в режиме «Порядок тренировок».
  */
-export const WorkoutsEditor = memo(function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scrollRef, onPickExercise, onReplaceExercise, singleWorkout = false }: Readonly<{
+export const WorkoutsEditor = memo(function WorkoutsEditor({ draft, change, lookup, issues, showIssues, scrollRef, onPickExercise, onReplaceExercise, singleWorkout = false,
+  facts, onFact }: Readonly<{
   draft: SimpleProgramDraft;
+  /** BUILDER-FACTS: результаты импортированного цикла по ID упражнения плана. */
+  facts?: ReadonlyMap<string, readonly ImportedFactRow[]>; onFact?: (factId: string, patch: ImportedFactPatch) => boolean;
   change: (next: SimpleProgramDraft) => void;
   lookup: ReadonlyMap<string, ExerciseInfo>;
   issues: readonly PlanIssue[];
@@ -315,7 +343,8 @@ export const WorkoutsEditor = memo(function WorkoutsEditor({ draft, change, look
               <ExerciseCard item={item} workout={workout} info={lookup.get(item.exerciseId) ?? null} draft={draft} change={change}
                 broken={showIssues && issues.some((issue) => issue.exerciseId === item.id)}
                 onReplace={() => onReplaceExercise(workout.id, item.id)}
-                setState={setStateOf(workout.id, item.id)} onSet={() => pressSet(workout, item.id)} />
+                setState={setStateOf(workout.id, item.id)} onSet={() => pressSet(workout, item.id)}
+                {...(facts?.has(item.id) && onFact ? { facts: facts.get(item.id)!, onFact } : {})} />
             )}
             onDragEnd={({ data }) => change(reorderExercises(draft, workout.id, data.map((item) => item.id)))} />
           </View>
@@ -395,6 +424,9 @@ const styles = StyleSheet.create({
   exercises: { paddingHorizontal: 10 },
   exerciseRow: { borderWidth: 1, borderRadius: 10, overflow: "hidden" },
   highlight: { borderWidth: 2 },
+  facts: { gap: 4, paddingTop: 6 },
+  factTitle: { paddingHorizontal: 0, paddingBottom: 0 },
+  factIndex: { width: 18, minHeight: 36, textAlign: "center", textAlignVertical: "center", fontFamily: fonts.medium, fontSize: 12 },
   handle: { width: 28, minHeight: 44, alignItems: "center", justifyContent: "center" },
   exerciseHead: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, paddingHorizontal: 2 },
   exerciseBody: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 10, paddingTop: 6, paddingBottom: 4 },

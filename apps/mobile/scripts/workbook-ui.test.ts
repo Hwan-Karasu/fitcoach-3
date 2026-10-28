@@ -10,6 +10,7 @@ import type { PickedWorkbook } from "../src/features/import/domain/WorkbookFiles
 import { builderWorkbookImport } from "../src/features/import/domain/BuilderWorkbookImport.ts";
 import { startWorkbookReview } from "../src/features/import/domain/WorkbookReviewSession.ts";
 import { prepareWholeWorkbook } from "../src/features/import/domain/WholeWorkbookImport.ts";
+import { parseWorkoutLog, workoutLogWorkbook } from "../src/features/import/domain/TextWorkoutLog.ts";
 import { trainingTransferFixture } from "../../../scripts/training-transfer-fixture.ts";
 import type { MesocycleBuilderDraft } from "../src/features/training/plans/domain/PeriodizedDraft.ts";
 import type { BuilderWorkbookSaveRequest } from "../src/shared/training-transfer/BuilderWorkbook.ts";
@@ -186,6 +187,36 @@ test("I07 creation chooser offers both saved drafts and deletes only the selecte
   const confirmed = renderer.root.findAll((n) => typeof n.type === "function" && n.props.title === "Удалить прежний черновик?")[0]!;
   await act(async () => { confirmed.props.onConfirm(); await new Promise((resolve) => setTimeout(resolve, 10)); });
   assert.deepEqual(deleted, ["new:SIMPLE"]); assert.deepEqual(chosen, ["PERIODIZED", "SIMPLE"]); await act(async () => renderer.unmount());
+});
+
+test("BUILDER-FACTS конструктор показывает факты импортированного цикла, правка уходит в сохранение, отпечаток листа прежний", async () => {
+  const Builder = loadScreen(resolve(import.meta.dirname, "../src/features/training/plans/presentation/PeriodizedBuilderScreen.tsx")).PeriodizedBuilderScreen as ComponentType<Props>;
+  const text = "ноги 20.10.2026\nЖим\n60 на 8\n70 на 6";
+  const incoming = builderWorkbookImport(prepareWholeWorkbook(startWorkbookReview(workoutLogWorkbook(parseWorkoutLog(text, "2026-10-28"), text,
+    { name: "Заметки", cycleType: "strength", reps: { min: 6, max: 8 } }), false), [{ id: "sys:press", name: "Жим", available: true }]));
+  const writes: BuilderWorkbookSaveRequest[] = [];
+  const props = { clientId: "client", repository: { getMesocycleBuilderDraft: async () => null, saveMesocycleBuilderDraft: async () => undefined },
+    exercises: { lookup: async () => new Map([["sys:press", { name: "Жим", metrics: ["load", "reps"] }]]), subscribe: () => () => undefined },
+    listCandidates: async () => [], picked: null, onPickExercise: () => undefined, onCreated: () => undefined, onCancel: () => undefined,
+    renderExcel: (onApply: unknown) => createElement("Excel", { onApply }), workbookSave: { saveBuilderWorkbook: async (request: BuilderWorkbookSaveRequest) => { writes.push(request); return { programId: "saved", mesocycleId: "cycle" }; } } };
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(createElement(Builder, props)); });
+  await until(renderer, () => nodes(renderer, "Excel").length > 0);
+  await act(async () => nodes(renderer, "Excel")[0]!.props.onApply(incoming));
+  type Row = { id: string; reps: number | null; loadGrams: number | null };
+  const editor = () => nodes(renderer, "Editor")[0]!.props as { facts: ReadonlyMap<string, readonly Row[]>; onFact: (id: string, patch: object) => boolean };
+  const rows = [...editor().facts.values()][0]!;
+  assert.deepEqual(rows.map((r) => [r.reps, r.loadGrams]), [[8, 60000], [6, 70000]]);
+  assert.equal(editor().onFact(rows[1]!.id, { reps: 0 }), false);
+  await act(async () => { assert.equal(editor().onFact(rows[1]!.id, { loadGrams: 72500 }), true); });
+  assert.deepEqual([...editor().facts.values()][0]!.map((r) => r.loadGrams), [60000, 72500]);
+  await act(async () => { nodes(renderer, "StickyEditorFooter")[0]!.props.onAction(); await new Promise((resolve) => setTimeout(resolve, 20)); });
+  assert.equal(writes.length, 1);
+  const saved = writes[0]!.cycles[0]!;
+  assert.deepEqual(saved.imported!.sessions[0]!.facts.map((f) => [f.values.reps, f.values.loadGrams]), [[8, 60000], [6, 72500]]);
+  assert.equal(saved.imported!.sourceHash, incoming.cycles![0]!.imported!.sourceHash);
+  assert.deepEqual(saved.settings?.cycleType, "strength");
+  await act(async () => renderer.unmount());
 });
 
 test("I07 actual periodized constructor displays all imported cycles, preserves edits and restores its active cycle/week", async () => {
