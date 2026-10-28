@@ -10,7 +10,7 @@ import type { PickedWorkbook } from "../src/features/import/domain/WorkbookFiles
 import { builderWorkbookImport } from "../src/features/import/domain/BuilderWorkbookImport.ts";
 import { startWorkbookReview } from "../src/features/import/domain/WorkbookReviewSession.ts";
 import { prepareWholeWorkbook } from "../src/features/import/domain/WholeWorkbookImport.ts";
-import { aiWorkbookRows } from "../src/features/import/domain/AiWorkbookTemplate.ts";
+import { legacyFields } from "../src/features/import/domain/LegacyExcel.ts";
 import { trainingTransferFixture } from "../../../scripts/training-transfer-fixture.ts";
 import type { MesocycleBuilderDraft } from "../src/features/training/plans/domain/PeriodizedDraft.ts";
 import type { BuilderWorkbookSaveRequest } from "../src/shared/training-transfer/BuilderWorkbook.ts";
@@ -170,8 +170,8 @@ test("I07 creation chooser offers both saved drafts and deletes only the selecte
 test("BUILDER-FACTS конструктор показывает факты импортированного цикла, правка уходит в сохранение, отпечаток листа прежний", async () => {
   const Builder = loadScreen(resolve(import.meta.dirname, "../src/features/training/plans/presentation/PeriodizedBuilderScreen.tsx")).PeriodizedBuilderScreen as ComponentType<Props>;
   // Плоская таблица «строка = подход» (формат образца для ИИ): одна тренировка, один день, два подхода с фактами 8×60 и 6×70.
-  const [header] = aiWorkbookRows();
-  const flat: PickedWorkbook = { kind: "TABLES", sourceId: "flat-fixture", tables: [{ name: "Тренировки", rows: [header!,
+  const header = Object.values(legacyFields).slice(0, 11);
+  const flat: PickedWorkbook = { kind: "TABLES", sourceId: "flat-fixture", tables: [{ name: "Тренировки", rows: [header,
     [1, "ноги", "Жим", 1, "6-8", 60, 8, 60, "", "", "20.10.2026"], [1, "ноги", "Жим", 1, "6-8", 70, 6, 70, "", "", "20.10.2026"]] }] };
   const incoming = builderWorkbookImport(prepareWholeWorkbook(startWorkbookReview(flat, false), [{ id: "sys:press", name: "Жим", available: true }]));
   const writes: BuilderWorkbookSaveRequest[] = [];
