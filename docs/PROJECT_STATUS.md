@@ -8,6 +8,13 @@
 - Проверки: typecheck, lint, arch:check, source:verify, secrets:check PASS; test:foundation 1034/1034, excel:test 100/100, training:test 268/268
   (счётчики включают параллельные правки календаря в рабочем дереве, они не мои и не коммитятся). На телефоне не проверено; в APK не входит (последний — build34).
 
+## 2026-10-28 — build35: производительность и календарь
+
+- Собран `artifacts/apk/athlete-diary-3.0.0-build35.apk`: `com.fitcoach.v3`, 3.0.0, versionCode 35, arm64-v8a, 70 425 124 байта; assembleRelease PASS
+  (1 мин 27 с; Node 24.3 первым в PATH, JDK17, IPv4, без prebuild). Сертификат SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`
+  совпадает с build33/34. SHA-256 APK `9d6fccdc01079d53ca428261870ae4dbc2b917b06f785406c2b91850d4b0fff1`. Входят PERF-PLAN-BATCH (8234b49), PERF-REST-DOCK (bd57247),
+  CAL-WORKOUT-LINK (3a6c83d), TEXT-LOG-5. На телефон не устанавливался. Примечание: с системным Node 22 шаг createBundleReleaseJsAndAssets падает.
+
 ## 2026-10-28 — CAL-WORKOUT-LINK: «Завершить тренировку» отмечает сегодняшнюю запись календаря (ADR-048)
 
 - Решение владельца: автоматически + подсказка; только запись этого клиента на сегодня без исхода, которая уже началась (несколько —
