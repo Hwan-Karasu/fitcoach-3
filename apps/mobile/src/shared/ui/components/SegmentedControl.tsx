@@ -52,10 +52,10 @@ const styles = StyleSheet.create({
   segmentScroll: { flex: 0, paddingHorizontal: 8 },
   scrollContent: { gap: 2 },
   trackScroll: { height: 40 },
-  trackWrap: { height: 60 },
-  segmentWrap: { minWidth: 72, maxWidth: 176 },
+  trackWrap: { height: "auto", minHeight: 40 },
+  segmentWrap: { minWidth: 72, maxWidth: 176, paddingVertical: 3 },
   trackCompact: { height: 44, borderRadius: 14, padding: 3, gap: 2 },
   segmentCompact: { borderRadius: 11, paddingHorizontal: 2 },
-  labelWrap: { fontSize: 14, lineHeight: 18, textAlign: "center" },
+  labelWrap: { fontSize: 13, lineHeight: 16, textAlign: "center" },
   labelCompact: { fontSize: 13, lineHeight: 17 },
 });

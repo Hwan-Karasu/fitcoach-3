@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import { CalendarDays, Minus, Plus } from "lucide-react-native";
@@ -85,7 +85,7 @@ function WeekStatusLine({ status }: Readonly<{ status: BuilderWeekStatus }>) {
   const ink = tone === null ? colors.textSecondary : readableInk(tone, [colors.surface, colors.surfaceRaised], colors.textPrimary);
   return <Text style={[styles.weekStatus, { color: ink }]}>{status.marker === null ? status.label : `${status.marker} ${status.label}`}</Text>;
 }
-export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, templateId, onSwitchCycle, initialWeek, mesocycleSave, repository, exercises, listCandidates, picked,
+function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, onSwitchCycle, onCycleShown, knownCycles, onCycles, initialWeek, mesocycleSave, repository, exercises, listCandidates, picked,
   onPickExercise, onCreated, onSaved, onCancel, renderTemplates, renderExcel, workbookSave, loadWeekStatuses }: Readonly<{
   workbookSave?: BuilderWorkbookSavePort;
   /** Правка: подписи статуса недель сохранённого мезоцикла («Не начата», «В работе», …) в порядке `weeks`; номер — неделя программы. */
@@ -99,6 +99,12 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, temp
   templateId?: string;
   /** Правка и «+ Мезоцикл» существующей программы: переход к другому циклу (`undefined` — новый); несохранённое спрашивает защита выхода. */
   onSwitchCycle?: (mesocycleId: string | undefined) => void;
+  /** Циклы программы, уже известные предыдущему экрану: полоса видна сразу, пока грузится выбранный цикл. */
+  knownCycles?: readonly Readonly<{ id: string; title: string }>[];
+  /** Экран показал этот цикл (`undefined` — новый): навигация запоминает его для выхода из конструктора (программа откроется на нём). */
+  onCycleShown?: (mesocycleId: string | undefined) => void;
+  /** Циклы программы загружены: обёртка хранит их между переключениями, полоса не мигает. */
+  onCycles?: (cycles: readonly Readonly<{ id: string; title: string }>[]) => void;
   /** Правка: открыть эту неделю (номер с 1). */
   initialWeek?: number;
   mesocycleSave?: MesocycleSavePort;
@@ -145,7 +151,14 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, temp
   const baselines = useRef(new Map<number, readonly PlannedWorkout[]>());
   const [scopeFor, setScopeFor] = useState<number | null>(null);
   /** Циклы этого клиента в существующей программе: полоса переключения над настройками. */
-  const [programCycles, setProgramCycles] = useState<readonly Readonly<{ id: string; title: string }>[]>([]);
+  const [programCycles, setProgramCycles] = useState<readonly Readonly<{ id: string; title: string }>[]>(knownCycles ?? []);
+  const cycleShownRef = useRef(onCycleShown); cycleShownRef.current = onCycleShown;
+  useEffect(() => { cycleShownRef.current?.(mesocycleId); }, [mesocycleId]);
+  const cyclesRef = useRef(onCycles); cyclesRef.current = onCycles;
+  useEffect(() => { if (programCycles.length > 0) cyclesRef.current?.(programCycles); }, [programCycles]);
+  /** Переключение цикла на месте: с несохранённой правкой сначала спрашивает (сохранить черновик / отбросить / остаться). */
+  const [pendingSwitch, setPendingSwitch] = useState<Readonly<{ to: string | undefined }> | null>(null);
+  const [switchBusy, setSwitchBusy] = useState(false);
   // Состав группы в правке (UI-OWN-042): убрать — с подтверждением; добавить — с выбором, чей план копировать.
   const [leaving, setLeaving] = useState<string | null>(null);
   const [joining, setJoining] = useState<Readonly<{ ids: readonly string[]; source: string }> | null>(null);
@@ -389,8 +402,30 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, temp
       <InlineNotice kind="error">Справочник упражнений не загрузился. Данные не изменены.</InlineNotice>
       <AppButton variant="secondary" label="Повторить" onPress={lookupState.retry} />
     </View>;
+  // Полоса циклов не пропадает при переключении: пока грузится выбранный цикл, она остаётся на месте, а загрузка — под ней.
+  const requestSwitch = (to: string | undefined) => {
+    if (busy !== null) return;
+    if (dirty) setPendingSwitch({ to }); else onSwitchCycle?.(to);
+  };
+  const finishSwitch = async (save: boolean) => {
+    if (pendingSwitch === null || switchBusy) return;
+    setSwitchBusy(true); setMessage(null);
+    try {
+      if (save) await recovery.beforePublish(); else await recovery.discard(() => repository.clearMesocycleBuilderDraft(clientId, scope));
+      const { to } = pendingSwitch; setPendingSwitch(null); onSwitchCycle?.(to);
+    } catch { setMessage(save ? "Не удалось сохранить черновик. Повторите." : "Не удалось удалить черновик. Повторите."); recovery.resume(); }
+    finally { setSwitchBusy(false); }
+  };
+  const cycleStrip = !workbook && onSwitchCycle !== undefined && programId !== undefined && programCycles.length > 0 ? (
+    <SegmentedControl scroll wrap items={[...programCycles.map((c) => ({ id: c.id, label: c.id === mesocycleId && program !== null ? title || c.title : c.title })),
+      { id: NEW_CYCLE, label: "+ Новый цикл" }]}
+      selectedId={mesocycleId ?? NEW_CYCLE} onSelect={(id) => { if (id !== (mesocycleId ?? NEW_CYCLE)) requestSwitch(id === NEW_CYCLE ? undefined : id); }} />
+  ) : null;
   if (lookup === null || (mode !== "create" && program === null)) {
-    return <View style={[styles.center, { backgroundColor: colors.canvas }]}><LoadingState label="Открываем конструктор…" /></View>;
+    return <View style={[styles.fill, { backgroundColor: colors.canvas }]}>
+      {cycleStrip !== null ? <View style={styles.loadingStrip}>{cycleStrip}</View> : null}
+      <View style={styles.center}><LoadingState label="Открываем конструктор…" /></View>
+    </View>;
   }
 
   const input = () => ({ title, cycleType, repRange: reps === "invalid" ? null : reps, startDate, weeks: cleanWeeks });
@@ -539,12 +574,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, temp
       {tabs}
       <Animated.ScrollView ref={scrollRef} pointerEvents={busy !== null ? "none" : "auto"} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {renderExcel?.(applyWorkbook, mode === "create" ? programTitle || undefined : program?.title)}
-        {!workbook && onSwitchCycle !== undefined && programId !== undefined && programCycles.length > 0 ? <Section title={`Циклы программы · ${programCycles.length}`}>
-          <SegmentedControl scroll wrap items={[...programCycles.map((c) => ({ id: c.id, label: c.id === mesocycleId ? title || c.title : c.title })),
-            { id: NEW_CYCLE, label: "+ Новый цикл" }]}
-            selectedId={mesocycleId ?? NEW_CYCLE} onSelect={(id) => { if (id !== (mesocycleId ?? NEW_CYCLE)) onSwitchCycle(id === NEW_CYCLE ? undefined : id); }} />
-          <Text style={[styles.hint, { color: colors.textSecondary }]}>Переключение спросит, что сделать с несохранёнными правками этого цикла.</Text>
-        </Section> : null}
+        {cycleStrip !== null ? <Section title={`Циклы программы · ${programCycles.length}`}>{cycleStrip}</Section> : null}
         {workbook && <Section title={`Циклы программы · ${workbook.cycles.length}`}>
           <SegmentedControl scroll wrap items={workbook.cycles.map((c) => ({ id: c.key, label: c.key === workbook.activeKey ? title : c.title }))}
             selectedId={workbook.activeKey} onSelect={(key) => { const state = currentWorkbook()!; openCycle(state.cycles.find((c) => c.key === key)!, state); touch(); }} />
@@ -717,15 +747,32 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, temp
       <StickyEditorFooter actionLabel={mode === "edit" ? "Сохранить" : mode === "add" ? "Добавить" : "Создать"} busy={busy === "create"} onCancel={onCancel}
         secondaryAction={{ label: "В шаблон", busy: busy === "template", onPress: () => { void saveTemplate(); } }}
         onAction={() => { void create(); }} message={recovery.error ?? message ?? saved} messageKind={recovery.error !== null || message !== null ? "error" : "success"} />
+      <BuilderDraftExitDialog visible={pendingSwitch !== null} busy={switchBusy} error={message}
+        onSave={() => { void finishSwitch(true); }} onDiscard={() => { void finishSwitch(false); }} onContinue={() => setPendingSwitch(null)} />
       <BuilderDraftExitDialog visible={recovery.exitVisible} busy={recovery.exitBusy} error={recovery.error}
         onSave={recovery.saveAndLeave} onDiscard={recovery.discardAndLeave} onContinue={recovery.cancelExit} />
     </TrainingEditorLayout>
   );
 }
 
+type BuilderProps = ComponentProps<typeof PeriodizedBuilderBody>;
+
+/**
+ * Конструктор расширенной программы. Переключение между циклами существующей программы идёт на месте (CYCLE-STRIP): обёртка помнит выбранный цикл и
+ * список циклов, а экран цикла пересоздаётся по ключу — без нового экрана навигации и перехода; состояние цикла сбрасывается целиком.
+ */
+export function PeriodizedBuilderScreen(props: BuilderProps) {
+  const [cycle, setCycle] = useState(props.mesocycleId);
+  const [cycles, setCycles] = useState(props.knownCycles);
+  return <PeriodizedBuilderBody key={cycle ?? "new"} {...props} mesocycleId={cycle} knownCycles={cycles} onCycles={setCycles}
+    onSwitchCycle={props.programId === undefined ? undefined : setCycle} />;
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, padding: 16, justifyContent: "center" },
+  fill: { flex: 1 },
+  loadingStrip: { paddingHorizontal: 16, paddingTop: 12 },
   tabs: { paddingHorizontal: 16, paddingTop: 4 },
   content: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24, gap: 10 },
   row: { flexDirection: "row", gap: 8 },

@@ -41,7 +41,8 @@ type TrainingRoutes = {
   TrainingTemplateEdit: { templateId: string; picked?: PickedExercise };
   /** Конструктор Расширенной: создание; с `programId` — «+ Мезоцикл», с `mesocycleId` — правка (UI-OWN-041). */
   TrainingCreate: { kind: ProgramKind; picked?: PickedExercise; programId?: string; mesocycleId?: string; weekIndex?: number; templateId?: string };
-  TrainingProgram: { programId: string; weekIndex?: number; mesocycleId?: string };
+  /** `switchedAt` — конструктор переключил цикл: программа откроется на нём при выходе (CYCLE-STRIP). */
+  TrainingProgram: { programId: string; weekIndex?: number; mesocycleId?: string; switchedAt?: number };
   TrainingBuilder: { programId?: string; picked?: PickedExercise; templateId?: string } | undefined;
   TrainingWeek: { programId: string; mesocycleId: string; weekIndex: number; picked?: PickedExercise };
   TrainingSimpleWorkout: { programId: string; weekIndex: number; workoutId: string; picked?: PickedExercise };
@@ -299,8 +300,13 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
         {/* Расширенная — конструктор 2.0 (UI-OWN-038): программа, участники и первый мезоцикл одной записью. */}
         {({ navigation, route }) => <PeriodizedBuilderScreen clientId={viewer} repository={repository} exercises={exerciseLookup}
           programId={route.params.programId} mesocycleId={route.params.mesocycleId} templateId={route.params.templateId} initialWeek={route.params.weekIndex}
-          {...(route.params.programId === undefined ? {} : { onSwitchCycle: (target: string | undefined) => navigation.replace("TrainingCreate", { kind: route.params.kind,
-            programId: route.params.programId!, ...(target === undefined ? {} : { mesocycleId: target }) }) })}
+          {...(route.params.programId === undefined ? {} : { onCycleShown: (shown: string | undefined) => {
+            // Цикл выбран на полосе конструктора: заголовок и возврат из каталога следуют за ним, программа откроется на нём при выходе.
+            navigation.setParams({ mesocycleId: shown });
+            const program = shown === undefined ? undefined : navigation.getState().routes.find((item: { name: string; key: string; params?: unknown }) => item.name === "TrainingProgram"
+              && (item.params as TrainingRoutes["TrainingProgram"] | undefined)?.programId === route.params.programId);
+            if (program !== undefined) navigation.dispatch({ ...CommonActions.setParams({ mesocycleId: shown, switchedAt: Date.now() }), source: program.key });
+          } })}
           mesocycleSave={mesocycleSave} workbookSave={trainingTransfer}
           loadWeekStatuses={async (programId, weeks) => {
             const statuses = await execution.getProgramStatuses(viewer, programId);
@@ -326,7 +332,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingProgram">
         {({ navigation, route }) => <RetainedTrainingProgram><TabBarPending weeks dock /><Profiler id="TrainingProgram" onRender={navigationPerformance.onRender}><ProgramScreen clientId={viewer} programId={route.params.programId}
-          requestedWeek={route.params.weekIndex} requestedMesocycle={route.params.mesocycleId}
+          requestedWeek={route.params.weekIndex} requestedMesocycle={route.params.mesocycleId} requestedAt={route.params.switchedAt}
           repository={repository} listCandidates={listCandidates} exercises={exerciseLookup} planDelete={planDelete}
           onExport={async (mesocycleId) => { const value = await trainingTransfer.exportClient(viewer, [route.params.programId]); await expoWorkbookFiles.share(mesocycleId ? selectTransferCycle(value, route.params.programId, mesocycleId) : value); }}
           onOpenMatrix={() => navigation.navigate("TrainingMatrix", { programId: route.params.programId })}

@@ -52,7 +52,7 @@ export interface ProgramWeeksView {
  * и «Изменить неделю» (T04).
  */
 export function ProgramScreen({ clientId, programId, repository, listCandidates, exercises, renderWeeks, renderTemplates, renderParticipants, planDelete, onTabChange, onEditStructure,
-  onAddMesocycle, onEditWeek, onArchived, requestedWeek, requestedMesocycle, onOpenProgram, onOpenMatrix, onExport }: Readonly<{
+  onAddMesocycle, onEditWeek, onArchived, requestedWeek, requestedMesocycle, requestedAt, onOpenProgram, onOpenMatrix, onExport }: Readonly<{
   onExport?: (mesocycleId?: string) => Promise<void>;
   clientId: string;
   programId: string;
@@ -78,6 +78,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   /** Смена вкладки — чтобы шапка показала «Программа» или «Шаблоны». */
   onTabChange?: (tab: "program" | "templates") => void;
   requestedMesocycle?: string;
+  /** Метка запроса цикла из конструктора: тот же цикл запрашивается снова после ручного выбора другого. */
+  requestedAt?: number;
   /** UI-OWN-043: полоса участников группы под шапкой; получает текущее место плана (мезоцикл и неделя). */
   /** `shown` — чьи данные сейчас на экране: состав группы читается по ним, а не по параметрам маршрута, которые меняются раньше. */
   renderParticipants?: (current: () => CounterpartRef, shown: Readonly<{ clientId: string; programId: string }> | null,
@@ -134,6 +136,13 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       void repository.selectMesocycle(clientId, programId, key).catch(() => setMessage("Не удалось выбрать мезоцикл."));
     }
   }, [requestedWeek, requestedMesocycle, program, periodized, cycleKey, repository, clientId, programId, loadedFor, currentKey]);
+  // Конструктор переключил цикл на полосе: при возврате программа открыта на нём (выбор сохраняется, как при ручном выборе).
+  useEffect(() => {
+    if (requestedAt === undefined || requestedMesocycle === undefined || periodized === null || periodized.selectedMesocycleId === requestedMesocycle
+      || !periodized.mesocycles.some((item) => item.id === requestedMesocycle)) return;
+    setPeriodized((current) => current === null ? current : { ...current, selectedMesocycleId: requestedMesocycle });
+    void repository.selectMesocycle(clientId, programId, requestedMesocycle).catch(() => setMessage("Не удалось выбрать мезоцикл."));
+  }, [requestedAt, requestedMesocycle]);
   const selectWeek = (key: string, week: number) => setWeeksByCycle((current) => ({ ...current, [key]: week }));
 
   useEffect(() => { setMessage(null); setNotice(null); }, [clientId, programId]);
