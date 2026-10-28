@@ -12,6 +12,7 @@ import { applyWorkbookColumns, autoMatchWorkbookEntry, builderWorkbookImport, co
   type WorkbookReviewEntry, type WorkbookReviewSession, type WorkoutLog } from "../../features/import/public.ts";
 import { CYCLE_TYPES, type BuilderExcelDraft } from "../../features/training/public.ts";
 import { localToday, TextLogDistribution, TextLogInput, type LogCycleType } from "./TextLogImport.tsx";
+import { AiTableHelp } from "./AiTableHelp.tsx";
 import { TrainingTransferReviewScreen } from "./TrainingTransferReviewScreen.tsx";
 import { WorkbookColumnSettings } from "./WorkbookColumnSettings.tsx";
 import { RememberedImportMatchesDialog } from "./RememberedImportMatchesDialog.tsx";
@@ -158,6 +159,7 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "ÐšÐ
       {otherProblems.map((p) => { const issue = session.entries[p.id]?.value?.issues?.[0];
         return <AppButton key={p.id} compact variant="ghost" label={`${p.label}: ${p.reason}`} disabled={busy}
           onPress={() => issue ? focusCard(p.id, null, `issue:${issue.id}`) : select(p.id)} />; })}</View>}
+    {session.picked.kind === "TABLES" && !fromText && <AiTableHelp busy={busy} onTemplate={() => { void run(async () => files.aiTemplate()); }} />}
     {session.picked.kind === "TABLES" && !fromText && current && <WorkbookColumnSettings table={session.picked.tables[Number(session.activeId)]!} entry={current} busy={busy} onChange={patch}
       onApply={() => setSession(match(applyWorkbookColumns(session)))} />}
   </> : null;

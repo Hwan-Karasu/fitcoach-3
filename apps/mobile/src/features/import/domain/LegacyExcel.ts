@@ -8,11 +8,24 @@ const key = (v: unknown) => String(v ?? "").trim().toLowerCase().replace(/ё/gu,
 const actualFields: Partial<Record<keyof LegacyMapping, keyof TransferValues>> = {
   actualReps: "reps", actualLoad: "loadGrams", actualDuration: "durationSec", actualDistance: "distanceM",
 };
+/**
+ * Синонимы заголовков чужих таблиц (EXCEL-AI). Только однозначные: «Подход» (номер подхода), «День» (часто дата) и голые
+ * «Повторы»/«Вес» (план или факт?) не угадываются — их сопоставляют вручную.
+ */
+const headerAliases: Partial<Record<keyof typeof legacyFields, readonly string[]>> = {
+  week: ["нед", "week"], workout: ["занятие", "workout"], exercise: ["название", "название упражнения", "exercise"],
+  sets: ["кол во подходов", "количество подходов", "sets"], reps: ["план повт", "повторения план"], load: ["план кг", "вес план"],
+  actualReps: ["факт повт", "повторения факт"], actualLoad: ["факт кг", "вес факт"], date: ["date"], note: ["комментарий", "примечание"],
+};
+const headerKey = (v: unknown) => key(v).replace(/[.,:;()\-–—]+/gu, " ").replace(/\s+/gu, " ").trim();
 export function detectLegacyMapping(table: ImportTable): { header: number; mapping: LegacyMapping } {
   let best: { header: number; mapping: LegacyMapping } = { header: 0, mapping: {} };
   table.rows.slice(0, 30).forEach((row, header) => {
     const mapping: LegacyMapping = {};
-    for (const [field, title] of Object.entries(legacyFields)) { const index = row.findIndex((v) => key(v) === key(title)); if (index >= 0) mapping[field as keyof LegacyMapping] = index; }
+    for (const [field, title] of Object.entries(legacyFields)) {
+      const names = new Set([headerKey(title), ...(headerAliases[field as keyof typeof legacyFields] ?? [])]);
+      const index = row.findIndex((v) => names.has(headerKey(v))); if (index >= 0) mapping[field as keyof LegacyMapping] = index;
+    }
     if (Object.keys(mapping).length > Object.keys(best.mapping).length) best = { header, mapping };
   });
   return best;

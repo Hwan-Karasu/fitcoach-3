@@ -193,7 +193,7 @@ test("I02 tab changes retain matching, column settings and corrections and expos
 });
 
 test("I02 structural failure stays local to its tab and can be repaired by selecting columns", () => {
-  const bad = { name: "Ручная таблица", rows: [["Название", "Запланировано"], ["Жим", "8-10"]] };
+  const bad = { name: "Ручная таблица", rows: [["Движение", "Запланировано"], ["Жим", "8-10"]] };
   let session = startWorkbookReview(picked([bad, matrix("Матрица")]), true);
   assert.equal(session.entries["0"]!.value, null);
   assert.equal(session.entries["0"]!.settingsOpen, true);

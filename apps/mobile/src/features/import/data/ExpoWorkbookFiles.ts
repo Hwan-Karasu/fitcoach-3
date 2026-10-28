@@ -8,6 +8,7 @@ import type { WorkbookFilesPort } from "../domain/WorkbookFilesPort.ts";
 import { readWorkbook, readTrainingWorkbook } from "./TrainingWorkbook.ts";
 import { writeVisibleTrainingWorkbook } from "./VisibleMatrixWorkbook.ts";
 import { flattenLegacyMatrix } from "../domain/LegacyMatrix.ts";
+import { AI_WORKBOOK_FILENAME, AI_WORKBOOK_PROMPT, aiWorkbookRows } from "../domain/AiWorkbookTemplate.ts";
 import { transferReviewScopes } from "../domain/TrainingTransferReview.ts";
 import { visibleTrainingTransfer } from "../../../shared/training-transfer/VisibleTrainingTransfer.ts";
 import { trainingWorkbookFilename } from "../../../shared/training-transfer/WorkbookFilename.ts";
@@ -68,5 +69,14 @@ export const expoWorkbookFiles: WorkbookFilesPort = {
     XLSX.utils.book_append_sheet(book, sheet, "Программа");
     const bytes: unknown = XLSX.write(book, { type: "array", bookType: "xlsx" });
     await share(new Uint8Array(bytes as ArrayBuffer), "Шаблон программы тренировок.xlsx");
+  },
+  async aiTemplate() {
+    const book = XLSX.utils.book_new();
+    const sheet = XLSX.utils.aoa_to_sheet(aiWorkbookRows());
+    sheet["!cols"] = [{ wch: 8 }, { wch: 16 }, { wch: 30 }, { wch: 9 }, { wch: 16 }, { wch: 10 }, { wch: 16 }, { wch: 10 }, { wch: 6 }, { wch: 18 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(book, sheet, "Тренировки");
+    XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(AI_WORKBOOK_PROMPT.split("\n").map((line) => [line])), "Как заполнять");
+    const bytes: unknown = XLSX.write(book, { type: "array", bookType: "xlsx" });
+    await share(new Uint8Array(bytes as ArrayBuffer), AI_WORKBOOK_FILENAME);
   },
 };

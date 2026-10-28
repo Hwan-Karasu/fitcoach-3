@@ -17,4 +17,6 @@ export interface WorkbookFilesPort {
   pick(options?: Readonly<{ onReading?: () => Promise<void>; active?: () => boolean }>): Promise<PickedWorkbook | null>;
   share(value: TrainingTransfer): Promise<void>;
   template(): Promise<void>;
+  /** Плоский образец «строка = подход» для переделки чужой таблицы через ИИ (EXCEL-AI). */
+  aiTemplate(): Promise<void>;
 }
