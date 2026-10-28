@@ -4,6 +4,7 @@ import type { Appointment, CalendarInterval, LocalDate } from "../domain/Calenda
 import type { TimeWindow } from "../domain/CalendarGeometry.ts";
 import type { CalendarParticipant } from "../domain/CalendarParticipantDirectoryPort.ts";
 import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
+import { RangeCache } from "../domain/CalendarRangeCache.ts";
 import { addDays, mondayOf, weekDates } from "../domain/CalendarRules.ts";
 import { TimelineGrid, TimelineHours, type TimelineHandlers } from "./TimelineGrid.tsx";
 
@@ -21,19 +22,35 @@ type PageRange = Readonly<{ appointments: readonly Appointment[]; intervals: rea
 /** Данные недели, уже прочитанные экраном: первая страница показывает их без повторного запроса. */
 export type PageSeed = Readonly<{ monday: LocalDate } & PageRange>;
 
-/** Записи и интервалы одной страницы; перечитываются при изменениях календаря в её датах. */
-function usePageRange(repository: CalendarRepositoryPort, from: LocalDate, to: LocalDate, seed: PageSeed | undefined) {
-  const [range, setRange] = useState<PageRange | null>(() => seed !== undefined && seed.monday === from && addDays(from, 6) === to ? seed : null);
+/** Лимит прочитанных диапазонов: хватает на соседние недели и дни, память не растёт со временем (CAL-RANGE-CACHE). */
+const RANGE_CACHE_SIZE = 16;
+
+/**
+ * Записи и интервалы одной страницы; перечитываются при изменениях календаря в её датах. Страница сначала берёт уже прочитанное
+ * (кэш диапазонов, заготовка экрана) и рисуется сразу целиком, а не пустой сеткой до ответа базы.
+ */
+function usePageRange(repository: CalendarRepositoryPort, from: LocalDate, to: LocalDate, seed: PageSeed | undefined, cache: RangeCache) {
+  const [range, setRange] = useState<PageRange | null>(() => {
+    const cached = cache.get(from, to);
+    if (cached !== null) return cached;
+    if (seed !== undefined && seed.monday === from && addDays(from, 6) === to) { cache.put(from, to, seed); return seed; }
+    return null;
+  });
   const [tick, setTick] = useState(0);
   const generation = useRef(0);
   const seeded = useRef(range !== null);
   useEffect(() => {
     if (seeded.current) { seeded.current = false; return; }
+    const cached = cache.get(from, to);
+    if (cached !== null) { setRange(cached); return; }
     const request = ++generation.current;
+    const version = cache.version;
     void repository.listRange(from, to).then((value) => {
-      if (request === generation.current) setRange(value);
+      cache.put(from, to, value, version);
+      if (request !== generation.current) return;
+      setRange(value);
     }, () => undefined);
-  }, [repository, from, to, tick]);
+  }, [repository, cache, from, to, tick]);
   useEffect(() => repository.subscribeCommittedChanges((change) => {
     if (change.dates === "ALL" || change.dates.some((date) => date >= from && date <= to)) setTick((value) => value + 1);
   }), [repository, from, to]);
@@ -51,6 +68,7 @@ type PageShared = Readonly<{
   handlers: TimelineHandlers;
   /** Всегда актуальные данные экрана для недели, с которой открыт календарь (читается один раз при создании страницы). */
   seedRef: { readonly current: PageSeed | undefined };
+  cache: RangeCache;
 }>;
 
 /** Одна страница ленты: неделя (видимые дни) или один день. Пока данные грузятся — пустая сетка с датами. */
@@ -59,7 +77,7 @@ const TimelinePage = memo(function TimelinePage({ start, week, width, shared }: 
 }>) {
   const dates = useMemo(() => week
     ? weekDates(start).filter((_, index) => shared.visibleWeekdays[index] ?? true) : [start], [shared.visibleWeekdays, start, week]);
-  const range = usePageRange(shared.repository, start, week ? addDays(start, 6) : start, shared.seedRef.current);
+  const range = usePageRange(shared.repository, start, week ? addDays(start, 6) : start, shared.seedRef.current, shared.cache);
   return (
     <View style={{ width }}>
       <TimelineGrid dates={dates} window={shared.window} appointments={range?.appointments ?? []}
@@ -74,7 +92,7 @@ const TimelinePage = memo(function TimelinePage({ start, week, width, shared }: 
  * месте. Горизонтальный FlatList с постраничной прокруткой — соседние страницы отрисованы заранее.
  */
 export function WeekPager({ mode, selected, today, scrollLocked, onSelect, repository, visibleWeekdays, window, people,
-  typeColors, now, handlers, maxHeight, seed, initialWidth = 0 }: Omit<PageShared, "height" | "seedRef"> & Readonly<{
+  typeColors, now, handlers, maxHeight, seed, initialWidth = 0 }: Omit<PageShared, "height" | "seedRef" | "cache"> & Readonly<{
   seed?: PageSeed;
   /** Ширина ленты, вычисленная из размера окна: страницы строятся сразу, измерение лишь уточняет. */
   initialWidth?: number;
@@ -98,8 +116,11 @@ export function WeekPager({ mode, selected, today, scrollLocked, onSelect, repos
   // Общие параметры страниц — один объект, пока они не меняются: открытие меню не перерисовывает сетку.
   const seedRef = useRef(seed);
   seedRef.current = seed;
-  const shared = useMemo<PageShared>(() => ({ repository, visibleWeekdays, window, people, typeColors, now, height, handlers, seedRef }),
-    [repository, visibleWeekdays, window, people, typeColors, now, height, handlers]);
+  const [cache] = useState(() => new RangeCache(RANGE_CACHE_SIZE));
+  // Изменение календаря сбрасывает затронутые даты кэша; подписка снимается вместе с лентой.
+  useEffect(() => repository.subscribeCommittedChanges((change) => cache.invalidate(change.dates)), [repository, cache]);
+  const shared = useMemo<PageShared>(() => ({ repository, visibleWeekdays, window, people, typeColors, now, height, handlers, seedRef, cache }),
+    [repository, visibleWeekdays, window, people, typeColors, now, height, handlers, cache]);
   const [baseMonday] = useState(() => mondayOf(today));
   const [baseDay] = useState(today);
   const week = mode === "WEEK";
