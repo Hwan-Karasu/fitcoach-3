@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ChartColumn, Check, ChevronRight, Trash2 } from "lucide-react-native";
-import { AppButton, AppIconButton, ConfirmDialog, DateField, DropdownMenu, InlineNotice, SelectionChip, TextField } from "../../shared/ui/components/public.ts";
+import { AppButton, AppIconButton, ConfirmDialog, DateField, InlineNotice, SelectionChip, TextField } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 import { plural } from "../../shared/format/clockText.ts";
@@ -16,13 +16,9 @@ type LogStats = ReturnType<typeof logStats>;
 export const localToday = (now = new Date()) => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 /** Пикер всегда показывает не меньше стольких номеров; наличие кнопки не создаёт тренировку. */
 const PICKER_MIN = 4;
-/** Больше тренировок — выбор списком с названиями и датами, а не кнопками. */
-const CHIPS_MAX = 6;
 /** Ширина кнопки номера и промежуток — для прокрутки к выбранному. */
 const PICK_STEP = 50;
 const PER_WEEK_MAX = 7;
-/** Короткая дата `дд.мм` и полная `дд.мм.гггг` из YYYY-MM-DD. */
-const dayMonth = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
 const range = (reps: (typeof CYCLE_TYPES)[number]["reps"]) => reps === null ? null : reps.max === null ? String(reps.min) : `${reps.min}–${reps.max}`;
 /** Попадает ли упражнение в импорт: есть подходы или это плановая копия. */
 const isIncluded = (exercise: LogExercise) => exercise.sets.length > 0 || (exercise.planSets ?? 0) > 0;
@@ -50,40 +46,30 @@ export function TextLogInput({ text, error, busy, onText, onParse }: Readonly<{
 }
 
 /**
- * Выбор тренировки упражнения: кнопки с датой (или номером, если даты нет) и «+»; при многих тренировках — список с названиями и датами.
- * Подписи приходят строками через перевод строки, чтобы карточка не перерисовывалась без причины.
+ * Выбор тренировки упражнения: кнопки-номера «1 2 3 …» и «+» (новая тренировка); при многих тренировках ряд прокручивается.
+ * Даты тренировок сюда не выводятся: они проставляются сами и правятся на шаге «Тренировки».
  */
-function SessionPicker({ name, value, chips, options, onPick }: Readonly<{ name: string; value: number; chips: string; options: string; onPick: (index: number) => void }>) {
+function SessionPicker({ name, value, count, onPick }: Readonly<{ name: string; value: number; count: number; onPick: (index: number) => void }>) {
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
-  const labels = chips.split("\n"); const count = labels.length; const group = `Тренировка для «${name}»`;
+  const group = `Тренировка для «${name}»`;
   const shown = Math.max(PICKER_MIN, count, value + 1);
-  const anchor = useRef<View>(null); const [open, setOpen] = useState(false);
   const scroll = useRef<ScrollView>(null);
   const toSelected = useCallback(() => scroll.current?.scrollTo({ x: Math.max(0, (value - 1) * PICK_STEP), animated: false }), [value]);
   useEffect(toSelected, [toSelected]);
   const caption = <Text style={[styles.label, { color: colors.textMuted }]}>Тренировка</Text>;
-  if (count > CHIPS_MAX) {
-    const names = options.split("\n");
-    return <View style={styles.pickerLine}>{caption}
-      <View ref={anchor} collapsable={false} style={styles.picker}><AppButton compact variant="secondary" label={names[value] ?? `Тренировка ${value + 1}`} onPress={() => setOpen(true)} /></View>
-      <DropdownMenu visible={open} anchor={anchor} title={group} searchable selected={String(value)}
-        options={[...names.map((label, i) => ({ value: String(i), label })), { value: "new", label: "Новая тренировка" }]}
-        onSelect={(next) => { setOpen(false); onPick(next === "new" ? count : Number(next)); }} onClose={() => setOpen(false)} />
-    </View>;
-  }
   return <View style={styles.pickerLine}>{caption}
     <ScrollView ref={scroll} horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" onContentSizeChange={toSelected}
       style={styles.picker} contentContainerStyle={styles.pickerRow}>
       {Array.from({ length: shown }, (_, i) => <View key={i} style={styles.pick}>
-        <SelectionChip compact dense fill group={group} label={labels[i] ?? String(i + 1)} selected={i === value} onPress={() => onPick(i)} /></View>)}
+        <SelectionChip compact dense fill group={group} label={String(i + 1)} selected={i === value} onPress={() => onPick(i)} /></View>)}
       <View style={styles.pick}><SelectionChip compact dense fill group={group} label="+" selected={false} onPress={() => onPick(count)} /></View>
     </ScrollView>
   </View>;
 }
 
 /** Карточка упражнения единого списка: основа — карточка конструктора; подпись «подходы · повторы по типу цикла · вес». */
-const ExercisePlacement = memo(function ExercisePlacement({ exercise, workout, chips, options, repsText, clash, copyFrom, onAssign, onDuplicate, onCopySets, onRemove }: Readonly<{
-  exercise: LogExercise; workout: number; chips: string; options: string; repsText: string | null; clash: boolean; copyFrom: LogExercise | null;
+const ExercisePlacement = memo(function ExercisePlacement({ exercise, workout, count, repsText, clash, copyFrom, onAssign, onDuplicate, onCopySets, onRemove }: Readonly<{
+  exercise: LogExercise; workout: number; count: number; repsText: string | null; clash: boolean; copyFrom: LogExercise | null;
   onAssign: (id: string, target: number) => void; onDuplicate: (id: string) => void; onCopySets: (id: string, from: string) => void; onRemove: (id: string) => void;
 }>) {
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
@@ -105,7 +91,7 @@ const ExercisePlacement = memo(function ExercisePlacement({ exercise, workout, c
           <Text style={[styles.actionText, { color: colors.accentInk }]}>Дублировать</Text></Pressable>
         <AppIconButton label={`Убрать: ${exercise.name}`} icon={<Trash2 size={18} color={colors.danger} />} onPress={remove} />
       </View>}>
-      <SessionPicker name={exercise.name} value={workout} chips={chips} options={options} onPick={(index) => onAssign(exercise.id, index)} />
+      <SessionPicker name={exercise.name} value={workout} count={count} onPick={(index) => onAssign(exercise.id, index)} />
       {clash && <Text style={[styles.hint, { color: colors.danger }]}>Это упражнение уже есть в этой тренировке.</Text>}
     </ExerciseCardShell>
     <ConfirmDialog visible={confirm === "copy"} title="Скопировать подходы?"
@@ -133,8 +119,7 @@ export function TextLogDistribution({ log, recognized, onUpdate, cycleType, onCy
   const stats = useMemo(() => logStats(log, perWeek), [log, perWeek]);
   // Даты смотрим у тех же непустых тренировок, что и `logWeeks`: степпер нужен ровно тогда, когда недели считаются по порядку.
   const dated = log.workouts.some((w) => w.date && w.exercises.some(isIncluded));
-  const chips = log.workouts.map((w, i) => w.date ? dayMonth(w.date) : String(i + 1)).join("\n");
-  const options = log.workouts.map((w, i) => `${i + 1}. ${w.title.replace(/\s+/gu, " ")}${w.date ? ` · ${dayMonth(w.date)}.${w.date.slice(0, 4)}` : ""}`).join("\n");
+  const count = log.workouts.length;
   const clashes = useMemo(() => {
     const seen = new Map<string, number>(); const key = (item: (typeof items)[number]) => `${item.workout}:${item.exercise.name.toLowerCase().replace(/ё/gu, "е").replace(/\s+/gu, " ").trim()}`;
     for (const item of items) seen.set(key(item), (seen.get(key(item)) ?? 0) + 1);
@@ -147,8 +132,8 @@ export function TextLogDistribution({ log, recognized, onUpdate, cycleType, onCy
   const copySets = useCallback((id: string, from: string) => onUpdate((l) => copyLogSets(l, id, from)), [onUpdate]);
   const remove = useCallback((id: string) => onUpdate((l) => removeLogExercise(l, id)), [onUpdate]);
   const renderItem = useCallback(({ item }: Readonly<{ item: (typeof items)[number] }>) => <ExercisePlacement exercise={item.exercise} workout={item.workout}
-    chips={chips} options={options} repsText={repsText} clash={clashes.has(item.exercise.id)} copyFrom={sources.get(item.exercise.id) ?? null}
-    onAssign={assign} onDuplicate={duplicate} onCopySets={copySets} onRemove={remove} />, [chips, options, repsText, clashes, sources, assign, duplicate, copySets, remove]);
+    count={count} repsText={repsText} clash={clashes.has(item.exercise.id)} copyFrom={sources.get(item.exercise.id) ?? null}
+    onAssign={assign} onDuplicate={duplicate} onCopySets={copySets} onRemove={remove} />, [count, repsText, clashes, sources, assign, duplicate, copySets, remove]);
   const cycleRows = [CYCLE_TYPES.slice(0, 3), CYCLE_TYPES.slice(3)];
   const header = <View style={styles.stack}>
     <Text style={[styles.body, { color: colors.textSecondary }]}>Распознано: {workoutsText(recognized.workouts)}{recognized.dated ? ` в ${weeksText(recognized.weeks)}` : ""}, {counts(recognized)}.</Text>

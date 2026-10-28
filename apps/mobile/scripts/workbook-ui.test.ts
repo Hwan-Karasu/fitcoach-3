@@ -151,7 +151,7 @@ test("TEXT-LOG-3 заметки: единый список с пикером т�
   await act(async () => renderer.unmount());
 });
 
-test("TEXT-LOG-5 заметки с датами: на кнопках даты, недели из дат, степпера нет; больше шести тренировок — выбор списком", async () => {
+test("TEXT-LOG-5 заметки с датами: на кнопках номера, недели из дат, степпера нет; пикер «1 2 3 +» и при многих тренировках", async () => {
   const open = async (days: readonly string[]) => {
     let renderer!: ReactTestRenderer;
     await act(async () => { renderer = create(createElement(Importer, { files: { pick: async () => null }, exercises: { list: async () => catalogue },
@@ -165,13 +165,15 @@ test("TEXT-LOG-5 заметки с датами: на кнопках даты, �
   const few = await open(["26.07.2026", "31.07.2026", "03.08.2026"]);
   assert.match(textOf(few), /Распознано: 3 тренировки в 3 неделях/);
   assert.ok(!/Тренировок в неделю/.test(textOf(few)), "с датами степпера нет");
-  assert.ok(nodes(few, "SelectionChip").some((n) => n.props.label === "26.07" && String(n.props.group).startsWith("Тренировка для")));
+  const picks = (r: ReactTestRenderer) => nodes(r, "SelectionChip").filter((n) => String(n.props.group).startsWith("Тренировка для"));
+  assert.ok(picks(few).some((n) => n.props.label === "3"), "на кнопках номера, а не даты");
+  assert.ok(!picks(few).some((n) => /\./.test(String(n.props.label))), "дат на кнопках нет");
   await act(async () => few.unmount());
-  // 8 записей: календарные недели с понедельника — 7 недель; пикер — список с названиями и датами.
+  // 8 записей: календарные недели с понедельника — 7 недель; пикер остаётся рядом номеров с «+».
   const many = await open(["26.07.2026", "31.07.2026", "03.08.2026", "04.09.2026", "06.09.2026", "14.09.2026", "21.09.2026", "28.09.2026"]);
   assert.match(textOf(many), /Будет создано: 8 тренировок в 7 неделях/);
-  const menu = nodes(many, "DropdownMenu")[0]!;
-  assert.equal((menu.props.options as { label: string }[])[0]!.label, "1. Фуллбоди · 26.07.2026");
+  assert.ok(picks(many).some((n) => n.props.label === "8") && picks(many).some((n) => n.props.label === "+"));
+  assert.equal(nodes(many, "DropdownMenu").length, 0);
   await act(async () => many.unmount());
 });
 
