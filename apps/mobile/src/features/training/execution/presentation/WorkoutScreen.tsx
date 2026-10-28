@@ -627,7 +627,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
             </View>
           );
         });
-        // Суперсет — одна бегущая рамка вокруг всех его карточек (как в 2.0).
+        // Суперсет — одна сплошная рамка вокруг всех его карточек.
         return run.length > 1 ? <SupersetBorder key={run[0]!.lineageId ?? run[0]!.id} radius={22} gap={12}>{cards}</SupersetBorder> : cards[0];
         })}
         <View style={styles.outcomes}>

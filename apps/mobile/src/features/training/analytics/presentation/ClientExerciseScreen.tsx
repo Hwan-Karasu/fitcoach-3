@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react-native";
 import { EmptyState, InlineNotice, LineChart, LoadingState, SegmentedControl } from
@@ -211,6 +211,9 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
   const [chosen, setChosen] = useState<ProgressMetricId | null>(null);
   /** Точка графика, выбранная касанием; без выбора или после смены фильтров — последняя. */
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  // Подсказка графика остаётся после отпускания; касание вне графика прячет её (событие касания всплывает от графика к списку).
+  const [chartReset, setChartReset] = useState(0);
+  const touchInChart = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -232,6 +235,7 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
   const metrics = progressMetrics(lookup?.get(exerciseId)?.metrics ?? []);
   const metric = chosen !== null && metrics.includes(chosen) ? chosen : metrics[0] ?? null;
   const points = useMemo(() => metric === null ? [] : progressSeries(inPeriod, metric), [inPeriod, metric]);
+  const chartPoints = useMemo(() => points.map((point) => ({ key: point.key, label: shortDate(point.date), caption: dateText(point.date), value: point.value })), [points]);
   const records = useMemo(() => metrics.includes("e1rm") ? repRecords(inPeriod) : [], [inPeriod, metrics]);
   const bestE1rm = useMemo(() => {
     const values = inPeriod.map((session) => sessionValue(session, "e1rm")).filter((value): value is number => value !== null);
@@ -275,7 +279,8 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
       {tabs}
-      <ScrollView contentContainerStyle={styles.list}>
+      <ScrollView contentContainerStyle={styles.list}
+        onTouchStart={() => { if (touchInChart.current) touchInChart.current = false; else setChartReset((value) => value + 1); }}>
         <View style={styles.header}>
           {filters}
           {/* Показатели — один ряд: сегменты по ширине подписи, шрифт ужимается, а не переносится. */}
@@ -302,7 +307,7 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
                   : `${last!.value - first!.value >= 0 ? "+" : "−"}${formatMetric(metric, Math.abs(last!.value - first!.value))}`}</Text>
               </View>
             </View>
-            <LineChart points={points.map((point) => ({ key: point.key, label: shortDate(point.date), caption: dateText(point.date), value: point.value }))}
+            <LineChart points={chartPoints} resetKey={chartReset} onTouchInside={() => { touchInChart.current = true; }}
               format={(value) => formatMetric(metric, value).replace(/ (кг|повт\.|м|км)$/, "")}
               formatValue={(value) => formatMetric(metric, value)} title={metricLabels[metric]}
               onSelect={(point) => setSelectedKey(point.key)}

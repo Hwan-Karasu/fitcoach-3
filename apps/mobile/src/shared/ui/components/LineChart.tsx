@@ -1,4 +1,4 @@
-import { useRef, useState, type ComponentProps } from "react";
+import { useMemo, useRef, useState, type ComponentProps } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { LineChart as GiftedLineChart } from "react-native-gifted-charts";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
@@ -25,11 +25,11 @@ type GiftedData = ComponentProps<typeof GiftedLineChart>["data"];
 
 /**
  * Интерактивный линейный график (react-native-gifted-charts): касание или протягивание по графику ставит вертикальную
- * черту на ближайшую точку и показывает подсказку — дата, значение с единицей, название показателя; выбор остаётся после
- * отпускания. Изначально выбрана последняя точка. `onSelect` сообщает о выбранной точке — под графиком можно показать
- * подробности. Точки — только реальные наблюдения; пропуски не превращаются в ноль (§48.86.32).
+ * черту на ближайшую точку и показывает подсказку — дата, значение с единицей, название показателя; после отпускания
+ * подсказка остаётся, пока родитель не сменит `resetKey` (касание вне графика). `onSelect` сообщает о выбранной точке — под графиком можно показать подробности (без касания
+ * вызывающий код показывает последнюю). Точки — только реальные наблюдения; пропуски не превращаются в ноль (§48.86.32).
  */
-export function LineChart({ points, format, formatValue, title, accessibilityLabel, onSelect }: Readonly<{
+export function LineChart({ points, format, formatValue, title, accessibilityLabel, onSelect, onTouchInside, resetKey }: Readonly<{
   points: readonly LineChartPoint[];
   /** Подписи шкалы по оси Y (коротко, без единицы). */
   format: (value: number) => string;
@@ -39,11 +39,17 @@ export function LineChart({ points, format, formatValue, title, accessibilityLab
   title?: string;
   accessibilityLabel: string;
   onSelect?: (point: LineChartPoint) => void;
+  /** Касание началось внутри графика: родитель отличает его от касания вне графика. */
+  onTouchInside?: () => void;
+  /** Смена значения прячет подсказку (родитель меняет его при касании вне графика). */
+  resetKey?: number;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const [width, setWidth] = useState(0);
   const lastIndex = useRef(-1);
+  const shownReset = useRef(resetKey);
+  if (shownReset.current !== resetKey) { shownReset.current = resetKey; lastIndex.current = -1; }
   const values = points.map((point) => point.value);
   const low = values.length === 0 ? 0 : Math.min(...values);
   // Данные передаются от минимума, подписи шкалы возвращают смещение: график не прижат к нулю.
@@ -52,11 +58,12 @@ export function LineChart({ points, format, formatValue, title, accessibilityLab
   const last = points.length - 1;
   const shown = formatValue ?? format;
   // Данные элемента приходят в подсказку как есть — подпись и значение кладутся в сам элемент.
-  const data = points.map((point, index) => ({ value: point.value - low, caption: point.caption ?? point.label, real: point.value,
-    dataPointColor: index === last ? colors.accentInk : colors.surface })) as unknown as GiftedData;
+  // Ссылка на `data` стабильна: смена ссылки заставляет библиотеку заново ставить указатель (resetPointerOnDataChange).
+  const data = useMemo(() => points.map((point, index) => ({ value: point.value - low, caption: point.caption ?? point.label, real: point.value,
+    dataPointColor: index === last ? colors.accentInk : colors.surface })) as unknown as GiftedData, [points, low, last, colors.accentInk, colors.surface]);
   return (
-    <View accessible accessibilityLabel={accessibilityLabel} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
-      {width > 0 && points.length > 0 ? <GiftedLineChart
+    <View accessible accessibilityLabel={accessibilityLabel} onTouchStart={onTouchInside} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
+      {width > 0 && points.length > 0 ? <GiftedLineChart key={resetKey}
         data={data}
         width={layout.width}
         height={HEIGHT - PAD} noOfSections={3} maxValue={step * 3} stepValue={step}
@@ -68,7 +75,7 @@ export function LineChart({ points, format, formatValue, title, accessibilityLab
         pointerConfig={{
           pointerStripHeight: HEIGHT - PAD, pointerStripColor: colors.border, pointerStripWidth: 2, pointerColor: colors.accentInk, radius: 6,
           pointerLabelWidth: TOOLTIP_WIDTH, pointerLabelHeight: TOOLTIP_HEIGHT, autoAdjustPointerLabelPosition: true,
-          activatePointersOnLongPress: false, persistPointer: true, initialPointerIndex: last,
+          activatePointersOnLongPress: false, persistPointer: true, initialPointerIndex: -1, resetPointerOnDataChange: false,
           pointerLabelComponent: (items: readonly Readonly<{ caption?: string; real?: number }>[]) => {
             const item = items[0];
             return (

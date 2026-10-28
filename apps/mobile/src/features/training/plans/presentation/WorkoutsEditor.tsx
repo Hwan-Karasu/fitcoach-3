@@ -142,7 +142,7 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, s
   const name = info?.name ?? "упражнение";
   const active = setState !== "idle";
   const card = (
-    // Каждое упражнение — своя карточка (как в 2.0); участники суперсета обводятся бегущей рамкой (SupersetBorder).
+    // Каждое упражнение — своя карточка (как в 2.0); участники суперсета обводятся сплошной рамкой (SupersetBorder).
     <View style={[styles.exerciseRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
       {/* Название и действия — на фоне карточки; поля ввода ниже — отдельной полосой другого тона (UI-OWN-028). */}
       <View style={styles.exerciseHead}>
