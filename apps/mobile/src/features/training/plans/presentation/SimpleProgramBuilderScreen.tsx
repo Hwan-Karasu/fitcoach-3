@@ -40,8 +40,10 @@ const errors: Readonly<Record<string, string>> = {
  * Компоновка 2.0 (UI-OWN-026): вкладки «Программа | Шаблоны», карточка «Настройки программы», внизу «Создать»,
  * «В шаблон» и «Отмена».
  */
-export function SimpleProgramBuilderScreen({ clientId, programId, repository, simplePlanSave, exercises, picked, onPickExercise, onSaved, onCancel, renderExcel, onOpenExtended }: Readonly<{
+export function SimpleProgramBuilderScreen({ clientId, programId, templateId, repository, simplePlanSave, exercises, picked, onPickExercise, onSaved, onCancel, renderExcel, onOpenExtended }: Readonly<{
   onOpenExtended?: () => void;
+  /** Новая программа по шаблону: черновик строится из него, если нет несохранённого черновика. */
+  templateId?: string;
   renderExcel?: (onApply: (draft: BuilderExcelDraft) => void, targetTitle?: string) => ReactNode;
   clientId: string;
   programId: string | null;
@@ -92,6 +94,13 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, si
       if (!active) return;
       if (recovery === null) {
         setRevision(saved?.program.revision ?? null); setBase(saved?.draft ?? null);
+        const template = programId === null && templateId !== undefined ? (await repository.listTemplates()).find((item) => item.id === templateId) : undefined;
+        if (!active) return;
+        if (template?.payload.kind === "SIMPLE") {
+          setDraft({ title: template.title, plan: { weeks: template.payload.weeks, workouts: workoutsFromTemplate(template.payload.workouts, () => newPlanId("t")) } });
+          setChanged(true);
+          return;
+        }
         setDraft(saved?.draft ?? newDraft(newPlanId("w")));
         return;
       }
@@ -105,7 +114,7 @@ export function SimpleProgramBuilderScreen({ clientId, programId, repository, si
       setDraft(recovery.draft); setRevision(recovery.baseRevision); setBase(recovery.base ?? saved?.draft ?? null);
     })().catch(() => { if (active) setMessage("Не удалось открыть конструктор."); });
     return () => { active = false; };
-  }, [clientId, key, programId, repository]);
+  }, [clientId, key, programId, repository, templateId]);
 
   const change = useCallback((next: SimpleProgramDraft) => {
     setChanged(true);

@@ -7,15 +7,17 @@ import { WEEK_SCOPES, weekScopeLabels, type WeekScope } from "../domain/Periodiz
 
 /**
  * Контекстное меню области (UI-OWN-041, решение владельца): всплывает после правки недели в конструкторе — когда
- * ввод закончен или выполнено действие со структурой. Нажатие пункта сразу применяет правку к неделям области;
- * закрыть меню = «Только эта неделя». Под пунктом — номера недель, куда попадёт правка.
+ * ввод закончен или выполнено действие со структурой. Нажатие пункта сразу применяет правку к неделям области; нажатие вне меню или
+ * «Назад» отменяет правку (решение владельца 2026-10-28: защита от случайного промаха). Под пунктом — номера недель области.
  */
-export function ScopeMenu({ visible, weekIndex, weeksOf, onPick }: Readonly<{
+export function ScopeMenu({ visible, weekIndex, weeksOf, onPick, onDismiss }: Readonly<{
   visible: boolean;
   weekIndex: number;
   /** Номера недель области (для подписи). */
   weeksOf: (scope: WeekScope) => readonly number[];
   onPick: (scope: WeekScope) => void;
+  /** Нажатие вне меню или «Назад»: правка недели отменяется. */
+  onDismiss: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -26,13 +28,13 @@ export function ScopeMenu({ visible, weekIndex, weeksOf, onPick }: Readonly<{
     ALL: <ListChecks size={18} color={colors.accentInk} strokeWidth={2} />,
   };
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={() => onPick("CURRENT")}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
       <View style={styles.overlay}>
-        <Pressable accessible={false} importantForAccessibility="no" onPress={() => onPick("CURRENT")}
+        <Pressable accessible={false} importantForAccessibility="no" onPress={onDismiss}
           style={[styles.scrim, { backgroundColor: colors.canvas }]} />
         <View accessibilityViewIsModal style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>{`Неделя ${weekIndex} изменена`}</Text>
-          <Text style={[styles.hint, { color: colors.textSecondary }]}>Применить правку и к другим неделям? Закрыть — только эта неделя.</Text>
+          <Text style={[styles.hint, { color: colors.textSecondary }]}>Применить правку и к другим неделям? Нажмите вне окна — правка отменится.</Text>
           {WEEK_SCOPES.map((scope) => {
             const weeks = weeksOf(scope);
             return (

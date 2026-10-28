@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Copy, Ellipsis, FilePlus2, Pencil, PencilLine, Trash2, type LucideIcon } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, EmptyState, InlineNotice, LoadingState, SearchField, SegmentedControl,
   TextField } from "../../../../shared/ui/components/public.ts";
@@ -12,6 +12,10 @@ import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidat
 import { ParticipantChips } from "./ParticipantChips.tsx";
 
 type Filter = TemplateKind | "ALL";
+
+/** Шаблон, который целиком умещается в один конструктор: Простая программа или Расширенная из одного мезоцикла. */
+const opensInBuilder = (template: ProgramTemplate): boolean => template.payload.kind === "SIMPLE"
+  || (template.payload.kind === "PERIODIZED" && template.payload.mesocycles.length === 1);
 
 /** Значок пункта меню: получает цвет пункта (UI-OWN-046). */
 const menuIcon = (Icon: LucideIcon) => (color: string) => <Icon size={18} color={color} strokeWidth={1.9} />;
@@ -25,13 +29,15 @@ const filterLabels: Readonly<Record<Filter, string>> = { ALL: "Все", SIMPLE: 
  * сделать копию, удалить. Шаблон мезоцикла применяется в «+ Мезоцикл» программы. Действия с шаблоном не
  * меняют программы, созданные по нему (§48.16 п. 4).
  */
-export function TemplateLibraryScreen({ clientId, repository, listCandidates, onCreated, onEdit }: Readonly<{
+export function TemplateLibraryScreen({ clientId, repository, listCandidates, onCreated, onEdit, onOpenInBuilder }: Readonly<{
   clientId: string;
   repository: TrainingPlansRepositoryPort;
   listCandidates: () => Promise<readonly TrainingParticipantCandidate[]>;
   onCreated: (programId: string) => void;
   /** §48.16 п. 3: открыть шаблон для правки содержимого. */
   onEdit?: (templateId: string) => void;
+  /** Нажатие на карточку: шаблон открывается в конструкторе новой программы (Простой, Расширенный из одного мезоцикла). */
+  onOpenInBuilder?: (template: ProgramTemplate) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -117,12 +123,17 @@ export function TemplateLibraryScreen({ clientId, repository, listCandidates, on
       ) : visible.map((template) => (
         <View key={template.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.cardHead}>
-            <View style={styles.grow}>
+            <Pressable style={styles.grow} accessibilityRole="button" disabled={onOpenInBuilder === undefined}
+              accessibilityLabel={`Открыть шаблон ${template.title} в конструкторе`}
+              onPress={() => {
+                if (opensInBuilder(template)) onOpenInBuilder?.(template);
+                else { anchor.current = anchors.current.get(template.id) ?? null; setMenuFor(template); }
+              }}>
               <Text numberOfLines={2} style={[styles.title, { color: colors.textPrimary }]}>{template.title}</Text>
               <Text style={[styles.meta, { color: colors.textSecondary }]}>
                 {`${templateKindLabels[template.kind]} · ${templateSummary(template.payload)}`}
               </Text>
-            </View>
+            </Pressable>
             <View ref={(node) => { anchors.current.set(template.id, node); }} collapsable={false}>
               <AppIconButton label={`Действия: ${template.title}`} icon={<Ellipsis size={22} color={colors.textPrimary} />}
                 onPress={() => { anchor.current = anchors.current.get(template.id) ?? null; setMenuFor(template); }} />

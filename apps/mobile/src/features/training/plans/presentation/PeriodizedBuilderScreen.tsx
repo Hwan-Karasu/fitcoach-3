@@ -9,7 +9,7 @@ import { statusToneColor, type StatusTone } from "../../../../shared/ui/theme/st
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
-import { applyBuilderScope, cleanBuilderWeeks, copyWeekPlan, CYCLE_TYPES, resizeBuilderWeeks, restForNewExercises, retuneBuilderRest, type BuilderWeek, type CycleType } from "../domain/MesocycleBuilder.ts";
+import { applyBuilderScope, cleanBuilderWeeks, copyWeekPlan, CYCLE_TYPES, resizeBuilderWeeks, restForNewExercises, retuneBuilderRest, revertBuilderWeek, type BuilderWeek, type CycleType } from "../domain/MesocycleBuilder.ts";
 import type { MesocycleSavePort } from "../domain/MesocycleSave.ts";
 import { diffWeek, targetWeeks } from "../domain/PeriodizedRules.ts";
 import { ScopeMenu } from "./ScopeMenu.tsx";
@@ -33,6 +33,7 @@ import { useExerciseLookupState } from "./useExerciseLookup.ts";
 import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
 import { weekTypeTone } from "./weekTypeTone.ts";
 import { newPlanId, WorkoutsEditor } from "./WorkoutsEditor.tsx";
+import { weeksFromTemplate } from "../domain/TemplateModel.ts";
 import type { BuilderExcelDraft, BuilderWorkbookCycle, BuilderWorkbookState } from "../domain/BuilderExcelDraft.ts";
 import type { BuilderWorkbookSavePort } from "../domain/BuilderWorkbookSave.ts";
 
@@ -82,7 +83,7 @@ function WeekStatusLine({ status }: Readonly<{ status: BuilderWeekStatus }>) {
   const ink = tone === null ? colors.textSecondary : readableInk(tone, [colors.surface, colors.surfaceRaised], colors.textPrimary);
   return <Text style={[styles.weekStatus, { color: ink }]}>{status.marker === null ? status.label : `${status.marker} ${status.label}`}</Text>;
 }
-export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, initialWeek, mesocycleSave, repository, exercises, listCandidates, picked,
+export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, templateId, initialWeek, mesocycleSave, repository, exercises, listCandidates, picked,
   onPickExercise, onCreated, onSaved, onCancel, renderTemplates, renderExcel, workbookSave, loadWeekStatuses }: Readonly<{
   workbookSave?: BuilderWorkbookSavePort;
   /** Правка: подписи статуса недель сохранённого мезоцикла («Не начата», «В работе», …) в порядке `weeks`; номер — неделя программы. */
@@ -92,6 +93,8 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
   /** Существующая программа: «+ Мезоцикл» или правка (`mesocycleId`). */
   programId?: string;
   mesocycleId?: string;
+  /** Новая программа по шаблону из одного мезоцикла: недели и название берутся из него, если нет несохранённого черновика. */
+  templateId?: string;
   /** Правка: открыть эту неделю (номер с 1). */
   initialWeek?: number;
   mesocycleSave?: MesocycleSavePort;
@@ -256,6 +259,22 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
   const week = weeks[editing] ?? weeks[0]!;
   const draft: SimpleProgramDraft = useMemo(() => ({ title: title || "Мезоцикл", plan: { weeks: 1, workouts: week.workouts } }),
     [title, week.workouts]);
+  const templateApplied = useRef(false);
+  useEffect(() => {
+    if (templateId === undefined || mode !== "create" || templateApplied.current) return;
+    templateApplied.current = true;
+    void (async () => {
+      // Несохранённый черновик важнее: его восстанавливает отдельный эффект выше, шаблон поверх него не ложится.
+      if (await repository.getMesocycleBuilderDraft(clientId, scope) !== null) return;
+      const template = (await repository.listTemplates()).find((item) => item.id === templateId);
+      if (template?.payload.kind !== "PERIODIZED" || template.payload.mesocycles.length !== 1) return;
+      const cycle = template.payload.mesocycles[0]!;
+      const next = weeksFromTemplate(cycle, () => newPlanId("t")).map((week) => ({ type: week.type, workouts: week.workouts }));
+      setProgramTitle(template.title); setTitle(cycle.title); setWeeks(next); setEditing(0);
+      baselines.current = new Map(next.map((week, index) => [index, week.workouts]));
+      setDirty(true); setSaved(null); setMessage(null);
+    })().catch(() => setMessage("Не удалось открыть шаблон. Конструктор пуст."));
+  }, [clientId, mode, repository, scope, templateId]);
   const touch = () => { setDirty(true); setSaved(null); setMessage(null); };
   const updateWeek = useCallback((index: number, next: BuilderWeek) => {
     setWeeks((current) => current.map((item, at) => at === index ? next : item));
@@ -318,6 +337,12 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
     setWeeks(next);
     // Новая точка отсчёта: изменённые недели считаются «до» следующей правки.
     next.forEach((item, index) => { if (index === at || item !== weeks[index]) baselines.current.set(index, item.workouts); });
+    setScopeFor(null);
+  };
+  // Нажатие вне меню области: правка недели откатывается к состоянию до неё (защита от случайного промаха).
+  const dismissScope = () => {
+    const at = scopeFor ?? editing;
+    setWeeks((current) => revertBuilderWeek(current, at, baselines.current.get(at) ?? []));
     setScopeFor(null);
   };
   // Стабильные колбэки: редактор недели (memo) не перерисовывается из-за несвязанных обновлений экрана.
@@ -670,7 +695,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
         onCancel={() => setConfirmResults(false)}
         onConfirm={() => { setConfirmResults(false); void saveMesocycle("DELETE"); }}
         onTertiary={() => { setConfirmResults(false); void saveMesocycle("KEEP_HISTORY"); }} />
-      <ScopeMenu visible={scopeFor !== null} weekIndex={(scopeFor ?? 0) + 1} onPick={pickScope}
+      <ScopeMenu visible={scopeFor !== null} weekIndex={(scopeFor ?? 0) + 1} onPick={pickScope} onDismiss={dismissScope}
         weeksOf={(scope) => targetWeeks(weeks.map((item, index) => ({ index: index + 1, type: item.type })), (scopeFor ?? 0) + 1, scope)} />
       <StickyEditorFooter actionLabel={mode === "edit" ? "Сохранить" : mode === "add" ? "Добавить" : "Создать"} busy={busy === "create"} onCancel={onCancel}
         secondaryAction={{ label: "В шаблон", busy: busy === "template", onPress: () => { void saveTemplate(); } }}

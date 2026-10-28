@@ -4,7 +4,7 @@ import test from "node:test";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant } from
   "../apps/mobile/src/features/training/plans/data/DevTrainingPlansRepository.ts";
-import { applyBuilderScope, copyWeekPlan, fillEmptyWeeks, resizeBuilderWeeks, weekRangeLabel, weeksWord, type BuilderWeek } from
+import { applyBuilderScope, copyWeekPlan, fillEmptyWeeks, resizeBuilderWeeks, revertBuilderWeek, weekRangeLabel, weeksWord, type BuilderWeek } from
   "../apps/mobile/src/features/training/plans/domain/MesocycleBuilder.ts";
 import { addExercise, fillSets, newDraft } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
 import type { PlannedWorkout } from "../apps/mobile/src/features/training/plans/domain/SimplePlanModel.ts";
@@ -94,4 +94,17 @@ test("UI-OWN-041 меню области в конструкторе: правк
   assert.deepEqual(reps(applyBuilderScope(draft, 0, first.workouts, "ALL", newId)), [5, 5, 5, 5]);
   assert.deepEqual(reps(applyBuilderScope(draft, 0, first.workouts, "CURRENT", newId)), [5, 10, 10, 10], "закрыть меню — только эта неделя");
   assert.equal(applyBuilderScope(weeks, 0, first.workouts, "ALL", newId), weeks, "нет правок — недели те же");
+});
+
+test("UI-OWN-041 закрытие меню области вне пунктов откатывает правку: неделя возвращается к состоянию до правки, остальные не меняются", () => {
+  const first: BuilderWeek = { type: "heavy", workouts: plan("q") };
+  const weeks: readonly BuilderWeek[] = [first, { ...copyWeekPlan(first, newId), type: "base" }];
+  const exerciseId = first.workouts[0]!.exercises[0]!.id;
+  const edited = fillSets({ title: "м", plan: { weeks: 1, workouts: first.workouts } }, exerciseId, "reps", 5).plan.workouts;
+  const draft = [{ type: "heavy" as const, workouts: edited }, weeks[1]!];
+  const reverted = revertBuilderWeek(draft, 0, first.workouts);
+  assert.equal(reverted[0]!.workouts, first.workouts, "правка недели снята");
+  assert.equal(reverted[0]!.type, "heavy", "тип недели не трогается");
+  assert.equal(reverted[1], weeks[1], "другие недели те же");
+  assert.equal(revertBuilderWeek(draft, 7, first.workouts), draft, "несуществующая неделя — без изменений");
 });

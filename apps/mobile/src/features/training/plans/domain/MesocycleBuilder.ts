@@ -59,6 +59,16 @@ export function fillEmptyWeeks(weeks: readonly BuilderWeek[], newId: () => strin
 }
 
 /**
+ * Закрытие меню области вне пунктов (решение владельца 2026-10-28): правка недели `editing` (0-based) откатывается к `baseline` —
+ * состоянию до правки. Тип недели и остальные недели не затрагиваются.
+ */
+export function revertBuilderWeek(weeks: readonly BuilderWeek[], editing: number, baseline: readonly PlannedWorkout[]): readonly BuilderWeek[] {
+  const open = weeks[editing];
+  if (open === undefined) return weeks;
+  return weeks.map((week, index) => index === editing ? { ...open, workouts: baseline } : week);
+}
+
+/**
  * Меню области после правки недели в конструкторе (§48.6, решение владельца 2026-10-19): изменения недели
  * `editing` (0-based) относительно `baseline` переносятся на недели области по родству; сама неделя не меняется.
  */
