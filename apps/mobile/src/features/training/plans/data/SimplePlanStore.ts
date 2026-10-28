@@ -1,5 +1,5 @@
 import type { SqlValue, SqliteStatementPort } from "../../../../shared/db/SqlitePort.ts";
-import { assertIdsFree, insertRows } from "../../../../shared/db/BatchInsert.ts";
+import { assertIdsFree, deleteRows, insertRows, upsertRows } from "../../../../shared/db/BatchInsert.ts";
 import type { PlannedExercise, PlannedSet, PlannedWorkout, SimplePlan } from "../domain/SimplePlanModel.ts";
 
 /**
@@ -69,59 +69,61 @@ export async function readStructure(tx: SqliteStatementPort, workspaceId: string
   return { weeks, workouts: await readWorkouts(tx, workspaceId, programId, null) };
 }
 
-async function ownedIds(tx: SqliteStatementPort, workspaceId: string, programId: string, weekId: string | null) {
-  const workouts = await readWorkouts(tx, workspaceId, programId, weekId);
-  return {
-    workouts: new Set(workouts.map((workout) => workout.id)),
-    exercises: new Set(workouts.flatMap((workout) => workout.exercises.map((exercise) => exercise.id))),
-    sets: new Set(workouts.flatMap((workout) => workout.exercises.flatMap((exercise) => exercise.sets.map((set) => set.id)))),
-  };
-}
+const TABLES = {
+  workouts: { name: "training_workouts", columns: ["id", "workspace_id", "program_id", "position", "title", "week_id", "lineage_id"],
+    update: ["position", "title", "lineage_id"] },
+  exercises: { name: "training_planned_exercises", columns: ["id", "workspace_id", "workout_id", "position", "exercise_id", "rest_sec",
+    "instruction", "rir_min", "rir_max", "lineage_id", "superset_id"],
+  update: ["workout_id", "position", "exercise_id", "rest_sec", "instruction", "rir_min", "rir_max", "lineage_id", "superset_id"] },
+  sets: { name: "training_planned_sets", columns: ["id", "workspace_id", "planned_exercise_id", "position", "reps", "reps_max",
+    "load_grams", "duration_sec", "distance_m"],
+  update: ["planned_exercise_id", "position", "reps", "reps_max", "load_grams", "duration_sec", "distance_m"] },
+} as const;
+type Table = keyof typeof TABLES;
 
-async function assertFree(tx: SqliteStatementPort, table: string, id: string, owned: ReadonlySet<string>) {
-  if (owned.has(id)) return;
-  const taken = await tx.first<{ id: string }>(`SELECT id FROM ${table} WHERE id = ?`, [id]);
-  if (taken !== null) throw new Error("DRAFT_INVALID");
-}
-
-/** Запись тренировок программы (`weekId = null`) или одной недели. */
-export async function writeWorkouts(tx: SqliteStatementPort, workspaceId: string, programId: string, weekId: string | null,
-  workouts: readonly PlannedWorkout[]): Promise<void> {
-  const owned = await ownedIds(tx, workspaceId, programId, weekId);
-  const keep = { workouts: new Set<string>(), exercises: new Set<string>(), sets: new Set<string>() };
+/** Строки таблиц ровно в том виде, в каком их пишет `writeWorkouts`: по ним же сравниваются сохранённая и новая неделя. */
+function rowsOf(workspaceId: string, programId: string, weekId: string | null,
+  workouts: readonly PlannedWorkout[]): Record<Table, Map<string, readonly SqlValue[]>> {
+  const rows = { workouts: new Map<string, readonly SqlValue[]>(), exercises: new Map<string, readonly SqlValue[]>(),
+    sets: new Map<string, readonly SqlValue[]>() };
   for (const [workoutIndex, workout] of workouts.entries()) {
-    await assertFree(tx, "training_workouts", workout.id, owned.workouts);
-    keep.workouts.add(workout.id);
-    await tx.run(`INSERT INTO training_workouts (id, workspace_id, program_id, position, title, week_id, lineage_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET position = excluded.position, title = excluded.title, lineage_id = excluded.lineage_id`,
-    [workout.id, workspaceId, programId, workoutIndex, workout.title.trim(), weekId, workout.lineageId ?? null]);
+    rows.workouts.set(workout.id, [workout.id, workspaceId, programId, workoutIndex, workout.title.trim(), weekId, workout.lineageId ?? null]);
     for (const [exerciseIndex, exercise] of workout.exercises.entries()) {
-      await assertFree(tx, "training_planned_exercises", exercise.id, owned.exercises);
-      keep.exercises.add(exercise.id);
-      await tx.run(`INSERT INTO training_planned_exercises (id, workspace_id, workout_id, position, exercise_id, rest_sec,
-        instruction, rir_min, rir_max, lineage_id, superset_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
-        workout_id = excluded.workout_id, position = excluded.position, exercise_id = excluded.exercise_id,
-        rest_sec = excluded.rest_sec, instruction = excluded.instruction, rir_min = excluded.rir_min, rir_max = excluded.rir_max,
-        lineage_id = excluded.lineage_id, superset_id = excluded.superset_id`,
-      [exercise.id, workspaceId, workout.id, exerciseIndex, exercise.exerciseId, exercise.restSec, exercise.instruction,
-        exercise.rir?.min ?? null, exercise.rir?.max ?? null, exercise.lineageId ?? null, exercise.supersetId ?? null]);
+      rows.exercises.set(exercise.id, [exercise.id, workspaceId, workout.id, exerciseIndex, exercise.exerciseId, exercise.restSec,
+        exercise.instruction, exercise.rir?.min ?? null, exercise.rir?.max ?? null, exercise.lineageId ?? null, exercise.supersetId ?? null]);
       for (const [setIndex, set] of exercise.sets.entries()) {
-        await assertFree(tx, "training_planned_sets", set.id, owned.sets);
-        keep.sets.add(set.id);
-        await tx.run(`INSERT INTO training_planned_sets (id, workspace_id, planned_exercise_id, position, reps, reps_max,
-            load_grams, duration_sec, distance_m) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(id) DO UPDATE SET planned_exercise_id = excluded.planned_exercise_id, position = excluded.position,
-            reps = excluded.reps, reps_max = excluded.reps_max, load_grams = excluded.load_grams,
-            duration_sec = excluded.duration_sec, distance_m = excluded.distance_m`,
-        [set.id, workspaceId, exercise.id, setIndex, set.reps, set.repsMax, set.loadGrams, set.durationSec, set.distanceM]);
+        rows.sets.set(set.id, [set.id, workspaceId, exercise.id, setIndex, set.reps, set.repsMax, set.loadGrams, set.durationSec, set.distanceM]);
       }
     }
   }
+  return rows;
+}
+
+const sameRow = (a: readonly SqlValue[], b: readonly SqlValue[]) => a.length === b.length && a.every((value, at) => value === b[at]);
+
+/**
+ * Запись тренировок программы (`weekId = null`) или одной недели. Пишутся только новые и изменённые строки и пачками:
+ * на телефоне каждый запрос — обмен по мосту Expo, а правка «все недели» иначе стоит тысяч запросов (PERF-PLAN-BATCH).
+ */
+export async function writeWorkouts(tx: SqliteStatementPort, workspaceId: string, programId: string, weekId: string | null,
+  workouts: readonly PlannedWorkout[]): Promise<void> {
+  const stored = rowsOf(workspaceId, programId, weekId, await readWorkouts(tx, workspaceId, programId, weekId));
+  const next = rowsOf(workspaceId, programId, weekId, workouts);
+  const order: readonly Table[] = ["workouts", "exercises", "sets"];
+  for (const table of order) {
+    // Чужие ID отклоняются; повтор нового ID внутри правки — тоже (assertIdsFree).
+    const fresh = workouts.flatMap((workout) => table === "workouts" ? [workout.id]
+      : workout.exercises.flatMap((exercise) => table === "exercises" ? [exercise.id] : exercise.sets.map((set) => set.id)))
+      .filter((id) => !stored[table].has(id));
+    await assertIdsFree(tx, TABLES[table].name, fresh, "DRAFT_INVALID");
+  }
+  for (const table of order) {
+    const changed = [...next[table]].filter(([id, row]) => { const old = stored[table].get(id); return old === undefined || !sameRow(old, row); });    await upsertRows(tx, TABLES[table].name, TABLES[table].columns, TABLES[table].update, changed.map(([, row]) => row));
+  }
   // Убранное удаляется снизу вверх: подходы → упражнения → тренировки (FK RESTRICT).
-  for (const id of owned.sets) if (!keep.sets.has(id)) await tx.run("DELETE FROM training_planned_sets WHERE id = ?", [id]);
-  for (const id of owned.exercises) if (!keep.exercises.has(id)) await tx.run("DELETE FROM training_planned_exercises WHERE id = ?", [id]);
-  for (const id of owned.workouts) if (!keep.workouts.has(id)) await tx.run("DELETE FROM training_workouts WHERE id = ?", [id]);
+  for (const table of [...order].reverse()) {
+    await deleteRows(tx, TABLES[table].name, [...stored[table].keys()].filter((id) => !next[table].has(id)));
+  }
 }
 
 /**

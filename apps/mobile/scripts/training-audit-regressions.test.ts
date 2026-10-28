@@ -9,6 +9,7 @@ import { copyWeekPlan } from "../src/features/training/plans/domain/MesocycleBui
 import { addExercise, fillSets, newDraft, removeSet } from "../src/features/training/plans/domain/SimplePlanEdits.ts";
 import type { PlannedExercise } from "../src/features/training/plans/domain/SimplePlanModel.ts";
 import { SharedSqliteDatabase } from "../src/shared/db/SharedSqliteDatabase.ts";
+import type { SqliteConnectionPort } from "../src/shared/db/SqlitePort.ts";
 import { createWeekCopyWorkflow } from "../src/workflows/copyTrainingWeek.ts";
 import { createProgramDeleteWorkflow } from "../src/workflows/deleteTrainingProgram.ts";
 import { createPlanOnlyDeleteWorkflow } from "../src/workflows/deleteTrainingPlanOnly.ts";
@@ -33,9 +34,21 @@ function workoutWith(setCount: number): SimpleDraft {
 }
 type SimpleDraft = ReturnType<typeof newDraft>;
 
+/** Запросы внутри транзакций записи, пока `recording` включён (PERF-PLAN-BATCH: каждый запрос на телефоне — обмен по мосту Expo). */
+function recordingPort(db: DatabaseSync, journal: { recording: boolean; sql: string[] }): SqliteConnectionPort {
+  const port = nodeSqlitePort(db);
+  const log = (sql: string) => { if (journal.recording) journal.sql.push(sql.replace(/\s+/gu, " ").trim()); };
+  return { ...port, exclusive: (task) => port.exclusive((tx) => task({
+    run: (sql, bindings) => { log(sql); return tx.run(sql, bindings); },
+    first: (sql, bindings) => { log(sql); return tx.first(sql, bindings); },
+    all: (sql, bindings) => { log(sql); return tx.all(sql, bindings); },
+  })) };
+}
+
 async function setup() {
   const db = new DatabaseSync(":memory:");
-  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const journal = { recording: false, sql: [] as string[] };
+  const shared = new SharedSqliteDatabase(async () => recordingPort(db, journal));
   const clients = new DevClientRepository(shared, WS, [devTrainingPlansClientDeletionParticipant]);
   await clients.initialize();
   const plans = new DevTrainingPlansRepository(shared, WS);
@@ -56,7 +69,7 @@ async function setup() {
     return { programId: program.id, mesocycleId: created.mesocycleId };
   };
   const cycleOf = async (clientId: string, programId: string) => (await plans.getPeriodizedPlan(clientId, programId))!;
-  return { db, plans, execution, a, b, tx, fill, periodized, cycleOf, shared,
+  return { db, plans, execution, a, b, tx, fill, periodized, cycleOf, shared, journal,
     close: async () => { await shared.release(); await execution.close(); await plans.close(); await clients.close(); } };
 }
 
@@ -401,4 +414,61 @@ test("TRN-009 правка недели: тренировка с результ�
       }
     } finally { await env.close(); }
   }
+});
+
+const writesTo = (sql: readonly string[], verb: "INSERT INTO" | "DELETE FROM", table: string) =>
+  sql.filter((item) => item.startsWith(`${verb} ${table} `)).length;
+
+test("PERF-PLAN-BATCH замена упражнения во всех 8 неделях: один запрос на таблицу в неделе, неизменённое не переписывается", async () => {
+  const env = await setup();
+  try {
+    const { programId, mesocycleId } = await env.periodized(4, 8);
+    const plan = await env.cycleOf(env.a, programId);
+    const w1 = plan.mesocycles[0]!.weeks[0]!.workouts[0]!;
+    const openSets = w1.exercises[0]!.sets.map((set) => set.id);
+    const replaced = { ...w1, exercises: [{ ...w1.exercises[0]!, exerciseId: "sys:repdb:row" }] };
+    env.journal.recording = true;
+    await env.plans.saveWeek(env.a, programId, plan.program.revision, { mesocycleId, weekIndex: 1, workouts: [replaced], type: "base",
+      scope: "ALL", clientIds: [env.a] });
+    env.journal.recording = false;
+    const sql = env.journal.sql;
+    // В открытой неделе меняется только строка упражнения (ID подходов те же); в неделях 2–8 замена — новое упражнение с
+    // новыми подходами (как и раньше). Каждая неделя: один запрос упражнений, в неделях 2–8 — одна вставка и одно удаление
+    // подходов (было: по запросу на строку); тренировки не переписываются.
+    assert.equal(writesTo(sql, "INSERT INTO", "training_planned_exercises"), 8);
+    assert.equal(writesTo(sql, "INSERT INTO", "training_planned_sets"), 7);
+    assert.equal(writesTo(sql, "DELETE FROM", "training_planned_sets"), 7);
+    assert.equal(writesTo(sql, "INSERT INTO", "training_workouts"), 0);
+    const after = (await env.cycleOf(env.a, programId)).mesocycles[0]!.weeks;
+    assert.deepEqual(after.map((week) => week.workouts[0]!.exercises[0]!.exerciseId), Array(8).fill("sys:repdb:row"));
+    assert.deepEqual(after.map((week) => week.workouts[0]!.exercises[0]!.sets.length), Array(8).fill(4));
+    assert.deepEqual(after[0]!.workouts[0]!.exercises[0]!.sets.map((set) => set.id), openSets, "в открытой неделе ID подходов сохранены");
+  } finally { await env.close(); }
+});
+
+test("PERF-PLAN-BATCH добавление подходов во всех неделях: одна вставка подходов на неделю, убранные удаляются одним запросом", async () => {
+  const env = await setup();
+  try {
+    const { programId, mesocycleId } = await env.periodized(4, 8);
+    const plan = await env.cycleOf(env.a, programId);
+    const w1 = plan.mesocycles[0]!.weeks[0]!.workouts[0]!;
+    const ex = w1.exercises[0]!;
+    const grown = { ...w1, exercises: [{ ...ex, sets: [...ex.sets, ...["n1", "n2", "n3"].map((id) => ({ ...ex.sets[0]!, id }))] }] };
+    env.journal.recording = true;
+    const revision = (await env.plans.saveWeek(env.a, programId, plan.program.revision, { mesocycleId, weekIndex: 1, workouts: [grown],
+      type: "base", scope: "ALL", clientIds: [env.a] })).program.revision;
+    assert.equal(writesTo(env.journal.sql, "INSERT INTO", "training_planned_sets"), 8);
+    let weeks = (await env.cycleOf(env.a, programId)).mesocycles[0]!.weeks;
+    assert.deepEqual(weeks.map((week) => week.workouts[0]!.exercises[0]!.sets.length), Array(8).fill(7));
+    env.journal.sql.length = 0;
+    const current = weeks[0]!.workouts[0]!;
+    const shrunk = { ...current, exercises: [{ ...current.exercises[0]!, sets: current.exercises[0]!.sets.slice(0, 2) }] };
+    await env.plans.saveWeek(env.a, programId, revision, { mesocycleId, weekIndex: 1, workouts: [shrunk], type: "base",
+      scope: "ALL", clientIds: [env.a] });
+    env.journal.recording = false;
+    assert.equal(writesTo(env.journal.sql, "DELETE FROM", "training_planned_sets"), 8);
+    assert.equal(writesTo(env.journal.sql, "INSERT INTO", "training_planned_sets"), 0, "оставшиеся подходы не переписываются");
+    weeks = (await env.cycleOf(env.a, programId)).mesocycles[0]!.weeks;
+    assert.deepEqual(weeks.map((week) => week.workouts[0]!.exercises[0]!.sets.length), Array(8).fill(2));
+  } finally { await env.close(); }
 });
