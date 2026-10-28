@@ -45,7 +45,7 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
   const [logText, setLogText] = useState(""); const [log, setLog] = useState<WorkoutLog | null>(null);
   const [cycleType, setCycleType] = useState<LogCycleType>("hypertrophy");
   const [similar, setSimilar] = useState<readonly (readonly [string, string])[]>([]); const [merged, setMerged] = useState<ReadonlySet<number>>(new Set());
-  const [recognized, setRecognized] = useState({ workouts: 0, exercises: 0, sets: 0 });
+  const [recognized, setRecognized] = useState({ weeks: 0, workouts: 0, exercises: 0, sets: 0 });
   /** Одни и те же названия в списке и в итоговой книге: отмеченные пары объединены, исходный журнал не меняется. */
   const view = useMemo(() => log && mergeLogNames(log, similar.filter((_, i) => merged.has(i))), [log, similar, merged]);
   const updateLog = useCallback<LogUpdate>((change) => setLog((current) => current && change(current)), []);

@@ -36,7 +36,7 @@ function loadScreen(file: string): Record<string, unknown> {
     if (specifier === "react-native-sortables") return { default: {} };
     if (specifier === "lucide-react-native") return new Proxy({}, { get: () => control("Icon") });
     if (specifier === "@react-navigation/native") return { useNavigation: () => nav, useIsFocused: () => true, usePreventRemove: (_enabled: boolean, callback: (e: unknown) => void) => { nav.remove = callback; } };
-    if (specifier.endsWith("features/training/public.ts")) return { ExerciseCardShell: (p: Props) => createElement("ExerciseCard", p, p.subtitle as ReactNode, p.children as ReactNode),
+    if (specifier.endsWith("features/training/public.ts")) return { ExerciseCardShell: (p: Props) => createElement("ExerciseCard", p, p.subtitle as ReactNode, p.actions as ReactNode, p.children as ReactNode),
       CYCLE_TYPES: [{ id: "hypertrophy", label: "Гипертрофия", reps: { min: 8, max: 12 } }, { id: "custom", label: "Свой", reps: null }] };
     if (specifier === "react-native") return { Modal: (p: Props) => p.visible ? createElement("NativeModal", p, p.children as ReactNode) : null,
       FlatList: (p: Props) => createElement("FlatList", null, p.ListHeaderComponent as ReactNode,
@@ -103,21 +103,36 @@ test("TEXT-LOG-3 заметки: единый список с пикером т�
   const field = nodes(renderer, "TextField").find((n) => n.props.label === "Текст из заметок")!;
   await act(async () => (field.props.onChangeText as (text: string) => void)("Жим\n60 на 8\nЖим\n70 на 6"));
   await press(renderer, "Разобрать текст");
-  // Единый список: две карточки, у каждой свой пикер 1–4 и «+»; нижняя панель — из актуального распределения.
+  // Единый список: две карточки, у каждой два пикера (неделя и тренировка) 1–4 и «+»; нижняя панель — из актуального распределения.
   assert.equal(nodes(renderer, "ExerciseCard").length, 2);
-  assert.equal(nodes(renderer, "SelectionChip").filter((n) => n.props.label === "+").length, 2);
-  assert.match(textOf(renderer), /Распознано: 1 тренировка, 2 упражнения, 2 подхода/);
-  assert.match(textOf(renderer), /Будет создано: 1 тренировка/);
+  assert.equal(nodes(renderer, "SelectionChip").filter((n) => n.props.label === "+").length, 4);
+  assert.match(textOf(renderer), /Распознано: 1 тренировка в 1 неделе, 2 упражнения, 2 подхода/);
+  assert.match(textOf(renderer), /Будет создано: 1 тренировка в 1 неделе/);
   assert.match(textOf(renderer), /Упражнения \(2\)/);
-  await act(async () => (nodes(renderer, "SelectionChip").filter((n) => n.props.label === "2")[1]!.props.onPress as () => void)());
-  assert.match(textOf(renderer), /Будет создано: 2 тренировки/);
-  assert.match(textOf(renderer), /Распознано: 1 тренировка/);
+  const slotChip = (label: string, card: number) => nodes(renderer, "SelectionChip").filter((n) => String(n.props.group).startsWith("Тренировка для") && n.props.label === label)[card]!;
+  await act(async () => (slotChip("2", 1).props.onPress as () => void)());
+  assert.match(textOf(renderer), /Будет создано: 2 тренировки в 1 неделе/);
+  assert.match(textOf(renderer), /Распознано: 1 тренировка в 1 неделе/);
+  // Неделя — отдельный пикер: упражнение в неделю 2 меняет число недель, а не тренировок.
+  await act(async () => (nodes(renderer, "SelectionChip").filter((n) => String(n.props.group).startsWith("Неделя для") && n.props.label === "2")[1]!.props.onPress as () => void)());
+  assert.match(textOf(renderer), /Будет создано: 2 тренировки в 2 неделях/);
+  await act(async () => (nodes(renderer, "SelectionChip").filter((n) => String(n.props.group).startsWith("Неделя для") && n.props.label === "1")[1]!.props.onPress as () => void)());
+  assert.match(textOf(renderer), /Будет создано: 2 тренировки в 1 неделе/);
   // Дубль встаёт сразу под исходной карточкой и сразу получает свой номер тренировки.
-  const menu = nodes(renderer, "DropdownMenu")[0]!;
-  await act(async () => (menu.props.onSelect as (value: string) => void)("duplicate"));
+  // «Дублировать» и корзина — прямо на карточке, не в меню.
+  const labelled = (label: string) => r().root.findAll((n) => n.props.accessibilityLabel === label || n.props.label === label)[0]!;
+  const r = () => renderer;
+  await act(async () => (labelled("Дублировать: Жим").props.onPress as () => void)());
   assert.equal(nodes(renderer, "ExerciseCard").length, 3);
   assert.match(textOf(renderer), /Упражнения \(3\)/);
   assert.match(textOf(renderer), /Распределено: 3 упражнения, 3 подхода/);
+  // Лишняя копия убирается корзиной сразу, без подтверждения; запись из текста с подходами — через подтверждение.
+  assert.equal(nodes(renderer, "ExerciseCard").length, 3);
+  const copyCard = nodes(renderer, "ExerciseCard")[1]!;
+  await act(async () => (copyCard.findAll((n) => String(n.props.label).startsWith("Убрать:"))[0]!.props.onPress as () => void)());
+  assert.equal(nodes(renderer, "ExerciseCard").length, 2);
+  await act(async () => (labelled("Дублировать: Жим").props.onPress as () => void)());
+  assert.equal(nodes(renderer, "ExerciseCard").length, 3);
   await press(renderer, "Далее");
   const names = () => nodes(renderer, "TextField").filter((n) => n.props.label === "Название");
   assert.deepEqual(names().map((n) => n.props.value), ["Тренировка 1", "Тренировка 2"]);
