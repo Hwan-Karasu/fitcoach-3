@@ -7,7 +7,7 @@ import { startWorkbookReview, selectWorkbookSheet, updateWorkbookEntry, applyWor
 import { readWorkbook, readTrainingWorkbook, writeTrainingWorkbook } from "../apps/mobile/src/features/import/data/TrainingWorkbook.ts";
 import type { ImportTable, PickedWorkbook } from "../apps/mobile/src/features/import/domain/WorkbookFilesPort.ts";
 import { trainingTransferFixture } from "./training-transfer-fixture.ts";
-import { compileWholeWorkbook, prepareWholeWorkbook, wholeWorkbookStatus } from "../apps/mobile/src/features/import/domain/WholeWorkbookImport.ts";
+import { compileWholeWorkbook, prepareWholeWorkbook, wholeWorkbookStatus, workbookUnmatchedTargets } from "../apps/mobile/src/features/import/domain/WholeWorkbookImport.ts";
 import { setWorkbookNameMatch, workbookMatchesToRemember, selectWorkbookImportSheets } from "../apps/mobile/src/features/import/domain/WorkbookReviewSession.ts";
 import { prepareWorkbookResponsive } from "../apps/mobile/src/features/import/domain/WholeWorkbookImport.ts";
 
@@ -257,4 +257,20 @@ test("I02 older matrices without date columns do not mistake the next week's pla
   assert.equal(input.sessions[0]!.actualDate, null);
   assert.equal(input.programs[0]!.mesocycles[0]!.weeks[0]!.workouts.length, 0);
   assert.deepEqual(input.issues![0]!.source, { sheet: table.name, row: 4, column: 9 });
+});
+
+test("IMPORT-HINT-SCROLL hints name the first sheet, week and card of every unmatched exercise once per book", () => {
+  const twoWeeks = (name: string) => flattenLegacyMatrix({ name, rows: [["Упражнение", "Подход", "Неделя 1", "", "", "", "", "Неделя 2"],
+    ["", "", "План", "Пред.", "Повт.", "Кг", "Дата", "План", "Пред.", "Повт.", "Кг", "Дата"], ["Тренировка А"],
+    ["Жим штанги лёжа", 1, "8–10 × 62,5 кг", "", "", "", "", "", "", "", "", ""],
+    ["Тяга блока", 1, "", "", "", "", "", "8–10 × 40 кг", "", "", "", ""]] })!;
+  let session = prepareWholeWorkbook(startWorkbookReview(picked([twoWeeks("Первый"), twoWeeks("Второй")]), false), []);
+  const hints = workbookUnmatchedTargets(session);
+  assert.deepEqual(hints.map((h) => [h.sheetId, h.sheetLabel, h.weekIndex, h.name]), [["0", "Первый", 1, "Жим штанги лёжа"], ["0", "Первый", 2, "Тяга блока"]]);
+  const weeks = session.entries["0"]!.value!.programs[0]!.mesocycles[0]!.weeks;
+  assert.equal(weeks[1]!.workouts[0]!.exercises[0]!.id, hints[1]!.rowId);
+  session = setWorkbookNameMatch(session, "Жим штанги лёжа", "target");
+  assert.deepEqual(workbookUnmatchedTargets(session).map((h) => h.name), ["Тяга блока"]);
+  session = selectWorkbookImportSheets(session, ["1"]);
+  assert.deepEqual(workbookUnmatchedTargets(session).map((h) => [h.sheetId, h.weekIndex]), [["1", 2]]);
 });

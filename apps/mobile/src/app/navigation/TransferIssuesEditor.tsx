@@ -7,8 +7,9 @@ import type { TrainingTransfer } from "../../features/import/public.ts";
 import { excelColumnName } from "./WorkbookColumnSettings.tsx";
 
 const labels = { reps: "Фактические повторения", loadGrams: "Вес, кг", durationSec: "Время, сек", distanceM: "Расстояние, м", rpe: "RPE" };
-export function TransferIssuesEditor({ value, busy, onCorrect, inputs: storedInputs, onInputs }: Readonly<{
+export function TransferIssuesEditor({ value, busy, onCorrect, inputs: storedInputs, onInputs, register, highlightId }: Readonly<{
   inputs?: Readonly<Record<string, string>>; onInputs?: (value: Readonly<Record<string, string>>) => void;
+  register?: (id: string, node: View | null) => void; highlightId?: string;
   value: TrainingTransfer; busy: boolean; onCorrect: (id: string, correction: string) => void;
 }>) {
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
@@ -30,7 +31,9 @@ export function TransferIssuesEditor({ value, busy, onCorrect, inputs: storedInp
       const position = fact ? fact.position + 1 : (exercise?.sets.findIndex((set) => set.id === issue.targetId) ?? -1) + 1;
       const location = issue.source ? `Лист «${issue.source.sheet}», ${excelColumnName(issue.source.column - 1)}${issue.source.row}` : "";
       const title = `${name} · неделя ${session?.weekIndex ?? issue.weekIndex ?? "?"} · ${workout?.title ?? "Тренировка"} · подход ${position}`;
-      return <View key={issue.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      const focused = `issue:${issue.id}` === highlightId;
+      return <View key={issue.id} ref={register ? (node) => register(`issue:${issue.id}`, node) : undefined}
+        style={[styles.card, { backgroundColor: colors.surface, borderColor: focused ? colors.accentInk : colors.border }, focused && styles.focused]}>
         <Text style={[styles.label, { color: colors.textPrimary }]}>{title}</Text>
         {!!location && <Text style={[styles.body, { color: colors.textSecondary }]}>{location}</Text>}
         <Text style={[styles.body, { color: colors.textPrimary }]}>{`${labels[issue.field]}: «${issue.raw}»`}</Text>
@@ -44,6 +47,6 @@ export function TransferIssuesEditor({ value, busy, onCorrect, inputs: storedInp
     })}
   </View>;
 }
-const styles = StyleSheet.create({ block: { gap: 10 }, card: { padding: 12, borderWidth: 1, borderRadius: 12, gap: 8 },
+const styles = StyleSheet.create({ block: { gap: 10 }, card: { padding: 12, borderWidth: 1, borderRadius: 12, gap: 8 }, focused: { borderWidth: 2 },
   heading: { fontFamily: fonts.semibold, fontSize: 16 }, label: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 19 },
   body: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19 }, row: { flexDirection: "row", gap: 8 }, grow: { flex: 1 } });

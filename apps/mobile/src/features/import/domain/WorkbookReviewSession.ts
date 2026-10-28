@@ -6,6 +6,8 @@ import type { PickedWorkbook } from "./WorkbookFilesPort.ts";
 
 export interface WorkbookReviewEntry {
   readonly viewWeek?: number;
+  /** Карточка, к которой прокрутить по подсказке; `at` — момент касания, повторное касание прокручивает снова. */
+  readonly focus?: Readonly<{ id: string; at: number }>;
   readonly issueInputs?: Readonly<Record<string, string>>;
   readonly header: number;
   readonly columns: LegacyMapping;

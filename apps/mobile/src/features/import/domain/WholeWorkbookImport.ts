@@ -48,6 +48,29 @@ export function wholeWorkbookStatus(session: WorkbookReviewSession): Readonly<{
   return { problems, emptySheets, cycles: session.sheets.filter((s) => session.selectedSheetIds.has(s.id) && !emptySheet(session, s.id)).length };
 }
 
+/** Первое вхождение каждого несопоставленного названия в выбранных листах: подсказка ведёт к карточке, выбор применяется ко всем точным совпадениям. */
+export function workbookUnmatchedTargets(session: WorkbookReviewSession): readonly Readonly<{
+  sheetId: string; sheetLabel: string; weekIndex: number | null; rowId: string | null; name: string;
+}>[] {
+  const result: { sheetId: string; sheetLabel: string; weekIndex: number | null; rowId: string | null; name: string }[] = [];
+  const seen = new Set<string>();
+  for (const sheet of session.sheets) {
+    const entry = session.entries[sheet.id];
+    if (!session.selectedSheetIds.has(sheet.id) || !entry?.value) continue;
+    const pending = new Map(entry.value.exercises.filter((e) => !entry.mapping[e.id]).map((e) => [e.id, e.name.trim()]));
+    const push = (exerciseId: string, weekIndex: number | null, rowId: string | null) => {
+      const name = pending.get(exerciseId); pending.delete(exerciseId);
+      if (name === undefined || seen.has(name)) return;
+      seen.add(name); result.push({ sheetId: sheet.id, sheetLabel: sheet.label, weekIndex, rowId, name });
+    };
+    for (const week of entry.value.programs[0]?.mesocycles[0]?.weeks ?? []) {
+      for (const workout of week.workouts) for (const exercise of workout.exercises) push(exercise.exerciseId, week.index, exercise.id);
+    }
+    for (const exerciseId of [...pending.keys()]) push(exerciseId, null, null);
+  }
+  return result;
+}
+
 /** One workbook is one new programme. IDs include sheet/week context, even for repeated simple plans. */
 export function compileWholeWorkbook(session: WorkbookReviewSession): Readonly<{
   value: TrainingTransfer; mapping: Readonly<Record<string, string>>;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppButton, InlineNotice, SegmentedControl, StickyEditorFooter, TrainingEditorLayout } from "../../shared/ui/components/public.ts";
 import { fonts } from "../../shared/ui/theme/typography.ts";
@@ -11,8 +11,10 @@ import { TransferIssuesEditor } from "./TransferIssuesEditor.tsx";
 
 export function TrainingTransferReviewScreen({ value, mapping, catalog, clientName, busy, error, onMatch, onConfirm, onBack, onShare, planOnly = false,
   controls, controlsExpanded = false, onCorrectIssue, onParameters, parametersLabel, blocked = false, sheetMode = false, actionLabel, footerNote, blockedReason, allowUnknownDates = false,
-  selectedValidation = false, viewWeek, onViewWeek, issueInputs, onIssueInputs }: Readonly<{
+  selectedValidation = false, viewWeek, onViewWeek, issueInputs, onIssueInputs, focus }: Readonly<{
   selectedValidation?: boolean; viewWeek?: number; onViewWeek?: (week: number) => void;
+  /** IMPORT-HINT-SCROLL: прокрутить к карточке упражнения (ID строки) или значения (`issue:<id>`). */
+  focus?: Readonly<{ id: string; at: number }>;
   issueInputs?: Readonly<Record<string, string>>; onIssueInputs?: (inputs: Readonly<Record<string, string>>) => void;
   allowUnknownDates?: boolean;
   actionLabel?: string; footerNote?: string; blockedReason?: string;
@@ -30,6 +32,18 @@ export function TrainingTransferReviewScreen({ value, mapping, catalog, clientNa
   const [scopeId, setScopeId] = useState(scopes[0]?.id ?? "");
   const [localWeek, setLocalWeek] = useState(scopes[0]?.weeks[0]?.index ?? 1);
   const weekIndex = viewWeek ?? localWeek;
+  const content = useRef<View>(null);
+  const cards = useRef(new Map<string, View>());
+  const register = useCallback((id: string, node: View | null) => { if (node) cards.current.set(id, node); else cards.current.delete(id); }, []);
+  useEffect(() => {
+    if (!focus) return;
+    // Неделя и лист меняются в том же касании: измерять после отрисовки новой недели.
+    const timer = setTimeout(() => {
+      const node = cards.current.get(focus.id); const base = content.current;
+      if (node && base) node.measureLayout(base, (_x, y) => scroll.current?.scrollTo({ y: Math.max(0, y), animated: true }));
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [focus, weekIndex]);
   const setWeekIndex = (index: number) => { if (onViewWeek) onViewWeek(index); else setLocalWeek(index); };
   const scope = scopes.find((s) => s.id === scopeId) ?? scopes[0];
   const week = scope?.weeks.find((w) => w.index === weekIndex) ?? scope?.weeks[0];
@@ -50,13 +64,15 @@ export function TrainingTransferReviewScreen({ value, mapping, catalog, clientNa
   const chooseScope = (id: string) => { setScopeId(id); setWeekIndex(scopes.find((s) => s.id === id)?.weeks[0]?.index ?? 1); };
   return <TrainingEditorLayout>
     <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+      <View ref={content} style={styles.stack}>
       {controls}
       <Text style={[styles.heading, { color: colors.textPrimary }]}>Сверка упражнений в конструкторе</Text>
       <Text style={[styles.body, { color: colors.textSecondary }]}>{planOnly ? "План выбранного листа. После сверки он откроется для редактирования в конструкторе. Историю результатов можно перенести через импорт в карточке клиента." : `Клиент: ${clientName ?? "не выбран"} · Программ: ${summary.programs} · Занятий: ${summary.sessions} · Подходов: ${summary.sets}`}</Text>
       {!!error && <InlineNotice kind="error">{error}</InlineNotice>}
       <InlineNotice kind={unresolved ? "warning" : "success"}>{unresolved ? `Нужно выбрать упражнений: ${unresolved} из ${value.exercises.length}.` : `Сопоставлены все упражнения: ${value.exercises.length}.`}</InlineNotice>
       {!clientName && <InlineNotice>Выберите или создайте клиента в параметрах импорта.</InlineNotice>}
-      {onCorrectIssue ? <TransferIssuesEditor value={value} busy={busy} onCorrect={onCorrectIssue} inputs={issueInputs} onInputs={onIssueInputs} />
+      {onCorrectIssue ? <TransferIssuesEditor value={value} busy={busy} onCorrect={onCorrectIssue} inputs={issueInputs} onInputs={onIssueInputs}
+        register={register} highlightId={focus?.id} />
         : !!value.issues?.length && <InlineNotice>Значений для проверки: {value.issues.length}. Исправьте лист «Проверить значения» в сохранённой матрице и выберите исправленный файл.</InlineNotice>}
       {!!missingDates && <InlineNotice>{allowUnknownDates ? `Занятий с неизвестной датой: ${missingDates}. Даты останутся неизвестными.` : `Занятий с неизвестной датой: ${missingDates}. Для переноса фактических результатов укажите даты в Excel. План без дат можно загрузить через конструктор.`}</InlineNotice>}
       {!!(value.issues?.length || missingDates) && <AppButton label="Сохранить матрицу для проверки" variant="secondary" disabled={busy} onPress={onShare} />}
@@ -66,8 +82,10 @@ export function TrainingTransferReviewScreen({ value, mapping, catalog, clientNa
         {scope && scopes.filter((s) => s.programId === scope.programId).length > 1 && <SegmentedControl scroll items={scopes.filter((s) => s.programId === scope.programId).map((s) => ({ id: s.id, label: s.title }))} selectedId={scope.id} onSelect={chooseScope} />}
         {!!scope?.weeks.length && scope.programId !== null && <SegmentedControl scroll items={scope.weeks.map((w) => ({ id: String(w.index), label: `Неделя ${w.index}` }))} selectedId={String(week?.index)} onSelect={(id) => setWeekIndex(Number(id))} />}
       </View>
-      {week && <WorkoutsReview workouts={week.workouts} names={names} matches={matches} onMatch={onMatch} disabled={busy} />}
+      {week && <WorkoutsReview workouts={week.workouts} names={names} matches={matches} onMatch={onMatch} disabled={busy}
+        register={register} highlightId={focus?.id} />}
       {!scopes.length && <InlineNotice>В файле нет упражнений для сверки.</InlineNotice>}
+      </View>
     </ScrollView>
     <StickyEditorFooter actionLabel={actionLabel ?? (planOnly ? "Открыть в конструкторе" : "Подтвердить импорт")} onAction={onConfirm} busy={busy}
       disabled={blocked || !clientName || (!selectedValidation && (!value.programs.length || unresolved > 0 || (!allowUnknownDates && missingDates > 0) || !!value.issues?.length))}
@@ -75,4 +93,4 @@ export function TrainingTransferReviewScreen({ value, mapping, catalog, clientNa
       secondaryAction={{ label: parametersLabel ?? (planOnly ? "Выбрать другой лист" : "Параметры импорта"), onPress: onParameters ?? onBack }} />
   </TrainingEditorLayout>;
 }
-const styles = StyleSheet.create({ content: { padding: 16, gap: 12, paddingBottom: 24 }, settings: { padding: 12, gap: 10, borderWidth: 1, borderRadius: 12 }, heading: { fontFamily: fonts.semibold, fontSize: 16 }, body: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19 } });
+const styles = StyleSheet.create({ content: { padding: 16, paddingBottom: 24 }, stack: { gap: 12 }, settings: { padding: 12, gap: 10, borderWidth: 1, borderRadius: 12 }, heading: { fontFamily: fonts.semibold, fontSize: 16 }, body: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19 } });

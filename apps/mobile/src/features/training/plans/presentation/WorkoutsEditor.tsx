@@ -316,9 +316,11 @@ export const WorkoutsEditor = memo(function WorkoutsEditor({ draft, change, look
 });
 
 /** The constructor's cards in import-review mode. Choosing a catalog match is the only edit. */
-export function WorkoutsReview({ workouts, names, matches, onMatch, disabled = false }: Readonly<{
+export function WorkoutsReview({ workouts, names, matches, onMatch, disabled = false, register, highlightId }: Readonly<{
   workouts: readonly PlannedWorkout[]; names: ReadonlyMap<string, string>; matches: ReadonlyMap<string, ExerciseInfo>;
   onMatch: (sourceExerciseId: string) => void; disabled?: boolean;
+  /** Строки упражнений для прокрутки по подсказке (IMPORT-HINT-SCROLL); `highlightId` обводится акцентом. */
+  register?: (id: string, node: View | null) => void; highlightId?: string;
 }>) {
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
   const planText = (set: PlannedExercise["sets"][number]) => [
@@ -333,7 +335,9 @@ export function WorkoutsReview({ workouts, names, matches, onMatch, disabled = f
     </View>
     <View style={[styles.exercises, { gap: 8, paddingBottom: 10 }]}>{workout.exercises.map((item) => {
       const match = matches.get(item.exerciseId); const name = names.get(item.exerciseId) ?? item.exerciseId; const group = supersetNumber(workout, item);
-      return <View key={item.id} style={[styles.exerciseRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+      return <View key={item.id} ref={register ? (node) => register(item.id, node) : undefined}
+        style={[styles.exerciseRow, { borderColor: item.id === highlightId ? colors.accentInk : colors.border, backgroundColor: colors.surface },
+          item.id === highlightId && styles.highlight]}>
         <View style={[styles.exerciseHead, { paddingHorizontal: 8 }]}>
           <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>{match?.thumbnail != null ? <Image source={match.thumbnail} resizeMethod="resize" style={styles.thumbImage} /> : <Dumbbell size={16} color={colors.accentInk} />}</View>
           <View style={styles.grow}>
@@ -363,6 +367,7 @@ const styles = StyleSheet.create({
   addExercise: { padding: 10 },
   exercises: { paddingHorizontal: 10 },
   exerciseRow: { borderWidth: 1, borderRadius: 10, overflow: "hidden" },
+  highlight: { borderWidth: 2 },
   handle: { width: 28, minHeight: 44, alignItems: "center", justifyContent: "center" },
   exerciseHead: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, paddingHorizontal: 2 },
   exerciseBody: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 10, paddingTop: 6, paddingBottom: 4 },

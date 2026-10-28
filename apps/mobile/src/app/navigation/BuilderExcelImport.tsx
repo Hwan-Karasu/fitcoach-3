@@ -6,7 +6,7 @@ import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.
 import { CustomExerciseEditorScreen, ExerciseLibraryScreen, displayNameOf, type CatalogEntry, type ExerciseCatalogPort, type CatalogBackHandle } from "../../features/exercises/public.ts";
 import { applyWorkbookColumns, autoMatchWorkbookEntry, builderWorkbookImport, compileWholeWorkbook, correctWorkbookValue,
   emptyWorkbookSheet, prepareWorkbookResponsive, requireWorkbookNameChoices, selectWorkbookImportSheets, selectWorkbookSheet, setWorkbookNameMatch,
-  startWorkbookReview, updateWorkbookEntry, wholeWorkbookStatus, workbookMatchesToRemember, workbookSourceNames,
+  startWorkbookReview, updateWorkbookEntry, wholeWorkbookStatus, workbookMatchesToRemember, workbookSourceNames, workbookUnmatchedTargets,
   type ExerciseImportMatch, type ExerciseImportMatchesPort, type TrainingTransfer, type WorkbookFilesPort,
   type WorkbookReviewEntry, type WorkbookReviewSession } from "../../features/import/public.ts";
 import type { BuilderExcelDraft } from "../../features/training/public.ts";
@@ -19,6 +19,7 @@ export type WorkbookImportTarget = Readonly<{ kind: "PROGRAM"; title?: string;
   save: (value: TrainingTransfer, mapping: Readonly<Record<string, string>>, matches: readonly ExerciseImportMatch[]) => Promise<void> }>
   | Readonly<{ kind: "BUILDER"; title?: string; apply: (draft: BuilderExcelDraft) => void }>;
 type Page = "reading" | "sheets" | "history" | "review" | "confirm" | "catalog" | "create" | null;
+const HINTS_SHOWN = 6;
 const yieldFrame = () => new Promise<void>((resolve) => setTimeout(resolve, 32));
 
 /** Exactly one host modal. Active tab is presentation; selected sheets are the write scope. */
@@ -106,11 +107,26 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
     locked.current = false; close();
   }); };
   const selectedLabels = session?.sheets.filter((s) => session.selectedSheetIds.has(s.id)).map((s) => s.label) ?? [];
+  const unmatched = session ? workbookUnmatchedTargets(session) : [];
+  const otherProblems = status?.problems.filter((p) => !unmatched.some((t) => t.sheetId === p.id) || !p.reason.startsWith("Выберите упражнения")) ?? [];
+  /** Подсказка: открыть лист и неделю и прокрутить к карточке. */
+  const focusCard = (sheetId: string, weekIndex: number | null, id: string | null) => {
+    if (busy || !session) return;
+    setError("");
+    const next = match(selectWorkbookSheet(session, sheetId));
+    setSession(updateWorkbookEntry(next, { ...(weekIndex === null ? {} : { viewWeek: weekIndex }), ...(id === null ? {} : { focus: { id, at: Date.now() } }) }));
+  };
   const controls = session ? <>
     <AppButton compact variant="secondary" label={`Листы для импорта: ${session.selectedSheetIds.size} из ${session.sheets.length}`} disabled={busy} onPress={() => setPage("sheets")} />
     <TextField label="Название программы" value={session.programTitle} disabled={busy || !!target.title} onChangeText={(programTitle) => setSession({ ...session, programTitle })} />
-    {!!status?.problems.length && <View style={{ gap: 4 }}><Text style={{ color: colors.textSecondary }}>Проверьте выбранные листы:</Text>
-      {status.problems.map((p) => <AppButton key={p.id} compact variant="ghost" label={`${p.label}: ${p.reason}`} disabled={busy} onPress={() => select(p.id)} />)}</View>}
+    {!!(otherProblems.length || unmatched.length) && <View style={{ gap: 4 }}><Text style={{ color: colors.textSecondary }}>Проверьте выбранные листы:</Text>
+      {unmatched.slice(0, HINTS_SHOWN).map((t) => <AppButton key={`${t.sheetId}:${t.name}`} compact variant="ghost" disabled={busy}
+        label={`${t.sheetLabel}${t.weekIndex === null ? "" : ` · неделя ${t.weekIndex}`} · выберите «${t.name}»`}
+        onPress={() => focusCard(t.sheetId, t.weekIndex, t.rowId)} />)}
+      {unmatched.length > HINTS_SHOWN && <Text style={{ color: colors.textSecondary }}>И ещё упражнений: {unmatched.length - HINTS_SHOWN}. Выбор применяется ко всем совпадениям в книге.</Text>}
+      {otherProblems.map((p) => { const issue = session.entries[p.id]?.value?.issues?.[0];
+        return <AppButton key={p.id} compact variant="ghost" label={`${p.label}: ${p.reason}`} disabled={busy}
+          onPress={() => issue ? focusCard(p.id, null, `issue:${issue.id}`) : select(p.id)} />; })}</View>}
     {session.picked.kind === "TABLES" && current && <WorkbookColumnSettings table={session.picked.tables[Number(session.activeId)]!} entry={current} busy={busy} onChange={patch}
       onApply={() => setSession(match(applyWorkbookColumns(session)))} />}
   </> : null;
@@ -154,7 +170,7 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
           </View>
           {current?.value ? <TrainingTransferReviewScreen key={session.activeId} value={current.value} mapping={current.mapping} catalog={catalog} clientName={clientName}
             busy={busy} error={error} sheetMode allowUnknownDates controls={controls} controlsExpanded={current.settingsOpen} selectedValidation
-            viewWeek={current.viewWeek} onViewWeek={(viewWeek) => patch({ viewWeek })} issueInputs={current.issueInputs ?? {}} onIssueInputs={(issueInputs) => patch({ issueInputs })}
+            viewWeek={current.viewWeek} focus={current.focus} onViewWeek={(viewWeek) => patch({ viewWeek })} issueInputs={current.issueInputs ?? {}} onIssueInputs={(issueInputs) => patch({ issueInputs })}
             blocked={!!status?.problems.length || !status?.cycles}
             blockedReason={!status?.cycles ? "Выберите хотя бы один лист." : "Проверьте выбранные листы или измените их список."}
             actionLabel="Продолжить импорт выбранных листов" footerNote={`Будет добавлено ${status?.cycles ?? 0} циклов. Открытая вкладка не ограничивает импорт.`}
