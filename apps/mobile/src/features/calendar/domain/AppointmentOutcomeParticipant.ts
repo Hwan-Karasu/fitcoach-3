@@ -5,6 +5,8 @@ export interface StartedAppointmentRef {
   readonly id: string;
   readonly revision: number;
   readonly startMinute: number;
+  /** День самой записи: уведомлять нужно его, а не день тренировки (дату тренировки правят после завершения). */
+  readonly localDate: LocalDate;
 }
 
 /**

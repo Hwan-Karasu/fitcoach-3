@@ -23,6 +23,11 @@ import { RetainedScreenTheme, usePrototypeTheme } from "../../shared/ui/theme/Pr
 import { ClientHeader } from "./ClientHeader.tsx";
 
 type HomeRoutes = { HomeIndex: undefined };
+/** Маршрут, собранный функцией (`templateRoute`, `createRoute`), не сужается до одной записи карты маршрутов: приведение к `never` — здесь одно. */
+function openRoute(navigation: { navigate: (name: never, params: never) => void; replace: (name: never, params: never) => void },
+  route: Readonly<{ name: string; params: object }>, method: "navigate" | "replace" = "navigate"): void {
+  navigation[method](route.name as never, route.params as never);
+}
 function RetainedTrainingProgram({ children }: Readonly<{ children: ReactNode }>) {
   return <RetainedScreenTheme active={useIsFocused()}>{children}</RetainedScreenTheme>;
 }
@@ -260,13 +265,13 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
           renderExcelImport={(renderTrigger) => <BuilderExcelImport memory={trainingTransfer} renderTrigger={renderTrigger} files={expoWorkbookFiles} exercises={exercises} label="Импортировать из Excel" clientName={clientName}
             target={{ kind: "PROGRAM", save: async (value, mapping, rememberMatches) => { await trainingTransfer.importClient(clientId, value, mapping, { rememberMatches }); } }} />}
           planDelete={planDelete} onExport={async (programId) => { await expoWorkbookFiles.share(await trainingTransfer.exportClient(clientId, [programId])); }}
-          onChoose={(kind) => { const route = createRoute(kind); navigation.navigate(route.name, route.params as never); }}
+          onChoose={(kind) => { const route = createRoute(kind); openRoute(navigation, route); }}
           onCreate={() => navigation.navigate("TrainingChooser")}
           onOpenTemplates={() => navigation.navigate("TrainingTemplates")}
           onTabChange={(tab) => navigation.setOptions({ title: programLibraryTabTitles[tab] })}
           renderTemplates={() => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
-            onEdit={(template) => { const route = templateEditRoute(template); navigation.navigate(route.name, route.params as never); }}
-            onOpenInBuilder={(template) => { const route = templateRoute(template); navigation.navigate(route.name, route.params as never); }}
+            onEdit={(template) => { const route = templateEditRoute(template); openRoute(navigation, route); }}
+            onOpenInBuilder={(template) => { const route = templateRoute(template); openRoute(navigation, route); }}
             onCreated={(programId) => navigation.navigate("TrainingProgram", { programId })} />}
           renderArchive={() => <ArchivedProgramsPanel clientId={clientId} repository={repository} planDelete={planDelete} />}
           onOpenProgram={(programId) => navigation.navigate("TrainingProgram", { programId })} />}
@@ -279,13 +284,13 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingTemplates">
         {({ navigation }) => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
-          onEdit={(template) => { const route = templateEditRoute(template); navigation.navigate(route.name, route.params as never); }}
-          onOpenInBuilder={(template) => { const route = templateRoute(template); navigation.navigate(route.name, route.params as never); }}
+          onEdit={(template) => { const route = templateEditRoute(template); openRoute(navigation, route); }}
+          onOpenInBuilder={(template) => { const route = templateRoute(template); openRoute(navigation, route); }}
           onCreated={(programId) => navigation.reset({ index: 1,
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId } }] })} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingChooser">
-        {({ navigation }) => <ProgramModeChooserScreen repository={repository} clientId={viewer} onChoose={(kind) => { const route = createRoute(kind); navigation.navigate(route.name, route.params as never); }}
+        {({ navigation }) => <ProgramModeChooserScreen repository={repository} clientId={viewer} onChoose={(kind) => { const route = createRoute(kind); openRoute(navigation, route); }}
           onOpenTemplates={() => navigation.navigate("TrainingTemplates")}
           renderExcelImport={(renderTrigger) => <BuilderExcelImport memory={trainingTransfer} renderTrigger={renderTrigger} files={expoWorkbookFiles} exercises={exercises} label="Импортировать из Excel" clientName={viewerName}
             target={{ kind: "PROGRAM", save: async (value, mapping, rememberMatches) => { await trainingTransfer.importClient(viewer, value, mapping, { rememberMatches }); navigation.popTo("TrainingIndex"); } }} />} />}
@@ -321,8 +326,8 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
               ...(route.params.mesocycleId === undefined ? {} : { mesocycleId: route.params.mesocycleId }),
               ...(route.params.templateEditId === undefined ? {} : { templateEditId: route.params.templateEditId }) } } })}
           renderTemplates={() => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
-            onEdit={(template) => { const route = templateEditRoute(template); navigation.navigate(route.name, route.params as never); }}
-            onOpenInBuilder={(template) => { const route = templateRoute(template); navigation.replace(route.name, route.params as never); }}
+            onEdit={(template) => { const route = templateEditRoute(template); openRoute(navigation, route); }}
+            onOpenInBuilder={(template) => { const route = templateRoute(template); openRoute(navigation, route, "replace"); }}
             onCreated={(createdId) => navigation.reset({ index: 1,
               routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId: createdId } }] })} />}
           onCreated={(programId) => navigation.reset({ index: 1,
@@ -345,8 +350,8 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
                 ...(target.mesocycleId === null ? {} : { mesocycleId: target.mesocycleId }) });
             }); }} />}
           renderTemplates={() => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
-            onEdit={(template) => { const route = templateEditRoute(template); navigation.navigate(route.name, route.params as never); }}
-            onOpenInBuilder={(template) => { const route = templateRoute(template); navigation.navigate(route.name, route.params as never); }}
+            onEdit={(template) => { const route = templateEditRoute(template); openRoute(navigation, route); }}
+            onOpenInBuilder={(template) => { const route = templateRoute(template); openRoute(navigation, route); }}
             onCreated={(createdId) => navigation.reset({ index: 1,
               routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId: createdId } }] })} />}
           onOpenProgram={(createdId) => navigation.reset({ index: 1,

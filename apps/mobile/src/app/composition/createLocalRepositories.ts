@@ -40,6 +40,8 @@ export function createLocalRepositories(database: SharedSqliteDatabase, workspac
   const owners = [clients, calendar, accounting, measurements, nutrition.foods, nutrition.recipes, nutrition.diary,
     nutrition.targets, nutrition.calc, questionnaire, settings, notifications, trainingPlans, trainingExecution, exercises] as const;
   calendar.subscribeCommittedChanges(() => accounting.notifyExternalChange());
+  // Окончательное удаление клиента отменяет и обезличивает его записи в своей транзакции: кэш диапазонов календаря должен это увидеть.
+  clients.subscribeCommittedChanges(() => calendar.notifyExternalChange());
   return { clients, calendar, accounting, measurements, nutrition, questionnaire, settings, notifications, trainingPlans, trainingExecution, exercises,
     ownerCount: owners.length,
     async initialize(): Promise<void> { for (const owner of owners) await owner.initialize(); },

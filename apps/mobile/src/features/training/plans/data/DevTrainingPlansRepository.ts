@@ -1260,6 +1260,9 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   async deleteTemplate(templateId: string): Promise<void> {
     await this.ready().writer.write(async (tx) => {
       await tx.run("DELETE FROM training_templates WHERE workspace_id = ? AND id = ?", [this.workspaceId, templateId]);
+      // Черновики правки этого шаблона (простой и расширенный) у любых клиентов недостижимы без него.
+      await tx.run("DELETE FROM training_builder_drafts WHERE workspace_id = ? AND draft_key IN (?, ?)",
+        [this.workspaceId, `${TEMPLATE_DRAFT_PREFIX}${templateId}`, mesocycleBuilderDraftKey({ programId: null, mesocycleId: `${TEMPLATE_DRAFT_PREFIX}${templateId}` })]);
     });
   }
 

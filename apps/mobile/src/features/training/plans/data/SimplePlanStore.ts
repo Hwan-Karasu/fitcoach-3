@@ -118,7 +118,8 @@ export async function writeWorkouts(tx: SqliteStatementPort, workspaceId: string
     await assertIdsFree(tx, TABLES[table].name, fresh, "DRAFT_INVALID");
   }
   for (const table of order) {
-    const changed = [...next[table]].filter(([id, row]) => { const old = stored[table].get(id); return old === undefined || !sameRow(old, row); });    await upsertRows(tx, TABLES[table].name, TABLES[table].columns, TABLES[table].update, changed.map(([, row]) => row));
+    const changed = [...next[table]].filter(([id, row]) => { const old = stored[table].get(id); return old === undefined || !sameRow(old, row); });
+    await upsertRows(tx, TABLES[table].name, TABLES[table].columns, TABLES[table].update, changed.map(([, row]) => row));
   }
   // Убранное удаляется снизу вверх: подходы → упражнения → тренировки (FK RESTRICT).
   for (const table of [...order].reverse()) {

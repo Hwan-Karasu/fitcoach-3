@@ -56,6 +56,7 @@ function RestClock({ timer, style }: Readonly<{ timer: RestTimer; style: StylePr
   }, [timer, endAt, seconds, frame]);
   const animatedProps = useAnimatedProps(() => {
     const text = clock(seconds.value);
+    // `text` нет в типах props TextInput, но это штатный способ Reanimated менять значение поля на UI-потоке.
     return { text, defaultValue: text } as never;
   });
   return <AnimatedTextInput editable={false} pointerEvents="none" accessible={false} importantForAccessibility="no" caretHidden
@@ -168,6 +169,9 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
   // Окончание в открытом приложении: одна вибрация на всю пачку закончившихся (сигналы не накладываются), панель разворачивается,
   // через несколько секунд каждый закончившийся таймер уходит. Скрытые за «Ещё N» тоже сигналят.
   useEffect(() => {
+    // Ушедший из списка таймер забывается: набор не растёт за сессию, а перезапущенный таймер сигналит заново.
+    const present = new Set(list.map((timer) => timer.id));
+    for (const id of signalled.current) if (!present.has(id)) signalled.current.delete(id);
     const fresh = list.filter((timer) => isFinished(timer, now) && !signalled.current.has(timer.id));
     if (fresh.length === 0) return;
     setSide(null);

@@ -231,3 +231,27 @@ test("UI-OWN-026 «В шаблон» из простого конструкто�
     await close();
   }
 });
+
+test("AUD28-09 удаление шаблона убирает черновики его правки (простой и расширенный), чужие черновики остаются", async () => {
+  const { plans, a, close } = await setup();
+  try {
+    const simple = week("sd");
+    const template = await plans.saveSimpleDraftAsTemplate({ title: "Фулбади", plan: { weeks: 4, workouts: simple } });
+    const other = await plans.saveSimpleDraftAsTemplate({ title: "Другой", plan: { weeks: 4, workouts: simple } });
+    const periodizedDraft = { baseRevision: null, programTitle: "", title: "Блок", cycleType: "hypertrophy" as const, repsText: "8-12", startDate: "",
+      weeks: [{ type: "base" as const, workouts: simple }], editing: 0, members: [a.id], baseWeeks: null };
+    const simpleKey = (id: string) => `template:${id}`;
+    const cycleScope = (id: string) => ({ programId: null, mesocycleId: `template:${id}` });
+    for (const id of [template.id, other.id]) {
+      await plans.saveBuilderDraft(a.id, simpleKey(id), null, { title: "Фулбади", plan: { weeks: 4, workouts: simple } });
+      await plans.saveMesocycleBuilderDraft(a.id, cycleScope(id), periodizedDraft);
+    }
+    await plans.deleteTemplate(template.id);
+    assert.equal(await plans.getBuilderDraft(a.id, simpleKey(template.id)), null);
+    assert.equal(await plans.getMesocycleBuilderDraft(a.id, cycleScope(template.id)), null);
+    assert.notEqual(await plans.getBuilderDraft(a.id, simpleKey(other.id)), null, "чужой шаблон не задет");
+    assert.notEqual(await plans.getMesocycleBuilderDraft(a.id, cycleScope(other.id)), null);
+  } finally {
+    await close();
+  }
+});

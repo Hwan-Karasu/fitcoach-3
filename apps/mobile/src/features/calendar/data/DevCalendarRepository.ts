@@ -280,6 +280,9 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
     return () => { this.listeners.delete(listener); };
   }
 
+  /** Чужая транзакция изменила записи (окончательное удаление клиента): наблюдатели перечитывают все даты. */
+  notifyExternalChange(): void { this.publish({ dates: "ALL" }); }
+
   private publish(change: CalendarCommittedChange): void {
     for (const listener of this.listeners) {
       try { listener(change); } catch { /* Observers cannot turn a commit into a failure. */ }
@@ -491,7 +494,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       const rows = await tx.all<AppointmentRow>(`SELECT ${appointmentColumns} FROM calendar_appointments
         WHERE workspace_id = ? AND client_id = ? AND local_date = ? AND lifecycle = 'SCHEDULED'`, [this.workspaceId, clientId, localDate]);
       const found = pickStartedPending(rows.map(toAppointment), clientId, localDate, now);
-      return found === null ? null : { id: found.id, revision: found.revision, startMinute: found.startMinute };
+      return found === null ? null : { id: found.id, revision: found.revision, startMinute: found.startMinute, localDate: found.localDate };
     },
     complete: async (tx, appointment, now) => {
       await this.resolveIn(tx, appointment.id, appointment.revision, "COMPLETED", now);
@@ -503,7 +506,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
         revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND id = ? AND revision = ? AND outcome = 'COMPLETED'`,
       [now.toISOString(), this.workspaceId, appointmentId, current.revision]);
       if (result.changes !== 1) throw new Error("CALENDAR_STALE_APPOINTMENT");
-      return { id: current.id, revision: current.revision + 1, startMinute: current.startMinute };
+      return { id: current.id, revision: current.revision + 1, startMinute: current.startMinute, localDate: current.localDate };
     },
     notify: (dates) => this.publish({ dates }),
   };

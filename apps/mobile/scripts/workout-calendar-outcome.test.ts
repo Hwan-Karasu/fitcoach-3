@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { createLocalRepositories } from "../src/app/composition/createLocalRepositories.ts";
+import type { SystemCatalog } from "../src/features/exercises/public.ts";
 import { DevCalendarRepository, devCalendarClientDeletionParticipant } from "../src/features/calendar/data/DevCalendarRepository.ts";
 import type { AppointmentInput } from "../src/features/calendar/domain/CalendarModel.ts";
 import { pickStartedPending } from "../src/features/calendar/domain/CalendarRules.ts";
@@ -127,6 +129,40 @@ test("ADR-048 «Отменить завершение» снимает исхо�
     const final = await env.workflow.setOutcome(env.slot, "CANCELLED", missed.session.revision, at(19, 5));
     assert.equal(final.calendar, null, "«Пропущена»/«Отменена» запись календаря сами не отмечают");
   } finally { await env.close(); }
+});
+
+test("AUD28-02 после смены даты тренировки отмена завершения уведомляет календарь за день записи, а не тренировки", async () => {
+  const env = await setup();
+  try {
+    await env.book({});
+    const done = await env.workflow.setOutcome(env.slot, "COMPLETED", null, at(18, 30));
+    const moved = await env.execution.setActualDate(env.slot, "2026-10-27", done.session.revision, at(18, 35));
+    const changes: unknown[] = [];
+    const unsubscribe = env.calendar.subscribeCommittedChanges((change) => changes.push(change.dates));
+    const undone = await env.workflow.setOutcome(env.slot, null, moved.revision, at(18, 40));
+    unsubscribe();
+    assert.deepEqual(undone.calendar, { kind: "CLEARED", startMinute: 1080 });
+    assert.deepEqual(changes, [[TODAY]]);
+  } finally { await env.close(); }
+});
+
+test("AUD28-03 окончательное удаление клиента сообщает календарю: записи обезличены, кэш недели сбрасывается", async () => {
+  const db = new DatabaseSync(":memory:");
+  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const repositories = createLocalRepositories(shared, WS, { meta: { version: "test", source: "REPDB", license: "test", exerciseCount: 0 }, exercises: [] } as unknown as SystemCatalog);
+  await repositories.initialize();
+  try {
+    const gone = await repositories.clients.create({ displayName: "SyntheticGone" });
+    const personal = (await repositories.calendar.listSessionTypes())[0]!;
+    await repositories.calendar.createAppointment({ localDate: TODAY, startMinute: 1080, durationMinutes: 60, clientId: gone.id,
+      guestName: null, note: null, sessionTypeId: personal.id });
+    const archived = await repositories.clients.setArchived(gone.id, gone.revision, true);
+    const changes: unknown[] = [];
+    const unsubscribe = repositories.calendar.subscribeCommittedChanges((change) => changes.push(change.dates));
+    await repositories.clients.deleteArchivedPermanently(gone.id, archived.revision);
+    unsubscribe();
+    assert.deepEqual(changes, ["ALL"]);
+  } finally { await repositories.close(); }
 });
 
 test("ADR-048 повторное «Завершена» не отмечает вторую запись и не теряет связь с первой", async () => {

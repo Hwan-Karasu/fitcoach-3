@@ -35,7 +35,7 @@ export function createWorkoutOutcomeWorkflow(transaction: TrainingTransaction, e
             await execution.setAppointmentLink(tx, slot, null);
             if (cleared !== null) {
               effect = { kind: "CLEARED", startMinute: cleared.startMinute };
-              date = session.actualDate;
+              date = cleared.localDate;
             }
           }
         }
