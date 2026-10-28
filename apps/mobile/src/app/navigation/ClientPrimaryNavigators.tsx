@@ -299,6 +299,8 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
         {/* Расширенная — конструктор 2.0 (UI-OWN-038): программа, участники и первый мезоцикл одной записью. */}
         {({ navigation, route }) => <PeriodizedBuilderScreen clientId={viewer} repository={repository} exercises={exerciseLookup}
           programId={route.params.programId} mesocycleId={route.params.mesocycleId} templateId={route.params.templateId} initialWeek={route.params.weekIndex}
+          {...(route.params.programId === undefined ? {} : { onSwitchCycle: (target: string | undefined) => navigation.replace("TrainingCreate", { kind: route.params.kind,
+            programId: route.params.programId!, ...(target === undefined ? {} : { mesocycleId: target }) }) })}
           mesocycleSave={mesocycleSave} workbookSave={trainingTransfer}
           loadWeekStatuses={async (programId, weeks) => {
             const statuses = await execution.getProgramStatuses(viewer, programId);

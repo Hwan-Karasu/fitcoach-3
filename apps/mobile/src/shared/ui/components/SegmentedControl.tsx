@@ -9,7 +9,7 @@ interface SegmentItem<Id extends string> {
 }
 
 /** Переключатель из 2–3 равных сегментов во всю ширину (UI-OWN-026); «Зефирка»: дорожка, выбранный — белый с тенью. */
-export function SegmentedControl<Id extends string>({ items, selectedId, onSelect, compact = false, fit = false, scroll = false, scrollItemGap = 2 }: Readonly<{
+export function SegmentedControl<Id extends string>({ items, selectedId, onSelect, compact = false, fit = false, scroll = false, wrap = false, scrollItemGap = 2 }: Readonly<{
   items: readonly SegmentItem<Id>[];
   selectedId: Id;
   onSelect: (id: Id) => void;
@@ -19,6 +19,8 @@ export function SegmentedControl<Id extends string>({ items, selectedId, onSelec
   fit?: boolean;
   /** Много пунктов: один контейнер с горизонтальной прокруткой, сегменты по ширине подписи. */
   scroll?: boolean;
+  /** С `scroll`: длинные подписи (названия циклов) переносятся на вторую строку и сжимаются, ширина вкладки ограничена. */
+  wrap?: boolean;
   /** Отступ между пунктами горизонтального меню. */
   scrollItemGap?: number;
 }>) {
@@ -29,13 +31,13 @@ export function SegmentedControl<Id extends string>({ items, selectedId, onSelec
     return (
       <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected }} accessibilityLabel={item.label}
         onPress={() => onSelect(item.id)}
-        style={[styles.segment, fit ? styles.segmentFit : null, scroll ? styles.segmentScroll : null, compact ? styles.segmentCompact : null, selected ? [shadow.control, { backgroundColor: colors.surface }] : null]}>
-        <Text numberOfLines={1} adjustsFontSizeToFit={(compact || fit) && !scroll} minimumFontScale={0.85} style={[styles.label, compact ? styles.labelCompact : null, selected ? styles.selected : null, { color: selected ? colors.accentInk : colors.textSecondary }]}>{item.label}</Text>
+        style={[styles.segment, fit ? styles.segmentFit : null, scroll ? styles.segmentScroll : null, scroll && wrap ? styles.segmentWrap : null, compact ? styles.segmentCompact : null, selected ? [shadow.control, { backgroundColor: colors.surface }] : null]}>
+        <Text numberOfLines={scroll && wrap ? 2 : 1} adjustsFontSizeToFit={((compact || fit) && !scroll) || (scroll && wrap)} minimumFontScale={scroll && wrap ? 0.75 : 0.85} style={[styles.label, compact ? styles.labelCompact : null, scroll && wrap ? styles.labelWrap : null, selected ? styles.selected : null, { color: selected ? colors.accentInk : colors.textSecondary }]}>{item.label}</Text>
       </Pressable>
     );
   });
   return (
-    <View accessibilityRole="tablist" style={[styles.track, compact ? styles.trackCompact : null, scroll ? styles.trackScroll : null, { backgroundColor: colors.border }]}>
+    <View accessibilityRole="tablist" style={[styles.track, compact ? styles.trackCompact : null, scroll ? styles.trackScroll : null, scroll && wrap ? styles.trackWrap : null, { backgroundColor: colors.border }]}>
       {scroll ? <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.scrollContent, { gap: scrollItemGap }]}>{segments}</ScrollView> : segments}
     </View>
   );
@@ -50,7 +52,10 @@ const styles = StyleSheet.create({
   segmentScroll: { flex: 0, paddingHorizontal: 8 },
   scrollContent: { gap: 2 },
   trackScroll: { height: 40 },
+  trackWrap: { height: 60 },
+  segmentWrap: { minWidth: 72, maxWidth: 176 },
   trackCompact: { height: 44, borderRadius: 14, padding: 3, gap: 2 },
   segmentCompact: { borderRadius: 11, paddingHorizontal: 2 },
+  labelWrap: { fontSize: 14, lineHeight: 18, textAlign: "center" },
   labelCompact: { fontSize: 13, lineHeight: 17 },
 });

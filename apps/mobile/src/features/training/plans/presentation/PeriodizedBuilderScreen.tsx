@@ -37,6 +37,8 @@ import { weeksFromTemplate } from "../domain/TemplateModel.ts";
 import type { BuilderExcelDraft, BuilderWorkbookCycle, BuilderWorkbookState } from "../domain/BuilderExcelDraft.ts";
 import type { BuilderWorkbookSavePort } from "../domain/BuilderWorkbookSave.ts";
 
+const NEW_CYCLE = "__new-cycle__";
+
 const errors: Readonly<Record<string, string>> = {
   NAVIGATION_GROUP_CONFLICT: "Группа выбранного цикла изменилась. Выберите цикл ещё раз.",
   NAVIGATION_REASSIGNMENT_REQUIRED: "Подтвердите перенос выбранного цикла из другой группы.",
@@ -83,7 +85,7 @@ function WeekStatusLine({ status }: Readonly<{ status: BuilderWeekStatus }>) {
   const ink = tone === null ? colors.textSecondary : readableInk(tone, [colors.surface, colors.surfaceRaised], colors.textPrimary);
   return <Text style={[styles.weekStatus, { color: ink }]}>{status.marker === null ? status.label : `${status.marker} ${status.label}`}</Text>;
 }
-export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, templateId, initialWeek, mesocycleSave, repository, exercises, listCandidates, picked,
+export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, templateId, onSwitchCycle, initialWeek, mesocycleSave, repository, exercises, listCandidates, picked,
   onPickExercise, onCreated, onSaved, onCancel, renderTemplates, renderExcel, workbookSave, loadWeekStatuses }: Readonly<{
   workbookSave?: BuilderWorkbookSavePort;
   /** Правка: подписи статуса недель сохранённого мезоцикла («Не начата», «В работе», …) в порядке `weeks`; номер — неделя программы. */
@@ -95,6 +97,8 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, temp
   mesocycleId?: string;
   /** Новая программа по шаблону из одного мезоцикла: недели и название берутся из него, если нет несохранённого черновика. */
   templateId?: string;
+  /** Правка и «+ Мезоцикл» существующей программы: переход к другому циклу (`undefined` — новый); несохранённое спрашивает защита выхода. */
+  onSwitchCycle?: (mesocycleId: string | undefined) => void;
   /** Правка: открыть эту неделю (номер с 1). */
   initialWeek?: number;
   mesocycleSave?: MesocycleSavePort;
@@ -140,6 +144,8 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, temp
   // Меню области (только в правке): неделя «до» правки и признак открытого меню.
   const baselines = useRef(new Map<number, readonly PlannedWorkout[]>());
   const [scopeFor, setScopeFor] = useState<number | null>(null);
+  /** Циклы этого клиента в существующей программе: полоса переключения над настройками. */
+  const [programCycles, setProgramCycles] = useState<readonly Readonly<{ id: string; title: string }>[]>([]);
   // Состав группы в правке (UI-OWN-042): убрать — с подтверждением; добавить — с выбором, чей план копировать.
   const [leaving, setLeaving] = useState<string | null>(null);
   const [joining, setJoining] = useState<Readonly<{ ids: readonly string[]; source: string }> | null>(null);
@@ -207,6 +213,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, temp
       const cycle = plan?.mesocycles.find((item) => item.id === mesocycleId);
       if (plan === null || (mesocycleId !== undefined && cycle === undefined)) { setProgram("ERROR"); return; }
       setProgram({ revision: plan.program.revision, title: plan.program.title, members: plan.program.memberClientIds });
+      setProgramCycles(plan.mesocycles.map((item) => ({ id: item.id, title: item.title })));
       // «+ Мезоцикл» — только у этого участника; остальных тренер добавляет сам (решение владельца).
       setMembers([clientId]);
       void refreshGroup().catch(() => undefined);
@@ -532,8 +539,14 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, temp
       {tabs}
       <Animated.ScrollView ref={scrollRef} pointerEvents={busy !== null ? "none" : "auto"} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {renderExcel?.(applyWorkbook, mode === "create" ? programTitle || undefined : program?.title)}
+        {!workbook && onSwitchCycle !== undefined && programId !== undefined && programCycles.length > 0 ? <Section title={`Циклы программы · ${programCycles.length}`}>
+          <SegmentedControl scroll wrap items={[...programCycles.map((c) => ({ id: c.id, label: c.id === mesocycleId ? title || c.title : c.title })),
+            { id: NEW_CYCLE, label: "+ Новый цикл" }]}
+            selectedId={mesocycleId ?? NEW_CYCLE} onSelect={(id) => { if (id !== (mesocycleId ?? NEW_CYCLE)) onSwitchCycle(id === NEW_CYCLE ? undefined : id); }} />
+          <Text style={[styles.hint, { color: colors.textSecondary }]}>Переключение спросит, что сделать с несохранёнными правками этого цикла.</Text>
+        </Section> : null}
         {workbook && <Section title={`Циклы программы · ${workbook.cycles.length}`}>
-          <SegmentedControl scroll items={workbook.cycles.map((c) => ({ id: c.key, label: c.key === workbook.activeKey ? title : c.title }))}
+          <SegmentedControl scroll wrap items={workbook.cycles.map((c) => ({ id: c.key, label: c.key === workbook.activeKey ? title : c.title }))}
             selectedId={workbook.activeKey} onSelect={(key) => { const state = currentWorkbook()!; openCycle(state.cycles.find((c) => c.key === key)!, state); touch(); }} />
           <Text style={[styles.hint, { color: colors.textSecondary }]}>Все циклы сохранятся общей кнопкой конструктора.{workbook.cycles.some((c) => c.imported) ? " Результаты Excel относятся только к этому клиенту." : ""}</Text>
         </Section>}
