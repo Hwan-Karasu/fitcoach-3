@@ -34,11 +34,8 @@ export function TextLogInput({ text, error, busy, onText, onParse }: Readonly<{
 }>) {
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
   return <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
-    <Text style={[styles.body, { color: colors.textSecondary }]}>
-      Вставьте тренировки из заметок. Строка с датой — тренировка («Фуллбоди 26.07.2026»), строка с буквами — упражнение,
-      «22 на 15» — подход: вес на повторы. Комментарий в скобках сохранится заметкой. Если дат нет, упражнения можно разложить по тренировкам на следующем шаге.
-    </Text>
-    <TextField label="Текст из заметок" multiline value={text} onChangeText={onText} placeholder={"Фуллбоди 26.07.2026\nЭкстензия\n0 на 15\n0 на 15"} />
+    <Text style={[styles.body, { color: colors.textSecondary }]}>Вставьте тренировки из заметок. Даты и названия тренировок необязательны: упражнения можно разложить на следующем шаге.</Text>
+    <TextField label="Текст из заметок" multiline value={text} onChangeText={onText} placeholder="Вставьте текст" />
     {!!error && <InlineNotice kind="error">{error}</InlineNotice>}
     <AppButton label="Разобрать текст" busy={busy} disabled={!text.trim()} onPress={onParse} />
   </ScrollView>;
@@ -80,7 +77,7 @@ const ExercisePlacement = memo(function ExercisePlacement({ exercise, workout, w
         <Text style={[styles.label, { color: colors.textMuted }]}>Тренировка</Text>
         <WorkoutPicker id={exercise.id} name={exercise.name} workout={workout} count={workouts} onAssign={onAssign} />
       </View>
-      {clash && <Text style={[styles.hint, { color: colors.danger }]}>Это упражнение уже есть в этой тренировке: выберите другой номер или оставьте, если так и записано.</Text>}
+      {clash && <Text style={[styles.hint, { color: colors.danger }]}>Это упражнение уже есть в этой тренировке.</Text>}
     </ExerciseCardShell>
     <DropdownMenu visible={menu} anchor={anchor} title={`Действия: ${exercise.name}`} options={options} selected={"" as MenuAction} onSelect={choose} onClose={() => setMenu(false)} />
     <ConfirmDialog visible={confirm} title="Скопировать подходы?"
@@ -123,8 +120,7 @@ export function TextLogDistribution({ log, recognized, onUpdate, cycleType, onCy
       <Text style={[styles.heading, { color: colors.textPrimary }]}>Тип цикла</Text>
       {cycleRows.map((row, i) => <View key={i} style={styles.gridRow}>{row.map((item) => <SelectionChip key={item.id} fill group="Тип цикла" label={item.label}
         selected={item.id === cycleType} onPress={() => onCycleType(item.id)} />)}</View>)}
-      <Text style={[styles.hint, { color: colors.textSecondary }]}>{repsText === null ? "Свой: план повторений останется пустым — задайте его в конструкторе."
-        : `${selectedType.label}: ${repsText} повторений. Факты из текста сохранятся как результаты.`}</Text>
+      <Text style={[styles.hint, { color: colors.textSecondary }]}>{repsText === null ? "Свой: план повторений останется пустым." : `${selectedType.label}: ${repsText} повторений.`}</Text>
     </View>
     {!!similar.length && <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <Text style={[styles.heading, { color: colors.textPrimary }]}>Похожие названия</Text>
@@ -167,7 +163,7 @@ export function TextLogWorkouts({ log, onUpdate, busy, error, onContinue }: Read
   const missing = rows.some(({ workout }) => !workout.title.trim());
   return <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
     <View style={styles.stack}>
-      <Text style={[styles.body, { color: colors.textSecondary }]}>Назовите тренировки. Дата берётся из заметок; если её нет, она останется пустой — её можно задать здесь или позже.</Text>
+      <Text style={[styles.body, { color: colors.textSecondary }]}>Назовите тренировки. Дата из заметок подставлена, если она там была.</Text>
       {rows.map(({ workout, index }) => <View key={index} style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.heading, { color: colors.textPrimary }]}>Тренировка {index + 1}</Text>
         <TextField label="Название" compact value={workout.title} error={workout.title.trim() ? undefined : "Введите название тренировки"}
