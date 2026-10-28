@@ -12,13 +12,14 @@ import { remapSupersets } from "./SupersetRules.ts";
  */
 export type { BuilderWeek, CycleType, MesocycleSettings } from "./PeriodizedModel.ts";
 
-export const CYCLE_TYPES: readonly Readonly<{ id: CycleType; label: string; reps: PlanRange; restSec: number }>[] = [
+/** Повторения по типу (решение владельца 2026-10-28, CYCLE-PRESETS); «Свой» — без повторений по умолчанию. */
+export const CYCLE_TYPES: readonly Readonly<{ id: CycleType; label: string; reps: PlanRange | null; restSec: number }>[] = [
   { id: "hypertrophy", label: "Гипертрофия", reps: { min: 8, max: 12 }, restSec: CYCLE_REST_SEC.hypertrophy },
-  { id: "strength", label: "Сила", reps: { min: 3, max: 6 }, restSec: CYCLE_REST_SEC.strength },
-  { id: "power", label: "Мощность", reps: { min: 1, max: 5 }, restSec: CYCLE_REST_SEC.power },
-  { id: "endurance", label: "Выносливость", reps: { min: 12, max: 20 }, restSec: CYCLE_REST_SEC.endurance },
-  { id: "recomp", label: "Рекомпозиция", reps: { min: 8, max: 12 }, restSec: CYCLE_REST_SEC.recomp },
-  { id: "custom", label: "Свой", reps: { min: 8, max: 12 }, restSec: CYCLE_REST_SEC.custom },
+  { id: "strength", label: "Сила", reps: { min: 6, max: 8 }, restSec: CYCLE_REST_SEC.strength },
+  { id: "power", label: "Мощность", reps: { min: 3, max: 5 }, restSec: CYCLE_REST_SEC.power },
+  { id: "endurance", label: "Выносливость", reps: { min: 12, max: 15 }, restSec: CYCLE_REST_SEC.endurance },
+  { id: "recomp", label: "Рекомпозиция", reps: { min: 9, max: 12 }, restSec: CYCLE_REST_SEC.recomp },
+  { id: "custom", label: "Свой", reps: null, restSec: CYCLE_REST_SEC.custom },
 ];
 
 /**

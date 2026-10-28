@@ -15,6 +15,12 @@ test("отдых по типу цикла: гипертрофия 2:00, сила
     { hypertrophy: 120, strength: 180, power: 240, endurance: 60, recomp: 90, custom: 90 });
 });
 
+test("CYCLE-PRESETS: повторения по типу цикла — гипертрофия 8–12, сила 6–8, мощность 3–5, выносливость 12–15, рекомпозиция 9–12, свой пусто", () => {
+  assert.deepEqual(Object.fromEntries(CYCLE_TYPES.map((item) => [item.id, item.reps])), {
+    hypertrophy: { min: 8, max: 12 }, strength: { min: 6, max: 8 }, power: { min: 3, max: 5 },
+    endurance: { min: 12, max: 15 }, recomp: { min: 9, max: 12 }, custom: null });
+});
+
 test("новые упражнения с отдыхом по умолчанию получают отдых типа цикла, остальные не меняются", () => {
   const before = draft(exercise("old", REST_DEFAULT_SEC), exercise("fresh", REST_DEFAULT_SEC), exercise("custom", 45), exercise("off", null));
   const next = restForNewExercises(before, (id) => id !== "old", 180);

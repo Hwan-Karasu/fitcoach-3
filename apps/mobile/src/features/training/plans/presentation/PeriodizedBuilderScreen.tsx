@@ -512,7 +512,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, init
           <View style={styles.grid}>
             {CYCLE_TYPES.map((item) => (
               <Pressable key={item.id} accessibilityRole="radio" accessibilityState={{ selected: cycleType === item.id }}
-                accessibilityLabel={`${item.label}, повторения ${formatRange(item.reps)}`}
+                accessibilityLabel={item.reps ? `${item.label}, повторения ${formatRange(item.reps)}` : `${item.label}, повторения не заданы`}
                 onPress={() => {
                   // Отдых упражнений следует типу цикла: не менявшийся вручную переходит на отдых нового типа во всех неделях.
                   const next = retuneBuilderRest(weeks, restOfType(cycleType), item.restSec);
