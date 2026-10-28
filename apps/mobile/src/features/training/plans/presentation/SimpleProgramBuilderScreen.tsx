@@ -40,10 +40,12 @@ const errors: Readonly<Record<string, string>> = {
  * Компоновка 2.0 (UI-OWN-026): вкладки «Программа | Шаблоны», карточка «Настройки программы», внизу «Создать»,
  * «В шаблон» и «Отмена».
  */
-export function SimpleProgramBuilderScreen({ clientId, programId, templateId, repository, simplePlanSave, exercises, picked, onPickExercise, onSaved, onCancel, renderExcel, onOpenExtended }: Readonly<{
+export function SimpleProgramBuilderScreen({ clientId, programId, templateId, templateEditId, repository, simplePlanSave, exercises, picked, onPickExercise, onSaved, onCancel, renderExcel, onOpenExtended }: Readonly<{
   onOpenExtended?: () => void;
   /** Новая программа по шаблону: черновик строится из него, если нет несохранённого черновика. */
   templateId?: string;
+  /** Правка Простого шаблона в этом же конструкторе (TEMPLATE-EDIT): сохраняется сам шаблон, программа не создаётся. */
+  templateEditId?: string;
   renderExcel?: (onApply: (draft: BuilderExcelDraft) => void, targetTitle?: string) => ReactNode;
   clientId: string;
   programId: string | null;
@@ -62,7 +64,9 @@ export function SimpleProgramBuilderScreen({ clientId, programId, templateId, re
   const colors = palette.tokens;
   const lookupState = useExerciseLookupState(exercises);
   const lookup = lookupState.lookup;
-  const key = programId ?? NEW_KEY;
+  const templateEdit = templateEditId !== undefined;
+  const key = templateEditId !== undefined ? `template:${templateEditId}` : programId ?? NEW_KEY;
+  const [editedTemplate, setEditedTemplate] = useState<Readonly<{ id: string; revision: number }> | null>(null);
   const [draft, setDraft] = useState<SimpleProgramDraft | null>(null);
   const [revision, setRevision] = useState<number | null>(null);
   /** План, на основе которого сделан черновик: по нему черновик переносится на изменившуюся программу. */
@@ -91,8 +95,15 @@ export function SimpleProgramBuilderScreen({ clientId, programId, templateId, re
     void (async () => {
       const saved = programId === null ? null : await repository.getSimplePlan(clientId, programId);
       const recovery = await repository.getBuilderDraft(clientId, key);
+      const editing = templateEditId === undefined ? null : await repository.getTemplate(templateEditId);
       if (!active) return;
+      if (editing !== null) setEditedTemplate({ id: editing.id, revision: editing.revision });
       if (recovery === null) {
+        if (templateEditId !== undefined) {
+          if (editing?.payload.kind === "SIMPLE") setDraft({ title: editing.title, plan: { weeks: editing.payload.weeks, workouts: editing.payload.workouts } });
+          else setMessage("Шаблон не найден или не Простой.");
+          return;
+        }
         setRevision(saved?.program.revision ?? null); setBase(saved?.draft ?? null);
         const template = programId === null && templateId !== undefined ? (await repository.listTemplates()).find((item) => item.id === templateId) : undefined;
         if (!active) return;
@@ -114,7 +125,7 @@ export function SimpleProgramBuilderScreen({ clientId, programId, templateId, re
       setDraft(recovery.draft); setRevision(recovery.baseRevision); setBase(recovery.base ?? saved?.draft ?? null);
     })().catch(() => { if (active) setMessage("Не удалось открыть конструктор."); });
     return () => { active = false; };
-  }, [clientId, key, programId, repository, templateId]);
+  }, [clientId, key, programId, repository, templateEditId, templateId]);
 
   const change = useCallback((next: SimpleProgramDraft) => {
     setChanged(true);
@@ -175,6 +186,27 @@ export function SimpleProgramBuilderScreen({ clientId, programId, templateId, re
     }
   };
 
+  /** Правка шаблона: сохраняется только сам шаблон; программы, созданные по нему раньше, не меняются (§48.16 п. 4). */
+  const saveTemplateEdit = async () => {
+    setShowIssues(true);
+    if (editedTemplate === null) { setMessage("Шаблон ещё открывается. Повторите через секунду."); return; }
+    if (draft.title.trim().length === 0) { setMessage("Введите название шаблона."); return; }
+    if (issues.length > 0) { setMessage(issues[0]?.message ?? "Проверьте шаблон."); return; }
+    setBusy(true); setMessage(null);
+    try {
+      await recovery.beforePublish();
+      await repository.updateTemplate(editedTemplate.id, editedTemplate.revision, draft.title.trim(),
+        { kind: "SIMPLE", weeks: draft.plan.weeks, workouts: draft.plan.workouts });
+      await repository.clearBuilderDraft(clientId, key).catch(() => undefined);
+      onSaved(editedTemplate.id);
+    } catch (error) {
+      recovery.resume();
+      const code = error instanceof Error ? error.message : "";
+      setMessage(code === "TEMPLATE_REVISION_CONFLICT" ? "Шаблон изменился в другом месте. Откройте его заново."
+        : code === "DRAFT_INVALID" ? "Шаблон не сохранился: проверьте название, недели и тренировки." : "Не удалось сохранить шаблон. Он не изменён.");
+    } finally { setBusy(false); }
+  };
+
   const discardRecovery = async () => {
     setBusy(true);
     try {
@@ -190,10 +222,10 @@ export function SimpleProgramBuilderScreen({ clientId, programId, templateId, re
 
   return (
     <TrainingEditorLayout>
-      <View style={styles.tabs}>
+      {templateEdit ? null : <View style={styles.tabs}>
         <SegmentedControl items={[{ id: "program", label: "Программа" }, { id: "templates", label: "Шаблоны" }]}
           selectedId={tab} onSelect={setTab} />
-      </View>
+      </View>}
       {tab === "templates" ? (
         <Animated.ScrollView contentContainerStyle={styles.content}>
           <SimpleTemplatesPanel repository={repository} reloadKey={templatesKey} onApply={(title, payload) => {
@@ -204,7 +236,7 @@ export function SimpleProgramBuilderScreen({ clientId, programId, templateId, re
         </Animated.ScrollView>
       ) : <>
       <Animated.ScrollView ref={scrollRef} pointerEvents={busy ? "none" : "auto"} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {programId === null && renderExcel?.((imported) => setPendingExcel(imported), draft.title || undefined)}
+        {programId === null && !templateEdit && renderExcel?.((imported) => setPendingExcel(imported), draft.title || undefined)}
         {restored ? (
           <InlineNotice kind="info">{rebased ? REBASED_NOTICE : "Восстановлен несохранённый черновик."}</InlineNotice>
         ) : null}
@@ -232,9 +264,9 @@ export function SimpleProgramBuilderScreen({ clientId, programId, templateId, re
           onReplaceExercise={(workoutId, plannedId) => onPickExercise(workoutId, plannedId)} />
       </Animated.ScrollView>
 
-      <StickyEditorFooter actionLabel={programId === null ? "Создать" : "Сохранить"} busy={busy}
-        onCancel={onCancel} secondaryAction={{ label: "В шаблон", busy: templateBusy, onPress: () => { void saveTemplate(); } }}
-        onAction={() => { void save(); }} message={recovery.error ?? message ?? saved}
+      <StickyEditorFooter actionLabel={templateEdit ? "Сохранить шаблон" : programId === null ? "Создать" : "Сохранить"} busy={busy}
+        onCancel={onCancel} {...(templateEdit ? {} : { secondaryAction: { label: "В шаблон", busy: templateBusy, onPress: () => { void saveTemplate(); } } })}
+        onAction={() => { void (templateEdit ? saveTemplateEdit() : save()); }} message={recovery.error ?? message ?? saved}
         messageKind={recovery.error ?? message ? "error" : "success"} />
       <ConfirmDialog visible={confirmRemoved} destructive confirmBusy={busy} title="В убираемых неделях есть результаты"
         description="Недели или тренировки с выполненными подходами исчезнут из плана. Результаты не удаляются: они останутся в истории и вернутся в дневник, если вернуть неделю или тренировку. Сохранить так?"

@@ -58,6 +58,8 @@ type BuilderDraftEnvelope = Readonly<{ envelope: 2; draft: SimpleProgramDraft; b
 
 /** Ключ черновика ещё не созданной Простой программы (§48.29 п. 4: черновик привязан к объекту правки). */
 export const NEW_SIMPLE_DRAFT_KEY = "new:SIMPLE";
+/** Черновик правки Простого шаблона: `template:<id>`; программой не проверяется. */
+export const TEMPLATE_DRAFT_PREFIX = "template:";
 
 /**
  * Структурная проверка в хранилище. Соответствие полей подхода профилю упражнения проверяет конструктор:
@@ -1405,7 +1407,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       WHERE workspace_id = ? AND client_id = ? AND draft_key = ?`, [this.workspaceId, clientId, key]);
     if (row === null) return null;
     // Черновик удалённой программы не воскрешает её (§48.29 п. 7).
-    if (key !== NEW_SIMPLE_DRAFT_KEY && (await this.getProgram(clientId, key)) === null) return null;
+    if (key !== NEW_SIMPLE_DRAFT_KEY && !key.startsWith(TEMPLATE_DRAFT_PREFIX) && (await this.getProgram(clientId, key)) === null) return null;
     const stored = readStoredJson(row.draftJson, storedBuilderDraft, `training_builder_drafts:${clientId}:${key}`);
     if (stored === null) return null;
     const envelope = "envelope" in stored && stored.envelope === 2 ? stored : null;

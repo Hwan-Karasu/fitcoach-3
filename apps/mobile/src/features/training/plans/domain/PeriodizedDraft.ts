@@ -45,5 +45,7 @@ export interface MesocycleBuilderScope {
 }
 
 export function mesocycleBuilderDraftKey(scope: MesocycleBuilderScope): string {
-  return scope.programId === null ? "new:PERIODIZED" : `builder:${scope.programId}:${scope.mesocycleId ?? "add"}`;
+  // Правка шаблона (TEMPLATE-EDIT): программы нет, `mesocycleId` — «template:<id шаблона>».
+  if (scope.programId === null) return scope.mesocycleId === null ? "new:PERIODIZED" : `builder:${scope.mesocycleId}`;
+  return `builder:${scope.programId}:${scope.mesocycleId ?? "add"}`;
 }

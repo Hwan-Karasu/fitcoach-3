@@ -6,16 +6,13 @@ import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, EmptyState, Inli
   TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
-import { templateKindLabels, templateSummary, type ProgramTemplate, type TemplateKind } from "../domain/TemplateModel.ts";
+import { templateKindLabels, templateOpensInBuilder, templateSummary, type ProgramTemplate, type TemplateKind } from "../domain/TemplateModel.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidate.ts";
 import { ParticipantChips } from "./ParticipantChips.tsx";
 
 type Filter = TemplateKind | "ALL";
 
-/** Шаблон открывается в конструкторе новой программы: Простая или Расширенная (несколько мезоциклов — вкладками-циклами, как книга Excel). */
-const opensInBuilder = (template: ProgramTemplate): boolean => template.payload.kind === "SIMPLE"
-  || (template.payload.kind === "PERIODIZED" && template.payload.mesocycles.length > 0);
 
 /** Значок пункта меню: получает цвет пункта (UI-OWN-046). */
 const menuIcon = (Icon: LucideIcon) => (color: string) => <Icon size={18} color={color} strokeWidth={1.9} />;
@@ -35,7 +32,7 @@ export function TemplateLibraryScreen({ clientId, repository, listCandidates, on
   listCandidates: () => Promise<readonly TrainingParticipantCandidate[]>;
   onCreated: (programId: string) => void;
   /** §48.16 п. 3: открыть шаблон для правки содержимого. */
-  onEdit?: (templateId: string) => void;
+  onEdit?: (template: ProgramTemplate) => void;
   /** Нажатие на карточку: шаблон открывается в конструкторе новой программы (Простой или Расширенный). */
   onOpenInBuilder?: (template: ProgramTemplate) => void;
 }>) {
@@ -126,7 +123,7 @@ export function TemplateLibraryScreen({ clientId, repository, listCandidates, on
             <Pressable style={styles.grow} accessibilityRole="button"
               accessibilityLabel={`Открыть шаблон ${template.title} в конструкторе`}
               onPress={() => {
-                if (onOpenInBuilder !== undefined && opensInBuilder(template)) onOpenInBuilder(template);
+                if (onOpenInBuilder !== undefined && templateOpensInBuilder(template.payload)) onOpenInBuilder(template);
                 else { anchor.current = anchors.current.get(template.id) ?? null; setMenuFor(template); }
               }}>
               <Text numberOfLines={2} style={[styles.title, { color: colors.textPrimary }]}>{template.title}</Text>
@@ -167,7 +164,7 @@ export function TemplateLibraryScreen({ clientId, repository, listCandidates, on
             setMenuFor(null);
             setMessage(null);
             if (value === "delete") { setRemoving(template); return; }
-            if (value === "edit") { onEdit?.(template.id); return; }
+            if (value === "edit") { onEdit?.(template); return; }
             if (value === "") return;
             setMembers([clientId]);
             setAction({ kind: value, template, title: value === "duplicate" ? `${template.title} — копия`.slice(0, 80) : template.title });

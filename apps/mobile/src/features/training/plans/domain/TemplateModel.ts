@@ -62,6 +62,16 @@ export function workoutsFromTemplate(workouts: readonly PlannedWorkout[], newId:
   });
 }
 
+/** Мезоциклы шаблона как циклы конструктора: Расширенная — все по порядку, Мезоцикл — один, Простая — нет. */
+export function templateCycles(payload: TemplatePayload): readonly TemplateMesocycle[] {
+  return payload.kind === "MESOCYCLE" ? [payload.mesocycle] : payload.kind === "PERIODIZED" ? payload.mesocycles : [];
+}
+
+/** Нажатие на карточку открывает шаблон в конструкторе новой программы (Простой или Расширенный). */
+export function templateOpensInBuilder(payload: TemplatePayload): boolean {
+  return payload.kind === "SIMPLE" || templateCycles(payload).length > 0;
+}
+
 /** Короткое описание для карточки библиотеки. */
 export function templateSummary(payload: TemplatePayload): string {
   const weeksWord = (count: number) => `${count} нед.`;

@@ -14,7 +14,7 @@ import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts"
 import { AddFoodScreen, type CalcClientBody, type CatalogFilter, type SaveCalcProfile, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
   type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ArchivedProgramsPanel, ParticipantSwitcher, participantTarget, ProgramMatrixScreen, PeriodizedBuilderScreen, ProgramLibraryScreen, ProgramModeChooserScreen, programLibraryTabTitles, ProgramScreen, SimpleProgramBuilderScreen,
-  WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, TemplateEditorScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type SimplePlanSavePort, type WeekEditSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort,
+  WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type SimplePlanSavePort, type WeekEditSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort,
   type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
   type TrainingPlansRepositoryPort, ProgramWeeksPanel, weekCardMarkers, weekCardTone, weekStatus, weekStatusLabels, WorkoutScreen, type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort,
   type WorkoutSlot } from "../../features/training/public.ts";
@@ -38,12 +38,11 @@ type TrainingRoutes = {
   TrainingChooser: undefined;
   TrainingTemplates: undefined;
   TrainingMatrix: { programId: string };
-  TrainingTemplateEdit: { templateId: string; picked?: PickedExercise };
   /** Конструктор Расширенной: создание; с `programId` — «+ Мезоцикл», с `mesocycleId` — правка (UI-OWN-041). */
-  TrainingCreate: { kind: ProgramKind; picked?: PickedExercise; programId?: string; mesocycleId?: string; weekIndex?: number; templateId?: string };
+  TrainingCreate: { kind: ProgramKind; picked?: PickedExercise; programId?: string; mesocycleId?: string; weekIndex?: number; templateId?: string; templateEditId?: string };
   /** `switchedAt` — конструктор переключил цикл: программа откроется на нём при выходе (CYCLE-STRIP). */
   TrainingProgram: { programId: string; weekIndex?: number; mesocycleId?: string; switchedAt?: number };
-  TrainingBuilder: { programId?: string; picked?: PickedExercise; templateId?: string } | undefined;
+  TrainingBuilder: { programId?: string; picked?: PickedExercise; templateId?: string; templateEditId?: string } | undefined;
   TrainingWeek: { programId: string; mesocycleId: string; weekIndex: number; picked?: PickedExercise };
   TrainingSimpleWorkout: { programId: string; weekIndex: number; workoutId: string; picked?: PickedExercise };
   /** Каталог для выбора упражнения; результат возвращается на экран `returnTo` с теми же параметрами. */
@@ -56,11 +55,10 @@ type TrainingRoutes = {
 };
 
 type PickReturn =
-  | Readonly<{ name: "TrainingBuilder"; params: { programId?: string } }>
+  | Readonly<{ name: "TrainingBuilder"; params: { programId?: string; templateEditId?: string } }>
   | Readonly<{ name: "TrainingWeek"; params: { programId: string; mesocycleId: string; weekIndex: number } }>
   | Readonly<{ name: "TrainingSimpleWorkout"; params: { programId: string; weekIndex: number; workoutId: string } }>
-  | Readonly<{ name: "TrainingTemplateEdit"; params: { templateId: string } }>
-  | Readonly<{ name: "TrainingCreate"; params: { kind: ProgramKind; programId?: string; mesocycleId?: string; weekIndex?: number } }>
+  | Readonly<{ name: "TrainingCreate"; params: { kind: ProgramKind; programId?: string; mesocycleId?: string; weekIndex?: number; templateEditId?: string } }>
   | Readonly<{ name: "TrainingWorkout"; params: { programId: string; weekIndex: number; workoutId: string; mesocycleId?: string } }>;
 
 const trainingTitles: Readonly<Record<keyof TrainingRoutes, string>> = {
@@ -71,7 +69,6 @@ const trainingTitles: Readonly<Record<keyof TrainingRoutes, string>> = {
   TrainingSimpleWorkout: "План тренировки",
   TrainingTemplates: "Шаблоны",
   TrainingMatrix: "Матрица недель",
-  TrainingTemplateEdit: "Шаблон",
 };
 
 const HomeStack = createNativeStackNavigator<HomeRoutes>();
@@ -231,6 +228,10 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
   const templateRoute = (template: Readonly<{ id: string; payload: Readonly<{ kind: string }> }>) => template.payload.kind === "SIMPLE"
     ? { name: "TrainingBuilder" as const, params: { templateId: template.id } }
     : { name: "TrainingCreate" as const, params: { kind: "PERIODIZED" as const, templateId: template.id } };
+  /** «Открыть и изменить»: шаблон правится в привычном конструкторе своего вида (TEMPLATE-EDIT). */
+  const templateEditRoute = (template: Readonly<{ id: string; payload: Readonly<{ kind: string }> }>) => template.payload.kind === "SIMPLE"
+    ? { name: "TrainingBuilder" as const, params: { templateEditId: template.id } }
+    : { name: "TrainingCreate" as const, params: { kind: "PERIODIZED" as const, templateEditId: template.id } };
   const createRoute = (kind: ProgramKind) => kind === "SIMPLE" ? { name: "TrainingBuilder" as const, params: {} }
     : { name: "TrainingCreate" as const, params: { kind } };
   return (
@@ -264,19 +265,11 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
           onOpenTemplates={() => navigation.navigate("TrainingTemplates")}
           onTabChange={(tab) => navigation.setOptions({ title: programLibraryTabTitles[tab] })}
           renderTemplates={() => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
-            onEdit={(templateId) => navigation.navigate("TrainingTemplateEdit", { templateId })}
+            onEdit={(template) => { const route = templateEditRoute(template); navigation.navigate(route.name, route.params as never); }}
             onOpenInBuilder={(template) => { const route = templateRoute(template); navigation.navigate(route.name, route.params as never); }}
             onCreated={(programId) => navigation.navigate("TrainingProgram", { programId })} />}
           renderArchive={() => <ArchivedProgramsPanel clientId={clientId} repository={repository} planDelete={planDelete} />}
           onOpenProgram={(programId) => navigation.navigate("TrainingProgram", { programId })} />}
-      </TrainingStack.Screen>
-      <TrainingStack.Screen name="TrainingTemplateEdit">
-        {({ navigation, route }) => <TemplateEditorScreen templateId={route.params.templateId} repository={repository}
-          exercises={exerciseLookup} picked={route.params.picked ?? null}
-          onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId,
-            ...(replace === undefined ? {} : { replace }),
-            returnTo: { name: "TrainingTemplateEdit", params: { templateId: route.params.templateId } } })}
-          onSaved={() => navigation.goBack()} onCancel={() => navigation.goBack()} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingMatrix">
         {/* UI-OWN-045: матрица — таблица с правкой на месте, без перехода в дневник по нажатию. */}
@@ -286,7 +279,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingTemplates">
         {({ navigation }) => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
-          onEdit={(templateId) => navigation.navigate("TrainingTemplateEdit", { templateId })}
+          onEdit={(template) => { const route = templateEditRoute(template); navigation.navigate(route.name, route.params as never); }}
           onOpenInBuilder={(template) => { const route = templateRoute(template); navigation.navigate(route.name, route.params as never); }}
           onCreated={(programId) => navigation.reset({ index: 1,
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId } }] })} />}
@@ -297,7 +290,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
           renderExcelImport={(renderTrigger) => <BuilderExcelImport memory={trainingTransfer} renderTrigger={renderTrigger} files={expoWorkbookFiles} exercises={exercises} label="Импортировать из Excel" clientName={viewerName}
             target={{ kind: "PROGRAM", save: async (value, mapping, rememberMatches) => { await trainingTransfer.importClient(viewer, value, mapping, { rememberMatches }); navigation.popTo("TrainingIndex"); } }} />} />}
       </TrainingStack.Screen>
-      <TrainingStack.Screen name="TrainingCreate" options={({ route }) => ({ title: route.params.mesocycleId !== undefined ? "Изменение мезоцикла"
+      <TrainingStack.Screen name="TrainingCreate" options={({ route }) => ({ title: route.params.templateEditId !== undefined ? "Правка шаблона" : route.params.mesocycleId !== undefined ? "Изменение мезоцикла"
         : route.params.programId !== undefined ? "Новый мезоцикл" : trainingTitles.TrainingCreate })}>
         {/* Расширенная — конструктор 2.0 (UI-OWN-038): программа, участники и первый мезоцикл одной записью. */}
         {({ navigation, route }) => <PeriodizedBuilderScreen clientId={viewer} repository={repository} exercises={exerciseLookup}
@@ -319,14 +312,16 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
             });
           }}
           renderExcel={(onApply, title) => <BuilderExcelImport memory={trainingTransfer} files={expoWorkbookFiles} exercises={exercises} clientName={viewerName} target={{ kind: "BUILDER", title, apply: onApply }} />}
-          onSaved={(mesocycleId) => navigation.popTo("TrainingProgram", { programId: route.params.programId!, mesocycleId })}
+          onSaved={(mesocycleId) => route.params.templateEditId !== undefined ? navigation.goBack()
+            : navigation.popTo("TrainingProgram", { programId: route.params.programId!, mesocycleId })}
           listCandidates={listCandidates} picked={route.params.picked ?? null} onCancel={() => navigation.goBack()}
           onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId,
             ...(replace === undefined ? {} : { replace }), returnTo: { name: "TrainingCreate", params: { kind: route.params.kind,
               ...(route.params.programId === undefined ? {} : { programId: route.params.programId }),
-              ...(route.params.mesocycleId === undefined ? {} : { mesocycleId: route.params.mesocycleId }) } } })}
+              ...(route.params.mesocycleId === undefined ? {} : { mesocycleId: route.params.mesocycleId }),
+              ...(route.params.templateEditId === undefined ? {} : { templateEditId: route.params.templateEditId }) } } })}
           renderTemplates={() => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
-            onEdit={(templateId) => navigation.navigate("TrainingTemplateEdit", { templateId })}
+            onEdit={(template) => { const route = templateEditRoute(template); navigation.navigate(route.name, route.params as never); }}
             onOpenInBuilder={(template) => { const route = templateRoute(template); navigation.replace(route.name, route.params as never); }}
             onCreated={(createdId) => navigation.reset({ index: 1,
               routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId: createdId } }] })} />}
@@ -350,7 +345,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
                 ...(target.mesocycleId === null ? {} : { mesocycleId: target.mesocycleId }) });
             }); }} />}
           renderTemplates={() => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
-            onEdit={(templateId) => navigation.navigate("TrainingTemplateEdit", { templateId })}
+            onEdit={(template) => { const route = templateEditRoute(template); navigation.navigate(route.name, route.params as never); }}
             onOpenInBuilder={(template) => { const route = templateRoute(template); navigation.navigate(route.name, route.params as never); }}
             onCreated={(createdId) => navigation.reset({ index: 1,
               routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId: createdId } }] })} />}
@@ -367,16 +362,17 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
             mesocycleId, weekIndex })}
           onArchived={() => navigation.popTo("TrainingIndex")} /></Profiler></RetainedTrainingProgram>}
       </TrainingStack.Screen>
-      <TrainingStack.Screen name="TrainingBuilder">
-        {({ navigation, route }) => <SimpleProgramBuilderScreen clientId={viewer} programId={route.params?.programId ?? null} {...(route.params?.templateId === undefined ? {} : { templateId: route.params.templateId })}
+      <TrainingStack.Screen name="TrainingBuilder" options={({ route }) => ({ title: route.params?.templateEditId !== undefined ? "Правка шаблона" : trainingTitles.TrainingBuilder })}>
+        {({ navigation, route }) => <SimpleProgramBuilderScreen clientId={viewer} programId={route.params?.programId ?? null} {...(route.params?.templateId === undefined ? {} : { templateId: route.params.templateId })} {...(route.params?.templateEditId === undefined ? {} : { templateEditId: route.params.templateEditId })}
           onOpenExtended={() => navigation.replace("TrainingCreate", { kind: "PERIODIZED" })}
           renderExcel={(onApply, title) => <BuilderExcelImport memory={trainingTransfer} files={expoWorkbookFiles} exercises={exercises} clientName={viewerName} target={{ kind: "BUILDER", title, apply: onApply }} />}
           onCancel={() => navigation.goBack()}
           repository={repository} simplePlanSave={mesocycleSave} exercises={exerciseLookup} picked={route.params?.picked ?? null}
           onPickExercise={(workoutId, replace) => navigation.navigate("TrainingPickExercise", { workoutId,
             ...(replace === undefined ? {} : { replace }),
-            returnTo: { name: "TrainingBuilder", params: { ...(route.params?.programId === undefined ? {} : { programId: route.params.programId }) } } })}
-          onSaved={(programId) => navigation.reset({ index: 1,
+            returnTo: { name: "TrainingBuilder", params: { ...(route.params?.programId === undefined ? {} : { programId: route.params.programId }),
+              ...(route.params?.templateEditId === undefined ? {} : { templateEditId: route.params.templateEditId }) } } })}
+          onSaved={(programId) => route.params?.templateEditId !== undefined ? navigation.goBack() : navigation.reset({ index: 1,
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId } }] })} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingPickExercise" listeners={{ beforeRemove: () => setPickQuery("") }}>

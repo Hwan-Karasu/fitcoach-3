@@ -33,7 +33,7 @@ import { useExerciseLookupState } from "./useExerciseLookup.ts";
 import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
 import { weekTypeTone } from "./weekTypeTone.ts";
 import { newPlanId, WorkoutsEditor } from "./WorkoutsEditor.tsx";
-import { weeksFromTemplate } from "../domain/TemplateModel.ts";
+import { templateCycles, weeksFromTemplate, type TemplateKind, type TemplatePayload } from "../domain/TemplateModel.ts";
 import type { BuilderExcelDraft, BuilderWorkbookCycle, BuilderWorkbookState } from "../domain/BuilderExcelDraft.ts";
 import type { BuilderWorkbookSavePort } from "../domain/BuilderWorkbookSave.ts";
 
@@ -85,7 +85,7 @@ function WeekStatusLine({ status }: Readonly<{ status: BuilderWeekStatus }>) {
   const ink = tone === null ? colors.textSecondary : readableInk(tone, [colors.surface, colors.surfaceRaised], colors.textPrimary);
   return <Text style={[styles.weekStatus, { color: ink }]}>{status.marker === null ? status.label : `${status.marker} ${status.label}`}</Text>;
 }
-function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, onSwitchCycle, onCycleShown, knownCycles, onCycles, initialWeek, mesocycleSave, repository, exercises, listCandidates, picked,
+function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, templateEditId, onSwitchCycle, onCycleShown, knownCycles, onCycles, initialWeek, mesocycleSave, repository, exercises, listCandidates, picked,
   onPickExercise, onCreated, onSaved, onCancel, renderTemplates, renderExcel, workbookSave, loadWeekStatuses }: Readonly<{
   workbookSave?: BuilderWorkbookSavePort;
   /** Правка: подписи статуса недель сохранённого мезоцикла («Не начата», «В работе», …) в порядке `weeks`; номер — неделя программы. */
@@ -97,6 +97,8 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, o
   mesocycleId?: string;
   /** Новая программа по шаблону из одного мезоцикла: недели и название берутся из него, если нет несохранённого черновика. */
   templateId?: string;
+  /** Правка шаблона в этом же конструкторе (TEMPLATE-EDIT): без программы и участников, сохраняется сам шаблон. */
+  templateEditId?: string;
   /** Правка и «+ Мезоцикл» существующей программы: переход к другому циклу (`undefined` — новый); несохранённое спрашивает защита выхода. */
   onSwitchCycle?: (mesocycleId: string | undefined) => void;
   /** Циклы программы, уже известные предыдущему экрану: полоса видна сразу, пока грузится выбранный цикл. */
@@ -176,7 +178,9 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, o
   }, [clientId, mesocycleId, programId, repository]);
 
   // Recovery Draft (§48.29): несохранённая работа переживает «Назад», выгрузку экрана и смерть процесса; публикация — только «Сохранить».
-  const scope = useMemo(() => ({ programId: programId ?? null, mesocycleId: mesocycleId ?? null }), [programId, mesocycleId]);
+  const scope = useMemo(() => ({ programId: programId ?? null, mesocycleId: templateEditId !== undefined ? `template:${templateEditId}` : mesocycleId ?? null }),
+    [programId, mesocycleId, templateEditId]);
+  const templateEdit = templateEditId !== undefined;
   const recovery = useRecoveryDraftSave<MesocycleBuilderDraft>((value) => repository.saveMesocycleBuilderDraft(clientId, scope, value),
     { hasDraft: dirty, busy: busy !== null, remove: () => repository.clearMesocycleBuilderDraft(clientId, scope) });
   const { schedule } = recovery;
@@ -280,25 +284,34 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, o
   const draft: SimpleProgramDraft = useMemo(() => ({ title: title || "Мезоцикл", plan: { weeks: 1, workouts: week.workouts } }),
     [title, week.workouts]);
   const templateApplied = useRef(false);
+  const [editedTemplate, setEditedTemplate] = useState<Readonly<{ id: string; revision: number; kind: TemplateKind }> | null>(null);
   useEffect(() => {
-    if (templateId === undefined || mode !== "create" || templateApplied.current) return;
+    const sourceId = templateEditId ?? templateId;
+    if (sourceId === undefined || mode !== "create" || templateApplied.current) return;
     templateApplied.current = true;
     void (async () => {
+      const template = await repository.getTemplate(sourceId);
+      if (template === null) { setMessage("Шаблон не найден. Конструктор пуст."); return; }
+      if (templateEditId !== undefined) setEditedTemplate({ id: template.id, revision: template.revision, kind: template.kind });
       // Несохранённый черновик важнее: его восстанавливает отдельный эффект выше, шаблон поверх него не ложится.
       if (await repository.getMesocycleBuilderDraft(clientId, scope) !== null) return;
-      const template = (await repository.listTemplates()).find((item) => item.id === templateId);
-      if (template?.payload.kind !== "PERIODIZED" || template.payload.mesocycles.length === 0) return;
-      const cycles = template.payload.mesocycles.map((mesocycle) => ({ key: newPlanId("tpl"), title: mesocycle.title,
+      const source = templateCycles(template.payload);
+      if (source.length === 0) return;
+      const cycles = source.map((mesocycle) => ({ key: newPlanId("tpl"), title: mesocycle.title,
         weeks: weeksFromTemplate(mesocycle, () => newPlanId("t")).map((week) => ({ type: week.type, workouts: week.workouts })) }));
-      // Несколько мезоциклов — тот же интерфейс «Циклы программы», что у импорта книги Excel: вкладки-циклы, общее сохранение.
-      if (cycles.length > 1) { applyWorkbook({ title: template.title, weeks: cycles[0]!.weeks, cycles }); return; }
-      const cycle = template.payload.mesocycles[0]!;
+      // Несколько мезоциклов — тот же интерфейс «Циклы программы», что у импорта книги Excel: вкладки-циклы.
+      if (cycles.length > 1) {
+        applyWorkbook({ title: template.title, weeks: cycles[0]!.weeks, cycles });
+        if (templateEditId !== undefined) { setProgramTitle(template.title); setDirty(false); }
+        return;
+      }
+      const cycle = source[0]!;
       const next = cycles[0]!.weeks;
       setProgramTitle(template.title); setTitle(cycle.title); setWeeks(next); setEditing(0);
       baselines.current = new Map(next.map((week, index) => [index, week.workouts]));
-      setDirty(true); setSaved(null); setMessage(null);
+      setDirty(templateEditId === undefined); setSaved(null); setMessage(null);
     })().catch(() => setMessage("Не удалось открыть шаблон. Конструктор пуст."));
-  }, [clientId, mode, repository, scope, templateId]);
+  }, [clientId, mode, repository, scope, templateEditId, templateId]);
   const touch = () => { setDirty(true); setSaved(null); setMessage(null); };
   const updateWeek = useCallback((index: number, next: BuilderWeek) => {
     setWeeks((current) => current.map((item, at) => at === index ? next : item));
@@ -558,7 +571,32 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, o
     } finally { setBusy(null); }
   };
 
-  const tabs = renderTemplates !== undefined && mode === "create" ? (
+  /** Правка шаблона: сохраняется только сам шаблон; программы, созданные по нему раньше, не меняются (§48.16 п. 4). */
+  const saveTemplateEdit = async () => {
+    if (editedTemplate === null) { setMessage("Шаблон ещё открывается. Повторите через секунду."); return; }
+    if (programTitle.trim().length === 0) { setMessage("Введите название шаблона."); return; }
+    const state = workbook ? currentWorkbook() : undefined;
+    const cycles = (state?.cycles ?? [{ title, weeks }]).map((cycle) => ({ title: cycle.title, weeks: cleanBuilderWeeks(cycle.weeks, metricsOf) }));
+    const invalid = cycles.find((cycle) => !cycle.title.trim() || !cycle.weeks.some((item) => item.workouts.length)
+      || cycle.weeks.some((item) => item.workouts.length > 0 && validateDraft({ title: cycle.title, plan: { weeks: 1, workouts: item.workouts } }, metricsOf).length > 0));
+    if (invalid !== undefined) { setShowIssues(true); setMessage(`Проверьте цикл «${invalid.title || "без названия"}».`); return; }
+    const payload: TemplatePayload = editedTemplate.kind === "MESOCYCLE" ? { kind: "MESOCYCLE", mesocycle: cycles[0]! } : { kind: "PERIODIZED", mesocycles: cycles };
+    setBusy("create"); setMessage(null);
+    try {
+      await recovery.beforePublish();
+      await repository.updateTemplate(editedTemplate.id, editedTemplate.revision, programTitle.trim(), payload);
+      setDirty(false);
+      await repository.clearMesocycleBuilderDraft(clientId, scope).catch(() => undefined);
+      onSaved?.(editedTemplate.id);
+    } catch (error) {
+      recovery.resume();
+      const code = error instanceof Error ? error.message : "";
+      setMessage(code === "TEMPLATE_REVISION_CONFLICT" ? "Шаблон изменился в другом месте. Откройте его заново."
+        : code === "DRAFT_INVALID" ? "Шаблон не сохранился: проверьте название, недели и тренировки." : "Не удалось сохранить шаблон. Он не изменён.");
+    } finally { setBusy(null); }
+  };
+
+  const tabs = renderTemplates !== undefined && mode === "create" && !templateEdit ? (
     <View style={styles.tabs}>
       <SegmentedControl items={[{ id: "program", label: "Программа" }, { id: "templates", label: "Шаблоны" }]} selectedId={tab} onSelect={setTab} />
     </View>
@@ -573,7 +611,7 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, o
     <TrainingEditorLayout>
       {tabs}
       <Animated.ScrollView ref={scrollRef} pointerEvents={busy !== null ? "none" : "auto"} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {renderExcel?.(applyWorkbook, mode === "create" ? programTitle || undefined : program?.title)}
+        {templateEdit ? null : renderExcel?.(applyWorkbook, mode === "create" ? programTitle || undefined : program?.title)}
         {cycleStrip !== null ? <Section title={`Циклы программы · ${programCycles.length}`}>{cycleStrip}</Section> : null}
         {workbook && <Section title={`Циклы программы · ${workbook.cycles.length}`}>
           <SegmentedControl scroll wrap items={workbook.cycles.map((c) => ({ id: c.key, label: c.key === workbook.activeKey ? title : c.title }))}
@@ -584,7 +622,7 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, o
         {restored ? <AppButton compact variant="secondary" label="Отбросить черновик и выйти" disabled={busy !== null} onPress={() => { void discard(); }} /> : null}
         {dirty ? <Text style={[styles.dirty, { color: colors.warning }]}>Есть несохранённые изменения</Text> : null}
         <Section title="Настройки мезоцикла">
-          {mode === "create" ? <TextField label="Название программы" required value={programTitle} placeholder="Например, «Подготовка к лету»"
+          {mode === "create" ? <TextField label={templateEdit ? "Название шаблона" : "Название программы"} required value={programTitle} placeholder={templateEdit ? "Название шаблона" : "Например, «Подготовка к лету»"}
             onChangeText={(value) => { setProgramTitle(value); touch(); }} />
             : <Text style={[styles.hint, { color: colors.textSecondary }]}>{`Программа «${program?.title ?? ""}»`}</Text>}
           {mode === "edit" ? <Text style={[styles.hint, { color: colors.textSecondary }]}>
@@ -658,7 +696,7 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, o
                     mesocycleId!, joining.source, placementsFor(joining.ids))); }} /></View>
               </View>
             </View> : null}
-          </> : mode === "edit" ? null : <>
+          </> : mode === "edit" || templateEdit ? null : <>
             <ParticipantAssignments repository={repository} hostProgramId={programId ?? null} values={placements}
               onAssign={(id, target) => {
                 setPlacements((current) => new Map(current).set(id, target)); touch();
@@ -744,9 +782,9 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, o
         onTertiary={() => { setConfirmResults(false); void saveMesocycle("KEEP_HISTORY"); }} />
       <ScopeMenu visible={scopeFor !== null} weekIndex={(scopeFor ?? 0) + 1} onPick={pickScope} onDismiss={dismissScope}
         weeksOf={(scope) => targetWeeks(weeks.map((item, index) => ({ index: index + 1, type: item.type })), (scopeFor ?? 0) + 1, scope)} />
-      <StickyEditorFooter actionLabel={mode === "edit" ? "Сохранить" : mode === "add" ? "Добавить" : "Создать"} busy={busy === "create"} onCancel={onCancel}
-        secondaryAction={{ label: "В шаблон", busy: busy === "template", onPress: () => { void saveTemplate(); } }}
-        onAction={() => { void create(); }} message={recovery.error ?? message ?? saved} messageKind={recovery.error !== null || message !== null ? "error" : "success"} />
+      <StickyEditorFooter actionLabel={templateEdit ? "Сохранить шаблон" : mode === "edit" ? "Сохранить" : mode === "add" ? "Добавить" : "Создать"} busy={busy === "create"} onCancel={onCancel}
+        {...(templateEdit ? {} : { secondaryAction: { label: "В шаблон", busy: busy === "template", onPress: () => { void saveTemplate(); } } })}
+        onAction={() => { void (templateEdit ? saveTemplateEdit() : create()); }} message={recovery.error ?? message ?? saved} messageKind={recovery.error !== null || message !== null ? "error" : "success"} />
       <BuilderDraftExitDialog visible={pendingSwitch !== null} busy={switchBusy} error={message}
         onSave={() => { void finishSwitch(true); }} onDiscard={() => { void finishSwitch(false); }} onContinue={() => setPendingSwitch(null)} />
       <BuilderDraftExitDialog visible={recovery.exitVisible} busy={recovery.exitBusy} error={recovery.error}
