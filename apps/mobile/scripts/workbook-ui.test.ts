@@ -192,7 +192,7 @@ test("I07 creation chooser offers both saved drafts and deletes only the selecte
 test("BUILDER-FACTS конструктор показывает факты импортированного цикла, правка уходит в сохранение, отпечаток листа прежний", async () => {
   const Builder = loadScreen(resolve(import.meta.dirname, "../src/features/training/plans/presentation/PeriodizedBuilderScreen.tsx")).PeriodizedBuilderScreen as ComponentType<Props>;
   const text = "ноги 20.10.2026\nЖим\n60 на 8\n70 на 6";
-  const incoming = builderWorkbookImport(prepareWholeWorkbook(startWorkbookReview(workoutLogWorkbook(parseWorkoutLog(text, "2026-10-28"), text,
+  const incoming = builderWorkbookImport(prepareWholeWorkbook(startWorkbookReview(workoutLogWorkbook(parseWorkoutLog(text, "2026-10-28"),
     { name: "Заметки", cycleType: "strength", reps: { min: 6, max: 8 } }), false), [{ id: "sys:press", name: "Жим", available: true }]));
   const writes: BuilderWorkbookSaveRequest[] = [];
   const props = { clientId: "client", repository: { getMesocycleBuilderDraft: async () => null, saveMesocycleBuilderDraft: async () => undefined },

@@ -21,7 +21,9 @@ type RepRange = Readonly<{ min: number; max: number | null }> | null;
 type CycleType = NonNullable<TransferCycle["cycleType"]>;
 
 const HEADER = /^(?:тренировка|день|workout|day)(?![\p{L}])/iu;
-const DATE = /(?<![\d.])(\d{1,2})[./](\d{1,2})(?:[./](\d{4}|\d{2}))?(?![\d.])/u;
+// С годом — «26.07.2026», «28.09.26», «1/8/2026»; без года — только «26.07» (двузначный месяц через точку): «Гантели 7.5»,
+// «Присед 1/2» остаются названиями.
+const DATE = /(?<![\d.,/])(\d{1,2})[./](\d{1,2})[./](\d{4}|\d{2})(?![\d.,/])|(?<![\d.,/])(\d{1,2})\.(\d{2})(?![\d.,/])/u;
 // «22 на 15», «27,5 x 14», «31 на 20 x 2» (два подхода), «5 кг на 20 раз»; одно число — только повторы.
 const SET = /^(\d{1,4}(?:\.\d{1,3})?)\s*(?:на|x|х|×|\*)\s*(\d{1,3})(?:\s*(?:x|х|×|\*)\s*(\d{1,2}))?$/u;
 const REPS = /^(\d{1,3})$/u;
@@ -38,7 +40,8 @@ function parseSets(body: string): readonly Readonly<{ loadKg: number | null; rep
 
 function findDate(body: string, today: string): Readonly<{ iso: string; match: string }> | null {
   const found = DATE.exec(body); if (!found) return null;
-  const [match, day, month, rawYear] = found;
+  const [match] = found; const rawYear = found[3];
+  const day = found[1] ?? found[4]; const month = found[2] ?? found[5];
   const pad = (v: string) => v.padStart(2, "0");
   if (rawYear) {
     const iso = spreadsheetDay(`${rawYear.length === 2 ? `20${rawYear}` : rawYear}-${pad(month!)}-${pad(day!)}`);
@@ -169,9 +172,13 @@ export function workoutLogTables(log: WorkoutLog, options: Readonly<{ name: stri
     ...(options.cycleType ? { cycle: { cycleType: options.cycleType, repRange: options.reps } } : {}) }));
 }
 
-/** Заметки как книга из листов: дальше обычная сверка Excel-импорта. ID источника — хеш текста, как у файла. */
-export function workoutLogWorkbook(log: WorkoutLog, text: string, options: Parameters<typeof workoutLogTables>[1]): PickedWorkbook {
+/**
+ * Заметки как книга из листов: дальше обычная сверка Excel-импорта. ID источника — хеш итоговых листов (текст после распределения,
+ * объединения названий и с типом цикла): иная раскладка того же текста — иной источник, а не «Конфликт цикла» в черновике.
+ */
+export function workoutLogWorkbook(log: WorkoutLog, options: Parameters<typeof workoutLogTables>[1]): PickedWorkbook {
   const tables = workoutLogTables(log, options);
   if (!tables.length) throw new Error("В тексте нет подходов: проверьте строки вида «22 на 15».");
-  return { kind: "TABLES", filename: options.name, sourceId: `text:${bytesToHex(sha256(utf8ToBytes(text)))}`, tables };
+  const identity = JSON.stringify(tables.map((t) => [t.name, t.rows, t.cycle ?? null]));
+  return { kind: "TABLES", filename: options.name, sourceId: `text:${bytesToHex(sha256(utf8ToBytes(identity)))}`, tables };
 }

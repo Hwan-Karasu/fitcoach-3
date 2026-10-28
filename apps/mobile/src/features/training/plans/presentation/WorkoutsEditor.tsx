@@ -96,7 +96,10 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, s
   const [showInstruction, setShowInstruction] = useState(item.instruction !== null);
   const refs = useRef<(TextInput | null)[]>([]);
   const factRefs = useRef<(TextInput | null)[]>([]);
-  const factLoad = setFieldsOf(metrics).includes("loadGrams");
+  const factLoadShown = setFieldsOf(metrics).includes("loadGrams") || !!facts?.some((f) => f.loadGrams !== null);
+  const factRepsShown = withReps || !!facts?.some((f) => f.reps !== null);
+  // «Далее» — в следующее существующее поле фактов (без веса у подхода только «Повт.»).
+  const focusFactAfter = (index: number) => factRefs.current.slice(index + 1).find((node) => node)?.focus();
   const group = supersetNumber(workout, item);
   const inputs: Readonly<{ key: string; label: string; kind: FieldKind; value: string; placeholder: string;
     commit: (text: string) => boolean }>[] = [
@@ -188,14 +191,14 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, s
             {facts.map((fact, row) => (
               <View key={fact.id} style={styles.fields}>
                 <Text style={[styles.factIndex, { color: colors.textMuted }]}>{row + 1}</Text>
-                {factLoad || facts.some((f) => f.loadGrams !== null) ? <InlineField ref={(node) => { factRefs.current[row * 2] = node; }} label="Кг"
-                  accessibilityLabel={`${name}, подход ${row + 1}, вес факт`} kind="decimal" placeholder="—" last={false}
+                {factLoadShown ? <InlineField ref={(node) => { factRefs.current[row * 2] = node; }} label="Кг"
+                  accessibilityLabel={`${name}, подход ${row + 1}, вес факт`} kind="decimal" placeholder="—" last={!factRepsShown && row === facts.length - 1}
                   value={fact.loadGrams === null ? "" : String(fact.loadGrams / 1000).replace(".", ",")}
-                  onNext={() => factRefs.current[row * 2 + 1]?.focus()}
+                  onNext={() => focusFactAfter(row * 2)}
                   onCommit={(text) => { const grams = parseLoad(text); return grams !== "invalid" && onFact(fact.id, { loadGrams: grams }); }} /> : null}
-                {withReps || facts.some((f) => f.reps !== null) ? <InlineField ref={(node) => { factRefs.current[row * 2 + 1] = node; }} label="Повт."
+                {factRepsShown ? <InlineField ref={(node) => { factRefs.current[row * 2 + 1] = node; }} label="Повт."
                   accessibilityLabel={`${name}, подход ${row + 1}, повторения факт`} kind="count" placeholder="—" last={row === facts.length - 1}
-                  value={fact.reps === null ? "" : String(fact.reps)} onNext={() => factRefs.current[row * 2 + 2]?.focus()}
+                  value={fact.reps === null ? "" : String(fact.reps)} onNext={() => focusFactAfter(row * 2 + 1)}
                   onCommit={(text) => onFact(fact.id, { reps: text === "" ? null : Number(text) })} /> : null}
               </View>
             ))}

@@ -9,6 +9,8 @@ import { transferReviewScopes, type TrainingTransfer } from "../../features/impo
 import { transferSummary } from "../../shared/training-transfer/TrainingTransfer.ts";
 import { TransferIssuesEditor } from "./TransferIssuesEditor.tsx";
 
+const FOCUS_FRESH_MS = 2000;
+
 export function TrainingTransferReviewScreen({ value, mapping, catalog, clientName, busy, error, onMatch, onConfirm, onBack, onShare, planOnly = false,
   controls, controlsExpanded = false, onCorrectIssue, onParameters, parametersLabel, blocked = false, sheetMode = false, actionLabel, footerNote, blockedReason, allowUnknownDates = false,
   selectedValidation = false, viewWeek, onViewWeek, issueInputs, onIssueInputs, focus }: Readonly<{
@@ -36,14 +38,15 @@ export function TrainingTransferReviewScreen({ value, mapping, catalog, clientNa
   const cards = useRef(new Map<string, View>());
   const register = useCallback((id: string, node: View | null) => { if (node) cards.current.set(id, node); else cards.current.delete(id); }, []);
   useEffect(() => {
-    if (!focus) return;
+    // Только свежее касание подсказки: фокус хранится в записи листа, и возврат на лист (новый экран) не должен снова прокручивать.
+    if (!focus || Date.now() - focus.at > FOCUS_FRESH_MS) return;
     // Неделя и лист меняются в том же касании: измерять после отрисовки новой недели.
     const timer = setTimeout(() => {
       const node = cards.current.get(focus.id); const base = content.current;
       if (node && base) node.measureLayout(base, (_x, y) => scroll.current?.scrollTo({ y: Math.max(0, y), animated: true }));
     }, 60);
     return () => clearTimeout(timer);
-  }, [focus, weekIndex]);
+  }, [focus]);
   const setWeekIndex = (index: number) => { if (onViewWeek) onViewWeek(index); else setLocalWeek(index); };
   const scope = scopes.find((s) => s.id === scopeId) ?? scopes[0];
   const week = scope?.weeks.find((w) => w.index === weekIndex) ?? scope?.weeks[0];

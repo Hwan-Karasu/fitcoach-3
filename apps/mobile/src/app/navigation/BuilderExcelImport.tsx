@@ -114,7 +114,7 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
   const continueText = () => { void run(async (id) => {
     if (!log) return;
     const reps = CYCLE_TYPES.find((item) => item.id === cycleType)!.reps;
-    const picked = workoutLogWorkbook(mergeLogNames(log, similar.filter((_, i) => merged.has(i))), logText, { name: "Заметки", cycleType, reps });
+    const picked = workoutLogWorkbook(mergeLogNames(log, similar.filter((_, i) => merged.has(i))), { name: "Заметки", cycleType, reps });
     await open(picked, id);
   }); };
   const patch = (change: Partial<WorkbookReviewEntry>) => setSession((s) => s ? updateWorkbookEntry(s, change) : null);
