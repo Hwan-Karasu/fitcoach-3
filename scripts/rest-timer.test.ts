@@ -7,7 +7,7 @@ import { RestTimerService } from "../apps/mobile/src/features/training/execution
 import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParticipant } from
   "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 import type { RestSignalPort } from "../apps/mobile/src/features/training/execution/domain/RestTimerPorts.ts";
-import { adjustTimer, isFinished, pauseTimer, remainingSec, resumeTimer, runningTimers, startTimer } from
+import { adjustTimer, isFinished, nextFinishAt, pauseTimer, remainingSec, resumeTimer, runningTimers, startTimer } from
   "../apps/mobile/src/features/training/execution/domain/RestTimerRules.ts";
 import { DEV_TRAINING_EXECUTION_LEDGER, devTrainingExecutionCatalog } from
   "./d01/history/DevTrainingExecutionCatalog.ts";
@@ -171,6 +171,17 @@ test("T03 правила таймера: перезапуск того же уп
   assert.equal(remainingSec(first.timer, T0 + 179_001), 1);
   assert.equal(remainingSec(first.timer, T0 + 200_000), 0);
   assert.throws(() => startTimer([], { ...bench, durationSec: 0 }, "t0", T0), { message: "REST_DURATION_INVALID" });
+});
+
+test("PERF-REST-DOCK панель просыпается только к ближайшему окончанию идущего таймера; пауза и закончившиеся не будят", () => {
+  const bench180 = startTimer([], bench, "t1", T0);
+  const curl90 = startTimer(bench180.timers, { ...bench, exerciseKey: "pe-curl", durationSec: 90 }, "t2", T0);
+  assert.equal(nextFinishAt(curl90.timers, T0), T0 + 90_000, "ближайшее окончание — сгибания через 90 с");
+  assert.equal(nextFinishAt(curl90.timers, T0 + 90_000), T0 + 180_000, "закончившийся таймер больше не будит");
+  const paused = curl90.timers.map((timer) => timer.id === "t2" ? pauseTimer(timer, T0 + 10_000) : timer);
+  assert.equal(nextFinishAt(paused, T0 + 10_000), T0 + 180_000, "таймер на паузе не заканчивается");
+  assert.equal(nextFinishAt(paused, T0 + 180_000), null);
+  assert.equal(nextFinishAt([], T0), null);
 });
 
 test("пауза: остаток замирает, продолжение считает окончание заново, ±15 на паузе меняет остаток, пауза не заканчивается", () => {

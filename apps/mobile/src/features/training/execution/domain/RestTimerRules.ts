@@ -78,6 +78,16 @@ export function remainingSec(timer: RestTimer, now: number): number {
   return Math.max(0, Math.ceil(leftMs / 1000));
 }
 
+/**
+ * Ближайшее окончание идущего таймера позже `now` (`null` — будить нечего). Цифры отсчёта рисует UI-поток, JS просыпается только к
+ * «Готово» (PERF-REST-DOCK): приостановленный таймер не заканчивается, закончившийся к `now` уже показан.
+ */
+export function nextFinishAt(timers: readonly RestTimer[], now: number): number | null {
+  let next: number | null = null;
+  for (const timer of timers) if (timer.pausedLeftMs === null && timer.endAt > now && (next === null || timer.endAt < next)) next = timer.endAt;
+  return next;
+}
+
 /** Идущие и приостановленные таймеры (закончившиеся отсеиваются): первым — ближайший к окончанию. */
 export function runningTimers(timers: readonly RestTimer[], now: number): readonly RestTimer[] {
   return timers.filter((timer) => !isFinished(timer, now)).sort((a, b) => a.endAt - b.endAt);
