@@ -92,7 +92,9 @@ test("I07 ten consecutive imports with and without history keep a single modal a
   assert.deepEqual(saved, Array(10).fill(3)); await act(async () => renderer.unmount());
 });
 
-test("TEXT-LOG-2 заметки: разбор, «+» раскладывает упражнения по тренировкам, обычная сверка сохраняет одну программу", async () => {
+const textOf = (r: ReactTestRenderer) => nodes(r, "Text").map((n) => [n.props.children].flat(Infinity).join("")).join("|");
+
+test("TEXT-LOG-3 заметки: единый список с пикером тренировки, дубль, название тренировки на втором этапе, обычная сверка сохраняет одну программу", async () => {
   type Saved = { programs: { mesocycles: { cycleType?: string; weeks: { workouts: { title: string }[] }[] }[] }[]; sessions: unknown[] };
   const saved: Saved[] = []; let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(createElement(Importer, { files: { pick: async () => null }, exercises: { list: async () => catalogue },
@@ -101,17 +103,35 @@ test("TEXT-LOG-2 заметки: разбор, «+» раскладывает у
   const field = nodes(renderer, "TextField").find((n) => n.props.label === "Текст из заметок")!;
   await act(async () => (field.props.onChangeText as (text: string) => void)("Жим\n60 на 8\nЖим\n70 на 6"));
   await press(renderer, "Разобрать текст");
-  const plus = nodes(renderer, "SelectionChip").filter((n) => n.props.label === "+");
-  assert.equal(plus.length, 2);
-  await act(async () => (plus[1]!.props.onPress as () => void)());
-  assert.deepEqual(nodes(renderer, "TextField").filter((n) => n.props.label === "Название").map((n) => n.props.value), ["Тренировка 1", "Тренировка 2"]);
+  // Единый список: две карточки, у каждой свой пикер 1–4 и «+»; нижняя панель — из актуального распределения.
+  assert.equal(nodes(renderer, "ExerciseCard").length, 2);
+  assert.equal(nodes(renderer, "SelectionChip").filter((n) => n.props.label === "+").length, 2);
+  assert.match(textOf(renderer), /Распознано: 1 тренировка, 2 упражнения, 2 подхода/);
+  assert.match(textOf(renderer), /Будет создано: 1 тренировка/);
+  assert.match(textOf(renderer), /Упражнения \(2\)/);
+  await act(async () => (nodes(renderer, "SelectionChip").filter((n) => n.props.label === "2")[1]!.props.onPress as () => void)());
+  assert.match(textOf(renderer), /Будет создано: 2 тренировки/);
+  assert.match(textOf(renderer), /Распознано: 1 тренировка/);
+  // Дубль встаёт сразу под исходной карточкой и сразу получает свой номер тренировки.
+  const menu = nodes(renderer, "DropdownMenu")[0]!;
+  await act(async () => (menu.props.onSelect as (value: string) => void)("duplicate"));
+  assert.equal(nodes(renderer, "ExerciseCard").length, 3);
+  assert.match(textOf(renderer), /Упражнения \(3\)/);
+  assert.match(textOf(renderer), /Распределено: 3 упражнения, 3 подхода/);
+  await press(renderer, "Далее");
+  const names = () => nodes(renderer, "TextField").filter((n) => n.props.label === "Название");
+  assert.deepEqual(names().map((n) => n.props.value), ["Тренировка 1", "Тренировка 2"]);
+  // Название обязательно: с пустым названием дальше не пройти.
+  await act(async () => (names()[1]!.props.onChangeText as (text: string) => void)(""));
+  assert.ok(nodes(renderer, "AppButton").find((n) => n.props.label === "Далее: сверка упражнений")!.props.disabled);
+  await act(async () => (names()[1]!.props.onChangeText as (text: string) => void)("Тяга"));
   await press(renderer, "Далее: сверка упражнений");
   await until(renderer, () => nodes(renderer, "AppButton").some((n) => n.props.label === "Продолжить импорт выбранных листов" && !n.props.disabled));
   await press(renderer, "Продолжить импорт выбранных листов"); await press(renderer, "Импортировать выбранные листы");
   await until(renderer, () => nodes(renderer, "NativeModal").length === 0);
   const cycle = saved[0]!.programs[0]!.mesocycles[0]!;
   assert.equal(cycle.cycleType, "hypertrophy");
-  assert.deepEqual(cycle.weeks.map((w) => w.workouts.map((x) => x.title)), [["Тренировка 1", "Тренировка 2"]]);
+  assert.deepEqual(cycle.weeks.map((w) => w.workouts.map((x) => x.title)), [["Тренировка 1", "Тяга"]]);
   assert.equal(saved[0]!.sessions.length, 2);
   await act(async () => renderer.unmount());
 });

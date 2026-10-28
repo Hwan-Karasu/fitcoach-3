@@ -250,6 +250,15 @@
       "remaining": "Owner phone check: paste, distribution, review, builder import"
     },
     {
+      "id": "TEXT-LOG-3",
+      "state": "CODE_IMPLEMENTED_HOST_VERIFIED",
+      "inputs": ["Owner mockup and spec 2026-10-28: single exercise list with per-exercise workout picker, bottom summary bar", "Owner decisions: duplicate and copy-sets buttons, workout name/date on a separate step, no split-on-repeat"],
+      "refs": ["ADR-047", "TEXT-LOG"],
+      "acceptance": "All exercises in one list; each card has a 1..N + picker; duplicate is a plan-only copy assigned a workout on the same step; copy-sets is an explicit confirmed action; unused numbers create no workouts; workout title (required) and date are set on the next step; stats bar matches the actual distribution",
+      "evidence": "text-workout-log (9 tests) and workbook-ui tests; test:foundation 1030/1030, excel:test 99/99, training:test 265/265",
+      "remaining": "Owner phone check: list, picker, duplicate, copy sets, workouts step, result in the program"
+    },
+    {
       "id": "EXCEL-AI",
       "state": "CODE_IMPLEMENTED_HOST_VERIFIED",
       "inputs": ["Owner idea 2026-10-28: downloadable sample plus AI prompt for foreign workbooks"],

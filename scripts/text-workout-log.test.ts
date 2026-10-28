@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { editLogWorkout, mergeLogNames, moveLogExercise, parseWorkoutLog, similarLogNames, workoutLogTables, workoutLogWorkbook } from "../apps/mobile/src/features/import/domain/TextWorkoutLog.ts";
+import { assignLogExercise, copyLogSets, copySetsSource, duplicateLogExercise, editLogWorkout, logExercises, logStats, mergeLogNames, parseWorkoutLog, removeLogExercise, similarLogNames, workoutLogTables, workoutLogWorkbook } from "../apps/mobile/src/features/import/domain/TextWorkoutLog.ts";
 import { startWorkbookReview } from "../apps/mobile/src/features/import/domain/WorkbookReviewSession.ts";
 import { prepareWholeWorkbook, wholeWorkbookStatus } from "../apps/mobile/src/features/import/domain/WholeWorkbookImport.ts";
 import { builderWorkbookImport } from "../apps/mobile/src/features/import/domain/BuilderWorkbookImport.ts";
@@ -45,10 +45,11 @@ test("TEXT-LOG-1 дата без года — ближайшая прошедш�
 
 test("TEXT-LOG-2 распределение: «+» создаёт тренировку, перенос, правка названия и даты, объединение названий", () => {
   let log = parseWorkoutLog("присед\n60 на 8\nжим\n40 на 10\nтяга\n50 на 10", "2026-10-28");
-  log = moveLogExercise(log, 0, 1, 1);
-  log = moveLogExercise(log, 0, 1, 1);
+  assert.deepEqual(log.workouts[0]!.exercises.map((e) => e.id), ["1", "3", "5"]);
+  log = assignLogExercise(log, "3", 1);
+  log = assignLogExercise(log, "5", 1);
   assert.deepEqual(log.workouts.map((w) => [w.title, w.exercises.map((e) => e.name)]), [["Тренировка 1", ["присед"]], ["Тренировка 2", ["жим", "тяга"]]]);
-  log = moveLogExercise(log, 0, 0, 1);
+  log = assignLogExercise(log, "1", 1);
   assert.deepEqual(log.workouts.map((w) => w.exercises.map((e) => e.name)), [[], ["жим", "тяга", "присед"]]);
   log = editLogWorkout(log, 1, { title: "Ноги", date: "2026-10-20" });
   log = mergeLogNames(log, [["присед", "тяга"]]);
@@ -58,6 +59,55 @@ test("TEXT-LOG-2 распределение: «+» создаёт трениро
   // Пустая тренировка не создаёт неделю; дата правки попадает в занятие.
   assert.deepEqual(value.programs[0]!.mesocycles[0]!.weeks.map((w) => w.workouts.map((x) => x.title)), [["Ноги"]]);
   assert.deepEqual(value.sessions.map((s) => [s.actualDate, s.facts.length]), [["2026-10-20", 3]]);
+});
+
+test("TEXT-LOG-3 номер дальше последней тренировки создаёт пустые, они не попадают в импорт; одинаковые названия — разные id", () => {
+  let log = parseWorkoutLog("присед\n60 на 8\nприсед\n70 на 6", "2026-10-28");
+  assert.deepEqual(log.workouts[0]!.exercises.map((e) => e.id), ["1", "3"]);
+  log = assignLogExercise(log, "3", 3);
+  assert.deepEqual(logExercises(log).map((item) => [item.exercise.id, item.workout]), [["1", 0], ["3", 3]]);
+  assert.deepEqual(log.workouts.map((w) => [w.title, w.exercises.length]), [["Тренировка 1", 1], ["Тренировка 2", 0], ["Тренировка 3", 0], ["Тренировка 4", 1]]);
+  assert.deepEqual(logStats(log), { workouts: 2, exercises: 2, sets: 2 });
+  const [table] = workoutLogTables(log, { name: "Заметки", reps: null });
+  assert.deepEqual(parse(table!).programs[0]!.mesocycles[0]!.weeks[0]!.workouts.map((w) => w.title), ["Тренировка 1", "Тренировка 4"]);
+  assert.equal(assignLogExercise(log, "нет", 1), log);
+});
+
+test("TEXT-LOG-3 дубликат — плановая строка без фактов в следующей тренировке; копирование подходов переносит факты", () => {
+  let log = parseWorkoutLog("жим\n60 на 8\n60 на 8\n50 на 10", "2026-10-28");
+  const duplicated = duplicateLogExercise(log, "1")!;
+  log = duplicated.log;
+  assert.equal(duplicated.id, "1+1");
+  assert.deepEqual(log.workouts.map((w) => w.exercises.map((e) => [e.id, e.sets.length, e.planSets ?? null])), [[["1", 3, null]], [["1+1", 0, 3]]]);
+  assert.equal(duplicateLogExercise(log, "1")!.id, "1+2");
+  // Порядок списка — по тексту, копия сразу после исходного, и он не зависит от тренировки.
+  assert.deepEqual(logExercises(assignLogExercise(log, "1+1", 4)).map((item) => [item.exercise.id, item.workout]), [["1", 0], ["1+1", 4]]);
+  assert.equal(copySetsSource(log, "1+1")!.id, "1");
+  assert.equal(copySetsSource(log, "1"), null);
+  assert.deepEqual(logStats(log), { workouts: 2, exercises: 2, sets: 6 });
+  // Копия без фактов даёт одну плановую строку «3 подхода»: подходы создаются, фактов нет.
+  const value = parse(workoutLogTables(log, { name: "Заметки", reps: { min: 8, max: 12 } })[0]!);
+  assertValidTransfer(value);
+  const planned = value.programs[0]!.mesocycles[0]!.weeks[0]!.workouts[1]!.exercises[0]!;
+  assert.deepEqual(planned.sets.map((s) => [s.reps, s.repsMax]), [[8, 12], [8, 12], [8, 12]]);
+  assert.deepEqual(value.sessions.map((s) => s.facts.length), [3]);
+  // «Копировать подходы»: только из упражнения с тем же названием и подходами; планового счётчика после этого нет.
+  assert.equal(copyLogSets(log, "1+1", "1+1"), log);
+  const copied = copyLogSets(log, "1+1", "1");
+  assert.deepEqual(copied.workouts[1]!.exercises[0]!.sets.map((s) => [s.loadKg, s.reps]), [[60, 8], [60, 8], [50, 10]]);
+  assert.equal(copied.workouts[1]!.exercises[0]!.planSets, undefined);
+  assert.deepEqual(logStats(copied), { workouts: 2, exercises: 2, sets: 6 });
+  // Источник — только с тем же названием; существующие факты не затираются.
+  const other = parseWorkoutLog("жим\n60 на 8\nтяга\n50 на 10\nприсед", "2026-10-28");
+  assert.equal(copySetsSource(other, "7"), null);
+  assert.equal(copyLogSets(other, "1", "3"), other);
+  // Названия после «объединить» расходятся с сырым журналом: копирование идёт по id и не зависит от имён.
+  const renamed = parseWorkoutLog("присед\n60 на 8\nприсед\n", "2026-10-28");
+  assert.deepEqual(copyLogSets(renamed, "3", "1").workouts[0]!.exercises[1]!.sets.map((s) => s.reps), [8]);
+  // Убрать можно только копию.
+  assert.equal(removeLogExercise(log, "1"), log);
+  assert.deepEqual(removeLogExercise(log, "1+1").workouts.map((w) => w.exercises.length), [1, 0]);
+  assert.deepEqual(logStats(removeLogExercise(log, "1+1")), { workouts: 1, exercises: 1, sets: 3 });
 });
 
 test("TEXT-LOG-1 похожие названия только предлагаются: опечатка, окончание, порядок слов; разные упражнения — нет", () => {

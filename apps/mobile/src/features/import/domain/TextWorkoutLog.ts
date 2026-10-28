@@ -11,7 +11,8 @@ import type { TransferCycle } from "../../../shared/training-transfer/TrainingTr
  * дальше работают обычные проверка, сверка упражнений и запись Excel-импорта.
  */
 export interface LogSet { readonly loadKg: number | null; readonly reps: number; readonly note: string | null; readonly line: number }
-export interface LogExercise { readonly name: string; readonly note: string | null; readonly sets: readonly LogSet[]; readonly line: number }
+/** `id` стабилен при переносах и правках названия: номер строки текста, у копии — `<id>+<n>`; `planSets` — плановая копия без фактов. */
+export interface LogExercise { readonly id: string; readonly name: string; readonly note: string | null; readonly sets: readonly LogSet[]; readonly line: number; readonly planSets?: number }
 export interface LogWorkout { readonly title: string; readonly date: string | null; readonly exercises: readonly LogExercise[]; readonly line: number }
 export interface WorkoutLog {
   readonly workouts: readonly LogWorkout[];
@@ -59,7 +60,7 @@ const titleOf = (text: string) => {
 };
 
 export function parseWorkoutLog(text: string, today: string): WorkoutLog {
-  type Exercise = { name: string; note: string | null; sets: LogSet[]; line: number };
+  type Exercise = { id: string; name: string; note: string | null; sets: LogSet[]; line: number };
   type Workout = { title: string; date: string | null; exercises: Exercise[]; line: number };
   const workouts: Workout[] = []; const unknownLines: { line: number; text: string }[] = [];
   let workout: Workout | null = null; let exercise: Exercise | null = null;
@@ -80,20 +81,92 @@ export function parseWorkoutLog(text: string, today: string): WorkoutLog {
     }
     if (/^\d/u.test(body) || !/\p{L}/u.test(body)) { unknownLines.push({ line, text: source }); continue; }
     if (!workout) { workout = { title: "Тренировка 1", date: null, exercises: [], line }; workouts.push(workout); }
-    exercise = { name: body, note, sets: [], line }; workout.exercises.push(exercise);
+    exercise = { id: String(line), name: body, note, sets: [], line }; workout.exercises.push(exercise);
   }
   return { workouts, unknownLines };
 }
 
-/** Шаг «Распределение» (TEXT-LOG-2): упражнение в тренировку `target`; `target` = число тренировок — новая «Тренировка N+1». */
-export function moveLogExercise(log: WorkoutLog, workout: number, exercise: number, target: number): WorkoutLog {
-  const item = log.workouts[workout]?.exercises[exercise];
-  if (!item || target === workout || target < 0 || target > log.workouts.length) return log;
-  const workouts = target === log.workouts.length
-    ? [...log.workouts, { title: `Тренировка ${target + 1}`, date: null, exercises: [], line: item.line }] : [...log.workouts];
-  workouts[workout] = { ...workouts[workout]!, exercises: workouts[workout]!.exercises.filter((_, i) => i !== exercise) };
-  workouts[target] = { ...workouts[target]!, exercises: [...workouts[target]!.exercises, item] };
+const WORKOUTS_MAX = 100;
+const findExercise = (log: WorkoutLog, id: string) => {
+  for (const [workout, item] of log.workouts.entries()) {
+    const exercise = item.exercises.findIndex((e) => e.id === id);
+    if (exercise >= 0) return { workout, exercise, item: item.exercises[exercise]! };
+  }
+  return null;
+};
+/** Попадает ли упражнение в импорт: есть подходы из текста или это плановая копия. */
+const included = (exercise: LogExercise) => exercise.sets.length > 0 || (exercise.planSets ?? 0) > 0;
+
+/**
+ * Шаг «Распределение»: упражнение `id` в тренировку `target`. Номер дальше последней тренировки создаёт недостающие пустые
+ * «Тренировка N» (в импорт пустые не попадают). Дата и название принадлежат тренировке и не меняются вместе с упражнением.
+ */
+export function assignLogExercise(log: WorkoutLog, id: string, target: number): WorkoutLog {
+  const at = findExercise(log, id);
+  if (!at || target === at.workout || target < 0 || target >= WORKOUTS_MAX) return log;
+  const workouts = [...log.workouts];
+  while (workouts.length <= target) workouts.push({ title: `Тренировка ${workouts.length + 1}`, date: null, exercises: [], line: at.item.line });
+  workouts[at.workout] = { ...workouts[at.workout]!, exercises: workouts[at.workout]!.exercises.filter((e) => e.id !== id) };
+  workouts[target] = { ...workouts[target]!, exercises: [...workouts[target]!.exercises, at.item] };
   return { ...log, workouts };
+}
+
+/** Копия упражнения без фактов — плановая строка (`planSets` подходов); сразу уходит в следующую тренировку, номер меняется пикером. */
+export function duplicateLogExercise(log: WorkoutLog, id: string): Readonly<{ log: WorkoutLog; id: string }> | null {
+  const at = findExercise(log, id); if (!at) return null;
+  const base = id.split("+")[0]!; const taken = new Set(log.workouts.flatMap((w) => w.exercises.map((e) => e.id)));
+  let n = 1; while (taken.has(`${base}+${n}`)) n += 1;
+  const copy: LogExercise = { id: `${base}+${n}`, name: at.item.name, note: null, sets: [], line: at.item.line, planSets: Math.max(1, at.item.sets.length || at.item.planSets || 1) };
+  const workouts = log.workouts.map((w, i) => i === at.workout ? { ...w, exercises: [...w.exercises, copy] } : w);
+  return { log: assignLogExercise({ ...log, workouts }, copy.id, at.workout + 1), id: copy.id };
+}
+
+/**
+ * Переносит подходы (вес, повторы, заметки) в упражнение без фактов. Источник выбирает `copySetsSource` (то же название);
+ * здесь только защита: факты существующих подходов не затираются.
+ */
+export function copyLogSets(log: WorkoutLog, toId: string, fromId: string): WorkoutLog {
+  const to = findExercise(log, toId); const from = findExercise(log, fromId);
+  if (!to || !from || toId === fromId || to.item.sets.length || !from.item.sets.length) return log;
+  const { id, name, note, line } = to.item;
+  return { ...log, workouts: log.workouts.map((w, i) => i === to.workout ? { ...w, exercises: w.exercises.map((e) => e.id === toId ? { id, name, note, line, sets: from.item.sets } : e) } : w) };
+}
+
+/** Убирает копию; исходные упражнения из текста не удаляются. */
+export function removeLogExercise(log: WorkoutLog, id: string): WorkoutLog {
+  if (!id.includes("+")) return log;
+  return { ...log, workouts: log.workouts.map((w) => ({ ...w, exercises: w.exercises.filter((e) => e.id !== id) })) };
+}
+
+/**
+ * Единый список упражнений в порядке текста (копия — сразу после исходного) с номером тренировки. Порядок не зависит от
+ * распределения: перенос в другую тренировку не двигает карточку.
+ */
+export function logExercises(log: WorkoutLog): readonly Readonly<{ exercise: LogExercise; workout: number }>[] {
+  const key = (id: string) => { const [base = "0", copy = "0"] = id.split("+"); return [Number(base), Number(copy)] as const; };
+  return log.workouts.flatMap((w, workout) => w.exercises.map((exercise) => ({ exercise, workout })))
+    .sort((a, b) => { const [x, y] = [key(a.exercise.id), key(b.exercise.id)]; return x[0] - y[0] || x[1] - y[1]; });
+}
+
+/**
+ * Откуда копировать подходы в упражнение без фактов: исходное упражнение копии, иначе ближайшее по тексту предыдущее с тем же названием.
+ */
+export function copySetsSource(log: WorkoutLog, id: string): LogExercise | null {
+  const list = logExercises(log).map((item) => item.exercise); const at = list.findIndex((e) => e.id === id);
+  if (at < 0 || list[at]!.sets.length) return null;
+  const key = logNameKey(list[at]!.name); const same = list.filter((e) => e.id !== id && e.sets.length && logNameKey(e.name) === key);
+  const before = same.filter((e) => list.indexOf(e) < at);
+  return same.find((e) => e.id === id.split("+")[0]) ?? before[before.length - 1] ?? same[0] ?? null;
+}
+
+/** Что попадёт в импорт: тренировки, упражнения и подходы (у плановой копии — плановые). Пустые тренировки не считаются. */
+export function logStats(log: WorkoutLog): Readonly<{ workouts: number; exercises: number; sets: number }> {
+  let workouts = 0; let exercises = 0; let sets = 0;
+  for (const workout of log.workouts) {
+    const items = workout.exercises.filter(included); if (!items.length) continue;
+    workouts += 1; exercises += items.length; sets += items.reduce((n, e) => n + (e.sets.length || e.planSets!), 0);
+  }
+  return { workouts, exercises, sets };
 }
 
 export function editLogWorkout(log: WorkoutLog, index: number, patch: Readonly<{ title?: string; date?: string | null }>): WorkoutLog {
@@ -144,8 +217,8 @@ const WEEKS_PER_SHEET = 52;
  * тренировок, они упорядочиваются по дате. Повтор названия в неделе получает номер («Фуллбоди 2»). План повторений — по типу цикла.
  */
 export function workoutLogTables(log: WorkoutLog, options: Readonly<{ name: string; reps: RepRange; cycleType?: CycleType }>): readonly ImportTable[] {
-  // Тренировка без подходов (опустевшая при распределении) не создаёт неделю.
-  const present = log.workouts.filter((w) => w.exercises.some((e) => e.sets.length));
+  // Тренировка без подходов и плановых копий (опустевшая при распределении) не создаёт неделю.
+  const present = log.workouts.filter((w) => w.exercises.some(included));
   const dated = present.length > 0 && present.every((w) => w.date !== null);
   const ordered = dated ? [...present].sort((a, b) => a.date!.localeCompare(b.date!)) : present;
   const canonical = new Map<string, string>();
@@ -159,7 +232,15 @@ export function workoutLogTables(log: WorkoutLog, options: Readonly<{ name: stri
     const title = count === 1 ? workout.title : `${workout.title} ${count}`;
     const sheet = sheets[Math.floor((week - 1) / WEEKS_PER_SHEET)] ??= { rows: [COLUMNS.map((field) => legacyFields[field])], cellOrigins: [[]] };
     for (const exercise of workout.exercises) {
+      if (!included(exercise)) continue;
       const name = canonical.get(logNameKey(exercise.name)) ?? exercise.name; canonical.set(logNameKey(exercise.name), name);
+      if (!exercise.sets.length) {
+        // Плановая копия: строка без фактов, число подходов — в «Подходах».
+        sheet.rows.push([String((week - 1) % WEEKS_PER_SHEET + 1), title, name, exercise.planSets, planReps, "", "", "", "", "", workout.date ?? ""]);
+        const at = (row: number): ImportCellOrigin => ({ row, column: 1 });
+        sheet.cellOrigins.push([null, at(workout.line), at(exercise.line), null, null, null, null, null, null, null, at(workout.line)]);
+        continue;
+      }
       const note = [exercise.note, ...exercise.sets.map((set, i) => set.note ? `Подход ${i + 1}: ${set.note}` : null)].filter(Boolean).join("; ");
       exercise.sets.forEach((set, i) => {
         sheet.rows.push([String((week - 1) % WEEKS_PER_SHEET + 1), title, name, 1, planReps, "", String(set.reps), set.loadKg === null ? "" : String(set.loadKg), "", i === 0 ? note : "", workout.date ?? ""]);

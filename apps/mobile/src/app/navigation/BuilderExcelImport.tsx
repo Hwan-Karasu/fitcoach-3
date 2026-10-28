@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppButton, InlineNotice, LoadingState, ScreenHeader, SegmentedControl, TextField } from "../../shared/ui/components/public.ts";
@@ -7,11 +7,11 @@ import { CustomExerciseEditorScreen, ExerciseLibraryScreen, displayNameOf, type 
 import { applyWorkbookColumns, autoMatchWorkbookEntry, builderWorkbookImport, compileWholeWorkbook, correctWorkbookValue,
   emptyWorkbookSheet, prepareWorkbookResponsive, requireWorkbookNameChoices, selectWorkbookImportSheets, selectWorkbookSheet, setWorkbookNameMatch,
   startWorkbookReview, updateWorkbookEntry, wholeWorkbookStatus, workbookMatchesToRemember, workbookSourceNames, workbookUnmatchedTargets,
-  mergeLogNames, parseWorkoutLog, similarLogNames, workoutLogWorkbook,
+  logStats, mergeLogNames, parseWorkoutLog, similarLogNames, workoutLogWorkbook,
   type ExerciseImportMatch, type ExerciseImportMatchesPort, type PickedWorkbook, type TrainingTransfer, type WorkbookFilesPort,
   type WorkbookReviewEntry, type WorkbookReviewSession, type WorkoutLog } from "../../features/import/public.ts";
 import { CYCLE_TYPES, type BuilderExcelDraft } from "../../features/training/public.ts";
-import { localToday, TextLogDistribution, TextLogInput, type LogCycleType } from "./TextLogImport.tsx";
+import { localToday, TextLogDistribution, TextLogInput, TextLogWorkouts, type LogCycleType, type LogUpdate } from "./TextLogImport.tsx";
 import { AiTableHelp } from "./AiTableHelp.tsx";
 import { TrainingTransferReviewScreen } from "./TrainingTransferReviewScreen.tsx";
 import { WorkbookColumnSettings } from "./WorkbookColumnSettings.tsx";
@@ -21,7 +21,7 @@ import { previousImportPage } from "./importBack.ts";
 export type WorkbookImportTarget = Readonly<{ kind: "PROGRAM"; title?: string;
   save: (value: TrainingTransfer, mapping: Readonly<Record<string, string>>, matches: readonly ExerciseImportMatch[]) => Promise<void> }>
   | Readonly<{ kind: "BUILDER"; title?: string; apply: (draft: BuilderExcelDraft) => void }>;
-type Page = "text" | "distribute" | "reading" | "sheets" | "history" | "review" | "confirm" | "catalog" | "create" | null;
+type Page = "text" | "distribute" | "workouts" | "reading" | "sheets" | "history" | "review" | "confirm" | "catalog" | "create" | null;
 const HINTS_SHOWN = 6;
 const TEXT_MAX = 200_000;
 const yieldFrame = () => new Promise<void>((resolve) => setTimeout(resolve, 32));
@@ -45,6 +45,11 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
   const [logText, setLogText] = useState(""); const [log, setLog] = useState<WorkoutLog | null>(null);
   const [cycleType, setCycleType] = useState<LogCycleType>("hypertrophy");
   const [similar, setSimilar] = useState<readonly (readonly [string, string])[]>([]); const [merged, setMerged] = useState<ReadonlySet<number>>(new Set());
+  const [recognized, setRecognized] = useState({ workouts: 0, exercises: 0, sets: 0 });
+  /** Одни и те же названия в списке и в итоговой книге: отмеченные пары объединены, исходный журнал не меняется. */
+  const view = useMemo(() => log && mergeLogNames(log, similar.filter((_, i) => merged.has(i))), [log, similar, merged]);
+  const updateLog = useCallback<LogUpdate>((change) => setLog((current) => current && change(current)), []);
+  const toggleMerge = useCallback((i: number) => setMerged((current) => { const next = new Set(current); if (!next.delete(i)) next.add(i); return next; }), []);
   const catalogBack = useRef<CatalogBackHandle>(null);
   const operation = useRef(0); const locked = useRef(false); const writing = useRef(false);
   const pageRef = useRef(page); pageRef.current = page;
@@ -68,6 +73,7 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
     if (writing.current) return;
     if (page === "reading" || page === "text") { close(); return; }
     if (page === "distribute") { setError(""); setPage("text"); return; }
+    if (page === "workouts") { setError(""); setPage("distribute"); return; }
     if (page === "history") { setProposals(null); setPage("review"); return; }
     if (page === "sheets" || page === "confirm") { setPage("review"); return; }
     if (page === "catalog" || page === "create") { const previous = previousImportPage(page, catalogBack.current); if (previous !== null) setPage(previous); return; }
@@ -109,12 +115,12 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
     const parsed = parseWorkoutLog(logText, localToday());
     if (!parsed.workouts.some((w) => w.exercises.length)) { setError("Не нашёл упражнений. Название — строка с буквами, подход — «22 на 15»."); return; }
     const pairs = similarLogNames(parsed);
-    setLog(parsed); setSimilar(pairs); setMerged(new Set(pairs.map((_, i) => i))); setError(""); setPage("distribute");
+    setLog(parsed); setRecognized(logStats(parsed)); setSimilar(pairs); setMerged(new Set(pairs.map((_, i) => i))); setError(""); setPage("distribute");
   };
   const continueText = () => { void run(async (id) => {
-    if (!log) return;
+    if (!view) return;
     const reps = CYCLE_TYPES.find((item) => item.id === cycleType)!.reps;
-    const picked = workoutLogWorkbook(mergeLogNames(log, similar.filter((_, i) => merged.has(i))), { name: "Заметки", cycleType, reps });
+    const picked = workoutLogWorkbook(view, { name: "Заметки", cycleType, reps });
     await open(picked, id);
   }); };
   const patch = (change: Partial<WorkbookReviewEntry>) => setSession((s) => s ? updateWorkbookEntry(s, change) : null);
@@ -171,12 +177,12 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
     {!!error && page === null && <InlineNotice kind="error">{error}</InlineNotice>}
     <Modal visible={page !== null} animationType="none" onRequestClose={back}>
       <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, backgroundColor: colors.canvas }}>
-        <ScreenHeader insetTop={false} title={page === "catalog" ? "Выбрать упражнение" : page === "create" ? "Своё упражнение" : page === "sheets" ? "Листы для импорта" : page === "text" || page === "distribute" || fromText ? "Импорт из заметок" : "Импорт Excel"} onBack={back} />
+        <ScreenHeader insetTop={false} title={page === "catalog" ? "Выбрать упражнение" : page === "create" ? "Своё упражнение" : page === "sheets" ? "Листы для импорта" : page === "text" || page === "distribute" || page === "workouts" || fromText ? "Импорт из заметок" : "Импорт Excel"} onBack={back} />
         {!!notice && <InlineNotice>{notice}</InlineNotice>}
         {page === "text" && <TextLogInput text={logText} error={error} busy={busy} onText={setLogText} onParse={parseText} />}
-        {page === "distribute" && log && <TextLogDistribution log={log} onChange={setLog} cycleType={cycleType} onCycleType={setCycleType}
-          similar={similar} merged={merged} busy={busy} error={error} onContinue={continueText}
-          onToggleMerge={(i) => setMerged((current) => { const next = new Set(current); if (!next.delete(i)) next.add(i); return next; })} />}
+        {page === "distribute" && view && <TextLogDistribution log={view} recognized={recognized} onUpdate={updateLog} cycleType={cycleType} onCycleType={setCycleType}
+          similar={similar} merged={merged} busy={busy} error={error} onContinue={() => { setError(""); setPage("workouts"); }} onToggleMerge={toggleMerge} />}
+        {page === "workouts" && view && <TextLogWorkouts log={view} onUpdate={updateLog} busy={busy} error={error} onContinue={continueText} />}
         {page === "reading" && <View style={{ padding: 24, gap: 16 }}>{error ? <InlineNotice kind="error">{error}</InlineNotice> : <LoadingState label={progress} />}<AppButton label="Отменить" variant="secondary" onPress={close} /></View>}
         {page === "history" && <RememberedImportMatchesDialog matches={proposals} catalog={catalog} onApply={chooseMatches} onDecline={() => chooseMatches([])} />}
         {page === "sheets" && session && <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
