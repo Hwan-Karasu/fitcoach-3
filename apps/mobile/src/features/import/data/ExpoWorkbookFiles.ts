@@ -1,7 +1,6 @@
 import { Directory, File, Paths } from "expo-file-system";
 import { getDocumentAsync } from "expo-document-picker";
 import * as Sharing from "expo-sharing";
-import * as Clipboard from "expo-clipboard";
 import * as XLSX from "xlsx";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { sha256 } from "@noble/hashes/sha2.js";
@@ -9,7 +8,7 @@ import type { WorkbookFilesPort } from "../domain/WorkbookFilesPort.ts";
 import { readWorkbook, readTrainingWorkbook } from "./TrainingWorkbook.ts";
 import { writeVisibleTrainingWorkbook } from "./VisibleMatrixWorkbook.ts";
 import { flattenLegacyMatrix } from "../domain/LegacyMatrix.ts";
-import { AI_SHEET_NAME, AI_WORKBOOK_FILENAME, AI_WORKBOOK_PROMPT, aiWorkbookSheet } from "../domain/AiWorkbookTemplate.ts";
+import { IMPORT_SAMPLE_FILENAME, IMPORT_SAMPLE_SHEET, importSampleSheet } from "../domain/ImportSample.ts";
 import { transferReviewScopes } from "../domain/TrainingTransferReview.ts";
 import { visibleTrainingTransfer } from "../../../shared/training-transfer/VisibleTrainingTransfer.ts";
 import { trainingWorkbookFilename } from "../../../shared/training-transfer/WorkbookFilename.ts";
@@ -57,32 +56,12 @@ export const expoWorkbookFiles: WorkbookFilesPort = {
   share: (value) => share(writeVisibleTrainingWorkbook(value), trainingWorkbookFilename(value)),
   async template() {
     const book = XLSX.utils.book_new();
-    const rows: (string | number | null)[][] = [["Упражнение", "Подход"], ["", ""], ["Тренировка 1"], ["Жим штанги лёжа", 1], ["", 2], ["", 3]];
-    const merges: XLSX.Range[] = [];
-    for (let week = 0; week < 4; week++) {
-      const col = 2 + week * 5; rows[0]![col] = `Неделя ${week + 1}`;
-      merges.push({ s: { r: 0, c: col }, e: { r: 0, c: col + 4 } });
-      ["План", "Пред.", "Повт.", "Кг", "Дата"].forEach((label, i) => { rows[1]![col + i] = label; });
-      for (let row = 3; row < 6; row++) rows[row]![col] = "8–10 × 62,5 кг";
-    }
-    const sheet = XLSX.utils.aoa_to_sheet(rows); sheet["!merges"] = merges;
-    sheet["!cols"] = [{ wch: 36 }, { wch: 9 }, ...Array.from({ length: 4 }, () => [{ wch: 24 }, { wch: 18 }, { wch: 9 }, { wch: 9 }, { wch: 13 }]).flat()];
-    XLSX.utils.book_append_sheet(book, sheet, "Программа");
-    const bytes: unknown = XLSX.write(book, { type: "array", bookType: "xlsx" });
-    await share(new Uint8Array(bytes as ArrayBuffer), "Шаблон программы тренировок.xlsx");
-  },
-  async copyText(text) {
-    if (!await Clipboard.setStringAsync(text)) throw new Error("Не удалось скопировать текст.");
-  },
-  async aiTemplate() {
-    const book = XLSX.utils.book_new();
-    const { rows, merges } = aiWorkbookSheet();
+    const { rows, merges } = importSampleSheet();
     const sheet = XLSX.utils.aoa_to_sheet(rows);
     sheet["!merges"] = merges.map((merge) => ({ s: { r: merge.r, c: merge.c0 }, e: { r: merge.r, c: merge.c1 } }));
     sheet["!cols"] = [{ wch: 30 }, { wch: 9 }, ...Array.from({ length: 3 }, () => [{ wch: 16 }, { wch: 12 }, { wch: 8 }, { wch: 8 }, { wch: 12 }]).flat()];
-    XLSX.utils.book_append_sheet(book, sheet, AI_SHEET_NAME);
-    XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(AI_WORKBOOK_PROMPT.split("\n").map((line) => [line])), "Как заполнять");
+    XLSX.utils.book_append_sheet(book, sheet, IMPORT_SAMPLE_SHEET);
     const bytes: unknown = XLSX.write(book, { type: "array", bookType: "xlsx" });
-    await share(new Uint8Array(bytes as ArrayBuffer), AI_WORKBOOK_FILENAME);
+    await share(new Uint8Array(bytes as ArrayBuffer), IMPORT_SAMPLE_FILENAME);
   },
 };

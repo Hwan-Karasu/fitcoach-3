@@ -15,6 +15,15 @@
 - Проверки: typecheck, lint, arch:check, source:verify, secrets:check PASS; test:foundation 1034/1034, excel:test 100/100, training:test 268/268
   (счётчики включают параллельные правки календаря в рабочем дереве, они не мои и не коммитятся). На телефоне не проверено; в APK не входит (последний — build34).
 
+## 2026-10-28 — AI-REMOVE: импорт через ИИ удалён; остаются импорт Excel и образец для импорта (ADR-051)
+
+- Решение владельца: «работает плохо» — убрать схему с образцом и промптом для ИИ. Удалены: `AI_WORKBOOK_PROMPT`, страница «Образец и промпт для ИИ», `AiTableHelp.tsx`, `aiTemplate`/`copyText` в `WorkbookFilesPort` и
+  `ExpoWorkbookFiles`, строка в списке «Создать программу», зависимость `expo-clipboard` (из apps/mobile/package.json и lock; нативный модуль в следующую сборку не войдёт).
+- Образец для импорта остаётся, один: `ImportSample.ts` (бывший образец «для ИИ»: лист-матрица в формате 2.0, 3 недели, 2 тренировки, факты и даты) — теперь это `WorkbookFilesPort.template()`, файл
+  «Образец для импорта.xlsx». Доступен в списке «Создать программу» («Скачать образец для импорта») и кнопкой «Скачать шаблон» на экране переноса. Тест `import-sample.test.ts` (бывший `ai-workbook.test.ts`): макет,
+  разбор образца импортом, синонимы заголовков.
+- Проверки: typecheck, lint, arch:check, source:verify, secrets:check PASS; test:foundation 1051/1051, excel:test 99/99, training:test 278/278. НЕ ПРОВЕРЕНО на телефоне (в APK не входит; последний — build40).
+
 ## 2026-10-28 — build40: образец и промпт для ИИ в формате 2.0
 
 - Собран `artifacts/apk/athlete-diary-3.0.0-build40.apk`: `com.fitcoach.v3`, 3.0.0, versionCode 40, arm64-v8a, 70 382 524 байт; assembleRelease PASS

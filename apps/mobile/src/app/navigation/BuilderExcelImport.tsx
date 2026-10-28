@@ -10,7 +10,6 @@ import { applyWorkbookColumns, autoMatchWorkbookEntry, builderWorkbookImport, co
   type ExerciseImportMatch, type ExerciseImportMatchesPort, type PickedWorkbook, type TrainingTransfer, type WorkbookFilesPort,
   type WorkbookReviewEntry, type WorkbookReviewSession } from "../../features/import/public.ts";
 import type { BuilderExcelDraft } from "../../features/training/public.ts";
-import { AiTableHelp } from "./AiTableHelp.tsx";
 import { TrainingTransferReviewScreen } from "./TrainingTransferReviewScreen.tsx";
 import { WorkbookColumnSettings } from "./WorkbookColumnSettings.tsx";
 import { RememberedImportMatchesDialog } from "./RememberedImportMatchesDialog.tsx";
@@ -19,7 +18,7 @@ import { previousImportPage } from "./importBack.ts";
 export type WorkbookImportTarget = Readonly<{ kind: "PROGRAM"; title?: string;
   save: (value: TrainingTransfer, mapping: Readonly<Record<string, string>>, matches: readonly ExerciseImportMatch[]) => Promise<void> }>
   | Readonly<{ kind: "BUILDER"; title?: string; apply: (draft: BuilderExcelDraft) => void }>;
-type Page = "ai" | "reading" | "sheets" | "history" | "review" | "confirm" | "catalog" | "create" | null;
+type Page = "reading" | "sheets" | "history" | "review" | "confirm" | "catalog" | "create" | null;
 const HINTS_SHOWN = 6;
 const yieldFrame = () => new Promise<void>((resolve) => setTimeout(resolve, 32));
 
@@ -27,8 +26,8 @@ const yieldFrame = () => new Promise<void>((resolve) => setTimeout(resolve, 32))
 export function BuilderExcelImport({ files, exercises, target, clientName = "Конструктор", label = "Импортировать из Excel", renderTrigger, memory }: Readonly<{
   files: WorkbookFilesPort; exercises: ExerciseCatalogPort; target: WorkbookImportTarget; clientName?: string; label?: string;
   memory?: ExerciseImportMatchesPort;
-  /** `onAi` — образец таблицы и промпт для внешнего ИИ (EXCEL-AI): заметки или чужую таблицу ИИ переделывает в Excel. */
-  renderTrigger?: (onPress: () => void, disabled: boolean, onAi: () => void) => ReactNode;
+  /** `onSample` — скачать образец файла для импорта (формат 2.0). */
+  renderTrigger?: (onPress: () => void, disabled: boolean, onSample: () => void) => ReactNode;
 }>) {
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
   const [page, setPage] = useState<Page>(null);
@@ -60,7 +59,7 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
   };
   const back = () => {
     if (writing.current) return;
-    if (page === "reading" || page === "ai") { close(); return; }
+    if (page === "reading") { close(); return; }
     if (page === "history") { setProposals(null); setPage("review"); return; }
     if (page === "sheets" || page === "confirm") { setPage("review"); return; }
     if (page === "catalog" || page === "create") { const previous = previousImportPage(page, catalogBack.current); if (previous !== null) setPage(previous); return; }
@@ -93,10 +92,7 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
       if (suggestions.length) { setSession(requireWorkbookNameChoices(review, suggestions.map((m) => m.sourceName))); setProposals(suggestions); setPage("history"); }
     } catch { if (id === operation.current) setNotice("Прошлые сопоставления недоступны. Можно выбрать упражнения вручную."); }
   };
-  const startAi = () => {
-    if (locked.current) return;
-    setError(""); setNotice(""); setPage("ai");
-  };
+  const downloadSample = () => { void run(async () => files.template()); };
   const patch = (change: Partial<WorkbookReviewEntry>) => setSession((s) => s ? updateWorkbookEntry(s, change) : null);
   const select = (id: string) => { if (!busy && session) { setError(""); setSession(match(selectWorkbookSheet(session, id))); } };
   const currentName = current?.value?.exercises.find((e) => e.id === sourceId)?.name ?? "";
@@ -138,25 +134,19 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
       {otherProblems.map((p) => { const issue = session.entries[p.id]?.value?.issues?.[0];
         return <AppButton key={p.id} compact variant="ghost" label={`${p.label}: ${p.reason}`} disabled={busy}
           onPress={() => issue ? focusCard(p.id, null, `issue:${issue.id}`) : select(p.id)} />; })}</View>}
-    {session.picked.kind === "TABLES" && <AiTableHelp busy={busy} onTemplate={() => { void run(async () => files.aiTemplate()); }} onCopy={files.copyText} />}
     {session.picked.kind === "TABLES" && current && <WorkbookColumnSettings table={session.picked.tables[Number(session.activeId)]!} entry={current} busy={busy} onChange={patch}
       onApply={() => setSession(match(applyWorkbookColumns(session)))} />}
   </> : null;
   return <>
-    {renderTrigger ? renderTrigger(pick, busy, startAi) : <>
+    {renderTrigger ? renderTrigger(pick, busy, downloadSample) : <>
       <AppButton compact variant="secondary" label={label} disabled={busy} onPress={pick} />
-      <AppButton compact variant="secondary" label="Образец и промпт для ИИ" disabled={busy} onPress={startAi} />
+      <AppButton compact variant="secondary" label="Скачать образец для импорта" disabled={busy} onPress={downloadSample} />
     </>}
     {!!error && page === null && <InlineNotice kind="error">{error}</InlineNotice>}
     <Modal visible={page !== null} animationType="none" onRequestClose={back}>
       <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, backgroundColor: colors.canvas }}>
-        <ScreenHeader insetTop={false} title={page === "catalog" ? "Выбрать упражнение" : page === "create" ? "Своё упражнение" : page === "sheets" ? "Листы для импорта" : page === "ai" ? "Образец и промпт для ИИ" : "Импорт Excel"} onBack={back} />
+        <ScreenHeader insetTop={false} title={page === "catalog" ? "Выбрать упражнение" : page === "create" ? "Своё упражнение" : page === "sheets" ? "Листы для импорта" : "Импорт Excel"} onBack={back} />
         {!!notice && <InlineNotice>{notice}</InlineNotice>}
-        {page === "ai" && <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }} keyboardShouldPersistTaps="handled">
-          <AiTableHelp defaultOpen busy={busy} onTemplate={() => { void run(async () => files.aiTemplate()); }} onCopy={files.copyText} />
-          {!!error && <InlineNotice kind="error">{error}</InlineNotice>}
-          <AppButton label="Выбрать готовый файл Excel" disabled={busy} onPress={pick} />
-        </ScrollView>}
         {page === "reading" && <View style={{ padding: 24, gap: 16 }}>{error ? <InlineNotice kind="error">{error}</InlineNotice> : <LoadingState label={progress} />}<AppButton label="Отменить" variant="secondary" onPress={close} /></View>}
         {page === "history" && <RememberedImportMatchesDialog matches={proposals} catalog={catalog} onApply={chooseMatches} onDecline={() => chooseMatches([])} />}
         {page === "sheets" && session && <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
