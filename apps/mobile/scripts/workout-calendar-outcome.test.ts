@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { createLocalRepositories } from "../src/app/composition/createLocalRepositories.ts";
 import type { SystemCatalog } from "../src/features/exercises/public.ts";
+import { DevAccountingRepository, devAccountingCalendarHook } from "../src/features/accounting/data/DevAccountingRepository.ts";
 import { DevCalendarRepository, devCalendarClientDeletionParticipant } from "../src/features/calendar/data/DevCalendarRepository.ts";
 import type { AppointmentInput } from "../src/features/calendar/domain/CalendarModel.ts";
 import { pickStartedPending } from "../src/features/calendar/domain/CalendarRules.ts";
@@ -20,20 +21,26 @@ const WS = "synthetic-workspace-a";
 const TODAY = "2026-10-28";
 const at = (hour: number, minute = 0) => new Date(2026, 9, 28, hour, minute);
 
-async function setup() {
+async function setup(options: Readonly<{ credit?: boolean }> = {}) {
   const db = new DatabaseSync(":memory:");
   const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
   const clients = new DevClientRepository(shared, WS, [devCalendarClientDeletionParticipant, devTrainingPlansClientDeletionParticipant]);
   await clients.initialize();
-  const calendar = new DevCalendarRepository(shared, WS);
+  const calendar = new DevCalendarRepository(shared, WS, options.credit === true ? devAccountingCalendarHook : null);
   await calendar.initialize();
+  const accounting = new DevAccountingRepository(shared, WS);
+  await accounting.initialize();
   const plans = new DevTrainingPlansRepository(shared, WS);
   await plans.initialize();
   const execution = new DevTrainingExecutionRepository(shared, WS);
   await execution.initialize();
   const a = (await clients.create({ displayName: "SyntheticA" })).id;
   const b = (await clients.create({ displayName: "SyntheticB" })).id;
-  const personal = (await calendar.listSessionTypes())[0]!;
+  const personal = (await calendar.listSessionTypes()).find((type) => type.requiresCredit)!;
+  if (options.credit === true) {
+    await accounting.setClientMode(a, "FITCOACH");
+    await accounting.createPack(a, { title: "Пакет 2", creditScope: "GENERAL", sessionTypeId: null, sessionTypeName: null, grantedCount: 2, totalKopeks: 340_000, expiresOn: null });
+  }
   const program = await plans.createProgram({ kind: "PERIODIZED", title: "Проверка", clientIds: [a] });
   let n = 0;
   const draft = fillSets(addExercise(newDraft("w1"), "w1", "e1", "sys:repdb:bench", () => `s${n++}`), "e1", "reps", 10);
@@ -47,8 +54,8 @@ async function setup() {
   const book = (overrides: Partial<AppointmentInput>) => calendar.createAppointment({ localDate: TODAY, startMinute: 1080, durationMinutes: 60,
     clientId: a, guestName: null, note: null, sessionTypeId: personal.id, ...overrides });
   const outcomes = async () => (await calendar.listRange(TODAY, "2026-10-30")).appointments.map((item) => [item.startMinute, item.localDate, item.outcome]);
-  return { a, b, slot, workflow, book, outcomes, calendar, execution, shared,
-    close: async () => { await shared.release(); await execution.close(); await plans.close(); await calendar.close(); await clients.close(); } };
+  return { a, b, slot, workflow, book, outcomes, calendar, execution, shared, accounting,
+    close: async () => { await shared.release(); await accounting.close(); await execution.close(); await plans.close(); await calendar.close(); await clients.close(); } };
 }
 
 test("ADR-048 запись сегодня 18:00, завершение в 18:30: запись «Проведена», подсказка с временем начала", async () => {
@@ -163,6 +170,23 @@ test("AUD28-03 окончательное удаление клиента соо
     unsubscribe();
     assert.deepEqual(changes, ["ALL"]);
   } finally { await repositories.close(); }
+});
+
+test("AUD28-04 «Отменить завершение» возвращает списание и резерв; повторное завершение списывает ровно один раз", async () => {
+  const env = await setup({ credit: true });
+  try {
+    await env.book({});
+    const state = async () => { const snapshot = await env.accounting.getClientSnapshot(env.a); const pack = snapshot.packs[0]!;
+      return { balance: pack.ledgerBalance, reserved: pack.reserved, entries: snapshot.ledger.map((entry) => entry.entryType).sort() }; };
+    assert.deepEqual(await state(), { balance: 2, reserved: 1, entries: ["ISSUED"] });
+    const done = await env.workflow.setOutcome(env.slot, "COMPLETED", null, at(18, 30));
+    assert.deepEqual(await state(), { balance: 1, reserved: 0, entries: ["ISSUED", "USED"] });
+    const undone = await env.workflow.setOutcome(env.slot, null, done.session.revision, at(18, 40));
+    assert.deepEqual(undone.calendar, { kind: "CLEARED", startMinute: 1080 });
+    assert.deepEqual(await state(), { balance: 2, reserved: 1, entries: ["ISSUED", "RETURNED", "USED"] }, "списание компенсировано, запись снова держит резерв");
+    await env.workflow.setOutcome(env.slot, "COMPLETED", undone.session.revision, at(18, 50));
+    assert.deepEqual(await state(), { balance: 1, reserved: 0, entries: ["ISSUED", "RETURNED", "USED", "USED"] }, "эффективное списание одно");
+  } finally { await env.close(); }
 });
 
 test("ADR-048 повторное «Завершена» не отмечает вторую запись и не теряет связь с первой", async () => {

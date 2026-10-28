@@ -1,8 +1,8 @@
 # Progress — 2026-10-28
 
 ## Сделано
-- 2026-10-28 (ADR-052) исправления аудита: AUD28-02, 03, 09, 06, 11 (регрессионные тесты в workout-calendar-outcome и
-  training-templates). test:foundation 1054/1054, training 281/281, excel 99/99, calendar 29/29. На телефоне не проверено.
+- 2026-10-28 (ADR-052) исправления аудита: AUD28-02, 03, 04, 09, 06, 11 (регрессионные тесты в workout-calendar-outcome и
+  training-templates). test:foundation 1055/1055, training 282/282, excel 99/99, calendar 29/29. На телефоне не проверено.
 - 2026-10-28 (ADR-049…051) шаблоны и циклы: TEMPLATE-OPEN-2/EDIT (шаблон любого вида открывается и правится в конструкторе),
   CYCLE-STRIP-3 (циклы переключаются на месте, CycleState.ts); удалены импорт из заметок (TEXT-LOG) и «образец и промпт для ИИ»
   вместе с expo-clipboard; добавлен «Образец для импорта» формата 2.0 (ImportSample.ts). build38–40.
@@ -15,7 +15,6 @@
 - CA-аудит (docs/CODE_AUDIT_2026-10-27.md): этапы A–E сделаны. IMPORT-V2 S1–S5 готовы (CA-29). POLISH-1, EDITOR-FIX-1.
 
 ## Открыто / техдолг
-- AUD28-04: «Отменить завершение» не откатывает списание (accounting.settle) — решение владельца + тест ledger.
 - AUD28-10: SegmentedControl со скольжением (SegmentedControl.tsx): индикатор не пересчитывается при смене текста выбранной
   вкладки, возможное мигание при первом показе — проверить на телефоне.
 - Смена недели в конструкторе мезоцикла медленная (WorkoutsEditor.tsx / Sortable.Grid) — решено оставить; варианты в docs/PROJECT_STATUS.md.

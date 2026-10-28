@@ -506,6 +506,11 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
         revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND id = ? AND revision = ? AND outcome = 'COMPLETED'`,
       [now.toISOString(), this.workspaceId, appointmentId, current.revision]);
       if (result.changes !== 1) throw new Error("CALENDAR_STALE_APPOINTMENT");
+      const requires = (await tx.first<{ r: number }>(`SELECT session_type_requires_credit AS r
+        FROM calendar_appointments WHERE workspace_id = ? AND id = ?`, [this.workspaceId, appointmentId]))?.r === 1;
+      await this.accounting?.unsettle(tx, this.workspaceId, appointmentId, { clientId: current.clientId, sessionTypeId: current.sessionTypeId,
+        requiresCredit: requires, bypass: current.creditBypass, localDate: current.localDate, endMinute: current.startMinute + current.durationMinutes },
+      now.toISOString());
       return { id: current.id, revision: current.revision + 1, startMinute: current.startMinute, localDate: current.localDate };
     },
     notify: (dates) => this.publish({ dates }),

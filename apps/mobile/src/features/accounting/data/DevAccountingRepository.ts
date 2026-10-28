@@ -157,6 +157,15 @@ export const devAccountingCalendarHook = {
   async settle(tx: SqliteStatementPort, workspaceId: string, appointmentId: string, now: string): Promise<void> {
     await devAccountingCalendarHook.cancel(tx, workspaceId, appointmentId, "CHARGE", now);
   },
+  async unsettle(tx: SqliteStatementPort, workspaceId: string, appointmentId: string, booking: Booking,
+    now: string): Promise<void> {
+    const used = await unreturnedUsed(tx, appointmentId);
+    if (used === null) return;
+    // USED не правится: компенсирует связанный RETURNED; резерв возвращается в тот же пакет, чтобы следующее «Проведена» списало один раз.
+    await insertReturned(tx, workspaceId, used, appointmentId, now);
+    await tx.run("DELETE FROM credit_reservations WHERE workspace_id = ? AND appointment_id = ?", [workspaceId, appointmentId]);
+    await devAccountingCalendarHook.reserve(tx, workspaceId, appointmentId, { ...booking, clientId: used.clientId }, used.packId);
+  },
   async correct(tx: SqliteStatementPort, workspaceId: string, appointmentId: string, booking: Booking,
     now: string): Promise<void> {
     await tx.run("DELETE FROM credit_reservations WHERE workspace_id = ? AND appointment_id = ?",

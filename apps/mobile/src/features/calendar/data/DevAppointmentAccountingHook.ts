@@ -29,6 +29,11 @@ export interface DevAppointmentAccountingHook {
   /** A chosen Завершена/Пропущена: an open reservation becomes the single USED; never a second one. */
   settle(tx: SqliteStatementPort, workspaceId: string, appointmentId: string, now: string): Promise<void>;
   /**
+   * Снятие «Проведена», поставленной дневником (ADR-048): единственное действующее USED компенсируется связанным RETURNED, запись
+   * снова держит резерв того же пакета — как до завершения. Нет действующего USED (кредит не нужен) — ничего не делает.
+   */
+  unsettle(tx: SqliteStatementPort, workspaceId: string, appointmentId: string, booking: DevBooking, now: string): Promise<void>;
+  /**
    * «Исправить клиента»: compensate the old client's USED (or drop its reservation) and charge the
    * new booking; throws ACCOUNTING_INSUFFICIENT_CREDIT so the whole correction rolls back.
    */
