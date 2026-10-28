@@ -1,4 +1,4 @@
-import { forwardRef, memo, useEffect, useRef, useState, type ReactNode, type Ref } from "react";
+import { forwardRef, memo, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type Animated from "react-native-reanimated";
 import type { AnimatedRef } from "react-native-reanimated";
@@ -14,6 +14,7 @@ import { INSTRUCTION_MAX, type PlannedExercise, type PlannedWorkout, type Simple
 import { formatDuration, formatRange, parseDuration, parseLoad, parseRange, sanitizeRange, setFieldsOf, type PlanIssue } from
   "../domain/SimplePlanRules.ts";
 import type { ImportedFactPatch, ImportedFactRow } from "../domain/ImportedFacts.ts";
+import { assignSlotKeys } from "../domain/SlotKeys.ts";
 import { applySupersetPress, IDLE_SUPERSET_PICK, pressSuperset, supersetNumber, type SupersetPick } from "../domain/SupersetRules.ts";
 
 let counter = 0;
@@ -93,7 +94,10 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, s
   const metrics = info?.metrics ?? [];
   const fields = setFieldsOf(metrics).filter((field) => field !== "loadGrams");
   const withReps = fields.includes("reps");
-  const [showInstruction, setShowInstruction] = useState(item.instruction !== null);
+  // Карточка переиспользуется при смене недели: «Инструкция» открыта или закрыта по текущему упражнению, а не прежнему.
+  const [instructionOpen, setInstructionOpen] = useState({ id: item.id, open: item.instruction !== null });
+  const showInstruction = instructionOpen.id === item.id ? instructionOpen.open : item.instruction !== null;
+  const setShowInstruction = (open: boolean) => setInstructionOpen({ id: item.id, open });
   const refs = useRef<(TextInput | null)[]>([]);
   const factRefs = useRef<(TextInput | null)[]>([]);
   const factLoadShown = setFieldsOf(metrics).includes("loadGrams") || !!facts?.some((f) => f.loadGrams !== null);
@@ -266,6 +270,17 @@ export const WorkoutsEditor = memo(function WorkoutsEditor({ draft, change, look
   const [ordering, setOrdering] = useState(false);
   const [pick, setPick] = useState<SupersetPick>(IDLE_SUPERSET_PICK);
   const [dissolving, setDissolving] = useState<Readonly<{ workoutId: string; groupId: string }> | null>(null);
+  // BUILDER-SLOTS: ключ карточки — слот, а не id недели: при смене недели карточки и Sortable.Grid переиспользуются.
+  const slotCounter = useRef(0);
+  const workoutSlotsRef = useRef<ReadonlyMap<string, string>>(new Map());
+  const exerciseSlotsRef = useRef<ReadonlyMap<string, string>>(new Map());
+  const workoutIds = draft.plan.workouts.map((workout) => workout.id);
+  const exerciseIds = draft.plan.workouts.flatMap((workout) => workout.exercises.map((exercise) => exercise.id));
+  const fresh = () => `slot-${slotCounter.current++}`;
+  const workoutSlots = useMemo(() => { workoutSlotsRef.current = assignSlotKeys(workoutSlotsRef.current, workoutIds, fresh); return workoutSlotsRef.current; },
+    [workoutIds.join("|")]);
+  const exerciseSlots = useMemo(() => { exerciseSlotsRef.current = assignSlotKeys(exerciseSlotsRef.current, exerciseIds, fresh); return exerciseSlotsRef.current; },
+    [exerciseIds.join("|")]);
   const pressSet = (workout: PlannedWorkout, exerciseId: string) => {
     const result = pressSuperset(pick, workout, exerciseId);
     setPick(result.pick);
@@ -311,7 +326,7 @@ export const WorkoutsEditor = memo(function WorkoutsEditor({ draft, change, look
         onPress={() => setOrdering(true)} />
     ) : null}
     {draft.plan.workouts.map((workout) => (
-      <View key={workout.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View key={workoutSlots.get(workout.id) ?? workout.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {/* Шапка как в 2.0 (UI-OWN-026): акцентная полоса, название без подписи, «×» удаляет тренировку. */}
         <View style={styles.workoutHead}>
           <View style={[styles.stripe, { backgroundColor: colors.accentFill }]} />
@@ -332,7 +347,7 @@ export const WorkoutsEditor = memo(function WorkoutsEditor({ draft, change, look
         ) : null}
         {workout.exercises.length > 0 ? (
           <View style={styles.exercises}>
-          <Sortable.Grid data={[...workout.exercises]} keyExtractor={(item) => item.id} columns={1} rowGap={8} customHandle
+          <Sortable.Grid data={[...workout.exercises]} keyExtractor={(item) => exerciseSlots.get(item.id) ?? item.id} columns={1} rowGap={8} customHandle
             scrollableRef={scrollRef} activeItemScale={1.03}
             renderItem={({ item }: Readonly<{ item: PlannedExercise }>) => (
               <ExerciseCard item={item} workout={workout} info={lookup.get(item.exerciseId) ?? null} draft={draft} change={change}
