@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import { CalendarDays, Minus, Plus } from "lucide-react-native";
@@ -33,6 +33,7 @@ import { useExerciseLookupState } from "./useExerciseLookup.ts";
 import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
 import { weekTypeTone } from "./weekTypeTone.ts";
 import { newPlanId, WorkoutsEditor } from "./WorkoutsEditor.tsx";
+import { cycleStateFrom } from "../domain/CycleState.ts";
 import { templateCycles, weeksFromTemplate, type TemplateKind, type TemplatePayload } from "../domain/TemplateModel.ts";
 import type { BuilderExcelDraft, BuilderWorkbookCycle, BuilderWorkbookState } from "../domain/BuilderExcelDraft.ts";
 import type { BuilderWorkbookSavePort } from "../domain/BuilderWorkbookSave.ts";
@@ -85,7 +86,7 @@ function WeekStatusLine({ status }: Readonly<{ status: BuilderWeekStatus }>) {
   const ink = tone === null ? colors.textSecondary : readableInk(tone, [colors.surface, colors.surfaceRaised], colors.textPrimary);
   return <Text style={[styles.weekStatus, { color: ink }]}>{status.marker === null ? status.label : `${status.marker} ${status.label}`}</Text>;
 }
-function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, templateEditId, onSwitchCycle, onCycleShown, knownCycles, onCycles, initialWeek, mesocycleSave, repository, exercises, listCandidates, picked,
+export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId: initialMesocycleId, templateId, templateEditId, onCycleShown, initialWeek, mesocycleSave, repository, exercises, listCandidates, picked,
   onPickExercise, onCreated, onSaved, onCancel, renderTemplates, renderExcel, workbookSave, loadWeekStatuses }: Readonly<{
   workbookSave?: BuilderWorkbookSavePort;
   /** Правка: подписи статуса недель сохранённого мезоцикла («Не начата», «В работе», …) в порядке `weeks`; номер — неделя программы. */
@@ -99,14 +100,8 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, t
   templateId?: string;
   /** Правка шаблона в этом же конструкторе (TEMPLATE-EDIT): без программы и участников, сохраняется сам шаблон. */
   templateEditId?: string;
-  /** Правка и «+ Мезоцикл» существующей программы: переход к другому циклу (`undefined` — новый); несохранённое спрашивает защита выхода. */
-  onSwitchCycle?: (mesocycleId: string | undefined) => void;
-  /** Циклы программы, уже известные предыдущему экрану: полоса видна сразу, пока грузится выбранный цикл. */
-  knownCycles?: readonly Readonly<{ id: string; title: string }>[];
   /** Экран показал этот цикл (`undefined` — новый): навигация запоминает его для выхода из конструктора (программа откроется на нём). */
   onCycleShown?: (mesocycleId: string | undefined) => void;
-  /** Циклы программы загружены: обёртка хранит их между переключениями, полоса не мигает. */
-  onCycles?: (cycles: readonly Readonly<{ id: string; title: string }>[]) => void;
   /** Правка: открыть эту неделю (номер с 1). */
   initialWeek?: number;
   mesocycleSave?: MesocycleSavePort;
@@ -124,6 +119,11 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, t
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
+  // Цикл переключается на месте (CYCLE-STRIP-3): экран не пересоздаётся, как при смене недели; программа читается один раз.
+  // Стартовый цикл неизменен: навигация обновляет параметр экрана при переключении, но загрузка плана от него не зависит.
+  const startCycle = useRef(initialMesocycleId).current;
+  const [mesocycleId, setMesocycleId] = useState(startCycle);
+  const mesocycleIdRef = useRef(mesocycleId); mesocycleIdRef.current = mesocycleId;
   const lookupState = useExerciseLookupState(exercises);
   const lookup = lookupState.lookup;
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
@@ -141,7 +141,7 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, t
   const [weekStatuses, setWeekStatuses] = useState<readonly BuilderWeekStatus[]>([]);
   const [dirty, setDirty] = useState(false);
   const [workbook, setWorkbook] = useState<BuilderWorkbookState | null>(null);
-  const initialCycleKey = useRef(mesocycleId ? `existing:${mesocycleId}` : newPlanId("cycle"));
+  const initialCycleKey = useRef(startCycle ? `existing:${startCycle}` : newPlanId("cycle"));
   const [busy, setBusy] = useState<"create" | "template" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
@@ -153,11 +153,9 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, t
   const baselines = useRef(new Map<number, readonly PlannedWorkout[]>());
   const [scopeFor, setScopeFor] = useState<number | null>(null);
   /** Циклы этого клиента в существующей программе: полоса переключения над настройками. */
-  const [programCycles, setProgramCycles] = useState<readonly Readonly<{ id: string; title: string }>[]>(knownCycles ?? []);
+  const [programCycles, setProgramCycles] = useState<readonly Readonly<{ id: string; title: string }>[]>([]);
   const cycleShownRef = useRef(onCycleShown); cycleShownRef.current = onCycleShown;
   useEffect(() => { cycleShownRef.current?.(mesocycleId); }, [mesocycleId]);
-  const cyclesRef = useRef(onCycles); cyclesRef.current = onCycles;
-  useEffect(() => { if (programCycles.length > 0) cyclesRef.current?.(programCycles); }, [programCycles]);
   /** Переключение цикла на месте: с несохранённой правкой сначала спрашивает (сохранить черновик / отбросить / остаться). */
   const [pendingSwitch, setPendingSwitch] = useState<Readonly<{ to: string | undefined }> | null>(null);
   const [switchBusy, setSwitchBusy] = useState(false);
@@ -171,16 +169,19 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, t
   const [placementOptions, setPlacementOptions] = useState<ReadonlyMap<string, ClientPlacementOptions>>(new Map());
   const [placements, setPlacements] = useState<ReadonlyMap<string, PlacementTarget>>(new Map());
   const refreshGroup = useCallback(async () => {
-    if (programId === undefined || mesocycleId === undefined) return;
-    const copies = await repository.getMesocycleGroup(clientId, programId, { mesocycleId });
+    const current = mesocycleIdRef.current;
+    if (programId === undefined || current === undefined) return;
+    const copies = await repository.getMesocycleGroup(clientId, programId, { mesocycleId: current });
+    if (mesocycleIdRef.current !== current) return;
     setGroup(copies.map((copy) => copy.clientId));
     setGroupCycles(new Map(copies.map((copy) => [copy.clientId, copy.mesocycleId])));
-  }, [clientId, mesocycleId, programId, repository]);
+  }, [clientId, programId, repository]);
 
   // Recovery Draft (§48.29): несохранённая работа переживает «Назад», выгрузку экрана и смерть процесса; публикация — только «Сохранить».
   const scope = useMemo(() => ({ programId: programId ?? null, mesocycleId: templateEditId !== undefined ? `template:${templateEditId}` : mesocycleId ?? null }),
     [programId, mesocycleId, templateEditId]);
   const templateEdit = templateEditId !== undefined;
+  const scopeRef = useRef(scope); scopeRef.current = scope;
   const recovery = useRecoveryDraftSave<MesocycleBuilderDraft>((value) => repository.saveMesocycleBuilderDraft(clientId, scope, value),
     { hasDraft: dirty, busy: busy !== null, remove: () => repository.clearMesocycleBuilderDraft(clientId, scope) });
   const { schedule } = recovery;
@@ -206,7 +207,8 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, t
     if (restoreDone.current || (mode !== "create" && (program === null || program === "ERROR"))) return;
     restoreDone.current = true;
     repository.getMesocycleBuilderDraft(clientId, scope).then((saved) => {
-      if (saved === null) return;
+      // Цикл переключили, пока читался черновик: ответ прежнего цикла к новому не относится.
+      if (saved === null || scopeRef.current !== scope) return;
       // Мезоцикл изменился после черновика: правки тренера переносятся на текущий план, а не затирают его.
       const stale = mode === "edit" && (!saved.workbook || saved.workbook.activeKey === initialCycleKey.current) && saved.baseWeeks !== null && saved.baseRevision !== loadedRevision;
       const nextWeeks = stale ? rebaseBuilderWeeks(saved.baseWeeks!, saved.weeks, weeksRef.current, () => newPlanId("r")) : saved.weeks;
@@ -222,34 +224,43 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, t
     }).catch(() => undefined);
   }, [clientId, loadedRevision, mode, program, repository, scope]);
 
+  // Прочитанный план программы: переключение цикла берёт данные отсюда, без чтения базы (CYCLE-STRIP-3).
+  const planRef = useRef<Awaited<ReturnType<TrainingPlansRepositoryPort["getPeriodizedPlan"]>>>(null);
+  const loadStatusesRef = useRef(loadWeekStatuses); loadStatusesRef.current = loadWeekStatuses;
+  const initialWeekRef = useRef(initialWeek);
+  const statusRequest = useRef(0);
+  /** Состояние выбранного цикла из плана (чистая функция `cycleStateFrom`) и подписи статусов его недель. */
+  const applyCycleState = (plan: NonNullable<typeof planRef.current>, cycleId: string | undefined, first: boolean) => {
+    const state = cycleStateFrom(plan, cycleId, today());
+    setTitle(state.title); setCycleType(state.cycleType); setRepsText(state.repsText); setStartDate(state.startDate);
+    setWeeks(state.weeks);
+    setEditing(first && initialWeekRef.current !== undefined ? Math.min(Math.max(initialWeekRef.current - 1, 0), state.weeks.length - 1) : 0);
+    baselines.current = new Map(state.baselines); baseWeeks.current = state.baseWeeks;
+    const request = ++statusRequest.current;
+    setWeekStatuses([]);
+    const cycle = cycleId === undefined ? undefined : plan.mesocycles.find((item) => item.id === cycleId);
+    if (cycle !== undefined && loadStatusesRef.current !== undefined && programId !== undefined) {
+      loadStatusesRef.current(programId, cycle.weeks.map((week) => ({ index: week.index, workoutIds: week.workouts.map((workout) => workout.id) })))
+        .then((labels) => { if (request === statusRequest.current) setWeekStatuses(labels); }).catch(() => undefined);
+    }
+  };
   useEffect(() => {
     if (programId === undefined) return undefined;
     let active = true;
     repository.getPeriodizedPlan(clientId, programId).then((plan) => {
       if (!active) return;
-      const cycle = plan?.mesocycles.find((item) => item.id === mesocycleId);
-      if (plan === null || (mesocycleId !== undefined && cycle === undefined)) { setProgram("ERROR"); return; }
+      const cycle = plan?.mesocycles.find((item) => item.id === startCycle);
+      if (plan === null || (startCycle !== undefined && cycle === undefined)) { setProgram("ERROR"); return; }
+      planRef.current = plan;
       setProgram({ revision: plan.program.revision, title: plan.program.title, members: plan.program.memberClientIds });
       setProgramCycles(plan.mesocycles.map((item) => ({ id: item.id, title: item.title })));
       // «+ Мезоцикл» — только у этого участника; остальных тренер добавляет сам (решение владельца).
       setMembers([clientId]);
       void refreshGroup().catch(() => undefined);
-      if (cycle === undefined) { setTitle(`Мезоцикл ${plan.mesocycles.length + 1}`); return; }
-      setTitle(cycle.title);
-      if (cycle.cycleType != null) setCycleType(cycle.cycleType);
-      setRepsText(cycle.repRange == null ? "" : formatRange(cycle.repRange).replace("–", "-"));
-      if (cycle.startDate != null) setStartDate(cycle.startDate);
-      setWeeks(cycle.weeks.map((week) => ({ type: week.type, workouts: week.workouts })));
-      if (loadWeekStatuses !== undefined && mesocycleId !== undefined) {
-        loadWeekStatuses(programId, cycle.weeks.map((week) => ({ index: week.index, workoutIds: week.workouts.map((workout) => workout.id) })))
-          .then((labels) => { if (active) setWeekStatuses(labels); }).catch(() => undefined);
-      }
-      baselines.current = new Map(cycle.weeks.map((week, index) => [index, week.workouts]));
-      baseWeeks.current = cycle.weeks.map((week) => ({ type: week.type, workouts: week.workouts }));
-      if (initialWeek !== undefined) setEditing(Math.min(Math.max(initialWeek - 1, 0), cycle.weeks.length - 1));
+      applyCycleState(plan, mesocycleIdRef.current, mesocycleIdRef.current === startCycle);
     }).catch(() => { if (active) setProgram("ERROR"); });
     return () => { active = false; };
-  }, [clientId, initialWeek, loadWeekStatuses, mesocycleId, programId, refreshGroup, repository]);
+  }, [clientId, programId, refreshGroup, repository, startCycle]);
   // Добавленные клиенты вне этой программы: куда ляжет их копия.
   const outsiders = useMemo(() => mode === "edit" ? joining?.ids ?? []
     : members.filter((id) => id !== clientId),
@@ -416,21 +427,37 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, t
       <AppButton variant="secondary" label="Повторить" onPress={lookupState.retry} />
     </View>;
   // Полоса циклов не пропадает при переключении: пока грузится выбранный цикл, она остаётся на месте, а загрузка — под ней.
+  /** Другой цикл на месте: состояние цикла из прочитанного плана и сброс всего, что принадлежало прежнему циклу; один пакет — один рендер. */
+  const switchTo = (to: string | undefined) => {
+    const plan = planRef.current;
+    if (plan === null) return;
+    setPendingSwitch(null);
+    restoreDone.current = false;
+    initialCycleKey.current = to === undefined ? newPlanId("cycle") : `existing:${to}`;
+    mesocycleIdRef.current = to;
+    setMesocycleId(to);
+    applyCycleState(plan, to, false);
+    setDirty(false); setRestored(false); setRebased(false); setScopeFor(null); setSaved(null); setMessage(null); setShowIssues(false);
+    setMembers([clientId]); setPlacements(new Map()); setJoining(null); setLeaving(null); setConfirmResults(false); setWorkbook(null);
+    setGroup([clientId]); setGroupCycles(new Map());
+    recovery.resume();
+    void refreshGroup().catch(() => undefined);
+  };
   const requestSwitch = (to: string | undefined) => {
     if (busy !== null) return;
-    if (dirty) setPendingSwitch({ to }); else onSwitchCycle?.(to);
+    if (dirty) setPendingSwitch({ to }); else switchTo(to);
   };
   const finishSwitch = async (save: boolean) => {
     if (pendingSwitch === null || switchBusy) return;
     setSwitchBusy(true); setMessage(null);
     try {
       if (save) await recovery.beforePublish(); else await recovery.discard(() => repository.clearMesocycleBuilderDraft(clientId, scope));
-      const { to } = pendingSwitch; setPendingSwitch(null); onSwitchCycle?.(to);
+      switchTo(pendingSwitch.to);
     } catch { setMessage(save ? "Не удалось сохранить черновик. Повторите." : "Не удалось удалить черновик. Повторите."); recovery.resume(); }
     finally { setSwitchBusy(false); }
   };
-  const cycleStrip = !workbook && onSwitchCycle !== undefined && programId !== undefined && programCycles.length > 0 ? (
-    <SegmentedControl scroll wrap items={[...programCycles.map((c) => ({ id: c.id, label: c.id === mesocycleId && program !== null ? title || c.title : c.title })),
+  const cycleStrip = !workbook && !templateEdit && programId !== undefined && programCycles.length > 0 ? (
+    <SegmentedControl scroll wrap slide items={[...programCycles.map((c) => ({ id: c.id, label: c.id === mesocycleId && program !== null ? title || c.title : c.title })),
       { id: NEW_CYCLE, label: "+ Новый цикл" }]}
       selectedId={mesocycleId ?? NEW_CYCLE} onSelect={(id) => { if (id !== (mesocycleId ?? NEW_CYCLE)) requestSwitch(id === NEW_CYCLE ? undefined : id); }} />
   ) : null;
@@ -614,7 +641,7 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, t
         {templateEdit ? null : renderExcel?.(applyWorkbook, mode === "create" ? programTitle || undefined : program?.title)}
         {cycleStrip !== null ? <Section title={`Циклы программы · ${programCycles.length}`}>{cycleStrip}</Section> : null}
         {workbook && <Section title={`Циклы программы · ${workbook.cycles.length}`}>
-          <SegmentedControl scroll wrap items={workbook.cycles.map((c) => ({ id: c.key, label: c.key === workbook.activeKey ? title : c.title }))}
+          <SegmentedControl scroll wrap slide items={workbook.cycles.map((c) => ({ id: c.key, label: c.key === workbook.activeKey ? title : c.title }))}
             selectedId={workbook.activeKey} onSelect={(key) => { const state = currentWorkbook()!; openCycle(state.cycles.find((c) => c.key === key)!, state); touch(); }} />
           <Text style={[styles.hint, { color: colors.textSecondary }]}>Все циклы сохранятся общей кнопкой конструктора.{workbook.cycles.some((c) => c.imported) ? " Результаты Excel относятся только к этому клиенту." : ""}</Text>
         </Section>}
@@ -791,19 +818,6 @@ function PeriodizedBuilderBody({ clientId, programId, mesocycleId, templateId, t
         onSave={recovery.saveAndLeave} onDiscard={recovery.discardAndLeave} onContinue={recovery.cancelExit} />
     </TrainingEditorLayout>
   );
-}
-
-type BuilderProps = ComponentProps<typeof PeriodizedBuilderBody>;
-
-/**
- * Конструктор расширенной программы. Переключение между циклами существующей программы идёт на месте (CYCLE-STRIP): обёртка помнит выбранный цикл и
- * список циклов, а экран цикла пересоздаётся по ключу — без нового экрана навигации и перехода; состояние цикла сбрасывается целиком.
- */
-export function PeriodizedBuilderScreen(props: BuilderProps) {
-  const [cycle, setCycle] = useState(props.mesocycleId);
-  const [cycles, setCycles] = useState(props.knownCycles);
-  return <PeriodizedBuilderBody key={cycle ?? "new"} {...props} mesocycleId={cycle} knownCycles={cycles} onCycles={setCycles}
-    onSwitchCycle={props.programId === undefined ? undefined : setCycle} />;
 }
 
 const styles = StyleSheet.create({

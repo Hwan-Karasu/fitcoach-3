@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import test from "node:test";
-import { createElement, type ComponentType, type ReactNode } from "react";
+import { createElement, useEffect, type ComponentType, type ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import ts from "typescript";
 import type { PickedWorkbook } from "../src/features/import/domain/WorkbookFilesPort.ts";
@@ -20,6 +20,8 @@ type Props = Record<string, unknown>;
 const control = (name: string) => (props: Props) => createElement(name, props, props.children as ReactNode);
 const ui = Object.fromEntries(["AppButton", "AppIconButton", "ConfirmDialog", "FloatingActionButton", "ListSectionHeader", "InlineNotice", "LoadingState", "ScreenHeader", "SegmentedControl", "TextField", "SelectionChip", "StickyEditorFooter", "TrainingEditorLayout", "DateField", "DropdownMenu"].map((name) => [name, control(name)]));
 let idSequence = 0;
+/** Сколько раз смонтирован редактор недели конструктора (CYCLE-STRIP-3: при переключении цикла не растёт). */
+let editorMounts = 0;
 const cache = new Map<string, Record<string, unknown>>();
 const nav = { actions: [] as unknown[], remove: (event: unknown): void => { void event; }, dispatch(action: unknown) { this.actions.push(action); } };
 function loadScreen(file: string): Record<string, unknown> {
@@ -41,11 +43,11 @@ function loadScreen(file: string): Record<string, unknown> {
     if (specifier === "react-native") return { Modal: (p: Props) => p.visible ? createElement("NativeModal", p, p.children as ReactNode) : null,
       FlatList: (p: Props) => createElement("FlatList", null, p.ListHeaderComponent as ReactNode,
         ...(p.data as unknown[]).map((item, index) => (p.renderItem as (row: { item: unknown; index: number }) => ReactNode)({ item, index })), p.ListFooterComponent as ReactNode),
-      ...Object.fromEntries(["Text", "View", "ScrollView", "Pressable"].map((n) => [n, control(n)])), StyleSheet: { create: (s: unknown) => s }, Platform: { OS: "android", select: (p: Props) => p.android ?? p.default } };
+      ...Object.fromEntries(["Text", "View", "ScrollView", "Pressable"].map((n) => [n, control(n)])), StyleSheet: { create: (s: unknown) => s }, Keyboard: { addListener: () => ({ remove: () => undefined }), dismiss: () => undefined }, Platform: { OS: "android", select: (p: Props) => p.android ?? p.default } };
     if (specifier === "react-native-safe-area-context") return { SafeAreaView: control("SafeAreaView") };
     if (specifier.endsWith("ui/components/public.ts")) return ui;
     if (specifier.endsWith("PrototypeThemeProvider.tsx")) return { usePrototypeTheme: () => ({ palette: { tokens: new Proxy({}, { get: () => "#445566" }) } }) };
-    if (specifier === "./WorkoutsEditor.tsx") return { WorkoutsEditor: control("Editor"), newPlanId: () => `draft:${++idSequence}` };
+    if (specifier === "./WorkoutsEditor.tsx") return { WorkoutsEditor: (p: Props) => { useEffect(() => { editorMounts += 1; }, []); return createElement("Editor", p, p.children as ReactNode); }, newPlanId: () => `draft:${++idSequence}` };
     if (specifier === "./usePickedExercise.ts") return { usePickedExercise: () => undefined };
     if (specifier === "./useRecoveryDraftSave.ts") return loadScreen(resolve(file, "..", specifier));
     if (["./ScopeMenu.tsx", "./ParticipantAssignments.tsx", "./PlacementRows.tsx"].includes(specifier)) return { [specifier.slice(2, -4)]: control("BuilderPanel") };
@@ -227,5 +229,39 @@ test("I07 actual periodized constructor displays all imported cycles, preserves 
   assert.ok(nodes(renderer, "Text").some((n) => n.props.children === "Программа недели 3"));
   await act(async () => { nodes(renderer, "StickyEditorFooter")[0]!.props.onAction(); await new Promise((resolve) => setTimeout(resolve, 20)); });
   assert.equal(writes.length, 1); assert.equal(writes[0]!.cycles.length, 3); assert.equal(writes[0]!.cycles[0]!.title, "Правка первого");
+  await act(async () => renderer.unmount());
+});
+
+test("CYCLE-STRIP-3 переключение цикла на месте: план не читается повторно, редактор недели не пересоздаётся, загрузки нет; несохранённое спрашивает", async () => {
+  const Builder = loadScreen(resolve(import.meta.dirname, "../src/features/training/plans/presentation/PeriodizedBuilderScreen.tsx")).PeriodizedBuilderScreen as ComponentType<Props>;
+  const week = (id: string, index: number, type: string) => ({ id, index, type, workouts: [{ id: `${id}-t`, title: "Т", exercises: [] }] });
+  const plan = { program: { id: "p1", revision: 3, title: "Прог", memberClientIds: ["client"] }, mesocycles: [
+    { id: "a", lineageId: "la", title: "Волна 1", weeks: [week("a0", 1, "heavy"), week("a1", 2, "base")] },
+    { id: "b", lineageId: "lb", title: "Волна 2", weeks: [week("b0", 1, "base")] }] };
+  let reads = 0; const shown: (string | undefined)[] = [];
+  const props = { clientId: "client", programId: "p1", mesocycleId: "a", onCycleShown: (id: string | undefined) => { shown.push(id); },
+    repository: { getPeriodizedPlan: async () => { reads += 1; return plan; }, getMesocycleGroup: async () => [], getPlacementOptions: async () => [],
+      getMesocycleBuilderDraft: async () => null, saveMesocycleBuilderDraft: async () => undefined, clearMesocycleBuilderDraft: async () => undefined },
+    exercises: { lookup: async () => new Map([["sys:press", { name: "Жим", metrics: ["load", "reps"] }]]), subscribe: () => () => undefined },
+    listCandidates: async () => [], picked: null, onPickExercise: () => undefined, onCreated: () => undefined, onCancel: () => undefined };
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(createElement(Builder, props)); });
+  await until(renderer, () => nodes(renderer, "Editor").length > 0);
+  const strip = () => nodes(renderer, "SegmentedControl").find((n) => (n.props.items as { id: string }[] | undefined)?.some((item) => item.id === "b"))!;
+  const mesocycleTitle = () => nodes(renderer, "TextField").find((n) => n.props.label === "Название мезоцикла")!.props.value;
+  assert.equal(mesocycleTitle(), "Волна 1");
+  const mountsBefore = editorMounts;
+  await act(async () => strip().props.onSelect("b"));
+  assert.equal(mesocycleTitle(), "Волна 2", "цикл B показан");
+  assert.equal(reads, 1, "план читается один раз");
+  assert.equal(editorMounts, mountsBefore, "редактор недели не пересоздан");
+  assert.equal(nodes(renderer, "LoadingState").length, 0, "экран загрузки не показывался");
+  assert.equal(shown.at(-1), "b", "навигация знает выбранный цикл");
+  await act(async () => nodes(renderer, "TextField").find((n) => n.props.label === "Название мезоцикла")!.props.onChangeText("Волна 2 правка"));
+  await act(async () => strip().props.onSelect("a"));
+  assert.equal(mesocycleTitle(), "Волна 2 правка", "с несохранённой правкой переключение сначала спрашивает");
+  await press(renderer, "Удалить черновик");
+  assert.equal(mesocycleTitle(), "Волна 1", "после «Удалить черновик» открыт цикл A без правок цикла B");
+  assert.equal(reads, 1); assert.equal(editorMounts, mountsBefore); assert.equal(shown.at(-1), "a");
   await act(async () => renderer.unmount());
 });
