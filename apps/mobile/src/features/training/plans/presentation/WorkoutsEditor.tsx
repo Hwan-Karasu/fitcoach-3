@@ -143,30 +143,19 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, s
   const active = setState !== "idle";
   const card = (
     // Каждое упражнение — своя карточка (как в 2.0); участники суперсета обводятся сплошной рамкой (SupersetBorder).
-    <View style={[styles.exerciseRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-      {/* Название и действия — на фоне карточки; поля ввода ниже — отдельной полосой другого тона (UI-OWN-028). */}
-      <View style={styles.exerciseHead}>
-        <Sortable.Handle>
-          <View accessible accessibilityLabel={`Перетащить: ${name}`} style={styles.handle}>
-            <GripVertical size={16} color={colors.textMuted} strokeWidth={1.8} />
-          </View>
-        </Sortable.Handle>
-        <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>
-          {info?.thumbnail != null ? <Image source={info.thumbnail} resizeMethod="resize" style={styles.thumbImage} />
-            : <Dumbbell size={14} color={colors.accentInk} strokeWidth={1.8} />}
+    <ExerciseCardShell name={info?.name ?? "Упражнение не найдено в каталоге"} danger={broken} thumbnail={info?.thumbnail ?? null}
+      handle={<Sortable.Handle>
+        <View accessible accessibilityLabel={`Перетащить: ${name}`} style={styles.handle}>
+          <GripVertical size={16} color={colors.textMuted} strokeWidth={1.8} />
         </View>
-        <View style={styles.grow}>
-          <Text style={[styles.exerciseName, { color: broken ? colors.danger : colors.textPrimary }]}>
-            {info?.name ?? "Упражнение не найдено в каталоге"}
-          </Text>
-          {group !== null ? <Text style={[styles.supersetTag, { color: colors.accentInk }]}>{`Суперсет ${group}`}</Text> : null}
-        </View>
+      </Sortable.Handle>}
+      subtitle={group !== null ? <Text style={[styles.supersetTag, { color: colors.accentInk }]}>{`Суперсет ${group}`}</Text> : null}
+      actions={<>
         <AppIconButton compact label={`Заменить: ${name}`}
           icon={<ArrowLeftRight size={17} color={colors.textSecondary} strokeWidth={1.8} />} onPress={onReplace} />
         <AppIconButton compact label={`Убрать из тренировки: ${name}`}
           icon={<X size={19} color={colors.danger} strokeWidth={2} />} onPress={() => change(removeExercise(draft, item.id))} />
-      </View>
-      <View style={[styles.exerciseBody, { backgroundColor: colors.surfaceRaised, borderTopColor: colors.border }]}>
+      </>}>
         <View style={styles.fields}>
           {inputs.map((input, index) => (
             <InlineField key={input.key} ref={(node) => { refs.current[index] = node; }} label={input.label} kind={input.kind}
@@ -216,30 +205,33 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, s
             <Text style={[styles.instructionAddText, { color: colors.textSecondary }]}>Указание</Text>
           </Pressable>
         )}
-      </View>
-    </View>
+    </ExerciseCardShell>
   );
   return group !== null ? <SupersetBorder radius={10}>{card}</SupersetBorder> : card;
 }
 
 /**
- * Оболочка карточки упражнения конструктора (миниатюра, название, действия; ниже — полоса полей другого тона, UI-OWN-028)
- * для экранов вне конструктора: распределение заметок по тренировкам (TEXT-LOG-2).
+ * Оболочка карточки упражнения конструктора: ручка (если есть), миниатюра, название, действия; ниже — полоса полей другого
+ * тона (UI-OWN-028). Из неё собраны карточка конструктора и распределение заметок по тренировкам (TEXT-LOG-2).
  */
-export function ExerciseCardShell({ name, subtitle, thumbnail = null, actions, children }: Readonly<{
+export function ExerciseCardShell({ name, subtitle, thumbnail = null, actions, children, handle, danger = false }: Readonly<{
   name: string; subtitle?: ReactNode; thumbnail?: ExerciseInfo["thumbnail"] | null; actions?: ReactNode; children?: ReactNode;
+  /** Ручка перетаскивания: только внутри Sortable.Grid конструктора. */
+  handle?: ReactNode; danger?: boolean;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
     <View style={[styles.exerciseRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-      <View style={[styles.exerciseHead, { paddingHorizontal: 8 }]}>
+      {/* Название и действия — на фоне карточки; поля ввода ниже — отдельной полосой другого тона. */}
+      <View style={[styles.exerciseHead, handle ? null : { paddingHorizontal: 8 }]}>
+        {handle}
         <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>
           {thumbnail != null ? <Image source={thumbnail} resizeMethod="resize" style={styles.thumbImage} />
             : <Dumbbell size={14} color={colors.accentInk} strokeWidth={1.8} />}
         </View>
         <View style={styles.grow}>
-          <Text style={[styles.exerciseName, { color: colors.textPrimary }]}>{name}</Text>
+          <Text style={[styles.exerciseName, { color: danger ? colors.danger : colors.textPrimary }]}>{name}</Text>
           {subtitle}
         </View>
         {actions}
