@@ -1,12 +1,12 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ChartColumn, Check, ChevronRight, Trash2 } from "lucide-react-native";
-import { AppButton, AppIconButton, ConfirmDialog, DateField, InlineNotice, SelectionChip, TextField } from "../../shared/ui/components/public.ts";
+import { AppButton, AppIconButton, ConfirmDialog, DateField, DropdownMenu, InlineNotice, SelectionChip, TextField } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 import { plural } from "../../shared/format/clockText.ts";
 import { CYCLE_TYPES, ExerciseCardShell } from "../../features/training/public.ts";
-import { assignLogExercise, copyLogSets, copySetsSource, duplicateLogExercise, editLogWorkout, logExercises, logStats, removeLogExercise,
+import { assignLogExercise, copyLogSets, copySetsSource, duplicateLogExercise, editLogWorkout, logExercises, logStats, logWeeks, removeLogExercise,
   type LogExercise, type LogSet, type WorkoutLog } from "../../features/import/public.ts";
 
 export type LogCycleType = (typeof CYCLE_TYPES)[number]["id"];
@@ -14,11 +14,15 @@ export type LogUpdate = (change: (log: WorkoutLog) => WorkoutLog) => void;
 type LogStats = ReturnType<typeof logStats>;
 /** Местная дата YYYY-MM-DD: дата без года в заметках — ближайшая прошедшая относительно неё. */
 export const localToday = (now = new Date()) => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-/** Пикер всегда показывает не меньше стольких номеров; наличие кнопки не создаёт ни неделю, ни тренировку. */
+/** Пикер всегда показывает не меньше стольких номеров; наличие кнопки не создаёт тренировку. */
 const PICKER_MIN = 4;
+/** Больше тренировок — выбор списком с названиями и датами, а не кнопками. */
+const CHIPS_MAX = 6;
 /** Ширина кнопки номера и промежуток — для прокрутки к выбранному. */
 const PICK_STEP = 50;
-type Target = Readonly<{ week?: number; slot?: number }>;
+const PER_WEEK_MAX = 7;
+/** Короткая дата `дд.мм` и полная `дд.мм.гггг` из YYYY-MM-DD. */
+const dayMonth = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
 const range = (reps: (typeof CYCLE_TYPES)[number]["reps"]) => reps === null ? null : reps.max === null ? String(reps.min) : `${reps.min}–${reps.max}`;
 /** Попадает ли упражнение в импорт: есть подходы или это плановая копия. */
 const isIncluded = (exercise: LogExercise) => exercise.sets.length > 0 || (exercise.planSets ?? 0) > 0;
@@ -45,28 +49,42 @@ export function TextLogInput({ text, error, busy, onText, onParse }: Readonly<{
   </ScrollView>;
 }
 
-/** Выбор номера (неделя или тренировка в неделе): номера и «+»; при многих номерах пикер прокручивается внутри карточки к выбранному. */
-function NumberPicker({ label, name, value, count, onPick }: Readonly<{ label: string; name: string; value: number; count: number; onPick: (index: number) => void }>) {
+/**
+ * Выбор тренировки упражнения: кнопки с датой (или номером, если даты нет) и «+»; при многих тренировках — список с названиями и датами.
+ * Подписи приходят строками через перевод строки, чтобы карточка не перерисовывалась без причины.
+ */
+function SessionPicker({ name, value, chips, options, onPick }: Readonly<{ name: string; value: number; chips: string; options: string; onPick: (index: number) => void }>) {
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
-  const shown = Math.max(PICKER_MIN, count, value + 1); const group = `${label} для «${name}»`;
+  const labels = chips.split("\n"); const count = labels.length; const group = `Тренировка для «${name}»`;
+  const shown = Math.max(PICKER_MIN, count, value + 1);
+  const anchor = useRef<View>(null); const [open, setOpen] = useState(false);
   const scroll = useRef<ScrollView>(null);
   const toSelected = useCallback(() => scroll.current?.scrollTo({ x: Math.max(0, (value - 1) * PICK_STEP), animated: false }), [value]);
   useEffect(toSelected, [toSelected]);
-  return <View style={styles.pickerLine}>
-    <Text style={[styles.label, { color: colors.textMuted }]}>{label}</Text>
+  const caption = <Text style={[styles.label, { color: colors.textMuted }]}>Тренировка</Text>;
+  if (count > CHIPS_MAX) {
+    const names = options.split("\n");
+    return <View style={styles.pickerLine}>{caption}
+      <View ref={anchor} collapsable={false} style={styles.picker}><AppButton compact variant="secondary" label={names[value] ?? `Тренировка ${value + 1}`} onPress={() => setOpen(true)} /></View>
+      <DropdownMenu visible={open} anchor={anchor} title={group} searchable selected={String(value)}
+        options={[...names.map((label, i) => ({ value: String(i), label })), { value: "new", label: "Новая тренировка" }]}
+        onSelect={(next) => { setOpen(false); onPick(next === "new" ? count : Number(next)); }} onClose={() => setOpen(false)} />
+    </View>;
+  }
+  return <View style={styles.pickerLine}>{caption}
     <ScrollView ref={scroll} horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" onContentSizeChange={toSelected}
       style={styles.picker} contentContainerStyle={styles.pickerRow}>
       {Array.from({ length: shown }, (_, i) => <View key={i} style={styles.pick}>
-        <SelectionChip compact dense fill group={group} label={String(i + 1)} selected={i === value} onPress={() => onPick(i)} /></View>)}
-      <View style={styles.pick}><SelectionChip compact dense fill group={group} label="+" selected={false} onPress={() => onPick(shown)} /></View>
+        <SelectionChip compact dense fill group={group} label={labels[i] ?? String(i + 1)} selected={i === value} onPress={() => onPick(i)} /></View>)}
+      <View style={styles.pick}><SelectionChip compact dense fill group={group} label="+" selected={false} onPress={() => onPick(count)} /></View>
     </ScrollView>
   </View>;
 }
 
 /** Карточка упражнения единого списка: основа — карточка конструктора; подпись «подходы · повторы по типу цикла · вес». */
-const ExercisePlacement = memo(function ExercisePlacement({ exercise, week, slot, weeks, slots, repsText, clash, copyFrom, onAssign, onDuplicate, onCopySets, onRemove }: Readonly<{
-  exercise: LogExercise; week: number; slot: number; weeks: number; slots: number; repsText: string | null; clash: boolean; copyFrom: LogExercise | null;
-  onAssign: (id: string, target: Target) => void; onDuplicate: (id: string) => void; onCopySets: (id: string, from: string) => void; onRemove: (id: string) => void;
+const ExercisePlacement = memo(function ExercisePlacement({ exercise, workout, chips, options, repsText, clash, copyFrom, onAssign, onDuplicate, onCopySets, onRemove }: Readonly<{
+  exercise: LogExercise; workout: number; chips: string; options: string; repsText: string | null; clash: boolean; copyFrom: LogExercise | null;
+  onAssign: (id: string, target: number) => void; onDuplicate: (id: string) => void; onCopySets: (id: string, from: string) => void; onRemove: (id: string) => void;
 }>) {
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
   const [confirm, setConfirm] = useState<"copy" | "remove" | null>(null);
@@ -87,8 +105,7 @@ const ExercisePlacement = memo(function ExercisePlacement({ exercise, week, slot
           <Text style={[styles.actionText, { color: colors.accentInk }]}>Дублировать</Text></Pressable>
         <AppIconButton label={`Убрать: ${exercise.name}`} icon={<Trash2 size={18} color={colors.danger} />} onPress={remove} />
       </View>}>
-      <NumberPicker label="Неделя" name={exercise.name} value={week} count={weeks} onPick={(index) => onAssign(exercise.id, { week: index })} />
-      <NumberPicker label="Тренировка" name={exercise.name} value={slot} count={slots} onPick={(index) => onAssign(exercise.id, { slot: index })} />
+      <SessionPicker name={exercise.name} value={workout} chips={chips} options={options} onPick={(index) => onAssign(exercise.id, index)} />
       {clash && <Text style={[styles.hint, { color: colors.danger }]}>Это упражнение уже есть в этой тренировке.</Text>}
     </ExerciseCardShell>
     <ConfirmDialog visible={confirm === "copy"} title="Скопировать подходы?"
@@ -100,35 +117,41 @@ const ExercisePlacement = memo(function ExercisePlacement({ exercise, week, slot
   </>;
 });
 
-/** Шаг 2 макета: тип цикла, похожие названия, единый список упражнений с пикерами недели и тренировки и нижняя панель. */
-export function TextLogDistribution({ log, recognized, onUpdate, cycleType, onCycleType, similar, merged, onToggleMerge, busy, error, onContinue }: Readonly<{
-  log: WorkoutLog; recognized: LogStats; onUpdate: LogUpdate; cycleType: LogCycleType; onCycleType: (type: LogCycleType) => void;
+/**
+ * Шаг 2 макета: тип цикла, похожие названия, единый список упражнений с пикером тренировки и нижняя панель. Недель здесь нет:
+ * неделя — следствие даты тренировки, без дат — «тренировок в неделю».
+ */
+export function TextLogDistribution({ log, recognized, onUpdate, cycleType, onCycleType, perWeek, onPerWeek, similar, merged, onToggleMerge, busy, error, onContinue }: Readonly<{
+  /** Итог первичного разбора; недели в нём показываются только если в заметках есть даты (иначе зависят от степпера). */
+  log: WorkoutLog; recognized: LogStats & Readonly<{ dated: boolean }>; onUpdate: LogUpdate; cycleType: LogCycleType; onCycleType: (type: LogCycleType) => void;
+  perWeek: number; onPerWeek: (count: number) => void;
   similar: readonly (readonly [string, string])[]; merged: ReadonlySet<number>; onToggleMerge: (index: number) => void;
   busy: boolean; error: string; onContinue: () => void;
 }>) {
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
   const items = useMemo(() => logExercises(log), [log]);
-  const stats = useMemo(() => logStats(log), [log]);
+  const stats = useMemo(() => logStats(log, perWeek), [log, perWeek]);
+  // Даты смотрим у тех же непустых тренировок, что и `logWeeks`: степпер нужен ровно тогда, когда недели считаются по порядку.
+  const dated = log.workouts.some((w) => w.date && w.exercises.some(isIncluded));
+  const chips = log.workouts.map((w, i) => w.date ? dayMonth(w.date) : String(i + 1)).join("\n");
+  const options = log.workouts.map((w, i) => `${i + 1}. ${w.title.replace(/\s+/gu, " ")}${w.date ? ` · ${dayMonth(w.date)}.${w.date.slice(0, 4)}` : ""}`).join("\n");
   const clashes = useMemo(() => {
-    const seen = new Map<string, number>(); const key = (item: (typeof items)[number]) => `${item.week}:${item.slot}:${item.exercise.name.toLowerCase().replace(/ё/gu, "е").replace(/\s+/gu, " ").trim()}`;
+    const seen = new Map<string, number>(); const key = (item: (typeof items)[number]) => `${item.workout}:${item.exercise.name.toLowerCase().replace(/ё/gu, "е").replace(/\s+/gu, " ").trim()}`;
     for (const item of items) seen.set(key(item), (seen.get(key(item)) ?? 0) + 1);
     return new Set(items.filter((item) => seen.get(key(item))! > 1).map((item) => item.exercise.id));
   }, [items]);
   const sources = useMemo(() => new Map(items.filter((item) => !item.exercise.sets.length).map((item) => [item.exercise.id, copySetsSource(log, item.exercise.id)] as const)), [items, log]);
   const selectedType = CYCLE_TYPES.find((item) => item.id === cycleType)!; const repsText = range(selectedType.reps);
-  const assign = useCallback((id: string, target: Target) => onUpdate((l) => assignLogExercise(l, id, target)), [onUpdate]);
+  const assign = useCallback((id: string, target: number) => onUpdate((l) => assignLogExercise(l, id, target)), [onUpdate]);
   const duplicate = useCallback((id: string) => onUpdate((l) => duplicateLogExercise(l, id)?.log ?? l), [onUpdate]);
   const copySets = useCallback((id: string, from: string) => onUpdate((l) => copyLogSets(l, id, from)), [onUpdate]);
   const remove = useCallback((id: string) => onUpdate((l) => removeLogExercise(l, id)), [onUpdate]);
-  // Сколько номеров знает пикер: неделя — по самой дальней, тренировка — по самой большой неделе.
-  const weeks = log.workouts.reduce((max, w) => Math.max(max, w.week + 1), 0);
-  const slots = log.workouts.reduce((max, w) => Math.max(max, log.workouts.filter((x) => x.week === w.week).length), 0);
-  const renderItem = useCallback(({ item }: Readonly<{ item: (typeof items)[number] }>) => <ExercisePlacement exercise={item.exercise} week={item.week} slot={item.slot}
-    weeks={weeks} slots={slots} repsText={repsText} clash={clashes.has(item.exercise.id)} copyFrom={sources.get(item.exercise.id) ?? null}
-    onAssign={assign} onDuplicate={duplicate} onCopySets={copySets} onRemove={remove} />, [weeks, slots, repsText, clashes, sources, assign, duplicate, copySets, remove]);
+  const renderItem = useCallback(({ item }: Readonly<{ item: (typeof items)[number] }>) => <ExercisePlacement exercise={item.exercise} workout={item.workout}
+    chips={chips} options={options} repsText={repsText} clash={clashes.has(item.exercise.id)} copyFrom={sources.get(item.exercise.id) ?? null}
+    onAssign={assign} onDuplicate={duplicate} onCopySets={copySets} onRemove={remove} />, [chips, options, repsText, clashes, sources, assign, duplicate, copySets, remove]);
   const cycleRows = [CYCLE_TYPES.slice(0, 3), CYCLE_TYPES.slice(3)];
   const header = <View style={styles.stack}>
-    <Text style={[styles.body, { color: colors.textSecondary }]}>Распознано: {workoutsText(recognized.workouts)} в {weeksText(recognized.weeks)}, {counts(recognized)}.</Text>
+    <Text style={[styles.body, { color: colors.textSecondary }]}>Распознано: {workoutsText(recognized.workouts)}{recognized.dated ? ` в ${weeksText(recognized.weeks)}` : ""}, {counts(recognized)}.</Text>
     {!!log.unknownLines.length && <InlineNotice kind="warning">{`Не распознаны строки (${log.unknownLines.length}): `
       + log.unknownLines.slice(0, 5).map((l) => `${l.line} «${l.text}»`).join(", ") + (log.unknownLines.length > 5 ? "…" : "")
       + ". Исправьте текст и разберите заново, иначе эти строки не попадут в импорт."}</InlineNotice>}
@@ -137,6 +160,12 @@ export function TextLogDistribution({ log, recognized, onUpdate, cycleType, onCy
       {cycleRows.map((row, i) => <View key={i} style={styles.gridRow}>{row.map((item) => <SelectionChip key={item.id} compact fill group="Тип цикла" label={item.label}
         selected={item.id === cycleType} onPress={() => onCycleType(item.id)} />)}</View>)}
       <Text style={[styles.hint, { color: colors.textSecondary }]}>{repsText === null ? "Свой: план повторений останется пустым." : `${selectedType.label}: ${repsText} повторений.`}</Text>
+      {!dated && <View style={styles.stepper}>
+        <Text style={[styles.body, styles.stepperText, { color: colors.textPrimary }]}>Тренировок в неделю</Text>
+        <AppButton compact variant="secondary" label="−" accessibilityLabel="Меньше тренировок в неделю" disabled={perWeek <= 1} onPress={() => onPerWeek(perWeek - 1)} />
+        <Text style={[styles.heading, { color: colors.textPrimary }]}>{perWeek}</Text>
+        <AppButton compact variant="secondary" label="+" accessibilityLabel="Больше тренировок в неделю" disabled={perWeek >= PER_WEEK_MAX} onPress={() => onPerWeek(perWeek + 1)} />
+      </View>}
     </View>
     {!!similar.length && <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <Text style={[styles.heading, { color: colors.textPrimary }]}>Похожие названия</Text>
@@ -171,18 +200,19 @@ export function TextLogDistribution({ log, recognized, onUpdate, cycleType, onCy
 const Separator = () => <View style={styles.separator} />;
 
 /** Шаг 3: название (обязательное) и дата (из заметок или пусто) каждой тренировки, когда упражнения уже разложены. */
-export function TextLogWorkouts({ log, onUpdate, busy, error, onContinue }: Readonly<{
-  log: WorkoutLog; onUpdate: LogUpdate; busy: boolean; error: string; onContinue: () => void;
+export function TextLogWorkouts({ log, perWeek, onUpdate, busy, error, onContinue }: Readonly<{
+  log: WorkoutLog; perWeek: number; onUpdate: LogUpdate; busy: boolean; error: string; onContinue: () => void;
 }>) {
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
-  const rows = log.workouts.map((workout, index) => ({ workout, index, slot: log.workouts.slice(0, index).filter((w) => w.week === workout.week).length }))
-    .filter(({ workout }) => workout.exercises.some(isIncluded)).sort((a, b) => a.workout.week - b.workout.week || a.index - b.index);
+  const weeks = useMemo(() => logWeeks(log, perWeek), [log, perWeek]);
+  // Порядок — как в расчёте недель (при полных датах хронологический), чтобы подписи «неделя N» не шли вразнобой.
+  const rows = [...weeks.keys()].map((index) => ({ workout: log.workouts[index]!, index }));
   const missing = rows.some(({ workout }) => !workout.title.trim());
   return <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
     <View style={styles.stack}>
-      <Text style={[styles.body, { color: colors.textSecondary }]}>Назовите тренировки. Дата из заметок подставлена, если она там была.</Text>
-      {rows.map(({ workout, index, slot }) => <View key={index} style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Text style={[styles.heading, { color: colors.textPrimary }]}>Неделя {workout.week + 1} · Тренировка {slot + 1}</Text>
+      <Text style={[styles.body, { color: colors.textSecondary }]}>Назовите тренировки. Дата из заметок подставлена, если она там была; неделя считается по дате.</Text>
+      {rows.map(({ workout, index }) => <View key={index} style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.heading, { color: colors.textPrimary }]}>Тренировка {index + 1} · неделя {weeks.get(index)! + 1}</Text>
         <TextField label="Название" compact value={workout.title} error={workout.title.trim() ? undefined : "Введите название тренировки"}
           onChangeText={(title) => onUpdate((l) => editLogWorkout(l, index, { title }))} />
         <DateField label="Дата" value={workout.date ?? ""} placeholder="Без даты" onChange={(date) => onUpdate((l) => editLogWorkout(l, index, { date }))} />
@@ -203,6 +233,7 @@ const styles = StyleSheet.create({
   pair: { minHeight: 48, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 12 },
   actions: { flexDirection: "row", alignItems: "center" }, textAction: { minHeight: 44, justifyContent: "center", paddingHorizontal: 6 },
   link: { minHeight: 32, justifyContent: "center" }, actionText: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
+  stepper: { flexDirection: "row", alignItems: "center", gap: 10 }, stepperText: { flex: 1 },
   pairGap: { width: 20 }, pairText: { flex: 1, fontFamily: fonts.medium, fontSize: 14, lineHeight: 18 },
   pickerLine: { flexDirection: "row", alignItems: "center", gap: 12 }, picker: { flex: 1 }, pickerRow: { gap: 6, alignItems: "center" }, pick: { width: 44, flexDirection: "row" },
   bar: { flexDirection: "row", alignItems: "center", gap: 12, borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 10 },

@@ -13,8 +13,8 @@ import type { TransferCycle } from "../../../shared/training-transfer/TrainingTr
 export interface LogSet { readonly loadKg: number | null; readonly reps: number; readonly note: string | null; readonly line: number }
 /** `id` стабилен при переносах и правках названия: номер строки текста, у копии — `<id>+<n>`; `planSets` — плановая копия без фактов. */
 export interface LogExercise { readonly id: string; readonly name: string; readonly note: string | null; readonly sets: readonly LogSet[]; readonly line: number; readonly planSets?: number }
-/** `week` — неделя цикла (с нуля); тренировка внутри недели — по порядку среди тренировок той же недели («слот»). */
-export interface LogWorkout { readonly title: string; readonly date: string | null; readonly week: number; readonly exercises: readonly LogExercise[]; readonly line: number }
+/** Неделя тренировки не хранится: она вытекает из даты (или из порядка, если дат нет) — см. `logWeeks`. */
+export interface LogWorkout { readonly title: string; readonly date: string | null; readonly exercises: readonly LogExercise[]; readonly line: number }
 export interface WorkoutLog {
   readonly workouts: readonly LogWorkout[];
   readonly unknownLines: readonly Readonly<{ line: number; text: string }>[];
@@ -62,7 +62,7 @@ const titleOf = (text: string) => {
 
 export function parseWorkoutLog(text: string, today: string): WorkoutLog {
   type Exercise = { id: string; name: string; note: string | null; sets: LogSet[]; line: number };
-  type Workout = { title: string; date: string | null; week: number; exercises: Exercise[]; line: number };
+  type Workout = { title: string; date: string | null; exercises: Exercise[]; line: number };
   const workouts: Workout[] = []; const unknownLines: { line: number; text: string }[] = [];
   let workout: Workout | null = null; let exercise: Exercise | null = null;
   for (const [index, raw] of text.split(/\r?\n/u).entries()) {
@@ -77,37 +77,18 @@ export function parseWorkoutLog(text: string, today: string): WorkoutLog {
     }
     const date = findDate(body, today);
     if (date || HEADER.test(body)) {
-      workout = { title: titleOf(date ? body.replace(date.match, " ") : body), date: date?.iso ?? null, week: 0, exercises: [], line };
+      workout = { title: titleOf(date ? body.replace(date.match, " ") : body), date: date?.iso ?? null, exercises: [], line };
       workouts.push(workout); exercise = null; continue;
     }
     if (/^\d/u.test(body) || !/\p{L}/u.test(body)) { unknownLines.push({ line, text: source }); continue; }
-    if (!workout) { workout = { title: "Тренировка 1", date: null, week: 0, exercises: [], line }; workouts.push(workout); }
+    if (!workout) { workout = { title: "Тренировка 1", date: null, exercises: [], line }; workouts.push(workout); }
     exercise = { id: String(line), name: body, note, sets: [], line }; workout.exercises.push(exercise);
   }
-  // Недели по хронологии: если даты есть у всех тренировок — по дате (календарные недели с понедельника, пустые не создаются);
-  // тренировка без даты остаётся в текущей неделе, без дат вообще всё лежит в неделе 1.
-  const ordered = workouts.length && workouts.every((w) => w.date) ? [...workouts].sort((a, b) => a.date!.localeCompare(b.date!)) : workouts;
-  let week = -1; let key: string | null = null;
-  for (const item of ordered) {
-    const start = item.date ? monday(item.date) : null;
-    if (start !== null && start !== key) { week = key === null ? Math.max(week, 0) : week + 1; key = start; } else if (week < 0) week = 0;
-    item.week = week;
-  }
-  return { workouts: ordered, unknownLines };
+  // Если даты есть у всех тренировок — хронологический порядок (пикер тренировки идёт по датам).
+  return { workouts: workouts.length && workouts.every((w) => w.date) ? [...workouts].sort((a, b) => a.date!.localeCompare(b.date!)) : workouts, unknownLines };
 }
 
-const WEEKS_MAX = 100;
-const SLOTS_MAX = 20;
-/** Номер тренировки внутри её недели: порядок среди тренировок той же недели. */
-const slotOf = (workouts: readonly LogWorkout[], index: number) => workouts.slice(0, index).filter((w) => w.week === workouts[index]!.week).length;
-/** Индекс тренировки (неделя, слот); недостающие пустые «Тренировка N» этой недели добавляются в конец. */
-function sessionAt(workouts: LogWorkout[], week: number, slot: number, line: number): number {
-  let last = -1; let found = -1;
-  for (const [i, w] of workouts.entries()) if (w.week === week && ++last === slot) found = i;
-  if (found >= 0) return found;
-  while (last < slot) { last += 1; workouts.push({ title: `Тренировка ${last + 1}`, date: null, week, exercises: [], line }); }
-  return workouts.length - 1;
-}
+const WORKOUTS_MAX = 100;
 const findExercise = (log: WorkoutLog, id: string) => {
   for (const [workout, item] of log.workouts.entries()) {
     const exercise = item.exercises.findIndex((e) => e.id === id);
@@ -119,29 +100,28 @@ const findExercise = (log: WorkoutLog, id: string) => {
 const included = (exercise: LogExercise) => exercise.sets.length > 0 || (exercise.planSets ?? 0) > 0;
 
 /**
- * Шаг «Распределение»: упражнение `id` в неделю `week` и/или в тренировку `slot` внутри недели (что не задано — остаётся).
- * Недостающие неделя и тренировка создаются пустыми (в импорт пустые не попадают). Дата и название принадлежат тренировке
- * и не меняются вместе с упражнением: оно получает данные тренировки-приёмника.
+ * Шаг «Распределение»: упражнение `id` в тренировку с номером `target` (с нуля). Номер дальше последней тренировки создаёт недостающие
+ * пустые «Тренировка N» без даты (в импорт пустые не попадают). Дата и название принадлежат тренировке и не меняются вместе
+ * с упражнением: оно получает данные тренировки-приёмника, а неделя вытекает из её даты.
  */
-export function assignLogExercise(log: WorkoutLog, id: string, target: Readonly<{ week?: number; slot?: number }>): WorkoutLog {
-  const at = findExercise(log, id); if (!at) return log;
-  const from = log.workouts[at.workout]!; const fromSlot = slotOf(log.workouts, at.workout);
-  const week = target.week ?? from.week; const slot = target.slot ?? fromSlot;
-  if ((week === from.week && slot === fromSlot) || week < 0 || week >= WEEKS_MAX || slot < 0 || slot >= SLOTS_MAX) return log;
-  const workouts = [...log.workouts]; const to = sessionAt(workouts, week, slot, at.item.line);
+export function assignLogExercise(log: WorkoutLog, id: string, target: number): WorkoutLog {
+  const at = findExercise(log, id);
+  if (!at || target === at.workout || target < 0 || target >= WORKOUTS_MAX) return log;
+  const workouts = [...log.workouts];
+  while (workouts.length <= target) workouts.push({ title: `Тренировка ${workouts.length + 1}`, date: null, exercises: [], line: at.item.line });
   workouts[at.workout] = { ...workouts[at.workout]!, exercises: workouts[at.workout]!.exercises.filter((e) => e.id !== id) };
-  workouts[to] = { ...workouts[to]!, exercises: [...workouts[to]!.exercises, at.item] };
+  workouts[target] = { ...workouts[target]!, exercises: [...workouts[target]!.exercises, at.item] };
   return { ...log, workouts };
 }
 
-/** Копия упражнения без фактов — плановая строка (`planSets` подходов); сразу уходит в следующую тренировку той же недели, номер меняется пикером. */
+/** Копия упражнения без фактов — плановая строка (`planSets` подходов); сразу уходит в следующую тренировку, номер меняется пикером. */
 export function duplicateLogExercise(log: WorkoutLog, id: string): Readonly<{ log: WorkoutLog; id: string }> | null {
   const at = findExercise(log, id); if (!at) return null;
   const base = id.split("+")[0]!; const taken = new Set(log.workouts.flatMap((w) => w.exercises.map((e) => e.id)));
   let n = 1; while (taken.has(`${base}+${n}`)) n += 1;
   const copy: LogExercise = { id: `${base}+${n}`, name: at.item.name, note: null, sets: [], line: at.item.line, planSets: Math.max(1, at.item.sets.length || at.item.planSets || 1) };
   const workouts = log.workouts.map((w, i) => i === at.workout ? { ...w, exercises: [...w.exercises, copy] } : w);
-  return { log: assignLogExercise({ ...log, workouts }, copy.id, { slot: slotOf(log.workouts, at.workout) + 1 }), id: copy.id };
+  return { log: assignLogExercise({ ...log, workouts }, copy.id, at.workout + 1), id: copy.id };
 }
 
 /**
@@ -162,12 +142,12 @@ export function removeLogExercise(log: WorkoutLog, id: string): WorkoutLog {
 }
 
 /**
- * Единый список упражнений в порядке текста (копия — сразу после исходного) с неделей и номером тренировки в неделе. Порядок
- * не зависит от распределения: перенос не двигает карточку.
+ * Единый список упражнений в порядке текста (копия — сразу после исходного) с номером тренировки. Порядок не зависит от
+ * распределения: перенос в другую тренировку не двигает карточку.
  */
-export function logExercises(log: WorkoutLog): readonly Readonly<{ exercise: LogExercise; week: number; slot: number }>[] {
+export function logExercises(log: WorkoutLog): readonly Readonly<{ exercise: LogExercise; workout: number }>[] {
   const key = (id: string) => { const [base = "0", copy = "0"] = id.split("+"); return [Number(base), Number(copy)] as const; };
-  return log.workouts.flatMap((w, i) => { const slot = slotOf(log.workouts, i); return w.exercises.map((exercise) => ({ exercise, week: w.week, slot })); })
+  return log.workouts.flatMap((w, workout) => w.exercises.map((exercise) => ({ exercise, workout })))
     .sort((a, b) => { const [x, y] = [key(a.exercise.id), key(b.exercise.id)]; return x[0] - y[0] || x[1] - y[1]; });
 }
 
@@ -182,14 +162,34 @@ export function copySetsSource(log: WorkoutLog, id: string): LogExercise | null 
   return same.find((e) => e.id === id.split("+")[0]) ?? before[before.length - 1] ?? same[0] ?? null;
 }
 
+/**
+ * Неделя каждой тренировки (индекс тренировки → неделя с нуля; по порядку, пустые тренировки и недели пропускаются). Неделя — следствие даты:
+ * если даты есть — календарные недели с понедельника, тренировка без даты остаётся в неделе предыдущей; если дат нет совсем — по порядку,
+ * по `perWeek` тренировок в неделю.
+ */
+export function logWeeks(log: WorkoutLog, perWeek = 1): ReadonlyMap<number, number> {
+  const present = log.workouts.flatMap((workout, index) => workout.exercises.some(included) ? [{ workout, index }] : []);
+  const ordered = present.length && present.every((item) => item.workout.date)
+    ? [...present].sort((a, b) => a.workout.date!.localeCompare(b.workout.date!) || a.index - b.index) : present;
+  const weeks = new Map<number, number>(); const size = Math.max(1, Math.floor(perWeek));
+  if (!ordered.some((item) => item.workout.date)) { ordered.forEach((item, n) => weeks.set(item.index, Math.floor(n / size))); return weeks; }
+  let week = -1; let key: string | null = null;
+  for (const { workout, index } of ordered) {
+    const start = workout.date ? monday(workout.date) : null;
+    if (start !== null && start !== key) { week = key === null ? Math.max(week, 0) : week + 1; key = start; } else if (week < 0) week = 0;
+    weeks.set(index, week);
+  }
+  return weeks;
+}
+
 /** Что попадёт в импорт: недели, тренировки, упражнения и подходы (у плановой копии — плановые). Пустые тренировки и недели не считаются. */
-export function logStats(log: WorkoutLog): Readonly<{ weeks: number; workouts: number; exercises: number; sets: number }> {
-  let workouts = 0; let exercises = 0; let sets = 0; const weeks = new Set<number>();
+export function logStats(log: WorkoutLog, perWeek = 1): Readonly<{ weeks: number; workouts: number; exercises: number; sets: number }> {
+  let workouts = 0; let exercises = 0; let sets = 0;
   for (const workout of log.workouts) {
     const items = workout.exercises.filter(included); if (!items.length) continue;
-    workouts += 1; weeks.add(workout.week); exercises += items.length; sets += items.reduce((n, e) => n + (e.sets.length || e.planSets!), 0);
+    workouts += 1; exercises += items.length; sets += items.reduce((n, e) => n + (e.sets.length || e.planSets!), 0);
   }
-  return { weeks: weeks.size, workouts, exercises, sets };
+  return { weeks: new Set(logWeeks(log, perWeek).values()).size, workouts, exercises, sets };
 }
 
 export function editLogWorkout(log: WorkoutLog, index: number, patch: Readonly<{ title?: string; date?: string | null }>): WorkoutLog {
@@ -236,19 +236,18 @@ const COLUMNS = ["week", "workout", "exercise", "sets", "reps", "load", "actualR
 const WEEKS_PER_SHEET = 52;
 
 /**
- * Лист на каждые 52 недели с занятиями. Неделя — `workout.week` (хронология по датам задаётся разбором, дальше её правит тренер),
- * пустые недели не создаются; внутри недели тренировки идут по порядку. Повтор названия в неделе получает номер («Фуллбоди 2»).
- * План повторений — по типу цикла.
+ * Лист на каждые 52 недели с занятиями. Неделя — по `logWeeks` (из дат или из порядка по `perWeek`), пустые недели не создаются;
+ * внутри недели тренировки идут по порядку. Повтор названия в неделе получает номер («Фуллбоди 2»). План повторений — по типу цикла.
  */
-export function workoutLogTables(log: WorkoutLog, options: Readonly<{ name: string; reps: RepRange; cycleType?: CycleType }>): readonly ImportTable[] {
-  // Тренировка без подходов и плановых копий (опустевшая при распределении) не создаёт неделю.
-  const ordered = log.workouts.filter((w) => w.exercises.some(included)).sort((a, b) => a.week - b.week);
+export function workoutLogTables(log: WorkoutLog, options: Readonly<{ name: string; reps: RepRange; cycleType?: CycleType; perWeek?: number }>): readonly ImportTable[] {
+  // Тренировка без подходов и плановых копий (опустевшая при распределении) не создаёт неделю: в `logWeeks` её нет.
   const canonical = new Map<string, string>();
   const planReps = options.reps === null ? "" : options.reps.max === null ? String(options.reps.min) : `${options.reps.min}-${options.reps.max}`;
   const sheets: { rows: unknown[][]; cellOrigins: (ImportCellOrigin | null)[][] }[] = [];
   let week = 0; let weekKey: number | null = null; const titles = new Map<string, number>();
-  for (const workout of ordered) {
-    if (workout.week !== weekKey) { week += 1; weekKey = workout.week; titles.clear(); }
+  for (const [index, weekOf] of logWeeks(log, options.perWeek)) {
+    const workout = log.workouts[index]!;
+    if (weekOf !== weekKey) { week += 1; weekKey = weekOf; titles.clear(); }
     const count = (titles.get(workout.title) ?? 0) + 1; titles.set(workout.title, count);
     const title = count === 1 ? workout.title : `${workout.title} ${count}`;
     const sheet = sheets[Math.floor((week - 1) / WEEKS_PER_SHEET)] ??= { rows: [COLUMNS.map((field) => legacyFields[field])], cellOrigins: [[]] };

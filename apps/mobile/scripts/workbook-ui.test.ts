@@ -103,20 +103,20 @@ test("TEXT-LOG-3 заметки: единый список с пикером т�
   const field = nodes(renderer, "TextField").find((n) => n.props.label === "Текст из заметок")!;
   await act(async () => (field.props.onChangeText as (text: string) => void)("Жим\n60 на 8\nЖим\n70 на 6"));
   await press(renderer, "Разобрать текст");
-  // Единый список: две карточки, у каждой два пикера (неделя и тренировка) 1–4 и «+»; нижняя панель — из актуального распределения.
+  // Единый список: две карточки, у каждой один пикер тренировки 1–4 и «+» (пикера недели нет); нижняя панель — из актуального распределения.
   assert.equal(nodes(renderer, "ExerciseCard").length, 2);
-  assert.equal(nodes(renderer, "SelectionChip").filter((n) => n.props.label === "+").length, 4);
-  assert.match(textOf(renderer), /Распознано: 1 тренировка в 1 неделе, 2 упражнения, 2 подхода/);
+  assert.equal(nodes(renderer, "SelectionChip").filter((n) => n.props.label === "+").length, 2);
+  assert.equal(nodes(renderer, "SelectionChip").filter((n) => String(n.props.group).startsWith("Неделя для")).length, 0);
+  assert.match(textOf(renderer), /Распознано: 1 тренировка, 2 упражнения, 2 подхода/);
   assert.match(textOf(renderer), /Будет создано: 1 тренировка в 1 неделе/);
   assert.match(textOf(renderer), /Упражнения \(2\)/);
   const slotChip = (label: string, card: number) => nodes(renderer, "SelectionChip").filter((n) => String(n.props.group).startsWith("Тренировка для") && n.props.label === label)[card]!;
   await act(async () => (slotChip("2", 1).props.onPress as () => void)());
-  assert.match(textOf(renderer), /Будет создано: 2 тренировки в 1 неделе/);
-  assert.match(textOf(renderer), /Распознано: 1 тренировка в 1 неделе/);
-  // Неделя — отдельный пикер: упражнение в неделю 2 меняет число недель, а не тренировок.
-  await act(async () => (nodes(renderer, "SelectionChip").filter((n) => String(n.props.group).startsWith("Неделя для") && n.props.label === "2")[1]!.props.onPress as () => void)());
+  // Без дат недели идут по порядку: одна тренировка в неделю → 2 недели; «Тренировок в неделю: 2» → одна неделя.
   assert.match(textOf(renderer), /Будет создано: 2 тренировки в 2 неделях/);
-  await act(async () => (nodes(renderer, "SelectionChip").filter((n) => String(n.props.group).startsWith("Неделя для") && n.props.label === "1")[1]!.props.onPress as () => void)());
+  assert.match(textOf(renderer), /Распознано: 1 тренировка,/);
+  assert.match(textOf(renderer), /Тренировок в неделю/);
+  await press(renderer, "+");
   assert.match(textOf(renderer), /Будет создано: 2 тренировки в 1 неделе/);
   // Дубль встаёт сразу под исходной карточкой и сразу получает свой номер тренировки.
   // «Дублировать» и корзина — прямо на карточке, не в меню.
@@ -149,6 +149,30 @@ test("TEXT-LOG-3 заметки: единый список с пикером т�
   assert.deepEqual(cycle.weeks.map((w) => w.workouts.map((x) => x.title)), [["Тренировка 1", "Тяга"]]);
   assert.equal(saved[0]!.sessions.length, 2);
   await act(async () => renderer.unmount());
+});
+
+test("TEXT-LOG-5 заметки с датами: на кнопках даты, недели из дат, степпера нет; больше шести тренировок — выбор списком", async () => {
+  const open = async (days: readonly string[]) => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(createElement(Importer, { files: { pick: async () => null }, exercises: { list: async () => catalogue },
+      target: { kind: "PROGRAM", save: async () => undefined } })); });
+    await press(renderer, "Вставить из заметок");
+    const field = nodes(renderer, "TextField").find((n) => n.props.label === "Текст из заметок")!;
+    await act(async () => (field.props.onChangeText as (text: string) => void)(days.map((day) => `Фуллбоди ${day}\nЖим\n60 на 8`).join("\n")));
+    await press(renderer, "Разобрать текст");
+    return renderer;
+  };
+  const few = await open(["26.07.2026", "31.07.2026", "03.08.2026"]);
+  assert.match(textOf(few), /Распознано: 3 тренировки в 3 неделях/);
+  assert.ok(!/Тренировок в неделю/.test(textOf(few)), "с датами степпера нет");
+  assert.ok(nodes(few, "SelectionChip").some((n) => n.props.label === "26.07" && String(n.props.group).startsWith("Тренировка для")));
+  await act(async () => few.unmount());
+  // 8 записей: календарные недели с понедельника — 7 недель; пикер — список с названиями и датами.
+  const many = await open(["26.07.2026", "31.07.2026", "03.08.2026", "04.09.2026", "06.09.2026", "14.09.2026", "21.09.2026", "28.09.2026"]);
+  assert.match(textOf(many), /Будет создано: 8 тренировок в 7 неделях/);
+  const menu = nodes(many, "DropdownMenu")[0]!;
+  assert.equal((menu.props.options as { label: string }[])[0]!.label, "1. Фуллбоди · 26.07.2026");
+  await act(async () => many.unmount());
 });
 
 test("I07 active unselected tab does not constrain checked sheets, and failed writes can be retried", async () => {
