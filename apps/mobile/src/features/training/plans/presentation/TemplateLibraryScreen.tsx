@@ -13,9 +13,9 @@ import { ParticipantChips } from "./ParticipantChips.tsx";
 
 type Filter = TemplateKind | "ALL";
 
-/** Шаблон, который целиком умещается в один конструктор: Простая программа или Расширенная из одного мезоцикла. */
+/** Шаблон открывается в конструкторе новой программы: Простая или Расширенная (несколько мезоциклов — вкладками-циклами, как книга Excel). */
 const opensInBuilder = (template: ProgramTemplate): boolean => template.payload.kind === "SIMPLE"
-  || (template.payload.kind === "PERIODIZED" && template.payload.mesocycles.length === 1);
+  || (template.payload.kind === "PERIODIZED" && template.payload.mesocycles.length > 0);
 
 /** Значок пункта меню: получает цвет пункта (UI-OWN-046). */
 const menuIcon = (Icon: LucideIcon) => (color: string) => <Icon size={18} color={color} strokeWidth={1.9} />;
@@ -36,7 +36,7 @@ export function TemplateLibraryScreen({ clientId, repository, listCandidates, on
   onCreated: (programId: string) => void;
   /** §48.16 п. 3: открыть шаблон для правки содержимого. */
   onEdit?: (templateId: string) => void;
-  /** Нажатие на карточку: шаблон открывается в конструкторе новой программы (Простой, Расширенный из одного мезоцикла). */
+  /** Нажатие на карточку: шаблон открывается в конструкторе новой программы (Простой или Расширенный). */
   onOpenInBuilder?: (template: ProgramTemplate) => void;
 }>) {
   const { palette } = usePrototypeTheme();

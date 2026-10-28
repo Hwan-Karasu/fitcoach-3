@@ -267,9 +267,13 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, temp
       // Несохранённый черновик важнее: его восстанавливает отдельный эффект выше, шаблон поверх него не ложится.
       if (await repository.getMesocycleBuilderDraft(clientId, scope) !== null) return;
       const template = (await repository.listTemplates()).find((item) => item.id === templateId);
-      if (template?.payload.kind !== "PERIODIZED" || template.payload.mesocycles.length !== 1) return;
+      if (template?.payload.kind !== "PERIODIZED" || template.payload.mesocycles.length === 0) return;
+      const cycles = template.payload.mesocycles.map((mesocycle) => ({ key: newPlanId("tpl"), title: mesocycle.title,
+        weeks: weeksFromTemplate(mesocycle, () => newPlanId("t")).map((week) => ({ type: week.type, workouts: week.workouts })) }));
+      // Несколько мезоциклов — тот же интерфейс «Циклы программы», что у импорта книги Excel: вкладки-циклы, общее сохранение.
+      if (cycles.length > 1) { applyWorkbook({ title: template.title, weeks: cycles[0]!.weeks, cycles }); return; }
       const cycle = template.payload.mesocycles[0]!;
-      const next = weeksFromTemplate(cycle, () => newPlanId("t")).map((week) => ({ type: week.type, workouts: week.workouts }));
+      const next = cycles[0]!.weeks;
       setProgramTitle(template.title); setTitle(cycle.title); setWeeks(next); setEditing(0);
       baselines.current = new Map(next.map((week, index) => [index, week.workouts]));
       setDirty(true); setSaved(null); setMessage(null);
@@ -531,7 +535,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId, temp
         {workbook && <Section title={`Циклы программы · ${workbook.cycles.length}`}>
           <SegmentedControl scroll items={workbook.cycles.map((c) => ({ id: c.key, label: c.key === workbook.activeKey ? title : c.title }))}
             selectedId={workbook.activeKey} onSelect={(key) => { const state = currentWorkbook()!; openCycle(state.cycles.find((c) => c.key === key)!, state); touch(); }} />
-          <Text style={[styles.hint, { color: colors.textSecondary }]}>Все циклы сохранятся общей кнопкой конструктора. Результаты Excel относятся только к этому клиенту.</Text>
+          <Text style={[styles.hint, { color: colors.textSecondary }]}>Все циклы сохранятся общей кнопкой конструктора.{workbook.cycles.some((c) => c.imported) ? " Результаты Excel относятся только к этому клиенту." : ""}</Text>
         </Section>}
         {restored ? <InlineNotice kind="info">{rebased ? REBASED_NOTICE : "Восстановлен несохранённый черновик."}</InlineNotice> : null}
         {restored ? <AppButton compact variant="secondary" label="Отбросить черновик и выйти" disabled={busy !== null} onPress={() => { void discard(); }} /> : null}
