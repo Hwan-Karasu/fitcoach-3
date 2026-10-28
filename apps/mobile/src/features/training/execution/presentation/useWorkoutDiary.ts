@@ -7,6 +7,7 @@ import type { SetFact, SetType, SetValues, Side, TrackingMetric, WorkoutExecutio
 import { EMPTY_VALUES } from "../domain/ExecutionModel.ts";
 import { dropsForType, hasEnteredData, workoutStatus } from "../domain/ExecutionRules.ts";
 import type { SaveSetInput, TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
+import type { CalendarOutcomeEffect } from "../domain/WorkoutOutcomePort.ts";
 import { useWorkoutSnapshot } from "./useWorkoutSnapshot.ts";
 import { SerialWriteQueue } from "../application/SerialWriteQueue.ts";
 
@@ -49,7 +50,9 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   /** Одностороннее ли упражнение каталога (§48.66): тогда подход пишется по сторонам. */
   unilateralOf: (exerciseId: string) => boolean,
   /** Новый переход «не выполнен → выполнен» при вводе в открытом дневнике — запуск таймера отдыха (§48.55). */
-  onConfirmedNow: (exercise: PlannedExercise) => void) {
+  onConfirmedNow: (exercise: PlannedExercise) => void,
+  /** ADR-048: «Завершить тренировку» отметила запись календаря / «Отменить завершение» её сняло — для подсказки. */
+  onCalendarEffect?: (effect: CalendarOutcomeEffect) => void) {
   const { clientId, programId } = slot;
   const [version, setVersion] = useState(0);
   const { stableSlot, slotKey, slotKeyRef, loadedKey, loadedKeyRef, workout, state, setState,
@@ -57,6 +60,8 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   const stateRef = useRef<WorkoutExecution | null>(null);
   const confirmedRef = useRef(onConfirmedNow);
   confirmedRef.current = onConfirmedNow;
+  const calendarEffectRef = useRef(onCalendarEffect);
+  calendarEffectRef.current = onCalendarEffect;
   const unilateralRef = useRef(unilateralOf);
   unilateralRef.current = unilateralOf;
   /** Собственные команды идут по очереди; пока они выполняются, их коммиты уже применены через ACK и перечитывания не требуют. */
@@ -232,7 +237,11 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   }), [enqueue, execution, stableSlot]);
 
   const setOutcome = useCallback((outcome: WorkoutOutcome | null) => enqueue(async () => {
-    const session = await execution.setOutcome(stableSlot, outcome, stateRef.current?.session?.revision ?? null);
+    const revision = stateRef.current?.session?.revision ?? null;
+    const { session, calendar } = execution.setOutcomeWithCalendar !== undefined
+      ? await execution.setOutcomeWithCalendar(stableSlot, outcome, revision)
+      : { session: await execution.setOutcome(stableSlot, outcome, revision), calendar: null };
+    if (calendar !== null) calendarEffectRef.current?.(calendar);
     setState((current) => {
       const next = { session, facts: current?.facts ?? new Map(), notes: current?.notes ?? new Map<string, string>() };
       stateRef.current = next;

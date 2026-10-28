@@ -1,3 +1,4 @@
+import type { WorkoutOutcomeResult } from "./WorkoutOutcomePort.ts";
 import type { ActiveWorkout, ConfirmationMode, PreviousQuery, Side, PreviousSet, SessionStatus, SetFact, SetType, SetValues, TrackingMetric,
   WorkoutExecution, WorkoutOutcome, WorkoutSession, WorkoutSlot } from "./ExecutionModel.ts";
 
@@ -99,6 +100,11 @@ export interface TrainingExecutionPort {
   toggleSetConfirmation(identity: SetIdentity, now?: Date, side?: Side): Promise<SetSaveResult>;
   /** §48.31, §48.38: исход тренировки или `null` — снять исход. Факты не удаляются. */
   setOutcome(slot: WorkoutSlot, outcome: WorkoutOutcome | null, expectedRevision: number | null, now?: Date): Promise<WorkoutSession>;
+  /**
+   * ADR-048: то же, но «Завершить тренировку» ещё отмечает сегодняшнюю запись календаря (одна транзакция). Подключается в composition
+   * root; без него дневник использует `setOutcome`.
+   */
+  setOutcomeWithCalendar?(slot: WorkoutSlot, outcome: WorkoutOutcome | null, expectedRevision: number | null, now?: Date): Promise<WorkoutOutcomeResult>;
   /**
    * §48.67: заметка о том, как прошло упражнение в этой тренировке; пустая — убирается. Не план и не
    * начало тренировки (статус по-прежнему по введённым подходам).

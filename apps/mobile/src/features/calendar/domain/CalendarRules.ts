@@ -199,3 +199,13 @@ export function appointmentLabel(row: Pick<Appointment, "guestName" | "participa
   if (row.participantDeleted) return "Удалённый клиент";
   return clientName ?? row.guestName ?? "Клиент";
 }
+
+/**
+ * Запись, которую отмечает завершённая тренировка (ADR-048): клиент, дата, `SCHEDULED` без исхода, уже началась; из нескольких —
+ * с самым поздним началом. Не начавшиеся, будущие и чужие записи не выбираются.
+ */
+export function pickStartedPending(rows: readonly Appointment[], clientId: string, localDate: LocalDate, now: Date): Appointment | null {
+  const fit = rows.filter((row) => row.clientId === clientId && row.localDate === localDate && row.lifecycle === "SCHEDULED"
+    && row.outcome === null && !row.participantDeleted && appointmentStarted(row, now));
+  return fit.reduce<Appointment | null>((best, row) => best === null || row.startMinute > best.startMinute ? row : best, null);
+}

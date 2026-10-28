@@ -4,7 +4,7 @@ export { ArchivedProgramsPanel, PeriodizedBuilderScreen, ParticipantSwitcher, pa
   type ProgramKind, type TrainingParticipantCandidate, type TrainingPlansRepositoryPort } from "./plans/public.ts";
 export { ProgramMatrixScreen, ProgramWeeksPanel, RestTimerDock, RestTimerService, TrainingSettingsScreen, WorkoutScreen, type RestSignalPort, type RestTimersPort,
   type TrainingExecutionPort, type ActiveWorkoutCard, type ActiveWorkoutsPort, type WorkoutSlot, type ClientExecution, type SetFact,
-  type WorkoutOutcome, type WorkoutStatus,
+  type WorkoutOutcome, type WorkoutOutcomePort, type WorkoutStatus,
   hasEnteredData, sessionDurationSec, weekCardMarkers, weekCardTone, weekStatus, weekStatusLabels, workoutStatus, workoutDayFromEvidence, type WorkoutDateEvidence } from "./execution/public.ts";
 export { ExecutionDetailsScreen, HistoryProgramScreen, TrainingArchiveScreen, retainHistoryView, sortHistory, type TrainingHistoryEntry } from "./archive/public.ts";
 export { ClientExerciseScreen, ExerciseHistoryList, MonthlyReportScreen, TrainingStatisticsScreen, isWorkingSet, retainStatsFilters } from "./analytics/public.ts";

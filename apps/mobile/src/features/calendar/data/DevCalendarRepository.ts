@@ -7,7 +7,8 @@ import type { Appointment, AppointmentInput, AppointmentOutcome, CalendarInterva
   DaySummary, IntervalInput, LocalDate, PasteResult, SessionType, SessionTypeCategory,
   WeekTemplate } from "../domain/CalendarModel.ts";
 import type { CalendarCommittedChange, CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
-import { addDays, appointmentEnded, appointmentStarted, buildWeekTemplate, sameGuestName, validateSessionType, isLocalDate, localDateOf, minuteOfDay, validateAppointment,
+import type { AppointmentOutcomeParticipant } from "../domain/AppointmentOutcomeParticipant.ts";
+import { addDays, appointmentEnded, appointmentStarted, buildWeekTemplate, pickStartedPending, sameGuestName, validateSessionType, isLocalDate, localDateOf, minuteOfDay, validateAppointment,
   validateInterval, validateSettings, weekDates } from "../domain/CalendarRules.ts";
 import type { DevAppointmentAccountingHook, DevBooking } from "./DevAppointmentAccountingHook.ts";
 import { DEV_CALENDAR_LEDGER, devCalendarCatalog } from "./DevCalendarCatalog.ts";
@@ -449,38 +450,63 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
     if (outcome !== "COMPLETED" && outcome !== "MISSED" && outcome !== "CANCELLED") {
       throw new Error("CALENDAR_OUTCOME_INVALID");
     }
-    let changed = false;
-    const resolved = await this.ready().writer.write(async (tx) => {
-      const current = await this.appointmentById(tx, id);
-      if (current.revision !== expectedRevision || current.lifecycle === "CANCELLED") {
-        throw new Error("CALENDAR_STALE_APPOINTMENT");
-      }
-      if (current.outcome === outcome) return current;
-      const stamp = now.toISOString();
-      if (outcome === "CANCELLED") {
-        const result = await tx.run(`UPDATE calendar_appointments SET lifecycle = 'CANCELLED',
-          outcome = 'CANCELLED', outcome_at = ?, cancelled_at = ?, revision = revision + 1, updated_at = ?
-          WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle <> 'CANCELLED'`,
-        [stamp, stamp, stamp, this.workspaceId, id, expectedRevision]);
-        if (result.changes !== 1) throw new Error("CALENDAR_STALE_APPOINTMENT");
-        // A charged session gets one linked RETURNED; a reservation is only released (§48.35.6).
-        await this.accounting?.cancel(tx, this.workspaceId, id, "RETURN", stamp);
-      } else {
-        if (!appointmentStarted(current, now)) throw new Error("CALENDAR_OUTCOME_TOO_EARLY");
-        const result = await tx.run(`UPDATE calendar_appointments SET lifecycle = 'COMPLETED',
-          outcome = ?, outcome_at = ?, revision = revision + 1, updated_at = ?
-          WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle <> 'CANCELLED'`,
-        [outcome, stamp, stamp, this.workspaceId, id, expectedRevision]);
-        if (result.changes !== 1) throw new Error("CALENDAR_STALE_APPOINTMENT");
-        // Завершена and Пропущена both keep exactly one USED; the timer will find no reservation.
-        await this.accounting?.settle(tx, this.workspaceId, id, stamp);
-      }
-      changed = true;
-      return this.appointmentById(tx, id);
-    });
-    if (changed) this.publish({ dates: [resolved.localDate] });
-    return resolved;
+    const { appointment, changed } = await this.ready().writer.write((tx) => this.resolveIn(tx, id, expectedRevision, outcome, now));
+    if (changed) this.publish({ dates: [appointment.localDate] });
+    return appointment;
   }
+
+  /** Исход записи в чужой или собственной транзакции; публикует вызывающий после commit. */
+  private async resolveIn(tx: SqliteStatementPort, id: string, expectedRevision: number, outcome: AppointmentOutcome,
+    now: Date): Promise<Readonly<{ appointment: Appointment; changed: boolean }>> {
+    const current = await this.appointmentById(tx, id);
+    if (current.revision !== expectedRevision || current.lifecycle === "CANCELLED") {
+      throw new Error("CALENDAR_STALE_APPOINTMENT");
+    }
+    if (current.outcome === outcome) return { appointment: current, changed: false };
+    const stamp = now.toISOString();
+    if (outcome === "CANCELLED") {
+      const result = await tx.run(`UPDATE calendar_appointments SET lifecycle = 'CANCELLED',
+        outcome = 'CANCELLED', outcome_at = ?, cancelled_at = ?, revision = revision + 1, updated_at = ?
+        WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle <> 'CANCELLED'`,
+      [stamp, stamp, stamp, this.workspaceId, id, expectedRevision]);
+      if (result.changes !== 1) throw new Error("CALENDAR_STALE_APPOINTMENT");
+      // A charged session gets one linked RETURNED; a reservation is only released (§48.35.6).
+      await this.accounting?.cancel(tx, this.workspaceId, id, "RETURN", stamp);
+    } else {
+      if (!appointmentStarted(current, now)) throw new Error("CALENDAR_OUTCOME_TOO_EARLY");
+      const result = await tx.run(`UPDATE calendar_appointments SET lifecycle = 'COMPLETED',
+        outcome = ?, outcome_at = ?, revision = revision + 1, updated_at = ?
+        WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle <> 'CANCELLED'`,
+      [outcome, stamp, stamp, this.workspaceId, id, expectedRevision]);
+      if (result.changes !== 1) throw new Error("CALENDAR_STALE_APPOINTMENT");
+      // Завершена and Пропущена both keep exactly one USED; the timer will find no reservation.
+      await this.accounting?.settle(tx, this.workspaceId, id, stamp);
+    }
+    return { appointment: await this.appointmentById(tx, id), changed: true };
+  }
+
+  /** ADR-048: «Завершить тренировку» в дневнике отмечает сегодняшнюю начавшуюся запись клиента одной транзакцией с тренировкой. */
+  readonly outcomeParticipant: AppointmentOutcomeParticipant<SqliteStatementPort> = {
+    findStartedPending: async (tx, clientId, localDate, now) => {
+      const rows = await tx.all<AppointmentRow>(`SELECT ${appointmentColumns} FROM calendar_appointments
+        WHERE workspace_id = ? AND client_id = ? AND local_date = ? AND lifecycle = 'SCHEDULED'`, [this.workspaceId, clientId, localDate]);
+      const found = pickStartedPending(rows.map(toAppointment), clientId, localDate, now);
+      return found === null ? null : { id: found.id, revision: found.revision, startMinute: found.startMinute };
+    },
+    complete: async (tx, appointment, now) => {
+      await this.resolveIn(tx, appointment.id, appointment.revision, "COMPLETED", now);
+    },
+    clearIfCompleted: async (tx, appointmentId, now) => {
+      const current = await this.appointmentById(tx, appointmentId);
+      if (current.lifecycle === "CANCELLED" || current.outcome !== "COMPLETED") return null;
+      const result = await tx.run(`UPDATE calendar_appointments SET lifecycle = 'SCHEDULED', outcome = NULL, outcome_at = NULL,
+        revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND id = ? AND revision = ? AND outcome = 'COMPLETED'`,
+      [now.toISOString(), this.workspaceId, appointmentId, current.revision]);
+      if (result.changes !== 1) throw new Error("CALENDAR_STALE_APPOINTMENT");
+      return { id: current.id, revision: current.revision + 1, startMinute: current.startMinute };
+    },
+    notify: (dates) => this.publish({ dates }),
+  };
 
   async clearOutcome(id: string, expectedRevision: number): Promise<Appointment> {
     const cleared = await this.ready().writer.write(async (tx) => {

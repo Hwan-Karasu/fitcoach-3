@@ -80,11 +80,12 @@ export async function importLegacyDevData(target: Readonly<{ writer: WriterCoord
   await target.writer.write(async (tx) => {
     await tx.run("PRAGMA defer_foreign_keys = ON");
     for (const table of copy) {
-      const columns = (await tx.all<TableInfo>(`PRAGMA table_info(${table})`)).map((column) => column.name);
+      const targetColumns = (await tx.all<TableInfo>(`PRAGMA table_info(${table})`)).map((column) => column.name);
       const legacyColumns = (await legacy.all<TableInfo>(`PRAGMA table_info(${LEGACY_PREFIX}${table})`)).map((column) => column.name);
-      if (columns.length !== legacyColumns.length || legacyColumns.some((column) => !columns.includes(column))) {
-        throw new Error(`LEGACY_IMPORT_SCHEMA_MISMATCH:${table}`);
-      }
+      // Лишняя колонка источника не теряется молча (ошибка); новая колонка цели, которой в старой базе не было (миграция после
+      // источника), заполняется значением по умолчанию — переносятся общие колонки.
+      if (legacyColumns.some((column) => !targetColumns.includes(column))) throw new Error(`LEGACY_IMPORT_SCHEMA_MISMATCH:${table}`);
+      const columns = targetColumns.filter((column) => legacyColumns.includes(column));
       const source = await legacy.all<Record<string, SqlValue>>(`SELECT * FROM ${LEGACY_PREFIX}${table}`);
       for (const row of source) {
         if (columns.some((column) => {

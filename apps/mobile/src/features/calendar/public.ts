@@ -6,6 +6,7 @@ export { CalendarUndoProvider } from "./presentation/CancelUndo.tsx";
 export type { Appointment, AppointmentInput, AppointmentOutcome, CalendarInterval, GuestLinkRequest, CalendarSettings, LocalDate,
   SessionType, WeekTemplate } from "./domain/CalendarModel.ts";
 export type { CalendarCommittedChange, CalendarRepositoryPort } from "./domain/CalendarRepositoryPort.ts";
+export type { AppointmentOutcomeParticipant, StartedAppointmentRef } from "./domain/AppointmentOutcomeParticipant.ts";
 export type { CalendarAppointmentCredit, CalendarBookingCredit, CalendarCreditPort } from
   "./domain/CalendarCreditPort.ts";
 export type { CalendarParticipant, CalendarParticipantDirectoryPort } from

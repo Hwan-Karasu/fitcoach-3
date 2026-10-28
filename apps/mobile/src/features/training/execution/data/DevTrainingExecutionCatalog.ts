@@ -2,5 +2,6 @@
 import { trainingExecutionBaseline } from "./TrainingExecutionBaseline.generated.ts";
 import { executionIntegrityMigration } from "./ExecutionIntegrityMigration.ts";
 import { unknownWorkoutDateMigration } from "./UnknownWorkoutDateMigration.ts";
-export const devTrainingExecutionCatalog = [...trainingExecutionBaseline, executionIntegrityMigration, unknownWorkoutDateMigration];
+import { calendarAppointmentLinkMigration } from "./CalendarAppointmentLinkMigration.ts";
+export const devTrainingExecutionCatalog = [...trainingExecutionBaseline, executionIntegrityMigration, unknownWorkoutDateMigration, calendarAppointmentLinkMigration];
 export const DEV_TRAINING_EXECUTION_LEDGER = "training_execution_schema_migrations";

@@ -8,6 +8,25 @@
 - Проверки: typecheck, lint, arch:check, source:verify, secrets:check PASS; test:foundation 1034/1034, excel:test 100/100, training:test 268/268
   (счётчики включают параллельные правки календаря в рабочем дереве, они не мои и не коммитятся). На телефоне не проверено; в APK не входит (последний — build34).
 
+## 2026-10-28 — CAL-WORKOUT-LINK: «Завершить тренировку» отмечает сегодняшнюю запись календаря (ADR-048)
+
+- Решение владельца: автоматически + подсказка; только запись этого клиента на сегодня без исхода, которая уже началась (несколько —
+  самая поздняя по началу); «Отменить завершение» снимает исход записи, если её отметила эта тренировка; только «Завершить».
+  Пересматривает §48.31.2 п. 3 и 7 Product Contract. Дата тренировки: ручное завершение ставит дату первого ввода (сегодня), импорт —
+  свою дату или никакой; календарь трогается только при дате «сегодня».
+- Миграция `training_execution_schema_migrations` v4: `training_sessions.calendar_appointment_id TEXT` (без FK). `DevCalendarRepository`:
+  `resolveOutcome` вынесен в `resolveIn(tx, …)`, добавлен `outcomeParticipant` (поиск, проведение, снятие); `pickStartedPending` в
+  `CalendarRules.ts`. `DevTrainingExecutionRepository`: `setOutcomeIn` + `outcomeParticipant`. Workflow
+  `completeWorkoutWithAppointment.ts`, в composition root — прокси `withCalendarOutcome` добавляет `setOutcomeWithCalendar` к порту;
+  `useWorkoutDiary`/`WorkoutScreen` показывают «Запись на 18:00 в календаре отмечена проведённой».
+- `LegacyDevImport`: колонки, добавленные в цель после старой базы, не ломают перенос (лишняя колонка источника по-прежнему ошибка).
+- Тесты `apps/mobile/scripts/workout-calendar-outcome.test.ts` (8, в test:foundation): запись 18:00 / завершение 18:30; 17:50 — не трогается;
+  чужой клиент, гость, другой день, ручной исход — не трогаются; две записи — поздняя; вчерашняя дата — не трогается; отмена и повтор;
+  ручное «Пропущена» не снимается; сбой календаря откатывает исход. Списание (USED) в тестах календаря без ledger не проверялось —
+  используется прежний `settle`.
+- Проверки: typecheck, lint, arch:check, source:verify, secrets:check PASS; test:foundation 1042/1042, training:test 276/276, calendar:test 24/24.
+  На телефоне не проверено; в APK не входит (последний — build34).
+
 ## 2026-10-28 — PERF-REST-DOCK: отсчёт таймеров на UI-потоке, JS просыпается только к «Готово»
 
 - Раньше `RestTimerDock` каждые 250 мс перерисовывал всю панель на JS-потоке (карточки, иконки, жесты), и эти перерисовки вставали между

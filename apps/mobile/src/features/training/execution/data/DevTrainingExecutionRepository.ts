@@ -20,6 +20,7 @@ import { navigationPerformance } from "../../../../shared/diagnostics/Navigation
 import type { WeekExecutionParticipant, WorkoutCopyMapping } from "../domain/WeekCopyParticipant.ts";
 import type { WeekRenumberParticipant } from "../domain/WeekRenumberParticipant.ts";
 import type { ExecutionCleanupParticipant } from "../domain/ExecutionCleanupParticipant.ts";
+import type { WorkoutOutcomeParticipant } from "../domain/WorkoutOutcomeParticipant.ts";
 
 const OUTCOMES: readonly WorkoutOutcome[] = ["COMPLETED", "MISSED", "CANCELLED"];
 
@@ -695,22 +696,41 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
 
   async setOutcome(slot: WorkoutSlot, outcome: WorkoutOutcome | null, expectedRevision: number | null,
     now: Date = new Date()): Promise<WorkoutSession> {
+    const saved = await this.ready().writer.write((tx) => this.setOutcomeIn(tx, slot, outcome, expectedRevision, now));
+    this.publish(slot);
+    return saved.session;
+  }
+
+  /** Исход в транзакции вызывающего (workflow с календарём, ADR-048); публикует вызывающий после commit. */
+  private async setOutcomeIn(tx: SqliteStatementPort, slot: WorkoutSlot, outcome: WorkoutOutcome | null, expectedRevision: number | null,
+    now: Date): Promise<Readonly<{ session: WorkoutSession; previous: WorkoutOutcome | null }>> {
     assertSlot(slot);
     if (outcome !== null && !OUTCOMES.includes(outcome)) throw new Error("INVALID_METRIC");
-    const saved = await this.ready().writer.write(async (tx) => {
-      const existing = await this.sessionOf(tx, slot);
-      if ((existing?.revision ?? null) !== expectedRevision) throw new Error("STALE_SESSION");
-      // Исход у ещё не начатой тренировки (например, «Пропущена») создаёт выполнение без фактов.
-      const session = existing ?? await this.ensureSession(tx, slot, now);
-      // PC §48.86.13: «Завершить» записывает окончание, если его ещё нет; отмена завершения и повторное завершение отметки не стирают и не переписывают.
-      await tx.run(`UPDATE training_sessions SET outcome = ?, finished_at = CASE WHEN ? = 'COMPLETED' THEN COALESCE(finished_at, ?) ELSE finished_at END,
-        revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND id = ?`,
-      [outcome, outcome, now.toISOString(), now.toISOString(), this.workspaceId, session.id]);
-      return await this.sessionOf(tx, slot) as WorkoutSession;
-    });
-    this.publish(slot);
-    return saved;
+    const existing = await this.sessionOf(tx, slot);
+    if ((existing?.revision ?? null) !== expectedRevision) throw new Error("STALE_SESSION");
+    // Исход у ещё не начатой тренировки (например, «Пропущена») создаёт выполнение без фактов.
+    const session = existing ?? await this.ensureSession(tx, slot, now);
+    // PC §48.86.13: «Завершить» записывает окончание, если его ещё нет; отмена завершения и повторное завершение отметки не стирают и не переписывают.
+    await tx.run(`UPDATE training_sessions SET outcome = ?, finished_at = CASE WHEN ? = 'COMPLETED' THEN COALESCE(finished_at, ?) ELSE finished_at END,
+      revision = revision + 1, updated_at = ? WHERE workspace_id = ? AND id = ?`,
+    [outcome, outcome, now.toISOString(), now.toISOString(), this.workspaceId, session.id]);
+    return { session: await this.sessionOf(tx, slot) as WorkoutSession, previous: existing?.outcome ?? null };
   }
+
+  /** ADR-048: «Завершить тренировку» отмечает запись календаря; какую — запоминается в сессии для «Отменить завершение». */
+  readonly outcomeParticipant: WorkoutOutcomeParticipant<SqliteStatementPort> = {
+    setOutcome: (tx, slot, outcome, expectedRevision, now) => this.setOutcomeIn(tx, slot, outcome, expectedRevision, now),
+    appointmentLink: async (tx, slot) => (await tx.first<{ id: string | null }>(`SELECT calendar_appointment_id AS id FROM training_sessions
+      WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND week_index = ? AND planned_workout_id = ?`,
+    [this.workspaceId, slot.clientId, slot.programId, slot.weekIndex, slot.plannedWorkoutId]))?.id ?? null,
+    setAppointmentLink: async (tx, slot, appointmentId) => {
+      await tx.run(`UPDATE training_sessions SET calendar_appointment_id = ? WHERE workspace_id = ? AND client_id = ? AND program_id = ?
+        AND week_index = ? AND planned_workout_id = ?`,
+      [appointmentId, this.workspaceId, slot.clientId, slot.programId, slot.weekIndex, slot.plannedWorkoutId]);
+    },
+    dayOf: (at) => localDateOf(at),
+    notify: (slot) => this.publish(slot),
+  };
 
   async setActualDate(slot: WorkoutSlot, date: string, expectedRevision: number, now: Date = new Date()): Promise<WorkoutSession> {
     assertSlot(slot);

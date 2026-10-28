@@ -8,7 +8,7 @@ import type { FoodCatalogPort, NutritionCalcPort, NutritionDiaryPort, NutritionT
 import { dailyPoints, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import type { SettingsPort } from "../../features/settings/public.ts";
 import type { QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
-import type { ActiveWorkoutsPort, RestTimersPort, TrainingExecutionPort, TrainingPlansRepositoryPort } from
+import type { ActiveWorkoutsPort, RestTimersPort, TrainingExecutionPort, TrainingPlansRepositoryPort, WorkoutOutcomePort } from
   "../../features/training/public.ts";
 import { createActiveWorkouts } from "../../read-models/activeWorkouts.ts";
 import { RestTimerService, hasEnteredData, isWorkingSet, sessionDurationSec, sortHistory, workoutStatus, workoutDayFromEvidence } from "../../features/training/public.ts";
@@ -43,6 +43,7 @@ import { createWeekSwapWorkflow } from "../../workflows/swapTrainingWeeks.ts";
 import { createMesocycleSaveWorkflow } from "../../workflows/saveTrainingMesocycle.ts";
 import { createSimplePlanSaveWorkflow } from "../../workflows/saveTrainingSimplePlan.ts";
 import { createWeekEditWorkflow } from "../../workflows/saveTrainingWeek.ts";
+import { createWorkoutOutcomeWorkflow } from "../../workflows/completeWorkoutWithAppointment.ts";
 import { createMesocycleDeleteWorkflow } from "../../workflows/deleteTrainingMesocycle.ts";
 import { createProgramDeleteWorkflow } from "../../workflows/deleteTrainingProgram.ts";
 import { createPlanOnlyDeleteWorkflow } from "../../workflows/deleteTrainingPlanOnly.ts";
@@ -204,6 +205,15 @@ export function createServices(clients: LocalClientServices, calendar: CalendarR
   };
 }
 
+/** ADR-048: дневник получает исход тренировки вместе с записью календаря; остальные методы порта проходят без изменений. */
+function withCalendarOutcome(execution: TrainingExecutionPort, outcome: WorkoutOutcomePort): TrainingExecutionPort {
+  return new Proxy(execution, { get: (target, key) => {
+    if (key === "setOutcomeWithCalendar") return outcome.setOutcome;
+    const value: unknown = Reflect.get(target, key, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  } });
+}
+
 export interface ApplicationRuntime {
   readonly trainingTransfer: TrainingTransferPort;
   readonly development: boolean;
@@ -240,6 +250,7 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
   const planDelete = { ...createMesocycleDeleteWorkflow(transaction, trainingPlans.deleteParticipant, trainingExecution.cleanupParticipant),
     ...createProgramDeleteWorkflow(transaction, trainingPlans.deleteParticipant, trainingExecution.cleanupParticipant),
     ...createPlanOnlyDeleteWorkflow(transaction, trainingPlans.deleteParticipant, trainingExecution.cleanupParticipant) };
+  const workoutOutcome = createWorkoutOutcomeWorkflow(transaction, trainingExecution.outcomeParticipant, calendar.outcomeParticipant);
   const initializeRepositories = async () => {
     await repositories.initialize();
     await restTimers.recover({ reconcileSignals: true }).catch(() => undefined);
@@ -255,8 +266,8 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
     // The dev file has a separate workspace/schema gate; do not claim it as production.
     ...(development ? {} : { recoverBeforeOpen: (): Promise<void> => recoverProductionRestore(maintenance) }),
   });
-  const raw = createServices(clients, calendar, accounting, measurements, { ...nutrition, calcProfile }, questionnaire, trainingPlans, trainingExecution,
-    restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete, settings, clientCard, notifications,
+  const raw = createServices(clients, calendar, accounting, measurements, { ...nutrition, calcProfile }, questionnaire, trainingPlans,
+    withCalendarOutcome(trainingExecution, workoutOutcome), restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete, settings, clientCard, notifications,
     development ? { runSqliteProbe: () => runF04Probe(() => openExpoSqliteConnection("fitcoach_f04_probe.db")) } : undefined, registerInvalidation);
   const commands = new RuntimeCommandGate();
   const maintenance: RuntimeMaintenance = new RuntimeMaintenance({ database, commands,

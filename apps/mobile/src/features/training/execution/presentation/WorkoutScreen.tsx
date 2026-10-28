@@ -24,6 +24,7 @@ import { weekTypeTone, DiaryEditDialog, formatDuration, formatRange, supersetNum
   type WorkoutWeekNavigation } from "../../plans/public.ts";
 import { type ActiveWorkoutsPort, type SessionStatus, type SetFact, type SetType, type SetValues, type Side, type TrackingMetric,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
+import type { CalendarOutcomeEffect } from "../domain/WorkoutOutcomePort.ts";
 import { displayOrder, endInstantAfter, instantFromLocal, localDateOf, localMinuteOfDay, nextOutcome } from "../domain/ExecutionRules.ts";
 import { timeText } from "../../../../shared/format/clockText.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
@@ -128,7 +129,13 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
       programId: slot.programId, weekIndex: slot.weekIndex, plannedWorkoutId: slot.plannedWorkoutId }).catch(() => undefined);
   }, [clientName, lookup, restTimers, slot.clientId, slot.programId, slot.weekIndex, slot.plannedWorkoutId]);
   const unilateralOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.unilateral === true, [lookup]);
-  const diary = useWorkoutDiary(slot, plans, execution, metricsOf, unilateralOf, startRest);
+  const [notice, setNotice] = useState<string | null>(null);
+  // ADR-048: подсказка о записи календаря, отмеченной или снятой исходом тренировки.
+  const calendarEffect = useCallback((effect: CalendarOutcomeEffect) => {
+    const time = `${String(Math.floor(effect.startMinute / 60)).padStart(2, "0")}:${String(effect.startMinute % 60).padStart(2, "0")}`;
+    setNotice(effect.kind === "MARKED" ? `Запись на ${time} в календаре отмечена проведённой.` : `Отметка «проведена» у записи на ${time} в календаре снята.`);
+  }, []);
+  const diary = useWorkoutDiary(slot, plans, execution, metricsOf, unilateralOf, startRest, calendarEffect);
   useEffect(() => {
     if (diary.loadFailed) { navigationPerformance.finish("workout", false); return undefined; }
     if (diary.switching || diary.workout === undefined || diary.state === null || lookup === null) return undefined;
@@ -184,7 +191,6 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const [menuFor, setMenuFor] = useState<PlannedExercise | null>(null);
   const [edit, setEdit] = useState<DiaryEdit | null>(null);
   const [ordering, setOrdering] = useState<readonly string[] | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   // Запас снизу под панель таймеров отдыха — только пока она видна (иначе внизу пустое место).
   const [timers, setTimers] = useState(() => restTimers.list().length);

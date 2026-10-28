@@ -14,6 +14,8 @@ export type { RestTimer, RestTimerStart } from "./domain/RestTimerRules.ts";
 export type { ClientExecution, ProgramExecution, SaveSetInput, SessionOrigin, SetIdentity, SetSaveResult, TrainingExecutionCommittedChange,
   TrainingExecutionPort } from "./domain/TrainingExecutionPort.ts";
 export type { WeekExecutionParticipant, WorkoutCopyMapping } from "./domain/WeekCopyParticipant.ts";
+export type { WorkoutOutcomeParticipant } from "./domain/WorkoutOutcomeParticipant.ts";
+export type { CalendarOutcomeEffect, WorkoutOutcomePort, WorkoutOutcomeResult } from "./domain/WorkoutOutcomePort.ts";
 export type { WeekRenumberInput, WeekRenumberParticipant } from "./domain/WeekRenumberParticipant.ts";
 export type { ExecutionCleanupParticipant } from "./domain/ExecutionCleanupParticipant.ts";
 export type { WorkoutDateEvidence } from "./domain/WorkoutDateEvidence.ts";
