@@ -9,7 +9,7 @@ export { ProgramMatrixScreen, ProgramWeeksPanel, RestTimerDock, RestTimerService
 export { ExecutionDetailsScreen, HistoryProgramScreen, TrainingArchiveScreen, retainHistoryView, sortHistory, type TrainingHistoryEntry } from "./archive/public.ts";
 export { ClientExerciseScreen, ExerciseHistoryList, MonthlyReportScreen, TrainingStatisticsScreen, isWorkingSet, retainStatsFilters } from "./analytics/public.ts";
 export type { ProgramCard } from "./plans/public.ts";
-export { WorkoutsReview } from "./plans/public.ts";
+export { CYCLE_TYPES, ExerciseCardShell, WorkoutsReview } from "./plans/public.ts";
 export type { BuilderExcelDraft } from "./plans/public.ts";
 export type { BuilderWorkbookCycle, BuilderWorkbookState } from "./plans/public.ts";
 export type { BuilderWorkbookSavePort, BuilderWorkbookSaveRequest } from "./plans/public.ts";

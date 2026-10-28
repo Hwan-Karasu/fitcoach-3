@@ -6,10 +6,10 @@ export { ParticipantSwitcher, participantTarget } from "./presentation/Participa
 export type { CounterpartRef } from "./domain/ParticipantCounterpart.ts";
 export type { GroupCopy } from "./domain/Placement.ts";
 export { weekTypeTone } from "./presentation/weekTypeTone.ts";
-export { cycleTypeLabels, weekDates } from "./domain/MesocycleBuilder.ts";
+export { CYCLE_TYPES, cycleTypeLabels, weekDates } from "./domain/MesocycleBuilder.ts";
 export { ProgramScreen } from "./presentation/ProgramScreen.tsx";
 export { SimpleProgramBuilderScreen } from "./presentation/SimpleProgramBuilderScreen.tsx";
-export { WorkoutsReview } from "./presentation/WorkoutsEditor.tsx";
+export { ExerciseCardShell, WorkoutsReview } from "./presentation/WorkoutsEditor.tsx";
 export { WeekEditorScreen } from "./presentation/WeekEditorScreen.tsx";
 export { TemplateLibraryScreen } from "./presentation/TemplateLibraryScreen.tsx";
 export { TemplateEditorScreen } from "./presentation/TemplateEditorScreen.tsx";

@@ -1,7 +1,7 @@
 export type { TrainingTransferPort } from "./domain/TrainingTransferPort.ts";
 export type { WorkbookFilesPort, PickedWorkbook, ImportTable } from "./domain/WorkbookFilesPort.ts";
 export { detectLegacyMapping, normalizeLegacyTable, legacyFields, type LegacyMapping } from "./domain/LegacyExcel.ts";
-export { parseWorkoutLog, similarLogNames, workoutLogTables, logNameKey, type WorkoutLog, type LogWorkout, type LogExercise, type LogSet } from "./domain/TextWorkoutLog.ts";
+export { editLogWorkout, mergeLogNames, moveLogExercise, parseWorkoutLog, similarLogNames, workoutLogTables, workoutLogWorkbook, logNameKey, type WorkoutLog, type LogWorkout, type LogExercise, type LogSet } from "./domain/TextWorkoutLog.ts";
 export type { TrainingTransfer, TransferSummary } from "../../shared/training-transfer/TrainingTransfer.ts";
 export { transferReviewScopes, type TransferReviewScope } from "./domain/TrainingTransferReview.ts";
 export { copyWorkbookPlan, hasRepeatedWorkbookWeeks } from "./domain/BuilderWorkbook.ts";

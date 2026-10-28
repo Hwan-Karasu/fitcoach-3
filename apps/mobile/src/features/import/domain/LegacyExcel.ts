@@ -87,5 +87,5 @@ export function normalizeLegacyTable(table: ImportTable, sourceId: string, heade
   }
   if (!workouts.size) throw new Error("На выбранном листе нет тренировок.");
   const weeks = Array.from({ length: maxWeek }, (_, i) => ({ id: `${source}:week:${i + 1}`, index: i + 1, type: "base" as const, workouts: [...workouts.values()].filter((w) => w.index === i + 1).map((w) => w.workout) }));
-  return { format: "athlete-training", version: 1, sourceId, client: { id: source, name: "Импорт Excel" }, exercises: [...catalog.values()], programs: [{ id: programId, title: table.name, kind: "PERIODIZED", createdAt: "2000-01-01T00:00:00.000Z", archivedAt: null, simple: null, simpleWeeks: [], mesocycles: [{ id: `${source}:cycle`, lineageId: `${source}:cycle`, title: table.name, weeks }] }], sessions: [...sessions.values()], ...(issues.length ? { issues } : {}) };
+  return { format: "athlete-training", version: 1, sourceId, client: { id: source, name: "Импорт Excel" }, exercises: [...catalog.values()], programs: [{ id: programId, title: table.name, kind: "PERIODIZED", createdAt: "2000-01-01T00:00:00.000Z", archivedAt: null, simple: null, simpleWeeks: [], mesocycles: [{ id: `${source}:cycle`, lineageId: `${source}:cycle`, title: table.name, ...table.cycle, weeks }] }], sessions: [...sessions.values()], ...(issues.length ? { issues } : {}) };
 }

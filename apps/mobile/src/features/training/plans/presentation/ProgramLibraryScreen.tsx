@@ -4,7 +4,7 @@ import { useIsFocused } from "@react-navigation/native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
 import { CalendarDays, ChartColumnIncreasing, ChevronRight, CircleMinus, Clock, FileText, LayoutGrid, Plus, RefreshCw, Rocket,
-  Archive, Ellipsis, Trash2, FileSpreadsheet, Pencil, SlidersHorizontal, TrendingUp, Users, Zap } from "lucide-react-native";
+  Archive, Ellipsis, Trash2, FileSpreadsheet, NotebookPen, Pencil, SlidersHorizontal, TrendingUp, Users, Zap } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, FloatingActionButton, InlineNotice, ListSectionHeader, LoadingState, SegmentedControl, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
@@ -112,7 +112,7 @@ function ProgramModeChooser({ onChoose }: Readonly<{ onChoose: (kind: ProgramKin
  */
 export function ProgramModeChooserScreen({ onChoose, onOpenTemplates, onOpenExcel, renderExcelImport, repository, clientId }: Readonly<{
   repository?: TrainingPlansRepositoryPort; clientId?: string;
-  renderExcelImport?: (renderTrigger: (onPress: () => void, disabled: boolean) => ReactNode) => ReactNode;
+  renderExcelImport?: (renderTrigger: (onPress: () => void, disabled: boolean, onText: () => void) => ReactNode) => ReactNode;
   onOpenExcel?: () => void;
   onChoose: (kind: ProgramKind) => void;
   /** §48.16: программа из шаблона. */
@@ -159,8 +159,10 @@ export function ProgramModeChooserScreen({ onChoose, onOpenTemplates, onOpenExce
       <ListSectionHeader title="Дополнительно" />
       {onOpenTemplates !== undefined ? <FeatureRow title="Создать из шаблона" detail="Готовые варианты программ"
         icon={icon(FileText, 18)} onPress={onOpenTemplates} /> : null}
-      {renderExcelImport ? renderExcelImport((onPress, disabled) => <FeatureRow title="Импортировать из Excel" detail="Планы и фактические результаты"
-        icon={icon(FileSpreadsheet, 18)} onPress={onPress} disabled={disabled} />)
+      {renderExcelImport ? renderExcelImport((onPress, disabled, onText) => <>
+        <FeatureRow title="Импортировать из Excel" detail="Планы и фактические результаты" icon={icon(FileSpreadsheet, 18)} onPress={onPress} disabled={disabled} />
+        <FeatureRow title="Вставить из заметок" detail="Текст тренировок: упражнения и «вес на повторы»" icon={icon(NotebookPen, 18)} onPress={onText} disabled={disabled} />
+      </>)
         : <FeatureRow title="Импортировать из Excel" detail="Планы и фактические результаты" icon={icon(FileSpreadsheet, 18)} onPress={onOpenExcel} />}
     </ScrollView>
   );
@@ -228,7 +230,7 @@ export const programLibraryTabTitles: Readonly<Record<ProgramLibraryTab, string>
 
 export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate, onOpenProgram, onOpenTemplates, renderTemplates, renderArchive,
   onTabChange, onExport, planDelete, renderExcelImport }: Readonly<{
-  renderExcelImport?: (renderTrigger: (onPress: () => void, disabled: boolean) => ReactNode) => ReactNode;
+  renderExcelImport?: (renderTrigger: (onPress: () => void, disabled: boolean, onText: () => void) => ReactNode) => ReactNode;
   onExport?: (programId: string) => Promise<void>;
   planDelete?: ProgramDeletePort;
   clientId: string;

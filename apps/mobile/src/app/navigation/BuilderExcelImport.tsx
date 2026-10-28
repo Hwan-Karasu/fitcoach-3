@@ -7,9 +7,11 @@ import { CustomExerciseEditorScreen, ExerciseLibraryScreen, displayNameOf, type 
 import { applyWorkbookColumns, autoMatchWorkbookEntry, builderWorkbookImport, compileWholeWorkbook, correctWorkbookValue,
   emptyWorkbookSheet, prepareWorkbookResponsive, requireWorkbookNameChoices, selectWorkbookImportSheets, selectWorkbookSheet, setWorkbookNameMatch,
   startWorkbookReview, updateWorkbookEntry, wholeWorkbookStatus, workbookMatchesToRemember, workbookSourceNames, workbookUnmatchedTargets,
-  type ExerciseImportMatch, type ExerciseImportMatchesPort, type TrainingTransfer, type WorkbookFilesPort,
-  type WorkbookReviewEntry, type WorkbookReviewSession } from "../../features/import/public.ts";
-import type { BuilderExcelDraft } from "../../features/training/public.ts";
+  mergeLogNames, parseWorkoutLog, similarLogNames, workoutLogWorkbook,
+  type ExerciseImportMatch, type ExerciseImportMatchesPort, type PickedWorkbook, type TrainingTransfer, type WorkbookFilesPort,
+  type WorkbookReviewEntry, type WorkbookReviewSession, type WorkoutLog } from "../../features/import/public.ts";
+import { CYCLE_TYPES, type BuilderExcelDraft } from "../../features/training/public.ts";
+import { localToday, TextLogDistribution, TextLogInput, type LogCycleType } from "./TextLogImport.tsx";
 import { TrainingTransferReviewScreen } from "./TrainingTransferReviewScreen.tsx";
 import { WorkbookColumnSettings } from "./WorkbookColumnSettings.tsx";
 import { RememberedImportMatchesDialog } from "./RememberedImportMatchesDialog.tsx";
@@ -18,14 +20,17 @@ import { previousImportPage } from "./importBack.ts";
 export type WorkbookImportTarget = Readonly<{ kind: "PROGRAM"; title?: string;
   save: (value: TrainingTransfer, mapping: Readonly<Record<string, string>>, matches: readonly ExerciseImportMatch[]) => Promise<void> }>
   | Readonly<{ kind: "BUILDER"; title?: string; apply: (draft: BuilderExcelDraft) => void }>;
-type Page = "reading" | "sheets" | "history" | "review" | "confirm" | "catalog" | "create" | null;
+type Page = "text" | "distribute" | "reading" | "sheets" | "history" | "review" | "confirm" | "catalog" | "create" | null;
 const HINTS_SHOWN = 6;
+const TEXT_MAX = 200_000;
 const yieldFrame = () => new Promise<void>((resolve) => setTimeout(resolve, 32));
 
 /** Exactly one host modal. Active tab is presentation; selected sheets are the write scope. */
 export function BuilderExcelImport({ files, exercises, target, clientName = "Конструктор", label = "Импортировать из Excel", renderTrigger, memory }: Readonly<{
   files: WorkbookFilesPort; exercises: ExerciseCatalogPort; target: WorkbookImportTarget; clientName?: string; label?: string;
-  memory?: ExerciseImportMatchesPort; renderTrigger?: (onPress: () => void, disabled: boolean) => ReactNode;
+  memory?: ExerciseImportMatchesPort;
+  /** `onText` — тот же импорт из текста заметок (TEXT-LOG-2). */
+  renderTrigger?: (onPress: () => void, disabled: boolean, onText: () => void) => ReactNode;
 }>) {
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
   const [page, setPage] = useState<Page>(null);
@@ -36,6 +41,9 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
   const [error, setError] = useState(""); const [progress, setProgress] = useState("");
   const [proposals, setProposals] = useState<readonly ExerciseImportMatch[] | null>(null);
   const [notice, setNotice] = useState("");
+  const [logText, setLogText] = useState(""); const [log, setLog] = useState<WorkoutLog | null>(null);
+  const [cycleType, setCycleType] = useState<LogCycleType>("hypertrophy");
+  const [similar, setSimilar] = useState<readonly (readonly [string, string])[]>([]); const [merged, setMerged] = useState<ReadonlySet<number>>(new Set());
   const catalogBack = useRef<CatalogBackHandle>(null);
   const operation = useRef(0); const locked = useRef(false); const writing = useRef(false);
   const pageRef = useRef(page); pageRef.current = page;
@@ -57,7 +65,8 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
   };
   const back = () => {
     if (writing.current) return;
-    if (page === "reading") { close(); return; }
+    if (page === "reading" || page === "text") { close(); return; }
+    if (page === "distribute") { setError(""); setPage("text"); return; }
     if (page === "history") { setProposals(null); setPage("review"); return; }
     if (page === "sheets" || page === "confirm") { setPage("review"); return; }
     if (page === "catalog" || page === "create") { const previous = previousImportPage(page, catalogBack.current); if (previous !== null) setPage(previous); return; }
@@ -70,6 +79,10 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
     } });
     if (id !== operation.current) return;
     if (!picked) { setPage(session ? "review" : null); return; }
+    await open(picked, id);
+  }); };
+  /** Общая сверка для книги Excel и для заметок. */
+  const open = async (picked: PickedWorkbook, id: number) => {
     setPage("reading"); setProgress("Загружаем каталог…"); await yieldFrame();
     const entries = await exercises.list(); if (id !== operation.current) return; setCatalog(entries);
     const started = startWorkbookReview(picked, false); const prefix = `${clientName} — `;
@@ -85,6 +98,23 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
       if (id !== operation.current) return;
       if (suggestions.length) { setSession(requireWorkbookNameChoices(review, suggestions.map((m) => m.sourceName))); setProposals(suggestions); setPage("history"); }
     } catch { if (id === operation.current) setNotice("Прошлые сопоставления недоступны. Можно выбрать упражнения вручную."); }
+  };
+  const startText = () => {
+    if (locked.current) return;
+    setSession(null); setLog(null); setError(""); setNotice(""); setPage("text");
+  };
+  const parseText = () => {
+    if (logText.length > TEXT_MAX) { setError("Текст слишком длинный: вставьте его частями до 200 000 символов."); return; }
+    const parsed = parseWorkoutLog(logText, localToday());
+    if (!parsed.workouts.some((w) => w.exercises.length)) { setError("Не нашёл упражнений. Название — строка с буквами, подход — «22 на 15»."); return; }
+    const pairs = similarLogNames(parsed);
+    setLog(parsed); setSimilar(pairs); setMerged(new Set(pairs.map((_, i) => i))); setError(""); setPage("distribute");
+  };
+  const continueText = () => { void run(async (id) => {
+    if (!log) return;
+    const reps = CYCLE_TYPES.find((item) => item.id === cycleType)!.reps;
+    const picked = workoutLogWorkbook(mergeLogNames(log, similar.filter((_, i) => merged.has(i))), logText, { name: "Заметки", cycleType, reps });
+    await open(picked, id);
   }); };
   const patch = (change: Partial<WorkbookReviewEntry>) => setSession((s) => s ? updateWorkbookEntry(s, change) : null);
   const select = (id: string) => { if (!busy && session) { setError(""); setSession(match(selectWorkbookSheet(session, id))); } };
@@ -106,6 +136,7 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
     finally { writing.current = false; setCommitting(false); }
     locked.current = false; close();
   }); };
+  const fromText = session?.picked.kind === "TABLES" && session.picked.tables[0]?.source === "text";
   const selectedLabels = session?.sheets.filter((s) => session.selectedSheetIds.has(s.id)).map((s) => s.label) ?? [];
   const unmatched = session ? workbookUnmatchedTargets(session) : [];
   const otherProblems = status?.problems.filter((p) => !unmatched.some((t) => t.sheetId === p.id) || !p.reason.startsWith("Выберите упражнения")) ?? [];
@@ -127,16 +158,23 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
       {otherProblems.map((p) => { const issue = session.entries[p.id]?.value?.issues?.[0];
         return <AppButton key={p.id} compact variant="ghost" label={`${p.label}: ${p.reason}`} disabled={busy}
           onPress={() => issue ? focusCard(p.id, null, `issue:${issue.id}`) : select(p.id)} />; })}</View>}
-    {session.picked.kind === "TABLES" && current && <WorkbookColumnSettings table={session.picked.tables[Number(session.activeId)]!} entry={current} busy={busy} onChange={patch}
+    {session.picked.kind === "TABLES" && !fromText && current && <WorkbookColumnSettings table={session.picked.tables[Number(session.activeId)]!} entry={current} busy={busy} onChange={patch}
       onApply={() => setSession(match(applyWorkbookColumns(session)))} />}
   </> : null;
   return <>
-    {renderTrigger ? renderTrigger(pick, busy) : <AppButton compact variant="secondary" label={label} disabled={busy} onPress={pick} />}
+    {renderTrigger ? renderTrigger(pick, busy, startText) : <>
+      <AppButton compact variant="secondary" label={label} disabled={busy} onPress={pick} />
+      <AppButton compact variant="secondary" label="Вставить из заметок" disabled={busy} onPress={startText} />
+    </>}
     {!!error && page === null && <InlineNotice kind="error">{error}</InlineNotice>}
     <Modal visible={page !== null} animationType="none" onRequestClose={back}>
       <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, backgroundColor: colors.canvas }}>
-        <ScreenHeader insetTop={false} title={page === "catalog" ? "Выбрать упражнение" : page === "create" ? "Своё упражнение" : page === "sheets" ? "Листы для импорта" : "Импорт Excel"} onBack={back} />
+        <ScreenHeader insetTop={false} title={page === "catalog" ? "Выбрать упражнение" : page === "create" ? "Своё упражнение" : page === "sheets" ? "Листы для импорта" : page === "text" || page === "distribute" || fromText ? "Импорт из заметок" : "Импорт Excel"} onBack={back} />
         {!!notice && <InlineNotice>{notice}</InlineNotice>}
+        {page === "text" && <TextLogInput text={logText} error={error} busy={busy} onText={setLogText} onParse={parseText} />}
+        {page === "distribute" && log && <TextLogDistribution log={log} onChange={setLog} cycleType={cycleType} onCycleType={setCycleType}
+          similar={similar} merged={merged} busy={busy} error={error} onContinue={continueText}
+          onToggleMerge={(i) => setMerged((current) => { const next = new Set(current); if (!next.delete(i)) next.add(i); return next; })} />}
         {page === "reading" && <View style={{ padding: 24, gap: 16 }}>{error ? <InlineNotice kind="error">{error}</InlineNotice> : <LoadingState label={progress} />}<AppButton label="Отменить" variant="secondary" onPress={close} /></View>}
         {page === "history" && <RememberedImportMatchesDialog matches={proposals} catalog={catalog} onApply={chooseMatches} onDecline={() => chooseMatches([])} />}
         {page === "sheets" && session && <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
@@ -165,7 +203,8 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
           <View style={{ padding: 12, gap: 6 }}><Text style={{ color: colors.textSecondary }}>Выбрано листов: {session.selectedSheetIds.size} · Будет добавлено {status?.cycles ?? 0} циклов</Text>
             <SegmentedControl scroll items={session.sheets} selectedId={session.activeId} onSelect={select} />
             {!session.selectedSheetIds.has(session.activeId) && <InlineNotice>Этот лист не выбран и не будет импортирован.</InlineNotice>}
-            <AppButton compact variant="ghost" label="Выбрать другой файл" disabled={busy} onPress={pick} />
+            {fromText ? <AppButton compact variant="ghost" label="Вернуться к распределению" disabled={busy} onPress={() => setPage("distribute")} />
+              : <AppButton compact variant="ghost" label="Выбрать другой файл" disabled={busy} onPress={pick} />}
             {busy && <AppButton compact variant="ghost" label="Продолжить без прошлых сопоставлений" onPress={() => { operation.current += 1; locked.current = false; setBusy(false); }} />}
           </View>
           {current?.value ? <TrainingTransferReviewScreen key={session.activeId} value={current.value} mapping={current.mapping} catalog={catalog} clientName={clientName}
@@ -176,7 +215,8 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
             actionLabel="Продолжить импорт выбранных листов" footerNote={`Будет добавлено ${status?.cycles ?? 0} циклов. Открытая вкладка не ограничивает импорт.`}
             onCorrectIssue={(id, correction) => { try { setSession(correctWorkbookValue(session, id, correction)); setError(""); } catch (cause) { setError(cause instanceof Error ? cause.message : "Проверьте значение."); } }}
             onMatch={(id) => { setSourceId(id); setPage("catalog"); }} onConfirm={() => setPage("confirm")} onBack={back}
-            onParameters={() => patch({ settingsOpen: !current.settingsOpen })} parametersLabel="Настроить столбцы"
+            onParameters={fromText ? () => setPage("distribute") : () => patch({ settingsOpen: !current.settingsOpen })}
+            parametersLabel={fromText ? "К распределению" : "Настроить столбцы"}
             onShare={() => { void run(async () => files.share(current.value!)); }} />
             : <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>{!!(error || current?.error) && <InlineNotice>{error || current?.error}</InlineNotice>}{controls}
               <AppButton label="Продолжить импорт выбранных листов" disabled={busy || !status?.cycles || !!status.problems.length} onPress={() => setPage("confirm")} />

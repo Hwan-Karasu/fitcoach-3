@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseWorkoutLog, similarLogNames, workoutLogTables } from "../apps/mobile/src/features/import/domain/TextWorkoutLog.ts";
+import { editLogWorkout, mergeLogNames, moveLogExercise, parseWorkoutLog, similarLogNames, workoutLogTables, workoutLogWorkbook } from "../apps/mobile/src/features/import/domain/TextWorkoutLog.ts";
+import { startWorkbookReview } from "../apps/mobile/src/features/import/domain/WorkbookReviewSession.ts";
+import { prepareWholeWorkbook, wholeWorkbookStatus } from "../apps/mobile/src/features/import/domain/WholeWorkbookImport.ts";
+import { builderWorkbookImport } from "../apps/mobile/src/features/import/domain/BuilderWorkbookImport.ts";
 import { detectLegacyMapping, normalizeLegacyTable } from "../apps/mobile/src/features/import/domain/LegacyExcel.ts";
 import { assertValidTransfer } from "../apps/mobile/src/features/import/domain/TransferValidation.ts";
 import type { ImportTable } from "../apps/mobile/src/features/import/domain/WorkbookFilesPort.ts";
@@ -34,7 +37,24 @@ test("TEXT-LOG-1 дата без года — ближайшая прошедш�
   assert.equal(parseWorkoutLog("ноги 30.12\nприсед\n60 на 8", "2026-10-28").workouts[0]!.date, "2025-12-30");
   assert.equal(parseWorkoutLog("ноги 01.10\nприсед\n60 на 8", "2026-10-28").workouts[0]!.date, "2026-10-01");
   const plain = parseWorkoutLog("присед\n60 на 8\nжим\n40 на 10", "2026-10-28");
-  assert.deepEqual(plain.workouts.map((w) => [w.title, w.date, w.exercises.length]), [["Тренировка", null, 2]]);
+  assert.deepEqual(plain.workouts.map((w) => [w.title, w.date, w.exercises.length]), [["Тренировка 1", null, 2]]);
+});
+
+test("TEXT-LOG-2 распределение: «+» создаёт тренировку, перенос, правка названия и даты, объединение названий", () => {
+  let log = parseWorkoutLog("присед\n60 на 8\nжим\n40 на 10\nтяга\n50 на 10", "2026-10-28");
+  log = moveLogExercise(log, 0, 1, 1);
+  log = moveLogExercise(log, 0, 1, 1);
+  assert.deepEqual(log.workouts.map((w) => [w.title, w.exercises.map((e) => e.name)]), [["Тренировка 1", ["присед"]], ["Тренировка 2", ["жим", "тяга"]]]);
+  log = moveLogExercise(log, 0, 0, 1);
+  assert.deepEqual(log.workouts.map((w) => w.exercises.map((e) => e.name)), [[], ["жим", "тяга", "присед"]]);
+  log = editLogWorkout(log, 1, { title: "Ноги", date: "2026-10-20" });
+  log = mergeLogNames(log, [["присед", "тяга"]]);
+  assert.deepEqual(log.workouts[1]!.exercises.map((e) => e.name), ["жим", "присед", "присед"]);
+  const [table] = workoutLogTables(log, { name: "Заметки", reps: null });
+  const value = parse(table!);
+  // Пустая тренировка не создаёт неделю; дата правки попадает в занятие.
+  assert.deepEqual(value.programs[0]!.mesocycles[0]!.weeks.map((w) => w.workouts.map((x) => x.title)), [["Ноги"]]);
+  assert.deepEqual(value.sessions.map((s) => [s.actualDate, s.facts.length]), [["2026-10-20", 3]]);
 });
 
 test("TEXT-LOG-1 похожие названия только предлагаются: опечатка, окончание, порядок слов; разные упражнения — нет", () => {
@@ -58,6 +78,20 @@ test("TEXT-LOG-1 таблица: календарные недели без пу
   assert.deepEqual(first.sets.map((s) => [s.reps, s.repsMax, s.loadGrams]), [[8, 12, null], [8, 12, null]]);
   assert.deepEqual(value.sessions[0]!.facts.slice(2, 4).map((f) => [f.values.reps, f.values.loadGrams]), [[15, 22000], [14, 27500]]);
   assert.equal(weeks[0]!.workouts[0]!.exercises[2]!.instruction, "Подход 1: огонь");
+});
+
+test("TEXT-LOG-2 заметки проходят обычную сверку: тип цикла и повторения попадают в цикл конструктора, факты — в черновик", () => {
+  const text = "ноги 20.10.2026\nприсед\n60 на 8\n70 на 6";
+  const picked = workoutLogWorkbook(parseWorkoutLog(text, "2026-10-28"), text, { name: "Заметки", cycleType: "strength", reps: { min: 6, max: 8 } });
+  assert.match(picked.kind === "TABLES" ? picked.sourceId : "", /^text:[0-9a-f]{64}$/u);
+  let session = prepareWholeWorkbook(startWorkbookReview(picked, false), [{ id: "squat", name: "присед", available: true }]);
+  assert.equal(wholeWorkbookStatus(session).problems.length, 0);
+  session = { ...session, programTitle: "Заметки" };
+  const cycle = builderWorkbookImport(session).cycles![0]!;
+  assert.deepEqual(cycle.settings, { cycleType: "strength", repRange: { min: 6, max: 8 }, startDate: undefined });
+  assert.deepEqual(cycle.weeks[0]!.workouts[0]!.exercises[0]!.sets.map((s) => [s.reps, s.repsMax]), [[6, 8], [6, 8]]);
+  assert.deepEqual(cycle.imported!.sessions[0]!.facts.map((f) => [f.exerciseId, f.values.reps, f.values.loadGrams]), [["squat", 8, 60000], ["squat", 6, 70000]]);
+  assert.throws(() => workoutLogWorkbook(parseWorkoutLog("присед", "2026-10-28"), "присед", { name: "Заметки", reps: null }), /нет подходов/);
 });
 
 test("TEXT-LOG-1 тип «Свой» оставляет план пустым; больше 52 недель с занятиями — несколько листов", () => {

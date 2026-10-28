@@ -1,4 +1,4 @@
-import { forwardRef, memo, useEffect, useRef, useState, type Ref } from "react";
+import { forwardRef, memo, useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type Animated from "react-native-reanimated";
 import type { AnimatedRef } from "react-native-reanimated";
@@ -192,6 +192,33 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, s
     </View>
   );
   return group !== null ? <SupersetBorder radius={10}>{card}</SupersetBorder> : card;
+}
+
+/**
+ * Оболочка карточки упражнения конструктора (миниатюра, название, действия; ниже — полоса полей другого тона, UI-OWN-028)
+ * для экранов вне конструктора: распределение заметок по тренировкам (TEXT-LOG-2).
+ */
+export function ExerciseCardShell({ name, subtitle, thumbnail = null, actions, children }: Readonly<{
+  name: string; subtitle?: ReactNode; thumbnail?: ExerciseInfo["thumbnail"] | null; actions?: ReactNode; children?: ReactNode;
+}>) {
+  const { palette } = usePrototypeTheme();
+  const colors = palette.tokens;
+  return (
+    <View style={[styles.exerciseRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+      <View style={[styles.exerciseHead, { paddingHorizontal: 8 }]}>
+        <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>
+          {thumbnail != null ? <Image source={thumbnail} resizeMethod="resize" style={styles.thumbImage} />
+            : <Dumbbell size={14} color={colors.accentInk} strokeWidth={1.8} />}
+        </View>
+        <View style={styles.grow}>
+          <Text style={[styles.exerciseName, { color: colors.textPrimary }]}>{name}</Text>
+          {subtitle}
+        </View>
+        {actions}
+      </View>
+      {children ? <View style={[styles.exerciseBody, { backgroundColor: colors.surfaceRaised, borderTopColor: colors.border }]}>{children}</View> : null}
+    </View>
+  );
 }
 
 /**

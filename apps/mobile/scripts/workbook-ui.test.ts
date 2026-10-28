@@ -17,7 +17,7 @@ import type { BuilderWorkbookSaveRequest } from "../src/shared/training-transfer
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 type Props = Record<string, unknown>;
 const control = (name: string) => (props: Props) => createElement(name, props, props.children as ReactNode);
-const ui = Object.fromEntries(["AppButton", "AppIconButton", "ConfirmDialog", "FloatingActionButton", "ListSectionHeader", "InlineNotice", "LoadingState", "ScreenHeader", "SegmentedControl", "TextField", "SelectionChip", "StickyEditorFooter", "TrainingEditorLayout"].map((name) => [name, control(name)]));
+const ui = Object.fromEntries(["AppButton", "AppIconButton", "ConfirmDialog", "FloatingActionButton", "ListSectionHeader", "InlineNotice", "LoadingState", "ScreenHeader", "SegmentedControl", "TextField", "SelectionChip", "StickyEditorFooter", "TrainingEditorLayout", "DateField", "DropdownMenu"].map((name) => [name, control(name)]));
 let idSequence = 0;
 const cache = new Map<string, Record<string, unknown>>();
 const nav = { actions: [] as unknown[], remove: (event: unknown): void => { void event; }, dispatch(action: unknown) { this.actions.push(action); } };
@@ -35,7 +35,11 @@ function loadScreen(file: string): Record<string, unknown> {
     if (specifier === "react-native-sortables") return { default: {} };
     if (specifier === "lucide-react-native") return new Proxy({}, { get: () => control("Icon") });
     if (specifier === "@react-navigation/native") return { useNavigation: () => nav, useIsFocused: () => true, usePreventRemove: (_enabled: boolean, callback: (e: unknown) => void) => { nav.remove = callback; } };
+    if (specifier.endsWith("features/training/public.ts")) return { ExerciseCardShell: (p: Props) => createElement("ExerciseCard", p, p.subtitle as ReactNode, p.children as ReactNode),
+      CYCLE_TYPES: [{ id: "hypertrophy", label: "Гипертрофия", reps: { min: 8, max: 12 } }, { id: "custom", label: "Свой", reps: null }] };
     if (specifier === "react-native") return { Modal: (p: Props) => p.visible ? createElement("NativeModal", p, p.children as ReactNode) : null,
+      FlatList: (p: Props) => createElement("FlatList", null, p.ListHeaderComponent as ReactNode,
+        ...(p.data as unknown[]).map((item, index) => (p.renderItem as (row: { item: unknown; index: number }) => ReactNode)({ item, index })), p.ListFooterComponent as ReactNode),
       ...Object.fromEntries(["Text", "View", "ScrollView", "Pressable"].map((n) => [n, control(n)])), StyleSheet: { create: (s: unknown) => s }, Platform: { OS: "android", select: (p: Props) => p.android ?? p.default } };
     if (specifier === "react-native-safe-area-context") return { SafeAreaView: control("SafeAreaView") };
     if (specifier.endsWith("ui/components/public.ts")) return ui;
@@ -85,6 +89,30 @@ test("I07 ten consecutive imports with and without history keep a single modal a
     await until(renderer, () => nodes(renderer, "NativeModal").length === 0);
   }
   assert.deepEqual(saved, Array(10).fill(3)); await act(async () => renderer.unmount());
+});
+
+test("TEXT-LOG-2 заметки: разбор, «+» раскладывает упражнения по тренировкам, обычная сверка сохраняет одну программу", async () => {
+  type Saved = { programs: { mesocycles: { cycleType?: string; weeks: { workouts: { title: string }[] }[] }[] }[]; sessions: unknown[] };
+  const saved: Saved[] = []; let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(createElement(Importer, { files: { pick: async () => null }, exercises: { list: async () => catalogue },
+    target: { kind: "PROGRAM", save: async (value: Saved) => { saved.push(value); } } })); });
+  await press(renderer, "Вставить из заметок");
+  const field = nodes(renderer, "TextField").find((n) => n.props.label === "Текст из заметок")!;
+  await act(async () => (field.props.onChangeText as (text: string) => void)("Жим\n60 на 8\nЖим\n70 на 6"));
+  await press(renderer, "Разобрать текст");
+  const plus = nodes(renderer, "SelectionChip").filter((n) => n.props.label === "+");
+  assert.equal(plus.length, 2);
+  await act(async () => (plus[1]!.props.onPress as () => void)());
+  assert.deepEqual(nodes(renderer, "TextField").filter((n) => n.props.label === "Название").map((n) => n.props.value), ["Тренировка 1", "Тренировка 2"]);
+  await press(renderer, "Далее: сверка упражнений");
+  await until(renderer, () => nodes(renderer, "AppButton").some((n) => n.props.label === "Продолжить импорт выбранных листов" && !n.props.disabled));
+  await press(renderer, "Продолжить импорт выбранных листов"); await press(renderer, "Импортировать выбранные листы");
+  await until(renderer, () => nodes(renderer, "NativeModal").length === 0);
+  const cycle = saved[0]!.programs[0]!.mesocycles[0]!;
+  assert.equal(cycle.cycleType, "hypertrophy");
+  assert.deepEqual(cycle.weeks.map((w) => w.workouts.map((x) => x.title)), [["Тренировка 1", "Тренировка 2"]]);
+  assert.equal(saved[0]!.sessions.length, 2);
+  await act(async () => renderer.unmount());
 });
 
 test("I07 active unselected tab does not constrain checked sheets, and failed writes can be retried", async () => {

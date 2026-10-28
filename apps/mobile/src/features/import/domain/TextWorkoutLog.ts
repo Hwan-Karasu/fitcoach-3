@@ -1,6 +1,9 @@
-import type { ImportCellOrigin, ImportTable } from "./WorkbookFilesPort.ts";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
+import type { ImportCellOrigin, ImportTable, PickedWorkbook } from "./WorkbookFilesPort.ts";
 import { legacyFields } from "./LegacyExcel.ts";
 import { spreadsheetDay } from "../../../shared/training-transfer/SpreadsheetDay.ts";
+import type { TransferCycle } from "../../../shared/training-transfer/TrainingTransfer.ts";
 
 /**
  * Импорт тренировок из текста заметок (TEXT-LOG-1). Строка с датой (или «Тренировка…»/«День…») — тренировка,
@@ -15,6 +18,7 @@ export interface WorkoutLog {
   readonly unknownLines: readonly Readonly<{ line: number; text: string }>[];
 }
 type RepRange = Readonly<{ min: number; max: number | null }> | null;
+type CycleType = NonNullable<TransferCycle["cycleType"]>;
 
 const HEADER = /^(?:тренировка|день|workout|day)(?![\p{L}])/iu;
 const DATE = /(?<![\d.])(\d{1,2})[./](\d{1,2})(?:[./](\d{4}|\d{2}))?(?![\d.])/u;
@@ -72,10 +76,33 @@ export function parseWorkoutLog(text: string, today: string): WorkoutLog {
       workouts.push(workout); exercise = null; continue;
     }
     if (/^\d/u.test(body) || !/\p{L}/u.test(body)) { unknownLines.push({ line, text: source }); continue; }
-    if (!workout) { workout = { title: "Тренировка", date: null, exercises: [], line }; workouts.push(workout); }
+    if (!workout) { workout = { title: "Тренировка 1", date: null, exercises: [], line }; workouts.push(workout); }
     exercise = { name: body, note, sets: [], line }; workout.exercises.push(exercise);
   }
   return { workouts, unknownLines };
+}
+
+/** Шаг «Распределение» (TEXT-LOG-2): упражнение в тренировку `target`; `target` = число тренировок — новая «Тренировка N+1». */
+export function moveLogExercise(log: WorkoutLog, workout: number, exercise: number, target: number): WorkoutLog {
+  const item = log.workouts[workout]?.exercises[exercise];
+  if (!item || target === workout || target < 0 || target > log.workouts.length) return log;
+  const workouts = target === log.workouts.length
+    ? [...log.workouts, { title: `Тренировка ${target + 1}`, date: null, exercises: [], line: item.line }] : [...log.workouts];
+  workouts[workout] = { ...workouts[workout]!, exercises: workouts[workout]!.exercises.filter((_, i) => i !== exercise) };
+  workouts[target] = { ...workouts[target]!, exercises: [...workouts[target]!.exercises, item] };
+  return { ...log, workouts };
+}
+
+export function editLogWorkout(log: WorkoutLog, index: number, patch: Readonly<{ title?: string; date?: string | null }>): WorkoutLog {
+  return { ...log, workouts: log.workouts.map((w, i) => i === index ? { ...w, ...patch } : w) };
+}
+
+/** Пара [оставить, заменить]: названия второго (с точностью до регистра и знаков) получают название первого. */
+export function mergeLogNames(log: WorkoutLog, pairs: readonly (readonly [string, string])[]): WorkoutLog {
+  const rename = new Map(pairs.map(([keep, replace]) => [logNameKey(replace), keep]));
+  return { ...log, workouts: log.workouts.map((w) => ({ ...w, exercises: w.exercises.map((e) => {
+    const name = rename.get(logNameKey(e.name)); return name === undefined ? e : { ...e, name };
+  }) })) };
 }
 
 /** Одно упражнение с точностью до регистра, «ё», пробелов и знаков. */
@@ -113,9 +140,11 @@ const WEEKS_PER_SHEET = 52;
  * Лист на каждые 52 недели с занятиями. Неделя — календарная (с понедельника), пустые недели не создаются; если даты есть у всех
  * тренировок, они упорядочиваются по дате. Повтор названия в неделе получает номер («Фуллбоди 2»). План повторений — по типу цикла.
  */
-export function workoutLogTables(log: WorkoutLog, options: Readonly<{ name: string; reps: RepRange }>): readonly ImportTable[] {
-  const dated = log.workouts.length > 0 && log.workouts.every((w) => w.date !== null);
-  const ordered = dated ? [...log.workouts].sort((a, b) => a.date!.localeCompare(b.date!)) : log.workouts;
+export function workoutLogTables(log: WorkoutLog, options: Readonly<{ name: string; reps: RepRange; cycleType?: CycleType }>): readonly ImportTable[] {
+  // Тренировка без подходов (опустевшая при распределении) не создаёт неделю.
+  const present = log.workouts.filter((w) => w.exercises.some((e) => e.sets.length));
+  const dated = present.length > 0 && present.every((w) => w.date !== null);
+  const ordered = dated ? [...present].sort((a, b) => a.date!.localeCompare(b.date!)) : present;
   const canonical = new Map<string, string>();
   const planReps = options.reps === null ? "" : options.reps.max === null ? String(options.reps.min) : `${options.reps.min}-${options.reps.max}`;
   const sheets: { rows: unknown[][]; cellOrigins: (ImportCellOrigin | null)[][] }[] = [];
@@ -136,5 +165,13 @@ export function workoutLogTables(log: WorkoutLog, options: Readonly<{ name: stri
       });
     }
   }
-  return sheets.map((sheet, i) => ({ name: i === 0 ? options.name : `${options.name} ${i + 1}`, ...sheet }));
+  return sheets.map((sheet, i) => ({ name: i === 0 ? options.name : `${options.name} ${i + 1}`, ...sheet, source: "text" as const,
+    ...(options.cycleType ? { cycle: { cycleType: options.cycleType, repRange: options.reps } } : {}) }));
+}
+
+/** Заметки как книга из листов: дальше обычная сверка Excel-импорта. ID источника — хеш текста, как у файла. */
+export function workoutLogWorkbook(log: WorkoutLog, text: string, options: Parameters<typeof workoutLogTables>[1]): PickedWorkbook {
+  const tables = workoutLogTables(log, options);
+  if (!tables.length) throw new Error("В тексте нет подходов: проверьте строки вида «22 на 15».");
+  return { kind: "TABLES", filename: options.name, sourceId: `text:${bytesToHex(sha256(utf8ToBytes(text)))}`, tables };
 }
