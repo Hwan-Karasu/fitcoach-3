@@ -231,6 +231,41 @@
       "apk": "artifacts/apk/athlete-diary-3.0.0-build16.apk",
       "sha256": "6D633E178A74A8260AD9A75E81E7A0312C5F716F74A40428CD73BFCC651A468D",
       "remaining": "Owner physical Android UI/window-focus validation after manual installation. No phone installation performed."
+    },
+    {
+      "id": "IMPORT-HINT-SCROLL",
+      "state": "CODE_IMPLEMENTED_HOST_VERIFIED",
+      "inputs": ["Owner request 2026-10-28: tapping a review hint scrolls to the exercise"],
+      "acceptance": "One hint per unmatched source name (sheet, week, name); tap selects sheet and week, scrolls to and outlines the card; value hint scrolls to the first issue card",
+      "evidence": "workbook-review-session test; typecheck/lint/boundaries; commit b2066e1",
+      "remaining": "Owner phone check of scroll position"
+    },
+    {
+      "id": "TEXT-LOG",
+      "state": "CODE_IMPLEMENTED_HOST_VERIFIED",
+      "inputs": ["Owner request 2026-10-28: paste workouts from phone notes; distribute exercises over workouts with 1-2-3-+ before catalog matching"],
+      "refs": ["ADR-045", "CYCLE-PRESETS"],
+      "acceptance": "Notes text becomes legacy flat tables and passes normal review/write; dated headers split workouts; undated lists are distributed manually; similar names offered for merge; plan reps by cycle type, custom empty",
+      "evidence": "text-workout-log and workbook-ui tests; owner sample outside the repo: 8 workouts, 120 sets, 0 unknown lines; commits 6679d40, 223a9f3",
+      "remaining": "Owner phone check: paste, distribution, review, builder import"
+    },
+    {
+      "id": "EXCEL-AI",
+      "state": "CODE_IMPLEMENTED_HOST_VERIFIED",
+      "inputs": ["Owner idea 2026-10-28: downloadable sample plus AI prompt for foreign workbooks"],
+      "refs": ["ADR-045"],
+      "acceptance": "Flat AI sample is recognised without column settings; prompt names exact columns; unambiguous header synonyms",
+      "evidence": "ai-workbook test; owner 2.0 workbook (3 sheets, 604 sets) read by the current importer, not stored in the repo; commit 4ffbcf5",
+      "remaining": "Owner decision on expo-clipboard copy button; real AI round trip by the owner"
+    },
+    {
+      "id": "BUILDER-FACTS",
+      "state": "CODE_IMPLEMENTED_HOST_VERIFIED",
+      "inputs": ["Owner request 2026-10-28: plan and actual values in builder exercise cards for imported cycles"],
+      "refs": ["ADR-046"],
+      "acceptance": "Imported cycles show per-set actual kg/reps in the builder card, edits change only the unsaved draft and reach saveBuilderWorkbook; sourceHash unchanged",
+      "evidence": "builder-imported-facts and workbook-ui tests; commit 68393aa",
+      "remaining": "Owner phone check of the facts block"
     }
   ]
 }

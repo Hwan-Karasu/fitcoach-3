@@ -1,6 +1,9 @@
-# Progress — 2026-10-27
+# Progress — 2026-10-28
 
 ## Сделано
+- 2026-10-28 (ADR-045/046): IMPORT-HINT-SCROLL, CYCLE-PRESETS, TEXT-LOG (импорт из заметок), EXCEL-AI (образец+промпт, синонимы),
+  BUILDER-FACTS (факты в карточке конструктора) + исправления ревью (7bb8ccc). test:foundation 1028/1028, training 265/265,
+  excel 98/99 (I07, старая поломка). На телефоне не проверено.
 - UI-MATRIX-READ / CAL-PAST-EDIT / CAL-DUTY-DAY (ADR-044): матрица недель крупнее и разделена по блокам (масштаб 0,9); прошедшая запись правится как будущая, кнопки исхода одним рядом; дежурство и пресеты — касанием дня в шапке. test:foundation 1013/1013, calendar:test 23/23; на телефоне не проверено, в APK не входит (docs/PROJECT_STATUS.md).
 - BOOT-ROUTE-1: отделён стартовый маршрут от generation обслуживания. Проверка журнала/повтор запуска ведут на главный экран, операция из APP_READY возвращает к копиям. 47/47 целевых тестов PASS; в build29 не входит.
 - UI-HEADER-WRAP: метаданные дневника переносятся целыми элементами, длинный текст пилюль ограничен карточкой; подпись программы без многоточия. Typecheck/lint/source/diff PASS. Собран build29 arm64; aapt/apksigner PASS, сертификат совпадает с build28. Визуальная проверка ширин и шрифта открыта (docs/PROJECT_STATUS.md).
@@ -14,6 +17,10 @@
 - EDITOR-FIX-1: очистка плановых значений и статусы недель в редакторе (7deb80e).
 
 ## Открыто / техдолг
+- excel:test I07 «legacy drafts survive the guard migration» падает с 77af02e: тест удаляет v4 из журнала
+  training_plans при наличии более поздней миграции (scripts/training-transfer.test.ts:153).
+- ExerciseCard не собран из ExerciseCardShell (WorkoutsEditor.tsx) — после коммита чужой правки комментария.
+- expo-clipboard для «Скопировать промпт» (AiTableHelp.tsx) — ждёт согласия владельца.
 - Смена недели в конструкторе мезоцикла медленная (создание ~23 карточек, WorkoutsEditor.tsx / Sortable.Grid) — решено оставить; варианты в docs/PROJECT_STATUS.md.
 - Решения владельца из POLISH-1 (P-01…P-07 в CODE_AUDIT): разрешения Android RECORD_AUDIO/CAMERA/SYSTEM_ALERT_WINDOW
   (app.json), icon.png 2,2 МБ, токен scrim ×26, CI arch:check без assets/exercises, flash-list, отчёты docs/ui, старые APK.
