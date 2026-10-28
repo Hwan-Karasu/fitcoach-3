@@ -227,6 +227,10 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
     finally { switchingRef.current = false; setSwitching(false); }
   };
   // Простая программа создаётся сразу в конструкторе; расширенная — пока через название и участников.
+  /** Нажатие на карточку шаблона: Простая — в простой конструктор, Расширенная — в расширенный (TEMPLATE-OPEN). */
+  const templateRoute = (template: Readonly<{ id: string; payload: Readonly<{ kind: string }> }>) => template.payload.kind === "SIMPLE"
+    ? { name: "TrainingBuilder" as const, params: { templateId: template.id } }
+    : { name: "TrainingCreate" as const, params: { kind: "PERIODIZED" as const, templateId: template.id } };
   const createRoute = (kind: ProgramKind) => kind === "SIMPLE" ? { name: "TrainingBuilder" as const, params: {} }
     : { name: "TrainingCreate" as const, params: { kind } };
   return (
@@ -261,8 +265,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
           onTabChange={(tab) => navigation.setOptions({ title: programLibraryTabTitles[tab] })}
           renderTemplates={() => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
             onEdit={(templateId) => navigation.navigate("TrainingTemplateEdit", { templateId })}
-            onOpenInBuilder={(template) => navigation.navigate(...(template.payload.kind === "SIMPLE" ? ["TrainingBuilder", { templateId: template.id }] as const
-              : ["TrainingCreate", { kind: "PERIODIZED", templateId: template.id }] as const))}
+            onOpenInBuilder={(template) => { const route = templateRoute(template); navigation.navigate(route.name, route.params as never); }}
             onCreated={(programId) => navigation.navigate("TrainingProgram", { programId })} />}
           renderArchive={() => <ArchivedProgramsPanel clientId={clientId} repository={repository} planDelete={planDelete} />}
           onOpenProgram={(programId) => navigation.navigate("TrainingProgram", { programId })} />}
@@ -284,8 +287,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
       <TrainingStack.Screen name="TrainingTemplates">
         {({ navigation }) => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
           onEdit={(templateId) => navigation.navigate("TrainingTemplateEdit", { templateId })}
-          onOpenInBuilder={(template) => navigation.navigate(...(template.payload.kind === "SIMPLE" ? ["TrainingBuilder", { templateId: template.id }] as const
-              : ["TrainingCreate", { kind: "PERIODIZED", templateId: template.id }] as const))}
+          onOpenInBuilder={(template) => { const route = templateRoute(template); navigation.navigate(route.name, route.params as never); }}
           onCreated={(programId) => navigation.reset({ index: 1,
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId } }] })} />}
       </TrainingStack.Screen>
@@ -325,6 +327,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
               ...(route.params.mesocycleId === undefined ? {} : { mesocycleId: route.params.mesocycleId }) } } })}
           renderTemplates={() => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
             onEdit={(templateId) => navigation.navigate("TrainingTemplateEdit", { templateId })}
+            onOpenInBuilder={(template) => { const route = templateRoute(template); navigation.replace(route.name, route.params as never); }}
             onCreated={(createdId) => navigation.reset({ index: 1,
               routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId: createdId } }] })} />}
           onCreated={(programId) => navigation.reset({ index: 1,
@@ -348,6 +351,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
             }); }} />}
           renderTemplates={() => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
             onEdit={(templateId) => navigation.navigate("TrainingTemplateEdit", { templateId })}
+            onOpenInBuilder={(template) => { const route = templateRoute(template); navigation.navigate(route.name, route.params as never); }}
             onCreated={(createdId) => navigation.reset({ index: 1,
               routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId: createdId } }] })} />}
           onOpenProgram={(createdId) => navigation.reset({ index: 1,

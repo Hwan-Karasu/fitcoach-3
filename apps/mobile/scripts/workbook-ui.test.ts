@@ -10,7 +10,7 @@ import type { PickedWorkbook } from "../src/features/import/domain/WorkbookFiles
 import { builderWorkbookImport } from "../src/features/import/domain/BuilderWorkbookImport.ts";
 import { startWorkbookReview } from "../src/features/import/domain/WorkbookReviewSession.ts";
 import { prepareWholeWorkbook } from "../src/features/import/domain/WholeWorkbookImport.ts";
-import { parseWorkoutLog, workoutLogWorkbook } from "../src/features/import/domain/TextWorkoutLog.ts";
+import { aiWorkbookRows } from "../src/features/import/domain/AiWorkbookTemplate.ts";
 import { trainingTransferFixture } from "../../../scripts/training-transfer-fixture.ts";
 import type { MesocycleBuilderDraft } from "../src/features/training/plans/domain/PeriodizedDraft.ts";
 import type { BuilderWorkbookSaveRequest } from "../src/shared/training-transfer/BuilderWorkbook.ts";
@@ -92,89 +92,6 @@ test("I07 ten consecutive imports with and without history keep a single modal a
   assert.deepEqual(saved, Array(10).fill(3)); await act(async () => renderer.unmount());
 });
 
-const textOf = (r: ReactTestRenderer) => nodes(r, "Text").map((n) => [n.props.children].flat(Infinity).join("")).join("|");
-
-test("TEXT-LOG-3 заметки: единый список с пикером тренировки, дубль, название тренировки на втором этапе, обычная сверка сохраняет одну программу", async () => {
-  type Saved = { programs: { mesocycles: { cycleType?: string; weeks: { workouts: { title: string }[] }[] }[] }[]; sessions: unknown[] };
-  const saved: Saved[] = []; let renderer!: ReactTestRenderer;
-  await act(async () => { renderer = create(createElement(Importer, { files: { pick: async () => null }, exercises: { list: async () => catalogue },
-    target: { kind: "PROGRAM", save: async (value: Saved) => { saved.push(value); } } })); });
-  await press(renderer, "Вставить из заметок");
-  const field = nodes(renderer, "TextField").find((n) => n.props.label === "Текст из заметок")!;
-  await act(async () => (field.props.onChangeText as (text: string) => void)("Жим\n60 на 8\nЖим\n70 на 6"));
-  await press(renderer, "Разобрать текст");
-  // Единый список: две карточки, у каждой один пикер тренировки 1–4 и «+» (пикера недели нет); нижняя панель — из актуального распределения.
-  assert.equal(nodes(renderer, "ExerciseCard").length, 2);
-  assert.equal(nodes(renderer, "SelectionChip").filter((n) => n.props.label === "+").length, 2);
-  assert.equal(nodes(renderer, "SelectionChip").filter((n) => String(n.props.group).startsWith("Неделя для")).length, 0);
-  assert.match(textOf(renderer), /Распознано: 1 тренировка, 2 упражнения, 2 подхода/);
-  assert.match(textOf(renderer), /Будет создано: 1 тренировка в 1 неделе/);
-  assert.match(textOf(renderer), /Упражнения \(2\)/);
-  const slotChip = (label: string, card: number) => nodes(renderer, "SelectionChip").filter((n) => String(n.props.group).startsWith("Тренировка для") && n.props.label === label)[card]!;
-  await act(async () => (slotChip("2", 1).props.onPress as () => void)());
-  // Без дат сколько тренировок распределили, столько их в неделе; степпера «Тренировок в неделю» нет.
-  assert.match(textOf(renderer), /Будет создано: 2 тренировки в 1 неделе/);
-  assert.match(textOf(renderer), /Распознано: 1 тренировка,/);
-  assert.ok(!/Тренировок в неделю/.test(textOf(renderer)));
-  // Дубль встаёт сразу под исходной карточкой и сразу получает свой номер тренировки.
-  // «Дублировать» и корзина — прямо на карточке, не в меню.
-  const labelled = (label: string) => r().root.findAll((n) => n.props.accessibilityLabel === label || n.props.label === label)[0]!;
-  const r = () => renderer;
-  await act(async () => (labelled("Дублировать: Жим").props.onPress as () => void)());
-  assert.equal(nodes(renderer, "ExerciseCard").length, 3);
-  assert.match(textOf(renderer), /Упражнения \(3\)/);
-  assert.match(textOf(renderer), /Распределено: 3 упражнения, 3 подхода/);
-  // Лишняя копия убирается корзиной сразу, без подтверждения; запись из текста с подходами — через подтверждение.
-  assert.equal(nodes(renderer, "ExerciseCard").length, 3);
-  const copyCard = nodes(renderer, "ExerciseCard")[1]!;
-  await act(async () => (copyCard.findAll((n) => String(n.props.label).startsWith("Убрать:"))[0]!.props.onPress as () => void)());
-  assert.equal(nodes(renderer, "ExerciseCard").length, 2);
-  await act(async () => (labelled("Дублировать: Жим").props.onPress as () => void)());
-  assert.equal(nodes(renderer, "ExerciseCard").length, 3);
-  await press(renderer, "Далее");
-  const names = () => nodes(renderer, "TextField").filter((n) => n.props.label === "Название");
-  assert.deepEqual(names().map((n) => n.props.value), ["Тренировка 1", "Тренировка 2"]);
-  // Название обязательно: с пустым названием дальше не пройти.
-  await act(async () => (names()[1]!.props.onChangeText as (text: string) => void)(""));
-  assert.ok(nodes(renderer, "AppButton").find((n) => n.props.label === "Далее: сверка упражнений")!.props.disabled);
-  await act(async () => (names()[1]!.props.onChangeText as (text: string) => void)("Тяга"));
-  await press(renderer, "Далее: сверка упражнений");
-  await until(renderer, () => nodes(renderer, "AppButton").some((n) => n.props.label === "Продолжить импорт выбранных листов" && !n.props.disabled));
-  await press(renderer, "Продолжить импорт выбранных листов"); await press(renderer, "Импортировать выбранные листы");
-  await until(renderer, () => nodes(renderer, "NativeModal").length === 0);
-  const cycle = saved[0]!.programs[0]!.mesocycles[0]!;
-  assert.equal(cycle.cycleType, "hypertrophy");
-  assert.deepEqual(cycle.weeks.map((w) => w.workouts.map((x) => x.title)), [["Тренировка 1", "Тяга"]]);
-  assert.equal(saved[0]!.sessions.length, 2);
-  await act(async () => renderer.unmount());
-});
-
-test("TEXT-LOG-5 заметки с датами: на кнопках номера, недели из дат, степпера нет; пикер «1 2 3 +» и при многих тренировках", async () => {
-  const open = async (days: readonly string[]) => {
-    let renderer!: ReactTestRenderer;
-    await act(async () => { renderer = create(createElement(Importer, { files: { pick: async () => null }, exercises: { list: async () => catalogue },
-      target: { kind: "PROGRAM", save: async () => undefined } })); });
-    await press(renderer, "Вставить из заметок");
-    const field = nodes(renderer, "TextField").find((n) => n.props.label === "Текст из заметок")!;
-    await act(async () => (field.props.onChangeText as (text: string) => void)(days.map((day) => `Фуллбоди ${day}\nЖим\n60 на 8`).join("\n")));
-    await press(renderer, "Разобрать текст");
-    return renderer;
-  };
-  const few = await open(["26.07.2026", "31.07.2026", "03.08.2026"]);
-  assert.match(textOf(few), /Распознано: 3 тренировки в 3 неделях/);
-  assert.ok(!/Тренировок в неделю/.test(textOf(few)), "с датами степпера нет");
-  const picks = (r: ReactTestRenderer) => nodes(r, "SelectionChip").filter((n) => String(n.props.group).startsWith("Тренировка для"));
-  assert.ok(picks(few).some((n) => n.props.label === "3"), "на кнопках номера, а не даты");
-  assert.ok(!picks(few).some((n) => /\./.test(String(n.props.label))), "дат на кнопках нет");
-  await act(async () => few.unmount());
-  // 8 записей: календарные недели с понедельника — 7 недель; пикер остаётся рядом номеров с «+».
-  const many = await open(["26.07.2026", "31.07.2026", "03.08.2026", "04.09.2026", "06.09.2026", "14.09.2026", "21.09.2026", "28.09.2026"]);
-  assert.match(textOf(many), /Будет создано: 8 тренировок в 7 неделях/);
-  assert.ok(picks(many).some((n) => n.props.label === "8") && picks(many).some((n) => n.props.label === "+"));
-  assert.equal(nodes(many, "DropdownMenu").length, 0);
-  await act(async () => many.unmount());
-});
-
 test("I07 active unselected tab does not constrain checked sheets, and failed writes can be retried", async () => {
   let calls = 0; const saved: string[][] = []; let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(createElement(Importer, { files: { pick: async () => picked }, exercises: { list: async () => catalogue },
@@ -250,9 +167,11 @@ test("I07 creation chooser offers both saved drafts and deletes only the selecte
 
 test("BUILDER-FACTS конструктор показывает факты импортированного цикла, правка уходит в сохранение, отпечаток листа прежний", async () => {
   const Builder = loadScreen(resolve(import.meta.dirname, "../src/features/training/plans/presentation/PeriodizedBuilderScreen.tsx")).PeriodizedBuilderScreen as ComponentType<Props>;
-  const text = "ноги 20.10.2026\nЖим\n60 на 8\n70 на 6";
-  const incoming = builderWorkbookImport(prepareWholeWorkbook(startWorkbookReview(workoutLogWorkbook(parseWorkoutLog(text, "2026-10-28"),
-    { name: "Заметки", cycleType: "strength", reps: { min: 6, max: 8 } }), false), [{ id: "sys:press", name: "Жим", available: true }]));
+  // Плоская таблица «строка = подход» (формат образца для ИИ): одна тренировка, один день, два подхода с фактами 8×60 и 6×70.
+  const [header] = aiWorkbookRows();
+  const flat: PickedWorkbook = { kind: "TABLES", sourceId: "flat-fixture", tables: [{ name: "Тренировки", rows: [header!,
+    [1, "ноги", "Жим", 1, "6-8", 60, 8, 60, "", "", "20.10.2026"], [1, "ноги", "Жим", 1, "6-8", 70, 6, 70, "", "", "20.10.2026"]] }] };
+  const incoming = builderWorkbookImport(prepareWholeWorkbook(startWorkbookReview(flat, false), [{ id: "sys:press", name: "Жим", available: true }]));
   const writes: BuilderWorkbookSaveRequest[] = [];
   const props = { clientId: "client", repository: { getMesocycleBuilderDraft: async () => null, saveMesocycleBuilderDraft: async () => undefined },
     exercises: { lookup: async () => new Map([["sys:press", { name: "Жим", metrics: ["load", "reps"] }]]), subscribe: () => () => undefined },
@@ -274,7 +193,6 @@ test("BUILDER-FACTS конструктор показывает факты им�
   const saved = writes[0]!.cycles[0]!;
   assert.deepEqual(saved.imported!.sessions[0]!.facts.map((f) => [f.values.reps, f.values.loadGrams]), [[8, 60000], [6, 72500]]);
   assert.equal(saved.imported!.sourceHash, incoming.cycles![0]!.imported!.sourceHash);
-  assert.deepEqual(saved.settings?.cycleType, "strength");
   await act(async () => renderer.unmount());
 });
 

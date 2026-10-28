@@ -7,20 +7,20 @@ import { fonts } from "../../shared/ui/theme/typography.ts";
 import { AI_WORKBOOK_PROMPT } from "../../features/import/public.ts";
 
 /** EXCEL-AI: чужая таблица переделывается внешним ИИ по образцу и промпту; приложение остаётся офлайн. */
-export function AiTableHelp({ busy, onTemplate, onCopy }: Readonly<{ busy: boolean; onTemplate: () => void; onCopy: (text: string) => Promise<void> }>) {
+export function AiTableHelp({ busy, onTemplate, onCopy, defaultOpen = false }: Readonly<{ busy: boolean; onTemplate: () => void; onCopy: (text: string) => Promise<void>; defaultOpen?: boolean }>) {
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [copied, setCopied] = useState<"" | "done" | "failed">("");
   const copy = () => { onCopy(AI_WORKBOOK_PROMPT).then(() => setCopied("done"), () => setCopied("failed")); };
   const Chevron = open ? ChevronUp : ChevronDown;
   return <View style={[styles.box, { borderColor: colors.border, backgroundColor: colors.surface }]}>
     <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)} style={styles.head}>
-      <Text style={[styles.title, { color: colors.textPrimary }]}>Таблица другого формата? Переделайте её через ИИ</Text>
+      <Text style={[styles.title, { color: colors.textPrimary }]}>Заметки или таблица другого формата? Переделайте через ИИ</Text>
       <Chevron size={18} color={colors.textSecondary} />
     </Pressable>
     {open && <View style={styles.body}>
       <Text style={[styles.text, { color: colors.textSecondary }]}>
-        1. Скачайте образец.{"\n"}2. Отправьте ИИ (ChatGPT, Claude и другим) свою таблицу, образец и текст ниже.{"\n"}3. Выберите здесь файл, который вернёт ИИ.
+        1. Скачайте образец.{"\n"}2. Отправьте ИИ (ChatGPT, Claude и другим) свои заметки или таблицу, образец и текст ниже.{"\n"}3. Выберите здесь файл, который вернёт ИИ.
       </Text>
       <AppButton compact variant="secondary" label="Скачать образец для ИИ" disabled={busy} onPress={onTemplate} />
       <View style={[styles.prompt, { borderColor: colors.border, backgroundColor: colors.input }]}>

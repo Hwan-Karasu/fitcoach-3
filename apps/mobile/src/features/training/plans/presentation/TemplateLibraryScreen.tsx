@@ -123,10 +123,10 @@ export function TemplateLibraryScreen({ clientId, repository, listCandidates, on
       ) : visible.map((template) => (
         <View key={template.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.cardHead}>
-            <Pressable style={styles.grow} accessibilityRole="button" disabled={onOpenInBuilder === undefined}
+            <Pressable style={styles.grow} accessibilityRole="button"
               accessibilityLabel={`Открыть шаблон ${template.title} в конструкторе`}
               onPress={() => {
-                if (opensInBuilder(template)) onOpenInBuilder?.(template);
+                if (onOpenInBuilder !== undefined && opensInBuilder(template)) onOpenInBuilder(template);
                 else { anchor.current = anchors.current.get(template.id) ?? null; setMenuFor(template); }
               }}>
               <Text numberOfLines={2} style={[styles.title, { color: colors.textPrimary }]}>{template.title}</Text>

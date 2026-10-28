@@ -437,10 +437,13 @@ test("I06 upgrading populated execution v2 preserves every row and guard and rol
       for (const owner of SCHEMA_OWNERS) await runMigrationsInTransaction(tx, owner.owner === "training_execution" ? owner.chain.slice(0, 2) : owner.chain, owner.ledger);
     });
     const tables = ["workspaces", "clients", "training_sessions", "training_performed_sets", "training_performed_drops", "training_performed_sides", "training_exercise_notes"];
+    // Исходная база уже на последней версии: переносятся только колонки, которые есть в базе v2 (миграция v4 добавила calendar_appointment_id).
     for (const table of tables) for (const row of f.native.prepare(`SELECT * FROM ${table}`).all()) {
-      const keys = Object.keys(row); native.prepare(`INSERT INTO ${table} (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")})`).run(...Object.values(row));
+      const present = new Set((native.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name));
+      const keys = Object.keys(row).filter((key) => present.has(key)); native.prepare(`INSERT INTO ${table} (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")})`).run(...keys.map((key) => row[key] as never));
     }
-    const snapshot = () => tables.map((table) => native.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
+    // Колонка, добавленная миграцией v4, в сравнение строк не входит: у перенесённых строк она пуста.
+    const snapshot = () => tables.map((table) => native.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all().map(({ calendar_appointment_id: added, ...row }) => { void added; return row; }));
     const before = snapshot();
     const objects = () => native.prepare("SELECT type,name,sql FROM sqlite_master WHERE type IN ('trigger','index') AND sql IS NOT NULL ORDER BY name").all();
     const guards = objects();
