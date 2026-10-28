@@ -8,6 +8,13 @@
 - Проверки: typecheck, lint, arch:check, source:verify, secrets:check PASS; test:foundation 1034/1034, excel:test 100/100, training:test 268/268
   (счётчики включают параллельные правки календаря в рабочем дереве, они не мои и не коммитятся). На телефоне не проверено; в APK не входит (последний — build34).
 
+## 2026-10-28 — build36: смена недели в конструкторе и кэш календаря
+
+- Собран `artifacts/apk/athlete-diary-3.0.0-build36.apk`: `com.fitcoach.v3`, 3.0.0, versionCode 36, arm64-v8a, 70 445 028 байт; assembleRelease PASS
+  (1 мин 29 с; Node 24.3 первым в PATH, JDK17, IPv4, без prebuild). Сертификат SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`
+  совпадает с build33–35. SHA-256 APK `acc8afbdb8364153f826ab9cfe025c2cb6432c6d286504164302003dea281171`. Входят BUILDER-SLOTS (573aa9b) и CAL-RANGE-CACHE (b626e48)
+  сверх build35. На телефон не устанавливался.
+
 ## 2026-10-28 — CAL-RANGE-CACHE: переключение «неделя ↔ день» в календаре без пустой сетки
 
 - Жалоба владельца: календарь долго рисуется при переключении неделя/день в обе стороны; опасение, что со временем записи копятся в памяти.
