@@ -5,7 +5,7 @@ import { DevClientRepository } from "../apps/mobile/src/features/clients/data/De
 import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParticipant } from
   "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 import type { SetValues, TrackingMetric, WorkoutSlot } from "../apps/mobile/src/features/training/execution/domain/ExecutionModel.ts";
-import { assertDropStructure, confirmationAfterSave, displayOrder, dropsForType, isSetComplete, matchPrevious, nextOutcome,
+import { assertDropStructure, confirmationAfterSave, displayOrder, dropsForType, isSetComplete, matchPrevious, nextOutcome, previousPlainValues, previousSides,
   endInstantAfter, instantFromLocal, localMinuteOfDay, sessionDurationSec, sidesAfterSave, toggleConfirmation, toggleSide, weekStatus, type SetContent } from
   "../apps/mobile/src/features/training/execution/domain/ExecutionRules.ts";
 import type { SaveSetInput } from "../apps/mobile/src/features/training/execution/domain/TrainingExecutionPort.ts";
@@ -592,4 +592,15 @@ test("TRN-015 пределы ячейки: «0 повторов» не допу�
   assert.equal(inLimits("reps", 2.5), false);
   assert.equal(limitHint("reps"), "От 1 до 999");
   assert.equal(limitHint("loadGrams"), "Вес от 0 до 1000 кг");
+});
+
+test("«Пред.» по сторонам: подход без сторон (импорт 2.0) даёт значение обеим сторонам, стороны — каждой свою (REST-FIX-5)", () => {
+  const v = (reps: number, loadGrams: number) => ({ reps, loadGrams, durationSec: null, distanceM: null });
+  const plain = { values: v(8, 50_000), drops: [], sides: null, date: "2026-10-20" };
+  assert.deepEqual(previousSides(plain), { left: v(8, 50_000), right: v(8, 50_000) });
+  const sided = { values: v(0, 0), drops: [], sides: { left: v(10, 40_000), right: null }, date: "2026-10-20" };
+  assert.deepEqual(previousSides(sided), { left: v(10, 40_000), right: null }, "незасчитанная сторона остаётся пустой");
+  assert.deepEqual(previousPlainValues(plain), v(8, 50_000));
+  assert.deepEqual(previousPlainValues(sided), v(10, 40_000), "двустороннему подходу — первая засчитанная сторона");
+  assert.deepEqual(previousPlainValues({ ...sided, sides: { left: null, right: v(9, 45_000) } }), v(9, 45_000));
 });

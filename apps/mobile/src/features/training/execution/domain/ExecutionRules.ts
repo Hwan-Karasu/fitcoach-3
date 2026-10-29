@@ -1,5 +1,5 @@
 import { isLocalDate } from "../../../../shared/domain/LocalDate.ts";
-import { DROPS_MAX, EMPTY_VALUES, type ConfirmationMode, type SetType, type SetValues, type TrackingMetric,
+import { DROPS_MAX, EMPTY_VALUES, type ConfirmationMode, type PreviousSet, type SetType, type SetValues, type TrackingMetric,
   type WeekStatus, type WorkoutOutcome, type WorkoutStatus } from "./ExecutionModel.ts";
 
 /** Поле факта подхода, которое заполняет величина профиля (§33.2). */
@@ -255,6 +255,19 @@ export function matchPrevious<T>(current: readonly Readonly<{ plannedSetId: stri
     if (match !== undefined) result.set(set.plannedSetId, match);
   }
   return result;
+}
+
+/**
+ * «Пред.» по сторонам одностороннего подхода: засчитанные стороны прошлого подхода как есть; подход, записанный без сторон
+ * (импорт из 2.0, упражнение стало односторонним позже), даёт своё значение обеим сторонам — иначе нажатие «Пред.» ничего не переносило.
+ */
+export function previousSides(previous: PreviousSet): Readonly<{ left: SetValues | null; right: SetValues | null }> {
+  return previous.sides ?? { left: previous.values, right: previous.values };
+}
+
+/** «Пред.» для обычного (двустороннего) подхода: прошлый односторонний подход даёт значения первой засчитанной стороны. */
+export function previousPlainValues(previous: PreviousSet): SetValues {
+  return previous.sides === null ? previous.values : previous.sides.left ?? previous.sides.right ?? previous.values;
 }
 
 /** Локальная календарная дата `YYYY-MM-DD` (§48.84 п. 1). */

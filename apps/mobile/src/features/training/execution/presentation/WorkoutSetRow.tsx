@@ -4,8 +4,8 @@ import { Check, Gauge, NotebookPen, Plus, X } from "lucide-react-native";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { type PlannedExercise, type PlannedSet } from "../../plans/public.ts";
-import { DROPS_MAX, EMPTY_VALUES, NOTE_MAX, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type Side } from "../domain/ExecutionModel.ts";
-import { limitHint, type SetField } from "../domain/ExecutionRules.ts";
+import { DROPS_MAX, EMPTY_VALUES, NOTE_MAX, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type Side } from "../domain/ExecutionModel.ts";
+import { limitHint, previousPlainValues, previousSides, type SetField } from "../domain/ExecutionRules.ts";
 import { compactValues, compactWithDrops, fieldNames, parseField, planText, rawOf, rpeTone, sanitizeField,
   setTypeLabels, setTypeTone } from "./setFormat.ts";
 import { type SetPatch } from "./useWorkoutDiary.ts";
@@ -203,10 +203,25 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
       </Pressable>
     );
   };
-  const previousText = previous === undefined ? "—" : previous.sides !== null
-    ? `Л ${previous.sides.left === null ? "—" : compactValues(previous.sides.left, fields)}\nП ${previous.sides.right === null ? "—"
-      : compactValues(previous.sides.right, fields)}`
-    : compactWithDrops(previous.values, previous.drops, fields);
+  const sidesPrevious = sided && previous !== undefined ? previousSides(previous) : null;
+  const sideText = (value: SetValues | null | undefined) => value === null || value === undefined ? "—" : compactValues(value, fields);
+  const previousText = previous === undefined ? "—" : sided
+    ? `Л ${sideText(sidesPrevious?.left)}`
+    : previous.sides !== null ? compactValues(previousPlainValues(previous), fields)
+      : compactWithDrops(previous.values, previous.drops, fields);
+  /** Плашка «Пред.» — нажатие переносит прошлый результат в эту ячейку (подход, сторону или мини-сет). */
+  const previousChip = (text: string, label: string, onTransfer: (() => void) | null) => (
+    <Pressable accessibilityRole="button" disabled={onTransfer === null} hitSlop={6}
+      style={({ pressed }) => [styles.previous, onTransfer === null ? null : [styles.previousChip, {
+        borderColor: withAlpha(colors.accentInk, 0.45), backgroundColor: withAlpha(colors.accentInk, pressed ? 0.22 : 0.1) }]]}
+      accessibilityLabel={onTransfer === null ? "Прошлого результата нет" : `${label} ${text}`}
+      onPress={() => onTransfer?.()}>
+      <Text style={[styles.previousText, { color: onTransfer === null ? colors.textMuted : colors.accentInk }]} numberOfLines={1}
+        adjustsFontSizeToFit minimumFontScale={0.85}>
+        {text}
+      </Text>
+    </Pressable>
+  );
   return (
     <View style={[styles.block, { backgroundColor: background }]}>
       <View style={styles.row}>
@@ -217,21 +232,12 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
           <Text style={[styles.markerText, { color: full ? colors.canvas : tone ?? colors.textPrimary }]}>{marker}</Text>
         </Pressable>
         <Text style={[styles.plan, { color: colors.textSecondary }]} numberOfLines={1}>{number === null ? "—" : planText(set, fields)}</Text>
-        {/* «Пред.» — кнопка-плашка (UI-OWN-037): нажатие переносит прошлый результат в подход. */}
-        <Pressable accessibilityRole="button" disabled={previous === undefined} hitSlop={6}
-          style={({ pressed }) => [styles.previous, previous === undefined ? null : [styles.previousChip, {
-            borderColor: withAlpha(colors.accentInk, 0.45), backgroundColor: withAlpha(colors.accentInk, pressed ? 0.22 : 0.1) }]]}
-          accessibilityLabel={previous === undefined ? "Прошлого результата нет" : `Перенести прошлый результат ${previousText}`}
-          onPress={() => {
-            if (previous === undefined) return;
-            if (previous.sides !== null) { onSave(target, { sidesFrom: previous.sides }); return; }
-            onSave(target, type === "DROP" ? { fields: previous.values, drops: previous.drops } : { fields: previous.values });
-          }}>
-          <Text style={[styles.previousText, { color: previous === undefined ? colors.textMuted : colors.accentInk }]} numberOfLines={1}
-            adjustsFontSizeToFit minimumFontScale={0.85}>
-            {previousText}
-          </Text>
-        </Pressable>
+        {/* «Пред.» — кнопка-плашка (UI-OWN-037): нажатие переносит прошлый результат в подход; у сторон и мини-сетов — своя плашка. */}
+        {previousChip(previousText, "Перенести прошлый результат", previous === undefined || (sided && !sidesPrevious?.left) ? null : () => {
+          if (sided) { onSave(target, { sidesFrom: { left: sidesPrevious!.left, right: null } }); return; }
+          const values = previousPlainValues(previous);
+          onSave(target, type === "DROP" && previous.sides === null ? { fields: values, drops: previous.drops } : { fields: values });
+        })}
         {sided ? sideRow("L") : cells(set.id, (field) => fact?.values[field] ?? null,
           (field, value) => onSave(target, { fields: { [field]: value } }))}
         <Pressable accessibilityRole="button" accessibilityLabel={fact?.rpe ? `RPE ${fact.rpe}. Изменить` : "Указать RPE"} hitSlop={6}
@@ -254,7 +260,8 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
         <View style={styles.row}>
           <View style={styles.markerSpace} />
           <View style={styles.plan} />
-          <View style={styles.grow} />
+          {previousChip(`П ${sideText(sidesPrevious?.right)}`, "Перенести прошлый результат правой стороны",
+            sidesPrevious?.right ? () => onSave(target, { sidesFrom: { left: null, right: sidesPrevious.right } }) : null)}
           {sideRow("R")}
           <View style={styles.side} />
           {mode === "MANUAL" ? sideCheck("R") : null}
@@ -265,7 +272,9 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
           <View key={`drop-${index}`} style={styles.row}>
             <View style={styles.markerSpace} />
             <View style={styles.plan} />
-            <Text style={[styles.dropLabel, { color: colors.textSecondary }]}>{`↳ ${index + 2}`}</Text>
+            {previousChip(`↳ ${index + 2}  ${previous?.drops[index] === undefined ? "—" : compactValues(previous.drops[index]!, fields)}`,
+              `Перенести прошлый мини-сет ${index + 2}`,
+              previous?.drops[index] === undefined ? null : () => onSave(target, { drop: { index, fields: previous.drops[index]! } }))}
             {cells(`${set.id}:d${index}`, (field) => drop[field],
               (field, value) => onSave(target, { drop: { index, fields: { [field]: value } } }))}
             <Pressable accessibilityRole="button" accessibilityLabel={`Убрать мини-сет ${index + 2}`} hitSlop={6}
