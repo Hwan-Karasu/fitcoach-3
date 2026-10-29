@@ -1,6 +1,9 @@
 # Progress — 2026-10-29
 
 ## Сделано
+- 2026-10-29 (ADR-055) AUTO-BACKUP-1/2/3, WRITE-PATH-1: нативный хеш файла автокопии, порции ≤ 8 мс, автокопия ждёт паузы в тренировке,
+  одно соединение записи, одно перечитывание на серию подходов. Тесты: time-slice, local-file-sha256, automatic-scheduler,
+  sqlite-isolated-connection, training-navigation. На телефоне не проверено.
 - 2026-10-29 (ADR-054) SET-DONE-1, TPL-KIND-1, BUILDER-TABS-1, PROG-MENU-1, PART-DOCK-1, REST-NAV-1, UI-COMPACT-1, REST-PERF-1:
   см. docs/PROJECT_STATUS.md. Новые тесты: participant-group-state, TPL-KIND (training-transfer, training-templates, template-cycles),
   SET-DONE-1 (rest-timer, training-execution), REST-NAV-1 (notification-target), PART-DOCK-1 (training-navigation). На телефоне не проверено.
@@ -23,8 +26,8 @@
 - CA-аудит (docs/CODE_AUDIT_2026-10-27.md): этапы A–E сделаны. IMPORT-V2 S1–S5 готовы (CA-29). POLISH-1, EDITOR-FIX-1.
 
 ## Открыто / техдолг
-- Соединение SQLite открывается на каждую транзакцию записи (IsolatedSqliteConnection.ts:48): если после REST-FIX-4 быстрый ввод всё
-  ещё подвисает — отдельный срез с замером на телефоне.
+- Зависание при быстрой записи подходов (ADR-055): причина «автокопия на JS-потоке» установлена по коду, не на телефоне. Если после
+  build45 зависание повторится и время автокопии с ним не совпадёт — замер на устройстве (профилировщик Android).
 - AUD28-10: SegmentedControl со скольжением (SegmentedControl.tsx): индикатор не пересчитывается при смене текста выбранной
   вкладки, возможное мигание при первом показе — проверить на телефоне.
 - Смена недели в конструкторе мезоцикла медленная (WorkoutsEditor.tsx / Sortable.Grid) — решено оставить; варианты в docs/PROJECT_STATUS.md.
