@@ -5,7 +5,7 @@ import { DevClientRepository } from "../apps/mobile/src/features/clients/data/De
 import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParticipant } from
   "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 import type { SetValues, TrackingMetric, WorkoutSlot } from "../apps/mobile/src/features/training/execution/domain/ExecutionModel.ts";
-import { assertDropStructure, confirmationAfterSave, displayOrder, dropsForType, isSetComplete, matchPrevious, nextOutcome, previousPlainValues, previousSides,
+import { assertDropStructure, confirmationAfterSave, displayOrder, dropsForType, isSetComplete, matchPrevious, nextOutcome, currentMaxLoads, previousPlainValues, previousSides,
   endInstantAfter, instantFromLocal, localMinuteOfDay, sessionDurationSec, sidesAfterSave, toggleConfirmation, toggleSide, weekStatus, type SetContent } from
   "../apps/mobile/src/features/training/execution/domain/ExecutionRules.ts";
 import type { SaveSetInput } from "../apps/mobile/src/features/training/execution/domain/TrainingExecutionPort.ts";
@@ -603,4 +603,40 @@ test("«Пред.» по сторонам: подход без сторон (и�
   assert.deepEqual(previousPlainValues(plain), v(8, 50_000));
   assert.deepEqual(previousPlainValues(sided), v(10, 40_000), "двустороннему подходу — первая засчитанная сторона");
   assert.deepEqual(previousPlainValues({ ...sided, sides: { left: null, right: v(9, 45_000) } }), v(9, 45_000));
+});
+
+test("«Макс.» под упражнением: лучший подтверждённый рабочий вес клиента за всё время, без текущей тренировки (REST-FIX-7)", async () => {
+  const { clients, execution, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const b = await clients.create({ displayName: "SyntheticB" });
+    const slot = (clientId: string, weekIndex: number, plannedWorkoutId = "w1"): WorkoutSlot => ({ clientId, programId: "program-a", weekIndex, plannedWorkoutId });
+    const save = (target: WorkoutSlot, id: string, position: number, set: SetValues, setType: SetContent["setType"] = "NORMAL") =>
+      execution.saveSet({ ...bench(target, id, position, set, null), setType }, DAY1);
+    await save(slot(a.id, 1), "s1", 0, values(100_000, 8));
+    await save(slot(a.id, 1), "s2", 1, values(80_000, 6), "FAILURE");
+    await save(slot(a.id, 1), "s3", 2, values(200_000, 3), "WARMUP");
+    await save(slot(a.id, 1), "s4", 3, values(150_000, null));
+    await save(slot(a.id, 2, "w2"), "t1", 0, values(120_000, 5));
+    await save(slot(a.id, 3), "c1", 0, values(300_000, 1));
+    await save(slot(b.id, 1), "s1", 0, values(250_000, 1));
+    const max = await execution.getMaxLoads(slot(a.id, 3), [BENCH, "sys:repdb:other"]);
+    assert.deepEqual([...max], [[BENCH, 120_000]],
+      "120 кг; разминка 200, неполный 150, чужой клиент 250 и текущая тренировка 300 не входят; упражнения без веса в ответе нет");
+    assert.deepEqual([...await execution.getMaxLoads(slot(a.id, 2, "w2"), [BENCH])], [[BENCH, 300_000]], "своя тренировка (120 кг) исключается, остальные считаются");
+    assert.deepEqual([...await execution.getMaxLoads(slot(a.id, 1), [])], []);
+    const c = await clients.create({ displayName: "SyntheticC" });
+    await execution.saveSet({ ...bench(slot(c.id, 1), "u1", 0, values(null, null), null), sides: { left: values(70_000, 10), right: values(65_000, 10) } }, DAY1);
+    assert.deepEqual([...await execution.getMaxLoads(slot(c.id, 2), [BENCH])], [[BENCH, 70_000]], "у одностороннего — лучшая засчитанная сторона");
+  } finally { await close(); }
+});
+
+test("«Макс.» открытой тренировки: подтверждённые обычные и отказные подходы и стороны, разминка и дроп не входят (REST-FIX-7)", () => {
+  const fact = (exerciseId: string, setType: SetContent["setType"], load: number | null, confirmed: boolean) => ({ exerciseId, setType, confirmed,
+    values: values(load, 5), sides: null }) as never;
+  const sided = { exerciseId: "e2", setType: "NORMAL", confirmed: true, values: values(null, null),
+    sides: { left: { confirmed: true, values: values(40_000, 8) }, right: { confirmed: false, values: values(90_000, 8) } } } as never;
+  const max = currentMaxLoads([fact("e1", "NORMAL", 60_000, true), fact("e1", "FAILURE", 70_000, true), fact("e1", "WARMUP", 99_000, true),
+    fact("e1", "DROP", 95_000, true), fact("e1", "NORMAL", 80_000, false), sided]);
+  assert.deepEqual([...max].sort(), [["e1", 70_000], ["e2", 40_000]]);
 });

@@ -25,7 +25,7 @@ import { weekTypeTone, DiaryEditDialog, formatDuration, formatRange, supersetNum
 import { type ActiveWorkoutsPort, type SessionStatus, type SetFact, type SetType, type SetValues, type Side, type TrackingMetric,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
 import type { CalendarOutcomeEffect } from "../domain/WorkoutOutcomePort.ts";
-import { displayOrder, endInstantAfter, instantFromLocal, localDateOf, localMinuteOfDay, nextOutcome } from "../domain/ExecutionRules.ts";
+import { currentMaxLoads, displayOrder, endInstantAfter, instantFromLocal, localDateOf, localMinuteOfDay, nextOutcome } from "../domain/ExecutionRules.ts";
 import { timeText } from "../../../../shared/format/clockText.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
@@ -145,6 +145,23 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     setNotice(effect.kind === "MARKED" ? `Запись на ${time} в календаре отмечена проведённой.` : `Отметка «проведена» у записи на ${time} в календаре снята.`);
   }, []);
   const diary = useWorkoutDiary(slot, plans, execution, metricsOf, unilateralOf, startRest, calendarEffect);
+  // «Макс.» под упражнением: лучший вес клиента за всё время в прошлых занятиях (один запрос на открытие тренировки),
+  // плюс подходы открытой тренировки из состояния дневника — ввод запросов не добавляет.
+  const exerciseIdsKey = diary.workout?.exercises.map((item) => item.exerciseId).join("|") ?? "";
+  const maxKey = `${slot.clientId}|${slot.programId}|${slot.weekIndex}|${slot.plannedWorkoutId}|${exerciseIdsKey}`;
+  const [pastMax, setPastMax] = useState<Readonly<{ key: string; loads: ReadonlyMap<string, number> }> | null>(null);
+  useEffect(() => {
+    if (exerciseIdsKey === "") return undefined;
+    let active = true;
+    execution.getMaxLoads({ clientId: slot.clientId, programId: slot.programId, weekIndex: slot.weekIndex, plannedWorkoutId: slot.plannedWorkoutId },
+      exerciseIdsKey.split("|")).then((loads) => { if (active) setPastMax({ key: maxKey, loads }); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [execution, maxKey, exerciseIdsKey, slot.clientId, slot.programId, slot.weekIndex, slot.plannedWorkoutId]);
+  const openMax = useMemo(() => currentMaxLoads(diary.state?.facts.values() ?? []), [diary.state]);
+  const maxLoadText = (exerciseId: string): string | null => {
+    const grams = Math.max(pastMax?.key === maxKey ? pastMax.loads.get(exerciseId) ?? -1 : -1, openMax.get(exerciseId) ?? -1);
+    return grams < 0 ? null : `Макс. ${String(grams / 1000).replace(".", ",")} кг`;
+  };
   useEffect(() => {
     if (diary.loadFailed) { navigationPerformance.finish("workout", false); return undefined; }
     if (diary.switching || diary.workout === undefined || diary.state === null || lookup === null) return undefined;
@@ -599,6 +616,10 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                   {exercise.rir !== null ? (
                     <Text accessibilityLabel={`Плановый RIR ${formatRange(exercise.rir)}`}
                       style={[styles.restText, { color: colors.textSecondary }]}>{`RIR ${formatRange(exercise.rir)}`}</Text>
+                  ) : null}
+                  {maxLoadText(exercise.exerciseId) !== null ? (
+                    <Text accessibilityLabel={`Максимальный вес за всё время: ${maxLoadText(exercise.exerciseId)!.slice(6)}`}
+                      style={[styles.restText, { color: colors.textSecondary }]}>{maxLoadText(exercise.exerciseId)}</Text>
                   ) : null}
                   <Text accessibilityLabel={`Объём ${kg(volumeOf(exercise.id))}, выполнено ${done} из ${rows.length}`}
                     style={[styles.restText, styles.cardVolume, { color: colors.textSecondary }]}>

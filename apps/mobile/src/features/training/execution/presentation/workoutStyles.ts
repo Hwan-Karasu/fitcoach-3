@@ -38,7 +38,7 @@ export const styles = StyleSheet.create({
   thumb: { width: 40, height: 40, borderRadius: 12 },
   exerciseText: { flex: 1, gap: 0 },
   exercise: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
-  subRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  subRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 10 },
   rest: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", minHeight: 28 },
   restText: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
   block: { borderRadius: 12, paddingVertical: 3, paddingHorizontal: 4, gap: 4 },

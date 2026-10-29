@@ -1,5 +1,5 @@
 import { isLocalDate } from "../../../../shared/domain/LocalDate.ts";
-import { DROPS_MAX, EMPTY_VALUES, type ConfirmationMode, type PreviousSet, type SetType, type SetValues, type TrackingMetric,
+import { DROPS_MAX, EMPTY_VALUES, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type TrackingMetric,
   type WeekStatus, type WorkoutOutcome, type WorkoutStatus } from "./ExecutionModel.ts";
 
 /** Поле факта подхода, которое заполняет величина профиля (§33.2). */
@@ -268,6 +268,24 @@ export function previousSides(previous: PreviousSet): Readonly<{ left: SetValues
 /** «Пред.» для обычного (двустороннего) подхода: прошлый односторонний подход даёт значения первой засчитанной стороны. */
 export function previousPlainValues(previous: PreviousSet): SetValues {
   return previous.sides === null ? previous.values : previous.sides.left ?? previous.sides.right ?? previous.values;
+}
+
+/**
+ * Лучший вес (граммы) по упражнениям каталога среди фактов открытой тренировки — для строки «Макс.», пока подходы вводятся:
+ * те же подходы, что в `getMaxLoads` (подтверждённые обычные и отказные; у односторонних — подтверждённые стороны).
+ */
+export function currentMaxLoads(facts: Iterable<SetFact>): ReadonlyMap<string, number> {
+  const best = new Map<string, number>();
+  const take = (exerciseId: string, grams: number | null) => {
+    if (grams !== null && grams > (best.get(exerciseId) ?? -1)) best.set(exerciseId, grams);
+  };
+  for (const fact of facts) {
+    if (fact.setType !== "NORMAL" && fact.setType !== "FAILURE") continue;
+    if (fact.sides !== null) {
+      for (const side of [fact.sides.left, fact.sides.right]) if (side.confirmed) take(fact.exerciseId, side.values.loadGrams);
+    } else if (fact.confirmed) take(fact.exerciseId, fact.values.loadGrams);
+  }
+  return best;
 }
 
 /** Локальная календарная дата `YYYY-MM-DD` (§48.84 п. 1). */
