@@ -147,8 +147,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const diary = useWorkoutDiary(slot, plans, execution, metricsOf, unilateralOf, startRest, calendarEffect);
   // «Макс.» под упражнением — рекорд веса клиента по упражнению за всё время (как «тяжелее всего» в истории упражнения): от недели и
   // тренировки не зависит, поэтому ключ — клиент и упражнения показанной тренировки; при смене недели с теми же упражнениями запроса нет.
-  // Запись дневника сбрасывает кэш без перезапроса на каждый подход: рекорд перечитывается при следующей смене недели или возврате на
-  // экран, а до тех пор рост веса виден из подходов открытой тренировки (`currentMaxLoads`).
+  // Запись дневника сбрасывает кэш и через короткую паузу (быстрый ввод — один запрос) перечитывает рекорд: он сразу и растёт, и
+  // снижается (завышенный по ошибке вес исправлен — рекорд исправлен). Запрос один агрегирующий, по индексу упражнения.
   const maxClientId = diary.displayedSlot.clientId;
   const exerciseIdsKey = [...new Set(diary.workout?.exercises.map((item) => item.exerciseId) ?? [])].sort().join("|");
   const maxKey = `${maxClientId}|${exerciseIdsKey}`;
@@ -161,9 +161,16 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     if (focused && !wasFocused.current) { maxCache.clear(); setMaxVersion((value) => value + 1); }
     wasFocused.current = focused;
   }, [focused, maxCache]);
-  useEffect(() => execution.subscribeCommittedChanges((change) => {
-    if (change.clientId === maxClientId) maxCache.clear();
-  }), [execution, maxCache, maxClientId]);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const off = execution.subscribeCommittedChanges((change) => {
+      if (change.clientId !== maxClientId) return;
+      maxCache.clear();
+      if (timer !== null) clearTimeout(timer);
+      timer = setTimeout(() => { timer = null; setMaxVersion((value) => value + 1); }, 250);
+    });
+    return () => { off(); if (timer !== null) clearTimeout(timer); };
+  }, [execution, maxCache, maxClientId]);
   const weekKey = `${diary.displayedSlot.programId}|${diary.displayedSlot.weekIndex}|${diary.displayedSlot.plannedWorkoutId}`;
   useEffect(() => {
     if (exerciseIdsKey === "") return undefined;
