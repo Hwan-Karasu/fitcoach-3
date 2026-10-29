@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Archive, CalendarDays, ChevronLeft, ChevronRight, Dumbbell, Ellipsis, House, Users, Utensils, type LucideIcon } from "lucide-react-native";
 import { useBottomBarLayout, useTabBarSlots } from "../../shared/ui/components/public.ts";
-import { focusedLeafKey } from "./focusedLeafKey.ts";
+import { focusedLeaf } from "./focusedLeafKey.ts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
@@ -27,7 +27,8 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
   const insets = useSafeAreaInsets();
   const onBarLayout = useBottomBarLayout();
   // Что положил в панель экран, который сейчас в фокусе (стрелки недель, строка переключателя): выбор — по состоянию навигации.
-  const { weeks, dock } = useTabBarSlots(focusedLeafKey(state));
+  const leaf = focusedLeaf(state);
+  const { weeks, dock } = useTabBarSlots(leaf.key, leaf.settled);
   // Со строкой экрана панель остаётся той же высоты: кнопки вкладок ужимаются и освобождают под неё место.
   const compact = dock !== null && dock !== undefined;
   const showClientsShortcut = navigationAppearance.showClientListShortcut && !state.routes.some((route) => route.name === "Clients");

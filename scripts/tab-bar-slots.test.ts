@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { focusedLeafKey } from "../apps/mobile/src/app/navigation/focusedLeafKey.ts";
-import { createSlotStore, PENDING, resolveSlot } from "../apps/mobile/src/shared/ui/components/slotStore.ts";
+import { focusedLeaf, focusedLeafKey } from "../apps/mobile/src/app/navigation/focusedLeafKey.ts";
+import { createSlotStore, FOCUSED_OWNER, PENDING, resolveSlot, slotOwnerKey } from "../apps/mobile/src/shared/ui/components/slotStore.ts";
 
 // Нижняя панель навигации: какой экран сейчас в фокусе и что он положил в панель (стрелки недель, строка переключателя).
 
@@ -90,4 +90,34 @@ test("слот готов: показывается его значение; я�
 
 test("слот не объявлен: экран ничего в панель не кладёт — прежнее не тянется за ним", () => {
   assert.equal(resolveSlot<string>(undefined, "стрелки программы"), undefined);
+});
+
+// ADR-056: переход по таймеру открывает клиента со стеком из params.state; React Navigation не сообщает такое начальное состояние
+// родителю до первого действия навигации — у вкладки «Тренировки» в состоянии вкладок нет state, только params.state.
+const timerOpenedTabs = {
+  index: 1,
+  routes: [
+    { key: "home-1" },
+    { key: "training-tab", params: { state: { routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram" }, { name: "TrainingWorkout" }] } } },
+  ],
+};
+
+test("ADR-056 focusedLeaf: стек открыт по таймеру и ещё не сообщил состояние — экран в фокусе неизвестен (settled: false)", () => {
+  assert.deepEqual(focusedLeaf(timerOpenedTabs), { key: "training-tab", settled: false });
+  const settled = { index: 1, routes: [{ key: "home-1" }, { key: "training-tab", state: { index: 2, routes: [{ key: "i" }, { key: "p" }, { key: "workout-1" }] } }] };
+  assert.deepEqual(focusedLeaf(settled), { key: "workout-1", settled: true }, "после первого действия навигации — как обычно");
+  assert.deepEqual(focusedLeaf({ index: 0, routes: [{ key: "client", state: timerOpenedTabs }] }), { key: "training-tab", settled: false },
+    "вложенность в два уровня");
+  assert.deepEqual(focusedLeaf({ routes: [{ key: "plain", params: { clientId: "c1" } }] }), { key: "plain", settled: true },
+    "обычные параметры — не вложенное состояние");
+});
+
+test("ADR-056 slotOwnerKey: пока состояние не дошло до панели — записи экрана, отметившего фокус; иначе — по состоянию", () => {
+  assert.equal(slotOwnerKey({ key: "training-tab", settled: false }, "workout-1"), "workout-1", "строка участников и стрелки дневника видны");
+  assert.equal(slotOwnerKey({ key: "workout-2", settled: true }, "workout-1"), "workout-2", "обычный случай — только состояние навигации");
+  assert.equal(slotOwnerKey({ key: "training-tab", settled: false }, undefined), "training-tab", "без отметки — прежний ключ");
+  const store = createSlotStore<string>();
+  store.set(FOCUSED_OWNER, "workout-1");
+  if (store.get(FOCUSED_OWNER) === "program-1") store.remove(FOCUSED_OWNER);
+  assert.equal(store.get(FOCUSED_OWNER), "workout-1", "размонтирование чужого экрана не снимает отметку текущего");
 });

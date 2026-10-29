@@ -1,6 +1,6 @@
 import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { useRoute } from "@react-navigation/native";
-import { createSlotStore, PENDING, resolveSlot, type SlotStore } from "./slotStore.ts";
+import { useIsFocused, useRoute } from "@react-navigation/native";
+import { createSlotStore, FOCUSED_OWNER, PENDING, resolveSlot, slotOwnerKey, type SlotStore } from "./slotStore.ts";
 
 export interface WeekNavigationState {
   readonly week: number;
@@ -13,10 +13,26 @@ interface Slots {
   readonly weeks: SlotStore<WeekNavigationState | null | typeof PENDING>;
   /** Строка над кнопками вкладок (переключатель участников). */
   readonly dock: SlotStore<ReactNode | typeof PENDING>;
+  /** Экран, который сам отметил свой фокус (`FOCUSED_OWNER` → `route.key`): нужен, пока состояние навигации его ещё не знает. */
+  readonly owner: SlotStore<string>;
 }
 
 const SlotsContext = createContext<Slots | null>(null);
-const NO_SLOTS: Slots = { weeks: createSlotStore(), dock: createSlotStore() };
+const NO_SLOTS: Slots = { weeks: createSlotStore(), dock: createSlotStore(), owner: createSlotStore() };
+
+/**
+ * Экран, пишущий в панель, отмечает себя, пока он в фокусе (`useIsFocused` считается по его собственному стеку, поэтому верен и до того,
+ * как родительский навигатор узнал состояние стека). Отметку снимает только её владелец.
+ */
+function useFocusedOwner(slots: Slots | null, key: string) {
+  const focused = useIsFocused();
+  useLayoutEffect(() => {
+    if (slots !== null && focused) slots.owner.set(FOCUSED_OWNER, key);
+  }, [slots, key, focused]);
+  useLayoutEffect(() => () => {
+    if (slots?.owner.get(FOCUSED_OWNER) === key) slots.owner.remove(FOCUSED_OWNER);
+  }, [slots, key]);
+}
 
 /**
  * Нижняя плавающая панель и экраны — разные ветки дерева. Экран кладёт в хранилище своё содержимое для панели (стрелки недель,
@@ -25,7 +41,7 @@ const NO_SLOTS: Slots = { weeks: createSlotStore(), dock: createSlotStore() };
  * обновлением: нет кадра, в котором прежний экран уже всё убрал, а новый ещё не поставил (кнопки не меняют размер).
  */
 export function TabBarSlotsProvider({ children }: Readonly<{ children: ReactNode }>) {
-  const slots = useMemo<Slots>(() => ({ weeks: createSlotStore(), dock: createSlotStore() }), []);
+  const slots = useMemo<Slots>(() => ({ weeks: createSlotStore(), dock: createSlotStore(), owner: createSlotStore() }), []);
   return <SlotsContext.Provider value={slots}>{children}</SlotsContext.Provider>;
 }
 
@@ -36,10 +52,13 @@ export function TabBarSlotsProvider({ children }: Readonly<{ children: ReactNode
  * Новый ключ без записи в первом проходе — «экран ещё не успел объявить» (его эффекты идут после отрисовки панели в том же
  * коммите), а не «экран ничего не кладёт»: панель держит прежнее и принимает «записей нет» только после этих эффектов.
  */
-export function useTabBarSlots(key: string | undefined): Readonly<{ weeks: WeekNavigationState | undefined; dock: ReactNode }> {
+export function useTabBarSlots(leafKey: string | undefined, settled = true): Readonly<{ weeks: WeekNavigationState | undefined; dock: ReactNode }> {
   const slots = useContext(SlotsContext) ?? NO_SLOTS;
   useSyncExternalStore(slots.weeks.subscribe, slots.weeks.getSnapshot, slots.weeks.getSnapshot);
   useSyncExternalStore(slots.dock.subscribe, slots.dock.getSnapshot, slots.dock.getSnapshot);
+  useSyncExternalStore(slots.owner.subscribe, slots.owner.getSnapshot, slots.owner.getSnapshot);
+  // ADR-056: стек открыт с готовым состоянием (таймер) и ещё не сообщил его родителю — берётся экран, отметивший свой фокус.
+  const key = slotOwnerKey({ key: leafKey, settled }, slots.owner.get(FOCUSED_OWNER));
   const [trustedKey, setTrustedKey] = useState(key);
   useLayoutEffect(() => { if (trustedKey !== key) setTrustedKey(key); });
   const shown = useRef<{ weeks: WeekNavigationState | undefined; dock: ReactNode }>({ weeks: undefined, dock: undefined });
@@ -57,6 +76,7 @@ export function useTabBarSlots(key: string | undefined): Readonly<{ weeks: WeekN
 export function TabBarPending({ weeks = false, dock = false }: Readonly<{ weeks?: boolean; dock?: boolean }>) {
   const slots = useContext(SlotsContext);
   const key = useRoute().key;
+  useFocusedOwner(slots, key);
   useLayoutEffect(() => {
     if (slots === null) return;
     if (weeks && slots.weeks.get(key) === undefined) slots.weeks.set(key, PENDING);
@@ -74,6 +94,7 @@ export function TabBarPending({ weeks = false, dock = false }: Readonly<{ weeks?
 export function useWeekNavigation(state: WeekNavigationState | null, ready = true) {
   const slots = useContext(SlotsContext);
   const key = useRoute().key;
+  useFocusedOwner(slots, key);
   // Действия экрана — новые функции на каждом рендере; в панель уходят постоянные обёртки,
   // а перезапись — только при смене недели, доступности стрелок или занятости.
   const actions = useRef(state);
@@ -100,6 +121,7 @@ export function useWeekNavigation(state: WeekNavigationState | null, ready = tru
 export function TabBarDock({ children, pending = false }: Readonly<{ children: ReactNode; pending?: boolean }>) {
   const slots = useContext(SlotsContext);
   const key = useRoute().key;
+  useFocusedOwner(slots, key);
   useLayoutEffect(() => {
     slots?.dock.set(key, pending ? PENDING : children ?? null);
   });

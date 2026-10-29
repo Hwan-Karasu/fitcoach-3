@@ -34,3 +34,15 @@ export function resolveSlot<T>(raw: T | null | typeof PENDING | undefined, previ
   if (raw === PENDING) return previous;
   return raw ?? undefined;
 }
+
+/** Ключ записи «экран, который сам отметил свой фокус» в хранилище владельца. */
+export const FOCUSED_OWNER = "focused";
+
+/**
+ * Чьи записи показывать (ADR-056). Состояние навигации знает экран в фокусе (`settled`) — его ключ, как всегда. Не знает: вложенный стек
+ * открыт с готовым состоянием из параметров (переход по таймеру) и ещё не сообщил его родителю — тогда экран, который сам отметил свой
+ * фокус; без отметки — прежний ключ.
+ */
+export function slotOwnerKey(leaf: Readonly<{ key: string | undefined; settled: boolean }>, owner: string | undefined): string | undefined {
+  return leaf.settled ? leaf.key : owner ?? leaf.key;
+}
