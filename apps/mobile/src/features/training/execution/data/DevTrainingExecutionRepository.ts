@@ -6,8 +6,8 @@ import type { WriterCoordinator } from "../../../../shared/db/WriterCoordinator.
 import { DEFAULT_CONFIRMATION_MODE, NOTE_MAX, SET_TYPES, type ActiveWorkout, type ConfirmationMode, type PreviousQuery, type PreviousSet,
   type SessionStatus, type SetFact, type SetType, type SetValues, type WorkoutExecution, type WorkoutOutcome,
   type WorkoutSession, type WorkoutSlot } from "../domain/ExecutionModel.ts";
-import { assertDropStructure, confirmationAfterSave, isInstant, isLocalDate, localDateOf, matchPrevious, sidesAfterSave, toggleConfirmation,
-  toggleSide, validateContent, validateSides, workoutStatus, type ConfirmationChange, type SetContent,
+import { assertDropStructure, confirmationAfterSave, confirmationTo, isInstant, isLocalDate, localDateOf, matchPrevious, sideTo, sidesAfterSave,
+  validateContent, validateSides, workoutStatus, type ConfirmationChange, type SetContent,
   type SidesChange } from "../domain/ExecutionRules.ts";
 import type { SaveSetInput, SetIdentity, SetSaveResult, TrainingExecutionCommittedChange,
   TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
@@ -522,7 +522,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     return result;
   }
 
-  async toggleSetConfirmation(identity: SetIdentity, now: Date = new Date(), side?: "L" | "R"): Promise<SetSaveResult> {
+  async setSetConfirmation(identity: SetIdentity, confirmed: boolean, now: Date = new Date(), side?: "L" | "R"): Promise<SetSaveResult> {
     assertIdentity(identity);
     const result = await this.ready().writer.write(async (tx) => {
       const session = await this.sessionOf(tx, identity.slot);
@@ -532,12 +532,12 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
         const content: SetContent = { setType: row.setType, values: valuesOf(row), drops };
         if (row.sided !== 1) {
           return { content, rpe: row.rpe, sides: null,
-            change: toggleConfirmation(row.confirmedAt !== null, content, identity.metrics) };
+            change: confirmationTo(row.confirmedAt !== null, confirmed, content, identity.metrics) };
         }
         if (side === undefined) throw new Error("INVALID_METRIC");
         const pair = { left: stored.L === undefined ? EMPTY_SIDE : valuesOf(stored.L),
           right: stored.R === undefined ? EMPTY_SIDE : valuesOf(stored.R) };
-        const change = toggleSide({ left: stored.L?.confirmedAt != null, right: stored.R?.confirmedAt != null }, pair, side,
+        const change = sideTo({ left: stored.L?.confirmedAt != null, right: stored.R?.confirmedAt != null }, pair, side, confirmed,
           identity.metrics);
         return { content, rpe: row.rpe, sides: { pair, change }, change: mergeSides(change) };
       });

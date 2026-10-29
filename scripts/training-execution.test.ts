@@ -6,7 +6,7 @@ import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParti
   "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 import type { SetValues, TrackingMetric, WorkoutSlot } from "../apps/mobile/src/features/training/execution/domain/ExecutionModel.ts";
 import { assertDropStructure, confirmationAfterSave, displayOrder, dropsForType, isSetComplete, matchPrevious, nextOutcome, currentMaxLoads, previousPlainValues, previousSides,
-  endInstantAfter, instantFromLocal, localMinuteOfDay, sessionDurationSec, sidesAfterSave, toggleConfirmation, toggleSide, weekStatus, type SetContent } from
+  endInstantAfter, instantFromLocal, localMinuteOfDay, sessionDurationSec, sidesAfterSave, confirmationTo, sideTo, weekStatus, type SetContent } from
   "../apps/mobile/src/features/training/execution/domain/ExecutionRules.ts";
 import type { SaveSetInput } from "../apps/mobile/src/features/training/execution/domain/TrainingExecutionPort.ts";
 import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
@@ -50,9 +50,13 @@ test("T03 правила подтверждения: авто по полным 
     "0 кг — заполненное значение");
   assert.deepEqual(confirmationAfterSave("MANUAL", false, plain(values(100_000, 8)), LOAD_REPS), { confirmed: false, confirmedNow: false });
   assert.deepEqual(confirmationAfterSave("MANUAL", true, plain(values(100_000, null)), LOAD_REPS), { confirmed: false, confirmedNow: false });
-  assert.deepEqual(toggleConfirmation(false, plain(values(100_000, 8)), LOAD_REPS), { confirmed: true, confirmedNow: true });
-  assert.deepEqual(toggleConfirmation(true, plain(values(100_000, 8)), LOAD_REPS), { confirmed: false, confirmedNow: false });
-  assert.throws(() => toggleConfirmation(false, plain(values(100_000, null)), LOAD_REPS), message("INVALID_METRIC"));
+  assert.deepEqual(confirmationTo(false, true, plain(values(100_000, 8)), LOAD_REPS), { confirmed: true, confirmedNow: true });
+  assert.deepEqual(confirmationTo(true, false, plain(values(100_000, 8)), LOAD_REPS), { confirmed: false, confirmedNow: false });
+  assert.deepEqual(confirmationTo(true, true, plain(values(100_000, 8)), LOAD_REPS), { confirmed: true, confirmedNow: false },
+    "повторное «отметить» не снимает отметку и не запускает таймер второй раз");
+  assert.deepEqual(confirmationTo(false, false, plain(values(100_000, null)), LOAD_REPS), { confirmed: false, confirmedNow: false },
+    "повторное «снять» у неотмеченного — ничего");
+  assert.throws(() => confirmationTo(false, true, plain(values(100_000, null)), LOAD_REPS), message("INVALID_METRIC"));
   assert.equal(nextOutcome("COMPLETED", "COMPLETED"), null, "повторное нажатие снимает исход");
   assert.equal(nextOutcome("MISSED", "COMPLETED"), "COMPLETED");
 });
@@ -112,14 +116,18 @@ test("T03 ручной режим: значения не подтверждаю�
     const filled = await execution.saveSet(bench(slot, "s1", 0, values(100_000, 8), null), DAY1);
     assert.equal(filled.fact.confirmed, false);
     const identity = { ...bench(slot, "s1", 0, values(null, null), filled.fact.revision) };
-    const checked = await execution.toggleSetConfirmation(identity, DAY1);
+    const checked = await execution.setSetConfirmation(identity, true, DAY1);
     assert.equal(checked.confirmedNow, true);
-    const unchecked = await execution.toggleSetConfirmation({ ...identity, expectedRevision: checked.fact.revision }, DAY1);
+    // Второе нажатие, пока первое писалось: та же команда «отметить» со свежей ревизией — отметка остаётся, таймер не перезапускается.
+    const again = await execution.setSetConfirmation({ ...identity, expectedRevision: checked.fact.revision }, true, DAY1);
+    assert.deepEqual([again.fact.confirmed, again.confirmedNow], [true, false]);
+    const unchecked = await execution.setSetConfirmation({ ...identity, expectedRevision: again.fact.revision }, false, DAY1);
     assert.equal(unchecked.fact.confirmed, false);
     assert.equal(unchecked.fact.id, filled.fact.id, "снятие галочки не создаёт и не удаляет подход");
+    assert.equal((await execution.getWorkout(slot)).facts.get("s1")?.confirmed, false, "после перечитывания — то же состояние");
     const partial = await execution.saveSet(bench(slot, "s2", 1, values(100_000, null), null), DAY1);
-    await assert.rejects(execution.toggleSetConfirmation({ ...identity, plannedSetId: "s2", position: 1,
-      expectedRevision: partial.fact.revision }, DAY1), message("INVALID_METRIC"));
+    await assert.rejects(execution.setSetConfirmation({ ...identity, plannedSetId: "s2", position: 1,
+      expectedRevision: partial.fact.revision }, true, DAY1), message("INVALID_METRIC"));
     await execution.setConfirmationMode("AUTO");
     assert.equal((await execution.getWorkout(slot)).facts.get("s1")?.confirmed, false,
       "смена режима не подтверждает подготовленные подходы");
@@ -337,9 +345,11 @@ test("T03 стороны — правила: каждая засчитывает
   const manual = sidesAfterSave("MANUAL", { left: false, right: false }, { left: values(10_000, 8), right: values(12_000, 10) },
     LOAD_REPS);
   assert.equal(manual.left.confirmed || manual.right.confirmed, false, "в ручном режиме цифры не засчитывают");
-  const toggled = toggleSide({ left: false, right: false }, { left: values(10_000, 8), right: values(12_000, 10) }, "R", LOAD_REPS);
+  const toggled = sideTo({ left: false, right: false }, { left: values(10_000, 8), right: values(12_000, 10) }, "R", true, LOAD_REPS);
   assert.deepEqual(toggled, { left: { confirmed: false, confirmedNow: false }, right: { confirmed: true, confirmedNow: true } });
-  assert.throws(() => toggleSide({ left: false, right: false }, { left: values(10_000, null), right: EMPTY }, "L", LOAD_REPS),
+  assert.deepEqual(sideTo({ left: false, right: true }, { left: values(10_000, 8), right: values(12_000, 10) }, "R", true, LOAD_REPS),
+    { left: { confirmed: false, confirmedNow: false }, right: { confirmed: true, confirmedNow: false } }, "повтор стороны — без изменений");
+  assert.throws(() => sideTo({ left: false, right: false }, { left: values(10_000, null), right: EMPTY }, "L", true, LOAD_REPS),
     message("INVALID_METRIC"));
 });
 
@@ -377,7 +387,7 @@ test("T03 стороны в хранилище: один подход с дву�
     const typed = await execution.saveSet(sided(w3, values(10_000, 8), values(12_000, 10), null), DAY2);
     assert.equal(typed.fact.confirmed, false);
     const identity = { ...bench(w3, "s1", 0, EMPTY, typed.fact.revision) };
-    const right = await execution.toggleSetConfirmation(identity, DAY2, "R");
+    const right = await execution.setSetConfirmation(identity, true, DAY2, "R");
     assert.deepEqual([right.fact.sides?.left.confirmed, right.fact.sides?.right.confirmed, right.fact.confirmed], [false, true, true]);
   } finally { await close(); }
 });
@@ -523,8 +533,8 @@ test("PC §48.86.13 время занятия не создаётся из пр�
     await execution.setConfirmationMode("MANUAL");
     const typed = await execution.saveSet(bench(w2, "s1", 0, values(100_000, 8), null), DAY1);
     assert.equal(typed.session.startedAt, null, "в ручном режиме значения без галочки тренировку не начинают");
-    const toggled = await execution.toggleSetConfirmation({ slot: w2, plannedExerciseId: "pe-bench", exerciseId: BENCH, plannedSetId: "s1",
-      position: 0, metrics: LOAD_REPS, expectedRevision: typed.fact.revision }, new Date("2026-10-20T10:40:00.000Z"));
+    const toggled = await execution.setSetConfirmation({ slot: w2, plannedExerciseId: "pe-bench", exerciseId: BENCH, plannedSetId: "s1",
+      position: 0, metrics: LOAD_REPS, expectedRevision: typed.fact.revision }, true, new Date("2026-10-20T10:40:00.000Z"));
     assert.equal(toggled.session.startedAt, "2026-10-20T10:40:00.000Z", "галочка — первое подтверждение");
   } finally { await close(); }
 });

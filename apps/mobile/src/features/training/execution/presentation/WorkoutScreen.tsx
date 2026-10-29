@@ -131,14 +131,17 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const lookup = lookupState.lookup;
   const metricsOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.metrics ?? null, [lookup]);
   // §48.56: таймер упражнения со своей длительностью; выключенный в плане — не запускается.
+  const [notice, setNotice] = useState<string | null>(null);
+  const [restFailed, setRestFailed] = useState(false);
+  // Подход к этому моменту уже записан: сбой таймера его не отменяет, но и не проходит молча.
   const startRest = useCallback((exercise: PlannedExercise) => {
     if (exercise.restSec === null) return;
     void restTimers.start({ clientId: slot.clientId, clientName, exerciseKey: exercise.id,
       exerciseName: lookup?.get(exercise.exerciseId)?.name ?? "Упражнение", durationSec: exercise.restSec,
-      programId: slot.programId, weekIndex: slot.weekIndex, plannedWorkoutId: slot.plannedWorkoutId }).catch(() => undefined);
+      programId: slot.programId, weekIndex: slot.weekIndex, plannedWorkoutId: slot.plannedWorkoutId })
+      .then(() => setRestFailed(false), () => setRestFailed(true));
   }, [clientName, lookup, restTimers, slot.clientId, slot.programId, slot.weekIndex, slot.plannedWorkoutId]);
   const unilateralOf = useCallback((exerciseId: string) => lookup?.get(exerciseId)?.unilateral === true, [lookup]);
-  const [notice, setNotice] = useState<string | null>(null);
   // ADR-048: подсказка о записи календаря, отмеченной или снятой исходом тренировки.
   const calendarEffect = useCallback((effect: CalendarOutcomeEffect) => {
     const time = `${String(Math.floor(effect.startMinute / 60)).padStart(2, "0")}:${String(effect.startMinute % 60).padStart(2, "0")}`;
@@ -207,7 +210,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const [busy, setBusy] = useState(false);
   const changingWeek = useRef(false);
   const [restFor, setRestFor] = useState<PlannedExercise | null>(null);
-  const { saveSet, toggleSet, setOutcome, addWarmup, removeWarmup } = diary;
+  const { saveSet, confirmSet, setOutcome, addWarmup, removeWarmup } = diary;
   const [removeWarm, setRemoveWarm] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const activeSheet = useRef<BottomSheetModal>(null);
@@ -284,6 +287,14 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   };
 
   const flushPending = useCallback(() => pending.flushAll(), [pending]);
+  // Перечитывание этой же тренировки (чужое изменение, ошибка записи) на миг закрывает ввод. Отложенная запись ячейки, пришедшая
+  // в это время, не принимается — значение остаётся на экране «грязным»; после загрузки оно дописывается само, без повторного ввода.
+  // Только ячейки показанного слота: значения другой недели в эту не попадают.
+  const wasSwitching = useRef(diary.switching);
+  useEffect(() => {
+    if (wasSwitching.current && !diary.switching && pending.dirty) void pending.flushPrefix(`${diary.displayedKey}|`);
+    wasSwitching.current = diary.switching;
+  }, [diary.switching, diary.displayedKey, pending]);
   const finishInput = useCallback(async () => {
     const endFlush = navigationPerformance.phase("flush");
     let inputsSaved: boolean;
@@ -351,14 +362,15 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     next: nextWeek ? () => { void changeWeek(nextWeek.index); } : null }, navigationLoaded);
 
   const saveSetRef = useRef(saveSet); saveSetRef.current = saveSet;
-  const toggleSetRef = useRef(toggleSet); toggleSetRef.current = toggleSet;
+  const confirmSetRef = useRef(confirmSet); confirmSetRef.current = confirmSet;
   const scopeRef = useRef(diary.displayedKey); scopeRef.current = diary.displayedKey;
   const onSave = useCallback((item: SetTarget, patch: SetPatch) =>
     saveSetRef.current(item.exercise, item.set, item.position, patch), []);
-  // Перед отметкой дописываются только ячейки этого подхода: ошибка в другом подходе её не блокирует.
-  const onToggle = useCallback((item: SetTarget, side?: Side) => {
+  // Перед отметкой дописываются только ячейки этого подхода: ошибка в другом подходе её не блокирует. `confirmed` — состояние,
+  // которое показывала галочка в момент нажатия: двойное нажатие не снимает отметку.
+  const onToggle = useCallback((item: SetTarget, confirmed: boolean, side?: Side) => {
     void pending.flushPrefix(`${scopeRef.current}|${item.set.id}:`).then((saved) => {
-      if (saved) { setNavigationError(null); void toggleSetRef.current(item.exercise, item.set, item.position, side); return; }
+      if (saved) { setNavigationError(null); void confirmSetRef.current(item.exercise, item.set, item.position, confirmed, side); return; }
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
       setNavigationError("В этом подходе неверное значение — исправьте подсвеченную ячейку и отметьте снова.");
     });
@@ -422,6 +434,9 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     );
   }
   const { workout, state, previous, mode } = diary;
+  /** Какие отметки подхода сейчас пишутся: строка-примитив, чтобы memo строки не сбивался. */
+  const confirmingOf = (setId: string) => (["", ":L", ":R"] as const).filter((side) => diary.confirming.has(`${setId}${side}`))
+    .map((side) => side === "" ? "S" : side.slice(1)).join("");
   const targetFact = target === null ? undefined : state.facts.get(target.set.id);
   const volumeOf = (exerciseId: string) => [...state.facts.values()].filter((fact) => fact.plannedExerciseId === exerciseId)
     .reduce((sum, fact) => sum + factVolume(fact), 0);
@@ -575,6 +590,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         {diary.message !== null ? <InlineNotice kind="error">{diary.message}</InlineNotice> : null}
         {navigationError !== null ? <InlineNotice kind="error">{navigationError}</InlineNotice> : null}
         {notice !== null ? <InlineNotice kind="success">{notice}</InlineNotice> : null}
+        {restFailed ? <InlineNotice kind="warning">Подход сохранён, но таймер отдыха не запустился.</InlineNotice> : null}
         {ordering !== null ? <>
           <Text style={[styles.meta, { color: colors.textSecondary }]}>Перетащите упражнения за ручку, затем «Готово».</Text>
           <Sortable.Grid data={[...ordering]} keyExtractor={(id) => id} columns={1} rowGap={8} customHandle activeItemScale={1.03}
@@ -680,7 +696,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                 <SetRow key={extraIds.has(item.set.id) ? item.set.id : `p:${item.position}`} scopeKey={diary.displayedKey}
                   exercise={exercise} set={item.set} position={item.position} number={number}
                   fact={state.facts.get(item.set.id)} previous={previous.get(item.set.id)} fields={fields} mode={mode}
-                  sided={info?.unilateral === true}
+                  sided={info?.unilateral === true} confirming={confirmingOf(item.set.id)}
                   pending={pending} onSave={onSave} onToggle={onToggle} onPickType={onPickType} onPickRpe={onPickRpe} />
               ))}
               <Pressable accessibilityRole="button" accessibilityLabel={`Добавить подход: ${info?.name ?? "упражнение"}`}

@@ -141,16 +141,19 @@ export function NoteField({ noteKey, value, pending, onCommit }: Readonly<{
  * Строка подхода. Тип красит строку (разминка — жёлтым, отказ — красным, дроп — синим), номер у рабочих
  * подходов не меняется; под дроп-сетом — строки мини-сетов (§48.60), их состав заморожен, пока подход выполнен.
  */
-export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, number, fact, previous, fields, mode, sided, pending,
-  onSave, onToggle, onPickType, onPickRpe }: Readonly<{
+export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, number, fact, previous, fields, mode, sided, confirming = "",
+  pending, onSave, onToggle, onPickType, onPickRpe }: Readonly<{
   exercise: PlannedExercise; set: PlannedSet; position: number; number: number | null; fact: SetFact | undefined; previous: PreviousSet | undefined;
   scopeKey: string;
   fields: readonly SetField[]; mode: ConfirmationMode;
   /** Одностороннее упражнение: две строки «Л» / «П» со своими значениями и отметками (§48.66, §48.70). */
   sided: boolean;
+  /** Отметки, которые сейчас пишутся: `S` — подход, `L` / `R` — стороны. Такая галочка приглушена и повтор не принимает. */
+  confirming?: string;
   pending: PendingRegistry;
   onSave: (target: SetTarget, patch: SetPatch) => Promise<unknown>;
-  onToggle: (target: SetTarget, side?: Side) => void;
+  /** `confirmed` — какое состояние выбрано нажатием (обратное показанному). */
+  onToggle: (target: SetTarget, confirmed: boolean, side?: Side) => void;
   onPickType: (target: SetTarget) => void;
   onPickRpe: (target: SetTarget) => void;
 }>) {
@@ -194,11 +197,12 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
   };
   const sideCheck = (side: Side) => {
     const done = (side === "L" ? fact?.sides?.left.confirmed : fact?.sides?.right.confirmed) === true;
+    const saving = confirming.includes(side);
     return (
-      <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: done }} hitSlop={6}
+      <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: done, busy: saving }} hitSlop={6} disabled={saving}
         accessibilityLabel={`${side === "L" ? "Левая" : "Правая"} сторона: ${done ? "снять отметку" : "отметить выполненной"}`}
-        onPress={() => onToggle(target, side)}
-        style={[styles.check, { borderColor: done ? colors.success : colors.border, backgroundColor: done ? colors.success : colors.surface }]}>
+        onPress={() => onToggle(target, !done, side)}
+        style={[styles.check, saving && styles.dim, { borderColor: done ? colors.success : colors.border, backgroundColor: done ? colors.success : colors.surface }]}>
         <Check size={18} color={done ? colors.canvas : colors.border} strokeWidth={2.4} />
       </Pressable>
     );
@@ -247,10 +251,10 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
         </Pressable>
         {mode === "MANUAL" && sided ? sideCheck("L") : null}
         {mode === "MANUAL" && !sided ? (
-          <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: confirmed }}
+          <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: confirmed, busy: confirming.includes("S") }}
             accessibilityLabel={confirmed ? "Снять отметку выполнения" : "Отметить подход выполненным"} hitSlop={6}
-            onPress={() => onToggle(target)}
-            style={[styles.check, { borderColor: confirmed ? colors.success : colors.border,
+            disabled={confirming.includes("S")} onPress={() => onToggle(target, !confirmed)}
+            style={[styles.check, confirming.includes("S") && styles.dim, { borderColor: confirmed ? colors.success : colors.border,
               backgroundColor: confirmed ? colors.success : colors.surface }]}>
             <Check size={18} color={confirmed ? colors.canvas : colors.border} strokeWidth={2.4} />
           </Pressable>

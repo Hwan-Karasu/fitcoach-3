@@ -93,10 +93,15 @@ export function confirmationAfterSave(mode: ConfirmationMode, wasConfirmed: bool
   return { confirmed: wasConfirmed, confirmedNow: false };
 }
 
-/** Галочка ручного режима — обратимая (§48.55 п. 2); подтвердить неполный подход нельзя (§48.52 п. 4). */
-export function toggleConfirmation(wasConfirmed: boolean, content: SetContent,
+/**
+ * Галочка ручного режима — обратимая (§48.55 п. 2), но команда несёт желаемое состояние, выбранное нажатием, а не «переключить»:
+ * второе нажатие, пока первое ещё пишется, ничего не меняет (раньше оно снимало только что поставленную отметку при уже запущенном
+ * таймере). Подтвердить неполный подход нельзя (§48.52 п. 4).
+ */
+export function confirmationTo(wasConfirmed: boolean, confirmed: boolean, content: SetContent,
   metrics: readonly TrackingMetric[]): ConfirmationChange {
-  if (wasConfirmed) return { confirmed: false, confirmedNow: false };
+  if (!confirmed) return { confirmed: false, confirmedNow: false };
+  if (wasConfirmed) return { confirmed: true, confirmedNow: false };
   if (!isSetComplete(content, metrics)) throw new Error("INVALID_METRIC");
   return { confirmed: true, confirmedNow: true };
 }
@@ -121,13 +126,13 @@ export function sidesAfterSave(mode: ConfirmationMode, was: SideFlags, sides: Si
     right: confirmationAfterSave(mode, was.right, plain(sides.right), metrics) };
 }
 
-/** Галочка ручного режима у одной стороны; другая не меняется. */
-export function toggleSide(was: SideFlags, sides: SideValuesPair, side: "L" | "R",
+/** Галочка ручного режима у одной стороны — желаемое состояние этой стороны; другая не меняется. */
+export function sideTo(was: SideFlags, sides: SideValuesPair, side: "L" | "R", confirmed: boolean,
   metrics: readonly TrackingMetric[]): SidesChange {
-  const keep = (confirmed: boolean): ConfirmationChange => ({ confirmed, confirmedNow: false });
+  const keep = (value: boolean): ConfirmationChange => ({ confirmed: value, confirmedNow: false });
   return side === "L"
-    ? { left: toggleConfirmation(was.left, plain(sides.left), metrics), right: keep(was.right) }
-    : { left: keep(was.left), right: toggleConfirmation(was.right, plain(sides.right), metrics) };
+    ? { left: confirmationTo(was.left, confirmed, plain(sides.left), metrics), right: keep(was.right) }
+    : { left: keep(was.left), right: confirmationTo(was.right, confirmed, plain(sides.right), metrics) };
 }
 
 /** Односторонний подход: значения только в сторонах; дроп-сет со сторонами — отдельный срез. */

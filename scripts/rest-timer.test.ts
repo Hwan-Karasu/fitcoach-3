@@ -342,6 +342,35 @@ test("миграция v10: прежние таймеры сохраняются
   } finally { await execution.close(); await clients.close(); }
 });
 
+test("SET-DONE-1 подход и таймер независимы: сбой запуска таймера не снимает выполнение, повтор того же подхода не плодит таймеры", async () => {
+  const { clients, execution, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "SyntheticA" });
+    const slot = { clientId: client.id, programId: "prog-1", weekIndex: 2, plannedWorkoutId: "w-1" };
+    await execution.setConfirmationMode("MANUAL");
+    const typed = await execution.saveSet({ slot, plannedExerciseId: "pe-bench", exerciseId: "sys:repdb:synthetic-bench", plannedSetId: "s1",
+      position: 0, metrics: ["load", "reps"], values: { reps: 8, loadGrams: 100_000, durationSec: null, distanceM: null }, drops: [], rpe: null,
+      setType: "NORMAL", expectedRevision: null });
+    const identity = { slot, plannedExerciseId: "pe-bench", exerciseId: "sys:repdb:synthetic-bench", plannedSetId: "s1", position: 0,
+      metrics: ["load", "reps"] as const, expectedRevision: typed.fact.revision };
+    const done = await execution.setSetConfirmation(identity, true);
+    assert.equal(done.confirmedNow, true);
+    const broken = { listTimers: () => execution.listTimers(), removeTimer: (id: string) => execution.removeTimer(id),
+      putTimer: () => Promise.reject(new Error("SQLITE_BUSY")) };
+    const failing = new RestTimerService(broken, fakeSignal().port, () => T0);
+    await assert.rejects(failing.start({ ...bench, clientId: client.id }), { message: "SQLITE_BUSY" });
+    assert.deepEqual(failing.list(), [], "незаписанный таймер не показывается");
+    assert.equal((await execution.getWorkout(slot)).facts.get("s1")?.confirmed, true, "подход остаётся выполненным");
+
+    const service = new RestTimerService(execution, fakeSignal().port, () => T0);
+    await service.start({ ...bench, clientId: client.id });
+    await service.start({ ...bench, clientId: client.id });
+    await service.idle();
+    assert.equal(service.list().length, 1, "повтор подхода перезапускает свой таймер, а не добавляет второй");
+    assert.equal((await execution.listTimers()).length, 1);
+  } finally { await close(); }
+});
+
 test("AUD-03 сбой записи в хранилище откатывает экран: пауза, продолжение и ±15 не расходятся с базой", async () => {
   const { execution, close } = await stores();
   try {

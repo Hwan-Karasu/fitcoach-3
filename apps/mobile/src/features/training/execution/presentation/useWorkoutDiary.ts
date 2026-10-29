@@ -49,7 +49,10 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   metricsOf: (exerciseId: string) => readonly TrackingMetric[] | null,
   /** Одностороннее ли упражнение каталога (§48.66): тогда подход пишется по сторонам. */
   unilateralOf: (exerciseId: string) => boolean,
-  /** Новый переход «не выполнен → выполнен» при вводе в открытом дневнике — запуск таймера отдыха (§48.55). */
+  /**
+   * Новый переход «не выполнен → выполнен» при вводе в открытом дневнике — запуск таймера отдыха (§48.55). Берётся в момент постановки
+   * команды: он замыкает слот и имя участника, для которых нажали.
+   */
   onConfirmedNow: (exercise: PlannedExercise) => void,
   /** ADR-048: «Завершить тренировку» отметила запись календаря / «Отменить завершение» её сняло — для подсказки. */
   onCalendarEffect?: (effect: CalendarOutcomeEffect) => void) {
@@ -107,7 +110,13 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   }, []);
 
   const enqueue = useCallback(<T,>(task: () => Promise<T>): Promise<T | null> => {
-    if (loadedKeyRef.current !== slotKeyRef.current) return Promise.resolve(null);
+    // Слот ещё не открыт (переход на другую неделю или участника): записывать некуда. Раньше команда пропадала молча — значение
+    // оставалось на экране несохранённым, а подход не засчитывался. Ячейка остаётся «грязной» и допишется следующей записью.
+    if (loadedKeyRef.current !== slotKeyRef.current) {
+      setMessage("Тренировка ещё открывается — значение не сохранено. Повторите ввод.");
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
+      return Promise.resolve(null);
+    }
     return queue.run(task, { onSuccess: () => setMessage(null), onError: (error) => {
       setMessage(errorText(error));
       setVersion((value) => value + 1);
@@ -123,8 +132,10 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
       plannedSetId: set.id, position, metrics: metricsOf(exercise.exerciseId) ?? [], expectedRevision: fact?.revision ?? null } };
   }, [metricsOf, stableSlot]);
 
-  const saveSet = useCallback((exercise: PlannedExercise, set: PlannedSet, position: number, patch: SetPatch) =>
-    enqueue(async () => {
+  const saveSet = useCallback((exercise: PlannedExercise, set: PlannedSet, position: number, patch: SetPatch) => {
+    // Таймер запускается в контексте нажатия (слот, участник, его имя), а не того экрана, что открыт к приходу ответа.
+    const onConfirmed = confirmedRef.current;
+    return enqueue(async () => {
       const { fact, identity } = identityOf(exercise, set, position);
       const setType = patch.setType ?? fact?.setType ?? "NORMAL";
       let drops = setType === (fact?.setType ?? "NORMAL") ? fact?.drops ?? [] : dropsForType(setType, fact?.drops ?? []);
@@ -148,22 +159,38 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
       applyFact(result.fact, result.session);
       if (result.confirmedNow) {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
-        confirmedRef.current(exercise);
+        onConfirmed(exercise);
       }
       return result;
-    }), [applyFact, enqueue, execution, identityOf]);
+    });
+  }, [applyFact, enqueue, execution, identityOf]);
 
-  const toggleSet = useCallback((exercise: PlannedExercise, set: PlannedSet, position: number, side?: Side) =>
-    enqueue(async () => {
-      const { identity } = identityOf(exercise, set, position);
-      const result = await execution.toggleSetConfirmation(identity, undefined, side);
+  /** Отметки, которые сейчас пишутся (`подход` или `подход:сторона`): галочка показывает «сохраняется» и не принимает повтор. */
+  const [confirming, setConfirming] = useState<ReadonlySet<string>>(() => new Set());
+  const confirmSet = useCallback((exercise: PlannedExercise, set: PlannedSet, position: number, confirmed: boolean, side?: Side) => {
+    const onConfirmed = confirmedRef.current;
+    const key = side === undefined ? set.id : `${set.id}:${side}`;
+    const mark = (on: boolean) => setConfirming((current) => {
+      if (current.has(key) === on) return current;
+      const next = new Set(current);
+      if (on) next.add(key); else next.delete(key);
+      return next;
+    });
+    mark(true);
+    return enqueue(async () => {
+      const { fact, identity } = identityOf(exercise, set, position);
+      // Уже в нужном состоянии (повторная команда): без записи, без второго сигнала и без перезапуска таймера.
+      const was = side === undefined ? fact?.confirmed : side === "L" ? fact?.sides?.left.confirmed : fact?.sides?.right.confirmed;
+      if (fact !== null && (was === true) === confirmed) return null;
+      const result = await execution.setSetConfirmation(identity, confirmed, undefined, side);
       applyFact(result.fact, result.session);
       if (result.confirmedNow) {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
-        confirmedRef.current(exercise);
+        onConfirmed(exercise);
       }
       return result;
-    }), [applyFact, enqueue, execution, identityOf]);
+    }).finally(() => mark(false));
+  }, [applyFact, enqueue, execution, identityOf]);
 
   /** Разминка (как в 2.0): новый подход сверху упражнения, плановые не меняются. */
   const addWarmup = useCallback((exercise: PlannedExercise) => enqueue(async () => {
@@ -256,7 +283,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
     /** Открыта другая неделя, её данные ещё грузятся: на экране прежние значения, ввод закрыт. */
     switching: workout !== undefined && loadedKey !== slotKey,
     status: workoutStatus(state?.session?.outcome ?? null, started),
-    saveSet, toggleSet, setOutcome, addWarmup, removeWarmup, setActualDate, setTimes, saveNote, deleteExecution, finishSaving, needsSaving,
+    saveSet, confirmSet, confirming, setOutcome, addWarmup, removeWarmup, setActualDate, setTimes, saveNote, deleteExecution, finishSaving, needsSaving,
     dismissMessage: () => setMessage(null),
   };
 }
