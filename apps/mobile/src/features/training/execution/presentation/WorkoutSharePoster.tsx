@@ -8,6 +8,8 @@ const ink = { paper: "#FFFFFF", text: "#13262B", muted: "#5B6B70", line: "#D5DEE
 
 export interface SharePosterExercise {
   readonly name: string;
+  /** Отдых после подхода, например «1:30»; `null` — таймер у упражнения выключен, строка не показывается. */
+  readonly rest: string | null;
   /** Строки подходов: факт, если введён, иначе план. */
   readonly sets: readonly string[];
 }
@@ -28,7 +30,10 @@ export function WorkoutSharePoster({ posterRef, title, subtitle, exercises }: Re
       <Text style={styles.subtitle}>{subtitle}</Text>
       {exercises.map((exercise, index) => (
         <View key={`${index}:${exercise.name}`} style={styles.exercise}>
-          <Text style={styles.name}>{`${index + 1}. ${exercise.name}`}</Text>
+          <View style={styles.nameRow}>
+            <Text style={[styles.name, styles.nameText]}>{`${index + 1}. ${exercise.name}`}</Text>
+            {exercise.rest === null ? null : <Text style={styles.rest}>{`Отдых ${exercise.rest}`}</Text>}
+          </View>
           {exercise.sets.map((line, setIndex) => (
             <Text key={setIndex} style={styles.set}>{`${setIndex + 1})  ${line}`}</Text>
           ))}
@@ -43,6 +48,9 @@ const styles = StyleSheet.create({
   title: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 23, color: ink.text },
   subtitle: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16, color: ink.accent },
   exercise: { borderTopWidth: 1, borderTopColor: ink.line, paddingTop: 8, gap: 2 },
+  nameRow: { flexDirection: "row", alignItems: "baseline", gap: 8 },
+  nameText: { flex: 1 },
+  rest: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16, color: ink.accent },
   name: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18, color: ink.text },
   set: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, color: ink.muted },
 });
