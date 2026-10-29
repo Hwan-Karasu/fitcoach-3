@@ -1,3 +1,9 @@
+## 2026-10-29 — build42: REST-FIX-1…7
+
+- Собран `artifacts/apk/athlete-diary-3.0.0-build42.apk`: `com.fitcoach.v3`, 3.0.0, versionCode 42, arm64-v8a, 70 358 760 байт; assembleRelease PASS (2 мин 17 с;
+  Node 24.3, JDK17, IPv4, без prebuild). Сертификат SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c` совпадает с build33–41 (apksigner verify PASS, aapt: package/version/ABI).
+  SHA-256 APK `bb0cf9ab1ed2e7ad021752185f8c1d49f320df8ca8f7523bd47a56ee4d7f5dfe`. Входит всё из записи REST-FIX-1…7 выше. Подпись по-прежнему debug (REL-ANDROID). На телефон не устанавливался.
+
 ## 2026-10-29 — REST-FIX-1…7: таймер отдыха, лишние чтения, «Пред.» по сторонам, «Макс.», пресеты, отдых на картинке (ADR-053)
 
 - Жалобы владельца (build41): пустые барабаны при быстрой прокрутке, долгая смена отдыха «во всех неделях», прокрутка к упражнению суперсета
