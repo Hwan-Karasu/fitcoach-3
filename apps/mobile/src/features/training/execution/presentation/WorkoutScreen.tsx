@@ -385,7 +385,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const kg = (value: number) => `${Math.round(value).toLocaleString("ru-RU")} кг`;
   const shareRows = sharing ? workout.exercises.map((exercise) => {
     const fields = diaryFields(lookup.get(exercise.exerciseId)?.metrics ?? []);
-    return { name: lookup.get(exercise.exerciseId)?.name ?? "Упражнение", sets: exercise.sets.map((set) => {
+    return { name: lookup.get(exercise.exerciseId)?.name ?? "Упражнение",
+      rest: exercise.restSec === null ? null : formatDuration(exercise.restSec), sets: exercise.sets.map((set) => {
       const fact = state.facts.get(set.id);
       return fact !== undefined && hasValues(fact.values) ? labeledWithDrops(fact.values, fact.drops, fields, rawOf)
         : `план: ${labeledPlan(planText(set, fields), fields)}`;
