@@ -80,6 +80,35 @@ test("T04 шаблон мезоцикла и программы (§48.14.3 п. 1
   }
 });
 
+test("TPL-KIND-1 «Сохранить как шаблон» у программы — всегда шаблон программы, даже с одной неделей или одним циклом", async () => {
+  const { plans, a, close } = await setup();
+  try {
+    const oneWeek = await plans.createSimpleProgram(a.id, { title: "Разовая", plan: { weeks: 1, workouts: week("o") } });
+    assert.equal((await plans.saveProgramAsTemplate(a.id, oneWeek.id, "Разовая")).kind, "SIMPLE");
+    const single = await plans.createProgram({ kind: "PERIODIZED", title: "Один цикл", clientIds: [a.id] });
+    await plans.createMesocycle(a.id, single.id, single.revision, { title: "Единственный", weeks: 2, firstWeek: week("u"), clientIds: [a.id] });
+    assert.equal((await plans.saveProgramAsTemplate(a.id, single.id, "Один цикл")).kind, "PERIODIZED", "вид — по операции, а не по числу циклов");
+
+    const program = await plans.createProgram({ kind: "PERIODIZED", title: "Три блока", clientIds: [a.id] });
+    let revision = program.revision;
+    for (const [index, title] of ["Объём", "Сила", "Пик"].entries()) {
+      revision = (await plans.createMesocycle(a.id, program.id, revision, { title, weeks: index + 1, firstWeek: week(`b${index}`),
+        clientIds: [a.id] })).program.revision;
+    }
+    const template = await plans.saveProgramAsTemplate(a.id, program.id, "Три блока");
+    const copy = await plans.createProgramFromTemplate(template.id, { title: "Три блока — копия", clientIds: [a.id] });
+    const restored = (await plans.getPeriodizedPlan(a.id, copy.id))!.mesocycles;
+    const original = (await plans.getPeriodizedPlan(a.id, program.id))!.mesocycles;
+    assert.deepEqual(restored.map((cycle) => [cycle.title, cycle.weeks.length]), [["Объём", 1], ["Сила", 2], ["Пик", 3]]);
+    assert.deepEqual(restored.map((cycle) => cycle.weeks.map((item) => item.workouts.map((workout) => workout.exercises.map((exercise) =>
+      [exercise.exerciseId, exercise.sets.length])))), original.map((cycle) => cycle.weeks.map((item) => item.workouts.map((workout) =>
+      workout.exercises.map((exercise) => [exercise.exerciseId, exercise.sets.length])))), "упражнения и подходы по неделям — как в исходной");
+    assert.equal((await plans.getProgram(a.id, program.id))!.revision, revision, "исходная программа не изменилась");
+  } finally {
+    await close();
+  }
+});
+
 test("T04 программа из шаблона (§48.14.3 п. 5, 7, 8): новые ID, свои копии участникам, шаблон дальше независим", async () => {
   const { plans, a, b, c, close } = await setup();
   try {

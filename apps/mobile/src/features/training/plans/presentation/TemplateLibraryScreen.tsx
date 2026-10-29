@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Copy, Ellipsis, FilePlus2, Pencil, PencilLine, Trash2, type LucideIcon } from "lucide-react-native";
+import { Copy, Ellipsis, FilePlus2, ListPlus, Pencil, PencilLine, Trash2, type LucideIcon } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, EmptyState, InlineNotice, LoadingState, SearchField, SegmentedControl,
   TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
-import { templateKindLabels, templateOpensInBuilder, templateSummary, type ProgramTemplate, type TemplateKind } from "../domain/TemplateModel.ts";
+import { templateAddsCycles, templateCreatesProgram, templateKindLabels, templateSummary, type ProgramTemplate, type TemplateKind } from "../domain/TemplateModel.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import type { TrainingParticipantCandidate } from "../domain/ParticipantCandidate.ts";
 import { ParticipantChips } from "./ParticipantChips.tsx";
@@ -23,24 +23,33 @@ const filterLabels: Readonly<Record<Filter, string>> = { ALL: "Все", SIMPLE: 
 
 /**
  * Библиотека шаблонов тренера (§48.16): поиск и фильтр по типу; создать программу клиенту, переименовать,
- * сделать копию, удалить. Шаблон мезоцикла применяется в «+ Мезоцикл» программы. Действия с шаблоном не
- * меняют программы, созданные по нему (§48.16 п. 4).
+ * сделать копию, удалить. Шаблон цикла (и циклы Расширенной) добавляется в существующую Расширенную программу, программа из
+ * него не создаётся (TPL-KIND-1). Действия с шаблоном не меняют программы, созданные по нему (§48.16 п. 4).
  */
-export function TemplateLibraryScreen({ clientId, repository, listCandidates, onCreated, onEdit, onOpenInBuilder }: Readonly<{
+export function TemplateLibraryScreen({ clientId, repository, listCandidates, onCreated, onEdit, onOpenInBuilder, addTo, programId,
+  onAddToProgram }: Readonly<{
   clientId: string;
   repository: TrainingPlansRepositoryPort;
   listCandidates: () => Promise<readonly TrainingParticipantCandidate[]>;
   onCreated: (programId: string) => void;
   /** §48.16 п. 3: открыть шаблон для правки содержимого. */
   onEdit?: (template: ProgramTemplate) => void;
-  /** Нажатие на карточку: шаблон открывается в конструкторе новой программы (Простой или Расширенный). */
+  /** Нажатие на карточку шаблона программы: он открывается в конструкторе новой программы (Простой или Расширенный). */
   onOpenInBuilder?: (template: ProgramTemplate) => void;
+  /** Вкладка «Шаблоны» конструктора «+ Мезоцикл»: цикл(ы) шаблона подставляются в этот конструктор; Простые не показываются. */
+  addTo?: Readonly<{ programTitle: string; onPick: (template: ProgramTemplate) => void }>;
+  /** Открытая программа (вкладка «Шаблоны» её экрана): «Добавить в эту программу» без выбора программы. */
+  programId?: string;
+  /** Добавить цикл(ы) шаблона в Расширенную программу клиента — открывается её конструктор «+ Мезоцикл» с этим шаблоном. */
+  onAddToProgram?: (template: ProgramTemplate, programId: string) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const [templates, setTemplates] = useState<readonly ProgramTemplate[] | null>(null);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("ALL");
+  const [filter, setFilter] = useState<Filter>(addTo !== undefined ? "MESOCYCLE" : "ALL");
+  /** Выбор Расширенной программы, в которую добавить циклы шаблона (из библиотеки, где своей программы нет). */
+  const [addFor, setAddFor] = useState<Readonly<{ template: ProgramTemplate; programs: readonly Readonly<{ id: string; title: string }>[] }> | null>(null);
   const [menuFor, setMenuFor] = useState<ProgramTemplate | null>(null);
   const [action, setAction] = useState<Action | null>(null);
   const [members, setMembers] = useState<readonly string[]>([clientId]);
@@ -70,7 +79,26 @@ export function TemplateLibraryScreen({ clientId, repository, listCandidates, on
 
   const needle = query.trim().toLocaleLowerCase();
   const visible = templates.filter((item) => (filter === "ALL" || item.kind === filter)
+    && (addTo === undefined || templateAddsCycles(item.payload))
     && (needle === "" || item.title.toLocaleLowerCase().includes(needle)));
+  const canAdd = (template: ProgramTemplate) => templateAddsCycles(template.payload) && (addTo !== undefined || onAddToProgram !== undefined);
+  /** Добавить циклы шаблона: в этот конструктор, в открытую программу или в выбранную Расширенную программу клиента. */
+  const addCycles = async (template: ProgramTemplate) => {
+    if (addTo !== undefined) { addTo.onPick(template); return; }
+    if (onAddToProgram === undefined) return;
+    if (programId !== undefined) { onAddToProgram(template, programId); return; }
+    try {
+      const library = await repository.getLibrary(clientId);
+      const programs = library.active.filter((card) => card.kind === "PERIODIZED").map((card) => ({ id: card.id, title: card.title }));
+      if (programs.length === 0) {
+        setMessage("Цикл добавляется только в Расширенную программу, а у клиента её нет. Создайте программу или возьмите шаблон программы.");
+        return;
+      }
+      if (programs.length === 1) { onAddToProgram(template, programs[0]!.id); return; }
+      anchor.current = anchors.current.get(template.id) ?? null;
+      setAddFor({ template, programs });
+    } catch { setMessage("Не удалось загрузить программы клиента."); }
+  };
 
   const run = async () => {
     if (action === null) return;
@@ -99,7 +127,10 @@ export function TemplateLibraryScreen({ clientId, repository, listCandidates, on
   };
 
   const options = (template: ProgramTemplate) => [
-    ...(template.kind === "MESOCYCLE" ? [] : [{ value: "create" as const, label: "Создать программу клиенту", icon: menuIcon(FilePlus2) }]),
+    ...(canAdd(template) ? [{ value: "add" as const, icon: menuIcon(ListPlus),
+      label: addTo !== undefined || programId !== undefined ? "Добавить в эту программу" : "Добавить в программу…" }] : []),
+    ...(addTo === undefined && templateCreatesProgram(template.payload)
+      ? [{ value: "create" as const, label: "Создать программу клиенту", icon: menuIcon(FilePlus2) }] : []),
     ...(onEdit === undefined ? [] : [{ value: "edit" as const, label: "Открыть и изменить", icon: menuIcon(Pencil) }]),
     { value: "rename" as const, label: "Переименовать", icon: menuIcon(PencilLine) },
     { value: "duplicate" as const, label: "Сделать копию", icon: menuIcon(Copy) },
@@ -110,20 +141,26 @@ export function TemplateLibraryScreen({ clientId, repository, listCandidates, on
     <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <SearchField query={query} onChangeQuery={setQuery} accessibilityLabel="Поиск шаблона" placeholder="Поиск по названию" />
       {/* Четыре типа в одном ряду: сегменты с ужимающейся подписью — «Расширенные» не рвётся посередине слова. */}
-      <SegmentedControl compact items={filters.map((id) => ({ id, label: filterLabels[id] }))} selectedId={filter} onSelect={setFilter} />
+      <SegmentedControl compact items={(addTo !== undefined ? filters.filter((id) => id !== "SIMPLE") : filters).map((id) => ({ id, label: filterLabels[id] }))}
+        selectedId={filter} onSelect={setFilter} />
+      {addTo !== undefined ? <Text style={[styles.meta, { color: colors.textSecondary }]}>
+        {`Цикл шаблона откроется в конструкторе и добавится в программу «${addTo.programTitle}» кнопкой «Добавить».`}</Text> : null}
       {message !== null ? <InlineNotice kind="error">{message}</InlineNotice> : null}
       {templates.length === 0 ? (
         <EmptyState reason="no-data" title="Шаблонов пока нет"
-          body="Сохраните программу или мезоцикл как шаблон: на экране программы «⋯» → «Сохранить как шаблон»." />
+          body="Шаблон цикла — кнопка «Цикл в шаблон» в конструкторе мезоцикла. Шаблон программы — «⋯» у программы → «Сохранить как шаблон»." />
       ) : visible.length === 0 ? (
         <Text style={[styles.meta, { color: colors.textSecondary }]}>Ничего не найдено.</Text>
       ) : visible.map((template) => (
         <View key={template.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.cardHead}>
             <Pressable style={styles.grow} accessibilityRole="button"
-              accessibilityLabel={`Открыть шаблон ${template.title} в конструкторе`}
+              accessibilityLabel={addTo !== undefined || !templateCreatesProgram(template.payload)
+                ? `Добавить циклы шаблона ${template.title} в программу` : `Открыть шаблон ${template.title} в конструкторе`}
               onPress={() => {
-                if (onOpenInBuilder !== undefined && templateOpensInBuilder(template.payload)) onOpenInBuilder(template);
+                // Шаблон программы — конструктор новой программы; шаблон цикла — только добавление в существующую программу.
+                if (addTo === undefined && onOpenInBuilder !== undefined && templateCreatesProgram(template.payload)) onOpenInBuilder(template);
+                else if (canAdd(template)) void addCycles(template);
                 else { anchor.current = anchors.current.get(template.id) ?? null; setMenuFor(template); }
               }}>
               <Text numberOfLines={2} style={[styles.title, { color: colors.textPrimary }]}>{template.title}</Text>
@@ -136,8 +173,8 @@ export function TemplateLibraryScreen({ clientId, repository, listCandidates, on
                 onPress={() => { anchor.current = anchors.current.get(template.id) ?? null; setMenuFor(template); }} />
             </View>
           </View>
-          {template.kind === "MESOCYCLE" && action?.template.id !== template.id ? (
-            <Text style={[styles.meta, { color: colors.textMuted }]}>Добавляется в программу: «+ Мезоцикл» → «Скопировать существующий».</Text>
+          {template.kind === "MESOCYCLE" && addTo === undefined && action?.template.id !== template.id ? (
+            <Text style={[styles.meta, { color: colors.textMuted }]}>Шаблон цикла: добавляется в Расширенную программу, новую программу не создаёт.</Text>
           ) : null}
           {action?.template.id === template.id ? (
             <View style={styles.form}>
@@ -165,9 +202,19 @@ export function TemplateLibraryScreen({ clientId, repository, listCandidates, on
             setMessage(null);
             if (value === "delete") { setRemoving(template); return; }
             if (value === "edit") { onEdit?.(template); return; }
+            if (value === "add") { void addCycles(template); return; }
             if (value === "") return;
             setMembers([clientId]);
             setAction({ kind: value, template, title: value === "duplicate" ? `${template.title} — копия`.slice(0, 80) : template.title });
+          }} />
+      ) : null}
+      {addFor !== null ? (
+        <DropdownMenu visible anchor={anchor} title={`В какую программу добавить «${addFor.template.title}»?`} selected=""
+          note="Только Расширенные программы: в Простой нет мезоциклов." options={addFor.programs.map((item) => ({ value: item.id, label: item.title }))}
+          onClose={() => setAddFor(null)} onSelect={(value) => {
+            const { template } = addFor;
+            setAddFor(null);
+            if (value !== "") onAddToProgram?.(template, value);
           }} />
       ) : null}
       <ConfirmDialog visible={removing !== null} destructive confirmBusy={busy} title="Удалить шаблон?"

@@ -42,8 +42,11 @@ export interface TrainingPlansRepositoryPort {
    * ближайшей заполненной (защита от мисклика); всё пусто или неверные настройки — DRAFT_INVALID, ничего не пишется.
    */
   createPeriodizedProgram(input: NewPeriodizedProgramInput, now?: Date): Promise<TrainingProgram>;
-  /** «В шаблон» конструктора Расширенной программы: черновик — шаблон программы из одного мезоцикла; программа не создаётся. */
-  saveBuilderAsTemplate(input: Readonly<{ title: string; mesocycle: BuilderMesocycleInput }>, now?: Date): Promise<ProgramTemplate>;
+  /**
+   * «Цикл в шаблон» конструктора мезоцикла (решение владельца 2026-10-29): открытый цикл — шаблон **мезоцикла** в любом режиме
+   * конструктора; программа не создаётся. Шаблон программы — только из меню программы (`saveProgramAsTemplate`).
+   */
+  saveBuilderCycleAsTemplate(input: Readonly<{ title: string; mesocycle: BuilderMesocycleInput }>, now?: Date): Promise<ProgramTemplate>;
   renameProgram(programId: string, expectedRevision: number, title: string, now?: Date): Promise<TrainingProgram>;
   /** §48.16: библиотека шаблонов тренера (все типы); новые сверху. */
   listTemplates(): Promise<readonly ProgramTemplate[]>;

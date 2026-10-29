@@ -347,14 +347,14 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     },
   };
 
-  async saveBuilderAsTemplate(input: Readonly<{ title: string; mesocycle: BuilderMesocycleInput }>, now: Date = new Date()): Promise<ProgramTemplate> {
+  async saveBuilderCycleAsTemplate(input: Readonly<{ title: string; mesocycle: BuilderMesocycleInput }>, now: Date = new Date()): Promise<ProgramTemplate> {
     const title = normalizeTitle(input.mesocycle.title);
     let local = 0;
     const filled = fillEmptyWeeks(input.mesocycle.weeks, () => `fill:${local++}`);
     if (filled.length === 0 || filled.some((week) => week.workouts.length === 0)) throw new Error("DRAFT_INVALID");
     for (const week of filled) assertWeek(title, week.workouts);
-    return this.ready().writer.write((tx) => this.insertTemplate(tx, input.title, { kind: "PERIODIZED",
-      mesocycles: [{ title, weeks: filled.map((week) => ({ type: week.type, workouts: week.workouts })) }] }, now));
+    return this.ready().writer.write((tx) => this.insertTemplate(tx, input.title, { kind: "MESOCYCLE",
+      mesocycle: { title, weeks: filled.map((week) => ({ type: week.type, workouts: week.workouts })) } }, now));
   }
 
   private async insertProgram(tx: SqliteStatementPort, valid: CreateProgramInput, now: Date,

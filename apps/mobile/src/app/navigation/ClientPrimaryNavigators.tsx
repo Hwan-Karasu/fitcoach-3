@@ -239,6 +239,9 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
     : { name: "TrainingCreate" as const, params: { kind: "PERIODIZED" as const, templateEditId: template.id } };
   const createRoute = (kind: ProgramKind) => kind === "SIMPLE" ? { name: "TrainingBuilder" as const, params: {} }
     : { name: "TrainingCreate" as const, params: { kind } };
+  /** TPL-KIND-1: циклы шаблона добавляются в существующую программу — её «+ Мезоцикл» с этим шаблоном; новая программа не создаётся. */
+  const addCyclesRoute = (template: Readonly<{ id: string }>, programId: string) =>
+    ({ name: "TrainingCreate" as const, params: { kind: "PERIODIZED" as const, programId, templateId: template.id } });
   return (
     <TrainingStack.Navigator initialRouteName="TrainingIndex" screenOptions={({ navigation, route }) => ({
       contentStyle: { backgroundColor: palette.tokens.canvas },
@@ -272,6 +275,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
           renderTemplates={() => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
             onEdit={(template) => { const route = templateEditRoute(template); openRoute(navigation, route); }}
             onOpenInBuilder={(template) => { const route = templateRoute(template); openRoute(navigation, route); }}
+            onAddToProgram={(template, programId) => { const route = addCyclesRoute(template, programId); openRoute(navigation, route); }}
             onCreated={(programId) => navigation.navigate("TrainingProgram", { programId })} />}
           renderArchive={() => <ArchivedProgramsPanel clientId={clientId} repository={repository} planDelete={planDelete} />}
           onOpenProgram={(programId) => navigation.navigate("TrainingProgram", { programId })} />}
@@ -286,6 +290,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
         {({ navigation }) => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
           onEdit={(template) => { const route = templateEditRoute(template); openRoute(navigation, route); }}
           onOpenInBuilder={(template) => { const route = templateRoute(template); openRoute(navigation, route); }}
+          onAddToProgram={(template, programId) => { const route = addCyclesRoute(template, programId); openRoute(navigation, route); }}
           onCreated={(programId) => navigation.reset({ index: 1,
             routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId } }] })} />}
       </TrainingStack.Screen>
@@ -325,9 +330,11 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
               ...(route.params.programId === undefined ? {} : { programId: route.params.programId }),
               ...(route.params.mesocycleId === undefined ? {} : { mesocycleId: route.params.mesocycleId }),
               ...(route.params.templateEditId === undefined ? {} : { templateEditId: route.params.templateEditId }) } } })}
-          renderTemplates={() => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
+          renderTemplates={(addTo) => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
+            {...(addTo === undefined ? {} : { addTo })}
             onEdit={(template) => { const route = templateEditRoute(template); openRoute(navigation, route); }}
             onOpenInBuilder={(template) => { const route = templateRoute(template); openRoute(navigation, route, "replace"); }}
+            onAddToProgram={(template, programId) => { const route = addCyclesRoute(template, programId); openRoute(navigation, route, "replace"); }}
             onCreated={(createdId) => navigation.reset({ index: 1,
               routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId: createdId } }] })} />}
           onCreated={(programId) => navigation.reset({ index: 1,
@@ -350,8 +357,10 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
                 ...(target.mesocycleId === null ? {} : { mesocycleId: target.mesocycleId }) });
             }); }} />}
           renderTemplates={() => <TemplateLibraryScreen clientId={viewer} repository={repository} listCandidates={listCandidates}
+            programId={route.params.programId}
             onEdit={(template) => { const route = templateEditRoute(template); openRoute(navigation, route); }}
             onOpenInBuilder={(template) => { const route = templateRoute(template); openRoute(navigation, route); }}
+            onAddToProgram={(template, programId) => { const target = addCyclesRoute(template, programId); openRoute(navigation, target); }}
             onCreated={(createdId) => navigation.reset({ index: 1,
               routes: [{ name: "TrainingIndex" }, { name: "TrainingProgram", params: { programId: createdId } }] })} />}
           onOpenProgram={(createdId) => navigation.reset({ index: 1,

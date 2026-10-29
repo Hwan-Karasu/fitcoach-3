@@ -118,6 +118,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const [orderReset, setOrderReset] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [tab, setTab] = useState<"program" | "templates">("program");
+  /** Библиотека шаблонов монтируется при первом открытии вкладки и дальше живёт рядом с планом. */
+  const [templatesOpened, setTemplatesOpened] = useState(false);
   const menuAnchor = useRef<View>(null);
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const restore = useParticipantScrollRestore({ currentKey, stale, scrollTo: (y) => scrollRef.current?.scrollTo({ y, animated: false }) });
@@ -235,17 +237,18 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   // Переключатель «Программа | Шаблоны» (макет владельца, UI-OWN-036): над содержимым, не прокручивается.
   const tabs = renderTemplates !== undefined ? <View style={[styles.tabs, { backgroundColor: colors.canvas }]}>
     <SegmentedControl items={[{ id: "program", label: "Программа" }, { id: "templates", label: "Шаблоны" }]}
-      selectedId={tab} onSelect={(next) => { setTab(next); onTabChange?.(next); }} />
+      selectedId={tab} onSelect={(next) => { if (next === "templates") setTemplatesOpened(true); setTab(next); onTabChange?.(next); }} />
   </View> : null;
   const participants = renderParticipants?.(() => ({ mesocycleId: selectedCycle()?.id ?? null,
     weekIndex: weeksByCycle[cycleKey] ?? shownWeek.current, workoutId: null }), shown, group, periodized);
-  if (tab === "templates" && renderTemplates !== undefined) {
-    return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{tabs}{renderTemplates()}</View>;
-  }
+  const showTemplates = tab === "templates" && renderTemplates !== undefined;
+  // Обе вкладки остаются в дереве (BUILDER-TABS-1): возврат на «Программа» не пересоздаёт план и не сбрасывает прокрутку.
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
     {tabs}
-    <View style={styles.screen}>
+    {templatesOpened && renderTemplates !== undefined
+      ? <View style={[styles.screen, !showTemplates && styles.hidden]}>{renderTemplates()}</View> : null}
+    <View style={[styles.screen, showTemplates && styles.hidden]}>
     <Animated.ScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} pointerEvents={stale ? "none" : "auto"}
       contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
       onContentSizeChange={(_width, height) => restore.onContentSizeChange(height)}
@@ -477,8 +480,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
         confirmLabel="В архив" onCancel={() => setConfirmArchive(false)} onConfirm={() => { void archive(); }} />
     </Animated.ScrollView>
     {/* Переключатель участников — строка внутри нижней панели навигации (UI-OWN-043): в раскладку экрана не входит, его высоту
-        забирает сама панель — верх страницы и прокрутка при смене мезоцикла не меняются. */}
-    {participants}
+        забирает сама панель — верх страницы и прокрутка при смене мезоцикла не меняются. На вкладке «Шаблоны» строки нет. */}
+    {showTemplates ? null : participants}
     </View>
     </View>
   );
@@ -490,6 +493,7 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
   heading: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23 },
   screen: { flex: 1 },
+  hidden: { display: "none" },
   tabs: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 2 },
   cardHead: { gap: 12 },
   cardTitle: { fontFamily: fonts.bold, fontSize: 18, letterSpacing: -0.2 },

@@ -31,6 +31,7 @@ import type { TrainingTransfer } from "../apps/mobile/src/shared/training-transf
 import { weekStatus } from "../apps/mobile/src/features/training/execution/domain/ExecutionRules.ts";
 import { reidTransfer, transferSourceIds } from "../apps/mobile/src/features/import/domain/TransferIds.ts";
 import { builderWorkbookImport } from "../apps/mobile/src/features/import/domain/BuilderWorkbookImport.ts";
+import { templateBuilderCycles } from "../apps/mobile/src/features/training/plans/domain/TemplateModel.ts";
 import type { BuilderWorkbookSaveRequest } from "../apps/mobile/src/features/training/plans/domain/BuilderWorkbookSave.ts";
 import type { MesocycleBuilderDraft } from "../apps/mobile/src/features/training/plans/domain/PeriodizedDraft.ts";
 import { prepareWholeWorkbook, compileWholeWorkbook } from "../apps/mobile/src/features/import/domain/WholeWorkbookImport.ts";
@@ -125,6 +126,47 @@ test("I07 importing additional sheets into the same programme appends them, repe
     assert.equal(savedFirst.id, (await f.plans.getPeriodizedPlan(f.client.id, created.programId))!.mesocycles[0]!.id);
     assert.equal(f.native.prepare("SELECT count(*) AS n FROM training_performed_sets").get()!.n, 8);
     assert.deepEqual(f.native.prepare("PRAGMA foreign_key_check").all(), []);
+  } finally { await f.close(); }
+});
+
+test("TPL-KIND-1 шаблоны циклов добавляются в одну существующую программу: новых программ нет, порядок сохранён, шаблон и цикл независимы", async () => {
+  const f = await fixture();
+  try {
+    const first = builderWorkbookImport(selectWorkbookImportSheets(multiBook(f.mapping.press!), ["0"]));
+    const create: BuilderWorkbookSaveRequest = { clientId: f.client.id, scope: { programId: null, mesocycleId: null }, expectedRevision: null,
+      programTitle: "Основная", cycles: first.cycles!, clientIds: [f.client.id], existingCycleKey: null, placements: [] };
+    const created = await f.transfer.saveBuilderWorkbook(create);
+    const plan = (await f.plans.getPeriodizedPlan(f.client.id, created.programId))!;
+    const source = plan.mesocycles[0]!;
+    // Шаблон цикла из конструктора («Цикл в шаблон») и из карточки цикла программы — оба вида MESOCYCLE.
+    const fromBuilder = await f.plans.saveBuilderCycleAsTemplate({ title: "Сила", mesocycle: { title: "Сила", cycleType: "strength", repRange: null,
+      startDate: null, weeks: [{ type: "heavy", workouts: source.weeks[0]!.workouts }, { type: "deload", workouts: source.weeks[1]!.workouts }] } });
+    const fromProgram = await f.plans.saveMesocycleAsTemplate(f.client.id, created.programId, source.id, "Объём");
+    assert.deepEqual([fromBuilder.kind, fromProgram.kind], ["MESOCYCLE", "MESOCYCLE"]);
+    const payloadBefore = JSON.stringify((await f.plans.getTemplate(fromBuilder.id))!.payload);
+    const programs = async () => (await f.plans.getLibrary(f.client.id)).active.length;
+    const before = await programs();
+
+    let key = 0;
+    const cycles = [fromBuilder, fromProgram].flatMap((template) => templateBuilderCycles(template.payload, () => `tpl:${key++}`, () => randomUUID()));
+    await f.transfer.saveBuilderWorkbook({ ...create, scope: { programId: created.programId, mesocycleId: null }, expectedRevision: plan.program.revision,
+      programTitle: plan.program.title, cycles });
+
+    assert.equal(await programs(), before, "добавление циклов из шаблонов не создаёт программу");
+    const after = (await f.plans.getPeriodizedPlan(f.client.id, created.programId))!.mesocycles;
+    assert.deepEqual(after.map((cycle) => cycle.title), [source.title, "Сила", source.title], "циклы — в конец, по порядку выбора");
+    assert.deepEqual(after[1]!.weeks.map((week) => week.type), ["heavy", "deload"], "типы недель из шаблона");
+    assert.equal(after[1]!.weeks[0]!.workouts[0]!.exercises[0]!.exerciseId, f.mapping.press);
+    assert.equal(after[1]!.weeks[0]!.workouts[0]!.exercises[0]!.sets.length, source.weeks[0]!.workouts[0]!.exercises[0]!.sets.length);
+    assert.notEqual(after[1]!.weeks[0]!.workouts[0]!.id, source.weeks[0]!.workouts[0]!.id, "у копии свои ID");
+
+    await f.plans.deleteTemplate(fromProgram.id);
+    assert.equal(JSON.stringify((await f.plans.getTemplate(fromBuilder.id))!.payload), payloadBefore, "применение не меняет шаблон");
+    assert.equal((await f.plans.getPeriodizedPlan(f.client.id, created.programId))!.mesocycles.length, 3, "удаление шаблона не трогает циклы");
+    const fromTemplates = new Set(after.slice(1).flatMap((cycle) => cycle.weeks.flatMap((week) => week.workouts.map((workout) => workout.id))));
+    const statuses = await f.execution.getProgramStatuses(f.client.id, created.programId);
+    assert.ok(statuses.length > 0 && statuses.every((status) => !fromTemplates.has(status.plannedWorkoutId)),
+      "результаты исходного цикла в циклы из шаблонов не переносятся");
   } finally { await f.close(); }
 });
 

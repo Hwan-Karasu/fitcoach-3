@@ -34,7 +34,7 @@ import { usePickedExercise, type PickedExercise } from "./usePickedExercise.ts";
 import { weekTypeTone } from "./weekTypeTone.ts";
 import { newPlanId, WorkoutsEditor } from "./WorkoutsEditor.tsx";
 import { cycleStateFrom } from "../domain/CycleState.ts";
-import { templateCycles, weeksFromTemplate, type TemplateKind, type TemplatePayload } from "../domain/TemplateModel.ts";
+import { templateBuilderCycles, templateCycles, type ProgramTemplate, type TemplateKind, type TemplatePayload } from "../domain/TemplateModel.ts";
 import type { BuilderExcelDraft, BuilderWorkbookCycle, BuilderWorkbookState } from "../domain/BuilderExcelDraft.ts";
 import type { BuilderWorkbookSavePort } from "../domain/BuilderWorkbookSave.ts";
 
@@ -114,8 +114,11 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId: init
   onPickExercise: (workoutId: string, replace?: string) => void;
   onCreated: (programId: string) => void;
   onCancel: () => void;
-  /** Вкладка «Шаблоны» — библиотека шаблонов (подставляет навигация). */
-  renderTemplates?: () => ReactNode;
+  /**
+   * Вкладка «Шаблоны» — библиотека шаблонов (подставляет навигация). В «+ Мезоцикл» приходит `addTo`: выбранный шаблон подставляет
+   * циклы в этот конструктор, а не открывает конструктор новой программы.
+   */
+  renderTemplates?: (addTo?: Readonly<{ programTitle: string; onPick: (template: ProgramTemplate) => void }>) => ReactNode;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -128,6 +131,8 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId: init
   const lookup = lookupState.lookup;
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const [tab, setTab] = useState<"program" | "templates">("program");
+  /** Библиотека шаблонов монтируется при первом открытии вкладки и дальше не размонтируется. */
+  const [templatesOpened, setTemplatesOpened] = useState(false);
   const [programTitle, setProgramTitle] = useState("");
   const [title, setTitle] = useState("Мезоцикл 1");
   const [cycleType, setCycleType] = useState<CycleType>("hypertrophy");
@@ -296,9 +301,11 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId: init
     [title, week.workouts]);
   const templateApplied = useRef(false);
   const [editedTemplate, setEditedTemplate] = useState<Readonly<{ id: string; revision: number; kind: TemplateKind }> | null>(null);
+  // Шаблон из параметров экрана: новая программа по шаблону программы, правка шаблона или «+ Мезоцикл» с шаблоном цикла (TPL-KIND-1:
+  // раньше шаблон подставлялся только при создании программы, и шаблон цикла превращался в новую программу).
   useEffect(() => {
     const sourceId = templateEditId ?? templateId;
-    if (sourceId === undefined || mode !== "create" || templateApplied.current) return;
+    if (sourceId === undefined || mode === "edit" || templateApplied.current) return;
     templateApplied.current = true;
     void (async () => {
       const template = await repository.getTemplate(sourceId);
@@ -308,8 +315,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId: init
       if (await repository.getMesocycleBuilderDraft(clientId, scope) !== null) return;
       const source = templateCycles(template.payload);
       if (source.length === 0) return;
-      const cycles = source.map((mesocycle) => ({ key: newPlanId("tpl"), title: mesocycle.title,
-        weeks: weeksFromTemplate(mesocycle, () => newPlanId("t")).map((week) => ({ type: week.type, workouts: week.workouts })) }));
+      const cycles = templateBuilderCycles(template.payload, () => newPlanId("tpl"), () => newPlanId("t"));
       // Несколько мезоциклов — тот же интерфейс «Циклы программы», что у импорта книги Excel: вкладки-циклы.
       if (cycles.length > 1) {
         applyWorkbook({ title: template.title, weeks: cycles[0]!.weeks, cycles });
@@ -318,7 +324,9 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId: init
       }
       const cycle = source[0]!;
       const next = cycles[0]!.weeks;
-      setProgramTitle(template.title); setTitle(cycle.title); setWeeks(next); setEditing(0);
+      // В «+ Мезоцикл» название программы — её собственное; из шаблона цикла берётся только цикл.
+      if (mode === "create") setProgramTitle(template.title);
+      setTitle(cycle.title); setWeeks(next); setEditing(0);
       baselines.current = new Map(next.map((week, index) => [index, week.workouts]));
       setDirty(templateEditId === undefined); setSaved(null); setMessage(null);
     })().catch(() => setMessage("Не удалось открыть шаблон. Конструктор пуст."));
@@ -591,8 +599,9 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId: init
     if (!check()) return;
     setBusy("template"); setMessage(null);
     try {
-      const template = await repository.saveBuilderAsTemplate({ title: programTitle.trim() || title, mesocycle: input() });
-      setSaved(`Шаблон «${template.title}» сохранён. Программа ещё не создана.`);
+      // Конструктор — контекст одного цикла: сохраняется шаблон цикла (решение владельца 2026-10-29), его добавляют в программу.
+      const template = await repository.saveBuilderCycleAsTemplate({ title: title.trim() || programTitle.trim(), mesocycle: input() });
+      setSaved(`Шаблон цикла «${template.title}» сохранён.${mode === "create" ? " Программа ещё не создана." : ""}`);
     } catch (error) {
       setMessage(errors[error instanceof Error ? error.message : ""] ?? "Не удалось сохранить шаблон.");
     } finally { setBusy(null); }
@@ -623,21 +632,41 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId: init
     } finally { setBusy(null); }
   };
 
-  const tabs = renderTemplates !== undefined && mode === "create" && !templateEdit ? (
+  /**
+   * «+ Мезоцикл»: шаблон, выбранный на вкладке «Шаблоны», добавляет свои циклы к черновику этого конструктора — так же, как книга Excel
+   * (циклы-вкладки, сохраняются общей кнопкой «Добавить» в эту программу). Ничего не затирается, несколько шаблонов подряд — несколько
+   * циклов; новая программа не создаётся.
+   */
+  const pickTemplate = (template: ProgramTemplate) => {
+    const cycles = templateBuilderCycles(template.payload, () => newPlanId("tpl"), () => newPlanId("t"));
+    if (cycles.length === 0) return;
+    try {
+      applyWorkbook({ title: template.title, weeks: cycles[0]!.weeks, cycles });
+      setTab("program");
+      setSaved(`Из шаблона «${template.title}» добавлено циклов: ${cycles.length}. Сохраните кнопкой «Добавить».`);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Не удалось подставить шаблон."); }
+  };
+  // Вкладки — при создании программы и в «+ Мезоцикл» (UI-OWN-041 ограничил их созданием, и в «+ Мезоцикл» они пропали — BUILDER-TABS-1).
+  const tabs = renderTemplates !== undefined && mode !== "edit" && !templateEdit ? (
     <View style={styles.tabs}>
-      <SegmentedControl items={[{ id: "program", label: "Программа" }, { id: "templates", label: "Шаблоны" }]} selectedId={tab} onSelect={setTab} />
+      <SegmentedControl items={[{ id: "program", label: "Программа" }, { id: "templates", label: "Шаблоны" }]} selectedId={tab}
+        onSelect={(next) => { if (next === "templates") setTemplatesOpened(true); setTab(next); }} />
     </View>
   ) : null;
-  if (tab === "templates" && renderTemplates !== undefined) {
-    return <View style={[styles.root, { backgroundColor: colors.canvas }]}>{tabs}{renderTemplates()}</View>;
-  }
+  const showTemplates = tab === "templates" && tabs !== null;
+  const programName = typeof program === "object" && program !== null ? program.title : "";
 
   const chip = (selected: boolean) => [styles.choice, { borderColor: selected ? colors.accentInk : colors.border,
     backgroundColor: selected ? withAlpha(colors.accentInk, 0.12) : colors.input }];
   return (
     <TrainingEditorLayout>
       {tabs}
-      <Animated.ScrollView ref={scrollRef} pointerEvents={busy !== null ? "none" : "auto"} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      {/* Обе вкладки остаются в дереве: черновик, позиция прокрутки и библиотека не пересоздаются при переключении. */}
+      {templatesOpened && renderTemplates !== undefined && tabs !== null ? <View style={[styles.fill, !showTemplates && styles.hidden]}>
+        {renderTemplates(mode === "add" ? { programTitle: programName, onPick: pickTemplate } : undefined)}
+      </View> : null}
+      <Animated.ScrollView ref={scrollRef} pointerEvents={busy !== null ? "none" : "auto"} style={showTemplates ? styles.hidden : undefined}
+        contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {templateEdit ? null : renderExcel?.(applyWorkbook, mode === "create" ? programTitle || undefined : program?.title)}
         {cycleStrip !== null ? <Section title={`Циклы программы · ${programCycles.length}`}>{cycleStrip}</Section> : null}
         {workbook && <Section title={`Циклы программы · ${workbook.cycles.length}`}>
@@ -809,9 +838,9 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId: init
         onTertiary={() => { setConfirmResults(false); void saveMesocycle("KEEP_HISTORY"); }} />
       <ScopeMenu visible={scopeFor !== null} weekIndex={(scopeFor ?? 0) + 1} onPick={pickScope} onDismiss={dismissScope}
         weeksOf={(scope) => targetWeeks(weeks.map((item, index) => ({ index: index + 1, type: item.type })), (scopeFor ?? 0) + 1, scope)} />
-      <StickyEditorFooter actionLabel={templateEdit ? "Сохранить шаблон" : mode === "edit" ? "Сохранить" : mode === "add" ? "Добавить" : "Создать"} busy={busy === "create"} onCancel={onCancel}
-        {...(templateEdit ? {} : { secondaryAction: { label: "В шаблон", busy: busy === "template", onPress: () => { void saveTemplate(); } } })}
-        onAction={() => { void (templateEdit ? saveTemplateEdit() : create()); }} message={recovery.error ?? message ?? saved} messageKind={recovery.error !== null || message !== null ? "error" : "success"} />
+      {showTemplates ? null : <StickyEditorFooter actionLabel={templateEdit ? "Сохранить шаблон" : mode === "edit" ? "Сохранить" : mode === "add" ? "Добавить" : "Создать"} busy={busy === "create"} onCancel={onCancel}
+        {...(templateEdit ? {} : { secondaryAction: { label: "Цикл в шаблон", busy: busy === "template", onPress: () => { void saveTemplate(); } } })}
+        onAction={() => { void (templateEdit ? saveTemplateEdit() : create()); }} message={recovery.error ?? message ?? saved} messageKind={recovery.error !== null || message !== null ? "error" : "success"} />}
       <BuilderDraftExitDialog visible={pendingSwitch !== null} busy={switchBusy} error={message}
         onSave={() => { void finishSwitch(true); }} onDiscard={() => { void finishSwitch(false); }} onContinue={() => setPendingSwitch(null)} />
       <BuilderDraftExitDialog visible={recovery.exitVisible} busy={recovery.exitBusy} error={recovery.error}
@@ -824,6 +853,7 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, padding: 16, justifyContent: "center" },
   fill: { flex: 1 },
+  hidden: { display: "none" },
   loadingStrip: { paddingHorizontal: 16, paddingTop: 12 },
   tabs: { paddingHorizontal: 16, paddingTop: 4 },
   content: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24, gap: 10 },

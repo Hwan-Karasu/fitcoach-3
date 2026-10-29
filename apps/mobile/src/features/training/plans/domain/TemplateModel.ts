@@ -67,9 +67,28 @@ export function templateCycles(payload: TemplatePayload): readonly TemplateMesoc
   return payload.kind === "MESOCYCLE" ? [payload.mesocycle] : payload.kind === "PERIODIZED" ? payload.mesocycles : [];
 }
 
-/** Нажатие на карточку открывает шаблон в конструкторе новой программы (Простой или Расширенный). */
-export function templateOpensInBuilder(payload: TemplatePayload): boolean {
-  return payload.kind === "SIMPLE" || templateCycles(payload).length > 0;
+/**
+ * Циклы шаблона как циклы конструктора (вкладки «Циклы программы»): у каждого цикла, тренировки, упражнения и подхода — новый ID, поэтому
+ * правка добавленного цикла не трогает шаблон, а удаление шаблона — цикл. Порядок и типы недель — как в шаблоне. Фактов в шаблоне нет.
+ */
+export function templateBuilderCycles(payload: TemplatePayload, newKey: () => string, newId: () => string):
+  readonly Readonly<{ key: string; title: string; weeks: readonly Readonly<{ type: PlanWeek["type"]; workouts: readonly PlannedWorkout[] }>[] }>[] {
+  return templateCycles(payload).map((cycle) => ({ key: newKey(), title: cycle.title,
+    weeks: weeksFromTemplate(cycle, newId).map((week) => ({ type: week.type, workouts: week.workouts })) }));
+}
+
+/**
+ * Из шаблона создаётся новая программа (открывается конструктор новой программы): Простая и Расширенная. Из шаблона цикла — никогда:
+ * он только добавляется в существующую программу (решение владельца 2026-10-29; раньше его открывали в конструкторе новой программы,
+ * и вместо цикла появлялась программа). Вид определяется типом шаблона, а не числом циклов или названием.
+ */
+export function templateCreatesProgram(payload: TemplatePayload): boolean {
+  return payload.kind === "SIMPLE" || (payload.kind === "PERIODIZED" && payload.mesocycles.length > 0);
+}
+
+/** Циклы шаблона можно добавить в существующую Расширенную программу: шаблон цикла и циклы Расширенной; Простая — не цикл (§48.14.2 п. 4). */
+export function templateAddsCycles(payload: TemplatePayload): boolean {
+  return templateCycles(payload).length > 0;
 }
 
 /** Короткое описание для карточки библиотеки. */
