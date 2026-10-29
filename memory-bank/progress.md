@@ -1,6 +1,12 @@
 # Progress — 2026-10-29
 
 ## Сделано
+- 2026-10-29 (ADR-054) SET-DONE-1, TPL-KIND-1, BUILDER-TABS-1, PROG-MENU-1, PART-DOCK-1, REST-NAV-1, UI-COMPACT-1, REST-PERF-1:
+  см. docs/PROJECT_STATUS.md. Новые тесты: participant-group-state, TPL-KIND (training-transfer, training-templates, template-cycles),
+  SET-DONE-1 (rest-timer, training-execution), REST-NAV-1 (notification-target), PART-DOCK-1 (training-navigation). На телефоне не проверено.
+  Техдолг: триггер перечитывания дневника в живой сессии не установлен (useWorkoutSnapshot.ts: перечитывание того же слота закрывает
+  ввод — ячейки теперь дописываются после загрузки, но причину перечитывания нужно поймать логом на телефоне); переход с таймера
+  внутри того же клиента по-прежнему пересоздаёт экран клиента (PrototypeShell.tsx openTarget, `StackActions.replace`).
 - 2026-10-29 (ADR-053) REST-FIX-1…7: см. docs/PROJECT_STATUS.md; тесты PERF-REST-ALL, active-workouts, training-execution («Макс.», «Пред.»).
   На телефоне не проверено. Отклонено: точечный сброс кэша планов по клиентам (ревизия программы общая).
 - 2026-10-28 (ADR-052) исправления аудита: AUD28-02, 03, 04, 09, 06, 11 (регрессионные тесты в workout-calendar-outcome и
