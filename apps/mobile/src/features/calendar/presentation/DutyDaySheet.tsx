@@ -12,6 +12,9 @@ import { formatMinute, mergeDutyRange } from "../domain/CalendarRules.ts";
 import { SLOT_MINUTES } from "../domain/CalendarModel.ts";
 import { calendarErrorMessage, dayTitle } from "./calendarPresentation.ts";
 
+/** Пресеты — сеткой по два в ряд на всю ширину окна. */
+const PRESET_COLUMNS = 2;
+
 const rangeText = (start: number, end: number) => `${formatMinute(start)}–${formatMinute(end)}`;
 
 /**
@@ -117,15 +120,24 @@ export function DutyDaySheet({ date, repository, window, onClose }: Readonly<{
           {duties.length === 0 ? <Text style={[styles.hint, { color: colors.textSecondary }]}>В этот день дежурства нет.</Text> : null}
 
           {dutyPresets.length > 0 ? (
-            <View style={styles.chips}>
-              {dutyPresets.map((preset) => (
-                <View key={preset.id} style={styles.presetRow}>
-                  <SelectionChip compact group="Пресет дежурства" label={`${preset.name} ${rangeText(preset.startMinute, preset.endMinute)}`}
-                    selected={false} disabled={busy} onPress={() => { void apply(preset.startMinute, preset.endMinute, editingId); }} />
-                  <Pressable accessibilityRole="button" accessibilityLabel={`Удалить пресет ${preset.name}`} disabled={busy}
-                    onPress={() => removePreset(preset)} style={styles.presetRemove}>
-                    <X size={14} color={colors.textSecondary} />
-                  </Pressable>
+            <View style={styles.presetGrid}>
+              {Array.from({ length: Math.ceil(dutyPresets.length / PRESET_COLUMNS) }, (_, rowIndex) => (
+                <View key={rowIndex} style={styles.presetGridRow}>
+                  {Array.from({ length: PRESET_COLUMNS }, (_, column) => {
+                    const preset = dutyPresets[rowIndex * PRESET_COLUMNS + column];
+                    // Пустая ячейка последнего ряда держит ширину колонки: нечётный пресет не растягивается на всю строку.
+                    if (preset === undefined) return <View key={`empty-${column}`} style={styles.presetCell} />;
+                    return (
+                      <View key={preset.id} style={styles.presetCell}>
+                        <SelectionChip fill compact group="Пресет дежурства" label={`${preset.name} ${rangeText(preset.startMinute, preset.endMinute)}`}
+                          selected={false} disabled={busy} onPress={() => { void apply(preset.startMinute, preset.endMinute, editingId); }} />
+                        <Pressable accessibilityRole="button" accessibilityLabel={`Удалить пресет ${preset.name}`} disabled={busy}
+                          onPress={() => removePreset(preset)} style={styles.presetRemove}>
+                          <X size={14} color={colors.textSecondary} />
+                        </Pressable>
+                      </View>
+                    );
+                  })}
                 </View>
               ))}
             </View>
@@ -176,9 +188,10 @@ const styles = StyleSheet.create({
   dutyText: { flex: 1, fontFamily: fonts.bold, fontSize: 15, lineHeight: 20 },
   dutyActions: { flexDirection: "row", gap: 6 },
   hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  presetRow: { flexDirection: "row", alignItems: "center" },
-  presetRemove: { width: 40, height: 48, alignItems: "center", justifyContent: "center" },
+  presetGrid: { gap: 6 },
+  presetGridRow: { flexDirection: "row", gap: 6 },
+  presetCell: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center" },
+  presetRemove: { width: 32, height: 48, alignItems: "center", justifyContent: "center" },
   time: { flex: 1, minHeight: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 6 },
   timeLabel: { flex: 1, fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
   timeValue: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
