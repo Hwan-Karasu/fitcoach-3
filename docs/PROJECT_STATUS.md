@@ -1,3 +1,10 @@
+## 2026-10-29 — build43: REST-FIX-8…10 («Макс.» — рекорд упражнения)
+
+- Собран `artifacts/apk/athlete-diary-3.0.0-build43.apk`: `com.fitcoach.v3`, 3.0.0, versionCode 43, arm64-v8a, 70 359 076 байт; assembleRelease PASS (58 с;
+  Node 24.3 первым в PATH — с системным Node 22 шаг createBundleReleaseJsAndAssets падает, JDK17, IPv4, без prebuild). Сертификат SHA-256
+  `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c` совпадает с build33–42 (apksigner verify PASS, aapt: package/version/ABI). SHA-256 APK
+  `077358c31523e2adcb5efa27f918af83413c6b87d635897a75c6ddd1439c0b7a`. Сверх build42 входят REST-FIX-8…10. Подпись по-прежнему debug (REL-ANDROID). На телефон не устанавливался.
+
 ## 2026-10-29 — REST-FIX-10: рекорд «Макс.» исправляется сразу после правки веса
 
 - Владелец: вес, завышенный по ошибке и исправленный, должен сразу исправить «Макс.», а не ждать смены недели. После каждой записи дневника
