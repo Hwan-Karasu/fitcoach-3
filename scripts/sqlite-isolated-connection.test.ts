@@ -68,6 +68,22 @@ test("SQLite runtime: handle записи проверяет FK до перво�
   assert.equal(native.closed, native.handles);
 });
 
+test("WRITE-PATH-1: сбой закрытия handle записи не глушится — release/restore откажет, reader всё равно закрыт", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "athlete-db-close-"));
+  const native = nativeFactory(join(directory, "synthetic.db"));
+  let opened = 0;
+  const connection = await openIsolatedSqliteConnection(async () => {
+    const handle = await native.open();
+    opened += 1;
+    return opened === 2 ? { ...handle, closeAsync: async () => { await handle.closeAsync(); throw new Error("CLOSE_FAILED"); } } : handle;
+  });
+  try {
+    await connection.exclusive(async (tx) => { await tx.run("CREATE TABLE t (id INTEGER)"); });
+    await assert.rejects(connection.close(), /CLOSE_FAILED/);
+    assert.equal(native.closed, 2, "reader закрыт и при сбое handle записи");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("SQLite runtime: если новый handle не включает FK, пользовательская команда даже не начинается", async () => {
   const directory = mkdtempSync(join(tmpdir(), "athlete-db-fk-failure-"));
   const native = nativeFactory(join(directory, "synthetic.db"));

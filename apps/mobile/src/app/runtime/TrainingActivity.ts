@@ -2,8 +2,8 @@
 export const TRAINING_QUIET_MS = 3 * 60 * 1000;
 
 export interface TrainingActivityPorts {
-  /** Таймеры отдыха на панели: пока хоть один есть, идёт тренировка. */
-  readonly restTimers: Readonly<{ list(): readonly unknown[] }>;
+  /** Таймеры отдыха на панели: пока хоть один идёт, идёт тренировка. Забытый на паузе таймер автокопию не держит. */
+  readonly restTimers: Readonly<{ list(): readonly Readonly<{ pausedLeftMs: number | null }>[] }>;
   /** Подписки на коммиты дневника и планов; возвращают отписку. */
   readonly subscriptions: readonly ((listener: () => void) => () => void)[];
 }
@@ -16,7 +16,7 @@ export function trackTrainingActivity(ports: TrainingActivityPorts, now: () => n
   let last = Number.NEGATIVE_INFINITY;
   const offs = ports.subscriptions.map((subscribe) => subscribe(() => { last = now(); }));
   return {
-    quiet: () => ports.restTimers.list().length === 0 && now() - last >= TRAINING_QUIET_MS,
+    quiet: () => !ports.restTimers.list().some((timer) => timer.pausedLeftMs === null) && now() - last >= TRAINING_QUIET_MS,
     dispose: () => { for (const off of offs) off(); },
   };
 }

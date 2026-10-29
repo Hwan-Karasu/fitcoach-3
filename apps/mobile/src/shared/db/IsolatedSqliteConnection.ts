@@ -77,9 +77,12 @@ export async function openIsolatedSqliteConnection(open: () => Promise<NativeSql
           throw error;
         }
       },
+      // Сбой закрытия handle записи не глушится: release/restore R06 должны отказать, а не заменять файл под открытым handle.
       close: async () => {
-        await discardWriter();
-        await reader.closeAsync();
+        const open = writer;
+        writer = null;
+        try { if (open !== null) await open.closeAsync(); }
+        finally { await reader.closeAsync(); }
       },
     };
   } catch (error) {

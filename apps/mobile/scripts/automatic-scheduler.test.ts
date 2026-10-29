@@ -55,7 +55,7 @@ test("AUTO-BACKUP-3 во время тренировки автокопия не
 });
 
 test("AUTO-BACKUP-3 тренировка идёт, пока на панели есть таймер или были записи последние 3 минуты", () => {
-  let now = 1_000_000; let timers: readonly unknown[] = [];
+  let now = 1_000_000; let timers: readonly { pausedLeftMs: number | null }[] = [];
   let emit!: () => void;
   const activity = trackTrainingActivity({ restTimers: { list: () => timers },
     subscriptions: [(listener) => { emit = listener; return () => { emit = () => undefined; }; }] }, () => now);
@@ -63,7 +63,8 @@ test("AUTO-BACKUP-3 тренировка идёт, пока на панели е
   emit(); now += TRAINING_QUIET_MS - 1;
   assert.equal(activity.quiet(), false, "запись подхода меньше 3 минут назад");
   now += 1; assert.equal(activity.quiet(), true);
-  timers = [{}]; assert.equal(activity.quiet(), false, "идёт таймер отдыха");
+  timers = [{ pausedLeftMs: null }]; assert.equal(activity.quiet(), false, "идёт таймер отдыха");
+  timers = [{ pausedLeftMs: 30_000 }]; assert.equal(activity.quiet(), true, "забытый на паузе таймер автокопию не держит");
   activity.dispose(); timers = [];
   emit(); assert.equal(activity.quiet(), true, "после отписки записи не учитываются");
 });
