@@ -4,6 +4,7 @@ import { SnapshotError } from "../domain/SnapshotManifest.ts";
 import { SNAPSHOT_OBJECTS } from "./SnapshotCatalog.ts";
 import { originalPhotoJsonForParity, type RestoredRecipePhoto } from "./SnapshotPhotoRules.ts";
 import type { SnapshotSqlPort } from "./SnapshotSqlPort.ts";
+import { createTimeSlicer } from "../../../shared/runtime/timeSlice.ts";
 
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
 /** Same byte protocol as the original node:crypto oracle. Integers cross the native bridge
@@ -33,7 +34,8 @@ export async function snapshotContentSha256(db: SnapshotSqlPort, photos: readonl
       if (SNAPSHOT_OBJECTS.has(object.name)) continue;
       for (const value of [object.type, object.name, object.tbl_name, object.sql]) feed(value === null ? "null" : "text", value);
     }
-    let sinceYield = 0;
+    // Порции по времени (AUTO-BACKUP-2): не дольше 8 мс работы подряд, а не 512 строк — длинные строки на Hermes держали поток.
+    const slice = createTimeSlicer();
     for (const object of objects.filter((row) => row.type === "table" && !SNAPSHOT_OBJECTS.has(row.name))) {
       feed("text", object.name);
       const columns = (await db.all<{ name: string }>(`PRAGMA table_info(${quote(object.name)})`)).map((row) => row.name);
@@ -53,7 +55,7 @@ export async function snapshotContentSha256(db: SnapshotSqlPort, photos: readonl
           const value = photo && name === "details_json" ? originalPhotoJsonForParity(row[`v${index}`], photo) : row[`v${index}`];
           feed(kind, value);
         }
-        if (++sinceYield >= 512) { await new Promise((resolve) => setTimeout(resolve, 0)); sinceYield = 0; }
+        await slice();
       }
       text("end-table;");
     }

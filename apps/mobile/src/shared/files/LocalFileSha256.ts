@@ -1,7 +1,9 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { createTimeSlicer, yieldToEventLoop } from "../runtime/timeSlice.ts";
 
-export const HASH_READ_BYTES = 256 * 1024;
+/** Кусок чтения: SHA-256 на чистом JS обрабатывает его за единицы миллисекунд даже на Hermes — порция не держит поток. */
+export const HASH_READ_BYTES = 64 * 1024;
 export interface LocalByteReader {
   readonly size: number | null;
   readBytes(length: number): Uint8Array;
@@ -14,23 +16,25 @@ export class LocalFileHashError extends Error {
 }
 
 /** Hash an immutable, closed/private file in bounded chunks. No database-sized JS buffer.
- * Yield periodically so large backups do not monopolize the JS thread.
+ * Запасной путь без нативного хеша (Expo Go): поток уступается по времени (≤ 8 мс работы подряд), а не раз в 4 МБ — раньше
+ * это давало секунды полной блокировки на Hermes (AUTO-BACKUP-1).
  */
-export async function localFileSha256(file: LocalByteFile,
-  yieldTask: () => Promise<void> = () => new Promise((resolve) => setTimeout(resolve, 0))): Promise<{ readonly sha256: string; readonly bytes: number }> {
+export async function localFileSha256(file: LocalByteFile, yieldTask: () => Promise<void> = yieldToEventLoop,
+  now: () => number = () => performance.now()): Promise<{ readonly sha256: string; readonly bytes: number }> {
   let reader: LocalByteReader | null = null;
   const hash = sha256.create();
+  const slice = createTimeSlicer(8, now, yieldTask);
   try {
     reader = file.openReader();
     const size = reader.size;
     if (size === null || !Number.isSafeInteger(size) || size < 0) throw new LocalFileHashError();
-    let bytes = 0; let sinceYield = 0;
+    let bytes = 0;
     while (bytes < size) {
       const expected = Math.min(HASH_READ_BYTES, size - bytes);
       const chunk = reader.readBytes(expected);
       if (!(chunk instanceof Uint8Array) || chunk.length === 0 || chunk.length > expected) throw new LocalFileHashError();
-      hash.update(chunk); bytes += chunk.length; sinceYield += chunk.length;
-      if (sinceYield >= 4 * 1024 * 1024) { await yieldTask(); sinceYield = 0; }
+      hash.update(chunk); bytes += chunk.length;
+      await slice();
     }
     if (reader.size !== size || reader.readBytes(1).length !== 0) throw new LocalFileHashError();
     reader.close(); reader = null;

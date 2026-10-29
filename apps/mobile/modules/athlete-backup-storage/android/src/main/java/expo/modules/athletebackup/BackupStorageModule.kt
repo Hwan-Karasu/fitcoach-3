@@ -10,6 +10,7 @@ import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
@@ -31,6 +32,26 @@ class BackupStorageModule : Module() {
   private val automaticLock = Any()
   override fun definition() = ModuleDefinition {
     Name("AthleteBackupStorage")
+
+    // AUTO-BACKUP-1: SHA-256 приватного файла копии вне JS-потока (раньше — чистый JS на Hermes, секунды блокировки). Только чтение,
+    // только файлы в приватных каталогах приложения; ошибка — фиксированный код без пути.
+    AsyncFunction("fileSha256") Coroutine { uri: String ->
+      val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+      withContext(Dispatchers.IO) {
+        try {
+          val file = File(URI(uri)).canonicalFile
+          val roots = listOfNotNull(context.filesDir, context.cacheDir, context.noBackupFilesDir).map { it.canonicalPath + File.separator }
+          if (roots.none { file.path.startsWith(it) } || !file.isFile) throw IllegalArgumentException()
+          val digest = MessageDigest.getInstance("SHA-256"); var size = 0L
+          file.inputStream().use { input ->
+            val buffer = ByteArray(1024 * 1024)
+            while (true) { val count = input.read(buffer); if (count < 0) break; size += count; digest.update(buffer, 0, count) }
+          }
+          mapOf("sha256" to digest.digest().joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }, "bytes" to size.toDouble())
+        } catch (error: CancellationException) { throw error }
+        catch (_: Exception) { throw CodedException("LOCAL_FILE_HASH_FAILED", "LOCAL_FILE_HASH_FAILED", null) }
+      }
+    }
 
     Function("supportsDownloads") { Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q }
     Function("automaticProtocolVersion") { 2 }
