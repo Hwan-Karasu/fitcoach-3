@@ -57,6 +57,8 @@ export function AppButton({
       accessibilityHint={disabled && !busy ? disabledReason : undefined}
       accessibilityState={{ disabled: unavailable, busy }}
       disabled={unavailable}
+      // Плотная кнопка 34 dp: область нажатия добирается до 48 dp за счёт невидимого края (правило hit-area ≥ 48).
+      hitSlop={size === "small" ? SMALL_HIT_SLOP : undefined}
       onPress={onPress}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
@@ -80,6 +82,8 @@ export function AppButton({
     </Pressable>
   );
 }
+
+const SMALL_HIT_SLOP = { top: 7, bottom: 7, left: 0, right: 0 } as const;
 
 const styles = StyleSheet.create({
   button: { minHeight: TOUCH_TARGET, borderRadius: radius.md, borderWidth: 2, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },

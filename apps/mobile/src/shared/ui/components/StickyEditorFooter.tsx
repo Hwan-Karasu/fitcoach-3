@@ -47,16 +47,23 @@ export function StickyEditorFooter({
   return (
     <View onLayout={onLayout} style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: keyboardVisible ? 8 : Math.max(8, insets.bottom) }]}>
       {message ? <InlineNotice kind={messageKind}>{message}</InlineNotice> : null}
-      {secondaryAction !== undefined ? <>
+      {secondaryAction !== undefined ? fontScale > 1.3 ? <>
+        {/* Крупный системный шрифт: прежняя раскладка столбцом, подписи не обрезаются. */}
         <AppButton compact label={actionLabel} accessibilityLabel={actionAccessibilityLabel} onPress={onAction} busy={busy}
           disabled={disabled || secondaryAction.busy === true} />
-        <View style={{ flexDirection: fontScale > 1.3 ? "column" : "row", gap: 6 }}>
-          <View style={fontScale > 1.3 ? undefined : { flex: 1 }}><AppButton compact label={secondaryAction.label} variant="secondary"
-            busy={secondaryAction.busy} disabled={busy} onPress={secondaryAction.onPress} /></View>
-          {onCancel ? <View style={fontScale > 1.3 ? undefined : { flex: 1 }}><AppButton compact label="Отмена" variant="secondary"
+        <AppButton compact label={secondaryAction.label} variant="secondary" busy={secondaryAction.busy} disabled={busy} onPress={secondaryAction.onPress} />
+        {onCancel ? <AppButton compact label="Отмена" variant="secondary" disabled={busy || secondaryAction.busy === true} onPress={onCancel} /> : null}
+      </> : (
+        // Одна строка плотных кнопок 34 dp (область нажатия 48 dp): «Отмена» и второстепенное — мягкие, главное — заливка справа.
+        <View style={styles.compactRow}>
+          {onCancel ? <View style={styles.cancel}><AppButton compact size="small" label="Отмена" variant="secondary"
             disabled={busy || secondaryAction.busy === true} onPress={onCancel} /></View> : null}
+          <View style={styles.wide}><AppButton compact size="small" label={secondaryAction.label} variant="secondary"
+            busy={secondaryAction.busy} disabled={busy} onPress={secondaryAction.onPress} /></View>
+          <View style={styles.wide}><AppButton compact size="small" label={actionLabel} accessibilityLabel={actionAccessibilityLabel}
+            onPress={onAction} busy={busy} disabled={disabled || secondaryAction.busy === true} /></View>
         </View>
-      </> : <View style={{ flexDirection: fontScale > 1.3 ? "column" : "row", gap: 6 }}>
+      ) : <View style={{ flexDirection: fontScale > 1.3 ? "column" : "row", gap: 6 }}>
       {onCancel ? <View style={fontScale > 1.3 ? undefined : { flex: 1 }}><AppButton compact label="Отмена" variant="secondary" disabled={busy} onPress={onCancel} /></View> : null}
       <View style={fontScale > 1.3 ? undefined : { flex: 2 }}><AppButton
         compact
@@ -74,5 +81,8 @@ export function StickyEditorFooter({
 
 const styles = StyleSheet.create({
   footer: { borderTopWidth: 1, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6, gap: 6 },
+  compactRow: { flexDirection: "row", gap: 6 },
+  cancel: { flex: 1 },
+  wide: { flex: 1.3 },
   note: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14, textAlign: "center" },
 });

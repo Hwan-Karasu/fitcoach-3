@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppButton, InlineNotice, LoadingState, ScreenHeader, SegmentedControl, TextField } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -30,6 +30,7 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
   renderTrigger?: (onPress: () => void, disabled: boolean, onSample: () => void) => ReactNode;
 }>) {
   const { palette } = usePrototypeTheme(); const colors = palette.tokens;
+  const { fontScale } = useWindowDimensions();
   const [page, setPage] = useState<Page>(null);
   const [session, setSession] = useState<WorkbookReviewSession | null>(null);
   const [catalog, setCatalog] = useState<readonly CatalogEntry[]>([]);
@@ -138,10 +139,15 @@ export function BuilderExcelImport({ files, exercises, target, clientName = "К�
       onApply={() => setSession(match(applyWorkbookColumns(session)))} />}
   </> : null;
   return <>
-    {renderTrigger ? renderTrigger(pick, busy, downloadSample) : <>
-      <AppButton compact variant="secondary" label={label} disabled={busy} onPress={pick} />
-      <AppButton compact variant="secondary" label="Скачать образец для импорта" disabled={busy} onPress={downloadSample} />
-    </>}
+    {renderTrigger ? renderTrigger(pick, busy, downloadSample) : (
+      // Обе кнопки в одной строке, плотные (34 dp, область нажатия 48 dp); при крупном системном шрифте — столбцом, без обрезки.
+      <View style={{ flexDirection: fontScale > 1.3 ? "column" : "row", gap: 8 }}>
+        <View style={fontScale > 1.3 ? undefined : { flex: 3 }}><AppButton compact size="small" variant="secondary" label={label}
+          disabled={busy} onPress={pick} /></View>
+        <View style={fontScale > 1.3 ? undefined : { flex: 2 }}><AppButton compact size="small" variant="secondary" label="Скачать образец"
+          accessibilityLabel="Скачать образец для импорта" disabled={busy} onPress={downloadSample} /></View>
+      </View>
+    )}
     {!!error && page === null && <InlineNotice kind="error">{error}</InlineNotice>}
     <Modal visible={page !== null} animationType="none" onRequestClose={back}>
       <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, backgroundColor: colors.canvas }}>
