@@ -347,7 +347,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
           onExport={async (mesocycleId) => { const value = await trainingTransfer.exportClient(viewer, [route.params.programId]); await expoWorkbookFiles.share(mesocycleId ? selectTransferCycle(value, route.params.programId, mesocycleId) : value); }}
           onOpenMatrix={() => navigation.navigate("TrainingMatrix", { programId: route.params.programId })}
           onTabChange={(tab) => navigation.setOptions({ title: tab === "templates" ? "Шаблоны" : trainingTitles.TrainingProgram })}
-          renderParticipants={(current, shown, group, source) => <ParticipantSwitcher docked members={group} clientId={shown?.clientId ?? viewer} activeClientId={viewer}
+          renderParticipants={(current, shown, group, source, groupFailed) => <ParticipantSwitcher docked members={group} membersFailed={groupFailed} clientId={shown?.clientId ?? viewer} activeClientId={viewer}
             anchorClientId={clientId} programId={shown?.programId ?? route.params.programId} mesocycleId={current().mesocycleId}
             repository={repository} names={names} busy={switching || shown?.clientId !== viewer || shown?.programId !== route.params.programId} onSelect={(next) => { void switchTo(next.clientId, async () => {
               navigationPerformance.begin("program-participant");

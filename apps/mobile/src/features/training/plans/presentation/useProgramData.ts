@@ -85,13 +85,16 @@ export function useProgramData({ clientId, programId, repository, requestedMesoc
     return () => { active = false; };
   }, [clientId, cycleKey, focused, programId, repository, shown, version, groupVersion]);
   // Состав другого места (прежней программы или мезоцикла) не выдаётся за состав открытого: до чтения — `null`.
-  const group = shown === null ? null : groupOf(groupRead, JSON.stringify([shown.clientId, shown.programId, cycleKey]));
+  const groupPlace = shown === null ? null : JSON.stringify([shown.clientId, shown.programId, cycleKey]);
+  const group = groupPlace === null ? null : groupOf(groupRead, groupPlace);
+  /** Состав этого места не прочитался: полосы нет до повтора (не PENDING — иначе панель держала бы строку другого экрана). */
+  const groupFailed = groupRead !== null && groupRead.place === groupPlace && groupRead.status === "error";
 
   useEffect(() => repository.subscribeCommittedChanges((change) => {
     if (change.selectionOnly !== true) setGroupVersion((value) => value + 1);
     if (change.selectionOnly !== true && change.orderOnly !== true && change.clientIds.includes(clientId)) setVersion((value) => value + 1);
   }), [clientId, repository]);
 
-  return { program, setProgram, plan, simpleWeeks, periodized, setPeriodized, shown, group, cycleKey,
+  return { program, setProgram, plan, simpleWeeks, periodized, setPeriodized, shown, group, groupFailed, cycleKey,
     refresh: () => setVersion((value) => value + 1) };
 }

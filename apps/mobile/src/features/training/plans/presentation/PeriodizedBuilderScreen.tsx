@@ -312,7 +312,10 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId: init
       if (template === null) { setMessage("Шаблон не найден. Конструктор пуст."); return; }
       if (templateEditId !== undefined) setEditedTemplate({ id: template.id, revision: template.revision, kind: template.kind });
       // Несохранённый черновик важнее: его восстанавливает отдельный эффект выше, шаблон поверх него не ложится.
-      if (await repository.getMesocycleBuilderDraft(clientId, scope) !== null) return;
+      if (await repository.getMesocycleBuilderDraft(clientId, scope) !== null) {
+        if (mode === "add") setSaved("Открыт несохранённый черновик этой программы, шаблон не подставлен: добавьте его на вкладке «Шаблоны».");
+        return;
+      }
       const source = templateCycles(template.payload);
       if (source.length === 0) return;
       const cycles = templateBuilderCycles(template.payload, () => newPlanId("tpl"), () => newPlanId("t"));
@@ -643,6 +646,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId: init
     try {
       applyWorkbook({ title: template.title, weeks: cycles[0]!.weeks, cycles });
       setTab("program");
+      setMessage(null);
       setSaved(`Из шаблона «${template.title}» добавлено циклов: ${cycles.length}. Сохраните кнопкой «Добавить».`);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Не удалось подставить шаблон."); }
   };

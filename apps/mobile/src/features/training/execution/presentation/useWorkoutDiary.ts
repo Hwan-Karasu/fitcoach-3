@@ -69,6 +69,8 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
   unilateralRef.current = unilateralOf;
   /** Собственные команды идут по очереди; пока они выполняются, их коммиты уже применены через ACK и перечитывания не требуют. */
   const queue = useRef(new SerialWriteQueue()).current;
+  /** Когда запись последний раз отклонена из-за неоткрытого слота (вибрация — одна на серию). */
+  const refusedAt = useRef(0);
   const focused = useIsFocused();
   const focusedRef = useRef(focused);
   focusedRef.current = focused;
@@ -114,7 +116,10 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
     // оставалось на экране несохранённым, а подход не засчитывался. Ячейка остаётся «грязной» и допишется следующей записью.
     if (loadedKeyRef.current !== slotKeyRef.current) {
       setMessage("Тренировка ещё открывается — значение не сохранено. Повторите ввод.");
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
+      // Несколько ячеек отказывают разом (flush): одна вибрация на серию, а не на каждую.
+      const now = Date.now();
+      if (now - refusedAt.current > 1000) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
+      refusedAt.current = now;
       return Promise.resolve(null);
     }
     return queue.run(task, { onSuccess: () => setMessage(null), onError: (error) => {
@@ -181,7 +186,8 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
       const { fact, identity } = identityOf(exercise, set, position);
       // Уже в нужном состоянии (повторная команда): без записи, без второго сигнала и без перезапуска таймера.
       const was = side === undefined ? fact?.confirmed : side === "L" ? fact?.sides?.left.confirmed : fact?.sides?.right.confirmed;
-      if (fact !== null && (was === true) === confirmed) return null;
+      // Без факта «снять» тоже ничего не делает: снимать нечего.
+      if ((was === true) === confirmed) return null;
       const result = await execution.setSetConfirmation(identity, confirmed, undefined, side);
       applyFact(result.fact, result.session);
       if (result.confirmedNow) {

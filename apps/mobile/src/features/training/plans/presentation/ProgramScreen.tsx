@@ -84,7 +84,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   /** UI-OWN-043: полоса участников группы под шапкой; получает текущее место плана (мезоцикл и неделя). */
   /** `shown` — чьи данные сейчас на экране: состав группы читается по ним, а не по параметрам маршрута, которые меняются раньше. */
   renderParticipants?: (current: () => CounterpartRef, shown: Readonly<{ clientId: string; programId: string }> | null,
-    group: readonly GroupCopy[] | null, source: PeriodizedPlan | null) => ReactNode;
+    group: readonly GroupCopy[] | null, source: PeriodizedPlan | null, groupFailed: boolean) => ReactNode;
   /** §48.11, §50.3: удаление мезоцикла и программы у этого клиента; без порта пунктов нет. */
   planDelete?: MesocycleDeletePort & ProgramDeletePort;
 }>) {
@@ -106,7 +106,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
   const appliedContext = useRef<string | null>(null);
   const [weeksByCycle, setWeeksByCycle] = useState<Readonly<Record<string, number>>>({});
   const focused = useIsFocused();
-  const { program, setProgram, plan, simpleWeeks, periodized, setPeriodized, shown, group, cycleKey, refresh } = useProgramData({
+  const { program, setProgram, plan, simpleWeeks, periodized, setPeriodized, shown, group, groupFailed, cycleKey, refresh } = useProgramData({
     clientId, programId, repository, requestedMesocycle, requestedWeek, onMessage: setMessage, focused,
     onRequestedWeek: (key, week) => { appliedContext.current = `${key}:${week}`; setWeeksByCycle((current) => ({ ...current, [key]: week })); } });
   const loadedFor = shown === null ? null : `${shown.clientId}:${shown.programId}`;
@@ -227,7 +227,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
       selectedId={tab} onSelect={(next) => { if (next === "templates") setTemplatesOpened(true); setTab(next); onTabChange?.(next); }} />
   </View> : null;
   const participants = renderParticipants?.(() => ({ mesocycleId: selectedCycle()?.id ?? null,
-    weekIndex: weeksByCycle[cycleKey] ?? shownWeek.current, workoutId: null }), shown, group, periodized);
+    weekIndex: weeksByCycle[cycleKey] ?? shownWeek.current, workoutId: null }), shown, group, periodized, groupFailed);
   const showTemplates = tab === "templates" && renderTemplates !== undefined;
   // Обе вкладки остаются в дереве (BUILDER-TABS-1): возврат на «Программа» не пересоздаёт план и не сбрасывает прокрутку.
   return (

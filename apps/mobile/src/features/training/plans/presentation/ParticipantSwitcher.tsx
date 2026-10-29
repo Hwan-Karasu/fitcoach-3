@@ -21,7 +21,7 @@ import { navigationPerformance } from "../../../../shared/diagnostics/Navigation
  * участников; вышедшие не показываются.
  */
 export function ParticipantSwitcher({ clientId, activeClientId = clientId, anchorClientId, programId, mesocycleId, workoutId, repository, names,
-  busy = false, onSelect, members: given, docked = false }: Readonly<{
+  busy = false, onSelect, members: given, membersFailed = false, docked = false }: Readonly<{
   /** Чьими данными читается состав группы (с `programId` и мезоцикл/тренировкой — одна идентичность). */
   clientId: string;
   /** Чей участник выделен: меняется сразу при выборе, раньше, чем загрузятся данные (по умолчанию — `clientId`). */
@@ -37,10 +37,14 @@ export function ParticipantSwitcher({ clientId, activeClientId = clientId, ancho
   onSelect: (copy: GroupCopy) => void;
   /** Готовая группа: экран программы читает её сам и отдаёт сюда — переключатель не читает базу и не подписывается второй раз. */
   members?: readonly GroupCopy[] | null;
+  /** Готовая группа не прочиталась (ошибка чтения у экрана программы): строки нет до повтора. */
+  membersFailed?: boolean;
   /** Строка внутри нижней панели навигации: без собственных отступов и фона. */
   docked?: boolean;
 }>) {
-  const { members, fresh, failed } = useParticipantGroup(repository, clientId, programId, mesocycleId, workoutId, given, useIsFocused());
+  const read = useParticipantGroup(repository, clientId, programId, mesocycleId, workoutId, given, useIsFocused());
+  const { members, fresh } = read;
+  const failed = given === undefined ? read.failed : membersFailed;
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
   const select = useCallback((copy: GroupCopy) => selectRef.current(copy), []);

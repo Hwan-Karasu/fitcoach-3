@@ -119,6 +119,7 @@ test("PART-DOCK-1 программа A(2) → B(1) → A: до ответа A с
   hold = false; fail = true;
   await act(async () => { notify({ clientIds: ["client"] }); });
   assert.equal(groupNow(), null, "ошибка чтения — не «один участник»");
+  assert.equal(latest.groupFailed, true, "ошибка видна переключателю: строки нет, панель не держит чужую строку");
   fail = false;
   await act(async () => { notify({ clientIds: ["other"] }); });
   assert.equal(groupNow()?.length, 2, "следующее изменение плана перечитывает состав");
