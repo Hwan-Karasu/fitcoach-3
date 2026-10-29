@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
+import { useIsFocused } from "@react-navigation/native";
 import { Pressable, ScrollView, StyleSheet, Text, View, type NativeScrollEvent } from "react-native";
 import { TabBarDock } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -9,6 +10,7 @@ import { counterpartOf, participantOrder, type CounterpartRef } from "../domain/
 import type { GroupCopy } from "../domain/Placement.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import { useParticipantGroup } from "./useParticipantGroup.ts";
+import { stripState } from "../domain/ParticipantGroupState.ts";
 import type { PeriodizedPlan } from "../domain/PeriodizedModel.ts";
 import { navigationPerformance } from "../../../../shared/diagnostics/NavigationPerformance.ts";
 
@@ -38,12 +40,14 @@ export function ParticipantSwitcher({ clientId, activeClientId = clientId, ancho
   /** Строка внутри нижней панели навигации: без собственных отступов и фона. */
   docked?: boolean;
 }>) {
-  const { members, fresh } = useParticipantGroup(repository, clientId, programId, mesocycleId, workoutId, given);
+  const { members, fresh, failed } = useParticipantGroup(repository, clientId, programId, mesocycleId, workoutId, given, useIsFocused());
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
   const select = useCallback((copy: GroupCopy) => selectRef.current(copy), []);
-  if (members === null) return null;
-  if (members.length < 2) return docked ? <TabBarDock>{null}</TabBarDock> : null;
+  // Состав этого места ещё не известен: панель держит прежнее, а не прячет строку как «один участник» (PART-DOCK-1).
+  const state = stripState(members, failed);
+  if (state === "pending") return docked ? <TabBarDock pending>{null}</TabBarDock> : null;
+  if (state === "none" || members === null) return docked ? <TabBarDock>{null}</TabBarDock> : null;
   const strip = <ParticipantStrip group={members} activeClientId={activeClientId} anchorClientId={anchorClientId} names={names}
     busy={busy} fresh={fresh} onSelect={select} docked={docked} />;
   return docked ? <TabBarDock>{strip}</TabBarDock> : strip;

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { TrainingProgram } from "../domain/ProgramModel.ts";
 import type { PeriodizedPlan } from "../domain/PeriodizedModel.ts";
 import type { GroupCopy } from "../domain/Placement.ts";
+import { groupOf, type GroupRead } from "../domain/ParticipantGroupState.ts";
 import type { SimplePlan } from "../domain/SimplePlanModel.ts";
 import type { SimpleWeek } from "../domain/SimpleWorkoutEdit.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
@@ -26,8 +27,8 @@ export function useProgramData({ clientId, programId, repository, requestedMesoc
   const [shown, setShown] = useState<Readonly<{ clientId: string; programId: string }> | null>(null);
   const [version, setVersion] = useState(0);
   const [groupVersion, setGroupVersion] = useState(0);
-  /** `null` — группа выбранного мезоцикла ещё не прочитана (переключатель участников её не показывает и не прячет). */
-  const [group, setGroup] = useState<readonly GroupCopy[] | null>(null);
+  /** Прочитанная группа вместе с местом (клиент, программа, мезоцикл), для которого её читали (PART-DOCK-1). */
+  const [groupRead, setGroupRead] = useState<GroupRead<GroupCopy> | null>(null);
   const callbacks = useRef({ onRequestedWeek, onMessage });
   callbacks.current = { onRequestedWeek, onMessage };
   const cycleKey = periodized?.selectedMesocycleId ?? periodized?.mesocycles[0]?.id ?? "simple";
@@ -73,13 +74,18 @@ export function useProgramData({ clientId, programId, repository, requestedMesoc
   // его результат получают и «N участников» в карточке, и полоса участников.
   useEffect(() => {
     if (!focused || shown === null || shown.clientId !== clientId || shown.programId !== programId) return undefined;
-    if (cycleKey === "simple") { setGroup([]); return undefined; }
-    let active = true;
     // Идентичность — показанных данных: мезоцикл `cycleKey` принадлежит им, а не новому участнику, пока тот не загружен.
-    repository.getMesocycleGroup(shown?.clientId ?? clientId, shown?.programId ?? programId, { mesocycleId: cycleKey })
-      .then((copies) => { if (active) setGroup(copies); }).catch(() => undefined);
+    const place = JSON.stringify([shown.clientId, shown.programId, cycleKey]);
+    if (cycleKey === "simple") { setGroupRead({ place, version: groupVersion, status: "ready", members: [] }); return undefined; }
+    let active = true;
+    // Ошибка чтения — не «один участник»: состав остаётся неизвестным и перечитывается при возврате на экран или следующем коммите.
+    repository.getMesocycleGroup(shown.clientId, shown.programId, { mesocycleId: cycleKey }).then(
+      (members) => { if (active) setGroupRead({ place, version: groupVersion, status: "ready", members }); },
+      () => { if (active) setGroupRead({ place, version: groupVersion, status: "error" }); });
     return () => { active = false; };
   }, [clientId, cycleKey, focused, programId, repository, shown, version, groupVersion]);
+  // Состав другого места (прежней программы или мезоцикла) не выдаётся за состав открытого: до чтения — `null`.
+  const group = shown === null ? null : groupOf(groupRead, JSON.stringify([shown.clientId, shown.programId, cycleKey]));
 
   useEffect(() => repository.subscribeCommittedChanges((change) => {
     if (change.selectionOnly !== true) setGroupVersion((value) => value + 1);

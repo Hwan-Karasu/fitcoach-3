@@ -75,6 +75,78 @@ test("P01 programme switcher refreshes on another participant archive and restor
   await act(async () => { renderer.unmount(); });
 });
 
+test("PART-DOCK-1 программа A(2) → B(1) → A: до ответа A состав неизвестен (не «один участник» от B), ошибка чтения перечитывается", async () => {
+  let notify!: (change: TrainingPlansCommittedChange) => void;
+  const programOf = (id: string) => ({ id, title: id, kind: "PERIODIZED", revision: 1, createdAt: "2026-10-26", memberClientIds: ["client"] });
+  const cycle = (programId: string) => `${programId}-cycle`;
+  const groups: Record<string, readonly { clientId: string; programId: string; mesocycleId: string }[]> = {
+    A: [{ clientId: "client", programId: "A", mesocycleId: cycle("A") }, { clientId: "other", programId: "A", mesocycleId: "other-A" }],
+    B: [{ clientId: "client", programId: "B", mesocycleId: cycle("B") }],
+  };
+  const held = new Map<string, ReturnType<typeof deferred<readonly { clientId: string; programId: string; mesocycleId: string }[]>>>();
+  let hold = false;
+  let fail = false;
+  const plans = {
+    getProgram: async (_client: string, id: string) => programOf(id), selectProgram: async () => undefined,
+    getPeriodizedPlan: async (_client: string, id: string) => ({ program: programOf(id), selectedMesocycleId: cycle(id),
+      mesocycles: [{ id: cycle(id), lineageId: `${id}-lineage`, title: id, weeks: [] }] }),
+    getMesocycleGroup: async (_client: string, id: string) => {
+      if (fail) throw new Error("SQLITE_BUSY");
+      if (!hold) return groups[id]!;
+      const pending = deferred<readonly { clientId: string; programId: string; mesocycleId: string }[]>(); held.set(id, pending); return pending.promise;
+    },
+    subscribeCommittedChanges: (listener: typeof notify) => { notify = listener; return () => undefined; },
+  } as unknown as TrainingPlansRepositoryPort;
+  let latest!: ReturnType<typeof useProgramData>;
+  function Probe({ programId }: { programId: string }) {
+    latest = useProgramData({ clientId: "client", programId, repository: plans, onRequestedWeek: () => undefined, onMessage: () => undefined });
+    return null;
+  }
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => { renderer = TestRenderer.create(createElement(Probe, { programId: "A" })); });
+  assert.equal(latest.group?.length, 2);
+  await act(async () => { renderer.update(createElement(Probe, { programId: "B" })); });
+  assert.equal(latest.group?.length, 1, "в программе B один участник — строки нет");
+  hold = true;
+  await act(async () => { renderer.update(createElement(Probe, { programId: "A" })); });
+  assert.equal(latest.shown?.programId, "A");
+  assert.equal(latest.group, null, "пока состав A читается, он неизвестен — не состав B");
+  await act(async () => { held.get("A")!.resolve(groups.A!); });
+  assert.equal(latest.group?.length, 2, "панель двух участников вернулась");
+
+  hold = false; fail = true;
+  await act(async () => { notify({ clientIds: ["client"] }); });
+  assert.equal(latest.group, null, "ошибка чтения — не «один участник»");
+  fail = false;
+  await act(async () => { notify({ clientIds: ["other"] }); });
+  assert.equal(latest.group?.length, 2, "следующее изменение плана перечитывает состав");
+  await act(async () => { renderer.unmount(); });
+});
+
+test("PART-DOCK-1 дневник: ответ прежней тренировки не показывается для новой; ошибка — failed и повтор при возврате фокуса", async () => {
+  let reads = 0;
+  let fail = true;
+  const plans = {
+    getMesocycleGroup: async () => { reads += 1; if (fail) throw new Error("SQLITE_BUSY");
+      return [{ clientId: "client", programId: "program", mesocycleId: "cycle" }, { clientId: "other", programId: "program", mesocycleId: "c2" }]; },
+    subscribeCommittedChanges: () => () => undefined,
+  } as unknown as TrainingPlansRepositoryPort;
+  let latest!: ReturnType<typeof useParticipantGroup>;
+  function Probe({ focused }: { focused: boolean }) {
+    latest = useParticipantGroup(plans, "client", "program", "cycle", "workout", undefined, focused); return null;
+  }
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => { renderer = TestRenderer.create(createElement(Probe, { focused: true })); });
+  assert.deepEqual([latest.members, latest.failed], [null, true], "не прочиталось — состав неизвестен, а не пуст");
+  assert.equal(reads, 2, "одна немедленная повторная попытка, без цикла");
+  fail = false;
+  await act(async () => { renderer.update(createElement(Probe, { focused: false })); });
+  await act(async () => { renderer.update(createElement(Probe, { focused: true })); });
+  assert.equal(latest.members?.length, 2, "возврат на экран перечитал состав");
+  assert.equal(latest.failed, false);
+  await act(async () => { renderer.unmount(); });
+});
+
 test("P01 diary group availability refreshes for each workout, membership and order change; stale identities are blocked", async () => {
   let reads = 0;
   let notify!: (change: TrainingPlansCommittedChange) => void;

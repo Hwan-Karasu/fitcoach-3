@@ -95,12 +95,13 @@ export function useWeekNavigation(state: WeekNavigationState | null, ready = tru
 /**
  * Строка над кнопками вкладок в нижней панели (переключатель участников). Кнопки вкладок при этом ужимаются, высота панели прежняя.
  * Запись — на каждом рендере экрана (элемент новый), снятие — при размонтировании; `null` — готовая запись «строки нет».
+ * `pending` — содержимое ещё читается: панель держит то, что показывала (загрузка — не «строки нет»).
  */
-export function TabBarDock({ children }: Readonly<{ children: ReactNode }>) {
+export function TabBarDock({ children, pending = false }: Readonly<{ children: ReactNode; pending?: boolean }>) {
   const slots = useContext(SlotsContext);
   const key = useRoute().key;
   useLayoutEffect(() => {
-    slots?.dock.set(key, children ?? null);
+    slots?.dock.set(key, pending ? PENDING : children ?? null);
   });
   useLayoutEffect(() => () => { slots?.dock.remove(key); }, [slots, key]);
   return null;
