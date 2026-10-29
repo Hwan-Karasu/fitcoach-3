@@ -342,8 +342,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       status: workoutStatus(row.outcome, row.started === 1) }));
   }
 
-  async getMaxLoads(slot: WorkoutSlot, exerciseIds: readonly string[]): Promise<ReadonlyMap<string, number>> {
-    assertSlot(slot);
+  async getMaxLoads(clientId: string, exerciseIds: readonly string[]): Promise<ReadonlyMap<string, number>> {
     if (exerciseIds.length === 0) return new Map();
     // Один агрегирующий запрос по индексу (workspace_id, exercise_id): подходы клиента за всё время в память не читаются.
     const rows = await this.ready().connection.all<{ exerciseId: string; grams: number }>(`WITH wanted AS (SELECT value AS exerciseId FROM json_each(?)),
@@ -352,17 +351,14 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
           JOIN training_sessions s ON s.id = f.session_id AND s.workspace_id = f.workspace_id
         WHERE f.workspace_id = ? AND s.client_id = ? AND f.exercise_id IN (SELECT exerciseId FROM wanted) AND f.removed_at IS NULL
           AND f.confirmed_at IS NOT NULL AND f.sided = 0 AND f.set_type IN ('NORMAL', 'FAILURE') AND f.load_grams IS NOT NULL
-          AND NOT (s.program_id = ? AND s.week_index = ? AND s.planned_workout_id = ?)
         UNION ALL
         SELECT f.exercise_id, d.load_grams FROM training_performed_sides d
           JOIN training_performed_sets f ON f.id = d.set_id AND f.workspace_id = d.workspace_id
           JOIN training_sessions s ON s.id = f.session_id AND s.workspace_id = f.workspace_id
         WHERE f.workspace_id = ? AND s.client_id = ? AND f.exercise_id IN (SELECT exerciseId FROM wanted) AND f.removed_at IS NULL
           AND d.confirmed_at IS NOT NULL AND f.sided = 1 AND f.set_type IN ('NORMAL', 'FAILURE') AND d.load_grams IS NOT NULL
-          AND NOT (s.program_id = ? AND s.week_index = ? AND s.planned_workout_id = ?)
       ) SELECT exerciseId, MAX(grams) AS grams FROM loads GROUP BY exerciseId`,
-    [JSON.stringify([...new Set(exerciseIds)]), this.workspaceId, slot.clientId, slot.programId, slot.weekIndex, slot.plannedWorkoutId,
-      this.workspaceId, slot.clientId, slot.programId, slot.weekIndex, slot.plannedWorkoutId]);
+    [JSON.stringify([...new Set(exerciseIds)]), this.workspaceId, clientId, this.workspaceId, clientId]);
     return new Map(rows.map((row) => [row.exerciseId, row.grams]));
   }
 

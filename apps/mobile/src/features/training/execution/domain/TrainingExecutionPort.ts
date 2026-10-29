@@ -87,11 +87,11 @@ export interface TrainingExecutionPort {
    * Week 1 or no counterpart/results: empty. No fallback to other weeks, workouts, cycles or programs. */
   getPrevious(slot: WorkoutSlot, queries: readonly PreviousQuery[], now?: Date): Promise<ReadonlyMap<string, PreviousSet>>;
   /**
-   * Максимальный вес (граммы) клиента по упражнениям каталога за все его занятия, кроме указанной тренировки: подтверждённые
-   * обычные и отказные подходы (разминка и мини-сеты не входят), у односторонних — подтверждённые стороны. Упражнения без веса
-   * в ответе нет. Текущую тренировку экран добавляет сам из своего состояния.
+   * Рекорд веса (граммы) клиента по упражнениям каталога за все его занятия, как «тяжелее всего» на странице упражнения: от недели и
+   * тренировки не зависит. Подтверждённые обычные и отказные подходы (разминка и мини-сеты не входят), у односторонних — подтверждённые
+   * стороны. Упражнения без веса в ответе нет.
    */
-  getMaxLoads(slot: WorkoutSlot, exerciseIds: readonly string[]): Promise<ReadonlyMap<string, number>>;
+  getMaxLoads(clientId: string, exerciseIds: readonly string[]): Promise<ReadonlyMap<string, number>>;
   /** Ввод значений, «Пред.» или смена типа подхода: тот же факт по ID, подтверждение по режиму тренера. */
   saveSet(input: SaveSetInput, now?: Date): Promise<SetSaveResult>;
   /**

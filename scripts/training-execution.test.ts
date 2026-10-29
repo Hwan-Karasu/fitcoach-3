@@ -605,7 +605,7 @@ test("«Пред.» по сторонам: подход без сторон (и�
   assert.deepEqual(previousPlainValues({ ...sided, sides: { left: null, right: v(9, 45_000) } }), v(9, 45_000));
 });
 
-test("«Макс.» под упражнением: лучший подтверждённый рабочий вес клиента за всё время, без текущей тренировки (REST-FIX-7)", async () => {
+test("«Макс.» под упражнением: рекорд веса клиента по упражнению за всё время, от недели не зависит (REST-FIX-7/9)", async () => {
   const { clients, execution, close } = await stores();
   try {
     const a = await clients.create({ displayName: "SyntheticA" });
@@ -620,14 +620,13 @@ test("«Макс.» под упражнением: лучший подтверж
     await save(slot(a.id, 2, "w2"), "t1", 0, values(120_000, 5));
     await save(slot(a.id, 3), "c1", 0, values(300_000, 1));
     await save(slot(b.id, 1), "s1", 0, values(250_000, 1));
-    const max = await execution.getMaxLoads(slot(a.id, 3), [BENCH, "sys:repdb:other"]);
-    assert.deepEqual([...max], [[BENCH, 120_000]],
-      "120 кг; разминка 200, неполный 150, чужой клиент 250 и текущая тренировка 300 не входят; упражнения без веса в ответе нет");
-    assert.deepEqual([...await execution.getMaxLoads(slot(a.id, 2, "w2"), [BENCH])], [[BENCH, 300_000]], "своя тренировка (120 кг) исключается, остальные считаются");
-    assert.deepEqual([...await execution.getMaxLoads(slot(a.id, 1), [])], []);
+    const max = await execution.getMaxLoads(a.id, [BENCH, "sys:repdb:other"]);
+    assert.deepEqual([...max], [[BENCH, 300_000]],
+      "300 кг — лучший подтверждённый рабочий подход клиента из любой тренировки; разминка 200, неполный 150 и чужой клиент 250 не входят; упражнения без веса в ответе нет");
+    assert.deepEqual([...await execution.getMaxLoads(a.id, [])], []);
     const c = await clients.create({ displayName: "SyntheticC" });
     await execution.saveSet({ ...bench(slot(c.id, 1), "u1", 0, values(null, null), null), sides: { left: values(70_000, 10), right: values(65_000, 10) } }, DAY1);
-    assert.deepEqual([...await execution.getMaxLoads(slot(c.id, 2), [BENCH])], [[BENCH, 70_000]], "у одностороннего — лучшая засчитанная сторона");
+    assert.deepEqual([...await execution.getMaxLoads(c.id, [BENCH])], [[BENCH, 70_000]], "у одностороннего — лучшая засчитанная сторона");
   } finally { await close(); }
 });
 

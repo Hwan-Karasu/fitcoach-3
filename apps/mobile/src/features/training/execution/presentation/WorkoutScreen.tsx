@@ -145,38 +145,38 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     setNotice(effect.kind === "MARKED" ? `Запись на ${time} в календаре отмечена проведённой.` : `Отметка «проведена» у записи на ${time} в календаре снята.`);
   }, []);
   const diary = useWorkoutDiary(slot, plans, execution, metricsOf, unilateralOf, startRest, calendarEffect);
-  // «Макс.» под упражнением: лучший вес клиента за всё время в прошлых занятиях плюс подходы открытой тренировки из состояния дневника
-  // (ввод запросов не добавляет). Запрос — по ПОКАЗАННОЙ тренировке (карточки на экране), а не по новому слоту, который при смене недели
-  // меняется раньше карточек; результаты кэшируются по тренировке, а пока грузится новая — остаётся прежнее значение, а не пустота.
-  const shown = diary.displayedSlot;
-  const exerciseIdsKey = diary.workout?.exercises.map((item) => item.exerciseId).join("|") ?? "";
-  const maxKey = `${shown.clientId}|${shown.programId}|${shown.weekIndex}|${shown.plannedWorkoutId}|${exerciseIdsKey}`;
+  // «Макс.» под упражнением — рекорд веса клиента по упражнению за всё время (как «тяжелее всего» в истории упражнения): от недели и
+  // тренировки не зависит, поэтому ключ — клиент и упражнения показанной тренировки; при смене недели с теми же упражнениями запроса нет.
+  // Запись дневника сбрасывает кэш без перезапроса на каждый подход: рекорд перечитывается при следующей смене недели или возврате на
+  // экран, а до тех пор рост веса виден из подходов открытой тренировки (`currentMaxLoads`).
+  const maxClientId = diary.displayedSlot.clientId;
+  const exerciseIdsKey = [...new Set(diary.workout?.exercises.map((item) => item.exerciseId) ?? [])].sort().join("|");
+  const maxKey = `${maxClientId}|${exerciseIdsKey}`;
   const maxCache = useRef(new Map<string, ReadonlyMap<string, number>>()).current;
-  const [maxVersion, setMaxVersion] = useState(0);
   const [pastMax, setPastMax] = useState<ReadonlyMap<string, number> | null>(null);
+  const [maxVersion, setMaxVersion] = useState(0);
   const focused = useIsFocused();
   const wasFocused = useRef(focused);
-  // Занятия клиента могли измениться на другом экране (матрица) — при возврате кэш перечитывается; свой ввод кэш не трогает.
   useEffect(() => {
     if (focused && !wasFocused.current) { maxCache.clear(); setMaxVersion((value) => value + 1); }
     wasFocused.current = focused;
   }, [focused, maxCache]);
   useEffect(() => execution.subscribeCommittedChanges((change) => {
-    if (change.clientId === shown.clientId && change.programId !== shown.programId) { maxCache.clear(); setMaxVersion((value) => value + 1); }
-  }), [execution, maxCache, shown.clientId, shown.programId]);
+    if (change.clientId === maxClientId) maxCache.clear();
+  }), [execution, maxCache, maxClientId]);
+  const weekKey = `${diary.displayedSlot.programId}|${diary.displayedSlot.weekIndex}|${diary.displayedSlot.plannedWorkoutId}`;
   useEffect(() => {
     if (exerciseIdsKey === "") return undefined;
     const cached = maxCache.get(maxKey);
     if (cached !== undefined) { setPastMax(cached); return undefined; }
     let active = true;
-    execution.getMaxLoads({ clientId: shown.clientId, programId: shown.programId, weekIndex: shown.weekIndex, plannedWorkoutId: shown.plannedWorkoutId },
-      exerciseIdsKey.split("|")).then((loads) => {
+    execution.getMaxLoads(maxClientId, exerciseIdsKey.split("|")).then((loads) => {
       maxCache.set(maxKey, loads);
       if (maxCache.size > 12) maxCache.delete(maxCache.keys().next().value!);
       if (active) setPastMax(loads);
     }).catch(() => undefined);
     return () => { active = false; };
-  }, [execution, maxCache, maxKey, maxVersion, exerciseIdsKey, shown.clientId, shown.programId, shown.weekIndex, shown.plannedWorkoutId]);
+  }, [execution, maxCache, maxKey, maxVersion, weekKey, exerciseIdsKey, maxClientId]);
   const openMax = useMemo(() => currentMaxLoads(diary.state?.facts.values() ?? []), [diary.state]);
   const maxLoadText = (exerciseId: string): string | null => {
     const grams = Math.max(pastMax?.get(exerciseId) ?? -1, openMax.get(exerciseId) ?? -1);
