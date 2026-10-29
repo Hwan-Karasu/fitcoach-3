@@ -108,12 +108,21 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   // Возврат с таймера отдыха: после раскладки прокручиваем к упражнению, из которого он запущен, один раз на открытие.
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
   const bodyY = useRef(0);
+  const bodyRef = useRef<View>(null);
+  const cardRefs = useRef(new Map<string, View>()).current;
   const focusDone = useRef<string | null>(null);
-  const focusExercise = useCallback((exerciseId: string, cardY: number) => {
+  // Положение карточки считается относительно тела дневника (measureLayout), а не её родителя: внутри рамки суперсета
+  // `onLayout.y` отсчитан от рамки, и прокрутка уходила выше нужного.
+  const focusExercise = useCallback((exerciseId: string) => {
     if (focusExerciseId === null || exerciseId !== focusExerciseId || focusDone.current === focusExerciseId) return;
+    const card = cardRefs.get(exerciseId);
+    const body = bodyRef.current;
+    if (card === undefined || body === null) return;
     focusDone.current = focusExerciseId;
-    setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, bodyY.current + cardY - 8), animated: true }), 50);
-  }, [focusExerciseId]);
+    card.measureLayout(body, (_x, y) => {
+      setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, bodyY.current + y - 8), animated: true }), 50);
+    }, () => { focusDone.current = null; });
+  }, [cardRefs, focusExerciseId]);
   useEffect(() => { focusDone.current = null; }, [focusExerciseId]);
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -550,7 +559,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
           </View>
         </> : null}
         {/* Смена недели — тот же экран: пока грузится новая неделя, прежние значения приглушены и не нажимаются. */}
-        {ordering === null ? <View onLayout={(event) => { bodyY.current = event.nativeEvent.layout.y; }} pointerEvents={diary.switching ? "none" : "auto"} style={[styles.body, diary.switching && styles.switching]}>
+        {ordering === null ? <View ref={bodyRef} collapsable={false} onLayout={(event) => { bodyY.current = event.nativeEvent.layout.y; }} pointerEvents={diary.switching ? "none" : "auto"} style={[styles.body, diary.switching && styles.switching]}>
         {supersetRuns(workout.exercises).map((run) => {
         const cards = run.map((exercise) => {
           const info = lookup.get(exercise.exerciseId);
@@ -563,7 +572,9 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
           const extraIds = new Set(extras.map((extra) => extra.set.id));
           // Ключи — по месту в плане, а не по ID недели: при смене недели строки не пересоздаются.
           return (
-            <View key={exercise.lineageId ?? exercise.id} onLayout={(event) => focusExercise(exercise.id, event.nativeEvent.layout.y)} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View key={exercise.lineageId ?? exercise.id} collapsable={false}
+              ref={(node) => { if (node === null) cardRefs.delete(exercise.id); else cardRefs.set(exercise.id, node); }}
+              onLayout={() => focusExercise(exercise.id)} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               {group !== null ? <Text style={[styles.meta, { color: colors.accentInk }]}>{`Суперсет ${group}`}</Text> : null}
               <View style={styles.cardHead}>
                 {info?.thumbnail != null ? <Image source={info.thumbnail} resizeMethod="resize" style={[styles.thumb, { backgroundColor: colors.input }]} /> : null}
