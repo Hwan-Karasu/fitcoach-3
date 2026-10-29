@@ -43,7 +43,8 @@ function loadScreen(file: string): Record<string, unknown> {
     if (specifier === "react-native") return { Modal: (p: Props) => p.visible ? createElement("NativeModal", p, p.children as ReactNode) : null,
       FlatList: (p: Props) => createElement("FlatList", null, p.ListHeaderComponent as ReactNode,
         ...(p.data as unknown[]).map((item, index) => (p.renderItem as (row: { item: unknown; index: number }) => ReactNode)({ item, index })), p.ListFooterComponent as ReactNode),
-      ...Object.fromEntries(["Text", "View", "ScrollView", "Pressable"].map((n) => [n, control(n)])), StyleSheet: { create: (s: unknown) => s }, Keyboard: { addListener: () => ({ remove: () => undefined }), dismiss: () => undefined }, Platform: { OS: "android", select: (p: Props) => p.android ?? p.default } };
+      ...Object.fromEntries(["Text", "View", "ScrollView", "Pressable"].map((n) => [n, control(n)])), StyleSheet: { create: (s: unknown) => s }, Keyboard: { addListener: () => ({ remove: () => undefined }), dismiss: () => undefined }, Platform: { OS: "android", select: (p: Props) => p.android ?? p.default },
+      useWindowDimensions: () => ({ width: 360, height: 800, scale: 2, fontScale: 1 }) };
     if (specifier === "react-native-safe-area-context") return { SafeAreaView: control("SafeAreaView") };
     if (specifier.endsWith("ui/components/public.ts")) return ui;
     if (specifier.endsWith("PrototypeThemeProvider.tsx")) return { usePrototypeTheme: () => ({ palette: { tokens: new Proxy({}, { get: () => "#445566" }) } }) };
