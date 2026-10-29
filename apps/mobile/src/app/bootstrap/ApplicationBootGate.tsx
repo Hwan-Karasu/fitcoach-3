@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import type { ApplicationRuntime } from "../composition/createServices.ts";
@@ -28,6 +28,11 @@ export function ApplicationBootGate({ boot, services, development, maintenance, 
   const [introVisible, setIntroVisible] = useState(true);
   const finishIntro = useCallback(() => setIntroVisible(false), []);
   const maintenanceState = maintenanceView.phase;
+  // AUTO-BACKUP-3: автокопия ждёт паузы в тренировке — таймеры отдыха и записи дневника/планов.
+  const trainingActivity = useMemo(() => ({ restTimers: services.restTimers, subscriptions: [
+    (listener: () => void) => services.trainingExecution.subscribeCommittedChanges(() => listener()),
+    (listener: () => void) => services.trainingPlans.subscribeCommittedChanges(() => listener()),
+  ] }), [services]);
 
   useEffect(() => {
     const unsubscribe = boot.subscribe(setState);
@@ -39,7 +44,7 @@ export function ApplicationBootGate({ boot, services, development, maintenance, 
   const recovering = maintenanceState === "RECOVERY_REQUIRED";
   const maintaining = maintenanceState !== "ACTIVE";
   const ready = state.kind === "APP_READY" && maintenanceState === "ACTIVE";
-  const content = state.kind === "APP_READY" && maintenanceState === "ACTIVE" ? <><AutomaticBackupHost backup={automaticBackup} /><PrototypeShell key={maintenanceView.generation} services={services}
+  const content = state.kind === "APP_READY" && maintenanceState === "ACTIVE" ? <><AutomaticBackupHost backup={automaticBackup} activity={trainingActivity} /><PrototypeShell key={maintenanceView.generation} services={services}
     workspaceId={state.workspaceId} trainingTransfer={trainingTransfer} manualBackup={manualBackup} restoreActions={restoreActions} automaticBackup={automaticBackup} initialBackup={maintenanceView.initialBackup} /></> : (
     <SafeAreaProvider>
       <SafeAreaView style={styles.safe}>
