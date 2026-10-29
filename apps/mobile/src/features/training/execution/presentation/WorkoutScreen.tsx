@@ -232,10 +232,14 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         .catch(() => undefined);
     };
     load();
+    // Серия подходов — одно чтение статусов через паузу (WRITE-PATH-1), а не запрос на каждую запись.
+    let pause: ReturnType<typeof setTimeout> | null = null;
     const unsubscribe = execution.subscribeCommittedChanges((change) => {
-      if (change.clientId === slot.clientId && change.programId === slot.programId) load();
+      if (change.clientId !== slot.clientId || change.programId !== slot.programId) return;
+      if (pause !== null) clearTimeout(pause);
+      pause = setTimeout(() => { pause = null; load(); }, 250);
     });
-    return () => { active = false; unsubscribe(); };
+    return () => { active = false; unsubscribe(); if (pause !== null) clearTimeout(pause); };
   }, [execution, slot.clientId, slot.programId]);
   /** Недели программы прочитаны (`null` — их нет): до этого панель держит прежние стрелки, а не «стрелок нет». */
   const [navigationLoaded, setNavigationLoaded] = useState(false);

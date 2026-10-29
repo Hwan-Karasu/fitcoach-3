@@ -9,7 +9,7 @@ import type { TrainingExecutionPort } from "../src/features/training/execution/d
 import type { PlannedWorkout } from "../src/features/training/plans/domain/SimplePlanModel.ts";
 import type { WorkoutExecution } from "../src/features/training/execution/domain/ExecutionModel.ts";
 import { navigationPerformance } from "../src/shared/diagnostics/NavigationPerformance.ts";
-import { useActiveWorkoutCards } from "../src/features/training/execution/presentation/useActiveWorkoutCards.ts";
+import { ACTIVE_CARDS_PAUSE_MS, useActiveWorkoutCards } from "../src/features/training/execution/presentation/useActiveWorkoutCards.ts";
 import { useParticipantGroup } from "../src/features/training/plans/presentation/useParticipantGroup.ts";
 import type { ActiveWorkoutCard, ActiveWorkoutsPort } from "../src/features/training/execution/domain/ExecutionModel.ts";
 import type { TrainingPlansCommittedChange } from "../src/features/training/plans/domain/TrainingPlansRepositoryPort.ts";
@@ -40,8 +40,11 @@ test("changing a diary week filters global cards without rereading every client"
   await act(async () => { renderer.update(createElement(Probe, { week: 2 })); });
   assert.equal(reads, 1);
   assert.deepEqual(shown.map((card) => card.slot.weekIndex), [1, 3]);
-  await act(async () => { notify(); });
-  assert.equal(reads, 2, "committed changes still refresh cards");
+  // WRITE-PATH-1: серия коммитов (несколько подходов подряд) — одно перечитывание после паузы.
+  await act(async () => { notify(); notify(); notify(); });
+  assert.equal(reads, 1, "сразу после записи список не перечитывается");
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, ACTIVE_CARDS_PAUSE_MS + 20)); });
+  assert.equal(reads, 2, "committed changes still refresh cards — once per burst");
   await act(async () => { renderer.unmount(); });
 });
 

@@ -36,7 +36,7 @@ function nativeFactory(file: string) {
     failForeignKeys: () => { ignoreForeignKeys = true; } };
 }
 
-test("SQLite runtime: каждый новый handle проверяет FK до BEGIN; ошибка откатывает всё, очередь продолжает работу", async () => {
+test("SQLite runtime: handle записи проверяет FK до первого BEGIN и переиспользуется; ошибка откатывает всё, очередь продолжает работу", async () => {
   const directory = mkdtempSync(join(tmpdir(), "athlete-db-connection-"));
   const native = nativeFactory(join(directory, "synthetic.db"));
   const connection = await openIsolatedSqliteConnection(native.open);
@@ -57,9 +57,11 @@ test("SQLite runtime: каждый новый handle проверяет FK до 
       await tx.run("INSERT INTO child VALUES ('valid','valid')");
     });
     assert.equal((await connection.first<{ n: number }>("SELECT count(*) AS n FROM child"))?.n, 1);
-    assert.equal(native.handles, 4);
-    assert.equal(native.closed, 3);
-    assert.equal(new Set(native.events.filter((event) => event.sql === "BEGIN IMMEDIATE").map((event) => event.handle)).size, 3);
+    // WRITE-PATH-1: reader + один handle записи на все три транзакции (раньше — новый handle и 4 PRAGMA на каждую запись).
+    assert.equal(native.handles, 2);
+    assert.equal(native.closed, 0, "handle записи живёт до закрытия соединения");
+    assert.equal(new Set(native.events.filter((event) => event.sql === "BEGIN IMMEDIATE").map((event) => event.handle)).size, 1);
+    assert.equal(native.events.filter((event) => event.sql === "PRAGMA foreign_keys = ON").length, 2, "FK включаются один раз на handle");
     assert.ok(native.events.some((event) => event.sql === "ROLLBACK"));
     assert.equal((await connection.first<{ journal_mode: string }>("PRAGMA journal_mode"))?.journal_mode, "wal");
   } finally { await connection.close(); rmSync(directory, { recursive: true, force: true }); }
@@ -75,7 +77,10 @@ test("SQLite runtime: если новый handle не включает FK, по�
     native.failForeignKeys();
     await assert.rejects(connection.exclusive(async () => { invoked = true; }), /DB_FOREIGN_KEYS_UNAVAILABLE/);
     assert.equal(invoked, false);
-    assert.equal(native.closed, 1);
+    assert.equal(native.closed, 1, "ненастроенный handle закрыт и не переиспользуется");
     assert.ok(!native.events.some((event) => event.sql === "BEGIN IMMEDIATE"));
+    await assert.rejects(connection.exclusive(async () => { invoked = true; }), /DB_FOREIGN_KEYS_UNAVAILABLE/);
+    assert.equal(native.handles, 3, "следующая запись снова открывает и проверяет новый handle");
+    assert.equal(invoked, false);
   } finally { await connection.close(); rmSync(directory, { recursive: true, force: true }); }
 });

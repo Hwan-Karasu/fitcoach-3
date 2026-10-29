@@ -32,23 +32,38 @@ async function configure(native: NativeSqliteDatabase, enableWal: boolean): Prom
   }
 }
 
-/** Every write owns a new physical handle, configured before BEGIN. The shared writer queues tasks per file.
+/** Writes use a separate private handle, configured (foreign_keys, WAL) before its first BEGIN. The shared writer queues tasks per file.
  * Expo's withExclusiveTransactionAsync also opens a new handle, but starts BEGIN before its callback;
  * enabling foreign_keys inside that callback would silently have no effect.
+ * WRITE-PATH-1: the write handle is opened once and reused (раньше — новое соединение и 4 PRAGMA на каждую запись подхода). A handle
+ * whose transaction could not be closed (failed ROLLBACK) is discarded; the next write opens and configures a fresh one.
  */
 export async function openIsolatedSqliteConnection(open: () => Promise<NativeSqliteDatabase>,
   inspectBeforeWrite?: (reader: SqliteStatementPort) => Promise<unknown>): Promise<SqliteConnectionPort> {
   const reader = await open();
+  let writer: NativeSqliteDatabase | null = null;
+  const discardWriter = async () => {
+    const stale = writer;
+    writer = null;
+    if (stale !== null) try { await stale.closeAsync(); } catch { /* A broken handle is dropped either way. */ }
+  };
+  const writeHandle = async (): Promise<NativeSqliteDatabase> => {
+    if (writer !== null) return writer;
+    const native = await open();
+    try { await configure(native, false); }
+    catch (error) { try { await native.closeAsync(); } catch { /* Preserve the configuration failure. */ } throw error; }
+    writer = native;
+    return native;
+  };
   try {
     if (inspectBeforeWrite) await inspectBeforeWrite(statements(reader));
     await configure(reader, true);
     return {
       ...statements(reader),
       async exclusive<T>(task: (tx: SqliteStatementPort) => Promise<T>): Promise<T> {
-        const native = await open();
+        const native = await writeHandle();
         let begun = false;
         try {
-          await configure(native, false);
           await native.execAsync("BEGIN IMMEDIATE");
           begun = true;
           const result = await task(statements(native));
@@ -57,12 +72,15 @@ export async function openIsolatedSqliteConnection(open: () => Promise<NativeSql
           return result;
         } catch (error) {
           if (begun) {
-            try { await native.execAsync("ROLLBACK"); } catch { /* Preserve the original failure. */ }
+            try { await native.execAsync("ROLLBACK"); } catch { await discardWriter(); }
           }
           throw error;
-        } finally { await native.closeAsync(); }
+        }
       },
-      close: () => reader.closeAsync(),
+      close: async () => {
+        await discardWriter();
+        await reader.closeAsync();
+      },
     };
   } catch (error) {
     await reader.closeAsync();
