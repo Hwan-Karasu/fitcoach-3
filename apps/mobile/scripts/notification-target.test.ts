@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calendarEventTarget, targetOfPayload, timerTarget } from "../src/app/navigation/notificationTarget.ts";
+import { calendarEventTarget, resolveTimerTarget, targetOfPayload, timerTarget } from "../src/app/navigation/notificationTarget.ts";
 
 test("нажатие на строку центра: дежурство и гость — Календарь, запись клиента — его «Тренировки», исход — Календарь", () => {
   assert.deepEqual(calendarEventTarget({ sourceType: "DUTY", eventKind: "REMINDER", clientId: null }), { kind: "CALENDAR" });
@@ -31,4 +31,17 @@ test("панель таймера: таймер с происхождением 
   assert.deepEqual(timerTarget({ ...base, programId: "p1", weekIndex: 2, plannedWorkoutId: "w1" }),
     { kind: "WORKOUT", clientId: "c1", programId: "p1", weekIndex: 2, plannedWorkoutId: "w1", exerciseKey: "pe-1" });
   assert.deepEqual(timerTarget({ ...base, programId: null, weekIndex: null, plannedWorkoutId: null }), { kind: "CLIENT_TRAINING", clientId: "c1" });
+});
+
+test("REST-NAV-1 нажатие на таймер: цель разрешается при нажатии — мезоцикл тренировки, архив и удалённая программа", () => {
+  const target = { kind: "WORKOUT", clientId: "c1", programId: "p1", weekIndex: 3, plannedWorkoutId: "w1", exerciseKey: "pe-1" } as const;
+  assert.deepEqual(resolveTimerTarget(target, { active: true, archived: false, workoutFound: true, mesocycleId: "m2" }),
+    { open: { ...target, mesocycleId: "m2" }, notice: null }, "программа под дневником — на мезоцикле тренировки");
+  const archived = resolveTimerTarget(target, { active: false, archived: true, workoutFound: true, mesocycleId: "m2" });
+  assert.deepEqual(archived.open, { kind: "CLIENT_TRAINING", clientId: "c1" });
+  assert.match(archived.notice ?? "", /архиве/);
+  const gone = resolveTimerTarget(target, { active: true, archived: false, workoutFound: false, mesocycleId: null });
+  assert.equal(gone.open, null, "удалённая тренировка — без перехода");
+  assert.match(gone.notice ?? "", /недоступна/);
+  assert.equal(resolveTimerTarget(target, { active: false, archived: false, workoutFound: false, mesocycleId: null }).open, null);
 });

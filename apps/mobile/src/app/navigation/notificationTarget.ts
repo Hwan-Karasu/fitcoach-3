@@ -2,7 +2,32 @@
 export type NotificationTarget =
   | Readonly<{ kind: "CALENDAR" }>
   | Readonly<{ kind: "CLIENT_TRAINING"; clientId: string }>
-  | Readonly<{ kind: "WORKOUT"; clientId: string; programId: string; weekIndex: number; plannedWorkoutId: string; exerciseKey: string | null }>;
+  | Readonly<{ kind: "WORKOUT"; clientId: string; programId: string; weekIndex: number; plannedWorkoutId: string; exerciseKey: string | null;
+    /** Мезоцикл тренировки (разрешён при нажатии): программа под дневником открывается на нём, а не на выбранном раньше. */
+    mesocycleId?: string | null }>;
+
+/** Что известно о тренировке таймера к моменту нажатия: где программа клиента и найдена ли тренировка. */
+export interface TimerWorkoutState {
+  readonly active: boolean;
+  readonly archived: boolean;
+  /** Неделя тренировки (`null` — тренировки в плане больше нет). */
+  readonly mesocycleId: string | null;
+  readonly workoutFound: boolean;
+}
+
+/**
+ * Куда вести по нажатию на таймер (REST-NAV-1). Контекст разрешается при нажатии, а не на тике отсчёта: программа в архиве — к программам
+ * клиента с подсказкой про архив; программа или тренировка удалены — понятное сообщение без перехода (раньше открывался пустой дневник).
+ */
+export function resolveTimerTarget(target: Extract<NotificationTarget, { kind: "WORKOUT" }>, state: TimerWorkoutState):
+  Readonly<{ open: NotificationTarget | null; notice: string | null }> {
+  if (state.active && state.workoutFound) return { open: { ...target, mesocycleId: state.mesocycleId }, notice: null };
+  if (state.archived) {
+    return { open: { kind: "CLIENT_TRAINING", clientId: target.clientId },
+      notice: "Программа этого таймера в архиве. Вернуть её можно во вкладке «Архив программ»." };
+  }
+  return { open: null, notice: "Тренировка этого таймера недоступна: программа или тренировка удалена." };
+}
 
 /**
  * Строка центра и напоминание календаря: дежурство и запись гостя — в Календарь; запись клиента — в раздел «Тренировки» этого клиента;

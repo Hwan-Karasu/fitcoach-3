@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ToastAndroid } from "react-native";
 import { DefaultTheme, NavigationContainer, StackActions, createNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { KeyboardProvider } from "react-native-keyboard-controller";
-import { ClientExerciseScreen, RestTimerDock, TrainingSettingsScreen } from "../../features/training/public.ts";
-import { calendarEventTarget, timerTarget, type NotificationTarget } from "./notificationTarget.ts";
+import { ClientExerciseScreen, RestTimerDock, TrainingSettingsScreen, type TrainingPlansRepositoryPort } from "../../features/training/public.ts";
+import { calendarEventTarget, resolveTimerTarget, timerTarget, type NotificationTarget } from "./notificationTarget.ts";
 import { NotificationOpenHost } from "./NotificationOpenHost.tsx";
 import { NotificationCenterScreen, NotificationSettingsScreen } from "../../features/notifications/public.ts";
 import { NotificationsHost } from "./NotificationsHost.tsx";
@@ -99,12 +100,34 @@ function openTarget(target: NotificationTarget): void {
     && current.params?.programId === target.programId && current.params.weekIndex === target.weekIndex && current.params.workoutId === target.plannedWorkoutId) return;
   // Полный путь клиент → программы → программа → тренировка, как при обычном заходе: «назад» ведёт к списку тренировок (программе),
   // затем к программам клиента и дальше к списку клиентов.
+  const cycle = target.mesocycleId == null ? {} : { mesocycleId: target.mesocycleId };
   navigationRef.dispatch(open("ClientWorkspace", { clientId: target.clientId, screen: "Training", params: { state: { routes: [
     { name: "TrainingIndex" },
-    { name: "TrainingProgram", params: { programId: target.programId, weekIndex: target.weekIndex } },
-    { name: "TrainingWorkout", params: { programId: target.programId, weekIndex: target.weekIndex, workoutId: target.plannedWorkoutId,
+    { name: "TrainingProgram", params: { programId: target.programId, weekIndex: target.weekIndex, ...cycle } },
+    { name: "TrainingWorkout", params: { programId: target.programId, weekIndex: target.weekIndex, workoutId: target.plannedWorkoutId, ...cycle,
       ...(target.exerciseKey === null ? {} : { focusExerciseId: target.exerciseKey }) } },
   ] } } } as never));
+}
+
+/**
+ * Нажатие на таймер отдыха (REST-NAV-1): программа и тренировка проверяются в момент нажатия — один раз, не на тике. Удалённая тренировка —
+ * сообщение без перехода; архивная программа — к программам клиента; иначе — в дневник с мезоциклом тренировки.
+ */
+async function openTimer(plans: TrainingPlansRepositoryPort, timer: Parameters<typeof timerTarget>[0]): Promise<void> {
+  const target = timerTarget(timer);
+  if (target.kind !== "WORKOUT") { openTarget(target); return; }
+  let resolved: ReturnType<typeof resolveTimerTarget>;
+  try {
+    const [library, weeks] = await Promise.all([plans.getLibrary(target.clientId),
+      plans.getWorkoutWeekNavigation(target.clientId, target.programId, target.plannedWorkoutId).catch(() => null)]);
+    resolved = resolveTimerTarget(target, { active: library.active.some((card) => card.id === target.programId),
+      archived: library.archived.some((card) => card.id === target.programId), workoutFound: weeks !== null, mesocycleId: weeks?.mesocycleId ?? null });
+  } catch {
+    // Проверить не удалось (чтение базы): прежний переход — дневник сам покажет, если тренировки нет.
+    resolved = { open: target, notice: null };
+  }
+  if (resolved.notice !== null) ToastAndroid.show(resolved.notice, ToastAndroid.LONG);
+  if (resolved.open !== null) openTarget(resolved.open);
 }
 
 function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, restoreActions, automaticBackup, initialBackup, trainingTransfer }: Readonly<{
@@ -308,7 +331,7 @@ export function PrototypeShell({ services, workspaceId, manualBackup, restoreAct
             <ShellNavigator trainingTransfer={trainingTransfer} services={services} clientLists={clientLists} rosterOverview={rosterOverview} manualBackup={manualBackup} restoreActions={restoreActions} automaticBackup={automaticBackup} initialBackup={initialBackup} />
           </NotificationsHost></TrainingTransferContext.Provider>
           <OutcomeQueueHost services={services} />
-          <RestTimerDock timers={services.restTimers} onOpen={(timer) => openTarget(timerTarget(timer))} />
+          <RestTimerDock timers={services.restTimers} onOpen={(timer) => { void openTimer(services.trainingPlans, timer); }} />
           <NotificationOpenHost navigationRef={navigationRef} onTarget={openTarget} />
         </CalendarUndoProvider>
         </BottomSheetModalProvider>

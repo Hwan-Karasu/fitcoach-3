@@ -102,6 +102,8 @@ test("PART-DOCK-1 программа A(2) → B(1) → A: до ответа A с
     latest = useProgramData({ clientId: "client", programId, repository: plans, onRequestedWeek: () => undefined, onMessage: () => undefined });
     return null;
   }
+  /** Чтение через функцию: assert.equal(…, null) иначе сужает тип поля до null для следующих проверок. */
+  const groupNow = () => latest.group;
   let renderer!: TestRenderer.ReactTestRenderer;
   await act(async () => { renderer = TestRenderer.create(createElement(Probe, { programId: "A" })); });
   assert.equal(latest.group?.length, 2);
@@ -110,16 +112,16 @@ test("PART-DOCK-1 программа A(2) → B(1) → A: до ответа A с
   hold = true;
   await act(async () => { renderer.update(createElement(Probe, { programId: "A" })); });
   assert.equal(latest.shown?.programId, "A");
-  assert.equal(latest.group, null, "пока состав A читается, он неизвестен — не состав B");
+  assert.equal(groupNow(), null, "пока состав A читается, он неизвестен — не состав B");
   await act(async () => { held.get("A")!.resolve(groups.A!); });
-  assert.equal(latest.group?.length, 2, "панель двух участников вернулась");
+  assert.equal(groupNow()?.length, 2, "панель двух участников вернулась");
 
   hold = false; fail = true;
   await act(async () => { notify({ clientIds: ["client"] }); });
-  assert.equal(latest.group, null, "ошибка чтения — не «один участник»");
+  assert.equal(groupNow(), null, "ошибка чтения — не «один участник»");
   fail = false;
   await act(async () => { notify({ clientIds: ["other"] }); });
-  assert.equal(latest.group?.length, 2, "следующее изменение плана перечитывает состав");
+  assert.equal(groupNow()?.length, 2, "следующее изменение плана перечитывает состав");
   await act(async () => { renderer.unmount(); });
 });
 
