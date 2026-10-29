@@ -12,6 +12,7 @@ import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { ADJUST_STEP_SEC, isFinished, isPaused, nextFinishAt, remainingSec, type RestTimer } from "../domain/RestTimerRules.ts";
 import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
 import { useBottomBarHeight, useEditorDockHeight } from "../../../../shared/ui/components/public.ts";
+import { restTimerDiagnostics } from "../../../../shared/diagnostics/RestTimerDiagnostics.ts";
 
 /** Сколько секунд закончившийся таймер остаётся на панели с надписью «Готово». */
 const FINISHED_VISIBLE_MS = 4000;
@@ -101,7 +102,10 @@ const TimerCard = memo(function TimerCard({ timer, finished, compact, nearest, t
     paused ? <Play size={18} color={colors.textPrimary} strokeWidth={2} /> : <Pause size={18} color={colors.textPrimary} strokeWidth={2} />);
   const skip = button("skip", "Пропустить отдых", () => { timers.skip(timer.id).catch(() => undefined); }, <SkipForward size={18} color={colors.onAccentFill} strokeWidth={2} />, true);
   const timeStyle = [styles.time, compact && styles.timeCompact, { color: timeColor }];
-  const timeView = finished ? <Text numberOfLines={1} style={timeStyle}>Готово</Text> : <RestClock timer={timer} style={timeStyle} />;
+  // Замер REST-PERF-1: с выключенным отсчётом — остаток на момент перерисовки, без покадрового обновления.
+  const timeView = finished ? <Text numberOfLines={1} style={timeStyle}>Готово</Text>
+    : restTimerDiagnostics.clockDisabled ? <Text numberOfLines={1} style={timeStyle}>{clock(remainingSec(timer, Date.now()))}</Text>
+      : <RestClock timer={timer} style={timeStyle} />;
   return (
     <Pressable accessibilityRole="button" accessibilityLiveRegion="polite"
       accessibilityLabel={`${timer.clientName}, ${timer.exerciseName}. ${restState(timer, finished)}. Открыть тренировку`}
@@ -135,6 +139,7 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
   const barHeight = useBottomBarHeight();
   const subscribe = useCallback((listener: () => void) => timers.subscribe(listener), [timers]);
   const list = useSyncExternalStore(subscribe, () => timers.list());
+  useEffect(() => { restTimerDiagnostics.reportActive(list.length); }, [list.length]);
   const [now, setNow] = useState(() => Date.now());
   const [side, setSide] = useState<Side | null>(null);
   const [showAll, setShowAll] = useState(false);
