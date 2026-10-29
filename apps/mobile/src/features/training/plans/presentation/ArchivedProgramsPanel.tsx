@@ -82,7 +82,7 @@ export function ArchivedProgramsPanel({ clientId, repository, planDelete }: Read
           </View>
         )} />
       <ConfirmDialog visible={deleting !== null} confirmBusy={busy !== null} title={`Удалить «${deleting?.title ?? ""}»?`}
-        description="Удалить план — недели и тренировки уйдут, а проведённые занятия останутся в истории и статистике с пометкой «исходный план удалён». Удалить полностью — вместе со всеми результатами этого клиента."
+        description="Окончательное удаление нельзя отменить. Удалить план — недели и тренировки уйдут, а проведённые занятия останутся в истории и статистике с пометкой «исходный план удалён». Удалить полностью — вместе со всеми результатами этого клиента (ещё одно подтверждение)."
         confirmLabel="Удалить план, сохранить историю" tertiaryLabel="Удалить полностью с результатами…"
         onTertiary={() => { setConfirmFull(deleting); setDeleting(null); }}
         onCancel={() => setDeleting(null)} onConfirm={() => { if (deleting !== null) void remove(deleting, true); }} />

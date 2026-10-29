@@ -4,7 +4,7 @@ import { useIsFocused } from "@react-navigation/native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
 import { CalendarDays, ChartColumnIncreasing, ChevronRight, CircleMinus, Clock, FileText, LayoutGrid, Plus, RefreshCw, Rocket,
-  Archive, Ellipsis, Trash2, FileSpreadsheet, Download, Pencil, SlidersHorizontal, TrendingUp, Users, Zap } from "lucide-react-native";
+  Bookmark, Ellipsis, Trash2, FileSpreadsheet, Download, Pencil, SlidersHorizontal, TrendingUp, Users, Zap } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, FloatingActionButton, InlineNotice, ListSectionHeader, LoadingState, SegmentedControl, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
@@ -13,10 +13,14 @@ import type { ProgramCard, ProgramKind } from "../domain/ProgramModel.ts";
 import { membersWord, programKindLabels, PROGRAM_TITLE_MAX } from "../domain/ProgramRules.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import { useProgramLibrary } from "./useProgramLibrary.ts";
-import type { ProgramDeletePort } from "../domain/PlanDeletion.ts";
+import { SaveTemplateDialog } from "./SaveTemplateDialog.tsx";
 
-function ProgramCardMenu({ card, busy, onExport, onArchive, onDelete, onRename }: Readonly<{
-  card: ProgramCard; busy: boolean; onExport?: () => void; onArchive: () => void; onDelete?: () => void; onRename: () => void;
+/**
+ * Меню карточки активной программы. «Удалить» — первый шаг удаления: программа переносится в архив (решение владельца 2026-10-29);
+ * окончательное удаление — только во вкладке «Архив программ», с отдельным подтверждением.
+ */
+function ProgramCardMenu({ card, busy, onExport, onSaveTemplate, onDelete, onRename }: Readonly<{
+  card: ProgramCard; busy: boolean; onExport?: () => void; onSaveTemplate: () => void; onDelete: () => void; onRename: () => void;
 }>) {
   const { palette } = usePrototypeTheme(); const anchor = useRef<View>(null); const [open, setOpen] = useState(false);
   return <>
@@ -27,10 +31,13 @@ function ProgramCardMenu({ card, busy, onExport, onArchive, onDelete, onRename }
     <DropdownMenu anchor={anchor} visible={open} title={card.title} selected="" onClose={() => setOpen(false)}
       options={[
         { value: "rename", label: "Переименовать программу", icon: (color: string) => <Pencil size={18} color={color} /> },
+        { value: "template", label: "Сохранить как шаблон", icon: (color: string) => <Bookmark size={18} color={color} /> },
         ...(onExport ? [{ value: "export", label: "Экспорт в Excel", icon: (color: string) => <FileSpreadsheet size={18} color={color} /> }] : []),
-        { value: "archive", label: "Архивировать", icon: (color: string) => <Archive size={18} color={color} /> },
-        ...(onDelete ? [{ value: "delete", label: "Удалить", danger: true, icon: (color: string) => <Trash2 size={18} color={color} /> }] : [])
-      ]} onSelect={(action) => { if (action === "rename") onRename(); else if (action === "export") onExport?.(); else if (action === "archive") onArchive(); else if (action === "delete") onDelete?.(); }} />
+        { value: "delete", label: "Удалить", danger: true, icon: (color: string) => <Trash2 size={18} color={color} /> },
+      ]} onSelect={(action) => {
+        if (action === "rename") onRename(); else if (action === "template") onSaveTemplate();
+        else if (action === "export") onExport?.(); else if (action === "delete") onDelete();
+      }} />
   </>;
 }
 
@@ -229,10 +236,9 @@ export const programLibraryTabTitles: Readonly<Record<ProgramLibraryTab, string>
   programs: "Программы", templates: "Шаблоны", archive: "Архив программ" };
 
 export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate, onOpenProgram, onOpenTemplates, renderTemplates, renderArchive,
-  onTabChange, onExport, planDelete, renderExcelImport }: Readonly<{
+  onTabChange, onExport, renderExcelImport }: Readonly<{
   renderExcelImport?: (renderTrigger: (onPress: () => void, disabled: boolean, onSample: () => void) => ReactNode) => ReactNode;
   onExport?: (programId: string) => Promise<void>;
-  planDelete?: ProgramDeletePort;
   clientId: string;
   repository: TrainingPlansRepositoryPort;
   /** Пустая библиотека: конструктор выбран прямо здесь. */
@@ -255,7 +261,10 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
   const [orderReset, setOrderReset] = useState(0);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
-  const [pending, setPending] = useState<{ kind: "archive" | "delete"; card: ProgramCard } | null>(null);
+  /** Программа, которую «Удалить» переносит в архив (ждёт подтверждения). */
+  const [pending, setPending] = useState<ProgramCard | null>(null);
+  const [savingTemplate, setSavingTemplate] = useState<ProgramCard | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ card: ProgramCard; title: string } | null>(null);
   const run = async (task: () => Promise<void>) => {
     if (busy) return; setBusy(true); setActionError("");
@@ -297,6 +306,7 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
       <Animated.ScrollView ref={scrollRef} contentContainerStyle={[styles.content, styles.withFab]}>
         {failed ? <InlineNotice kind="error">Не удалось обновить список. Показан последний загруженный.</InlineNotice> : null}
         {!!actionError && <InlineNotice kind="error">{actionError}</InlineNotice>}
+        {notice !== null ? <InlineNotice kind="success">{notice}</InlineNotice> : null}
         {busy && <InlineNotice>Подготавливаем данные…</InlineNotice>}
         {orderError ? <InlineNotice kind="error">Не удалось сохранить порядок. Повторите перетаскивание.</InlineNotice> : null}
         {onOpenTemplates !== undefined && renderTemplates === undefined
@@ -317,9 +327,10 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
                   <ProgramCardRow card={item} selected={item.id === library.selectedProgramId} hasMenu />
                 </View>
               </Sortable.Touchable>
-                <ProgramCardMenu card={item} busy={busy} onRename={() => { setActionError(""); setRenaming({ card: item, title: item.title }); }} onArchive={() => setPending({ kind: "archive", card: item })}
+                <ProgramCardMenu card={item} busy={busy} onRename={() => { setActionError(""); setRenaming({ card: item, title: item.title }); }}
+                  onSaveTemplate={() => { setActionError(""); setNotice(null); setSavingTemplate(item); }}
                   {...(onExport ? { onExport: () => { void run(() => onExport(item.id)); } } : {})}
-                  {...(planDelete ? { onDelete: () => setPending({ kind: "delete", card: item }) } : {})} />
+                  onDelete={() => setPending(item)} />
               </View>
             )}
             onDragEnd={({ data }) => {
@@ -358,11 +369,15 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
           </View>
         </View>
       </Modal>
-      <ConfirmDialog visible={pending !== null} destructive={pending?.kind === "delete"} confirmBusy={busy}
-        title={pending?.kind === "delete" ? `Удалить «${pending.card.title}»?` : `Архивировать «${pending?.card.title ?? ""}»?`}
-        description={pending?.kind === "delete" ? "Программа и все её результаты будут удалены у этого клиента. Копии других участников останутся." : "Программа переместится в архив этого клиента. Её можно вернуть вместе с результатами."}
-        confirmLabel={pending?.kind === "delete" ? "Удалить" : "Архивировать"} onCancel={() => setPending(null)}
-        onConfirm={() => { if (!pending) return; const { card, kind } = pending; void run(() => kind === "archive" ? repository.archiveForClient(clientId, card.id) : planDelete!.deleteProgram({ clientId, programId: card.id, expectedRevision: card.revision })); }} />
+      <ConfirmDialog visible={pending !== null} confirmBusy={busy} title={`Переместить «${pending?.title ?? ""}» в архив?`}
+        description={`Программа исчезнет из списка, но циклы, недели и результаты сохранятся${(pending?.memberCount ?? 0) > 1
+          ? "; у остальных участников она останется" : ""}. Вернуть или удалить окончательно можно во вкладке «Архив программ».`}
+        confirmLabel="В архив" onCancel={() => setPending(null)}
+        onConfirm={() => { if (!pending) return; const card = pending; void run(() => repository.archiveForClient(clientId, card.id)); }} />
+      <SaveTemplateDialog visible={savingTemplate !== null} kind="program" initialTitle={savingTemplate?.title ?? ""}
+        save={(title) => repository.saveProgramAsTemplate(clientId, savingTemplate!.id, title)}
+        onClose={() => setSavingTemplate(null)}
+        onSaved={(template) => { setSavingTemplate(null); setNotice(`Шаблон «${template.title}» сохранён — он во вкладке «Шаблоны».`); }} />
     </View>
   );
 }

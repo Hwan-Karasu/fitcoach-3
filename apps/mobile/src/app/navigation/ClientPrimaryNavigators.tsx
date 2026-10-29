@@ -267,7 +267,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
         {({ navigation }) => <ProgramLibraryScreen clientId={clientId} repository={repository}
           renderExcelImport={(renderTrigger) => <BuilderExcelImport memory={trainingTransfer} renderTrigger={renderTrigger} files={expoWorkbookFiles} exercises={exercises} label="Импортировать из Excel" clientName={clientName}
             target={{ kind: "PROGRAM", save: async (value, mapping, rememberMatches) => { await trainingTransfer.importClient(clientId, value, mapping, { rememberMatches }); } }} />}
-          planDelete={planDelete} onExport={async (programId) => { await expoWorkbookFiles.share(await trainingTransfer.exportClient(clientId, [programId])); }}
+          onExport={async (programId) => { await expoWorkbookFiles.share(await trainingTransfer.exportClient(clientId, [programId])); }}
           onChoose={(kind) => { const route = createRoute(kind); openRoute(navigation, route); }}
           onCreate={() => navigation.navigate("TrainingChooser")}
           onOpenTemplates={() => navigation.navigate("TrainingTemplates")}

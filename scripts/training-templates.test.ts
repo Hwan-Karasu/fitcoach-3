@@ -109,6 +109,35 @@ test("TPL-KIND-1 «Сохранить как шаблон» у программ�
   }
 });
 
+test("PROG-MENU-1 «Удалить» = в архив: план и результаты не трогаются, восстановление возвращает программу как была", async () => {
+  const { plans, execution, a, b, close } = await setup();
+  try {
+    const program = await plans.createProgram({ kind: "PERIODIZED", title: "Архивная", clientIds: [a.id, b.id] });
+    await plans.createMesocycle(a.id, program.id, program.revision, { title: "Блок", weeks: 2, firstWeek: week("z"), clientIds: [a.id, b.id] });
+    const plan = (await plans.getPeriodizedPlan(a.id, program.id))!;
+    const workout = plan.mesocycles[0]!.weeks[0]!.workouts[0]!;
+    const slot = { clientId: a.id, programId: program.id, weekIndex: 1, plannedWorkoutId: workout.id };
+    await execution.saveSet({ slot, plannedExerciseId: workout.exercises[0]!.id, exerciseId: BENCH, plannedSetId: workout.exercises[0]!.sets[0]!.id,
+      position: 0, metrics: ["load", "reps"], values: { loadGrams: 80_000, reps: 10, durationSec: null, distanceM: null }, setType: "NORMAL",
+      drops: [], rpe: null, expectedRevision: null });
+    const factsBefore = (await execution.getWorkout(slot)).facts;
+
+    await plans.archiveForClient(a.id, program.id);
+    const library = await plans.getLibrary(a.id);
+    assert.deepEqual([library.active.some((card) => card.id === program.id), library.archived.some((card) => card.id === program.id)], [false, true]);
+    assert.equal((await plans.getLibrary(b.id)).active.some((card) => card.id === program.id), true, "у другого участника программа осталась");
+    assert.equal((await execution.getWorkout(slot)).facts.size, factsBefore.size, "архив не трогает результаты");
+
+    await plans.restoreForClient(a.id, program.id);
+    const restored = (await plans.getPeriodizedPlan(a.id, program.id))!;
+    assert.deepEqual(restored.mesocycles, plan.mesocycles, "циклы, недели и упражнения — без изменений");
+    assert.deepEqual([...(await execution.getWorkout(slot)).facts.values()].map((fact) => [fact.values.loadGrams, fact.confirmed]),
+      [...factsBefore.values()].map((fact) => [fact.values.loadGrams, fact.confirmed]));
+  } finally {
+    await close();
+  }
+});
+
 test("T04 программа из шаблона (§48.14.3 п. 5, 7, 8): новые ID, свои копии участникам, шаблон дальше независим", async () => {
   const { plans, a, b, c, close } = await setup();
   try {
