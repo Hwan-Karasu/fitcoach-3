@@ -1,3 +1,11 @@
+## 2026-10-29 — build44: стабилизация ADR-054
+
+- Собран `artifacts/apk/athlete-diary-3.0.0-build44.apk`: `com.fitcoach.v3`, 3.0.0, versionCode 44, arm64-v8a, 70 386 184 байт; assembleRelease PASS
+  (2 мин 4 с, JDK17, IPv4, без prebuild). Сертификат SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c` совпадает с
+  build33–43 (apksigner verify, aapt). SHA-256 APK `9151d2a3fd69137e9f6381555e8124ffd99442717865f0dfdd544454a2131b99`. Бандл Hermes свежий (строки
+  «Цикл в шаблон», «Добавить в программу» найдены). Сверх build43 входят коммиты 00e470f…0b2190e. Подпись debug (REL-ANDROID). На телефон не
+  устанавливался.
+
 ## 2026-10-29 — Стабилизация: подходы, шаблоны, вкладки, архив, участники, таймеры (ADR-054)
 
 Коммиты 00e470f…d5834e7 (ветка perf/week-participant-navigation, после тега build43). На телефоне ничего не проверялось (правило владельца:
