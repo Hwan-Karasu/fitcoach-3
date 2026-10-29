@@ -6,7 +6,7 @@ import { Image, Keyboard, Pressable, Text, View } from "react-native";
 import { KeyboardAwareScrollView, type KeyboardAwareScrollViewRef } from "react-native-keyboard-controller";
 import { useKeepAwake } from "expo-keep-awake";
 import * as Haptics from "expo-haptics";
-import { usePreventRemove, useNavigation } from "@react-navigation/native";
+import { usePreventRemove, useNavigation, useIsFocused } from "@react-navigation/native";
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { scheduleOnRN } from "react-native-worklets";
@@ -145,21 +145,41 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     setNotice(effect.kind === "MARKED" ? `Запись на ${time} в календаре отмечена проведённой.` : `Отметка «проведена» у записи на ${time} в календаре снята.`);
   }, []);
   const diary = useWorkoutDiary(slot, plans, execution, metricsOf, unilateralOf, startRest, calendarEffect);
-  // «Макс.» под упражнением: лучший вес клиента за всё время в прошлых занятиях (один запрос на открытие тренировки),
-  // плюс подходы открытой тренировки из состояния дневника — ввод запросов не добавляет.
+  // «Макс.» под упражнением: лучший вес клиента за всё время в прошлых занятиях плюс подходы открытой тренировки из состояния дневника
+  // (ввод запросов не добавляет). Запрос — по ПОКАЗАННОЙ тренировке (карточки на экране), а не по новому слоту, который при смене недели
+  // меняется раньше карточек; результаты кэшируются по тренировке, а пока грузится новая — остаётся прежнее значение, а не пустота.
+  const shown = diary.displayedSlot;
   const exerciseIdsKey = diary.workout?.exercises.map((item) => item.exerciseId).join("|") ?? "";
-  const maxKey = `${slot.clientId}|${slot.programId}|${slot.weekIndex}|${slot.plannedWorkoutId}|${exerciseIdsKey}`;
-  const [pastMax, setPastMax] = useState<Readonly<{ key: string; loads: ReadonlyMap<string, number> }> | null>(null);
+  const maxKey = `${shown.clientId}|${shown.programId}|${shown.weekIndex}|${shown.plannedWorkoutId}|${exerciseIdsKey}`;
+  const maxCache = useRef(new Map<string, ReadonlyMap<string, number>>()).current;
+  const [maxVersion, setMaxVersion] = useState(0);
+  const [pastMax, setPastMax] = useState<ReadonlyMap<string, number> | null>(null);
+  const focused = useIsFocused();
+  const wasFocused = useRef(focused);
+  // Занятия клиента могли измениться на другом экране (матрица) — при возврате кэш перечитывается; свой ввод кэш не трогает.
+  useEffect(() => {
+    if (focused && !wasFocused.current) { maxCache.clear(); setMaxVersion((value) => value + 1); }
+    wasFocused.current = focused;
+  }, [focused, maxCache]);
+  useEffect(() => execution.subscribeCommittedChanges((change) => {
+    if (change.clientId === shown.clientId && change.programId !== shown.programId) { maxCache.clear(); setMaxVersion((value) => value + 1); }
+  }), [execution, maxCache, shown.clientId, shown.programId]);
   useEffect(() => {
     if (exerciseIdsKey === "") return undefined;
+    const cached = maxCache.get(maxKey);
+    if (cached !== undefined) { setPastMax(cached); return undefined; }
     let active = true;
-    execution.getMaxLoads({ clientId: slot.clientId, programId: slot.programId, weekIndex: slot.weekIndex, plannedWorkoutId: slot.plannedWorkoutId },
-      exerciseIdsKey.split("|")).then((loads) => { if (active) setPastMax({ key: maxKey, loads }); }).catch(() => undefined);
+    execution.getMaxLoads({ clientId: shown.clientId, programId: shown.programId, weekIndex: shown.weekIndex, plannedWorkoutId: shown.plannedWorkoutId },
+      exerciseIdsKey.split("|")).then((loads) => {
+      maxCache.set(maxKey, loads);
+      if (maxCache.size > 12) maxCache.delete(maxCache.keys().next().value!);
+      if (active) setPastMax(loads);
+    }).catch(() => undefined);
     return () => { active = false; };
-  }, [execution, maxKey, exerciseIdsKey, slot.clientId, slot.programId, slot.weekIndex, slot.plannedWorkoutId]);
+  }, [execution, maxCache, maxKey, maxVersion, exerciseIdsKey, shown.clientId, shown.programId, shown.weekIndex, shown.plannedWorkoutId]);
   const openMax = useMemo(() => currentMaxLoads(diary.state?.facts.values() ?? []), [diary.state]);
   const maxLoadText = (exerciseId: string): string | null => {
-    const grams = Math.max(pastMax?.key === maxKey ? pastMax.loads.get(exerciseId) ?? -1 : -1, openMax.get(exerciseId) ?? -1);
+    const grams = Math.max(pastMax?.get(exerciseId) ?? -1, openMax.get(exerciseId) ?? -1);
     return grams < 0 ? null : `Макс. ${String(grams / 1000).replace(".", ",")} кг`;
   };
   useEffect(() => {
@@ -582,6 +602,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         const cards = run.map((exercise) => {
           const info = lookup.get(exercise.exerciseId);
           const group = supersetNumber(workout, exercise);
+          const maxText = maxLoadText(exercise.exerciseId);
           const fields = diaryFields(info?.metrics ?? NO_METRICS);
           const extras = extraWarmups(state, exercise.id).map((fact) => ({ set: extraSetOf(fact), position: fact.position, setType: fact.setType }));
           const rows = displayOrder([...extras, ...exercise.sets.map((set, position) => ({ set, position,
@@ -617,9 +638,9 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                     <Text accessibilityLabel={`Плановый RIR ${formatRange(exercise.rir)}`}
                       style={[styles.restText, { color: colors.textSecondary }]}>{`RIR ${formatRange(exercise.rir)}`}</Text>
                   ) : null}
-                  {maxLoadText(exercise.exerciseId) !== null ? (
-                    <Text accessibilityLabel={`Максимальный вес за всё время: ${maxLoadText(exercise.exerciseId)!.slice(6)}`}
-                      style={[styles.restText, { color: colors.textSecondary }]}>{maxLoadText(exercise.exerciseId)}</Text>
+                  {maxText !== null ? (
+                    <Text accessibilityLabel={`Максимальный вес за всё время: ${maxText.slice(6)}`}
+                      style={[styles.restText, { color: colors.textSecondary }]}>{maxText}</Text>
                   ) : null}
                   <Text accessibilityLabel={`Объём ${kg(volumeOf(exercise.id))}, выполнено ${done} из ${rows.length}`}
                     style={[styles.restText, styles.cardVolume, { color: colors.textSecondary }]}>
