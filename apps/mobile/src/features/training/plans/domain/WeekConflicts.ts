@@ -62,6 +62,11 @@ function conflictReason(op: WeekOp, before: readonly PlannedWorkout[], after: re
   const desired = exerciseIn(after, id);
   if (!current) return op.kind === "addExercise" || op.kind === "removeExercise" ? null : "MISSING_EXERCISE";
   if (desired && same(shape(current), shape(desired))) return null;
+  // Отдых — свойство упражнения, а не подходов: другие повторы и вес недели его не защищают (тип недели выбирают областью).
+  // Защищён только отдых, который в той неделе уже задан вручную иначе.
+  if (op.kind === "updateExercise" && Object.keys(op.patch).every((key) => key === "restSec")) {
+    return previous === undefined || current.restSec === previous.restSec || current.restSec === desired?.restSec ? null : "PERSONAL_CHANGE";
+  }
   return previous && same(shape(current), shape(previous)) ? null : "PERSONAL_CHANGE";
 }
 

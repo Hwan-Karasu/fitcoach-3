@@ -140,6 +140,15 @@ export function diffWeek(beforeWeek: readonly PlannedWorkout[], afterWeek: reado
   return ops;
 }
 
+/**
+ * Нужны ли операциям новые ID: только добавление/замена и смена состава подходов. Отдых, указание, RIR, названия, порядок и
+ * суперсеты ID не требуют — для них запас идентификаторов не готовится (на «все недели» это тысячи лишних UUID).
+ */
+export function opsNeedIds(ops: readonly WeekOp[]): boolean {
+  return ops.some((op) => op.kind === "addWorkout" || op.kind === "addExercise" || op.kind === "replaceExercise"
+    || (op.kind === "updateExercise" && op.patch.sets !== undefined));
+}
+
 /** Известные элементы встают в новом относительном порядке на свои же места; незнакомые не двигаются. */
 function reorder<T extends Readonly<{ id: string; lineageId?: string }>>(items: readonly T[], order: readonly string[]): T[] {
   const known = items.filter((item) => order.includes(lineageOf(item)))

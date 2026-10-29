@@ -106,8 +106,9 @@ const sameRow = (a: readonly SqlValue[], b: readonly SqlValue[]) => a.length ===
  * на телефоне каждый запрос — обмен по мосту Expo, а правка «все недели» иначе стоит тысяч запросов (PERF-PLAN-BATCH).
  */
 export async function writeWorkouts(tx: SqliteStatementPort, workspaceId: string, programId: string, weekId: string | null,
-  workouts: readonly PlannedWorkout[]): Promise<void> {
-  const stored = rowsOf(workspaceId, programId, weekId, await readWorkouts(tx, workspaceId, programId, weekId));
+  workouts: readonly PlannedWorkout[], current?: readonly PlannedWorkout[]): Promise<void> {
+  // `current` — неделя, уже прочитанная в этой же транзакции (запись идёт под BEGIN IMMEDIATE, она не изменилась): перечитывать не нужно.
+  const stored = rowsOf(workspaceId, programId, weekId, current ?? await readWorkouts(tx, workspaceId, programId, weekId));
   const next = rowsOf(workspaceId, programId, weekId, workouts);
   const order: readonly Table[] = ["workouts", "exercises", "sets"];
   for (const table of order) {

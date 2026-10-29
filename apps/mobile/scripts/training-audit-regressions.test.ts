@@ -472,3 +472,60 @@ test("PERF-PLAN-BATCH добавление подходов во всех нед
     assert.deepEqual(weeks.map((week) => week.workouts[0]!.exercises[0]!.sets.length), Array(8).fill(2));
   } finally { await env.close(); }
 });
+
+test("PERF-REST-ALL отдых «все недели»: другие повторы не мешают, без UUID, без перечитывания недель, читается один мезоцикл", async () => {
+  const env = await setup();
+  try {
+    const { programId, mesocycleId } = await env.periodized(4, 8);
+    // Второй мезоцикл: правка первого не должна его читать.
+    const other = await env.cycleOf(env.a, programId);
+    await env.plans.createMesocycle(env.a, programId, other.program.revision,
+      { title: "Второй", weeks: 8, firstWeek: workoutWith(4).plan.workouts, clientIds: [env.a] });
+    let plan = await env.cycleOf(env.a, programId);
+    // Неделя 3 — «тяжёлая»: 6 повторов вместо 10 (другая форма упражнения), отдых прежний.
+    const w3 = plan.mesocycles[0]!.weeks[2]!;
+    const heavy = w3.workouts.map((workout) => ({ ...workout, exercises: workout.exercises.map((exercise) => ({ ...exercise,
+      sets: exercise.sets.map((set) => ({ ...set, reps: 6 })) })) }));
+    await env.plans.saveWeek(env.a, programId, plan.program.revision, { mesocycleId, weekIndex: 3, workouts: heavy, type: w3.type,
+      scope: "CURRENT", clientIds: [env.a] });
+    plan = await env.cycleOf(env.a, programId);
+    const w1 = plan.mesocycles[0]!.weeks[0]!;
+    const edited = w1.workouts.map((workout) => ({ ...workout, exercises: workout.exercises.map((exercise) => ({ ...exercise, restSec: 150 })) }));
+    const input = { mesocycleId, weekIndex: 1, workouts: edited, type: w1.type, scope: "ALL" as const, clientIds: [env.a] };
+    env.journal.sql.length = 0;
+    env.journal.recording = true;
+    const preview = await env.plans.previewWeekEdit(env.a, programId, plan.program.revision, input);
+    await env.plans.saveWeek(env.a, programId, plan.program.revision, input);
+    env.journal.recording = false;
+    assert.equal(preview.conflicts.length, 0, "другие повторы недели 3 не считаются своей структурой");
+    const after = (await env.cycleOf(env.a, programId)).mesocycles[0]!.weeks;
+    assert.deepEqual(after.map((week) => week.workouts[0]!.exercises[0]!.restSec), Array(8).fill(150));
+    assert.deepEqual(after[2]!.workouts[0]!.exercises[0]!.sets.map((set) => set.reps), [6, 6, 6, 6], "повторы недели 3 не тронуты");
+    const sql = env.journal.sql;
+    assert.equal(sql.filter((item) => item.includes("WITH RECURSIVE n(i)")).length, 0, "ID не готовятся");
+    assert.equal(sql.filter((item) => item.startsWith("SELECT") && item.includes("FROM training_mesocycles") && !item.includes("id = ?")).length, 0,
+      "читается один мезоцикл, а не все");
+    assert.equal(writesTo(sql, "INSERT INTO", "training_planned_sets"), 0, "подходы не переписываются");
+    assert.equal(writesTo(sql, "INSERT INTO", "training_workouts"), 0);
+  } finally { await env.close(); }
+});
+
+test("PERF-REST-ALL отдых, заданный вручную в другой неделе, не затирается", async () => {
+  const env = await setup();
+  try {
+    const { programId, mesocycleId } = await env.periodized(2, 3);
+    let plan = await env.cycleOf(env.a, programId);
+    const w2 = plan.mesocycles[0]!.weeks[1]!;
+    const own = w2.workouts.map((workout) => ({ ...workout, exercises: workout.exercises.map((exercise) => ({ ...exercise, restSec: 45 })) }));
+    await env.plans.saveWeek(env.a, programId, plan.program.revision, { mesocycleId, weekIndex: 2, workouts: own, type: w2.type,
+      scope: "CURRENT", clientIds: [env.a] });
+    plan = await env.cycleOf(env.a, programId);
+    const w1 = plan.mesocycles[0]!.weeks[0]!;
+    const edited = w1.workouts.map((workout) => ({ ...workout, exercises: workout.exercises.map((exercise) => ({ ...exercise, restSec: 150 })) }));
+    const saved = await env.plans.saveWeek(env.a, programId, plan.program.revision,
+      { mesocycleId, weekIndex: 1, workouts: edited, type: w1.type, scope: "ALL", clientIds: [env.a] });
+    assert.equal(saved.skipped, 1);
+    const rests = (await env.cycleOf(env.a, programId)).mesocycles[0]!.weeks.map((week) => week.workouts[0]!.exercises[0]!.restSec);
+    assert.deepEqual(rests, [150, 45, 150]);
+  } finally { await env.close(); }
+});

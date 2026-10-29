@@ -22,10 +22,10 @@ import { preferredPlacement, type ClientPlacementOptions, type GroupCopy, type P
   type PlacementTarget } from "../domain/Placement.ts";
 import { navigationGroup as groupOfCopy, navigationGroupId, moveNavigationMember, putNavigationMember } from "./NavigationGroupStore.ts";
 import { findCopy, readCopy } from "./MesocycleGroupStore.ts";
-import { deleteMemberMesocycles, insertMesocycle, readMesocycles, saveSelection, selectedMesocycle, writeWeek } from "./PeriodizedStore.ts";
+import { deleteMemberMesocycles, insertMesocycle, readMesocycle, readMesocycles, saveSelection, selectedMesocycle, writeWeek } from "./PeriodizedStore.ts";
 import { MESOCYCLE_WEEKS_MAX, weekTypeLabels, type Mesocycle, type NewMesocycleInput, type NewPeriodizedProgramInput, type BuilderMesocycleInput, type PeriodizedPlan, type PlanWeek, type WeekEditInput,
   type WeekEditConflict, type WeekEditPreview, type WeekEditResult } from "../domain/PeriodizedModel.ts";
-import { copyWeeks, diffWeek, newMesocycleWeeks, targetWeeks, withLineage } from "../domain/PeriodizedRules.ts";
+import { copyWeeks, diffWeek, newMesocycleWeeks, opsNeedIds, targetWeeks, withLineage } from "../domain/PeriodizedRules.ts";
 import { fillEmptyWeeks, type MesocycleSettings } from "../domain/MesocycleBuilder.ts";
 import { applyWithConflicts } from "../domain/WeekConflicts.ts";
 import type { PlannedWorkout } from "../domain/SimplePlanModel.ts";
@@ -547,7 +547,8 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
           continue;
         }
         const rows = 1 + next.exercises.reduce((sum, exercise) => sum + 1 + exercise.sets.length, 0);
-        const applied = applyWithConflicts([old], [next], [personal], clientId, override.week, [], await this.idPool(tx, rows * 2));
+        const take = opsNeedIds(diffWeek([old], [next])) ? await this.idPool(tx, rows * 2) : () => { throw new Error("PROGRAM_ID_UNAVAILABLE"); };
+        const applied = applyWithConflicts([old], [next], [personal], clientId, override.week, [], take);
         await writeSimpleOverride(tx, this.workspaceId, clientId, programId, override.week, applied.workouts[0]!);
       }
       await tx.run("DELETE FROM training_builder_drafts WHERE workspace_id = ? AND client_id = ? AND draft_key = ?",
@@ -780,8 +781,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       await membership(tx, this.workspaceId, input.sourceClientId, input.sourceProgramId);
       const sourceProgram = await programById(tx, this.workspaceId, input.sourceProgramId);
       if (sourceProgram.revision !== input.sourceRevision) throw new Error("SOURCE_REVISION_CONFLICT");
-      const source = (await readMesocycles(tx, this.workspaceId, input.sourceProgramId, input.sourceClientId))
-        .find((item) => item.id === input.sourceMesocycleId);
+      const source = (await readMesocycle(tx, this.workspaceId, input.sourceProgramId, input.sourceClientId, input.sourceMesocycleId));
       if (!source || sourceProgram.kind !== "PERIODIZED") throw new Error("TARGET_NOT_FOUND");
       await this.assertTargets(tx, clientId, programId, input.clientIds);
       for (const week of source.weeks) assertWeek(title, week.workouts);
@@ -807,7 +807,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     await this.assertTargets(tx, clientId, programId, [clientId]);
     const program = await programById(tx, this.workspaceId, programId);
     if (program.revision !== expectedRevision) throw new Error("PROGRAM_REVISION_CONFLICT");
-    const cycle = (await readMesocycles(tx, this.workspaceId, programId, clientId)).find((item) => item.id === mesocycleId);
+    const cycle = (await readMesocycle(tx, this.workspaceId, programId, clientId, mesocycleId));
     const source = cycle?.weeks.find((week) => week.index === sourceWeek);
     const target = cycle?.weeks.find((week) => week.index === targetWeek);
     if (!cycle || !source || !target || source.id === target.id) throw new Error("TARGET_NOT_FOUND");
@@ -821,7 +821,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       if (first === second) throw new Error("DRAFT_INVALID");
       await this.assertTargets(tx, clientId, programId, [clientId]);
       if ((await programById(tx, this.workspaceId, programId)).revision !== expectedRevision) throw new Error("PROGRAM_REVISION_CONFLICT");
-      const cycle = (await readMesocycles(tx, this.workspaceId, programId, clientId)).find((item) => item.id === mesocycleId);
+      const cycle = (await readMesocycle(tx, this.workspaceId, programId, clientId, mesocycleId));
       const a = cycle?.weeks.find((week) => week.index === first);
       const b = cycle?.weeks.find((week) => week.index === second);
       if (!cycle || !a || !b) throw new Error("TARGET_NOT_FOUND");
@@ -870,8 +870,8 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
   }
 
   private async ownMesocycle(tx: SqliteStatementPort, request: MesocycleSaveRequest): Promise<Mesocycle> {
-    const cycle = (await readMesocycles(tx, this.workspaceId, request.programId, request.clientId))
-      .find((item) => item.id === request.mesocycleId);
+    const cycle = request.mesocycleId === null ? undefined
+      : await readMesocycle(tx, this.workspaceId, request.programId, request.clientId, request.mesocycleId);
     if (cycle === undefined) throw new Error("TARGET_NOT_FOUND");
     return cycle;
   }
@@ -1051,12 +1051,15 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       await this.assertTargets(tx, clientId, programId, [clientId]);
       if (input.clientIds.length !== 1 || input.clientIds[0] !== clientId) throw new Error("DRAFT_INVALID");
       if ((await programById(tx, this.workspaceId, programId)).revision !== expectedRevision) throw new Error("PROGRAM_REVISION_CONFLICT");
-      const own = (await readMesocycles(tx, this.workspaceId, programId, clientId)).find((item) => item.id === input.mesocycleId);
+      const own = (await readMesocycle(tx, this.workspaceId, programId, clientId, input.mesocycleId));
       const open = own?.weeks.find((week) => week.index === input.weekIndex);
       if (own === undefined || open === undefined) throw new Error("TARGET_NOT_FOUND");
       assertWeek(own.title, input.workouts);
       const rows = input.workouts.reduce((sum, workout) => sum + 1
         + workout.exercises.reduce((inner, exercise) => inner + 1 + exercise.sets.length, 0), 0);
+      // Правка отдыха, указания, порядка и т. п. новых ID не требует (явная замена конфликта — требует).
+      const needIds = opsNeedIds(diffWeek(open.workouts, input.workouts)) || (input.replaceConflicts?.length ?? 0) > 0;
+      const noIds = () => { throw new Error("PROGRAM_ID_UNAVAILABLE"); };
       let skipped = 0;
       const conflicts: WeekEditConflict[] = [];
       const affectedWeeks: { clientId: string; weeks: readonly number[] }[] = [];
@@ -1077,7 +1080,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
             continue;
           }
           const applied = applyWithConflicts(open.workouts, input.workouts, week.workouts, memberId, index,
-            input.replaceConflicts ?? [], await allocate(rows * 2));
+            input.replaceConflicts ?? [], needIds ? await allocate(rows * 2) : noIds);
           skipped += applied.skipped;
           conflicts.push(...applied.conflicts);
           let type = week.type;
@@ -1145,7 +1148,8 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       await this.bumpRevision(tx, programId, expectedRevision, now);
       for (const change of prepared.changes) {
         await preserveMesocycle(tx, this.workspaceId, change.clientId, change.programId, change.mesocycle, now);
-        for (const week of change.weeks) await writeWeek(tx, this.workspaceId, change.programId, week);
+        for (const week of change.weeks) await writeWeek(tx, this.workspaceId, change.programId, week,
+          change.mesocycle.weeks.find((item) => item.index === week.index));
         if (change.programId !== programId) await this.touchRevision(tx, change.programId, now);
       }
       await tx.run("DELETE FROM training_periodized_drafts WHERE workspace_id = ? AND client_id = ? AND program_id = ? AND draft_key = ?",
@@ -1206,7 +1210,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     now: Date = new Date()): Promise<ProgramTemplate> {
     return this.ready().writer.write(async (tx) => {
       await membership(tx, this.workspaceId, clientId, programId);
-      const mesocycle = (await readMesocycles(tx, this.workspaceId, programId, clientId)).find((item) => item.id === mesocycleId);
+      const mesocycle = (await readMesocycle(tx, this.workspaceId, programId, clientId, mesocycleId));
       if (mesocycle === undefined) throw new Error("TARGET_NOT_FOUND");
       return this.insertTemplate(tx, title, { kind: "MESOCYCLE", mesocycle: templateMesocycle(mesocycle) }, now);
     });
@@ -1431,7 +1435,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       if ((await membership(tx, this.workspaceId, clientId, programId)).archivedAt !== null) throw new Error("PROGRAM_ARCHIVED");
       if ((await programById(tx, this.workspaceId, programId)).kind !== "PERIODIZED") throw new Error("DRAFT_INVALID");
       if (draft.kind === "WEEK") {
-        const cycle = (await readMesocycles(tx, this.workspaceId, programId, clientId)).find((item) => item.id === draft.mesocycleId);
+        const cycle = (await readMesocycle(tx, this.workspaceId, programId, clientId, draft.mesocycleId));
         if (!cycle?.weeks.some((week) => week.index === draft.weekIndex)) throw new Error("TARGET_NOT_FOUND");
       }
       await tx.run(`INSERT INTO training_periodized_drafts(workspace_id, client_id, program_id, draft_key, draft_json, updated_at)
@@ -1689,8 +1693,7 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
       const own = await this.viewerCopy(tx, clientId, programId, { mesocycleId });
       const source = own === null ? undefined : (await groupOfCopy(tx, this.workspaceId, own.mesocycleId))
         .find((item) => item.clientId === sourceClientId);
-      const cycle = source === undefined ? undefined : (await readMesocycles(tx, this.workspaceId, source.programId, sourceClientId))
-        .find((item) => item.id === source.mesocycleId);
+      const cycle = source === undefined ? undefined : (await readMesocycle(tx, this.workspaceId, source.programId, sourceClientId, source.mesocycleId));
       if (own === null || cycle === undefined) throw new Error("DRAFT_INVALID");
       if (ids.includes(clientId)) throw new Error("DRAFT_INVALID");
       const groupId = await navigationGroupId(tx, this.workspaceId, own.mesocycleId) ?? `cycle:${own.mesocycleId}`;

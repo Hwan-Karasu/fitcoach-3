@@ -14,34 +14,43 @@ import { insertWorkoutsOfNewWeeks, plannedWorkoutOf, writeWorkouts, type Exercis
 type MesocycleRow = Readonly<{ id: string; lineageId: string; title: string; cycleType: CycleType | null; repMin: number | null;
   repMax: number | null; startDate: string | null }>;
 
+/** Один мезоцикл участника теми же пятью запросами, но только его недели, тренировки и подходы (а не всей программы). */
+export async function readMesocycle(tx: SqliteStatementPort, workspaceId: string, programId: string, clientId: string,
+  mesocycleId: string): Promise<Mesocycle | undefined> {
+  return (await readMesocycles(tx, workspaceId, programId, clientId, mesocycleId))[0];
+}
+
 export async function readMesocycles(tx: SqliteStatementPort, workspaceId: string, programId: string,
-  clientId: string): Promise<readonly Mesocycle[]> {
+  clientId: string, onlyMesocycleId?: string): Promise<readonly Mesocycle[]> {
+  const only = onlyMesocycleId === undefined ? "" : " AND m.id = ?";
+  const onlyParams = onlyMesocycleId === undefined ? [] : [onlyMesocycleId];
   // Пять запросов на всю программу клиента, а не по запросу на мезоцикл, неделю и упражнение: на телефоне каждое обращение
   // идёт через мост Expo, и сотни последовательных чтений давали секунды при открытии и переключении участников.
   const rows = await tx.all<MesocycleRow>(`SELECT id, lineage_id AS lineageId, title, cycle_type AS cycleType, rep_min AS repMin, rep_max AS repMax,
     start_date AS startDate FROM training_mesocycles
-    WHERE workspace_id = ? AND program_id = ? AND client_id = ? ORDER BY position`, [workspaceId, programId, clientId]);
+    WHERE workspace_id = ? AND program_id = ? AND client_id = ?${onlyMesocycleId === undefined ? "" : " AND id = ?"} ORDER BY position`,
+  [workspaceId, programId, clientId, ...onlyParams]);
   if (rows.length === 0) return [];
   const weeks = await tx.all<{ id: string; mesocycleId: string; position: number; type: WeekType }>(`SELECT k.id, k.mesocycle_id AS mesocycleId,
       k.position, k.week_type AS type FROM training_weeks k
     JOIN training_mesocycles m ON m.id = k.mesocycle_id AND m.workspace_id = k.workspace_id
-    WHERE k.workspace_id = ? AND m.program_id = ? AND m.client_id = ? ORDER BY k.position`, [workspaceId, programId, clientId]);
+    WHERE k.workspace_id = ? AND m.program_id = ? AND m.client_id = ?${only} ORDER BY k.position`, [workspaceId, programId, clientId, ...onlyParams]);
   const workouts = await tx.all<WorkoutRow & { weekId: string }>(`SELECT w.id, w.title, w.lineage_id AS lineageId, w.week_id AS weekId
       FROM training_workouts w ${OWNED_BY_CLIENT}
-    WHERE w.workspace_id = ? AND w.program_id = ? AND m.program_id = ? AND m.client_id = ? ORDER BY w.position`,
-  [workspaceId, programId, programId, clientId]);
+    WHERE w.workspace_id = ? AND w.program_id = ? AND m.program_id = ? AND m.client_id = ?${only} ORDER BY w.position`,
+  [workspaceId, programId, programId, clientId, ...onlyParams]);
   const exercises = await tx.all<ExerciseRow>(`SELECT e.id, e.workout_id AS workoutId, e.exercise_id AS exerciseId, e.rest_sec AS restSec,
       e.instruction, e.rir_min AS rirMin, e.rir_max AS rirMax, e.lineage_id AS lineageId, e.superset_id AS supersetId
       FROM training_planned_exercises e
     JOIN training_workouts w ON w.id = e.workout_id AND w.workspace_id = e.workspace_id ${OWNED_BY_CLIENT}
-    WHERE e.workspace_id = ? AND w.program_id = ? AND m.program_id = ? AND m.client_id = ? ORDER BY e.position`,
-  [workspaceId, programId, programId, clientId]);
+    WHERE e.workspace_id = ? AND w.program_id = ? AND m.program_id = ? AND m.client_id = ?${only} ORDER BY e.position`,
+  [workspaceId, programId, programId, clientId, ...onlyParams]);
   const sets = await tx.all<SetRow>(`SELECT s.id, s.planned_exercise_id AS exerciseRowId, s.reps, s.reps_max AS repsMax,
       s.load_grams AS loadGrams, s.duration_sec AS durationSec, s.distance_m AS distanceM FROM training_planned_sets s
     JOIN training_planned_exercises e ON e.id = s.planned_exercise_id AND e.workspace_id = s.workspace_id
     JOIN training_workouts w ON w.id = e.workout_id AND w.workspace_id = e.workspace_id ${OWNED_BY_CLIENT}
-    WHERE s.workspace_id = ? AND w.program_id = ? AND m.program_id = ? AND m.client_id = ? ORDER BY s.position`,
-  [workspaceId, programId, programId, clientId]);
+    WHERE s.workspace_id = ? AND w.program_id = ? AND m.program_id = ? AND m.client_id = ?${only} ORDER BY s.position`,
+  [workspaceId, programId, programId, clientId, ...onlyParams]);
   const toWorkout = plannedWorkoutOf(exercises, sets);
   const workoutsByWeek = new Map<string, PlannedWorkout[]>();
   for (const { weekId, ...workout } of workouts) workoutsByWeek.set(weekId, [...(workoutsByWeek.get(weekId) ?? []), toWorkout(workout)]);
@@ -74,9 +83,13 @@ export async function insertMesocycle(tx: SqliteStatementPort, workspaceId: stri
   await insertWorkoutsOfNewWeeks(tx, workspaceId, programId, mesocycle.weeks);
 }
 
-export async function writeWeek(tx: SqliteStatementPort, workspaceId: string, programId: string, week: PlanWeek): Promise<void> {
-  await tx.run("UPDATE training_weeks SET week_type = ? WHERE workspace_id = ? AND id = ?", [week.type, workspaceId, week.id]);
-  await writeWorkouts(tx, workspaceId, programId, week.id, week.workouts);
+/** `before` — неделя как она прочитана в этой же транзакции (без перечитывания); тип пишется, только если он изменился. */
+export async function writeWeek(tx: SqliteStatementPort, workspaceId: string, programId: string, week: PlanWeek,
+  before?: PlanWeek): Promise<void> {
+  if (before === undefined || before.type !== week.type) {
+    await tx.run("UPDATE training_weeks SET week_type = ? WHERE workspace_id = ? AND id = ?", [week.type, workspaceId, week.id]);
+  }
+  await writeWorkouts(tx, workspaceId, programId, week.id, week.workouts, before?.workouts);
 }
 
 /** Удаление всех мезоциклов участника в программе (окончательное удаление клиента). */
