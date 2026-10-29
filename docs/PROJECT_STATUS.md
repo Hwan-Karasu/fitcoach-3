@@ -1,3 +1,16 @@
+## 2026-10-29 — build46: DOCK-TIMER-1
+
+- Собран `artifacts/apk/athlete-diary-3.0.0-build46.apk`: `com.fitcoach.v3`, 3.0.0, versionCode 46, arm64-v8a, 70 393 456 байт; assembleRelease PASS
+  (65 с, Node 24.3 первым в PATH). Сертификат SHA-256 `fac61745…033b9c` совпадает с build33–45. SHA-256 APK
+  `e640c495a599b44648acb96619e39ceb9fe81f1928f9c8c8ff2d7ec9e89b6a55`. Сверх build45 — DOCK-TIMER-1. Подпись debug. На телефон не устанавливался.
+
+## 2026-10-29 — DOCK-TIMER-1: строка участников и стрелки недель после перехода по таймеру (ADR-056)
+
+- Жалоба (build45): после нажатия на таймер (с любого экрана) пропадают строка участников и стрелки недель; после смены недели или
+  «назад» возвращаются. Причина: стек открыт из `params.state`, React Navigation не сообщает его вкладке до первого действия — панель
+  искала записи по ключу вкладки. Исправление — см. ADR-056. Тесты tab-bar-slots (снимок состояния после таймера). test:foundation
+  1077/1077, training 297/297. Коммиты 73def0d, 792780f. На телефоне не проверено.
+
 ## 2026-10-29 — build45: ADR-055 (автокопия и путь записи)
 
 - Собран `artifacts/apk/athlete-diary-3.0.0-build45.apk`: `com.fitcoach.v3`, 3.0.0, versionCode 45, arm64-v8a, 70 376 684 байт; assembleRelease PASS
