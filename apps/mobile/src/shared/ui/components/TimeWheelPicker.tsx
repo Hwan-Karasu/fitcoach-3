@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, type NativeScrollEvent,
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View, type NativeScrollEvent,
   type NativeSyntheticEvent } from "react-native";
 import * as Haptics from "expo-haptics";
 import { TimerPicker } from "react-native-timer-picker";
@@ -9,6 +9,31 @@ import { AppButton } from "./AppButton.tsx";
 
 const ITEM = 34;
 const VISIBLE = 5;
+
+/**
+ * Кольцевой барабан библиотеки — FlatList с данными ×3 и окном в 5 строк: у края он без анимации прыгает на ±60 строк,
+ * а ячейки там ещё не созданы, и колонка на миг пустая. Список короткий (~180 строк текста), поэтому ячейки создаются сразу.
+ */
+const FullWheelList = forwardRef<FlatList, React.ComponentProps<typeof FlatList>>(function FullWheelList(props, ref) {
+  const count = Math.max(1, props.data?.length ?? 1);
+  return <FlatList {...props} ref={ref} initialNumToRender={count} maxToRenderPerBatch={count} windowSize={count}
+    removeClippedSubviews={false} />;
+});
+
+const feedback = () => { Haptics.selectionAsync().catch(() => undefined); };
+
+/** Стили барабана библиотеки: один объект на тему, а не новый на каждый рендер (иначе каждый выбор перерисовывает обе колонки). */
+function useWheelStyles() {
+  const colors = usePrototypeTheme().palette.tokens;
+  return useMemo(() => ({
+    backgroundColor: colors.surface,
+    pickerItem: { fontFamily: fonts.medium, fontSize: 18, color: colors.textMuted },
+    selectedPickerItem: { fontFamily: fonts.semibold, color: colors.textPrimary },
+    pickerLabel: { fontFamily: fonts.medium, fontSize: 13, color: colors.textSecondary },
+    pickerItemContainer: { height: 44 },
+    pickerContainer: { backgroundColor: colors.surface },
+  }), [colors]);
+}
 
 /** Один барабан: прокрутка с привязкой к строке, выбранная строка — по центру. */
 function Wheel({ values, index, onChange, label }: Readonly<{
@@ -134,6 +159,8 @@ export function DurationWheelPicker({ visible, title, value, min, max, clearLabe
   const chosen = Math.max(min, Math.min(max, minute * 60 + second));
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
+  const wheelStyles = useWheelStyles();
+  const onDuration = useCallback((duration: { minutes: number; seconds: number }) => { setMinute(duration.minutes); setSecond(duration.seconds); }, []);
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <Pressable accessibilityLabel="Закрыть" style={[StyleSheet.absoluteFill, styles.scrim]} onPress={onClose} />
@@ -143,16 +170,8 @@ export function DurationWheelPicker({ visible, title, value, min, max, clearLabe
           <TimerPicker hideDays hideHours padMinutesWithZero padSecondsWithZero padWithNItems={2}
             maximumMinutes={Math.floor(max / 60)} maximumSeconds={59} minuteLabel="мин" secondLabel="с"
             initialValue={{ minutes: Math.floor(value / 60), seconds: value % 60 }}
-            onDurationChange={(duration) => { setMinute(duration.minutes); setSecond(duration.seconds); }}
-            pickerFeedback={() => Haptics.selectionAsync().catch(() => undefined)}
-            styles={{
-              backgroundColor: colors.surface,
-              pickerItem: { fontFamily: fonts.medium, fontSize: 18, color: colors.textMuted },
-              selectedPickerItem: { fontFamily: fonts.semibold, color: colors.textPrimary },
-              pickerLabel: { fontFamily: fonts.medium, fontSize: 13, color: colors.textSecondary },
-              pickerItemContainer: { height: 44 },
-              pickerContainer: { backgroundColor: colors.surface },
-            }} />
+            onDurationChange={onDuration}
+            pickerFeedback={feedback} styles={wheelStyles} FlatList={FullWheelList} />
           <Text style={[styles.hint, { color: colors.textSecondary }]}>{`Будет: ${Math.floor(chosen / 60)}:${pad(chosen % 60)}`}</Text>
           <View style={styles.actions}>
             <View style={styles.action}><AppButton compact variant="secondary" label="Отмена" onPress={onClose} /></View>
@@ -184,6 +203,8 @@ export function HourMinutePicker({ visible, title, value, min, max, onConfirm, o
   const chosen = Math.max(min, Math.min(max, hour * 60 + minute));
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
+  const wheelStyles = useWheelStyles();
+  const onDuration = useCallback((duration: { hours: number; minutes: number }) => { setHour(duration.hours); setMinute(duration.minutes); }, []);
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <Pressable accessibilityLabel="Закрыть" style={[StyleSheet.absoluteFill, styles.scrim]} onPress={onClose} />
@@ -193,16 +214,8 @@ export function HourMinutePicker({ visible, title, value, min, max, onConfirm, o
           <TimerPicker hideDays hideSeconds padHoursWithZero padMinutesWithZero padWithNItems={2}
             maximumHours={Math.floor(max / 60)} maximumMinutes={59} hourLabel="ч" minuteLabel="мин"
             initialValue={{ hours: Math.floor(value / 60), minutes: value % 60 }}
-            onDurationChange={(duration) => { setHour(duration.hours); setMinute(duration.minutes); }}
-            pickerFeedback={() => Haptics.selectionAsync().catch(() => undefined)}
-            styles={{
-              backgroundColor: colors.surface,
-              pickerItem: { fontFamily: fonts.medium, fontSize: 18, color: colors.textMuted },
-              selectedPickerItem: { fontFamily: fonts.semibold, color: colors.textPrimary },
-              pickerLabel: { fontFamily: fonts.medium, fontSize: 13, color: colors.textSecondary },
-              pickerItemContainer: { height: 44 },
-              pickerContainer: { backgroundColor: colors.surface },
-            }} />
+            onDurationChange={onDuration}
+            pickerFeedback={feedback} styles={wheelStyles} FlatList={FullWheelList} />
           <Text style={[styles.hint, { color: colors.textSecondary }]}>{`Будет: ${Math.floor(chosen / 60)} ч ${chosen % 60} мин`}</Text>
           <View style={styles.actions}>
             <View style={styles.action}><AppButton compact variant="secondary" label="Отмена" onPress={onClose} /></View>
