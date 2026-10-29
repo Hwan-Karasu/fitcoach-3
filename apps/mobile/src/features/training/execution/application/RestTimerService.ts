@@ -6,7 +6,7 @@ const defaultId = () => `rt-${Date.now().toString(36)}-${Math.random().toString(
 /**
  * Единственный владелец побочных эффектов таймеров отдыха. Отсчёт показывается и сохраняется сразу;
  * системный сигнал ставится следом и не задерживает экран (загрузка модуля, вопрос о разрешении).
- * Опоздавший сигнал проверяется по актуальному `endAt`: если таймер успели пропустить, перезапустить
+ * Идентификатор сигнала в базу не пишется (см. `attachSignal`). Опоздавший сигнал проверяется по актуальному `endAt`: если таймер успели пропустить, перезапустить
  * или сдвинуть, сигнал отменяется — старый сигнал не сработает не вовремя (§44.9).
  */
 export class RestTimerService implements RestTimersPort {
@@ -60,9 +60,9 @@ export class RestTimerService implements RestTimersPort {
       await this.enqueue(async () => {
         const current = this.timers.find((item) => item.id === timer.id);
         if (current === undefined || current.endAt !== timer.endAt || current.pausedLeftMs !== null) { await this.cancelSignal(signalId); return; }
-        const signalled = { ...current, signalId };
-        await this.store.putTimer(signalled, []);
-        this.publish(this.timers.map((item) => item.id === timer.id ? signalled : item));
+        // Идентификатор сигнала живёт только в памяти процесса: после перезапуска `recover` сам снимает свои сигналы (clearOwned)
+        // и ставит их заново, поэтому вторая транзакция записи и вторая публикация панели на каждый подход не нужны.
+        this.timers = this.timers.map((item) => item.id === timer.id ? { ...item, signalId } : item);
       });
     })().catch(() => undefined);
     this.signalling.add(task);

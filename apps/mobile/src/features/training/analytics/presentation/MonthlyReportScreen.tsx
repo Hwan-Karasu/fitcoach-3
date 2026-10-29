@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
 import { BarChart, EmptyState, InlineNotice, LoadingState, type BarChartItem } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
-import { filterHistory, HistoryFilterBar, type HistoryFilter, type TrainingHistoryEntry } from "../../archive/public.ts";
+import { filterHistory, HistoryFilterBar, type HistoryFilter, useClientHistory, type TrainingHistoryEntry } from "../../archive/public.ts";
 import type { WorkoutSlot } from "../../execution/public.ts";
 import { useExerciseLookup, type ExerciseLookupPort } from "../../plans/public.ts";
 import { useBodyOf } from "./useBodyOf.ts";
@@ -45,21 +45,12 @@ export function MonthlyReportScreen({ clientId, history, bodyweight, exercises, 
   const lookup = useExerciseLookup(exercises);
   const today = todayOf(now);
   const thisMonth = monthOf(today);
-  const [entries, setEntries] = useState<readonly TrainingHistoryEntry[] | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [version, setVersion] = useState(0);
+  const { entries, failed } = useClientHistory(history, clientId);
   const [stored, setStored] = useState(() => readStatsFilters(clientId));
   const [month, setMonth] = useState<MonthRef>(thisMonth);
   const [drill, setDrill] = useState<DrillTarget | null>(null);
   const bodyOf = useBodyOf(bodyweight, clientId);
 
-  useEffect(() => {
-    let active = true;
-    history.list(clientId).then((next) => { if (active) { setEntries(next); setFailed(false); } })
-      .catch(() => { if (active) setFailed(true); });
-    return () => { active = false; };
-  }, [clientId, history, version]);
-  useEffect(() => history.subscribe(clientId, () => setVersion((value) => value + 1)), [clientId, history]);
 
   const all = useMemo(() => entries ?? [], [entries]);
   const filter = useMemo(() => sanitizeFilter(all, stored.filter), [all, stored.filter]);

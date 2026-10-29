@@ -38,3 +38,4 @@ export { SegmentedRing, type RingSegment } from "./SegmentedRing.tsx";
 export { ChoiceSegments } from "./ChoiceSegments.tsx";
 export { ChoiceGrid } from "./ChoiceGrid.tsx";
 export { DateField, dateLabel } from "./DateField.tsx";
+export { useFocusGatedVersion } from "./useFocusGatedVersion.ts";

@@ -51,9 +51,24 @@ test("T03 быстрый переход (§48.83): карточки «в раб�
     await plans.renameProgram(programA.id, current.revision, "Synthetic renamed");
     assert.equal(invalidations, 2, "plan titles invalidate cards");
     assert.equal((await active.list())[0]!.programTitle, "Synthetic renamed");
+    // Запись подхода подписи не меняет: повторный список берёт карточки из кэша, клиенты и планы не перечитываются.
+    let lookups = 0;
+    const counting = createActiveWorkouts(execution, { findWorkout: (...args: Parameters<typeof plans.findWorkout>) => { lookups += 1; return plans.findWorkout(...args); },
+      subscribeCommittedChanges: (listener) => plans.subscribeCommittedChanges(listener) }, clients);
+    await counting.list(); const first = lookups;
+    await execution.saveSet({ slot: { clientId: a.id, programId: programA.id, weekIndex: 2, plannedWorkoutId: "aw" }, plannedExerciseId: "ae",
+      exerciseId: BENCH, plannedSetId: "as0", position: 0, metrics: ["load", "reps"],
+      values: { reps: 9, loadGrams: 60_000, durationSec: null, distanceM: null }, drops: [], rpe: null, setType: "NORMAL",
+      expectedRevision: (await execution.getWorkout({ clientId: a.id, programId: programA.id, weekIndex: 2, plannedWorkoutId: "aw" }))
+        .facts.get("as0")!.revision }, DAY);
+    await counting.list();
+    assert.equal(lookups, first, "после записи подхода планы заново не читаются");
+    await plans.renameProgram(programA.id, (await plans.getProgram(a.id, programA.id))!.revision, "Third");
+    assert.equal((await counting.list())[0]!.programTitle, "Third", "смена плана сбрасывает кэш и без подписчиков");
+    const before = invalidations;
     off();
     await clients.setArchived(b.id, b.revision + 1, false);
-    assert.equal(invalidations, 2, "unsubscribing removes all three observers");
+    assert.equal(invalidations, before, "unsubscribing removes all three observers");
   } finally {
     await execution.close();
     await plans.close();

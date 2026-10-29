@@ -38,6 +38,8 @@ async function loadApi() {
 
 let api: ReturnType<typeof loadApi> | null = null;
 let asked = false;
+/** Выданное разрешение за запуск не переспрашивается у системы: Android при отзыве разрешения перезапускает процесс. */
+let granted = false;
 
 const available = () => {
   const pending = (api ??= loadApi());
@@ -47,11 +49,13 @@ const available = () => {
 
 /** Разрешение спрашивается один раз за запуск; отказ не блокирует таймер (§44.14). */
 async function allowed(permissions: Awaited<ReturnType<typeof loadApi>>["permissions"], requestPermission: boolean): Promise<boolean> {
+  if (granted) return true;
   const current = await permissions.getPermissionsAsync();
-  if (current.granted) return true;
+  if (current.granted) { granted = true; return true; }
   if (!requestPermission || asked || !current.canAskAgain) return false;
   asked = true;
-  return (await permissions.requestPermissionsAsync()).granted;
+  granted = (await permissions.requestPermissionsAsync()).granted;
+  return granted;
 }
 
 export const expoRestSignal: RestSignalPort = {

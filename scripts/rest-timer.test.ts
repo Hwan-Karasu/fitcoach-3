@@ -49,7 +49,7 @@ async function stores() {
 const bench = { clientId: "a", clientName: "SyntheticA", exerciseKey: "pe-bench", exerciseName: "Жим", durationSec: 180,
   programId: "prog-1", weekIndex: 2, plannedWorkoutId: "w-1" };
 
-test("R06 idle waits for a queued start, its late OS signal, and the signalId DB update", async () => {
+test("R06 idle waits for a queued start and its late OS signal; the start is one DB write (REST-FIX-4)", async () => {
   let finishWrite!: () => void; let finishSignal!: (value: string) => void;
   const write = new Promise<void>((resolve) => { finishWrite = resolve; });
   const signal = new Promise<string>((resolve) => { finishSignal = resolve; });
@@ -61,7 +61,7 @@ test("R06 idle waits for a queued start, its late OS signal, and the signalId DB
   await new Promise<void>((resolve) => setImmediate(resolve)); assert.equal(idleDone, false);
   finishWrite(); await start; await new Promise<void>((resolve) => setImmediate(resolve)); assert.equal(idleDone, false);
   finishSignal("synthetic-signal"); await idle;
-  assert.equal(writes, 2); assert.equal(service.list()[0]?.signalId, "synthetic-signal");
+  assert.equal(writes, 1, "подход = одна запись таймера; id сигнала в базу не пишется"); assert.equal(service.list()[0]?.signalId, "synthetic-signal");
 });
 
 test("R06 restore reconciles imported OS IDs without permission prompt, preserves paused timers/endAt and removes expired", async () => {
@@ -100,7 +100,7 @@ test("R06 suspend drains a late OS schedule before clearing signals and leaves p
     await new Promise<void>((resolve) => setImmediate(resolve)); assert.equal(done, false); assert.deepEqual(events, []);
     release("late-before-close"); await suspending;
     assert.deepEqual(events, ["clear"]);
-    const stored = (await execution.listTimers())[0]!; assert.equal(stored.endAt, original.endAt); assert.equal(stored.signalId, "late-before-close");
+    const stored = (await execution.listTimers())[0]!; assert.equal(stored.endAt, original.endAt); assert.equal(stored.signalId, null, "id сигнала хранится только в памяти: после перезапуска recover снимает свои сигналы сам");
   } finally { await close(); }
 });
 

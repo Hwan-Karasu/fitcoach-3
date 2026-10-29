@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react-native";
 import { EmptyState, InlineNotice, LineChart, LoadingState, SegmentedControl } from
@@ -6,7 +6,7 @@ import { EmptyState, InlineNotice, LineChart, LoadingState, SegmentedControl } f
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../../shared/ui/theme/style.ts";
-import { MONTHS, dateText, filterHistory, HistoryFilterBar, originText, setLabel, type HistoryFilter, type TrainingHistoryEntry } from
+import { MONTHS, dateText, filterHistory, HistoryFilterBar, originText, setLabel, useClientHistory, type HistoryFilter, type TrainingHistoryEntry } from
   "../../archive/public.ts";
 import { formatDuration, useExerciseLookup, type ExerciseLookupPort } from "../../plans/public.ts";
 import type { SetFact } from "../../execution/public.ts";
@@ -203,9 +203,7 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
   const colors = palette.tokens;
   const lookup = useExerciseLookup(exercises);
   const [tab, setTab] = useState<Tab>("history");
-  const [entries, setEntries] = useState<readonly TrainingHistoryEntry[] | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [version, setVersion] = useState(0);
+  const { entries, failed } = useClientHistory(history, clientId);
   const [filter, setFilter] = useState<HistoryFilter>({ programId: null, mesocycleId: null, workoutKey: null });
   const [period, setPeriod] = useState<PeriodValue>({ period: "all", custom: null });
   const [chosen, setChosen] = useState<ProgressMetricId | null>(null);
@@ -215,13 +213,6 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
   const [chartReset, setChartReset] = useState(0);
   const touchInChart = useRef(false);
 
-  useEffect(() => {
-    let active = true;
-    history.list(clientId).then((next) => { if (active) { setEntries(next); setFailed(false); } })
-      .catch(() => { if (active) setFailed(true); });
-    return () => { active = false; };
-  }, [clientId, history, version]);
-  useEffect(() => history.subscribe(clientId, () => setVersion((value) => value + 1)), [clientId, history]);
 
   const own = useMemo(() => (entries ?? []).filter((entry) => entry.exercises.some((exercise) => exercise.exerciseId === exerciseId)),
     [entries, exerciseId]);

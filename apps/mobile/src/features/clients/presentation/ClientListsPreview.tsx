@@ -4,7 +4,7 @@ import { AppState, ScrollView, StyleSheet, Text, View, useWindowDimensions } fro
 import { Cake, CalendarClock, CalendarDays, Dumbbell, Flame, Footprints, Percent, PinOff, Plus, Scale, Ticket } from "lucide-react-native";
 import { AppButton, AppIconButton, ClientRosterCard, RosterGroup, ConfirmDialog, EmptyState, FilterPill, FloatingActionButton,
   InlineNotice,
-  ListSectionHeader, DropdownMenu, SkeletonList, useHeaderScrollHandler, useHeaderSearch,
+  ListSectionHeader, DropdownMenu, SkeletonList, useHeaderScrollHandler, useHeaderSearch, useFocusGatedVersion,
   type DropdownOption } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { ArchiveSortMode, ClientArchivePort, ClientDeletionManifest } from
@@ -83,13 +83,14 @@ function useRosterOverview(port: RosterOverviewPort, clientIds: readonly string[
   const [tick, setTick] = useState(0);
   const generation = useRef(0);
   const key = clientIds.join("|");
+  // Изменения других владельцев (в том числе каждый подход дневника) на скрытом экране не пересчитывают сводку всех клиентов: один раз при возврате.
+  const changes = useFocusGatedVersion(port.subscribe);
   useEffect(() => {
     const request = ++generation.current;
     port.load(key === "" ? [] : key.split("|"), new Date(), clientCards.metricIds).then((value) => {
       if (request === generation.current) setOverview(value);
     }, () => undefined);
-  }, [port, key, today, tick, metricKey, clientCards.metricIds]);
-  useEffect(() => port.subscribe(() => setTick((value) => value + 1)), [port]);
+  }, [port, key, today, tick, changes, metricKey, clientCards.metricIds]);
   useEffect(() => {
     if (overview === null) return undefined;
     const now = new Date();
