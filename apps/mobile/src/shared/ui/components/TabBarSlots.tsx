@@ -15,23 +15,31 @@ interface Slots {
   readonly dock: SlotStore<ReactNode | typeof PENDING>;
   /** Экран, который сам отметил свой фокус (`FOCUSED_OWNER` → `route.key`): нужен, пока состояние навигации его ещё не знает. */
   readonly owner: SlotStore<string>;
+  /** Сколько писателей каждого экрана сейчас в фокусе: отметка снимается с последним. */
+  readonly focusedWriters: Map<string, number>;
 }
 
 const SlotsContext = createContext<Slots | null>(null);
-const NO_SLOTS: Slots = { weeks: createSlotStore(), dock: createSlotStore(), owner: createSlotStore() };
+const NO_SLOTS: Slots = { weeks: createSlotStore(), dock: createSlotStore(), owner: createSlotStore(), focusedWriters: new Map() };
 
 /**
  * Экран, пишущий в панель, отмечает себя, пока он в фокусе (`useIsFocused` считается по его собственному стеку, поэтому верен и до того,
- * как родительский навигатор узнал состояние стека). Отметку снимает только её владелец.
+ * как родительский навигатор узнал состояние стека). У экрана несколько писателей с одним ключом: отметка снимается, когда фокус потеряли
+ * или исчезли все они, и только если она ещё его — скрытый экран свою отметку не держит.
  */
 function useFocusedOwner(slots: Slots | null, key: string) {
   const focused = useIsFocused();
   useLayoutEffect(() => {
-    if (slots !== null && focused) slots.owner.set(FOCUSED_OWNER, key);
+    if (slots === null || !focused) return undefined;
+    slots.focusedWriters.set(key, (slots.focusedWriters.get(key) ?? 0) + 1);
+    slots.owner.set(FOCUSED_OWNER, key);
+    return () => {
+      const left = (slots.focusedWriters.get(key) ?? 1) - 1;
+      if (left > 0) { slots.focusedWriters.set(key, left); return; }
+      slots.focusedWriters.delete(key);
+      if (slots.owner.get(FOCUSED_OWNER) === key) slots.owner.remove(FOCUSED_OWNER);
+    };
   }, [slots, key, focused]);
-  useLayoutEffect(() => () => {
-    if (slots?.owner.get(FOCUSED_OWNER) === key) slots.owner.remove(FOCUSED_OWNER);
-  }, [slots, key]);
 }
 
 /**
@@ -41,7 +49,7 @@ function useFocusedOwner(slots: Slots | null, key: string) {
  * обновлением: нет кадра, в котором прежний экран уже всё убрал, а новый ещё не поставил (кнопки не меняют размер).
  */
 export function TabBarSlotsProvider({ children }: Readonly<{ children: ReactNode }>) {
-  const slots = useMemo<Slots>(() => ({ weeks: createSlotStore(), dock: createSlotStore(), owner: createSlotStore() }), []);
+  const slots = useMemo<Slots>(() => ({ weeks: createSlotStore(), dock: createSlotStore(), owner: createSlotStore(), focusedWriters: new Map() }), []);
   return <SlotsContext.Provider value={slots}>{children}</SlotsContext.Provider>;
 }
 
