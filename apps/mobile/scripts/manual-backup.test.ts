@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL, URL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { ManualBackupService } from "../src/features/backup/application/ManualBackupService.ts";
+import { BackupExclusive } from "../src/features/backup/application/BackupExclusive.ts";
 import { BackupStorageError, type BackupDestination, type PublishedBackup } from "../src/features/backup/domain/BackupPublication.ts";
 import { ManualBackupError, parseBackupLocation, type ManualBackupState } from "../src/features/backup/domain/ManualBackupPort.ts";
 import { RuntimeCommandGate } from "../src/app/runtime/RuntimeCommandGate.ts";
@@ -31,7 +32,7 @@ function world(overrides: Partial<Options> = {}) {
   const calls = { prepare: 0, cleanup: 0, picker: 0, preferenceWrites: 0, publications: [] as BackupDestination[] };
   const commands = new RuntimeCommandGate();
   const options: Options = {
-    enabled: true, locations: { read: async () => destination, write: async (next) => {
+    enabled: true, exclusive: new BackupExclusive(), locations: { read: async () => destination, write: async (next) => {
       if (failWrite) throw new ManualBackupError("BACKUP_FOLDER_UNAVAILABLE"); destination = next; calls.preferenceWrites++;
     } },
     publisher: { available: true, supportsDownloads: true, publish: async (_file, target) => {
@@ -153,7 +154,7 @@ test("R06 manual operation publishes a real self-contained SQLite snapshot, usab
   try {
     await prepareProductionDatabase(database); await owners.initialize();
     const client = await owners.clients.create({ displayName: "Синтетический атлет 🏋️" });
-    const service = new ManualBackupService({ enabled: true, locations: { read: async () => ({ kind: "DOWNLOADS" }), write: async () => undefined },
+    const service = new ManualBackupService({ enabled: true, exclusive: new BackupExclusive(), locations: { read: async () => ({ kind: "DOWNLOADS" }), write: async () => undefined },
       chooseDirectory: async () => { throw new Error("MANUAL_DEFAULT_MUST_NOT_ASK"); }, run: (task) => gate.run(task),
       prepare: async () => {
         const source = new DatabaseSync(sourceFile, { readOnly: true });

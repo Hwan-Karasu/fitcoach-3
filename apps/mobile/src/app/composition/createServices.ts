@@ -58,6 +58,7 @@ import type { AutomaticBackupPort } from "../../features/backup/public.ts";
 import type { RestoreActionsPort } from "../../features/backup/public.ts";
 import { recoverProductionRestore } from "./recoverProductionRestore.ts";
 import { createManualBackup } from "./createManualBackup.ts";
+import { BackupExclusive } from "../../features/backup/public.ts";
 import type { ManualBackupPort } from "../../features/backup/public.ts";
 
 /** Питание: каталог продуктов и рецептов (общий) и дневник клиента (N01–N02). */
@@ -295,9 +296,10 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
     mesocycleSave: commands.port(raw.mesocycleSave), planDelete: commands.port(raw.planDelete),
     listCreditSessionTypes: () => commands.run(raw.listCreditSessionTypes),
   };
-  const manualBackup = createManualBackup(development, commands, boot);
+  const backupQueue = new BackupExclusive();
+  const manualBackup = createManualBackup(development, commands, boot, backupQueue);
   const restoreActions = createRestoreActions(development, commands, boot, maintenance);
-  const automaticBackup = createAutomaticBackup(development, commands, boot);
+  const automaticBackup = createAutomaticBackup(development, commands, boot, backupQueue, () => database.changeToken);
   const transfer = createTrainingTransfer(database, workspaceId, trainingPlans, trainingExecution, exercises);
   const trainingTransfer = commands.port(transfer);
   return { development, boot, services, maintenance, manualBackup, restoreActions, automaticBackup, trainingTransfer };

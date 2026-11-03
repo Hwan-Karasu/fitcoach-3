@@ -1,3 +1,4 @@
+import type { BackupObserver } from "../domain/BackupProgress.ts";
 import type { ImageMime } from "./SnapshotPhotoRules.ts";
 
 /** Private immutable media only. Implementations must reject escapes from the configured root. */
@@ -29,6 +30,8 @@ export interface SnapshotMediaSettings {
   readonly files?: SnapshotMediaPort;
   readonly restoreId?: string;
   readonly onMediaProgress?: (progress: SnapshotMediaProgress) => void;
+  /** Этапы и прогресс копии для экрана (BKP-STAGE-1). */
+  readonly observe?: BackupObserver;
 }
 export function snapshotMediaProgress(settings: SnapshotMediaSettings, phase: SnapshotMediaProgress["phase"], completedBytes: number, totalBytes: number): void {
   try { settings.onMediaProgress?.({ phase, completedBytes, totalBytes }); }

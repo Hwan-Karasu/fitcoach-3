@@ -5,8 +5,14 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { DatabaseSync } from "node:sqlite";
+import { backup, DatabaseSync } from "node:sqlite";
 import { spawnSync } from "node:child_process";
+import { SqliteSnapshotEngine } from "../apps/mobile/src/features/backup/data/SqliteSnapshotEngine.ts";
+import { snapshotContentSha256 } from "../apps/mobile/src/features/backup/data/SnapshotContentHash.ts";
+import { PRODUCTION_IDENTITY } from "../apps/mobile/src/app/composition/productionDatabase.ts";
+import { SCHEMA_OWNERS } from "../apps/mobile/src/app/composition/schema.ts";
+import { nodeSnapshotSql } from "./r06/NodeSnapshotSql.ts";
+import { nodeSnapshotMediaSettings } from "./r06/NodeSnapshotMedia.ts";
 import { createSqliteBackup, prepareBackupForRestore, SnapshotError, validateSqliteBackup, canonicalContentSha256 } from "./r06/SqliteBackup.ts";
 import { MEDIA_CHUNK_BYTES } from "./r06/SqliteBackupMedia.ts";
 import { prepareProductionDatabase, inspectProductionDatabase, PRODUCTION_WORKSPACE_ID as WS } from "../apps/mobile/src/app/composition/productionDatabase.ts";
@@ -16,6 +22,7 @@ import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4HsAAAAASUVORK5CYII=", "base64");
 const NOW = "2026-10-22T10:00:00.000Z";
 const metadata = () => ({ backupId: randomUUID(), createdAt: NOW });
+const engine = new SqliteSnapshotEngine({ identity: PRODUCTION_IDENTITY, owners: SCHEMA_OWNERS });
 const code = (expected: SnapshotError["code"]) => (error: unknown) => error instanceof SnapshotError && error.code === expected;
 async function fixture() {
   const directory = mkdtempSync(join(tmpdir(), "athlete-backup-media-"));
@@ -206,3 +213,29 @@ for (const phase of ["EMBEDDED", "WRITING", "PUBLISHED"] as const) {
     } finally { f.cleanup(); }
   });
 }
+
+for (const wrong of [false, true]) test(`BKP-PERF-1 seal of the already hashed private copy with ${wrong ? "a wrong" : "the"} known content hash ${wrong ? "is rejected by verification" : "verifies and restores data and photo"}`, async () => {
+  const f = await fixture();
+  try {
+    const image = Buffer.concat([PNG, Buffer.alloc(MEDIA_CHUNK_BYTES + 7, 33)]); writeFileSync(f.sourcePhoto, image);
+    const recipeId = f.addRecipe();
+    const current = join(f.directory, "current.db"); await backup(f.db, current);
+    const copy = new DatabaseSync(current);
+    let known: string;
+    try {
+      copy.exec("PRAGMA journal_mode=DELETE");
+      known = wrong ? "0".repeat(64) : await snapshotContentSha256(nodeSnapshotSql(copy));
+      copy.exec("PRAGMA synchronous=FULL");
+      await engine.sealSnapshot(nodeSnapshotSql(copy), metadata(), nodeSnapshotMediaSettings({ mediaRoot: f.sourceRoot }), known);
+    } finally { copy.close(); }
+    if (wrong) { await assert.rejects(validateSqliteBackup(current), code("SNAPSHOT_INVALID")); return; }
+    const manifest = await validateSqliteBackup(current);
+    assert.equal(manifest.contentSha256, known); assert.equal(manifest.contentSha256, canonicalContentSha256(f.db));
+    await prepareBackupForRestore(current, f.staging, { mediaRoot: f.restoredRoot });
+    const staging = new DatabaseSync(f.staging, { readOnly: true });
+    try {
+      const details = JSON.parse(String(staging.prepare("SELECT details_json FROM recipes WHERE id=?").get(recipeId)!.details_json)) as { photoUri: string };
+      assert.deepEqual(readFileSync(fileURLToPath(details.photoUri)), image);
+    } finally { staging.close(); }
+  } finally { f.cleanup(); }
+});

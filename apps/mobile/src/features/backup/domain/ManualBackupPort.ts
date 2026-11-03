@@ -1,10 +1,21 @@
+import { classifyPrepareFailure, type PrepareFailureKind, type PrepareStage } from "./BackupFailure.ts";
+import type { BackupProgress, BackupRunTiming } from "./BackupProgress.ts";
 import type { BackupDestination, BackupStorageErrorCode } from "./BackupPublication.ts";
 
+/** BACKUP_SOURCE_UNAVAILABLE — неизвестная причина подготовки; известные — свои коды (BKP-DIAG-1). */
 export type ManualBackupErrorCode = BackupStorageErrorCode | "BACKUP_BUSY" | "BACKUP_NOT_READY"
-  | "BACKUP_SOURCE_UNAVAILABLE" | "BACKUP_MEDIA_UNAVAILABLE" | "BACKUP_FOLDER_UNAVAILABLE";
+  | "BACKUP_SOURCE_UNAVAILABLE" | "BACKUP_MEDIA_UNAVAILABLE" | "BACKUP_FOLDER_UNAVAILABLE"
+  | "BACKUP_SPACE_LOW" | "BACKUP_SNAPSHOT_FAILED" | "BACKUP_ARCHIVE_INVALID" | "BACKUP_WRITE_FAILED";
 export class ManualBackupError extends Error {
   readonly code: ManualBackupErrorCode;
-  constructor(code: ManualBackupErrorCode) { super(code); this.code = code; }
+  readonly stage: PrepareStage | null;
+  constructor(code: ManualBackupErrorCode, stage: PrepareStage | null = null) { super(code); this.code = code; this.stage = stage; }
+}
+const PREPARE_CODES: Readonly<Record<PrepareFailureKind, ManualBackupErrorCode>> = { SPACE_LOW: "BACKUP_SPACE_LOW",
+  MEDIA_UNAVAILABLE: "BACKUP_MEDIA_UNAVAILABLE", SNAPSHOT_FAILED: "BACKUP_SNAPSHOT_FAILED", ARCHIVE_INVALID: "BACKUP_ARCHIVE_INVALID",
+  WRITE_FAILED: "BACKUP_WRITE_FAILED", UNKNOWN: "BACKUP_SOURCE_UNAVAILABLE" };
+export function manualPrepareError(stage: PrepareStage, error: unknown): ManualBackupError {
+  return new ManualBackupError(PREPARE_CODES[classifyPrepareFailure(stage, error)], stage);
 }
 export interface BackupLocationStore {
   read(): Promise<BackupDestination>;
@@ -18,10 +29,16 @@ export interface SavedBackupSummary {
 }
 export interface ManualBackupState {
   readonly available: boolean;
-  readonly phase: "IDLE" | "LOADING" | "CHOOSING" | "CREATING" | "PUBLISHING";
+  /** WAITING — ждём завершения идущей автокопии (BKP-LOCK-1). */
+  readonly phase: "IDLE" | "LOADING" | "CHOOSING" | "WAITING" | "CREATING" | "PUBLISHING";
+  /** Этап и честный прогресс текущей копии (BKP-STAGE-1); null вне CREATING/PUBLISHING. */
+  readonly progress: BackupProgress | null;
   readonly location: BackupDestination["kind"] | "UNKNOWN";
   readonly lastSaved: SavedBackupSummary | null;
   readonly error: ManualBackupErrorCode | null;
+  readonly errorStage: PrepareStage | null;
+  /** Время последней сохранённой копии по этапам. */
+  readonly lastRun: BackupRunTiming | null;
 }
 export type ManualBackupOutcome = Readonly<{ kind: "SAVED"; backup: SavedBackupSummary }>
   | Readonly<{ kind: "UPDATED" | "CANCELLED" }> | Readonly<{ kind: "FAILED"; code: ManualBackupErrorCode }>;
@@ -33,6 +50,8 @@ export interface ManualBackupPort {
   exportElsewhere(): Promise<ManualBackupOutcome>;
   chooseFolder(): Promise<ManualBackupOutcome>;
   useDefaultFolder(): Promise<ManualBackupOutcome>;
+  /** Повторить последнюю неудачную копию (в выбранную папку или экспорт в тот же каталог). */
+  retry(): Promise<ManualBackupOutcome>;
 }
 /** A present malformed preference must not silently redirect subsequent backups to Downloads. */
 export function parseBackupLocation(value: unknown): BackupDestination {

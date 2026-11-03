@@ -1,7 +1,9 @@
 import type { BackupDestination } from "../domain/BackupPublication.ts";
-import { AutomaticBackupError, AUTO_BACKUP_INTERVAL, automaticDay, automaticRetention, parseAutomaticCatalog, parseAutomaticPublication,
+import { AutomaticBackupError, AUTO_BACKUP_INTERVAL, AUTO_BUSY_RETRY, automaticDay, automaticRetention, parseAutomaticCatalog, parseAutomaticPublication,
   sameBackupDestination, type AutomaticBackupFiles, type AutomaticBackupPort,
   type AutomaticBackupState, type AutomaticBackupStore, type AutomaticCatalog } from "../domain/AutomaticBackup.ts";
+import { BackupRunClock, type BackupProgress, type BackupStage } from "../domain/BackupProgress.ts";
+import type { BackupExclusive } from "./BackupExclusive.ts";
 
 interface Options {
   readonly enabled: boolean;
@@ -10,8 +12,13 @@ interface Options {
   readonly location: () => Promise<BackupDestination>;
   readonly run: <T>(task: () => Promise<T>) => Promise<T>;
   readonly ready: () => boolean;
+  /** Общая очередь с ручной копией (BKP-LOCK-1). */
+  readonly exclusive: BackupExclusive;
+  /** Счётчик закоммиченных записей рабочей базы (BKP-PERF-3): не изменился — копировать и сравнивать базу незачем. */
+  readonly changeToken?: () => number;
   readonly now?: () => number;
   readonly offset?: () => number;
+  readonly clock?: () => number;
 }
 /** One admitted operation owns every reader/publication/cleanup. A durable pending job
  * replays the SAME native receipt; committed retention metadata precedes every old delete. */
@@ -19,9 +26,14 @@ export class AutomaticBackupService implements AutomaticBackupPort {
   private readonly options: Options;
   private readonly listeners = new Set<() => void>();
   private active = false;
+  /** Значение changeToken при последнем полном сравнении в этом процессе; null — сравнения ещё не было (первая проверка полная). */
+  private comparedToken: number | null = null;
+  private runClock: BackupRunClock | null = null;
   private current: AutomaticBackupState;
   constructor(options: Options) {
-    this.options = options; this.current = { available: options.enabled && options.files.available, phase: "IDLE", nextCheckAt: null, lastSaved: null, versions: 0, error: null };
+    this.options = options;
+    this.current = { available: options.enabled && options.files.available, phase: "IDLE", progress: null, nextCheckAt: null, lastSaved: null,
+      versions: 0, error: null, errorStage: null, lastRun: null };
   }
   get state(): AutomaticBackupState { return this.current; }
   subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
@@ -30,6 +42,12 @@ export class AutomaticBackupService implements AutomaticBackupPort {
   }
   private now(): number { return this.options.now?.() ?? Date.now(); }
   private offset(): number { return this.options.offset?.() ?? new Date().getTimezoneOffset(); }
+  private stage(stage: BackupStage, done: number | null = null, total: number | null = null): void {
+    this.observe({ stage, done, total });
+  }
+  private readonly observe = (progress: BackupProgress): void => {
+    this.runClock?.mark(progress.stage); this.publish({ progress });
+  };
   private async save(catalog: AutomaticCatalog): Promise<AutomaticCatalog> {
     const checked = parseAutomaticCatalog(catalog); await this.options.store.write(checked);
     const readback = await this.options.store.read();
@@ -78,22 +96,34 @@ export class AutomaticBackupService implements AutomaticBackupPort {
   retry(): Promise<void> { return this.perform(true); }
   private async perform(force: boolean): Promise<void> {
     if (this.active || !this.current.available || !this.options.ready()) return;
-    this.active = true; this.publish({ phase: "CHECKING" });
+    // Идёт ручная копия: не ждать её в очереди, а повторить позже (одна операция копирования за раз).
+    const admitted = this.options.exclusive.tryRun(() => this.admitted(force));
+    if (admitted === null) { this.publish({ nextCheckAt: this.now() + AUTO_BUSY_RETRY }); return; }
+    await admitted;
+  }
+  private async admitted(force: boolean): Promise<void> {
+    this.active = true; this.publish({ phase: "CHECKING", progress: null });
     try { await this.options.run(async () => {
-      const prior = await this.options.store.readFailure(); if (prior !== null) this.publish({ error: prior.code });
+      const prior = await this.options.store.readFailure(); if (prior !== null) this.publish({ error: prior.code, errorStage: prior.stage ?? null });
       try {
         await this.checkAdmitted(force);
         if (this.current.error === null) await this.options.store.writeFailure(null);
       } catch (error) {
-        const code = error instanceof AutomaticBackupError ? error.code : "AUTO_SOURCE_UNAVAILABLE";
-        try { await this.options.store.writeFailure({ code, at: this.now() }); } catch { /* Preserve catalog on a status-only IO failure. */ }
-        throw error;
+        const failure = error instanceof AutomaticBackupError ? error : new AutomaticBackupError("AUTO_SOURCE_UNAVAILABLE");
+        if (failure.code !== "AUTO_NOT_READY") {
+          // Без данных клиентов и путей: код, этап и класс исходной ошибки.
+          console.warn("[backup] AUTO_FAILED", failure.code, failure.stage ?? "-", error instanceof Error ? error.name : typeof error);
+          try { await this.options.store.writeFailure({ code: failure.code, at: this.now(), ...failure.stage === null ? {} : { stage: failure.stage } }); }
+          catch { /* Preserve catalog on a status-only IO failure. */ }
+        }
+        throw failure;
       }
     }); }
     catch (error) {
-      if (error instanceof AutomaticBackupError && error.code === "AUTO_NOT_READY") { this.publish({ nextCheckAt: this.now() + 1000 }); return; }
-      this.publish({ error: error instanceof AutomaticBackupError ? error.code : "AUTO_SOURCE_UNAVAILABLE", nextCheckAt: this.now() + AUTO_BACKUP_INTERVAL });
-    } finally { this.active = false; this.publish({ phase: "IDLE" }); }
+      if (error instanceof AutomaticBackupError && error.code === "AUTO_NOT_READY") { this.publish({ nextCheckAt: this.now() + AUTO_BUSY_RETRY }); return; }
+      this.publish({ error: error instanceof AutomaticBackupError ? error.code : "AUTO_SOURCE_UNAVAILABLE",
+        errorStage: error instanceof AutomaticBackupError ? error.stage : null, nextCheckAt: this.now() + AUTO_BACKUP_INTERVAL });
+    } finally { this.active = false; this.runClock = null; this.publish({ phase: "IDLE", progress: null }); }
   }
   private async checkAdmitted(force: boolean): Promise<void> {
     let c = await this.options.store.read(); const now = this.now();
@@ -102,7 +132,7 @@ export class AutomaticBackupService implements AutomaticBackupPort {
       let destination: BackupDestination;
       try { destination = await this.options.location(); } catch { throw new AutomaticBackupError("AUTO_FOLDER_UNAVAILABLE"); }
       c = await this.save({ version: 1, destination, sequence: 0, checkedAt: now, entries: [], retired: [], pending: null });
-      if (!force) { this.publish({ nextCheckAt: now + AUTO_BACKUP_INTERVAL, error: null }); return; }
+      if (!force) { this.publish({ nextCheckAt: now + AUTO_BACKUP_INTERVAL, error: null, errorStage: null }); return; }
     }
     this.summary(c);
     if (!force && c.pending === null && c.retired.length === 0 && now >= c.checkedAt && now - c.checkedAt < AUTO_BACKUP_INTERVAL) {
@@ -117,25 +147,37 @@ export class AutomaticBackupService implements AutomaticBackupPort {
       c = await this.save({ version: 1, destination, sequence: 0, checkedAt: now, entries: [], retired: [], pending: null });
       force = true; this.summary(c);
     }
+    // BKP-PERF-3: после полного сравнения в этом процессе не было ни одной записи — копия и сверка файлов не нужны.
+    // Первая проверка после запуска, ошибка, незавершённая работа или «Повторить» идут полным путём. Цена: файл копии, удалённый
+    // из папки извне, будет пересоздан после следующей записи в базу или перезапуска, а не через 30 минут.
+    const token = this.options.changeToken?.();
+    if (!force && token !== undefined && token === this.comparedToken && c.pending === null && c.retired.length === 0 && this.current.error === null) {
+      await this.save({ ...c, checkedAt: now });
+      this.publish({ nextCheckAt: now + AUTO_BACKUP_INTERVAL }); return;
+    }
     const observed = await this.reconcileFiles(c); c = observed.catalog; force = force || observed.repair;
     // During repair, keep every verified predecessor until a new full copy is committed.
     if (!observed.repair) c = await this.retire(c);
     if (!force && c.pending === null && now >= c.checkedAt && now - c.checkedAt < AUTO_BACKUP_INTERVAL) {
-      this.publish({ nextCheckAt: c.checkedAt + AUTO_BACKUP_INTERVAL, error: null }); return;
+      this.publish({ nextCheckAt: c.checkedAt + AUTO_BACKUP_INTERVAL, error: null, errorStage: null }); return;
     }
+    this.runClock = new BackupRunClock(this.options.clock);
     if (c.pending === null) {
       automaticRetention(c.entries, new Date(now).toISOString(), this.offset());
       c = await this.save({ ...c, checkedAt: now });
       this.publish({ phase: "PREPARING", nextCheckAt: now + AUTO_BACKUP_INTERVAL });
-      const prepared = await this.options.files.prepare(c.entries[0]?.contentSha256 ?? null);
-      if (prepared === null) { this.publish({ error: null }); return; }
+      const prepared = await this.options.files.prepare(c.entries[0]?.contentSha256 ?? null, this.observe);
+      if (prepared === null) {
+        this.comparedToken = token ?? null; this.logTiming("unchanged");
+        this.publish({ error: null, errorStage: null }); return;
+      }
       c = await this.save({ ...c, pending: prepared });
     }
     const pending = c.pending!;
     automaticRetention(c.entries, new Date(this.now()).toISOString(), this.offset());
     // Publishing never authorizes old deletion by itself. After the catalog commit,
     // retire() revalidates retained files before removing any healthy predecessor.
-    this.publish({ phase: "PUBLISHING" });
+    this.publish({ phase: "PUBLISHING" }); this.stage("PUBLISH");
     const publication = parseAutomaticPublication(await this.options.files.publish(pending, c.destination), pending);
     const completedAt = new Date(this.now()).toISOString(); const offsetMinutes = this.offset();
     const historical = automaticRetention(c.entries, completedAt, offsetMinutes);
@@ -143,9 +185,17 @@ export class AutomaticBackupService implements AutomaticBackupPort {
     const kept = [next, ...historical];
     c = await this.save({ ...c, sequence: next.sequence, checkedAt: this.now(), entries: kept,
       retired: [...c.retired, ...c.entries.filter((e) => !historical.includes(e))], pending: null });
-    this.summary(c); this.publish({ error: null, nextCheckAt: c.checkedAt + AUTO_BACKUP_INTERVAL });
+    this.comparedToken = token ?? null;
+    this.summary(c); this.publish({ error: null, errorStage: null, nextCheckAt: c.checkedAt + AUTO_BACKUP_INTERVAL });
     // Cleanup is separately retryable; its failure never mislabels a completed publication.
     try { await this.options.files.cleanup(pending.backupId); } catch { /* Private orphan. */ }
+    this.stage("ROTATE");
     await this.retire(c);
+    this.publish({ lastRun: this.logTiming("saved") });
+  }
+  private logTiming(outcome: "saved" | "unchanged") {
+    const timing = this.runClock?.finish() ?? null; this.runClock = null;
+    if (timing !== null) console.info("[backup-timing] auto", outcome, timing.totalMs, timing.stages.map((s) => `${s.stage}=${s.ms}`).join(" "));
+    return timing;
   }
 }

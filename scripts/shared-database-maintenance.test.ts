@@ -135,3 +135,16 @@ test("R06 failed admitted transaction drains and does not prevent safe physical 
   await write;
   assert.equal(f.closes, 1); assert.equal(files, true);
 });
+
+test("BKP-PERF-3 changeToken grows after a committed write, a plain run, a new connection and closed-file maintenance, not after reads", async () => {
+  const f = fixture();
+  const lease = await f.database.acquire(); const opened = f.database.changeToken;
+  await lease.connection.first("SELECT 1"); await lease.connection.all("SELECT 1");
+  assert.equal(f.database.changeToken, opened, "reads do not change data");
+  await lease.writer.write(async (tx) => { await tx.run("UPDATE synthetic"); });
+  const written = f.database.changeToken; assert.ok(written > opened);
+  await lease.connection.run("PRAGMA optimize"); assert.ok(f.database.changeToken > written);
+  const beforeRestore = f.database.changeToken;
+  await f.database.withClosedDatabase(async () => { await f.database.release(); }, async () => undefined);
+  assert.ok(f.database.changeToken > beforeRestore, "restore replaces the file without any new connection");
+});

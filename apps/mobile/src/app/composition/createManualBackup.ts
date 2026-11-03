@@ -2,19 +2,20 @@ import { Directory } from "expo-file-system";
 import { expoBackupLocationStore } from "../../features/backup/data/ExpoBackupLocationStore.ts";
 import { expoManualSnapshotJobs } from "../../features/backup/data/ExpoManualSnapshotJobs.ts";
 import { nativeBackupPublisher } from "../../features/backup/data/NativeBackupPublisher.ts";
-import { ManualBackupService, ManualBackupError, type ManualBackupPort } from "../../features/backup/public.ts";
+import { ManualBackupService, ManualBackupError, type BackupExclusive, type ManualBackupPort } from "../../features/backup/public.ts";
 import type { RuntimeCommandGate } from "../runtime/RuntimeCommandGate.ts";
 import type { BootCoordinator } from "../bootstrap/BootCoordinator.ts";
 import { PRODUCTION_IDENTITY } from "./productionDatabase.ts";
 import { SCHEMA_OWNERS } from "./schema.ts";
 import { productionLiveFile } from "./productionFiles.ts";
 
-export function createManualBackup(development: boolean, commands: RuntimeCommandGate, boot: BootCoordinator): ManualBackupPort {
+export function createManualBackup(development: boolean, commands: RuntimeCommandGate, boot: BootCoordinator,
+  exclusive: BackupExclusive): ManualBackupPort {
   let jobs: ReturnType<typeof expoManualSnapshotJobs> | null = null;
   const getJobs = () => jobs ??= expoManualSnapshotJobs(productionLiveFile(),
     { identity: PRODUCTION_IDENTITY, owners: SCHEMA_OWNERS });
   return new ManualBackupService({ enabled: !development, publisher: nativeBackupPublisher(), locations: expoBackupLocationStore(),
-    prepare: () => getJobs().prepare(), cleanup: (snapshot) => getJobs().cleanup(snapshot),
+    prepare: (observe) => getJobs().prepare(observe), cleanup: (snapshot) => getJobs().cleanup(snapshot), exclusive,
     chooseDirectory: async () => {
       try { return { kind: "DIRECTORY", uri: (await Directory.pickDirectoryAsync()).uri }; }
       catch (error) {

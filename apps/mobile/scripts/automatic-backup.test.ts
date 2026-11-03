@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { AutomaticBackupService, AutomaticBackupError, AUTO_BACKUP_INTERVAL, automaticFilename, parseAutomaticCatalog,
   type AutomaticBackupFiles, type AutomaticBackupStore, type AutomaticCatalog, type PendingAutomatic, type AutomaticFailure,
-  type BackupDestination, type PublishedBackup } from "../src/features/backup/public.ts";
+  type BackupDestination, type PublishedBackup, BackupExclusive } from "../src/features/backup/public.ts";
 import { RuntimeCommandGate } from "../src/app/runtime/RuntimeCommandGate.ts";
 
 const monday = Date.parse("2026-10-19T10:00:00.000Z");
@@ -57,7 +57,7 @@ function world() {
     },
     cleanup: async (id) => { prepared.delete(id); events.push(`cleanup:${id}`); },
   };
-  const make = (enabled = true) => new AutomaticBackupService({ enabled, files, store, location: async () => copy(destination),
+  const make = (enabled = true) => new AutomaticBackupService({ exclusive: new BackupExclusive(), enabled, files, store, location: async () => copy(destination),
     now: () => time, offset: () => zone, ready: () => true, run: (task) => commands.run(task) });
   const service = make();
   return { service, make, files, store, faults, events, external, prepared, removed, archives, commands,

@@ -6,7 +6,7 @@ import { AUTO_BACKUP_INTERVAL, type AutomaticBackupPort, type AutomaticBackupSta
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 function world() {
   let now = 0; let checks = 0; let release: (() => void) | null = null; let deferred = false;
-  let state: AutomaticBackupState = { available: true, phase: "IDLE", nextCheckAt: null, versions: 0, lastSaved: null, error: null };
+  let state: AutomaticBackupState = { available: true, phase: "IDLE", progress: null, nextCheckAt: null, versions: 0, lastSaved: null, error: null, errorStage: null, lastRun: null };
   const timers = new Map<() => void, number>(); const listeners = new Set<() => void>();
   const publish = (patch: Partial<AutomaticBackupState>) => { state = { ...state, ...patch }; for (const listener of listeners) listener(); };
   const check = async () => { checks++; publish({ phase: "CHECKING" });
@@ -38,7 +38,7 @@ test("R06 scheduler disposal waits neither for nor cancels admitted IO, and late
 test("AUTO-BACKUP-3 во время тренировки автокопия не стартует: попытка откладывается на минуту, после паузы — проходит", async () => {
   let training = true;
   let now = 0; let checks = 0;
-  const state: AutomaticBackupState = { available: true, phase: "IDLE", nextCheckAt: null, versions: 0, lastSaved: null, error: null };
+  const state: AutomaticBackupState = { available: true, phase: "IDLE", progress: null, nextCheckAt: null, versions: 0, lastSaved: null, error: null, errorStage: null, lastRun: null };
   const timers = new Map<() => void, number>();
   const port: AutomaticBackupPort = { get state() { return state; }, subscribe: () => () => undefined,
     check: async () => { checks++; }, retry: async () => { checks++; } };

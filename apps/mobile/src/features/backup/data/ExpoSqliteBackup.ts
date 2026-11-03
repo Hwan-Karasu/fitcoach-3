@@ -2,6 +2,8 @@ import { File, FileMode } from "expo-file-system";
 import { moveAsync } from "expo-file-system/legacy";
 import * as SQLite from "expo-sqlite";
 import { inspectDatabaseIdentity } from "../../../shared/db/DatabaseIdentity.ts";
+import { isStorageFull } from "../domain/BackupFailure.ts";
+import { observeBackup, type BackupObserver } from "../domain/BackupProgress.ts";
 import { SnapshotError, type SnapshotManifest } from "../domain/SnapshotManifest.ts";
 import { assertSnapshotPrivateUri } from "./ExpoSnapshotMedia.ts";
 import { expoSnapshotSql } from "./ExpoSnapshotSql.ts";
@@ -10,7 +12,7 @@ import type { SnapshotMediaSettings } from "./SnapshotMediaPort.ts";
 
 function typed(error: unknown): never {
   if (error instanceof SnapshotError) throw error;
-  throw new SnapshotError("SNAPSHOT_IO_FAILED");
+  throw new SnapshotError(isStorageFull(error) ? "SNAPSHOT_SPACE_LOW" : "SNAPSHOT_IO_FAILED");
 }
 function noSidecars(file: File): void {
   for (const suffix of ["-wal", "-shm", "-journal"]) if (new File(`${file.uri}${suffix}`).exists) throw new SnapshotError("SNAPSHOT_INVALID");
@@ -44,10 +46,10 @@ export class ExpoSqliteBackup {
       return db;
     } catch (error) { await db.closeAsync(); throw error; }
   }
-  private async inspectPrivate(file: File): Promise<SnapshotManifest> {
+  private async inspectPrivate(file: File, observe?: BackupObserver): Promise<SnapshotManifest> {
     noSidecars(file); header(file);
     const db = await this.open(file, true);
-    try { return await this.engine.validateSnapshot(expoSnapshotSql(db)); }
+    try { return await this.engine.validateSnapshot(expoSnapshotSql(db), observe); }
     finally { await db.closeAsync(); }
   }
   /** Verification of an already sealed private point; never opens the old photo URIs. */
@@ -59,6 +61,7 @@ export class ExpoSqliteBackup {
     metadata: Pick<SnapshotManifest, "backupId" | "createdAt">, settings: SnapshotMediaSettings = {}): Promise<SnapshotManifest> {
     let stage = "identity";
     try {
+      observeBackup(settings.observe, "SNAPSHOT");
       assertSnapshotPrivateUri(destination.uri);
       if (partial.uri === destination.uri || destination.exists) throw new SnapshotError("SNAPSHOT_DESTINATION_EXISTS");
       if (await inspectDatabaseIdentity(expoSnapshotSql(source), this.schema.identity, this.schema.owners) !== "OWNED") throw new SnapshotError("SNAPSHOT_INVALID");
@@ -69,9 +72,32 @@ export class ExpoSqliteBackup {
         await copy.execAsync("PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON");
         stage = "seal"; await this.engine.sealSnapshot(expoSnapshotSql(copy), metadata, settings);
       } finally { await copy.closeAsync(); }
-      stage = "verify"; const manifest = await this.inspectPrivate(partial);
+      stage = "verify"; const manifest = await this.inspectPrivate(partial, settings.observe);
       if (destination.exists) throw new SnapshotError("SNAPSHOT_DESTINATION_EXISTS");
       await moveAsync({ from: partial.uri, to: destination.uri });
+      return manifest;
+    } catch (error) {
+      console.warn("SNAPSHOT_PREPARE_FAILED", stage, error instanceof SnapshotError ? error.code : "IO");
+      return typed(error);
+    }
+  }
+  /** BKP-PERF-1: запечатать уже снятую приватную копию на месте (journal_mode=DELETE, закрыта вызывающим) вместо второго
+   * backupDatabaseAsync. `knownContentSha256` пересчитывается проверкой до переноса в `destination`. */
+  async sealPrivateCopy(copy: File, destination: File, metadata: Pick<SnapshotManifest, "backupId" | "createdAt">,
+    knownContentSha256: string, settings: SnapshotMediaSettings = {}): Promise<SnapshotManifest> {
+    let stage = "seal";
+    try {
+      assertSnapshotPrivateUri(destination.uri);
+      if (copy.uri === destination.uri || destination.exists) throw new SnapshotError("SNAPSHOT_DESTINATION_EXISTS");
+      noSidecars(copy); header(copy);
+      const db = await this.open(copy, false);
+      try {
+        await db.execAsync("PRAGMA synchronous=FULL");
+        await this.engine.sealSnapshot(expoSnapshotSql(db), metadata, settings, knownContentSha256);
+      } finally { await db.closeAsync(); }
+      stage = "verify"; const manifest = await this.inspectPrivate(copy, settings.observe);
+      if (destination.exists) throw new SnapshotError("SNAPSHOT_DESTINATION_EXISTS");
+      await moveAsync({ from: copy.uri, to: destination.uri });
       return manifest;
     } catch (error) {
       console.warn("SNAPSHOT_PREPARE_FAILED", stage, error instanceof SnapshotError ? error.code : "IO");

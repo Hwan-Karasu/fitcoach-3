@@ -3,7 +3,7 @@ import { moveAsync } from "expo-file-system/legacy";
 import { uuid, requireOptionalNativeModule } from "expo-modules-core";
 import * as SQLite from "expo-sqlite";
 import { AutomaticBackupService, parseAutomaticCatalog, parseAutomaticPublication,
-  type AutomaticBackupFiles, type AutomaticBackupStore, type AutomaticCatalog } from "../../features/backup/public.ts";
+  type AutomaticBackupFiles, type AutomaticBackupStore, type AutomaticCatalog, BackupExclusive } from "../../features/backup/public.ts";
 import { ExpoAutomaticBackupFiles } from "../../features/backup/data/ExpoAutomaticBackupFiles.ts";
 import { expoAutomaticBackupStore } from "../../features/backup/data/ExpoAutomaticBackupStore.ts";
 import { ExpoSqliteBackup } from "../../features/backup/data/ExpoSqliteBackup.ts";
@@ -109,7 +109,7 @@ export async function runR06AutomaticInterruptionProbe(mode: Mode): Promise<R06N
       await new Promise<void>(() => { /* External orchestrator kills only this test PID. */ });
     }
   } };
-  const service = new AutomaticBackupService({ enabled: true, files: observed, store: observedStore, now: () => fixture.time, offset: () => 0,
+  const service = new AutomaticBackupService({ exclusive: new BackupExclusive(), enabled: true, files: observed, store: observedStore, now: () => fixture.time, offset: () => 0,
     ready: () => true, location: async () => ({ kind: "DOWNLOADS" }), run: (task) => commands.run(task) });
   try {
     if (mode === "ARM_RECEIPT") await prepareProductionDatabase(database);

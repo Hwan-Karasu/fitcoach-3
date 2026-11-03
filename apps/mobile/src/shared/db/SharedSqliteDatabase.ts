@@ -23,10 +23,15 @@ export class SharedSqliteDatabase {
   private maintenance: "ACTIVE" | "RECOVERY_REQUIRED" | null = null;
   private closeFailed = false;
   private readonly open: () => Promise<SqliteConnectionPort>;
+  private changes = 0;
 
   constructor(open: () => Promise<SqliteConnectionPort>) {
     this.open = open;
   }
+  /** Растёт после каждой завершённой записи (транзакция или одиночный run) и при каждом новом соединении (восстановление
+   * подменяет файл). Не изменился — содержимое базы то же (BKP-PERF-3). Чтения через run тоже считаются: лишний рост
+   * лишь вызывает полную проверку копии. */
+  get changeToken(): number { return this.changes; }
 
   acquire(): Promise<SqliteDatabaseLease> {
     return this.serial(async () => {
@@ -85,6 +90,8 @@ export class SharedSqliteDatabase {
       succeeded = true;
       return result;
     } finally {
+      // Обслуживание при закрытой базе (восстановление) могло подменить файл без нового соединения (BKP-PERF-3).
+      if (taskStarted) this.changes++;
       if (!taskStarted && paused !== null && paused.accepting && resume !== null) {
         resume();
         paused.pause = null;
@@ -120,11 +127,13 @@ export class SharedSqliteDatabase {
       void result.then(() => pending.delete(result), () => pending.delete(result));
       return result;
     };
+    const changed = <T>(value: T): T => { this.changes++; return value; };
+    this.changes++;
     const internal: SqliteConnectionPort = {
-      run: (sql, bindings) => track(() => raw.run(sql, bindings)),
+      run: (sql, bindings) => track(() => raw.run(sql, bindings).then(changed)),
       first: <Row>(sql: string, bindings?: readonly SqlValue[]) => track(() => raw.first<Row>(sql, bindings)),
       all: <Row>(sql: string, bindings?: readonly SqlValue[]) => track(() => raw.all<Row>(sql, bindings)),
-      exclusive: (task) => track(() => raw.exclusive(task)),
+      exclusive: (task) => track(() => raw.exclusive(task).then(changed)),
       close: async () => { throw new Error("DATABASE_RELEASE_REQUIRED"); },
     };
     const check = <T>(task: () => Promise<T>): Promise<T> => {

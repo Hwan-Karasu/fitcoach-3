@@ -1,5 +1,6 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
+import { observeBackup } from "../domain/BackupProgress.ts";
 import { SnapshotError, type SnapshotMediaSummary } from "../domain/SnapshotManifest.ts";
 import { MEDIA_CHUNK_BYTES, MEDIA_CHUNKS, MEDIA_TABLE } from "./SnapshotCatalog.ts";
 import { IMAGE_EXTENSION, IMAGE_MIMES, imageMime, isLocalImageUri,
@@ -41,7 +42,8 @@ async function descriptorDigest(rows: AsyncIterable<MediaRow>): Promise<Snapshot
 /** Includes archived recipes. Missing/corrupt media blocks an incomplete backup. */
 export async function recipePhotoReferences(db: SnapshotSqlPort): Promise<readonly RecipePhotoReference[]> {
   const result: RecipePhotoReference[] = [];
-  for await (const row of db.each<{ id: string; details_json: string }>("SELECT id, details_json FROM recipes WHERE details_json IS NOT NULL ORDER BY id")) {
+  // Одним обращением (BKP-PERF-2): `each` в Expo — переход через мост на каждый рецепт.
+  for (const row of await db.all<{ id: string; details_json: string }>("SELECT id, details_json FROM recipes WHERE details_json IS NOT NULL ORDER BY id")) {
     if (typeof row.id !== "string" || typeof row.details_json !== "string") invalid();
     let value: unknown;
     try { value = JSON.parse(row.details_json); } catch { return invalid(); }
@@ -56,7 +58,8 @@ export async function recipePhotoReferences(db: SnapshotSqlPort): Promise<readon
 /** The caller owns the private snapshot's metadata transaction. */
 export async function embedRecipePhotos(db: SnapshotSqlPort, settings: SnapshotMediaSettings): Promise<SnapshotMediaSummary> {
   const uris = [...new Set((await recipePhotoReferences(db)).map((row) => row.sourceUri))].sort();
-  for (const uri of uris) {
+  observeBackup(settings.observe, "MEDIA", 0, uris.length);
+  for (const [index, uri] of uris.entries()) {
     if (!settings.files) incomplete();
     const reader = await settings.files.openSource(uri);
     const hash = sha256.create();
@@ -85,6 +88,7 @@ export async function embedRecipePhotos(db: SnapshotSqlPort, settings: SnapshotM
       await reader.assertUnchanged();
       await db.run(`UPDATE ${MEDIA_TABLE} SET sha256=? WHERE id=?`, [bytesToHex(hash.digest()), id]);
     } finally { hash.destroy(); reader.close(); }
+    observeBackup(settings.observe, "MEDIA", index + 1, uris.length);
   }
   return descriptorDigest(descriptors(db));
 }

@@ -1,7 +1,7 @@
 import { Directory, File, Paths } from "expo-file-system";
 import { uuid, requireOptionalNativeModule } from "expo-modules-core";
 import * as SQLite from "expo-sqlite";
-import { AutomaticBackupService, AutomaticBackupError, type AutomaticBackupFiles, type AutomaticEntry, parseAutomaticPublication } from "../../features/backup/public.ts";
+import { AutomaticBackupService, AutomaticBackupError, type AutomaticBackupFiles, type AutomaticEntry, parseAutomaticPublication, BackupExclusive } from "../../features/backup/public.ts";
 import { ExpoAutomaticBackupFiles } from "../../features/backup/data/ExpoAutomaticBackupFiles.ts";
 import { expoAutomaticBackupStore } from "../../features/backup/data/ExpoAutomaticBackupStore.ts";
 import { ExpoSqliteBackup } from "../../features/backup/data/ExpoSqliteBackup.ts";
@@ -54,7 +54,7 @@ export async function runR06AutomaticMissingProbe(): Promise<R06NativeReport> {
       return parseAutomaticPublication({ uri: r.uri, filename: r.filename, sha256: r.sha256, bytes: r.bytes }, p);
     },
     inspect: (e) => files.inspect(e), verify: (e) => files.verify(e), remove: (e) => files.remove(e), cleanup: (id) => files.cleanup(id) };
-  const create = () => new AutomaticBackupService({ enabled: true, files: observed, store, now: () => time, offset: () => 0,
+  const create = () => new AutomaticBackupService({ exclusive: new BackupExclusive(), enabled: true, files: observed, store, now: () => time, offset: () => 0,
     ready: () => true, location: async () => ({ kind: "DOWNLOADS" }), run: (task) => commands.run(task) });
   const inspect = (entry: AutomaticEntry) => native!.inspectAutomatic(entry.backupId, entry.uri, entry.sha256, entry.bytes);
   try {

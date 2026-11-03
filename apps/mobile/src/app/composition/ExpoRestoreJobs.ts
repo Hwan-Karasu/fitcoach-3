@@ -41,6 +41,7 @@ const space = (required: number) => {
 };
 function masked(error: unknown): RestoreActionError {
   if (error instanceof RestoreActionError) return error;
+  if (error instanceof SnapshotError && error.code === "SNAPSHOT_SPACE_LOW") return new RestoreActionError("RESTORE_NO_SPACE");
   if (error instanceof SnapshotError && error.code !== "SNAPSHOT_IO_FAILED") return new RestoreActionError("RESTORE_INVALID_BACKUP");
   return new RestoreActionError("RESTORE_SOURCE_UNAVAILABLE");
 }

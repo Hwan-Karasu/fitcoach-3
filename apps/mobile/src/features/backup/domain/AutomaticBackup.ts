@@ -1,12 +1,28 @@
 import { backupFilename, publicationTreeUri, type BackupDestination, type PublishedBackup } from "./BackupPublication.ts";
+import { classifyPrepareFailure, PREPARE_STAGES, type PrepareFailureKind, type PrepareStage } from "./BackupFailure.ts";
+import type { BackupObserver, BackupProgress, BackupRunTiming } from "./BackupProgress.ts";
 import { parseBackupLocation } from "./ManualBackupPort.ts";
 
 export const AUTO_BACKUP_INTERVAL = 30 * 60 * 1000;
+/** Повтор, когда копию отложила другая операция копирования или обслуживание (BKP-LOCK-1; раньше — через 1 с). */
+export const AUTO_BUSY_RETRY = 60 * 1000;
+/** AUTO_SOURCE_UNAVAILABLE — неизвестная причина; известные сбои подготовки имеют свои коды (BKP-DIAG-1). */
 export type AutomaticBackupErrorCode = "AUTO_UNAVAILABLE" | "AUTO_NOT_READY" | "AUTO_FOLDER_UNAVAILABLE" | "AUTO_SOURCE_UNAVAILABLE"
-  | "AUTO_VERIFICATION_FAILED" | "AUTO_STATE_UNAVAILABLE" | "AUTO_CLOCK_CHANGED" | "AUTO_CLEANUP_PENDING";
+  | "AUTO_VERIFICATION_FAILED" | "AUTO_STATE_UNAVAILABLE" | "AUTO_CLOCK_CHANGED" | "AUTO_CLEANUP_PENDING"
+  | "AUTO_SPACE_LOW" | "AUTO_MEDIA_UNAVAILABLE" | "AUTO_SNAPSHOT_FAILED" | "AUTO_ARCHIVE_INVALID" | "AUTO_WRITE_FAILED";
+const ERROR_CODES: readonly AutomaticBackupErrorCode[] = ["AUTO_UNAVAILABLE", "AUTO_NOT_READY", "AUTO_FOLDER_UNAVAILABLE", "AUTO_SOURCE_UNAVAILABLE",
+  "AUTO_VERIFICATION_FAILED", "AUTO_STATE_UNAVAILABLE", "AUTO_CLOCK_CHANGED", "AUTO_CLEANUP_PENDING",
+  "AUTO_SPACE_LOW", "AUTO_MEDIA_UNAVAILABLE", "AUTO_SNAPSHOT_FAILED", "AUTO_ARCHIVE_INVALID", "AUTO_WRITE_FAILED"];
 export class AutomaticBackupError extends Error {
   readonly code: AutomaticBackupErrorCode;
-  constructor(code: AutomaticBackupErrorCode) { super(code); this.code = code; }
+  readonly stage: PrepareStage | null;
+  constructor(code: AutomaticBackupErrorCode, stage: PrepareStage | null = null) { super(code); this.code = code; this.stage = stage; }
+}
+const PREPARE_CODES: Readonly<Record<PrepareFailureKind, AutomaticBackupErrorCode>> = { SPACE_LOW: "AUTO_SPACE_LOW",
+  MEDIA_UNAVAILABLE: "AUTO_MEDIA_UNAVAILABLE", SNAPSHOT_FAILED: "AUTO_SNAPSHOT_FAILED", ARCHIVE_INVALID: "AUTO_ARCHIVE_INVALID",
+  WRITE_FAILED: "AUTO_WRITE_FAILED", UNKNOWN: "AUTO_SOURCE_UNAVAILABLE" };
+export function automaticPrepareError(stage: PrepareStage, error: unknown): AutomaticBackupError {
+  return new AutomaticBackupError(PREPARE_CODES[classifyPrepareFailure(stage, error)], stage);
 }
 export interface PendingAutomatic {
   readonly backupId: string;
@@ -39,18 +55,20 @@ export interface AutomaticBackupStore {
   /** Atomic publication plus exact readback; failure never authorizes deleting a file. */
   write(catalog: AutomaticCatalog): Promise<void>;
 }
-export interface AutomaticFailure { readonly code: AutomaticBackupErrorCode; readonly at: number }
+/** `stage` — этап подготовки (BKP-DIAG-1); статусы прежних сборок без него читаются как есть. */
+export interface AutomaticFailure { readonly code: AutomaticBackupErrorCode; readonly at: number; readonly stage?: PrepareStage }
 export function parseAutomaticFailure(value: unknown): AutomaticFailure | null {
   if (value === null) return null;
-  const f = object(value, "at,code");
-  const codes: readonly unknown[] = ["AUTO_UNAVAILABLE", "AUTO_NOT_READY", "AUTO_FOLDER_UNAVAILABLE", "AUTO_SOURCE_UNAVAILABLE",
-    "AUTO_VERIFICATION_FAILED", "AUTO_STATE_UNAVAILABLE", "AUTO_CLOCK_CHANGED", "AUTO_CLEANUP_PENDING"];
-  if (!codes.includes(f.code) || typeof f.at !== "number" || !Number.isSafeInteger(f.at) || f.at < 0) invalid();
-  return { code: f.code as AutomaticBackupErrorCode, at: f.at };
+  const staged = !!value && typeof value === "object" && "stage" in value;
+  const f = object(value, staged ? "at,code,stage" : "at,code");
+  if (!(ERROR_CODES as readonly unknown[]).includes(f.code) || typeof f.at !== "number" || !Number.isSafeInteger(f.at) || f.at < 0) invalid();
+  if (staged && !(PREPARE_STAGES as readonly unknown[]).includes(f.stage)) invalid();
+  return staged ? { code: f.code as AutomaticBackupErrorCode, at: f.at, stage: f.stage as PrepareStage } : { code: f.code as AutomaticBackupErrorCode, at: f.at };
 }
 export interface AutomaticBackupFiles {
   readonly available: boolean;
-  prepare(previousContentSha256: string | null): Promise<PendingAutomatic | null>;
+  /** Сбой — AutomaticBackupError с кодом и этапом (automaticPrepareError). */
+  prepare(previousContentSha256: string | null, observe?: BackupObserver): Promise<PendingAutomatic | null>;
   /** Idempotent native publication, bound to its private ownership receipt. */
   publish(pending: PendingAutomatic, destination: BackupDestination): Promise<PublishedBackup>;
   /** MISSING requires exact native ownership plus proven absence; access/IO errors throw. */
@@ -63,10 +81,16 @@ export interface AutomaticBackupFiles {
 export interface AutomaticBackupState {
   readonly available: boolean;
   readonly phase: "IDLE" | "CHECKING" | "PREPARING" | "PUBLISHING";
+  /** Текущий этап и честный прогресс внутри фазы (BKP-STAGE-1); null в IDLE. */
+  readonly progress: BackupProgress | null;
   readonly nextCheckAt: number | null;
   readonly lastSaved: Readonly<{ createdAt: string; filename: string; day: string }> | null;
   readonly versions: number;
   readonly error: AutomaticBackupErrorCode | null;
+  /** Этап подготовки, на котором случилась ошибка, — для кода на экране. */
+  readonly errorStage: PrepareStage | null;
+  /** Время последней созданной копии по этапам; null, пока в этом запуске копия не создавалась. */
+  readonly lastRun: BackupRunTiming | null;
 }
 export interface AutomaticBackupPort {
   readonly state: AutomaticBackupState;

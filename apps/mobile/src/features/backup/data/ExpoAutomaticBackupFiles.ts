@@ -3,8 +3,10 @@ import { uuid, requireOptionalNativeModule } from "expo-modules-core";
 import * as SQLite from "expo-sqlite";
 import { inspectDatabaseIdentity } from "../../../shared/db/DatabaseIdentity.ts";
 import { expoFileSha256 } from "../../../shared/files/ExpoFileSha256.ts";
-import { AutomaticBackupError, parseAutomaticPublication, type AutomaticBackupFiles, type AutomaticEntry,
+import { AutomaticBackupError, automaticPrepareError, parseAutomaticPublication, type AutomaticBackupFiles, type AutomaticEntry,
   type PendingAutomatic } from "../domain/AutomaticBackup.ts";
+import type { PrepareStage } from "../domain/BackupFailure.ts";
+import { observeBackup, type BackupObserver } from "../domain/BackupProgress.ts";
 import { publicationTreeUri, type BackupDestination } from "../domain/BackupPublication.ts";
 import { assertSnapshotPrivateUri, expoSnapshotMedia } from "./ExpoSnapshotMedia.ts";
 import { ExpoSqliteBackup } from "./ExpoSqliteBackup.ts";
@@ -39,6 +41,9 @@ export class ExpoAutomaticBackupFiles implements AutomaticBackupFiles {
   private readonly options: Options;
   private readonly native = requireOptionalNativeModule<NativeAutomatic>("AthleteBackupStorage");
   private readonly driver: ExpoSqliteBackup;
+  /** backupId → SHA-256 файла, подготовленного и проверенного в этом процессе (BKP-PERF-1). После перезапуска пусто:
+   * незавершённая публикация проверяется полностью. */
+  private readonly verified = new Map<string, string>();
   readonly available: boolean;
   constructor(options: Options) {
     this.options = options; this.driver = new ExpoSqliteBackup(options.schema);
@@ -49,40 +54,46 @@ export class ExpoAutomaticBackupFiles implements AutomaticBackupFiles {
     if (!ownedId.test(id)) throw new AutomaticBackupError("AUTO_STATE_UNAVAILABLE");
     return new Directory(this.options.root, "automatic-jobs", id);
   }
-  async prepare(previousContentSha256: string | null): Promise<PendingAutomatic | null> {
-    await this.cleanOrphans(); const id = uuid.v4(); const job = this.job(id); let created = false; let handedOff = false;
-    let stage = "source";
+  async prepare(previousContentSha256: string | null, observe?: BackupObserver): Promise<PendingAutomatic | null> {
+    const id = uuid.v4(); const job = this.job(id); let created = false; let handedOff = false;
+    let stage: PrepareStage = "orphans";
     try {
+      // Сбой уборки собственных сирот не мешает новой копии (раньше — необработанная ошибка и «проверьте место»).
+      try { await this.cleanOrphans(); } catch (error) { console.warn("[backup] AUTO_ORPHANS_SKIPPED", error instanceof Error ? error.name : typeof error); }
       const { live, schema, images } = this.options;
-      if (!live.exists || live.size < 100 || Paths.availableDiskSpace < live.size * 3 + 4 * 1024 * 1024) throw new Error();
+      stage = "source"; if (!live.exists || live.size < 100) throw new Error("LIVE_MISSING");
+      // Приватная копия, журнал запечатывания, запас; WAL — часть рабочей базы. Фото не оцениваются: реальная нехватка места
+      // распознаётся по ошибке SQLite/ОС (isStorageFull).
+      stage = "space"; const wal = new File(`${live.uri}-wal`); const base = live.size + (wal.exists ? wal.size : 0);
+      if (Paths.availableDiskSpace < base * 3 + 4 * 1024 * 1024) throw new Error("SPACE_LOW");
       stage = "job"; job.create({ intermediates: true }); created = true; new File(job, "owner.json").write(owner(id));
       const current = new File(job, "current.db"); current.create();
-      const source = await SQLite.openDatabaseAsync(live.name, { useNewConnection: true }, live.parentDirectory.uri);
+      stage = "source"; const source = await SQLite.openDatabaseAsync(live.name, { useNewConnection: true }, live.parentDirectory.uri);
       let contentSha256: string;
       try {
-        await source.execAsync("PRAGMA query_only=ON; PRAGMA foreign_keys=ON");
+        // Ожидание блокировки вместо мгновенного SQLITE_BUSY: expo-sqlite не проверяет итог backup_step (BKP-BUSY-1).
+        await source.execAsync("PRAGMA busy_timeout=5000; PRAGMA query_only=ON; PRAGMA foreign_keys=ON");
         const copy = await SQLite.openDatabaseAsync(current.name, { useNewConnection: true }, job.uri);
         try {
-          stage = "copy"; await SQLite.backupDatabaseAsync({ sourceDatabase: source, destDatabase: copy });
+          stage = "copy"; observeBackup(observe, "SNAPSHOT"); await SQLite.backupDatabaseAsync({ sourceDatabase: source, destDatabase: copy });
           await copy.execAsync("PRAGMA journal_mode=DELETE; PRAGMA foreign_keys=ON");
-          if (await inspectDatabaseIdentity(expoSnapshotSql(copy), schema.identity, schema.owners) !== "OWNED") throw new Error();
-          stage = "hash"; contentSha256 = await snapshotContentSha256(expoSnapshotSql(copy));
+          stage = "identity"; if (await inspectDatabaseIdentity(expoSnapshotSql(copy), schema.identity, schema.owners) !== "OWNED") throw new Error("NOT_OWNED");
+          stage = "hash"; contentSha256 = await snapshotContentSha256(expoSnapshotSql(copy), [], (done, total) => observeBackup(observe, "CONTENT", done, total));
         } finally { await copy.closeAsync(); }
       } finally { await source.closeAsync(); }
       if (contentSha256 === previousContentSha256) return null;
-      const from = await SQLite.openDatabaseAsync(current.name, { useNewConnection: true }, job.uri);
+      // BKP-PERF-1: та же приватная копия запечатывается на месте — без второго backupDatabaseAsync и второго хеша.
       const createdAt = new Date(this.options.now?.() ?? Date.now()).toISOString(); const snapshot = new File(job, "snapshot.atbackup");
-      try {
-        await from.execAsync("PRAGMA query_only=ON; PRAGMA foreign_keys=ON");
-        stage = "snapshot"; const manifest = await this.driver.createSnapshot(from, new File(job, "snapshot.partial"), snapshot,
-          { backupId: id, createdAt }, { files: expoSnapshotMedia(images) });
-        if (manifest.contentSha256 !== contentSha256) throw new Error();
-      } finally { await from.closeAsync(); }
+      stage = "seal"; const manifest = await this.driver.sealPrivateCopy(current, snapshot, { backupId: id, createdAt }, contentSha256,
+        { files: expoSnapshotMedia(images), observe: (progress) => { if (progress.stage === "VERIFY") stage = "verify"; observeBackup(observe, progress.stage, progress.done, progress.total); } });
+      if (manifest.contentSha256 !== contentSha256) throw new Error("CONTENT_CHANGED");
       stage = "digest"; const result = { backupId: id, createdAt, contentSha256, ...await expoFileSha256(snapshot) };
+      this.verified.set(id, result.sha256);
       handedOff = true; return result;
     } catch (error) {
-      console.warn("AUTOMATIC_SNAPSHOT_PREPARE_FAILED", stage, error instanceof Error ? error.name : "UNKNOWN");
-      throw new AutomaticBackupError("AUTO_SOURCE_UNAVAILABLE");
+      const failure = automaticPrepareError(stage, error);
+      console.warn("AUTOMATIC_SNAPSHOT_PREPARE_FAILED", stage, failure.code, error instanceof Error ? error.name : "UNKNOWN");
+      throw failure;
     }
     finally { if (created && !handedOff) try { await this.cleanup(id); } catch { /* Retryable own orphan. */ } }
   }
@@ -91,9 +102,15 @@ export class ExpoAutomaticBackupFiles implements AutomaticBackupFiles {
     const file = new File(this.job(pending.backupId), "snapshot.atbackup");
     try {
       if (file.exists) {
-        const digest = await expoFileSha256(file); const manifest = await this.driver.validatePrivateSnapshot(file);
-        if (digest.sha256 !== pending.sha256 || digest.bytes !== pending.bytes || manifest.backupId !== pending.backupId ||
-          manifest.createdAt !== pending.createdAt || manifest.contentSha256 !== pending.contentSha256) throw new AutomaticBackupError("AUTO_VERIFICATION_FAILED");
+        const digest = await expoFileSha256(file);
+        if (digest.sha256 !== pending.sha256 || digest.bytes !== pending.bytes) throw new AutomaticBackupError("AUTO_VERIFICATION_FAILED");
+        // Файл этого процесса уже прошёл полную проверку в prepare, а совпавший SHA-256 доказывает, что байты те же.
+        if (this.verified.get(pending.backupId) !== pending.sha256) {
+          const manifest = await this.driver.validatePrivateSnapshot(file);
+          if (manifest.backupId !== pending.backupId || manifest.createdAt !== pending.createdAt || manifest.contentSha256 !== pending.contentSha256) {
+            throw new AutomaticBackupError("AUTO_VERIFICATION_FAILED");
+          }
+        }
       }
       // A durable native receipt can finish replay even if the private source was lost;
       // without that receipt, the native publisher requires the exact existing source.
@@ -124,7 +141,7 @@ export class ExpoAutomaticBackupFiles implements AutomaticBackupFiles {
     throw new AutomaticBackupError("AUTO_CLEANUP_PENDING");
   }
   async cleanup(id: string): Promise<void> {
-    const job = this.job(id); const marker = new File(job, "owner.json");
+    const job = this.job(id); const marker = new File(job, "owner.json"); this.verified.delete(id);
     if (marker.exists && marker.size < 200 && await marker.text() === owner(id)) job.delete();
   }
   private async cleanOrphans(): Promise<void> {

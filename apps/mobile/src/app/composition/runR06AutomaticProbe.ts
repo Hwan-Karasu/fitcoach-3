@@ -1,7 +1,7 @@
 import { Directory, File, Paths } from "expo-file-system";
 import { uuid, requireOptionalNativeModule } from "expo-modules-core";
 import * as SQLite from "expo-sqlite";
-import { AutomaticBackupService, AutomaticBackupError, type AutomaticBackupFiles, type PendingAutomatic, type PublishedBackup } from "../../features/backup/public.ts";
+import { AutomaticBackupService, AutomaticBackupError, type AutomaticBackupFiles, type PendingAutomatic, type PublishedBackup, BackupExclusive } from "../../features/backup/public.ts";
 import { ExpoAutomaticBackupFiles } from "../../features/backup/data/ExpoAutomaticBackupFiles.ts";
 import { expoAutomaticBackupStore } from "../../features/backup/data/ExpoAutomaticBackupStore.ts";
 import { nativeBackupPublisher } from "../../features/backup/data/NativeBackupPublisher.ts";
@@ -69,7 +69,7 @@ export async function runR06AutomaticProbe(mode: "FULL" | "STATUS" = "FULL"): Pr
         }
         const receipt = await files.publish(pending, destination); if (first === null) first = receipt; return receipt;
       } };
-    const service = new AutomaticBackupService({ enabled: true, files: observed, store, now: () => time, offset: () => 0,
+    const service = new AutomaticBackupService({ exclusive: new BackupExclusive(), enabled: true, files: observed, store, now: () => time, offset: () => 0,
       ready: () => true, location: async () => ({ kind: "DOWNLOADS" }), run: (task) => commands.run(task) });
     stage = "FIRST"; await service.check(); check("native_auto_first_check_schedules_without_publication", service.state.lastSaved === null && (await store.read())!.pending === null);
     time += 30 * 60 * 1000; await service.check();
@@ -138,7 +138,7 @@ async function runStatusProbe(): Promise<R06NativeReport> {
     prepare: async () => { if (failing) throw new AutomaticBackupError("AUTO_SOURCE_UNAVAILABLE"); return null; },
     publish: async () => { throw new Error("R06_UNEXPECTED_PUBLICATION"); },
     inspect: (e) => nativeFiles.inspect(e), verify: (e) => nativeFiles.verify(e), remove: (e) => nativeFiles.remove(e), cleanup: async () => undefined };
-  const create = () => new AutomaticBackupService({ enabled: true, files, store, ready: () => true, now: () => time,
+  const create = () => new AutomaticBackupService({ exclusive: new BackupExclusive(), enabled: true, files, store, ready: () => true, now: () => time,
     offset: () => prior.entries[0]!.offsetMinutes, location: async () => prior.destination, run: (task) => task() });
   const checks: { name: string; passed: boolean }[] = []; const check = (name: string, passed: boolean) => {
     checks.push({ name, passed }); if (!passed) throw new Error("R06_AUTO_STATUS_FAILED");

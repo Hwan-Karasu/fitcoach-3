@@ -1,5 +1,6 @@
 import { inspectDatabaseIdentity, type DatabaseIdentity, type DatabaseOwnerCatalog } from "../../../shared/db/DatabaseIdentity.ts";
 import { runMigrationsInTransaction } from "../../../shared/db/MigrationRunner.ts";
+import { observeBackup, type BackupObserver } from "../domain/BackupProgress.ts";
 import { parseSnapshotManifest, SnapshotError, type SnapshotManifest } from "../domain/SnapshotManifest.ts";
 import { MANIFEST_TABLE, MEDIA_CHUNKS, MEDIA_TABLE, SNAPSHOT_LEDGER, SNAPSHOT_OWNER } from "./SnapshotCatalog.ts";
 import { snapshotContentSha256 } from "./SnapshotContentHash.ts";
@@ -21,10 +22,13 @@ export class SqliteSnapshotEngine {
     const owners = snapshot ? [...this.schema.owners, SNAPSHOT_OWNER] : this.schema.owners;
     if (await inspectDatabaseIdentity(db, this.schema.identity, owners) !== "OWNED") throw new SnapshotError("SNAPSHOT_INVALID");
   }
+  /** `knownContentSha256` — хеш этой же приватной копии, уже посчитанный вызывающим (автокопия сравнивает его с прошлой
+   * копией, BKP-PERF-1). Значение не принимается на веру: validateSnapshot пересчитывает его до публикации. */
   async sealSnapshot(db: SnapshotSqlPort, metadata: Pick<SnapshotManifest, "backupId" | "createdAt">,
-    settings: SnapshotMediaSettings = {}): Promise<SnapshotManifest> {
+    settings: SnapshotMediaSettings = {}, knownContentSha256?: string): Promise<SnapshotManifest> {
     await this.owned(db, false);
-    const contentSha256 = await snapshotContentSha256(db);
+    const contentSha256 = knownContentSha256
+      ?? await snapshotContentSha256(db, [], (done, total) => observeBackup(settings.observe, "CONTENT", done, total));
     return db.transaction(async (tx) => {
       await runMigrationsInTransaction(tx, SNAPSHOT_OWNER.chain, SNAPSHOT_OWNER.ledger);
       const media = await embedRecipePhotos(tx, settings);
@@ -35,7 +39,8 @@ export class SqliteSnapshotEngine {
       return manifest;
     });
   }
-  async validateSnapshot(db: SnapshotSqlPort): Promise<SnapshotManifest> {
+  async validateSnapshot(db: SnapshotSqlPort, observe?: BackupObserver): Promise<SnapshotManifest> {
+    observeBackup(observe, "VERIFY");
     await this.owned(db, true);
     const rows = await db.all<{ singleton: number; json: unknown }>(
       `SELECT singleton, CASE WHEN length(json) <= 8192 THEN json END AS json FROM ${MANIFEST_TABLE}`);
@@ -44,7 +49,9 @@ export class SqliteSnapshotEngine {
     const version = (await db.first<{ version: number }>(`SELECT max(version) AS version FROM ${SNAPSHOT_LEDGER}`))?.version;
     if ((version === 2) !== (manifest.media !== undefined)) throw new SnapshotError("SNAPSHOT_INVALID");
     await verifyRecipePhotos(db, manifest.media);
-    if (await snapshotContentSha256(db) !== manifest.contentSha256) throw new SnapshotError("SNAPSHOT_INVALID");
+    if (await snapshotContentSha256(db, [], (done, total) => observeBackup(observe, "VERIFY", done, total)) !== manifest.contentSha256) {
+      throw new SnapshotError("SNAPSHOT_INVALID");
+    }
     return manifest;
   }
   async stageSnapshot(db: SnapshotSqlPort, settings: SnapshotMediaSettings = {}): Promise<SnapshotManifest> {

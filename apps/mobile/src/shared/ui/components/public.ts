@@ -5,6 +5,7 @@ export { SelectionChip } from "./SelectionChip.tsx";
 export { SectionTabs } from "./SectionTabs.tsx";
 export { SegmentedControl } from "./SegmentedControl.tsx";
 export { InlineNotice, type NoticeKind } from "./InlineNotice.tsx";
+export { ProgressBar } from "./ProgressBar.tsx";
 export { ConfirmDialog } from "./ConfirmDialog.tsx";
 export { StickyEditorFooter } from "./StickyEditorFooter.tsx";
 export { BottomDockLayoutProvider, useBottomBarHeight, useBottomBarLayout, useEditorDockHeight } from "./BottomDockLayout.tsx";

@@ -16,7 +16,8 @@ export interface SnapshotManifest {
   readonly media?: SnapshotMediaSummary;
 }
 export class SnapshotError extends Error {
-  readonly code: "SNAPSHOT_INVALID" | "SNAPSHOT_INCOMPLETE_MEDIA" | "SNAPSHOT_DESTINATION_EXISTS" | "SNAPSHOT_IO_FAILED";
+  /** SNAPSHOT_SPACE_LOW — SQLite/ОС сообщили о заполненном хранилище (BKP-DIAG-1); прочие сбои IO — SNAPSHOT_IO_FAILED. */
+  readonly code: "SNAPSHOT_INVALID" | "SNAPSHOT_INCOMPLETE_MEDIA" | "SNAPSHOT_DESTINATION_EXISTS" | "SNAPSHOT_IO_FAILED" | "SNAPSHOT_SPACE_LOW";
   constructor(code: SnapshotError["code"]) { super(code); this.code = code; }
 }
 export function parseSnapshotManifest(json: unknown, workspaceId: string): SnapshotManifest {
