@@ -1,0 +1,41 @@
+# Progress — 2026-10-29
+
+## Сделано
+- 2026-10-29 (ADR-055) AUTO-BACKUP-1/2/3, WRITE-PATH-1: нативный хеш файла автокопии, порции ≤ 8 мс, автокопия ждёт паузы в тренировке,
+  одно соединение записи, одно перечитывание на серию подходов. Тесты: time-slice, local-file-sha256, automatic-scheduler,
+  sqlite-isolated-connection, training-navigation. На телефоне не проверено.
+- 2026-10-29 (ADR-054) SET-DONE-1, TPL-KIND-1, BUILDER-TABS-1, PROG-MENU-1, PART-DOCK-1, REST-NAV-1, UI-COMPACT-1, REST-PERF-1:
+  см. docs/PROJECT_STATUS.md. Новые тесты: participant-group-state, TPL-KIND (training-transfer, training-templates, template-cycles),
+  SET-DONE-1 (rest-timer, training-execution), REST-NAV-1 (notification-target), PART-DOCK-1 (training-navigation). На телефоне не проверено.
+  Техдолг: триггер перечитывания дневника в живой сессии не установлен (useWorkoutSnapshot.ts: перечитывание того же слота закрывает
+  ввод — ячейки теперь дописываются после загрузки, но причину перечитывания нужно поймать логом на телефоне); переход с таймера
+  внутри того же клиента по-прежнему пересоздаёт экран клиента (PrototypeShell.tsx openTarget, `StackActions.replace`).
+- 2026-10-29 (ADR-053) REST-FIX-1…7: см. docs/PROJECT_STATUS.md; тесты PERF-REST-ALL, active-workouts, training-execution («Макс.», «Пред.»).
+  На телефоне не проверено. Отклонено: точечный сброс кэша планов по клиентам (ревизия программы общая).
+- 2026-10-28 (ADR-052) исправления аудита: AUD28-02, 03, 04, 09, 06, 11 (регрессионные тесты в workout-calendar-outcome и
+  training-templates). test:foundation 1055/1055, training 282/282, excel 99/99, calendar 29/29. На телефоне не проверено.
+- 2026-10-28 (ADR-049…051) шаблоны и циклы: TEMPLATE-OPEN-2/EDIT (шаблон любого вида открывается и правится в конструкторе),
+  CYCLE-STRIP-3 (циклы переключаются на месте, CycleState.ts); удалены импорт из заметок (TEXT-LOG) и «образец и промпт для ИИ»
+  вместе с expo-clipboard; добавлен «Образец для импорта» формата 2.0 (ImportSample.ts). build38–40.
+- 2026-10-28 (ADR-048) PERF-PLAN-BATCH, PERF-REST-DOCK, CAL-WORKOUT-LINK, BUILDER-SLOTS, CAL-RANGE-CACHE: пачечная запись плана,
+  таймеры на UI-потоке, исход тренировки отмечает запись календаря (миграция execution v4), кэш диапазонов календаря. build35–37.
+- 2026-10-28 (ADR-045/046) IMPORT-HINT-SCROLL, CYCLE-PRESETS, BUILDER-FACTS, EXCEL-AI синонимы заголовков; тест I07/I06 поправлены.
+  Остальное из TEXT-LOG/EXCEL-AI удалено (см. выше).
+- UI-MATRIX-READ / CAL-PAST-EDIT / CAL-DUTY-DAY (ADR-044), BOOT-ROUTE-1, UI-HEADER-WRAP (build29).
+- R04-RETIRE (ADR-043): удалены scripts/r02–r04, команды r02–r04, nutrition history reader, ClientWorkDataModel.
+- CA-аудит (docs/CODE_AUDIT_2026-10-27.md): этапы A–E сделаны. IMPORT-V2 S1–S5 готовы (CA-29). POLISH-1, EDITOR-FIX-1.
+
+## Открыто / техдолг
+- Зависание при быстрой записи подходов (ADR-055): причина «автокопия на JS-потоке» установлена по коду, не на телефоне. Если после
+  build45 зависание повторится и время автокопии с ним не совпадёт — замер на устройстве (профилировщик Android).
+- AUD28-10: SegmentedControl со скольжением (SegmentedControl.tsx): индикатор не пересчитывается при смене текста выбранной
+  вкладки, возможное мигание при первом показе — проверить на телефоне.
+- Смена недели в конструкторе мезоцикла медленная (WorkoutsEditor.tsx / Sortable.Grid) — решено оставить; варианты в docs/PROJECT_STATUS.md.
+- Решения владельца из POLISH-1 (P-01…P-07 в CODE_AUDIT): разрешения Android RECORD_AUDIO/CAMERA/SYSTEM_ALERT_WINDOW
+  (app.json), icon.png 2,2 МБ, токен scrim ×26, CI arch:check без assets/exercises, flash-list, отчёты docs/ui, старые APK.
+- AUD26-01 удаление клиента (training_transfer_receipts); AUD26-04 sync-v2-workbook.ts читает соседнюю папку FitCoach_2_Excel.
+- CA-23 импорт больших книг; CA-24 inline requires; CA-19 нет react-hooks lint; CA-12 DevTrainingPlansRepository.ts — решено не трогать.
+- I01-USER-PARITY: 544 значения и 243 занятия без даты. REL-ANDROID: debug-подпись, releaseReady:false.
+
+Архив: memory-bank/archive/progress-before-audit-fixes-2026-10-28.md (журнал TEXT-LOG/EXCEL-AI и build33–37),
+progress-before-retire-2026-10-27.md (блоки R04).

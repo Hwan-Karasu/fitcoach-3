@@ -1,6 +1,10 @@
-# Progress — 2026-10-29
+# Progress — 2026-11-03
 
 ## Сделано
+- 2026-11-03 (ADR-057) BKP-DIAG-1, BKP-LOCK-1, BKP-STAGE-1, BKP-PERF-1/2/3, BKP-BUSY-1: причина сбоя копии по этапу и код на экране,
+  одна очередь ручной/авто, этапы/процент/время, хеш порциями по ключу, одна копия SQLite, без записей — без копирования. build47.
+  Тесты: backup-coordination (новый), r06-portable-snapshot (keyset = оракул), r06-backup-media (seal с известным хешем),
+  shared-database-maintenance (changeToken). Замер ПК: scripts/backup-bench.ts. На телефоне не проверено.
 - 2026-10-29 (ADR-055) AUTO-BACKUP-1/2/3, WRITE-PATH-1: нативный хеш файла автокопии, порции ≤ 8 мс, автокопия ждёт паузы в тренировке,
   одно соединение записи, одно перечитывание на серию подходов. Тесты: time-slice, local-file-sha256, automatic-scheduler,
   sqlite-isolated-connection, training-navigation. На телефоне не проверено.
@@ -12,20 +16,15 @@
   внутри того же клиента по-прежнему пересоздаёт экран клиента (PrototypeShell.tsx openTarget, `StackActions.replace`).
 - 2026-10-29 (ADR-053) REST-FIX-1…7: см. docs/PROJECT_STATUS.md; тесты PERF-REST-ALL, active-workouts, training-execution («Макс.», «Пред.»).
   На телефоне не проверено. Отклонено: точечный сброс кэша планов по клиентам (ревизия программы общая).
-- 2026-10-28 (ADR-052) исправления аудита: AUD28-02, 03, 04, 09, 06, 11 (регрессионные тесты в workout-calendar-outcome и
-  training-templates). test:foundation 1055/1055, training 282/282, excel 99/99, calendar 29/29. На телефоне не проверено.
-- 2026-10-28 (ADR-049…051) шаблоны и циклы: TEMPLATE-OPEN-2/EDIT (шаблон любого вида открывается и правится в конструкторе),
-  CYCLE-STRIP-3 (циклы переключаются на месте, CycleState.ts); удалены импорт из заметок (TEXT-LOG) и «образец и промпт для ИИ»
-  вместе с expo-clipboard; добавлен «Образец для импорта» формата 2.0 (ImportSample.ts). build38–40.
-- 2026-10-28 (ADR-048) PERF-PLAN-BATCH, PERF-REST-DOCK, CAL-WORKOUT-LINK, BUILDER-SLOTS, CAL-RANGE-CACHE: пачечная запись плана,
-  таймеры на UI-потоке, исход тренировки отмечает запись календаря (миграция execution v4), кэш диапазонов календаря. build35–37.
-- 2026-10-28 (ADR-045/046) IMPORT-HINT-SCROLL, CYCLE-PRESETS, BUILDER-FACTS, EXCEL-AI синонимы заголовков; тест I07/I06 поправлены.
-  Остальное из TEXT-LOG/EXCEL-AI удалено (см. выше).
-- UI-MATRIX-READ / CAL-PAST-EDIT / CAL-DUTY-DAY (ADR-044), BOOT-ROUTE-1, UI-HEADER-WRAP (build29).
-- R04-RETIRE (ADR-043): удалены scripts/r02–r04, команды r02–r04, nutrition history reader, ClientWorkDataModel.
-- CA-аудит (docs/CODE_AUDIT_2026-10-27.md): этапы A–E сделаны. IMPORT-V2 S1–S5 готовы (CA-29). POLISH-1, EDITOR-FIX-1.
+- 2026-10-28 и ранее — memory-bank/archive/progress-before-backup-audit-2026-11-03.md.
 
 ## Открыто / техдолг
+- Первопричина «Не удалось подготовить автоматическую копию» у владельца не установлена (ADR-057): нужен код этапа с экрана build47.
+  Hermes-время копии не измерено — владелец присылает строку «Создана за N с» с разбивкой.
+- Автокопия без записей не сверяет внешние файлы (AutomaticBackupService.ts, ветка changeToken): удалённая извне копия пересоздаётся
+  после следующей записи или перезапуска. BackupExclusive.ts без таймаута: зависший нативный вызов держит очередь.
+- Нативный publish читает файл 3 раза (SHA источника, запись с проверкой, чтение назад — BackupStorageModule.kt Publisher.publish);
+  проверка каждой версии в inspect — полный SHA через провайдер. Не менялось: нативное, вне JS-потока; оценить по замеру этапа «запись».
 - Зависание при быстрой записи подходов (ADR-055): причина «автокопия на JS-потоке» установлена по коду, не на телефоне. Если после
   build45 зависание повторится и время автокопии с ним не совпадёт — замер на устройстве (профилировщик Android).
 - AUD28-10: SegmentedControl со скольжением (SegmentedControl.tsx): индикатор не пересчитывается при смене текста выбранной
