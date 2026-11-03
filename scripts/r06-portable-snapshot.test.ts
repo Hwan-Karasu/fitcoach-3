@@ -76,3 +76,39 @@ for (const changed of [false, true]) test(`R06 short media reads are assembled; 
     assert.ok(closed && unchangedChecked);
   } finally { db.close(); }
 });
+
+test("BKP-PERF-2 keyset pages give the oracle hash: page boundary, Cyrillic, int64 rowid, WITHOUT ROWID; NOCASE/NULL/mixed keys fall back", async () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(`CREATE TABLE texts (id TEXT PRIMARY KEY NOT NULL, note TEXT);
+      CREATE TABLE ints (id INTEGER PRIMARY KEY, value REAL);
+      CREATE TABLE pairs (id TEXT PRIMARY KEY, n INTEGER) WITHOUT ROWID;
+      CREATE TABLE exact (id TEXT PRIMARY KEY NOT NULL);
+      CREATE TABLE empty (id TEXT PRIMARY KEY NOT NULL);
+      CREATE TABLE nocase (id TEXT PRIMARY KEY COLLATE NOCASE, v TEXT);
+      CREATE TABLE nullable (id TEXT PRIMARY KEY, v TEXT);
+      CREATE TABLE mixed (id PRIMARY KEY, v TEXT)`);
+    const texts = db.prepare("INSERT INTO texts VALUES (?, ?)");
+    for (let i = 0; i < 1203; i++) texts.run(`${["я", "Я", "a", "B", "é", ""][i % 6]}${i}`, i % 7 === 0 ? "Подход ✓" : `n${i}`);
+    const ints = db.prepare("INSERT INTO ints VALUES (?, ?)");
+    for (const id of [9223372036854775807n, -9223372036854775808n, 0n, -1n, 9007199254740993n]) ints.run(id, -0);
+    for (let i = 1; i <= 700; i++) ints.run(BigInt(i * 1000), i / 3);
+    const pairs = db.prepare("INSERT INTO pairs VALUES (?, ?)");
+    for (let i = 0; i < 501; i++) pairs.run(`k${String(i).padStart(4, "0")}`, i);
+    const exact = db.prepare("INSERT INTO exact VALUES (?)");
+    for (let i = 0; i < 500; i++) exact.run(`e${i}`);
+    db.exec(`INSERT INTO nocase VALUES ('b', '1'), ('A', '2'), ('c', '3');
+      INSERT INTO nullable VALUES (NULL, 'x'), (NULL, 'y'), ('z', 'z');
+      INSERT INTO mixed VALUES (1, 'int'), ('1', 'text'), (x'01', 'blob'), (2.5, 'real')`);
+    let calls = 0; const port = nodeSnapshotSql(db);
+    const counted = { ...port,
+      all: async <Row>(sql: string, bindings?: readonly (string | number | null | Uint8Array)[]) => { calls++; return port.all<Row>(sql, bindings); },
+      async *each<Row>(sql: string, bindings?: readonly (string | number | null | Uint8Array)[]) { for await (const row of port.each<Row>(sql, bindings)) { calls++; yield row; } } };
+    const progress: [number, number][] = [];
+    assert.equal(await snapshotContentSha256(counted, [], (done, total) => progress.push([done, total])), canonicalContentSha256(db));
+    // 2 919 rows; per-row reads remain only for the 10 fallback rows (NOCASE, NULL, mixed).
+    assert.ok(calls < 100, `calls=${calls}`);
+    assert.deepEqual(progress.at(-1), [2919, 2919]);
+    assert.deepEqual(progress[0], [0, 2919]);
+  } finally { db.close(); }
+});
