@@ -8,7 +8,7 @@
 Перенос 2.0 → 3.0 — только тренировки через Excel (ADR-043; docs/INDEPENDENT_V3_AND_EXCEL.md, docs/TRANSFER_BACKLOG.json).
 
 ## 2026-11-09: REST-END-1, CAL-DONE-1 (ADR-058), REST-INSET-1, INPUT-LAG-1
-Коммиты acafb8c, d7c1f77, 4046b3b, 6d39f49 (после build47, сборки нет). Подробности — docs/PROJECT_STATUS.md. На телефоне не проверено.
+Коммиты acafb8c, d7c1f77, 4046b3b, 6d39f49, fe99d15; APK `artifacts/apk/athlete-diary-3.0.0-build48.apk` (на телефон не ставился). Подробности — docs/PROJECT_STATUS.md. На телефоне не проверено.
 Проверить: таймер на нуле при погашенном экране/после сворачивания → «Отдых окончен», «+15» после окончания; «Завершить тренировку» до
 начала записи → запись «Проведена», клиент ушёл из «Сегодня»; отступ под 0/1/2 таймерами и «таблеткой»; задержка ввода — пункт
 меню «Report cell input latency» при 0/1/2 таймерах и с «Toggle rest timer clock», прислать p50/p95.

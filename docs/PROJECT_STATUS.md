@@ -1,3 +1,10 @@
+## 2026-11-09 — build48: таймер, календарь, отступ, ввод
+
+- Собран `artifacts/apk/athlete-diary-3.0.0-build48.apk`: `com.fitcoach.v3`, 3.0.0, versionCode 48, arm64-v8a, 70 406 396 байт; assembleRelease PASS
+  (`-PreactNativeArchitectures=arm64-v8a`). SHA-256 `4a6e3dfec683a01de79d2dd6bd7a43e729a93f08e1f906ff926d7643f474a6c5`.
+  Сверх build47 — коммиты acafb8c, d7c1f77, 4046b3b, 6d39f49, fe99d15. Подпись debug. На телефон не устанавливался.
+  Сборка шла с системным Node 22.12 в PATH (в отличие от build47 с Node 24.3); на бандл это не влияет, но отличие отмечено.
+
 ## 2026-11-09 — Таймер на нуле, «Завершить» → календарь и «Сегодня», отступ под таймер, задержка ввода (REST-END-1, CAL-DONE-1, REST-INSET-1, INPUT-LAG-1)
 
 Коммиты acafb8c, d7c1f77, 4046b3b, 6d39f49. Телефона не было: причины — по коду и тестам на ПК, замеры на телефоне не проведены.
