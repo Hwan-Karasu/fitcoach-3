@@ -201,11 +201,14 @@ export function appointmentLabel(row: Pick<Appointment, "guestName" | "participa
 }
 
 /**
- * Запись, которую отмечает завершённая тренировка (ADR-048): клиент, дата, `SCHEDULED` без исхода, уже началась; из нескольких —
- * с самым поздним началом. Не начавшиеся, будущие и чужие записи не выбираются.
+ * Запись, которую отмечает завершённая тренировка (ADR-048, ADR-058): клиент, дата, `SCHEDULED` без исхода. Из начавшихся —
+ * с самым поздним началом; если начавшихся нет (тренировку завершили раньше записи) — ближайшая из не начавшихся сегодняшних.
+ * Будущие дни, чужие записи, записи с исходом и удалённых участников не выбираются.
  */
-export function pickStartedPending(rows: readonly Appointment[], clientId: string, localDate: LocalDate, now: Date): Appointment | null {
+export function pickCompletionTarget(rows: readonly Appointment[], clientId: string, localDate: LocalDate, now: Date): Appointment | null {
   const fit = rows.filter((row) => row.clientId === clientId && row.localDate === localDate && row.lifecycle === "SCHEDULED"
-    && row.outcome === null && !row.participantDeleted && appointmentStarted(row, now));
-  return fit.reduce<Appointment | null>((best, row) => best === null || row.startMinute > best.startMinute ? row : best, null);
+    && row.outcome === null && !row.participantDeleted);
+  const started = fit.filter((row) => appointmentStarted(row, now));
+  if (started.length > 0) return started.reduce((best, row) => row.startMinute > best.startMinute ? row : best);
+  return fit.reduce<Appointment | null>((best, row) => best === null || row.startMinute < best.startMinute ? row : best, null);
 }

@@ -175,7 +175,8 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
   // Прошедшая запись правится так же, как будущая; к ней добавляется блок исхода. Смена клиента у неё идёт
   // через «исправление» с компенсацией списания (§22.1.4), остальное — обычная правка без изменения учёта.
   const editable = existing === null || existing.lifecycle !== "CANCELLED";
-  const outcomeOpen = existing !== null && existing.lifecycle !== "CANCELLED" && appointmentStarted(existing, now);
+  // Запись, отмеченную «Завершить тренировку» до её начала (ADR-058), можно переисправить сразу, не дожидаясь начала.
+  const outcomeOpen = existing !== null && existing.lifecycle !== "CANCELLED" && (appointmentStarted(existing, now) || existing.outcome !== null);
   const guestRecord = existing !== null && existing.guestName !== null && existing.lifecycle !== "CANCELLED"
     ? existing : null;
   const matches = useMemo(() => {

@@ -8,7 +8,7 @@ import type { Appointment, AppointmentInput, AppointmentOutcome, CalendarInterva
   WeekTemplate } from "../domain/CalendarModel.ts";
 import type { CalendarCommittedChange, CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts";
 import type { AppointmentOutcomeParticipant } from "../domain/AppointmentOutcomeParticipant.ts";
-import { addDays, appointmentEnded, appointmentStarted, buildWeekTemplate, pickStartedPending, sameGuestName, validateSessionType, isLocalDate, localDateOf, minuteOfDay, validateAppointment,
+import { addDays, appointmentEnded, appointmentStarted, buildWeekTemplate, pickCompletionTarget, sameGuestName, validateSessionType, isLocalDate, localDateOf, minuteOfDay, validateAppointment,
   validateInterval, validateSettings, weekDates } from "../domain/CalendarRules.ts";
 import type { DevAppointmentAccountingHook, DevBooking } from "./DevAppointmentAccountingHook.ts";
 import { DEV_CALENDAR_LEDGER, devCalendarCatalog } from "./DevCalendarCatalog.ts";
@@ -460,7 +460,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
 
   /** Исход записи в чужой или собственной транзакции; публикует вызывающий после commit. */
   private async resolveIn(tx: SqliteStatementPort, id: string, expectedRevision: number, outcome: AppointmentOutcome,
-    now: Date): Promise<Readonly<{ appointment: Appointment; changed: boolean }>> {
+    now: Date, allowBeforeStart = false): Promise<Readonly<{ appointment: Appointment; changed: boolean }>> {
     const current = await this.appointmentById(tx, id);
     if (current.revision !== expectedRevision || current.lifecycle === "CANCELLED") {
       throw new Error("CALENDAR_STALE_APPOINTMENT");
@@ -476,7 +476,8 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
       // A charged session gets one linked RETURNED; a reservation is only released (§48.35.6).
       await this.accounting?.cancel(tx, this.workspaceId, id, "RETURN", stamp);
     } else {
-      if (!appointmentStarted(current, now)) throw new Error("CALENDAR_OUTCOME_TOO_EARLY");
+      // Только «Завершить тренировку» отмечает запись до её начала (ADR-058); ручной исход в календаре — после начала.
+      if (!allowBeforeStart && !appointmentStarted(current, now)) throw new Error("CALENDAR_OUTCOME_TOO_EARLY");
       const result = await tx.run(`UPDATE calendar_appointments SET lifecycle = 'COMPLETED',
         outcome = ?, outcome_at = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ? AND lifecycle <> 'CANCELLED'`,
@@ -493,11 +494,11 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
     findStartedPending: async (tx, clientId, localDate, now) => {
       const rows = await tx.all<AppointmentRow>(`SELECT ${appointmentColumns} FROM calendar_appointments
         WHERE workspace_id = ? AND client_id = ? AND local_date = ? AND lifecycle = 'SCHEDULED'`, [this.workspaceId, clientId, localDate]);
-      const found = pickStartedPending(rows.map(toAppointment), clientId, localDate, now);
+      const found = pickCompletionTarget(rows.map(toAppointment), clientId, localDate, now);
       return found === null ? null : { id: found.id, revision: found.revision, startMinute: found.startMinute, localDate: found.localDate };
     },
     complete: async (tx, appointment, now) => {
-      await this.resolveIn(tx, appointment.id, appointment.revision, "COMPLETED", now);
+      await this.resolveIn(tx, appointment.id, appointment.revision, "COMPLETED", now, true);
     },
     clearIfCompleted: async (tx, appointmentId, now) => {
       const current = await this.appointmentById(tx, appointmentId);

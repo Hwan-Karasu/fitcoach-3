@@ -72,8 +72,9 @@ export function buildRosterOverview(input: Readonly<{
       a.localDate.localeCompare(b.localDate) || a.startMinute - b.startMinute);
     const next = rows.find((row) => row.lifecycle === "SCHEDULED"
       && (row.localDate > input.today || (row.localDate === input.today && row.startMinute >= input.nowMinute)));
-    // §7: сегодняшняя неотменённая запись держит клиента в фильтре до своего конца.
-    const today = rows.find((row) => row.localDate === input.today
+    // §7 с поправкой ADR-058: клиента в фильтре держит сегодняшняя запись без исхода до своего конца; «Проведена»/«Пропущена»
+    // (и «Отменена» — она отсеяна выше) означают, что день с клиентом решён. Запись остаётся в календаре и в истории.
+    const today = rows.find((row) => row.localDate === input.today && row.lifecycle === "SCHEDULED" && row.outcome === null
       && row.startMinute + row.durationMinutes > input.nowMinute);
     const metrics: RosterMetricValue[] = [
         { id: "nextAppointment", value: next === undefined ? null : formatNext(next, input.today) },

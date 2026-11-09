@@ -56,6 +56,25 @@ test("GetRosterMetrics: следующее занятие, «Сегодня» д
   assert.equal(overview.get("C")?.metrics[0]?.value, null);
 });
 
+test("CAL-DONE-1 «Сегодня»: запись с исходом не держит клиента, незавершённая вторая запись держит", () => {
+  const done = (id: string, client: string, start: number, outcome: "COMPLETED" | "MISSED") =>
+    ({ ...appointment(id, client, "2026-10-17", start, "COMPLETED"), outcome });
+  const overview = buildRosterOverview({
+    rules, clientIds: ["A", "B", "C", "D"], today: "2026-10-17", nowMinute: 9 * 60, // 09:00, записи позже — завершены заранее
+    appointments: [
+      done("a1", "A", 10 * 60, "COMPLETED"),
+      done("b1", "B", 10 * 60, "MISSED"),
+      done("c1", "C", 10 * 60, "COMPLETED"), appointment("c2", "C", "2026-10-17", 15 * 60),
+      appointment("d1", "D", "2026-10-17", 10 * 60),
+    ],
+    accounting: new Map(), answers: new Map(),
+  });
+  assert.equal(overview.get("A")?.todayStartMinute, null, "«Проведена» убирает клиента из «Сегодня»");
+  assert.equal(overview.get("B")?.todayStartMinute, null, "«Пропущена» тоже");
+  assert.equal(overview.get("C")?.todayStartMinute, 15 * 60, "вторая запись без исхода остаётся");
+  assert.equal(overview.get("D")?.todayStartMinute, 10 * 60, "запись без исхода держит");
+});
+
 test("Индикатор ограничений: явное «есть противопоказания» или заполненное поле здоровья", () => {
   assert.equal(hasRestrictions(null), false);
   assert.equal(hasRestrictions({ "sys:health.noContra": true }), false);

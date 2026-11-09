@@ -6,7 +6,7 @@ import type { SystemCatalog } from "../src/features/exercises/public.ts";
 import { DevAccountingRepository, devAccountingCalendarHook } from "../src/features/accounting/data/DevAccountingRepository.ts";
 import { DevCalendarRepository, devCalendarClientDeletionParticipant } from "../src/features/calendar/data/DevCalendarRepository.ts";
 import type { AppointmentInput } from "../src/features/calendar/domain/CalendarModel.ts";
-import { pickStartedPending } from "../src/features/calendar/domain/CalendarRules.ts";
+import { pickCompletionTarget } from "../src/features/calendar/domain/CalendarRules.ts";
 import { DevClientRepository } from "../src/features/clients/data/DevClientRepository.ts";
 import { DevTrainingExecutionRepository } from "../src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant } from
@@ -69,14 +69,38 @@ test("ADR-048 запись сегодня 18:00, завершение в 18:30: 
   } finally { await env.close(); }
 });
 
-test("ADR-048 запись ещё не началась, чужая, на другой день или уже с исходом — не трогается", async () => {
+test("CAL-DONE-1 тренировка завершена до начала записи (17:50, запись 18:00): запись «Проведена», «Отменить завершение» её снимает", async () => {
   const env = await setup();
   try {
     await env.book({ startMinute: 1080 });
     const early = await env.workflow.setOutcome(env.slot, "COMPLETED", null, at(17, 50));
-    assert.equal(early.calendar, null, "в 17:50 запись на 18:00 ещё не началась");
+    assert.deepEqual(early.calendar, { kind: "MARKED", startMinute: 1080 });
+    assert.deepEqual(await env.outcomes(), [[1080, TODAY, "COMPLETED"]]);
+    const undone = await env.workflow.setOutcome(env.slot, null, early.session.revision, at(17, 55));
+    assert.deepEqual(undone.calendar, { kind: "CLEARED", startMinute: 1080 });
     assert.deepEqual(await env.outcomes(), [[1080, TODAY, null]]);
   } finally { await env.close(); }
+});
+
+test("CAL-DONE-1 две записи за день, завершение раньше обеих: отмечается ближайшая, вторая остаётся без исхода; начавшаяся важнее не начавшейся", async () => {
+  const env = await setup();
+  try {
+    await env.book({ startMinute: 1080 });
+    await env.book({ startMinute: 1200 });
+    const first = await env.workflow.setOutcome(env.slot, "COMPLETED", null, at(9, 0));
+    assert.deepEqual(first.calendar, { kind: "MARKED", startMinute: 1080 });
+    assert.deepEqual(await env.outcomes(), [[1080, TODAY, "COMPLETED"], [1200, TODAY, null]]);
+  } finally { await env.close(); }
+  const mixed = await setup();
+  try {
+    await mixed.book({ startMinute: 600 });
+    await mixed.book({ startMinute: 1200 });
+    const result = await mixed.workflow.setOutcome(mixed.slot, "COMPLETED", null, at(11, 0));
+    assert.deepEqual(result.calendar, { kind: "MARKED", startMinute: 600 }, "начавшаяся запись предпочтительнее будущей");
+  } finally { await mixed.close(); }
+});
+
+test("ADR-048 чужая запись, запись на другой день или уже с исходом — не трогается", async () => {
   const other = await setup();
   try {
     await other.book({ clientId: other.b, startMinute: 600 });
@@ -234,8 +258,9 @@ test("ADR-048 правило выбора: начавшаяся запись к�
     guestName: null, participantDeleted: false, sessionTypeId: "t", sessionTypeName: "T", note: null, creditBypass: false,
     lifecycle: "SCHEDULED" as const, outcome: null, revision: 1, ...extra });
   const now = at(12, 0);
-  assert.equal(pickStartedPending([row("a", 600), row("b", 660), row("c", 720)], "c", TODAY, now)?.id, "c", "12:00 — 720 уже началась");
-  assert.equal(pickStartedPending([row("a", 780)], "c", TODAY, now), null, "13:00 ещё не началась");
-  assert.equal(pickStartedPending([row("a", 600, { lifecycle: "COMPLETED", outcome: "MISSED" })], "c", TODAY, now), null);
-  assert.equal(pickStartedPending([row("a", 600)], "other", TODAY, now), null);
+  assert.equal(pickCompletionTarget([row("a", 600), row("b", 660), row("c", 720)], "c", TODAY, now)?.id, "c", "12:00 — 720 уже началась");
+  assert.equal(pickCompletionTarget([row("a", 780)], "c", TODAY, now)?.id, "a", "13:00 ещё не началась — отмечается как ближайшая");
+  assert.equal(pickCompletionTarget([row("a", 840), row("b", 780)], "c", TODAY, now)?.id, "b", "из не начавшихся — ближайшая");
+  assert.equal(pickCompletionTarget([row("a", 600, { lifecycle: "COMPLETED", outcome: "MISSED" })], "c", TODAY, now), null);
+  assert.equal(pickCompletionTarget([row("a", 600)], "other", TODAY, now), null);
 });
