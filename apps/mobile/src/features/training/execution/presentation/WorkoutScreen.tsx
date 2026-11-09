@@ -73,6 +73,16 @@ function extraSetOf(fact: SetFact): PlannedSet {
 /** Заголовок колонки в одну строку: при нехватке места шрифт ужимается. */
 const oneLine = { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.7 } as const;
 
+/** Повторное чтение тех же статусов недель не должно перерисовывать весь дневник (INPUT-LAG-1). */
+const sameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/** Рекорд веса без изменений — прежний объект: после каждой записи дневник перечитывает его, а значения чаще всего те же. */
+function sameLoads(a: ReadonlyMap<string, number> | null, b: ReadonlyMap<string, number>): boolean {
+  if (a === null || a.size !== b.size) return false;
+  for (const [key, value] of b) if (a.get(key) !== value) return false;
+  return true;
+}
+
 /**
  * Дневник тренировки (Feature 10): план, «Пред.», факт по профилю упражнения, RPE; три исхода под последним
  * упражнением (§48.31). После завершения экран остаётся тем же (§48.68). Выход из начатой тренировки без
@@ -180,12 +190,12 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   useEffect(() => {
     if (exerciseIdsKey === "") return undefined;
     const cached = maxCache.get(maxKey);
-    if (cached !== undefined) { setPastMax(cached); return undefined; }
+    if (cached !== undefined) { setPastMax((old) => sameLoads(old, cached) ? old : cached); return undefined; }
     let active = true;
     execution.getMaxLoads(maxClientId, exerciseIdsKey.split("|")).then((loads) => {
       maxCache.set(maxKey, loads);
       if (maxCache.size > 12) maxCache.delete(maxCache.keys().next().value!);
-      if (active) setPastMax(loads);
+      if (active) setPastMax((old) => sameLoads(old, loads) ? old : loads);
     }).catch(() => undefined);
     return () => { active = false; };
   }, [execution, maxCache, maxKey, maxVersion, weekKey, exerciseIdsKey, maxClientId]);
@@ -230,7 +240,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     const load = () => {
       const latest = ++request;
       void execution.getProgramStatuses(slot.clientId, slot.programId)
-        .then((statuses) => { if (active && latest === request) setWeekStatuses({ key, statuses }); })
+        .then((statuses) => { if (active && latest === request) setWeekStatuses((old) => old?.key === key && sameJson(old.statuses, statuses) ? old : { key, statuses }); })
         .catch(() => undefined);
     };
     load();

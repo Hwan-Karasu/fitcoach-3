@@ -1,6 +1,7 @@
 import { DevSettings } from "react-native";
 import { workoutNavigationProbe } from "../../shared/diagnostics/WorkoutNavigationProbe.ts";
 import { restTimerDiagnostics } from "../../shared/diagnostics/RestTimerDiagnostics.ts";
+import { inputLatency } from "../../shared/diagnostics/InputLatency.ts";
 
 /**
  * Explicit developer-menu action; no production UI or automatic navigation. Метка замера содержит число таймеров отдыха и состояние
@@ -11,6 +12,11 @@ export function installWorkoutNavigationProbe() {
   DevSettings.addMenuItem("Profile workout weeks (30)", () => {
     void workoutNavigationProbe.run(restTimerDiagnostics.label("device")).catch((error: unknown) => console.info("[nav-profile-error]",
       error instanceof Error ? error.message : "PROFILE_FAILED"));
+  });
+  // INPUT-LAG-1: набрать цифры в нескольких ячейках, затем пункт печатает задержку «ввод → отрисовка» и сбрасывает счётчик.
+  DevSettings.addMenuItem("Report cell input latency", () => {
+    console.info("[input-latency]", restTimerDiagnostics.label("device"), JSON.stringify(inputLatency.stats()));
+    inputLatency.reset();
   });
   DevSettings.addMenuItem("Toggle rest timer clock", () => {
     console.info("[rest-clock]", restTimerDiagnostics.toggleClock() ? "off" : "on");

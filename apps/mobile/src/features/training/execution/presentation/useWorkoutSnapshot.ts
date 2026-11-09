@@ -44,12 +44,14 @@ export function useWorkoutSnapshot(slot: WorkoutSlot, plans: TrainingPlansReposi
   loadedKeyRef.current = hit === undefined ? null : slotKey;
 
   useEffect(() => {
-    const invalidate = (client: string, program?: string) => {
-      for (const [key, item] of cache.entries) if (item.slot.clientId === client && (program === undefined || item.slot.programId === program)) cache.entries.delete(key);
-      for (const [key, item] of cache.pending) if (item.slot.clientId === client && (program === undefined || item.slot.programId === program)) cache.pending.delete(key);
+    const invalidate = (client: string, program?: string, keep?: string) => {
+      for (const [key, item] of cache.entries) if (key !== keep && item.slot.clientId === client && (program === undefined || item.slot.programId === program)) cache.entries.delete(key);
+      for (const [key, item] of cache.pending) if (key !== keep && item.slot.clientId === client && (program === undefined || item.slot.programId === program)) cache.pending.delete(key);
     };
-    // Invalidate the owner's commits too: its ACK repopulates this slot, while N+1's Previous is evicted.
-    const offExecution = execution.subscribeCommittedChanges((change) => invalidate(change.clientId, change.programId));
+    // Остальные недели программы вытесняются (N+1 перечитает «Пред.»), а показанный слот остаётся: его обновляет ACK собственной записи,
+    // а чужое изменение приходит в дневник через `refresh` → `version`. Иначе рендер между публикацией и ACK видел бы слот незагруженным:
+    // `switching` закрывал ввод и отказывал записи (INPUT-LAG-1).
+    const offExecution = execution.subscribeCommittedChanges((change) => invalidate(change.clientId, change.programId, slotKeyRef.current));
     const offPlans = plans.subscribeCommittedChanges((change) => {
       if (change.selectionOnly !== true && change.orderOnly !== true) for (const client of change.clientIds) invalidate(client);
     });

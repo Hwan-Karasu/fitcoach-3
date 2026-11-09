@@ -155,3 +155,44 @@ test("cache is bounded and replacing repository owners cannot reuse another data
   assert.equal(reads, 16); assert.equal(latest.workout!.title, "second:1");
   await act(async () => { renderer.unmount(); });
 });
+
+test("INPUT-LAG-1 коммит собственной записи не вытесняет показанный слот из кэша (между публикацией и ACK ввод не закрывается)", async () => {
+  const db = new DatabaseSync(":memory:");
+  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const clients = new DevClientRepository(shared, WS, []);
+  const plans = new DevTrainingPlansRepository(shared, WS);
+  const execution = new DevTrainingExecutionRepository(shared, WS);
+  await clients.initialize(); await plans.initialize(); await execution.initialize();
+  let renderer!: TestRenderer.ReactTestRenderer;
+  try {
+    const a = (await clients.create({ displayName: "Synthetic A" })).id;
+    const firstWeek = [{ id: "workout", title: "Workout", exercises: [{ id: "exercise", exerciseId: "sys:synthetic:bench",
+      restSec: 90, instruction: null, rir: null, sets: [{ id: "set", reps: 8, repsMax: null, loadGrams: null, durationSec: null, distanceM: null }] }] }];
+    const program = await plans.createProgram({ title: "Synthetic", kind: "PERIODIZED", clientIds: [a] });
+    await plans.createMesocycle(a, program.id, program.revision, { title: "Cycle", weeks: 2, firstWeek, clientIds: [a] });
+    const slot: WorkoutSlot = { clientId: a, programId: program.id, weekIndex: 1,
+      plannedWorkoutId: (await plans.getPeriodizedPlan(a, program.id))!.mesocycles[0]!.weeks[0]!.workouts[0]!.id };
+    const exercise = (await plans.findWorkout(a, program.id, slot.plannedWorkoutId, 1))!.workout.exercises[0]!;
+    let latest!: ReturnType<typeof useWorkoutSnapshot>;
+    let finds = 0;
+    const counted: TrainingPlansRepositoryPort = new Proxy(plans, { get: (target, key) => {
+      const value: unknown = Reflect.get(target, key, target);
+      if (key !== "findWorkout" || typeof value !== "function") return typeof value === "function" ? value.bind(target) : value;
+      return (...args: unknown[]) => { finds += 1; return (value as (...rest: unknown[]) => unknown).apply(target, args); };
+    } });
+    // Любой подписчик на коммиты, который перерисовывает дерево синхронно (как useSyncExternalStore), оказывается между публикацией и ACK.
+    function Probe() { latest = useWorkoutSnapshot(slot, counted, execution, 0); return null; }
+    await act(async () => { renderer = TestRenderer.create(createElement(Probe)); });
+    assert.equal(finds, 1);
+    let insideCommit = false;
+    // Коммит записи публикуется до того, как ACK дойдёт до дневника: в этот момент слот обязан оставаться загруженным.
+    const off = execution.subscribeCommittedChanges(() => { insideCommit = latest.isCached(slot); });
+    await execution.saveSet({ slot, plannedExerciseId: exercise.id, exerciseId: exercise.exerciseId,
+      plannedSetId: exercise.sets[0]!.id, position: 0, metrics: ["load", "reps"],
+      values: { reps: 8, loadGrams: 20_000, durationSec: null, distanceM: null }, setType: "NORMAL", drops: [], rpe: null, expectedRevision: null });
+    off();
+    assert.equal(insideCommit, true, "показанный слот не вытеснен коммитом собственной записи");
+    assert.equal(finds, 1, "собственная запись не перечитывает слот");
+    await act(async () => { renderer.unmount(); });
+  } finally { await execution.close(); await plans.close(); await clients.close(); }
+});

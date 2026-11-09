@@ -1,4 +1,4 @@
-import { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState, type Ref } from "react";
+import { forwardRef, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Ref } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { Check, Gauge, NotebookPen, Plus, X } from "lucide-react-native";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
@@ -13,6 +13,7 @@ import { PendingInputWrites } from "../domain/PendingInputWrites.ts";
 import { styles } from "./workoutStyles.ts";
 import { navigationPerformance } from "../../../../shared/diagnostics/NavigationPerformance.ts";
 import { useInputDraft } from "./useInputDraft.ts";
+import { inputLatency } from "../../../../shared/diagnostics/InputLatency.ts";
 
 /** Пауза после последнего нажатия, после которой значение ячейки записывается. */
 const SAVE_DELAY_MS = 700;
@@ -46,6 +47,8 @@ const ValueCell = forwardRef(function ValueCell({ cellKey, field, value, pending
   commitRef.current = onCommit;
 
   textRef.current = text;
+  // Замер разработчика: ячейка отрисована с набранным текстом (INPUT-LAG-1); в релизе вызов пустой.
+  useLayoutEffect(() => { inputLatency.end(); }, [text]);
 
   const flush = useCallback(() => {
     if (timer.current !== null) clearTimeout(timer.current);
@@ -64,6 +67,7 @@ const ValueCell = forwardRef(function ValueCell({ cellKey, field, value, pending
       onFocus={() => { focused.current = true; }}
       onBlur={() => { focused.current = false; flush(); }}
       onChangeText={(typed) => {
+        inputLatency.begin();
         const next = sanitizeField(field, typed);
         textRef.current = next;
         if (timer.current !== null) clearTimeout(timer.current);
