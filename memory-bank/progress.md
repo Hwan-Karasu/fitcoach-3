@@ -1,6 +1,7 @@
 # Progress — 2026-11-03
 
 ## Сделано
+- 2026-11-09 UIX-01, UIX-02 (логика и UI «Клиентов»), UIX-10 (логика): коммиты ff6336b, 8d12671, 2f6b794, 4c447c7; test:foundation 1104/1104; на телефоне не проверено. Остальное — docs/ui/UIX_BACKLOG.json.
 - 2026-11-09 Health Connect: границы V1 изменены (AGENTS.md, README, projectbrief, LEGACY_CROSSWALK + дополнение владельца), ADR-059 APPROVED, распространение — APK «для своих», декларация Google Play отменена (заготовка сохранена); код не менялся.
 - 2026-11-09 Закрыты остальные открытые вопросы плана (закрытие записи без подтверждения, рисунки, сон, Google Play); gate Health Connect остаётся.
 - 2026-11-09 Ответы владельца на открытые вопросы плана внесены (ONLYFITS_IMPLEMENTATION_PLAN.md, UIX_BACKLOG.json, UI_STYLE_DECISIONS.md, ADR-059); разрешена библиотека Health Connect, gate — границы V1 и Google Play.
