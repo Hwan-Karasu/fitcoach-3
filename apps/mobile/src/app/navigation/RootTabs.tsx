@@ -86,9 +86,10 @@ export function RootTabs({
     Clients: { query: search.Clients.query, setQuery: (query) => patchSearch("Clients", { query }) },
     Archive: { query: search.Archive.query, setQuery: (query) => patchSearch("Archive", { query }) },
   }), [patchSearch, search]);
-  const headerSearch = (tab: keyof RootTabRoutes): RootHeaderSearch | undefined => tab === "Calendar" ? undefined : {
+  // У «Клиентов» поиск — в нижней пилюле экрана (UIX-02, UI-OWN-060); в шапке остаётся только у «Архива».
+  const headerSearch = (tab: keyof RootTabRoutes): RootHeaderSearch | undefined => tab !== "Archive" ? undefined : {
     open: search[tab].open, query: search[tab].query,
-    placeholder: tab === "Clients" ? "Поиск по клиентам" : "Поиск по архиву",
+    placeholder: "Поиск по архиву",
     onOpen: () => patchSearch(tab, { open: true }),
     onChangeQuery: (query) => patchSearch(tab, { query }),
     onClose: () => patchSearch(tab, { open: false, query: "" }),

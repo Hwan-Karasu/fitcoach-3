@@ -13,9 +13,15 @@ export { CREDITS_ENDING_MAX };
 export type RosterRing = "TODAY" | "WEEK" | "ENDING";
 
 export interface RosterSummary {
+  /** Сегодняшние записи без исхода, ещё не закончившиеся. */
   readonly today: number;
+  /** Записи недели пн–вс, кроме отменённых. */
   readonly week: number;
+  /** Клиенты с остатком абонемента 0…CREDITS_ENDING_MAX занятий. */
   readonly ending: number;
+  /** Клиенты, которые попадают под кольцо (доля дуги и число в списке). */
+  readonly todayClients: number;
+  readonly weekClients: number;
 }
 
 /** Числа трёх колец по видимым клиентам; нет данных — ноль, не ошибка. */
@@ -23,14 +29,18 @@ export function summarizeRoster(overview: RosterOverview | null | undefined, cli
   let today = 0;
   let week = 0;
   let ending = 0;
+  let todayClients = 0;
+  let weekClients = 0;
   for (const id of clientIds) {
     const facts = overview?.get(id);
     if (facts === undefined) continue;
     today += facts.todayCount ?? 0;
     week += facts.weekCount ?? 0;
     if (isCreditsEnding(facts)) ending += 1;
+    if (matchesRosterRing(facts, "TODAY")) todayClients += 1;
+    if (matchesRosterRing(facts, "WEEK")) weekClients += 1;
   }
-  return { today, week, ending };
+  return { today, week, ending, todayClients, weekClients };
 }
 
 function isCreditsEnding(facts: RosterClientOverview): boolean {

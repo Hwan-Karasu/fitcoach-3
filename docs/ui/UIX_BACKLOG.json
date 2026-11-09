@@ -16,8 +16,8 @@
       "state": "IN_PROGRESS",
       "title": "Клиенты: сводка, карточки, фильтры, пилюля поиска",
       "acceptance": "Три кольца с фильтром, карточка с равными плашками, именинник, лист фильтров; «Занятий на неделе» и правило «кончается абонемент» (осталось ≤ 3 занятий) с тестами на границе 3/4/0/«без учёта»; сложение фильтров",
-      "evidence": "Логика готова и покрыта тестами: CREDITS_ENDING_MAX=3 (shared/domain), summarizeRoster, фильтр кольца matchesRosterRing + presentClientRoster({ring}), поля обзора todayCount/weekCount/creditsAvailable, неделя пн–вс в rosterOverview; порог «Главной» = 3. test:foundation 1102/1102",
-      "remaining": "UI: три кольца, карточки с равными плашками, именинник, пилюля «фильтры · поиск · +», лист фильтров; подключение ring/summarizeRoster в ClientListsPreview; на телефоне не проверено"
+      "evidence": "Логика готова и покрыта тестами: CREDITS_ENDING_MAX=3 (shared/domain), summarizeRoster, фильтр кольца matchesRosterRing + presentClientRoster({ring}), поля обзора todayCount/weekCount/creditsAvailable, неделя пн–вс в rosterOverview; порог «Главной» = 3. test:foundation 1102/1102; UI среза b: RosterSummaryCard (три кольца, нажатие = фильтр), RosterSearchBar (нижняя пилюля: фильтры · поиск · +), лист фильтров с «Сортировкой» и «Показать N», шапка «Клиентов» без лупы; typecheck, lint, arch:check, test:foundation зелёные",
+      "remaining": "UI среза c: карточка клиента с равными плашками, именинник с рамкой и меткой «Через N дней»; проверка владельцем на телефоне (кольца, нижняя пилюля, лист, клавиатура)"
     },
     {
       "id": "UIX-03",

@@ -192,14 +192,14 @@ test("UIX-02: сводка дня — занятия сегодня и на не
   const fact = (over: Partial<RosterClientOverview>): RosterClientOverview => ({ metrics: [], restricted: false, restrictionsKnown: true,
     creditStatus: "UNKNOWN", todayStartMinute: null, todayEndMinute: null, ...over });
   const overview = new Map<string, RosterClientOverview>([
-    ["a", fact({ todayCount: 2, weekCount: 5, creditsAvailable: 3, creditStatus: "AVAILABLE" })],
+    ["a", fact({ todayCount: 2, todayStartMinute: 600, weekCount: 5, creditsAvailable: 3, creditStatus: "AVAILABLE" })],
     ["b", fact({ todayCount: 0, weekCount: 1, creditsAvailable: 4, creditStatus: "AVAILABLE" })],
-    ["c", fact({ todayCount: 1, weekCount: 1, creditsAvailable: 0, creditStatus: "EMPTY" })],
+    ["c", fact({ todayCount: 1, todayStartMinute: 700, weekCount: 1, creditsAvailable: 0, creditStatus: "EMPTY" })],
     ["d", fact({ creditsAvailable: null, creditStatus: "NOT_TRACKED" })],
   ]);
-  assert.deepEqual(summarizeRoster(overview, ["a", "b", "c", "d"]), { today: 3, week: 7, ending: 2 });
-  assert.deepEqual(summarizeRoster(overview, ["b", "d"]), { today: 0, week: 1, ending: 0 }, "только видимые клиенты");
-  assert.deepEqual(summarizeRoster(new Map(), ["a"]), { today: 0, week: 0, ending: 0 }, "нет данных — нули, не ошибка");
+  assert.deepEqual(summarizeRoster(overview, ["a", "b", "c", "d"]), { today: 3, week: 7, ending: 2, todayClients: 2, weekClients: 3 });
+  assert.deepEqual(summarizeRoster(overview, ["b", "d"]), { today: 0, week: 1, ending: 0, todayClients: 0, weekClients: 1 }, "только видимые клиенты");
+  assert.deepEqual(summarizeRoster(new Map(), ["a"]), { today: 0, week: 0, ending: 0, todayClients: 0, weekClients: 0 }, "нет данных — нули, не ошибка");
   assert.equal(CREDITS_ENDING_MAX, 3);
 });
 

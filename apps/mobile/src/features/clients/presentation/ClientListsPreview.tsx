@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { AppState, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import { Cake, CalendarClock, CalendarDays, Dumbbell, Flame, Footprints, Percent, PinOff, Plus, Scale, Ticket } from "lucide-react-native";
-import { AppButton, AppIconButton, ClientRosterCard, RosterGroup, ConfirmDialog, EmptyState, FilterPill, FloatingActionButton,
+import { Cake, CalendarClock, Dumbbell, Flame, Footprints, Percent, PinOff, Scale, Ticket } from "lucide-react-native";
+import { AppButton, AppIconButton, ClientRosterCard, RosterGroup, ConfirmDialog, EmptyState, FilterPill,
   InlineNotice,
   ListSectionHeader, DropdownMenu, SkeletonList, useHeaderScrollHandler, useHeaderSearch, useFocusGatedVersion,
   type DropdownOption } from "../../../shared/ui/components/public.ts";
@@ -16,8 +16,10 @@ import type { RosterMetricId, RosterOverview, RosterOverviewPort } from "../doma
 import { ageOn, formatArchivedSince, formatYears, localCalendarDate, permanentDeleteDescription, presentArchivedClients,
   presentClientRoster } from "../domain/ClientRosterPresentation.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
-import { EMPTY_ROSTER_FILTERS, rosterFilterCount, type ClientRosterFilters } from "../domain/ClientRosterFilters.ts";
+import { EMPTY_ROSTER_FILTERS, rosterFilterCount, summarizeRoster, type ClientRosterFilters, type RosterRing } from "../domain/ClientRosterFilters.ts";
 import { ClientRosterFiltersDialog } from "./ClientRosterFiltersDialog.tsx";
+import { RosterSearchBar } from "./RosterSearchBar.tsx";
+import { RosterSummaryCard } from "./RosterSummaryCard.tsx";
 
 function initialsOf(displayName: string): string {
   return displayName.trim().split(/\s+/u).slice(0, 2)
@@ -53,10 +55,6 @@ function ListLoadState({ snapshot, error, onRetry }: Readonly<{
   </>;
 }
 
-const sortOptions: readonly DropdownOption<RosterSortMode>[] = [
-  { value: "NAME", label: "Имя А–Я" },
-  { value: "RECENT", label: "Недавние" },
-];
 const archiveSortOptions: readonly DropdownOption<ArchiveSortMode>[] = [
   { value: "ARCHIVED_AT", label: "Недавно архивированные" },
   { value: "NAME", label: "Имя А–Я" },
@@ -117,11 +115,8 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
   const { query, setQuery } = useHeaderSearch();
   const [error, setError] = useState<string | null>(null);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
-  const [toolbarHeight, setToolbarHeight] = useState(52);
-  const [menu, setMenu] = useState<"sort" | "group" | null>(null);
-  const groupAnchor = useRef<View>(null);
-  const sortAnchor = useRef<View>(null);
-  const [todayOnly, setTodayOnly] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [ring, setRing] = useState<RosterRing | null>(null);
   const [filters, setFilters] = useState<ClientRosterFilters>(EMPTY_ROSTER_FILTERS);
   const filterCount = rosterFilterCount(filters);
   const onScroll = useHeaderScrollHandler();
@@ -162,20 +157,21 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
     setToday(localCalendarDate(new Date()));
   }, []));
 
-  const todayStarts = useMemo(() => {
-    if (!todayOnly) return null;
-    const starts = new Map<string, number>();
-    for (const [id, row] of overview ?? []) if (row.todayStartMinute !== null) starts.set(id, row.todayStartMinute);
-    return starts;
-  }, [overview, todayOnly]);
-  const factsPending = overview === null && (filters.health !== "ALL" || filters.credit !== "ALL");
-  const roster = useMemo(() => data === null || factsPending ? null : presentClientRoster({
+  const factsPending = overview === null && (filters.health !== "ALL" || filters.credit !== "ALL" || ring !== null);
+  const summary = useMemo(() => overview === null ? null : summarizeRoster(overview, activeIds), [overview, activeIds]);
+  const present = useCallback((next: ClientRosterFilters) => data === null ? null : presentClientRoster({
     rows: data.rows, search: query, sort: activeSort, today,
-    birthday: birthdaySettings, dismissals: data.dismissals, todayStarts,
-    filters, overview,
-  }), [activeSort, birthdaySettings, data, query, today, todayStarts, filters, overview, factsPending]);
+    birthday: birthdaySettings, dismissals: data.dismissals,
+    filters: next, overview, ring,
+  }), [activeSort, birthdaySettings, data, query, today, overview, ring]);
+  const roster = useMemo(() => factsPending ? null : present(filters), [factsPending, present, filters]);
   const visibleCount = (roster?.birthday.length ?? 0) + (roster?.recent ? 1 : 0)
     + (roster?.regular.length ?? 0);
+  const countFor = (next: ClientRosterFilters): number | null => {
+    if (overview === null && (next.health !== "ALL" || next.credit !== "ALL")) return null;
+    const shown = present(next);
+    return shown === null ? 0 : shown.birthday.length + (shown.recent ? 1 : 0) + shown.regular.length;
+  };
 
   const chooseActiveSort = async (mode: RosterSortMode) => {
     try { await repository.setRosterSort(mode); setError(null); }
@@ -224,63 +220,41 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
     );
   };
 
-  const sortLabel = sortOptions.find((option) => option.value === activeSort)?.label ?? "Имя А–Я";
+  const narrowed = filterCount > 0 || ring !== null;
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
-      {/* Фильтры висят поверх списка без собственного фона: карточки проходят под ними (UI-OWN-020). */}
-      <View style={styles.toolbar} pointerEvents="box-none"
-        onLayout={(event) => setToolbarHeight(event.nativeEvent.layout.height)}>
-        <View style={styles.pills}>
-          <FilterPill label="Сегодня" selected={todayOnly}
-            accessibilityLabel={todayOnly ? "Сегодня по расписанию, включён" : "Сегодня по расписанию"}
-            icon={(color) => <CalendarDays size={16} color={color} strokeWidth={1.8} />}
-            onPress={() => setTodayOnly((value) => !value)} />
-          <FilterPill grow menu selected={filterCount > 0} expanded={menu === "group"} anchorRef={groupAnchor}
-            label={filterCount > 0 ? `Фильтры · ${filterCount}` : "Все\nклиенты"} accessibilityLabel={`Фильтры клиентов: ${filterCount === 0 ? "все клиенты" : `выбрано ${filterCount}`}`}
-            onPress={() => setMenu("group")} />
-          <FilterPill menu expanded={menu === "sort"} anchorRef={sortAnchor} label={todayOnly ? "Время" : sortLabel}
-            accessibilityLabel={todayOnly ? "Сортировка: по времени записи" : `Сортировка: ${sortLabel}`}
-            onPress={() => setMenu("sort")} />
-        </View>
-      </View>
-      <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: toolbarHeight }]}
+      <ScrollView style={styles.screen} contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled" onScroll={onScroll} scrollEventThrottle={16}
         onScrollEndDrag={onScroll} onMomentumScrollEnd={onScroll}>
+        <RosterSummaryCard summary={summary} activeCount={activeIds.length} ring={ring}
+          onToggle={(next) => setRing((current) => current === next ? null : next)} />
         <ListLoadState snapshot={snapshot} error={error}
           onRetry={() => { setError(null); readModel.refresh(); }} />
         {snapshot.status === "loading" ? <SkeletonList label="Загружаем клиентов" /> : null}
         {factsPending ? <SkeletonList label="Загружаем данные фильтров" /> : null}
         {roster !== null && visibleCount === 0 ? (
-          filterCount > 0
+          narrowed
             ? <EmptyState reason="no-match" title="Никого не найдено" body="Нет клиентов, подходящих под выбранные условия."
-              action={{ label: "Сбросить фильтры", onPress: () => { setFilters(EMPTY_ROSTER_FILTERS); setTodayOnly(false); setQuery(""); } }} />
-            : roster.todayOnly
-            ? <EmptyState reason="no-match" title="Сегодня по расписанию никого"
-              body="Нет записей, которые ещё не закончились." action={{ label: "Все клиенты", onPress: () => setTodayOnly(false) }} />
+              action={{ label: "Сбросить фильтры", onPress: () => { setFilters(EMPTY_ROSTER_FILTERS); setRing(null); setQuery(""); } }} />
             : query.trim()
               ? <EmptyState reason="no-match" title="Ничего не найдено" body="Попробуйте другое имя или очистите поиск."
                 action={{ label: "Очистить поиск", onPress: () => setQuery("") }} />
               : <EmptyState reason="no-data" title="Клиентов пока нет" body="Создайте первую карточку клиента."
                 action={{ label: "Создать карточку клиента", onPress: onOpenCreate }} />
         ) : null}
-        {roster?.todayOnly && visibleCount > 0 ? <ListSectionHeader title="Сегодня по расписанию" count={visibleCount} /> : null}
-        {roster?.searching && !roster.todayOnly && visibleCount > 0 ? <ListSectionHeader title="Найдено" count={visibleCount} /> : null}
-        {roster && roster.birthday.length > 0 ? <ListSectionHeader accent title="Дни рождения" count={roster.birthday.length} /> : null}
+        {roster && visibleCount > 0 && (roster.searching || narrowed)
+          ? <ListSectionHeader title="Найдено" count={visibleCount} /> : null}
         {roster?.birthday.map((entry) => renderRow(entry.client, entry.birthdayText,
           entry.birthdayOccurrence, true))}
-        {roster?.recent ? <ListSectionHeader title="Недавно открывали" count={1} /> : null}
         {roster?.recent ? renderRow(roster.recent.client, roster.recent.birthdayBadge === null ? null
           : roster.recent.birthdayText, null, true) : null}
-        {roster && !roster.searching && !roster.todayOnly && roster.regular.length > 0
-          ? <ListSectionHeader title={filterCount > 0 ? "Клиенты" : "Все клиенты"} count={roster.regular.length} /> : null}
         <RosterGroup>{roster?.regular.map((entry) => renderRow(entry.client, entry.birthdayBadge === null ? null : entry.birthdayText))}</RosterGroup>
       </ScrollView>
-      <FloatingActionButton label="Создать карточку клиента" onPress={onOpenCreate}
-        icon={(color) => <Plus size={26} color={color} strokeWidth={2.2} />} />
-      <DropdownMenu visible={menu === "sort"} anchor={sortAnchor} title="Сортировка" options={sortOptions} selected={activeSort}
-        note={todayOnly ? "Пока включён «Сегодня», список идёт по времени записи." : undefined}
-        onSelect={(mode) => { void chooseActiveSort(mode); }} onClose={() => setMenu(null)} />
-      <ClientRosterFiltersDialog visible={menu === "group"} filters={filters} onApply={setFilters} onClose={() => setMenu(null)} />
+      <RosterSearchBar query={query} onChangeQuery={setQuery} filterCount={filterCount}
+        onOpenFilters={() => setFiltersOpen(true)} onCreate={onOpenCreate} />
+      <ClientRosterFiltersDialog visible={filtersOpen} filters={filters} sort={activeSort} countFor={countFor}
+        onApply={setFilters} onSort={(mode) => { void chooseActiveSort(mode); }}
+        onReset={() => { setFilters(EMPTY_ROSTER_FILTERS); setRing(null); }} onClose={() => setFiltersOpen(false)} />
     </View>
   );
 }
@@ -441,10 +415,11 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   archiveAction: { flexGrow: 1, flexBasis: 0 },
   // Нижний отступ — чтобы последняя карточка не уходила под плавающую кнопку.
+  // Архив: тулбар с пилюлями остаётся до UIX-03.
   toolbar: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, paddingHorizontal: 16, paddingTop: 4,
     paddingBottom: 8, gap: 8 },
-  content: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 88, gap: 8 },
   pills: { flexDirection: "row", alignItems: "center", gap: 8 },
+  content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 96, gap: 8 },
   filters: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   message: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   card: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 12 },
