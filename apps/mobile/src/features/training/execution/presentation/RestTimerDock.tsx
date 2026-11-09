@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions, type StyleProp, type TextStyle } from "react-native";
+import { AppState, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions, type StyleProp, type TextStyle } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { Easing, FadeIn, SlideInLeft, SlideInRight, SlideOutLeft, SlideOutRight, useAnimatedProps, useAnimatedStyle, useFrameCallback,
   useSharedValue, withSpring, withTiming } from "react-native-reanimated";
@@ -10,11 +10,12 @@ import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Pause, Play, SkipFor
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { ADJUST_STEP_SEC, isFinished, isPaused, nextFinishAt, remainingSec, type RestTimer } from "../domain/RestTimerRules.ts";
+import { RestFinishTracker } from "../domain/RestFinishTracker.ts";
 import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
 import { useBottomBarHeight, useEditorDockHeight } from "../../../../shared/ui/components/public.ts";
 import { restTimerDiagnostics } from "../../../../shared/diagnostics/RestTimerDiagnostics.ts";
 
-/** Сколько секунд закончившийся таймер остаётся на панели с надписью «Готово». */
+/** Сколько секунд закончившийся таймер остаётся на панели с надписью «Отдых окончен». */
 const FINISHED_VISIBLE_MS = 4000;
 /** Отступ от края экрана, когда нижней панели вкладок на экране нет. */
 const EDGE_GAP = 8;
@@ -41,14 +42,20 @@ const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
  * пока идёт отдых, JS-поток панель не перерисовывает и не мешает длинным правкам плана (PERF-REST-DOCK). Секунды сравниваются
  * каждый кадр, текст меняется раз в секунду. На паузе кадры не идут — остаток постоянный.
  */
-function RestClock({ timer, style }: Readonly<{ timer: RestTimer; style: StyleProp<TextStyle> }>) {
+function RestClock({ timer, style, onElapsed }: Readonly<{ timer: RestTimer; style: StyleProp<TextStyle>; onElapsed?: () => void }>) {
   const endAt = useSharedValue(timer.endAt);
   const seconds = useSharedValue(remainingSec(timer, Date.now()));
   const paused = timer.pausedLeftMs !== null;
+  // Переход через ноль замечает UI-поток и будит JS: «Отдых окончен» не ждёт JS-таймера, который на Android стоит, пока экран погашен.
+  const elapsedFor = useSharedValue(-1);
   const frame = useFrameCallback(() => {
     "worklet";
     const left = Math.max(0, Math.ceil((endAt.value - Date.now()) / 1000));
     if (left !== seconds.value) seconds.value = left;
+    if (left === 0 && elapsedFor.value !== endAt.value && onElapsed !== undefined) {
+      elapsedFor.value = endAt.value;
+      scheduleOnRN(onElapsed);
+    }
   }, !paused);
   useEffect(() => {
     endAt.value = timer.endAt;
@@ -83,8 +90,8 @@ function restState(timer: RestTimer, finished: boolean): string {
 }
 
 /** Перерисовывается только при смене своего таймера, окончания или раскладки — не каждую секунду (PERF-REST-DOCK). */
-const TimerCard = memo(function TimerCard({ timer, finished, compact, nearest, timers, onOpen }: Readonly<{ timer: RestTimer; finished: boolean;
-  compact: boolean; nearest: boolean; timers: RestTimersPort; onOpen: (timer: RestTimer) => void }>) {
+const TimerCard = memo(function TimerCard({ timer, finished, compact, nearest, timers, onOpen, onElapsed }: Readonly<{ timer: RestTimer; finished: boolean;
+  compact: boolean; nearest: boolean; timers: RestTimersPort; onOpen: (timer: RestTimer) => void; onElapsed: () => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const paused = isPaused(timer);
@@ -103,9 +110,9 @@ const TimerCard = memo(function TimerCard({ timer, finished, compact, nearest, t
   const skip = button("skip", "Пропустить отдых", () => { timers.skip(timer.id).catch(() => undefined); }, <SkipForward size={18} color={colors.onAccentFill} strokeWidth={2} />, true);
   const timeStyle = [styles.time, compact && styles.timeCompact, { color: timeColor }];
   // Замер REST-PERF-1: с выключенным отсчётом — остаток на момент перерисовки, без покадрового обновления.
-  const timeView = finished ? <Text numberOfLines={1} style={timeStyle}>Готово</Text>
+  const timeView = finished ? <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[timeStyle, styles.timeDone]}>Отдых окончен</Text>
     : restTimerDiagnostics.clockDisabled ? <Text numberOfLines={1} style={timeStyle}>{clock(remainingSec(timer, Date.now()))}</Text>
-      : <RestClock timer={timer} style={timeStyle} />;
+      : <RestClock timer={timer} style={timeStyle} onElapsed={onElapsed} />;
   return (
     <Pressable accessibilityRole="button" accessibilityLiveRegion="polite"
       accessibilityLabel={`${timer.clientName}, ${timer.exerciseName}. ${restState(timer, finished)}. Открыть тренировку`}
@@ -143,7 +150,7 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
   const [now, setNow] = useState(() => Date.now());
   const [side, setSide] = useState<Side | null>(null);
   const [showAll, setShowAll] = useState(false);
-  const signalled = useRef(new Set<string>());
+  const tracker = useRef(new RestFinishTracker()).current;
   const pendingDismiss = useRef(new Set<ReturnType<typeof setTimeout>>());
   const offset = useSharedValue(0);
   const { width: screenWidth } = useWindowDimensions();
@@ -153,13 +160,20 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
   const openRef = useRef(onOpen);
   openRef.current = onOpen;
   const open = useCallback((timer: RestTimer) => openRef.current(timer), []);
+  const wake = useCallback(() => setNow(Date.now()), []);
+
+  // Возврат из фона: JS-таймер мог стоять, пока приложение не было активно, — окончания замечаются сразу.
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => { if (state === "active") setNow(Date.now()); });
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => () => {
     for (const handle of pendingDismiss.current) clearTimeout(handle);
     pendingDismiss.current.clear();
   }, []);
 
-  // Цифры идут на UI-потоке (RestClock); JS просыпается только к ближайшему окончанию — показать «Готово» и дать вибрацию.
+  // Цифры идут на UI-потоке (RestClock); JS просыпается только к ближайшему окончанию — показать «Отдых окончен» и дать вибрацию.
   useEffect(() => {
     const at = nextFinishAt(list, now);
     if (at === null) return undefined;
@@ -172,25 +186,23 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
   useEffect(() => { if (list.length <= SIDE_BY_SIDE) setShowAll(false); }, [list.length]);
 
   // Окончание в открытом приложении: одна вибрация на всю пачку закончившихся (сигналы не накладываются), панель разворачивается,
-  // через несколько секунд каждый закончившийся таймер уходит. Скрытые за «Ещё N» тоже сигналят.
+  // через несколько секунд каждый закончившийся таймер уходит. Скрытые за «Ещё N» тоже сигналят. Каждое окончание — ровно один раз
+  // (RestFinishTracker), откуда бы его ни заметили; продлённый «+15» таймер остаётся на панели и заканчивается заново.
   useEffect(() => {
-    // Ушедший из списка таймер забывается: набор не растёт за сессию, а перезапущенный таймер сигналит заново.
-    const present = new Set(list.map((timer) => timer.id));
-    for (const id of signalled.current) if (!present.has(id)) signalled.current.delete(id);
-    const fresh = list.filter((timer) => isFinished(timer, now) && !signalled.current.has(timer.id));
+    const fresh = tracker.observe(list, Math.max(now, Date.now()));
     if (fresh.length === 0) return;
+    setNow(Date.now());
     setSide(null);
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
     for (const timer of fresh) {
-      signalled.current.add(timer.id);
-      const id = timer.id;
+      const { id, endAt } = timer;
       const handle = setTimeout(() => {
         pendingDismiss.current.delete(handle);
-        void timers.dismiss(id).catch(() => undefined);
+        void timers.dismissFinished(id, endAt).catch(() => undefined);
       }, FINISHED_VISIBLE_MS);
       pendingDismiss.current.add(handle);
     }
-  }, [list, now, timers]);
+  }, [list, now, timers, tracker]);
 
   // Сдвиг от жеста обнуляется до смены вида: иначе свёрнутая «таблетка» унаследует смещение и окажется за краем экрана.
   const collapse = useCallback((next: Side) => { offset.value = 0; setSide(next); }, [offset]);
@@ -243,7 +255,7 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
                 { backgroundColor: colors.surface, borderColor: finished ? colors.success : colors.border }]}>
               {side === "right" ? <Hint size={16} color={colors.accentInk} strokeWidth={2.5} /> : null}
               {isPaused(first) ? <Pause size={14} color={colors.textSecondary} strokeWidth={2.5} /> : null}
-              {finished ? <Text style={pillStyle} numberOfLines={1}>Готово</Text> : <RestClock timer={first} style={pillStyle} />}
+              {finished ? <Text style={pillStyle} numberOfLines={1}>Отдых окончен</Text> : <RestClock timer={first} style={pillStyle} onElapsed={wake} />}
               {more > 0 ? <Text style={[styles.pillMore, { color: colors.accentInk }]}>{`+${more}`}</Text> : null}
               {side === "left" ? <Hint size={16} color={colors.accentInk} strokeWidth={2.5} /> : null}
             </Pressable>
@@ -261,7 +273,7 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
         <Animated.View entering={FadeIn.duration(PILL_MS).easing(EASE)} style={panelStyle}>
           <View style={styles.row}>
             {visible.map((timer) => <TimerCard key={timer.id} timer={timer} finished={isFinished(timer, now)} compact={visible.length > 1}
-              nearest={timer.id === nearest?.id && ordered.length > 1} timers={timers} onOpen={open} />)}
+              nearest={timer.id === nearest?.id && ordered.length > 1} timers={timers} onOpen={open} onElapsed={wake} />)}
           </View>
           {hidden.length > 0 ? (
             <Pressable accessibilityRole="button" accessibilityState={{ expanded: showAll }}
@@ -274,7 +286,7 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
           ) : null}
           {showAll ? <View style={styles.rest}>
             {hidden.map((timer) => <TimerCard key={timer.id} timer={timer} finished={isFinished(timer, now)} compact={false}
-              nearest={timer.id === nearest?.id} timers={timers} onOpen={open} />)}
+              nearest={timer.id === nearest?.id} timers={timers} onOpen={open} onElapsed={wake} />)}
           </View> : null}
           <ChevronLeft size={14} color={colors.textMuted} strokeWidth={2.5} style={styles.hintLeft} />
           <ChevronRight size={14} color={colors.textMuted} strokeWidth={2.5} style={styles.hintRight} />
@@ -300,6 +312,7 @@ const styles = StyleSheet.create({
   /** Поле отсчёта выглядит как текст: без отступов поля ввода Android. */
   clockInput: { padding: 0, margin: 0, borderWidth: 0, backgroundColor: "transparent" },
   time: { flex: 1, minWidth: 64, textAlign: "center", fontFamily: fonts.bold, fontSize: 20, lineHeight: 26 },
+  timeDone: { flex: 1, minWidth: 0 },
   timeCompact: { flex: 0, fontSize: 17, lineHeight: 21 },
   button: { flex: 1, minWidth: 44, minHeight: 44, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   buttonCompact: { minWidth: 0, minHeight: 34, borderRadius: 8 },

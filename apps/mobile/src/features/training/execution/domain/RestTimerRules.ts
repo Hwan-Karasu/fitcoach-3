@@ -55,9 +55,13 @@ export const isPaused = (timer: RestTimer): boolean => timer.pausedLeftMs !== nu
 /** Закончился: идущий таймер дошёл до `endAt`. Приостановленный не заканчивается. */
 export const isFinished = (timer: RestTimer, now: number): boolean => timer.pausedLeftMs === null && timer.endAt <= now;
 
-/** «+15 / −15» (§48.64): сдвигает окончание (на паузе — остаток), но не раньше текущего момента; на паузе остаётся не меньше секунды. */
+/**
+ * «+15 / −15» (§48.64): сдвигает окончание (на паузе — остаток), но не раньше текущего момента; на паузе остаётся не меньше секунды.
+ * Закончившийся таймер: «−15» его не меняет, «+15» продолжает отдых от текущего момента (REST-END-1).
+ */
 export function adjustTimer(timer: RestTimer, deltaSec: number, now: number): RestTimer {
   if (timer.pausedLeftMs !== null) return { ...timer, pausedLeftMs: Math.max(1000, timer.pausedLeftMs + deltaSec * 1000) };
+  if (timer.endAt <= now) return deltaSec > 0 ? { ...timer, endAt: now + deltaSec * 1000 } : timer;
   return { ...timer, endAt: Math.max(now, timer.endAt + deltaSec * 1000) };
 }
 

@@ -39,5 +39,7 @@ export interface RestTimersPort {
   skip(id: string): Promise<void>;
   /** Убрать закончившийся таймер с панели. */
   dismiss(id: string): Promise<void>;
+  /** Убрать таймер, только если он всё ещё закончился с этим `endAt`: продлённый («+15») или перезапущенный остаётся. */
+  dismissFinished(id: string, endAt: number): Promise<void>;
   subscribe(listener: () => void): () => void;
 }

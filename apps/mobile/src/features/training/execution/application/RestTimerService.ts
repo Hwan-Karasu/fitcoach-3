@@ -1,5 +1,5 @@
 import type { RestSignalPort, RestTimerStorePort, RestTimersPort } from "../domain/RestTimerPorts.ts";
-import { adjustTimer, pauseTimer, resumeTimer, runningTimers, startTimer, type RestTimer, type RestTimerStart } from "../domain/RestTimerRules.ts";
+import { adjustTimer, isFinished, pauseTimer, resumeTimer, runningTimers, startTimer, type RestTimer, type RestTimerStart } from "../domain/RestTimerRules.ts";
 
 const defaultId = () => `rt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -193,10 +193,14 @@ export class RestTimerService implements RestTimersPort {
     return this.remove(id);
   }
 
-  private remove(id: string): Promise<void> {
+  dismissFinished(id: string, endAt: number): Promise<void> {
+    return this.remove(id, (timer) => timer.endAt === endAt && isFinished(timer, this.now()));
+  }
+
+  private remove(id: string, when: (timer: RestTimer) => boolean = () => true): Promise<void> {
     return this.enqueue(async () => {
       const current = this.timers.find((timer) => timer.id === id);
-      if (current === undefined) return;
+      if (current === undefined || !when(current)) return;
       this.publish(this.timers.filter((timer) => timer.id !== id));
       await this.store.removeTimer(id);
       await this.cancelSignal(current.signalId);

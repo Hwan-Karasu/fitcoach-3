@@ -7,6 +7,7 @@ import { RestTimerService } from "../apps/mobile/src/features/training/execution
 import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParticipant } from
   "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 import type { RestSignalPort } from "../apps/mobile/src/features/training/execution/domain/RestTimerPorts.ts";
+import { RestFinishTracker } from "../apps/mobile/src/features/training/execution/domain/RestFinishTracker.ts";
 import { adjustTimer, isFinished, nextFinishAt, pauseTimer, remainingSec, resumeTimer, runningTimers, startTimer } from
   "../apps/mobile/src/features/training/execution/domain/RestTimerRules.ts";
 import { DEV_TRAINING_EXECUTION_LEDGER, devTrainingExecutionCatalog } from
@@ -397,4 +398,48 @@ test("AUD-03 сбой записи в хранилище откатывает э
     assert.notEqual(service.list()[0]!.pausedLeftMs, null, "продолжение не показано, раз не записано");
     assert.equal((await execution.listTimers())[0]!.pausedLeftMs, service.list()[0]!.pausedLeftMs, "экран и база совпадают");
   } finally { await close(); }
+});
+
+test("REST-END-1 «+15» у закончившегося продолжает отдых от текущего момента, «−15» его не меняет", () => {
+  const { timer } = startTimer([], bench, "t1", T0);
+  const late = T0 + 180_000 + 60_000;
+  assert.equal(adjustTimer(timer, 15, late).endAt, late + 15_000);
+  assert.equal(adjustTimer(timer, -15, late), timer);
+  // Идущий таймер — как раньше: сдвиг от прежнего окончания.
+  assert.equal(adjustTimer(timer, 15, T0 + 1000).endAt, timer.endAt + 15_000);
+});
+
+test("REST-END-1 каждое окончание отдаётся один раз из любого источника; продлённый таймер заканчивается заново; ушедший забывается", () => {
+  const tracker = new RestFinishTracker();
+  const a = startTimer([], bench, "a", T0).timer;
+  const b = startTimer([], { ...bench, exerciseKey: "pe-squat" }, "b", T0).timer;
+  assert.equal(tracker.observe([a, b], T0 + 1000).length, 0);
+  // Три источника замечают окончание двух таймеров одновременно: пачка одна.
+  assert.deepEqual(tracker.observe([a, b], a.endAt).map((item) => item.id), ["a", "b"]);
+  assert.equal(tracker.observe([a, b], a.endAt + 5).length, 0);
+  assert.equal(tracker.observe([a, b], a.endAt + 900).length, 0);
+  // «+15» после окончания: другое окончание — снова один сигнал.
+  const extended = adjustTimer(a, 15, a.endAt + 2000);
+  assert.equal(tracker.observe([extended, b], a.endAt + 2000).length, 0);
+  assert.deepEqual(tracker.observe([extended, b], extended.endAt).map((item) => item.id), ["a"]);
+  // Таймер ушёл и вернулся (перезапуск того же id с тем же endAt невозможен, но память не растёт).
+  assert.equal(tracker.observe([], extended.endAt).length, 0);
+  assert.deepEqual(tracker.observe([extended], extended.endAt).map((item) => item.id), ["a"]);
+});
+
+test("REST-END-1 автоскрытие убирает только закончившийся с тем же окончанием: продлённый «+15» остаётся", async () => {
+  let now = T0;
+  const stored = new Map<string, import("../apps/mobile/src/features/training/execution/domain/RestTimerRules.ts").RestTimer>();
+  const service = new RestTimerService({ listTimers: async () => [...stored.values()], removeTimer: async (id) => { stored.delete(id); },
+    putTimer: async (timer) => { stored.set(timer.id, timer); } }, fakeSignal().port, () => now, () => "t1");
+  await service.start(bench);
+  const endAt = service.list()[0]!.endAt;
+  now = endAt + 100;
+  await service.adjust("t1", 15);
+  await service.dismissFinished("t1", endAt);
+  assert.equal(service.list().length, 1, "продлённый таймер не скрыт");
+  now = service.list()[0]!.endAt + 10;
+  await service.dismissFinished("t1", service.list()[0]!.endAt);
+  assert.equal(service.list().length, 0);
+  await service.idle();
 });
