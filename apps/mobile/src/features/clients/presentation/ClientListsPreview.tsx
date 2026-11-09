@@ -281,6 +281,10 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
   const [busyId, setBusyId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ClientDeletionManifest | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Пока лист удаления закрывается, заголовок и текст не пустеют.
+  const lastDelete = useRef<ClientDeletionManifest | null>(null);
+  if (pendingDelete !== null) lastDelete.current = pendingDelete;
+  const shownDelete = pendingDelete ?? lastDelete.current;
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const snapshot = useSyncExternalStore(readModel.subscribe, readModel.getSnapshot,
@@ -392,16 +396,16 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
       <BottomSheet visible={sortOpen} title="Сортировка архива" onClose={() => setSortOpen(false)}
         footer={error === null ? undefined : <Text accessibilityRole="alert" style={[styles.message, { color: colors.danger, textAlign: "center" }]}>{error}</Text>}>
         <ChoiceGrid group="Сортировка архива" columns={2} selected={[sort]} items={archiveSortOptions.map((option) => ({ id: option.value, label: option.label }))}
-          onPress={(id) => { void chooseSort(id as ArchiveSortMode); }} />
+          onPress={(id) => { void chooseSort(id as ArchiveSortMode); setSortOpen(false); }} />
       </BottomSheet>
-      <BottomSheet visible={pendingDelete !== null} title={`Удалить «${pendingDelete?.displayName ?? ""}» окончательно?`}
+      <BottomSheet visible={pendingDelete !== null} title={`Удалить «${shownDelete?.displayName ?? ""}» окончательно?`}
         onClose={() => { if (!deleting) setPendingDelete(null); }}
         footer={<View style={styles.actions}>
           <View style={styles.actionRow}><AppButton variant="secondary" label="Отмена" disabled={deleting} onPress={() => setPendingDelete(null)} /></View>
           <View style={styles.actionRow}><AppButton variant="destructive" label="Удалить окончательно" busy={deleting}
             onPress={() => { void confirmDelete(); }} /></View>
         </View>}>
-        <Text style={[styles.message, { color: colors.textPrimary }]}>{pendingDelete === null ? "" : permanentDeleteDescription(pendingDelete)}</Text>
+        <Text style={[styles.message, { color: colors.textPrimary }]}>{shownDelete === null ? "" : permanentDeleteDescription(shownDelete)}</Text>
       </BottomSheet>
     </View>
   );
@@ -416,7 +420,7 @@ const styles = StyleSheet.create({
   actions: { flexDirection: "row", gap: 8 },
   actionsStacked: { flexDirection: "column" },
   actionRow: { flex: 1, minWidth: 0 },
-  action: { minHeight: 44, borderRadius: 22, paddingHorizontal: 10, alignItems: "center", justifyContent: "center" },
+  action: { minHeight: 48, borderRadius: 24, paddingHorizontal: 10, alignItems: "center", justifyContent: "center" },
   actionText: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17, textAlign: "center" },
   identityRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   identityMain: { flex: 1, minHeight: 52, flexDirection: "row", alignItems: "center", gap: 12 },

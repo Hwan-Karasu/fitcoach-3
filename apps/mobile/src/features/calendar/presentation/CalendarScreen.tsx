@@ -119,6 +119,10 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
   const [sharing, setSharing] = useState(false);
   const [timePicker, setTimePicker] = useState<"start" | "end" | null>(null);
   const [editor, setEditor] = useState<OpenAppointmentParams | null>(null);
+  // Пока лист уезжает вниз, он показывает прежнее содержимое, а не пустое «Новая запись».
+  const lastEditor = useRef<OpenAppointmentParams | null>(null);
+  if (editor !== null) lastEditor.current = editor;
+  const shownEditor = editor ?? lastEditor.current;
   const [dutyDay, setDutyDay] = useState<LocalDate | null>(null);
   const [showHint, setShowHint] = useState(false);
   const posterRef = useRef<View>(null);
@@ -457,25 +461,26 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
       <DutyDaySheet date={dutyDay} repository={repository} window={dayWindow} onClose={() => setDutyDay(null)} />
 
       {/* Запись открывается окном поверх календаря, а не отдельным экраном (решение владельца). */}
-      <Modal visible={editor !== null} transparent animationType="fade" statusBarTranslucent
+      <Modal visible={editor !== null} transparent animationType="slide" statusBarTranslucent
         onRequestClose={() => setEditor(null)}>
         <Pressable accessibilityLabel="Закрыть запись" style={[StyleSheet.absoluteFill, styles.sheetScrim]}
           onPress={() => setEditor(null)} />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={[styles.sheetFrame, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]} pointerEvents="box-none">
-        <View accessibilityViewIsModal style={[styles.sheet, { backgroundColor: colors.canvas, borderColor: colors.border }]}>
-          <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
+          style={[styles.sheetFrame, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">
+        <View accessibilityViewIsModal style={[styles.sheet, { backgroundColor: colors.canvas, paddingBottom: insets.bottom }]}>
+          <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+          <View style={styles.sheetHeader}>
             <Text accessibilityRole="header" style={[styles.sheetTitle, { color: colors.textPrimary }]}>
-              {editor?.appointmentId ? "Запись" : "Новая запись"}
+              {shownEditor?.appointmentId ? "Запись" : "Новая запись"}
             </Text>
             <AppIconButton compact label="Закрыть" icon={<X size={22} color={colors.textPrimary} strokeWidth={1.8} />}
               onPress={() => setEditor(null)} />
           </View>
-          {editor !== null ? (
+          {shownEditor !== null ? (
             <View style={styles.sheetBody}>
               <AppointmentEditorScreen repository={repository} participants={participants} credit={credit}
-                appointmentId={editor.appointmentId} localDate={editor.localDate} startMinute={editor.startMinute}
-                durationMinutes={editor.durationMinutes} onClose={() => setEditor(null)}
+                appointmentId={shownEditor.appointmentId} localDate={shownEditor.localDate} startMinute={shownEditor.startMinute}
+                durationMinutes={shownEditor.durationMinutes} onClose={() => setEditor(null)}
                 onCreateClientFromGuest={onCreateClientFromGuest === undefined ? undefined
                   : (request) => { setEditor(null); onCreateClientFromGuest(request); }} />
             </View>
@@ -519,10 +524,11 @@ const styles = StyleSheet.create({
   hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, paddingHorizontal: 8 },
   helpButton: { width: 44, minHeight: 44, borderWidth: 2, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   sheetScrim: { backgroundColor: "rgba(0,0,0,0.45)" },
-  sheetFrame: { flex: 1, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
-  sheet: { height: "90%", width: "100%", maxWidth: 440, borderRadius: 20, borderWidth: 1, overflow: "hidden" },
+  sheetFrame: { flex: 1, justifyContent: "flex-end" },
+  sheet: { height: "92%", width: "100%", borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden" },
+  sheetHandle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, marginTop: 8 },
   sheetHeader: { minHeight: 44, paddingLeft: 12, paddingRight: 4, flexDirection: "row", alignItems: "center",
-    justifyContent: "space-between", borderBottomWidth: 1 },
+    justifyContent: "space-between" },
   sheetTitle: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
   sheetBody: { flex: 1 },
 });

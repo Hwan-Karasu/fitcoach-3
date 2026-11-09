@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { AppButton, ChoiceSegments, ConfirmDialog, InlineNotice, LoadingState, SearchField, SelectionChip, StatusTag,
-  TextField } from "../../../shared/ui/components/public.ts";
+import { CalendarDays, Clock } from "lucide-react-native";
+import { AppButton, AppSwitch, ChoiceGrid, ConfirmDialog, InlineNotice, LoadingState, SearchField, SelectionChip, StatusTag,
+  TextField, TimeWheelPicker, pickDate } from "../../../shared/ui/components/public.ts";
+import { shadow } from "../../../shared/ui/theme/style.ts";
 import { PrototypeScreen, SectionHeading } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { APPOINTMENT_DURATIONS, SLOT_MINUTES, type Appointment, type AppointmentInput, type AppointmentOutcome, type CalendarSettings,
@@ -24,11 +26,21 @@ interface Loaded {
   readonly firstFree: number;
 }
 
-function ParticipantSearch({ query, onQuery, matches, selectedId, onSelect, label, disabled = false }: Readonly<{
+/** Имя с акцентом на совпавшей части запроса (поиск без учёта регистра). */
+function MatchedName({ name, needle, accent }: Readonly<{ name: string; needle: string; accent: string }>) {
+  const at = needle === "" ? -1 : name.toLocaleLowerCase("ru").indexOf(needle.toLocaleLowerCase("ru"));
+  if (at < 0) return <>{name}</>;
+  return <>{name.slice(0, at)}<Text style={{ color: accent, fontFamily: fonts.bold }}>{name.slice(at, at + needle.length)}</Text>{name.slice(at + needle.length)}</>;
+}
+
+function ParticipantSearch({ query, onQuery, matches, selectedId, onSelect, label, disabled = false, guestRow }: Readonly<{
   query: string; onQuery: (value: string) => void; matches: readonly CalendarParticipant[];
   selectedId: string | null; onSelect: (id: string) => void; label: string; disabled?: boolean;
+  /** Последняя строка списка: «Записать как гостя «имя»» — запись без карточки клиента. */
+  guestRow?: Readonly<{ selected: boolean; onPick: () => void }>;
 }>) {
   const { palette: { tokens: colors } } = usePrototypeTheme();
+  const needle = query.trim();
   return <View style={styles.search} pointerEvents={disabled ? "none" : "auto"}>
     <SearchField accessibilityLabel={label} query={query} onChangeQuery={onQuery} />
     {query.trim().length > 0 ? <View style={[styles.results, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -37,9 +49,15 @@ function ParticipantSearch({ query, onQuery, matches, selectedId, onSelect, labe
           accessibilityLabel={person.displayName} accessibilityState={{ selected: selectedId === person.id }}
           onPress={() => { onSelect(person.id); Keyboard.dismiss(); }}
           style={({ pressed }) => [styles.result, { backgroundColor: pressed || selectedId === person.id ? colors.accentSoft : "transparent" }]}>
-          <Text style={[styles.resultText, { color: colors.textPrimary }]}>{person.emoji ? `${person.emoji} ` : ""}{person.displayName}</Text>
+          <Text style={[styles.resultText, { color: colors.textPrimary }]}>{person.emoji ? `${person.emoji} ` : ""}<MatchedName name={person.displayName} needle={needle}
+            accent={colors.accentInk} /></Text>
         </Pressable>)}
-        {matches.length === 0 ? <Text style={[styles.resultText, styles.result, { color: colors.textSecondary }]}>Никто не найден</Text> : null}
+        {guestRow === undefined ? matches.length === 0 ? <Text style={[styles.resultText, styles.result, { color: colors.textSecondary }]}>Никто не найден</Text> : null
+          : <Pressable accessibilityRole="button" accessibilityLabel={`Записать как гостя: ${needle}`} accessibilityState={{ selected: guestRow.selected }}
+            onPress={() => { guestRow.onPick(); Keyboard.dismiss(); }}
+            style={({ pressed }) => [styles.result, { backgroundColor: pressed || guestRow.selected ? colors.accentSoft : "transparent" }]}>
+            <Text numberOfLines={1} style={[styles.resultText, { color: colors.accentInk }]}>Записать как гостя «{needle}»</Text>
+          </Pressable>}
       </ScrollView>
     </View> : null}
   </View>;
@@ -93,6 +111,7 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
   const [creditInfo, setCreditInfo] = useState<CalendarBookingCredit | null>(null);
   const [existingCredit, setExistingCredit] = useState<CalendarAppointmentCredit>("NONE");
   const [settling, setSettling] = useState(false);
+  const [timeOpen, setTimeOpen] = useState(false);
   const offerUndo = useOfferCancelUndo();
   const [sameGuest, setSameGuest] = useState(0);
   const [includeSameGuest, setIncludeSameGuest] = useState(true);
@@ -280,75 +299,6 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
     <View style={styles.editor}>
     <PrototypeScreen compact>
       {!editable ? <InlineNotice kind="info">Запись отменена: время, тип и участник не меняются.</InlineNotice> : null}
-      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <SectionHeading>Участник</SectionHeading>
-        {selectedPerson !== null ? (
-          <Text style={[styles.selected, { color: colors.textPrimary }]}>
-            {selectedPerson.emoji ? `${selectedPerson.emoji} ` : ""}{selectedPerson.displayName}
-            {selectedPerson.active ? "" : " (в архиве)"}
-          </Text>
-        ) : existing?.participantDeleted ? (
-          <Text style={[styles.selected, { color: colors.textSecondary }]}>Удалённый клиент</Text>
-        ) : null}
-        {editable ? <>
-          <ParticipantSearch label="Имя участника записи" query={query} onQuery={(value) => {
-            setQuery(value); setGuestName(value); setGuestMode(true); setClientId(null);
-          }} matches={matches} selectedId={clientId} onSelect={(id) => {
-            setClientId(id); setGuestMode(false); setGuestName(""); setQuery("");
-          }} disabled={busy} />
-        </> : null}
-      {!editable && guestMode && guestName !== "" ? <Text style={[styles.selected, { color: colors.textPrimary }]}>{guestName}</Text> : null}
-      {creditText !== null && !bypass ? (
-        <Text accessibilityLiveRegion="polite" style={[styles.hint, { color: colors.textSecondary }]}>
-          {creditText}
-        </Text>
-      ) : null}
-      {!guestMode && clientId !== null && requiresCredit && editable && existingCredit !== "USED" ? (
-        <View style={styles.chips}>
-          <SelectionChip compact fill group="Учёт" label="Записать без списания" selected={bypass} disabled={busy}
-            onPress={() => setBypass(!bypass)} />
-        </View>
-      ) : null}
-      </View>
-      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={styles.stepper}>
-        <AppButton compact size="small" variant="ghost" label="‹" accessibilityLabel="Предыдущий день" disabled={!editable || busy}
-          onPress={() => setDate(addDays(date, -1))} />
-        <Text style={[styles.stepperValue, { color: colors.textPrimary }]}>{dayTitle(date)}</Text>
-        <AppButton compact size="small" variant="ghost" label="›" accessibilityLabel="Следующий день" disabled={!editable || busy}
-          onPress={() => setDate(addDays(date, 1))} />
-      </View>
-      <View style={styles.stepper}>
-        <AppButton compact size="small" variant="secondary" label="−30" accessibilityLabel="Начало на 30 минут раньше"
-          disabled={!editable || busy || start - SLOT_MINUTES < settings.dayStartMinute}
-          onPress={() => setStart(start - SLOT_MINUTES)} />
-        <Text accessibilityLiveRegion="polite" style={[styles.stepperValue, { color: colors.textPrimary }]}>
-          {formatMinute(start)}–{formatMinute(start + duration)}
-        </Text>
-        <AppButton compact size="small" variant="secondary" label="+30" accessibilityLabel="Начало на 30 минут позже"
-          disabled={!editable || busy || start + SLOT_MINUTES + duration > settings.dayEndMinute}
-          onPress={() => setStart(start + SLOT_MINUTES)} />
-      </View>
-      <ChoiceSegments label="Длительность" value={String(duration)} disabled={!editable || busy}
-        items={[...new Set([...APPOINTMENT_DURATIONS, duration])].sort((a, b) => a - b)
-          .map((minutes) => ({ id: String(minutes), label: `${minutes} мин` }))}
-        onChange={(minutes) => setDuration(Number(minutes))} />
-      </View>
-      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <SectionHeading>Тип занятия</SectionHeading>
-      {Array.from({ length: Math.ceil(types.length / 2) }, (_, row) => <View key={row} style={styles.row}>
-        {types.slice(row * 2, row * 2 + 2).map((type) => (
-          <SelectionChip compact fill key={type.id} group="Тип занятия" label={type.name}
-            selected={typeId === type.id} disabled={!editable || busy}
-            onPress={() => {
-              setTypeId(type.id);
-              if (existing === null) setDuration(type.defaultDurationMinutes);
-            }} />
-        ))}
-      </View>)}
-      <TextField compact label="Заметка" value={note} onChangeText={setNote} disabled={!editable || busy}
-        placeholder="Необязательно" />
-      </View>
       {outcomeOpen ? <>
         <SectionHeading>Исход занятия</SectionHeading>
         <View style={styles.chips}>
@@ -358,7 +308,7 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
         </View>
         <View style={styles.row}>
           {existing.outcome === null ? <>
-            <View style={styles.cell}><AppButton compact size="small" label="Завершить" disabled={busy}
+            <View style={styles.cell}><AppButton compact size="small" label="Завершить тренировку" disabled={busy}
               onPress={() => { void resolve("COMPLETED"); }} /></View>
             <View style={styles.cell}><AppButton compact size="small" variant="secondary" label="Пропущена" disabled={busy}
               onPress={() => { void resolve("MISSED"); }} /></View>
@@ -379,6 +329,81 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
           {existingCredit === "USED" || existingCredit === "RESERVED" ? " и вернёт тренировку клиенту" : ""}.
         </Text>
       </> : null}
+      <View style={[styles.section, shadow.card, { backgroundColor: colors.surface }]}>
+      <SectionHeading>Участник</SectionHeading>
+        {selectedPerson !== null ? (
+          <Text style={[styles.selected, { color: colors.textPrimary }]}>
+            {selectedPerson.emoji ? `${selectedPerson.emoji} ` : ""}{selectedPerson.displayName}
+            {selectedPerson.active ? "" : " (в архиве)"}
+          </Text>
+        ) : existing?.participantDeleted ? (
+          <Text style={[styles.selected, { color: colors.textSecondary }]}>Удалённый клиент</Text>
+        ) : null}
+        {editable ? <>
+          <ParticipantSearch label="Имя участника записи" query={query} onQuery={(value) => {
+            setQuery(value); setGuestName(value); setGuestMode(true); setClientId(null);
+          }} matches={matches} selectedId={clientId} onSelect={(id) => {
+            setClientId(id); setGuestMode(false); setGuestName(""); setQuery("");
+          }} disabled={busy} guestRow={linking ? undefined : { selected: guestMode && guestName.trim() !== "", onPick: () => { setGuestMode(true); setClientId(null); setGuestName(query); } }} />
+        </> : null}
+      {!editable && guestMode && guestName !== "" ? <Text style={[styles.selected, { color: colors.textPrimary }]}>{guestName}</Text> : null}
+      {creditText !== null && !bypass ? (
+        <Text accessibilityLiveRegion="polite" style={[styles.hint, { color: colors.textSecondary }]}>
+          {creditText}
+        </Text>
+      ) : null}
+      {!guestMode && clientId !== null && requiresCredit && editable && existingCredit !== "USED" ? (
+        <View style={styles.switchRow}>
+          <Text style={[styles.switchLabel, { color: colors.textPrimary }]}>Записать без списания</Text>
+          <AppSwitch accessibilityLabel="Записать без списания" value={bypass} disabled={busy} onValueChange={setBypass} />
+        </View>
+      ) : null}
+      </View>
+      <View style={[styles.section, shadow.card, { backgroundColor: colors.surface }]}>
+      <View style={styles.stepper}>
+        <AppButton compact size="small" variant="ghost" label="‹" accessibilityLabel="Предыдущий день" disabled={!editable || busy}
+          onPress={() => setDate(addDays(date, -1))} />
+        <Pressable accessibilityRole="button" accessibilityLabel={`Дата: ${dayTitle(date)}. Изменить`} disabled={!editable || busy}
+          onPress={() => { void pickDate({ value: date }).then((picked) => { if (picked !== null) setDate(picked); }); }}
+          style={[styles.pill, { backgroundColor: colors.surfaceRaised, opacity: !editable || busy ? 0.5 : 1 }]}>
+          <CalendarDays size={16} color={colors.accentInk} strokeWidth={2} />
+          <Text numberOfLines={1} style={[styles.pillText, { color: colors.textPrimary }]}>{dayTitle(date)}</Text>
+        </Pressable>
+        <AppButton compact size="small" variant="ghost" label="›" accessibilityLabel="Следующий день" disabled={!editable || busy}
+          onPress={() => setDate(addDays(date, 1))} />
+      </View>
+      <View style={styles.stepper}>
+        <AppButton compact size="small" variant="secondary" label="−30" accessibilityLabel="Начало на 30 минут раньше"
+          disabled={!editable || busy || start - SLOT_MINUTES < settings.dayStartMinute}
+          onPress={() => setStart(start - SLOT_MINUTES)} />
+        <Pressable accessibilityRole="button" accessibilityLiveRegion="polite" accessibilityLabel={`Время: ${formatMinute(start)}–${formatMinute(start + duration)}. Изменить`}
+          disabled={!editable || busy} onPress={() => setTimeOpen(true)}
+          style={[styles.pill, { backgroundColor: colors.surfaceRaised, opacity: !editable || busy ? 0.5 : 1 }]}>
+          <Clock size={16} color={colors.accentInk} strokeWidth={2} />
+          <Text style={[styles.pillText, { color: colors.textPrimary }]}>{formatMinute(start)}–{formatMinute(start + duration)}</Text>
+        </Pressable>
+        <AppButton compact size="small" variant="secondary" label="+30" accessibilityLabel="Начало на 30 минут позже"
+          disabled={!editable || busy || start + SLOT_MINUTES + duration > settings.dayEndMinute}
+          onPress={() => setStart(start + SLOT_MINUTES)} />
+      </View>
+      <Text style={[styles.groupLabel, { color: colors.textMuted }]}>ДЛИТЕЛЬНОСТЬ</Text>
+      <ChoiceGrid group="Длительность" disabled={!editable || busy} selected={[String(duration)]}
+        items={[...new Set([...APPOINTMENT_DURATIONS, duration])].sort((x, y) => x - y).map((minutes) => ({ id: String(minutes), label: `${minutes} мин` }))}
+        columns={Math.min(4, new Set([...APPOINTMENT_DURATIONS, duration]).size)} onPress={(minutes) => setDuration(Number(minutes))} />
+      </View>
+      <View style={[styles.section, shadow.card, { backgroundColor: colors.surface }]}>
+      <SectionHeading>Тип занятия</SectionHeading>
+      <ChoiceGrid group="Тип занятия" disabled={!editable || busy} selected={typeId === null ? [] : [typeId]} columns={2}
+        items={types.map((type) => ({ id: type.id, label: type.name }))}
+        onPress={(id) => {
+          const type = types.find((item) => item.id === id);
+          if (type === undefined) return;
+          setTypeId(type.id);
+          if (existing === null) setDuration(type.defaultDurationMinutes);
+        }} />
+      <TextField compact label="Заметка" value={note} onChangeText={setNote} disabled={!editable || busy}
+        placeholder="Необязательно" />
+      </View>
       {outcomeOpen && existing.clientId !== null && existingCredit !== "NONE" ? (
         <Text style={[styles.hint, { color: colors.textSecondary }]}>
           Смена клиента вернёт тренировку прежнему и спишет у выбранного, если их учёт ведётся в приложении.
@@ -423,19 +448,22 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
     </PrototypeScreen>
     <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
       {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
+      {editable ? <AppButton label={existing === null ? "Записать" : "Сохранить"} busy={busy}
+        onPress={() => { void save(); }} /> : null}
       <View style={styles.row}>
       {existing !== null && editable && !outcomeOpen ? (
-        <View style={styles.cell}><AppButton compact size="small" variant="destructive" label="Удалить" disabled={busy}
+        <View style={styles.cell}><AppButton compact size="small" variant="destructive" label="Удалить запись" disabled={busy}
           onPress={() => {
             if (existingCredit === "RESERVED" || existingCredit === "USED") setSettling(true);
             else void remove("RETURN");
           }} /></View>
       ) : null}
       <View style={styles.cell}><AppButton compact size="small" variant="secondary" label={editable ? "Отмена" : "Закрыть"} disabled={busy} onPress={onClose} /></View>
-      {editable ? <View style={styles.cell}><AppButton compact size="small" label={existing === null ? "Записать" : "Сохранить"} busy={busy}
-        onPress={() => { void save(); }} /></View> : null}
       </View>
     </View>
+      <TimeWheelPicker visible={timeOpen} title="Начало занятия" value={start} min={settings.dayStartMinute}
+        max={Math.max(settings.dayStartMinute, settings.dayEndMinute - duration)} minuteStep={SLOT_MINUTES}
+        onConfirm={(minute) => setStart(minute)} onClose={() => setTimeOpen(false)} />
       <ConfirmDialog visible={settling} confirmBusy={busy} title="Удалить запись"
         description={existingCredit === "USED"
           ? "Тренировка по этой записи уже списана. Вернуть её клиенту или оставить списанной?"
@@ -449,7 +477,12 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
 
 const styles = StyleSheet.create({
   editor: { flex: 1 },
-  section: { borderWidth: 1, borderRadius: 16, padding: 10, gap: 7 },
+  section: { borderRadius: 24, padding: 14, gap: 10 },
+  pill: { flex: 1, minHeight: 44, borderRadius: 22, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  pillText: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 18 },
+  groupLabel: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, letterSpacing: 0.8 },
+  switchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: 44 },
+  switchLabel: { flex: 1, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
   row: { flexDirection: "row", gap: 6, alignItems: "stretch" },
   cell: { flex: 1, minWidth: 0 },
   footer: { borderTopWidth: 1, padding: 10, gap: 6 },
@@ -459,7 +492,6 @@ const styles = StyleSheet.create({
   result: { minHeight: 44, paddingHorizontal: 10, paddingVertical: 8, justifyContent: "center" },
   resultText: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
   stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6 },
-  stepperValue: { flex: 1, textAlign: "center", fontSize: 13, lineHeight: 18, fontFamily: fonts.bold },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   selected: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
   hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
