@@ -1,7 +1,9 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { AppButton, ConfirmDialog, InlineNotice, StatusTag } from
+import { Archive } from "lucide-react-native";
+import { AppButton, ConfirmDialog, InlineNotice, ProgressBar, StatusTag } from
   "../../../shared/ui/components/public.ts";
+import { shadow } from "../../../shared/ui/theme/style.ts";
 import { PrototypeScreen } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { ClientHomeSummary, HomePackSummary } from "../domain/ClientHomeSummary.ts";
@@ -97,28 +99,27 @@ export function ClientHomePreview({ client, summary, onOpenAccounting, onWriteOf
 
   return <PrototypeScreen compact scroll={false}>
 
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={[styles.card, shadow.card, { backgroundColor: colors.surface }]}>
     <Pressable accessibilityRole="button" accessibilityLabel={pack?.kind === "TRACKED" ? `Абонемент: доступно ${pack.available} из ${pack.granted} занятий. Открыть абонемент и оплату` : "Абонемент. Открыть абонемент и оплату"}
       onPress={onOpenAccounting} style={styles.cardBody}>
       <View style={styles.cardHead}>
         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Абонемент</Text>
-        <View style={styles.packLine}>
-          {pack?.kind === "TRACKED" ? <>
-            <Text style={[styles.packNumber, { color: colors.textPrimary }]}>{`${pack.available}/${pack.granted}`}</Text>
-            <Text style={[styles.detail, { color: colors.textSecondary }]}>доступно</Text>
-          </> : null}
-        </View>
-      </View>
-      <View style={styles.packFooter}>
-        <View style={styles.packDetails}><PackSummaryLine pack={pack} /></View>
         {pack?.kind === "TRACKED" ? <StatusTag kind={toneKind[pack.tone]} label={toneLabel[pack.tone]} /> : null}
       </View>
+      {pack?.kind === "TRACKED" ? <>
+        <View style={styles.packLine}>
+          <Text style={[styles.packNumber, { color: colors.textPrimary }]}>{pack.available}</Text>
+          <Text style={[styles.packUnit, { color: colors.textSecondary }]}>{`из ${pack.granted} занятий`}</Text>
+        </View>
+        <ProgressBar value={pack.granted > 0 ? pack.available / pack.granted : null} accessibilityLabel={`Остаток: ${pack.available} из ${pack.granted} занятий`} />
+      </> : null}
+      <PackSummaryLine pack={pack} />
     </Pressable>
     {pack?.kind === "TRACKED" ? <View style={styles.creditActions}>
       <View style={styles.creditAction}><AppButton compact size="small" variant="secondary" label="Списать" busy={creditBusy}
         disabled={!pack.writeOffAvailable} disabledReason="Нет доступных занятий" accessibilityLabel="Списать одно занятие"
         onPress={() => { void runCredit(onWriteOff); }} /></View>
-      <View style={styles.creditAction}><AppButton compact size="small" variant="ghost" label="Отменить" busy={creditBusy}
+      <View style={styles.creditAction}><AppButton compact size="small" variant="secondary" label="Отменить" busy={creditBusy}
         disabled={pack.returnableDebitId === null} disabledReason="Нечего возвращать" accessibilityLabel="Отменить последнее списание"
         onPress={() => { const entryId = pack.returnableDebitId; if (entryId !== null) void runCredit(() => onReturnLast(entryId)); }} /></View>
     </View> : null}
@@ -130,8 +131,12 @@ export function ClientHomePreview({ client, summary, onOpenAccounting, onWriteOf
     {archiveError ? <InlineNotice kind="error">
       Не удалось переместить клиента в архив: карточка изменилась или операция не удалась. Данные не изменены.
     </InlineNotice> : null}
-    <AppButton compact size="small" variant="ghost" label="Переместить в архив"
-      onPress={() => { setArchiveError(false); setConfirming(true); }} />
+    <Pressable accessibilityRole="button" accessibilityLabel="Переместить в архив"
+      onPress={() => { setArchiveError(false); setConfirming(true); }}
+      style={({ pressed }) => [styles.archiveButton, { borderColor: colors.border, opacity: pressed ? 0.85 : 1 }]}>
+      <Archive size={18} color={colors.textSecondary} strokeWidth={1.8} />
+      <Text style={[styles.archiveText, { color: colors.textSecondary }]}>Переместить в архив</Text>
+    </Pressable>
     <ConfirmDialog visible={confirming} confirmBusy={archiving}
       title={`Переместить ${client.displayName} в Архив?`}
       description="Клиент исчезнет из активного списка и появится в Архиве. Данные и записи календаря сохранятся. Клиента можно будет вернуть позже."
@@ -149,16 +154,19 @@ const styles = StyleSheet.create({
   detail: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   tiles: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tile: { flexGrow: 1, flexBasis: 100 },
-  card: { borderWidth: 1, borderRadius: 14, padding: 8, gap: 4 },
-  cardBody: { gap: 4 },
+  card: { borderRadius: 26, padding: 14, gap: 10 },
+  cardBody: { gap: 8 },
+  archiveButton: { minHeight: 44, borderRadius: 22, borderWidth: 1.5, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  archiveText: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
+  packUnit: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
   creditActions: { flexDirection: "row", gap: 8 },
   creditAction: { flex: 1 },
   cardHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  cardTitle: { fontSize: 14, lineHeight: 19, fontFamily: fonts.bold },
+  cardTitle: { fontSize: 16, lineHeight: 21, fontFamily: fonts.bold },
   weightRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   weightField: { flex: 1 },
-  packLine: { flexDirection: "row", alignItems: "baseline", justifyContent: "flex-end", gap: 6, flexShrink: 1 },
+  packLine: { flexDirection: "row", alignItems: "baseline", gap: 8 },
   packFooter: { flexDirection: "row", alignItems: "center", gap: 8 },
   packDetails: { flex: 1, minWidth: 0 },
-  packNumber: { fontSize: 18, lineHeight: 23, fontFamily: fonts.bold },
+  packNumber: { fontSize: 34, lineHeight: 40, fontFamily: fonts.bold },
 });
