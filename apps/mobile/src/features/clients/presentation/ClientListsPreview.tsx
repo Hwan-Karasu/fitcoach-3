@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { AppState, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import { Cake, CalendarClock, Dumbbell, Flame, Footprints, Percent, PinOff, Scale, Ticket } from "lucide-react-native";
-import { AppButton, AppIconButton, ClientRosterCard, RosterGroup, ConfirmDialog, EmptyState, FilterPill,
+import { Cake, PinOff } from "lucide-react-native";
+import { AppButton, AppIconButton, ClientRosterCard, ConfirmDialog, EmptyState, FilterPill,
   InlineNotice,
   ListSectionHeader, DropdownMenu, SkeletonList, useHeaderScrollHandler, useHeaderSearch, useFocusGatedVersion,
   type DropdownOption } from "../../../shared/ui/components/public.ts";
@@ -60,14 +60,9 @@ const archiveSortOptions: readonly DropdownOption<ArchiveSortMode>[] = [
   { value: "NAME", label: "Имя А–Я" },
 ];
 
-const metricLook: Readonly<Record<RosterMetricId, Readonly<{ label: string; icon: (color: string) => ReactNode }>>> = {
-  weight: { label: "Вес", icon: (color) => <Scale size={16} color={color} /> },
-  calories: { label: "Калории", icon: (color) => <Flame size={16} color={color} /> },
-  steps: { label: "Шаги", icon: (color) => <Footprints size={16} color={color} /> },
-  fatPercent: { label: "% жира", icon: (color) => <Percent size={16} color={color} /> },
-  nextAppointment: { label: "Следующее занятие", icon: (color) => <CalendarClock size={16} color={color} strokeWidth={1.8} /> },
-  lastTraining: { label: "Последняя тренировка", icon: (color) => <Dumbbell size={16} color={color} strokeWidth={1.8} /> },
-  credits: { label: "Абонемент", icon: (color) => <Ticket size={16} color={color} strokeWidth={1.8} /> },
+const metricLabel: Readonly<Record<RosterMetricId, string>> = {
+  weight: "Вес", calories: "Калории", steps: "Шаги", fatPercent: "% жира",
+  nextAppointment: "Следующее занятие", lastTraining: "Последняя тренировка", credits: "Абонемент",
 };
 
 /**
@@ -201,16 +196,16 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
   };
 
   const renderRow = (row: ClientRosterRow, birthdayText: string | null = null,
-    birthdayOccurrence: string | null = null, pinned = false) => {
+    birthdayOccurrence: string | null = null) => {
     const age = row.birthDate === null ? null : ageOn(row.birthDate, today);
     const facts = overview?.get(row.id);
     return (
       <ClientRosterCard key={row.id} clientId={row.id} displayName={row.displayName} mark={clientMark(row)}
         subtitle={age === null ? null : formatYears(age)} restricted={clientCards.showHealthBadge && (facts?.restricted ?? false)}
         highlight={birthdayText} highlightIcon={(color) => <Cake size={14} color={color} strokeWidth={2} />}
-        metrics={clientCards.metricIds.map((id) => ({ label: metricLook[id].label,
-          value: facts?.metrics.find((metric) => metric.id === id)?.value ?? null, icon: metricLook[id].icon }))}
-        onOpen={onOpenClient} emoji={row.emoji} inGroup={!pinned} metricTiles={pinned}
+        metrics={clientCards.metricIds.map((id) => ({ label: metricLabel[id],
+          value: facts?.metrics.find((metric) => metric.id === id)?.value ?? null }))}
+        onOpen={onOpenClient} emoji={row.emoji}
         onChangeEmoji={(_, emoji) => { void changeEmoji(row, emoji); }}
         action={birthdayOccurrence === null ? undefined : (
           <AppIconButton label={`Убрать ${row.displayName} из закреплённых`} disabled={dismissingId !== null}
@@ -245,10 +240,10 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
         {roster && visibleCount > 0 && (roster.searching || narrowed)
           ? <ListSectionHeader title="Найдено" count={visibleCount} /> : null}
         {roster?.birthday.map((entry) => renderRow(entry.client, entry.birthdayText,
-          entry.birthdayOccurrence, true))}
+          entry.birthdayOccurrence))}
         {roster?.recent ? renderRow(roster.recent.client, roster.recent.birthdayBadge === null ? null
-          : roster.recent.birthdayText, null, true) : null}
-        <RosterGroup>{roster?.regular.map((entry) => renderRow(entry.client, entry.birthdayBadge === null ? null : entry.birthdayText))}</RosterGroup>
+          : roster.recent.birthdayText, null) : null}
+        {roster?.regular.map((entry) => renderRow(entry.client, entry.birthdayBadge === null ? null : entry.birthdayText))}
       </ScrollView>
       <RosterSearchBar query={query} onChangeQuery={setQuery} filterCount={filterCount}
         onOpenFilters={() => setFiltersOpen(true)} onCreate={onOpenCreate} />

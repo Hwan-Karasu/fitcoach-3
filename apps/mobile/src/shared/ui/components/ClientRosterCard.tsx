@@ -1,4 +1,4 @@
-import { Children, Fragment, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
@@ -6,15 +6,15 @@ import { fonts } from "../theme/typography.ts";
 import { shadow, TOUCH_TARGET } from "../theme/style.ts";
 import { emojiFromInput } from "./emojiInput.ts";
 
+/** При четырёх показателях подписи сокращаются, чтобы плашки оставались одной ширины и значение не обрезалось. */
 const shortMetricLabels: Readonly<Record<string, string>> = {
-  "Следующее занятие": "Занятие", "Последняя тренировка": "Тренировка", "Абонемент": "Абонемент",
+  "Следующее занятие": "Занятие", "Последняя тренировка": "Трен.", "Абонемент": "Абон.",
 };
 
-/** Метрика карточки: значок и значение; `label` читает TalkBack. `value: null` — «нет данных» (§51.2.3). */
+/** Показатель карточки: подпись и значение; `value: null` — «нет данных» (§51.2.3), показывается прочерком. */
 export interface RosterMetric {
   readonly label: string;
   readonly value: string | null;
-  readonly icon: (color: string) => ReactNode;
 }
 
 export interface ClientRosterCardData {
@@ -28,12 +28,12 @@ export interface ClientRosterCardData {
   readonly subtitle?: string | null;
   /** Нейтральный индикатор ограничений без раскрытия диагнозов (§7). */
   readonly restricted?: boolean;
-  /** Бейдж особой карточки («ДР через 3 д.»); вместе с ним появляется акцентная полоса (UI-OWN-013). */
+  /** Метка особой карточки («Через 3 дня · 12 нояб.»): над именем, вместе с ней карточка получает акцентную рамку (UI-OWN-063). */
   readonly highlight?: string | null;
-  /** Значок бейджа особой карточки; получает его цвет. */
+  /** Значок метки особой карточки; получает её цвет. */
   readonly highlightIcon?: (color: string) => ReactNode;
   readonly metrics?: readonly RosterMetric[];
-  /** Дополнительная кнопка справа, например «убрать из закреплённых». */
+  /** Дополнительная кнопка в строке метки, например «открепить». */
   readonly action?: ReactNode;
   readonly onOpen: (clientId: string) => void;
   /**
@@ -41,27 +41,32 @@ export interface ClientRosterCardData {
    * смайл сохраняется сразу, стёртое поле возвращает инициалы (null).
    */
   readonly onChangeEmoji?: (clientId: string, emoji: string | null) => void;
-  /** «Зефирка» (UI-OWN-048): строка внутри общей карточки `RosterGroup` — без своего фона. */
-  readonly inGroup?: boolean;
-  /** Показатели плитками с подписями (закреплённая карточка «Недавно открывали» / «Дни рождения»). */
-  readonly metricTiles?: boolean;
 }
 
 /**
- * Карточка клиента (CLIENTS.md; «Зефирка», UI-OWN-048): белая, радиус 20, тень без рамки, аватар 44 (радиус 14) на мягком
- * фоне акцента, «›». В общей карточке `RosterGroup` — строка с разделителем.
+ * Карточка клиента (UIX-02, UI-OWN-062/063): отдельная круглая карточка (радиус 26), аватар 52, имя, возраст и бейдж «Ограничения»,
+ * ниже ряд плашек показателей одной ширины и высоты: число колонок равно числу показателей (2–4), длинное значение переносится.
  */
 export function ClientRosterCard({ clientId, displayName, mark, emoji = null, subtitle, restricted = false, highlight,
-  highlightIcon, metrics = [], action, onOpen, onChangeEmoji, inGroup = false, metricTiles = false }: Readonly<ClientRosterCardData>) {
+  highlightIcon, metrics = [], action, onOpen, onChangeEmoji }: Readonly<ClientRosterCardData>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const spoken = [displayName, subtitle, restricted ? "есть ограничения" : null, highlight]
     .filter((part): part is string => typeof part === "string" && part.length > 0).join(", ");
-  const compactMetrics = metrics.length > 3;
-  const metricRows = [metrics.slice(0, 4)];
+  const shown = metrics.slice(0, 4);
+  const dense = shown.length > 3;
   return (
-    <View style={inGroup ? styles.groupRow : [styles.card, shadow.card, { backgroundColor: colors.surface }]}>
-      {highlight ? <View style={[styles.stripe, { backgroundColor: colors.accentFill }]} /> : null}
+    <View style={[styles.card, shadow.card, { backgroundColor: colors.surface,
+      borderColor: highlight ? colors.accentFill : "transparent" }]}>
+      {highlight ? (
+        <View style={styles.labelRow}>
+          <View style={[styles.highlight, { backgroundColor: colors.accentSoft }]}>
+            {highlightIcon?.(colors.onAccentSoft) ?? null}
+            <Text numberOfLines={1} style={[styles.highlightText, { color: colors.onAccentSoft }]}>{highlight}</Text>
+          </View>
+          {action}
+        </View>
+      ) : null}
       <View style={styles.row}>
         <EmojiAvatar displayName={displayName} mark={mark} emoji={emoji}
           onChange={onChangeEmoji === undefined ? undefined : (value) => onChangeEmoji(clientId, value)} />
@@ -69,79 +74,38 @@ export function ClientRosterCard({ clientId, displayName, mark, emoji = null, su
           onPress={() => onOpen(clientId)} style={styles.main}>
           <View style={styles.text}>
             <Text numberOfLines={2} style={[styles.name, { color: colors.textPrimary }]}>{displayName}</Text>
-            {subtitle || restricted || highlight ? (
+            {subtitle || restricted ? (
               <View style={styles.subtitleRow}>
                 {subtitle ? <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text> : null}
-                {highlight ? (
-                  <View style={[styles.highlight, { backgroundColor: colors.surfaceRaised }]}>
-                    {highlightIcon?.(colors.warning) ?? null}
-                    <Text style={[styles.highlightText, { color: colors.warning }]}>{highlight}</Text>
-                  </View>
-                ) : null}
                 {restricted ? (
                   <View style={[styles.badge, { borderColor: colors.warning }]}>
-                    <Text style={[styles.badgeText, { color: colors.warning }]}>Есть ограничения</Text>
+                    <Text style={[styles.badgeText, { color: colors.warning }]}>Ограничения</Text>
                   </View>
                 ) : null}
               </View>
             ) : null}
           </View>
-          {/* Дополнительное действие («открепить») — перед стрелкой, стрелка всегда у края. */}
-          {action}
           <ChevronRight size={20} color={colors.textMuted} strokeWidth={2} />
         </Pressable>
       </View>
-      {metrics.length > 0 && metricTiles ? (
-        <View>
-          {metricRows.map((row, rowIndex) => <View key={rowIndex} style={styles.tiles}>
-          {row.map((metric) => (
+      {shown.length > 0 ? (
+        <View style={styles.plates}>
+          {shown.map((metric) => (
             <View key={metric.label} accessible accessibilityLabel={`${metric.label}: ${metric.value ?? "нет данных"}`}
-              style={[styles.tile, compactMetrics ? styles.compactTile : null, { backgroundColor: colors.surfaceRaised }]}>
-              <Text numberOfLines={compactMetrics ? 1 : 2} adjustsFontSizeToFit minimumFontScale={0.85}
-                style={[styles.tileLabel, compactMetrics ? styles.compactTileLabel : null, { color: colors.textSecondary }]}>{compactMetrics ? shortMetricLabels[metric.label] ?? metric.label : metric.label}</Text>
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.tileValue, { color: metric.value === null ? colors.textMuted : colors.textPrimary }]}>
-                {metric.value ?? "—"}</Text>
-            </View>
-          ))}
-          </View>)}
-        </View>
-      ) : metrics.length > 0 ? (
-        <View>
-          {metricRows.map((row, rowIndex) => <View key={rowIndex} style={[styles.metrics, compactMetrics ? styles.compactMetrics : null]}>
-          {row.map((metric, index) => (
-            <View key={metric.label} accessible accessibilityLabel={`${metric.label}: ${metric.value ?? "нет данных"}`}
-              style={[styles.metric, { flex: compactMetrics ? 1 : metricWeights[index] ?? 1 }]}>
-              {metric.icon(colors.textSecondary)}
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[styles.metricValue, compactMetrics ? styles.compactMetricValue : null, { color: metric.value === null ? colors.textMuted : colors.textPrimary }]}>
+              style={[styles.plate, { backgroundColor: colors.surfaceRaised }]}>
+              <Text numberOfLines={1} style={[styles.plateLabel, { color: colors.textSecondary }]}>
+                {dense ? shortMetricLabels[metric.label] ?? metric.label : metric.label}
+              </Text>
+              <Text style={[styles.plateValue, dense ? styles.plateValueDense : null, { color: metric.value === null ? colors.textMuted : colors.textPrimary }]}>
                 {metric.value ?? "—"}
               </Text>
             </View>
           ))}
-          </View>)}
         </View>
       ) : null}
     </View>
   );
 }
-
-/** Общая белая карточка списка клиентов («Зефирка»): строки `ClientRosterCard inGroup` с разделителями. */
-export function RosterGroup({ children }: Readonly<{ children: ReactNode }>) {
-  const { palette } = usePrototypeTheme();
-  const colors = palette.tokens;
-  const rows = Children.toArray(children);
-  if (rows.length === 0) return null;
-  return (
-    <View style={[styles.group, shadow.card, { backgroundColor: colors.surface }]}>
-      {rows.map((row, index) => <Fragment key={index}>
-        {index > 0 ? <View style={[styles.divider, { backgroundColor: colors.border }]} /> : null}
-        {row}
-      </Fragment>)}
-    </View>
-  );
-}
-
-/** Доли ширины показателей: следующее занятие длиннее («Сегодня 18:00»), тренировка — короткая дата. */
-const metricWeights = [1.5, 0.8, 1.2];
 
 /** Аватар; в режиме правки — то же поле ввода, куда системная клавиатура вставляет смайл. */
 function EmojiAvatar({ displayName, mark, emoji, onChange }: Readonly<{
@@ -188,33 +152,24 @@ function EmojiAvatar({ displayName, mark, emoji, onChange }: Readonly<{
 }
 
 const styles = StyleSheet.create({
-  compactTile: { minWidth: 0, paddingHorizontal: 6 },
-  compactTileLabel: { fontSize: 10, lineHeight: 14 },
-  compactMetrics: { paddingLeft: 16, gap: 6 },
-  compactMetricValue: { fontSize: 12, lineHeight: 17 },
-  card: { borderRadius: 20, overflow: "hidden" },
-  groupRow: { overflow: "hidden" },
-  group: { borderRadius: 20, overflow: "hidden" },
-  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
-  stripe: { position: "absolute", left: 0, top: 0, bottom: 0, width: 3 },
-  row: { flexDirection: "row", alignItems: "center", paddingLeft: 16, paddingRight: 10, paddingVertical: 12, gap: 12 },
-  avatar: { width: TOUCH_TARGET, height: TOUCH_TARGET, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  mark: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
-  avatarInput: { borderWidth: 2, padding: 0, textAlign: "center", fontSize: 18 },
-  main: { flex: 1, minHeight: 44, flexDirection: "row", alignItems: "center", gap: 8 },
+  card: { borderRadius: 26, borderWidth: 2, paddingBottom: 12, overflow: "hidden" },
+  labelRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingLeft: 14, paddingRight: 6, paddingTop: 10 },
+  highlight: { flexShrink: 1, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 6 },
+  highlightText: { flexShrink: 1, fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
+  row: { flexDirection: "row", alignItems: "center", paddingLeft: 14, paddingRight: 10, paddingTop: 10, gap: 12 },
+  avatar: { width: 52, height: 52, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  mark: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 23 },
+  avatarInput: { borderWidth: 2, padding: 0, textAlign: "center", fontSize: 20 },
+  main: { flex: 1, minHeight: TOUCH_TARGET, flexDirection: "row", alignItems: "center", gap: 8 },
   text: { flex: 1, gap: 4 },
   name: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
   subtitleRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
   subtitle: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 17 },
-  badge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 },
+  badge: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 1 },
   badgeText: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
-  highlight: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, flexDirection: "row", alignItems: "center", gap: 4 },
-  highlightText: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
-  metrics: { flexDirection: "row", paddingLeft: 72, paddingRight: 16, paddingBottom: 12, marginTop: -6, gap: 12 },
-  metric: { flex: 1, flexBasis: 0, flexDirection: "row", alignItems: "center", gap: 5 },
-  metricValue: { flexShrink: 1, fontFamily: fonts.medium, fontSize: 13, lineHeight: 17 },
-  tiles: { flexDirection: "row", gap: 6, paddingHorizontal: 16, paddingBottom: 14 },
-  tile: { flex: 1, borderRadius: 10, paddingVertical: 7, paddingHorizontal: 10, gap: 1 },
-  tileLabel: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
-  tileValue: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
+  plates: { flexDirection: "row", gap: 6, paddingHorizontal: 12, paddingTop: 10 },
+  plate: { flex: 1, flexBasis: 0, minWidth: 0, minHeight: 56, borderRadius: 16, paddingVertical: 7, paddingHorizontal: 8, gap: 2 },
+  plateLabel: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14 },
+  plateValue: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
+  plateValueDense: { fontSize: 12, lineHeight: 16 },
 });

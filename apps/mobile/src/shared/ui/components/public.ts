@@ -18,7 +18,7 @@ export { NumericField } from "./NumericField.tsx";
 export { parseNumericDraft, type DecimalPolicy, type NumericDraft } from "./numeric-draft.ts";
 export { StatusTag, type StatusKind } from "./StatusTag.tsx";
 export { EmptyState, LoadingState, type EmptyReason } from "./AsyncStates.tsx";
-export { ClientRosterCard, RosterGroup, type ClientRosterCardData, type RosterMetric } from "./ClientRosterCard.tsx";
+export { ClientRosterCard, type ClientRosterCardData, type RosterMetric } from "./ClientRosterCard.tsx";
 export { FilterPill } from "./FilterPill.tsx";
 export { SupersetBorder } from "./SupersetBorder.tsx";
 export { ListSectionHeader } from "./ListSectionHeader.tsx";
