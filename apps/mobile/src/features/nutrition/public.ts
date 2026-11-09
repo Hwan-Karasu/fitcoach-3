@@ -2,6 +2,8 @@ export { AddFoodScreen, type CatalogFilter } from "./presentation/AddFoodScreen.
 export { FoodEditorScreen } from "./presentation/FoodEditorScreen.tsx";
 export { NutritionHomeScreen } from "./presentation/NutritionHomeScreen.tsx";
 export { NutritionHomeCards } from "./presentation/NutritionHomeCards.tsx";
+export { ClientDayProvider } from "./presentation/ClientDay.tsx";
+export { DayTabs } from "./presentation/DayTabs.tsx";
 export type { CalcClientBody, SaveCalcProfile } from "./presentation/NutritionCalcScreen.tsx";
 export { RecipeEditorScreen } from "./presentation/RecipeEditorScreen.tsx";
 export type { FoodBasis, FoodBasisUnit, FoodInput, FoodProduct, Nutrients } from "./domain/FoodModel.ts";

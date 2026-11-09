@@ -84,16 +84,17 @@ type HomeProps = Readonly<{
   client: ClientRecord; accounting: AccountingRepositoryPort;
   onOpenAccounting: () => void;
   nutritionSlot?: ReactNode;
+  daySlot?: ReactNode;
   onArchive: () => Promise<void>;
 }>;
 
 /** Home composes owners' read projections; the weight entry goes to the Measurements owner. */
-function HomeIndexRoute({ client, accounting, onOpenAccounting, nutritionSlot,
+function HomeIndexRoute({ client, accounting, onOpenAccounting, nutritionSlot, daySlot,
   onArchive }: HomeProps) {
   const summary = useClientHomeSummary(client.id, accounting);
   return <ClientHomePreview client={client} summary={summary} onOpenAccounting={onOpenAccounting}
     onWriteOff={() => accounting.writeOff(client.id)} onReturnLast={(entryId) => accounting.returnLastDebit(client.id, entryId)}
-    nutritionSlot={nutritionSlot} onArchive={onArchive} />;
+    nutritionSlot={nutritionSlot} daySlot={daySlot} onArchive={onArchive} />;
 }
 
 export function HomeNavigator(props: HomeProps) {

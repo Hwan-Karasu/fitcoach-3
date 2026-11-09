@@ -11,7 +11,7 @@ import { useTrainedOn } from "../../read-models/useTrainedOn.ts";
 import { useWorkoutsThisWeek } from "../../read-models/useWorkoutsThisWeek.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import type { CalcProfileWithBodyPort } from "../../workflows/saveCalcProfile.ts";
-import { NutritionHomeCards, type SaveCalcProfile, type FoodCatalogPort, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort, type RecipeCatalogPort } from "../../features/nutrition/public.ts";
+import { ClientDayProvider, DayTabs, NutritionHomeCards, type SaveCalcProfile, type FoodCatalogPort, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort, type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ExecutionDetailsScreen, ExerciseHistoryList, HistoryProgramScreen, MonthlyReportScreen, TrainingArchiveScreen, TrainingStatisticsScreen, retainHistoryView,
   retainStatsFilters, type ExerciseLookupPort,
   type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort, type TrainingPlansRepositoryPort,
@@ -213,7 +213,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       {activityErrorFor === clientId ? <Text style={[styles.warning, { color: colors.danger }]}>
         Не удалось обновить «Недавно открытые»; карточка доступна.
       </Text> : null}
-    <TabBarSlotsProvider><ScreenToneProvider><Tabs.Navigator key={client.id}
+    <ClientDayProvider key={client.id}><TabBarSlotsProvider><ScreenToneProvider><Tabs.Navigator key={client.id}
       initialRouteName={clientCards.startSection}
       backBehavior="history"
       tabBar={(props) => <RootTabBar {...props} />}
@@ -221,7 +221,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
     >
       <Tabs.Screen name="Home" options={{ tabBarLabel: workspaceTabs.Home, tabBarAccessibilityLabel: workspaceTabs.Home, headerShown: true,
         header: () => <ClientHeader client={client} subtitle={workspaceTabs.Home} onBack={onClose} onClients={onOpenClients} onEdit={() => onOpenEdit(client.id)} /> }}>
-        {({ navigation }) => <HomeNavigator client={client} accounting={accounting}
+        {({ navigation }) => <HomeNavigator client={client} accounting={accounting} daySlot={<DayTabs />}
           nutritionSlot={<NutritionHomeCards key={client.id} clientId={client.id} body={calcBody} trainedToday={trainedToday} workoutsThisWeek={workoutsThisWeek} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements}
             onOpenNutrition={() => navigation.navigate("Nutrition")} onOpenCalculation={() => navigation.navigate("Nutrition", { screen: "NutritionIndex", params: { section: "calc", requestKey: Date.now() } })} />}
           onOpenAccounting={() => onOpenAccounting(client.id)}
@@ -246,7 +246,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
           history={trainingHistory} bodyweight={clientBodyweight} exerciseLookup={exerciseLookup}
           onOpenExercise={(exerciseId) => onOpenExercise?.(exerciseId)} onOpenWorkout={onOpenWorkout} />}
       </Tabs.Screen>
-    </Tabs.Navigator></ScreenToneProvider></TabBarSlotsProvider>
+    </Tabs.Navigator></ScreenToneProvider></TabBarSlotsProvider></ClientDayProvider>
     </View>
   );
 }

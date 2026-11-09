@@ -20,9 +20,9 @@ import { dayTitle, kcalText, metricLabels, nutritionErrorText, quantityText, slo
 import { useNutritionGuide } from "./useNutritionGuide.ts";
 import type { CalcClientBody } from "./NutritionCalcScreen.tsx";
 import type { CatalogFilter } from "./AddFoodScreen.tsx";
-import { DiaryWeekHeader } from "./DiaryWeekHeader.tsx";
+import { DayTabs } from "./DayTabs.tsx";
+import { useClientDay } from "./ClientDay.tsx";
 import { useNutritionDay } from "./useNutritionDay.ts";
-import { useToday } from "./useToday.ts";
 import { SavedMealEditorDialog } from "./SavedMealEditorDialog.tsx";
 import { savedSnapshot } from "../domain/SavedMeal.ts";
 import type { FoodSnapshot } from "../domain/FoodSnapshot.ts";
@@ -81,9 +81,8 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const today = useToday();
-  const [localDate, setLocalDate] = useState(today);
-  useEffect(() => { if (requestedDay !== undefined) setLocalDate(requestedDay.date); }, [requestedDay]);
+  const { day: localDate, today, setDay: setLocalDate } = useClientDay();
+  useEffect(() => { if (requestedDay !== undefined) setLocalDate(requestedDay.date); }, [requestedDay, setLocalDate]);
   const { data, stale, failed, reload } = useNutritionDay(clientId, localDate, diary, targets);
   const { guide, defaults, leanMassKg } = useNutritionGuide(clientId, body, calc, measurements);
   const macroColors = useMacroColors();
@@ -156,7 +155,7 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
 
   const header = (
     <View style={styles.dateBar}>
-      <DiaryWeekHeader clientId={clientId} diary={diary} localDate={localDate} today={today} onSelect={setLocalDate} />
+      <DayTabs />
     </View>
   );
 
@@ -185,7 +184,6 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
       {slow ? <View accessible accessibilityLabel="Загружаем день" style={[styles.slowBar, { backgroundColor: colors.accentFill }]} /> : null}
       <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled" pointerEvents={stale ? "none" : "auto"}>
         <View style={styles.waterRow}>
-          <View style={styles.grow}><AppButton compact variant="secondary" label="Сегодня" disabled={localDate === today} onPress={() => setLocalDate(today)} /></View>
           <View style={styles.grow}><AppButton compact variant="secondary" icon={(color) => <Repeat2 size={16} color={color} />} label="С прошлого дня" busy={copying} onPress={() => { void copyPreviousDay(); }} /></View>
         </View>
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}

@@ -44,8 +44,10 @@ function PackSummaryLine({ pack }: Readonly<{ pack: HomePackSummary | null }>) {
  * Client Home (UX 2.0): identity header with the edit pencil, abonement first, then the nutrition blocks (day data and КБЖУ, supplied by the shell), archive last —
  * all projections of their owners' facts; no invented dashboard blocks.
  */
-export function ClientHomePreview({ client, summary, onOpenAccounting, onWriteOff, onReturnLast, nutritionSlot,
+export function ClientHomePreview({ client, summary, onOpenAccounting, onWriteOff, onReturnLast, nutritionSlot, daySlot,
   onArchive }: Readonly<{
+  /** Ряд дней «Вчера | Сегодня | Завтра» и календарь — сверху экрана; подставляется оболочкой (день общий с «Питанием»). */
+  daySlot?: ReactNode;
   /** Блоки питания (шаги, КБЖУ) — проекция Nutrition, подставляется оболочкой; Clients не знает о питании. */
   nutritionSlot?: ReactNode;
   client: ClientRecord;
@@ -98,6 +100,7 @@ export function ClientHomePreview({ client, summary, onOpenAccounting, onWriteOf
   const pack = summary?.pack ?? null;
 
   return <PrototypeScreen compact scroll={false}>
+    {daySlot}
 
     <View style={[styles.card, shadow.card, { backgroundColor: colors.surface }]}>
     <Pressable accessibilityRole="button" accessibilityLabel={pack?.kind === "TRACKED" ? `Абонемент: доступно ${pack.available} из ${pack.granted} занятий. Открыть абонемент и оплату` : "Абонемент. Открыть абонемент и оплату"}

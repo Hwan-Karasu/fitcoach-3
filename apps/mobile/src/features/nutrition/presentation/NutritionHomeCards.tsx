@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { CalendarDays } from "lucide-react-native";
-import { AppButton, AppIconButton, InlineNotice, SegmentedRing, TextField } from "../../../shared/ui/components/public.ts";
+import { AppButton, InlineNotice, SegmentedRing, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
-import { upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../measurements/public.ts";
+import { dailyPoints, upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../measurements/public.ts";
 import { KCAL_PER_G } from "../domain/EnergyRules.ts";
 import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
@@ -15,11 +14,10 @@ import type { CalcClientBody } from "./NutritionCalcScreen.tsx";
 import { useMacroColors } from "./MacroGrid.tsx";
 import { NutritionTargetRows, type TargetMode } from "./NutritionTargetRows.tsx";
 import { metricLabels, nutritionErrorText, rangeText, wholeText } from "./nutritionFormat.ts";
-import { DayDataJournal } from "./DayDataJournal.tsx";
 import { saveDayData } from "./dayData.ts";
 import { useNutritionGuide } from "./useNutritionGuide.ts";
 import { useNutritionDay } from "./useNutritionDay.ts";
-import { useToday } from "./useToday.ts";
+import { useClientDay } from "./ClientDay.tsx";
 
 /** Шаги за сегодня: одно значение на дату; пусто — «нет данных», а не 0 (§49.5). Подписка снимается в cleanup. */
 function useTodaySteps(clientId: string, calc: NutritionCalcPort, today: string): Readonly<{ steps: number | null; loaded: boolean }> {
@@ -49,6 +47,25 @@ function useTodayWorkoutMark(clientId: string, calc: NutritionCalcPort, today: s
   return { done: current ? state.done : null, loaded: current };
 }
 
+/** Вес за выбранный день (единственная запись или основная); пусто — «нет данных», а не 0. */
+function useDayWeight(clientId: string, measurements: MeasurementRepositoryPort, day: string): Readonly<{ weight: number | null; ambiguous: boolean; loaded: boolean }> {
+  const [state, setState] = useState<Readonly<{ key: string; weight: number | null; ambiguous: boolean }> | null>(null);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    let active = true;
+    void measurements.listForClient(clientId).then((data) => {
+      if (!active) return;
+      const point = dailyPoints(data.measurements, data.primaries, "WEIGHT").find((candidate) => candidate.localDate === day);
+      setState({ key: `${clientId}|${day}`, weight: point !== undefined && point.kind === "VALUE" ? point.measurement.valueX10 / 10 : null,
+        ambiguous: point !== undefined && point.kind === "AMBIGUOUS" });
+    }, () => undefined);
+    return () => { active = false; };
+  }, [measurements, clientId, day, tick]);
+  useEffect(() => measurements.subscribeCommittedChanges((change) => { if (change.clientId === clientId) setTick((value) => value + 1); }), [measurements, clientId]);
+  const current = state !== null && state.key === `${clientId}|${day}`;
+  return { weight: current ? state.weight : null, ambiguous: current && state.ambiguous, loaded: current };
+}
+
 const midpoint = (range: Readonly<{ minX10: number; maxX10: number }>) => (range.minX10 + range.maxX10) / 2;
 
 /**
@@ -62,11 +79,12 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const macroColors = useMacroColors();
-  const today = useToday();
+  const { day, today, future } = useClientDay();
   const { loaded, guide, defaults, leanMassKg } = useNutritionGuide(clientId, body, calc, measurements);
-  const { data } = useNutritionDay(clientId, today, diary, targets);
-  const stepsToday = useTodaySteps(clientId, calc, today);
-  const mark = useTodayWorkoutMark(clientId, calc, today);
+  const { data } = useNutritionDay(clientId, day, diary, targets);
+  const stepsToday = useTodaySteps(clientId, calc, day);
+  const mark = useTodayWorkoutMark(clientId, calc, day);
+  const dayWeight = useDayWeight(clientId, measurements, day);
   const [mode, setMode] = useState<TargetMode>("EXACT");
   /** Живая цель из ячеек ручной корректировки (расчёт или правка тренера). */
   const [liveTarget, setLiveTarget] = useState<Corridors | null>(null);
@@ -75,29 +93,31 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [journal, setJournal] = useState(false);
   const lock = useRef(false);
   const recordWeight = useCallback((valueX10: number, localDate: string) => upsertDailyMeasurement(measurements, clientId, { type: "WEIGHT", valueX10, localDate, localMinute: null }), [measurements, clientId]);
 
-  // Поля показывают сегодняшние значения, пока тренер их не правил; правка не затирается обновлением данных.
+  // Другой день — другие значения: несохранённый ввод и ошибка прежнего дня сбрасываются.
+  useEffect(() => { setDirty(false); setError(null); setWeightText(""); setStepsText(""); }, [day]);
+  // Поля показывают значения выбранного дня, пока тренер их не правил; правка не затирается обновлением данных.
   useEffect(() => {
-    if (dirty || loaded === null || !stepsToday.loaded) return;
-    setWeightText(loaded.weightToday === null ? "" : String(loaded.weightToday).replace(".", ","));
+    if (dirty || !dayWeight.loaded || !stepsToday.loaded) return;
+    setWeightText(dayWeight.weight === null ? "" : String(dayWeight.weight).replace(".", ","));
     setStepsText(stepsToday.steps === null ? "" : String(stepsToday.steps));
-  }, [dirty, loaded, stepsToday]);
+  }, [dirty, dayWeight, stepsToday]);
 
-  const trainingAuto = trainedToday === true;
+  // Авто-«Да» из дневника тренировок известно только за сегодня.
+  const trainingAuto = day === today && trainedToday === true;
   const trainingState = trainingAuto || mark.done === true;
   const cycleTraining = useCallback(async () => {
     if (trainingAuto || lock.current) return;
     lock.current = true;
     try {
       // Два состояния: Да ↔ Нет (нет отметки показывается как «Нет»).
-      await calc.setWorkoutMark(clientId, today, mark.done !== true);
+      await calc.setWorkoutMark(clientId, day, mark.done !== true);
       setError(null);
     } catch (failure) { setError(nutritionErrorText(failure)); }
     lock.current = false;
-  }, [calc, clientId, today, mark.done, trainingAuto]);
+  }, [calc, clientId, day, mark.done, trainingAuto]);
 
   const saveDay = useCallback(async () => {
     if (lock.current) return;
@@ -105,15 +125,15 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
     setBusy(true);
     // Вес, шаги — отдельные записи: сбой или неверный ввод одного не мешает другому; пишется только изменённое.
     const weight = weightText.trim().replace(",", ".");
-    const result = await saveDayData({ clientId, calc, recordWeight }, { localDate: today,
-      weight: weight !== "" && Number(weight) !== loaded?.weightToday ? weightText : null,
+    const result = await saveDayData({ clientId, calc, recordWeight }, { localDate: day,
+      weight: weight !== "" && Number(weight) !== dayWeight.weight ? weightText : null,
       steps: stepsText.trim() !== (stepsToday.steps === null ? "" : String(stepsToday.steps)) ? stepsText : null, workout: null });
     const messages = Object.values(result);
     setError(messages.length === 0 ? null : messages.join(" "));
     if (messages.length === 0) setDirty(false);
     lock.current = false;
     setBusy(false);
-  }, [weightText, stepsText, recordWeight, clientId, calc, today, loaded, stepsToday.steps]);
+  }, [weightText, stepsText, recordWeight, clientId, calc, day, dayWeight.weight, stepsToday.steps]);
 
   const recorded = data?.summary.state === "FOOD_RECORDED";
   /** Ориентир по калориям: цель тренера (коридор Б/Ж/У → ккал), иначе суточный ориентир расчёта. */
@@ -140,30 +160,27 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
           <Text style={[styles.cardTitle, styles.titleFlex, { color: colors.textPrimary }]} numberOfLines={1}
             accessibilityLabel={`Данные дня. Тренировок на этой неделе: ${workoutsThisWeek === null ? "нет данных" : workoutsThisWeek}`}>Данные дня
             <Text style={[styles.hint, { color: colors.textSecondary }]}>{`  ·  трен./нед.: ${workoutsThisWeek === null ? "нет данных" : workoutsThisWeek}`}</Text></Text>
-          <View style={styles.headRight}>
-            <View style={[styles.pill, { backgroundColor: colors.accentSoft }]}><Text style={[styles.pillText, { color: colors.accentInk }]}>Сегодня</Text></View>
-            <AppIconButton compact label="Журнал данных дня: вес, шаги, тренировка по датам" icon={<CalendarDays size={20} color={colors.textPrimary} />} onPress={() => setJournal(true)} />
-          </View>
         </View>
         <View style={styles.dayRow}>
           <View style={styles.dayCell}>
-            <TextField label="Вес, кг" value={weightText} textAlign="center" keyboardType="decimal-pad" placeholder="85,4" disabled={busy} onChangeText={(value) => { setWeightText(value); setDirty(true); setError(null); }} />
+            <TextField label="Вес, кг" value={weightText} textAlign="center" keyboardType="decimal-pad" placeholder="85,4" disabled={busy || future} onChangeText={(value) => { setWeightText(value); setDirty(true); setError(null); }} />
           </View>
           <View style={styles.dayCell}>
-            <TextField label="Шаги" value={stepsText} textAlign="center" keyboardType="number-pad" placeholder="8000" disabled={busy} onChangeText={(value) => { setStepsText(value); setDirty(true); setError(null); }} />
+            <TextField label="Шаги" value={stepsText} textAlign="center" keyboardType="number-pad" placeholder="8000" disabled={busy || future} onChangeText={(value) => { setStepsText(value); setDirty(true); setError(null); }} />
           </View>
           <View style={styles.dayCell}>
             <Text style={[styles.cellLabel, { color: colors.textPrimary }]}>Тренировка</Text>
-            <Pressable accessibilityRole="button" disabled={trainingAuto} hitSlop={{ top: 3, bottom: 3 }}
-              accessibilityLabel={`Тренировка сегодня: ${trainingState ? "да" : "нет"}${trainingAuto ? ", по дневнику тренировок" : ". Нажмите, чтобы изменить"}`}
+            <Pressable accessibilityRole="button" disabled={trainingAuto || future} hitSlop={{ top: 3, bottom: 3 }}
+              accessibilityLabel={`Тренировка за день: ${trainingState ? "да" : "нет"}${trainingAuto ? ", по дневнику тренировок" : ". Нажмите, чтобы изменить"}`}
               onPress={() => { void cycleTraining(); }} style={[styles.trainingButton, { borderColor: colors.border, backgroundColor: trainingState ? colors.accentSoft : colors.surfaceRaised, opacity: trainingAuto ? 0.85 : 1 }]}>
               <Text style={[styles.trainingText, { color: trainingState ? colors.accentInk : colors.textPrimary }]}>{trainingState ? "Да" : "Нет"}</Text>
             </Pressable>
           </View>
         </View>
+        {future ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Для будущего дня доступно только питание.</Text> : null}
+        {dayWeight.ambiguous ? <Text style={[styles.hint, { color: colors.textSecondary }]}>За этот день несколько записей веса: основную выбирают в журнале замеров.</Text> : null}
         {dirty ? <AppButton compact label="Записать" busy={busy} onPress={() => { void saveDay(); }} /> : null}
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
-        <DayDataJournal visible={journal} clientId={clientId} today={today} calc={calc} measurements={measurements} recordWeight={recordWeight} onClose={() => setJournal(false)} />
       </View>
 
       <View style={[styles.card, styles.bigCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
