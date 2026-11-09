@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { AppState, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions, type StyleProp, type TextStyle } from "react-native";
+import { AppState, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions, type LayoutChangeEvent, type StyleProp, type TextStyle } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { Easing, FadeIn, SlideInLeft, SlideInRight, SlideOutLeft, SlideOutRight, useAnimatedProps, useAnimatedStyle, useFrameCallback,
   useSharedValue, withSpring, withTiming } from "react-native-reanimated";
@@ -12,7 +12,7 @@ import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { ADJUST_STEP_SEC, isFinished, isPaused, nextFinishAt, remainingSec, type RestTimer } from "../domain/RestTimerRules.ts";
 import { RestFinishTracker } from "../domain/RestFinishTracker.ts";
 import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
-import { useBottomBarHeight, useEditorDockHeight } from "../../../../shared/ui/components/public.ts";
+import { useBottomBarHeight, useEditorDockHeight, useRestDockRegister } from "../../../../shared/ui/components/public.ts";
 import { restTimerDiagnostics } from "../../../../shared/diagnostics/RestTimerDiagnostics.ts";
 
 /** Сколько секунд закончившийся таймер остаётся на панели с надписью «Отдых окончен». */
@@ -151,6 +151,8 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
   const [side, setSide] = useState<Side | null>(null);
   const [showAll, setShowAll] = useState(false);
   const tracker = useRef(new RestFinishTracker()).current;
+  const registerInset = useRestDockRegister();
+  const [shownHeight, setShownHeight] = useState(0);
   const pendingDismiss = useRef(new Set<ReturnType<typeof setTimeout>>());
   const offset = useSharedValue(0);
   const { width: screenWidth } = useWindowDimensions();
@@ -231,11 +233,22 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
     }), [expand]);
   const panelStyle = useAnimatedStyle(() => ({ transform: [{ translateX: offset.value }] }));
 
-  if (list.length === 0) return null;
-  const ordered = stableOrder(list);
-  const nearest = nearestRunning(list, now);
   // Над фактической нижней панелью вкладок; без неё — у нижнего края с учётом системной полосы.
   const bottom = (barHeight > 0 ? barHeight : insets.bottom + EDGE_GAP) + editorHeight;
+  const empty = list.length === 0;
+  // Экраны с прокруткой узнают, сколько снизу занято панелью (REST-INSET-1): нет таймеров — 0, свёрнутая «таблетка» — её высота.
+  useEffect(() => {
+    registerInset?.(empty ? 0 : bottom + shownHeight);
+    return () => registerInset?.(0);
+  }, [registerInset, empty, bottom, shownHeight]);
+  const measured = useCallback((event: LayoutChangeEvent) => {
+    const height = Math.round(event.nativeEvent.layout.height);
+    setShownHeight((old) => old === height ? old : height);
+  }, []);
+
+  if (empty) return null;
+  const ordered = stableOrder(list);
+  const nearest = nearestRunning(list, now);
 
   if (side !== null) {
     const first = nearest ?? ordered[0]!;
@@ -244,7 +257,7 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
     const pillStyle = [styles.pillTime, { color: finished ? colors.success : isPaused(first) ? colors.textSecondary : colors.textPrimary }];
     const more = ordered.length - 1;
     return (
-      <View key="collapsed" pointerEvents="box-none" style={[styles.edge, { bottom }, side === "left" ? styles.edgeLeft : styles.edgeRight]}>
+      <View key="collapsed" pointerEvents="box-none" onLayout={measured} style={[styles.edge, { bottom }, side === "left" ? styles.edgeLeft : styles.edgeRight]}>
         <GestureDetector gesture={swipeToExpand}>
           <Animated.View entering={(side === "left" ? SlideInLeft : SlideInRight).duration(PILL_MS).easing(EASE)}
             exiting={(side === "left" ? SlideOutLeft : SlideOutRight).duration(SLIDE_OUT_MS).easing(EASE)}>
@@ -268,7 +281,7 @@ export function RestTimerDock({ timers, onOpen }: Readonly<{ timers: RestTimersP
   const visible = ordered.slice(0, SIDE_BY_SIDE);
   const hidden = ordered.slice(SIDE_BY_SIDE);
   return (
-    <View key="expanded" pointerEvents="box-none" style={[styles.dock, { bottom }]}>
+    <View key="expanded" pointerEvents="box-none" onLayout={measured} style={[styles.dock, { bottom }]}>
       <GestureDetector gesture={swipeToCollapse}>
         <Animated.View entering={FadeIn.duration(PILL_MS).easing(EASE)} style={panelStyle}>
           <View style={styles.row}>

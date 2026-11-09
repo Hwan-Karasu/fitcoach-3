@@ -15,7 +15,7 @@ import * as Sharing from "expo-sharing";
 import Sortable from "react-native-sortables";
 import { CalendarDays, ChevronRight, Clock, EllipsisVertical, GripVertical, LayoutGrid, Plus, Share2, Timer, Trash2,
   Users } from "lucide-react-native";
-import { AppButton, ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, StatusTag, SupersetBorder, TimeWheelPicker, WeekCards, useWeekNavigation,
+import { AppButton, ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, RestDockSpacer, StatusTag, SupersetBorder, TimeWheelPicker, WeekCards, useWeekNavigation,
   type StatusKind } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { useReportScreenTone } from "../../../../shared/ui/theme/ScreenTone.tsx";
@@ -107,6 +107,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   useKeepAwake();
   // Возврат с таймера отдыха: после раскладки прокручиваем к упражнению, из которого он запущен, один раз на открытие.
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
+  /** Область прокрутки в окне: по ней `RestDockSpacer` считает, сколько нижнего края перекрывает панель таймеров. */
+  const scrollAreaRef = useRef<View>(null);
   const bodyY = useRef(0);
   const bodyRef = useRef<View>(null);
   const cardRefs = useRef(new Map<string, View>()).current;
@@ -252,9 +254,6 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const [edit, setEdit] = useState<DiaryEdit | null>(null);
   const [ordering, setOrdering] = useState<readonly string[] | null>(null);
   const [sharing, setSharing] = useState(false);
-  // Запас снизу под панель таймеров отдыха — только пока она видна (иначе внизу пустое место).
-  const [timers, setTimers] = useState(() => restTimers.list().length);
-  useEffect(() => restTimers.subscribe(() => setTimers(restTimers.list().length)), [restTimers]);
   const posterRef = useRef<View>(null);
   const appliedPick = useRef<string | null>(null);
   useEffect(() => {
@@ -513,7 +512,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     <>
       {participants}
       <GestureDetector gesture={pinch}>
-      <KeyboardAwareScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} contentContainerStyle={[styles.content, { paddingBottom: timers > 0 ? 200 : 24 }]}
+      <View ref={scrollAreaRef} collapsable={false} style={styles.scrollArea}>
+      <KeyboardAwareScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} contentContainerStyle={[styles.content, styles.contentFlush]}
         keyboardShouldPersistTaps="handled" bottomOffset={24}>
         <View style={[styles.topCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.titleRow}>
@@ -738,7 +738,9 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
           </Pressable>
         ) : null}
         </View> : null}
+        <RestDockSpacer scrollRef={scrollAreaRef} />
       </KeyboardAwareScrollView>
+      </View>
       </GestureDetector>
       {/* PC §48.86.13: ручная правка отметок; окончание после полуночи учитывается, длительность — только при валидной паре. */}
       <TimeWheelPicker visible={timeEdit !== null} minuteStep={1} min={0} max={24 * 60 - 1}
