@@ -1,3 +1,13 @@
+## 2026-11-09 — UI-концепт «в духе Onlyfits»: план реализации (только документы)
+
+- Макет `docs/ui/concepts/ONLYFITS_CONCEPT_2026-11-09.html`; решения UI-OWN-059…085 и ADR-059 — `PROPOSED`.
+- Добавлены `docs/ui/ONLYFITS_IMPLEMENTATION_PLAN.md` (по экрану: UI, UX, новая логика, файлы, тесты, открытые вопросы) и `docs/ui/UIX_BACKLOG.json` (UIX-01…17, `PLANNED`).
+- Решения владельца: Health Connect — в V1 наравне (gate UIX-15); порядок — общие компоненты, потом экраны; «Тренировки» без изменений (UI-OWN-080).
+- Health Connect: границы V1 изменены (`docs/ADDENDUM_HEALTH_CONNECT_2026-11-09.md`, `AGENTS.md`, README, projectbrief, LEGACY_CROSSWALK); ADR-059 APPROVED владельцем; распространение — APK «для своих», декларация Google Play отменена (`docs/release/GOOGLE_PLAY_HEALTH_DECLARATION.md` — заготовка); библиотека на SDK 57 не проверена, код не менялся.
+- Закрыты открытые вопросы: нет подтверждения закрытия окна записи; рисунки — один размер и ориентировочные диапазоны; сон 8 ч («не менее 7 ч для взрослых»); распространение — Google Play. Открыт gate Health Connect.
+- Ответы владельца: абонемент «кончается» при ≤ 3 занятиях; «−30/+30» остаются; анкета N % по всем вопросам; вес — ручной главнее, шаги — Health Connect; «Сохранить» в «Списке и карточках клиентов» убрана; поля упражнения в одну строку; рисунки собственные; библиотека Health Connect разрешена (gate — границы V1, Google Play).
+- Код приложения не менялся; проверки приложения не запускались.
+
 ## 2026-11-09 — build48: таймер, календарь, отступ, ввод
 
 - Собран `artifacts/apk/athlete-diary-3.0.0-build48.apk`: `com.fitcoach.v3`, 3.0.0, versionCode 48, arm64-v8a, 70 406 396 байт; assembleRelease PASS

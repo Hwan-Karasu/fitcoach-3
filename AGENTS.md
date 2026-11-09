@@ -39,8 +39,11 @@ GitHub `Hwan-Karasu/fitcoach`, ветка `stable/v2.0.0-build120`, — толь
   не добавлять без отдельного платформенного основания.
 - UI не обращается к SQLite напрямую. Calendar, Workout и Credit Ledger имеют
   независимую семантику. Структурные правки не уничтожают факты.
-- V1 — offline trainer-only. Client login, backend/cloud sync, client chat,
-  подписки приложения и Health Connect исключены.
+- V1 — offline trainer-only. Client login, backend/cloud sync, client chat и
+  подписки приложения исключены. Health Connect — только чтение для одной
+  карточки «для себя» по дополнению владельца от 2026-11-09
+  (`docs/ADDENDUM_HEALTH_CONNECT_2026-11-09.md`, ADR-059): им заменён §18.4
+  Product Contract «DEFER V1»; реализация — задачи UIX-15…18.
 
 ## Проверки
 

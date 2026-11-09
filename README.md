@@ -26,8 +26,9 @@
 
 - Android, React Native/Expo как выбранное архитектурное направление.
 - TypeScript strict, React Navigation, локальная SQLite как канонический SoT.
-- Offline trainer-only V1 без client auth, backend/cloud sync, подписок
-  приложения и Health Connect.
+- Offline trainer-only V1 без client auth, backend/cloud sync и подписок
+  приложения; Health Connect — только чтение для одной карточки «для себя»
+  (`docs/ADDENDUM_HEALTH_CONNECT_2026-11-09.md`).
 - Три корневых раздела: Клиенты, Календарь, Архив; отдельные Settings и Bell.
 - Client Workspace: Главная, Питание, Тренировки, Ещё.
 - Девять тем и по три совместимых акцента.

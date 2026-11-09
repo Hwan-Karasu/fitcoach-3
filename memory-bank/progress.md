@@ -1,6 +1,10 @@
 # Progress — 2026-11-03
 
 ## Сделано
+- 2026-11-09 Health Connect: границы V1 изменены (AGENTS.md, README, projectbrief, LEGACY_CROSSWALK + дополнение владельца), ADR-059 APPROVED, распространение — APK «для своих», декларация Google Play отменена (заготовка сохранена); код не менялся.
+- 2026-11-09 Закрыты остальные открытые вопросы плана (закрытие записи без подтверждения, рисунки, сон, Google Play); gate Health Connect остаётся.
+- 2026-11-09 Ответы владельца на открытые вопросы плана внесены (ONLYFITS_IMPLEMENTATION_PLAN.md, UIX_BACKLOG.json, UI_STYLE_DECISIONS.md, ADR-059); разрешена библиотека Health Connect, gate — границы V1 и Google Play.
+- 2026-11-09 UI-концепт «в духе Onlyfits»: решения UI-OWN-059…085 (PROPOSED), план `docs/ui/ONLYFITS_IMPLEMENTATION_PLAN.md`, задачи UIX-01…17 в `docs/ui/UIX_BACKLOG.json`. Код не менялся, на телефоне не проверено.
 - 2026-11-09 (ADR-058) REST-END-1, CAL-DONE-1, REST-INSET-1, INPUT-LAG-1: окончание таймера из трёх источников и один раз, «Отдых окончен»;
   «Завершить» отмечает и не начавшуюся запись, «Сегодня» держит только запись без исхода; запас под панель таймеров = перекрытие;
   показанный слот не вытесняется коммитом собственной записи. Тесты: rest-timer, workout-calendar-outcome, roster-overview,

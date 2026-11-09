@@ -14,7 +14,7 @@
 | Старые визуальные ограничения Client Home | Полный редизайн разрешён §53.4 при неизменной бизнес-семантике | Использовать старый экран только как поведенческий reference |
 | Client Inbox / proposal events | Локальный Notifications Center тренера | Не переносить чат, cloud inbox или approval workflow |
 | Notification scheduling | Schedule/delivery не являются бизнес-фактом | Отделить OS adapter от persisted notification center и доменных команд |
-| Health Connect | Исключён из V1 | Не добавлять экран, permissions и runtime adapter |
+| Health Connect | В V1 только чтение для одной карточки «для себя» (дополнение 2026-11-09) | Экраны, permissions и adapter — только по UIX-15…18; данные клиентов не читать |
 | Appointment, Workout и списание могли быть связаны UI-потоком | Три независимых источника; settlement инициирует Calendar workflow | Не завершать Workout и не менять Ledger скрытым side effect |
 | Структура программы и выполненные подходы | Факты независимы от ревизий плана | Stable fact identity; обычная правка не удаляет историю |
 | SQLite текущей версии | Не является автоматически production schema 3.0 | Legacy изучается для migration; DDL утверждается в `D01` |
