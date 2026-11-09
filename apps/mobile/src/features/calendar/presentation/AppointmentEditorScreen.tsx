@@ -366,9 +366,10 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
             <View style={styles.cell}><AppButton compact size="small" variant="secondary" disabled={busy}
               label={existing.outcome === "COMPLETED" ? "Отменить завершение" : "Отменить пропуск"}
               onPress={() => { void act((row) => repository.clearOutcome(row.id, row.revision)); }} /></View>
-            <View style={styles.cell}><AppButton compact size="small" variant="secondary" disabled={busy}
+            {/* Исход другой записи, не начавшейся, ставится только из дневника (ADR-058): здесь это дало бы ошибку «слишком рано». */}
+            {appointmentStarted(existing, now) ? <View style={styles.cell}><AppButton compact size="small" variant="secondary" disabled={busy}
               label={existing.outcome === "COMPLETED" ? "Отметить пропущенной" : "Отметить проведённой"}
-              onPress={() => { void resolve(existing.outcome === "COMPLETED" ? "MISSED" : "COMPLETED"); }} /></View>
+              onPress={() => { void resolve(existing.outcome === "COMPLETED" ? "MISSED" : "COMPLETED"); }} /></View> : null}
           </>}
           <View style={styles.cell}><AppButton compact size="small" variant="secondary" label="Отменена" disabled={busy}
             onPress={() => { void resolve("CANCELLED"); }} /></View>
