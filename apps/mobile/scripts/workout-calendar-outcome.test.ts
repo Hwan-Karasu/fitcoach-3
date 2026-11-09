@@ -17,6 +17,8 @@ import { createWorkoutOutcomeWorkflow } from "../src/workflows/completeWorkoutWi
 import { nodeSqlitePort } from "../../../scripts/support/node-sqlite-port.ts";
 
 // ADR-048: «Завершить тренировку» отмечает сегодняшнюю начавшуюся запись клиента в календаре. Время — параметром `at`.
+import { runMigrationsInTransaction } from "../src/shared/db/MigrationRunner.ts";
+import { TRANSFER_OWNER } from "../src/features/import/data/TransferReceiptStore.ts";
 const WS = "synthetic-workspace-a";
 const TODAY = "2026-10-28";
 const at = (hour: number, minute = 0) => new Date(2026, 9, 28, hour, minute);
@@ -182,6 +184,9 @@ test("AUD28-03 окончательное удаление клиента соо
   const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
   const repositories = createLocalRepositories(shared, WS, { meta: { version: "test", source: "REPDB", license: "test", exerciseCount: 0 }, exercises: [] } as unknown as SystemCatalog);
   await repositories.initialize();
+  // Участник удаления «квитанции переноса» (AUD26-01) читает свою таблицу; в приложении она есть всегда — здесь добавляем её схему.
+  const lease = await shared.acquire();
+  try { await lease.writer.write((tx) => runMigrationsInTransaction(tx, TRANSFER_OWNER.chain, TRANSFER_OWNER.ledger)); } finally { await shared.release(); }
   try {
     const gone = await repositories.clients.create({ displayName: "SyntheticGone" });
     const personal = (await repositories.calendar.listSessionTypes())[0]!;

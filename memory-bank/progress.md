@@ -33,7 +33,7 @@
 - Смена недели в конструкторе мезоцикла медленная (WorkoutsEditor.tsx / Sortable.Grid) — решено оставить; варианты в docs/PROJECT_STATUS.md.
 - Решения владельца из POLISH-1 (P-01…P-07 в CODE_AUDIT): разрешения Android RECORD_AUDIO/CAMERA/SYSTEM_ALERT_WINDOW
   (app.json), icon.png 2,2 МБ, токен scrim ×26, CI arch:check без assets/exercises, flash-list, отчёты docs/ui, старые APK.
-- AUD26-01 удаление клиента (training_transfer_receipts); AUD26-04 sync-v2-workbook.ts читает соседнюю папку FitCoach_2_Excel.
+- AUD26-01 закрыт 2026-11-09 (см. activeContext); AUD26-04 sync-v2-workbook.ts читает соседнюю папку FitCoach_2_Excel.
 - CA-23 импорт больших книг; CA-24 inline requires; CA-19 нет react-hooks lint; CA-12 DevTrainingPlansRepository.ts — решено не трогать.
 - I01-USER-PARITY: 544 значения и 243 занятия без даты. REL-ANDROID: debug-подпись, releaseReady:false.
 

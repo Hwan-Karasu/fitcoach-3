@@ -75,6 +75,7 @@ const deletionOwnerLabels: Readonly<Record<string, string>> = {
   "nutrition.calc": "настройки расчёта питания",
   "nutrition.targets": "цели питания",
   "notifications.center": "уведомления",
+  "training-transfer.receipts": "служебные записи переноса",
 };
 
 /** Consequence text built from the actual manifest, not a generic «Вы уверены?». */

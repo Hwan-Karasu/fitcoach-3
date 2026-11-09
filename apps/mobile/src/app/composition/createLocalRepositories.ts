@@ -15,6 +15,7 @@ import { DevQuestionnaireRepository, devQuestionnaireClientDeletionParticipant }
 import { DevSettingsRepository } from "../../features/settings/data/DevSettingsRepository.ts";
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant } from "../../features/training/plans/data/DevTrainingPlansRepository.ts";
 import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParticipant } from "../../features/training/execution/data/DevTrainingExecutionRepository.ts";
+import { devTransferReceiptsClientDeletionParticipant } from "../../features/import/data/TransferReceiptStore.ts";
 
 /** Actual application owner inventory, also used by the filesystem integration rehearsal.
  * Every holder belongs to the same physical file. Keep initialize/close derived from this
@@ -24,7 +25,8 @@ export function createLocalRepositories(database: SharedSqliteDatabase, workspac
     [devAccountingClientDeletionParticipant, devCalendarClientDeletionParticipant, devNotificationClientDeletionParticipant,
       devMeasurementClientDeletionParticipant, devNutritionCalcClientDeletionParticipant, devNutritionClientDeletionParticipant,
       devNutritionTargetsClientDeletionParticipant, devQuestionnaireClientDeletionParticipant,
-      devTrainingPlansClientDeletionParticipant, devTrainingExecutionClientDeletionParticipant]);
+      devTrainingPlansClientDeletionParticipant, devTrainingExecutionClientDeletionParticipant,
+      devTransferReceiptsClientDeletionParticipant]);
   const calendar = new DevCalendarRepository(database, workspaceId, devAccountingCalendarHook);
   const accounting = new DevAccountingRepository(database, workspaceId);
   const measurements = new DevMeasurementRepository(database, workspaceId);

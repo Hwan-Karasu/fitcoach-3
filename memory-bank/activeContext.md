@@ -37,7 +37,7 @@
 Список — memory-bank/archive/activeContext-before-input-lag-2026-11-09.md (ещё не проверено).
 
 ## Прочее открытое
-1. AUD26-01: удаление клиента и таблица training_transfer_receipts (createLocalRepositories.ts, DevClientRepository.ts:193).
+1. AUD26-01 закрыт 2026-11-09: участник удаления devTransferReceiptsClientDeletionParticipant (раньше проверка схемы блокировала окончательное удаление любого клиента в полной схеме).
 2. CA-23: падение импорта больших книг — ждём данные владельца. CA-24: замер inline requires.
 3. I01-USER-PARITY: 544 значения исправляет владелец, затем 25 книг и сверка с 2.0.
 4. Выпуск: подпись не debug (REL-ANDROID).
