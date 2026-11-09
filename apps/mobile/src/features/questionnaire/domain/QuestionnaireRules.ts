@@ -160,6 +160,13 @@ export function completionStatus(schema: QuestionnaireSchema, answers: Answers):
   return missing ? "IN_PROGRESS" : "COMPLETE";
 }
 
+/** UIX-10: «Заполнена на N %» — заполненные ÷ все видимые вопросы (решение владельца); скрытые и убранные не считаются. */
+export function completionPercent(schema: QuestionnaireSchema, answers: Answers): number {
+  const visible = allFields(schema).filter((item) => isFieldVisible(schema, item.field.id, answers));
+  if (visible.length === 0) return 0;
+  return Math.round(visible.filter((item) => hasAnswer(answers[item.field.id])).length / visible.length * 100);
+}
+
 function isIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
   const [year, month, day] = value.split("-").map(Number) as [number, number, number];

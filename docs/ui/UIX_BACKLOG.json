@@ -77,11 +77,11 @@
     },
     {
       "id": "UIX-10",
-      "state": "PLANNED",
+      "state": "IN_PROGRESS",
       "title": "Ещё: карточки с живыми подписями",
       "acceptance": "Заполненность анкеты = заполнено ÷ все вопросы, число занятий и последнее, итог месяца; тесты правил",
-      "evidence": "",
-      "remaining": "Нет"
+      "evidence": "Правило completionPercent (QuestionnaireRules.ts, экспорт через public.ts) и тесты scripts/questionnaire-completion.test.ts (в test:foundation)",
+      "remaining": "UI «Ещё»: карточки с живыми подписями (подписи «N занятий, последнее…», итог месяца — после UIX-11); на телефоне не проверено"
     },
     {
       "id": "UIX-11",
