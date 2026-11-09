@@ -1,22 +1,11 @@
 import { useEffect, useRef, type RefObject } from "react";
-import { Animated, BackHandler, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { Bell, Menu, Search, Settings, X } from "lucide-react-native";
+import { Animated, StyleSheet, Text, View } from "react-native";
+import { Bell, Menu, Settings } from "lucide-react-native";
 import { AppIconButton, BrandMark, ScreenHeader, SCREEN_HEADER_HEIGHT } from "../../shared/ui/components/public.ts";
 import { useUnreadNotifications } from "./NotificationsHost.tsx";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 import { appBrandName } from "./routeCatalog.ts";
-
-/** Поиск вкладки в шапке (UI-OWN-019): лупа рядом с колокольчиком раскрывает поле на всю строку. */
-export interface RootHeaderSearch {
-  readonly open: boolean;
-  readonly query: string;
-  readonly placeholder: string;
-  readonly onOpen: () => void;
-  readonly onChangeQuery: (value: string) => void;
-  /** Закрыть поиск и сбросить текст. */
-  readonly onClose: () => void;
-}
 
 /**
  * Одна строка шапки корневой вкладки (UI-OWN-001/016): вверху — знак и название приложения,
@@ -26,13 +15,12 @@ export interface RootHeaderSearch {
 export function RootHeader({
   title,
   collapsed,
-  search,
   onOpenNotifications,
   onOpenMenu,
   menuButtonRef,
   onOpenSettings,
   onBack,
-}: Readonly<{ title: string; collapsed: boolean; search?: RootHeaderSearch; onOpenNotifications: () => void;
+}: Readonly<{ title: string; collapsed: boolean; onOpenNotifications: () => void;
   onOpenMenu: () => void; menuButtonRef: RefObject<View | null>;
   /** Настройки раздела (шестерёнка календаря) — в одном ряду с колокольчиком и меню. */
   onOpenSettings?: () => void; onBack?: () => void }>) {
@@ -51,42 +39,11 @@ export function RootHeader({
     opacity: progress,
     transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
   };
-  // Системная «Назад» сначала закрывает поиск.
-  const closeSearch = search?.open ? search.onClose : null;
-  useEffect(() => {
-    if (closeSearch === null) return undefined;
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => { closeSearch(); return true; });
-    return () => subscription.remove();
-  }, [closeSearch]);
-
-  if (search?.open) {
-    return (
-      <ScreenHeader insetTop={false} onBack={search.onClose}>
-        <View style={[styles.searchField, { backgroundColor: colors.input, borderColor: colors.focusRing }]}>
-          <Search size={18} color={colors.textMuted} strokeWidth={2} />
-          <TextInput autoFocus value={search.query} onChangeText={search.onChangeQuery} placeholder={search.placeholder}
-            placeholderTextColor={colors.textMuted} selectionColor={colors.accentInk} returnKeyType="search"
-            accessibilityLabel={search.placeholder} style={[styles.searchInput, { color: colors.textPrimary }]} />
-          {search.query ? (
-            <Pressable accessibilityRole="button" accessibilityLabel="Очистить поиск" hitSlop={8}
-              onPress={() => search.onChangeQuery("")} style={styles.clear}>
-              <X size={18} color={colors.textSecondary} strokeWidth={2} />
-            </Pressable>
-          ) : null}
-        </View>
-      </ScreenHeader>
-    );
-  }
-
   return (
     <ScreenHeader insetTop={false} onBack={onBack} right={<>
       {onOpenSettings ? (
         <AppIconButton compact label={`Настройки: ${title.toLowerCase()}`}
           icon={<Settings size={20} color={colors.textPrimary} strokeWidth={1.8} />} onPress={onOpenSettings} />
-      ) : null}
-      {search ? (
-        <AppIconButton compact label={search.placeholder} icon={<Search size={20} color={colors.textPrimary} strokeWidth={1.8} />}
-          onPress={search.onOpen} />
       ) : null}
       <AppIconButton
         compact
@@ -124,8 +81,4 @@ const styles = StyleSheet.create({
   layer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, flexDirection: "row", alignItems: "center", gap: 8 },
   brand: { flexShrink: 1, fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
   title: { flexShrink: 1, fontFamily: fonts.bold, fontSize: 18, lineHeight: 23 },
-  searchField: { flex: 1, height: 40, marginRight: 4, borderWidth: 1, borderRadius: 10, paddingLeft: 10, paddingRight: 2,
-    flexDirection: "row", alignItems: "center", gap: 8 },
-  searchInput: { flex: 1, fontFamily: fonts.regular, fontSize: 14, paddingVertical: 0 },
-  clear: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
 });

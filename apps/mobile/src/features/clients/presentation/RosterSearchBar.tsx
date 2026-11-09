@@ -5,34 +5,40 @@ import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow, TOUCH_TARGET } from "../../../shared/ui/theme/style.ts";
 
 /**
- * Нижняя пилюля «Клиентов» (UIX-02, UI-OWN-060): слева кнопка фильтров (три линии, счётчик активных), поле поиска,
- * справа круглая акцентная «+». Лупы в шапке у вкладки нет; текст поиска — общий с шапкой через `useHeaderSearch`.
+ * Нижняя пилюля «Клиентов» и «Архива» (UIX-02/03, UI-OWN-060/066): слева кнопка из трёх линий (фильтры у клиентов, сортировка у архива;
+ * счётчик активных), поле поиска, справа круглая акцентная «+» (только у клиентов: `onCreate`). Лупы в шапке нет;
+ * текст поиска общий с шапкой вкладки через `useHeaderSearch`.
  */
-export function RosterSearchBar({ query, onChangeQuery, filterCount, onOpenFilters, onCreate }: Readonly<{
+export function RosterSearchBar({ query, onChangeQuery, placeholder, searchLabel, menuLabel, menuCount = 0, onOpenMenu, onCreate }: Readonly<{
   query: string;
   onChangeQuery: (value: string) => void;
-  /** Число включённых фильтров листа; 0 — без счётчика. */
-  filterCount: number;
-  onOpenFilters: () => void;
-  onCreate: () => void;
+  placeholder: string;
+  searchLabel: string;
+  /** Подпись кнопки слева для TalkBack: «Фильтры клиентов», «Сортировка архива». */
+  menuLabel: string;
+  /** Число включённых фильтров; 0 — без счётчика. */
+  menuCount?: number;
+  onOpenMenu: () => void;
+  /** Нет — без «+» (архив). */
+  onCreate?: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
     <View style={[styles.bar, shadow.floating, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Pressable accessibilityRole="button" accessibilityLabel={filterCount > 0 ? `Фильтры клиентов, включено: ${filterCount}` : "Фильтры клиентов"}
-        onPress={onOpenFilters} style={styles.round}>
+      <Pressable accessibilityRole="button" accessibilityLabel={menuCount > 0 ? `${menuLabel}, включено: ${menuCount}` : menuLabel}
+        onPress={onOpenMenu} style={styles.round}>
         <Menu size={22} color={colors.textPrimary} strokeWidth={2} />
-        {filterCount > 0 ? (
+        {menuCount > 0 ? (
           <View style={[styles.badge, { backgroundColor: colors.accentFill }]}>
-            <Text style={[styles.badgeText, { color: colors.onAccentFill }]}>{filterCount}</Text>
+            <Text style={[styles.badgeText, { color: colors.onAccentFill }]}>{menuCount}</Text>
           </View>
         ) : null}
       </Pressable>
       <View style={[styles.field, { backgroundColor: colors.input }]}>
         <Search size={18} color={colors.textMuted} strokeWidth={2} />
-        <TextInput value={query} onChangeText={onChangeQuery} placeholder="Найти клиента" placeholderTextColor={colors.textMuted}
-          selectionColor={colors.accentInk} returnKeyType="search" accessibilityLabel="Поиск по клиентам"
+        <TextInput value={query} onChangeText={onChangeQuery} placeholder={placeholder} placeholderTextColor={colors.textMuted}
+          selectionColor={colors.accentInk} returnKeyType="search" accessibilityLabel={searchLabel}
           style={[styles.input, { color: colors.textPrimary }]} />
         {query ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Очистить поиск" hitSlop={14} onPress={() => onChangeQuery("")}>
@@ -40,11 +46,13 @@ export function RosterSearchBar({ query, onChangeQuery, filterCount, onOpenFilte
           </Pressable>
         ) : null}
       </View>
-      <Pressable accessibilityRole="button" accessibilityLabel="Создать карточку клиента" onPress={onCreate}
-        hitSlop={{ top: 2, bottom: 2, left: 1, right: 1 }}
-        style={({ pressed }) => [styles.round, styles.plus, { backgroundColor: colors.accentFill, opacity: pressed ? 0.85 : 1 }]}>
-        <Plus size={24} color={colors.onAccentFill} strokeWidth={2.2} />
-      </Pressable>
+      {onCreate === undefined ? null : (
+        <Pressable accessibilityRole="button" accessibilityLabel="Создать карточку клиента" onPress={onCreate}
+          hitSlop={{ top: 2, bottom: 2, left: 1, right: 1 }}
+          style={({ pressed }) => [styles.round, styles.plus, { backgroundColor: colors.accentFill, opacity: pressed ? 0.85 : 1 }]}>
+          <Plus size={24} color={colors.onAccentFill} strokeWidth={2.2} />
+        </Pressable>
+      )}
     </View>
   );
 }

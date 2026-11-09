@@ -8,8 +8,8 @@
       "state": "IN_PROGRESS",
       "title": "Общие компоненты и геометрия",
       "acceptance": "BottomSheet, нижняя панель, pill/ChipGrid, RoundCard, SettingsRow, AppSwitch, поле-заливка, DayTabs, MetricScreenLayout, кольцо и графики; экспорт через public.ts",
-      "evidence": "AppSwitch (shared/ui/components) и перенос 7 Switch в 4 файлах; typecheck, lint, arch:check, source:verify, secrets:check зелёные; на телефоне не проверено",
-      "remaining": "Остальные общие компоненты (RoundCard, SettingsRow, DayTabs, MetricScreenLayout, BottomSheet, нижняя панель, pill/ChipGrid, поле-заливка, токены радиусов) создаются вместе с первым экраном-потребителем (правило проекта «без кода на вырост»)"
+      "evidence": "AppSwitch (shared/ui/components) и перенос 7 Switch в 4 файлах; typecheck, lint, arch:check, source:verify, secrets:check зелёные; на телефоне не проверено; BottomSheet (shared/ui/components, Modal) — первый потребитель: фильтры клиентов, сортировка и удаление в архиве",
+      "remaining": "Остальные общие компоненты (RoundCard, SettingsRow, DayTabs, MetricScreenLayout, нижняя панель, pill/ChipGrid, поле-заливка, токены радиусов) создаются вместе с первым экраном-потребителем (правило проекта «без кода на вырост»)"
     },
     {
       "id": "UIX-02",
@@ -21,11 +21,11 @@
     },
     {
       "id": "UIX-03",
-      "state": "PLANNED",
+      "state": "IMPLEMENTED_NOT_DEVICE_VERIFIED",
       "title": "Архив: карточки и две кнопки",
       "acceptance": "Карточки как у клиентов, «Вернуть» и «Удалить окончательно» в ряд, подтверждение листом; исправлен текст permanentDeleteDescription (с AUD26-01)",
-      "evidence": "",
-      "remaining": ""
+      "evidence": "Архив: карточки как у клиентов (радиус 26, аватар 52), без заголовка и счётчика; две кнопки в ряд («Вернуть в клиенты», «Удалить окончательно» — красная рамка); нижняя пилюля с сортировкой и поиском без «+»; подтверждение удаления нижним листом с текстом последствий. Общий BottomSheet (shared/ui), поиск в шапке корневых вкладок удалён; typecheck, lint, arch:check, test:foundation зелёные; текст подтверждения удаления исправлен: убрана ложная строка «Тренировки и питание ещё не подключены», добавлены русские подписи владельцев данных (тренировки, питание, уведомления), тест",
+      "remaining": "Проверка владельцем на телефоне. AUD26-01 (training_transfer_receipts при удалении клиента) остаётся отдельной задачей"
     },
     {
       "id": "UIX-04",

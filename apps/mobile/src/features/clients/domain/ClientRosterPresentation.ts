@@ -69,6 +69,12 @@ const deletionOwnerLabels: Readonly<Record<string, string>> = {
   "accounting.client": "записи абонемента, списаний и оплат",
   "measurements.body": "замеры",
   "questionnaire.answers": "ответы анкеты",
+  "training.plans": "планы и программы тренировок",
+  "training.execution": "выполненные тренировки",
+  "nutrition.diary": "дневник питания",
+  "nutrition.calc": "настройки расчёта питания",
+  "nutrition.targets": "цели питания",
+  "notifications.center": "уведомления",
 };
 
 /** Consequence text built from the actual manifest, not a generic «Вы уверены?». */
@@ -82,7 +88,6 @@ export function permanentDeleteDescription(manifest: ClientDeletionManifest): st
     `Будет удалено: карточка клиента${extra.length > 0 ? `; ${extra.join("; ")}` : ""}.`,
     ...appointments > 0 ? [`Записи календаря: ${appointments}. Будущие записи будут отменены, `
       + "прошлые останутся в истории календаря без данных клиента (как «Удалённый клиент»)."] : [],
-    "Тренировки и питание ещё не подключены, поэтому их данных у клиента нет.",
   ].join("\n\n");
 }
 

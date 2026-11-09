@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { StatusBar, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -12,7 +12,7 @@ import { HeaderScrollReporter, HeaderSearchProvider, type HeaderSearchState } fr
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { CalendarNavigator, type CalendarStackRoutes } from "./CalendarNavigator.tsx";
 import { getFocusedRouteNameFromRoute, StackActions, type NavigatorScreenParams } from "@react-navigation/native";
-import { RootHeader, type RootHeaderSearch } from "./RootHeader.tsx";
+import { RootHeader } from "./RootHeader.tsx";
 import { ArchiveNavigator, ClientsNavigator } from "./RootSectionNavigators.tsx";
 import { rootTabs } from "./routeCatalog.ts";
 import { RootTabBar } from "./RootTabBar.tsx";
@@ -76,24 +76,13 @@ export function RootTabs({
     Clients: (value: boolean) => setScrolled((current) => current.Clients === value ? current : { ...current, Clients: value }),
     Archive: (value: boolean) => setScrolled((current) => current.Archive === value ? current : { ...current, Archive: value }),
   }), []);
-  // Поиск «Клиентов» и «Архива» живёт в шапке (UI-OWN-019): лупа раскрывает поле, «назад» закрывает и сбрасывает.
+  // Поиск «Клиентов» и «Архива» — в нижней пилюле своего экрана (UI-OWN-060/066); текст живёт здесь, чтобы не пропадал при переходах между вкладками.
   type SearchTab = "Clients" | "Archive";
-  const [search, setSearch] = useState<Readonly<Record<SearchTab, Readonly<{ open: boolean; query: string }>>>>(
-    { Clients: { open: false, query: "" }, Archive: { open: false, query: "" } });
-  const patchSearch = useCallback((tab: SearchTab, next: Partial<{ open: boolean; query: string }>) =>
-    setSearch((current) => ({ ...current, [tab]: { ...current[tab], ...next } })), []);
+  const [queries, setQueries] = useState<Readonly<Record<SearchTab, string>>>({ Clients: "", Archive: "" });
   const searchContexts = useMemo((): Readonly<Record<SearchTab, HeaderSearchState>> => ({
-    Clients: { query: search.Clients.query, setQuery: (query) => patchSearch("Clients", { query }) },
-    Archive: { query: search.Archive.query, setQuery: (query) => patchSearch("Archive", { query }) },
-  }), [patchSearch, search]);
-  // У «Клиентов» поиск — в нижней пилюле экрана (UIX-02, UI-OWN-060); в шапке остаётся только у «Архива».
-  const headerSearch = (tab: keyof RootTabRoutes): RootHeaderSearch | undefined => tab !== "Archive" ? undefined : {
-    open: search[tab].open, query: search[tab].query,
-    placeholder: "Поиск по архиву",
-    onOpen: () => patchSearch(tab, { open: true }),
-    onChangeQuery: (query) => patchSearch(tab, { query }),
-    onClose: () => patchSearch(tab, { open: false, query: "" }),
-  };
+    Clients: { query: queries.Clients, setQuery: (query) => setQueries((current) => ({ ...current, Clients: query })) },
+    Archive: { query: queries.Archive, setQuery: (query) => setQueries((current) => ({ ...current, Archive: query })) },
+  }), [queries]);
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const counts = useSyncExternalStore(clientLists.counts.subscribe, clientLists.counts.getSnapshot,
@@ -118,7 +107,7 @@ export function RootTabs({
             } : undefined}
             onOpenSettings={route.name === "Calendar"
               ? () => navigation.navigate("Calendar", { screen: "CalendarSettings" }) : undefined}
-            collapsed={scrolled[route.name as keyof RootTabRoutes]} search={headerSearch(route.name as keyof RootTabRoutes)}
+            collapsed={scrolled[route.name as keyof RootTabRoutes]}
             onOpenNotifications={onOpenNotifications}
             onOpenMenu={() => setMenuVisible(true)} menuButtonRef={menuButtonRef} />;
           },

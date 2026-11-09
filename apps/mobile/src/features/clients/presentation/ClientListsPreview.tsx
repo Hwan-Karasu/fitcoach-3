@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useFocusEffect } from "@react-navigation/native";
-import { AppState, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { AppState, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Cake, PinOff } from "lucide-react-native";
-import { AppButton, AppIconButton, ClientRosterCard, ConfirmDialog, EmptyState, FilterPill,
+import { AppButton, AppIconButton, ClientRosterCard, BottomSheet, ChoiceGrid, EmptyState,
   InlineNotice,
-  ListSectionHeader, DropdownMenu, SkeletonList, useHeaderScrollHandler, useHeaderSearch, useFocusGatedVersion,
+  ListSectionHeader, SkeletonList, useHeaderScrollHandler, useHeaderSearch, useFocusGatedVersion,
   type DropdownOption } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { ArchiveSortMode, ClientArchivePort, ClientDeletionManifest } from
@@ -16,6 +16,7 @@ import type { RosterMetricId, RosterOverview, RosterOverviewPort } from "../doma
 import { ageOn, formatArchivedSince, formatYears, localCalendarDate, permanentDeleteDescription, presentArchivedClients,
   presentClientRoster } from "../domain/ClientRosterPresentation.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
+import { shadow } from "../../../shared/ui/theme/style.ts";
 import { EMPTY_ROSTER_FILTERS, rosterFilterCount, summarizeRoster, type ClientRosterFilters, type RosterRing } from "../domain/ClientRosterFilters.ts";
 import { ClientRosterFiltersDialog } from "./ClientRosterFiltersDialog.tsx";
 import { RosterSearchBar } from "./RosterSearchBar.tsx";
@@ -245,8 +246,8 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
           : roster.recent.birthdayText, null) : null}
         {roster?.regular.map((entry) => renderRow(entry.client, entry.birthdayBadge === null ? null : entry.birthdayText))}
       </ScrollView>
-      <RosterSearchBar query={query} onChangeQuery={setQuery} filterCount={filterCount}
-        onOpenFilters={() => setFiltersOpen(true)} onCreate={onOpenCreate} />
+      <RosterSearchBar query={query} onChangeQuery={setQuery} placeholder="Найти клиента" searchLabel="Поиск по клиентам"
+        menuLabel="Фильтры клиентов" menuCount={filterCount} onOpenMenu={() => setFiltersOpen(true)} onCreate={onOpenCreate} />
       <ClientRosterFiltersDialog visible={filtersOpen} filters={filters} sort={activeSort} countFor={countFor}
         onApply={setFilters} onSort={(mode) => { void chooseActiveSort(mode); }}
         onReset={() => { setFilters(EMPTY_ROSTER_FILTERS); setRing(null); }} error={error} onClose={() => setFiltersOpen(false)} />
@@ -274,8 +275,6 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
   const { query, setQuery } = useHeaderSearch();
   const { width, fontScale } = useWindowDimensions();
   const [sortOpen, setSortOpen] = useState(false);
-  const [toolbarHeight, setToolbarHeight] = useState(52);
-  const sortAnchor = useRef<View>(null);
   const onScroll = useHeaderScrollHandler();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -345,21 +344,10 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
     }
   };
 
+  const stacked = fontScale > 1.15 || width < 340;
   return (
     <View style={styles.screen}>
-      <View style={styles.toolbar} pointerEvents="box-none"
-        onLayout={(event) => setToolbarHeight(event.nativeEvent.layout.height)}>
-        <View style={styles.pills}>
-          <FilterPill label={sort === "NAME" ? "Имя А–Я" : "Недавно архивированные"}
-            accessibilityLabel="Сортировка архива" menu expanded={sortOpen} anchorRef={sortAnchor}
-            onPress={() => setSortOpen(true)} />
-        </View>
-      </View>
-      <ScrollView onScroll={onScroll} scrollEventThrottle={16} keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[styles.content, { paddingTop: toolbarHeight + 8 }]}>
-      {data !== null && total > 0 ? (
-        <Text style={[styles.message, { color: colors.textSecondary }]}>В архиве: {total}</Text>
-      ) : null}
+      <ScrollView onScroll={onScroll} scrollEventThrottle={16} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
       {notice !== null ? <InlineNotice kind="success">{notice}</InlineNotice> : null}
       <ListLoadState snapshot={snapshot} error={error}
         onRetry={() => { setError(null); readModel.refresh(); }} />
@@ -372,10 +360,9 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
         />
       ) : null}
       {visible?.map((row) => (
-        <View key={row.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View key={row.id} style={[styles.card, shadow.card, { backgroundColor: colors.surface }]}>
           <View style={styles.identityMain}>
-            <Text accessibilityElementsHidden style={[styles.avatar, { borderRadius: 8 },
-              { color: colors.textPrimary, backgroundColor: colors.surfaceRaised }]}>{clientMark(row)}</Text>
+            <Text accessibilityElementsHidden style={[styles.avatar, { color: colors.accentInk, backgroundColor: colors.accentSoft }]}>{clientMark(row)}</Text>
             <View style={styles.cardText}>
               <Text numberOfLines={2} style={[styles.name, { color: colors.textPrimary }]}>{row.displayName}</Text>
               <Text style={[styles.detail, { color: colors.textSecondary }]}>
@@ -383,45 +370,58 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
               </Text>
             </View>
           </View>
-          <View style={{ flexDirection: fontScale > 1.15 || width < 340 ? "column" : "row", gap: 8 }}>
-          <View style={fontScale > 1.15 || width < 340 ? undefined : styles.archiveAction}><AppButton variant="secondary" label="Вернуть в клиенты" busy={busyId === row.id}
-            disabled={busyId !== null} disabledReason="Дождитесь завершения операции"
-            onPress={() => { void restore(row); }} /></View>
-          <View style={fontScale > 1.15 || width < 340 ? undefined : styles.archiveAction}><AppButton variant="destructive" label="Удалить окончательно"
-            disabled={busyId !== null} disabledReason="Дождитесь завершения операции"
-            onPress={() => { void requestDelete(row); }} /></View>
+          <View style={[styles.actions, stacked ? styles.actionsStacked : null]}>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Вернуть в клиенты: ${row.displayName}`}
+              accessibilityState={{ disabled: busyId !== null, busy: busyId === row.id }} disabled={busyId !== null}
+              onPress={() => { void restore(row); }}
+              style={({ pressed }) => [styles.action, stacked ? null : styles.actionRow, { backgroundColor: colors.accentSoft, opacity: busyId !== null ? 0.5 : pressed ? 0.85 : 1 }]}>
+              <Text numberOfLines={2} style={[styles.actionText, { color: colors.onAccentSoft }]}>Вернуть в клиенты</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Удалить окончательно: ${row.displayName}`}
+              accessibilityState={{ disabled: busyId !== null }} disabled={busyId !== null}
+              onPress={() => { void requestDelete(row); }}
+              style={({ pressed }) => [styles.action, stacked ? null : styles.actionRow, { borderWidth: 1.5, borderColor: colors.danger, opacity: busyId !== null ? 0.5 : pressed ? 0.85 : 1 }]}>
+              <Text numberOfLines={2} style={[styles.actionText, { color: colors.danger }]}>Удалить окончательно</Text>
+            </Pressable>
           </View>
         </View>
       ))}
       </ScrollView>
-      <DropdownMenu visible={sortOpen} anchor={sortAnchor} title="Сортировка архива"
-        options={archiveSortOptions} selected={sort} onSelect={(mode) => { void chooseSort(mode); }}
-        onClose={() => setSortOpen(false)} />
-      <ConfirmDialog visible={pendingDelete !== null} confirmBusy={deleting} destructive
-        title={`Удалить «${pendingDelete?.displayName ?? ""}» окончательно?`}
-        description={pendingDelete === null ? "" : permanentDeleteDescription(pendingDelete)}
-        confirmLabel="Удалить окончательно"
-        onCancel={() => setPendingDelete(null)} onConfirm={() => { void confirmDelete(); }} />
+      <RosterSearchBar query={query} onChangeQuery={setQuery} placeholder="Найти в архиве" searchLabel="Поиск по архиву"
+        menuLabel="Сортировка архива" onOpenMenu={() => setSortOpen(true)} />
+      <BottomSheet visible={sortOpen} title="Сортировка архива" onClose={() => setSortOpen(false)}
+        footer={error === null ? undefined : <Text accessibilityRole="alert" style={[styles.message, { color: colors.danger, textAlign: "center" }]}>{error}</Text>}>
+        <ChoiceGrid group="Сортировка архива" columns={2} selected={[sort]} items={archiveSortOptions.map((option) => ({ id: option.value, label: option.label }))}
+          onPress={(id) => { void chooseSort(id as ArchiveSortMode); }} />
+      </BottomSheet>
+      <BottomSheet visible={pendingDelete !== null} title={`Удалить «${pendingDelete?.displayName ?? ""}» окончательно?`}
+        onClose={() => { if (!deleting) setPendingDelete(null); }}
+        footer={<View style={styles.actions}>
+          <View style={styles.actionRow}><AppButton variant="secondary" label="Отмена" disabled={deleting} onPress={() => setPendingDelete(null)} /></View>
+          <View style={styles.actionRow}><AppButton variant="destructive" label="Удалить окончательно" busy={deleting}
+            onPress={() => { void confirmDelete(); }} /></View>
+        </View>}>
+        <Text style={[styles.message, { color: colors.textPrimary }]}>{pendingDelete === null ? "" : permanentDeleteDescription(pendingDelete)}</Text>
+      </BottomSheet>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  archiveAction: { flexGrow: 1, flexBasis: 0 },
-  // Нижний отступ — чтобы последняя карточка не уходила под плавающую кнопку.
-  // Архив: тулбар с пилюлями остаётся до UIX-03.
-  toolbar: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, paddingHorizontal: 16, paddingTop: 4,
-    paddingBottom: 8, gap: 8 },
-  pills: { flexDirection: "row", alignItems: "center", gap: 8 },
   content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 96, gap: 8 },
   filters: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   message: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
-  card: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 12 },
+  card: { borderRadius: 26, padding: 14, gap: 12 },
+  actions: { flexDirection: "row", gap: 8 },
+  actionsStacked: { flexDirection: "column" },
+  actionRow: { flex: 1, minWidth: 0 },
+  action: { minHeight: 44, borderRadius: 22, paddingHorizontal: 10, alignItems: "center", justifyContent: "center" },
+  actionText: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17, textAlign: "center" },
   identityRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   identityMain: { flex: 1, minHeight: 52, flexDirection: "row", alignItems: "center", gap: 12 },
-  avatar: { minWidth: 52, minHeight: 52, borderRadius: 26, overflow: "hidden",
-    textAlign: "center", textAlignVertical: "center", fontFamily: fonts.regular, fontSize: 18, lineHeight: 47 },
+  avatar: { minWidth: 52, minHeight: 52, borderRadius: 18, overflow: "hidden",
+    textAlign: "center", textAlignVertical: "center", fontFamily: fonts.bold, fontSize: 18, lineHeight: 52 },
   cardText: { flexShrink: 1, gap: 2 },
   name: { fontSize: 15, lineHeight: 21, fontFamily: fonts.bold },
   detail: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },

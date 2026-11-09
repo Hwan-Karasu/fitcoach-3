@@ -225,3 +225,18 @@ test("UIX-02: фильтр кольца складывается с осталь
   assert.deepEqual(names("TODAY", { ...EMPTY_ROSTER_FILTERS, sex: "FEMALE" }), ["f"], "кольцо и лист пересекаются");
   assert.deepEqual(presentClientRoster({ ...base, ring: "WEEK" }).birthday, [], "при фильтре кольца именинник не закрепляется");
 });
+
+test("UIX-03: подтверждение удаления называет данные тренировок, питания и уведомлений по-русски и не утверждает, что их нет", () => {
+  const text = permanentDeleteDescription({ clientId: "a", displayName: "Анна", revision: 3,
+    owners: [{ owner: "clients.profile", rows: 1 }, { owner: "training.plans", rows: 4 }, { owner: "training.execution", rows: 12 },
+      { owner: "nutrition.diary", rows: 30 }, { owner: "nutrition.calc", rows: 2 }, { owner: "nutrition.targets", rows: 1 },
+      { owner: "notifications.center", rows: 5 }] });
+  assert.match(text, /планы и программы тренировок: 4/u);
+  assert.match(text, /выполненные тренировки: 12/u);
+  assert.match(text, /дневник питания: 30/u);
+  assert.match(text, /настройки расчёта питания: 2/u);
+  assert.match(text, /цели питания: 1/u);
+  assert.match(text, /уведомления: 5/u);
+  assert.doesNotMatch(text, /training\.|nutrition\.|notifications\./u, "служебные имена владельцев не показываются");
+  assert.doesNotMatch(text, /не подключены/u);
+});
