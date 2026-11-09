@@ -31,7 +31,7 @@ const sortOptions: readonly Readonly<{ id: RosterSortMode; label: string }>[] = 
  * Фильтры клиентов нижним листом (UIX-02, UI-OWN-064): «Пол», «Ограничения здоровья», «Абонемент», «Сортировка».
  * Сортировка применяется сразу, фильтры — по «Показать N» (N считает `countFor` по выбранному в листе).
  */
-export function ClientRosterFiltersDialog({ visible, filters, sort, countFor, onApply, onSort, onReset, onClose }: Readonly<{
+export function ClientRosterFiltersDialog({ visible, filters, sort, countFor, onApply, onSort, onReset, error = null, onClose }: Readonly<{
   visible: boolean;
   filters: ClientRosterFilters;
   sort: RosterSortMode;
@@ -39,6 +39,8 @@ export function ClientRosterFiltersDialog({ visible, filters, sort, countFor, on
   countFor: (filters: ClientRosterFilters) => number | null;
   onApply: (filters: ClientRosterFilters) => void;
   onSort: (mode: RosterSortMode) => void;
+  /** Ошибка сохранения сортировки: показывается в самом листе, а не под ним. */
+  error?: string | null;
   /** «Сбросить»: фильтры листа и кольцо сводки снимаются вместе. */
   onReset: () => void;
   onClose: () => void;
@@ -66,6 +68,7 @@ export function ClientRosterFiltersDialog({ visible, filters, sort, countFor, on
             onSelect={(credit) => setDraft({ ...draft, credit })} />
           <Choices<RosterSortMode> label="Сортировка" selected={sort} options={sortOptions} onSelect={onSort} />
         </ScrollView>
+        {error === null ? null : <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>{error}</Text>}
         <View style={styles.row}>
           <View style={styles.reset}><AppButton variant="secondary" label="Сбросить" onPress={() => { onReset(); onClose(); }} /></View>
           <View style={styles.show}><AppButton label={(() => { const shown = countFor(draft); return shown === null ? "Показать" : `Показать ${shown}`; })()} onPress={() => { onApply(draft); onClose(); }} /></View>
@@ -86,6 +89,7 @@ const styles = StyleSheet.create({
   group: { gap: 6 },
   label: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, letterSpacing: 0.8 },
   row: { flexDirection: "row", gap: 8 },
+  error: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, textAlign: "center" },
   reset: { flex: 1, minWidth: 0 },
   show: { flex: 2, minWidth: 0 },
 });

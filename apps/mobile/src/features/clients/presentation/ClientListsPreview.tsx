@@ -254,7 +254,7 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
         onOpenFilters={() => setFiltersOpen(true)} onCreate={onOpenCreate} />
       <ClientRosterFiltersDialog visible={filtersOpen} filters={filters} sort={activeSort} countFor={countFor}
         onApply={setFilters} onSort={(mode) => { void chooseActiveSort(mode); }}
-        onReset={() => { setFilters(EMPTY_ROSTER_FILTERS); setRing(null); }} onClose={() => setFiltersOpen(false)} />
+        onReset={() => { setFilters(EMPTY_ROSTER_FILTERS); setRing(null); }} error={error} onClose={() => setFiltersOpen(false)} />
     </View>
   );
 }
