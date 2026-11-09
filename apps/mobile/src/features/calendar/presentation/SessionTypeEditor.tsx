@@ -1,8 +1,8 @@
 import { useRef } from "react";
-import { AccessibilityInfo, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View, findNodeHandle } from "react-native";
+import { AccessibilityInfo, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, findNodeHandle } from "react-native";
 import { X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AppButton, AppIconButton, ChoiceSegments, InlineNotice, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
+import { AppButton, AppIconButton, ChoiceSegments, InlineNotice, SelectionChip, TextField, AppSwitch } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { APPOINTMENT_DURATIONS, SESSION_TYPE_COLORS, type SessionTypeCategory, type SessionTypeColor } from "../domain/CalendarModel.ts";
@@ -70,8 +70,7 @@ export function SessionTypeEditor({ draft, busy, error, occupiedColors, onChange
           </View>
           <View style={styles.creditRow}>
             <Text style={[styles.creditLabel, { color: colors.textPrimary }]}>Списывать из пакета</Text>
-            <Switch accessibilityLabel="Списывает тренировку из пакета" value={draft.requiresCredit} disabled={busy || draft.creditLocked}
-              trackColor={{ false: colors.border, true: colors.accentFill }} thumbColor={colors.surface}
+            <AppSwitch accessibilityLabel="Списывает тренировку из пакета" value={draft.requiresCredit} disabled={busy || draft.creditLocked}
               onValueChange={(requiresCredit) => onChange({ ...draft, requiresCredit })} />
           </View>
           {draft.creditLocked ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Списание зафиксировано: тип уже используется в записях.</Text> : null}

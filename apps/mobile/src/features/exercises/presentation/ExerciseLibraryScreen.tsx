@@ -1,10 +1,9 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
-import { BackHandler, FlatList, Image, Keyboard, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { BackHandler, FlatList, Image, Keyboard, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, type BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronRight, Dumbbell, Plus, SlidersHorizontal, Star, X } from "lucide-react-native";
-import { AppButton, FilterPill, FloatingActionButton, InlineNotice, LoadingState, SearchField,
-  } from "../../../shared/ui/components/public.ts";
+import { AppButton, FilterPill, FloatingActionButton, InlineNotice, LoadingState, SearchField, AppSwitch } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import type { ExerciseCatalogPort } from "../domain/ExerciseCatalogPort.ts";
@@ -325,8 +324,7 @@ export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, pi
             <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>Показывать скрытые</Text>
             <Text style={[styles.switchHint, { color: colors.textSecondary }]}>Упражнения, которые вы скрыли из каталога</Text>
           </View>
-          <Switch value={filters.showHidden} onValueChange={(showHidden) => setFilters({ ...filters, showHidden })}
-            trackColor={{ false: colors.border, true: colors.accentFill }} thumbColor={colors.surface} />
+          <AppSwitch accessibilityLabel="Показывать скрытые" value={filters.showHidden} onValueChange={(showHidden) => setFilters({ ...filters, showHidden })} />
         </Pressable>
         </>}
       </CatalogSheet>

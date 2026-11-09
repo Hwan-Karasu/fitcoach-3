@@ -5,11 +5,11 @@
   "tasks": [
     {
       "id": "UIX-01",
-      "state": "PLANNED",
+      "state": "IN_PROGRESS",
       "title": "Общие компоненты и геометрия",
       "acceptance": "BottomSheet, нижняя панель, pill/ChipGrid, RoundCard, SettingsRow, AppSwitch, поле-заливка, DayTabs, MetricScreenLayout, кольцо и графики; экспорт через public.ts",
-      "evidence": "",
-      "remaining": "Открытых вопросов нет"
+      "evidence": "AppSwitch (shared/ui/components) и перенос 7 Switch в 4 файлах; typecheck, lint, arch:check, source:verify, secrets:check зелёные; на телефоне не проверено",
+      "remaining": "Остальные общие компоненты (RoundCard, SettingsRow, DayTabs, MetricScreenLayout, BottomSheet, нижняя панель, pill/ChipGrid, поле-заливка, токены радиусов) создаются вместе с первым экраном-потребителем (правило проекта «без кода на вырост»)"
     },
     {
       "id": "UIX-02",

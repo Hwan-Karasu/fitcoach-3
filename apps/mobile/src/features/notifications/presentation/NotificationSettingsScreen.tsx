@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppState, StyleSheet, Switch, Text, View } from "react-native";
-import { AppButton, ChoiceSegments, HourMinutePicker, InlineNotice, LoadingState, TimeWheelPicker } from "../../../shared/ui/components/public.ts";
+import { AppState, StyleSheet, Text, View } from "react-native";
+import { AppButton, ChoiceSegments, HourMinutePicker, InlineNotice, LoadingState, TimeWheelPicker, AppSwitch } from "../../../shared/ui/components/public.ts";
 import { PrototypeScreen, SectionHeading } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
@@ -79,7 +79,6 @@ export function NotificationSettingsScreen({ center, platform, onChanged }: Read
   if (failed) return <PrototypeScreen><InlineNotice kind="error">Не удалось загрузить настройки уведомлений.</InlineNotice></PrototypeScreen>;
   if (settings === null) return <LoadingState label="Загружаем настройки…" />;
   const { appointment, duty, quietHours } = settings;
-  const toggleColors = { false: colors.border, true: colors.accentFill };
 
   return (
     <PrototypeScreen>
@@ -89,21 +88,21 @@ export function NotificationSettingsScreen({ center, platform, onChanged }: Read
 
       <SectionHeading>Записи</SectionHeading>
       <Row title="Напоминать о записях" detail="Одно напоминание на запись">
-        <Switch accessibilityLabel="Напоминать о записях" value={appointment.enabled} disabled={busy} trackColor={toggleColors} thumbColor={colors.surface}
+        <AppSwitch accessibilityLabel="Напоминать о записях" value={appointment.enabled} disabled={busy}
           onValueChange={(enabled) => { void save({ ...settings, appointment: { ...appointment, enabled } }, enabled); }} />
       </Row>
       {appointment.enabled ? <AppButton variant="secondary" label={`За ${leadText(appointment.minutesBefore)} до начала`} disabled={busy} onPress={() => setPicker("appointment")} /> : null}
 
       <SectionHeading>Дежурства</SectionHeading>
       <Row title="Напоминать о дежурствах" detail="Отдельно от записей">
-        <Switch accessibilityLabel="Напоминать о дежурствах" value={duty.enabled} disabled={busy} trackColor={toggleColors} thumbColor={colors.surface}
+        <AppSwitch accessibilityLabel="Напоминать о дежурствах" value={duty.enabled} disabled={busy}
           onValueChange={(enabled) => { void save({ ...settings, duty: { ...duty, enabled } }, enabled); }} />
       </Row>
       {duty.enabled ? <AppButton variant="secondary" label={`За ${leadText(duty.minutesBefore)} до начала`} disabled={busy} onPress={() => setPicker("duty")} /> : null}
 
       <SectionHeading>Тихие часы</SectionHeading>
       <Row title="Не беспокоить напоминаниями" detail="Попавшие в этот интервал напоминания не показываются и не переносятся. Таймер отдыха не отключается.">
-        <Switch accessibilityLabel="Тихие часы" value={quietHours.enabled} disabled={busy} trackColor={toggleColors} thumbColor={colors.surface}
+        <AppSwitch accessibilityLabel="Тихие часы" value={quietHours.enabled} disabled={busy}
           onValueChange={(enabled) => { void save({ ...settings, quietHours: { ...quietHours, enabled } }); }} />
       </Row>
       {quietHours.enabled ? <View style={styles.pair}>

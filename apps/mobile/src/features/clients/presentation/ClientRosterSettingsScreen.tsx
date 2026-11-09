@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
-import { StyleSheet, Switch, Text, View } from "react-native";
-import { AppButton, NumericField, SelectionChip } from "../../../shared/ui/components/public.ts";
+import { StyleSheet, Text, View } from "react-native";
+import { AppButton, NumericField, SelectionChip, AppSwitch } from "../../../shared/ui/components/public.ts";
 import { PrototypeScreen, SectionHeading } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { ClientRosterPort, RosterBirthdaySettings } from "../domain/ClientRosterPort.ts";
@@ -78,24 +78,21 @@ export function ClientRosterSettingsScreen({ repository }: Readonly<{
       <Text style={[styles.message, { color: colors.textSecondary }]}>Порядок плиток — по порядку включения.</Text>
       <View style={styles.toggleRow}>
         <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Значок ограничений здоровья</Text>
-        <Switch accessibilityLabel="Показывать ограничения здоровья" value={clientCards.showHealthBadge}
-          onValueChange={(showHealthBadge) => setClientCards({ showHealthBadge })}
-          trackColor={{ false: colors.border, true: colors.accentFill }} thumbColor={colors.surface} />
+        <AppSwitch accessibilityLabel="Показывать ограничения здоровья" value={clientCards.showHealthBadge}
+          onValueChange={(showHealthBadge) => setClientCards({ showHealthBadge })} />
       </View>
       </View>
       <View style={[styles.block, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <SectionHeading>Панель навигации</SectionHeading>
       <View style={styles.toggleRow}>
         <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>К списку клиентов</Text>
-        <Switch accessibilityLabel="Показывать кнопку К списку клиентов" value={navigationAppearance.showClientListShortcut}
-          onValueChange={(enabled) => setNavigationAppearance("showClientListShortcut", enabled)}
-          trackColor={{ false: colors.border, true: colors.accentFill }} thumbColor={colors.surface} />
+        <AppSwitch accessibilityLabel="Показывать кнопку К списку клиентов" value={navigationAppearance.showClientListShortcut}
+          onValueChange={(enabled) => setNavigationAppearance("showClientListShortcut", enabled)} />
       </View>
       <View style={styles.toggleRow}>
         <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Подписи кнопок навигации</Text>
-        <Switch accessibilityLabel="Показывать подписи кнопок навигации" value={!navigationAppearance.hideNavigationLabels}
-          onValueChange={(enabled) => setNavigationAppearance("hideNavigationLabels", !enabled)}
-          trackColor={{ false: colors.border, true: colors.accentFill }} thumbColor={colors.surface} />
+        <AppSwitch accessibilityLabel="Показывать подписи кнопок навигации" value={!navigationAppearance.hideNavigationLabels}
+          onValueChange={(enabled) => setNavigationAppearance("hideNavigationLabels", !enabled)} />
       </View>
       </View>
       <View style={[styles.block, { backgroundColor: colors.surface, borderColor: colors.border }]}>

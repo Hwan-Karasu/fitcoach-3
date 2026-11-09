@@ -1,5 +1,6 @@
 export { AppButton, type AppButtonVariant } from "./AppButton.tsx";
 export { AppIconButton } from "./AppIconButton.tsx";
+export { AppSwitch } from "./AppSwitch.tsx";
 export { SearchField } from "./SearchField.tsx";
 export { SelectionChip } from "./SelectionChip.tsx";
 export { SectionTabs } from "./SectionTabs.tsx";
