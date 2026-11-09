@@ -1,24 +1,20 @@
 # Progress — 2026-11-03
 
 ## Сделано
+- 2026-11-09 (ADR-058) REST-END-1, CAL-DONE-1, REST-INSET-1, INPUT-LAG-1: окончание таймера из трёх источников и один раз, «Отдых окончен»;
+  «Завершить» отмечает и не начавшуюся запись, «Сегодня» держит только запись без исхода; запас под панель таймеров = перекрытие;
+  показанный слот не вытесняется коммитом собственной записи. Тесты: rest-timer, workout-calendar-outcome, roster-overview,
+  rest-dock-spacer (новый), training-snapshot-cache. На телефоне не проверено; вклад INPUT-LAG-1 в задержку не измерен.
 - 2026-11-03 (ADR-057) BKP-DIAG-1, BKP-LOCK-1, BKP-STAGE-1, BKP-PERF-1/2/3, BKP-BUSY-1: причина сбоя копии по этапу и код на экране,
   одна очередь ручной/авто, этапы/процент/время, хеш порциями по ключу, одна копия SQLite, без записей — без копирования. build47.
   Тесты: backup-coordination (новый), r06-portable-snapshot (keyset = оракул), r06-backup-media (seal с известным хешем),
   shared-database-maintenance (changeToken). Замер ПК: scripts/backup-bench.ts. На телефоне не проверено.
-- 2026-10-29 (ADR-055) AUTO-BACKUP-1/2/3, WRITE-PATH-1: нативный хеш файла автокопии, порции ≤ 8 мс, автокопия ждёт паузы в тренировке,
-  одно соединение записи, одно перечитывание на серию подходов. Тесты: time-slice, local-file-sha256, automatic-scheduler,
-  sqlite-isolated-connection, training-navigation. На телефоне не проверено.
-- 2026-10-29 (ADR-054) SET-DONE-1, TPL-KIND-1, BUILDER-TABS-1, PROG-MENU-1, PART-DOCK-1, REST-NAV-1, UI-COMPACT-1, REST-PERF-1:
-  см. docs/PROJECT_STATUS.md. Новые тесты: participant-group-state, TPL-KIND (training-transfer, training-templates, template-cycles),
-  SET-DONE-1 (rest-timer, training-execution), REST-NAV-1 (notification-target), PART-DOCK-1 (training-navigation). На телефоне не проверено.
-  Техдолг: триггер перечитывания дневника в живой сессии не установлен (useWorkoutSnapshot.ts: перечитывание того же слота закрывает
-  ввод — ячейки теперь дописываются после загрузки, но причину перечитывания нужно поймать логом на телефоне); переход с таймера
-  внутри того же клиента по-прежнему пересоздаёт экран клиента (PrototypeShell.tsx openTarget, `StackActions.replace`).
-- 2026-10-29 (ADR-053) REST-FIX-1…7: см. docs/PROJECT_STATUS.md; тесты PERF-REST-ALL, active-workouts, training-execution («Макс.», «Пред.»).
-  На телефоне не проверено. Отклонено: точечный сброс кэша планов по клиентам (ревизия программы общая).
 - 2026-10-28 и ранее — memory-bank/archive/progress-before-backup-audit-2026-11-03.md.
 
 ## Открыто / техдолг
+- INPUT-LAG-1: причина задержки ввода у владельца не измерена; если после новой сборки p95 («Report cell input latency») заметен —
+  следующий срез: вынести карточку упражнения WorkoutScreen в memo-компонент (WorkoutScreen.tsx, блок `supersetRuns(...).map`).
+- REST-INSET-1: `RestDockSpacer` считает низ окна по `useWindowDimensions` (Android edge-to-edge может дать погрешность в несколько dp).
 - Первопричина «Не удалось подготовить автоматическую копию» у владельца не установлена (ADR-057): нужен код этапа с экрана build47.
   Hermes-время копии не измерено — владелец присылает строку «Создана за N с» с разбивкой.
 - Автокопия без записей не сверяет внешние файлы (AutomaticBackupService.ts, ветка changeToken): удалённая извне копия пересоздаётся
