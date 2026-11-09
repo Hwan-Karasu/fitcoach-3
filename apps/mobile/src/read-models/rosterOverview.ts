@@ -7,6 +7,12 @@ import type { TrainingHistoryPort } from "./trainingHistory.ts";
 import type { Answers, QuestionnaireRepositoryPort } from "../features/questionnaire/public.ts";
 import { packSummary, type HomeSummaryRules } from "./clientHomeSummary.ts";
 
+/** Понедельник недели, в которую входит дата (неделя пн–вс). */
+function weekStart(date: string): string {
+  const day = new Date(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)))).getUTCDay();
+  return shiftDate(date, -((day + 6) % 7));
+}
+
 /** Насколько вперёд ищем «следующее занятие». */
 const LOOKAHEAD_DAYS = 90;
 
@@ -76,6 +82,11 @@ export function buildRosterOverview(input: Readonly<{
     // (и «Отменена» — она отсеяна выше) означают, что день с клиентом решён. Запись остаётся в календаре и в истории.
     const today = rows.find((row) => row.localDate === input.today && row.lifecycle === "SCHEDULED" && row.outcome === null
       && row.startMinute + row.durationMinutes > input.nowMinute);
+    const weekFrom = weekStart(input.today);
+    const weekTo = shiftDate(weekFrom, 6);
+    const weekCount = rows.filter((row) => row.localDate >= weekFrom && row.localDate <= weekTo).length;
+    const todayCount = rows.filter((row) => row.localDate === input.today && row.lifecycle === "SCHEDULED" && row.outcome === null
+      && row.startMinute + row.durationMinutes > input.nowMinute).length;
     const metrics: RosterMetricValue[] = [
         { id: "nextAppointment", value: next === undefined ? null : formatNext(next, input.today) },
         // Последняя тренировка появится вместе с дневником тренировок (T03).
@@ -94,6 +105,12 @@ export function buildRosterOverview(input: Readonly<{
         const pack = packSummary(input.rules, input.accounting.get(clientId) ?? null, input.today);
         return pack.kind === "TRACKED" ? (pack.available > 0 ? "AVAILABLE" : "EMPTY")
           : pack.kind === "NO_PACK" ? "NO_PACK" : pack.kind === "NOT_TRACKED" ? "NOT_TRACKED" : "UNKNOWN";
+      })(),
+      todayCount,
+      weekCount,
+      creditsAvailable: (() => {
+        const pack = packSummary(input.rules, input.accounting.get(clientId) ?? null, input.today);
+        return pack.kind === "TRACKED" ? pack.available : null;
       })(),
       todayStartMinute: today?.startMinute ?? null,
       todayEndMinute: today === undefined ? null : today.startMinute + today.durationMinutes,
@@ -129,7 +146,7 @@ export function createRosterOverviewSource(ports: Readonly<{
       const today = localDate(now);
       const selected = new Set(metricIds);
       const [range, snapshots, answers, extra] = await Promise.all([
-        safe(() => ports.calendar.listRange(today, shiftDate(today, LOOKAHEAD_DAYS))),
+        safe(() => ports.calendar.listRange(weekStart(today), shiftDate(today, LOOKAHEAD_DAYS))),
         Promise.all(clientIds.map((id) => safe(() => ports.accounting.getClientSnapshot(id)))),
         Promise.all(clientIds.map((id) => Promise.resolve().then(() => ports.questionnaire.getAnswers(id))
           .then((value) => ({ value, failed: false }), () => ({ value: null, failed: true })))),

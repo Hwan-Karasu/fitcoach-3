@@ -18,6 +18,12 @@ export interface RosterClientOverview {
   readonly todayStartMinute: number | null;
   /** Когда эта запись закончится — момент, когда фильтр «Сегодня» может измениться. */
   readonly todayEndMinute: number | null;
+  /** Сегодняшние записи без исхода, ещё не закончившиеся (число «Занятий сегодня» в сводке). */
+  readonly todayCount?: number;
+  /** Записи этой недели (пн–вс), кроме отменённых (число «Занятий на неделе»). */
+  readonly weekCount?: number;
+  /** Остаток занятий числом: только для учёта в FitCoach, иначе null (правило «кончается абонемент»). */
+  readonly creditsAvailable?: number | null;
 }
 
 export type RosterOverview = ReadonlyMap<string, RosterClientOverview>;

@@ -1,5 +1,6 @@
 import type { ClientAccountingSnapshot } from "../features/accounting/public.ts";
 import type { ClientHomeSummary, HomePackSummary } from "../features/clients/public.ts";
+import { CREDITS_ENDING_MAX } from "../shared/domain/CreditsEnding.ts";
 
 /** Owners' pure rules, injected so this projection stays type-only towards feature public APIs. */
 export interface HomeSummaryRules {
@@ -7,8 +8,7 @@ export interface HomeSummaryRules {
   readonly pricePerSessionKopeks: (totalKopeks: number, sessions: number) => number;
 }
 
-/** «Подходит к концу» threshold, taken from the build120 reference; not a new product rule. */
-const LOW_CREDITS = 2;
+/** «Подходит к концу»: порог общий с кольцом «Кончается абонемент» на «Клиентах» (CREDITS_ENDING_MAX = 3, решение владельца 2026-11-09). */
 
 /** Only packs usable today count; the ledger owner already derived each balance. */
 export function packSummary(rules: HomeSummaryRules, snapshot: ClientAccountingSnapshot | null, today: string): HomePackSummary {
@@ -31,7 +31,7 @@ export function packSummary(rules: HomeSummaryRules, snapshot: ClientAccountingS
     ? rules.formatKopeks(rules.pricePerSessionKopeks(next.pack.totalKopeks, next.pack.grantedCount)) : null;
   return {
     kind: "TRACKED", available, granted, reserved,
-    tone: available === 0 ? "empty" : available <= LOW_CREDITS ? "warning" : "active",
+    tone: available === 0 ? "empty" : available <= CREDITS_ENDING_MAX ? "warning" : "active",
     pricePerSession: price, expiresOn: next?.pack.expiresOn ?? null,
     writeOffAvailable: next !== undefined && next.available > 0 && (next.pack.expiresOn === null || next.pack.expiresOn >= today),
     returnableDebitId: snapshot.returnableDebitId,

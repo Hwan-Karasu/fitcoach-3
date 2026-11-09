@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EMPTY_ROSTER_FILTERS, matchesRosterFilters, rosterFilterCount } from "../apps/mobile/src/features/clients/domain/ClientRosterFilters.ts";
+import { CREDITS_ENDING_MAX, EMPTY_ROSTER_FILTERS, matchesRosterFilters, rosterFilterCount, summarizeRoster } from "../apps/mobile/src/features/clients/domain/ClientRosterFilters.ts";
 import type { RosterClientOverview } from "../apps/mobile/src/features/clients/domain/ClientRosterOverview.ts";
 import { birthdayOccurrenceForYear, formatArchivedSince, permanentDeleteDescription,
   presentArchivedClients, presentClientRoster } from
@@ -186,4 +186,42 @@ test("Дата ближайшего дня рождения на закрепл�
   assert.equal(text.get("today"), "Сегодня, 17 окт.");
   assert.equal(text.get("tomorrow"), "Завтра, 18 окт.");
   assert.equal(text.get("soon"), "25 окт., через 8 дн.");
+});
+
+test("UIX-02: сводка дня — занятия сегодня и на неделе, «кончается абонемент» при остатке 0…3 занятий", () => {
+  const fact = (over: Partial<RosterClientOverview>): RosterClientOverview => ({ metrics: [], restricted: false, restrictionsKnown: true,
+    creditStatus: "UNKNOWN", todayStartMinute: null, todayEndMinute: null, ...over });
+  const overview = new Map<string, RosterClientOverview>([
+    ["a", fact({ todayCount: 2, weekCount: 5, creditsAvailable: 3, creditStatus: "AVAILABLE" })],
+    ["b", fact({ todayCount: 0, weekCount: 1, creditsAvailable: 4, creditStatus: "AVAILABLE" })],
+    ["c", fact({ todayCount: 1, weekCount: 1, creditsAvailable: 0, creditStatus: "EMPTY" })],
+    ["d", fact({ creditsAvailable: null, creditStatus: "NOT_TRACKED" })],
+  ]);
+  assert.deepEqual(summarizeRoster(overview, ["a", "b", "c", "d"]), { today: 3, week: 7, ending: 2 });
+  assert.deepEqual(summarizeRoster(overview, ["b", "d"]), { today: 0, week: 1, ending: 0 }, "только видимые клиенты");
+  assert.deepEqual(summarizeRoster(new Map(), ["a"]), { today: 0, week: 0, ending: 0 }, "нет данных — нули, не ошибка");
+  assert.equal(CREDITS_ENDING_MAX, 3);
+});
+
+test("UIX-02: фильтр кольца складывается с остальными фильтрами; «Сегодня» упорядочен по началу записи", () => {
+  const male = { ...row("m", "Михаил", null), sex: "MALE" as const };
+  const female = { ...row("f", "Фаина", null), sex: "FEMALE" as const };
+  const third = { ...row("z", "Захар", null), sex: "MALE" as const };
+  const fact = (over: Partial<RosterClientOverview>): RosterClientOverview => ({ metrics: [], restricted: false, restrictionsKnown: true,
+    creditStatus: "AVAILABLE", todayStartMinute: null, todayEndMinute: null, ...over });
+  const overview = new Map<string, RosterClientOverview>([
+    ["m", fact({ weekCount: 2, creditsAvailable: 3, todayStartMinute: 900, todayEndMinute: 960, todayCount: 1 })],
+    ["f", fact({ weekCount: 1, creditsAvailable: 8, todayStartMinute: 600, todayEndMinute: 660, todayCount: 1 })],
+    ["z", fact({ weekCount: 0, creditsAvailable: 2 })],
+  ]);
+  const base = { rows: [male, female, third], search: "", sort: "NAME" as const, today: "2026-10-17", birthday: settings, dismissals: [], overview };
+  const names = (ring: "TODAY" | "WEEK" | "ENDING" | null, filters = EMPTY_ROSTER_FILTERS) =>
+    presentClientRoster({ ...base, ring, filters }).regular.map((entry) => entry.client.id);
+  assert.deepEqual(names(null), ["z", "m", "f"], "без кольца — по имени");
+  assert.deepEqual(names("TODAY"), ["f", "m"], "по времени начала записи");
+  assert.deepEqual(names("WEEK"), ["m", "f"], "есть занятия на неделе, по имени");
+  assert.deepEqual(names("ENDING"), ["z", "m"], "остаток 3 и 2 занятия, по имени");
+  assert.deepEqual(names("ENDING", { ...EMPTY_ROSTER_FILTERS, sex: "MALE" }), ["z", "m"]);
+  assert.deepEqual(names("TODAY", { ...EMPTY_ROSTER_FILTERS, sex: "FEMALE" }), ["f"], "кольцо и лист пересекаются");
+  assert.deepEqual(presentClientRoster({ ...base, ring: "WEEK" }).birthday, [], "при фильтре кольца именинник не закрепляется");
 });

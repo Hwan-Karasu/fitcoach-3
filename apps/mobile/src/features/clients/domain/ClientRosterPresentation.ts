@@ -175,14 +175,20 @@ export function presentClientRoster(input: Readonly<{
   todayStarts?: ReadonlyMap<string, number> | null;
   filters?: ClientRosterFilters;
   overview?: RosterOverview | null;
+  /** Кольцо сводки (UIX-02): складывается с фильтрами листа; «Сегодня» упорядочено по началу записи. */
+  ring?: RosterRing | null;
 }>): PresentedRoster {
   if (dateEpoch(input.today) === null) throw new Error("ROSTER_TODAY_INVALID");
   const needle = input.search.trim().toLowerCase();
   const searching = needle.length > 0;
   const dismissed = new Set(input.dismissals.map((row) => JSON.stringify([row.clientId, row.occurrenceDate])));
-  const todayStarts = input.todayStarts ?? null;
+  const ring = input.ring ?? null;
+  const todayStarts = ring === "TODAY"
+    ? new Map([...(input.overview ?? [])].flatMap(([id, facts]) => facts.todayStartMinute === null ? [] : [[id, facts.todayStartMinute] as const]))
+    : input.todayStarts ?? null;
   const presented = input.rows.filter((row) => row.lifecycle === "ACTIVE"
     && matchesRosterFilters(row, input.overview?.get(row.id), input.filters ?? EMPTY_ROSTER_FILTERS)
+    && matchesRosterRing(input.overview?.get(row.id), ring)
     && (todayStarts === null || todayStarts.has(row.id))
     && [row.displayName, row.contactPhone, row.contactEmail]
       .some((value) => value?.toLowerCase().includes(needle)))
@@ -200,7 +206,7 @@ export function presentClientRoster(input: Readonly<{
     regular: [...presented].sort((a, b) => (todayStarts.get(a.client.id) ?? 0) - (todayStarts.get(b.client.id) ?? 0)
       || byName(a, b)),
   };
-  if (searching) return {
+  if (searching || ring !== null) return {
     birthday: [], recent: null, regular: [...presented].sort(bySelectedSort(input.sort)), searching, todayOnly: false,
   };
   const birthday = input.birthday.birthdayPinEnabled
@@ -220,5 +226,5 @@ export function presentClientRoster(input: Readonly<{
     searching, todayOnly: false,
   };
 }
-import { EMPTY_ROSTER_FILTERS, matchesRosterFilters, type ClientRosterFilters } from "./ClientRosterFilters.ts";
+import { EMPTY_ROSTER_FILTERS, matchesRosterFilters, matchesRosterRing, type ClientRosterFilters, type RosterRing } from "./ClientRosterFilters.ts";
 import type { RosterOverview } from "./ClientRosterOverview.ts";

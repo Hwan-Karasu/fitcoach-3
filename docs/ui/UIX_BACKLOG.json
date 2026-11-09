@@ -13,11 +13,11 @@
     },
     {
       "id": "UIX-02",
-      "state": "PLANNED",
+      "state": "IN_PROGRESS",
       "title": "Клиенты: сводка, карточки, фильтры, пилюля поиска",
       "acceptance": "Три кольца с фильтром, карточка с равными плашками, именинник, лист фильтров; «Занятий на неделе» и правило «кончается абонемент» (осталось ≤ 3 занятий) с тестами на границе 3/4/0/«без учёта»; сложение фильтров",
-      "evidence": "",
-      "remaining": "Сложение фильтров кольца и листа"
+      "evidence": "Логика готова и покрыта тестами: CREDITS_ENDING_MAX=3 (shared/domain), summarizeRoster, фильтр кольца matchesRosterRing + presentClientRoster({ring}), поля обзора todayCount/weekCount/creditsAvailable, неделя пн–вс в rosterOverview; порог «Главной» = 3. test:foundation 1102/1102",
+      "remaining": "UI: три кольца, карточки с равными плашками, именинник, пилюля «фильтры · поиск · +», лист фильтров; подключение ring/summarizeRoster в ClientListsPreview; на телефоне не проверено"
     },
     {
       "id": "UIX-03",

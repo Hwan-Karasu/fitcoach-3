@@ -117,3 +117,38 @@ test("optional roster tiles use owner facts, retain zero, and skip reads for uns
   assert.equal(value("B", "steps"), null);
   assert.deepEqual([measurementReads, foodReads, stepReads], [2, 2, 2]);
 });
+
+test("UIX-02: занятия сегодня и на неделе (пн–вс), остаток абонемента числом; отменённые не считаются", () => {
+  // 2026-10-17 — суббота; неделя 12.10–18.10. Сейчас 10:30.
+  const done = (id: string, start: number, date: string): Appointment => ({ ...appointment(id, "A", date, start), outcome: "COMPLETED" });
+  const overview = buildRosterOverview({
+    rules, clientIds: ["A", "B"], today: "2026-10-17", nowMinute: 10 * 60 + 30,
+    appointments: [
+      done("a0", 9 * 60, "2026-10-13"),                       // вторник — проведена, неделя
+      appointment("a1", "A", "2026-10-14", 9 * 60, "CANCELLED"), // отменена — не считается
+      appointment("a2", "A", "2026-10-17", 10 * 60),          // сегодня, идёт
+      appointment("a3", "A", "2026-10-17", 12 * 60),          // сегодня, позже
+      appointment("a4", "A", "2026-10-18", 9 * 60),           // воскресенье
+      appointment("a5", "A", "2026-10-19", 9 * 60),           // следующая неделя
+      done("a6", 8 * 60, "2026-10-17"),                       // сегодня, уже проведена — не «сегодня по расписанию»
+    ],
+    accounting: new Map([["A", tracked(3)], ["B", tracked(0)]]),
+    answers: new Map(),
+  });
+  const a = overview.get("A");
+  assert.equal(a?.weekCount, 5, "13, 17, 17, 17, 18 — отменённая и следующая неделя не входят");
+  assert.equal(a?.todayCount, 2, "две незавершённые сегодня, проведённая не в счёт");
+  assert.equal(a?.creditsAvailable, 3);
+  assert.equal(overview.get("B")?.creditsAvailable, 0);
+  assert.equal(overview.get("B")?.weekCount, 0);
+});
+
+test("UIX-02: остаток абонемента числом только для учёта в FitCoach; без учёта и без данных — null", () => {
+  const overview = buildRosterOverview({
+    rules, clientIds: ["A", "B", "C"], today: "2026-10-17", nowMinute: 0, appointments: [],
+    accounting: new Map([["A", { ...tracked(4), mode: "UNTRACKED" } as unknown as ClientAccountingSnapshot], ["B", null]]), answers: new Map(),
+  });
+  assert.equal(overview.get("A")?.creditsAvailable, null);
+  assert.equal(overview.get("B")?.creditsAvailable, null);
+  assert.equal(overview.get("C")?.creditsAvailable, null);
+});
