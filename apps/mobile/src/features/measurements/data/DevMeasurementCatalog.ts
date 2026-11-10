@@ -1,3 +1,7 @@
 /** D01-2: runtime catalog; the 63-step dev history is archived under scripts/d01/history. */
-export { measurementsBaseline as devMeasurementCatalog } from "./MeasurementsBaseline.generated.ts";
+import type { MigrationStep } from "../../../shared/db/MigrationRunner.ts";
+import { measurementMethodMigration } from "./MeasurementMethodMigration.ts";
+import { measurementsBaseline } from "./MeasurementsBaseline.generated.ts";
+
+export const devMeasurementCatalog: readonly MigrationStep[] = [...measurementsBaseline, measurementMethodMigration];
 export const DEV_MEASUREMENT_LEDGER = "measurement_schema_migrations";

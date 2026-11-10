@@ -85,7 +85,7 @@ test("миграция замеров v2: данные, основные зна�
     assert.deepEqual(data.measurements.map((row) => [row.id, row.type, row.valueX10]).sort(), [["m1", "WEIGHT", 801], ["m2", "WEIGHT", 808], ["m3", "ARM", 330]]);
     assert.deepEqual(data.primaries.map((row) => [row.type, row.localDate, row.measurementId]), [["WEIGHT", "2026-10-14", "m2"]], "основное значение дня сохранено");
     assert.equal((db.prepare(`SELECT count(*) AS n FROM ${DEV_MEASUREMENT_LEDGER}`).get() as { n: number }).n, 2, "исторические миграции v1 и v2 применены");
-    assert.equal((imported.db.prepare(`SELECT count(*) AS n FROM ${DEV_MEASUREMENT_LEDGER}`).get() as { n: number }).n, 1, "новый файл использует baseline");
+    assert.equal((imported.db.prepare(`SELECT count(*) AS n FROM ${DEV_MEASUREMENT_LEDGER}`).get() as { n: number }).n, 2, "новый файл: baseline и миграция метода замера (UIX-06)");
     const added = await measurements.record(client.id, { type: "CALF_R", valueX10: 380, localDate: "2026-10-15", localMinute: null }, NOW);
     assert.equal(added.type, "CALF_R");
     assert.throws(() => imported.db.prepare(`INSERT INTO body_measurements (id, workspace_id, client_id, type, value_x10, local_date, method, revision, created_at, updated_at)

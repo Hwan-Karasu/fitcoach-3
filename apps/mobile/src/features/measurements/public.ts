@@ -6,5 +6,8 @@ export { dailyPoints, formatDate, formatValue, latestPoint, localDateOf, measure
   "./domain/MeasurementRules.ts";
 export { navyBodyFat, type NavyInput } from "./domain/NavyBodyFat.ts";
 export { MeasurementsCard } from "./presentation/MeasurementsCard.tsx";
+export { BODY_FAT_PICTURES, pictureSetOf, type BodyFatPicture, type BodyFatPictureSet } from "./domain/BodyFatPictures.ts";
+export { BodyFatPictureSheet } from "./presentation/BodyFatPictureSheet.tsx";
+export type { WritableMeasurementMethod } from "./domain/MeasurementModel.ts";
 export { upsertDailyMeasurement } from "./domain/DailyMeasurement.ts";
 export { GroupVisibilityPreferenceProvider, type GroupVisibilityPreference } from "./presentation/GroupVisibilityPreference.tsx";

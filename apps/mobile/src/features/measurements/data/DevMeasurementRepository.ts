@@ -26,9 +26,15 @@ async function recordIn(tx: SqliteStatementPort, workspaceId: string, clientId: 
   const stamp = now.toISOString();
   await tx.run(`INSERT INTO body_measurements (id, workspace_id, client_id, type, value_x10,
       local_date, local_minute, method, revision, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'MANUAL', 1, ?, ?)`,
-  [id, workspaceId, clientId, valid.type, valid.valueX10, valid.localDate, valid.localMinute, stamp, stamp]);
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+  [id, workspaceId, clientId, valid.type, valid.valueX10, valid.localDate, valid.localMinute, valid.method ?? "MANUAL", stamp, stamp]);
   return byId(tx, workspaceId, id);
+}
+
+/** Метод после правки: указан явно — он; значение и тип не менялись (правка времени или даты) — прежний, в том числе «оценка ВМС»; иначе ручной ввод. */
+function methodAfterCorrection(current: Measurement, valid: ValidInput): Measurement["method"] {
+  if (valid.method !== undefined) return valid.method;
+  return current.type === valid.type && current.valueX10 === valid.valueX10 ? current.method : "MANUAL";
 }
 
 async function correctIn(tx: SqliteStatementPort, workspaceId: string, id: string, expectedRevision: number, valid: ValidInput, now: Date): Promise<Measurement> {
@@ -39,9 +45,9 @@ async function correctIn(tx: SqliteStatementPort, workspaceId: string, id: strin
     await tx.run("DELETE FROM measurement_daily_primary WHERE workspace_id = ? AND measurement_id = ?", [workspaceId, id]);
   }
   const result = await tx.run(`UPDATE body_measurements SET type = ?, value_x10 = ?, local_date = ?,
-      local_minute = ?, revision = revision + 1, updated_at = ?
+      local_minute = ?, method = ?, revision = revision + 1, updated_at = ?
     WHERE workspace_id = ? AND id = ? AND revision = ?`,
-  [valid.type, valid.valueX10, valid.localDate, valid.localMinute, now.toISOString(), workspaceId, id, expectedRevision]);
+  [valid.type, valid.valueX10, valid.localDate, valid.localMinute, methodAfterCorrection(current, valid), now.toISOString(), workspaceId, id, expectedRevision]);
   if (result.changes !== 1) throw new Error("MEASUREMENT_STALE");
   return byId(tx, workspaceId, id);
 }

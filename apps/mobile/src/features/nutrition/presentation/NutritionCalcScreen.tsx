@@ -5,7 +5,8 @@ import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvid
 import { plural } from "../../../shared/format/clockText.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
-import { localDateOf, navyBodyFat, upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../measurements/public.ts";
+import { BODY_FAT_PICTURES, BodyFatPictureSheet, localDateOf, navyBodyFat, pictureSetOf, upsertDailyMeasurement, type MeasurementRepositoryPort,
+  type WritableMeasurementMethod } from "../../measurements/public.ts";
 import { CALC_ACTIVITIES, CALC_GOALS, CALC_INTENSITIES, deriveCalc, type CalcActivity, type CalcGoal, type CalcIntensity,
   type CalcProfile, type CalcSex } from "../domain/CalcRules.ts";
 import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
@@ -34,11 +35,13 @@ export interface CalcClientBody {
 interface Draft {
   sex: CalcSex | null; height: string; weight: string; fat: string; activity: CalcActivity; workouts: string; minutes: string; step: string; intensity: CalcIntensity;
   neck: string; waist: string; hips: string;
+  /** Как получен процент жира в поле: вручную/по обхватам — MANUAL; выбран рисунок — VISUAL_ESTIMATE и его номер (UIX-06). */
+  fatMethod: WritableMeasurementMethod; fatPicture: number | null;
 }
 
 function draftOf(profile: CalcProfile, body: CalcClientBody, weight: number | null, fat: number | null): Draft {
   return { sex: body.sex, height: show(body.heightCm), weight: show(weight), fat: show(fat), activity: profile.activity, workouts: String(profile.workoutsPerWeek),
-    minutes: String(profile.minutes), step: String(profile.stepKcal), intensity: profile.intensity, neck: "", waist: "", hips: "" };
+    minutes: String(profile.minutes), step: String(profile.stepKcal), intensity: profile.intensity, neck: "", waist: "", hips: "", fatMethod: "MANUAL", fatPicture: null };
 }
 
 function profileOf(draft: Draft, goal: CalcGoal): CalcProfile {
@@ -131,7 +134,8 @@ export function NutritionCalcScreen({ clientId, body, onSaveProfile, calc, measu
   const { loaded, failed, reload } = useCalcData(clientId, calc, measurements);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [navyOpen, setNavyOpen] = useState(false);
+  const [fatMode, setFatMode] = useState<"GIRTH" | "PICTURE">("GIRTH");
+  const [pictureOpen, setPictureOpen] = useState(false);
   const [help, setHelp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -158,7 +162,7 @@ export function NutritionCalcScreen({ clientId, body, onSaveProfile, calc, measu
   const startEdit = () => {
     if (loaded === null) return;
     setDraft(draftOf(profile, body, loaded.weight, loaded.fat));
-    setNavyOpen(false);
+    setFatMode("GIRTH");
     setError(null);
     setNotice(null);
     setEditing(true);
@@ -193,8 +197,8 @@ export function NutritionCalcScreen({ clientId, body, onSaveProfile, calc, measu
       try { await upsertDailyMeasurement(measurements, clientId, { type: "WEIGHT", valueX10: Math.round(weight * 10), localDate: today, localMinute: null }); }
       catch (failure) { failures.push(`Вес: ${calcErrorText(failure)}`); }
     }
-    if (fat !== null && fat !== loaded.fat) {
-      try { await upsertDailyMeasurement(measurements, clientId, { type: "BODY_FAT", valueX10: Math.round(fat * 10), localDate: today, localMinute: null }); }
+    if (fat !== null && (fat !== loaded.fat || draft.fatMethod === "VISUAL_ESTIMATE")) {
+      try { await upsertDailyMeasurement(measurements, clientId, { type: "BODY_FAT", valueX10: Math.round(fat * 10), localDate: today, localMinute: null, method: draft.fatMethod }); }
       catch (failure) { failures.push(`% жира: ${calcErrorText(failure)}`); }
     }
     if (failures.length === 0) { setEditing(false); setError(null); } else { setError(failures.join(" ")); reload(); }
@@ -206,13 +210,14 @@ export function NutritionCalcScreen({ clientId, body, onSaveProfile, calc, measu
     return failed ? <View style={styles.pad}><InlineNotice kind="error">Не удалось загрузить расчёт.</InlineNotice></View> : <LoadingState label="Загружаем расчёт…" />;
   }
   const missing = result.startTdee === null;
+  const pictureSet = draft === null ? null : pictureSetOf(draft.sex);
+  const pickedPicture = draft === null || pictureSet === null || draft.fatPicture === null ? null : BODY_FAT_PICTURES[pictureSet].find((entry) => entry.index === draft.fatPicture) ?? null;
   const setField = (patch: Partial<Draft>) => setDraft((current) => current === null ? current : { ...current, ...patch });
 
   const headerButtons = (
     <View style={styles.headButtons}>
       <AppButton compact size="small" variant="secondary" label="?" accessibilityLabel="Справка по расчёту" onPress={() => setHelp(true)} />
-      {editing ? <AppButton compact size="small" label="Готово" busy={busy} onPress={() => { void done(); }} />
-        : <AppButton compact size="small" variant="secondary" label="Изменить" disabled={busy} onPress={startEdit} />}
+      {editing ? <AppButton compact size="small" label="Готово" busy={busy} onPress={() => { void done(); }} /> : null}
     </View>
   );
 
@@ -227,22 +232,19 @@ export function NutritionCalcScreen({ clientId, body, onSaveProfile, calc, measu
             <View style={styles.grow}><Stat label="ИТОГОВЫЙ КАЛОРАЖ" value={result.target} caption={goalLabels[profile.goal]} accent /></View>
           </View>
           <ChoiceSegments label="Пол" items={[{ id: "MALE", label: "Мужской" }, { id: "FEMALE", label: "Женский" }]}
-            value={draft.sex ?? ""} disabled={busy} onChange={(sex) => { if (sex === "MALE" || sex === "FEMALE") setField({ sex }); }} />
+            value={draft.sex ?? ""} disabled={busy} onChange={(sex) => { if (sex === "MALE" || sex === "FEMALE") setField(sex === draft.sex ? { sex } : { sex, fatPicture: null, fatMethod: "MANUAL" }); }} />
           <View style={styles.pair}>
             <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Рост, см" value={draft.height} onChangeText={(height) => setField({ height })} keyboardType="decimal-pad" placeholder="—" /></View>
             <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Вес, кг" value={draft.weight} onChangeText={(weight) => setField({ weight })} keyboardType="decimal-pad" placeholder="—" /></View>
-            <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Жир, %" value={draft.fat} onChangeText={(fat) => setField({ fat })} keyboardType="decimal-pad" placeholder="—" /></View>
+            <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Жир, %" value={draft.fat} onChangeText={(fat) => setField({ fat, fatMethod: "MANUAL", fatPicture: null })} keyboardType="decimal-pad" placeholder="—" /></View>
           </View>
           <Text style={[styles.hint, { color: colors.textMuted }]}>{body.age === null ? "Возраст: укажите дату рождения в карточке." : `Возраст: ${body.age} ${plural(body.age, "год", "года", "лет")} · из карточки клиента.`} Вес и жир сохраняются в замеры.</Text>
 
           <View style={[styles.nested, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
-            <View style={styles.nestedHead}>
-              <Text style={[styles.nestedTitle, { color: colors.textPrimary }]}>Жир по обхватам · ВМС</Text>
-              <AppButton compact size="small" disabled={busy} variant={navyOpen ? "secondary" : "ghost"} label={navyOpen ? "Свернуть" : "Развернуть"} accessibilityLabel={navyOpen ? "Свернуть калькулятор процента жира" : "Развернуть калькулятор процента жира"}
-                onPress={() => setNavyOpen(!navyOpen)} />
-            </View>
-            {navyOpen ? <>
-              <View style={[styles.rule, { backgroundColor: colors.border }]} />
+            <Text style={[styles.nestedTitle, { color: colors.textPrimary }]}>Оценка процента жира</Text>
+            <ChoiceSegments label="Способ оценки жира" items={[{ id: "GIRTH", label: "По обхватам" }, { id: "PICTURE", label: "По рисунку" }]}
+              value={fatMode} disabled={busy} onChange={setFatMode} />
+            {fatMode === "GIRTH" ? <>
               {draft.sex === null ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Выберите пол — формула для мужчин и женщин разная.</Text> : null}
               {num(draft.height) === null ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Рост берётся из поля «Рост» профиля выше.</Text> : null}
               <View style={styles.pair}>
@@ -256,9 +258,19 @@ export function NutritionCalcScreen({ clientId, body, onSaveProfile, calc, measu
                   <Text style={[styles.hint, { color: colors.textMuted }]}>Оценка по окружностям</Text>
                 </View>
                 <AppButton compact size="small" label="Подставить" accessibilityLabel="Подставить процент жира в профиль" disabled={navy === null || busy}
-                  disabledReason="Введите пол, рост, шею и талию (женщинам — и бёдра)." onPress={() => { if (navy !== null) setField({ fat: show(navy) }); }} />
+                  disabledReason="Введите пол, рост, шею и талию (женщинам — и бёдра)." onPress={() => { if (navy !== null) setField({ fat: show(navy), fatMethod: "MANUAL", fatPicture: null }); }} />
               </View>
-            </> : null}
+            </> : <>
+              {pictureSet === null ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Выберите пол — наборы рисунков для мужчин и женщин разные.</Text> : null}
+              <View style={styles.resultRow}>
+                <View accessible accessibilityLabel={`Выбранный рисунок: ${pickedPicture === null ? "не выбран" : `${pickedPicture.label} процентов`}`}>
+                  <Text style={[styles.resultValue, { color: colors.textPrimary }]}>{pickedPicture === null ? "— %" : `${pickedPicture.label} %`}</Text>
+                  <Text style={[styles.hint, { color: colors.textMuted }]}>Ориентировочно, не заменяет замеры</Text>
+                </View>
+                <AppButton compact size="small" label="Выбрать рисунок" accessibilityLabel="Открыть рисунки для оценки процента жира" disabled={pictureSet === null || busy}
+                  disabledReason="Сначала выберите пол." onPress={() => setPictureOpen(true)} />
+              </View>
+            </>}
           </View>
 
           <Text style={[styles.label, { color: colors.textSecondary }]}>Образ жизни</Text>
@@ -298,10 +310,13 @@ export function NutritionCalcScreen({ clientId, body, onSaveProfile, calc, measu
               </View>
             ))}
           </View>
-          {missing ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Для расчёта нужны пол, возраст, рост и вес (или вес с процентом жира). Нажмите «Изменить», чтобы заполнить профиль.</Text> : null}
+          {missing ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Для расчёта нужны пол, возраст, рост и вес (или вес с процентом жира). Откройте «Профиль и активность» и заполните данные.</Text> : null}
+          <AppButton variant="secondary" label="Профиль и активность" disabled={busy} onPress={startEdit} />
         </>}
       </Card>
 
+      {pictureSet === null ? null : <BodyFatPictureSheet visible={pictureOpen} set={pictureSet} selected={draft?.fatPicture ?? null} onClose={() => setPictureOpen(false)}
+        onSelect={(picture) => { setField({ fat: show(picture.pickX10 / 10), fatMethod: "VISUAL_ESTIMATE", fatPicture: picture.index }); setPictureOpen(false); }} />}
       <HelpSheet visible={help} onClose={() => setHelp(false)} />
     </ScrollView>
   );

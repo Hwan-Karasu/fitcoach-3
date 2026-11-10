@@ -24,8 +24,11 @@ export const MEASUREMENT_GROUPS: readonly MeasurementGroup[] = [
   { id: "THIGH", label: "Бедро", left: "THIGH_L", right: "THIGH_R", legacy: "THIGH" }, { id: "CALF", label: "Голень", left: "CALF_L", right: "CALF_R", legacy: "CALF" },
 ];
 
-/** Provenance: a manual entry or a saved US Navy estimate (§49.16), never mixed silently. */
-export type MeasurementMethod = "MANUAL" | "NAVY_ESTIMATE";
+/** Provenance: a manual entry, a saved US Navy estimate (§49.16) or a body-fat estimate by picture (UIX-06), never mixed silently. */
+export type MeasurementMethod = "MANUAL" | "NAVY_ESTIMATE" | "VISUAL_ESTIMATE";
+
+/** Методы, которые можно записать из приложения: ВМС в журнале остаётся только как прочитанная пометка. */
+export type WritableMeasurementMethod = "MANUAL" | "VISUAL_ESTIMATE";
 
 /**
  * One observation with a stable ID (§49.15). Values are tenths (80,1 kg → 801) so no float drift;
@@ -47,6 +50,8 @@ export interface MeasurementInput {
   readonly valueX10: number;
   readonly localDate: string;
   readonly localMinute: number | null;
+  /** Как получено значение; не указан — `MANUAL`. «Оценка по рисунку» — только для процента жира. */
+  readonly method?: WritableMeasurementMethod;
 }
 
 /** The trainer's explicit choice for one `clientId + type + localDate` (§49.18 П12). */

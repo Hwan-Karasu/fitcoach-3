@@ -47,7 +47,7 @@ function JournalEntry({ row, primary, canChoose, busy, onEdit, onDelete, onPrima
         <Text style={[styles.entryLabel, { color: colors.textSecondary }]}>{measurementTypeInfo[row.type].label}</Text>
         <Text style={[styles.entryValue, { color: colors.textPrimary }]}>{formatValue(row.valueX10, row.type)}</Text>
       </View>
-      <Text style={[styles.hint, { color: primary ? colors.accentInk : colors.textMuted }]}>{formatTime(row.localMinute)}{primary ? " · основной" : ""}{row.method === "NAVY_ESTIMATE" ? " · оценка ВМС" : ""}</Text>
+      <Text style={[styles.hint, { color: primary ? colors.accentInk : colors.textMuted }]}>{formatTime(row.localMinute)}{primary ? " · основной" : ""}{row.method === "NAVY_ESTIMATE" ? " · оценка ВМС" : row.method === "VISUAL_ESTIMATE" ? " · оценка по рисунку" : ""}</Text>
     </Pressable>
     <View ref={anchor} collapsable={false}>
       <AppIconButton label={`Действия: ${measurementTypeInfo[row.type].label}, ${formatValue(row.valueX10, row.type)}`}

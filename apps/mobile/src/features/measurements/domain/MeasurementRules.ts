@@ -6,7 +6,8 @@ export type MeasurementRuleError =
   | "MEASUREMENT_TYPE_INVALID"
   | "MEASUREMENT_VALUE_INVALID"
   | "MEASUREMENT_DATE_INVALID"
-  | "MEASUREMENT_TIME_INVALID";
+  | "MEASUREMENT_TIME_INVALID"
+  | "MEASUREMENT_METHOD_INVALID";
 
 function fail(code: MeasurementRuleError): never { throw new Error(code); }
 
@@ -102,6 +103,9 @@ export function validateMeasurement(input: MeasurementInput, now: Date): Measure
   if (!isLocalDate(input.localDate) || input.localDate > localDateOf(now)) fail("MEASUREMENT_DATE_INVALID");
   if (input.localMinute !== null && (!Number.isSafeInteger(input.localMinute)
     || input.localMinute < 0 || input.localMinute > 1439)) fail("MEASUREMENT_TIME_INVALID");
+  if (input.method !== undefined && input.method !== "MANUAL" && !(input.method === "VISUAL_ESTIMATE" && input.type === "BODY_FAT")) {
+    fail("MEASUREMENT_METHOD_INVALID");
+  }
   return input;
 }
 
