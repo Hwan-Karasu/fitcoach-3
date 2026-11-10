@@ -4,8 +4,8 @@ import { DefaultTheme, NavigationContainer, StackActions, createNavigationContai
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
-import { KeyboardProvider } from "react-native-keyboard-controller";
-import { ClientExerciseScreen, RestTimerDock, TrainingSettingsScreen, type TrainingPlansRepositoryPort } from "../../features/training/public.ts";
+import { KeyboardAvoidingView, KeyboardProvider } from "react-native-keyboard-controller";
+import { ClientExerciseScreen, TrainingSettingsScreen, type TrainingPlansRepositoryPort } from "../../features/training/public.ts";
 import { calendarEventTarget, resolveTimerTarget, timerTarget, type NotificationTarget } from "./notificationTarget.ts";
 import { NotificationOpenHost } from "./NotificationOpenHost.tsx";
 import { NotificationCenterScreen, NotificationSettingsScreen } from "../../features/notifications/public.ts";
@@ -34,7 +34,8 @@ import { RootTabs } from "./RootTabs.tsx";
 import { ClientsListNavigationProvider } from "./ClientsListShortcut.tsx";
 import { clientsListAction } from "./clientsListAction.ts";
 import { SqliteDiagnosticsScreen } from "./SqliteDiagnosticsScreen.tsx";
-import { BottomDockLayoutProvider, ScreenHeader } from "../../shared/ui/components/public.ts";
+import { BottomPanelProvider, ScreenHeader } from "../../shared/ui/components/public.ts";
+import { UnifiedBottomPanel } from "./UnifiedBottomPanel.tsx";
 import { DataReadNotice } from "../../shared/ui/components/DataReadNotice.tsx";
 import { BackupScreen } from "./BackupScreen.tsx";
 import { TrainingTransferScreen } from "./TrainingTransferScreen.tsx";
@@ -146,6 +147,7 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
   return (
     <ClientsListNavigationProvider onOpen={openClientsList}>
     <NavigationContainer ref={navigationRef} theme={navigationTheme} initialState={initialBackup ? { index: 1, routes: [{ name: "Root" }, { name: "Backup" }] } : undefined}>
+      <KeyboardAvoidingView automaticOffset behavior="padding" style={{ flex: 1, backgroundColor: colors.canvas }}>
       <Stack.Navigator
         screenOptions={{
           // Единая шапка-карточка одной высоты (UI-OWN-035).
@@ -288,6 +290,8 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
           {() => <SqliteDiagnosticsScreen runProbe={developmentTools.runSqliteProbe} />}
         </Stack.Screen> : null}
       </Stack.Navigator>
+      <UnifiedBottomPanel services={services} onOpen={(timer) => { void openTimer(services.trainingPlans, timer); }} />
+      </KeyboardAvoidingView>
     </NavigationContainer>
     </ClientsListNavigationProvider>
   );
@@ -327,18 +331,17 @@ export function PrototypeShell({ services, workspaceId, manualBackup, restoreAct
       <SettingsBinding settings={services.settings}>
         <DataReadNotice />
         <AutomaticBackupNotice backup={automaticBackup} onOpen={() => { if (navigationRef.isReady()) navigationRef.navigate("Backup"); }} />
-        <BottomDockLayoutProvider>
+        <BottomPanelProvider>
         <BottomSheetModalProvider>
         <CalendarUndoProvider repository={services.calendar}>
           <TrainingTransferContext.Provider value={trainingTransfer}><NotificationsHost center={services.notifications} calendar={services.calendar} sync={services.notificationSync}>
             <ShellNavigator trainingTransfer={trainingTransfer} services={services} clientLists={clientLists} rosterOverview={rosterOverview} manualBackup={manualBackup} restoreActions={restoreActions} automaticBackup={automaticBackup} initialBackup={initialBackup} />
           </NotificationsHost></TrainingTransferContext.Provider>
           <OutcomeQueueHost services={services} />
-          <RestTimerDock timers={services.restTimers} onOpen={(timer) => { void openTimer(services.trainingPlans, timer); }} />
           <NotificationOpenHost navigationRef={navigationRef} onTarget={openTarget} />
         </CalendarUndoProvider>
         </BottomSheetModalProvider>
-        </BottomDockLayoutProvider>
+        </BottomPanelProvider>
       </SettingsBinding>
       </KeyboardProvider>
     </SafeAreaProvider>

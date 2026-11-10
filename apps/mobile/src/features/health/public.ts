@@ -4,3 +4,4 @@ export type { HealthCommittedChange, HealthConnectPort, HealthStorePort } from "
 export { lastValuePerDay, sleepMinutesByWakeDate, toTenths, type SleepSessionInput, type SleepStageInput } from "./domain/HealthRules.ts";
 export { HealthConnectSection, type HealthSyncKind } from "./presentation/HealthConnectSection.tsx";
 export { useHealthDaily, useHealthLink } from "./presentation/useHealth.ts";
+export { createHealthOperationQueue } from "./domain/HealthOperationQueue.ts";

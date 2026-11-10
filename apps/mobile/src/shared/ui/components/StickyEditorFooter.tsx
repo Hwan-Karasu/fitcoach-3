@@ -5,7 +5,7 @@ import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { AppButton } from "./AppButton.tsx";
 import { InlineNotice, type NoticeKind } from "./InlineNotice.tsx";
 import { fonts } from "../theme/typography.ts";
-import { useEditorDockLayout } from "./BottomDockLayout.tsx";
+import { useBottomPanelInFlow } from "./BottomPanel.tsx";
 
 interface StickyEditorFooterProps {
   readonly actionLabel: string;
@@ -37,7 +37,7 @@ export function StickyEditorFooter({
   const insets = useSafeAreaInsets();
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const onLayout = useEditorDockLayout();
+  const inFlow = useBottomPanelInFlow();
   const { fontScale } = useWindowDimensions();
   useEffect(() => {
     const shown = Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true));
@@ -45,7 +45,7 @@ export function StickyEditorFooter({
     return () => { shown.remove(); hidden.remove(); };
   }, []);
   return (
-    <View onLayout={onLayout} style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: keyboardVisible ? 8 : Math.max(8, insets.bottom) }]}>
+    <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: inFlow || keyboardVisible ? 8 : Math.max(8, insets.bottom) }]}>
       {message ? <InlineNotice kind={messageKind}>{message}</InlineNotice> : null}
       {secondaryAction !== undefined ? fontScale > 1.3 ? <>
         {/* Крупный системный шрифт: прежняя раскладка столбцом, подписи не обрезаются. */}

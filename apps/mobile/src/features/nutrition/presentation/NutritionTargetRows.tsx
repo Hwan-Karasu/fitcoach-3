@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { InlineNotice, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -11,6 +11,7 @@ import { uniformWeek } from "../domain/TargetRules.ts";
 import { formatTargetText, parseTargetText } from "../domain/TargetText.ts";
 import { metricLabels, nutritionErrorText } from "./nutritionFormat.ts";
 import { useToday } from "./useToday.ts";
+import { HomeTargetSaveQueue } from "./HomeTargetSaveQueue.ts";
 
 export type TargetMode = "EXACT" | "RANGE";
 type MacroMetric = "protein" | "fat" | "carbs";
@@ -54,13 +55,13 @@ export function NutritionTargetRows({ clientId, targets, calories, defaults, lea
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const lock = useRef(false);
+  const saveQueue = useMemo(() => new HomeTargetSaveQueue(clientId, targets), [clientId, targets]);
 
   useEffect(() => {
     let active = true;
-    void targets.listVersions(clientId).then((versions) => { if (active) setData({ versions }); }, () => { if (active) setError("Не удалось загрузить цели."); });
+    void targets.listVersions(clientId).then((versions) => { if (active) { saveQueue.adopt(versions); setData({ versions }); } }, () => { if (active) setError("Не удалось загрузить цели."); });
     return () => { active = false; };
-  }, [targets, clientId, tick]);
+  }, [targets, clientId, tick, saveQueue]);
   useEffect(() => targets.subscribeCommittedChanges((change) => { if (change.clientId === clientId) setTick((value) => value + 1); }), [targets, clientId]);
 
   const adjustment = useMemo(() => data === null ? null : homeAdjustmentFor(data.versions, today), [data, today]);
@@ -84,6 +85,7 @@ export function NutritionTargetRows({ clientId, targets, calories, defaults, lea
   useEffect(() => { if (data !== null) onLiveTarget?.(live); }, [data, live, onLiveTarget]);
 
   const setField = (metric: MacroMetric, text: string) => {
+    saveQueue.markEdited();
     setDrafts({ ...shown, [metric]: text });
     setDirty(true);
     setError(null);
@@ -91,20 +93,19 @@ export function NutritionTargetRows({ clientId, targets, calories, defaults, lea
   };
 
   const save = async () => {
-    if (!dirty || lock.current || data === null || problem !== null || !hasTarget || typeof manual === "string") return;
-    lock.current = true;
+    if (!dirty || data === null || problem !== null || !hasTarget || typeof manual === "string") return;
     try {
-      const same = data.versions.find((version) => version.effectiveFrom === today);
-      const saved = await targets.saveVersion(clientId, { effectiveFrom: today, days: uniformWeek(parsed), homeAdjustment: { mode, manual } }, same?.revision ?? null);
+      const { saved, edit } = await saveQueue.save({ effectiveFrom: today, days: uniformWeek(parsed), homeAdjustment: { mode, manual } });
       setData((current) => current === null ? current : { ...current, versions: [...current.versions.filter((version) => version.id !== saved.id), saved] });
-      setDirty(false);
-      setError(null);
-      setNotice("Корректировка БЖУ сохранена.");
+      if (saveQueue.isCurrent(edit)) {
+        setDirty(false);
+        setError(null);
+        setNotice("Корректировка БЖУ сохранена.");
+      }
     } catch (failure) {
       setError(failure instanceof Error && failure.message === "TARGET_STALE" ? "Цели уже изменились. Данные обновлены — повторите." : nutritionErrorText(failure));
       setTick((value) => value + 1);
     }
-    lock.current = false;
   };
 
   return (

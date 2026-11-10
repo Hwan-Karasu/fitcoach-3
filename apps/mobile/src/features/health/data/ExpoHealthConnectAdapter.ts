@@ -3,13 +3,12 @@ import { aggregateGroupByPeriod, getGrantedPermissions, getSdkStatus, initialize
 import type { HealthAvailability, HealthDayValue, HealthMetric, HealthRange } from "../domain/HealthModel.ts";
 import { HEALTH_METRICS } from "../domain/HealthModel.ts";
 import type { HealthConnectPort } from "../domain/HealthPorts.ts";
-import { lastValuePerDay, sleepMinutesByWakeDate, toTenths, type SleepSessionInput } from "../domain/HealthRules.ts";
+import { lastValuePerDay, readHealthPages, sleepMinutesByWakeDate, toTenths, type SleepSessionInput } from "../domain/HealthRules.ts";
 
 type ReadType = "Steps" | "SleepSession" | "TotalCaloriesBurned" | "ActiveCaloriesBurned" | "Weight" | "BodyFat";
 const RECORD_OF: Readonly<Record<HealthMetric, ReadType>> = {
   STEPS: "Steps", SLEEP_MIN: "SleepSession", TOTAL_KCAL: "TotalCaloriesBurned", ACTIVE_KCAL: "ActiveCaloriesBurned", WEIGHT_X10: "Weight", BODY_FAT_X10: "BodyFat",
 };
-const MAX_PAGES = 50;
 
 const pad = (value: number) => String(value).padStart(2, "0");
 /** Локальная дата устройства (`YYYY-MM-DD`) для момента времени. */
@@ -73,17 +72,10 @@ export class ExpoHealthConnectAdapter implements HealthConnectPort {
       }
     };
 
-    /** Все страницы записей вида за интервал; страниц не больше MAX_PAGES — защита от зацикливания. */
+    /** Все страницы записей вида за интервал; неполный/зациклившийся ответ не выдаётся за успешное чтение. */
     const readAll = async <T extends "SleepSession" | "Weight" | "BodyFat">(type: T, from: string) => {
-      const records: Awaited<ReturnType<typeof readRecords<T>>>["records"] = [];
-      let pageToken: string | undefined;
-      for (let page = 0; page < MAX_PAGES; page += 1) {
-        const chunk = await readRecords(type, { timeRangeFilter: { operator: "between", startTime: from, endTime: end }, pageSize: 500, ...(pageToken === undefined ? {} : { pageToken }) });
-        records.push(...chunk.records);
-        pageToken = chunk.pageToken;
-        if (pageToken === undefined || pageToken === "") break;
-      }
-      return records;
+      return readHealthPages<Awaited<ReturnType<typeof readRecords<T>>>["records"][number]>((pageToken) =>
+        readRecords(type, { timeRangeFilter: { operator: "between", startTime: from, endTime: end }, pageSize: 500, ...(pageToken === undefined ? {} : { pageToken }) }));
     };
 
     for (const metric of metrics) {

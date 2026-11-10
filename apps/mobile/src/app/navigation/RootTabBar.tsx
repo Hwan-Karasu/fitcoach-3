@@ -2,15 +2,13 @@ import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Archive, CalendarDays, ChevronLeft, ChevronRight, Dumbbell, Ellipsis, House, Users, Utensils, type LucideIcon } from "lucide-react-native";
-import { useBottomBarLayout, useTabBarSlots } from "../../shared/ui/components/public.ts";
+import { usePublishBottomPanel, useTabBarSlots } from "../../shared/ui/components/public.ts";
 import { focusedLeaf } from "./focusedLeafKey.ts";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
-import { shadow } from "../../shared/ui/theme/style.ts";
 import { ClientsListShortcut } from "./ClientsListShortcut.tsx";
-import { navigationBorder } from "../../shared/ui/theme/navigationBorder.ts";
 import { navigationPerformance } from "../../shared/diagnostics/NavigationPerformance.ts";
+import { restTimerDiagnostics } from "../../shared/diagnostics/RestTimerDiagnostics.ts";
 
 /** Значки всех наборов вкладок: корень (Клиенты/Календарь/Архив) и карточка клиента (Главная/Питание/…). */
 const tabIcons: Readonly<Record<string, LucideIcon>> = { Clients: Users, Calendar: CalendarDays, Archive,
@@ -22,20 +20,16 @@ const tabIcons: Readonly<Record<string, LucideIcon>> = { Clients: Users, Calenda
  */
 export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTabBarProps>) {
   navigationPerformance.render("RootTabBar");
+  restTimerDiagnostics.render("navigation");
   const { palette, navigationAppearance } = usePrototypeTheme();
   const colors = palette.tokens;
-  const insets = useSafeAreaInsets();
-  const onBarLayout = useBottomBarLayout();
   // Что положил в панель экран, который сейчас в фокусе (стрелки недель, строка переключателя): выбор — по состоянию навигации.
   const leaf = focusedLeaf(state);
   const { weeks, dock } = useTabBarSlots(leaf.key, leaf.settled);
   // Со строкой экрана панель остаётся той же высоты: кнопки вкладок ужимаются и освобождают под неё место.
   const compact = dock !== null && dock !== undefined;
   const showClientsShortcut = navigationAppearance.showClientListShortcut && !state.routes.some((route) => route.name === "Clients");
-  return (
-    <View onLayout={onBarLayout} style={[styles.dock, { backgroundColor: colors.canvas, paddingBottom: insets.bottom + 4 }]}>
-      <View style={[styles.bar, compact ? styles.barCompact : null, weeks ? styles.barWithWeeks : null, shadow.floating, { backgroundColor: colors.navigation, borderColor: navigationBorder(colors) }]}>
-        {compact ? <View>{dock}</View> : null}
+  usePublishBottomPanel(state.key, { tokens: colors, participants: dock, navigation: (
         <View style={styles.navigationRow}>
         {weeks ? <WeekArrow label={`Предыдущая неделя. Сейчас неделя ${weeks.week}`}
           disabled={weeks.previous === null || weeks.busy === true} onPress={() => weeks.previous?.()}
@@ -82,9 +76,8 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
           disabled={weeks.next === null || weeks.busy === true} onPress={() => weeks.next?.()}
           icon={<ChevronRight size={32} strokeWidth={2.2} color={colors.accentInk} />} /> : null}
         </View>
-      </View>
-    </View>
-  );
+  ) });
+  return null;
 }
 
 /** Стрелки сохраняют положение; область нажатия начинается ниже строки участников. */
@@ -105,12 +98,6 @@ const styles = StyleSheet.create({
   navigationRow: { flexDirection: "row", alignItems: "stretch", gap: 2 },
   weekArrowColumn: { width: 36, minHeight: 44, alignSelf: "stretch", justifyContent: "center" },
   weekArrow: { width: 36, height: 44, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  barWithWeeks: { paddingHorizontal: 2 },
-  /** Подложка плашки (фон экрана): тонкая — поля 12 по бокам, снизу 6 над жестовой зоной, сверху вплотную к экрану. */
-  dock: { paddingHorizontal: 12 },
-  bar: { borderRadius: 22, borderWidth: 1, padding: 6, gap: 2 },
-  /** Со строкой экрана кнопки вкладок ужаты, переключатель участников остаётся внутри панели. */
-  barCompact: { padding: 4, gap: 2 },
   /** Строка экрана над вкладками (переключатель участников): внутри той же плашки. */
   tabsRow: { flexDirection: "row", gap: 4, minHeight: 44 },
   tabsRowIcons: { minHeight: 36 },

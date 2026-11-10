@@ -40,7 +40,12 @@ export async function syncHealthConnect(ports: HealthSyncPorts, today: string, n
   if (granted.length === 0) return { kind: "NO_PERMISSION" };
 
   const range = { from: addDays(today, link.lastSyncAt === null ? -(FIRST_SYNC_DAYS - 1) : -(RESYNC_DAYS - 1)), to: today };
-  const read = (await ports.platform.readDaily(granted, range)).filter((entry) => entry.localDate >= range.from && entry.localDate <= range.to && ports.isValidHealthValue(entry.metric, entry.value));
+  const values = (await ports.platform.readDaily(granted, range)).filter((entry) => entry.localDate >= range.from && entry.localDate <= range.to
+    && granted.includes(entry.metric) && ports.isValidHealthValue(entry.metric, entry.value));
+  // За время системного запроса карточка могла быть отключена или привязана заново; старый ответ не имеет права писать факты.
+  const current = await ports.health.getLink();
+  if (current === null || current.clientId !== link.clientId || current.linkedAt !== link.linkedAt) return { kind: "NOT_LINKED" };
+  const read = [...new Map(values.map((entry) => [`${entry.localDate}|${entry.metric}`, entry])).values()];
   const known = new Map((await ports.health.listDaily(link.clientId, range.from, range.to)).map((entry) => [`${entry.localDate}|${entry.metric}`, entry.value]));
 
   let stepsDays = 0;
@@ -61,6 +66,7 @@ export async function syncHealthConnect(ports: HealthSyncPorts, today: string, n
     for (const entry of fresh) {
       if (taken.has(entry.localDate)) continue;
       await ports.measurements.record(link.clientId, { type, valueX10: entry.value, localDate: entry.localDate, localMinute: null }, now);
+      taken.add(entry.localDate);
       imported += 1;
     }
     return imported;

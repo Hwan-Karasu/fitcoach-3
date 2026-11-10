@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { StyleSheet, Text, View } from "react-native";
 import { AppButton, NumericField, SelectionChip, AppSwitch } from "../../../shared/ui/components/public.ts";
@@ -6,7 +6,8 @@ import { PrototypeScreen, SectionHeading } from "../../../shared/ui/prototype/Sc
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { shadow } from "../../../shared/ui/theme/style.ts";
 import type { ClientRosterPort, RosterBirthdaySettings } from "../domain/ClientRosterPort.ts";
-import { nextBirthdaySettings, parseBirthdayLeadDays } from "../domain/BirthdaySettingsRules.ts";
+import { parseBirthdayLeadDays } from "../domain/BirthdaySettingsRules.ts";
+import { BirthdaySettingsSaveQueue } from "./BirthdaySettingsSaveQueue.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { CLIENT_METRICS, CLIENT_START_SECTIONS } from "../../../shared/domain/ClientCardPreference.ts";
 
@@ -25,7 +26,7 @@ export function ClientRosterSettingsScreen({ repository }: Readonly<{
   const [leadInvalid, setLeadInvalid] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const savedRef = useRef<RosterBirthdaySettings | null>(null);
-  const queue = useRef<Promise<void>>(Promise.resolve());
+  const queue = useMemo(() => new BirthdaySettingsSaveQueue(repository), [repository]);
   const leadRef = useRef(leadDays);
   leadRef.current = leadDays;
 
@@ -35,22 +36,24 @@ export function ClientRosterSettingsScreen({ repository }: Readonly<{
     setLeadDays(String(settings.birthdayPinLeadDays));
     setLeadInvalid(false);
   }, []);
-  const load = useCallback(() => repository.getBirthdaySettings().then((settings) => { adopt(settings); setError(null); },
-    () => setError("Не удалось загрузить настройки списка.")), [repository, adopt]);
+  const load = useCallback(() => queue.load().then((settings) => { adopt(settings); setError(null); },
+    () => setError("Не удалось загрузить настройки списка.")), [queue, adopt]);
 
   /** Запись изменения сразу; сбой — сообщение и перечитывание сохранённого, чтобы экран не показывал то, чего нет в хранилище. */
   const commit = useCallback((patch: Partial<RosterBirthdaySettings>) => {
-    const base = savedRef.current;
-    if (base === null) return;
-    const next = nextBirthdaySettings(base, patch);
-    if (next === null) return;
-    savedRef.current = next;
-    setSaved(next);
-    queue.current = queue.current.then(() => repository.setBirthdaySettings(next)).then(() => setError(null), () => {
+    const write = queue.commit(patch);
+    if (write === null) return;
+    savedRef.current = write.next;
+    setSaved(write.next);
+    void write.result.then(() => {
+      if (!queue.isLatest(write.sequence)) return;
+      savedRef.current = queue.value; setSaved(queue.value); setError(null);
+    }, () => {
+      if (!queue.isLatest(write.sequence)) return;
+      savedRef.current = queue.value; setSaved(queue.value);
       setError("Не удалось сохранить настройки. Попробуйте ещё раз.");
-      return load();
     });
-  }, [repository, load]);
+  }, [queue]);
 
   /** Число дней: корректное — пишется, некорректное — ошибка под полем без записи. */
   const commitLead = useCallback(() => {

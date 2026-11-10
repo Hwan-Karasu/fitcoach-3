@@ -49,7 +49,7 @@ export function HealthConnectSection({ clientId, store, platform, sync }: Readon
     if (busy) return;
     setBusy(true); setMessage(null); setErrorText(null);
     try { await work(); } catch (failure) {
-      setErrorText(failure instanceof Error && failure.message === "HEALTH_ALREADY_LINKED" ? "Health Connect уже подключён к другой карточке." : "Не удалось выполнить действие. Данные не изменены.");
+      setErrorText(failure instanceof Error && failure.message === "HEALTH_ALREADY_LINKED" ? "Health Connect уже подключён к другой карточке." : "Не удалось завершить действие. Проверьте подключение и повторите обновление.");
     } finally { setBusy(false); }
     await refreshState().catch(() => undefined);
   };
@@ -99,14 +99,16 @@ export function HealthConnectSection({ clientId, store, platform, sync }: Readon
               ))}
             </View>
             <AppButton label={granted.length < HEALTH_METRICS.length ? "Дать доступ и обновить" : "Обновить данные"} busy={busy} onPress={() => { void refresh(); }} />
-            <AppButton variant="secondary" label="Открыть настройки Health Connect" onPress={() => { void Promise.resolve(platform.openSettings()).catch(() => undefined); }} />
+            <AppButton variant="secondary" label="Открыть настройки Health Connect" onPress={() => {
+              void Promise.resolve().then(() => platform.openSettings()).catch(() => setErrorText("Не удалось открыть настройки Health Connect."));
+            }} />
             <AppButton variant="destructive" label="Отключить" disabled={busy} onPress={() => setDisconnectOpen(true)} />
           </>}
       {message !== null ? <InlineNotice kind="info">{message}</InlineNotice> : null}
       {errorText !== null ? <InlineNotice kind="error">{errorText}</InlineNotice> : null}
       <BottomSheet visible={connectOpen} title="Подключить Health Connect?" onClose={() => setConnectOpen(false)}
         footer={<View style={styles.footer}><AppButton label="Подключить" onPress={() => { void connect(); }} /><AppButton variant="ghost" label="Отмена" onPress={() => setConnectOpen(false)} /></View>}>
-        <Text style={[styles.text, { color: colors.textSecondary }]}>Система попросит доступ на чтение: шаги, сон, общий и активный расход, вес и % жира, а также историю данных. Доступ только для чтения, только для этой карточки. Сколько данных читать и когда — решает приложение при открытии карточки; в фоне оно ничего не читает. Отозвать доступ можно в любой момент здесь или в настройках Health Connect.</Text>
+        <Text style={[styles.text, { color: colors.textSecondary }]}>Система попросит доступ на чтение: шаги, сон, общий и активный расход, вес и % жира, а также историю данных. Доступ только для чтения, только для этой карточки. В фоне приложение ничего не читает. «Отключить» останавливает перенос в карточку; системные разрешения можно отозвать в настройках Health Connect.</Text>
       </BottomSheet>
       <ConfirmDialog visible={disconnectOpen} title="Отключить Health Connect?" description="Привязка будет снята, обновление данных прекратится. Уже записанные данные остаются в приложении; доступ можно отозвать в настройках Health Connect." confirmLabel="Отключить"
         destructive onCancel={() => setDisconnectOpen(false)} onConfirm={() => { void disconnect(); }} />

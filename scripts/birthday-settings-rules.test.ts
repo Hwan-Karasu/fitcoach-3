@@ -17,3 +17,26 @@ test("UIX-13: запись сразу при изменении — без из�
   assert.deepEqual(nextBirthdaySettings(saved, { birthdayPinEnabled: false }), { birthdayPinEnabled: false, birthdayPinLeadDays: 14, showBirthdayBadge: true });
   assert.deepEqual(nextBirthdaySettings(saved, { birthdayPinLeadDays: 30 }), { birthdayPinEnabled: true, birthdayPinLeadDays: 30, showBirthdayBadge: true });
 });
+import { BirthdaySettingsSaveQueue } from "../apps/mobile/src/features/clients/presentation/BirthdaySettingsSaveQueue.ts";
+
+test("UIX audit: сбой настройки не теряет следующий выбор и не сохраняет неуспешный патч повторно", async () => {
+  let saved = { birthdayPinEnabled: false, birthdayPinLeadDays: 14, showBirthdayBadge: true };
+  let fail!: (error: Error) => void;
+  let calls = 0;
+  const queue = new BirthdaySettingsSaveQueue({ getBirthdaySettings: async () => ({ ...saved }), setBirthdaySettings: async (next) => {
+    calls += 1;
+    if (calls === 1) return new Promise<void>((_resolve, reject) => { fail = reject; });
+    saved = { ...next };
+  } });
+  await queue.load();
+  const first = queue.commit({ birthdayPinEnabled: true })!;
+  const rejected = assert.rejects(first.result, /IO/u);
+  await Promise.resolve();
+  const second = queue.commit({ showBirthdayBadge: false })!;
+  fail(new Error("IO"));
+  await rejected;
+  await second.result;
+  assert.deepEqual(saved, { birthdayPinEnabled: false, birthdayPinLeadDays: 14, showBirthdayBadge: false });
+  assert.deepEqual(queue.value, saved);
+  assert.equal(queue.isLatest(first.sequence), false);
+});

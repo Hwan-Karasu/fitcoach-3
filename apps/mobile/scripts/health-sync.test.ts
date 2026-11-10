@@ -13,6 +13,7 @@ import { devNutritionClientDeletionParticipant } from "../src/features/nutrition
 import { devNutritionTargetsClientDeletionParticipant } from "../src/features/nutrition/data/DevNutritionTargetsRepository.ts";
 import { SharedSqliteDatabase } from "../src/shared/db/SharedSqliteDatabase.ts";
 import { syncHealthConnect } from "../src/workflows/syncHealthConnect.ts";
+import { createHealthOperationQueue } from "../src/features/health/domain/HealthOperationQueue.ts";
 import { nodeSqlitePort } from "../../../scripts/support/node-sqlite-port.ts";
 
 const WS = "synthetic-workspace-a";
@@ -48,6 +49,64 @@ async function stores(participants = true) {
   return { db, clients, measurements, calc, health, close };
 }
 const value = (localDate: string, metric: HealthMetric, v: number): HealthDayValue => ({ localDate, metric, value: v });
+
+test("UIX audit: отключение и новая привязка ждут текущую синхронизацию; параллельные запросы делят один запуск", async () => {
+  const { clients, health, close } = await stores();
+  let release!: () => void;
+  try {
+    const me = await clients.create({ displayName: "SyntheticSelf" });
+    const other = await clients.create({ displayName: "SyntheticOther" });
+    await health.link(me.id, NOW);
+    let calls = 0;
+    const operations = createHealthOperationQueue(health, async () => {
+      calls += 1;
+      await new Promise<void>((resolve) => { release = resolve; });
+      assert.equal((await health.getLink())!.clientId, me.id);
+      return "SYNCED";
+    });
+    const sync = operations.sync();
+    assert.equal(operations.sync(), sync);
+    const unlink = operations.store.unlink();
+    const link = operations.store.link(other.id, new Date(NOW.getTime() + 1000));
+    await Promise.resolve();
+    assert.equal((await health.getLink())!.clientId, me.id);
+    release();
+    await Promise.all([sync, unlink, link]);
+    assert.equal(calls, 1);
+    assert.equal((await health.getLink())!.clientId, other.id);
+  } finally { release?.(); await close(); }
+});
+
+test("UIX audit: смена привязки во время системного чтения не записывает данные прежнему клиенту", async () => {
+  const { clients, health, calc, measurements, close } = await stores();
+  try {
+    const me = await clients.create({ displayName: "SyntheticSelf" });
+    const other = await clients.create({ displayName: "SyntheticOther" });
+    await health.link(me.id, NOW);
+    const platform = new FakePlatform();
+    platform.readDaily = async () => {
+      await health.unlink(); await health.link(other.id, new Date(NOW.getTime() + 1000));
+      return [value(TODAY, "WEIGHT_X10", 800), value(TODAY, "STEPS", 7000)];
+    };
+    assert.deepEqual(await syncHealthConnect({ health, platform, calc, measurements, isValidHealthValue }, TODAY, NOW), { kind: "NOT_LINKED" });
+    assert.equal((await measurements.listForClient(me.id)).measurements.length, 0);
+    assert.equal((await calc.listSteps(me.id, TODAY, TODAY)).length, 0);
+  } finally { await close(); }
+});
+
+test("UIX audit: повтор дня во внешнем ответе не создаёт два замера и неоднозначный день", async () => {
+  const { clients, health, calc, measurements, close } = await stores();
+  try {
+    const me = await clients.create({ displayName: "SyntheticSelf" });
+    await health.link(me.id, NOW);
+    const platform = new FakePlatform();
+    platform.data = [value(TODAY, "WEIGHT_X10", 800), value(TODAY, "WEIGHT_X10", 810)];
+    await syncHealthConnect({ health, platform, calc, measurements, isValidHealthValue }, TODAY, NOW);
+    const rows = (await measurements.listForClient(me.id)).measurements;
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]!.valueX10, 810);
+  } finally { await close(); }
+});
 
 test("Health: одна привязка на рабочее пространство; повторная привязка той же карточки — как есть; другой — отказ; отключение не удаляет дни", async () => {
   const { clients, health, close } = await stores();

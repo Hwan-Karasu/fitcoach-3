@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { AppButton, BottomSheet, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
+import { useValueSheetSave } from "./useValueSheetSave.ts";
 
 /**
  * Лист ввода одного значения дня (UIX-05, UI-OWN-069): вес или шаги цифровой клавиатурой. Кнопки «Записать» на экране нет:
@@ -23,27 +23,14 @@ export function ValueSheet({ visible, title, label, unit, initial, keyboardType,
   onClose: () => void;
 }>) {
   const colors = usePrototypeTheme().palette.tokens;
-  const [text, setText] = useState(initial);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  // Текст сбрасывается только при открытии: пришедшие позже данные дня не затирают ввод.
-  useEffect(() => { if (visible) { setText(initial); setError(null); } }, [visible]);
-  const submit = async () => {
-    if (busy) return;
-    if (text.trim() === initial.trim()) { onClose(); return; }
-    if (text.trim() === "" && emptyMessage !== undefined) { setError(emptyMessage); return; }
-    setBusy(true);
-    const message = await onSave(text);
-    setBusy(false);
-    if (message === null) onClose(); else setError(message);
-  };
+  const { text, error, busy, submit, change } = useValueSheetSave(visible, initial, onSave, onClose, emptyMessage);
   return (
     <BottomSheet visible={visible} title={title} onClose={onClose}
       footer={<AppButton label="Сохранить" busy={busy} onPress={() => { void submit(); }} />}>
       <View style={styles.row}>
         <View style={styles.field}>
           <TextField label={label} value={text} autoFocus textAlign="center" keyboardType={keyboardType} placeholder={placeholder} returnKeyType="done"
-            error={error ?? undefined} onChangeText={(value) => { setText(value); setError(null); }} onSubmitEditing={() => { void submit(); }} />
+            error={error ?? undefined} onChangeText={change} onSubmitEditing={() => { void submit(); }} />
         </View>
         <Text style={[styles.unit, { color: colors.textSecondary }]}>{unit}</Text>
       </View>

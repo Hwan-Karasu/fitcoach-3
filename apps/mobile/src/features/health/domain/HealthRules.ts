@@ -86,3 +86,19 @@ export function lastValuePerDay(records: readonly Readonly<{ time: string; value
 
 /** Килограммы → десятые доли (80,14 → 801), проценты → десятые доли; округление до ближайшей десятой. */
 export const toTenths = (value: number): number => Math.round(value * 10);
+
+/** Неполный ответ нельзя объявить полной синхронизацией: зацикливание и лимит страниц — явная ошибка до записи фактов. */
+export async function readHealthPages<T>(readPage: (token?: string) => Promise<Readonly<{ records: readonly T[]; pageToken?: string }>>, maxPages = 50): Promise<T[]> {
+  const records: T[] = [];
+  const seen = new Set<string>();
+  let token: string | undefined;
+  for (let page = 0; page < maxPages; page += 1) {
+    const chunk = await readPage(token);
+    records.push(...chunk.records);
+    token = chunk.pageToken;
+    if (!token) return records;
+    if (seen.has(token)) throw new Error("HEALTH_READ_PAGINATION");
+    seen.add(token);
+  }
+  throw new Error("HEALTH_READ_LIMIT");
+}

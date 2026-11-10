@@ -3,6 +3,12 @@ import test from "node:test";
 import { datesIn, mondayOf, periodLabel, recentMonths, spanOf, stepAnchor, summarizeSeries } from "../apps/mobile/src/features/nutrition/domain/MetricPeriods.ts";
 
 // 10 ноября 2026 — вторник (1 ноября 2026 — воскресенье).
+test("UIX audit: среднее сна сохраняет десятые, целочисленные показатели сохраняют прежнее округление", () => {
+  const values = new Map([["2026-11-09", 7.2], ["2026-11-10", 8.3]]);
+  const span = { from: "2026-11-09", to: "2026-11-10" };
+  assert.equal(summarizeSeries(values, span, 1).average, 7.8);
+  assert.equal(summarizeSeries(values, span).average, 8);
+});
 test("UIX-08: неделя — понедельник–воскресенье, месяц — календарный, день — одна дата", () => {
   assert.equal(mondayOf("2026-11-10"), "2026-11-09");
   assert.equal(mondayOf("2026-11-09"), "2026-11-09");

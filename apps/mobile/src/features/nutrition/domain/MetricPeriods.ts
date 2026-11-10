@@ -96,10 +96,11 @@ export interface SeriesSummary {
 }
 
 /** Ряд по дням интервала: неизвестные дни остаются «нет данных» и не входят в среднее, минимум и максимум. */
-export function summarizeSeries(values: ReadonlyMap<string, number>, span: DateSpan): SeriesSummary {
+export function summarizeSeries(values: ReadonlyMap<string, number>, span: DateSpan, decimalPlaces = 0): SeriesSummary {
   const days = datesIn(span).map((date): SeriesDay => ({ date, value: values.get(date) ?? null }));
   const known = days.flatMap((day) => day.value === null ? [] : [day.value]);
   const total = known.reduce((sum, value) => sum + value, 0);
-  return { days, known: known.length, total, average: known.length === 0 ? null : Math.round(total / known.length),
+  const precision = 10 ** decimalPlaces;
+  return { days, known: known.length, total, average: known.length === 0 ? null : Math.round(total / known.length * precision) / precision,
     min: known.length === 0 ? null : Math.min(...known), max: known.length === 0 ? null : Math.max(...known) };
 }

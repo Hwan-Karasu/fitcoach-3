@@ -76,7 +76,7 @@ export function MetricScreen({ metric, clientId, body, diary, targets, calc, mea
 
   const span = useMemo(() => scale === "DAY" ? spanOf("DAY", day) : spanOf(scale, anchor, custom), [scale, day, anchor, custom]);
   const { data, failed } = useMetricSeries(metric, span, clientId, body, tdee, { diary, calc, measurements, ...(health === undefined ? {} : { health: health.store }) });
-  const summary = useMemo(() => data === null ? null : summarizeSeries(data.values, span), [data, span]);
+  const summary = useMemo(() => data === null ? null : summarizeSeries(data.values, span, metric === "sleep" ? 1 : 0), [data, span, metric]);
   const future = scale === "DAY" ? day > today : span.from > today;
   const futureBlocked = future && metric !== "meals";
 
@@ -158,8 +158,8 @@ export function MetricScreen({ metric, clientId, body, diary, targets, calc, mea
                 {goal === null ? null : <Text style={[styles.goal, { color: colors.textMuted }]}>{info.goalText(goal)}</Text>}
                 {scale === "DAY" ? null : (
                   <View style={styles.tiles}>
-                    <Tile label="Максимум" value={summary.max === null ? "—" : spaced(summary.max)} />
-                    <Tile label="Минимум" value={summary.min === null ? "—" : spaced(summary.min)} />
+                    <Tile label="Максимум" value={summary.max === null ? "—" : bigText(summary.max)} />
+                    <Tile label="Минимум" value={summary.min === null ? "—" : bigText(summary.min)} />
                     <Tile label="Дней с данными" value={`${summary.known} из ${Math.max(elapsedDays, summary.known)}`} />
                   </View>
                 )}

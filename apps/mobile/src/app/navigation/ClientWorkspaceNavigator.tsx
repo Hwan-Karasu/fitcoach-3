@@ -235,7 +235,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       initialRouteName={clientCards.startSection}
       backBehavior="history"
       tabBar={(props) => <RootTabBar {...props} />}
-      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.canvas } }}
+      screenOptions={{ headerShown: false, tabBarStyle: { height: 0 }, sceneStyle: { backgroundColor: colors.canvas } }}
     >
       <Tabs.Screen name="Home" options={{ tabBarLabel: workspaceTabs.Home, tabBarAccessibilityLabel: workspaceTabs.Home }}>
         {({ navigation }) => <HomeNavigator client={client} accounting={accounting} daySlot={<DayTabs />} onClose={onClose} onOpenClients={onOpenClients} onOpenEdit={() => onOpenEdit(client.id)}

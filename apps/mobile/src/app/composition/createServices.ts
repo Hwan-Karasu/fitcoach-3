@@ -9,6 +9,7 @@ import { dailyPoints, localDateOf, type MeasurementRepositoryPort } from "../../
 import { isValidHealthValue, type HealthConnectPort, type HealthStorePort } from "../../features/health/public.ts";
 import { ExpoHealthConnectAdapter } from "../../features/health/data/ExpoHealthConnectAdapter.ts";
 import { syncHealthConnect, type HealthSyncOutcome } from "../../workflows/syncHealthConnect.ts";
+import { createHealthOperationQueue } from "../../features/health/public.ts";
 import type { SettingsPort } from "../../features/settings/public.ts";
 import type { QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
 import type { ActiveWorkoutsPort, RestTimersPort, TrainingExecutionPort, TrainingPlansRepositoryPort, WorkoutOutcomePort } from
@@ -179,16 +180,9 @@ function exerciseLookup(exercises: ExerciseCatalogPort, registerInvalidation?: (
 const healthPlatform = new ExpoHealthConnectAdapter();
 
 function createHealthServices(store: HealthStorePort, nutrition: NutritionServices, measurements: MeasurementRepositoryPort): HealthServices {
-  // Одновременные обновления (открытие карточки и кнопка в ней) делят один запуск: иначе вес и % жира мог бы записаться дважды.
-  let running: Promise<HealthSyncOutcome> | null = null;
-  const sync = (): Promise<HealthSyncOutcome> => {
-    if (running !== null) return running;
-    const current = syncHealthConnect({ health: store, platform: healthPlatform, calc: nutrition.calc, measurements, isValidHealthValue }, localDateOf(new Date()));
-    running = current;
-    void current.then(() => undefined, () => undefined).then(() => { if (running === current) running = null; });
-    return current;
-  };
-  return { store, platform: healthPlatform, sync };
+  const queued = createHealthOperationQueue(store, () => syncHealthConnect({ health: store, platform: healthPlatform,
+    calc: nutrition.calc, measurements, isValidHealthValue }, localDateOf(new Date())));
+  return { store: queued.store, platform: healthPlatform, sync: queued.sync };
 }
 
 export function createServices(clients: LocalClientServices, calendar: CalendarRepositoryPort,

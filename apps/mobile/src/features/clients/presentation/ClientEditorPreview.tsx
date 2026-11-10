@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { AppState, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { UserRound, type LucideIcon } from "lucide-react-native";
-import { ChoiceSegments, ConfirmDialog, DateField, InlineNotice, SectionTabs, StickyEditorFooter, TextField } from "../../../shared/ui/components/public.ts";
+import { ChoiceSegments, ConfirmDialog, DateField, InlineNotice, SectionTabs, StickyEditorFooter, TextField, useBottomPanelInFlow } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { ClientRecord, CreateClientInput } from "../domain/ClientRepositoryPort.ts";
 import type { ClientFormDraft } from "../domain/ClientRecoveryDraftPort.ts";
@@ -54,6 +54,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
   appendix?: ClientEditorAppendix;
 }>) {
   const { palette } = usePrototypeTheme();
+  const panelInFlow = useBottomPanelInFlow();
   const colors = palette.tokens;
   const scrollRef = useRef<ScrollView>(null);
   const closeButtonRef = useRef<View>(null);
@@ -283,7 +284,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
   return (
     <SafeAreaView edges={["top"]} style={[styles.safe, { backgroundColor: colors.canvas }]}>
       <StatusBar barStyle={palette.tone === "dark" ? "light-content" : "dark-content"} backgroundColor={colors.canvas} />
-      <KeyboardAvoidingView style={styles.content} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoidingView enabled={!panelInFlow} style={styles.content} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
         <Pressable ref={closeButtonRef} accessibilityRole="button" accessibilityLabel="Закрыть форму" onPress={close} style={styles.closeButton}>
           <Text style={[styles.closeGlyph, { color: colors.accentInk }]}>←</Text>

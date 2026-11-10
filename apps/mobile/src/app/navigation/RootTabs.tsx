@@ -96,6 +96,7 @@ export function RootTabs({
         backBehavior="none"
         tabBar={(props) => <RootTabBar {...props} />}
         screenOptions={{
+          tabBarStyle: { height: 0 },
           sceneStyle: { backgroundColor: colors.canvas },
           // Заголовок корневой вкладки — в одной строке с колокольчиком и меню (UI-OWN-002).
           header: ({ route, options, navigation }) => {

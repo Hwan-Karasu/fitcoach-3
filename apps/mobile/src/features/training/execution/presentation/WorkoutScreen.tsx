@@ -15,7 +15,7 @@ import * as Sharing from "expo-sharing";
 import Sortable from "react-native-sortables";
 import { CalendarDays, ChevronRight, Clock, EllipsisVertical, GripVertical, LayoutGrid, Plus, Share2, Timer, Trash2,
   Users } from "lucide-react-native";
-import { AppButton, ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, RestDockSpacer, StatusTag, SupersetBorder, TimeWheelPicker, WeekCards, useWeekNavigation,
+import { AppButton, ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, StatusTag, SupersetBorder, TimeWheelPicker, WeekCards, useWeekNavigation,
   type StatusKind } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { useReportScreenTone } from "../../../../shared/ui/theme/ScreenTone.tsx";
@@ -41,6 +41,7 @@ import { extraWarmups, useWorkoutDiary, type SetPatch } from "./useWorkoutDiary.
 import { PendingInputWrites } from "../domain/PendingInputWrites.ts";
 import { NoteField, SetRow, type SetTarget } from "./WorkoutSetRow.tsx";
 import { styles } from "./workoutStyles.ts";
+import { restTimerDiagnostics } from "../../../../shared/diagnostics/RestTimerDiagnostics.ts";
 
 const statusKinds: Readonly<Record<WorkoutStatus, StatusKind>> = {
   NOT_STARTED: "neutral", IN_PROGRESS: "info", COMPLETED: "success", MISSED: "warning", CANCELLED: "warning",
@@ -115,10 +116,9 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   focusExerciseId?: string | null;
 }>) {
   useKeepAwake();
+  restTimerDiagnostics.render("workout");
   // Возврат с таймера отдыха: после раскладки прокручиваем к упражнению, из которого он запущен, один раз на открытие.
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
-  /** Область прокрутки в окне: по ней `RestDockSpacer` считает, сколько нижнего края перекрывает панель таймеров. */
-  const scrollAreaRef = useRef<View>(null);
   const bodyY = useRef(0);
   const bodyRef = useRef<View>(null);
   const cardRefs = useRef(new Map<string, View>()).current;
@@ -525,7 +525,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     <>
       {participants}
       <GestureDetector gesture={pinch}>
-      <View ref={scrollAreaRef} collapsable={false} style={styles.scrollArea}>
+      <View style={styles.scrollArea}>
       <KeyboardAwareScrollView ref={scrollRef} style={{ backgroundColor: colors.canvas }} contentContainerStyle={[styles.content, styles.contentFlush]}
         keyboardShouldPersistTaps="handled" bottomOffset={24}>
         <View style={[styles.topCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -751,7 +751,6 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
           </Pressable>
         ) : null}
         </View> : null}
-        <RestDockSpacer scrollRef={scrollAreaRef} />
       </KeyboardAwareScrollView>
       </View>
       </GestureDetector>

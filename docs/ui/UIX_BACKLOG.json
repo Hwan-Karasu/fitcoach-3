@@ -4,6 +4,14 @@
   "note": "Актуализация 2026-11-10: реализация и остатки — в state/evidence/remaining каждой задачи. IMPLEMENTED_NOT_DEVICE_VERIFIED не означает полной приёмки: на телефоне не проверено. UIX-15 требует APK и проверки Health Connect, UIX-18 отменён.",
   "tasks": [
     {
+      "id": "REST-DOCK-2",
+      "state": "IMPLEMENTED_NOT_DEVICE_VERIFIED",
+      "title": "Единая нижняя панель с таймерами и аудит UIX",
+      "acceptance": "Утверждённый макет: единый контейнер, горизонтальные карточки, компактная строка, жесты, отсутствие двойных отступов, сохранённая логика таймеров",
+      "evidence": "Постоянный узел в потоке под стеком, регистрация навигации по фокусу, общий UI-clock, карусель/индикатор, динамическое Ещё N, действия редактора сверху; React-интеграция жизненного цикла и смены фокуса; аудит UIX с исправлениями сохранения и синхронизации (ADR-064); test:foundation 1165/1165, excel:test 103/103, статические проверки и Android Hermes JS export",
+      "remaining": "18 Android-сценариев, клавиатура/safe area/жесты/шрифты, p50/p95/FPS и реальный Health Connect не проверены (ADB offline); APK отдельно. Отчёт docs/ui/UIX_TECHNICAL_AUDIT_2026-11-10.md"
+    },
+    {
       "id": "SIDE-RPE-1",
       "state": "IMPLEMENTED_NOT_DEVICE_VERIFIED",
       "title": "Отдельный RPE левой и правой стороны упражнения",

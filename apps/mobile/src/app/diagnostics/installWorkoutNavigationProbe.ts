@@ -21,4 +21,13 @@ export function installWorkoutNavigationProbe() {
   DevSettings.addMenuItem("Toggle rest timer clock", () => {
     console.info("[rest-clock]", restTimerDiagnostics.toggleClock() ? "off" : "on");
   });
+  DevSettings.addMenuItem("Start rest panel render sample", () => {
+    restTimerDiagnostics.startRenders();
+    inputLatency.reset();
+  });
+  DevSettings.addMenuItem("Report rest panel render sample", () => {
+    console.info("[rest-panel-profile]", restTimerDiagnostics.label("device"), JSON.stringify({
+      renders: restTimerDiagnostics.finishRenders(), latency: inputLatency.stats(),
+    }));
+  });
 }

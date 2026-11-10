@@ -5,9 +5,9 @@ import { shadow } from "../../../../shared/ui/theme/style.ts";
 export const styles = StyleSheet.create({
   center: { flex: 1, padding: 16, gap: 12, justifyContent: "center" },
   content: { padding: 16, gap: 12 },
-  /** Нижний запас даёт `RestDockSpacer` (панель таймеров), а не постоянный отступ. */
+  /** Общая нижняя панель занимает место в потоке; дневнику не нужна компенсация перекрытия. */
   scrollArea: { flex: 1 },
-  contentFlush: { paddingBottom: 0 },
+  contentFlush: { paddingBottom: 24 },
   heading: { flex: 1, fontFamily: fonts.bold, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
   topCard: { ...shadow.card, borderRadius: 22, padding: 16, gap: 12 },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 10 },

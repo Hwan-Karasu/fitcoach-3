@@ -71,3 +71,11 @@ test("Health: допустимые значения — границы шаго�
   assert.equal(isValidHealthValue("STEPS", -1), false);
   assert.equal(isValidHealthValue("STEPS", 1.5), false);
 });
+import { readHealthPages } from "../apps/mobile/src/features/health/domain/HealthRules.ts";
+
+test("UIX audit: все страницы Health Connect читаются, неполный или зацикленный ответ отклоняется", async () => {
+  assert.deepEqual(await readHealthPages(async (token) => token === undefined ? { records: [1], pageToken: "next" } : { records: [2] }), [1, 2]);
+  await assert.rejects(readHealthPages(async () => ({ records: [1], pageToken: "same" })), /HEALTH_READ_PAGINATION/u);
+  let page = 0;
+  await assert.rejects(readHealthPages(async () => ({ records: [page], pageToken: String(++page) }), 2), /HEALTH_READ_LIMIT/u);
+});
