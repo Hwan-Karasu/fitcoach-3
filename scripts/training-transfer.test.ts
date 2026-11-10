@@ -479,13 +479,14 @@ test("I06 upgrading populated execution v2 preserves every row and guard and rol
       for (const owner of SCHEMA_OWNERS) await runMigrationsInTransaction(tx, owner.owner === "training_execution" ? owner.chain.slice(0, 2) : owner.chain, owner.ledger);
     });
     const tables = ["workspaces", "clients", "training_sessions", "training_performed_sets", "training_performed_drops", "training_performed_sides", "training_exercise_notes"];
-    // Исходная база уже на последней версии: переносятся только колонки, которые есть в базе v2 (миграция v4 добавила calendar_appointment_id).
+    // Исходная база уже на последней версии: переносятся только колонки, которые есть в базе v2.
     for (const table of tables) for (const row of f.native.prepare(`SELECT * FROM ${table}`).all()) {
       const present = new Set((native.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name));
       const keys = Object.keys(row).filter((key) => present.has(key)); native.prepare(`INSERT INTO ${table} (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")})`).run(...keys.map((key) => row[key] as never));
     }
-    // Колонка, добавленная миграцией v4, в сравнение строк не входит: у перенесённых строк она пуста.
-    const snapshot = () => tables.map((table) => native.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all().map(({ calendar_appointment_id: added, ...row }) => { void added; return row; }));
+    // Сравниваем все прежние колонки. Новые calendar_appointment_id (v4) и RPE сторон (v5) проверяются отдельно.
+    const columns = tables.map((table) => native.prepare(`PRAGMA table_info(${table})`).all().map((column) => String(column.name)));
+    const snapshot = () => tables.map((table, at) => native.prepare(`SELECT ${columns[at]!.join(",")} FROM ${table} ORDER BY rowid`).all());
     const before = snapshot();
     const objects = () => native.prepare("SELECT type,name,sql FROM sqlite_master WHERE type IN ('trigger','index') AND sql IS NOT NULL ORDER BY name").all();
     const guards = objects();
@@ -502,6 +503,51 @@ test("I06 upgrading populated execution v2 preserves every row and guard and rol
     await port.exclusive((tx) => runMigrationsInTransaction(tx, devTrainingExecutionCatalog, DEV_TRAINING_EXECUTION_LEDGER));
     assert.deepEqual(snapshot(), before);
   } finally { native.close(); await f.close(); }
+});
+
+test("SIDE-RPE: Excel и повторный импорт сохраняют отдельные RPE сторон, включая явное пустое значение", async () => {
+  const f = await fixture();
+  try {
+    const base = trainingTransferFixture();
+    const input = { ...base, sessions: base.sessions.map((s) => ({ ...s, facts: s.facts.map((fact) => ({ ...fact,
+      values: { reps: null, loadGrams: null, durationSec: null, distanceM: null },
+      sides: { left: { values: { ...fact.values, reps: 8 }, confirmed: true, rpe: null },
+        right: { values: { ...fact.values, reps: 9 }, confirmed: true, rpe: 9 } },
+    })) })) };
+    const decoded = readTrainingWorkbook(readWorkbook(writeTrainingWorkbook(input)));
+    assert.deepEqual(decoded, input, "книга сохраняет значения сторон без подмены общим RPE");
+    await f.transfer.importClient(f.client.id, decoded, f.mapping);
+    const ids = (await f.plans.getLibrary(f.client.id)).active.map((p) => p.id);
+    const exported = await f.transfer.exportClient(f.client.id, ids);
+    for (const fact of exported.sessions.flatMap((s) => s.facts)) {
+      assert.deepEqual([fact.rpe, fact.sides?.left.rpe, fact.sides?.right.rpe], [null, null, 9]);
+      assert.deepEqual([fact.sides?.left.values.reps, fact.sides?.right.values.reps], [8, 9]);
+    }
+    assert.equal(exported.sessions.length, 2);
+    const nextClient = await f.clients.create({ displayName: "SyntheticSideRpe" });
+    const next = readTrainingWorkbook(readWorkbook(writeTrainingWorkbook(exported)));
+    await f.transfer.importClient(nextClient.id, next, Object.fromEntries(next.exercises.map((e) => [e.id, e.id])));
+    const nextIds = (await f.plans.getLibrary(nextClient.id)).active.map((p) => p.id);
+    const restored = await f.transfer.exportClient(nextClient.id, nextIds);
+    assert.deepEqual(restored.sessions.flatMap((s) => s.facts.map((fact) => [fact.rpe, fact.sides?.left.rpe, fact.sides?.right.rpe])),
+      [[null, null, 9], [null, null, 9]]);
+  } finally { await f.close(); }
+});
+
+test("SIDE-RPE: прежняя книга без RPE сторон переносит общий RPE в обе стороны", async () => {
+  const f = await fixture();
+  try {
+    const base = trainingTransferFixture();
+    const input = { ...base, sessions: base.sessions.map((s) => ({ ...s, facts: s.facts.map((fact) => ({ ...fact,
+      values: { reps: null, loadGrams: null, durationSec: null, distanceM: null },
+      sides: { left: { values: fact.values, confirmed: true }, right: { values: fact.values, confirmed: true } },
+    })) })) };
+    await f.transfer.importClient(f.client.id, readTrainingWorkbook(readWorkbook(writeTrainingWorkbook(input))), f.mapping);
+    const ids = (await f.plans.getLibrary(f.client.id)).active.map((p) => p.id);
+    const exported = await f.transfer.exportClient(f.client.id, ids);
+    assert.deepEqual(exported.sessions.flatMap((s) => s.facts.map((fact) => [fact.rpe, fact.sides?.left.rpe, fact.sides?.right.rpe])),
+      [[null, 8, 8], [null, 8, 8]]);
+  } finally { await f.close(); }
 });
 
 async function fixture() {

@@ -159,7 +159,7 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
   /** `confirmed` — какое состояние выбрано нажатием (обратное показанному). */
   onToggle: (target: SetTarget, confirmed: boolean, side?: Side) => void;
   onPickType: (target: SetTarget) => void;
-  onPickRpe: (target: SetTarget) => void;
+  onPickRpe: (target: SetTarget, side?: Side) => void;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -211,6 +211,14 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
       </Pressable>
     );
   };
+  /** Ячейка RPE: у обычного подхода — общий, у одностороннего — своя у каждой стороны (левая — в строке «Л», правая — в строке «П»). */
+  const rpeCell = (value: number | null | undefined, label: string, side?: Side) => (
+    <Pressable accessibilityRole="button" accessibilityLabel={value ? `RPE ${label} ${value}. Изменить` : `Указать RPE ${label}`} hitSlop={6}
+      onPress={() => onPickRpe(target, side)} style={styles.side}>
+      {value ? <Text style={[styles.rpeText, { color: rpeTone(value, colors) }]}>{value}</Text>
+        : <Gauge size={20} color={colors.textMuted} strokeWidth={1.8} />}
+    </Pressable>
+  );
   const sidesPrevious = sided && previous !== undefined ? previousSides(previous) : null;
   const sideText = (value: SetValues | null | undefined) => value === null || value === undefined ? "—" : compactValues(value, fields);
   const previousText = previous === undefined ? "—" : sided
@@ -248,11 +256,7 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
         })}
         {sided ? sideRow("L") : cells(set.id, (field) => fact?.values[field] ?? null,
           (field, value) => onSave(target, { fields: { [field]: value } }))}
-        <Pressable accessibilityRole="button" accessibilityLabel={fact?.rpe ? `RPE ${fact.rpe}. Изменить` : "Указать RPE"} hitSlop={6}
-          onPress={() => onPickRpe(target)} style={styles.side}>
-          {fact?.rpe ? <Text style={[styles.rpeText, { color: rpeTone(fact.rpe, colors) }]}>{fact.rpe}</Text>
-            : <Gauge size={20} color={colors.textMuted} strokeWidth={1.8} />}
-        </Pressable>
+        {sided ? rpeCell(fact?.sides?.left.rpe, "левой стороны", "L") : rpeCell(fact?.rpe, "подхода")}
         {mode === "MANUAL" && sided ? sideCheck("L") : null}
         {mode === "MANUAL" && !sided ? (
           <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: confirmed, busy: confirming.includes("S") }}
@@ -271,7 +275,7 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
           {previousChip(`П ${sideText(sidesPrevious?.right)}`, "Перенести прошлый результат правой стороны",
             sidesPrevious?.right ? () => onSave(target, { sidesFrom: { left: null, right: sidesPrevious.right } }) : null)}
           {sideRow("R")}
-          <View style={styles.side} />
+          {rpeCell(fact?.sides?.right.rpe, "правой стороны", "R")}
           {mode === "MANUAL" ? sideCheck("R") : null}
         </View>
       ) : null}

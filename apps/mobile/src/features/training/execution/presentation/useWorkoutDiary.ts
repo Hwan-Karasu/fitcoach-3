@@ -21,6 +21,8 @@ export function extraWarmups(state: WorkoutExecution | null, plannedExerciseId: 
 export interface SetPatch {
   readonly fields?: Partial<SetValues>;
   readonly rpe?: number | null;
+  /** RPE одной стороны одностороннего подхода: у левой и правой он свой. */
+  readonly sideRpe?: Readonly<{ side: Side; rpe: number | null }>;
   /** Смена типа; мини-сеты дроп-сета появляются или убираются вместе с ней. */
   readonly setType?: SetType;
   /** Состав мини-сетов целиком: добавить, убрать, перенести из «Пред.». */
@@ -148,6 +150,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
       const { drop } = patch;
       if (drop !== undefined) drops = drops.map((item, index) => index === drop.index ? { ...item, ...drop.fields } : item);
       let sides: SaveSetInput["sides"];
+      let sidesRpe: SaveSetInput["sidesRpe"];
       if (unilateralRef.current(exercise.exerciseId)) {
         let left = fact?.sides?.left.values ?? EMPTY_VALUES;
         let right = fact?.sides?.right.values ?? EMPTY_VALUES;
@@ -156,8 +159,11 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
         if (patch.sidesFrom?.left) left = patch.sidesFrom.left;
         if (patch.sidesFrom?.right) right = patch.sidesFrom.right;
         sides = { left, right };
+        // RPE сторон: прежние из факта, указанная в правке сторона заменяется.
+        sidesRpe = { left: patch.sideRpe?.side === "L" ? patch.sideRpe.rpe : fact?.sides?.left.rpe ?? null,
+          right: patch.sideRpe?.side === "R" ? patch.sideRpe.rpe : fact?.sides?.right.rpe ?? null };
       }
-      const input: SaveSetInput = { ...identity, drops, sides, setType,
+      const input: SaveSetInput = { ...identity, drops, sides, sidesRpe, setType,
         values: sides === undefined ? { ...(fact?.values ?? EMPTY_VALUES), ...patch.fields } : EMPTY_VALUES,
         rpe: patch.rpe !== undefined ? patch.rpe : fact?.rpe ?? null };
       const result = await execution.saveSet(input);

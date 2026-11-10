@@ -2,7 +2,7 @@
 
 Источник: макет [concepts/ONLYFITS_CONCEPT_2026-11-09.html](concepts/ONLYFITS_CONCEPT_2026-11-09.html), решения
 UI-OWN-059…085 в [UI_STYLE_DECISIONS.md](UI_STYLE_DECISIONS.md), ADR-059 (Health Connect) в `memory-bank/decisions.md`.
-Задачи — [UIX_BACKLOG.json](UIX_BACKLOG.json). Все решения `PROPOSED`, код не менялся, на телефоне не проверено.
+Задачи — [UIX_BACKLOG.json](UIX_BACKLOG.json). Актуализация 2026-11-10: UIX-01…14 и UIX-16…17 реализованы с остатками, указанными в backlog, на телефоне не проверены. UIX-15 ожидает сборки APK и проверки Health Connect; UIX-18 отменён. Ниже сохранён исходный план, фактические результаты — в backlog и `docs/PROJECT_STATUS.md`.
 
 Решения владельца по плану: Health Connect — **в V1 наравне** с остальным (после gate, этап 5); порядок — **сначала общие
 компоненты, потом экраны**. Правила проекта действуют полностью: одна задача — один срез, слои и `public.ts`, запись через

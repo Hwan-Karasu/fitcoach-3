@@ -135,14 +135,14 @@ export function sideTo(was: SideFlags, sides: SideValuesPair, side: "L" | "R", c
     : { left: keep(was.left), right: confirmationTo(was.right, confirmed, plain(sides.right), metrics) };
 }
 
-/** Односторонний подход: значения только в сторонах; дроп-сет со сторонами — отдельный срез. */
-export function validateSides(content: SetContent, sides: SideValuesPair, rpe: number | null,
+/** Односторонний подход: значения только в сторонах, у каждой стороны свой RPE; дроп-сет со сторонами — отдельный срез. */
+export function validateSides(content: SetContent, sides: SideValuesPair, rpes: Readonly<{ left: number | null; right: number | null }>,
   metrics: readonly TrackingMetric[]): void {
   if (content.setType === "DROP" || content.drops.length > 0 || hasEnteredData([{ values: content.values, confirmed: false }])) {
     throw new Error("INVALID_METRIC");
   }
-  validateContent(plain(sides.left), rpe, metrics);
-  validateContent(plain(sides.right), null, metrics);
+  validateContent(plain(sides.left), rpes.left, metrics);
+  validateContent(plain(sides.right), rpes.right, metrics);
 }
 
 /**

@@ -1,8 +1,16 @@
 {
   "decisionDate": "2026-11-09",
   "source": "docs/ui/ONLYFITS_IMPLEMENTATION_PLAN.md; решения UI-OWN-059…085 и ADR-059 в статусе PROPOSED",
-  "note": "Задачи UI-концепта «в духе Onlyfits». Все PLANNED: код не менялся, на телефоне не проверено. Порядок — как в плане.",
+  "note": "Актуализация 2026-11-10: реализация и остатки — в state/evidence/remaining каждой задачи. IMPLEMENTED_NOT_DEVICE_VERIFIED не означает полной приёмки: на телефоне не проверено. UIX-15 требует APK и проверки Health Connect, UIX-18 отменён.",
   "tasks": [
+    {
+      "id": "SIDE-RPE-1",
+      "state": "IMPLEMENTED_NOT_DEVICE_VERIFIED",
+      "title": "Отдельный RPE левой и правой стороны упражнения",
+      "acceptance": "Оценки 1–10 независимы; сохранение, подтверждение, копирование и Excel не теряют RPE; прежний общий RPE переносится в обе стороны",
+      "evidence": "Миграция исполнения v5, отдельные ячейки и лист RPE, история сторон, совместимый контракт Excel с различением отсутствующего поля и null (ADR-063); test:foundation 1147/1147, excel:test 103/103; typecheck, lint, arch:check, source:verify, secrets:check проходят",
+      "remaining": "Проверка на телефоне: обе ячейки RPE, очистка одной оценки, переход между неделями/клиентами; APK с этой правкой ещё не собирался"
+    },
     {
       "id": "UIX-01",
       "state": "IMPLEMENTED_NOT_DEVICE_VERIFIED",

@@ -18,6 +18,12 @@ export function valuesText(values: SetValues): string {
     values.distanceM === null ? null : `${values.distanceM} м`].filter((part): part is string => part !== null);
   return parts.length === 0 ? "—" : parts.join(" × ");
 }
+/** RPE сторон одностороннего подхода: «RPE Л 8 · П 7»; сторона без RPE — «—»; ни у одной нет — `null`. */
+export function sidesRpeText(fact: SetFact): string | null {
+  if (fact.sides === null || (fact.sides.left.rpe === null && fact.sides.right.rpe === null)) return null;
+  const side = (value: number | null) => value === null ? "—" : number(value);
+  return `RPE Л ${side(fact.sides.left.rpe)} · П ${side(fact.sides.right.rpe)}`;
+}
 export function factText(fact: SetFact): string {
   if (fact.sides !== null) return `Л ${valuesText(fact.sides.left.values)} · П ${valuesText(fact.sides.right.values)}`;
   return [fact.values, ...fact.drops].map(valuesText).join(" → ");
@@ -35,7 +41,8 @@ const number = (value: number) => value.toLocaleString("ru-RU", { maximumFractio
 /** Подход одной строкой: «1. 80 кг × 8 повт. · RPE 8», разминка — «Р.», с пометками «отказ», «дроп-сет», «не засчитан». */
 export function setLabel(fact: SetFact, ordinal: number): string {
   const marks = [fact.setType === "FAILURE" ? "отказ" : null, fact.setType === "DROP" ? "дроп-сет" : null,
-    fact.rpe === null ? null : `RPE ${number(fact.rpe)}`, fact.confirmed ? null : "не засчитан"].filter((mark) => mark !== null);
+    fact.sides === null ? (fact.rpe === null ? null : `RPE ${number(fact.rpe)}`) : sidesRpeText(fact),
+    fact.confirmed ? null : "не засчитан"].filter((mark) => mark !== null);
   return `${fact.setType === "WARMUP" ? "Р" : ordinal}. ${factText(fact)}${marks.length > 0 ? ` · ${marks.join(" · ")}` : ""}`;
 }
 

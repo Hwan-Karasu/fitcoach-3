@@ -74,3 +74,15 @@ test("warmups, drop mini-sets and unilateral sides are visible and round-trip wi
   assert.equal(book.Sheets["Матрица 1"]!.N6.v, "Л: 8 / П: 9");
   assert.deepEqual(readTrainingWorkbook(book), value);
 });
+
+test("SIDE-RPE: книга отклоняет нецелые и выходящие за диапазон RPE каждой стороны", () => {
+  for (const side of ["left", "right"] as const) for (const rpe of [0, 11, 7.5, "8"]) {
+    const base = trainingTransferFixture();
+    const input = { ...base, sessions: base.sessions.map((s) => ({ ...s, facts: s.facts.map((fact) => ({ ...fact,
+      values: { reps: null, loadGrams: null, durationSec: null, distanceM: null },
+      sides: { left: { values: fact.values, confirmed: true, rpe: 8 }, right: { values: fact.values, confirmed: true, rpe: 9 },
+        [side]: { values: fact.values, confirmed: true, rpe } },
+    })) })) };
+    assert.throws(() => readTrainingWorkbook(readWorkbook(writeTrainingWorkbook(input as typeof base))), /стороны|RPE/u);
+  }
+});

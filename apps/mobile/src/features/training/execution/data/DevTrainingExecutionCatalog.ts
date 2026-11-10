@@ -3,5 +3,6 @@ import { trainingExecutionBaseline } from "./TrainingExecutionBaseline.generated
 import { executionIntegrityMigration } from "./ExecutionIntegrityMigration.ts";
 import { unknownWorkoutDateMigration } from "./UnknownWorkoutDateMigration.ts";
 import { calendarAppointmentLinkMigration } from "./CalendarAppointmentLinkMigration.ts";
-export const devTrainingExecutionCatalog = [...trainingExecutionBaseline, executionIntegrityMigration, unknownWorkoutDateMigration, calendarAppointmentLinkMigration];
+import { sideRpeMigration } from "./SideRpeMigration.ts";
+export const devTrainingExecutionCatalog = [...trainingExecutionBaseline, executionIntegrityMigration, unknownWorkoutDateMigration, calendarAppointmentLinkMigration, sideRpeMigration];
 export const DEV_TRAINING_EXECUTION_LEDGER = "training_execution_schema_migrations";

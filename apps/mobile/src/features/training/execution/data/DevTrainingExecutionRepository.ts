@@ -50,7 +50,7 @@ type FactRow = Readonly<{
 }>;
 
 type SideRow = Readonly<{ setId: string; side: "L" | "R"; reps: number | null; loadGrams: number | null;
-  durationSec: number | null; distanceM: number | null; confirmedAt: string | null }>;
+  durationSec: number | null; distanceM: number | null; confirmedAt: string | null; rpe: number | null }>;
 type StoredSides = Readonly<{ L?: SideRow; R?: SideRow }>;
 
 /** Стороны односторонних подходов; ключ — ID факта. */
@@ -58,7 +58,7 @@ async function sidesWhere(port: SqliteStatementPort, workspaceId: string, condit
   Promise<ReadonlyMap<string, StoredSides>> {
   const result = new Map<string, { L?: SideRow; R?: SideRow }>();
   const rows = await port.all<SideRow>(`SELECT set_id AS setId, side, reps, load_grams AS loadGrams, duration_sec AS durationSec,
-    distance_m AS distanceM, confirmed_at AS confirmedAt FROM training_performed_sides
+    distance_m AS distanceM, confirmed_at AS confirmedAt, rpe FROM training_performed_sides
     WHERE workspace_id = ? AND ${condition}`, [workspaceId, ...params]);
   for (const row of rows) result.set(row.setId, { ...result.get(row.setId), [row.side]: row });
   return result;
@@ -75,7 +75,7 @@ const EMPTY_SIDE: SetValues = { reps: null, loadGrams: null, durationSec: null, 
 function factSides(row: FactRow, stored: StoredSides | undefined): SetFact["sides"] {
   if (row.sided !== 1) return null;
   const side = (value: SideRow | undefined) => ({ values: value === undefined ? EMPTY_SIDE : valuesOf(value),
-    confirmed: value?.confirmedAt != null });
+    confirmed: value?.confirmedAt != null, rpe: value?.rpe ?? null });
   return { left: side(stored?.L), right: side(stored?.R) };
 }
 
@@ -85,7 +85,7 @@ function valuesOf(row: SetValues): SetValues {
 
 function toFact(row: FactRow, drops: readonly SetValues[], sides: SetFact["sides"] = null): SetFact {
   return { id: row.id, plannedSetId: row.plannedSetId, plannedExerciseId: row.plannedExerciseId, exerciseId: row.exerciseId,
-    position: row.position, setType: row.setType, values: valuesOf(row), drops, sides, rpe: row.rpe,
+    position: row.position, setType: row.setType, values: valuesOf(row), drops, sides, rpe: row.sided === 1 ? null : row.rpe,
     confirmed: row.confirmedAt !== null, extra: row.extra === 1, origin: row.origin, revision: row.revision };
 }
 
@@ -434,7 +434,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
   private async writeFact(tx: SqliteStatementPort, identity: SetIdentity, now: Date,
     next: (existing: FactRow | null, existingDrops: readonly SetValues[], mode: ConfirmationMode, existingSides: StoredSides) =>
       Readonly<{ content: SetContent; rpe: number | null; change: ConfirmationChange;
-        sides: Readonly<{ pair: Readonly<{ left: SetValues; right: SetValues }>; change: SidesChange }> | null }>,
+        sides: Readonly<{ pair: Readonly<{ left: SetValues; right: SetValues }>; change: SidesChange; rpes: Readonly<{ left: number | null; right: number | null }> }> | null }>,
     /** Копирование недели не проводит занятие: начало ставится только вводом тренера (§48.24 п. 3). */
     markStart = true):
     Promise<SetSaveResult> {
@@ -486,8 +486,8 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       for (const [side, sideValues, sideChange, before] of [["L", sides.pair.left, sides.change.left, existingSides.L],
         ["R", sides.pair.right, sides.change.right, existingSides.R]] as const) {
         await tx.run(`INSERT INTO training_performed_sides (workspace_id, set_id, side, reps, load_grams, duration_sec,
-          distance_m, confirmed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [this.workspaceId, saved.id, side, sideValues.reps,
-          sideValues.loadGrams, sideValues.durationSec, sideValues.distanceM, sideStamp(sideChange, before)]);
+          distance_m, confirmed_at, rpe) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [this.workspaceId, saved.id, side, sideValues.reps,
+          sideValues.loadGrams, sideValues.durationSec, sideValues.distanceM, sideStamp(sideChange, before), side === "L" ? sides.rpes.left : sides.rpes.right]);
       }
     }
     const storedSides = (await sidesOf(tx, this.workspaceId, [saved.id])).get(saved.id);
@@ -508,7 +508,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     const content: SetContent = { setType: input.setType, values: input.values, drops: input.drops };
     const pair = input.sides;
     if (pair === undefined) validateContent(content, input.rpe, input.metrics);
-    else validateSides(content, pair, input.rpe, input.metrics);
+    else validateSides(content, pair, input.sidesRpe ?? { left: null, right: null }, input.metrics);
     const result = await this.ready().writer.write((tx) => this.writeFact(tx, input, now, (existing, _drops, mode, stored) => {
       if (pair === undefined) {
         return { content, rpe: input.rpe, sides: null,
@@ -516,7 +516,9 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       }
       const change = sidesAfterSave(mode, { left: stored.L?.confirmedAt != null, right: stored.R?.confirmedAt != null }, pair,
         input.metrics);
-      return { content, rpe: input.rpe, sides: { pair, change }, change: mergeSides(change) };
+      // RPE сторон: указан — он; не указан — прежний сохранённый (правка значений не стирает RPE).
+      const rpes = input.sidesRpe ?? { left: stored.L?.rpe ?? null, right: stored.R?.rpe ?? null };
+      return { content, rpe: null, sides: { pair, change, rpes }, change: mergeSides(change) };
     }));
     this.publish(input.slot);
     return result;
@@ -539,7 +541,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
           right: stored.R === undefined ? EMPTY_SIDE : valuesOf(stored.R) };
         const change = sideTo({ left: stored.L?.confirmedAt != null, right: stored.R?.confirmedAt != null }, pair, side, confirmed,
           identity.metrics);
-        return { content, rpe: row.rpe, sides: { pair, change }, change: mergeSides(change) };
+        return { content, rpe: null, sides: { pair, change, rpes: { left: stored.L?.rpe ?? null, right: stored.R?.rpe ?? null } }, change: mergeSides(change) };
       });
     });
     this.publish(identity.slot);
@@ -639,7 +641,8 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
         if (!plannedSetId || fact.exerciseId !== exercise.exerciseId) throw new Error("WRONG_CLIENT_SCOPE");
         const content = { setType: fact.setType, values: fact.values, drops: fact.drops };
         const pair = fact.sides ? { left: fact.sides.left.values, right: fact.sides.right.values } : null;
-        if (pair) validateSides(content, pair, fact.rpe, exercise.metrics);
+        const rpes = fact.sides ? { left: fact.sides.left.rpe, right: fact.sides.right.rpe } : null;
+        if (pair && rpes) validateSides(content, pair, rpes, exercise.metrics);
         else validateContent(content, fact.rpe, exercise.metrics);
         const copied = await this.writeFact(tx, { slot: mapping.target, plannedExerciseId: exercise.targetId,
           exerciseId: exercise.exerciseId, plannedSetId, position: fact.position, metrics: exercise.metrics, expectedRevision: null },
@@ -648,7 +651,7 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
           if (!pair) return { content, rpe: fact.rpe, sides: null,
             change: confirmationAfterSave(mode, false, content, exercise.metrics) };
           const change = sidesAfterSave(mode, { left: false, right: false }, pair, exercise.metrics);
-          return { content, rpe: fact.rpe, sides: { pair, change }, change: mergeSides(change) };
+          return { content, rpe: null, sides: { pair, change, rpes: rpes ?? { left: null, right: null } }, change: mergeSides(change) };
         }, false);
         await tx.run("UPDATE training_performed_sets SET origin = 'COPY', extra = ? WHERE workspace_id = ? AND id = ?",
           [fact.extra ? 1 : 0, this.workspaceId, copied.fact.id]);

@@ -5,6 +5,9 @@ import type { TrainingTransfer, TransferWorkout } from "../../../shared/training
  * её вызывают читатель файла и движок импорта, поэтому записи в БД не нужен круг через XLSX.
  */
 export function assertValidTransfer(value: TrainingTransfer): void {
+  const validateRpe = (rpe: number | null | undefined) => {
+    if (rpe != null && (!Number.isInteger(rpe) || rpe < 1 || rpe > 10)) throw new Error("RPE должен быть целым числом от 1 до 10.");
+  };
   const validateValues = (v: import("../../../shared/training-transfer/TrainingTransfer.ts").TransferValues) => {
     for (const [key, min, max] of [["reps", 1, 999], ["loadGrams", 0, 1000000], ["durationSec", 1, 86400], ["distanceM", 1, 1000000]] as const) {
       const n = v[key]; if (n !== null && (!Number.isSafeInteger(n) || n < min || n > max)) throw new Error(`Недопустимое значение ${key}. Проверьте числовые ячейки матрицы.`);
@@ -22,7 +25,8 @@ export function assertValidTransfer(value: TrainingTransfer): void {
     for (const f of s.facts) {
       if (!exercises.has(f.exerciseId) || setIds.has(f.plannedSetId)) throw new Error("Неизвестное упражнение или повтор подхода в занятии."); setIds.add(f.plannedSetId);
       validateValues(f.values); f.drops.forEach(validateValues);
-      if (f.sides) { validateValues(f.sides.left.values); validateValues(f.sides.right.values); }
+      validateRpe(f.rpe);
+      if (f.sides) for (const side of [f.sides.left, f.sides.right]) { validateValues(side.values); validateRpe(side.rpe); }
       if (f.setType !== "DROP" && f.drops.length || f.extra && f.setType !== "WARMUP" || f.setType === "DROP" && !f.drops.length) throw new Error("Некорректный тип подхода или структура мини-сетов.");
       if (f.confirmed && !f.sides && Object.values(f.values).every((n) => n === null) && !value.issues?.some((i) => i.scope === "FACT" && i.targetId === f.id)) throw new Error("У выполненного подхода отсутствуют результаты.");
     }

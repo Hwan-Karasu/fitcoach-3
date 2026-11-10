@@ -20,12 +20,18 @@ export interface TransferProgram {
   readonly simpleWeeks: readonly Readonly<{ index: number; workouts: readonly TransferWorkout[] }>[];
   readonly mesocycles: readonly TransferCycle[];
 }
+export interface TransferSide {
+  readonly values: TransferValues;
+  readonly confirmed: boolean;
+  /** Старые книги не содержат RPE сторон: тогда при импорте используется общий RPE подхода. */
+  readonly rpe?: number | null;
+}
 export interface TransferFact {
   readonly id: string; readonly plannedSetId: string; readonly plannedExerciseId: string; readonly exerciseId: string;
   readonly position: number; readonly setType: "NORMAL" | "WARMUP" | "FAILURE" | "DROP";
   readonly values: TransferValues; readonly drops: readonly TransferValues[]; readonly rpe: number | null;
   readonly confirmed: boolean; readonly extra: boolean; readonly origin: "INPUT" | "COPY" | "IMPORT"; readonly revision: number;
-  readonly sides: Readonly<{ left: Readonly<{ values: TransferValues; confirmed: boolean }>; right: Readonly<{ values: TransferValues; confirmed: boolean }> }> | null;
+  readonly sides: Readonly<{ left: TransferSide; right: TransferSide }> | null;
 }
 export interface TransferSession {
   readonly id: string; readonly programId: string; readonly weekIndex: number; readonly plannedWorkoutId: string;

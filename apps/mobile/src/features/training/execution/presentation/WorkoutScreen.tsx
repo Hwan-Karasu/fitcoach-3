@@ -214,6 +214,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const typeSheet = useRef<BottomSheetModal>(null);
   const rpeSheet = useRef<BottomSheetModal>(null);
   const [target, setTarget] = useState<SetTarget | null>(null);
+  /** Сторона, для которой открыт лист RPE одностороннего подхода; `null` — RPE обычного подхода. */
+  const [rpeSide, setRpeSide] = useState<Side | null>(null);
   const [removeDrops, setRemoveDrops] = useState<Readonly<{ target: SetTarget; setType: SetType }> | null>(null);
   const [confirmIncomplete, setConfirmIncomplete] = useState(false);
   /** Какая отметка времени сейчас правится (PC §48.86.13). */
@@ -393,9 +395,10 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     setTarget(item);
     typeSheet.current?.present();
   }, []);
-  const onPickRpe = useCallback((item: SetTarget) => {
+  const onPickRpe = useCallback((item: SetTarget, side?: Side) => {
     Keyboard.dismiss();
     setTarget(item);
+    setRpeSide(side ?? null);
     rpeSheet.current?.present();
   }, []);
 
@@ -803,8 +806,9 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
         confirmLabel="Удалить" cancelLabel="Оставить" destructive
         onCancel={() => setRemoveWarm(null)}
         onConfirm={() => { if (removeWarm !== null) void removeWarmup(removeWarm); setRemoveWarm(null); }} />
-      <RpeSheet ref={rpeSheet} rpe={targetFact?.rpe ?? null}
-        onSelect={(rpe) => { rpeSheet.current?.dismiss(); if (target !== null) onSave(target, { rpe }); }} />
+      <RpeSheet ref={rpeSheet} side={rpeSide === null ? undefined : rpeSide === "L" ? "левая сторона" : "правая сторона"}
+        rpe={rpeSide === null ? targetFact?.rpe ?? null : (rpeSide === "L" ? targetFact?.sides?.left.rpe : targetFact?.sides?.right.rpe) ?? null}
+        onSelect={(rpe) => { rpeSheet.current?.dismiss(); if (target !== null) onSave(target, rpeSide === null ? { rpe } : { sideRpe: { side: rpeSide, rpe } }); }} />
       <ConfirmDialog visible={removeDrops !== null} title="Убрать мини-сеты?"
         description="Подход перестанет быть дроп-сетом, заполненные мини-сеты будут убраны. Основной сет останется."
         confirmLabel="Убрать" cancelLabel="Оставить" destructive

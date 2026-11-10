@@ -206,7 +206,8 @@ function parseOrigin(json: string): TransferSession["origin"] {
 function parseFactDetails(dropsJson: string, sidesJson: string | null): Pick<TransferFact, "drops" | "sides"> {
   const drops: unknown = JSON.parse(dropsJson); const sides: unknown = sidesJson === null ? null : JSON.parse(sidesJson);
   const values = (v: unknown): boolean => !!v && typeof v === "object" && ["reps", "loadGrams", "durationSec", "distanceM"].every((key) => { const n = (v as Record<string, unknown>)[key]; return n === null || typeof n === "number" && Number.isSafeInteger(n) && n >= (key === "loadGrams" ? 0 : 1) && n <= ({ reps: 999, loadGrams: 1000000, durationSec: 86400, distanceM: 1000000 }[key] ?? 0); });
-  const side = (v: unknown): boolean => !!v && typeof v === "object" && "values" in v && values(v.values) && "confirmed" in v && typeof v.confirmed === "boolean";
+  const side = (v: unknown): boolean => !!v && typeof v === "object" && "values" in v && values(v.values) && "confirmed" in v && typeof v.confirmed === "boolean"
+    && (!("rpe" in v) || v.rpe === null || typeof v.rpe === "number" && Number.isInteger(v.rpe) && v.rpe >= 1 && v.rpe <= 10);
   if (!Array.isArray(drops) || drops.length > 9 || !drops.every(values) || sides !== null && !(typeof sides === "object" && "left" in sides && "right" in sides && side(sides.left) && side(sides.right))) throw new Error("Некорректные мини-сеты или стороны подхода.");
   return { drops, sides } as Pick<TransferFact, "drops" | "sides">;
 }

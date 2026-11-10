@@ -104,12 +104,14 @@ export const ActiveWorkoutsSheet = forwardRef<BottomSheetModal, Readonly<{
 /** RPE 1–10 одним рядом (§48.65 п. 6): нажатие на ячейку RPE; повторное нажатие на выбранное — убрать. */
 export const RpeSheet = forwardRef<BottomSheetModal, Readonly<{
   rpe: number | null;
+  /** Подзаголовок для одностороннего подхода: «левая сторона» / «правая сторона». */
+  side?: string;
   onSelect: (rpe: number | null) => void;
-}>>(function RpeSheet({ rpe, onSelect }, ref) {
+}>>(function RpeSheet({ rpe, side, onSelect }, ref) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
-    <PickerSheet ref={ref} title="RPE — тяжесть подхода">
+    <PickerSheet ref={ref} title={side === undefined ? "RPE — тяжесть подхода" : `RPE — ${side}`}>
       <View style={styles.rpeRow}>
         {RPE_VALUES.map((value) => {
           const selected = value === rpe;

@@ -20,6 +20,9 @@ export interface SaveSetInput extends SetIdentity {
   readonly drops: readonly SetValues[];
   /** Обе стороны одностороннего упражнения (§48.66); у обычного — не задаются, значения в `values`. */
   readonly sides?: Readonly<{ left: SetValues; right: SetValues }>;
+  /** RPE сторон одностороннего подхода (1–10 или `null`); не задан — сохраняются прежние. */
+  readonly sidesRpe?: Readonly<{ left: number | null; right: number | null }>;
+  /** RPE обычного подхода; у одностороннего не используется. */
   readonly rpe: number | null;
   readonly setType: SetType;
 }

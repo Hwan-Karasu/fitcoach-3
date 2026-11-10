@@ -66,7 +66,7 @@ test("T04 копия недели: предварительно/подтверд
       values, setType: "NORMAL" as const, drops: [], rpe: 8, expectedRevision: null };
     await execution.saveSet({ ...base, plannedSetId: exercise.sets[0]!.id, position: 0 });
     await execution.saveSet({ ...base, plannedSetId: exercise.sets[1]!.id, position: 1, setType: "DROP", drops: [empty] });
-    await execution.saveSet({ ...base, plannedSetId: exercise.sets[2]!.id, position: 2, values: empty, sides: { left: values, right: empty } });
+    await execution.saveSet({ ...base, plannedSetId: exercise.sets[2]!.id, position: 2, values: empty, sides: { left: values, right: empty }, sidesRpe: { left: 8, right: 6 } });
     const warmup = await execution.addWarmupSet(slot, { plannedExerciseId: exercise.id, exerciseId: BENCH });
     await execution.saveSet({ ...base, plannedSetId: warmup.fact.plannedSetId, position: warmup.fact.position,
       setType: "WARMUP", expectedRevision: warmup.fact.revision });
@@ -104,6 +104,7 @@ test("T04 копия недели: предварительно/подтверд
     assert.equal(facts.find((fact) => fact.setType === "DROP")!.confirmed, false);
     assert.equal(facts.find((fact) => fact.sides)!.sides!.right.confirmed, false);
     assert.equal(facts.find((fact) => fact.sides)!.sides!.left.values.loadGrams, 0, "ноль является данными");
+    assert.deepEqual([facts.find((fact) => fact.sides)!.sides!.left.rpe, facts.find((fact) => fact.sides)!.sides!.right.rpe], [8, 6], "RPE сторон переносится при копировании недели");
     assert.equal(confirmed.session!.outcome, null);
     const planRequest = { ...request, targetWeek: 4, expectedRevision: confirmedPlan.program.revision };
     await copy.copy(planRequest, (await copy.preview(planRequest)).revisionToken, "PLAN", false);

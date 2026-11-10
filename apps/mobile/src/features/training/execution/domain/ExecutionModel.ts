@@ -44,6 +44,8 @@ export type Side = "L" | "R";
 export interface SideFact {
   readonly values: SetValues;
   readonly confirmed: boolean;
+  /** RPE этой стороны, 1–10 (левая и правая оцениваются отдельно); `null` — не указан. */
+  readonly rpe: number | null;
 }
 
 /** Обе стороны одного подхода: каждая заполняется и засчитывается отдельно. */
@@ -88,6 +90,7 @@ export interface SetFact {
   readonly values: SetValues;
   /** Мини-сеты дроп-сета после основного (основной — `values`); у других типов пусто. */
   readonly drops: readonly SetValues[];
+  /** RPE подхода; у одностороннего упражнения его нет — RPE у каждой стороны (`sides.left.rpe`, `sides.right.rpe`). */
   readonly rpe: number | null;
   /**
    * Подход засчитан. У одностороннего — засчитана хотя бы одна сторона (§48.80): частично выполненный
