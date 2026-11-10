@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compactTimerCount, orderedRestTimers, retainedTimerOffset, restPanelMode, timerCarouselLayout,
+import { ACTION_GAP, CARD_PADDING, compactTimerCount, MIN_ACTION_WIDTH, orderedRestTimers, retainedTimerOffset, restPanelMode, TIMER_GAP, timerCarouselLayout,
   timerCarouselPosition, timerCountLabel, timerInitials } from "../apps/mobile/src/features/training/execution/presentation/restPanelRules.ts";
 import { adjustTimer, pauseTimer, startTimer, type RestTimerStart } from "../apps/mobile/src/features/training/execution/domain/RestTimerRules.ts";
 import { RestFinishTracker } from "../apps/mobile/src/features/training/execution/domain/RestFinishTracker.ts";
@@ -33,28 +33,42 @@ test("REST-DOCK-2: порядок владельцев/упражнений не
     [["a", "synthetic-a", "e1"], ["b", "synthetic-b", "e1"], ["c", "synthetic-a", "e2"]]);
 });
 
-test("REST-DOCK-2: на телефоне уже два таймера листаются; четыре кнопки остаются в одном ряду", () => {
+test("REST-DOCK-3: один таймер на всю ширину; два рядом, если помещаются кнопки не уже 34 dp, иначе край следующей карточки", () => {
   for (const screenWidth of [320, 360, 412]) for (const scale of [1, 1.3, 2]) {
     const width = screenWidth - 16; // Internal padding of the full-width shared bottom panel.
     assert.equal(timerCarouselLayout(width, 1, scale).cardWidth, width);
     assert.equal(timerCarouselLayout(width, 1, scale).stops, 1);
     for (const count of [2, 3, 5]) {
       const layout = timerCarouselLayout(width, count, scale);
-      assert.ok(layout.cardWidth >= 232, "карточки не сжимаются в половину ширины экрана");
-      assert.ok(layout.cardWidth < width, "виден край следующего таймера");
-      const buttonWidth = (layout.cardWidth - 12 - 3 * 4) / 4;
-      assert.ok(buttonWidth >= 48, "четыре действия помещаются в ряд с touch target 48 dp");
-      assert.ok(layout.maxOffset > 0);
-      assert.ok(layout.stops >= 2);
-      assert.equal(timerCarouselPosition(layout.maxOffset, layout.step, layout.maxOffset, layout.stops), layout.stops - 1);
+      const buttonWidth = (layout.cardWidth - 2 * CARD_PADDING - 3 * ACTION_GAP) / 4;
+      assert.ok(buttonWidth >= MIN_ACTION_WIDTH, `четыре кнопки карточки не уже ${MIN_ACTION_WIDTH} dp: ${screenWidth}/${scale}/${count} → ${buttonWidth}`);
+      assert.ok(layout.cardWidth <= width);
     }
   }
-  const tablet = timerCarouselLayout(600, 2, 1);
-  assert.equal(tablet.cardWidth, 296);
-  assert.equal(tablet.stops, 1, "на широком экране две полноценные карточки помещаются рядом");
+  // Телефон 360 dp (панель 344), обычный шрифт: два таймера — две полные карточки рядом, без прокрутки (макет, сценарий 2).
+  const two = timerCarouselLayout(344, 2, 1);
+  assert.equal(two.cardWidth, 168);
+  assert.equal(two.stops, 1);
+  assert.equal(two.maxOffset, 0);
+  // Три и больше: две полные карточки и край третьей, индикатор показывает позиции (макет, сценарий 4).
+  for (const count of [3, 4, 5]) {
+    const layout = timerCarouselLayout(344, count, 1);
+    assert.equal(layout.cardWidth, 156);
+    assert.ok(2 * layout.cardWidth + 2 * TIMER_GAP < 344, "край следующей карточки виден");
+    assert.ok(layout.maxOffset > 0);
+    assert.ok(layout.stops >= 2);
+    assert.equal(timerCarouselPosition(layout.maxOffset, layout.step, layout.maxOffset, layout.stops), layout.stops - 1);
+  }
+  // Узкий экран 320 dp: две полные карточки не помещаются — одна почти во всю ширину и край второй.
+  const narrow = timerCarouselLayout(304, 2, 1);
+  assert.ok(narrow.cardWidth > 156 && narrow.cardWidth < 304);
+  assert.ok(narrow.stops >= 2);
+  // Широкий экран: три таймера помещаются рядом.
+  const tablet = timerCarouselLayout(600, 3, 1);
+  assert.equal(tablet.stops, 1);
   for (const width of [600, 800]) for (const scale of [1, 1.3, 2]) {
-    const layout = timerCarouselLayout(width, 5, scale);
-    assert.ok(layout.cardWidth >= 232);
+    const layout = timerCarouselLayout(width, 8, scale);
+    assert.ok(layout.cardWidth >= 156);
     assert.ok(layout.maxOffset > 0);
     assert.ok(layout.stops >= 2);
   }

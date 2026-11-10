@@ -47,6 +47,7 @@ export const Gesture = { Pan: () => {
 } };
 export const GestureDetector = component("GestureDetector");
 export const ChevronDown = component("ChevronDown");
+export const ChevronRight = component("ChevronRight");
 export const Pause = component("Pause");
 export const Play = component("Play");
 export const SkipForward = component("SkipForward");

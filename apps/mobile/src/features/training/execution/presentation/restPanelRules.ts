@@ -10,11 +10,17 @@ export function orderedRestTimers(list: readonly RestTimer[]): readonly RestTime
 }
 
 export const TIMER_GAP = 8;
-/** Keep all four 48 dp controls in one row. On phones the next card peeks in,
- * instead of squeezing two cards into half-width columns and doubling their height. */
+/** Внутренний отступ карточки и промежуток между четырьмя кнопками (макет: два и больше таймеров — карточки рядом). */
+export const CARD_PADDING = 5;
+export const ACTION_GAP = 3;
+/** Самая узкая кнопка карточки при нескольких таймерах: ниже неё карточка не сжимается, а следующая только выглядывает. */
+export const MIN_ACTION_WIDTH = 34;
+const MIN_CARD_WIDTH = 4 * MIN_ACTION_WIDTH + 3 * ACTION_GAP + 2 * CARD_PADDING + 1;
+/** Два таймера — две карточки рядом, если на каждую хватает четырёх кнопок не уже 34 dp; иначе (узкий экран, крупный шрифт)
+ * карточки не сжимаются, а следующая выглядывает с краю и листается. Три и больше — две полные и край третьей. */
 export function timerCarouselLayout(width: number, count: number, fontScale: number) {
   const available = Math.max(0, width);
-  const minimum = Math.min(available, Math.max(232, 208 + 24 * Math.max(1, fontScale)));
+  const minimum = Math.min(available, Math.round(MIN_CARD_WIDTH + 28 * (Math.max(1, fontScale) - 1)));
   const full = Math.min(Math.max(1, count), Math.max(1, Math.floor((available + TIMER_GAP) / (minimum + TIMER_GAP))));
   const overflow = count > full;
   const cardWidth = count <= 1 ? available : overflow
