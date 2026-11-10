@@ -17,7 +17,8 @@ import { ActionSheet, type SheetAction } from "./ActionSheet.tsx";
 import { builderRows, dropTarget, type BuilderRow } from "./builderRows.ts";
 import { FieldEditorSheet, typeLabels } from "./FieldEditorSheet.tsx";
 import { typeIcons } from "./typeIcons.ts";
-import { QuestionnaireForm, type FormInputs } from "./QuestionnaireForm.tsx";
+import { QuestionnaireForm } from "./QuestionnaireForm.tsx";
+import type { FormInputs } from "./questionnaireInputs.ts";
 import { errorCode, newBuilderId, useQuestionnaireBuilder } from "./useQuestionnaireBuilder.ts";
 import type { QuestionnaireRepositoryPort } from "../domain/QuestionnaireRepositoryPort.ts";
 

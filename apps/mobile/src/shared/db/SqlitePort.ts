@@ -12,3 +12,15 @@ export interface SqliteConnectionPort extends SqliteStatementPort {
   exclusive<T>(task: (tx: SqliteStatementPort) => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
+
+/** Opening failed and its native reader could not close. The database owner must retain
+ * this cleanup before admitting another open or any closed-file maintenance. */
+export class SqliteOpenCloseError extends Error {
+  readonly closeError: unknown;
+  readonly retryClose: () => Promise<void>;
+  constructor(cause: unknown, closeError: unknown, retryClose: () => Promise<void>) {
+    super("DB_OPEN_CLOSE_FAILED", { cause });
+    this.closeError = closeError;
+    this.retryClose = retryClose;
+  }
+}

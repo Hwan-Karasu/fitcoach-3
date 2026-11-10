@@ -4,8 +4,8 @@ import { UUID_V4_SQL } from "../../../shared/db/SqlIds.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
 import type { ClientMeasurements, DailyPrimary, Measurement, MeasurementInput, MeasurementOperation } from "../domain/MeasurementModel.ts";
-import type { MeasurementCommittedChange, MeasurementRepositoryPort } from "../domain/MeasurementRepositoryPort.ts";
-import { compareJournal, validateMeasurement } from "../domain/MeasurementRules.ts";
+import type { DailyMeasurementParticipant, MeasurementCommittedChange, MeasurementRepositoryPort } from "../domain/MeasurementRepositoryPort.ts";
+import { compareJournal, dailyPoints, validateMeasurement } from "../domain/MeasurementRules.ts";
 import { DEV_MEASUREMENT_LEDGER, devMeasurementCatalog } from "./DevMeasurementCatalog.ts";
 
 const columns = `id, client_id AS clientId, type, value_x10 AS valueX10, local_date AS localDate,
@@ -50,6 +50,18 @@ async function correctIn(tx: SqliteStatementPort, workspaceId: string, id: strin
   [valid.type, valid.valueX10, valid.localDate, valid.localMinute, methodAfterCorrection(current, valid), now.toISOString(), workspaceId, id, expectedRevision]);
   if (result.changes !== 1) throw new Error("MEASUREMENT_STALE");
   return byId(tx, workspaceId, id);
+}
+
+async function upsertDailyIn(tx: SqliteStatementPort, workspaceId: string, clientId: string, valid: ValidInput, now: Date): Promise<Measurement> {
+  const params = [workspaceId, clientId, valid.type, valid.localDate];
+  const measurements = await tx.all<Measurement>(`SELECT ${columns} FROM body_measurements
+    WHERE workspace_id = ? AND client_id = ? AND type = ? AND local_date = ?`, params);
+  const primaries = await tx.all<DailyPrimary>(`SELECT type, local_date AS localDate, measurement_id AS measurementId
+    FROM measurement_daily_primary WHERE workspace_id = ? AND client_id = ? AND type = ? AND local_date = ?`, params);
+  const point = dailyPoints(measurements, primaries, valid.type)[0];
+  if (point === undefined) return recordIn(tx, workspaceId, clientId, valid, now);
+  if (point.kind === "AMBIGUOUS") throw new Error("MEASUREMENT_AMBIGUOUS_DAY");
+  return correctIn(tx, workspaceId, point.measurement.id, point.measurement.revision, { ...valid, localMinute: point.measurement.localMinute }, now);
 }
 
 async function removeIn(tx: SqliteStatementPort, workspaceId: string, id: string, expectedRevision: number): Promise<Measurement> {
@@ -149,6 +161,29 @@ export class DevMeasurementRepository implements MeasurementRepositoryPort {
     const created = await this.ready().writer.write((tx) => recordIn(tx, this.workspaceId, clientId, valid, now));
     this.publish({ clientId });
     return created;
+  }
+
+  readonly dailyParticipant: DailyMeasurementParticipant<SqliteStatementPort> = {
+    upsert: (tx, clientId, input, now) => upsertDailyIn(tx, this.workspaceId, clientId, validateMeasurement(input, now), now),
+    notify: (clientId) => this.publish({ clientId }),
+  };
+
+  async upsertDaily(clientId: string, input: MeasurementInput, now: Date = new Date()): Promise<Measurement> {
+    const saved = await this.ready().writer.write((tx) => this.dailyParticipant.upsert(tx, clientId, input, now));
+    this.dailyParticipant.notify(clientId);
+    return saved;
+  }
+
+  async recordIfDayEmpty(clientId: string, input: MeasurementInput, now: Date = new Date()): Promise<Measurement | null> {
+    const valid = validateMeasurement(input, now);
+    const saved = await this.ready().writer.write(async (tx) => {
+      const occupied = await tx.first<{ id: string }>(`SELECT id FROM body_measurements
+        WHERE workspace_id = ? AND client_id = ? AND type = ? AND local_date = ? LIMIT 1`,
+      [this.workspaceId, clientId, valid.type, valid.localDate]);
+      return occupied === null ? recordIn(tx, this.workspaceId, clientId, valid, now) : null;
+    });
+    if (saved !== null) this.publish({ clientId });
+    return saved;
   }
 
   async correct(id: string, expectedRevision: number, input: MeasurementInput,

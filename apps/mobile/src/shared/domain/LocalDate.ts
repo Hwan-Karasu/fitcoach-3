@@ -11,3 +11,8 @@ export function isLocalDate(value: string): boolean {
   probe.setUTCFullYear(year, month - 1, day);
   return probe.getUTCFullYear() === year && probe.getUTCMonth() === month - 1 && probe.getUTCDate() === day;
 }
+
+/** Календарный день устройства; UTC-представление может относиться к соседней дате. */
+export function localDateText(now: Date = new Date()): string {
+  return `${String(now.getFullYear()).padStart(4, "0")}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}

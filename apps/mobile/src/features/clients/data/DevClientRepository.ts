@@ -206,6 +206,7 @@ function parseDraft(row: DraftRow): ClientRecoveryDraft {
   const fields = form as Record<string, unknown>;
   if (["displayName", "contactPhone", "contactEmail", "birthDate", "heightDraft"]
     .some((field) => typeof fields[field] !== "string")
+    || (fields.weightText !== undefined && typeof fields.weightText !== "string")
     || (fields.emoji !== null && typeof fields.emoji !== "string")) {
     throw new Error("CLIENT_DRAFT_CORRUPT");
   }
@@ -484,6 +485,7 @@ export class DevClientRepository implements ClientRepositoryPort, ClientRecovery
     const form = input.formData;
     if ([form.displayName, form.contactPhone, form.contactEmail, form.birthDate,
       form.heightDraft].some((value) => typeof value !== "string")
+      || (form.weightText !== undefined && typeof form.weightText !== "string")
       || (form.emoji !== null && typeof form.emoji !== "string")) {
       throw new Error("CLIENT_DRAFT_FORM_INVALID");
     }

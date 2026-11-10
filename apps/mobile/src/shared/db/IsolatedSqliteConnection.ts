@@ -1,5 +1,5 @@
 import type * as SQLite from "expo-sqlite";
-import type { SqliteConnectionPort, SqliteStatementPort, SqlValue } from "./SqlitePort.ts";
+import { SqliteOpenCloseError, type SqliteConnectionPort, type SqliteStatementPort, type SqlValue } from "./SqlitePort.ts";
 import { navigationPerformance } from "../diagnostics/NavigationPerformance.ts";
 
 export type NativeSqliteDatabase = Pick<SQLite.SQLiteDatabase,
@@ -36,22 +36,33 @@ async function configure(native: NativeSqliteDatabase, enableWal: boolean): Prom
  * Expo's withExclusiveTransactionAsync also opens a new handle, but starts BEGIN before its callback;
  * enabling foreign_keys inside that callback would silently have no effect.
  * WRITE-PATH-1: the write handle is opened once and reused (раньше — новое соединение и 4 PRAGMA на каждую запись подхода). A handle
- * whose transaction could not be closed (failed ROLLBACK) is discarded; the next write opens and configures a fresh one.
+ * whose transaction could not be closed (failed ROLLBACK) is retired; a new writer opens only after its physical close succeeds.
  */
 export async function openIsolatedSqliteConnection(open: () => Promise<NativeSqliteDatabase>,
   inspectBeforeWrite?: (reader: SqliteStatementPort) => Promise<unknown>): Promise<SqliteConnectionPort> {
   const reader = await open();
   let writer: NativeSqliteDatabase | null = null;
+  let writerBroken = false;
+  let readerClosed = false;
+  let retiring = false;
   const discardWriter = async () => {
     const stale = writer;
-    writer = null;
-    if (stale !== null) try { await stale.closeAsync(); } catch { /* A broken handle is dropped either way. */ }
+    if (stale === null) return;
+    writerBroken = true;
+    try { await stale.closeAsync(); writer = null; writerBroken = false; }
+    catch { /* Keep the unclosed handle: maintenance must retry its close, never replace the file under it. */ }
   };
   const writeHandle = async (): Promise<NativeSqliteDatabase> => {
+    if (retiring) throw new Error("DB_CONNECTION_CLOSED");
+    if (writerBroken) throw new Error("DB_WRITER_UNAVAILABLE");
     if (writer !== null) return writer;
     const native = await open();
     try { await configure(native, false); }
-    catch (error) { try { await native.closeAsync(); } catch { /* Preserve the configuration failure. */ } throw error; }
+    catch (error) {
+      try { await native.closeAsync(); }
+      catch { writer = native; writerBroken = true; }
+      throw error;
+    }
     writer = native;
     return native;
   };
@@ -79,14 +90,18 @@ export async function openIsolatedSqliteConnection(open: () => Promise<NativeSql
       },
       // Сбой закрытия handle записи не глушится: release/restore R06 должны отказать, а не заменять файл под открытым handle.
       close: async () => {
+        retiring = true;
         const open = writer;
-        writer = null;
-        try { if (open !== null) await open.closeAsync(); }
-        finally { await reader.closeAsync(); }
+        try {
+          if (open !== null) { await open.closeAsync(); writer = null; writerBroken = false; }
+        } finally {
+          if (!readerClosed) { await reader.closeAsync(); readerClosed = true; }
+        }
       },
     };
   } catch (error) {
-    await reader.closeAsync();
+    try { await reader.closeAsync(); }
+    catch (closeError) { throw new SqliteOpenCloseError(error, closeError, () => reader.closeAsync()); }
     throw error;
   }
 }

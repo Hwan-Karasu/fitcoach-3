@@ -234,7 +234,7 @@ test("C03 recovery draft survives reopen and is cleared only by a committed clie
   const file = join(directory, "synthetic.db");
   const open = async () => sqlitePort(new DatabaseSync(file));
   const form = { displayName: "Unsaved", contactPhone: "", contactEmail: "bad-input",
-    birthDate: "", heightDraft: "172,55", emoji: null };
+    birthDate: "", heightDraft: "172,55", weightText: "85,4", emoji: null };
   const first = new DevClientRepository(open, "synthetic-workspace-a");
   try {
     await first.initialize();
@@ -247,6 +247,7 @@ test("C03 recovery draft survives reopen and is cleared only by a committed clie
     const second = new DevClientRepository(open, "synthetic-workspace-a");
     await second.initialize();
     assert.equal((await second.loadDraft(null))?.formData.displayName, "Still Unsaved");
+    assert.equal((await second.loadDraft(null))?.formData.weightText, "85,4", "вес остаётся в черновике после закрытия и открытия хранилища");
     await assert.rejects(second.create({ displayName: "Invalid", contactEmail: "bad-input" }),
       { message: "CLIENT_EMAIL_INVALID" });
     assert.equal((await second.loadDraft(null))?.id, saved.id);

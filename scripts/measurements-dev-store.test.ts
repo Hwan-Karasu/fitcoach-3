@@ -5,6 +5,7 @@ import { DevClientRepository } from "../apps/mobile/src/features/clients/data/De
 import { DevMeasurementRepository, devMeasurementClientDeletionParticipant } from
   "../apps/mobile/src/features/measurements/data/DevMeasurementRepository.ts";
 import type { MeasurementInput } from "../apps/mobile/src/features/measurements/domain/MeasurementModel.ts";
+import { upsertDailyMeasurement } from "../apps/mobile/src/features/measurements/domain/DailyMeasurement.ts";
 import { dailyPoints, formatValue, latestPoint, parseTime, parseValueX10, validateMeasurement } from
   "../apps/mobile/src/features/measurements/domain/MeasurementRules.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
@@ -26,6 +27,46 @@ async function stores(participants = true) {
 
 const weight = (valueX10: number, localMinute: number | null, localDate = "2026-10-14"): MeasurementInput =>
   ({ type: "WEIGHT", valueX10, localDate, localMinute });
+
+test("AUDIT-ALL-1: параллельные дневные записи не создают неоднозначный день; явные записи журнала остаются независимыми", async () => {
+  const { clients, measurements, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "Synthetic daily race" });
+    const [first, second] = await Promise.all([
+      upsertDailyMeasurement(measurements, client.id, weight(800, 480), NOW),
+      upsertDailyMeasurement(measurements, client.id, weight(810, null), NOW),
+    ]);
+    assert.equal(first.id, second.id);
+    const day = await measurements.listForClient(client.id);
+    assert.equal(day.measurements.length, 1);
+    assert.equal(day.measurements[0]!.valueX10, 810);
+    assert.equal(day.measurements[0]!.localMinute, 480, "правка дневного значения сохраняет время исходного факта");
+    await measurements.record(client.id, weight(820, 600), NOW);
+    await assert.rejects(upsertDailyMeasurement(measurements, client.id, weight(830, null), NOW), { message: "MEASUREMENT_AMBIGUOUS_DAY" });
+    await measurements.setPrimary(first.id);
+    await upsertDailyMeasurement(measurements, client.id, weight(840, null), NOW);
+    assert.equal((await measurements.listForClient(client.id)).measurements.find((row) => row.id === first.id)!.valueX10, 840);
+  } finally { await close(); }
+});
+
+test("AUDIT-ALL-1: условный импорт не создаёт второй факт, когда ручная запись уже стоит в очереди", async () => {
+  const { clients, measurements, close } = await stores();
+  try {
+    const client = await clients.create({ displayName: "Synthetic manual wins" });
+    let events = 0;
+    measurements.subscribeCommittedChanges(() => { events += 1; });
+    const [manual, imported] = await Promise.all([
+      measurements.record(client.id, weight(900, 480), NOW),
+      measurements.recordIfDayEmpty(client.id, weight(800, null), NOW),
+    ]);
+    assert.equal(imported, null);
+    assert.equal(events, 1, "пропуск импорта не публикует несуществующее изменение");
+    const data = await measurements.listForClient(client.id);
+    assert.deepEqual(data.measurements.map((row) => [row.id, row.valueX10]), [[manual.id, 900]]);
+    const nextDay = await measurements.recordIfDayEmpty(client.id, weight(805, null, "2026-10-15"), NOW);
+    assert.equal(nextDay?.valueX10, 805);
+  } finally { await close(); }
+});
 
 test("C06 values are exact tenths; empty is not zero; future and implausible values are refused", () => {
   assert.equal(parseValueX10("80,1"), 801);

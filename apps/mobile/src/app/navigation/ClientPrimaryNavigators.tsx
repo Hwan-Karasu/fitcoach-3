@@ -11,6 +11,8 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import { ClientHomePreview, type ClientRecord } from "../../features/clients/public.ts";
 import { type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
+import { homeSummaryRules } from "../composition/homeSummaryRules.ts";
+import { useClientDay } from "../../features/nutrition/public.ts";
 import { AddFoodScreen, metricTitle, type MetricId, type CalcClientBody, type CatalogFilter, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
   type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ArchivedProgramsPanel, ParticipantSwitcher, participantTarget, ProgramMatrixScreen, PeriodizedBuilderScreen, ProgramLibraryScreen, ProgramModeChooserScreen, programLibraryTabTitles, ProgramScreen, SimpleProgramBuilderScreen,
@@ -100,7 +102,8 @@ type HomeProps = Readonly<{
 /** Home composes owners' read projections; the weight entry goes to the Measurements owner. */
 function HomeIndexRoute({ client, accounting, onOpenAccounting, nutritionSlot, daySlot,
   onArchive }: Readonly<{ client: ClientRecord; accounting: AccountingRepositoryPort; onOpenAccounting: () => void; nutritionSlot?: ReactNode; daySlot?: ReactNode; onArchive: () => Promise<void> }>) {
-  const summary = useClientHomeSummary(client.id, accounting);
+  const { today } = useClientDay();
+  const summary = useClientHomeSummary(client.id, accounting, today, homeSummaryRules);
   return <ClientHomePreview client={client} summary={summary} onOpenAccounting={onOpenAccounting}
     onWriteOff={() => accounting.writeOff(client.id)} onReturnLast={(entryId) => accounting.returnLastDebit(client.id, entryId)}
     nutritionSlot={nutritionSlot} daySlot={daySlot} onArchive={onArchive} />;

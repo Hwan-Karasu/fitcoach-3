@@ -1,10 +1,15 @@
 import type { ExerciseDefinition, SystemCatalogMeta } from "./ExerciseModel.ts";
 import type { CatalogEntry, CustomExerciseInput } from "./ExerciseRules.ts";
 
+/** Владелец выполнения проверяет историю внутри той же транзакции, в которой каталог меняет профиль. */
+export interface ExerciseHistoryGuard<Tx> {
+  hasFacts(tx: Tx, exerciseId: string): Promise<boolean>;
+}
+
 /**
  * Exercise Registry (Feature 08, §39): системные упражнения из снимка RepDB, свои упражнения и личный слой.
  * Ошибки: EXERCISE_NAME_INVALID, EXERCISE_CATEGORY_REQUIRED, EXERCISE_PROFILE_REQUIRED, EXERCISE_NOT_FOUND,
- * EXERCISE_STALE, EXERCISE_SYSTEM_READ_ONLY.
+ * EXERCISE_STALE, EXERCISE_SYSTEM_READ_ONLY, EXERCISE_PROFILE_IN_USE, EXERCISE_HISTORY_UNAVAILABLE.
  */
 export interface ExerciseCatalogPort {
   meta(): SystemCatalogMeta;

@@ -263,7 +263,7 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
   const workflow = new WorkflowDatabaseLease(database);
   const transaction: TrainingTransaction = (task) => workflow.write(task);
   const calcProfile = createCalcProfileWorkflow(transaction, nutrition.calc.profileParticipant, clients.bodyParticipant);
-  const clientCard = createClientCardWorkflow(transaction, clients.cardParticipant, questionnaire.answersParticipant);
+  const clientCard = createClientCardWorkflow(transaction, clients.cardParticipant, questionnaire.answersParticipant, measurements.dailyParticipant);
   const weekCopy = createWeekCopyWorkflow(transaction, trainingPlans.weekCopyParticipant, trainingExecution.weekCopyParticipant,
     exerciseLookup(exercises, registerInvalidation));
   const weekSwap = createWeekSwapWorkflow(transaction, trainingPlans.weekSwapParticipant, trainingExecution.weekRenumberParticipant);

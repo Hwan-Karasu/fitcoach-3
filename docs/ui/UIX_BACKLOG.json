@@ -4,6 +4,14 @@
   "note": "Актуализация 2026-11-10: реализация и остатки — в state/evidence/remaining каждой задачи. IMPLEMENTED_NOT_DEVICE_VERIFIED не означает полной приёмки: на телефоне не проверено. UIX-15 требует APK и проверки Health Connect, UIX-18 отменён.",
   "tasks": [
     {
+      "id": "AUDIT-ALL-1",
+      "state": "IMPLEMENTED_NOT_DEVICE_VERIFIED",
+      "title": "Расширенное ревью всего проекта после UIX: данные, инфраструктура и UI-логика",
+      "acceptance": "Проверить все разделы несколькими агентами, подтвердить дефекты и внести исправления, выполнить общий прогон, разделить source/test и native-приёмку",
+      "evidence": "19 групп исправлений; foundation 1198/1198, Excel 106/106, theme 31/31, typecheck/lint/arch/source/secrets и Android JS export PASS; docs/CODE_AUDIT_2026-11-10.md, ADR-066",
+      "remaining": "Android/native/Health Connect/FPS/p50/p95; прежний SAF crash-window и частичный ключ цветов HTML-матрицы. APK не собирался"
+    },
+    {
       "id": "UIX-CLEAN-1",
       "state": "IMPLEMENTED_NOT_DEVICE_VERIFIED",
       "title": "Проверка мёртвого кода, дублирования и повторных вычислений UIX",

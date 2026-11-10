@@ -50,6 +50,68 @@ async function stores(participants = true) {
 }
 const value = (localDate: string, metric: HealthMetric, v: number): HealthDayValue => ({ localDate, metric, value: v });
 
+test("AUDIT-ALL-1: ручной вес между чтением журнала и импортом остаётся единственным, HC не создаёт неоднозначный день", async () => {
+  const { clients, measurements, calc, health, close } = await stores();
+  try {
+    const me = await clients.create({ displayName: "SyntheticHealthConcurrent" });
+    await health.link(me.id, NOW);
+    let inserted = false;
+    const delayed = new Proxy(measurements, { get(target, key) {
+      if (key === "listForClient") return async (id: string) => {
+        const snapshot = await target.listForClient(id);
+        if (!inserted) {
+          inserted = true;
+          await target.record(id, { type: "WEIGHT", valueX10: 900, localDate: TODAY, localMinute: null }, NOW);
+        }
+        return snapshot;
+      };
+      const member = Reflect.get(target, key); return typeof member === "function" ? member.bind(target) : member;
+    } });
+    const platform = new FakePlatform(); platform.data = [value(TODAY, "WEIGHT_X10", 800)];
+    const result = await syncHealthConnect({ health, calc, measurements: delayed, platform, isValidHealthValue }, TODAY, NOW);
+    assert.equal(result.kind, "SYNCED");
+    if (result.kind === "SYNCED") assert.equal(result.importedWeight, 0);
+    const rows = (await measurements.listForClient(me.id)).measurements;
+    assert.deepEqual(rows.map((row) => row.valueX10), [900]);
+    await measurements.remove(rows[0]!.id, rows[0]!.revision);
+    await syncHealthConnect({ health, calc, measurements, platform, isValidHealthValue }, TODAY, NOW);
+    assert.equal((await measurements.listForClient(me.id)).measurements.length, 0, "удалённый вручную факт не возвращается на следующей синхронизации");
+  } finally { await close(); }
+});
+
+test("AUDIT-ALL-1: нулевые и слишком большие шаги HC снимают прежнюю положительную проекцию Nutrition", async (t) => {
+  const { clients, measurements, calc, health, close } = await stores();
+  try {
+    const me = await clients.create({ displayName: "SyntheticHealthZeroSteps" });
+    await health.link(me.id, NOW);
+    const platform = new FakePlatform();
+    const stepReads = t.mock.method(calc, "listSteps");
+    for (const steps of [5000, 0, 6000, 150_000]) {
+      platform.data = [value(TODAY, "STEPS", steps)];
+      const before = stepReads.mock.callCount();
+      await syncHealthConnect({ health, calc, measurements, platform, isValidHealthValue }, TODAY, NOW);
+      assert.equal(stepReads.mock.callCount(), before + 1, "одна сверка проекции на весь диапазон дат");
+      assert.deepEqual((await calc.listSteps(me.id, TODAY, TODAY)).map((day) => day.steps), steps === 0 || steps > 100_000 ? [] : [steps]);
+      assert.equal((await health.listDaily(me.id, TODAY, TODAY))[0]!.value, steps, "исходное допустимое HC-значение сохраняется");
+    }
+  } finally { await close(); }
+});
+
+test("AUDIT-ALL-1: после повторного подключения HC заменяет ручные шаги, даже если внешнее значение не менялось", async () => {
+  const { clients, measurements, calc, health, close } = await stores();
+  try {
+    const me = await clients.create({ displayName: "SyntheticHealthRelinkSteps" });
+    await health.link(me.id, NOW);
+    const platform = new FakePlatform(); platform.data = [value(TODAY, "STEPS", 5000)];
+    const run = () => syncHealthConnect({ health, calc, measurements, platform, isValidHealthValue }, TODAY, NOW);
+    await run();
+    await health.unlink(); await calc.setSteps(me.id, TODAY, 7000, NOW);
+    await health.link(me.id, new Date(NOW.getTime() + 1000));
+    await run();
+    assert.deepEqual((await calc.listSteps(me.id, TODAY, TODAY)).map((day) => day.steps), [5000]);
+  } finally { await close(); }
+});
+
 test("UIX audit: отключение и новая привязка ждут текущую синхронизацию; параллельные запросы делят один запуск", async () => {
   const { clients, health, close } = await stores();
   let release!: () => void;

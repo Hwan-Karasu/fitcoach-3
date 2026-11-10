@@ -61,7 +61,7 @@ function probeRuntime(root: Directory, name: string, cold = false) {
   });
   const owners = createLocalRepositories(database, PRODUCTION_WORKSPACE_ID, systemCatalogJson as SystemCatalog);
   const workflow = new WorkflowDatabaseLease(database); const commands = new RuntimeCommandGate();
-  const card = commands.port(createClientCardWorkflow((task) => workflow.write(task), owners.clients.cardParticipant, owners.questionnaire.answersParticipant));
+  const card = commands.port(createClientCardWorkflow((task) => workflow.write(task), owners.clients.cardParticipant, owners.questionnaire.answersParticipant, owners.measurements.dailyParticipant));
   const initialize = async () => { await owners.initialize(); workflow.resume(); ready = true; };
   const close = async () => {
     const results = await Promise.allSettled([owners.close(), workflow.close()]);

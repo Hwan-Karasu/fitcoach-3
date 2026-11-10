@@ -28,7 +28,7 @@ import { ClientEditorRoute } from "./ClientEditorRoute.tsx";
 import type { ApplicationServices } from "../composition/createServices.ts";
 import { ClientListController } from "../../read-models/ClientListController.ts";
 import { createRosterOverviewSource } from "../../read-models/rosterOverview.ts";
-import { homeSummaryRules } from "../../read-models/useClientHomeSummary.ts";
+import { homeSummaryRules } from "../composition/homeSummaryRules.ts";
 import type { RosterOverviewPort } from "../../features/clients/public.ts";
 import { RootTabs } from "./RootTabs.tsx";
 import { ClientsListNavigationProvider } from "./ClientsListShortcut.tsx";

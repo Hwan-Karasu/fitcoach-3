@@ -3,7 +3,7 @@ import { compareOptionalDays as compareWorkoutDays } from "../../../../shared/fo
 import { isWorkingSet } from "./workingSet.ts";
 import type { HistoryFilter, TrainingHistoryEntry } from "../../archive/public.ts";
 import type { ExerciseInfo } from "../../plans/public.ts";
-import { exerciseSessions, repRecords } from "./exerciseProgress.ts";
+import { exerciseSessions, repRecordEvents, type RepRecord } from "./exerciseProgress.ts";
 
 /**
  * Статистика клиента (A01, §48.86): расчёты по хронологии занятий — фактам дневника всех программ. Ничего не пишет;
@@ -242,6 +242,7 @@ export function exerciseActivity(entries: readonly TrainingHistoryEntry[]): read
 }
 
 export interface RecordEvent {
+  readonly side: RepRecord["side"];
   readonly exerciseId: string;
   readonly reps: number;
   readonly loadKg: number;
@@ -261,9 +262,9 @@ export function recordsInRange(all: readonly TrainingHistoryEntry[], scoped: rea
   for (const exerciseId of exerciseIds) {
     const metrics = infoOf(exerciseId)?.metrics ?? [];
     if (!(metrics.includes("load") && metrics.includes("reps"))) continue;
-    for (const record of repRecords(exerciseSessions(all, exerciseId))) {
+    for (const record of repRecordEvents(exerciseSessions(all, exerciseId))) {
       if (record.date !== null && (range.from === null || record.date >= range.from) && record.date <= range.to && scopedKeys.has(record.sessionKey)) {
-        events.push({ exerciseId, reps: record.reps, loadKg: record.loadKg, date: record.date, sessionKey: record.sessionKey });
+        events.push({ exerciseId, side: record.side, reps: record.reps, loadKg: record.loadKg, date: record.date, sessionKey: record.sessionKey });
       }
     }
   }

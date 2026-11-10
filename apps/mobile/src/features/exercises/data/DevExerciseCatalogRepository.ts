@@ -3,7 +3,7 @@ import { SharedSqliteDatabase } from "../../../shared/db/SharedSqliteDatabase.ts
 import { UUID_V4_SQL } from "../../../shared/db/SqlIds.ts";
 import type { SqliteConnectionPort, SqliteStatementPort } from "../../../shared/db/SqlitePort.ts";
 import type { WriterCoordinator } from "../../../shared/db/WriterCoordinator.ts";
-import type { ExerciseCatalogPort } from "../domain/ExerciseCatalogPort.ts";
+import type { ExerciseCatalogPort, ExerciseHistoryGuard } from "../domain/ExerciseCatalogPort.ts";
 import { type BodyPart, type ExerciseDefinition, type SystemCatalog,
   type SystemCatalogMeta, type TrackingProfileId } from "../domain/ExerciseModel.ts";
 import { EMPTY_OVERLAY, EXERCISE_NAME_MAX, normalizeAliases, validateCustom, type CatalogEntry,
@@ -41,13 +41,15 @@ export class DevExerciseCatalogRepository implements ExerciseCatalogPort {
   private readonly systemById: ReadonlyMap<string, ExerciseDefinition>;
   private readonly workspaceId: string;
   private readonly system: SystemCatalog;
+  private readonly history: ExerciseHistoryGuard<SqliteStatementPort> | undefined;
 
   constructor(database: SharedSqliteDatabase | (() => Promise<SqliteConnectionPort>), workspaceId: string,
-    system: SystemCatalog) {
+    system: SystemCatalog, history?: ExerciseHistoryGuard<SqliteStatementPort>) {
     this.database = database instanceof SharedSqliteDatabase ? database : new SharedSqliteDatabase(database);
     this.workspaceId = workspaceId;
     this.system = system;
     this.systemById = new Map(system.exercises.map((exercise) => [exercise.id, exercise]));
+    this.history = history;
   }
 
   initialize(): Promise<void> {
@@ -162,7 +164,15 @@ export class DevExerciseCatalogRepository implements ExerciseCatalogPort {
     if (this.systemById.has(id)) throw new Error("EXERCISE_SYSTEM_READ_ONLY");
     const valid = validateCustom(input);
     const updated = await this.ready().writer.write(async (tx) => {
-      // Профиль учёта менять можно, пока нет тренировочных фактов (§39.3); фактов в V1-dev пока нет.
+      const current = await tx.first<CustomRow>(`SELECT ${customColumns} FROM custom_exercises
+        WHERE workspace_id = ? AND id = ? AND archived_at IS NULL`, [this.workspaceId, id]);
+      if (current === null) throw new Error("EXERCISE_NOT_FOUND");
+      if (current.revision !== expectedRevision) throw new Error("EXERCISE_STALE");
+      if (current.trackingProfile !== valid.trackingProfile) {
+        // Любые разные V1-профили меняют набор/семантику обязательных метрик. Историю нельзя переинтерпретировать (§39.3).
+        if (this.history === undefined) throw new Error("EXERCISE_HISTORY_UNAVAILABLE");
+        if (await this.history.hasFacts(tx, id)) throw new Error("EXERCISE_PROFILE_IN_USE");
+      }
       const result = await tx.run(`UPDATE custom_exercises SET name = ?, body_part = ?, equipment = ?,
           tracking_profile = ?, revision = revision + 1, updated_at = ?
         WHERE workspace_id = ? AND id = ? AND revision = ? AND archived_at IS NULL`,

@@ -39,7 +39,7 @@ export function createLocalRepositories(database: SharedSqliteDatabase, workspac
   const notifications = new DevNotificationRepository(database, workspaceId);
   const trainingPlans = new DevTrainingPlansRepository(database, workspaceId);
   const trainingExecution = new DevTrainingExecutionRepository(database, workspaceId);
-  const exercises = new DevExerciseCatalogRepository(database, workspaceId, system);
+  const exercises = new DevExerciseCatalogRepository(database, workspaceId, system, trainingExecution.exerciseHistoryGuard);
   const health = new DevHealthRepository(database, workspaceId);
   const owners = [clients, calendar, accounting, measurements, nutrition.foods, nutrition.recipes, nutrition.diary,
     nutrition.targets, nutrition.calc, questionnaire, settings, notifications, trainingPlans, trainingExecution, exercises, health] as const;

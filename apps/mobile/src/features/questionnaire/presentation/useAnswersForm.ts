@@ -1,17 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AnswerValue, ClientAnswers, CompletionStatus, PublishedQuestionnaire } from "../domain/QuestionnaireModel.ts";
 import type { QuestionnaireRepositoryPort } from "../domain/QuestionnaireRepositoryPort.ts";
 import { allFields, answerProblem, completionStatus } from "../domain/QuestionnaireRules.ts";
-import { answerFromInput, answersFromInputs, inputFromAnswer, type FormInputs, type InputValue } from "./QuestionnaireForm.tsx";
+import { answerFromInput, answersFromInputs, inputFromAnswer, type FormInputs, type InputValue } from "./questionnaireInputs.ts";
+import { localDateText } from "../../../shared/domain/LocalDate.ts";
 
 type Patch = Readonly<Record<string, AnswerValue | null>>;
 
 const emptyAnswers: ClientAnswers = { answers: {}, schemaVersion: null };
-
-function localToday(): string {
-  const now = new Date();
-  return `${String(now.getFullYear()).padStart(4, "0")}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
 
 export interface AnswersForm {
   readonly status: "loading" | "failed" | "ready";
@@ -38,47 +34,72 @@ export interface AnswersForm {
  * Общая логика экрана «Анкета» и единой формы карточки клиента.
  */
 export function useAnswersForm(repository: QuestionnaireRepositoryPort, clientId: string | null): AnswersForm {
+  const scope = useMemo(() => ({ repository, clientId }), [repository, clientId]);
+  const currentScope = useRef(scope);
+  currentScope.current = scope;
+  const [loadedScope, setLoadedScope] = useState<typeof scope | null>(null);
   const [published, setPublished] = useState<PublishedQuestionnaire | null>(null);
+  const latestSchema = useRef<Readonly<{ repository: QuestionnaireRepositoryPort; schema: PublishedQuestionnaire }> | null>(null);
   const [saved, setSaved] = useState<ClientAnswers | null>(null);
   const [inputs, setInputs] = useState<FormInputs>({});
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
-  const [failed, setFailed] = useState(false);
+  const [failedScope, setFailedScope] = useState<typeof scope | null>(null);
   const [schemaUpdated, setSchemaUpdated] = useState(false);
+
+  const acceptSchema = useCallback((schema: PublishedQuestionnaire) => {
+    const current = latestSchema.current;
+    if (current?.repository === repository && current.schema.version >= schema.version) return current.schema;
+    latestSchema.current = { repository, schema };
+    setPublished(schema);
+    return schema;
+  }, [repository]);
 
   useEffect(() => {
     let active = true;
+    setFailedScope(null);
+    setErrors({});
+    setSchemaUpdated(false);
     void Promise.all([repository.getPublished(),
       clientId === null ? Promise.resolve(emptyAnswers) : repository.getAnswers(clientId)]).then(([schema, answers]) => {
       if (!active) return;
-      setPublished(schema);
+      const currentSchema = acceptSchema(schema);
       setSaved(answers);
-      setInputs(Object.fromEntries(allFields(schema.schema).map((item) =>
+      setInputs(Object.fromEntries(allFields(currentSchema.schema).map((item) =>
         [item.field.id, inputFromAnswer(item.field, answers.answers[item.field.id])])));
-    }, () => { if (active) setFailed(true); });
+      setLoadedScope(scope);
+    }, () => { if (active) setFailedScope(scope); });
     return () => { active = false; };
-  }, [clientId, repository]);
+  }, [scope, clientId, repository, acceptSchema]);
 
   // Новая опубликованная схема заменяет структуру, но сохраняет введённое (§25.14).
-  useEffect(() => repository.subscribeCommittedChanges((change) => {
-    if (change.scope !== "SCHEMA") return;
-    void repository.getPublished().then((next) => {
-      setPublished((old) => {
-        if (old !== null && old.version !== next.version) setSchemaUpdated(true);
-        return next;
-      });
-    }, () => undefined);
-  }), [repository]);
+  useEffect(() => {
+    let active = true;
+    let request = 0;
+    const off = repository.subscribeCommittedChanges((change) => {
+      if (change.scope !== "SCHEMA") return;
+      const generation = ++request;
+      void repository.getPublished().then((next) => {
+        if (!active || generation !== request) return;
+        const previous = latestSchema.current;
+        const accepted = acceptSchema(next);
+        if (previous?.repository === repository && previous.schema.version < accepted.version) setSchemaUpdated(true);
+      }, () => undefined);
+    });
+    return () => { active = false; off(); };
+  }, [repository, acceptSchema]);
+
+  const ready = loadedScope === scope;
 
   const dirtyIds = useMemo(() => {
-    if (published === null || saved === null) return [];
+    if (!ready || published === null || saved === null) return [];
     return allFields(published.schema).filter((item) => !item.field.retired).map((item) => item.field)
       .filter((entry) => JSON.stringify(inputs[entry.id] ?? null)
         !== JSON.stringify(inputFromAnswer(entry, saved.answers[entry.id]) ?? null))
       .map((entry) => entry.id);
-  }, [inputs, published, saved]);
+  }, [inputs, published, ready, saved]);
 
-  const completion = published === null || saved === null ? "NOT_STARTED"
-    : completionStatus(published.schema, { ...saved.answers, ...answersFromInputs(published.schema, inputs) });
+  const completion = !ready || published === null || saved === null ? "NOT_STARTED"
+    : completionStatus(published.schema, answersFromInputs(published.schema, inputs));
 
   const onChange = (fieldId: string, value: InputValue) => {
     setInputs((old) => ({ ...old, [fieldId]: value }));
@@ -91,8 +112,8 @@ export function useAnswersForm(repository: QuestionnaireRepositoryPort, clientId
   };
 
   const prepare = (): Patch | null => {
-    if (published === null || saved === null) return {};
-    const today = localToday();
+    if (!ready || published === null || saved === null) return null;
+    const today = localDateText();
     const fields = new Map(allFields(published.schema).map((item) => [item.field.id, item.field]));
     const problems: Record<string, string> = {};
     const patch: Record<string, AnswerValue | null> = {};
@@ -115,18 +136,21 @@ export function useAnswersForm(repository: QuestionnaireRepositoryPort, clientId
   };
 
   const adopt = (patch: Patch, next: ClientAnswers) => {
-    if (published === null) return;
+    if (published === null || currentScope.current !== scope) return;
     const fields = new Map(allFields(published.schema).map((item) => [item.field.id, item.field]));
     setSaved(next);
-    setInputs((old) => ({ ...old, ...Object.fromEntries(Object.keys(patch).map((id) => {
+    setInputs((old) => ({ ...old, ...Object.fromEntries(Object.keys(patch).flatMap((id) => {
       const target = fields.get(id);
-      return [id, target === undefined ? undefined : inputFromAnswer(target, next.answers[id])];
+      // ACK подтверждает отправленный ввод; изменения, сделанные во время записи, остаются грязными.
+      if (target === undefined || JSON.stringify(answerFromInput(target, old[id])) !== JSON.stringify(patch[id])) return [];
+      return [[id, inputFromAnswer(target, next.answers[id])]];
     })) }));
     setSchemaUpdated(false);
   };
 
   return {
-    status: failed ? "failed" : published === null || saved === null ? "loading" : "ready",
-    published, inputs, errors, dirtyIds, completion, schemaUpdated, onChange, prepare, commit, adopt,
+    status: failedScope === scope ? "failed" : ready ? "ready" : "loading",
+    published: ready ? published : null, inputs: ready ? inputs : {}, errors: ready ? errors : {},
+    dirtyIds, completion, schemaUpdated: ready && schemaUpdated, onChange, prepare, commit, adopt,
   };
 }

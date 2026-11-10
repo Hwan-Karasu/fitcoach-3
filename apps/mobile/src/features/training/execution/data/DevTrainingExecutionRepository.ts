@@ -790,6 +790,15 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
     return saved;
   }
 
+  /** Все факты упражнения, включая снятые подходы и сохранённую историю удалённого плана (§39.3). */
+  readonly exerciseHistoryGuard = {
+    hasFacts: async (tx: SqliteStatementPort, exerciseId: string): Promise<boolean> => {
+      this.ready();
+      return await tx.first<{ found: number }>(`SELECT 1 AS found FROM training_performed_sets
+        WHERE workspace_id = ? AND exercise_id = ? LIMIT 1`, [this.workspaceId, exerciseId]) !== null;
+    },
+  };
+
   listTimers(): Promise<readonly RestTimer[]> {
     return this.ready().connection.all<RestTimer>(`SELECT id, client_id AS clientId, client_name AS clientName,
       exercise_key AS exerciseKey, exercise_name AS exerciseName, started_at AS startedAt, end_at AS endAt,

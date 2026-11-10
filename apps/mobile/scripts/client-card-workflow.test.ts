@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { DevClientRepository } from "../src/features/clients/data/DevClientRepository.ts";
+import { DevMeasurementRepository, devMeasurementClientDeletionParticipant } from "../src/features/measurements/data/DevMeasurementRepository.ts";
 import { DevQuestionnaireRepository, devQuestionnaireClientDeletionParticipant } from
   "../src/features/questionnaire/data/DevQuestionnaireRepository.ts";
 import { SharedSqliteDatabase } from "../src/shared/db/SharedSqliteDatabase.ts";
@@ -13,17 +14,50 @@ const WS = "synthetic-workspace-a";
 async function stores() {
   const db = new DatabaseSync(":memory:");
   const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
-  const clients = new DevClientRepository(shared, WS, [devQuestionnaireClientDeletionParticipant]);
+  const clients = new DevClientRepository(shared, WS, [devQuestionnaireClientDeletionParticipant, devMeasurementClientDeletionParticipant]);
   await clients.initialize();
   const questionnaire = new DevQuestionnaireRepository(shared, WS);
   await questionnaire.initialize();
+  const measurements = new DevMeasurementRepository(shared, WS);
+  await measurements.initialize();
   const lease = await shared.acquire();
-  const workflow = createClientCardWorkflow((task) => lease.writer.write(task), clients.cardParticipant, questionnaire.answersParticipant);
-  const close = async () => { await shared.release(); await questionnaire.close(); await clients.close(); };
-  return { clients, questionnaire, workflow, close };
+  const workflow = createClientCardWorkflow((task) => lease.writer.write(task), clients.cardParticipant, questionnaire.answersParticipant, measurements.dailyParticipant);
+  const close = async () => { await shared.release(); await measurements.close(); await questionnaire.close(); await clients.close(); };
+  return { clients, questionnaire, measurements, workflow, close };
 }
 
 const card = (displayName: string) => ({ displayName });
+
+test("AUDIT-ALL-1: неверный вес откатывает новую карточку и ответы; повтор создаёт ровно одного клиента", async () => {
+  const { clients, questionnaire, measurements, workflow, close } = await stores();
+  try {
+    let events = 0;
+    clients.subscribeCommittedChanges(() => { events += 1; });
+    questionnaire.subscribeCommittedChanges(() => { events += 1; });
+    measurements.subscribeCommittedChanges(() => { events += 1; });
+    const weight = { type: "WEIGHT" as const, valueX10: 9990, localDate: "2026-10-14", localMinute: null };
+    await assert.rejects(workflow.save(null, card("Synthetic atomic weight"), { "sys:lifestyle.sleep": "7" }, weight), { message: "MEASUREMENT_VALUE_INVALID" });
+    assert.equal((await clients.list("ACTIVE")).length, 0);
+    assert.equal(events, 0);
+    const result = await workflow.save(null, card("Synthetic atomic weight"), { "sys:lifestyle.sleep": "7" }, { ...weight, valueX10: 805 });
+    assert.equal((await clients.list("ACTIVE")).length, 1);
+    assert.equal((await measurements.listForClient(result.client.id)).measurements[0]!.valueX10, 805);
+    assert.equal(events, 3);
+  } finally { await close(); }
+});
+
+test("AUDIT-ALL-1: неоднозначный день веса не оставляет частичной правки карточки или анкеты", async () => {
+  const { clients, questionnaire, measurements, workflow, close } = await stores();
+  try {
+    const client = await clients.create(card("Synthetic unchanged"));
+    const weight = { type: "WEIGHT" as const, valueX10: 800, localDate: "2026-10-14", localMinute: null };
+    await measurements.record(client.id, weight);
+    await measurements.record(client.id, { ...weight, valueX10: 810 });
+    await assert.rejects(workflow.save({ id: client.id, revision: client.revision }, card("Synthetic changed"), { "sys:lifestyle.sleep": "9" }, weight), { message: "MEASUREMENT_AMBIGUOUS_DAY" });
+    assert.equal((await clients.get(client.id))!.displayName, "Synthetic unchanged");
+    assert.deepEqual((await questionnaire.getAnswers(client.id)).answers, {});
+  } finally { await close(); }
+});
 
 test("карточка + анкета: новый клиент и ответы появляются вместе, по одному событию от владельца", async () => {
   const { clients, questionnaire, workflow, close } = await stores();

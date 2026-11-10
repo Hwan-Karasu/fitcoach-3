@@ -6,6 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openIsolatedSqliteConnection, type NativeSqliteDatabase } from "../apps/mobile/src/shared/db/IsolatedSqliteConnection.ts";
 import { WriterCoordinator } from "../apps/mobile/src/shared/db/WriterCoordinator.ts";
+import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
+import { SqliteOpenCloseError } from "../apps/mobile/src/shared/db/SqlitePort.ts";
 import type { SqlValue } from "../apps/mobile/src/shared/db/SqlitePort.ts";
 
 function nativeFactory(file: string) {
@@ -99,4 +101,91 @@ test("SQLite runtime: если новый handle не включает FK, по�
     assert.equal(native.handles, 3, "следующая запись снова открывает и проверяет новый handle");
     assert.equal(invoked, false);
   } finally { await connection.close(); rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("AUDIT-ALL-1: failed rollback/close сохраняет handle, блокирует запись и maintenance; повторное закрытие освобождает его", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "athlete-db-unclosed-writer-"));
+  const native = nativeFactory(join(directory, "synthetic.db"));
+  let opened = 0; let refuseClose = true;
+  const connection = await openIsolatedSqliteConnection(async () => {
+    const handle = await native.open();
+    if (++opened !== 2) return handle;
+    return { ...handle,
+      execAsync: async (sql) => { if (sql === "ROLLBACK") throw new Error("ROLLBACK_FAILED"); await handle.execAsync(sql); },
+      closeAsync: async () => { if (refuseClose) throw new Error("CLOSE_FAILED"); await handle.closeAsync(); },
+    };
+  });
+  const shared = new SharedSqliteDatabase(async () => connection);
+  const lease = await shared.acquire();
+  try {
+    await assert.rejects(lease.writer.write(async (tx) => {
+      await tx.run("CREATE TABLE never_committed (id INTEGER)");
+      throw new Error("ORIGINAL_WRITE_FAILED");
+    }), /ORIGINAL_WRITE_FAILED/, "cleanup не подменяет исходную ошибку команды");
+    await assert.rejects(lease.writer.write(async () => undefined), /DB_WRITER_UNAVAILABLE/);
+    assert.equal(native.handles, 2, "новый handle не открывается поверх потерянного writer");
+    let swapped = false;
+    await assert.rejects(shared.withClosedDatabase(() => shared.release(), async () => { swapped = true; }), /DATABASE_CLOSE_FAILED/);
+    assert.equal(swapped, false, "замена файла запрещена, пока native writer не закрыт");
+    assert.equal(native.closed, 1, "reader освобождён даже при ошибке writer.close");
+    refuseClose = false;
+    await connection.close();
+    await connection.close();
+    assert.equal(native.closed, 2, "повторная очистка закрывает сохранённый writer, а закрытый reader не закрывает дважды");
+  } finally { refuseClose = false; await connection.close(); rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("AUDIT-ALL-1: после failed rollback и успешного закрытия writer следующая команда использует новый проверенный handle", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "athlete-db-discard-writer-"));
+  const native = nativeFactory(join(directory, "synthetic.db"));
+  let opened = 0;
+  const connection = await openIsolatedSqliteConnection(async () => {
+    const handle = await native.open();
+    return ++opened === 2 ? { ...handle, execAsync: async (sql) => {
+      if (sql === "ROLLBACK") throw new Error("ROLLBACK_FAILED"); await handle.execAsync(sql);
+    } } : handle;
+  });
+  const writer = new WriterCoordinator(connection);
+  try {
+    await assert.rejects(writer.write(async () => { throw new Error("WRITE_FAILED"); }), /WRITE_FAILED/);
+    await writer.write((tx) => tx.run("CREATE TABLE recovered (id INTEGER)"));
+    assert.equal(native.handles, 3);
+    assert.equal(native.closed, 1);
+  } finally { await connection.close(); rmSync(directory, { recursive: true, force: true }); }
+  assert.equal(native.closed, native.handles);
+});
+
+test("AUDIT-ALL-1: failed initial reader close блокирует новый open и file task до успешной повторной очистки", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "athlete-db-open-close-"));
+  const native = nativeFactory(join(directory, "synthetic.db"));
+  let opened = 0; let refuseClose = true;
+  const shared = new SharedSqliteDatabase(() => openIsolatedSqliteConnection(async () => {
+    const handle = await native.open();
+    return ++opened === 1 ? { ...handle,
+      execAsync: async () => { throw new Error("ORIGINAL_SETUP_FAILED"); },
+      closeAsync: async () => { if (refuseClose) throw new Error("READER_CLOSE_FAILED"); await handle.closeAsync(); },
+    } : handle;
+  }));
+  try {
+    await assert.rejects(shared.acquire(), (error: unknown) => {
+      assert.ok(error instanceof SqliteOpenCloseError);
+      assert.equal((error.cause as Error).message, "ORIGINAL_SETUP_FAILED");
+      assert.equal((error.closeError as Error).message, "READER_CLOSE_FAILED");
+      return true;
+    });
+    await assert.rejects(shared.acquire(), /DATABASE_CLOSE_FAILED/);
+    assert.equal(native.handles, 1, "повтор acquire сначала закрывает исходный native reader");
+    let swapped = false;
+    await assert.rejects(shared.withClosedDatabase(async () => undefined, async () => { swapped = true; }), /DATABASE_CLOSE_FAILED/);
+    assert.equal(swapped, false);
+    refuseClose = false;
+    await shared.withClosedDatabase(async () => undefined, async () => {
+      assert.equal(native.closed, 1, "cleanup завершился до разрешения файловой операции"); swapped = true;
+    });
+    assert.equal(swapped, true);
+    await shared.acquire();
+    assert.equal(native.handles, 2);
+    await shared.release();
+    assert.equal(native.closed, native.handles);
+  } finally { refuseClose = false; await shared.release(); rmSync(directory, { recursive: true, force: true }); }
 });

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isLocalDate } from "../apps/mobile/src/shared/domain/LocalDate.ts";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { isLocalDate, localDateText } from "../apps/mobile/src/shared/domain/LocalDate.ts";
 import { isLocalDate as calendar } from "../apps/mobile/src/features/calendar/domain/CalendarRules.ts";
 import { isLocalDate as measurements } from "../apps/mobile/src/features/measurements/domain/MeasurementRules.ts";
 import { isLocalDate as nutrition } from "../apps/mobile/src/features/nutrition/domain/DiaryRules.ts";
@@ -10,6 +12,18 @@ test("existing calendar days are accepted, including leap days by the Gregorian 
   for (const value of ["2026-02-28", "2024-02-29", "2000-02-29", "0400-02-29", "0001-01-01", "0099-12-31", "9999-12-31", "2026-12-31"]) {
     assert.equal(isLocalDate(value), true, value);
   }
+});
+
+test("AUDIT-ALL-1: ограничение даты формы использует локальный календарный день, включая границу суток", () => {
+  // TZ принадлежит отдельному процессу: изменение глобальной зоны ломает заранее созданные Date других foundation-тестов.
+  const probe = fileURLToPath(new URL("./support/local-date-probe.ts", import.meta.url));
+  for (const [zone, instant, expected] of [["Europe/Moscow", "2026-11-09T21:30:00Z", "2026-11-10"],
+    ["America/Los_Angeles", "2026-11-10T02:30:00Z", "2026-11-09"]]) {
+    const result = spawnSync(process.execPath, ["--experimental-strip-types", probe, instant!], { env: { ...process.env, TZ: zone }, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr || String(result.error));
+    assert.equal(result.stdout.trim(), expected);
+  }
+  assert.equal(localDateText(new Date(2026, 10, 10, 0, 30)), "2026-11-10");
 });
 
 test("impossible or malformed dates are rejected", () => {

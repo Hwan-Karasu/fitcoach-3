@@ -2,7 +2,7 @@ export { AddFoodScreen, type CatalogFilter } from "./presentation/AddFoodScreen.
 export { FoodEditorScreen } from "./presentation/FoodEditorScreen.tsx";
 export { NutritionHomeScreen } from "./presentation/NutritionHomeScreen.tsx";
 export { NutritionHomeCards } from "./presentation/NutritionHomeCards.tsx";
-export { ClientDayProvider } from "./presentation/ClientDay.tsx";
+export { ClientDayProvider, useClientDay } from "./presentation/ClientDay.tsx";
 export { DayTabs } from "./presentation/DayTabs.tsx";
 export { NutritionStatsScreen } from "./presentation/NutritionStatsScreen.tsx";
 export { MetricScreen, metricTitle } from "./presentation/MetricScreen.tsx";

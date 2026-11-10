@@ -1,4 +1,4 @@
-import type { SqliteConnectionPort, SqlValue } from "./SqlitePort.ts";
+import { SqliteOpenCloseError, type SqliteConnectionPort, type SqlValue } from "./SqlitePort.ts";
 import { WriterCoordinator } from "./WriterCoordinator.ts";
 
 export interface SqliteDatabaseLease {
@@ -22,6 +22,7 @@ export class SharedSqliteDatabase {
   private lifecycle: Promise<void> = Promise.resolve();
   private maintenance: "ACTIVE" | "RECOVERY_REQUIRED" | null = null;
   private closeFailed = false;
+  private failedOpen: SqliteOpenCloseError | null = null;
   private readonly open: () => Promise<SqliteConnectionPort>;
   private changes = 0;
 
@@ -36,7 +37,11 @@ export class SharedSqliteDatabase {
   acquire(): Promise<SqliteDatabaseLease> {
     return this.serial(async () => {
       this.assertAvailable();
-      if (this.state === null) this.state = this.wrap(await this.open());
+      await this.closeFailedOpen();
+      if (this.state === null) {
+        try { this.state = this.wrap(await this.open()); }
+        catch (error) { if (error instanceof SqliteOpenCloseError) this.failedOpen = error; throw error; }
+      }
       this.holders += 1;
       return this.state.lease;
     });
@@ -45,7 +50,7 @@ export class SharedSqliteDatabase {
   /** Last release permanently retires the lease; the next acquisition opens a fresh handle. */
   release(): Promise<void> {
     return this.serial(async () => {
-      if (this.holders === 0) return;
+      if (this.holders === 0) { await this.closeFailedOpen(); return; }
       this.holders -= 1;
       if (this.holders > 0 || this.state === null) return;
       const state = this.state;
@@ -77,7 +82,7 @@ export class SharedSqliteDatabase {
     let paused: ConnectionState | null = null;
     let resume: (() => void) | null = null;
     try {
-      await this.serial(async () => undefined);
+      await this.serial(() => this.closeFailedOpen());
       paused = this.state;
       if (paused !== null) resume = await this.pause(paused);
       await stopHolders();
@@ -104,6 +109,15 @@ export class SharedSqliteDatabase {
     const result = this.lifecycle.then(task);
     this.lifecycle = result.then(() => undefined, () => undefined);
     return result;
+  }
+  /** A failed initial open owns no lease, but its unclosed reader is still ours.
+   * Retrying acquire/release/maintenance first retries this exact close; no new handle
+   * or file task is admitted until it succeeds. Ordinary open failures remain retryable. */
+  private async closeFailedOpen(): Promise<void> {
+    if (this.failedOpen === null) return;
+    try { await this.failedOpen.retryClose(); }
+    catch { throw new Error("DATABASE_CLOSE_FAILED", { cause: this.failedOpen }); }
+    this.failedOpen = null;
   }
   private assertAvailable(): void {
     if (this.closeFailed) throw new Error("DATABASE_CLOSE_FAILED");

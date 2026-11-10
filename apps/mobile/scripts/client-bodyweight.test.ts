@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { act, createElement } from "react";
+import TestRenderer from "react-test-renderer";
+import { useBodyOf } from "../src/features/training/analytics/presentation/useBodyOf.ts";
+import type { BodyOf, BodyWeight, BodyweightSource } from "../src/features/training/analytics/presentation/trainingStats.ts";
 import { DevClientRepository } from "../src/features/clients/data/DevClientRepository.ts";
 import { DevMeasurementRepository, devMeasurementClientDeletionParticipant } from "../src/features/measurements/data/DevMeasurementRepository.ts";
 import { dailyPoints } from "../src/features/measurements/domain/MeasurementRules.ts";
@@ -11,6 +15,53 @@ import { nodeSqlitePort } from "../../../scripts/support/node-sqlite-port.ts";
 // Read-model импортирует public.ts фич (там экраны .tsx), поэтому тест живёт здесь.
 const WS = "synthetic-workspace-a";
 const NOW = new Date(2026, 9, 16, 21, 0);
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+test("AUDIT-ALL-1: при смене клиента тоннаж не использует массу прежнего клиента до завершения чтения", async () => {
+  let lookup!: BodyOf;
+  let complete!: (points: readonly BodyWeight[]) => void;
+  let subscriptions = 0;
+  const source: BodyweightSource = {
+    list: (clientId) => clientId === "a" ? Promise.resolve([{ date: "2026-10-01", kg: 80 }])
+      : new Promise((resolve) => { complete = resolve; }),
+    subscribe: () => { subscriptions += 1; return () => { subscriptions -= 1; }; },
+  };
+  function Probe({ clientId }: { clientId: string }) { lookup = useBodyOf(source, clientId); return null; }
+  let tree!: TestRenderer.ReactTestRenderer;
+  try {
+    await act(async () => { tree = TestRenderer.create(createElement(Probe, { clientId: "a" })); });
+    assert.equal(lookup("2026-10-10")!.kg, 80);
+    await act(async () => tree.update(createElement(Probe, { clientId: "b" })));
+    assert.equal(lookup("2026-10-10"), null);
+    assert.equal(subscriptions, 1);
+    await act(async () => complete([{ date: "2026-10-02", kg: 60 }]));
+    assert.equal(lookup("2026-10-10")!.kg, 60);
+  } finally { if (tree) await act(async () => tree.unmount()); }
+  assert.equal(subscriptions, 0);
+});
+
+test("AUDIT-ALL-1: медленное прежнее чтение замеров не отменяет результат последнего committed change", async () => {
+  let lookup!: BodyOf;
+  const requests: Array<Readonly<{ resolve: (points: readonly BodyWeight[]) => void; reject: (error: Error) => void }>> = [];
+  let changed: () => void = () => undefined;
+  const source: BodyweightSource = {
+    list: () => new Promise((resolve, reject) => { requests.push({ resolve, reject }); }),
+    subscribe: (_id, listener) => { changed = listener; return () => undefined; },
+  };
+  function Probe() { lookup = useBodyOf(source, "a"); return null; }
+  let tree!: TestRenderer.ReactTestRenderer;
+  try {
+    await act(async () => { tree = TestRenderer.create(createElement(Probe)); });
+    await act(async () => changed());
+    await act(async () => requests[1]!.resolve([{ date: "2026-10-01", kg: 85 }]));
+    assert.equal(lookup("2026-10-10")!.kg, 85);
+    await act(async () => requests[0]!.resolve([{ date: "2026-10-01", kg: 80 }]));
+    assert.equal(lookup("2026-10-10")!.kg, 85);
+    await act(async () => changed());
+    await act(async () => requests[2]!.reject(new Error("READ_FAILED")));
+    assert.equal(lookup("2026-10-10"), null, "отказ последнего источника означает невычислимый тоннаж");
+  } finally { if (tree) await act(async () => tree.unmount()); }
+});
 
 test("ряд массы тела: один достоверный замер в день; день с несколькими без основного не входит, выбор основного возвращает его (§49.18, §48.86.36)", async () => {
   const db = new DatabaseSync(":memory:");

@@ -316,10 +316,10 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
             <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Рекорды по повторениям</Text>
             {records.map((record) => {
               const session = inPeriod.find((item) => item.entry.key === record.sessionKey);
-              return <Pressable key={record.reps} accessibilityRole="button" disabled={session === undefined || session.entry.planDeleted}
-                accessibilityLabel={`${record.reps} повторений: ${number(record.loadKg)} килограмм, ${dateText(record.date)}. Открыть тренировку`}
+              return <Pressable key={`${record.side ?? ""}:${record.reps}`} accessibilityRole="button" disabled={session === undefined || session.entry.planDeleted}
+                accessibilityLabel={`${record.side === null ? "" : `${record.side === "L" ? "Левая" : "Правая"} сторона, `}${record.reps} повторений: ${number(record.loadKg)} килограмм, ${dateText(record.date)}. Открыть тренировку`}
                 onPress={() => { if (session !== undefined) open(session); }} style={[styles.record, { borderColor: colors.border }]}>
-                <Text style={[styles.recordReps, { color: colors.textSecondary }]}>{`${record.reps} ПМ`}</Text>
+                <Text style={[styles.recordReps, { color: colors.textSecondary }]}>{`${record.side === null ? "" : `${record.side === "L" ? "Л" : "П"} · `}${record.reps} ПМ`}</Text>
                 <Text style={[styles.recordValue, { color: colors.textPrimary }]}>{`${number(record.loadKg)} кг`}</Text>
                 <Text style={[styles.recordDate, { color: colors.textMuted }]}>{dateText(record.date)}</Text>
               </Pressable>;

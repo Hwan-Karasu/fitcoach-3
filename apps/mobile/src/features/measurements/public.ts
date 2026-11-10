@@ -1,7 +1,7 @@
 export { ClientMeasurementsScreen } from "./presentation/ClientMeasurementsScreen.tsx";
 export type { ClientMeasurements, DailyPoint, DailyPrimary, Measurement, MeasurementInput, MeasurementMethod, MeasurementOperation,
   MeasurementType } from "./domain/MeasurementModel.ts";
-export type { MeasurementCommittedChange, MeasurementRepositoryPort } from "./domain/MeasurementRepositoryPort.ts";
+export type { DailyMeasurementParticipant, MeasurementCommittedChange, MeasurementRepositoryPort } from "./domain/MeasurementRepositoryPort.ts";
 export { dailyPoints, formatDate, formatValue, latestPoint, localDateOf, measurementTypeInfo, parseValueX10 } from
   "./domain/MeasurementRules.ts";
 export { statsOfPoints, type PointStats } from "./domain/MeasurementStats.ts";

@@ -79,6 +79,14 @@ test("таблица рекордов — лучший вес на точное 
     [[1, 110, "2026-10-01"], [5, 100, "2026-10-08"], [8, 90, "2026-10-15"]]);
 });
 
+test("AUDIT-ALL-1: таблица рекордов не склеивает стороны; равный вес сохраняет первую дату каждой стороны", () => {
+  const sided = (left: number, right: number): SetFact => ({ ...fact(BENCH, values(null, null)),
+    sides: { left: { values: values(left, 5), confirmed: true, rpe: null }, right: { values: values(right, 5), confirmed: true, rpe: null } } });
+  const sessions = exerciseSessions([entry("new", "2026-11-10", "A", [sided(20, 17)]), entry("old", "2026-10-10", "A", [sided(20, 15)])], BENCH);
+  assert.deepEqual(repRecords(sessions).map((record) => [record.side, record.reps, record.loadKg, record.date]),
+    [["L", 5, 20, "2026-10-10"], ["R", 5, 17, "2026-11-10"]]);
+});
+
 test("нет веса — нет точки, а не ноль (§48.86.32)", () => {
   const sessions = exerciseSessions([
     entry("e2", "2026-10-08", "A", [fact(BENCH, values(null, 10))]),

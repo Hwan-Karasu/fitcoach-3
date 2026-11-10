@@ -18,7 +18,13 @@ export function writeVisibleTrainingWorkbook(input: TrainingTransfer): Uint8Arra
   for (const p of value.programs) {
     const scopes = p.simple ? [{ title: p.title, weeks: Array.from({ length: p.simple.weeks }, (_, at) => ({ index: at + 1, workouts: p.simpleWeeks.find((w) => w.index === at + 1)?.workouts ?? p.simple!.workouts })) }] : p.mesocycles;
     for (const scope of scopes) {
-      const timed = scope.weeks.some((w) => w.workouts.some((item) => item.exercises.some((e) => e.sets.some((s) => s.durationSec !== null || s.distanceM !== null))));
+      const timedValues = (values: TransferValues) => values.durationSec !== null || values.distanceM !== null;
+      const timed = scope.weeks.some((week) => week.workouts.some((workout) =>
+        workout.exercises.some((exercise) => exercise.sets.some(timedValues))
+        || sessions.get(JSON.stringify([p.id, week.index, workout.id]))?.facts.some((fact) =>
+          [fact.values, ...fact.drops, ...(fact.sides ? [fact.sides.left.values, fact.sides.right.values] : [])].some(timedValues)
+          || value.issues?.some((issue) => issue.scope === "FACT" && issue.targetId === fact.id
+            && (issue.field === "durationSec" || issue.field === "distanceM")))));
       const labels = ["План", "Пред.", "Повт.", "Кг", "Дата", ...(timed ? ["Сек", "М"] : [])];
       const rows: (string | number | null)[][] = [[`${value.client.name} · ${p.title}${scope.title !== p.title ? ` · ${scope.title}` : ""}`], ["Упражнение", "Подход"], ["", ""]];
       const merges: XLSX.Range[] = [];
@@ -49,7 +55,7 @@ export function writeVisibleTrainingWorkbook(input: TrainingTransfer): Uint8Arra
               }
               const col = 2 + at * labels.length;
               const issue = (field: keyof TransferValues) => { const raw = value.issues?.find((i) => i.scope === "FACT" && i.targetId === fact?.id && i.field === field)?.raw; return raw === "Отметка выполнения без результата" ? undefined : raw; };
-              const data = [plan ? planText(plan) : "", previous ? [metric(previous, "reps"), metric(previous, "loadGrams", 1000)].filter((v) => v !== null && v !== "").join(" × ") : "", issue("reps") ?? metric(fact, "reps"), issue("loadGrams") ?? metric(fact, "loadGrams", 1000), session?.actualDate ?? "неизвестно", ...(timed ? [metric(fact, "durationSec"), metric(fact, "distanceM")] : [])];
+              const data = [plan ? planText(plan) : "", previous ? [metric(previous, "reps"), metric(previous, "loadGrams", 1000)].filter((v) => v !== null && v !== "").join(" × ") : "", issue("reps") ?? metric(fact, "reps"), issue("loadGrams") ?? metric(fact, "loadGrams", 1000), session?.actualDate ?? "неизвестно", ...(timed ? [issue("durationSec") ?? metric(fact, "durationSec"), issue("distanceM") ?? metric(fact, "distanceM")] : [])];
               data.forEach((cell, offset) => { row[col + offset] = cell; });
             }); rows.push(row);
           }

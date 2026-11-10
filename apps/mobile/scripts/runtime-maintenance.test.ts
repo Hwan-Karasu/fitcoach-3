@@ -74,7 +74,7 @@ async function fixture() {
   await prepareProductionDatabase(database);
   const owners = createLocalRepositories(database, WS, catalog); await owners.initialize();
   const workflow = new WorkflowDatabaseLease(database); const commands = new RuntimeCommandGate();
-  const card = commands.port(createClientCardWorkflow((task) => workflow.write(task), owners.clients.cardParticipant, owners.questionnaire.answersParticipant));
+  const card = commands.port(createClientCardWorkflow((task) => workflow.write(task), owners.clients.cardParticipant, owners.questionnaire.answersParticipant, owners.measurements.dailyParticipant));
   let invalidated = 0; let cold = false; let failReopen = false; let reopenGate: Promise<void> | null = null;
   const maintenance = new RuntimeMaintenance({ database, commands, drainBackground: async () => undefined,
     closeOwners: async () => { await owners.close(); await workflow.close(); },

@@ -17,7 +17,7 @@ export type HealthSyncOutcome =
 export interface HealthSyncPorts {
   readonly health: HealthStorePort;
   readonly platform: HealthConnectPort;
-  readonly calc: Pick<NutritionCalcPort, "setSteps">;
+  readonly calc: Pick<NutritionCalcPort, "setSteps" | "clearSteps" | "listSteps">;
   readonly measurements: MeasurementRepositoryPort;
   /** Правило допустимых значений владельца health (подаётся композицией, как правила других владельцев). */
   readonly isValidHealthValue: (metric: HealthMetric, value: number) => boolean;
@@ -49,9 +49,19 @@ export async function syncHealthConnect(ports: HealthSyncPorts, today: string, n
   const known = new Map((await ports.health.listDaily(link.clientId, range.from, range.to)).map((entry) => [`${entry.localDate}|${entry.metric}`, entry.value]));
 
   let stepsDays = 0;
+  const projectedSteps = new Map(read.some((entry) => entry.metric === "STEPS")
+    ? (await ports.calc.listSteps(link.clientId, range.from, range.to)).map((entry) => [entry.localDate, entry.steps]) : []);
   for (const entry of read) {
-    if (entry.metric !== "STEPS" || entry.value < 1 || entry.value > CALC_STEPS_MAX) continue;
-    if (known.get(`${entry.localDate}|STEPS`) === entry.value) continue;
+    if (entry.metric !== "STEPS") continue;
+    // Неподставляемое актуальное значение не должно оставлять старую положительную проекцию.
+    if (entry.value < 1 || entry.value > CALC_STEPS_MAX) {
+      if (projectedSteps.has(entry.localDate)) {
+        await ports.calc.clearSteps(link.clientId, entry.localDate);
+        stepsDays += 1;
+      }
+      continue;
+    }
+    if (projectedSteps.get(entry.localDate) === entry.value) continue;
     await ports.calc.setSteps(link.clientId, entry.localDate, entry.value, now);
     stepsDays += 1;
   }
@@ -65,9 +75,9 @@ export async function syncHealthConnect(ports: HealthSyncPorts, today: string, n
     let imported = 0;
     for (const entry of fresh) {
       if (taken.has(entry.localDate)) continue;
-      await ports.measurements.record(link.clientId, { type, valueX10: entry.value, localDate: entry.localDate, localMinute: null }, now);
+      const saved = await ports.measurements.recordIfDayEmpty(link.clientId, { type, valueX10: entry.value, localDate: entry.localDate, localMinute: null }, now);
       taken.add(entry.localDate);
-      imported += 1;
+      if (saved !== null) imported += 1;
     }
     return imported;
   };

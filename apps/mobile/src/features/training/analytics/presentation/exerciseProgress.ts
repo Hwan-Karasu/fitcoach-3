@@ -26,6 +26,7 @@ export interface ProgressPoint {
 }
 
 export interface RepRecord {
+  readonly side: "L" | "R" | null;
   readonly reps: number;
   readonly loadKg: number;
   /** Первая известная дата достижения; `null` — лучший вес есть только без даты. */
@@ -68,8 +69,12 @@ function mainValues(fact: SetFact): readonly SetValues[] {
 }
 
 /** Для рекордов и e1RM — одиночные обычные/отказные рабочие подходы (§48.86.8 п. 4). */
-function recordValues(facts: readonly SetFact[]): readonly SetValues[] {
-  return facts.filter((fact) => isWorkingSet(fact) && fact.setType !== "DROP").flatMap(mainValues);
+type RecordValue = Readonly<{ side: RepRecord["side"]; values: SetValues }>;
+function recordValues(facts: readonly SetFact[]): readonly RecordValue[] {
+  return facts.filter((fact) => isWorkingSet(fact) && fact.setType !== "DROP").flatMap<RecordValue>((fact) => fact.sides === null
+    ? [{ side: null, values: fact.values }]
+    : ([{ side: "L" as const, ...fact.sides.left }, { side: "R" as const, ...fact.sides.right }]
+      .filter((side) => side.confirmed).map(({ side, values }) => ({ side, values }))));
 }
 
 /** Для объёма и суммы повторений — все рабочие, мини-сеты дроп-сета входят (§35.15). */
@@ -82,7 +87,7 @@ const sumOf = (numbers: readonly number[]) => numbers.length === 0 ? null : numb
 const kg = (values: SetValues) => values.loadGrams === null ? null : values.loadGrams / 1000;
 
 export function sessionValue(session: ExerciseSession, metric: ProgressMetricId): number | null {
-  const records = recordValues(session.facts);
+  const records = recordValues(session.facts).map((record) => record.values);
   const pick = (read: (values: SetValues) => number | null) =>
     records.map(read).filter((value): value is number => value !== null);
   switch (metric) {
@@ -106,21 +111,36 @@ export function progressSeries(sessions: readonly ExerciseSession[], metric: Pro
   });
 }
 
-/** §37.7: фактические рекорды веса на точное число повторений, отдельно от e1RM. */
-export function repRecords(sessions: readonly ExerciseSession[]): readonly RepRecord[] {
-  const best = new Map<number, RepRecord>();
-  for (const session of [...sessions].reverse()) {
-    for (const values of recordValues(session.facts)) {
+/** Одна хронология PR для таблицы лучших значений и событий периода; стороны никогда не смешиваются. */
+function recordProgress(sessions: readonly ExerciseSession[]) {
+  const best = new Map<string, RepRecord>();
+  const events: RepRecord[] = [];
+  // Недатированные достижения — консервативная база, но не событие на выдуманную дату.
+  const chronological = [...sessions].sort((a, b) => compareWorkoutDays(b.entry.actualDate, a.entry.actualDate) || a.entry.key.localeCompare(b.entry.key));
+  for (const session of chronological) {
+    const candidates = new Map<string, RepRecord>();
+    for (const { side, values } of recordValues(session.facts)) {
       const load = kg(values);
       if (load === null || !(load > 0) || values.reps === null || values.reps < 1) continue;
-      const current = best.get(values.reps);
-      if (current === undefined || load > current.loadKg || load === current.loadKg && current.date === null && session.entry.actualDate !== null) {
-        best.set(values.reps, { reps: values.reps, loadKg: load, date: session.entry.actualDate, sessionKey: session.entry.key });
-      }
+      const key = `${side ?? ""}:${values.reps}`;
+      if (load > (candidates.get(key)?.loadKg ?? -1)) candidates.set(key,
+        { side, reps: values.reps, loadKg: load, date: session.entry.actualDate, sessionKey: session.entry.key });
+    }
+    for (const [key, record] of candidates) {
+      const current = best.get(key);
+      const improved = current === undefined || record.loadKg > current.loadKg;
+      if (improved && record.date !== null) events.push(record);
+      if (improved || record.loadKg === current?.loadKg && current.date === null && record.date !== null) best.set(key, record);
     }
   }
-  return [...best.values()].sort((a, b) => a.reps - b.reps);
+  return { best: [...best.values()].sort((a, b) => a.reps - b.reps || (a.side ?? "").localeCompare(b.side ?? "")), events };
 }
+
+/** §37.7: лучший вес на точное число повторений отдельно для каждой стороны, с первой известной датой. */
+export const repRecords = (sessions: readonly ExerciseSession[]): readonly RepRecord[] => recordProgress(sessions).best;
+
+/** §48.86.35: каждое новое достижение остаётся событием своего периода, даже если позже побито. */
+export const repRecordEvents = (sessions: readonly ExerciseSession[]): readonly RepRecord[] => recordProgress(sessions).events;
 
 export interface ExerciseWeekNode {
   readonly weekIndex: number;

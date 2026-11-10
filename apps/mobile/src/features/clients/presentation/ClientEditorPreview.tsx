@@ -29,7 +29,7 @@ const easeInOut = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t +
 export interface ClientEditorAppendix {
   readonly sections: readonly Readonly<{ id: string; title: string; icon?: LucideIcon }>[];
   /** Содержимое; `onSectionLayout` сообщает положение раздела внутри содержимого для вкладок. */
-  readonly render: (onSectionLayout: (sectionId: string, y: number) => void) => ReactNode;
+  readonly render: (onSectionLayout: (sectionId: string, y: number) => void, disabled: boolean) => ReactNode;
   /** Есть несохранённые ответы — выход спросит подтверждение. */
   readonly dirty: boolean;
   /** Проверить ответы перед сохранением; false — ошибки показаны у самих вопросов. */
@@ -75,8 +75,8 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
   const [birthDate, setBirthDate] = useState(initialDraft?.birthDate ?? initial?.birthDate ?? "");
   const [heightDraft, setHeightDraft] = useState(initialDraft?.heightDraft
     ?? formatHeightCmX10(initial?.heightCmX10 ?? null));
-  const [weightText, setWeightText] = useState(initialWeight ?? "");
-  const [sex, setSex] = useState<"MALE" | "FEMALE" | null>(initialDraft?.sex ?? initial?.sex ?? null);
+  const [weightText, setWeightText] = useState(initialDraft?.weightText ?? initialWeight ?? "");
+  const [sex, setSex] = useState<"MALE" | "FEMALE" | null>(initialDraft?.sex === undefined ? initial?.sex ?? null : initialDraft.sex);
   const [emoji] = useState<string | null>(initialDraft?.emoji ?? initial?.emoji ?? null);
   const [nameError, setNameError] = useState(false);
   const [birthDateError, setBirthDateError] = useState(false);
@@ -98,9 +98,9 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
       || heightDraft !== formatHeightCmX10(initial.heightCmX10) || weightText !== (initialWeight ?? "") || (sex ?? null) !== (initial.sex ?? null) || emoji !== initial.emoji;
   const dirty = profileDirty || (appendix?.dirty ?? false);
   const formRef = useRef<ClientFormDraft>({ displayName, contactPhone: phone,
-    contactEmail: email, birthDate, heightDraft, sex, emoji });
+    contactEmail: email, birthDate, heightDraft, sex, emoji, weightText });
   formRef.current = { displayName, contactPhone: phone, contactEmail: email,
-    birthDate, heightDraft, sex, emoji };
+    birthDate, heightDraft, sex, emoji, weightText };
 
   const persistDraft = useCallback((form: ClientFormDraft): Promise<void> => {
     const write = onSaveDraft(form).then(() => {
@@ -122,7 +122,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
       if (!savingRef.current) void persistDraft(formRef.current).catch(() => undefined);
     }, 600);
     return () => clearTimeout(timer);
-  }, [displayName, phone, email, birthDate, heightDraft, sex, emoji, profileDirty, persistDraft]);
+  }, [displayName, phone, email, birthDate, heightDraft, sex, emoji, weightText, profileDirty, persistDraft]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
@@ -239,7 +239,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
       created = true;
     } catch (error) {
       const code = error instanceof Error ? error.message : "";
-      setMessage(code === "WEIGHT_SAVE_FAILED" ? "Карточка сохранена, а вес — нет: он должен быть от 20 до 400 кг, за сегодня не должно быть нескольких записей веса."
+      setMessage(code === "WEIGHT_SAVE_FAILED" ? "Карточка и вес не сохранены: вес должен быть от 20 до 400 кг, за сегодня не должно быть нескольких записей без основной. Введённые данные остались в форме."
         : code === "CLIENT_EMAIL_INVALID" ? "Проверьте адрес электронной почты."
         : code === "CLIENT_FIELD_TOO_LONG" ? "Слишком длинное значение одного из полей."
           : code === "CLIENT_STALE_OR_WRONG_SCOPE" ? "Карточка изменилась. Закройте форму и откройте её снова."
@@ -314,6 +314,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Основное</Text>
           <Text style={[styles.sectionDescription, { color: colors.textSecondary }]}>Только имя обязательно для сохранения.</Text>
           <TextField
+            disabled={saving || exitBusy}
             inputRef={nameRef}
             label="Имя клиента"
             required
@@ -325,6 +326,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
             onChangeText={(value) => { setDisplayName(value); setNameError(false); setMessage(null); }}
           />
           <TextField
+            disabled={saving || exitBusy}
             inputRef={phoneRef}
             label="Телефон · необязательно"
             placeholder="Номер телефона"
@@ -335,6 +337,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
             onChangeText={(value) => { setPhone(value); setMessage(null); }}
           />
           <TextField
+            disabled={saving || exitBusy}
             inputRef={emailRef}
             label="E-mail · необязательно"
             placeholder="Адрес для связи"
@@ -345,6 +348,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
             onChangeText={(value) => { setEmail(value); setMessage(null); }}
           />
           <DateField
+            disabled={saving || exitBusy}
             label="Дата рождения · необязательно"
             placeholder="Выберите дату"
             hint="Возраст вычисляется из даты."
@@ -358,6 +362,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
           <View style={styles.pair}>
             <View style={styles.pairCell}>
               <TextField
+                disabled={saving || exitBusy}
                 inputRef={heightRef}
                 label="Рост, см"
                 placeholder="172,5"
@@ -369,6 +374,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
             </View>
             <View style={styles.pairCell}>
               <TextField
+                disabled={saving || exitBusy}
                 label="Вес, кг"
                 placeholder="85,4"
                 keyboardType="decimal-pad"
@@ -379,13 +385,14 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
           </View>
           <Text style={[styles.fieldLabel, { color: colors.textPrimary }]}>Пол · нужен для расчёта КБЖУ</Text>
           <ChoiceSegments label="Пол"
+            disabled={saving || exitBusy}
             items={[{ id: "NONE", label: "Не указан" }, { id: "MALE", label: "Мужской" }, { id: "FEMALE", label: "Женский" }]}
             value={sex ?? "NONE"}
             onChange={(id) => setSex(id === "MALE" ? "MALE" : id === "FEMALE" ? "FEMALE" : null)} />
         </View>
         {appendix !== undefined ? (
           <View onLayout={(event) => { appendixOffset.current = event.nativeEvent.layout.y; }}>
-            {appendix.render((sectionId, y) => { appendixSections.current[sectionId] = y; })}
+            {appendix.render((sectionId, y) => { appendixSections.current[sectionId] = y; }, saving || exitBusy)}
           </View>
         ) : null}
       </ScrollView>

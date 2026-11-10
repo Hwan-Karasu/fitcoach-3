@@ -2,47 +2,12 @@ import { StyleSheet, Text, View } from "react-native";
 import { ChoiceGrid, DateField, TextField } from "../../../shared/ui/components/public.ts";
 import { choiceColumns } from "./choiceLayout.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
-import type { AnswerValue, Answers, QuestionField, QuestionnaireSchema } from "../domain/QuestionnaireModel.ts";
-import { formatDateInput, isFieldVisible, parseDateInput, parseNumberInput } from "../domain/QuestionnaireRules.ts";
+import type { QuestionField, QuestionnaireSchema } from "../domain/QuestionnaireModel.ts";
+import { formatDateInput, isFieldVisible, parseDateInput } from "../domain/QuestionnaireRules.ts";
+import { answersFromInputs, type FormInputs, type InputValue } from "./questionnaireInputs.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
+import { localDateText } from "../../../shared/domain/LocalDate.ts";
 
-/** What the trainer is typing: numbers and dates stay text until they are checked. */
-export type InputValue = string | boolean | readonly string[] | undefined;
-export type FormInputs = Readonly<Record<string, InputValue>>;
-
-export function inputFromAnswer(target: QuestionField, value: AnswerValue | undefined): InputValue {
-  if (value === undefined) return undefined;
-  if (typeof value === "number") return String(value).replace(".", ",");
-  if (target.type === "DATE" && typeof value === "string") return formatDateInput(value);
-  return value;
-}
-
-/** The raw answer for validation, or a marker when number/date text does not parse. */
-export function answerFromInput(target: QuestionField, input: InputValue): unknown {
-  if (input === undefined) return null;
-  if (target.type === "NUMBER" && typeof input === "string") {
-    const parsed = parseNumberInput(input);
-    return parsed === "invalid" ? input : parsed;
-  }
-  if (target.type === "DATE" && typeof input === "string") {
-    const parsed = parseDateInput(input);
-    return parsed === "invalid" ? "invalid-date" : parsed;
-  }
-  return input;
-}
-
-/** Valid parsed answers only, for live conditional visibility while typing. */
-export function answersFromInputs(schema: QuestionnaireSchema, inputs: FormInputs): Answers {
-  const result: Record<string, AnswerValue> = {};
-  for (const item of schema.sections) {
-    for (const entry of item.fields) {
-      const raw = answerFromInput(entry, inputs[entry.id]);
-      if (raw === null || raw === "invalid-date" || (entry.type === "NUMBER" && typeof raw === "string")) continue;
-      result[entry.id] = raw as AnswerValue;
-    }
-  }
-  return result;
-}
 
 const requiredNote = "* Обязательно для завершения анкеты. Карточку клиента можно сохранить и заполнить позже.";
 
@@ -75,7 +40,7 @@ export function QuestionnaireForm({ schema, inputs, errors, onChange, disabled =
       return (
         <View key={entry.id} style={styles.field}>
           <DateField label={label} value={typeof parsed === "string" ? parsed : ""} disabled={disabled} hint={entry.help ?? undefined}
-            max={entry.constraints?.notFuture === true ? new Date().toISOString().slice(0, 10) : undefined}
+            max={entry.constraints?.notFuture === true ? localDateText() : undefined}
             error={error} onChange={(iso) => onChange(entry.id, iso === "" ? undefined : formatDateInput(iso))} />
         </View>
       );

@@ -183,12 +183,12 @@ export function TrainingStatisticsScreen({ clientId, history, bodyweight, exerci
         {scoped.length > 0 && section === "exercises" ? <>
           <ChartCard title="Новые личные рекорды" note="Лучший вес на точное число повторений, установленный в периоде; разминка не считается.">
             {records.length === 0 ? <Text style={[styles.empty, { color: colors.textSecondary }]}>В этом периоде новых рекордов нет.</Text> : records.map((record) => (
-              <Pressable key={`${record.exerciseId}:${record.reps}`} accessibilityRole="button"
-                accessibilityLabel={`${nameOf(record.exerciseId)}: ${record.reps} повторений, ${number(record.loadKg, 1)} килограмм, ${dateText(record.date)}. Открыть упражнение`}
+              <Pressable key={`${record.exerciseId}:${record.side ?? ""}:${record.reps}:${record.sessionKey}`} accessibilityRole="button"
+                accessibilityLabel={`${nameOf(record.exerciseId)}: ${record.side === null ? "" : `${record.side === "L" ? "Левая" : "Правая"} сторона, `}${record.reps} повторений, ${number(record.loadKg, 1)} килограмм, ${dateText(record.date)}. Открыть упражнение`}
                 onPress={() => onOpenExercise(record.exerciseId)} style={[styles.record, { borderColor: colors.border }]}>
                 <View style={styles.grow}>
                   <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>{nameOf(record.exerciseId)}</Text>
-                  <Text style={[styles.caption, { color: colors.textSecondary }]}>{`${record.reps} ПМ · ${number(record.loadKg, 1)} кг · ${dateText(record.date)}`}</Text>
+                  <Text style={[styles.caption, { color: colors.textSecondary }]}>{`${record.side === null ? "" : `${record.side === "L" ? "Л" : "П"} · `}${record.reps} ПМ · ${number(record.loadKg, 1)} кг · ${dateText(record.date)}`}</Text>
                 </View>
                 <ChevronRight size={18} color={colors.textMuted} />
               </Pressable>

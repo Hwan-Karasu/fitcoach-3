@@ -1,35 +1,24 @@
-import { useEffect, useRef, useState } from "react";
-import { formatKopeks, pricePerSessionKopeks, type AccountingRepositoryPort } from "../features/accounting/public.ts";
+import { useEffect, useMemo, useState } from "react";
+import type { AccountingRepositoryPort, ClientAccountingSnapshot } from "../features/accounting/public.ts";
 import type { ClientHomeSummary } from "../features/clients/public.ts";
-import { localDateOf } from "../features/measurements/public.ts";
 import { buildClientHomeSummary, type HomeSummaryRules } from "./clientHomeSummary.ts";
 
-/** Чистые правила владельцев для проекций Главной и списка клиентов. */
-export const homeSummaryRules: HomeSummaryRules = { formatKopeks, pricePerSessionKopeks };
+type AccountingSource = Pick<AccountingRepositoryPort, "getClientSnapshot" | "subscribeCommittedChanges">;
 
-/**
- * Home reads owners' public ports and refreshes only on their committed changes for this client;
- * the last valid snapshot stays on screen while a refresh runs (Feature 16 §5).
- */
-export function useClientHomeSummary(clientId: string, accounting: AccountingRepositoryPort): ClientHomeSummary | null {
-  const [summary, setSummary] = useState<ClientHomeSummary | null>(null);
+/** Прежний снимок сохраняется только в рамках того же клиента/источника; дата меняет проекцию без чтения БД. */
+export function useClientHomeSummary(clientId: string, accounting: AccountingSource, today: string, rules: HomeSummaryRules): ClientHomeSummary | null {
+  const [loaded, setLoaded] = useState<Readonly<{ clientId: string; source: AccountingSource; ledger: ClientAccountingSnapshot | null }> | null>(null);
   const [tick, setTick] = useState(0);
-  const generation = useRef(0);
-
   useEffect(() => {
-    const request = ++generation.current;
-    const safe = <T>(load: () => Promise<T>) => Promise.resolve().then(load).catch(() => null);
-    void safe(() => accounting.getClientSnapshot(clientId)).then((ledger) => {
-      if (request === generation.current) setSummary(buildClientHomeSummary(homeSummaryRules, ledger, localDateOf(new Date())));
+    let active = true;
+    void Promise.resolve().then(() => accounting.getClientSnapshot(clientId)).catch(() => null).then((ledger) => {
+      if (active) setLoaded({ clientId, source: accounting, ledger });
     });
+    return () => { active = false; };
   }, [accounting, clientId, tick]);
-
-  useEffect(() => {
-    const refresh = () => setTick((value) => value + 1);
-    return accounting.subscribeCommittedChanges((change) => {
-      if (change.clientIds === "ALL" || change.clientIds.includes(clientId)) refresh();
-    });
-  }, [accounting, clientId]);
-
-  return summary;
+  useEffect(() => accounting.subscribeCommittedChanges((change) => {
+    if (change.clientIds === "ALL" || change.clientIds.includes(clientId)) setTick((value) => value + 1);
+  }), [accounting, clientId]);
+  return useMemo(() => loaded?.clientId === clientId && loaded.source === accounting
+    ? buildClientHomeSummary(rules, loaded.ledger, today) : null, [accounting, clientId, loaded, rules, today]);
 }

@@ -170,6 +170,33 @@ test("разминочный и незасчитанный подход не с�
   assert.deepEqual(recordsInRange(all, all, range, infoOf).map((event) => event.loadKg), [100]);
 });
 
+test("AUDIT-ALL-1: рекорд остаётся событием своего месяца после будущего улучшения; повторение прежнего веса не создаёт событие", () => {
+  const all = [entry("later", "2026-11-10", "COMPLETED", [fact(BENCH, values(115, 5))]),
+    entry("equal", "2026-10-25", "COMPLETED", [fact(BENCH, values(110, 5))]),
+    entry("oct2", "2026-10-20", "COMPLETED", [fact(BENCH, values(110, 5))]),
+    entry("oct1", "2026-10-10", "COMPLETED", [fact(BENCH, values(105, 5))]),
+    entry("before", "2026-09-10", "COMPLETED", [fact(BENCH, values(100, 5))])];
+  const range = { from: "2026-10-01", to: "2026-10-31" };
+  assert.deepEqual(recordsInRange(all, entriesInRange(all, range), range, infoOf).map((record) => [record.loadKg, record.date]),
+    [[110, "2026-10-20"], [105, "2026-10-10"]]);
+});
+
+test("AUDIT-ALL-1: рекорды сторон независимы; улучшение правой стороны не дублирует прежний рекорд левой", () => {
+  const sided = (id: string, left: number, right: number, leftConfirmed = true): SetFact => ({ ...fact(CURL, values(null, null)), id,
+    sides: { left: { values: values(left, 5), confirmed: leftConfirmed, rpe: null }, right: { values: values(right, 5), confirmed: true, rpe: null } } });
+  const all = [entry("new", "2026-11-10", "COMPLETED", [sided("new", 100, 17, false)]),
+    entry("old", "2026-10-10", "COMPLETED", [sided("old", 20, 15)])];
+  const range = { from: "2026-11-01", to: "2026-11-30" };
+  assert.deepEqual(recordsInRange(all, entriesInRange(all, range), range, infoOf).map((record) => [record.side, record.loadKg]), [["R", 17]]);
+  const oldRange = { from: "2026-10-01", to: "2026-10-31" };
+  assert.deepEqual(recordsInRange(all, entriesInRange(all, oldRange), oldRange, infoOf).map((record) => [record.side, record.loadKg]), [["L", 20], ["R", 15]]);
+});
+
+test("AUDIT-ALL-1: несколько рекордных подходов одного занятия дают один лучший результат на сторону и число повторений", () => {
+  const all = [entry("same", "2026-11-10", "COMPLETED", [fact(BENCH, values(100, 5)), fact(BENCH, values(105, 5)), fact(BENCH, values(102, 5))])];
+  assert.deepEqual(recordsInRange(all, all, { from: "2026-11-01", to: "2026-11-30" }, infoOf).map((record) => record.loadKg), [105]);
+});
+
 test("статусы и активность упражнений", () => {
   const entries = [entry("a", "2026-10-01", "COMPLETED", [fact(BENCH, values(1, 1))]), entry("b", "2026-10-09", "MISSED", [fact(BENCH, values(1, 1)), fact(CURL, values(1, 1))]),
     entry("c", "2026-10-05", "COMPLETED", [fact(BENCH, values(1, 1))])];

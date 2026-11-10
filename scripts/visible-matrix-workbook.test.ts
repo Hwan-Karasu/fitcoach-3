@@ -11,6 +11,56 @@ import { detectLegacyMapping, normalizeLegacyTable } from "../apps/mobile/src/fe
 const require = createRequire(new URL("../apps/mobile/package.json", import.meta.url));
 const XLSX = require("xlsx") as typeof import("../apps/mobile/node_modules/xlsx/types/index.d.ts");
 
+test("AUDIT-ALL-1: видимый Excel сохраняет сырые ошибочные время и дистанцию для последующего исправления", () => {
+  const base = trainingTransferFixture();
+  const fact = base.sessions[0]!.facts[0]!;
+  const input = { ...base, issues: [
+    { id: "synthetic-duration-issue", scope: "FACT" as const, programId: base.sessions[0]!.programId, targetId: fact.id, field: "durationSec" as const, raw: "00:xx" },
+    { id: "synthetic-distance-issue", scope: "FACT" as const, programId: base.sessions[0]!.programId, targetId: fact.id, field: "distanceM" as const, raw: "1,2км?" },
+  ] };
+  const book = readWorkbook(writeVisibleTrainingWorkbook(input));
+  const sheet = book.Sheets[book.SheetNames[0]!]!;
+  assert.equal(sheet.H3?.v, "Сек"); assert.equal(sheet.I3?.v, "М");
+  assert.equal(sheet.H5?.v, "00:xx"); assert.equal(sheet.I5?.v, "1,2км?");
+});
+
+test("AUDIT-ALL-1: время45с и дистанция100м проходят видимый Excel и обратный импорт при пустом плане", () => {
+  const base = trainingTransferFixture();
+  const input = { ...base, programs: base.programs.map((p) => ({ ...p, mesocycles: p.mesocycles.map((c) => ({ ...c,
+    weeks: c.weeks.map((w) => ({ ...w, workouts: w.workouts.map((workout) => ({ ...workout,
+      exercises: workout.exercises.map((exercise) => ({ ...exercise, sets: exercise.sets.map((set) => ({ ...set,
+        reps: null, repsMax: null, loadGrams: null, durationSec: null, distanceM: null })) })) })) })) })) })),
+    sessions: base.sessions.map((session) => ({ ...session, facts: session.facts.map((fact) => ({ ...fact,
+      values: { reps: null, loadGrams: null, durationSec: 45, distanceM: 100 } })) })) };
+  const book = readWorkbook(writeVisibleTrainingWorkbook(input));
+  const name = book.SheetNames[0]!;
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(book.Sheets[name]!, { header: 1, defval: "", raw: false });
+  assert.ok(rows[2]!.includes("Сек")); assert.ok(rows[2]!.includes("М"));
+  const table = flattenLegacyMatrix({ name, rows })!; const found = detectLegacyMapping(table);
+  const result = normalizeLegacyTable(table, "synthetic-time-export", found.header, found.mapping);
+  assert.deepEqual(result.sessions[0]!.facts[0]!.values, { reps: null, loadGrams: null, durationSec: 45, distanceM: 100 });
+});
+
+test("AUDIT-ALL-1: фактическое время/дистанция сторон и мини-сетов тоже включают колонки видимого экспорта", () => {
+  const base = trainingTransferFixture();
+  const clearedPlans = base.programs.map((p) => ({ ...p, mesocycles: p.mesocycles.map((c) => ({ ...c,
+    weeks: c.weeks.map((w) => ({ ...w, workouts: w.workouts.map((workout) => ({ ...workout,
+      exercises: workout.exercises.map((exercise) => ({ ...exercise, sets: exercise.sets.map((set) => ({ ...set,
+        durationSec: null, distanceM: null })) })) })) })) })) }));
+  const empty = { reps: null, loadGrams: null, durationSec: null, distanceM: null };
+  for (const mode of ["sides", "drops"] as const) {
+    const input = { ...base, programs: clearedPlans, sessions: base.sessions.map((session) => ({ ...session,
+      facts: session.facts.map((fact) => ({ ...fact, values: empty,
+        sides: mode === "sides" ? { left: { values: { ...empty, durationSec: 45 }, confirmed: true }, right: { values: { ...empty, distanceM: 100 }, confirmed: true } } : null,
+        drops: mode === "drops" ? [{ ...empty, durationSec: 45, distanceM: 100 }] : [],
+        setType: mode === "drops" ? "DROP" as const : "NORMAL" as const })) })) };
+    const book = readWorkbook(writeVisibleTrainingWorkbook(input));
+    const sheet = book.Sheets[book.SheetNames[0]!]!;
+    assert.equal(sheet.H3?.v, "Сек"); assert.equal(sheet.I3?.v, "М");
+    assert.ok(String(sheet.H5?.v).includes("45")); assert.ok(String(sheet.I5?.v).includes("100"));
+  }
+});
+
 test("export filenames retain client and programme names and stay within filesystem limits", () => {
   const value = trainingTransferFixture();
   const name = trainingWorkbookFilename({ ...value, client: { ...value.client, name: "Иванов Иван Иванович" } });

@@ -4,6 +4,8 @@ export interface ClientFormDraft {
   readonly contactEmail: string;
   readonly birthDate: string;
   readonly heightDraft: string;
+  /** Ввод веса до сохранения факта Measurements; старые черновики могут не содержать поле. */
+  readonly weightText?: string;
   /** Пол; в черновиках, сохранённых до появления поля, отсутствует. */
   readonly sex?: "MALE" | "FEMALE" | null;
   readonly emoji: string | null;

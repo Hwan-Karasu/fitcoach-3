@@ -6,7 +6,7 @@ import { ClientEditorPreview, type ClientEditorAppendix, type ClientRecord, type
   "../../features/clients/public.ts";
 import { QuestionnaireForm, useAnswersForm, type AnswerValue,
   type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
-import { latestPoint, localDateOf, parseValueX10, upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
+import { latestPoint, localDateOf, parseValueX10, type MeasurementInput, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import type { ClientCardWithAnswersPort } from "../../workflows/saveClientCard.ts";
 import { HealthConnectSection, type HealthConnectPort, type HealthStorePort, type HealthSyncKind } from "../../features/health/public.ts";
 import { AppButton, ConfirmDialog, LoadingState } from "../../shared/ui/components/public.ts";
@@ -22,8 +22,7 @@ type Loaded = Readonly<{ client: ClientRecord | null; draft: ClientRecoveryDraft
 
 /**
  * Единая карточка клиента: основное (владелец Clients) и анкета (владелец Questionnaire) в одной форме
- * с одним сохранением — сначала карточка, затем ответы по её ID. Если ответы не сохранились, повторное
- * сохранение не создаёт второго клиента, а дописывает ответы к уже сохранённой карточке.
+ * с одним сохранением: карточка, ответы и изменённый вес фиксируются одной транзакцией.
  */
 export function ClientEditorRoute({ clientId, repository, questionnaire, clientCard, measurements, health, onClose, prefillName, onCreated }: Readonly<{
   clientId?: string;
@@ -143,9 +142,9 @@ export function ClientEditorRoute({ clientId, repository, questionnaire, clientC
       patch.current = prepared;
       return true;
     },
-    render: (onSectionLayout) => <>
+    render: (onSectionLayout, disabled) => <>
       <QuestionnaireForm schema={published.schema} inputs={answers.inputs}
-        errors={answers.errors} onChange={answers.onChange} onSectionLayout={onSectionLayout} />
+        errors={answers.errors} onChange={answers.onChange} onSectionLayout={onSectionLayout} disabled={disabled} />
       {clientId === undefined ? null : <HealthConnectSection clientId={clientId} store={health.store} platform={health.platform} sync={health.sync} />}
     </>,
   };
@@ -164,25 +163,25 @@ export function ClientEditorRoute({ clientId, repository, questionnaire, clientC
     onDiscardDraft={() => repository.discardDraft(clientId ?? null)}
     onSave={async (input, extras) => {
       const known = savedClient.current ?? client;
+      const weightText = extras.weightText.replace(",", ".");
+      let weight: MeasurementInput | null = null;
+      if (weightText !== "" && weightText !== (initialWeight ?? "").replace(",", ".")) {
+        const valueX10 = parseValueX10(weightText);
+        if (valueX10 === null) throw new Error("WEIGHT_SAVE_FAILED");
+        weight = { type: "WEIGHT", valueX10, localDate: localDateOf(new Date()), localMinute: null };
+      }
       // Карточка и изменённые ответы — одна транзакция: сбой ответов не оставляет ни новой карточки, ни половины правки.
       let saved: Awaited<ReturnType<ClientCardWithAnswersPort["save"]>>;
-      try { saved = await clientCard.save(known === null ? null : { id: known.id, revision: known.revision }, input, patch.current); }
+      try { saved = await clientCard.save(known === null ? null : { id: known.id, revision: known.revision }, input, patch.current, weight); }
       catch (error) {
-        throw error instanceof Error && error.message.startsWith("QUESTIONNAIRE_") ? new Error("QUESTIONNAIRE_SAVE_FAILED") : error;
+        const code = error instanceof Error ? error.message : "";
+        throw code.startsWith("MEASUREMENT_") ? new Error("WEIGHT_SAVE_FAILED")
+          : code.startsWith("QUESTIONNAIRE_") ? new Error("QUESTIONNAIRE_SAVE_FAILED") : error;
       }
       savedClient.current = saved.client;
       if (saved.answers !== null) answers.adopt(patch.current, saved.answers);
       patch.current = {};
       if (known === null) await onCreated?.(saved.client);
-      // Вес из карточки — новый факт замеров за сегодня (или правка сегодняшнего), только если изменился.
-      const weightText = extras.weightText.replace(",", ".");
-      if (weightText !== "" && weightText !== (initialWeight ?? "").replace(",", ".")) {
-        const valueX10 = parseValueX10(weightText);
-        try {
-          if (valueX10 === null) throw new Error("WEIGHT_SAVE_FAILED");
-          await upsertDailyMeasurement(measurements, savedClient.current.id, { type: "WEIGHT", valueX10, localDate: localDateOf(new Date()), localMinute: null });
-        } catch { throw new Error("WEIGHT_SAVE_FAILED"); }
-      }
     }} />;
 }
 
