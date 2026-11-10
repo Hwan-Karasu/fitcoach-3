@@ -8,6 +8,7 @@ import { filterHistory, HistoryFilterBar, type HistoryFilter, useClientHistory, 
 import type { WorkoutSlot } from "../../execution/public.ts";
 import { useExerciseLookup, type ExerciseLookupPort } from "../../plans/public.ts";
 import { useBodyOf } from "./useBodyOf.ts";
+import { attentionNotes, bestResult, loadSetsOf, monthPhrase, trainingEntriesMissed } from "./monthInsights.ts";
 import { ChartCard, DrillDownModal, bucketLabel, kg, number, scaleCaption, type DrillTarget } from "./statsParts.tsx";
 import { readStatsFilters, writeStatsFilters } from "./statsFilters.ts";
 import { bucketKeyOf, buckets, compareMonths, delta, entriesInRange, entryTonnage, isWorkingSet, monthOf, muscleGroups, sanitizeFilter, summarize,
@@ -26,9 +27,22 @@ function deltaText(value: Delta, format: (amount: number) => string): string {
   return `${sign}${format(Math.abs(value.abs))}${percent}`;
 }
 
+/** Карточка сравнения «месяц против прошлого»: значение, «было» и разница. */
+function CompareCard({ label, now, before, change }: Readonly<{ label: string; now: string; before: string; change: string }>) {
+  const colors = usePrototypeTheme().palette.tokens;
+  return (
+    <View accessible accessibilityLabel={`${label}: сейчас ${now}, раньше ${before}, разница ${change}`} style={[styles.compareCard, { backgroundColor: colors.surface }]}>
+      <Text numberOfLines={1} style={[styles.caption, { color: colors.textSecondary }]}>{label}</Text>
+      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.compareValue, { color: colors.textPrimary }]}>{now}</Text>
+      <Text numberOfLines={2} style={[styles.caption, { color: colors.textMuted }]}>{`было ${before}`}</Text>
+      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.rowValue, { color: colors.accentInk }]}>{change}</Text>
+    </View>
+  );
+}
+
 /**
- * «Месячный отчёт» клиента (§48.86.11, .14, .18, .20, .21, .28): выбранный календарный месяц с переходом к любому
- * прошлому, сравнение с предыдущим календарным месяцем (неполный месяц — с такой же по длине частью), те же
+ * «Итоги месяца» клиента (UIX-11, UI-OWN-079; §48.86.11, .14, .18, .20, .21, .28) (§48.86.11, .14, .18, .20, .21, .28): фраза-вывод, три карточки «месяц против прошлого», лучший результат и «на что обратить внимание»; ниже — подробные графики.
+ * Выбранный календарный месяц с переходом к любому прошлому, сравнение с предыдущим календарным месяцем (неполный месяц — с такой же по длине частью), те же
  * определения и фильтры, что в общей статистике. Считается по актуальным фактам, снимок не сохраняется.
  */
 export function MonthlyReportScreen({ clientId, history, bodyweight, exercises, onOpenWorkout, now = new Date() }: Readonly<{
@@ -67,6 +81,7 @@ export function MonthlyReportScreen({ clientId, history, bodyweight, exercises, 
     (sum, exercise) => sum + exercise.facts.filter(isWorkingSet).length, 0), 0), [current, comparison]);
   const tonnageChart = useMemo(() => buckets(current, comparison.current, (entry) => entryTonnage(entry, infoOf, bodyOf).kg, null), [current, comparison, infoOf, bodyOf]);
   const groups = useMemo(() => muscleGroups(current, infoOf), [current, infoOf]);
+  const best = useMemo(() => bestResult(loadSetsOf(current, infoOf), loadSetsOf(previous, infoOf)), [current, previous, infoOf]);
 
   const items = (result: ReturnType<typeof buckets>): readonly BarChartItem[] =>
     result.items.map((item) => ({ key: item.key, label: bucketLabel(item.key, result.scale), value: item.value }));
@@ -81,8 +96,8 @@ export function MonthlyReportScreen({ clientId, history, bodyweight, exercises, 
   const atCurrent = month.year * 12 + month.month >= thisMonth.year * 12 + thisMonth.month;
 
   if (failed) return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
-    <View style={styles.pad}><InlineNotice kind="error">Не удалось загрузить отчёт.</InlineNotice></View></View>;
-  if (entries === null) return <View style={[styles.screen, { backgroundColor: colors.canvas }]}><LoadingState label="Собираем отчёт…" /></View>;
+    <View style={styles.pad}><InlineNotice kind="error">Не удалось загрузить итоги месяца.</InlineNotice></View></View>;
+  if (entries === null) return <View style={[styles.screen, { backgroundColor: colors.canvas }]}><LoadingState label="Считаем итоги месяца…" /></View>;
 
   const tonnageReliable = now1.incompleteSets === 0 && before.incompleteSets === 0;
   const rows: readonly Readonly<{ label: string; now: string; before: string; change: string }>[] = [
@@ -92,6 +107,7 @@ export function MonthlyReportScreen({ clientId, history, bodyweight, exercises, 
       change: deltaText(delta(now1.tonnageKg, before.tonnageKg, tonnageReliable), kg) },
   ];
   const max = Math.max(1, ...groups.map((group) => group.sets));
+  const notes = attentionNotes({ missed: trainingEntriesMissed(current), incompleteSets: now1.incompleteSets, completed: now1.completed, previousCompleted: before.completed, partial: comparison.partial });
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
       <ScrollView contentContainerStyle={styles.list}>
@@ -113,22 +129,27 @@ export function MonthlyReportScreen({ clientId, history, bodyweight, exercises, 
 
         {current.length === 0 ? <EmptyState reason="no-data" title="В этом месяце занятий нет"
           body="Здесь появятся тренировки с записанными подходами или исходом за выбранный месяц и программу." /> : <>
-          <ChartCard title="Сравнение с предыдущим месяцем"
-            note={`Сравнение с ${comparison.partial ? `${spanText(comparison.previous.from, comparison.previous.to)}` : `${NOMINATIVE[monthOf(comparison.previous.from).month - 1]!.toLowerCase()} ${monthOf(comparison.previous.from).year}`}.${
-              !tonnageReliable && now1.tonnageKg !== null && before.tonnageKg !== null ? " Тоннаж без разницы: в одном из месяцев неполные данные." : ""}`}>
-            {rows.map((row) => (
-              <View key={row.label} accessible accessibilityLabel={`${row.label}: сейчас ${row.now}, раньше ${row.before}, разница ${row.change}`} style={styles.compareRow}>
-                <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>{row.label}</Text>
-                <View style={styles.values}>
-                  <Text style={[styles.rowValue, { color: colors.textPrimary }]}>{row.now}</Text>
-                  <Text style={[styles.caption, { color: colors.textMuted }]}>{`было ${row.before} · ${row.change}`}</Text>
-                </View>
+          <View style={[styles.phraseCard, { backgroundColor: colors.accentSoft }]}>
+            <Text accessibilityRole="header" style={[styles.phrase, { color: colors.accentInk }]}>{monthPhrase({ month: month.month, previousMonth: monthOf(comparison.previous.from).month, completed: now1.completed, previousCompleted: before.completed, partial: comparison.partial })}</Text>
+          </View>
+          <View style={styles.compareRowCards}>
+            {rows.map((row) => <CompareCard key={row.label} label={row.label} now={row.now} before={row.before} change={row.change} />)}
+          </View>
+          {!tonnageReliable && now1.tonnageKg !== null && before.tonnageKg !== null ? <Text style={[styles.caption, { color: colors.textMuted }]}>Тоннаж без разницы: в одном из месяцев неполные данные.</Text> : null}
+          <ChartCard title="Лучший результат">
+            {best === null ? <Text style={[styles.empty, { color: colors.textSecondary }]}>В этом месяце нет рабочих подходов с весом и повторами.</Text> : (
+              <View accessible accessibilityLabel={`${nameOf(best.exerciseId)}: ${number(best.loadKg, 1)} килограмм на ${best.reps} повторений`}>
+                <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>{nameOf(best.exerciseId)}</Text>
+                <Text style={[styles.compareValue, { color: colors.textPrimary }]}>{`${number(best.loadKg, 1)} кг × ${best.reps}`}</Text>
+                <Text style={[styles.caption, { color: colors.textSecondary }]}>{best.previousLoadKg === null ? "В прошлом месяце это упражнение не выполнялось с весом."
+                  : best.loadKg === best.previousLoadKg ? "Столько же, сколько в прошлом месяце."
+                    : `${best.loadKg > best.previousLoadKg ? "+" : "−"}${number(Math.abs(best.loadKg - best.previousLoadKg), 1)} кг к прошлому месяцу (было ${number(best.previousLoadKg, 1)} кг)`}</Text>
               </View>
-            ))}
-            <View style={styles.compareRow}>
-              <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>Средняя длительность</Text>
-              <Text style={[styles.caption, { color: colors.textMuted }]}>Нет данных</Text>
-            </View>
+            )}
+          </ChartCard>
+          <ChartCard title="На что обратить внимание">
+            {notes.length === 0 ? <Text style={[styles.empty, { color: colors.textSecondary }]}>Замечаний нет.</Text>
+              : notes.map((note) => <Text key={note} style={[styles.empty, { color: colors.textPrimary }]}>{note}</Text>)}
           </ChartCard>
           <ChartCard title="Проведённые тренировки" note={`Завершённые, ${scaleCaption[workoutsChart.scale]}. Нажмите на столбец — покажем занятия.`}>
             <BarChart items={items(workoutsChart)} format={(value) => number(value)}
@@ -171,6 +192,11 @@ const styles = StyleSheet.create({
   pad: { paddingHorizontal: 16 },
   list: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32, gap: 12 },
   monthRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  phraseCard: { borderRadius: 26, padding: 16 },
+  phrase: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 22 },
+  compareRowCards: { flexDirection: "row", gap: 8 },
+  compareCard: { flex: 1, minWidth: 0, borderRadius: 22, padding: 12, gap: 2 },
+  compareValue: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 24, fontVariant: ["tabular-nums"] },
   arrow: { width: 48, height: 48, alignItems: "center", justifyContent: "center" },
   monthTitle: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 24 },
   grow: { flex: 1 },

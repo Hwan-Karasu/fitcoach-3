@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { historyCaption, questionnaireCaption } from "../src/read-models/moreCaptions.ts";
+import { historyCaption, questionnaireCaption, statisticsCaption } from "../src/read-models/moreCaptions.ts";
 
 const done = (actualDate: string | null) => ({ status: "COMPLETED", actualDate });
 
@@ -20,4 +20,12 @@ test("UIX-10: подпись истории — завершённые заня�
   assert.equal(historyCaption(many), "43 занятия, последнее 28 сент.");
   assert.equal(historyCaption(Array.from({ length: 5 }, () => done("2026-12-01"))), "5 занятий, последнее 1 дек.");
   assert.equal(historyCaption([done(null)]), "1 занятие", "дата неизвестна — только число");
+});
+
+test("UIX-11: подпись «Статистика» — завершённые занятия текущего месяца; другой месяц и не завершённые не считаются", () => {
+  const entries = [done("2026-11-02"), done("2026-11-09"), done("2026-10-30"), { status: "MISSED", actualDate: "2026-11-05" }, done(null)];
+  assert.equal(statisticsCaption(entries, "2026-11-10"), "Ноябрь: 2 занятия");
+  assert.equal(statisticsCaption([done("2026-11-02")], "2026-11-10"), "Ноябрь: 1 занятие");
+  assert.equal(statisticsCaption([], "2026-03-01"), "Март: занятий пока нет");
+  assert.equal(statisticsCaption(Array.from({ length: 5 }, () => done("2026-12-01")), "2026-12-15"), "Декабрь: 5 занятий");
 });

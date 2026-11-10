@@ -19,7 +19,7 @@ type Section = "workouts" | "load" | "muscles" | "exercises";
 
 /** Короткие подписи — четыре равных сегмента; полные названия разделов — у карточек и в озвучке. */
 const sections: readonly Readonly<{ id: Section; label: string }>[] = [
-  { id: "workouts", label: "Тренировки" }, { id: "load", label: "Нагрузка" },
+  { id: "workouts", label: "Занятия" }, { id: "load", label: "Нагрузка" },
   { id: "muscles", label: "Мышцы" }, { id: "exercises", label: "Упражнения" },
 ];
 
@@ -105,7 +105,7 @@ export function TrainingStatisticsScreen({ clientId, history, bodyweight, exerci
       <ScrollView contentContainerStyle={styles.list}>
         <HistoryFilterBar entries={all} filter={filter} onChange={(next) => change({ filter: next })} trailing={<>
           <PeriodPill grow value={{ period: stored.period, custom: stored.custom }} today={rangeFor(now, 1).to} onChange={(next) => change(next)} />
-          <FilterPill label="Отчёт за месяц" accessibilityLabel="Месячный отчёт" onPress={onOpenMonthlyReport}
+          <FilterPill label="Итоги месяца" accessibilityLabel="Итоги месяца" onPress={onOpenMonthlyReport}
             icon={(color) => <CalendarRange size={18} color={color} strokeWidth={1.8} />} />
         </>} />
 

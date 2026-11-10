@@ -5,10 +5,23 @@ const MONTHS_SHORT = ["янв.", "февр.", "мар.", "апр.", "мая", "�
 
 const dayMonth = (date: string) => `${Number(date.slice(8, 10))} ${MONTHS_SHORT[Number(date.slice(5, 7)) - 1] ?? ""}`;
 
+const MONTHS_NOMINATIVE = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"] as const;
+
 /** «Заполнена на 80 %»; пустая анкета — «Не заполнена»; данных ещё нет (грузятся) — `null`, подпись не выдумывается. */
 export function questionnaireCaption(percent: number | null): string | null {
   if (percent === null) return null;
   return percent <= 0 ? "Не заполнена" : `Заполнена на ${percent} %`;
+}
+
+/**
+ * Подпись «Статистика»: «Ноябрь: 9 занятий» — завершённые занятия текущего месяца по дате факта. «% плана» не показывается: плановых тренировок за календарный месяц
+ * по всем программам история не хранит (план считается по выбранной программе в самой статистике).
+ */
+export function statisticsCaption(entries: readonly Readonly<{ status: string; actualDate: string | null }>[], today: string): string {
+  const month = today.slice(0, 7);
+  const count = entries.filter((entry) => entry.status === "COMPLETED" && entry.actualDate !== null && entry.actualDate.slice(0, 7) === month).length;
+  const name = MONTHS_NOMINATIVE[Number(today.slice(5, 7)) - 1] ?? "";
+  return count === 0 ? `${name}: занятий пока нет` : `${name}: ${count} ${plural(count, "занятие", "занятия", "занятий")}`;
 }
 
 /** «43 занятия, последнее 7 нояб.»: считаются только завершённые занятия (так же, как в «Истории занятий»), последнее — по дате факта. */

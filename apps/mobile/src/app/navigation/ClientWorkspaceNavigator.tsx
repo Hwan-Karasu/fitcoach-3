@@ -27,7 +27,7 @@ import { moreDestinations, workspaceTabs } from "./routeCatalog.ts";
 import { RootTabBar } from "./RootTabBar.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 import type { TrainingHistoryPort } from "../../read-models/trainingHistory.ts";
-import { useHistoryCaption, useQuestionnaireCaption } from "../../read-models/useMoreCaptions.ts";
+import { useHistoryCaption, useQuestionnaireCaption, useStatisticsCaption } from "../../read-models/useMoreCaptions.ts";
 import type { QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
 import type { ClientBodyweightPort } from "../../read-models/clientBodyweight.ts";
 
@@ -50,6 +50,7 @@ type MoreRoutes = {
 };
 
 const Tabs = createBottomTabNavigator<WorkspaceTabs>();
+const todayLocal = () => localDateOf(new Date());
 const MoreStack = createNativeStackNavigator<MoreRoutes>();
 
 function MoreNavigator({ client, history, questionnaire, bodyweight, exerciseLookup, onClose, onOpenClients, onOpenEdit, onOpenExercise, onOpenWorkout }: Readonly<{
@@ -61,6 +62,7 @@ function MoreNavigator({ client, history, questionnaire, bodyweight, exerciseLoo
   const clientId = client.id;
   const questionnaireCaption = useQuestionnaireCaption(clientId, questionnaire);
   const historyCaption = useHistoryCaption(clientId, history);
+  const statisticsCaption = useStatisticsCaption(clientId, history, todayLocal);
   return (
     <MoreStack.Navigator initialRouteName="MoreIndex"
       screenOptions={{
@@ -78,6 +80,7 @@ function MoreNavigator({ client, history, questionnaire, bodyweight, exerciseLoo
             onOpenStatistics={() => navigation.navigate("Statistics")}
             questionnaireCaption={questionnaireCaption}
             historyCaption={historyCaption}
+            statisticsCaption={statisticsCaption}
           />
         )}
       </MoreStack.Screen>
@@ -103,7 +106,7 @@ function MoreNavigator({ client, history, questionnaire, bodyweight, exerciseLoo
         {({ navigation }) => <TrainingStatisticsScreen clientId={clientId} history={history} bodyweight={bodyweight} exercises={exerciseLookup} onOpenExercise={onOpenExercise}
           onOpenWorkout={(slot) => onOpenWorkout(slot, { returnToCaller: true })} onOpenMonthlyReport={() => navigation.navigate("MonthlyReport")} />}
       </MoreStack.Screen>
-      <MoreStack.Screen name="MonthlyReport" options={{ title: "Месячный отчёт" }}>
+      <MoreStack.Screen name="MonthlyReport" options={{ title: "Итоги месяца" }}>
         {() => <MonthlyReportScreen clientId={clientId} history={history} bodyweight={bodyweight} exercises={exerciseLookup} onOpenWorkout={(slot) => onOpenWorkout(slot, { returnToCaller: true })} />}
       </MoreStack.Screen>
     </MoreStack.Navigator>
