@@ -20,6 +20,18 @@ export function useMacroColors(): Readonly<Record<TargetMetric, string>> {
   return { kcal: charts[0], protein: charts[1], fat: charts[2], carbs: charts[3] };
 }
 
+/** Подписи колонок («ккал / Б / Ж / У») над списком: те же ширины, что у `MacroCells`, поэтому колонки выровнены по вертикали (UIX-07). */
+export const MacroColumnHeads = memo(function MacroColumnHeads() {
+  const colors = usePrototypeTheme().palette.tokens;
+  return (
+    <View importantForAccessibility="no-hide-descendants" style={styles.row}>
+      {TARGET_METRICS.map((metric) => (
+        <Text key={metric} style={[styles.head, { width: COLUMN_WIDTH[metric], color: colors.textMuted }]}>{metric === "kcal" ? "ккал" : metricLabels[metric].slice(0, 1)}</Text>
+      ))}
+    </View>
+  );
+});
+
 /** Значения К/Б/Ж/У в тех же колонках; `null` — «—» (нет данных, а не ноль). */
 export const MacroCells = memo(function MacroCells({ values, bold = false }: Readonly<{ values: Nutrients | null; bold?: boolean }>) {
   const colors = useMacroColors();
@@ -42,6 +54,7 @@ export const MacroCells = memo(function MacroCells({ values, bold = false }: Rea
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center" },
+  head: { textAlign: "right", fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14 },
   letter: { textAlign: "right", fontFamily: fonts.bold, fontSize: 13, lineHeight: 18 },
   cell: { textAlign: "right", fontSize: 14, lineHeight: 19, fontVariant: ["tabular-nums"] },
 });

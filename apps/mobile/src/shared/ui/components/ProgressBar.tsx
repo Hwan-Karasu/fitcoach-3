@@ -2,7 +2,7 @@ import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 
 /** Полоса выполнения. `value` 0…1 — только честно посчитанная доля; null — неизвестна: вращающийся индикатор без выдуманного процента. */
-export function ProgressBar({ value, accessibilityLabel }: Readonly<{ value: number | null; accessibilityLabel: string }>) {
+export function ProgressBar({ value, accessibilityLabel, color }: Readonly<{ value: number | null; accessibilityLabel: string; color?: string }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   if (value === null) {
@@ -13,7 +13,7 @@ export function ProgressBar({ value, accessibilityLabel }: Readonly<{ value: num
     <View accessibilityRole="progressbar" accessibilityLabel={accessibilityLabel}
       accessibilityValue={{ min: 0, max: 100, now: Math.round(share * 100) }}
       style={[styles.track, { backgroundColor: colors.input, borderColor: colors.border }]}>
-      <View style={[styles.fill, { width: `${share * 100}%`, backgroundColor: colors.accentFill }]} />
+      <View style={[styles.fill, { width: `${share * 100}%`, backgroundColor: color ?? colors.accentFill }]} />
     </View>
   );
 }

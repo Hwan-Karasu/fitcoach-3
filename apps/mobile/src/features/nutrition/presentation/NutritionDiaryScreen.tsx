@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { ChevronDown, ChevronRight, ClipboardPaste, Copy, Droplets, Plus, Repeat2 } from "lucide-react-native";
+import { ChevronDown, ChevronRight, ClipboardPaste, Copy, Droplets, Plus } from "lucide-react-native";
 import { AppButton, ConfirmDialog, EmptyState, InlineNotice, LoadingState } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
@@ -12,11 +12,12 @@ import type { MeasurementRepositoryPort } from "../../measurements/public.ts";
 import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
 import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
-import { TARGET_METRICS, type TargetMetric } from "../domain/TargetModel.ts";
+import { TARGET_METRICS } from "../domain/TargetModel.ts";
 import { NUTRIENT_OF } from "../domain/TargetRules.ts";
 import { EntryEditorDialog } from "./EntryEditorDialog.tsx";
-import { MacroCells, useMacroColors } from "./MacroGrid.tsx";
-import { dayTitle, kcalText, metricLabels, nutritionErrorText, quantityText, slotLabels, wholeText } from "./nutritionFormat.ts";
+import { MacroCells, MacroColumnHeads } from "./MacroGrid.tsx";
+import { DayTotalsCard } from "./DayTotalsCard.tsx";
+import { dayTitle, kcalText, nutritionErrorText, quantityText, slotLabels, wholeText } from "./nutritionFormat.ts";
 import { useNutritionGuide } from "./useNutritionGuide.ts";
 import type { CalcClientBody } from "./NutritionCalcScreen.tsx";
 import type { CatalogFilter } from "./AddFoodScreen.tsx";
@@ -27,7 +28,6 @@ import { SavedMealEditorDialog } from "./SavedMealEditorDialog.tsx";
 import { savedSnapshot } from "../domain/SavedMeal.ts";
 import type { FoodSnapshot } from "../domain/FoodSnapshot.ts";
 
-const metricLetters: Readonly<Record<TargetMetric, string>> = { kcal: "К", protein: "Б", fat: "Ж", carbs: "У" };
 const WATER_STEP_ML = 250;
 const WATER_QUICK_ML = [250, 500, 750, 1000] as const;
 
@@ -85,7 +85,6 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
   useEffect(() => { if (requestedDay !== undefined) setLocalDate(requestedDay.date); }, [requestedDay, setLocalDate]);
   const { data, stale, failed, reload } = useNutritionDay(clientId, localDate, diary, targets);
   const { guide, defaults, leanMassKg } = useNutritionGuide(clientId, body, calc, measurements);
-  const macroColors = useMacroColors();
   const [slow, setSlow] = useState(false);
   // Индикатор только если новый день читается дольше ~200 мс; экран при этом не затемняется.
   useEffect(() => {
@@ -165,27 +164,14 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
   }
   const recorded = data.summary.state === "FOOD_RECORDED";
   const orientation = dayOrientation(data.target, data.versions, data.summary.localDate, guide, defaults, leanMassKg);
-  const eatenText = (metric: TargetMetric) => !recorded ? "0" : wholeText(data.summary.totals[NUTRIENT_OF[metric]]);
-  const orientText = (metric: TargetMetric) => orientation[metric] === null ? "—" : String(orientation[metric]);
+  const totalRows = TARGET_METRICS.map((metric) => ({ metric, eaten: !recorded ? 0 : Math.round((data.summary.totals[NUTRIENT_OF[metric]] ?? 0) / 10), target: orientation[metric] }));
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
       {header}
-      <View style={[styles.totalsBar, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        accessible accessibilityLabel={`Итоги дня, съедено из ориентира: ${TARGET_METRICS.map((metric) => `${metricLabels[metric]} ${eatenText(metric)} из ${orientText(metric)}`).join(", ")}`}>
-        <Text style={[styles.totalsTitle, { color: colors.textPrimary }]}>Итого</Text>
-        {TARGET_METRICS.map((metric) => (
-          <View key={metric} style={styles.totalsCell}>
-            <Text style={[styles.totalsLetter, { color: macroColors[metric] }]}>{metricLetters[metric]}</Text>
-            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.totalsValue, { color: macroColors[metric] }]}>{`${eatenText(metric)}/${orientText(metric)}`}</Text>
-          </View>
-        ))}
-      </View>
       {slow ? <View accessible accessibilityLabel="Загружаем день" style={[styles.slowBar, { backgroundColor: colors.accentFill }]} /> : null}
       <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled" pointerEvents={stale ? "none" : "auto"}>
-        <View style={styles.waterRow}>
-          <View style={styles.grow}><AppButton compact variant="secondary" icon={(color) => <Repeat2 size={16} color={color} />} label="С прошлого дня" busy={copying} onPress={() => { void copyPreviousDay(); }} /></View>
-        </View>
+        <DayTotalsCard rows={totalRows} copying={copying} onCopyPrevious={() => { void copyPreviousDay(); }} />
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
         {failed ? <InlineNotice kind="error">Не удалось обновить дневник. Показаны последние загруженные данные.</InlineNotice> : null}
         {notice !== null ? <InlineNotice kind="info">{notice}</InlineNotice> : null}
@@ -204,11 +190,12 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
                 </Pressable>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Добавить в приём пищи: ${slotLabels[slot]}`} hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }} onPress={() => onAdd(localDate, slot)}
                   style={[styles.plus, { backgroundColor: colors.accentFill }]}>
-                  <Plus size={16} color={colors.onAccentFill} />
+                  <Plus size={18} color={colors.onAccentFill} />
                 </Pressable>
                 <MacroCells values={total} bold />
               </View>
               {open ? <>
+                {slotEntries.length > 0 ? <View style={styles.columnHeads}><MacroColumnHeads /></View> : null}
                 {slotEntries.map((entry) => <EntryRow key={entry.id} entry={entry} onOpen={setEditing} />)}
                 <View style={[styles.chipStrip, { borderColor: colors.border }]}>
                   <QuickChip label="Сохранить еду" accessibilityLabel={`Сохранить набор: ${slotLabels[slot]}`} disabled={slotEntries.length === 0} onPress={() => setSavingMeal(slotEntries.map(savedSnapshot))} />
@@ -265,18 +252,14 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   dateBar: { paddingHorizontal: 16, paddingTop: 2 },
   list: { paddingHorizontal: 16, paddingBottom: 24, paddingTop: 8, gap: 10 },
-  card: { ...shadow.card, borderRadius: 20, padding: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: "transparent", gap: 8 },
+  card: { ...shadow.card, borderRadius: 26, padding: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: "transparent", gap: 8 },
   slotHead: { flexDirection: "row", alignItems: "center", gap: 8 },
   slotTitle: { flex: 1, fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
   entry: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 8, minHeight: 48, flexDirection: "row", alignItems: "center", gap: 6 },
   entryText: { flex: 1, gap: 2 },
-  totalsBar: { marginHorizontal: 16, marginTop: 4, borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 6 },
-  totalsTitle: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 18 },
-  totalsCell: { flex: 1, minWidth: 0, alignItems: "center" },
-  totalsLetter: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 15 },
-  totalsValue: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, fontVariant: ["tabular-nums"] },
+  columnHeads: { alignItems: "flex-end", marginBottom: -4 },
   slotHeadRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  plus: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  plus: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   chipStrip: { flexDirection: "row", gap: 6, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
   chip: { flex: 1, minWidth: 0, minHeight: 32, borderRadius: 16, borderWidth: 1, paddingHorizontal: 6, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 },
   chipText: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
