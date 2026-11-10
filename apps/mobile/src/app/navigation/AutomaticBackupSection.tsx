@@ -2,8 +2,8 @@ import { useCallback, useSyncExternalStore } from "react";
 import { Pressable, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { AutomaticBackupErrorCode, AutomaticBackupPort } from "../../features/backup/public.ts";
-import { AppButton, InlineNotice } from "../../shared/ui/components/public.ts";
-import { SectionHeading } from "../../shared/ui/prototype/ScreenPieces.tsx";
+import { Clock } from "lucide-react-native";
+import { AppButton, InlineNotice, SettingsRow } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 import { BackupErrorCode, BackupProgressView, BackupTimingText } from "./BackupStatus.tsx";
@@ -24,21 +24,31 @@ const errors: Record<AutomaticBackupErrorCode, string> = {
   AUTO_CLOCK_CHANGED: "Автоматические копии приостановлены после изменения даты или часового пояса. Проверьте настройки времени телефона.",
   AUTO_CLEANUP_PENDING: "Новая копия сохранена, но очистка прежних версий не завершена. Повторите проверку.",
 };
-export function AutomaticBackupSection({ backup, blocked }: Readonly<{ backup: AutomaticBackupPort; blocked: boolean }>) {
+function useAutomaticState(backup: AutomaticBackupPort) {
   const subscribe = useCallback((listener: () => void) => backup.subscribe(listener), [backup]);
-  const snapshot = useCallback(() => backup.state, [backup]); const state = useSyncExternalStore(subscribe, snapshot);
+  const snapshot = useCallback(() => backup.state, [backup]);
+  return useSyncExternalStore(subscribe, snapshot);
+}
+
+/** Строка «Автоматические копии» в блоке настроек копий: проверка раз в 30 минут и число сохранённых версий (макет «Версий 3 из 3»). */
+export function AutomaticBackupRow({ backup, last = false }: Readonly<{ backup: AutomaticBackupPort; last?: boolean }>) {
+  const state = useAutomaticState(backup);
+  const caption = !state.available ? "Недоступны в этой сборке" : state.lastSaved === null ? "Проверка каждые 30 минут · пока не создана"
+    : `Проверка каждые 30 минут · версий ${state.versions} из 3`;
+  return <SettingsRow icon={Clock} title="Автоматические копии" caption={caption} last={last} />;
+}
+
+/** Сообщения об автокопиях вне блока строк: недоступность, прогресс, ошибка с кодом и «Повторить»; в покое ничего не занимает места. */
+export function AutomaticBackupStatus({ backup, blocked }: Readonly<{ backup: AutomaticBackupPort; blocked: boolean }>) {
+  const state = useAutomaticState(backup);
   const { palette } = usePrototypeTheme();
-  const body = { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, color: palette.tokens.textSecondary };
+  const body = { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, paddingHorizontal: 6, color: palette.tokens.textSecondary };
   return <>
-    <SectionHeading>Автоматические копии</SectionHeading>
-    <Text style={body}>Проверяем изменения каждые 30 минут, пока приложение активно. Сохраняем последнюю копию и две дневные версии при их наличии.</Text>
     {!state.available ? <InlineNotice>{errors.AUTO_UNAVAILABLE}</InlineNotice> : null}
     {state.phase !== "IDLE" ? <BackupProgressView progress={state.progress} fallback="Проверяем автоматическую копию" /> : null}
     {state.error !== null ? <InlineNotice kind="error">{errors[state.error]}</InlineNotice> : null}
     {state.error !== null && state.error !== "AUTO_NOT_READY" ? <BackupErrorCode code={state.error} stage={state.errorStage} /> : null}
-    {state.lastSaved !== null ? <Text style={body}>Последняя автоматическая копия: {new Date(state.lastSaved.createdAt).toLocaleString("ru-RU")} · Версий: {state.versions} из 3.</Text> : null}
-    {state.lastRun !== null && state.phase === "IDLE" ? <BackupTimingText timing={state.lastRun} prefix="Создана" /> : null}
-    {state.available && state.lastSaved === null ? <Text style={body}>Автоматическая копия пока не создана.</Text> : null}
+    {state.lastRun !== null && state.phase === "IDLE" ? <BackupTimingText timing={state.lastRun} prefix="Автоматическая копия создана" /> : null}
     {state.error !== null ? <AppButton label="Повторить проверку копий" variant="secondary" disabled={blocked || state.phase !== "IDLE"}
       onPress={() => { void backup.retry(); }} /> : null}
     <Text style={body}>Ручные экспорты и точка возврата хранятся отдельно от трёх автоматических версий.</Text>

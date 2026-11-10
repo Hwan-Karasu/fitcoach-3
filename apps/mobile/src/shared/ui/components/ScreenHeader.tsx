@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowLeft } from "lucide-react-native";
@@ -13,12 +13,14 @@ export const SCREEN_HEADER_HEIGHT = 56;
  * Шапка экрана — строка одной высоты на всех экранах (UI-OWN-035; «Зефирка», UI-OWN-048 — без карточки): «←», знак,
  * заголовок и подзаголовок, справа действия. `insetTop: false` — для вложенного стека, где отступ уже есть.
  */
-export function ScreenHeader({ title, subtitle, mark, onBack, right, insetTop = true, children }: Readonly<{
+export function ScreenHeader({ title, subtitle, mark, onBack, backRef, right, insetTop = true, children }: Readonly<{
   title?: string;
   subtitle?: string;
   /** Аватар: эмодзи или инициалы клиента. */
   mark?: string;
   onBack?: () => void;
+  /** Ссылка на кнопку «Назад» — чтобы окно вернуло фокус на неё после закрытия. */
+  backRef?: Ref<View>;
   right?: ReactNode;
   insetTop?: boolean;
   /** Своё содержимое вместо заголовка (главная шапка: знак приложения, поиск). */
@@ -30,7 +32,7 @@ export function ScreenHeader({ title, subtitle, mark, onBack, right, insetTop = 
   return (
     <View style={[styles.outer, { backgroundColor: colors.canvas, paddingTop: (insetTop ? insets.top : 0) + 8 }]}>
       <View style={styles.card}>
-        {onBack !== undefined ? <AppIconButton compact label="Назад"
+        {onBack !== undefined ? <AppIconButton compact label="Назад" buttonRef={backRef}
           icon={<ArrowLeft size={22} color={colors.textPrimary} strokeWidth={2} />} onPress={onBack} /> : <View style={styles.gap} />}
         {children ?? <>
           {mark !== undefined ? (

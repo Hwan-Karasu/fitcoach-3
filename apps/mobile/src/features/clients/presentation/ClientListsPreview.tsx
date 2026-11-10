@@ -27,7 +27,7 @@ function initialsOf(displayName: string): string {
     .map((part) => Array.from(part)[0]?.toLocaleUpperCase("ru") ?? "").join("") || "?";
 }
 
-function clientMark(row: ClientRecord): string {
+export function clientMark(row: ClientRecord): string {
   return row.emoji ?? initialsOf(row.displayName);
 }
 

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { AppState, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
+import { AppState, BackHandler, KeyboardAvoidingView, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { UserRound, type LucideIcon } from "lucide-react-native";
-import { ChoiceSegments, ConfirmDialog, DateField, InlineNotice, SectionTabs, StickyEditorFooter, TextField, useBottomPanelInFlow } from "../../../shared/ui/components/public.ts";
+import { ChoiceSegments, ConfirmDialog, DateField, InlineNotice, ScreenHeader, SectionTabs, StickyEditorFooter, TextField, useBottomPanelInFlow } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { ClientRecord, CreateClientInput } from "../domain/ClientRepositoryPort.ts";
+import { clientMark } from "./ClientListsPreview.tsx";
 import type { ClientFormDraft } from "../domain/ClientRecoveryDraftPort.ts";
 import { formatHeightCmX10, parseHeightCmX10, validPastBirthDate } from
   "../domain/ClientProfileValidation.ts";
@@ -285,14 +286,9 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
     <SafeAreaView edges={["top"]} style={[styles.safe, { backgroundColor: colors.canvas }]}>
       <StatusBar barStyle={palette.tone === "dark" ? "light-content" : "dark-content"} backgroundColor={colors.canvas} />
       <KeyboardAvoidingView enabled={!panelInFlow} style={styles.content} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-      <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-        <Pressable ref={closeButtonRef} accessibilityRole="button" accessibilityLabel="Закрыть форму" onPress={close} style={styles.closeButton}>
-          <Text style={[styles.closeGlyph, { color: colors.accentInk }]}>←</Text>
-        </Pressable>
-        <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>
-          {initial === undefined ? "Создать карточку" : "Редактировать карточку"}
-        </Text>
-      </View>
+      <ScreenHeader insetTop={false} backRef={closeButtonRef} onBack={close}
+        title={initial === undefined ? "Новый клиент" : initial.displayName} subtitle={initial === undefined ? "Карточка и анкета" : "Редактирование · карточка и анкета"}
+        {...(initial === undefined ? {} : { mark: clientMark(initial) })} />
       <SectionTabs
         tabs={tabs}
         selectedId={activeSection}
@@ -426,10 +422,6 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: { flex: 1 },
-  header: { minHeight: 56, borderBottomWidth: 1, flexDirection: "row", alignItems: "center", paddingRight: 16 },
-  closeButton: { width: 56, minHeight: 56, alignItems: "center", justifyContent: "center" },
-  closeGlyph: { fontFamily: fonts.regular, fontSize: 20, lineHeight: 26 },
-  pageTitle: { fontSize: 18, lineHeight: 23, fontFamily: fonts.bold },
   formContent: { padding: 16, paddingBottom: 32, gap: 12 },
   sectionCard: { borderWidth: 1, borderRadius: 26, padding: 16, gap: 10 },
   sectionTitle: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },

@@ -7,6 +7,7 @@ import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, LoadingState, Se
   TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
+import { shadow } from "../../../../shared/ui/theme/style.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
 import { newDraft, setTitle, setWeeks } from "../domain/SimplePlanEdits.ts";
 import { WEEKS_MAX, WEEKS_MIN, type SimpleProgramDraft } from "../domain/SimplePlanModel.ts";
@@ -242,7 +243,7 @@ export function SimpleProgramBuilderScreen({ clientId, programId, templateId, te
         ) : null}
         {restored ? <AppButton compact variant="secondary" label="Отменить несохранённые изменения" onPress={() => { void discardRecovery(); }} /> : null}
         {programId !== null ? <InlineNotice kind="info">При правке базового плана индивидуальные отличия недель сохраняются. Их можно изменить из дневника с выбором области.</InlineNotice> : null}
-        <View style={[styles.settings, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.settings, shadow.card, { backgroundColor: colors.surface }]}>
         <Text accessibilityRole="header" style={[styles.settingsTitle, { color: colors.textPrimary }]}>Настройки программы</Text>
         <TextField label="Название программы" hideLabel required placeholder="Название программы" value={draft.title}
           onChangeText={(title) => change(setTitle(draft, title))} />
@@ -252,10 +253,10 @@ export function SimpleProgramBuilderScreen({ clientId, programId, templateId, te
             <Text style={[styles.meta, { color: colors.textSecondary }]}>План недели повторяется каждую неделю</Text>
           </View>
           <AppIconButton compact label="Меньше недель" disabled={draft.plan.weeks <= WEEKS_MIN}
-            icon={<Minus size={18} color={colors.textPrimary} strokeWidth={2} />} onPress={() => change(setWeeks(draft, draft.plan.weeks - 1))} />
+            icon={<View style={[styles.stepIcon, { backgroundColor: colors.surfaceRaised }]}><Minus size={18} color={colors.textPrimary} strokeWidth={2} /></View>} onPress={() => change(setWeeks(draft, draft.plan.weeks - 1))} />
           <Text accessibilityLabel={`Недель: ${draft.plan.weeks}`} style={[styles.weeksValue, { color: colors.textPrimary }]}>{draft.plan.weeks}</Text>
           <AppIconButton compact label="Больше недель" disabled={draft.plan.weeks >= WEEKS_MAX}
-            icon={<Plus size={18} color={colors.textPrimary} strokeWidth={2} />} onPress={() => change(setWeeks(draft, draft.plan.weeks + 1))} />
+            icon={<View style={[styles.stepIcon, { backgroundColor: colors.surfaceRaised }]}><Plus size={18} color={colors.textPrimary} strokeWidth={2} /></View>} onPress={() => change(setWeeks(draft, draft.plan.weeks + 1))} />
         </View>
         </View>
 
@@ -306,8 +307,9 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingTop: 10, gap: 10, paddingBottom: 24 },
   grow: { flex: 1, minWidth: 0 },
   tabs: { paddingHorizontal: 16, paddingTop: 4 },
-  settings: { borderWidth: 1, borderRadius: 22, padding: 14, gap: 10 },
-  settingsTitle: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
+  settings: { borderRadius: 28, padding: 14, gap: 10 },
+  settingsTitle: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 20 },
+  stepIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   weeks: { flexDirection: "row", alignItems: "center", gap: 4 },
   weeksLabel: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
   weeksValue: { minWidth: 28, textAlign: "center", fontFamily: fonts.semibold, fontSize: 16 },

@@ -3,8 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { useIsFocused } from "@react-navigation/native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import Sortable from "react-native-sortables";
-import { CalendarDays, ChartColumnIncreasing, ChevronRight, CircleMinus, Clock, FileText, LayoutGrid, Plus, RefreshCw, Rocket,
-  Bookmark, Ellipsis, Trash2, FileSpreadsheet, Download, Pencil, SlidersHorizontal, TrendingUp, Users, Zap } from "lucide-react-native";
+import { ChevronRight, FileText, Plus, Rocket, Bookmark, Ellipsis, Trash2, FileSpreadsheet, Download, Pencil, TrendingUp } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, FloatingActionButton, InlineNotice, ListSectionHeader, LoadingState, SegmentedControl, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
@@ -44,28 +43,25 @@ function ProgramCardMenu({ card, busy, onExport, onSaveTemplate, onDelete, onRen
 type IconRender = (color: string) => ReactNode;
 const icon = (Icon: typeof Rocket, size = 20): IconRender => (color) => <Icon size={size} color={color} strokeWidth={1.8} />;
 
-/** Описание конструктора (макет владельца 2026-10-18), по правилам §48.4: ячейки — пояснение, не кнопки. */
+/** Описание конструктора (макет OnlyFits, UI-OWN-085), по правилам §48.4: ячейки — пояснение, не кнопки. */
 interface ModeInfo {
   readonly icon: IconRender;
   readonly subtitle: string;
   readonly badge: string;
-  readonly cells: readonly Readonly<{ icon: IconRender; label: string }>[];
-  readonly footerIcon: IconRender;
+  readonly cells: readonly string[];
   readonly footer: string;
 }
 
 const modeInfo: Readonly<Record<ProgramKind, ModeInfo>> = {
   SIMPLE: {
     icon: icon(Rocket), subtitle: "Минимум настроек для быстрого начала", badge: "Быстрый старт",
-    cells: [{ icon: icon(CalendarDays, 16), label: "Тренировки и недели" }, { icon: icon(FileText, 16), label: "Шаблоны" },
-      { icon: icon(SlidersHorizontal, 16), label: "Минимум настроек" }, { icon: icon(CircleMinus, 16), label: "Без циклов" }],
-    footerIcon: icon(Zap, 16), footer: "Один клиент, план недели повторяется",
+    cells: ["Тренировки и недели", "Шаблоны", "Минимум настроек", "Без циклов"],
+    footer: "Один клиент, план недели повторяется",
   },
   PERIODIZED: {
     icon: icon(TrendingUp), subtitle: "Планирование и контроль прогресса", badge: "Периодизация",
-    cells: [{ icon: icon(LayoutGrid, 16), label: "Мезоциклы и блоки" }, { icon: icon(RefreshCw, 16), label: "Смена циклов" },
-      { icon: icon(Users, 16), label: "Несколько клиентов" }, { icon: icon(ChartColumnIncreasing, 16), label: "Контроль прогресса" }],
-    footerIcon: icon(Clock, 16), footer: "Для долгих программ с циклами",
+    cells: ["Мезоциклы и блоки", "Смена циклов", "Несколько клиентов", "Контроль прогресса"],
+    footer: "Для долгих программ с циклами",
   },
 };
 
@@ -80,32 +76,27 @@ function ProgramModeChooser({ onChoose }: Readonly<{ onChoose: (kind: ProgramKin
         const title = `${programKindLabels[kind]} программа`;
         return (
           <Pressable key={kind} accessibilityRole="button"
-            accessibilityLabel={`${title}. ${info.subtitle}. ${info.cells.map((cell) => cell.label).join(", ")}. ${info.footer}`}
+            accessibilityLabel={`${title}. ${info.subtitle}. ${info.cells.join(", ")}. ${info.footer}`}
             onPress={() => onChoose(kind)}
-            style={({ pressed }) => [styles.mode, { borderColor: colors.border,
-              backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
+            style={({ pressed }) => [styles.mode, shadow.card, { backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
             <View style={styles.modeHead}>
-              <View style={[styles.modeIcon, { backgroundColor: colors.surfaceRaised }]}>{info.icon(colors.accentInk)}</View>
+              <View style={[styles.modeIcon, { backgroundColor: colors.accentSoft }]}>{info.icon(colors.onAccentSoft)}</View>
               <View style={styles.grow}>
                 <Text style={[styles.modeTitle, { color: colors.textPrimary }]}>{title}</Text>
                 <Text style={[styles.small, { color: colors.textSecondary }]}>{info.subtitle}</Text>
-                <View style={[styles.badge, { borderColor: colors.accentInk }]}>
-                  <Text style={[styles.badgeText, { color: colors.accentInk }]}>{info.badge}</Text>
+                <View style={[styles.badge, { backgroundColor: colors.accentSoft }]}>
+                  <Text style={[styles.badgeText, { color: colors.onAccentSoft }]}>{info.badge}</Text>
                 </View>
               </View>
             </View>
             <View style={styles.cells}>
               {info.cells.map((cell) => (
-                <View key={cell.label} style={[styles.cell, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-                  <View style={[styles.cellIcon, { backgroundColor: colors.surfaceRaised }]}>{cell.icon(colors.accentInk)}</View>
-                  <Text style={[styles.cellText, { color: colors.textPrimary }]}>{cell.label}</Text>
+                <View key={cell} style={[styles.cell, { backgroundColor: colors.surfaceRaised }]}>
+                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.cellText, { color: colors.textPrimary }]}>{cell}</Text>
                 </View>
               ))}
             </View>
-            <View style={[styles.modeFooter, { borderTopColor: colors.border }]}>
-              {info.footerIcon(colors.accentInk)}
-              <Text style={[styles.small, styles.grow, { color: colors.textSecondary }]}>{info.footer}</Text>
-            </View>
+            <Text style={[styles.small, { color: colors.textSecondary }]}>{info.footer}</Text>
           </Pressable>
         );
       })}
@@ -387,25 +378,22 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 10 },
   withFab: { paddingBottom: 96 },
   body: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
-  chooser: { padding: 12, gap: 8 },
+  chooser: { padding: 16, paddingTop: 10, gap: 8 },
   small: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   feature: { flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: 10, paddingRight: 10, paddingVertical: 4, minHeight: 48 },
   featureIcon: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   featureTitle: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 16 },
-  modes: { gap: 8 },
+  modes: { gap: 12 },
   card: { borderWidth: 2, borderRadius: 20 },
-  mode: { borderWidth: 1, borderRadius: 14, padding: 10, gap: 8 },
-  modeHead: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  modeTitle: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
-  badge: { alignSelf: "flex-start", borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 1, marginTop: 3 },
-  badgeText: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
-  cells: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  cell: { flexBasis: "47%", flexGrow: 1, flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: 10,
-    padding: 6, minHeight: 42 },
-  cellIcon: { width: 26, height: 26, borderRadius: 6, alignItems: "center", justifyContent: "center" },
-  cellText: { flex: 1, fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
-  modeFooter: { flexDirection: "row", alignItems: "center", gap: 8, borderTopWidth: 1, paddingTop: 8 },
-  modeIcon: { width: 36, height: 36, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  mode: { borderRadius: 28, padding: 14, gap: 10 },
+  modeHead: { flexDirection: "row", alignItems: "center", gap: 12 },
+  modeTitle: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
+  badge: { alignSelf: "flex-start", height: 26, borderRadius: 13, paddingHorizontal: 12, marginTop: 4, justifyContent: "center" },
+  badgeText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 },
+  cells: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  cell: { flexBasis: "47%", flexGrow: 1, height: 40, borderRadius: 20, paddingHorizontal: 6, alignItems: "center", justifyContent: "center" },
+  cellText: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16, textAlign: "center" },
+  modeIcon: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   program: { flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: 16, paddingRight: 12, paddingVertical: 14, minHeight: 64 },
   grow: { flex: 1, minWidth: 0, gap: 2 },
   title: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },

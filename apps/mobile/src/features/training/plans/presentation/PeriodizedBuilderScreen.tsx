@@ -8,6 +8,7 @@ import { readableInk, withAlpha } from "../../../../shared/ui/theme/colorAlpha.t
 import { statusToneColor, type StatusTone } from "../../../../shared/ui/theme/statusTone.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
+import { shadow } from "../../../../shared/ui/theme/style.ts";
 import type { ExerciseLookupPort } from "../domain/ExerciseLookupPort.ts";
 import { applyBuilderScope, cleanBuilderWeeks, copyWeekPlan, CYCLE_TYPES, resizeBuilderWeeks, restForNewExercises, retuneBuilderRest, revertBuilderWeek, type BuilderWeek, type CycleType } from "../domain/MesocycleBuilder.ts";
 import type { MesocycleSavePort } from "../domain/MesocycleSave.ts";
@@ -59,8 +60,8 @@ function Section({ title, children }: Readonly<{ title: string; children: ReactN
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Text accessibilityRole="header" style={[styles.eyebrow, { color: colors.accentInk }]}>{title}</Text>
+    <View style={[styles.card, shadow.card, { backgroundColor: colors.surface }]}>
+      <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.textPrimary }]}>{title}</Text>
       {children}
     </View>
   );
@@ -771,11 +772,11 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId: init
         <Section title="Структура недель">
           <View style={styles.counter}>
             <AppIconButton label="Меньше недель" disabled={weeks.length <= 1}
-              icon={<Minus size={18} color={colors.textPrimary} strokeWidth={2} />}
+              icon={<View style={[styles.stepIcon, { backgroundColor: colors.surfaceRaised }]}><Minus size={18} color={colors.textPrimary} strokeWidth={2} /></View>}
               onPress={() => { setWeeks(resizeBuilderWeeks(weeks, weeks.length - 1)); setEditing((value) => Math.min(value, weeks.length - 2)); touch(); }} />
             <Text accessibilityLabel={`Недель: ${weeks.length}`} style={[styles.count, { color: colors.textPrimary }]}>{weeks.length}</Text>
             <AppIconButton label="Больше недель" disabled={weeks.length >= MESOCYCLE_WEEKS_MAX}
-              icon={<Plus size={18} color={colors.textPrimary} strokeWidth={2} />}
+              icon={<View style={[styles.stepIcon, { backgroundColor: colors.surfaceRaised }]}><Plus size={18} color={colors.textPrimary} strokeWidth={2} /></View>}
               onPress={() => { setWeeks(resizeBuilderWeeks(weeks, weeks.length + 1)); touch(); }} />
           </View>
           <View style={styles.weekGrid}>
@@ -825,9 +826,10 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId: init
                 : "Пустая неделя при сохранении получит копию ближайшей заполненной."}
             </Text>
           ) : null}
-          <WorkoutsEditor draft={draft} change={change} lookup={lookup} issues={weekIssues} showIssues={showIssues} scrollRef={scrollRef}
-            onPickExercise={pickExercise} onReplaceExercise={replaceExercise} {...(facts ? { facts, onFact: editFact } : {})} />
         </Section>
+        {/* Тренировки недели — отдельными карточками под блоком, не внутри него (макет). */}
+        <WorkoutsEditor draft={draft} change={change} lookup={lookup} issues={weekIssues} showIssues={showIssues} scrollRef={scrollRef}
+          onPickExercise={pickExercise} onReplaceExercise={replaceExercise} {...(facts ? { facts, onFact: editFact } : {})} />
       </Animated.ScrollView>
       <ConfirmDialog visible={leaving !== null} destructive confirmBusy={memberBusy}
         title={`Убрать «${leaving === null ? "" : nameOf(leaving)}» из группы?`}
@@ -864,14 +866,15 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   field: { gap: 6 },
   dirty: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
-  card: { borderWidth: 1, borderRadius: 24, padding: 14, gap: 8 },
-  eyebrow: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, letterSpacing: 1.2, textTransform: "uppercase" },
+  card: { borderRadius: 28, padding: 14, gap: 10 },
+  sectionTitle: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 20 },
   label: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 18 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  choice: { flexBasis: "47%", flexGrow: 1, minHeight: 40, borderWidth: 1, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  choice: { flexBasis: "47%", flexGrow: 1, minHeight: 40, borderWidth: 1, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   choiceText: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
   date: { minHeight: 42, borderWidth: 1, borderRadius: 16, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12 },
   dateText: { fontFamily: fonts.medium, fontSize: 14 },
+  stepIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   counter: { flexDirection: "row", alignItems: "center", gap: 10 },
   count: { minWidth: 28, textAlign: "center", fontFamily: fonts.bold, fontSize: 18 },
   weekGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

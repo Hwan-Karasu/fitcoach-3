@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { Folder } from "lucide-react-native";
 import type { ManualBackupErrorCode, ManualBackupPort, RestoreActionsPort, AutomaticBackupPort } from "../../features/backup/public.ts";
-import { AutomaticBackupSection } from "./AutomaticBackupSection.tsx";
+import { AutomaticBackupRow, AutomaticBackupStatus } from "./AutomaticBackupSection.tsx";
 import { RestoreSection } from "./RestoreSection.tsx";
 import { BackupErrorCode, BackupProgressView, BackupTimingText } from "./BackupStatus.tsx";
-import { AppButton, InlineNotice } from "../../shared/ui/components/public.ts";
-import { PrototypeScreen, SectionHeading } from "../../shared/ui/prototype/ScreenPieces.tsx";
+import { backupMoment, backupSize } from "./backupFormat.ts";
+import { AppButton, InlineNotice, SettingsGroup, SettingsRow } from "../../shared/ui/components/public.ts";
+import { PrototypeScreen } from "../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
+import { shadow } from "../../shared/ui/theme/style.ts";
 
 const errors: Record<ManualBackupErrorCode, string> = {
   BACKUP_BUSY: "Дождитесь завершения текущей операции.",
@@ -30,7 +33,10 @@ const phases = { IDLE: "", LOADING: "Проверяем папку…", CHOOSING
 /** Повторять имеет смысл только сбой самой копии, а не занятость или неподдерживаемую папку. */
 const retryable = (code: ManualBackupErrorCode) => !["BACKUP_BUSY", "BACKUP_STORAGE_UNAVAILABLE", "BACKUP_LOCATION_UNSUPPORTED", "BACKUP_FOLDER_UNAVAILABLE"].includes(code);
 
-/** Privileged application-settings route. All SQLite/files/Android work stays behind the port. */
+/**
+ * Privileged application-settings route. All SQLite/files/Android work stays behind the port.
+ * Вид — макет OnlyFits (UI-OWN-087): карточка «Последняя копия», две кнопки в ряд, два блока строк (папка и автокопии; восстановление и точка возврата).
+ */
 export function BackupScreen({ backup, restore, automatic }: Readonly<{ backup: ManualBackupPort; restore: RestoreActionsPort; automatic: AutomaticBackupPort }>) {
   const subscribe = useCallback((listener: () => void) => backup.subscribe(listener), [backup]);
   const getSnapshot = useCallback(() => backup.state, [backup]);
@@ -42,14 +48,16 @@ export function BackupScreen({ backup, restore, automatic }: Readonly<{ backup: 
   const autoSnapshot = useCallback(() => automatic.state, [automatic]);
   const autoState = useSyncExternalStore(autoSubscribe, autoSnapshot);
   const { palette } = usePrototypeTheme();
-  const body = [styles.body, { color: palette.tokens.textSecondary }];
+  const colors = palette.tokens;
   const busy = state.phase !== "IDLE";
   const backupBlocked = busy || restoring.phase !== "IDLE" || autoState.phase !== "IDLE";
   // Ручная копия во время автокопии не запрещена: она встаёт в общую очередь и ждёт (BKP-LOCK-1).
   const createBlocked = busy || restoring.phase !== "IDLE";
   const working = state.phase === "CREATING" || state.phase === "PUBLISHING";
+  const settled = state.error === null && !busy;
   useEffect(() => { void backup.refresh(); }, [backup]);
-  return <PrototypeScreen description="Копия включает данные приложения и фото рецептов.">
+  const folder = state.location === "DOWNLOADS" ? "Загрузки / Дневник атлета" : state.location === "DIRECTORY" ? "Выбранная папка" : "Папка ещё не проверена";
+  return <PrototypeScreen mockup>
     {!state.available ? <InlineNotice>{errors.BACKUP_STORAGE_UNAVAILABLE}</InlineNotice> : null}
     {state.error !== null ? <InlineNotice kind="error">{errors[state.error]}</InlineNotice> : null}
     {state.error !== null && state.errorStage !== null ? <BackupErrorCode code={state.error} stage={state.errorStage} /> : null}
@@ -57,26 +65,49 @@ export function BackupScreen({ backup, restore, automatic }: Readonly<{ backup: 
       disabled={createBlocked} onPress={() => { void backup.retry(); }} /> : null}
     {working ? <BackupProgressView progress={state.progress} fallback="Подготавливаем копию" />
       : busy ? <InlineNotice>{phases[state.phase]}</InlineNotice> : null}
-    <SectionHeading>Папка для копий</SectionHeading>
-    <Text style={body}>{state.location === "DOWNLOADS" ? "Загрузки / Дневник атлета" : state.location === "DIRECTORY" ? "Выбранная папка" : "Папка ещё не проверена"}</Text>
-    <AppButton label="Выбрать папку" variant="secondary" disabled={!state.available || backupBlocked} onPress={() => { void backup.chooseFolder().then((outcome) => { if (outcome.kind === "UPDATED") void automatic.retry(); }); }} />
+
+    <View style={[styles.last, shadow.card, { backgroundColor: colors.surface }]}>
+      <Text style={[styles.lastLabel, { color: colors.textMuted }]}>ПОСЛЕДНЯЯ КОПИЯ</Text>
+      {state.lastSaved !== null ? <>
+        <Text style={[styles.lastTitle, { color: colors.textPrimary }]}>{backupMoment(state.lastSaved.createdAt)}</Text>
+        <Text style={[styles.lastCaption, { color: colors.textSecondary }]}>{backupSize(state.lastSaved.bytes)} · {settled ? "проверена" : "сохранена ранее"}</Text>
+        <Text selectable numberOfLines={1} style={[styles.lastFile, { color: colors.textMuted }]}>{state.lastSaved.filename}</Text>
+        {state.lastRun !== null && !busy ? <BackupTimingText timing={state.lastRun} prefix="Создана" /> : null}
+      </> : <>
+        <Text style={[styles.lastTitle, { color: colors.textPrimary }]}>Копии ещё нет</Text>
+        <Text style={[styles.lastCaption, { color: colors.textSecondary }]}>Нажмите «Создать копию»</Text>
+      </>}
+    </View>
+
+    <View style={styles.buttons}>
+      <View style={styles.button}><AppButton label="Создать копию" disabled={!state.available || createBlocked || state.location === "UNKNOWN"}
+        onPress={() => { void backup.createNow(); }} /></View>
+      <View style={styles.button}><AppButton label="Экспортировать" variant="secondary" disabled={!state.available || createBlocked}
+        onPress={() => { void backup.exportElsewhere(); }} /></View>
+    </View>
+    <Text style={[styles.hint, { color: colors.textSecondary }]}>Экспорт сохраняет отдельную копию и не меняет папку для следующих копий.</Text>
+
+    <SettingsGroup>
+      <SettingsRow icon={Folder} title="Папка для копий" caption={folder} disabled={!state.available || backupBlocked}
+        onPress={() => { void backup.chooseFolder().then((outcome) => { if (outcome.kind === "UPDATED") void automatic.retry(); }); }} />
+      <AutomaticBackupRow backup={automatic} last />
+    </SettingsGroup>
     {state.location !== "DOWNLOADS" ? <AppButton label="Использовать папку по умолчанию" variant="ghost"
       disabled={!state.available || backupBlocked} onPress={() => { void backup.useDefaultFolder().then((outcome) => { if (outcome.kind === "UPDATED") void automatic.retry(); }); }} /> : null}
-    <AutomaticBackupSection backup={automatic} blocked={busy || restoring.phase !== "IDLE"} />
-    <SectionHeading>Ручная копия</SectionHeading>
-    <AppButton label="Создать копию сейчас" disabled={!state.available || createBlocked || state.location === "UNKNOWN"}
-      onPress={() => { void backup.createNow(); }} />
-    <AppButton label="Экспортировать в другое место" variant="secondary" disabled={!state.available || createBlocked}
-      onPress={() => { void backup.exportElsewhere(); }} />
-    <Text style={body}>Экспорт сохраняет отдельную копию и не меняет папку для следующих копий.</Text>
-    {state.lastSaved !== null ? <View style={styles.saved}>
-      <InlineNotice kind={state.error === null && !busy ? "success" : "info"}>{state.error === null && !busy ? "Копия сохранена и проверена." : "Ранее сохранённая копия доступна."}</InlineNotice>
-      <Text selectable style={body}>{state.lastSaved.filename}</Text>
-      <Text style={body}>{new Date(state.lastSaved.createdAt).toLocaleString("ru-RU")} · {Math.ceil(state.lastSaved.bytes / 1024)} КБ</Text>
-      {state.lastRun !== null && !busy ? <BackupTimingText timing={state.lastRun} prefix="Создана" /> : null}
-    </View> : null}
-    <InlineNotice kind="warning">Копия содержит данные клиентов и не защищена паролем. Храните файл в надёжном месте.</InlineNotice>
+    <AutomaticBackupStatus backup={automatic} blocked={busy || restoring.phase !== "IDLE"} />
+
     <RestoreSection restore={restore} blocked={busy || autoState.phase !== "IDLE"} />
+    <Text style={[styles.hint, styles.center, { color: colors.textSecondary }]}>Копия включает данные приложения и фото рецептов. Она содержит данные клиентов и не защищена паролем — храните файл в надёжном месте.</Text>
   </PrototypeScreen>;
 }
-const styles = StyleSheet.create({ body: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19 }, saved: { gap: 8 } });
+const styles = StyleSheet.create({
+  last: { borderRadius: 28, padding: 16, gap: 4 },
+  lastLabel: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 15, letterSpacing: 0.7 },
+  lastTitle: { fontFamily: fonts.bold, fontSize: 22, lineHeight: 28 },
+  lastCaption: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
+  lastFile: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
+  buttons: { flexDirection: "row", gap: 8, marginTop: 4 },
+  button: { flex: 1, minWidth: 0 },
+  hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, paddingHorizontal: 6 },
+  center: { textAlign: "center" },
+});

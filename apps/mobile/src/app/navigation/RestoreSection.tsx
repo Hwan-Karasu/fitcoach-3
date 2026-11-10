@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import type { RestoreActionErrorCode, RestoreActionsPort, RestorePreview } from "../../features/backup/public.ts";
-import { AppButton, InlineNotice } from "../../shared/ui/components/public.ts";
-import { SectionHeading } from "../../shared/ui/prototype/ScreenPieces.tsx";
+import { ArchiveRestore, History } from "lucide-react-native";
+import { AppButton, InlineNotice, SettingsGroup, SettingsRow } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
+import { shadow } from "../../shared/ui/theme/style.ts";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 import { RestorePreparationView } from "./BackupStatus.tsx";
 
@@ -43,33 +44,35 @@ export function RestoreSection({ restore, blocked }: Readonly<{ restore: Restore
       } }]);
   };
   const point = state.point;
-  return <View style={styles.section}>
-    <SectionHeading>Восстановление данных</SectionHeading>
+  const colors = palette.tokens;
+  return <>
     {!state.available ? <InlineNotice>{errors.RESTORE_UNAVAILABLE}</InlineNotice> : null}
     {state.error !== null ? <InlineNotice kind="error">{errors[state.error]}</InlineNotice> : null}
     {state.phase === "PREPARING" ? <RestorePreparationView progress={state.preparation ?? null} /> : null}
     {state.notice !== null ? <InlineNotice kind="success">{state.notice === "RESTORED" ? "Данные восстановлены из выбранной копии."
       : state.notice === "RETURNED" ? "Прежние данные возвращены. Точка возврата использована." : state.notice === "CHECKED" ? "Проверка завершена. Данные доступны." : "Точка возврата удалена."}</InlineNotice> : null}
     {state.phase === "RECOVERY_REQUIRED" ? <AppButton label="Повторить восстановление" disabled={blocked} onPress={() => { void restore.recover(); }} /> : null}
-    <Text style={body}>Восстановление полностью заменяет текущие данные состоянием из копии.</Text>
-    <AppButton label="Выбрать файл копии" variant="secondary" disabled={!state.available || busy || state.preview !== null} onPress={() => { void restore.chooseFile(); }} />
-    {state.preview !== null ? <View style={styles.section}>
-      <Text style={body}>{state.preview.kind === "RETURN" ? "Точка возврата" : "Выбранная копия"} · {date(state.preview.createdAt)}</Text>
+    <SettingsGroup>
+      <SettingsRow icon={ArchiveRestore} title="Выбрать файл копии" caption="Восстановление данных" disabled={!state.available || busy || state.preview !== null}
+        onPress={() => { void restore.chooseFile(); }} />
+      <SettingsRow icon={History} title="Точка возврата" caption={point === null ? "Пока нет" : `Прежнее состояние от ${date(point.createdAt)}`} captionMuted={point === null} last
+        disabled={busy || state.preview !== null} onPress={point === null ? undefined : () => { void restore.previewReturn(); }} />
+    </SettingsGroup>
+    {state.preview !== null ? <View style={[styles.preview, shadow.card, { backgroundColor: colors.surface }]}>
+      <Text style={[styles.previewTitle, { color: colors.textPrimary }]}>{state.preview.kind === "RETURN" ? "Точка возврата" : "Выбранная копия"} · {date(state.preview.createdAt)}</Text>
       <Text style={body}>Клиенты: {state.preview.activeClients} · В архиве: {state.preview.archivedClients}</Text>
       <AppButton label={state.preview.kind === "RETURN" ? "Вернуть прежние данные" : "Восстановить из этой копии"} disabled={busy} onPress={() => { if (state.preview !== null) confirm(state.preview); }} />
       <AppButton label="Отменить выбор" variant="ghost" disabled={busy} onPress={() => { void restore.cancelPreview(); }} />
     </View> : null}
-    <SectionHeading>Точка возврата</SectionHeading>
-    <Text style={body}>{point === null ? "После успешного восстановления здесь будет доступно прежнее состояние данных."
-      : `Прежнее состояние от ${date(point.createdAt)}. Доступен один возврат. Следующее успешное восстановление заменит эту точку.`}</Text>
-    {point !== null ? <>
-      <AppButton label="Подготовить возврат" variant="secondary" disabled={busy || state.preview !== null} onPress={() => { void restore.previewReturn(); }} />
-      <AppButton label="Удалить точку возврата" variant="ghost" disabled={busy || state.preview !== null} onPress={() => {
-        Alert.alert("Удалить точку возврата?", "Вернуть состояние перед последним восстановлением через эту точку больше не получится. Сохранённые файлы копий останутся.",
-          [{ text: "Отмена", style: "cancel" }, { text: "Удалить", style: "destructive", onPress: () => { void restore.deletePoint(point.id); } }]);
-      }} />
-    </> : null}
-    <Text style={body}>Точка возврата хранится внутри приложения и удаляется вместе с ним. Для переустановки сохраняйте отдельные файлы копий.</Text>
-  </View>;
+    {point !== null && state.preview === null ? <AppButton label="Удалить точку возврата" variant="ghost" disabled={busy} onPress={() => {
+      Alert.alert("Удалить точку возврата?", "Вернуть состояние перед последним восстановлением через эту точку больше не получится. Сохранённые файлы копий останутся.",
+        [{ text: "Отмена", style: "cancel" }, { text: "Удалить", style: "destructive", onPress: () => { void restore.deletePoint(point.id); } }]);
+    }} /> : null}
+    <Text style={body}>Восстановление полностью заменяет текущие данные состоянием из копии. Точка возврата хранится внутри приложения и удаляется вместе с ним — для переустановки сохраняйте отдельные файлы копий.</Text>
+  </>;
 }
-const styles = StyleSheet.create({ section: { gap: 12 }, body: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19 } });
+const styles = StyleSheet.create({
+  body: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, paddingHorizontal: 6 },
+  preview: { borderRadius: 26, padding: 16, gap: 10 },
+  previewTitle: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 20 },
+});

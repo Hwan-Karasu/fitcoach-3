@@ -31,6 +31,7 @@ export { HeaderScrollReporter, HeaderSearchProvider, useHeaderScrollHandler, use
   type HeaderSearchState } from "./HeaderScroll.tsx";
 export { BrandMark } from "./BrandMark.tsx";
 export { ScreenHeader, SCREEN_HEADER_HEIGHT } from "./ScreenHeader.tsx";
+export { SettingsGroup, SettingsRow } from "./SettingsRow.tsx";
 export { FloatingActionButton } from "./FloatingActionButton.tsx";
 export { DurationWheelPicker, HourMinutePicker, TimeWheelPicker } from "./TimeWheelPicker.tsx";
 export { pickDate } from "./pickDate.ts";

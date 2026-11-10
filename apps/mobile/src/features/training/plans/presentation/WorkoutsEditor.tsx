@@ -7,6 +7,7 @@ import { ArrowLeftRight, ArrowUpDown, Check, Dumbbell, GripVertical, Link2, Plus
 import { AppButton, AppIconButton, ConfirmDialog, SupersetBorder, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
+import { shadow } from "../../../../shared/ui/theme/style.ts";
 import type { ExerciseInfo } from "../domain/ExerciseLookupPort.ts";
 import { addWorkout, fillSets, removeExercise, removeWorkout, renameWorkout, reorderExercises, reorderWorkouts,
   setInstruction, setRepsRange, setRir, setSetCount } from "../domain/SimplePlanEdits.ts";
@@ -63,8 +64,8 @@ const InlineField = forwardRef(function InlineField({ label, value, placeholder,
           setText(clean);
           setInvalid(!onCommit(clean));
         }}
-        style={[styles.fieldInput, { color: colors.textPrimary, backgroundColor: colors.input,
-          borderColor: invalid ? colors.danger : colors.border }]} />
+        style={[styles.fieldInput, { color: colors.textPrimary, backgroundColor: colors.surfaceRaised,
+          borderColor: invalid ? colors.danger : "transparent" }]} />
     </View>
   );
 });
@@ -171,8 +172,8 @@ function ExerciseCard({ item, workout, info, broken, draft, change, onReplace, s
             <Pressable accessibilityRole="button" accessibilityState={{ selected: active }}
               accessibilityLabel={setState === "ready" ? "Собрать сет" : group !== null ? `Сет: ${name}, в суперсете ${group}` : `Сет: ${name}`}
               onPress={onSet} hitSlop={6}
-              style={({ pressed }) => [styles.setButton, { borderColor: active || group !== null ? colors.accentInk : colors.border,
-                backgroundColor: active ? colors.accentFill : pressed ? colors.surface : colors.input }]}>
+              style={({ pressed }) => [styles.setButton, { borderColor: active || group !== null ? colors.accentInk : "transparent",
+                backgroundColor: active ? colors.accentFill : pressed ? colors.surface : colors.surfaceRaised }]}>
               {setState === "ready" ? <Check size={18} color={colors.onAccentFill} strokeWidth={2.2} />
                 : <Link2 size={18} color={active ? colors.onAccentFill : group !== null ? colors.accentInk : colors.textSecondary} strokeWidth={2} />}
             </Pressable>
@@ -226,8 +227,8 @@ export function ExerciseCardShell({ name, subtitle, thumbnail = null, actions, c
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
-    <View style={[styles.exerciseRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-      {/* Название и действия — на фоне карточки; поля ввода ниже — отдельной полосой другого тона. */}
+    <View style={[styles.exerciseRow, { backgroundColor: colors.canvas }]}>
+      {/* Название и действия — сверху, поля ввода — ниже; карточка на фоне холста внутри карточки тренировки (макет). */}
       <View style={[styles.exerciseHead, handle ? null : { paddingHorizontal: 8 }]}>
         {handle}
         <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>
@@ -240,7 +241,7 @@ export function ExerciseCardShell({ name, subtitle, thumbnail = null, actions, c
         </View>
         {actions}
       </View>
-      {children ? <View style={[styles.exerciseBody, { backgroundColor: colors.surfaceRaised, borderTopColor: colors.border }]}>{children}</View> : null}
+      {children ? <View style={styles.exerciseBody}>{children}</View> : null}
     </View>
   );
 }
@@ -326,7 +327,7 @@ export const WorkoutsEditor = memo(function WorkoutsEditor({ draft, change, look
         onPress={() => setOrdering(true)} />
     ) : null}
     {draft.plan.workouts.map((workout) => (
-      <View key={workoutSlots.get(workout.id) ?? workout.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View key={workoutSlots.get(workout.id) ?? workout.id} style={[styles.card, shadow.card, { backgroundColor: colors.surface }]}>
         {/* Шапка как в 2.0 (UI-OWN-026): акцентная полоса, название без подписи, «×» удаляет тренировку. */}
         <View style={styles.workoutHead}>
           <View style={[styles.stripe, { backgroundColor: colors.accentFill }]} />
@@ -337,7 +338,7 @@ export const WorkoutsEditor = memo(function WorkoutsEditor({ draft, change, look
           {!singleWorkout && draft.plan.workouts.length > 1 ? (
             <Pressable accessibilityRole="button" accessibilityLabel={`Удалить тренировку ${workout.title}`}
               onPress={() => setRemoving(workout.id)} hitSlop={3}
-              style={({ pressed }) => [styles.removeWorkout, { borderColor: colors.danger, opacity: pressed ? 0.7 : 1 }]}>
+              style={({ pressed }) => [styles.removeWorkout, { backgroundColor: colors.surfaceRaised, opacity: pressed ? 0.7 : 1 }]}>
               <X size={20} color={colors.danger} strokeWidth={2} />
             </Pressable>
           ) : null}
@@ -394,7 +395,7 @@ export function WorkoutsReview({ workouts, names, matches, onMatch, disabled = f
     set.loadGrams === null ? null : `${(set.loadGrams / 1000).toLocaleString("ru-RU")} кг`,
     set.durationSec === null ? null : `${set.durationSec} с`, set.distanceM === null ? null : `${set.distanceM} м`,
   ].filter(Boolean).join(" × ") || "План не задан";
-  return <View style={{ gap: 12 }}>{workouts.map((workout) => <View key={workout.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+  return <View style={{ gap: 12 }}>{workouts.map((workout) => <View key={workout.id} style={[styles.card, shadow.card, { backgroundColor: colors.surface }]}>
     <View style={styles.workoutHead}>
       <View style={[styles.stripe, { backgroundColor: colors.accentFill }]} />
       <Text style={[styles.grow, styles.exerciseName, { color: colors.textPrimary }]}>{workout.title}</Text>
@@ -402,7 +403,7 @@ export function WorkoutsReview({ workouts, names, matches, onMatch, disabled = f
     <View style={[styles.exercises, { gap: 8, paddingBottom: 10 }]}>{workout.exercises.map((item) => {
       const match = matches.get(item.exerciseId); const name = names.get(item.exerciseId) ?? item.exerciseId; const group = supersetNumber(workout, item);
       return <View key={item.id} ref={register ? (node) => register(item.id, node) : undefined}
-        style={[styles.exerciseRow, { borderColor: item.id === highlightId ? colors.accentInk : colors.border, backgroundColor: colors.surface },
+        style={[styles.exerciseRow, { borderColor: item.id === highlightId ? colors.accentInk : "transparent", backgroundColor: colors.canvas },
           item.id === highlightId && styles.highlight]}>
         <View style={[styles.exerciseHead, { paddingHorizontal: 8 }]}>
           <View style={[styles.thumb, { backgroundColor: colors.surfaceRaised }]}>{match?.thumbnail != null ? <Image source={match.thumbnail} resizeMethod="resize" style={styles.thumbImage} /> : <Dumbbell size={16} color={colors.accentInk} />}</View>
@@ -413,7 +414,7 @@ export function WorkoutsReview({ workouts, names, matches, onMatch, disabled = f
           </View>
           <AppIconButton compact disabled={disabled} label={`${match ? "Заменить" : "Выбрать"}: ${name}`} icon={<ArrowLeftRight size={19} color={colors.accentInk} />} onPress={() => onMatch(item.exerciseId)} />
         </View>
-        <View style={[styles.exerciseBody, { backgroundColor: colors.surfaceRaised, borderTopColor: colors.border }]}>
+        <View style={styles.exerciseBody}>
           <Text style={[styles.hint, { color: colors.textSecondary }]}>{item.sets.length ? `Подходов: ${item.sets.length}${item.rir ? ` · RIR ${formatRange(item.rir)}` : ""}` : "Сохранено в истории"}</Text>
           {item.sets.map((set, i) => <Text key={set.id} style={[styles.exerciseName, { color: colors.textPrimary, paddingVertical: 3 }]}>{i + 1}. {planText(set)}</Text>)}
           {!!item.instruction && <Text style={[styles.hint, { color: colors.textSecondary }]}>{item.instruction}</Text>}
@@ -426,32 +427,32 @@ export function WorkoutsReview({ workouts, names, matches, onMatch, disabled = f
 
 const styles = StyleSheet.create({
   grow: { flex: 1, minWidth: 0 },
-  card: { borderWidth: 1, borderRadius: 22, overflow: "hidden" },
+  card: { borderRadius: 28, overflow: "hidden" },
   workoutHead: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12 },
   stripe: { width: 4, alignSelf: "stretch", borderRadius: 2 },
-  removeWorkout: { width: 42, height: 42, borderWidth: 1, borderRadius: 21, alignItems: "center", justifyContent: "center" },
+  removeWorkout: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
   addExercise: { padding: 10 },
   exercises: { paddingHorizontal: 10 },
-  exerciseRow: { borderWidth: 1, borderRadius: 18, overflow: "hidden" },
+  exerciseRow: { borderWidth: 1, borderColor: "transparent", borderRadius: 20, overflow: "hidden" },
   highlight: { borderWidth: 2 },
   facts: { gap: 4, paddingTop: 6 },
   factTitle: { paddingHorizontal: 0, paddingBottom: 0 },
   factIndex: { width: 18, minHeight: 36, textAlign: "center", textAlignVertical: "center", fontFamily: fonts.medium, fontSize: 12 },
   handle: { width: 28, minHeight: 44, alignItems: "center", justifyContent: "center" },
   exerciseHead: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, paddingHorizontal: 2 },
-  exerciseBody: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 10, paddingTop: 6, paddingBottom: 4 },
+  exerciseBody: { paddingHorizontal: 10, paddingTop: 2, paddingBottom: 8 },
   supersetStripe: { position: "absolute", left: 0, top: 0, bottom: 0, width: 4 },
   supersetTag: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
   setCell: { width: 44, gap: 3 },
-  setButton: { minHeight: 36, borderWidth: 1, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  setButton: { minHeight: 42, borderWidth: 1, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   setHint: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16, paddingHorizontal: 12, paddingBottom: 6 },
-  thumb: { width: 32, height: 32, borderRadius: 6, overflow: "hidden", alignItems: "center", justifyContent: "center" },
-  thumbImage: { width: 32, height: 32 },
-  exerciseName: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 18 },
+  thumb: { width: 36, height: 36, borderRadius: 12, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  thumbImage: { width: 36, height: 36 },
+  exerciseName: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 18 },
   fields: { flexDirection: "row", alignItems: "flex-end", gap: 6 },
   field: { flex: 1, minWidth: 0, gap: 3 },
   fieldLabel: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14, textAlign: "center" },
-  fieldInput: { minHeight: 36, borderWidth: 1, borderRadius: 18, textAlign: "center", fontFamily: fonts.medium, fontSize: 14,
+  fieldInput: { minHeight: 42, borderWidth: 1, borderRadius: 16, textAlign: "center", fontFamily: fonts.medium, fontSize: 14,
     paddingHorizontal: 4, paddingVertical: 0 },
   instruction: { minHeight: 36, borderWidth: 1, borderRadius: 18, paddingHorizontal: 10, paddingVertical: 6, marginTop: 6,
     textAlignVertical: "top", fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
