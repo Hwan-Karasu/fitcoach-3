@@ -71,7 +71,7 @@ export function TrainingSettingsScreen({ execution }: Readonly<{ execution: Trai
 }
 
 const styles = StyleSheet.create({
-  option: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderRadius: 12, padding: 14, minHeight: 64 },
+  option: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderRadius: 22, padding: 14, minHeight: 64 },
   text: { flex: 1, gap: 4 },
   title: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
   detail: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },

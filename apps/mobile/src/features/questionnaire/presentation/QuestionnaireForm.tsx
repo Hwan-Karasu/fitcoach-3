@@ -149,7 +149,7 @@ export function QuestionnaireForm({ schema, inputs, errors, onChange, disabled =
 
 const styles = StyleSheet.create({
   form: { gap: 12 },
-  section: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 14 },
+  section: { borderWidth: 1, borderRadius: 26, padding: 16, gap: 14 },
   sectionTitle: { fontSize: 16, lineHeight: 22, fontFamily: fonts.bold },
   field: { gap: 6 },
   label: { fontSize: 14, lineHeight: 19, fontFamily: fonts.semibold },

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { AppState, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { UserRound, type LucideIcon } from "lucide-react-native";
-import { ChoiceGrid, ConfirmDialog, DateField, InlineNotice, SectionTabs, StickyEditorFooter, TextField } from "../../../shared/ui/components/public.ts";
+import { ChoiceSegments, ConfirmDialog, DateField, InlineNotice, SectionTabs, StickyEditorFooter, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import type { ClientRecord, CreateClientInput } from "../domain/ClientRepositoryPort.ts";
 import type { ClientFormDraft } from "../domain/ClientRecoveryDraftPort.ts";
@@ -377,10 +377,10 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
             </View>
           </View>
           <Text style={[styles.fieldLabel, { color: colors.textPrimary }]}>Пол · нужен для расчёта КБЖУ</Text>
-          <ChoiceGrid group="Пол" columns={3}
+          <ChoiceSegments label="Пол"
             items={[{ id: "NONE", label: "Не указан" }, { id: "MALE", label: "Мужской" }, { id: "FEMALE", label: "Женский" }]}
-            selected={[sex ?? "NONE"]}
-            onPress={(id) => setSex(id === "MALE" ? "MALE" : id === "FEMALE" ? "FEMALE" : null)} />
+            value={sex ?? "NONE"}
+            onChange={(id) => setSex(id === "MALE" ? "MALE" : id === "FEMALE" ? "FEMALE" : null)} />
         </View>
         {appendix !== undefined ? (
           <View onLayout={(event) => { appendixOffset.current = event.nativeEvent.layout.y; }}>
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
   closeGlyph: { fontFamily: fonts.regular, fontSize: 20, lineHeight: 26 },
   pageTitle: { fontSize: 18, lineHeight: 23, fontFamily: fonts.bold },
   formContent: { padding: 16, paddingBottom: 32, gap: 12 },
-  sectionCard: { borderWidth: 1, borderRadius: 12, padding: 16, gap: 10 },
+  sectionCard: { borderWidth: 1, borderRadius: 26, padding: 16, gap: 10 },
   sectionTitle: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold },
   sectionDescription: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
   pair: { flexDirection: "row", gap: 12 },

@@ -42,7 +42,7 @@ export function ThemePreviewPanel() {
 }
 
 const styles = StyleSheet.create({
-  panel: { borderWidth: 1, borderRadius: 12, padding: 10, gap: 8 },
+  panel: { borderWidth: 1, borderRadius: 26, padding: 14, gap: 8 },
   title: { fontSize: 13, lineHeight: 18, fontFamily: fonts.bold },
   row: { flexDirection: "row", alignItems: "stretch", gap: 6 },
   cell: { flex: 1, minWidth: 0 },

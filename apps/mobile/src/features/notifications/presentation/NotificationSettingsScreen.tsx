@@ -131,7 +131,7 @@ export function NotificationSettingsScreen({ center, platform, onChanged }: Read
 }
 
 const styles = StyleSheet.create({
-  row: { borderWidth: 1, borderRadius: 12, padding: 12, flexDirection: "row", alignItems: "center", gap: 12 },
+  row: { borderWidth: 1, borderRadius: 22, padding: 14, flexDirection: "row", alignItems: "center", gap: 12 },
   rowText: { flex: 1, gap: 2 },
   rowTitle: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 18 },
   rowDetail: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },

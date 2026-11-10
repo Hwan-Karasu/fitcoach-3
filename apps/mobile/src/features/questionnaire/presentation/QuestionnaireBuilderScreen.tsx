@@ -478,7 +478,7 @@ const styles = StyleSheet.create({
   status: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
   content: { padding: 16, gap: 12, paddingBottom: 24 },
   grow: { flex: 1, minWidth: 0 },
-  card: { borderWidth: 1, borderRadius: 12, overflow: "hidden" },
+  card: { borderWidth: 1, borderRadius: 22, overflow: "hidden" },
   anchor: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12 },
   sectionHead: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 12, paddingRight: 4, minHeight: 56 },
   sectionTitle: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },

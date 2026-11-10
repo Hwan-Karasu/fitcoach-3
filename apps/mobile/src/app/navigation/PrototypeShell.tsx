@@ -20,6 +20,7 @@ import { QuestionnaireBuilderScreen } from "../../features/questionnaire/public.
 import { CustomExerciseEditorScreen, ExerciseDetailScreen, ExerciseLibraryScreen } from "../../features/exercises/public.ts";
 import { useAppointmentOutcomeQueue } from "../bootstrap/useAppointmentOutcomeQueue.ts";
 import { SettingsBinding } from "./SettingsBinding.tsx";
+import { useQuestionnaireStructureCaption } from "../../read-models/useMoreCaptions.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { WorkspaceRoutePreview } from "../../shared/ui/prototype/WorkspaceRoutePreview.tsx";
 import { ClientWorkspaceNavigator } from "./ClientWorkspaceNavigator.tsx";
@@ -137,6 +138,7 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const developmentTools = services.developmentTools;
+  const questionnaireStructureCaption = useQuestionnaireStructureCaption(services.questionnaire);
   const navigationTheme = useMemo(() => ({ ...DefaultTheme, dark: palette.tone === "dark", colors: {
     ...DefaultTheme.colors, primary: colors.accentInk, background: colors.canvas, card: colors.navigation,
     text: colors.textPrimary, border: colors.border, notification: colors.danger,
@@ -192,6 +194,7 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
               onOpenExerciseCatalog={() => navigation.navigate("ExerciseCatalog")}
               onOpenTrainingSettings={() => navigation.navigate("TrainingSettings")}
               onOpenBackup={() => navigation.navigate("Backup")}
+              questionnaireCaption={questionnaireStructureCaption}
             />
           )}
         </Stack.Screen>

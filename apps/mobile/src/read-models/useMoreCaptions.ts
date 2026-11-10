@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { plural } from "../shared/format/clockText.ts";
 import { completionPercent, type QuestionnaireRepositoryPort } from "../features/questionnaire/public.ts";
 import { historyCaption, questionnaireCaption, statisticsCaption } from "./moreCaptions.ts";
 import type { TrainingHistoryPort } from "./trainingHistory.ts";
@@ -19,6 +20,23 @@ export function useQuestionnaireCaption(clientId: string, repository: Questionna
   }, [repository, clientId, tick]);
   useEffect(() => repository.subscribeCommittedChanges((change) => { if (change.clientId === null || change.clientId === clientId) setTick((value) => value + 1); }), [repository, clientId]);
   return questionnaireCaption(state !== null && state.clientId === clientId ? state.percent : null);
+}
+
+/** Подпись «Конструктор анкеты» в настройках: «Версия N · M разделов» по текущей опубликованной анкете (UIX-13). */
+export function useQuestionnaireStructureCaption(repository: QuestionnaireRepositoryPort): string | null {
+  const [caption, setCaption] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    let active = true;
+    void repository.getPublished().then((published) => {
+      if (!active) return;
+      const sections = published.schema.sections.length;
+      setCaption(`Версия ${published.version} · ${sections} ${plural(sections, "раздел", "раздела", "разделов")}`);
+    }, () => undefined);
+    return () => { active = false; };
+  }, [repository, tick]);
+  useEffect(() => repository.subscribeCommittedChanges((change) => { if (change.scope === "SCHEMA") setTick((value) => value + 1); }), [repository]);
+  return caption;
 }
 
 /** Подпись карточки «Статистика»: «Ноябрь: N занятий» (UIX-10/11); день берётся при каждом перечитывании. */

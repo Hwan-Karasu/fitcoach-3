@@ -64,14 +64,14 @@ export function ThemeCard({
 }
 
 const styles = StyleSheet.create({
-  card: { flex: 1, minWidth: 0, borderWidth: 2, borderRadius: 12, padding: 4 },
-  preview: { flex: 1, minHeight: 44, borderRadius: 7, padding: 4, justifyContent: "center" },
+  card: { flex: 1, minWidth: 0, borderWidth: 2, borderRadius: 24, padding: 6 },
+  preview: { flex: 1, minHeight: 44, borderRadius: 16, padding: 6, justifyContent: "center" },
   top: { flexDirection: "row", alignItems: "flex-start", gap: 2 },
   nameColumn: { flex: 1, minWidth: 0, gap: 3 },
   name: { fontSize: 12, lineHeight: 16, fontFamily: fonts.bold },
   selectedText: { width: 14, fontSize: 12, lineHeight: 16, fontFamily: fonts.bold, textAlign: "right" },
   swatches: { flexDirection: "row", alignItems: "center" },
-  accentButton: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 8 },
+  accentButton: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 14 },
   accentRing: { borderWidth: 2, borderRadius: 17, padding: 3 },
   colorSwatch: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
   check: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 18 },
