@@ -45,7 +45,7 @@ function CompareCard({ label, now, before, change }: Readonly<{ label: string; n
  * Выбранный календарный месяц с переходом к любому прошлому, сравнение с предыдущим календарным месяцем (неполный месяц — с такой же по длине частью), те же
  * определения и фильтры, что в общей статистике. Считается по актуальным фактам, снимок не сохраняется.
  */
-export function MonthlyReportScreen({ clientId, history, bodyweight, exercises, onOpenWorkout, now = new Date() }: Readonly<{
+export function MonthlyReportScreen({ clientId, history, bodyweight, exercises, onOpenWorkout, now: nowProp }: Readonly<{
   clientId: string;
   history: Readonly<{ list: (clientId: string) => Promise<readonly TrainingHistoryEntry[]>;
     subscribe: (clientId: string, listener: () => void) => () => void }>;
@@ -54,6 +54,9 @@ export function MonthlyReportScreen({ clientId, history, bodyweight, exercises, 
   onOpenWorkout: (slot: WorkoutSlot) => void;
   now?: Date;
 }>) {
+  // «Сейчас» фиксируется при открытии экрана: новая дата на каждый рендер сбивала бы useMemo периода и списков.
+  const [openedAt] = useState(() => new Date());
+  const now = nowProp ?? openedAt;
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const lookup = useExerciseLookup(exercises);

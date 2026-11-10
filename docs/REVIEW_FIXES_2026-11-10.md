@@ -54,22 +54,22 @@
 ### B. Устаревшие данные и ошибки в экранах
 | ID | Ст. | Где | Суть | Что сделать |
 |---|---|---|---|---|
-| B1 | [ ] | `nutrition/presentation/NutritionHomeCards.tsx:212-242` | КБЖУ-кольцо и «съедено/цель» без проверки `stale` при смене дня | `fresh = data !== null && !stale` |
-| B2 | [ ] | `NutritionDiaryScreen.tsx:108-120` `waterRequests` | Кэш воды живёт вечно | Чистить при `pending===0` в любом исходе |
-| B3 | [ ] | `MealMacroStats.tsx:37,60,74`, `useNutritionGuide` | Ошибка расчёта → статистика молча пропадает | Пробросить `failed` из `useCalcData`, показать `InlineNotice` |
-| B4 | [ ] | `accounting/presentation/ClientAccountingScreen.tsx:86-90` | `load()` без защиты от устаревших ответов и размонтирования | Счётчик поколения/флаг `active` |
-| B5 | [ ] | `clients/presentation/ClientRosterSettingsScreen.tsx:43-56`, `BirthdaySettingsSaveQueue.ts` | После сбоя записи в поле остаётся несохранённое число | В ветке отказа `setLeadDays(String(saved…))`, `setLeadInvalid(false)` |
-| B6 | [ ] | `clients/presentation/ClientListsPreview.tsx:84-86` | Ошибка `port.load` проглатывается → вечный скелетон | Флаг ошибки + «Повторить» |
-| B7 | [ ] | `notifications/presentation/NotificationCenterScreen.tsx:51-84` | `reload()` без защиты от гонки/unmount; undo теряется при двух свайпах; открытый свайп при ошибке | Счётчик поколения, `active`, стек undo или принять, `ref.close()` |
-| B8 | [ ] | `TrainingStatisticsScreen.tsx:43`, `MonthlyReportScreen.tsx:48`, `ClientExerciseScreen.tsx:192,226-231` | `now = new Date()` по умолчанию + `progressMetrics()` на каждый рендер сбивают `useMemo` | `useMemo/useRef` для `now`, `useMemo` для `metrics` |
-| B9 | [ ] | `useMetricSeries.ts:67`, `MetricScreen.tsx:140,161-162` | `failed` мигает при смене периода; «Максимум/Минимум» приёмов с десятой («5,0») | Сброс `failed` при смене ключа; целый формат для min/max |
-| B10 | [ ] | `NutritionHomeCards.tsx:36,50,69,308` | Ошибки чтения шагов/отметки/веса глушатся; устаревший текст «в разделе «Питание»» | Текст → «в «Расчёте»»; ошибки — оставить значение с пометкой или показать |
-| B11 | [ ] | `plans/presentation/ProgramLibraryScreen.tsx:349` | `restoreForClient(...).catch(reload)` без сообщения | `actionError` как в `run` |
-| B12 | [ ] | `PeriodizedBuilderScreen.tsx:718` и др. `pickDate(...).then` без `.catch` (также `ClientAccountingScreen.tsx:216,226`) | Необработанный отказ | Добавить `.catch` |
-| B13 | [ ] | `ThemeCatalogPreview.tsx:40-53,83` | Возможная вторая дублирующая «←» | Проверить, есть ли шапка навигатора |
-| B14 | [ ] | `NotificationSettingsScreen.tsx:56,67` | `save` молча возвращается при занятом замке; `onChanged()` внутри `try` | Вынести `onChanged()`; сообщение |
-| B15 | [ ] | `HealthConnectSection.tsx` `run()` | setState после unmount | флаг `active`/ref |
-| B16 | [ ] | `useHealth.ts`/прочие мелочи по отчётам | — | по ходу |
+| B1 | [f] | `nutrition/presentation/NutritionHomeCards.tsx:212-242` | КБЖУ-кольцо и «съедено/цель» без проверки `stale` при смене дня | `fresh = data !== null && !stale` |
+| B2 | [f] | `NutritionDiaryScreen.tsx:108-120` `waterRequests` | Кэш воды живёт вечно | Чистить при `pending===0` в любом исходе |
+| B3 | [f] | `MealMacroStats.tsx:37,60,74`, `useNutritionGuide` | Ошибка расчёта → статистика молча пропадает | Пробросить `failed` из `useCalcData`, показать `InlineNotice` |
+| B4 | [f] | `accounting/presentation/ClientAccountingScreen.tsx:86-90` | `load()` без защиты от устаревших ответов и размонтирования | Счётчик поколения/флаг `active` |
+| B5 | [f] | `clients/presentation/ClientRosterSettingsScreen.tsx:43-56`, `BirthdaySettingsSaveQueue.ts` | После сбоя записи в поле остаётся несохранённое число | В ветке отказа `setLeadDays(String(saved…))`, `setLeadInvalid(false)` |
+| B6 | [f] | `clients/presentation/ClientListsPreview.tsx:84-86` | Ошибка `port.load` проглатывается → вечный скелетон | Флаг ошибки + «Повторить» |
+| B7 | [f] | `notifications/presentation/NotificationCenterScreen.tsx:51-84` | `reload()` без защиты от гонки/unmount; undo теряется при двух свайпах; открытый свайп при ошибке | Счётчик поколения, `active`, стек undo или принять, `ref.close()` |
+| B8 | [f] | `TrainingStatisticsScreen.tsx:43`, `MonthlyReportScreen.tsx:48`, `ClientExerciseScreen.tsx:192,226-231` | `now = new Date()` по умолчанию + `progressMetrics()` на каждый рендер сбивают `useMemo` | `useMemo/useRef` для `now`, `useMemo` для `metrics` |
+| B9 | [f] | `useMetricSeries.ts:67`, `MetricScreen.tsx:140,161-162` | `failed` мигает при смене периода; «Максимум/Минимум» приёмов с десятой («5,0») | Сброс `failed` при смене ключа; целый формат для min/max |
+| B10 | [f] | `NutritionHomeCards.tsx:36,50,69,308` | Ошибки чтения шагов/отметки/веса глушатся; устаревший текст «в разделе «Питание»» | Текст → «в «Расчёте»»; ошибки — оставить значение с пометкой или показать |
+| B11 | [f] | `plans/presentation/ProgramLibraryScreen.tsx:349` | `restoreForClient(...).catch(reload)` без сообщения | `actionError` как в `run` |
+| B12 | [f] | `PeriodizedBuilderScreen.tsx:718` и др. `pickDate(...).then` без `.catch` (также `ClientAccountingScreen.tsx:216,226`) | Необработанный отказ | Добавить `.catch` |
+| B13 | [x] | `ThemeCatalogPreview.tsx:40-53,83` | Возможная вторая дублирующая «←» | Проверить, есть ли шапка навигатора |
+| B14 | [f] | `NotificationSettingsScreen.tsx:56,67` | `save` молча возвращается при занятом замке; `onChanged()` внутри `try` | Вынести `onChanged()`; сообщение |
+| B15 | [d] | `HealthConnectSection.tsx` `run()` | setState после unmount | флаг `active`/ref |
+| B16 | [d] | `useHealth.ts`/прочие мелочи по отчётам | — | по ходу |
 
 ### C. Доступность, жесты, производительность
 | ID | Ст. | Где | Суть | Что сделать |
@@ -115,3 +115,8 @@
 ## Итоги среза R1 (2026-11-10)
 Исправлено `[f]`: A1 (`sidesRpeAfter`), A2 (`monday` в данных недели), A3 (частичный тоннаж — «Неполные данные»), A5 (сужена ветка шагов HC: >100 000 снимает проекцию, нулевая ветка убрана), A6 (повтор `closeAsync` потерянного writer), A8 (`registerNavigationCopy` не падает на втором родстве клиента), A10 (одно правило RPE 1…10), A14 (`async`), A15 (смена привязки обнуляет идущий sync).
 Отложено/намеренно `[d]`: A4 (нет данных календаря = ноль задокументировано; нужен признак `calendarKnown` и правка `RosterSummaryCard`), A7 (`setExerciseRest` — точечная правка из дневника, ревизия растёт, чтобы конструктор получил конфликт; в production не вызывается), A9 (атомарность карточки+веса намеренна, ошибка понятная, форма сохраняется), A11 (дни — дочерние строки версий, счёт по версиям корректен), A12 (JSON пишет само приложение; низкий риск), A13 (фиксация показанных цветов безвредна и идемпотентна), A16 (общее сообщение при невалидной записи вставки — низкий приоритет).
+
+
+## Итоги среза R2 (2026-11-10)
+Исправлено `[f]`: B1 (`fresh` для колец и «съедено»), B2 (кэш воды освобождается), B3 (`failed` расчёта в статистике БЖУ), B4/B7 (поколение чтения, закрытие смахнутой строки при сбое), B5 (поле дней после отказа), B6 (ошибка сводки + «Повторить»), B8 (стабильный `now`, `useMemo` метрик), B9 (ошибка привязана к ключу; max/min целые), B10 (текст «в «Расчёте»»; ошибки чтения шагов/веса остаются «нет данных»), B11 (восстановление из архива через `run`), B12 (`pickDate` не отклоняет промис), B14 (`onChanged()` вне `try`).
+Ложное: B13 `[x]` — у маршрута Appearance навигаторская шапка скрыта (`headerShown:false`). Отложено `[d]`: B15 (React 19 без предупреждения и утечки), B16 (без конкретики), в B14 — молчаливый возврат при занятом замке (элементы и так `disabled={busy}`).

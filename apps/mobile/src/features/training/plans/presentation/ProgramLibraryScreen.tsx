@@ -346,7 +346,7 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
           <ListSectionHeader title="Архив" count={library.archived.length} />
           {library.archived.map((card) => (
             <ProgramCardRow key={card.id} card={card} selected={false}
-              onRestore={() => { void repository.restoreForClient(clientId, card.id).catch(reload); }} />
+              onRestore={() => { void run(async () => { await repository.restoreForClient(clientId, card.id); }); }} />
           ))}
         </> : null}
       </Animated.ScrollView>

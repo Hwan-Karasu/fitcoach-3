@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
-import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
+import ReanimatedSwipeable, { type SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { AppButton, EmptyState, InlineNotice, LoadingState } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
@@ -18,12 +18,13 @@ function whenText(occursAt: string, now: Date): string {
   return sameDay ? clock : `${pad(at.getDate())}.${pad(at.getMonth() + 1)} ${clock}`;
 }
 
-function Row({ item, now, onOpen, onDismiss }: Readonly<{ item: CenterEvent; now: Date; onOpen: (item: CenterEvent) => void; onDismiss: (item: CenterEvent) => void }>) {
+function Row({ item, now, onOpen, onDismiss }: Readonly<{ item: CenterEvent; now: Date; onOpen: (item: CenterEvent) => void; onDismiss: (item: CenterEvent, close: () => void) => void }>) {
   const { palette: { tokens: colors } } = usePrototypeTheme();
   const unread = item.readAt === null;
+  const swipeable = useRef<SwipeableMethods>(null);
   return (
-    <ReanimatedSwipeable overshootRight={false} overshootLeft={false} friction={2}
-      onSwipeableOpen={() => onDismiss(item)}
+    <ReanimatedSwipeable ref={swipeable} overshootRight={false} overshootLeft={false} friction={2}
+      onSwipeableOpen={() => onDismiss(item, () => swipeable.current?.close())}
       renderRightActions={() => <View style={[styles.swipe, { backgroundColor: colors.danger }]}><Trash2 size={20} color={colors.onAccentFill} /></View>}
       renderLeftActions={() => <View style={[styles.swipe, { backgroundColor: colors.danger }]}><Trash2 size={20} color={colors.onAccentFill} /></View>}>
       <Pressable accessibilityRole="button" accessibilityLabel={`${unread ? "Непрочитано. " : ""}${item.title}. ${item.body}. ${whenText(item.occursAt, now)}`}
@@ -56,18 +57,22 @@ export function NotificationCenterScreen({ center, onOpenSettings, onOpenEvent }
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [now] = useState(() => new Date());
 
+  /** Поколение чтения: поздний ответ прежнего запроса или размонтированного экрана ленту не перезаписывает. */
+  const generation = useRef(0);
   const reload = useCallback(() => {
-    center.listFeed().then((rows) => { setFeed(rows); setFailed(false); }, () => setFailed(true));
+    const request = ++generation.current;
+    center.listFeed().then((rows) => { if (request === generation.current) { setFeed(rows); setFailed(false); } },
+      () => { if (request === generation.current) setFailed(true); });
   }, [center]);
   useEffect(() => {
     reload();
     const off = center.subscribeCommittedChanges((change) => { if (change.scope === "EVENTS") reload(); });
-    return () => { off(); if (undoTimer.current !== null) clearTimeout(undoTimer.current); };
+    return () => { generation.current += 1; off(); if (undoTimer.current !== null) clearTimeout(undoTimer.current); };
   }, [center, reload]);
 
-  const attempt = async (action: () => Promise<unknown>) => {
+  const attempt = async (action: () => Promise<unknown>, onFail?: () => void) => {
     setError(null);
-    try { await action(); } catch { setError("Не удалось сохранить изменение. Лента не изменена."); reload(); }
+    try { await action(); } catch { setError("Не удалось сохранить изменение. Лента не изменена."); onFail?.(); reload(); }
   };
 
   const open = (item: CenterEvent) => {
@@ -76,13 +81,14 @@ export function NotificationCenterScreen({ center, onOpenSettings, onOpenEvent }
       onOpenEvent?.(item);
     });
   };
-  const dismiss = (item: CenterEvent) => {
+  /** Сбой убирания: открытая смахиванием строка закрывается, лента остаётся прежней. */
+  const dismiss = (item: CenterEvent, close: () => void) => {
     void attempt(async () => {
       await center.dismiss(item.id);
       setUndo(item);
       if (undoTimer.current !== null) clearTimeout(undoTimer.current);
       undoTimer.current = setTimeout(() => setUndo(null), UNDO_MS);
-    });
+    }, close);
   };
   const unreadCount = useMemo(() => feed?.filter((item) => item.readAt === null).length ?? 0, [feed]);
   const hasRead = useMemo(() => feed?.some((item) => item.readAt !== null) === true, [feed]);

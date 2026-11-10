@@ -83,17 +83,21 @@ export function ClientAccountingScreen({ clientId, repository, listCreditSession
   const [packPaymentDate, setPackPaymentDate] = useState(today);
   const [packPaymentMethod, setPackPaymentMethod] = useState<PaymentMethod>("transfer");
 
+  /** Поколение чтения: ответ устаревшего запроса (смена клиента, быстрые обновления) или размонтированного экрана не применяется. */
+  const generation = useRef(0);
   const load = useCallback(() => {
+    const request = ++generation.current;
     void Promise.all([repository.getClientSnapshot(clientId), listCreditSessionTypes()]).then(
-      ([next, creditTypes]) => { setSnapshot(next); setTypes(creditTypes); setFailed(false); },
-      () => setFailed(true));
+      ([next, creditTypes]) => { if (request === generation.current) { setSnapshot(next); setTypes(creditTypes); setFailed(false); } },
+      () => { if (request === generation.current) setFailed(true); });
   }, [clientId, listCreditSessionTypes, repository]);
 
   useEffect(() => {
     load();
-    return repository.subscribeCommittedChanges((change) => {
+    const off = repository.subscribeCommittedChanges((change) => {
       if (change.clientIds === "ALL" || change.clientIds.includes(clientId)) load();
     });
+    return () => { generation.current += 1; off(); };
   }, [clientId, load, repository]);
 
   const run = async (task: () => Promise<void>, done: string) => {

@@ -108,6 +108,8 @@ export function MetricScreen({ metric, clientId, body, diary, targets, calc, mea
   const dayValue = scale === "DAY" && summary !== null ? summary.days[0]?.value ?? null : null;
   const big = summary === null ? null : scale === "DAY" ? dayValue : metric === "meals" && summary.known > 0 ? summary.total / summary.known : summary.average;
   /** Приёмы в среднем — с десятой («3,5»), остальные показатели — целые. */
+  /** Максимум/минимум по дням — значения отдельных дней: приёмы целые («5»), в отличие от среднего («4,5»). */
+  const extremeText = (value: number) => metric === "sleep" ? bigText(value) : spaced(value);
   const bigText = (value: number) => metric === "sleep" || (metric === "meals" && scale !== "DAY") ? (Math.round(value * 10) / 10).toFixed(1).replace(".", ",") : spaced(value);
   const elapsedDays = summary === null ? 0 : summary.days.filter((entry) => entry.date <= today).length;
   const goal = data?.goal ?? null;
@@ -158,8 +160,8 @@ export function MetricScreen({ metric, clientId, body, diary, targets, calc, mea
                 {goal === null ? null : <Text style={[styles.goal, { color: colors.textMuted }]}>{info.goalText(goal)}</Text>}
                 {scale === "DAY" ? null : (
                   <View style={styles.tiles}>
-                    <Tile label="Максимум" value={summary.max === null ? "—" : bigText(summary.max)} />
-                    <Tile label="Минимум" value={summary.min === null ? "—" : bigText(summary.min)} />
+                    <Tile label="Максимум" value={summary.max === null ? "—" : extremeText(summary.max)} />
+                    <Tile label="Минимум" value={summary.min === null ? "—" : extremeText(summary.min)} />
                     <Tile label="Дней с данными" value={`${summary.known} из ${Math.max(elapsedDays, summary.known)}`} />
                   </View>
                 )}

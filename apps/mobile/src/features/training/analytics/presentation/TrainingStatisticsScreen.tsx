@@ -30,7 +30,7 @@ const sections: readonly Readonly<{ id: Section; label: string }>[] = [
  * исходных занятий и подходов (§48.86.19). Экран только читает. Средняя длительность — по занятиям с валидной парой
  * отметок начала и конца (§48.86.17).
  */
-export function TrainingStatisticsScreen({ clientId, history, bodyweight, exercises, onOpenExercise, onOpenWorkout, onOpenMonthlyReport, now = new Date() }: Readonly<{
+export function TrainingStatisticsScreen({ clientId, history, bodyweight, exercises, onOpenExercise, onOpenWorkout, onOpenMonthlyReport, now: nowProp }: Readonly<{
   clientId: string;
   history: Readonly<{ list: (clientId: string) => Promise<readonly TrainingHistoryEntry[]>;
     planned: (clientId: string, filter: HistoryFilter) => Promise<number | null>;
@@ -42,6 +42,9 @@ export function TrainingStatisticsScreen({ clientId, history, bodyweight, exerci
   onOpenMonthlyReport: () => void;
   now?: Date;
 }>) {
+  // «Сейчас» фиксируется при открытии экрана: новая дата на каждый рендер сбивала бы useMemo периода и списков.
+  const [openedAt] = useState(() => new Date());
+  const now = nowProp ?? openedAt;
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const lookup = useExerciseLookup(exercises);

@@ -10,23 +10,25 @@ const toLocal = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1
 
 /**
  * Системный выбор даты Android (UI-OWN-023 — все поля ввода даты через него, без самописных календарей).
- * Даты — локальные `YYYY-MM-DD`; `min`/`max` включительно. Отмена — `null`.
+ * Даты — локальные `YYYY-MM-DD`; `min`/`max` включительно. Отмена и сбой открытия окна — `null` (промис не отклоняется: вызывающие не обязаны ловить отказ).
  */
 export function pickDate(input: Readonly<{ value: string; min?: string; max?: string; title?: string; confirmLabel?: string }>):
   Promise<string | null> {
   if (Platform.OS !== "android") return Promise.resolve(null);
   return new Promise((resolve) => {
-    DateTimePickerAndroid.open({
-      value: toDate(input.value),
-      mode: "date",
-      title: input.title,
-      minimumDate: input.min === undefined ? undefined : toDate(input.min),
-      maximumDate: input.max === undefined ? undefined : toDate(input.max),
-      firstDayOfWeek: 1,
-      positiveButton: { label: input.confirmLabel ?? "Готово" },
-      negativeButton: { label: "Отмена" },
-      onChange: (event: DateTimePickerEvent, date?: Date) => resolve(event.type === "set" && date ? toLocal(date) : null),
-      onError: () => resolve(null),
-    });
+    try {
+      DateTimePickerAndroid.open({
+        value: toDate(input.value),
+        mode: "date",
+        title: input.title,
+        minimumDate: input.min === undefined ? undefined : toDate(input.min),
+        maximumDate: input.max === undefined ? undefined : toDate(input.max),
+        firstDayOfWeek: 1,
+        positiveButton: { label: input.confirmLabel ?? "Готово" },
+        negativeButton: { label: "Отмена" },
+        onChange: (event: DateTimePickerEvent, date?: Date) => resolve(event.type === "set" && date ? toLocal(date) : null),
+        onError: () => resolve(null),
+      });
+    } catch { resolve(null); }
   });
 }

@@ -61,11 +61,12 @@ export function NotificationSettingsScreen({ center, platform, onChanged }: Read
     lock.current = true;
     setBusy(true);
     setError(null);
+    let saved = false;
     try {
       // Разрешение запрашивается в понятном контексте — когда тренер включает напоминание (§41.12); отказ настройку не сбрасывает.
       if (askPermission && (permission === "undetermined" || permission === null)) setPermission(await platform.requestPermission().catch(() => "denied" as const));
       setSettings(await center.saveSettings(next));
-      onChanged();
+      saved = true;
     } catch (failure) {
       setError(failure instanceof Error && failure.message === "NOTIFICATION_SETTINGS_INVALID"
         ? "Проверьте значения: начало и конец тихих часов не должны совпадать, интервал — от 1 минуты до 24 часов."
@@ -74,6 +75,8 @@ export function NotificationSettingsScreen({ center, platform, onChanged }: Read
       lock.current = false;
       setBusy(false);
     }
+    // Перепланирование — после успешной записи и вне try: его сбой не выдаётся за сбой сохранения настройки.
+    if (saved) { try { onChanged(); } catch { /* повторится при следующем изменении или запуске */ } }
   };
 
   if (failed) return <PrototypeScreen><InlineNotice kind="error">Не удалось загрузить настройки уведомлений.</InlineNotice></PrototypeScreen>;

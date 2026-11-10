@@ -209,13 +209,15 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
     return messages.length === 0 ? null : messages.join(" ");
   }, [clientId, calc, recordWeight, day]);
 
-  const recorded = data?.summary.state === "FOOD_RECORDED";
+  // Данные предыдущего дня (stale) не показываются как данные выбранного: кольцо и «съедено» остаются пустыми, пока день не загрузился.
+  const fresh = data !== null && !stale;
+  const recorded = fresh && data.summary.state === "FOOD_RECORDED";
   /** Ориентир по калориям: цель тренера (коридор Б/Ж/У → ккал), иначе суточный ориентир расчёта. */
   const liveKcal = liveTarget?.kcal ?? null;
   const kcalRange = rangeText(liveKcal);
   const orientText = liveTarget !== null ? kcalRange : (guide === null ? null : String(guide));
   const orientMiddle = liveTarget !== null ? (liveKcal === null ? null : midpoint(liveKcal) / 10) : guide;
-  const eaten = (metric: "kcal" | "protein" | "fat" | "carbs"): number | null => (recorded && data !== null ? data.summary.totals[NUTRIENT_OF[metric]] : null);
+  const eaten = (metric: "kcal" | "protein" | "fat" | "carbs"): number | null => (recorded ? data.summary.totals[NUTRIENT_OF[metric]] : null);
   const eatenKcalX10 = eaten("kcal");
   const fraction = eatenKcalX10 === null || orientMiddle === null || orientMiddle <= 0 ? null : eatenKcalX10 / 10 / orientMiddle;
   /** Дуга делится по калориям съеденных белков, жиров и углеводов (4/9/4). */
@@ -225,7 +227,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
     if (effective !== null) return rangeText(effective[metric]) ?? "—";
     return defaults === null || defaults[metric] === null ? "—" : String(defaults[metric]).replace(".", ",");
   };
-  const eatenText = (metric: "protein" | "fat" | "carbs"): string => (data === null ? "—" : !recorded ? "0" : wholeText(eaten(metric)));
+  const eatenText = (metric: "protein" | "fat" | "carbs"): string => (!fresh ? "—" : !recorded ? "0" : wholeText(eaten(metric)));
 
   return (
     <>
@@ -239,8 +241,8 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
             fraction={goalFraction(sleepHours, SLEEP_GOAL_HOURS)} hint="Открыть график сна" onPress={() => onOpenMetric("sleep")} />
           <DayRing label="Расход" unit="ккал" caption="Расход, ккал" value={tdee === null ? null : wholeNumber(tdee)} fraction={null}
             hint="Открыть график расхода" onPress={() => onOpenMetric("expenditure")} />
-          <DayRing label="Приёмы" caption="Приёмы пищи" value={data === null || stale ? null : String(mealCount(data.summary))}
-            fraction={data === null || stale ? null : goalFraction(mealCount(data.summary), MEALS_GOAL)} hint="Открыть график приёмов пищи" onPress={() => onOpenMetric("meals")} />
+          <DayRing label="Приёмы" caption="Приёмы пищи" value={!fresh ? null : String(mealCount(data.summary))}
+            fraction={!fresh ? null : goalFraction(mealCount(data.summary), MEALS_GOAL)} hint="Открыть график приёмов пищи" onPress={() => onOpenMetric("meals")} />
         </View>
         <View style={styles.plates}>
           <DayPlate label="Вес, кг" value={future || dayWeight.weight === null ? null : String(dayWeight.weight).replace(".", ",")} disabled={future}
@@ -305,7 +307,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
         {loaded !== null && loaded.fat === null ? (
           <Pressable accessibilityRole="link" accessibilityLabel="Рассчитать процент жира" onPress={() => setCalcOpen(true)}
             style={{ minHeight: 44, justifyContent: "center" }}>
-            <Text style={[styles.hint, { color: colors.textSecondary }]}>Для расчёта БЖУ нужен процент жира. Его можно рассчитать в разделе «Питание».</Text>
+            <Text style={[styles.hint, { color: colors.textSecondary }]}>Для расчёта БЖУ нужен процент жира. Его можно рассчитать в «Расчёте».</Text>
           </Pressable>
         ) : null}
         <NutritionTargetRows key={clientId} clientId={clientId} targets={targets} calories={guide} defaults={defaults} leanMassKg={leanMassKg} mode={mode} onModeAutoChange={setMode} onLiveTarget={setLiveTarget} />

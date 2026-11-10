@@ -189,7 +189,7 @@ function HistoryTree({ programs, onOpen }: Readonly<{ programs: readonly Exercis
  * программ клиента, «Прогресс» — графики по профилю учёта и рекорды. Фильтр программы/мезоцикла общий для истории
  * и прогресса, период — только для прогресса (§37.4). Данные — хронология занятий; экран ничего не записывает.
  */
-export function ClientExerciseScreen({ clientId, exerciseId, history, exercises, renderOverview, onOpenWorkout, now = new Date() }: Readonly<{
+export function ClientExerciseScreen({ clientId, exerciseId, history, exercises, renderOverview, onOpenWorkout, now: nowProp }: Readonly<{
   clientId: string;
   exerciseId: string;
   history: Readonly<{ list: (clientId: string) => Promise<readonly TrainingHistoryEntry[]>;
@@ -199,6 +199,9 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
   onOpenWorkout: (target: Readonly<{ programId: string; weekIndex: number; plannedWorkoutId: string }>) => void;
   now?: Date;
 }>) {
+  // «Сейчас» фиксируется при открытии экрана: новая дата на каждый рендер сбивала бы useMemo периода и списков.
+  const [openedAt] = useState(() => new Date());
+  const now = nowProp ?? openedAt;
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const lookup = useExerciseLookup(exercises);
@@ -223,7 +226,8 @@ export function ClientExerciseScreen({ clientId, exerciseId, history, exercises,
     return sessions.filter((session) => allowed.has(session.entry.key));
   }, [sessions, range]);
   const tree = useMemo(() => exerciseTree(inPeriod), [inPeriod]);
-  const metrics = progressMetrics(lookup?.get(exerciseId)?.metrics ?? []);
+  const exerciseMetrics = lookup?.get(exerciseId)?.metrics;
+  const metrics = useMemo(() => progressMetrics(exerciseMetrics ?? []), [exerciseMetrics]);
   const metric = chosen !== null && metrics.includes(chosen) ? chosen : metrics[0] ?? null;
   const points = useMemo(() => metric === null ? [] : progressSeries(inPeriod, metric), [inPeriod, metric]);
   const chartPoints = useMemo(() => points.map((point) => ({ key: point.key, label: shortDate(point.date), caption: dateText(point.date), value: point.value })), [points]);

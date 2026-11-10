@@ -98,6 +98,12 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
   const [copying, setCopying] = useState(false);
   const copyLock = useRef(false);
   const waterRequests = useRef(new Map<string, { pending: number; value: number }>());
+  const latestWater = useRef<number | null>(null);
+  latestWater.current = data?.waterMl ?? 0;
+  // Данные дня догнали записанную воду: кэш запросов больше не нужен, внешние изменения воды снова читаются из данных.
+  useEffect(() => {
+    for (const [key, request] of waterRequests.current) if (request.pending === 0 && request.value === (data?.waterMl ?? 0)) waterRequests.current.delete(key);
+  }, [data?.waterMl]);
   const [savingMeal, setSavingMeal] = useState<readonly FoodSnapshot[] | null>(null);
   /** Ручное сворачивание приёмов; без выбора приём раскрыт, если в нём есть записи. */
   const [expanded, setExpanded] = useState<Readonly<Partial<Record<MealSlot, boolean>>>>({});
@@ -115,7 +121,8 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
     const pending = request;
     void guard(() => next === 0 ? diary.clearWater(clientId, localDate) : diary.setWater(clientId, localDate, next)).then((message) => {
       pending.pending -= 1;
-      if (message !== null && pending.pending === 0) waterRequests.current.delete(key);
+      // Запись удалена или нет — кэш не живёт вечно: при ошибке сразу, при успехе — когда экран уже показывает записанное значение (см. эффект ниже).
+      if (pending.pending === 0 && (message !== null || latestWater.current === pending.value)) waterRequests.current.delete(key);
     });
   };
 

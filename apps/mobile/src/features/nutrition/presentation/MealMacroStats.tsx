@@ -34,7 +34,7 @@ export function MealMacroStats({ clientId, body, span, diary, targets, calc, mea
   diary: NutritionDiaryPort; targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; onOpenDay: (date: string) => void }>) {
   const colors = usePrototypeTheme().palette.tokens;
   const macroColors = useMacroColors();
-  const { loaded: guideLoaded, guide, defaults, leanMassKg } = useNutritionGuide(clientId, body, calc, measurements);
+  const { loaded: guideLoaded, failed: guideFailed, guide, defaults, leanMassKg } = useNutritionGuide(clientId, body, calc, measurements);
   const key = `${clientId}|${span.from}|${span.to}`;
   const [state, setState] = useState<Readonly<{ key: string; entries: readonly EatenEntry[]; versions: readonly TargetVersion[]; exceptions: readonly TargetException[] }> | null>(null);
   const [failed, setFailed] = useState(false);
@@ -71,7 +71,7 @@ export function MealMacroStats({ clientId, body, span, diary, targets, calc, mea
   }, [state, key, span.from, span.to, guideLoaded, guide, defaults, leanMassKg]);
   const weekGroups = useMemo(() => weeklyAverages(stats?.days ?? []), [stats]);
 
-  if (stats === null) return failed ? <InlineNotice kind="error">Не удалось загрузить статистику питания.</InlineNotice> : null;
+  if (stats === null) return failed || guideFailed ? <InlineNotice kind="error">Не удалось загрузить статистику питания.</InlineNotice> : null;
   if (stats.accountedDays === 0) return <EmptyState reason="no-data" title="Нет данных" body="За выбранный период нет пищевых записей. Статистика появится после добавления еды в дневник." />;
   return (
     <>

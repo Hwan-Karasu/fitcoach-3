@@ -51,6 +51,8 @@ export function ClientRosterSettingsScreen({ repository }: Readonly<{
     }, () => {
       if (!queue.isLatest(write.sequence)) return;
       savedRef.current = queue.value; setSaved(queue.value);
+      // Поле дней возвращается к сохранённому значению: после отказа в нём не должно оставаться число, которого нет в хранилище.
+      if (queue.value !== null) { setLeadDays(String(queue.value.birthdayPinLeadDays)); setLeadInvalid(false); }
       setError("Не удалось сохранить настройки. Попробуйте ещё раз.");
     });
   }, [queue]);

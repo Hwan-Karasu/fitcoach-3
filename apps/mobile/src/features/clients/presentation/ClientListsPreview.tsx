@@ -70,11 +70,12 @@ const metricLabel: Readonly<Record<RosterMetricId, string>> = {
  * Сводка других владельцев для видимых карточек: перечитывается при их изменениях и в момент,
  * когда закончится ближайшая сегодняшняя запись (GetNextEligibilityTransitionAt без частого опроса).
  */
-function useRosterOverview(port: RosterOverviewPort, clientIds: readonly string[], today: string): RosterOverview | null {
+function useRosterOverview(port: RosterOverviewPort, clientIds: readonly string[], today: string): Readonly<{ overview: RosterOverview | null; failed: boolean; retry: () => void }> {
   const { clientCards } = usePrototypeTheme();
   const metricKey = clientCards.metricIds.join("|");
   const [overview, setOverview] = useState<RosterOverview | null>(null);
   const [tick, setTick] = useState(0);
+  const [failed, setFailed] = useState(false);
   const generation = useRef(0);
   const key = clientIds.join("|");
   // Изменения других владельцев (в том числе каждый подход дневника) на скрытом экране не пересчитывают сводку всех клиентов: один раз при возврате.
@@ -82,8 +83,8 @@ function useRosterOverview(port: RosterOverviewPort, clientIds: readonly string[
   useEffect(() => {
     const request = ++generation.current;
     port.load(key === "" ? [] : key.split("|"), new Date(), clientCards.metricIds).then((value) => {
-      if (request === generation.current) setOverview(value);
-    }, () => undefined);
+      if (request === generation.current) { setOverview(value); setFailed(false); }
+    }, () => { if (request === generation.current) setFailed(true); });
   }, [port, key, today, tick, changes, metricKey, clientCards.metricIds]);
   useEffect(() => {
     if (overview === null) return undefined;
@@ -96,7 +97,7 @@ function useRosterOverview(port: RosterOverviewPort, clientIds: readonly string[
     const timer = setTimeout(() => setTick((value) => value + 1), Math.max(wait, 1000));
     return () => clearTimeout(timer);
   }, [overview]);
-  return overview;
+  return { overview, failed, retry: () => setTick((value) => value + 1) };
 }
 
 
@@ -126,7 +127,7 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
   const birthdaySettings = data?.birthday ?? defaultBirthday;
   const activeIds = useMemo(() => data?.rows.filter((row) => row.lifecycle === "ACTIVE").map((row) => row.id) ?? [],
     [data]);
-  const overview = useRosterOverview(overviewSource, activeIds, today);
+  const { overview, failed: overviewFailed, retry: retryOverview } = useRosterOverview(overviewSource, activeIds, today);
 
   useEffect(() => {
     let midnightTimer: ReturnType<typeof setTimeout>;
@@ -153,7 +154,7 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
     setToday(localCalendarDate(new Date()));
   }, []));
 
-  const factsPending = overview === null && (filters.health !== "ALL" || filters.credit !== "ALL" || ring !== null);
+  const factsPending = overview === null && !overviewFailed && (filters.health !== "ALL" || filters.credit !== "ALL" || ring !== null);
   const summary = useMemo(() => overview === null ? null : summarizeRoster(overview, activeIds), [overview, activeIds]);
   const present = useCallback((next: ClientRosterFilters) => data === null ? null : presentClientRoster({
     rows: data.rows, search: query, sort: activeSort, today,
@@ -228,6 +229,10 @@ export function ClientsRosterPreview({ onOpenCreate, onOpenClient, repository, r
           onRetry={() => { setError(null); readModel.refresh(); }} />
         {snapshot.status === "loading" ? <SkeletonList label="Загружаем клиентов" /> : null}
         {factsPending ? <SkeletonList label="Загружаем данные фильтров" /> : null}
+        {overview === null && overviewFailed ? <>
+          <InlineNotice kind="error">Не удалось загрузить данные для фильтров и плиток.</InlineNotice>
+          <AppButton variant="secondary" label="Повторить" onPress={retryOverview} />
+        </> : null}
         {roster !== null && visibleCount === 0 ? (
           narrowed
             ? <EmptyState reason="no-match" title="Никого не найдено" body="Нет клиентов, подходящих под выбранные условия."

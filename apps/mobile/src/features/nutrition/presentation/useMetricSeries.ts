@@ -45,13 +45,13 @@ export function useMetricSeries(metric: MetricId, span: DateSpan, clientId: stri
   const { diary, calc, measurements, health } = ports;
   const key = `${metric}|${clientId}|${span.from}|${span.to}`;
   const [state, setState] = useState<Readonly<{ key: string; values: ReadonlyMap<string, number> }> | null>(null);
-  const [failed, setFailed] = useState(false);
+  // Ошибка привязана к ключу запроса: при смене периода/показателя прежняя ошибка не мигает на новом (эффект сбросит её только после рендера).
+  const [failedKey, setFailedKey] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const { sex, age, heightCm } = body;
 
   useEffect(() => {
     let active = true;
-    setFailed(false);
     const load = async (): Promise<ReadonlyMap<string, number>> => {
       // Сон — часы с десятой из Health Connect (минуты в хранилище); без подключения данных нет.
       if (metric === "sleep") {
@@ -64,7 +64,7 @@ export function useMetricSeries(metric: MetricId, span: DateSpan, clientId: stri
       return expenditureByDay({ profile: stored?.profile ?? DEFAULT_CALC_PROFILE, body: { sex, age, heightCm }, dates: datesIn(span),
         steps: new Map(steps.map((day) => [day.localDate, day.steps])), weights: datedValues(journal, "WEIGHT"), fats: datedValues(journal, "BODY_FAT") });
     };
-    void load().then((values) => { if (active) { setState({ key, values }); setFailed(false); } }, () => { if (active) setFailed(true); });
+    void load().then((values) => { if (active) { setState({ key, values }); setFailedKey(null); } }, () => { if (active) setFailedKey(key); });
     return () => { active = false; };
   }, [metric, clientId, span.from, span.to, key, diary, calc, measurements, health, sex, age, heightCm, tick]);
   useEffect(() => {
@@ -77,5 +77,5 @@ export function useMetricSeries(metric: MetricId, span: DateSpan, clientId: stri
   }, [clientId, calc, diary, measurements, health]);
 
   const goal = metric === "steps" ? STEPS_GOAL : metric === "meals" ? MEALS_GOAL : metric === "sleep" ? SLEEP_GOAL_HOURS : tdee;
-  return { data: state !== null && state.key === key ? { values: state.values, goal } : null, failed };
+  return { data: state !== null && state.key === key ? { values: state.values, goal } : null, failed: failedKey === key };
 }
