@@ -13,7 +13,8 @@ import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
 import type { Corridors } from "../domain/TargetModel.ts";
 import { NUTRIENT_OF } from "../domain/TargetRules.ts";
-import type { CalcClientBody } from "./NutritionCalcScreen.tsx";
+import type { CalcClientBody, SaveCalcProfile } from "./NutritionCalcScreen.tsx";
+import { CalcSheet } from "./CalcSheet.tsx";
 import { useMacroColors } from "./MacroGrid.tsx";
 import { NutritionTargetRows, type TargetMode } from "./NutritionTargetRows.tsx";
 import { metricLabels, nutritionErrorText, rangeText, wholeText } from "./nutritionFormat.ts";
@@ -116,9 +117,11 @@ const midpoint = (range: Readonly<{ minX10: number; maxX10: number }>) => (range
  * «съедено от цели» из трёх цветов Б/Ж/У, «съедено / цель» по каждому макро, ручная корректировка). Источники — Nutrition, Measurements и дневник тренировок; legacy `client_kbju_state` не используется.
  * `trainedToday` — факт тренировки из дневника тренировок (авто «Да»), `null` — неизвестно.
  */
-export function NutritionHomeCards({ clientId, body, diary, targets, calc, measurements, trainedToday, workoutsThisWeek, onOpenNutrition, onOpenCalculation }: Readonly<{ clientId: string; body: CalcClientBody; diary: NutritionDiaryPort;
+export function NutritionHomeCards({ clientId, body, diary, targets, calc, measurements, trainedToday, workoutsThisWeek, onOpenNutrition, onSaveProfile, onOpenJournal }: Readonly<{ clientId: string; body: CalcClientBody; diary: NutritionDiaryPort;
   targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; trainedToday: boolean | null;
-  /** Тренировок за текущую неделю Пн–Вс по дневнику; `null` — нет данных (не 0). */ workoutsThisWeek: number | null; onOpenNutrition: () => void; onOpenCalculation: () => void }>) {
+  /** Тренировок за текущую неделю Пн–Вс по дневнику; `null` — нет данных (не 0). */ workoutsThisWeek: number | null; onOpenNutrition: () => void;
+  /** Лист «Расчёт»: сохранение профиля и переход в журнал замеров (оболочка клиента). */
+  onSaveProfile: SaveCalcProfile; onOpenJournal: () => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const macroColors = useMacroColors();
@@ -132,6 +135,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   /** Живая цель из ячеек ручной корректировки (расчёт или правка тренера). */
   const [liveTarget, setLiveTarget] = useState<Corridors | null>(null);
   const [sheet, setSheet] = useState<"weight" | "steps" | null>(null);
+  const [calcOpen, setCalcOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lock = useRef(false);
   const saveLock = useRef(false);
@@ -193,7 +197,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
           {/* Сон приходит из Health Connect (ADR-059, UIX-16/17): пока кружок без данных и не нажимается. */}
           <DayRing label="Сон" caption="Сон" value={null} fraction={null} disabled hint="Нужен Health Connect: сон придёт из него" onPress={() => undefined} />
           <DayRing label="Расход" unit="ккал" caption="Расход, ккал" value={tdee === null ? null : wholeNumber(tdee)} fraction={null}
-            hint="Расчёт калорий" onPress={onOpenCalculation} />
+            hint="Расчёт калорий" onPress={() => setCalcOpen(true)} />
           <DayRing label="Приёмы" caption="Приёмы пищи" value={data === null || stale ? null : String(mealCount(data.summary))}
             fraction={data === null || stale ? null : goalFraction(mealCount(data.summary), MEALS_GOAL)} hint="Открыть дневник питания" onPress={onOpenNutrition} />
         </View>
@@ -208,6 +212,8 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
         {dayWeight.ambiguous ? <Text style={[styles.hint, { color: colors.textSecondary }]}>За этот день несколько записей веса: основную выбирают в журнале замеров.</Text> : null}
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       </View>
+      <CalcSheet visible={calcOpen} clientId={clientId} body={body} onSaveProfile={onSaveProfile} onOpenJournal={onOpenJournal} calc={calc} measurements={measurements}
+        onClose={() => setCalcOpen(false)} />
       <ValueSheet visible={sheet === "weight"} title="Вес за день" label="Вес" unit="кг" keyboardType="decimal-pad" placeholder="85,4" emptyMessage="Введите вес."
         initial={dayWeight.weight === null ? "" : String(dayWeight.weight).replace(".", ",")} onSave={(text) => saveValue("weight", text)} onClose={() => setSheet(null)} />
       <ValueSheet visible={sheet === "steps"} title="Шаги за день" label="Шаги" unit="шагов" keyboardType="number-pad" placeholder="8000"
@@ -225,9 +231,9 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
               </Pressable>
             ))}
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Открыть дневник питания" hitSlop={{ top: 8, bottom: 8 }} onPress={onOpenNutrition}
+          <Pressable accessibilityRole="button" accessibilityLabel="Расчёт калорий и БЖУ" hitSlop={{ top: 8, bottom: 8 }} onPress={() => setCalcOpen(true)}
             style={[styles.group, styles.segment, { borderColor: colors.accentInk, backgroundColor: colors.accentSoft }]}>
-            <Text style={[styles.segmentText, { color: colors.accentInk }]}>Питание</Text>
+            <Text style={[styles.segmentText, { color: colors.accentInk }]}>Расчёт ›</Text>
           </Pressable>
         </View>
         </View>
@@ -251,7 +257,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
         </View>
         <View style={[styles.rule, { backgroundColor: colors.border }]} />
         {loaded !== null && loaded.fat === null ? (
-          <Pressable accessibilityRole="link" accessibilityLabel="Рассчитать процент жира в разделе Питание" onPress={onOpenCalculation}
+          <Pressable accessibilityRole="link" accessibilityLabel="Рассчитать процент жира" onPress={() => setCalcOpen(true)}
             style={{ minHeight: 44, justifyContent: "center" }}>
             <Text style={[styles.hint, { color: colors.textSecondary }]}>Для расчёта БЖУ нужен процент жира. Его можно рассчитать в разделе «Питание».</Text>
           </Pressable>

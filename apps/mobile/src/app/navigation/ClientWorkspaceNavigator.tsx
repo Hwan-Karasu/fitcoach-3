@@ -33,7 +33,7 @@ type OpenWorkout = (slot: WorkoutSlot, options?: Readonly<{ returnToCaller?: boo
 
 type WorkspaceTabs = {
   Home: undefined;
-  Nutrition: { screen: "NutritionIndex"; params: { section: "calc"; requestKey: number } } | undefined;
+  Nutrition: undefined;
   Training: undefined;
   More: undefined;
 };
@@ -223,7 +223,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
         header: () => <ClientHeader client={client} subtitle={workspaceTabs.Home} onBack={onClose} onClients={onOpenClients} onEdit={() => onOpenEdit(client.id)} /> }}>
         {({ navigation }) => <HomeNavigator client={client} accounting={accounting} daySlot={<DayTabs />}
           nutritionSlot={<NutritionHomeCards key={client.id} clientId={client.id} body={calcBody} trainedToday={trainedToday} workoutsThisWeek={workoutsThisWeek} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements}
-            onOpenNutrition={() => navigation.navigate("Nutrition")} onOpenCalculation={() => navigation.navigate("Nutrition", { screen: "NutritionIndex", params: { section: "calc", requestKey: Date.now() } })} />}
+            onOpenNutrition={() => navigation.navigate("Nutrition")} onSaveProfile={saveCalcProfile} onOpenJournal={() => onOpenMeasurements(client.id)} />}
           onOpenAccounting={() => onOpenAccounting(client.id)}
           onArchive={async () => {
             try { await repository.setArchived(client.id, client.revision, true); }
@@ -232,8 +232,8 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
           }} />}
       </Tabs.Screen>
       <Tabs.Screen name="Nutrition" options={{ tabBarLabel: workspaceTabs.Nutrition, tabBarAccessibilityLabel: workspaceTabs.Nutrition }}>
-        {() => <NutritionNavigator clientId={client.id} clientName={client.displayName} clientEmoji={client.emoji} body={calcBody} onSaveProfile={saveCalcProfile} foods={nutrition.foods} recipes={nutrition.recipes}
-          diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements} onOpenJournal={() => onOpenMeasurements(client.id)} onExitClient={onClose} onOpenClients={onOpenClients} />}
+        {() => <NutritionNavigator clientId={client.id} clientName={client.displayName} clientEmoji={client.emoji} body={calcBody} foods={nutrition.foods} recipes={nutrition.recipes}
+          diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements} onExitClient={onClose} onOpenClients={onOpenClients} />}
       </Tabs.Screen>
       <Tabs.Screen name="Training" options={{ tabBarLabel: workspaceTabs.Training, tabBarAccessibilityLabel: workspaceTabs.Training}}>
         {() => <TrainingNavigator clientId={client.id} clientName={client.displayName} clientEmoji={client.emoji} repository={trainingPlans}

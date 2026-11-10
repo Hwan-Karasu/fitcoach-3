@@ -11,7 +11,7 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import { ClientHomePreview, type ClientRecord } from "../../features/clients/public.ts";
 import { type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
-import { AddFoodScreen, type CalcClientBody, type CatalogFilter, type SaveCalcProfile, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
+import { AddFoodScreen, type CalcClientBody, type CatalogFilter, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
   type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ArchivedProgramsPanel, ParticipantSwitcher, participantTarget, ProgramMatrixScreen, PeriodizedBuilderScreen, ProgramLibraryScreen, ProgramModeChooserScreen, programLibraryTabTitles, ProgramScreen, SimpleProgramBuilderScreen,
   WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type SimplePlanSavePort, type WeekEditSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort,
@@ -32,7 +32,8 @@ function RetainedTrainingProgram({ children }: Readonly<{ children: ReactNode }>
   return <RetainedScreenTheme active={useIsFocused()}>{children}</RetainedScreenTheme>;
 }
 type NutritionRoutes = {
-  NutritionIndex: { section: "calc"; requestKey: number } | undefined;
+  // Параметров нет; объектный тип нужен общему setParams шапки (иначе он сводится к never).
+  NutritionIndex: Readonly<{ reserved?: never }> | undefined;
   NutritionAdd: { localDate: string; slot: MealSlot; filter?: CatalogFilter };
   NutritionFood: { name?: string; foodId?: string; detailsRequest?: number };
   NutritionRecipe: { recipeId?: string } | undefined;
@@ -132,9 +133,9 @@ function NutritionAddRoute({ navigation, children, recipe = false, food = false 
   );
 }
 
-export function NutritionNavigator({ clientId, clientName, clientEmoji, body, onSaveProfile, onOpenJournal, foods, recipes, diary, targets, calc, measurements, onExitClient, onOpenClients }: Readonly<{
-  clientId: string; clientName: string; clientEmoji: string | null; body: CalcClientBody; onSaveProfile: SaveCalcProfile;
-  foods: FoodCatalogPort; recipes: RecipeCatalogPort; diary: NutritionDiaryPort; targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; onOpenJournal: () => void;
+export function NutritionNavigator({ clientId, clientName, clientEmoji, body, foods, recipes, diary, targets, calc, measurements, onExitClient, onOpenClients }: Readonly<{
+  clientId: string; clientName: string; clientEmoji: string | null; body: CalcClientBody;
+  foods: FoodCatalogPort; recipes: RecipeCatalogPort; diary: NutritionDiaryPort; targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort;
   onExitClient: () => void; onOpenClients: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
@@ -147,7 +148,7 @@ export function NutritionNavigator({ clientId, clientName, clientEmoji, body, on
           ? { label: "Изменить название, бренд и штрихкод", onPress: () => navigation.setParams({ detailsRequest: (route.params.detailsRequest ?? 0) + 1 }) } : undefined} />,
     })}>
       <NutritionStack.Screen name="NutritionIndex">
-        {({ navigation, route }) => <NutritionHomeScreen requestedSection={route.params?.section} sectionRequestKey={route.params?.requestKey} clientId={clientId} onOpenJournal={onOpenJournal} body={body} onSaveProfile={onSaveProfile} diary={diary} targets={targets} calc={calc} measurements={measurements}
+        {({ navigation }) => <NutritionHomeScreen clientId={clientId} body={body} diary={diary} targets={targets} calc={calc} measurements={measurements}
           onAdd={(localDate, slot, filter) => navigation.navigate("NutritionAdd", { localDate, slot, filter })}
           onEditSource={(source) => source.kind === "FOOD" ? navigation.navigate("NutritionFood", { foodId: source.id }) : navigation.navigate("NutritionRecipe", { recipeId: source.id })} />}
       </NutritionStack.Screen>
