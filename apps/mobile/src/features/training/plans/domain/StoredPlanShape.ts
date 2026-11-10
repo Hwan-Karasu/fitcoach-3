@@ -1,5 +1,5 @@
 import { arrayOf, id, integer, nullableInteger, nullableText, object, text } from "../../../../shared/domain/JsonShape.ts";
-import { WEEK_TYPES, WEEK_SCOPES, type BuilderWeek, type Mesocycle } from "./PeriodizedModel.ts";
+import { CYCLE_TYPES, MESOCYCLE_WEEKS_MAX, WEEK_TYPES, WEEK_SCOPES, type BuilderWeek, type Mesocycle } from "./PeriodizedModel.ts";
 import type { MesocycleBuilderDraft, PeriodizedDraft } from "./PeriodizedDraft.ts";
 import type { PlannedExercise, PlannedSet, PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
 import type { SimpleWorkoutDraft, SimpleWeek } from "./SimpleWorkoutEdit.ts";
@@ -46,15 +46,16 @@ const storedPlacement = (value: unknown): value is import("./Placement.ts").Plac
       && (value.target.label === undefined || text(value.target.label))
       && (value.target.confirmReassignment === undefined || typeof value.target.confirmReassignment === "boolean"));
 export const storedMesocycleBuilder = (value: unknown): value is MesocycleBuilderDraft => object(value) && nullableInteger(value.baseRevision)
-  && text(value.programTitle) && text(value.title) && ["hypertrophy", "strength", "power", "endurance", "recomp", "custom"].includes(String(value.cycleType))
-  && text(value.repsText) && text(value.startDate) && integer(value.editing) && strings(value.members) && arrayOf(value.weeks, builderWeek)
+  && text(value.programTitle) && text(value.title) && CYCLE_TYPES.some((type) => type === value.cycleType)
+  && text(value.repsText) && text(value.startDate) && strings(value.members) && arrayOf(value.weeks, builderWeek)
+  && value.weeks.length >= 1 && value.weeks.length <= MESOCYCLE_WEEKS_MAX && integer(value.editing) && value.editing >= 0 && value.editing < value.weeks.length
   && (value.baseWeeks === null || arrayOf(value.baseWeeks, builderWeek))
   && (value.placements === undefined || arrayOf(value.placements, storedPlacement))
   && (value.workbook === undefined || storedWorkbook(value.workbook, builderWeek));
 export const storedMesocycle = (value: unknown): value is Mesocycle => object(value) && id(value.id) && id(value.lineageId) && text(value.title)
   && arrayOf(value.weeks, (item): item is Mesocycle["weeks"][number] => week(item) && object(item) && id(item.id) && weekType(item.type))
   && (value.repRange === undefined || range(value.repRange)) && (value.startDate === undefined || nullableText(value.startDate))
-  && (value.cycleType === undefined || value.cycleType === null || ["hypertrophy", "strength", "power", "endurance", "recomp", "custom"].includes(String(value.cycleType)));
+  && (value.cycleType === undefined || value.cycleType === null || CYCLE_TYPES.some((type) => type === value.cycleType));
 const templateMesocycle = (value: unknown): value is TemplateMesocycle => object(value) && text(value.title) && arrayOf(value.weeks, builderWeek);
 export const storedTemplate = (value: unknown): value is TemplatePayload => object(value) && (
   value.kind === "SIMPLE" && integer(value.weeks) && value.weeks > 0 && workouts(value.workouts)

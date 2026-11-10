@@ -96,6 +96,8 @@ export function diffWeek(beforeWeek: readonly PlannedWorkout[], afterWeek: reado
   const before = withLineage(beforeWeek);
   const after = withLineage(afterWeek);
   const ops: WeekOp[] = [];
+  // Удаления упражнений идут раньше добавлений: упражнение, перенесённое в более раннюю тренировку, иначе пропускалось бы как «уже есть» и затем удалялось.
+  const removedExercises: WeekOp[] = [];
   const beforeByLineage = new Map(before.map((workout) => [lineageOf(workout), workout]));
   const afterLineages = after.map(lineageOf);
   for (const workout of before) if (!afterLineages.includes(lineageOf(workout))) ops.push({ kind: "removeWorkout", lineageId: lineageOf(workout) });
@@ -110,7 +112,7 @@ export function diffWeek(beforeWeek: readonly PlannedWorkout[], afterWeek: reado
     const oldByLineage = new Map(previous.exercises.map((exercise) => [lineageOf(exercise), exercise]));
     const newLineages = workout.exercises.map(lineageOf);
     for (const exercise of previous.exercises) {
-      if (!newLineages.includes(lineageOf(exercise))) ops.push({ kind: "removeExercise", lineageId: lineageOf(exercise) });
+      if (!newLineages.includes(lineageOf(exercise))) removedExercises.push({ kind: "removeExercise", lineageId: lineageOf(exercise) });
     }
     workout.exercises.forEach((exercise, position) => {
       const exerciseLineage = lineageOf(exercise);
@@ -137,7 +139,8 @@ export function diffWeek(beforeWeek: readonly PlannedWorkout[], afterWeek: reado
     }
   });
   if (orderChanged(before.map(lineageOf), afterLineages)) ops.push({ kind: "orderWorkouts", order: afterLineages });
-  return ops;
+  const firstAdded = ops.findIndex((op) => op.kind !== "removeWorkout");
+  return firstAdded < 0 ? [...ops, ...removedExercises] : [...ops.slice(0, firstAdded), ...removedExercises, ...ops.slice(firstAdded)];
 }
 
 /**

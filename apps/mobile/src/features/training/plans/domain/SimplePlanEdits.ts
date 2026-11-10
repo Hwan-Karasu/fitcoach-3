@@ -63,7 +63,7 @@ export function addExercises(draft: SimpleProgramDraft, workoutId: string, exerc
 /** §48.56: отдых упражнения в границах 1 с – 60 мин; `null` выключает таймер. */
 export const setRest = (draft: SimpleProgramDraft, plannedId: string, restSec: number | null) => produce(draft, (d) => {
   const exercise = exerciseOf(d, plannedId);
-  if (exercise === undefined) return;
+  if (exercise === undefined || (restSec !== null && !Number.isFinite(restSec))) return;
   exercise.restSec = restSec === null ? null : Math.min(REST_MAX_SEC, Math.max(REST_MIN_SEC, Math.round(restSec)));
 });
 

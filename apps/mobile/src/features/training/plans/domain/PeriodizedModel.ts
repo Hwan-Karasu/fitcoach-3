@@ -27,6 +27,8 @@ export interface PlanWeek {
 
 /** Тип цикла мезоцикла (UI-OWN-038, как в 2.0); подписи и повторения — в MesocycleBuilder. */
 export type CycleType = "hypertrophy" | "strength" | "power" | "endurance" | "recomp" | "custom";
+/** Все типы цикла: единый список для проверки сохранённых данных. */
+export const CYCLE_TYPES: readonly CycleType[] = ["hypertrophy", "strength", "power", "endurance", "recomp", "custom"];
 
 /** Настройки мезоцикла (хранятся у мезоцикла; решение владельца 2026-10-18). */
 export interface MesocycleSettings {

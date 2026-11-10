@@ -1,4 +1,5 @@
 import { arrayOf, id, integer, nullableInteger, nullableText, object, text } from "../../../../shared/domain/JsonShape.ts";
+import { CYCLE_TYPES } from "./PeriodizedModel.ts";
 import type { BuilderWorkbookState, BuilderWorkbookCycle } from "./BuilderExcelDraft.ts";
 import type { TransferSession } from "../../../../shared/training-transfer/TrainingTransfer.ts";
 
@@ -24,7 +25,7 @@ export function storedWorkbook(value: unknown, validWeek: (v: unknown) => boolea
     && arrayOf(c.weeks, (w): w is BuilderWorkbookCycle["weeks"][number] => validWeek(w)) && c.weeks.length > 0
     && (c.editing === undefined || integer(c.editing) && c.editing >= 0 && c.editing < c.weeks.length)
     && (c.settings === undefined || object(c.settings)
-      && (c.settings.cycleType === undefined || c.settings.cycleType === null || ["hypertrophy", "strength", "power", "endurance", "recomp", "custom"].includes(String(c.settings.cycleType)))
+      && (c.settings.cycleType === undefined || c.settings.cycleType === null || (CYCLE_TYPES as readonly string[]).includes(String(c.settings.cycleType)))
       && (c.settings.startDate === undefined || nullableText(c.settings.startDate))
       && (c.settings.repRange === undefined || c.settings.repRange === null || object(c.settings.repRange) && integer(c.settings.repRange.min) && nullableInteger(c.settings.repRange.max)))
     && (c.imported === undefined || object(c.imported) && id(c.imported.sourceId) && id(c.imported.sourceHash)

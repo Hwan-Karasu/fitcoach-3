@@ -1,4 +1,4 @@
-import type { BuilderWeek, CycleType, WeekScope } from "./PeriodizedModel.ts";
+import { MESOCYCLE_WEEKS_MAX, type BuilderWeek, type CycleType, type WeekScope } from "./PeriodizedModel.ts";
 import { applyWeekOps, diffWeek, targetWeeks, withLineage } from "./PeriodizedRules.ts";
 import { CYCLE_REST_SEC } from "../../../../shared/training-transfer/CycleRest.ts";
 import { setRest } from "./SimplePlanEdits.ts";
@@ -119,7 +119,8 @@ export function retuneBuilderRest(weeks: readonly BuilderWeek[], fromSec: number
 }
 
 /** Число недель: новые — пустые «Индивидуальные», лишние убираются с конца. */
-export function resizeBuilderWeeks(weeks: readonly BuilderWeek[], count: number): readonly BuilderWeek[] {
+export function resizeBuilderWeeks(weeks: readonly BuilderWeek[], requested: number): readonly BuilderWeek[] {
+  const count = Math.min(MESOCYCLE_WEEKS_MAX, requested);
   if (count <= weeks.length) return weeks.slice(0, Math.max(1, count));
   return [...weeks, ...Array.from({ length: count - weeks.length }, (): BuilderWeek => ({ type: "base", workouts: [] }))];
 }

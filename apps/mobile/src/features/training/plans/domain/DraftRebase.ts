@@ -11,6 +11,17 @@ export function rebaseDraft(base: readonly PlannedWorkout[], edited: readonly Pl
   return applyWeekOps(current, diffWeek(base, edited), newId).workouts;
 }
 
+/** Родство нужно только Расширенной программе: у Простой его нет (SimplePlanModel), перенос правок его не оставляет. */
+function withoutLineage(workouts: readonly PlannedWorkout[]): readonly PlannedWorkout[] {
+  return workouts.map(({ lineageId: workoutLineage, ...workout }) => {
+    void workoutLineage;
+    return { ...workout, exercises: workout.exercises.map(({ lineageId: exerciseLineage, ...exercise }) => {
+      void exerciseLineage;
+      return exercise;
+    }) };
+  });
+}
+
 export const REBASED_NOTICE = "План изменился после черновика: ваши правки перенесены на текущий план. Проверьте их перед сохранением.";
 
 /**
@@ -24,7 +35,7 @@ export function rebaseSimpleProgram(base: SimpleProgramDraft, draft: SimpleProgr
     title: draft.title !== base.title ? draft.title : current.title,
     plan: {
       weeks: draft.plan.weeks !== base.plan.weeks ? draft.plan.weeks : current.plan.weeks,
-      workouts: rebaseDraft(base.plan.workouts, draft.plan.workouts, current.plan.workouts, newId),
+      workouts: withoutLineage(rebaseDraft(base.plan.workouts, draft.plan.workouts, current.plan.workouts, newId)),
     },
   };
 }
@@ -35,10 +46,12 @@ export function rebaseSimpleProgram(base: SimpleProgramDraft, draft: SimpleProgr
  */
 export function rebaseBuilderWeeks(base: readonly BuilderWeek[], draft: readonly BuilderWeek[], current: readonly BuilderWeek[],
   newId: () => string): readonly BuilderWeek[] {
-  return draft.map((week, at) => {
+  const rebased = draft.map((week, at) => {
     const was = base[at];
     const now = current[at];
     if (was === undefined || now === undefined) return week;
     return { type: week.type !== was.type ? week.type : now.type, workouts: rebaseDraft(was.workouts, week.workouts, now.workouts, newId) };
   });
+  // Тренер число недель не менял, а в мезоцикле их с тех пор стало больше: добавленные недели остаются (удалённые тренером — не возвращаются).
+  return draft.length === base.length ? [...rebased, ...current.slice(draft.length)] : rebased;
 }

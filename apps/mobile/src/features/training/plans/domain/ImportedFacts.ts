@@ -24,6 +24,8 @@ export function isValidFactPatch(patch: ImportedFactPatch): boolean {
 }
 
 export function setImportedFact(sessions: readonly TransferSession[], factId: string, patch: ImportedFactPatch): readonly TransferSession[] {
+  // Ключ с `undefined` не затирает значение (неизвестное задаётся только явным null).
+  const defined = Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)) as ImportedFactPatch;
   return sessions.map((session) => !session.facts.some((fact) => fact.id === factId) ? session : { ...session,
-    facts: session.facts.map((fact) => fact.id === factId ? { ...fact, values: { ...fact.values, ...patch } } : fact) });
+    facts: session.facts.map((fact) => fact.id === factId ? { ...fact, values: { ...fact.values, ...defined } } : fact) });
 }
