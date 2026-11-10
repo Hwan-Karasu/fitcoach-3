@@ -243,20 +243,27 @@ export function displayOrder<T extends Readonly<{ setType: SetType }>>(sets: rea
   return [...warmups.map((item) => ({ item, number: null })), ...working.map((item, index) => ({ item, number: index + 1 }))];
 }
 
+/** Ряд сопоставления «Пред.»: обычный и отказной — один рабочий ряд (подход мог стать отказным в любой из недель), разминка и дроп-сет — каждый свой. */
+function previousRow(setType: SetType): "WORKING" | "WARMUP" | "DROP" {
+  return setType === "WARMUP" ? "WARMUP" : setType === "DROP" ? "DROP" : "WORKING";
+}
+
 /**
- * §37.11, §48.75: подход сопоставляется с прошлым по типу и номеру внутри своего типа; разминка не сдвигает
- * рабочие, недостающий подход остаётся без «Пред.», чужой тип не подставляется.
+ * §37.11, §48.75: подход сопоставляется с прошлым по ряду и номеру внутри ряда. Обычный и отказной нумеруются вместе: подход, сделанный отказным
+ * на прошлой неделе, подставляется под тот же по порядку на этой (и наоборот). Разминка не сдвигает рабочие, дроп-сет не подставляется под
+ * обычный; недостающий подход остаётся без «Пред.».
  */
 export function matchPrevious<T>(current: readonly Readonly<{ plannedSetId: string; setType: SetType }>[],
   source: readonly Readonly<{ setType: SetType; value: T }>[]): ReadonlyMap<string, T> {
-  const byType = new Map<SetType, T[]>();
-  for (const set of source) byType.set(set.setType, [...(byType.get(set.setType) ?? []), set.value]);
-  const used = new Map<SetType, number>();
+  const byRow = new Map<string, T[]>();
+  for (const set of source) { const row = previousRow(set.setType); byRow.set(row, [...(byRow.get(row) ?? []), set.value]); }
+  const used = new Map<string, number>();
   const result = new Map<string, T>();
   for (const set of current) {
-    const ordinal = used.get(set.setType) ?? 0;
-    used.set(set.setType, ordinal + 1);
-    const match = byType.get(set.setType)?.[ordinal];
+    const row = previousRow(set.setType);
+    const ordinal = used.get(row) ?? 0;
+    used.set(row, ordinal + 1);
+    const match = byRow.get(row)?.[ordinal];
     if (match !== undefined) result.set(set.plannedSetId, match);
   }
   return result;

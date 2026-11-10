@@ -36,6 +36,16 @@ function entry(key: string, date: string | null, status: WorkoutStatus, facts: r
     exercises: [...groups].map(([exerciseId, list]) => ({ exerciseId, facts: list, note: null })) };
 }
 
+test("отказной подход — рабочий: входит в подходы, тоннаж, мышечные группы и рекорды", () => {
+  const first = entry("a", "2026-10-01", "COMPLETED", [fact(BENCH, values(100, 5)), fact(BENCH, values(100, 5)), fact(BENCH, values(100, 5)), fact(BENCH, values(90, 8))]);
+  const second = entry("b", "2026-10-08", "COMPLETED", [fact(BENCH, values(100, 5)), fact(BENCH, values(100, 5)), fact(BENCH, values(100, 5)), fact(BENCH, values(95, 9), { setType: "FAILURE" })]);
+  const summary = summarize([second], infoOf);
+  assert.deepEqual([summary.workingSets, summary.tonnageKg], [4, 3 * 500 + 95 * 9], "отказной: 95 кг × 9 = 855 кг входит в тоннаж");
+  assert.equal(muscleGroups([second], infoOf).find((group) => group.id === "chest")?.sets, 4);
+  const records = recordsInRange([first, second], [second], { from: "2026-10-08", to: "2026-10-31" }, infoOf);
+  assert.ok(records.some((record) => record.reps === 9 && record.loadKg === 95), "лучший вес на 9 повторений, поставленный отказным подходом, — новый рекорд");
+});
+
 test("перенесённые записи без даты: общие итоги сохранены, в ограниченный период и график не подставляется дата", () => {
   const undated = entry("unknown", null, "COMPLETED", [fact(BENCH, values(120, 5))]);
   const dated = entry("known", "2026-10-01", "COMPLETED", [fact(BENCH, values(100, 5))]);

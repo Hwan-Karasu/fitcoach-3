@@ -77,6 +77,24 @@ test("T03 статус недели (§48.46.1) и «Пред.» по типу �
   [["x", 1]], "нет подходящего типа или номера — пусто, без подстановки соседнего");
 });
 
+test("«Пред.»: обычный и отказной — один ряд по порядку; разминка и дроп-сет в него не входят", () => {
+  const n = (id: string) => ({ plannedSetId: id, setType: "NORMAL" as const });
+  const f = (id: string) => ({ plannedSetId: id, setType: "FAILURE" as const });
+  const weekOne = [{ setType: "NORMAL", value: "n1" }, { setType: "NORMAL", value: "n2" }, { setType: "NORMAL", value: "n3" }, { setType: "FAILURE", value: "f4" }] as const;
+  // Неделя 1: четвёртый подход сделан отказным; неделя 2: по плану все обычные — четвёртый получает значения отказного.
+  assert.deepEqual([...matchPrevious([n("a"), n("b"), n("c"), n("d")], weekOne)], [["a", "n1"], ["b", "n2"], ["c", "n3"], ["d", "f4"]]);
+  // Наоборот: прошлый четвёртый — обычный, текущий — отказной.
+  assert.deepEqual([...matchPrevious([n("a"), n("b"), n("c"), f("d")], [{ setType: "NORMAL", value: 1 }, { setType: "NORMAL", value: 2 },
+    { setType: "NORMAL", value: 3 }, { setType: "NORMAL", value: 4 }])], [["a", 1], ["b", 2], ["c", 3], ["d", 4]]);
+  // Отказной в середине ряда не сбивает нумерацию: О, Отк, О против О, О, О.
+  assert.deepEqual([...matchPrevious([n("a"), n("b"), n("c")], [{ setType: "NORMAL", value: 1 }, { setType: "FAILURE", value: 2 }, { setType: "NORMAL", value: 3 }])],
+    [["a", 1], ["b", 2], ["c", 3]]);
+  // Разминка и дроп-сет остаются отдельными рядами: не подставляются под рабочие и не сдвигают их.
+  const mixed = [{ setType: "WARMUP", value: "w" }, { setType: "DROP", value: "d" }, { setType: "FAILURE", value: "f" }] as const;
+  assert.deepEqual([...matchPrevious([{ plannedSetId: "w", setType: "WARMUP" }, n("a"), { plannedSetId: "x", setType: "DROP" }, n("b")], mixed)],
+    [["w", "w"], ["a", "f"], ["x", "d"]], "рабочему — отказной; второму рабочему нечего подставить");
+});
+
 test("T03 авто-режим: первый ввод начинает тренировку, правка — тот же факт, очистка и повтор — новый переход", async () => {
   const { clients, execution, close } = await stores();
   try {
@@ -613,6 +631,35 @@ test("«Пред.» по сторонам: подход без сторон (и�
   assert.deepEqual(previousPlainValues(plain), v(8, 50_000));
   assert.deepEqual(previousPlainValues(sided), v(10, 40_000), "двустороннему подходу — первая засчитанная сторона");
   assert.deepEqual(previousPlainValues({ ...sided, sides: { left: null, right: v(9, 45_000) } }), v(9, 45_000));
+});
+
+test("«Пред.»: подход, сделанный отказным на прошлой неделе, подставляется под тот же по порядку на следующей (и наоборот)", async () => {
+  const { clients, execution, close } = await stores();
+  try {
+    const a = await clients.create({ displayName: "SyntheticA" });
+    const w1: WorkoutSlot = { clientId: a.id, programId: "program-a", weekIndex: 1, plannedWorkoutId: "w1" };
+    const w2: WorkoutSlot = { ...w1, weekIndex: 2 };
+    const where = { plannedExerciseId: "pe-bench", exerciseId: BENCH };
+    const save = (target: WorkoutSlot, id: string, position: number, set: SetValues, setType: SetContent["setType"] = "NORMAL") =>
+      execution.saveSet({ ...bench(target, id, position, set, null), setType }, DAY1);
+    await save(w1, "s1", 0, values(100_000, 8));
+    await save(w1, "s2", 1, values(100_000, 7));
+    await save(w1, "s3", 2, values(95_000, 6));
+    await save(w1, "s4", 3, values(90_000, 9), "FAILURE");
+    const query = [{ ...where, plannedSetIds: ["s1", "s2", "s3", "s4"] }];
+    const previous = await execution.getPrevious(w2, query, DAY2);
+    assert.deepEqual([...previous].map(([id, set]) => [id, set.values.loadGrams, set.values.reps]),
+      [["s1", 100_000, 8], ["s2", 100_000, 7], ["s3", 95_000, 6], ["s4", 90_000, 9]], "четвёртый подход получает вес и повторы отказного");
+    // Неделя 2: четвёртый тоже сделан отказным — «Пред.» тот же.
+    await save(w2, "s4", 3, values(92_500, 8), "FAILURE");
+    assert.equal((await execution.getPrevious(w2, query, DAY2)).get("s4")?.values.reps, 9);
+    // Через неделю: прошлая (неделя 2) — отказной на четвёртом, неделя 3 — по плану обычные.
+    await save(w2, "s1", 0, values(100_000, 8));
+    await save(w2, "s2", 1, values(100_000, 8));
+    await save(w2, "s3", 2, values(97_500, 6));
+    const w3: WorkoutSlot = { ...w1, weekIndex: 3 };
+    assert.equal((await execution.getPrevious(w3, query, DAY2)).get("s4")?.values.loadGrams, 92_500);
+  } finally { await close(); }
 });
 
 test("«Макс.» под упражнением: рекорд веса клиента по упражнению за всё время, от недели не зависит (REST-FIX-7/9)", async () => {
