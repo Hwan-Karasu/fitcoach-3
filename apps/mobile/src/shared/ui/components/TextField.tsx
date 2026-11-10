@@ -33,6 +33,8 @@ interface TextFieldProps {
   readonly compact?: boolean;
   /** Открыть клавиатуру сразу (поле в нижнем листе ввода). */
   readonly autoFocus?: boolean;
+  /** Фокус ушёл с поля (запись значения без кнопки «Сохранить»). */
+  readonly onBlur?: () => void;
 }
 
 export function TextField({
@@ -58,6 +60,7 @@ export function TextField({
   textAlign = "left",
   compact = false,
   autoFocus = false,
+  onBlur,
 }: Readonly<TextFieldProps>) {
   const [focused, setFocused] = useState(false);
   const { palette } = usePrototypeTheme();
@@ -78,7 +81,7 @@ export function TextField({
         value={value}
         onChangeText={onChangeText}
         onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        onBlur={() => { setFocused(false); onBlur?.(); }}
         editable={!disabled}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}

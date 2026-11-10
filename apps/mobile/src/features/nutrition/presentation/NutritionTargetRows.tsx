@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { AppButton, InlineNotice, TextField } from "../../../shared/ui/components/public.ts";
+import { InlineNotice, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import type { MacroGrams } from "../domain/CalcRules.ts";
@@ -32,7 +32,10 @@ function manualFrom(texts: Drafts, mode: TargetMode): HomeMacroAdjustment["manua
   return out;
 }
 
-/** Сводка пересчитывается сразу; версия и происхождение полей сохраняются только явной кнопкой. */
+/**
+ * Сводка пересчитывается сразу; цель сохраняется без кнопки (UI-OWN-071): по «Готово» на клавиатуре и при уходе фокуса с поля.
+ * Недопустимая комбинация не пишется: ошибка под строкой, введённое остаётся в поле.
+ */
 export function NutritionTargetRows({ clientId, targets, calories, defaults, leanMassKg, mode, onModeAutoChange, onLiveTarget }: Readonly<{ clientId: string; targets: NutritionTargetsPort;
   /** Суточный ориентир, ккал (расчёт с поправкой по весу); `null` — расчёта нет. */
   calories: number | null;
@@ -51,7 +54,6 @@ export function NutritionTargetRows({ clientId, targets, calories, defaults, lea
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const lock = useRef(false);
 
   useEffect(() => {
@@ -89,9 +91,8 @@ export function NutritionTargetRows({ clientId, targets, calories, defaults, lea
   };
 
   const save = async () => {
-    if (lock.current || data === null || problem !== null || !hasTarget || typeof manual === "string") return;
+    if (!dirty || lock.current || data === null || problem !== null || !hasTarget || typeof manual === "string") return;
     lock.current = true;
-    setBusy(true);
     try {
       const same = data.versions.find((version) => version.effectiveFrom === today);
       const saved = await targets.saveVersion(clientId, { effectiveFrom: today, days: uniformWeek(parsed), homeAdjustment: { mode, manual } }, same?.revision ?? null);
@@ -104,7 +105,6 @@ export function NutritionTargetRows({ clientId, targets, calories, defaults, lea
       setTick((value) => value + 1);
     }
     lock.current = false;
-    setBusy(false);
   };
 
   return (
@@ -113,15 +113,15 @@ export function NutritionTargetRows({ clientId, targets, calories, defaults, lea
       <View style={styles.row}>
         {MACROS.map((metric) => (
           <View key={metric} style={styles.cell}>
-            <TextField label={fieldLabels[metric]} value={shown[metric]} textAlign="center" keyboardType="numbers-and-punctuation" disabled={busy || data === null}
-              placeholder={mode === "EXACT" ? "22" : "22–30"} onChangeText={(text) => setField(metric, text)} />
+            <TextField label={fieldLabels[metric]} value={shown[metric]} textAlign="center" keyboardType="numbers-and-punctuation" disabled={data === null}
+              placeholder={mode === "EXACT" ? "22" : "22–30"} returnKeyType="done" onChangeText={(text) => setField(metric, text)}
+              onSubmitEditing={() => { void save(); }} onBlur={() => { void save(); }} />
           </View>
         ))}
       </View>
       {problem !== null ? <InlineNotice kind="error">{problem}</InlineNotice> : null}
       {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       {notice !== null ? <InlineNotice kind="success">{notice}</InlineNotice> : null}
-      {dirty ? <AppButton compact label="Сохранить БЖУ" busy={busy} disabled={problem !== null || !hasTarget || data === null} disabledReason={problem ?? "Недостаточно данных для сохранения."} onPress={() => { void save(); }} /> : null}
     </View>
   );
 }
