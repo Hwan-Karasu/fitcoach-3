@@ -115,7 +115,7 @@ export async function runR06AutomaticProbe(mode: "FULL" | "STATUS" = "FULL"): Pr
       const uri = (JSON.parse(row!.details_json) as { photoUri: string }).photoUri;
       check("native_auto_restore_embedded_photo_after_loss", (await expoFileSha256(new File(uri))).sha256 === photoSha);
     } finally { await restored.closeAsync(); }
-    check("native_auto_live_repositories_remain_usable", (await clients.get(initial.id)) !== null && (await clients.get(lateId)) !== null && owners.ownerCount === 15);
+    check("native_auto_live_repositories_remain_usable", (await clients.get(initial.id)) !== null && (await clients.get(lateId)) !== null && owners.ownerCount === 16);
     return { kind: "R06_NATIVE", checks, allPassed: checks.every((c) => c.passed), elapsedMs: Date.now() - started };
   } catch { console.info(`R06_AUTO_FAILURE ${stage}`); throw new Error("R06_AUTO_FAILED"); }
   finally { await owners.close(); }

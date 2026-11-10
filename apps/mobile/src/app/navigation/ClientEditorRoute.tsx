@@ -8,6 +8,7 @@ import { QuestionnaireForm, useAnswersForm, type AnswerValue,
   type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
 import { latestPoint, localDateOf, parseValueX10, upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import type { ClientCardWithAnswersPort } from "../../workflows/saveClientCard.ts";
+import { HealthConnectSection, type HealthConnectPort, type HealthStorePort, type HealthSyncKind } from "../../features/health/public.ts";
 import { AppButton, ConfirmDialog, LoadingState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
@@ -24,7 +25,7 @@ type Loaded = Readonly<{ client: ClientRecord | null; draft: ClientRecoveryDraft
  * с одним сохранением — сначала карточка, затем ответы по её ID. Если ответы не сохранились, повторное
  * сохранение не создаёт второго клиента, а дописывает ответы к уже сохранённой карточке.
  */
-export function ClientEditorRoute({ clientId, repository, questionnaire, clientCard, measurements, onClose, prefillName, onCreated }: Readonly<{
+export function ClientEditorRoute({ clientId, repository, questionnaire, clientCard, measurements, health, onClose, prefillName, onCreated }: Readonly<{
   clientId?: string;
   /** A guest name from Calendar; an existing recovery draft still asks first. */
   prefillName?: string;
@@ -36,6 +37,8 @@ export function ClientEditorRoute({ clientId, repository, questionnaire, clientC
   clientCard: ClientCardWithAnswersPort;
   /** Вес клиента — единый факт Measurements: показывается и записывается из карточки. */
   measurements: MeasurementRepositoryPort;
+  /** Health Connect: раздел карточки (только у сохранённого клиента). */
+  health: Readonly<{ store: HealthStorePort; platform: HealthConnectPort; sync: () => Promise<Readonly<{ kind: HealthSyncKind }>> }>;
   onClose: () => void;
 }>) {
   const answers = useAnswersForm(questionnaire, clientId ?? null);
@@ -140,8 +143,11 @@ export function ClientEditorRoute({ clientId, repository, questionnaire, clientC
       patch.current = prepared;
       return true;
     },
-    render: (onSectionLayout) => <QuestionnaireForm schema={published.schema} inputs={answers.inputs}
-      errors={answers.errors} onChange={answers.onChange} onSectionLayout={onSectionLayout} />,
+    render: (onSectionLayout) => <>
+      <QuestionnaireForm schema={published.schema} inputs={answers.inputs}
+        errors={answers.errors} onChange={answers.onChange} onSectionLayout={onSectionLayout} />
+      {clientId === undefined ? null : <HealthConnectSection clientId={clientId} store={health.store} platform={health.platform} sync={health.sync} />}
+    </>,
   };
   return <ClientEditorPreview key={`${clientId ?? "new"}:${recovered ? draft?.id : "fresh"}`}
     initial={client ?? undefined}

@@ -62,7 +62,7 @@ test("D01-4 обычный boot: 78 таблиц без тестовых кли�
     const lease = await f.database.acquire();
     try {
       assert.equal(await inspectProductionDatabase(lease.connection), "OWNED");
-      assert.equal((await lease.connection.first<{ n: number }>("SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"))?.n, 81);
+      assert.equal((await lease.connection.first<{ n: number }>("SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"))?.n, 84);
       assert.equal((await lease.connection.first<{ n: number }>("SELECT count(*) AS n FROM sqlite_master WHERE name LIKE 'dev_%'"))?.n, 0);
     } finally { await f.database.release(); }
     const client = await clients.create({ displayName: "Synthetic Persisted" });

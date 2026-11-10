@@ -6,9 +6,10 @@ import type { DateRange } from "../../../shared/ui/components/DateRangeCalendar.
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
+import type { HealthStorePort } from "../../health/public.ts";
 import type { MeasurementRepositoryPort } from "../../measurements/public.ts";
 import { shiftIsoDate } from "../domain/DayNavigation.ts";
-import { goalFraction, SLEEP_GOAL_HOURS, SLEEP_MIN_ADULT_HOURS } from "../domain/ActivityGoals.ts";
+import { goalFraction, SLEEP_MIN_ADULT_HOURS } from "../domain/ActivityGoals.ts";
 import { datesIn, periodLabel, recentMonths, spanOf, stepAnchor, summarizeSeries, type DateSpan, type MetricScale } from "../domain/MetricPeriods.ts";
 import type { MetricId } from "../domain/MetricSeries.ts";
 import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
@@ -57,7 +58,9 @@ function Tile({ label, value }: Readonly<{ label: string; value: string }>) {
  * «Месяц» — календарный, «Период» — диапазон из календаря. Почасовых данных нет (шаги и еда пишутся за день), поэтому «День» без графика.
  * Для будущего дня доступно только питание. Сон придёт из Health Connect (UIX-16): до этого — пустое состояние.
  */
-export function MetricScreen({ metric, clientId, body, diary, targets, calc, measurements, onOpenDiary }: Readonly<{ metric: MetricId; clientId: string; body: CalcClientBody;
+export function MetricScreen({ metric, clientId, body, diary, targets, calc, measurements, health, onOpenDiary }: Readonly<{ metric: MetricId; clientId: string; body: CalcClientBody;
+  /** Health Connect: сон и (у привязанной карточки) шаги приходят из него; ручного ввода шагов тогда нет. */
+  health?: Readonly<{ store: HealthStorePort; linked: boolean }>;
   diary: NutritionDiaryPort; targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; onOpenDiary: () => void }>) {
   const colors = usePrototypeTheme().palette.tokens;
   const info = INFO[metric];
@@ -72,7 +75,7 @@ export function MetricScreen({ metric, clientId, body, diary, targets, calc, mea
   const { tdee } = useNutritionGuide(clientId, body, calc, measurements);
 
   const span = useMemo(() => scale === "DAY" ? spanOf("DAY", day) : spanOf(scale, anchor, custom), [scale, day, anchor, custom]);
-  const { data, failed } = useMetricSeries(metric, span, clientId, body, tdee, { diary, calc, measurements });
+  const { data, failed } = useMetricSeries(metric, span, clientId, body, tdee, { diary, calc, measurements, ...(health === undefined ? {} : { health: health.store }) });
   const summary = useMemo(() => data === null ? null : summarizeSeries(data.values, span), [data, span]);
   const future = scale === "DAY" ? day > today : span.from > today;
   const futureBlocked = future && metric !== "meals";
@@ -105,7 +108,7 @@ export function MetricScreen({ metric, clientId, body, diary, targets, calc, mea
   const dayValue = scale === "DAY" && summary !== null ? summary.days[0]?.value ?? null : null;
   const big = summary === null ? null : scale === "DAY" ? dayValue : metric === "meals" && summary.known > 0 ? summary.total / summary.known : summary.average;
   /** Приёмы в среднем — с десятой («3,5»), остальные показатели — целые. */
-  const bigText = (value: number) => metric === "meals" && scale !== "DAY" ? (Math.round(value * 10) / 10).toFixed(1).replace(".", ",") : spaced(value);
+  const bigText = (value: number) => metric === "sleep" || (metric === "meals" && scale !== "DAY") ? (Math.round(value * 10) / 10).toFixed(1).replace(".", ",") : spaced(value);
   const elapsedDays = summary === null ? 0 : summary.days.filter((entry) => entry.date <= today).length;
   const goal = data?.goal ?? null;
   const unitText = metric === "meals" ? "приёмов" : info.unit;
@@ -134,12 +137,7 @@ export function MetricScreen({ metric, clientId, body, diary, targets, calc, mea
       <SegmentedControl compact fit items={SCALES} selectedId={scale} onSelect={chooseScale} />
 
       {futureBlocked ? <EmptyState reason="no-data" title="Будущий день" body="Для будущего дня доступно только питание." />
-        : metric === "sleep" ? <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Сон</Text>
-          <Text style={[styles.empty, { color: colors.textSecondary }]}>Данных о сне пока нет. Они появятся после подключения Health Connect.</Text>
-          <Text style={[styles.goal, { color: colors.textMuted }]}>{info.goalText(SLEEP_GOAL_HOURS)}</Text>
-        </View>
-          : failed && data === null ? <InlineNotice kind="error">Не удалось загрузить данные показателя.</InlineNotice>
+        : failed && data === null ? <InlineNotice kind="error">Не удалось загрузить данные показателя.</InlineNotice>
             : summary === null ? <LoadingState label="Загружаем…" /> : (
               <View style={[styles.card, { backgroundColor: colors.surface }]}>
                 <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{info.title}</Text>
@@ -152,9 +150,9 @@ export function MetricScreen({ metric, clientId, body, diary, targets, calc, mea
                     {goal === null ? null : <ProgressBar value={goalFraction(dayValue, goal)} accessibilityLabel={`${info.title}: доля цели`} />}
                     <Text style={[styles.empty, { color: colors.textMuted }]}>Почасовых данных нет: значение записывается за день.</Text>
                   </>
-                ) : summary.known === 0 ? (metric === "meals" ? null : <Text style={[styles.empty, { color: colors.textSecondary }]}>За выбранный период данных нет.</Text>) : (
+                ) : summary.known === 0 ? (metric === "meals" ? null : <Text style={[styles.empty, { color: colors.textSecondary }]}>{metric === "sleep" ? "Данных о сне нет: они приходят из Health Connect (подключение — в карточке клиента)." : "За выбранный период данных нет."}</Text>) : (
                   <BarChart goal={goal ?? undefined} items={summary.days.map((entry) => ({ key: entry.date, label: shortDate(entry.date), value: entry.value }))}
-                    format={(value) => spaced(value)} accessibilityLabel={`${info.title} по дням, дней с данными: ${summary.known}`}
+                    format={(value) => metric === "sleep" ? bigText(value) : spaced(value)} accessibilityLabel={`${info.title} по дням, дней с данными: ${summary.known}`}
                     onPressItem={(item) => { setDay(item.key); setScale("DAY"); }} />
                 )}
                 {goal === null ? null : <Text style={[styles.goal, { color: colors.textMuted }]}>{info.goalText(goal)}</Text>}
@@ -170,7 +168,8 @@ export function MetricScreen({ metric, clientId, body, diary, targets, calc, mea
 
       {metric === "meals" && !future ? <MealMacroStats clientId={clientId} body={body} span={span} diary={diary} targets={targets} calc={calc} measurements={measurements}
         onOpenDay={(date) => { setDay(date); setScale("DAY"); }} /> : null}
-      {metric === "steps" && scale === "DAY" && !future ? <AppButton label={dayValue === null ? "Ввести шаги за день" : "Изменить шаги за день"} onPress={() => setStepsSheet(true)} /> : null}
+      {metric === "steps" && health?.linked === true ? <Text style={[styles.note, { color: colors.textMuted }]}>Шаги приходят из Health Connect; ручного ввода нет.</Text> : null}
+      {metric === "steps" && scale === "DAY" && !future && health?.linked !== true ? <AppButton label={dayValue === null ? "Ввести шаги за день" : "Изменить шаги за день"} onPress={() => setStepsSheet(true)} /> : null}
       {metric === "meals" ? <AppButton variant="secondary" label="Открыть дневник питания" onPress={onOpenDiary} /> : null}
       {metric === "expenditure" ? <Text style={[styles.note, { color: colors.textMuted }]}>Расход дня — REE + NEAT по шагам этого дня + EAT. Дни без шагов в график не попадают.</Text> : null}
 

@@ -157,7 +157,7 @@ export async function runR06AutomaticInterruptionProbe(mode: Mode): Promise<R06N
       check("native_auto_kill_snapshot_preserves_all_client_facts", rows.length === fixture.ids.length && fixture.ids.every((id) => rows.some((r) => r.id === id)));
     } finally { await read.closeAsync(); }
     const later = await clients.create({ displayName: `R06 SYNTHETIC KILL LATER ${mode}` });
-    check("native_auto_kill_all_holders_and_late_write_usable", owners.ownerCount === 15 && await clients.get(later.id) !== null);
+    check("native_auto_kill_all_holders_and_late_write_usable", owners.ownerCount === 16 && await clients.get(later.id) !== null);
     // This later fact belongs to LIVE only; the next phase must include it as well.
     await save({ ...fixture, ids: [...fixture.ids, later.id], phase: receiptRecovery ? "RECEIPT_RECOVERED" : "COMPLETE" });
     return { kind: "R06_NATIVE", checks, allPassed: checks.every((c) => c.passed), elapsedMs: Date.now() - started };

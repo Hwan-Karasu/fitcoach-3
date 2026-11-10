@@ -117,7 +117,7 @@ async function recoverInterruptedProbe(): Promise<R06NativeReport> {
     loadThemePreference: async () => (await runtime.owners.settings.readAppearance()) ?? { themeId: null, accentId: null } });
     check("native_boot_ready_after_recovery", (await boot.start()).kind === "APP_READY");
     check("native_recovery_workspace_database_order", events.join(",") === "recovery,workspace,database");
-    check("native_all_owners_reopened_after_kill", runtime.owners.ownerCount === 15 && runtime.handles === 1 && runtime.peak === 1);
+    check("native_all_owners_reopened_after_kill", runtime.owners.ownerCount === 16 && runtime.handles === 1 && runtime.peak === 1);
     check(state.expectCommit ? "native_kill_restored_client" : "native_kill_original_client",
       state.expectCommit ? (await clients.get(state.restoredId))?.displayName === "R06 SYNTHETIC RESTORED"
         : (await clients.get(state.beforeId))?.displayName === "R06 SYNTHETIC BEFORE");
@@ -178,7 +178,7 @@ export async function runR06NativeProbe(mode: "NORMAL" | "ACTIONS" | "ACTIONS_RE
     stage = "PREPARE_LIVE";
     await prepareProductionDatabase(live); await runtime.initialize();
     const before = (await runtime.card.save(null, { displayName: "R06 SYNTHETIC BEFORE" }, {})).client;
-    check("native_all_owners_and_workflow_initialized", runtime.owners.ownerCount === 15 && runtime.handles === 1);
+    check("native_all_owners_and_workflow_initialized", runtime.owners.ownerCount === 16 && runtime.handles === 1);
     await runtime.close();
     stage = "PREPARE_SOURCE";
     await prepareProductionDatabase(source); await historicOwners.initialize();
@@ -249,7 +249,7 @@ export async function runR06NativeProbe(mode: "NORMAL" | "ACTIONS" | "ACTIONS_RE
       actionCheck("native_actions_abandoned_preview_cleanup", orphanNames.filter((name) => name !== operationId).every((name) => !new Directory(journal, "jobs", name).exists));
       const restoreId = actions.state.preview!.id;
       actionCheck("native_actions_confirm_restores", (await actions.confirmPreview(restoreId)).kind === "RESTORED");
-      actionCheck("native_actions_full_runtime_reopened_without_merge", runtime.handles === 1 && runtime.peak === 1 && runtime.owners.ownerCount === 15 &&
+      actionCheck("native_actions_full_runtime_reopened_without_merge", runtime.handles === 1 && runtime.peak === 1 && runtime.owners.ownerCount === 16 &&
         (await clients.get(restored.id)) !== null && (await clients.get(before.id)) === null && (await clients.get(intervening.id)) === null);
       const restoredRecipe = await runtime.owners.nutrition.recipes.get(recipeId);
       actionCheck("native_actions_exact_restored_photo", restoredRecipe?.details?.photoUri !== null && restoredRecipe?.details?.photoUri !== undefined &&

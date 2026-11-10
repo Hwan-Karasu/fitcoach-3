@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { TrendingUp } from "lucide-react-native";
+import { useHealthDaily, type HealthConnectPort, type HealthStorePort } from "../../health/public.ts";
 import { InlineNotice, SegmentedRing } from "../../../shared/ui/components/public.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { dailyPoints, MeasurementsCard, upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../measurements/public.ts";
-import { goalFraction, MEALS_GOAL, STEPS_GOAL } from "../domain/ActivityGoals.ts";
+import { goalFraction, MEALS_GOAL, SLEEP_GOAL_HOURS, STEPS_GOAL } from "../domain/ActivityGoals.ts";
 import { mealCount } from "../domain/DiaryRules.ts";
 import { KCAL_PER_G } from "../domain/EnergyRules.ts";
 import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
@@ -73,6 +74,25 @@ function useDayWeight(clientId: string, measurements: MeasurementRepositoryPort,
   return { weight: current ? state.weight : null, ambiguous: current && state.ambiguous, loaded: current };
 }
 
+/** Состояние Health Connect у привязанной карточки (UIX-17): служба и разрешения; `null` — ещё проверяется. */
+function useHealthReady(platform: HealthConnectPort, store: HealthStorePort, linked: boolean): boolean | null {
+  const [ready, setReady] = useState<boolean | null>(null);
+  const [tick, setTick] = useState(0);
+  // Привязка и синхронизация публикуются после коммита: статус перепроверяется, когда разрешения уже выданы.
+  useEffect(() => store.subscribeCommittedChanges(() => setTick((value) => value + 1)), [store]);
+  useEffect(() => {
+    if (!linked) { setReady(null); return undefined; }
+    let active = true;
+    void (async () => {
+      const availability = await platform.availability();
+      const granted = availability === "AVAILABLE" ? await platform.grantedMetrics() : [];
+      if (active) setReady(availability === "AVAILABLE" && granted.length > 0);
+    })().catch(() => { if (active) setReady(false); });
+    return () => { active = false; };
+  }, [platform, linked, tick]);
+  return ready;
+}
+
 const wholeNumber = (value: number): string => String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/gu, "\u00A0");
 
 /** Кружок показателя дня: дуга прогресса, число внутри, подпись ниже; нажатие открывает ввод или связанный экран. */
@@ -128,11 +148,15 @@ const midpoint = (range: Readonly<{ minX10: number; maxX10: number }>) => (range
  * «съедено от цели» из трёх цветов Б/Ж/У, «съедено / цель» по каждому макро, ручная корректировка). Источники — Nutrition, Measurements и дневник тренировок; legacy `client_kbju_state` не используется.
  * `trainedToday` — факт тренировки из дневника тренировок (авто «Да»), `null` — неизвестно.
  */
-export function NutritionHomeCards({ clientId, body, diary, targets, calc, measurements, trainedToday, workoutsThisWeek, onOpenMetric, onOpenWeightStats, onSaveProfile, onOpenJournal }: Readonly<{ clientId: string; body: CalcClientBody; diary: NutritionDiaryPort;
+export function NutritionHomeCards({ clientId, body, diary, targets, calc, measurements, trainedToday, workoutsThisWeek, onOpenMetric, onOpenWeightStats, onSaveProfile, onOpenJournal, health, onOpenHealth }: Readonly<{ clientId: string; body: CalcClientBody; diary: NutritionDiaryPort;
   targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; trainedToday: boolean | null;
   /** Тренировок за текущую неделю Пн–Вс по дневнику; `null` — нет данных (не 0). */ workoutsThisWeek: number | null;
   /** Кружок показателя открывает его экран с графиком (UIX-08). */ onOpenMetric: (metric: MetricId) => void;
   /** Значок графика у «Вес»: статистика веса и % жира. */ onOpenWeightStats: () => void;
+  /** Health Connect: сон выбранного дня и состояние подключения (UIX-16/17); `linked` — эта карточка привязана «для себя». */
+  health: Readonly<{ store: HealthStorePort; platform: HealthConnectPort; linked: boolean }>;
+  /** Открыть карточку клиента, где подключается Health Connect. */
+  onOpenHealth: () => void;
   /** Лист «Расчёт»: сохранение профиля и переход в журнал замеров (оболочка клиента). */
   onSaveProfile: SaveCalcProfile; onOpenJournal: () => void }>) {
   const { palette } = usePrototypeTheme();
@@ -142,6 +166,9 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   const { loaded, guide, defaults, leanMassKg, tdee } = useNutritionGuide(clientId, body, calc, measurements);
   const { data, stale } = useNutritionDay(clientId, day, diary, targets);
   const stepsToday = useTodaySteps(clientId, calc, day);
+  const sleepDay = useHealthDaily(health.store, clientId, "SLEEP_MIN", day, day);
+  const sleepHours = sleepDay === null || future ? null : (sleepDay.get(day) ?? null) === null ? null : (sleepDay.get(day) as number) / 60;
+  const healthReady = useHealthReady(health.platform, health.store, health.linked);
   const mark = useTodayWorkoutMark(clientId, calc, day);
   const dayWeight = useDayWeight(clientId, measurements, day);
   const [mode, setMode] = useState<TargetMode>("EXACT");
@@ -208,7 +235,8 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
           <DayRing label="Шаги" unit="шагов" caption="Шаги" value={future || !stepsToday.loaded || stepsToday.steps === null ? null : wholeNumber(stepsToday.steps)}
             fraction={future ? null : goalFraction(stepsToday.steps, STEPS_GOAL)} hint="Открыть график шагов" onPress={() => onOpenMetric("steps")} />
           {/* Сон приходит из Health Connect (ADR-059, UIX-16/17): до подключения экран сна показывает пустое состояние. */}
-          <DayRing label="Сон" caption="Сон" value={null} fraction={null} hint="Открыть график сна" onPress={() => onOpenMetric("sleep")} />
+          <DayRing label="Сон" unit="часов" caption="Сон, ч" value={sleepHours === null ? null : (Math.round(sleepHours * 10) / 10).toFixed(1).replace(".", ",")}
+            fraction={goalFraction(sleepHours, SLEEP_GOAL_HOURS)} hint="Открыть график сна" onPress={() => onOpenMetric("sleep")} />
           <DayRing label="Расход" unit="ккал" caption="Расход, ккал" value={tdee === null ? null : wholeNumber(tdee)} fraction={null}
             hint="Открыть график расхода" onPress={() => onOpenMetric("expenditure")} />
           <DayRing label="Приёмы" caption="Приёмы пищи" value={data === null || stale ? null : String(mealCount(data.summary))}
@@ -222,6 +250,12 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
           <DayPlate label="На неделе" value={workoutsThisWeek === null ? null : String(workoutsThisWeek)} disabled hint="Тренировок за неделю по дневнику" />
         </View>
         {future ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Для будущего дня доступно только питание.</Text> : null}
+        {health.linked && healthReady === false ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Health Connect не подключён. Открыть карточку клиента" onPress={onOpenHealth}
+            style={[styles.healthNotice, { backgroundColor: colors.surfaceRaised }]}>
+            <Text style={[styles.hint, { color: colors.textPrimary }]}>Health Connect не подключён: шаги и сон не обновляются. Нажмите, чтобы открыть карточку и дать доступ.</Text>
+          </Pressable>
+        ) : health.linked ? <Text style={[styles.hint, { color: colors.textMuted }]}>Шаги и сон — из Health Connect.</Text> : null}
         {dayWeight.ambiguous ? <Text style={[styles.hint, { color: colors.textSecondary }]}>За этот день несколько записей веса: основную выбирают в журнале замеров.</Text> : null}
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       </View>
@@ -286,6 +320,7 @@ const styles = StyleSheet.create({
   ring: { flex: 1, minWidth: 0, minHeight: 48, alignItems: "center", gap: 6, paddingVertical: 4 },
   ringNumber: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19, paddingHorizontal: 4, textAlign: "center" },
   ringCaption: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14, textAlign: "center" },
+  healthNotice: { borderRadius: 18, padding: 12, minHeight: 48, justifyContent: "center" },
   plates: { flexDirection: "row", gap: 6, paddingTop: 6 },
   plateWrap: { flex: 1, flexBasis: 0, minWidth: 0 },
   chartIcon: { position: "absolute", top: 4, right: 0, width: 48, height: 48, alignItems: "center", justifyContent: "center" },

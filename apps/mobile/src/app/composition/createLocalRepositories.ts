@@ -15,6 +15,7 @@ import { DevQuestionnaireRepository, devQuestionnaireClientDeletionParticipant }
 import { DevSettingsRepository } from "../../features/settings/data/DevSettingsRepository.ts";
 import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant } from "../../features/training/plans/data/DevTrainingPlansRepository.ts";
 import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParticipant } from "../../features/training/execution/data/DevTrainingExecutionRepository.ts";
+import { DevHealthRepository, devHealthClientDeletionParticipant } from "../../features/health/data/DevHealthRepository.ts";
 import { devTransferReceiptsClientDeletionParticipant } from "../../features/import/data/TransferReceiptStore.ts";
 
 /** Actual application owner inventory, also used by the filesystem integration rehearsal.
@@ -26,7 +27,7 @@ export function createLocalRepositories(database: SharedSqliteDatabase, workspac
       devMeasurementClientDeletionParticipant, devNutritionCalcClientDeletionParticipant, devNutritionClientDeletionParticipant,
       devNutritionTargetsClientDeletionParticipant, devQuestionnaireClientDeletionParticipant,
       devTrainingPlansClientDeletionParticipant, devTrainingExecutionClientDeletionParticipant,
-      devTransferReceiptsClientDeletionParticipant]);
+      devTransferReceiptsClientDeletionParticipant, devHealthClientDeletionParticipant]);
   const calendar = new DevCalendarRepository(database, workspaceId, devAccountingCalendarHook);
   const accounting = new DevAccountingRepository(database, workspaceId);
   const measurements = new DevMeasurementRepository(database, workspaceId);
@@ -39,12 +40,13 @@ export function createLocalRepositories(database: SharedSqliteDatabase, workspac
   const trainingPlans = new DevTrainingPlansRepository(database, workspaceId);
   const trainingExecution = new DevTrainingExecutionRepository(database, workspaceId);
   const exercises = new DevExerciseCatalogRepository(database, workspaceId, system);
+  const health = new DevHealthRepository(database, workspaceId);
   const owners = [clients, calendar, accounting, measurements, nutrition.foods, nutrition.recipes, nutrition.diary,
-    nutrition.targets, nutrition.calc, questionnaire, settings, notifications, trainingPlans, trainingExecution, exercises] as const;
+    nutrition.targets, nutrition.calc, questionnaire, settings, notifications, trainingPlans, trainingExecution, exercises, health] as const;
   calendar.subscribeCommittedChanges(() => accounting.notifyExternalChange());
   // Окончательное удаление клиента отменяет и обезличивает его записи в своей транзакции: кэш диапазонов календаря должен это увидеть.
   clients.subscribeCommittedChanges(() => calendar.notifyExternalChange());
-  return { clients, calendar, accounting, measurements, nutrition, questionnaire, settings, notifications, trainingPlans, trainingExecution, exercises,
+  return { clients, calendar, accounting, measurements, nutrition, questionnaire, settings, notifications, trainingPlans, trainingExecution, exercises, health,
     ownerCount: owners.length,
     async initialize(): Promise<void> { for (const owner of owners) await owner.initialize(); },
     async close(): Promise<void> {

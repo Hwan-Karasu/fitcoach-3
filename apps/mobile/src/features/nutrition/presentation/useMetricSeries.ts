@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { HealthStorePort } from "../../health/public.ts";
 import { dailyPoints, type MeasurementRepositoryPort } from "../../measurements/public.ts";
 import { SLEEP_GOAL_HOURS, MEALS_GOAL, STEPS_GOAL } from "../domain/ActivityGoals.ts";
 import { datesIn, type DateSpan } from "../domain/MetricPeriods.ts";
@@ -40,8 +41,8 @@ function groupMeals(entries: readonly EatenEntry[], span: DateSpan): ReadonlyMap
  * Пока читается новый интервал, прежние данные не выдаются за новые: возвращается `null`.
  */
 export function useMetricSeries(metric: MetricId, span: DateSpan, clientId: string, body: CalcClientBody, tdee: number | null,
-  ports: Readonly<{ diary: NutritionDiaryPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort }>): Readonly<{ data: MetricSeriesData | null; failed: boolean }> {
-  const { diary, calc, measurements } = ports;
+  ports: Readonly<{ diary: NutritionDiaryPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; health?: HealthStorePort }>): Readonly<{ data: MetricSeriesData | null; failed: boolean }> {
+  const { diary, calc, measurements, health } = ports;
   const key = `${metric}|${clientId}|${span.from}|${span.to}`;
   const [state, setState] = useState<Readonly<{ key: string; values: ReadonlyMap<string, number> }> | null>(null);
   const [failed, setFailed] = useState(false);
@@ -52,7 +53,11 @@ export function useMetricSeries(metric: MetricId, span: DateSpan, clientId: stri
     let active = true;
     setFailed(false);
     const load = async (): Promise<ReadonlyMap<string, number>> => {
-      if (metric === "sleep") return new Map();
+      // Сон — часы с десятой из Health Connect (минуты в хранилище); без подключения данных нет.
+      if (metric === "sleep") {
+        const days = health === undefined ? [] : await health.listDaily(clientId, span.from, span.to);
+        return new Map(days.filter((day) => day.metric === "SLEEP_MIN").map((day) => [day.localDate, Math.round(day.value / 6) / 10]));
+      }
       if (metric === "steps") return new Map((await calc.listSteps(clientId, span.from, span.to)).map((day) => [day.localDate, day.steps]));
       if (metric === "meals") return groupMeals(await diary.listEatenEntries(clientId, span.from, span.to), span);
       const [steps, stored, journal] = await Promise.all([calc.listSteps(clientId, span.from, span.to), calc.getProfile(clientId), measurements.listForClient(clientId)]);
@@ -61,14 +66,15 @@ export function useMetricSeries(metric: MetricId, span: DateSpan, clientId: stri
     };
     void load().then((values) => { if (active) { setState({ key, values }); setFailed(false); } }, () => { if (active) setFailed(true); });
     return () => { active = false; };
-  }, [metric, clientId, span.from, span.to, key, diary, calc, measurements, sex, age, heightCm, tick]);
+  }, [metric, clientId, span.from, span.to, key, diary, calc, measurements, health, sex, age, heightCm, tick]);
   useEffect(() => {
     const refresh = () => setTick((value) => value + 1);
     const offCalc = calc.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });
     const offDiary = diary.subscribeCommittedChanges((change) => { if (change.clientId === clientId && change.scope !== "WATER") refresh(); });
     const offBody = measurements.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });
-    return () => { offCalc(); offDiary(); offBody(); };
-  }, [clientId, calc, diary, measurements]);
+    const offHealth = health === undefined ? () => undefined : health.subscribeCommittedChanges((change) => { if (change.clientId === clientId) refresh(); });
+    return () => { offCalc(); offDiary(); offBody(); offHealth(); };
+  }, [clientId, calc, diary, measurements, health]);
 
   const goal = metric === "steps" ? STEPS_GOAL : metric === "meals" ? MEALS_GOAL : metric === "sleep" ? SLEEP_GOAL_HOURS : tdee;
   return { data: state !== null && state.key === key ? { values: state.values, goal } : null, failed };

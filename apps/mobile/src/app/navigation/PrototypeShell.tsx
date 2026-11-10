@@ -239,7 +239,7 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
         {/* Шапку клиента рисуют вкладки и стеки клиента (UI-OWN-035). */}
         <Stack.Screen name="ClientWorkspace" options={{ title: "Карточка клиента", headerShown: false }}>
           {({ navigation, route }) => <ClientWorkspaceNavigator
-            clientId={route.params.clientId} repository={services.clients} questionnaire={services.questionnaire}
+            clientId={route.params.clientId} repository={services.clients} questionnaire={services.questionnaire} health={services.health}
             accounting={services.accounting} measurements={services.measurements} nutrition={services.nutrition}
             trainingPlans={services.trainingPlans} trainingExecution={services.trainingExecution} trainingHistory={services.trainingHistory} clientBodyweight={services.clientBodyweight} restTimers={services.restTimers} activeWorkouts={services.activeWorkouts}
             onOpenWorkout={(slot, options) => navigation.push("ClientWorkspace", { clientId: slot.clientId, screen: "Training",
@@ -272,7 +272,7 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
         </Stack.Screen>
         <Stack.Screen name="ClientEditorDev" options={{ headerShown: false, gestureEnabled: false }}>
           {({ navigation, route }) => <ClientEditorRoute
-            clientId={route.params?.clientId} repository={services.clients} questionnaire={services.questionnaire} clientCard={services.clientCard} measurements={services.measurements}
+            clientId={route.params?.clientId} repository={services.clients} questionnaire={services.questionnaire} clientCard={services.clientCard} measurements={services.measurements} health={services.health}
             prefillName={route.params?.guestLink?.guestName}
             onCreated={async (client) => {
               const link = route.params?.guestLink;

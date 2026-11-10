@@ -151,10 +151,10 @@ test("R06 runtime drains an admitted multi-await operation before owner close; n
   } finally { read.release(); fileTask.release(); reopening.release(); off(); await f.close(); }
 });
 
-test("R06 all 15 actual repositories plus workflow holder close for backup→guarded replace→reopen", async () => {
+test("R06 all 16 actual repositories plus workflow holder close for backup→guarded replace→reopen", async () => {
   const f = await fixture();
   try {
-    assert.equal(f.owners.ownerCount, 15);
+    assert.equal(f.owners.ownerCount, 16);
     const historic = await f.card.save(null, { displayName: "SYNTHETIC HISTORIC" }, {});
     const source = new DatabaseSync(f.file, { readOnly: true }); const backup = join(f.directory, "copy.atbackup");
     try { await createSqliteBackup(source, join(f.directory, "copy.partial"), backup,

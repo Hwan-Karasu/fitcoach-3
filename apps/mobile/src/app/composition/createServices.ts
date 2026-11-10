@@ -5,7 +5,10 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import type { CalendarParticipantDirectoryPort, CalendarRepositoryPort } from
   "../../features/calendar/public.ts";
 import type { FoodCatalogPort, NutritionCalcPort, NutritionDiaryPort, NutritionTargetsPort, RecipeCatalogPort } from "../../features/nutrition/public.ts";
-import { dailyPoints, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
+import { dailyPoints, localDateOf, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
+import { isValidHealthValue, type HealthConnectPort, type HealthStorePort } from "../../features/health/public.ts";
+import { ExpoHealthConnectAdapter } from "../../features/health/data/ExpoHealthConnectAdapter.ts";
+import { syncHealthConnect, type HealthSyncOutcome } from "../../workflows/syncHealthConnect.ts";
 import type { SettingsPort } from "../../features/settings/public.ts";
 import type { QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
 import type { ActiveWorkoutsPort, RestTimersPort, TrainingExecutionPort, TrainingPlansRepositoryPort, WorkoutOutcomePort } from
@@ -77,6 +80,14 @@ export interface NutritionServices {
 const DEV_DATABASE = "fitcoach_dev_baseline_v3.db";
 
 /** Shared port bindings; development tooling is absent from the ordinary runtime. */
+/** Health Connect (ADR-059): хранилище дней, граница с системой и обновление данных привязанной карточки. */
+export interface HealthServices {
+  readonly store: HealthStorePort;
+  readonly platform: HealthConnectPort;
+  /** Читает разрешённые данные за недостающие дни и переносит их владельцам; без привязки, службы или разрешений ничего не делает. */
+  readonly sync: () => Promise<HealthSyncOutcome>;
+}
+
 export interface ApplicationServices {
   readonly developmentTools?: Readonly<{ runSqliteProbe: () => Promise<F04ProbeReport> }>;
   readonly clients: LocalClientServices;
@@ -86,6 +97,7 @@ export interface ApplicationServices {
   readonly measurements: MeasurementRepositoryPort;
   readonly nutrition: NutritionServices;
   readonly questionnaire: QuestionnaireRepositoryPort;
+  readonly health: HealthServices;
   /** Z01: тема, акцент и видимые поля замеров тренера. */
   readonly settings: SettingsPort;
   /** Настройки и лента уведомлений (§§41, 54), граница с Android и сверка с календарём. */
@@ -164,13 +176,28 @@ function exerciseLookup(exercises: ExerciseCatalogPort, registerInvalidation?: (
   };
 }
 
+const healthPlatform = new ExpoHealthConnectAdapter();
+
+function createHealthServices(store: HealthStorePort, nutrition: NutritionServices, measurements: MeasurementRepositoryPort): HealthServices {
+  // Одновременные обновления (открытие карточки и кнопка в ней) делят один запуск: иначе вес и % жира мог бы записаться дважды.
+  let running: Promise<HealthSyncOutcome> | null = null;
+  const sync = (): Promise<HealthSyncOutcome> => {
+    if (running !== null) return running;
+    const current = syncHealthConnect({ health: store, platform: healthPlatform, calc: nutrition.calc, measurements, isValidHealthValue }, localDateOf(new Date()));
+    running = current;
+    void current.then(() => undefined, () => undefined).then(() => { if (running === current) running = null; });
+    return current;
+  };
+  return { store, platform: healthPlatform, sync };
+}
+
 export function createServices(clients: LocalClientServices, calendar: CalendarRepositoryPort,
   accounting: AccountingRepositoryPort, measurements: MeasurementRepositoryPort, nutrition: NutritionServices,
   questionnaire: QuestionnaireRepositoryPort, trainingPlans: TrainingPlansRepositoryPort,
   trainingExecution: TrainingExecutionPort, restTimers: RestTimersPort, exercises: ExerciseCatalogPort,
   weekCopy: WeekCopyPort, weekSwap: WeekSwapPort, mesocycleSave: MesocycleSavePort & SimplePlanSavePort & WeekEditSavePort,
   planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort, settings: SettingsPort,
-  clientCard: ClientCardWithAnswersPort, notifications: NotificationCenterPort,
+  clientCard: ClientCardWithAnswersPort, notifications: NotificationCenterPort, healthStore: HealthStorePort,
   developmentTools?: ApplicationServices["developmentTools"], registerInvalidation?: (invalidate: () => void) => void): ApplicationServices {
   return {
     ...(developmentTools === undefined ? {} : { developmentTools }),
@@ -181,6 +208,7 @@ export function createServices(clients: LocalClientServices, calendar: CalendarR
     measurements,
     nutrition,
     questionnaire,
+    health: createHealthServices(healthStore, nutrition, measurements),
     settings,
     notifications,
     notificationPlatform: expoNotificationAdapter,
@@ -234,7 +262,7 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
   const database = new SharedSqliteDatabase(() => development ? openExpoSqliteConnection(DEV_DATABASE)
     : openExpoSqliteConnection(PRODUCTION_DATABASE, inspectProductionDatabase));
   const repositories = createLocalRepositories(database, workspaceId, systemCatalogJson as SystemCatalog);
-  const { clients, calendar, accounting, measurements, nutrition, questionnaire, settings, notifications, trainingPlans, trainingExecution, exercises } = repositories;
+  const { clients, calendar, accounting, measurements, nutrition, questionnaire, settings, notifications, trainingPlans, trainingExecution, exercises, health } = repositories;
   const restTimers = new RestTimerService(trainingExecution, expoRestSignal);
   const invalidators: (() => void)[] = [];
   const registerInvalidation = (invalidate: () => void) => { invalidators.push(invalidate); };
@@ -268,7 +296,7 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
     ...(development ? {} : { recoverBeforeOpen: (): Promise<void> => recoverProductionRestore(maintenance) }),
   });
   const raw = createServices(clients, calendar, accounting, measurements, { ...nutrition, calcProfile }, questionnaire, trainingPlans,
-    withCalendarOutcome(trainingExecution, workoutOutcome), restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete, settings, clientCard, notifications,
+    withCalendarOutcome(trainingExecution, workoutOutcome), restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete, settings, clientCard, notifications, health,
     development ? { runSqliteProbe: () => runF04Probe(() => openExpoSqliteConnection("fitcoach_f04_probe.db")) } : undefined, registerInvalidation);
   const commands = new RuntimeCommandGate();
   const maintenance: RuntimeMaintenance = new RuntimeMaintenance({ database, commands,
@@ -286,6 +314,7 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
     ...(raw.developmentTools ? { developmentTools: commands.port(raw.developmentTools) } : {}),
     clients: commands.port(raw.clients), calendar: commands.port(raw.calendar), calendarParticipants: commands.port(raw.calendarParticipants),
     accounting: commands.port(raw.accounting), measurements: commands.port(raw.measurements), questionnaire: commands.port(raw.questionnaire),
+    health: { store: commands.port(raw.health.store), platform: commands.port(raw.health.platform), sync: () => commands.run(raw.health.sync) },
     nutrition: { foods: commands.port(raw.nutrition.foods), recipes: commands.port(raw.nutrition.recipes), diary: commands.port(raw.nutrition.diary),
       targets: commands.port(raw.nutrition.targets), calc: commands.port(raw.nutrition.calc), calcProfile: commands.port(raw.nutrition.calcProfile) },
     settings: commands.port(raw.settings), notifications: commands.port(raw.notifications), notificationPlatform: commands.port(raw.notificationPlatform),
