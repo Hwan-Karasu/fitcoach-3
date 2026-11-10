@@ -83,7 +83,7 @@ export function remainingSec(timer: RestTimer, now: number): number {
 }
 
 /**
- * Ближайшее окончание идущего таймера позже `now` (`null` — будить нечего). Цифры отсчёта рисует UI-поток, JS просыпается только к
+ * Ближайшее окончание идущего таймера позже `now` (`null` — будить нечего). Контроллер, независимо от отображения цифр, просыпается к
  * «Готово» (PERF-REST-DOCK): приостановленный таймер не заканчивается, закончившийся к `now` уже показан.
  */
 export function nextFinishAt(timers: readonly RestTimer[], now: number): number | null {

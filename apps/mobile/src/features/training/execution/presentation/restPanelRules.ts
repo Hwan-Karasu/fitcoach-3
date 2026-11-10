@@ -10,17 +10,19 @@ export function orderedRestTimers(list: readonly RestTimer[]): readonly RestTime
 }
 
 export const TIMER_GAP = 8;
-/** Две кнопки 48 dp и отступы помещаются даже в узкой карточке. */
+/** Keep all four 48 dp controls in one row. On phones the next card peeks in,
+ * instead of squeezing two cards into half-width columns and doubling their height. */
 export function timerCarouselLayout(width: number, count: number, fontScale: number) {
   const available = Math.max(0, width);
-  const minimum = Math.max(128, 100 + 28 * fontScale);
-  const full = count <= 2 ? Math.max(1, count) : Math.max(1, Math.min(3, Math.floor((available - 24 + TIMER_GAP) / (minimum + TIMER_GAP))));
-  const cardWidth = count <= 2 ? Math.max(0, (available - (full - 1) * TIMER_GAP) / full)
-    : Math.max(minimum, (available - 24 - full * TIMER_GAP) / full);
+  const minimum = Math.min(available, Math.max(232, 208 + 24 * Math.max(1, fontScale)));
+  const full = Math.min(Math.max(1, count), Math.max(1, Math.floor((available + TIMER_GAP) / (minimum + TIMER_GAP))));
+  const overflow = count > full;
+  const cardWidth = count <= 1 ? available : overflow
+    ? Math.max(minimum, (available - 24 - full * TIMER_GAP) / full)
+    : Math.max(0, (available - (full - 1) * TIMER_GAP) / full);
   const step = cardWidth + TIMER_GAP;
   const maxOffset = Math.max(0, count * step - TIMER_GAP - available);
-  return { cardWidth, step, maxOffset, stops: maxOffset === 0 ? 1 : Math.ceil(maxOffset / step) + 1,
-    gridButtons: cardWidth < 220 * Math.max(1, fontScale) };
+  return { cardWidth, step, maxOffset, stops: maxOffset === 0 ? 1 : Math.ceil(maxOffset / step) + 1 };
 }
 
 /** В компактной строке время не ужимается: сначала оставляем место имени, раскрытию и «Ещё». */

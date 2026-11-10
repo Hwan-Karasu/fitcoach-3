@@ -19,6 +19,8 @@ export { ManualBackupService } from "./application/ManualBackupService.ts";
 export { BackupExclusive } from "./application/BackupExclusive.ts";
 export { BackupRunClock, observeBackup } from "./domain/BackupProgress.ts";
 export type { BackupObserver, BackupProgress, BackupRunTiming, BackupStage, BackupStageTiming } from "./domain/BackupProgress.ts";
+export { RestorePreparationTrace, RESTORE_PREPARATION_PHASES } from "./domain/RestorePreparation.ts";
+export type { RestorePreparationObserver, RestorePreparationPhase, RestorePreparationProgress } from "./domain/RestorePreparation.ts";
 export { classifyPrepareFailure, isStorageFull } from "./domain/BackupFailure.ts";
 export type { PrepareFailureKind, PrepareStage } from "./domain/BackupFailure.ts";
 export { ManualBackupError, manualPrepareError } from "./domain/ManualBackupPort.ts";

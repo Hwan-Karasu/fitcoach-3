@@ -5,6 +5,7 @@ import { AppButton, InlineNotice } from "../../shared/ui/components/public.ts";
 import { SectionHeading } from "../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
+import { RestorePreparationView } from "./BackupStatus.tsx";
 
 const errors: Record<RestoreActionErrorCode, string> = {
   RESTORE_UNAVAILABLE: "Восстановление недоступно в этой сборке приложения.",
@@ -46,7 +47,7 @@ export function RestoreSection({ restore, blocked }: Readonly<{ restore: Restore
     <SectionHeading>Восстановление данных</SectionHeading>
     {!state.available ? <InlineNotice>{errors.RESTORE_UNAVAILABLE}</InlineNotice> : null}
     {state.error !== null ? <InlineNotice kind="error">{errors[state.error]}</InlineNotice> : null}
-    {state.phase === "PREPARING" ? <InlineNotice>Проверяем и подготавливаем копию…</InlineNotice> : null}
+    {state.phase === "PREPARING" ? <RestorePreparationView progress={state.preparation ?? null} /> : null}
     {state.notice !== null ? <InlineNotice kind="success">{state.notice === "RESTORED" ? "Данные восстановлены из выбранной копии."
       : state.notice === "RETURNED" ? "Прежние данные возвращены. Точка возврата использована." : state.notice === "CHECKED" ? "Проверка завершена. Данные доступны." : "Точка возврата удалена."}</InlineNotice> : null}
     {state.phase === "RECOVERY_REQUIRED" ? <AppButton label="Повторить восстановление" disabled={blocked} onPress={() => { void restore.recover(); }} /> : null}

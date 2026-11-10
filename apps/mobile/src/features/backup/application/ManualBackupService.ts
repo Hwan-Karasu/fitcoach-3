@@ -46,7 +46,12 @@ export class ManualBackupService implements ManualBackupPort {
     if (this.current.phase !== "IDLE") return { kind: "FAILED", code: "BACKUP_BUSY" };
     if (!this.current.available) return { kind: "FAILED", code: "BACKUP_STORAGE_UNAVAILABLE" };
     this.publish({ phase, error: null, errorStage: null });
-    try { return await this.options.run(task); }
+    // Same lock order as restore and automatic backup: exclusive -> command admission.
+    // Holding a command while waiting for exclusive deadlocks a restore draining it.
+    if (this.options.exclusive.busy) this.publish({ phase: "WAITING", progress: null });
+    try { return await this.options.exclusive.run(() => {
+      this.publish({ phase }); return this.options.run(task);
+    }); }
     catch (error) {
       const code = errorCode(error);
       console.warn("[backup] MANUAL_FAILED", code, error instanceof ManualBackupError ? error.stage ?? "-" : "-");
@@ -89,8 +94,7 @@ export class ManualBackupService implements ManualBackupPort {
   private async save(destination: BackupDestination): Promise<ManualBackupOutcome> {
     if (destination.kind === "DOWNLOADS" && !this.options.publisher.supportsDownloads) throw new ManualBackupError("BACKUP_LOCATION_UNSUPPORTED");
     this.failedDestination = destination;
-    if (this.options.exclusive.busy) this.publish({ phase: "WAITING", progress: null });
-    const outcome = await this.options.exclusive.run(() => this.saveAdmitted(destination));
+    const outcome = await this.saveAdmitted(destination);
     this.failedDestination = null;
     return outcome;
   }

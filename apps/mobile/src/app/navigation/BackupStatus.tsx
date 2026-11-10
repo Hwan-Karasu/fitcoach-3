@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
-import type { BackupProgress, BackupRunTiming, BackupStage, PrepareStage } from "../../features/backup/public.ts";
+import { RESTORE_PREPARATION_PHASES, type RestorePreparationProgress, type RestorePreparationPhase,
+  type BackupProgress, type BackupRunTiming, type BackupStage, type PrepareStage } from "../../features/backup/public.ts";
 import { ProgressBar } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
@@ -16,13 +17,30 @@ const shortLabels: Readonly<Record<BackupStage, string>> = {
   SNAPSHOT: "снимок", CONTENT: "данные", MEDIA: "фото", VERIFY: "проверка", PUBLISH: "запись", ROTATE: "версии",
 };
 const NBSP = String.fromCharCode(0xa0);
+const restoreLabels: Record<RestorePreparationPhase, string> = {
+  COPY_SOURCE: "Копируем выбранный файл", VERIFY_SOURCE: "Проверяем файл копии",
+  PREPARE_CANDIDATE: "Подготавливаем данные копии", VERIFY_CURRENT: "Проверяем текущие данные", READY: "Копия готова",
+};
+export function RestorePreparationView({ progress }: Readonly<{ progress: RestorePreparationProgress | null }>) {
+  const { palette } = usePrototypeTheme();
+  const phase = progress?.phase ?? "COPY_SOURCE";
+  const label = restoreLabels[phase];
+  const known = progress?.done !== null && progress?.done !== undefined && progress.total !== null && progress.total > 0;
+  const value = known ? Math.min(1, Math.max(0, progress.done! / progress.total!)) : null;
+  return <View style={styles.progress} accessibilityLiveRegion="polite">
+    <Text style={[styles.label, { color: palette.tokens.textSecondary }]}>
+      {`Этап ${RESTORE_PREPARATION_PHASES.indexOf(phase) + 1} из ${RESTORE_PREPARATION_PHASES.length}: ${label}${value === null ? "…" : ` · ${Math.floor(value * 100)}${NBSP}%`}`}
+    </Text>
+    <ProgressBar value={value} accessibilityLabel={label} />
+  </View>;
+}
 const seconds = (ms: number) => `${(ms / 1000).toFixed(1).replace(".", ",")}${NBSP}с`;
 
 /** Текущий этап копии и прогресс (BKP-STAGE-1). Процент — только из посчитанных строк/фото; иначе индикатор без процента. */
-export function BackupProgressView({ progress, fallback }: Readonly<{ progress: BackupProgress | null; fallback: string }>) {
+export function BackupProgressView({ progress, fallback, labelOverride }: Readonly<{ progress: BackupProgress | null; fallback: string; labelOverride?: string }>) {
   const { palette } = usePrototypeTheme();
   const known = progress !== null && progress.done !== null && progress.total !== null && progress.total > 0;
-  const label = progress === null ? fallback : stageLabels[progress.stage];
+  const label = labelOverride ?? (progress === null ? fallback : stageLabels[progress.stage]);
   const detail = !known ? "" : progress.stage === "MEDIA" ? ` · ${progress.done} из ${progress.total}`
     : ` · ${Math.floor((progress.done! / progress.total!) * 100)}${NBSP}%`;
   return <View style={styles.progress} accessibilityLiveRegion="polite">

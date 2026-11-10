@@ -1,5 +1,6 @@
 import { RestoreActionError, type RestoreActionErrorCode, type RestoreActionOutcome, type RestoreActionState,
   type RestoreActionsPort, type RestoreJobsPort, type RestorePreview } from "../domain/RestoreActions.ts";
+import type { RestorePreparationObserver } from "../domain/RestorePreparation.ts";
 
 interface Options {
   readonly enabled: boolean;
@@ -54,27 +55,32 @@ export class RestoreActionsService implements RestoreActionsPort {
       return { kind: "UPDATED" };
     }, { preserveNotice: true });
   }
-  private prepare(task: () => Promise<RestorePreview | null>): Promise<RestoreActionOutcome> {
+  private prepare(task: (observe: RestorePreparationObserver) => Promise<RestorePreview | null>): Promise<RestoreActionOutcome> {
     if (this.current.preview !== null) return Promise.resolve({ kind: "FAILED", code: "RESTORE_BUSY" });
     return this.perform("PREPARING", async () => {
       this.preparingPreview = true; this.cancelPreparation = false;
+      this.publish({ preparation: null });
+      let live = true;
+      const observe: RestorePreparationObserver = (progress) => {
+        if (live && this.preparingPreview && !this.cancelPreparation) this.publish({ preparation: { ...progress } });
+      };
       try {
         const preview = await this.options.read(async () => {
-          const value = await task();
+          const value = await task(observe);
           if (this.cancelPreparation && value !== null) { await this.discard(value.id); return null; }
           return value;
         });
         if (preview === null) return { kind: "CANCELLED" };
         this.publish({ preview: Object.freeze({ ...preview }) }); return { kind: "UPDATED" };
-      } finally { this.preparingPreview = false; }
+      } finally { live = false; this.preparingPreview = false; this.publish({ preparation: null }); }
     });
   }
-  chooseFile(): Promise<RestoreActionOutcome> { return this.prepare(() => this.options.jobs.prepareFile()); }
+  chooseFile(): Promise<RestoreActionOutcome> { return this.prepare((observe) => this.options.jobs.prepareFile(observe)); }
   previewReturn(): Promise<RestoreActionOutcome> {
     const point = this.current.point;
-    return this.prepare(async () => {
+    return this.prepare(async (observe) => {
       if (point === null) throw new RestoreActionError("RESTORE_POINT_UNAVAILABLE");
-      return this.options.jobs.prepareReturn(point.id);
+      return this.options.jobs.prepareReturn(point.id, observe);
     });
   }
   private async discard(id: string): Promise<void> {

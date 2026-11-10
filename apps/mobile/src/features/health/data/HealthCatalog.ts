@@ -11,6 +11,7 @@ export const HEALTH_LEDGER = "health_schema_migrations";
 export const HEALTH_OWNER: DatabaseOwnerCatalog = {
   owner: "health",
   ledger: HEALTH_LEDGER,
+  allowMissingOnUpgrade: true,
   chain: [{
     version: 1,
     checksum: "health-connect-v1-20261110",

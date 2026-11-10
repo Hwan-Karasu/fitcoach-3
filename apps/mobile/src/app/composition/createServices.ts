@@ -25,6 +25,7 @@ import type { ExerciseLookupPort } from "../../features/training/public.ts";
 import type { ClientArchivePort, ClientChangePort, ClientRecoveryDraftPort, ClientRepositoryPort,
   ClientRosterPort } from "../../features/clients/public.ts";
 import { BootCoordinator } from "../bootstrap/BootCoordinator.ts";
+import { startupDiagnostics } from "../bootstrap/StartupDiagnostics.ts";
 import { createDevBootDependencies, DEV_WORKSPACE_ID } from "../bootstrap/DevBootDependencies.ts";
 import { createProductionBootDependencies } from "../bootstrap/ProductionBootDependencies.ts";
 import { PRODUCTION_DATABASE, PRODUCTION_WORKSPACE_ID, inspectProductionDatabase } from "./productionDatabase.ts";
@@ -273,8 +274,8 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
     ...createPlanOnlyDeleteWorkflow(transaction, trainingPlans.deleteParticipant, trainingExecution.cleanupParticipant) };
   const workoutOutcome = createWorkoutOutcomeWorkflow(transaction, trainingExecution.outcomeParticipant, calendar.outcomeParticipant);
   const initializeRepositories = async () => {
-    await repositories.initialize();
-    await restTimers.recover({ reconcileSignals: true }).catch(() => undefined);
+    await startupDiagnostics.measure("repositories.initialize", () => repositories.initialize());
+    await startupDiagnostics.measure("timers.recover", () => restTimers.recover({ reconcileSignals: true })).catch(() => undefined);
     preloadRestSignal();
     workflow.resume();
   };
@@ -285,7 +286,7 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
     }) : createProductionBootDependencies(database, initializeRepositories, () => settings.readAppearance());
   const boot: BootCoordinator = new BootCoordinator({ ...dependencies,
     // The dev file has a separate workspace/schema gate; do not claim it as production.
-    ...(development ? {} : { recoverBeforeOpen: (): Promise<void> => recoverProductionRestore(maintenance) }),
+    ...(development ? {} : { recoverBeforeOpen: (): Promise<void> => startupDiagnostics.measure("restore.recovery", () => recoverProductionRestore(maintenance)) }),
   });
   const raw = createServices(clients, calendar, accounting, measurements, { ...nutrition, calcProfile }, questionnaire, trainingPlans,
     withCalendarOutcome(trainingExecution, workoutOutcome), restTimers, exercises, weekCopy, weekSwap, mesocycleSave, planDelete, settings, clientCard, notifications, health,
@@ -319,7 +320,7 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
   };
   const backupQueue = new BackupExclusive();
   const manualBackup = createManualBackup(development, commands, boot, backupQueue);
-  const restoreActions = createRestoreActions(development, commands, boot, maintenance);
+  const restoreActions = createRestoreActions(development, commands, boot, maintenance, backupQueue);
   const automaticBackup = createAutomaticBackup(development, commands, boot, backupQueue, () => database.changeToken);
   const transfer = createTrainingTransfer(database, workspaceId, trainingPlans, trainingExecution, exercises);
   const trainingTransfer = commands.port(transfer);

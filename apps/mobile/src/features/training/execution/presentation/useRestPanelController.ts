@@ -18,6 +18,7 @@ export function useRestPanelController(timers: RestTimersPort) {
   const wake = useCallback(() => setNow(Date.now()), []);
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
+      restTimerDiagnostics.event(state === "active" ? "active" : "background");
       setActive(state === "active");
       if (state === "active") wake();
     });
@@ -25,12 +26,14 @@ export function useRestPanelController(timers: RestTimersPort) {
   }, [wake]);
   useEffect(() => {
     restTimerDiagnostics.reportActive(list.length);
+    if (!active) return undefined;
     const at = nextFinishAt(list, now);
     if (at === null) return undefined;
     const handle = setTimeout(wake, Math.max(0, at - Date.now()));
     return () => clearTimeout(handle);
-  }, [list, now, wake]);
+  }, [list, now, active, wake]);
   useEffect(() => {
+    if (!active) return;
     const fresh = tracker.observe(list, Math.max(now, Date.now()));
     if (fresh.length === 0) return;
     wake();
@@ -42,7 +45,7 @@ export function useRestPanelController(timers: RestTimersPort) {
       }, 4000);
       pending.add(handle);
     }
-  }, [list, now, timers, tracker, pending, wake]);
+  }, [list, now, active, timers, tracker, pending, wake]);
   useEffect(() => () => { for (const handle of pending) clearTimeout(handle); pending.clear(); }, [pending]);
-  return { list, now, wake, active };
+  return { list, now, active };
 }

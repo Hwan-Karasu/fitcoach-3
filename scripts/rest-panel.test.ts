@@ -33,15 +33,30 @@ test("REST-DOCK-2: порядок владельцев/упражнений не
     [["a", "synthetic-a", "e1"], ["b", "synthetic-b", "e1"], ["c", "synthetic-a", "e2"]]);
 });
 
-test("REST-DOCK-2: два таймера всегда рядом; карусель оставляет часть следующего, не уменьшает кнопки", () => {
-  assert.equal(timerCarouselLayout(280, 2, 1).cardWidth, 136);
-  assert.equal(timerCarouselLayout(280, 2, 1).gridButtons, true);
-  for (const width of [280, 320, 360, 600, 800]) for (const scale of [1, 1.3, 2]) {
+test("REST-DOCK-2: на телефоне уже два таймера листаются; четыре кнопки остаются в одном ряду", () => {
+  for (const screenWidth of [320, 360, 412]) for (const scale of [1, 1.3, 2]) {
+    const width = screenWidth - 16; // Internal padding of the full-width shared bottom panel.
+    assert.equal(timerCarouselLayout(width, 1, scale).cardWidth, width);
+    assert.equal(timerCarouselLayout(width, 1, scale).stops, 1);
+    for (const count of [2, 3, 5]) {
+      const layout = timerCarouselLayout(width, count, scale);
+      assert.ok(layout.cardWidth >= 232, "карточки не сжимаются в половину ширины экрана");
+      assert.ok(layout.cardWidth < width, "виден край следующего таймера");
+      const buttonWidth = (layout.cardWidth - 12 - 3 * 4) / 4;
+      assert.ok(buttonWidth >= 48, "четыре действия помещаются в ряд с touch target 48 dp");
+      assert.ok(layout.maxOffset > 0);
+      assert.ok(layout.stops >= 2);
+      assert.equal(timerCarouselPosition(layout.maxOffset, layout.step, layout.maxOffset, layout.stops), layout.stops - 1);
+    }
+  }
+  const tablet = timerCarouselLayout(600, 2, 1);
+  assert.equal(tablet.cardWidth, 296);
+  assert.equal(tablet.stops, 1, "на широком экране две полноценные карточки помещаются рядом");
+  for (const width of [600, 800]) for (const scale of [1, 1.3, 2]) {
     const layout = timerCarouselLayout(width, 5, scale);
-    assert.ok(layout.cardWidth >= 128, "в карточке помещаются две кнопки 48 dp и отступы");
+    assert.ok(layout.cardWidth >= 232);
     assert.ok(layout.maxOffset > 0);
     assert.ok(layout.stops >= 2);
-    assert.equal(timerCarouselPosition(layout.maxOffset, layout.step, layout.maxOffset, layout.stops), layout.stops - 1);
   }
 });
 

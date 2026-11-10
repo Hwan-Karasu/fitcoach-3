@@ -7,6 +7,7 @@ import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { KeyboardAvoidingView, KeyboardProvider } from "react-native-keyboard-controller";
 import { ClientExerciseScreen, TrainingSettingsScreen, type TrainingPlansRepositoryPort } from "../../features/training/public.ts";
 import { calendarEventTarget, resolveTimerTarget, timerTarget, type NotificationTarget } from "./notificationTarget.ts";
+import { exerciseFocusAction } from "./exerciseFocusAction.ts";
 import { NotificationOpenHost } from "./NotificationOpenHost.tsx";
 import { NotificationCenterScreen, NotificationSettingsScreen } from "../../features/notifications/public.ts";
 import { NotificationsHost } from "./NotificationsHost.tsx";
@@ -74,6 +75,7 @@ type RootStackRoutes = {
 
 const Stack = createNativeStackNavigator<RootStackRoutes>();
 const navigationRef = createNavigationContainerRef<RootStackRoutes>();
+let exerciseFocusRequest = 0;
 
 function openClientsList(): void {
   if (navigationRef.isReady()) navigationRef.dispatch(clientsListAction());
@@ -81,7 +83,7 @@ function openClientsList(): void {
 
 /**
  * Переход по нажатию на уведомление, строку центра или панель таймера. Календарь — вкладка корня; «Тренировки» клиента и его тренировка —
- * экран клиента (тот же вызов, что у быстрого перехода между дневниками). Если тренировка уже открыта, ничего не меняется.
+ * экран клиента. В уже открытой тренировке обновляется только запрос прокрутки к упражнению, без замены экрана.
  */
 function openTarget(target: NotificationTarget): void {
   if (!navigationRef.isReady()) return;
@@ -96,10 +98,16 @@ function openTarget(target: NotificationTarget): void {
     navigationRef.dispatch(open("ClientWorkspace", { clientId: target.clientId, screen: "Training", params: { screen: "TrainingIndex" } }));
     return;
   }
-  const current = navigationRef.getCurrentRoute() as { name: string; params?: { programId?: string; weekIndex?: number; workoutId?: string } } | undefined;
+  const current = navigationRef.getCurrentRoute() as { key: string; name: string; params?: { programId?: string; weekIndex?: number; workoutId?: string } } | undefined;
   const topParams = top?.params as { clientId?: string } | undefined;
   if (top?.name === "ClientWorkspace" && topParams?.clientId === target.clientId && current?.name === "TrainingWorkout"
-    && current.params?.programId === target.programId && current.params.weekIndex === target.weekIndex && current.params.workoutId === target.plannedWorkoutId) return;
+    && current.params?.programId === target.programId && current.params.weekIndex === target.weekIndex && current.params.workoutId === target.plannedWorkoutId) {
+    if (target.exerciseKey !== null) {
+      const action = exerciseFocusAction(navigationRef.getRootState(), current.key, target.exerciseKey, ++exerciseFocusRequest);
+      if (action !== null) navigationRef.dispatch(action);
+    }
+    return;
+  }
   // Полный путь клиент → программы → программа → тренировка, как при обычном заходе: «назад» ведёт к списку тренировок (программе),
   // затем к программам клиента и дальше к списку клиентов.
   const cycle = target.mesocycleId == null ? {} : { mesocycleId: target.mesocycleId };
@@ -132,7 +140,8 @@ async function openTimer(plans: TrainingPlansRepositoryPort, timer: Parameters<t
   if (resolved.open !== null) openTarget(resolved.open);
 }
 
-function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, restoreActions, automaticBackup, initialBackup, trainingTransfer }: Readonly<{
+function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, restoreActions, automaticBackup, initialBackup, trainingTransfer, onReady, launchVisible }: Readonly<{
+  onReady?: () => void; launchVisible: boolean;
   trainingTransfer: TrainingTransferPort;
   services: ApplicationServices; clientLists: ClientListController; rosterOverview: RosterOverviewPort; manualBackup: ManualBackupPort; restoreActions: RestoreActionsPort; automaticBackup: AutomaticBackupPort; initialBackup: boolean;
 }>) {
@@ -146,7 +155,7 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
   } }), [colors, palette.tone]);
   return (
     <ClientsListNavigationProvider onOpen={openClientsList}>
-    <NavigationContainer ref={navigationRef} theme={navigationTheme} initialState={initialBackup ? { index: 1, routes: [{ name: "Root" }, { name: "Backup" }] } : undefined}>
+    <NavigationContainer ref={navigationRef} theme={navigationTheme} onReady={onReady} initialState={initialBackup ? { index: 1, routes: [{ name: "Root" }, { name: "Backup" }] } : undefined}>
       <KeyboardAvoidingView automaticOffset behavior="padding" style={{ flex: 1, backgroundColor: colors.canvas }}>
       <Stack.Navigator
         screenOptions={{
@@ -154,8 +163,8 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
           header: ({ navigation, options, back }) => <ScreenHeader title={options.title}
             onBack={back !== undefined ? () => navigation.goBack() : undefined} />,
           contentStyle: { backgroundColor: colors.canvas },
-          statusBarStyle: palette.tone === "dark" ? "light" : "dark",
-          navigationBarColor: colors.navigation,
+          statusBarStyle: launchVisible || palette.tone === "dark" ? "light" : "dark",
+          navigationBarColor: launchVisible ? "#00171C" : colors.navigation,
         }}
       >
         <Stack.Screen name="Root" options={{ headerShown: false }}>
@@ -303,7 +312,8 @@ function OutcomeQueueHost({ services }: Readonly<{ services: ApplicationServices
     repository={services.calendar} participants={services.calendarParticipants} credit={services.accounting} />;
 }
 
-export function PrototypeShell({ services, workspaceId, manualBackup, restoreActions, automaticBackup, initialBackup, trainingTransfer }: Readonly<{
+export function PrototypeShell({ services, workspaceId, manualBackup, restoreActions, automaticBackup, initialBackup, trainingTransfer, onReady, launchVisible = false }: Readonly<{
+  onReady?: () => void; launchVisible?: boolean;
   trainingTransfer: TrainingTransferPort;
   services: ApplicationServices; workspaceId: string; manualBackup: ManualBackupPort; restoreActions: RestoreActionsPort; automaticBackup: AutomaticBackupPort; initialBackup: boolean;
 }>) {
@@ -332,11 +342,11 @@ export function PrototypeShell({ services, workspaceId, manualBackup, restoreAct
         <BottomPanelProvider>
         <BottomSheetModalProvider>
         <CalendarUndoProvider repository={services.calendar}>
-          <TrainingTransferContext.Provider value={trainingTransfer}><NotificationsHost center={services.notifications} calendar={services.calendar} sync={services.notificationSync}>
-            <ShellNavigator trainingTransfer={trainingTransfer} services={services} clientLists={clientLists} rosterOverview={rosterOverview} manualBackup={manualBackup} restoreActions={restoreActions} automaticBackup={automaticBackup} initialBackup={initialBackup} />
+          <TrainingTransferContext.Provider value={trainingTransfer}><NotificationsHost enabled={!launchVisible} center={services.notifications} calendar={services.calendar} sync={services.notificationSync}>
+            <ShellNavigator onReady={onReady} launchVisible={launchVisible} trainingTransfer={trainingTransfer} services={services} clientLists={clientLists} rosterOverview={rosterOverview} manualBackup={manualBackup} restoreActions={restoreActions} automaticBackup={automaticBackup} initialBackup={initialBackup} />
           </NotificationsHost></TrainingTransferContext.Provider>
-          <OutcomeQueueHost services={services} />
-          <NotificationOpenHost navigationRef={navigationRef} onTarget={openTarget} />
+          {!launchVisible && <OutcomeQueueHost services={services} />}
+          {!launchVisible && <NotificationOpenHost navigationRef={navigationRef} onTarget={openTarget} />}
         </CalendarUndoProvider>
         </BottomSheetModalProvider>
         </BottomPanelProvider>

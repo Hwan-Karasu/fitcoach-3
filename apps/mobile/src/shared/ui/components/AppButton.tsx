@@ -77,7 +77,7 @@ export function AppButton({
     >
       <View style={styles.content}>
         {busy ? <ActivityIndicator size="small" color={foregroundColor} /> : icon?.(foregroundColor) ?? null}
-        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.label, compact ? styles.compactLabel : null, size === "small" ? styles.smallLabel : null, { color: foregroundColor }]}>{busy ? busyLabel : label}</Text>
+        <Text style={[styles.label, compact ? styles.compactLabel : null, size === "small" ? styles.smallLabel : null, { color: foregroundColor }]}>{busy ? busyLabel : label}</Text>
       </View>
     </Pressable>
   );
@@ -86,11 +86,11 @@ export function AppButton({
 const SMALL_HIT_SLOP = { top: 7, bottom: 7, left: 0, right: 0 } as const;
 
 const styles = StyleSheet.create({
-  button: { minHeight: TOUCH_TARGET, borderRadius: radius.md, borderWidth: 2, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
+  button: { minHeight: TOUCH_TARGET, borderRadius: radius.md, borderWidth: 2, paddingHorizontal: 16, paddingVertical: 6, alignItems: "center", justifyContent: "center" },
   small: { minHeight: 34, paddingHorizontal: 8 },
   smallLabel: { fontSize: 12, lineHeight: 16 },
   compact: { paddingHorizontal: 10 },
   compactLabel: { fontSize: 13, lineHeight: 17 },
-  content: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  content: { maxWidth: "100%", minWidth: 0, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   label: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 18, textAlign: "center", flexShrink: 1 },
 });

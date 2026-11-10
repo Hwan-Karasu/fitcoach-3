@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import type { ApplicationRuntime } from "../composition/createServices.ts";
@@ -8,6 +8,7 @@ import { fonts } from "../../shared/ui/theme/typography.ts";
 import { AutomaticBackupHost } from "./AutomaticBackupHost.tsx";
 import { LaunchAnimation } from "./LaunchAnimation.tsx";
 import { useMaintenanceView } from "./useMaintenanceView.ts";
+import { startupDiagnostics } from "./StartupDiagnostics.ts";
 
 const errorLabels: Record<BootErrorCode, string> = {
   WORKSPACE_UNAVAILABLE: "Не удалось открыть локальные данные.",
@@ -21,12 +22,27 @@ const errorLabels: Record<BootErrorCode, string> = {
 };
 
 /** Screens receive repositories only after the critical database gate succeeds. */
-export function ApplicationBootGate({ boot, services, development, maintenance, manualBackup, restoreActions, automaticBackup, trainingTransfer }: Readonly<ApplicationRuntime>) {
+export function ApplicationBootGate({ boot, services, development, maintenance, manualBackup, restoreActions, automaticBackup, trainingTransfer,
+  fontsReady, firstFrameReady }: Readonly<ApplicationRuntime & { fontsReady: boolean; firstFrameReady: boolean }>) {
   const [state, setState] = useState(boot.state);
   const maintenanceView = useMaintenanceView(boot, maintenance);
   const [retrying, setRetrying] = useState(false);
   const [introVisible, setIntroVisible] = useState(true);
-  const finishIntro = useCallback(() => setIntroVisible(false), []);
+  const finishIntro = useCallback(() => {
+    startupDiagnostics.mark("launch.complete");
+    console.info("[startup]", JSON.stringify(startupDiagnostics.snapshot()));
+    setIntroVisible(false);
+  }, []);
+  const [navigationReady, setNavigationReady] = useState(false);
+  const navigationFrame = useRef<number | null>(null);
+  const onNavigationReady = useCallback(() => {
+    navigationFrame.current = requestAnimationFrame(() => {
+      navigationFrame.current = null;
+      startupDiagnostics.mark("navigation.ready");
+      setNavigationReady(true);
+    });
+  }, []);
+  useEffect(() => () => { if (navigationFrame.current !== null) cancelAnimationFrame(navigationFrame.current); }, []);
   const maintenanceState = maintenanceView.phase;
   // AUTO-BACKUP-3: автокопия ждёт паузы в тренировке — таймеры отдыха и записи дневника/планов.
   const trainingActivity = useMemo(() => ({ restTimers: services.restTimers, subscriptions: [
@@ -35,16 +51,20 @@ export function ApplicationBootGate({ boot, services, development, maintenance, 
   ] }), [services]);
 
   useEffect(() => {
+    if (!firstFrameReady) return;
     const unsubscribe = boot.subscribe(setState);
     void boot.start();
     return unsubscribe;
-  }, [boot]);
+  }, [boot, firstFrameReady]);
 
   const failed = state.kind === "BOOT_FAILED";
   const recovering = maintenanceState === "RECOVERY_REQUIRED";
   const maintaining = maintenanceState !== "ACTIVE";
-  const ready = state.kind === "APP_READY" && maintenanceState === "ACTIVE";
-  const content = state.kind === "APP_READY" && maintenanceState === "ACTIVE" ? <><AutomaticBackupHost backup={automaticBackup} activity={trainingActivity} /><PrototypeShell key={maintenanceView.generation} services={services}
+  // A failed/interrupted boot exposes the existing recovery UI and never replays the intro on retry.
+  useEffect(() => { if (failed || maintaining) setIntroVisible(false); }, [failed, maintaining]);
+  const ready = state.kind === "APP_READY" && maintenanceState === "ACTIVE" && fontsReady;
+  const content = state.kind === "APP_READY" && ready ? <>{!introVisible && <AutomaticBackupHost backup={automaticBackup} activity={trainingActivity} />}<PrototypeShell key={maintenanceView.generation} services={services}
+    launchVisible={introVisible} onReady={onNavigationReady}
     workspaceId={state.workspaceId} trainingTransfer={trainingTransfer} manualBackup={manualBackup} restoreActions={restoreActions} automaticBackup={automaticBackup} initialBackup={maintenanceView.initialBackup} /></> : (
     <SafeAreaProvider>
       <SafeAreaView style={styles.safe}>
@@ -74,7 +94,12 @@ export function ApplicationBootGate({ boot, services, development, maintenance, 
       </SafeAreaView>
     </SafeAreaProvider>
   );
-  return <View style={{ flex: 1 }}>{content}{introVisible && !failed && !maintaining && <LaunchAnimation ready={ready} onComplete={finishIntro} />}</View>;
+  const showIntro = introVisible && !failed && !maintaining;
+  return <View style={{ flex: 1 }}>
+    <View style={{ flex: 1 }} pointerEvents={showIntro ? "none" : "auto"}
+      importantForAccessibility={showIntro ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={showIntro}>{content}</View>
+    {showIntro && <LaunchAnimation start={firstFrameReady} ready={ready && navigationReady} onComplete={finishIntro} />}
+  </View>;
 }
 
 const styles = StyleSheet.create({

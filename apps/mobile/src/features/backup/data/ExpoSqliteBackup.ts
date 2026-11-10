@@ -105,29 +105,37 @@ export class ExpoSqliteBackup {
     }
   }
   /** privateCopy is a fresh inspection slot retained for this operation, not the external source. */
-  async validateExternal(source: File, privateCopy: File): Promise<SnapshotManifest> {
+  async validateExternal(source: File, privateCopy: File, observe?: BackupObserver): Promise<SnapshotManifest> {
     try {
       if (source.uri === privateCopy.uri) throw new SnapshotError("SNAPSHOT_DESTINATION_EXISTS");
       reserve(privateCopy);
+      observeBackup(observe, "SNAPSHOT");
       // Only overwrite the zero-byte placeholder just reserved by this operation.
       await source.copy(privateCopy, { overwrite: true });
-      return await this.inspectPrivate(privateCopy);
+      return await this.inspectPrivate(privateCopy, observe);
     } catch (error) { return typed(error); }
   }
   async prepareForRestore(source: File, privateCopy: File, staging: File,
-    settings: SnapshotMediaSettings = {}): Promise<SnapshotManifest> {
+    settings: SnapshotMediaSettings = {}, onCandidate?: () => void): Promise<SnapshotManifest> {
     try {
       if ([source.uri, privateCopy.uri].includes(staging.uri)) throw new SnapshotError("SNAPSHOT_DESTINATION_EXISTS");
-      const manifest = await this.validateExternal(source, privateCopy);
+      // Validate the actual candidate exactly once, before changing any table. The old
+      // path fully hashed privateCopy, then immediately hashed its identical SQLite copy
+      // again in stageSnapshot. No validation is skipped inside stageSnapshot.
+      if (source.uri === privateCopy.uri) throw new SnapshotError("SNAPSHOT_DESTINATION_EXISTS");
+      reserve(privateCopy);
+      observeBackup(settings.observe, "SNAPSHOT");
+      await source.copy(privateCopy, { overwrite: true });
+      noSidecars(privateCopy); header(privateCopy);
       reserve(staging);
       const from = await this.open(privateCopy, true);
+      let manifest: SnapshotManifest;
       try {
         const candidate = await this.open(staging, false);
         try {
           await SQLite.backupDatabaseAsync({ sourceDatabase: from, destDatabase: candidate });
           await candidate.execAsync("PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON");
-          const copied = await this.engine.stageSnapshot(expoSnapshotSql(candidate), settings);
-          if (JSON.stringify(copied) !== JSON.stringify(manifest)) throw new SnapshotError("SNAPSHOT_INVALID");
+          manifest = await this.engine.stageSnapshot(expoSnapshotSql(candidate), settings, onCandidate);
         } finally { await candidate.closeAsync(); }
       } finally { await from.closeAsync(); }
       noSidecars(staging);

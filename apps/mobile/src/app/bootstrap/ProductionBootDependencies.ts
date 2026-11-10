@@ -3,6 +3,7 @@ import type { ThemePreference } from "../../shared/ui/theme/resolver.ts";
 import type { SharedSqliteDatabase } from "../../shared/db/SharedSqliteDatabase.ts";
 import { PRODUCTION_WORKSPACE_ID, prepareProductionDatabase } from "../composition/productionDatabase.ts";
 import { BootGateError, type BootDependencies } from "./BootCoordinator.ts";
+import { startupDiagnostics } from "./StartupDiagnostics.ts";
 
 export function createProductionBootDependencies(database: SharedSqliteDatabase, initializeRepositories: () => Promise<void>,
   loadAppearance: () => Promise<ThemePreference | null>): BootDependencies {
@@ -11,7 +12,7 @@ export function createProductionBootDependencies(database: SharedSqliteDatabase,
     prepareWorkspace: async () => ({ id: PRODUCTION_WORKSPACE_ID }),
     openDatabase: async (workspaceId) => {
       if (workspaceId !== PRODUCTION_WORKSPACE_ID) throw new BootGateError("WORKSPACE_UNAVAILABLE");
-      try { await prepareProductionDatabase(database); }
+      try { await startupDiagnostics.measure("database.prepare", () => prepareProductionDatabase(database)); }
       catch (error) {
         if (error instanceof DatabaseCompatibilityError) throw new BootGateError(error.code);
         throw new BootGateError("MIGRATION_INCOMPLETE");
@@ -21,7 +22,7 @@ export function createProductionBootDependencies(database: SharedSqliteDatabase,
     },
     loadThemePreference: async () => {
       // Optional display preferences never prevent access to the diary.
-      try { return await loadAppearance() ?? { themeId: null, accentId: null }; }
+      try { return await startupDiagnostics.measure("theme.load", loadAppearance) ?? { themeId: null, accentId: null }; }
       catch { return { themeId: null, accentId: null }; }
     },
   };

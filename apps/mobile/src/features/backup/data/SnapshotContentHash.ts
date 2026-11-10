@@ -32,25 +32,32 @@ function bufferedHash() {
   return { bytes, ascii, digest: () => { flush(); return bytesToHex(hash.digest()); }, destroy: () => hash.destroy() };
 }
 
-/** Порядок «ORDER BY все столбцы» совпадает с порядком по первому столбцу, если он — единственный PK с BINARY-сравнением:
- * уникальность по ограничению исключает равные значения. Тогда таблицу можно читать порциями по ключу (keyset). Режим
- * задаёт тип связываемого значения: все ключи TEXT или все INTEGER; иначе (NULL, смешанные типы, NOCASE) — прежний обход. */
+/** A unique BINARY primary-key prefix orders rows exactly like ORDER BY every column.
+ * Include composite keys: OFFSET repeatedly scanned/sorted their already-consumed rows.
+ * Nullable, mixed-type, non-prefix and non-BINARY keys retain the conservative fallback. */
 async function keysetMode(db: SnapshotSqlPort, table: string, columns: readonly { name: string; type: string; pk: number }[]):
-  Promise<"text" | "integer" | null> {
+  Promise<readonly ("text" | "integer")[] | null> {
   const first = columns[0];
-  if (first === undefined || first.pk !== 1 || columns.some((column, index) => index > 0 && column.pk > 0)) return null;
+  const count = columns.filter((column) => column.pk > 0).length;
+  if (first === undefined || count === 0 || columns.slice(0, count).some((column, index) => column.pk !== index + 1)) return null;
+  const prefix = columns.slice(0, count);
   const indexes = (await db.all<{ name: string; origin: string }>(`PRAGMA index_list(${quote(table)})`)).filter((row) => row.origin === "pk");
   if (indexes.length === 1) {
     const keys = (await db.all<{ name: string | null; coll: string; key: number }>(`PRAGMA index_xinfo(${quote(indexes[0]!.name)})`))
       .filter((row) => row.key === 1);
-    if (keys.length !== 1 || keys[0]!.name !== first.name || keys[0]!.coll.toUpperCase() !== "BINARY") return null;
-  } else if (indexes.length !== 0 || first.type.toUpperCase() !== "INTEGER") return null; // Без индекса PK — только псевдоним rowid.
-  const column = quote(first.name);
-  for (const mode of ["text", "integer"] as const) {
-    const other = await db.first<{ count: number }>(`SELECT count(*) AS count FROM ${quote(table)} WHERE typeof(${column}) <> '${mode}'`);
-    if (other?.count === 0) return mode;
+    if (keys.length !== count || keys.some((key, index) => key.name !== prefix[index]!.name || key.coll.toUpperCase() !== "BINARY")) return null;
+  } else if (indexes.length !== 0 || count !== 1 || first.type.toUpperCase() !== "INTEGER") return null;
+  const modes: ("text" | "integer")[] = [];
+  for (const key of prefix) {
+    const column = quote(key.name);
+    let found = false;
+    for (const mode of ["text", "integer"] as const) {
+      const other = await db.first<{ count: number }>(`SELECT count(*) AS count FROM ${quote(table)} WHERE typeof(${column}) <> '${mode}'`);
+      if (other?.count === 0) { modes.push(mode); found = true; break; }
+    }
+    if (!found) return null;
   }
-  return null;
+  return modes;
 }
 
 /** Same byte protocol as the original node:crypto oracle. Integers cross the native bridge
@@ -109,22 +116,31 @@ export async function snapshotContentSha256(db: SnapshotSqlPort, photos: readonl
       const mode = await keysetMode(db, object.name, info);
       if (mode === null) {
         const order = columns.map((name) => `${quote(name)} COLLATE BINARY`).join(", ");
-        for await (const values of db.each<Record<string, unknown>>(`SELECT ${fields} FROM ${quote(object.name)} ORDER BY ${order}`)) {
-          row(values); done++; await slice();
-        }
-      } else {
-        const key = `${quote(columns[0]!)} COLLATE BINARY`;
-        const after = mode === "text" ? `${key} > ?` : `${key} > CAST(? AS INTEGER)`;
-        let last: SnapshotSqlValue | null = null;
-        for (;;) {
-          const page: readonly Record<string, unknown>[] = await db.all<Record<string, unknown>>(`SELECT ${fields} FROM ${quote(object.name)}${
-            last === null ? "" : ` WHERE ${after}`} ORDER BY ${key} LIMIT ${CONTENT_PAGE_ROWS}`, last === null ? [] : [last]);
+        // Composite keys and nullable/mixed keys used one native bridge roundtrip per row.
+        // The private snapshot is immutable: bounded pages preserve the exact canonical order,
+        // including duplicate rows and SQLite's mixed-type ordering.
+        for (let offset = 0; ; offset += CONTENT_PAGE_ROWS) {
+          const page = await db.all<Record<string, unknown>>(`SELECT ${fields} FROM ${quote(object.name)} ORDER BY ${order} LIMIT ${CONTENT_PAGE_ROWS} OFFSET ${offset}`);
           for (const values of page) { row(values); await slice(); }
           done += page.length; progress?.(done, total);
           if (page.length < CONTENT_PAGE_ROWS) break;
-          const next = page[page.length - 1]!.v0;
-          if (typeof next !== "string") throw new SnapshotError("SNAPSHOT_INVALID");
-          last = next;
+        }
+      } else {
+        const keys = mode.map((_, index) => `${quote(columns[index]!)} COLLATE BINARY`);
+        const tuple = (values: readonly string[]) => values.length === 1 ? values[0]! : `(${values.join(", ")})`;
+        const after = `${tuple(keys)} > ${tuple(mode.map((kind) => kind === "text" ? "?" : "CAST(? AS INTEGER)"))}`;
+        let last: readonly SnapshotSqlValue[] | null = null;
+        for (;;) {
+          const page: readonly Record<string, unknown>[] = await db.all<Record<string, unknown>>(`SELECT ${fields} FROM ${quote(object.name)}${
+            last === null ? "" : ` WHERE ${after}`} ORDER BY ${keys.join(", ")} LIMIT ${CONTENT_PAGE_ROWS}`, last ?? []);
+          for (const values of page) { row(values); await slice(); }
+          done += page.length; progress?.(done, total);
+          if (page.length < CONTENT_PAGE_ROWS) break;
+          last = mode.map((_, index) => {
+            const next = page[page.length - 1]![`v${index}`];
+            if (typeof next !== "string") throw new SnapshotError("SNAPSHOT_INVALID");
+            return next;
+          });
         }
       }
       hash.ascii("end-table;");

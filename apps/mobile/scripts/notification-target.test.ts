@@ -1,6 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { calendarEventTarget, resolveTimerTarget, targetOfPayload, timerTarget } from "../src/app/navigation/notificationTarget.ts";
+import { exerciseFocusAction } from "../src/app/navigation/exerciseFocusAction.ts";
+
+test("timer focus reaches the nested current workout and repeated presses get a fresh request without replacing the screen", () => {
+  const state = { key: "root", index: 1, routes: [{ key: "clients" }, { key: "client", state: {
+    key: "tabs", index: 1, routes: [{ key: "home" }, { key: "training", state: {
+      key: "training-stack", index: 1, routes: [{ key: "program" }, { key: "workout" }],
+    } }],
+  } }] };
+  for (const request of [1, 2]) assert.deepEqual(exerciseFocusAction(state, "workout", "second-exercise", request), {
+    type: "SET_PARAMS", source: "workout", target: "training-stack",
+    payload: { params: { focusExerciseId: "second-exercise", focusExerciseRequest: request } },
+  });
+  assert.equal(exerciseFocusAction(state, "removed-workout", "second-exercise", 3), null);
+});
 
 test("нажатие на строку центра: дежурство и гость — Календарь, запись клиента — его «Тренировки», исход — Календарь", () => {
   assert.deepEqual(calendarEventTarget({ sourceType: "DUTY", eventKind: "REMINDER", clientId: null }), { kind: "CALENDAR" });

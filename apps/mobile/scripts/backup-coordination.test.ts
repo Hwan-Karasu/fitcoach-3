@@ -4,11 +4,49 @@ import { AutomaticBackupService, AutomaticBackupError, AUTO_BACKUP_INTERVAL, AUT
   parseAutomaticCatalog, parseAutomaticFailure, BackupExclusive, BackupRunClock, ManualBackupService, ManualBackupError, manualPrepareError,
   classifyPrepareFailure, isStorageFull, SnapshotError, type AutomaticBackupFiles, type AutomaticBackupStore, type AutomaticCatalog,
   type AutomaticFailure, type BackupObserver, type BackupDestination, type PublishedBackup, type VerifiedBackupFile } from "../src/features/backup/public.ts";
+import { RestoreActionsService } from "../src/features/backup/public.ts";
+import { RuntimeCommandGate } from "../src/app/runtime/RuntimeCommandGate.ts";
 
 const monday = Date.parse("2026-10-19T10:00:00.000Z");
 const copy = <T>(value: T): T => structuredClone(value);
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 function latch() { let release!: () => void; const promise = new Promise<void>((resolve) => { release = resolve; }); return { release, promise }; }
+
+test("RECOVERY-51 manual backup and restore maintenance always acquire exclusive before command admission", { timeout: 3000 }, async () => {
+  const exclusive = new BackupExclusive(); const commands = new RuntimeCommandGate(); const location = latch();
+  const events: string[] = [];
+  const service = new ManualBackupService({ enabled: true, exclusive,
+    locations: { read: async () => { events.push("location"); await location.promise; return { kind: "DOWNLOADS" }; }, write: async () => undefined },
+    publisher: { available: true, supportsDownloads: true, publish: async () => receipt },
+    prepare: async () => { events.push("prepare"); return artifact; }, cleanup: async () => undefined,
+    chooseDirectory: async () => null, run: (task) => commands.run(task) });
+  const backup = service.createNow(); await tick();
+  assert.deepEqual(events, ["location"]);
+  const maintenance = exclusive.run(async () => {
+    commands.pause(); await commands.idle(); events.push("maintenance"); commands.resume();
+  });
+  location.release();
+  const [outcome] = await Promise.all([backup, maintenance]);
+  assert.equal(outcome.kind, "SAVED");
+  assert.deepEqual(events, ["location", "prepare", "maintenance"]);
+  await tick(); assert.equal(exclusive.busy, false);
+});
+
+test("RECOVERY-51 restore preparation excludes automatic snapshots for its entire reader lifetime", async () => {
+  const exclusive = new BackupExclusive(); const gate = latch(); let preparing = false;
+  const restore = new RestoreActionsService({ enabled: true, ready: () => true, read: (task) => exclusive.run(task), jobs: {
+    prepareFile: async () => { preparing = true; await gate.promise; return null; },
+    prepareReturn: async () => { throw new Error("unused"); }, apply: async () => "COMMITTED",
+    discard: async () => undefined, readPoint: async () => null, deletePoint: async () => undefined, recover: async () => undefined,
+  } });
+  const automatic = auto(exclusive);
+  const pending = restore.chooseFile(); await tick(); assert.equal(preparing, true);
+  await automatic.service.retry(); assert.equal(automatic.calls.prepare, 0);
+  assert.equal(exclusive.busy, true);
+  gate.release(); await pending; await tick();
+  assert.equal(exclusive.busy, false);
+  await automatic.service.retry(); assert.equal(automatic.calls.prepare, 1);
+});
 
 function auto(exclusive = new BackupExclusive()) {
   let time = monday; let data = 1; let number = 0; let token = 0; let catalog: AutomaticCatalog | null = null; let failure: AutomaticFailure | null = null;

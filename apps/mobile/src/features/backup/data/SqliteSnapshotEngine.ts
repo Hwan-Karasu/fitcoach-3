@@ -54,9 +54,11 @@ export class SqliteSnapshotEngine {
     }
     return manifest;
   }
-  async stageSnapshot(db: SnapshotSqlPort, settings: SnapshotMediaSettings = {}): Promise<SnapshotManifest> {
-    const manifest = await this.validateSnapshot(db);
+  async stageSnapshot(db: SnapshotSqlPort, settings: SnapshotMediaSettings = {}, onValidated?: () => void): Promise<SnapshotManifest> {
+    const manifest = await this.validateSnapshot(db, settings.observe);
+    onValidated?.();
     // Publish verified photos before DB changes. A failure leaves only private unreferenced media.
+    observeBackup(settings.observe, "MEDIA");
     const photos = await extractRecipePhotos(db, manifest.backupId, settings);
     await db.transaction(async (tx) => {
       if (manifest.media !== undefined) {
@@ -71,7 +73,7 @@ export class SqliteSnapshotEngine {
         if (changed.changes !== 1) throw new SnapshotError("SNAPSHOT_INVALID");
       }
       await this.owned(tx, false);
-      if (await snapshotContentSha256(tx, photos) !== manifest.contentSha256) throw new SnapshotError("SNAPSHOT_INVALID");
+      if (await snapshotContentSha256(tx, photos, (done, total) => observeBackup(settings.observe, "VERIFY", done, total)) !== manifest.contentSha256) throw new SnapshotError("SNAPSHOT_INVALID");
     });
     return manifest;
   }

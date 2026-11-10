@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { useAnimatedStyle, useFrameCallback, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { ChevronDown, Pause, Play, SkipForward, Timer } from "lucide-react-native";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -24,17 +24,17 @@ function Avatar({ timer, avatars }: Readonly<{ timer: RestTimer; avatars: Readon
   </View>;
 }
 
-type CardProps = Readonly<{ timer: RestTimer; timers: RestTimersPort; clock: SharedValue<number>; finished: boolean;
-  multipleOwners: boolean; avatars: ReadonlyMap<string, string | null>; grid: boolean; single: boolean; fontScale: number;
-  onOpen: (timer: RestTimer) => void; onElapsed: () => void; clockDisabled: boolean; inline: boolean }>;
+type CardProps = Readonly<{ timer: RestTimer; timers: RestTimersPort; active: boolean; finished: boolean;
+  multipleOwners: boolean; avatars: ReadonlyMap<string, string | null>; single: boolean; fontScale: number;
+  onOpen: (timer: RestTimer) => void; clockDisabled: boolean }>;
 
-const TimerCard = memo(function TimerCard({ timer, timers, clock, finished, multipleOwners, avatars, grid, single, fontScale, onOpen, onElapsed, clockDisabled, inline }: CardProps) {
+const TimerCard = memo(function TimerCard({ timer, timers, active, finished, multipleOwners, avatars, single, fontScale, onOpen, clockDisabled }: CardProps) {
   const colors = usePrototypeTheme().palette.tokens;
   const paused = isPaused(timer);
   const action = (label: string, run: () => Promise<void>, node: ReactNode, primary = false) => (
     <Pressable key={label} accessibilityRole="button" accessibilityLabel={`${timer.clientName}, ${timer.exerciseName}: ${label}`}
       onPress={() => { void run().catch(() => undefined); }}
-      style={[styles.action, grid ? styles.gridAction : null, { backgroundColor: primary ? colors.accentFill : colors.input }]}>{node}</Pressable>
+      style={[styles.action, { backgroundColor: primary ? colors.accentFill : colors.input }]}>{node}</Pressable>
   );
   const actions = [
     action(`Уменьшить отдых на ${ADJUST_STEP_SEC} секунд`, () => timers.adjust(timer.id, -ADJUST_STEP_SEC), <Text style={[styles.adjust, { color: colors.textPrimary }]}>{`−${ADJUST_STEP_SEC}`}</Text>),
@@ -43,22 +43,22 @@ const TimerCard = memo(function TimerCard({ timer, timers, clock, finished, mult
       paused ? <Play size={20} color={colors.textPrimary} /> : <Pause size={20} color={colors.textPrimary} />),
     action("Пропустить отдых", () => timers.skip(timer.id), <SkipForward size={22} color={colors.onAccentFill} />, true),
   ];
-  const time = <View style={[styles.clockRow, { minHeight: Math.max(48, 38 * fontScale) }, inline && { flex: 1, minWidth: 82 * fontScale }]}>
-    <RestPanelClock timer={timer} clock={clock} finished={finished} onElapsed={onElapsed} disabled={clockDisabled}
+  const time = <View style={[styles.clockRow, { minWidth: finished ? 0 : 68 * Math.max(1, fontScale) }]}>
+    <RestPanelClock timer={timer} active={active} finished={finished} disabled={clockDisabled}
       style={[styles.time, single && styles.timeSingle, finished && styles.finished,
         { color: finished ? colors.success : paused ? colors.textSecondary : colors.textPrimary }]} />
-    {paused && !inline ? <Pause size={14} color={colors.textSecondary} /> : null}
+    {paused ? <Pause size={14} color={colors.textSecondary} /> : null}
   </View>;
   return <View style={[styles.card, !single ? { backgroundColor: colors.surface } : null]}>
     <Pressable accessibilityRole="button" accessibilityLabel={`${timer.clientName}, ${timer.exerciseName}. ${finished ? "Отдых окончен" : paused ? "Пауза" : "Идёт отдых"}. Открыть тренировку`}
-      onPress={() => onOpen(timer)} style={[styles.heading, { minHeight: Math.max(48, 34 * fontScale) }]}>
+      onPress={() => onOpen(timer)} style={styles.heading}>
       {multipleOwners ? <Avatar timer={timer} avatars={avatars} /> : null}
-      <Text numberOfLines={2} style={[styles.caption, { color: colors.textPrimary }]}>
+      <Text style={[styles.caption, { color: colors.textPrimary }]}>
         <Text style={{ fontFamily: fonts.bold }}>{single ? timer.clientName : shortName(timer.clientName)}</Text>{` · ${timer.exerciseName}`}
       </Text>
+      {time}
     </Pressable>
-    {inline ? <View style={styles.actions}>{actions[0]}{actions[1]}{time}{actions[2]}{actions[3]}</View>
-      : <>{time}<View style={[styles.actions, grid ? styles.actionsGrid : null]}>{actions}</View></>}
+    <View style={styles.actions}>{actions}</View>
   </View>;
 });
 
@@ -71,12 +71,13 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
 }>) {
   restTimerDiagnostics.render("timers");
   const clockDisabled = useSyncExternalStore(restTimerDiagnostics.subscribe, restTimerDiagnostics.snapshot, restTimerDiagnostics.snapshot);
-  const { list, now, wake, active } = useRestPanelController(timers);
+  const { list, now, active } = useRestPanelController(timers);
   const [preference, setPreference] = useState<RestPanelPreference>("expanded");
   const mode = restPanelMode(preference, list.length);
+  useEffect(() => { restTimerDiagnostics.event(mode); }, [mode]);
   const colors = usePrototypeTheme().palette.tokens;
   const dimensions = useWindowDimensions();
-  const [width, setWidth] = useState(Math.max(0, dimensions.width - 42));
+  const [width, setWidth] = useState(Math.max(0, dimensions.width - 16));
   const ordered = useMemo(() => orderedRestTimers(list), [list]);
   const ids = ordered.map((timer) => timer.id);
   const idsKey = JSON.stringify(ids);
@@ -92,21 +93,19 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
   }, [ownersKey, loadAvatars]);
   const openRef = useRef(onOpen); openRef.current = onOpen;
   const open = useCallback((timer: RestTimer) => openRef.current(timer), []);
-  const clock = useSharedValue(Date.now());
-  const frame = useFrameCallback(() => { "worklet"; clock.value = Date.now(); }, false);
-  const running = active && !clockDisabled && list.some((timer) => !isPaused(timer) && !isFinished(timer, now));
-  useEffect(() => { clock.value = Date.now(); frame.setActive(running); }, [running, frame, clock]);
   const height = useSharedValue(0);
   const animatedHeight = useAnimatedStyle(() => ({ height: height.value }));
   useEffect(() => { if (mode === "hidden") height.value = withTiming(0, { duration: 180 }); }, [mode, height]);
   const collapse = useCallback(() => setPreference("collapsed"), []);
   const expand = useCallback(() => setPreference("expanded"), []);
+  const swipeDown = useCallback(() => { restTimerDiagnostics.event("gesture-down"); collapse(); }, [collapse]);
+  const swipeUp = useCallback(() => { restTimerDiagnostics.event("gesture-up"); expand(); }, [expand]);
   const gesture = useMemo(() => Gesture.Pan().activeOffsetY([-10, 10]).failOffsetX([-14, 14])
     .onEnd((event) => {
       "worklet";
-      if (event.translationY > 24 || event.velocityY > 300) scheduleOnRN(collapse);
-      else if (event.translationY < -24 || event.velocityY < -300) scheduleOnRN(expand);
-    }), [collapse, expand]);
+      if (event.translationY > 24 || event.velocityY > 300) scheduleOnRN(swipeDown);
+      else if (event.translationY < -24 || event.velocityY < -300) scheduleOnRN(swipeUp);
+    }), [swipeDown, swipeUp]);
   const scroll = useRef<ScrollView>(null);
   const offset = useRef(0);
   const previousIds = useRef<readonly string[]>([]);
@@ -134,11 +133,12 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
   const area = <Animated.View testID="rest-panel-area" style={[styles.area, animatedHeight]}>
     {mode === "hidden" ? null : <View style={styles.measured}
       onLayout={(event) => { height.value = withTiming(event.nativeEvent.layout.height, { duration: 180 }); }}>
-      <View onLayout={(event) => setWidth((old) => old === event.nativeEvent.layout.width ? old : event.nativeEvent.layout.width)}>
+      {/* Read during dispatch: RN releases the event before a queued state updater may run. */}
+      <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
         <GestureDetector gesture={gesture}>
           <View collapsable={false}>
             <Pressable accessibilityRole="button" accessibilityLabel={mode === "collapsed" ? "Развернуть таймеры отдыха" : "Свернуть таймеры отдыха"}
-              accessibilityState={{ expanded: mode === "expanded" }} hitSlop={{ top: 12, bottom: 12 }}
+              accessibilityState={{ expanded: mode === "expanded" }} hitSlop={{ top: 14, bottom: 14 }}
               onPress={mode === "collapsed" ? expand : collapse} style={styles.handle}>{grip}</Pressable>
           </View>
         </GestureDetector>
@@ -152,7 +152,7 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
           {ordered.slice(0, visibleCount).map((timer) => <Pressable key={timer.id} accessibilityRole="button" onPress={expand}
             accessibilityLabel={`${timer.clientName}, ${timer.exerciseName}. Развернуть таймеры`} style={[styles.summaryToken, { width: (multipleOwners ? 84 : 54) * Math.max(1, dimensions.fontScale) }]}>
             {multipleOwners ? <Avatar timer={timer} avatars={avatars} /> : null}
-            <RestPanelClock timer={timer} clock={clock} finished={isFinished(timer, now)} onElapsed={wake} disabled={clockDisabled}
+            <RestPanelClock timer={timer} active={active} finished={isFinished(timer, now)} disabled={clockDisabled}
               style={[styles.summaryTime, isFinished(timer, now) && styles.summaryDone, { color: colors.textPrimary }]} />
           </Pressable>)}
           {hidden > 0 ? <Pressable accessibilityRole="button" accessibilityLabel={`Показать остальные таймеры: ещё ${hidden}`}
@@ -163,7 +163,7 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
             <ChevronDown size={24} color={colors.accentInk} />
           </Pressable>
         </View> : mode === "expanded" ? <>
-          <ScrollView ref={scroll} horizontal scrollEnabled={ordered.length > 2} showsHorizontalScrollIndicator={false}
+          <ScrollView ref={scroll} horizontal scrollEnabled={layout.stops > 1} showsHorizontalScrollIndicator={false}
             keyboardShouldPersistTaps="handled" contentContainerStyle={styles.cards} snapToInterval={layout.step} decelerationRate="fast"
             scrollEventThrottle={32} onScroll={(event) => {
               offset.current = event.nativeEvent.contentOffset.x;
@@ -171,9 +171,9 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
               setPage((old) => old === next ? old : next);
             }}>
             {ordered.map((timer) => <View key={timer.id} style={{ width: layout.cardWidth }}>
-              <TimerCard timer={timer} timers={timers} clock={clock} finished={isFinished(timer, now)} multipleOwners={multipleOwners}
-                avatars={avatars} grid={layout.gridButtons} single={ordered.length === 1} inline={ordered.length === 1 && layout.cardWidth >= 220 + 82 * dimensions.fontScale}
-                fontScale={dimensions.fontScale} onOpen={open} onElapsed={wake} clockDisabled={clockDisabled} />
+              <TimerCard timer={timer} timers={timers} active={active} finished={isFinished(timer, now)} multipleOwners={multipleOwners}
+                avatars={avatars} single={ordered.length === 1}
+                fontScale={dimensions.fontScale} onOpen={open} clockDisabled={clockDisabled} />
             </View>)}
           </ScrollView>
           {layout.stops > 1 ? <View accessible accessibilityLabel={`Таймеры, позиция ${page + 1} из ${layout.stops}`} style={styles.indicator}>
@@ -188,20 +188,20 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
 
 const styles = StyleSheet.create({
   area: { overflow: "hidden" }, measured: { position: "absolute", top: 0, left: 0, right: 0 },
-  handle: { height: 24, alignItems: "center", justifyContent: "center" }, grip: { width: 40, height: 4, borderRadius: 2 },
-  cards: { gap: TIMER_GAP, alignItems: "stretch", paddingBottom: 4 },
+  handle: { height: 20, alignItems: "center", justifyContent: "center" }, grip: { width: 40, height: 4, borderRadius: 2 },
+  cards: { gap: TIMER_GAP, alignItems: "stretch", paddingBottom: 2 },
   card: { flex: 1, borderRadius: 16, paddingHorizontal: 6, paddingBottom: 6, gap: 4 },
-  heading: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 },
-  caption: { flex: 1, textAlign: "center", fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  heading: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 4 },
+  caption: { flex: 1, minWidth: 0, fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   avatar: { width: 28, height: 28, borderRadius: 9, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   initials: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 },
-  clockRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 4 },
-  time: { textAlign: "center", fontFamily: fonts.bold, fontSize: 28, lineHeight: 36, flexShrink: 1 },
-  timeSingle: { fontSize: 34, lineHeight: 42 }, finished: { fontSize: 16, lineHeight: 20 },
-  actions: { flexDirection: "row", gap: 4 }, actionsGrid: { flexWrap: "wrap" },
+  clockRow: { flexShrink: 0, maxWidth: "50%", flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 4 },
+  time: { textAlign: "center", fontFamily: fonts.bold, fontSize: 24, lineHeight: 32, flexShrink: 1 },
+  timeSingle: { fontSize: 28, lineHeight: 36 }, finished: { fontSize: 16, lineHeight: 20 },
+  actions: { flexDirection: "row", gap: 4 },
   action: { minWidth: 48, minHeight: 48, flex: 1, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  gridAction: { flexBasis: "45%" }, adjust: { fontFamily: fonts.bold, fontSize: 14 },
-  indicator: { flexDirection: "row", gap: 4, justifyContent: "center", paddingVertical: 4, paddingHorizontal: 40 },
+  adjust: { fontFamily: fonts.bold, fontSize: 14 },
+  indicator: { flexDirection: "row", gap: 4, justifyContent: "center", paddingVertical: 2, paddingHorizontal: 40 },
   segment: { flex: 1, maxWidth: 32, height: 5, borderRadius: 3 },
   summary: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 48 },
   summaryLead: { flex: 1, minWidth: 0, minHeight: 48, flexDirection: "row", alignItems: "center", gap: 6 },

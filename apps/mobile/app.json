@@ -4,11 +4,11 @@
     "slug": "fitcoach-3-development",
     "version": "3.0.0",
     "icon": "./assets/brand/icon.png",
-    "splash": { "backgroundColor": "#0C171C" },
+    "splash": { "backgroundColor": "#00171C" },
     "orientation": "portrait",
     "android": {
       "package": "com.fitcoach.v3",
-      "versionCode": 48,
+      "versionCode": 52,
       "adaptiveIcon": {
         "foregroundImage": "./assets/brand/adaptive-foreground.png",
         "backgroundImage": "./assets/brand/background.png",
@@ -30,6 +30,11 @@
       "expo-sqlite",
       "expo-sharing",
       "expo-font",
+      ["expo-splash-screen", {
+        "backgroundColor": "#00171C",
+        "dark": { "backgroundColor": "#00171C" },
+        "android": { "drawable": { "icon": "./assets/brand/splash-empty.xml", "darkIcon": "./assets/brand/splash-empty.xml" } }
+      }],
       ["expo-image-picker", { "microphonePermission": false }],
       ["expo-notifications", { "icon": "./assets/brand/notification-icon.png", "color": "#1FC8F2" }],
       ["./plugins/withNotificationLargeIcon.cjs", { "icon": "./assets/brand/notification-large-icon.png" }],

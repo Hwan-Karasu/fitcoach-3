@@ -18,11 +18,12 @@ const RESYNC_MS = 60_000;
  * а при открытом приложении — раз в минуту (наступившие события попадают в ленту). Значок обновляется из хранилища без пересоздания навигации.
  * Сбой сверки не мешает работе: следующий запуск досчитывает недостающее.
  */
-export function NotificationsHost({ center, calendar, sync, children }: Readonly<{ center: NotificationCenterPort;
+export function NotificationsHost({ center, calendar, sync, children, enabled = true }: Readonly<{ enabled?: boolean; center: NotificationCenterPort;
   calendar: Pick<CalendarRepositoryPort, "subscribeCommittedChanges">; sync: NotificationSync; children: ReactNode }>) {
   const [unread, setUnread] = useState(0);
 
   useEffect(() => {
+    if (!enabled) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const run = (scope: "FULL" | "TICK" = "FULL") => { sync.run(undefined, scope).catch(() => undefined); };
@@ -48,7 +49,7 @@ export function NotificationsHost({ center, calendar, sync, children }: Readonly
       offCenter();
       appState.remove();
     };
-  }, [center, calendar, sync]);
+  }, [center, calendar, sync, enabled]);
 
   return <UnreadContext.Provider value={unread}>{children}</UnreadContext.Provider>;
 }

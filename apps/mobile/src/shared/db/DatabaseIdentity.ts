@@ -5,6 +5,9 @@ export interface DatabaseOwnerCatalog {
   readonly owner: string;
   readonly ledger: string;
   readonly chain: readonly MigrationStep[];
+  /** An additive owner introduced after baseline may be completely absent in an older owned DB.
+   * Partial/unrecognized objects still fail the exact schema check below. */
+  readonly allowMissingOnUpgrade?: true;
 }
 export interface DatabaseIdentity {
   readonly applicationId: number;
@@ -39,7 +42,10 @@ export async function inspectDatabaseIdentity(reader: SqliteStatementPort, ident
     const expected = new Map<string, string>([[DATABASE_IDENTITY_TABLE, "table"]]);
     for (const owner of owners) {
       if (!/^[a-z][a-z0-9_]*$/u.test(owner.ledger)) incompatible();
-      if (!objects.some((row) => row.type === "table" && row.name === owner.ledger)) incompatible();
+      if (!objects.some((row) => row.type === "table" && row.name === owner.ledger)) {
+        if (owner.allowMissingOnUpgrade === true) continue;
+        incompatible();
+      }
       expected.set(owner.ledger, "table");
       const applied = await reader.all<{ version: number; checksum: string }>(`SELECT version, checksum FROM ${owner.ledger} ORDER BY version`);
       if (applied.length === 0) incompatible();

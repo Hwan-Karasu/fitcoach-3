@@ -14,6 +14,7 @@ export interface RestorePreview {
 }
 export interface ReturnPointSummary { readonly id: string; readonly createdAt: string }
 export interface RestoreActionState {
+  readonly preparation?: RestorePreparationProgress | null;
   readonly available: boolean;
   readonly phase: "IDLE" | "PREPARING" | "PREVIEW" | "APPLYING" | "DELETING" | "RECOVERING" | "RECOVERY_REQUIRED";
   readonly preview: RestorePreview | null;
@@ -38,8 +39,8 @@ export interface RestoreActionsPort {
 }
 /** Privileged composition owns all file paths, SQL, maintenance and opaque prepared jobs. */
 export interface RestoreJobsPort {
-  prepareFile(): Promise<RestorePreview | null>;
-  prepareReturn(pointId: string): Promise<RestorePreview>;
+  prepareFile(observe?: RestorePreparationObserver): Promise<RestorePreview | null>;
+  prepareReturn(pointId: string, observe?: RestorePreparationObserver): Promise<RestorePreview>;
   apply(previewId: string): Promise<"COMMITTED" | "ROLLED_BACK">;
   /** Release ephemeral preparation. Published journals, active points and LIVE media
    * remain protected; an adapter must never recursively delete a committed job here. */
@@ -56,3 +57,4 @@ export function restoreSpaceRequired(liveBytes: number, mediaBytes: number, medi
   if (!Number.isSafeInteger(required)) throw new RestoreActionError("RESTORE_NO_SPACE");
   return required;
 }
+import type { RestorePreparationObserver, RestorePreparationProgress } from "./RestorePreparation.ts";

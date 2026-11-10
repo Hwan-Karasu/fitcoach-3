@@ -57,10 +57,38 @@ test("REST-DOCK-2 UI: один контроллер, свёрнутый режи
     await act(async () => { tree = TestRenderer.create(panel()); });
     assert.equal(subscriptions, 1); assert.equal(nativePanelBoundary.listenerCount(), 1);
     const settledRenders = renders;
+    const texts = () => tree.root.findAll((node) => String(node.type) === "Text").map((node) => node.props.children);
+    assert.ok(texts().includes("1:00"));
+    assert.equal(tree.root.findAll((node) => String(node.type) === "TextInput").length, 0, "цифры — обычный Text");
     await act(async () => { t.mock.timers.tick(1000); });
+    assert.ok(texts().includes("0:59"));
     assert.equal(renders, settledRenders, "секундный ход времени до deadline не перерисовывает React-панель");
+    // React Native releases synthetic events after dispatch. State updaters may run later.
+    // Two queued measurements force a deferred reducer, rather than only React's eager path.
+    await act(async () => {
+      const area = tree.root.find((node) => String(node.type) === "View" && node.props.testID === "rest-panel-area");
+      const measurement = area.findAll((node) => String(node.type) === "View" && typeof node.props.onLayout === "function")[1]!;
+      for (const width of [310, 312]) {
+        const event: { nativeEvent: { layout: { width: number; height: number } } | null } = { nativeEvent: { layout: { width, height: 180 } } };
+        measurement.props.onLayout(event);
+        event.nativeEvent = null;
+      }
+    });
     const buttons = () => tree.root.findAll((node) => typeof node.type === "string" && String(node.type) === "Pressable");
     const click = async (label: string) => act(async () => { buttons().find((node) => node.props.accessibilityLabel === label)!.props.onPress(); });
+    const deadline = service.list()[0]!.endAt;
+    const swipe = async (translationY: number) => act(async () => {
+      tree.root.find((node) => typeof node.type === "string" && String(node.type) === "GestureDetector")
+        .props.gesture.end({ translationY, velocityY: 0 });
+    });
+    for (let index = 0; index < 30; index++) {
+      await swipe(40);
+      assert.ok(buttons().some((node) => node.props.accessibilityLabel === "Развернуть таймеры отдыха"));
+      await swipe(-40);
+      assert.ok(buttons().some((node) => node.props.accessibilityLabel === "Свернуть таймеры отдыха"));
+    }
+    assert.equal(service.list()[0]!.endAt, deadline, "gestures never restart or rewrite the timer");
+    assert.equal(subscriptions, 1, "gestures keep the same controller subscription");
     await click("Свернуть таймеры отдыха");
     await act(async () => { await service.start({ ...start, clientId: "synthetic-b", exerciseKey: "press", durationSec: 90 }); await service.idle(); });
     assert.ok(buttons().some((node) => node.props.accessibilityLabel === "Развернуть таймеры отдыха"));
@@ -80,6 +108,72 @@ test("REST-DOCK-2 UI: один контроллер, свёрнутый режи
   } finally {
     if (tree) await act(async () => tree.unmount());
     assert.equal(subscriptions, 0); assert.equal(nativePanelBoundary.listenerCount(), 0);
+    t.mock.timers.reset();
+  }
+});
+
+test("REST-DOCK-51-RCA UI: delayed ticks, pause, background, return route and finish survive view replacement", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000_000 });
+  const stored = new Map<string, RestTimer>();
+  let id = 0; let writes = 0; let renders = 0; let opened: RestTimer | undefined;
+  const service = new RestTimerService({ listTimers: async () => [...stored.values()],
+    putTimer: async (timer, replaced) => { writes++; for (const key of replaced) stored.delete(key); stored.set(timer.id, timer); },
+    removeTimer: async (key) => { stored.delete(key); } }, { schedule: async () => null, cancel: async () => undefined }, Date.now, () => `t${++id}`);
+  await service.start(start); await service.idle();
+  let tree!: TestRenderer.ReactTestRenderer;
+  try {
+    await act(async () => { tree = TestRenderer.create(createElement(PrototypeThemeProvider, null, createElement(RestTimerDock, {
+      timers: service, onOpen: (timer: RestTimer) => { opened = timer; }, loadAvatars: async () => new Map(),
+      renderContainer: (area: ReactNode) => { renders++; return createElement("Panel", null, area); },
+    }))); });
+    const texts = () => tree.root.findAll((node) => String(node.type) === "Text").map((node) => node.props.children);
+    const click = async (label: string) => act(async () => {
+      tree.root.find((node) => String(node.type) === "Pressable" && node.props.accessibilityLabel === label).props.onPress();
+      await service.idle();
+    });
+    const action = (label: string) => click(`${start.clientName}, ${start.exerciseName}: ${label}`);
+    const initialRenders = renders;
+    // A blocked JS thread must catch up from the deadline, not subtract one on its next callback.
+    await act(async () => { t.mock.timers.setTime(1_010_000); t.mock.timers.tick(1000); });
+    assert.ok(texts().includes("0:49"));
+    assert.equal(renders, initialRenders);
+    assert.equal(writes, 1, "ticks do not persist or mutate training state");
+    await action("Пауза");
+    await act(async () => { t.mock.timers.tick(8000); });
+    assert.ok(texts().includes("0:49"));
+    await action("Увеличить отдых на 15 секунд");
+    assert.ok(texts().includes("1:04"));
+    await action("Продолжить отдых");
+    const deadline = service.list()[0]!.endAt;
+    await click(`${start.clientName}, ${start.exerciseName}. Идёт отдых. Открыть тренировку`);
+    assert.deepEqual([opened?.clientId, opened?.programId, opened?.weekIndex, opened?.plannedWorkoutId, opened?.exerciseKey],
+      [start.clientId, start.programId, start.weekIndex, start.plannedWorkoutId, start.exerciseKey]);
+    await click("Свернуть таймеры отдыха");
+    await act(async () => { nativePanelBoundary.appState("background"); });
+    const backgroundRenders = renders; const signals = nativePanelBoundary.signals;
+    await act(async () => { t.mock.timers.tick(20_000); });
+    assert.equal(renders, backgroundRenders);
+    await act(async () => { nativePanelBoundary.appState("active"); });
+    assert.ok(texts().includes("0:44"), "foreground immediately catches up");
+    assert.equal(service.list()[0]!.endAt, deadline);
+    await act(async () => { nativePanelBoundary.appState("background"); });
+    await act(async () => { t.mock.timers.tick(50_000); });
+    assert.equal(nativePanelBoundary.signals, signals, "background JS does not duplicate the system signal");
+    await act(async () => { nativePanelBoundary.appState("active"); });
+    assert.ok(texts().includes("Отдых окончен"));
+    assert.equal(nativePanelBoundary.signals, signals + 1);
+    await click("Развернуть таймеры отдыха");
+    assert.equal(nativePanelBoundary.signals, signals + 1, "remounting clocks never finishes twice");
+    await action("Увеличить отдых на 15 секунд");
+    await act(async () => { t.mock.timers.tick(4000); await service.idle(); });
+    assert.equal(service.list().length, 1, "old auto-hide cannot dismiss an extended timer");
+    assert.ok(texts().includes("0:11"));
+    await action("Пропустить отдых");
+    assert.equal(service.list().length, 0);
+  } finally {
+    if (tree) await act(async () => tree.unmount());
+    nativePanelBoundary.appState("active");
+    assert.equal(nativePanelBoundary.listenerCount(), 0);
     t.mock.timers.reset();
   }
 });

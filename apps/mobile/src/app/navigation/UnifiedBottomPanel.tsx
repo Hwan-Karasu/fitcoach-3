@@ -6,7 +6,6 @@ import { useBottomPanelContent } from "../../shared/ui/components/public.ts";
 import { panelBottomPadding } from "../../shared/ui/components/bottomPanelRules.ts";
 import { PaletteOverride, usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { navigationBorder } from "../../shared/ui/theme/navigationBorder.ts";
-import { shadow } from "../../shared/ui/theme/style.ts";
 import type { ApplicationServices } from "../composition/createServices.ts";
 import { restTimerDiagnostics } from "../../shared/diagnostics/RestTimerDiagnostics.ts";
 
@@ -40,19 +39,20 @@ export function UnifiedBottomPanel({ services, onOpen }: Readonly<{
   }, [services.clients, avatarVersion]);
   const bottom = panelBottomPadding(insets.bottom, keyboardVisible);
   // Без панели и таймеров остаётся полоса высотой в системный отступ: экраны без своей панели (футеры, Excel, оформление) сами нижний inset не добавляют, полоса его заменяет.
-  const render = (area: ReactNode, hasTimers: boolean) => (
-    <View style={{ backgroundColor: colors.canvas, paddingHorizontal: 12, paddingBottom: bottom }}>
-      {entry === null && !hasTimers ? null : <View testID="unified-bottom-panel"
-        style={[styles.panel, shadow.floating, { backgroundColor: colors.navigation, borderColor: navigationBorder(colors) }]}>
+  const render = (area: ReactNode, hasTimers: boolean) => entry === null && !hasTimers
+    ? <View style={{ height: bottom, backgroundColor: colors.canvas }} />
+    : <View testID="unified-bottom-panel"
+        style={[styles.panel, { paddingBottom: bottom, backgroundColor: colors.navigation, borderTopColor: navigationBorder(colors) }]}>
         {area}
         {entry?.participants}
         {entry?.navigation}
-      </View>}
-    </View>
-  );
+      </View>;
   return <PaletteOverride tokens={colors}>
     <RestTimerDock timers={services.restTimers} onOpen={onOpen} loadAvatars={avatars} renderContainer={render} />
   </PaletteOverride>;
 }
 
-const styles = StyleSheet.create({ panel: { borderRadius: 22, borderWidth: 1, padding: 4, gap: 2 } });
+const styles = StyleSheet.create({ panel: {
+  borderTopLeftRadius: 16, borderTopRightRadius: 16, borderTopWidth: 1,
+  paddingTop: 4, paddingHorizontal: 8, gap: 2,
+} });

@@ -19,10 +19,10 @@ function Row({ icon: Icon, title, caption, fallback, last = false, onPress }: Re
         borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
       <View style={[styles.icon, { backgroundColor: colors.accentSoft }]}><Icon size={20} color={colors.accentInk} /></View>
       <View style={styles.text}>
-        <Text numberOfLines={1} style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-        <Text numberOfLines={2} style={[styles.caption, { color: caption === null || caption === undefined ? colors.textMuted : colors.textSecondary }]}>{detail}</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
+        <Text style={[styles.caption, { color: caption === null || caption === undefined ? colors.textMuted : colors.textSecondary }]}>{detail}</Text>
       </View>
-      <ChevronRight size={20} color={colors.textMuted} />
+      <ChevronRight size={20} color={colors.textMuted} style={styles.chevron} />
     </Pressable>
   );
 }
@@ -77,7 +77,8 @@ export function SettingsPreview({
 const styles = StyleSheet.create({
   group: { borderRadius: 26, overflow: "hidden" },
   row: { minHeight: 68, paddingVertical: 12, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", gap: 14 },
-  icon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  icon: { width: 40, height: 40, flexShrink: 0, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  chevron: { flexShrink: 0 },
   text: { flex: 1, minWidth: 0, gap: 2 },
   title: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 20 },
   caption: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },

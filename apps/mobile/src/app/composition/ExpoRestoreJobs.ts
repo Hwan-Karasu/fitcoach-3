@@ -4,6 +4,7 @@ import * as SQLite from "expo-sqlite";
 import { RestoreActionError, ReturnPointCompletion, SnapshotError, emptyReturnPointState,
   parseRestoreGuard, parseReturnPointState, restoreSpaceRequired, type RestoreJobsPort, type RestorePreview,
   type ReturnPoint } from "../../features/backup/public.ts";
+import { observeBackup, RestorePreparationTrace, type BackupObserver, type RestorePreparationObserver } from "../../features/backup/public.ts";
 import { ExpoRestoreStorage } from "../../features/backup/data/ExpoRestoreStorage.ts";
 import { ExpoReturnPointStore } from "../../features/backup/data/ExpoReturnPointStore.ts";
 import { ExpoSqliteBackup } from "../../features/backup/data/ExpoSqliteBackup.ts";
@@ -85,7 +86,7 @@ export class ExpoRestoreJobs implements RestoreJobsPort {
   async readPoint() {
     const point = await this.point(); return point === null ? null : { id: point.operationId, createdAt: point.createdAt };
   }
-  private async currentPin(directory: Directory): Promise<string> {
+  private async currentPin(directory: Directory, observe?: BackupObserver): Promise<string> {
     const copy = new File(directory, "current-preview.db");
     space(this.options.live.size + 4 * 1024 * 1024);
     copy.create();
@@ -96,10 +97,12 @@ export class ExpoRestoreJobs implements RestoreJobsPort {
         await destination.execAsync("PRAGMA journal_mode=DELETE; PRAGMA foreign_keys=ON");
       } finally { await destination.closeAsync(); }
     });
-    return this.read(copy, (db) => snapshotContentSha256(expoSnapshotSql(db)));
+    return this.read(copy, (db) => snapshotContentSha256(expoSnapshotSql(db), [], (done, total) => observeBackup(observe, "CONTENT", done, total)));
   }
-  private async prepare(source: File, kind: RestorePreview["kind"], pointId: string | null): Promise<RestorePreview> {
+  private async prepare(source: File, kind: RestorePreview["kind"], pointId: string | null, observe?: RestorePreparationObserver): Promise<RestorePreview> {
     const id = uuid.v4(); const directory = this.job(id); let created = false;
+    const trace = new RestorePreparationTrace(id, observe);
+    let ok = false;
     try {
       await this.cleanupOrphans();
       // Peak includes private inspection, staging with BLOB media and extracted images.
@@ -108,33 +111,35 @@ export class ExpoRestoreJobs implements RestoreJobsPort {
       new File(directory, "owner.json").write(marker(id));
       const incoming = new File(directory, "incoming.db");
       const manifest = await this.driver.prepareForRestore(source, new File(directory, "inspection.atbackup"), incoming,
-        { files: expoSnapshotMedia(this.options.images), restoreId: id });
+        { files: expoSnapshotMedia(this.options.images), restoreId: id, observe: trace.observe }, () => trace.phase("PREPARE_CANDIDATE"));
       const counts = await this.read(incoming, async (db) => {
         const rows = await db.getAllAsync<{ lifecycle: string; count: number }>("SELECT lifecycle, count(*) AS count FROM clients GROUP BY lifecycle");
         return { activeClients: rows.find((row) => row.lifecycle === "ACTIVE")?.count ?? 0, archivedClients: rows.find((row) => row.lifecycle === "ARCHIVED")?.count ?? 0 };
       });
-      const currentContentSha256 = await this.currentPin(directory);
+      trace.phase("VERIFY_CURRENT");
+      const currentContentSha256 = await this.currentPin(directory, trace.observe);
       const incomingSha256 = (await expoFileSha256(incoming)).sha256;
       const preview: RestorePreview = Object.freeze({ id, kind, createdAt: manifest.createdAt, ...counts });
       this.prepared.set(id, { id, preview, pointId, currentContentSha256, incomingSha256 });
+      ok = true;
       return preview;
     } catch (error) {
       if (created) try { await this.cleanup(id); } catch { /* Own unpublished orphan is retryable. */ }
       throw masked(error);
-    }
+    } finally { trace.finish(ok); }
   }
-  async prepareFile(): Promise<RestorePreview | null> {
+  async prepareFile(observe?: RestorePreparationObserver): Promise<RestorePreview | null> {
     try {
       const file = this.options.pick ? await this.options.pick() : await (async () => {
         const result = await File.pickFileAsync({}); return result.canceled ? null : result.result;
       })();
-      return file === null ? null : this.prepare(file, "RESTORE", null);
+      return file === null ? null : this.prepare(file, "RESTORE", null, observe);
     } catch (error) { throw masked(error); }
   }
-  async prepareReturn(pointId: string): Promise<RestorePreview> {
+  async prepareReturn(pointId: string, observe?: RestorePreparationObserver): Promise<RestorePreview> {
     const point = await this.point();
     if (point === null || point.operationId !== pointId) throw new RestoreActionError("RESTORE_POINT_UNAVAILABLE");
-    return this.prepare(this.points.pointFile(point), "RETURN", pointId);
+    return this.prepare(this.points.pointFile(point), "RETURN", pointId, observe);
   }
   private async checkSpace(kind: RestorePreview["kind"]): Promise<void> {
     if (kind === "RETURN") { space(restoreSpaceRequired(this.options.live.size, 0, 0, kind)); return; }

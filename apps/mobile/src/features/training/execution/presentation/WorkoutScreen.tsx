@@ -90,7 +90,7 @@ function sameLoads(a: ReadonlyMap<string, number> | null, b: ReadonlyMap<string,
  * исхода спрашивает «Завершить тренировку?» (§48.36).
  */
 export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, activeWorkouts, onOpenWorkout,
-  exercises, onChangeWeek, onEditWeek, onOpenMatrix, onPickExercises, picked, onOpenExercise, renderParticipants, focusExerciseId = null }: Readonly<{
+  exercises, onChangeWeek, onEditWeek, onOpenMatrix, onPickExercises, picked, onOpenExercise, renderParticipants, focusExerciseId = null, focusExerciseRequest = 0 }: Readonly<{
   slot: WorkoutSlot;
   /** Подпись таймера отдыха — таймеры разных клиентов различимы (§48.62). */
   clientName: string;
@@ -114,6 +114,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   onOpenExercise?: (exerciseId: string) => void;
   /** Плановое упражнение, к которому один раз прокрутить дневник при открытии (возврат с панели таймера отдыха). */
   focusExerciseId?: string | null;
+  focusExerciseRequest?: number;
 }>) {
   useKeepAwake();
   restTimerDiagnostics.render("workout");
@@ -135,7 +136,11 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
       setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, bodyY.current + y - 8), animated: true }), 50);
     }, () => { focusDone.current = null; });
   }, [cardRefs, focusExerciseId]);
-  useEffect(() => { focusDone.current = null; }, [focusExerciseId]);
+  useEffect(() => {
+    focusDone.current = null;
+    // Existing cards may not emit onLayout again when only the navigation params changed.
+    if (focusExerciseId !== null) focusExercise(focusExerciseId);
+  }, [focusExerciseId, focusExerciseRequest, focusExercise]);
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const navigation = useNavigation();

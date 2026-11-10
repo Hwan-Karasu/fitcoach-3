@@ -22,6 +22,23 @@ function world(overrides: Partial<RestoreJobsPort> = {}, enabled = true) {
   return { service, commands, calls, ready: (value: boolean) => { ready = value; } };
 }
 
+test("RECOVERY-50 preparation reports real progress, clears it at preview and ignores late observers", async () => {
+  const gate = latch();
+  let emit: Parameters<RestoreJobsPort["prepareFile"]>[0];
+  const w = world({ prepareFile: async (observe) => {
+    emit = observe; observe?.({ phase: "VERIFY_SOURCE", done: 0, total: 1000 });
+    await gate.promise; return preview;
+  } });
+  const pending = w.service.chooseFile(); await tick();
+  assert.deepEqual(w.service.state.preparation, { phase: "VERIFY_SOURCE", done: 0, total: 1000 });
+  emit?.({ phase: "VERIFY_SOURCE", done: 500, total: 1000 });
+  assert.equal(w.service.state.preparation?.done, 500);
+  gate.release(); await pending;
+  assert.equal(w.service.state.phase, "PREVIEW"); assert.equal(w.service.state.preparation, null);
+  emit?.({ phase: "VERIFY_SOURCE", done: 1000, total: 1000 });
+  assert.equal(w.service.state.preparation, null); assert.equal(w.calls.apply, 0);
+});
+
 test("R06 restore preview never applies data; only its exact confirmation ID can proceed", async () => {
   const w = world(); await w.service.chooseFile();
   assert.equal(w.service.state.phase, "PREVIEW"); assert.equal(w.calls.apply, 0);
@@ -30,6 +47,23 @@ test("R06 restore preview never applies data; only its exact confirmation ID can
   assert.deepEqual(await w.service.confirmPreview(preview.id), { kind: "RESTORED" });
   assert.equal(w.calls.apply, 1); assert.equal(w.service.state.preview, null);
   assert.deepEqual(await w.service.confirmPreview(preview.id), { kind: "FAILED", code: "RESTORE_STALE_PREVIEW" }); assert.equal(w.calls.apply, 1);
+});
+
+test("RECOVERY-51 an old preparation observer cannot overwrite a later operation", async () => {
+  const gate = latch(); let calls = 0;
+  const observers: NonNullable<Parameters<RestoreJobsPort["prepareFile"]>[0]>[] = [];
+  const w = world({ prepareFile: async (observe) => {
+    if (observe) observers.push(observe);
+    if (++calls > 1) await gate.promise;
+    return preview;
+  } });
+  await w.service.chooseFile(); await w.service.cancelPreview();
+  const next = w.service.chooseFile(); await tick();
+  observers[0]!({ phase: "VERIFY_SOURCE", done: 999, total: 1000 });
+  assert.equal(w.service.state.preparation, null);
+  observers[1]!({ phase: "COPY_SOURCE", done: null, total: null });
+  assert.deepEqual(w.service.state.preparation, { phase: "COPY_SOURCE", done: null, total: null });
+  gate.release(); await next;
 });
 test("R06 cancelled picker preserves point without preparing a confirmation or replacing data", async () => {
   const w = world({ prepareFile: async () => null }); await w.service.refresh();

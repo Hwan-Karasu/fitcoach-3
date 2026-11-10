@@ -50,6 +50,26 @@ async function stores() {
 const bench = { clientId: "a", clientName: "SyntheticA", exerciseKey: "pe-bench", exerciseName: "Жим", durationSec: 180,
   programId: "prog-1", weekIndex: 2, plannedWorkoutId: "w-1" };
 
+test("REST-DOCK-51-RCA: delayed schedules after +15 then -15 keep only the latest signal, even with the same deadline", async () => {
+  const requests: { endAt: number; resolve: (id: string) => void }[] = [];
+  const live = new Set<string>();
+  const service = new RestTimerService({ listTimers: async () => [], putTimer: async () => undefined, removeTimer: async () => undefined }, {
+    schedule: ({ endAt }) => new Promise<string>((resolve) => { requests.push({ endAt, resolve: (id) => { live.add(id); resolve(id); } }); }),
+    cancel: async (id) => { live.delete(id); },
+  }, () => T0, () => "t1");
+  await service.start(bench);
+  await service.adjust("t1", 15);
+  await service.adjust("t1", -15);
+  assert.equal(requests.length, 3);
+  assert.equal(requests[0]!.endAt, requests[2]!.endAt);
+  requests[2]!.resolve("latest");
+  requests[1]!.resolve("middle");
+  requests[0]!.resolve("oldest");
+  await service.idle();
+  assert.deepEqual([...live], ["latest"]);
+  assert.equal(service.list()[0]!.signalId, "latest");
+});
+
 test("R06 idle waits for a queued start and its late OS signal; the start is one DB write (REST-FIX-4)", async () => {
   let finishWrite!: () => void; let finishSignal!: (value: string) => void;
   const write = new Promise<void>((resolve) => { finishWrite = resolve; });

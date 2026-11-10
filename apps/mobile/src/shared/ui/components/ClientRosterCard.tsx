@@ -6,9 +6,9 @@ import { fonts } from "../theme/typography.ts";
 import { shadow, TOUCH_TARGET } from "../theme/style.ts";
 import { emojiFromInput } from "./emojiInput.ts";
 
-/** При четырёх показателях подписи сокращаются, чтобы плашки оставались одной ширины и значение не обрезалось. */
+/** Compact but readable labels; the accessible label always retains the full meaning. */
 const shortMetricLabels: Readonly<Record<string, string>> = {
-  "Следующее занятие": "Занятие", "Последняя тренировка": "Трен.", "Абонемент": "Абон.",
+  "Следующее занятие": "Занятие", "Последняя тренировка": "Тренировка",
 };
 
 /** Показатель карточки: подпись и значение; `value: null` — «нет данных» (§51.2.3), показывается прочерком. */
@@ -54,7 +54,7 @@ export function ClientRosterCard({ clientId, displayName, mark, emoji = null, su
   const spoken = [displayName, subtitle, restricted ? "есть ограничения" : null, highlight]
     .filter((part): part is string => typeof part === "string" && part.length > 0).join(", ");
   const shown = metrics.slice(0, 4);
-  const dense = shown.length > 3;
+  const rows = Array.from({ length: Math.ceil(shown.length / 2) }, (_, index) => shown.slice(index * 2, index * 2 + 2));
   return (
     <View style={[styles.card, shadow.card, { backgroundColor: colors.surface,
       borderColor: highlight ? colors.accentFill : "transparent" }]}>
@@ -73,7 +73,7 @@ export function ClientRosterCard({ clientId, displayName, mark, emoji = null, su
         <Pressable accessibilityRole="button" accessibilityLabel={`Открыть карточку клиента: ${spoken}`}
           onPress={() => onOpen(clientId)} style={styles.main}>
           <View style={styles.text}>
-            <Text numberOfLines={2} style={[styles.name, { color: colors.textPrimary }]}>{displayName}</Text>
+            <Text style={[styles.name, { color: colors.textPrimary }]}>{displayName}</Text>
             {subtitle || restricted ? (
               <View style={styles.subtitleRow}>
                 {subtitle ? <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text> : null}
@@ -90,17 +90,20 @@ export function ClientRosterCard({ clientId, displayName, mark, emoji = null, su
       </View>
       {shown.length > 0 ? (
         <View style={styles.plates}>
-          {shown.map((metric) => (
+          {rows.map((row, index) => <View key={index} style={styles.plateRow}>
+          {row.map((metric) => (
             <View key={metric.label} accessible accessibilityLabel={`${metric.label}: ${metric.value ?? "нет данных"}`}
               style={[styles.plate, { backgroundColor: colors.surfaceRaised }]}>
-              <Text numberOfLines={1} style={[styles.plateLabel, { color: colors.textSecondary }]}>
-                {dense ? shortMetricLabels[metric.label] ?? metric.label : metric.label}
+              <Text style={[styles.plateLabel, { color: colors.textSecondary }]}>
+                {shortMetricLabels[metric.label] ?? metric.label}
               </Text>
-              <Text style={[styles.plateValue, dense ? styles.plateValueDense : null, { color: metric.value === null ? colors.textMuted : colors.textPrimary }]}>
+              <Text style={[styles.plateValue, { color: metric.value === null ? colors.textMuted : colors.textPrimary }]}>
                 {metric.value ?? "—"}
               </Text>
             </View>
           ))}
+          {shown.length > 1 && row.length === 1 ? <View style={styles.plateSpacer} /> : null}
+          </View>)}
         </View>
       ) : null}
     </View>
@@ -157,19 +160,20 @@ const styles = StyleSheet.create({
   highlight: { flexShrink: 1, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 6 },
   highlightText: { flexShrink: 1, fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
   row: { flexDirection: "row", alignItems: "center", paddingLeft: 14, paddingRight: 10, paddingTop: 10, gap: 12 },
-  avatar: { width: 52, height: 52, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  avatar: { width: 52, height: 52, flexShrink: 0, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   mark: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 23 },
   avatarInput: { borderWidth: 2, padding: 0, textAlign: "center", fontSize: 20 },
-  main: { flex: 1, minHeight: TOUCH_TARGET, flexDirection: "row", alignItems: "center", gap: 8 },
-  text: { flex: 1, gap: 4 },
+  main: { flex: 1, minWidth: 0, minHeight: TOUCH_TARGET, flexDirection: "row", alignItems: "center", gap: 8 },
+  text: { flex: 1, minWidth: 0, gap: 4 },
   name: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
   subtitleRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
   subtitle: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 17 },
   badge: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 1 },
   badgeText: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
-  plates: { flexDirection: "row", gap: 6, paddingHorizontal: 12, paddingTop: 10 },
-  plate: { flex: 1, flexBasis: 0, minWidth: 0, minHeight: 56, borderRadius: 16, paddingVertical: 7, paddingHorizontal: 8, gap: 2 },
+  plates: { gap: 6, paddingHorizontal: 12, paddingTop: 10 },
+  plateRow: { flexDirection: "row", gap: 6, alignItems: "stretch" },
+  plateSpacer: { flex: 1, flexBasis: 0 },
+  plate: { flex: 1, flexBasis: 0, minWidth: 0, borderRadius: 12, paddingVertical: 5, paddingHorizontal: 8, gap: 2 },
   plateLabel: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14 },
   plateValue: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
-  plateValueDense: { fontSize: 12, lineHeight: 16 },
 });

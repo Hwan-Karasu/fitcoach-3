@@ -40,7 +40,9 @@ export const withTiming = <T,>(value: T): T => value;
 export const scheduleOnRN = (callback: (...args: never[]) => unknown, ...args: never[]) => callback(...args);
 export const Gesture = { Pan: () => {
   const gesture = { activeOffsetY: (value: unknown) => { void value; return gesture; }, failOffsetX: (value: unknown) => { void value; return gesture; },
-    onEnd: (callback: unknown) => { void callback; return gesture; } };
+    onEnd: (callback: (event: { translationY: number; velocityY: number }) => void) => {
+      return { ...gesture, end: callback };
+    } };
   return gesture;
 } };
 export const GestureDetector = component("GestureDetector");

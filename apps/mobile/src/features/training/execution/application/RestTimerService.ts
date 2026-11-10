@@ -1,4 +1,5 @@
 import type { RestSignalPort, RestTimerStorePort, RestTimersPort } from "../domain/RestTimerPorts.ts";
+import { restTimerDiagnostics } from "../../../../shared/diagnostics/RestTimerDiagnostics.ts";
 import { adjustTimer, isFinished, pauseTimer, resumeTimer, runningTimers, startTimer, type RestTimer, type RestTimerStart } from "../domain/RestTimerRules.ts";
 
 const defaultId = () => `rt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -13,6 +14,8 @@ export class RestTimerService implements RestTimersPort {
   private timers: readonly RestTimer[] = [];
   private tail: Promise<unknown> = Promise.resolve();
   private readonly signalling = new Set<Promise<void>>();
+  /** Request identity prevents ABA races: +15 then -15 can return to the same endAt. Memory only. */
+  private readonly signalRequests = new Map<string, symbol>();
   private readonly listeners = new Set<() => void>();
   private readonly store: RestTimerStorePort;
   private readonly signal: RestSignalPort;
@@ -44,29 +47,39 @@ export class RestTimerService implements RestTimersPort {
   }
 
   private schedule(timer: RestTimer, requestPermission: boolean): Promise<string | null> {
+    restTimerDiagnostics.event("signal");
     return this.signal.schedule({ endAt: timer.endAt, title: "Отдых окончен", body: `${timer.clientName} · ${timer.exerciseName}`,
       requestPermission,
       route: timer.programId === null || timer.weekIndex === null || timer.plannedWorkoutId === null ? { clientId: timer.clientId }
         : { clientId: timer.clientId, programId: timer.programId, weekIndex: timer.weekIndex, plannedWorkoutId: timer.plannedWorkoutId,
-          exerciseKey: timer.exerciseKey } }).catch(() => null);
+          exerciseKey: timer.exerciseKey } }).then((id) => {
+            restTimerDiagnostics.event("signal-ready"); return id;
+          }).catch(() => { restTimerDiagnostics.event("signal-failed"); return null; });
   }
 
   /** Поставить сигнал на окончание этого таймера и прежний снять — в фоне, без задержки отсчёта. */
   private attachSignal(timer: RestTimer, previousSignal: string | null): void {
+    const request = Symbol();
+    this.signalRequests.set(timer.id, request);
     const task = (async () => {
       await this.cancelSignal(previousSignal);
       const signalId = await this.schedule(timer, true);
       if (signalId === null) return;
       await this.enqueue(async () => {
         const current = this.timers.find((item) => item.id === timer.id);
-        if (current === undefined || current.endAt !== timer.endAt || current.pausedLeftMs !== null) { await this.cancelSignal(signalId); return; }
+        if (this.signalRequests.get(timer.id) !== request || current === undefined || current.endAt !== timer.endAt || current.pausedLeftMs !== null) {
+          await this.cancelSignal(signalId); return;
+        }
         // Идентификатор сигнала живёт только в памяти процесса: после перезапуска `recover` сам снимает свои сигналы (clearOwned)
         // и ставит их заново, поэтому вторая транзакция записи и вторая публикация панели на каждый подход не нужны.
         this.timers = this.timers.map((item) => item.id === timer.id ? { ...item, signalId } : item);
       });
     })().catch(() => undefined);
     this.signalling.add(task);
-    void task.finally(() => this.signalling.delete(task));
+    void task.finally(() => {
+      this.signalling.delete(task);
+      if (this.signalRequests.get(timer.id) === request) this.signalRequests.delete(timer.id);
+    });
   }
 
   list(): readonly RestTimer[] {
@@ -92,6 +105,7 @@ export class RestTimerService implements RestTimersPort {
   recover(options: Readonly<{ reconcileSignals?: boolean }> = {}): Promise<void> {
     return this.enqueue(async () => {
       const stored = await this.store.listTimers();
+      this.signalRequests.clear();
       const running = runningTimers(stored, this.now());
       // Replace the old in-memory model before any optional platform or persistence work.
       // A restore must never leave the previous workspace's dock visible after an IO failure.
@@ -124,17 +138,20 @@ export class RestTimerService implements RestTimersPort {
 
   start(input: RestTimerStart): Promise<void> {
     return this.enqueue(async () => {
+      restTimerDiagnostics.event("start");
       const before = this.timers;
       const { timers, timer, replaced } = startTimer(before, input, this.newId(), this.now());
       this.publish(timers);
       try {
         await this.store.putTimer(timer, replaced.map((item) => item.id));
+        restTimerDiagnostics.event("persisted");
       } catch (error) {
+        restTimerDiagnostics.event("start-failed");
         this.publish(before);
         throw error;
       }
       // Прежний таймер заменён: его системный сигнал не должен сработать.
-      for (const item of replaced) await this.cancelSignal(item.signalId);
+      for (const item of replaced) { this.signalRequests.delete(item.id); await this.cancelSignal(item.signalId); }
       this.attachSignal(timer, null);
     });
   }
@@ -157,6 +174,7 @@ export class RestTimerService implements RestTimersPort {
       if (current === undefined) return;
       const moved = { ...adjustTimer(current, deltaSec, this.now()), signalId: null };
       await this.replace(current, moved);
+      this.signalRequests.delete(id);
       // На паузе сигнала нет: он появится при продолжении.
       if (moved.pausedLeftMs === null) this.attachSignal(moved, current.signalId);
       else await this.cancelSignal(current.signalId);
@@ -170,6 +188,7 @@ export class RestTimerService implements RestTimersPort {
       const paused = pauseTimer(current, this.now());
       if (paused === current) return;
       await this.replace(current, paused);
+      this.signalRequests.delete(id);
       await this.cancelSignal(current.signalId);
     });
   }
@@ -203,6 +222,7 @@ export class RestTimerService implements RestTimersPort {
       if (current === undefined || !when(current)) return;
       this.publish(this.timers.filter((timer) => timer.id !== id));
       await this.store.removeTimer(id);
+      this.signalRequests.delete(id);
       await this.cancelSignal(current.signalId);
     });
   }
