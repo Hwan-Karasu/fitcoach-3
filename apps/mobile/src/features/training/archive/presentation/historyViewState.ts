@@ -1,4 +1,5 @@
 import type { HistoryMode } from "./historyTypes.ts";
+import { useCallback, useState } from "react";
 import { createViewRetainer } from "../../../../shared/ui/retainedView.ts";
 
 /**
@@ -42,3 +43,19 @@ export function programViewOf(clientId: string, programId: string): ProgramViewS
 
 /** Карточка клиента открыта: состояние сохраняется; возвращённая функция вызывается при закрытии карточки. */
 export const retainHistoryView = createViewRetainer((clientId) => { byClient.delete(clientId); });
+
+/** Выбор и раскрытие принадлежат программе клиента, даже если навигатор переиспользовал экран. */
+export function useProgramHistoryView(clientId: string, programId: string) {
+  const view = programViewOf(clientId, programId);
+  const [state, setState] = useState(() => ({ view, selected: view.mesocycleId, expanded: new Set(view.expanded), listOpen: false }));
+  if (state.view !== view) setState({ view, selected: view.mesocycleId, expanded: new Set(view.expanded), listOpen: false });
+  const choose = useCallback((selected: string | null) => { view.mesocycleId = selected; setState((old) => ({ ...old, selected })); }, [view]);
+  const toggle = useCallback((key: string) => setState((old) => {
+    const expanded = new Set(old.expanded);
+    if (!expanded.delete(key)) expanded.add(key);
+    view.expanded.clear(); expanded.forEach((item) => view.expanded.add(item));
+    return { ...old, expanded };
+  }), [view]);
+  const setListOpen = useCallback((listOpen: boolean) => setState((old) => ({ ...old, listOpen })), []);
+  return { view, selected: state.selected, expanded: state.expanded, listOpen: state.listOpen, choose, toggle, setListOpen };
+}

@@ -11,10 +11,12 @@ import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import { SerialWriteQueue } from "../application/SerialWriteQueue.ts";
 import { diaryFields, compactWithDrops, parseField, planText } from "./setFormat.ts";
 import { buildProgramMatrix, type MatrixTarget, type MatrixWeek, type ProgramMatrix } from "./programMatrix.ts";
-import { buildMatrixHtml, matrixEditTargets, matrixStructureKey, matrixTexts, type MatrixHtmlView, type MatrixHtmlWeek } from "./matrixHtml.ts";
+import { buildMatrixHtml, matrixDataKey, matrixEditTargets, matrixFactKey, matrixPageKey, matrixTexts, readMatrixMessage, type MatrixHtmlView, type MatrixHtmlWeek } from "./matrixHtml.ts";
 import { MATRIX_ZOOM } from "./matrixZoom.ts";
 
 const SIDE_PADDING = 16;
+/** Страница матрицы не открывает ссылок: допускается только собственная пустая загрузка. */
+const allowOnlyBlank = (request: { url: string }): boolean => request.url === "about:blank";
 const EMPTY: SetValues = { reps: null, loadGrams: null, durationSec: null, distanceM: null };
 
 /** Версия структуры для выбора в матрице: действующая или историческая с периодом действия (§48.5.4, §48.9). */
@@ -69,6 +71,14 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
   const [message, setMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
+  // Смена клиента/программы на том же экране: данные прежней не остаются в состоянии (иначе версии запросились бы по мезоциклу чужой программы).
+  const inputKey = JSON.stringify([clientId, programId]);
+  const inputRef = useRef(inputKey);
+  inputRef.current = inputKey;
+  const [loadedKey, setLoadedKey] = useState(inputKey);
+  if (loadedKey !== inputKey) {
+    setLoadedKey(inputKey); setProgram(null); setMesocycles([]); setMesocycleId(null); setVersions(null); setVersionId("current"); setExecutions([]); setMessage(null); setSaveError(null);
+  }
 
   // Колбэк навигатора пересоздаётся при каждом рендере — читаем его из ref, иначе setOptions зациклится.
   const titleSink = useRef(onProgramTitle);
@@ -137,17 +147,18 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
   const acked = useRef(new Map<string, SetFact>());
   const save = useCallback((weekIndex: number, workoutId: string, target: MatrixTarget, patch: Partial<SetValues>) => {
     setSaveError(null);
+    const key = matrixFactKey(clientId, programId, weekIndex, workoutId, target.plannedSetId);
     void queue.run(async () => {
-      const latest = acked.current.get(target.plannedSetId);
+      const latest = acked.current.get(key);
       const fact = latest !== undefined && (target.fact === null || latest.revision >= target.fact.revision) ? latest : target.fact;
       const result = await execution.saveSet({ slot: { clientId, programId, weekIndex, plannedWorkoutId: workoutId },
         plannedExerciseId: target.plannedExerciseId, exerciseId: target.exerciseId, plannedSetId: target.plannedSetId,
         position: target.position, metrics: lookup?.get(target.exerciseId)?.metrics ?? [],
         values: { ...(fact?.values ?? EMPTY), ...patch }, drops: fact?.drops ?? [], rpe: fact?.rpe ?? null,
         setType: fact?.setType ?? "NORMAL", expectedRevision: fact?.revision ?? null });
-      acked.current.set(target.plannedSetId, result.fact);
-    }, { onError: () => { setSaveError("Не удалось сохранить значение — матрица обновлена, повторите ввод."); setRevision((value) => value + 1); } });
-  }, [clientId, execution, lookup, programId, queue]);
+      acked.current.set(key, result.fact);
+    }, { onError: () => { if (inputRef.current === inputKey) { setSaveError("Не удалось сохранить значение — матрица обновлена, повторите ввод."); setRevision((value) => value + 1); } } });
+  }, [clientId, execution, inputKey, lookup, programId, queue]);
 
   // Правка из страницы: идентификатор ячейки → цель записи; значение проверяется, как раньше в поле ввода.
   const targets = useMemo(() => matrix === null ? null : matrixEditTargets(matrix), [matrix]);
@@ -167,9 +178,10 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
   }, [editable, save]);
 
   // Масштаб и позиция запоминаются по мезоциклу и версии (1 → 2 → 1 возвращает туда же, T05); нужны при пересборке страницы.
-  const positionKey = `${mesocycleId ?? "simple"}:${version?.id ?? ""}`;
+  const positionKey = JSON.stringify([clientId, programId, mesocycleId ?? "simple", version?.id ?? ""]);
   const views = useRef(new Map<string, MatrixHtmlView>());
-  const lastZoom = useRef<number>(MATRIX_ZOOM.initial);
+  const lastZoom = useRef({ inputKey, zoom: MATRIX_ZOOM.initial as number });
+  if (lastZoom.current.inputKey !== inputKey) lastZoom.current = { inputKey, zoom: MATRIX_ZOOM.initial };
   const positionKeyRef = useRef(positionKey);
   positionKeyRef.current = positionKey;
 
@@ -181,17 +193,21 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
     tint: tintOf(week.type, 0.1), headTint: tintOf(week.type, 0.18) })), [colors, matrix?.weeks, tintOf]);
 
   // Страница собирается заново только при смене структуры, цветов или позиции; значения обновляются через patch.
-  const structureKey = matrix === null ? "" : `${positionKey}|${matrixStructureKey(matrix, editable)}|${colors.canvas}|${colors.accentInk}`;
+  const htmlColors = { canvas: colors.canvas, surface: colors.surfaceRaised, border: colors.border, text: colors.textPrimary,
+    textSecondary: colors.textSecondary, textMuted: colors.textMuted, accentInk: colors.accentInk, success: colors.success, input: colors.input };
+  const nameOf = (exerciseId: string) => lookup?.get(exerciseId)?.name ?? "Упражнение";
+  const structureKey = matrix === null ? "" : matrixPageKey(matrix, editable, positionKey, nameOf, htmlWeeks, htmlColors);
+  const dataKey = matrix === null ? "" : matrixDataKey(matrix, editable, positionKey);
+  const page = useRef({ key: dataKey, id: 1 });
+  if (page.current.key !== dataKey) page.current = { key: dataKey, id: page.current.id + 1 };
   const matrixRef = useRef(matrix);
   matrixRef.current = matrix;
   const html = useMemo(() => {
     const current = matrixRef.current;
     if (current === null) return "";
     const saved = views.current.get(positionKeyRef.current);
-    return buildMatrixHtml(current, (exerciseId) => lookup?.get(exerciseId)?.name ?? "Упражнение", htmlWeeks,
-      { canvas: colors.canvas, surface: colors.surfaceRaised, border: colors.border, text: colors.textPrimary, textSecondary: colors.textSecondary,
-        textMuted: colors.textMuted, accentInk: colors.accentInk, success: colors.success, input: colors.input }, editable,
-      { zoom: saved?.zoom ?? lastZoom.current, x: saved?.x ?? 0, y: saved?.y ?? 0 });
+    return buildMatrixHtml(current, nameOf, htmlWeeks, htmlColors, editable,
+      { zoom: saved?.zoom ?? lastZoom.current.zoom, x: saved?.x ?? 0, y: saved?.y ?? 0 }, page.current.id);
   }, [structureKey]);
 
   const web = useRef<WebView>(null);
@@ -202,14 +218,12 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
   useEffect(patch, [patch]);
 
   const onMessage = useCallback((event: WebViewMessageEvent) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data) as { type?: string; id?: string; field?: string; text?: string; zoom?: number; x?: number; y?: number };
-      if (data.type === "edit" && typeof data.id === "string" && typeof data.field === "string" && typeof data.text === "string") onEdit(data.id, data.field, data.text);
-      else if (data.type === "view" && typeof data.zoom === "number" && typeof data.x === "number" && typeof data.y === "number") {
-        lastZoom.current = data.zoom;
-        views.current.set(positionKeyRef.current, { zoom: data.zoom, x: data.x, y: data.y });
-      }
-    } catch { /* Чужое сообщение — игнорируем. */ }
+    const data = readMatrixMessage(event.nativeEvent.data, page.current.id);
+    if (data?.type === "edit") onEdit(data.id, data.field, data.text);
+    else if (data?.type === "view") {
+      lastZoom.current.zoom = data.zoom;
+      views.current.set(positionKeyRef.current, { zoom: data.zoom, x: data.x, y: data.y });
+    }
   }, [onEdit]);
 
   if (message !== null) return <View style={[styles.center, { backgroundColor: colors.canvas }]}><InlineNotice kind="error">{message}</InlineNotice></View>;
@@ -237,7 +251,7 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
       </View>
       <View style={[styles.grid, { backgroundColor: colors.canvas }]}>
         <WebView ref={web} key={structureKey} originWhitelist={["*"]} source={{ html }} onMessage={onMessage} onLoadEnd={patch}
-          onShouldStartLoadWithRequest={(request) => request.url === "about:blank"}
+          onShouldStartLoadWithRequest={allowOnlyBlank}
           javaScriptEnabled domStorageEnabled={false} allowFileAccess={false} allowFileAccessFromFileURLs={false}
           allowUniversalAccessFromFileURLs={false} thirdPartyCookiesEnabled={false} sharedCookiesEnabled={false}
           mixedContentMode="never" setSupportMultipleWindows={false} hideKeyboardAccessoryView keyboardDisplayRequiresUserAction={false}

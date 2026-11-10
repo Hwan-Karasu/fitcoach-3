@@ -1,5 +1,4 @@
-import { useCallback, useState } from "react";
-import { useFocusEffect } from "@react-navigation/native";
+import { useIsFocused } from "@react-navigation/native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Check } from "lucide-react-native";
 import { InlineNotice, LoadingState } from "../../../../shared/ui/components/public.ts";
@@ -8,6 +7,7 @@ import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemePro
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ConfirmationMode } from "../domain/ExecutionModel.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
+import { useConfirmationMode } from "./useConfirmationMode.ts";
 
 const modes: readonly Readonly<{ mode: ConfirmationMode; title: string; detail: string }>[] = [
   { mode: "AUTO", title: "Автоматически",
@@ -23,26 +23,7 @@ const modes: readonly Readonly<{ mode: ConfirmationMode; title: string; detail: 
 export function TrainingSettingsScreen({ execution }: Readonly<{ execution: TrainingExecutionPort }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const [mode, setMode] = useState<ConfirmationMode | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useFocusEffect(useCallback(() => {
-    let active = true;
-    execution.getConfirmationMode().then((next) => { if (active) setMode(next); })
-      .catch(() => { if (active) setError("Не удалось загрузить настройку."); });
-    return () => { active = false; };
-  }, [execution]));
-
-  const choose = (next: ConfirmationMode) => {
-    if (next === mode) return;
-    const before = mode;
-    setMode(next);
-    setError(null);
-    execution.setConfirmationMode(next).catch(() => {
-      setMode(before);
-      setError("Не удалось сохранить. Режим не изменён — повторите.");
-    });
-  };
+  const { mode, error, choose } = useConfirmationMode(execution, useIsFocused());
 
   if (mode === null && error === null) return <PrototypeScreen><LoadingState label="Загружаем…" /></PrototypeScreen>;
   return (

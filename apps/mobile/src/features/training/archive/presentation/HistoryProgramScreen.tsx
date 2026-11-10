@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react-native";
 import { DropdownMenu, EmptyState, FilterPill, InlineNotice, LoadingState, SelectionChip, StatusTag } from "../../../../shared/ui/components/public.ts";
@@ -8,7 +8,7 @@ import { shadow } from "../../../../shared/ui/theme/style.ts";
 import { mesocyclesWithHistory, scopeSummary, workoutGroups, type WorkoutGroup } from "./historyGroups.ts";
 import { dateText, statusKinds, statusLabels } from "./historyFormat.ts";
 import { durationText, plural, timeText } from "../../../../shared/format/clockText.ts";
-import { programViewOf } from "./historyViewState.ts";
+import { useProgramHistoryView } from "./historyViewState.ts";
 import { ALL_OPTION, type TrainingHistoryEntry } from "./trainingHistory.ts";
 import { useClientHistory } from "./useClientHistory.ts";
 
@@ -77,11 +77,8 @@ export function HistoryProgramScreen({ clientId, programId, history, onOpenExecu
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const view = programViewOf(clientId, programId);
+  const { view, selected, expanded, listOpen, choose, toggle, setListOpen } = useProgramHistoryView(clientId, programId);
   const { entries, failed } = useClientHistory(history, clientId);
-  const [selected, setSelected] = useState<string | null | undefined>(view.mesocycleId);
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(view.expanded));
-  const [listOpen, setListOpen] = useState(false);
   const listAnchor = useRef<View>(null);
   const listRef = useRef<FlatList<WorkoutGroup>>(null);
 
@@ -102,20 +99,13 @@ export function HistoryProgramScreen({ clientId, programId, history, onOpenExecu
   const groups = useMemo(() => workoutGroups(programEntries, { programId, mesocycleId: scope }), [programEntries, programId, scope]);
   const summary = useMemo(() => scopeSummary(programEntries.filter((entry) => scope === null || entry.mesocycleId === scope)), [programEntries, scope]);
 
-  const choose = useCallback((next: string | null) => { view.mesocycleId = next; setSelected(next); }, [view]);
-  const toggle = useCallback((key: string) => setExpanded((current) => {
-    const next = new Set(current);
-    if (!next.delete(key)) next.add(key);
-    view.expanded.clear();
-    next.forEach((item) => view.expanded.add(item));
-    return next;
-  }), [view]);
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => { view.scroll.set(scopeKey, event.nativeEvent.contentOffset.y); }, [view, scopeKey]);
   // Возврат на область (или из «Деталей») — прежняя позиция списка тренировок.
   const loaded = entries !== null;
   useEffect(() => {
+    // Позиция применяется и при нуле: смена области без сохранённой прокрутки возвращает список наверх, а не оставляет прежнюю.
     const offset = view.scroll.get(scopeKey) ?? 0;
-    if (offset <= 0 || !loaded) return undefined;
+    if (!loaded) return undefined;
     const frame = requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset, animated: false }));
     return () => cancelAnimationFrame(frame);
   }, [view, scopeKey, loaded]);

@@ -42,7 +42,7 @@ const REPS = 38;
 const LOAD = 44;
 const CELL = PLAN + PREV + REPS + LOAD;
 
-export const kgText = (grams: number | null) => grams === null ? "" : (grams / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+export const kgText = (grams: number | null) => grams === null ? "" : (grams / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 2, useGrouping: false });
 const volumeText = (kg: number | undefined) => kg === undefined ? "—" : `${Math.round(kg).toLocaleString("ru-RU")} кг`;
 
 export const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -93,8 +93,50 @@ export function matrixStructureKey(matrix: ProgramMatrix, editable: boolean): st
         `${week}${cell.sets.map((set) => (isEditable(set) ? (set.hasReps ? "r" : "") + (set.hasLoad ? "l" : "") : "-")).join("")}`).join(".")}`).join("|")}]`)].join("#");
 }
 
+/** Только данные, зашитые в HTML: фактические значения и объёмы обновляются через patch без перезагрузки. */
+export function matrixPageKey(matrix: ProgramMatrix, editable: boolean, scope: string, names: (exerciseId: string) => string,
+  weeks: readonly MatrixHtmlWeek[], colors: MatrixHtmlColors): string {
+  return JSON.stringify([matrixDataKey(matrix, editable, scope), weeks, colors,
+    matrix.sections.map((section) => [section.title, section.rows.map((row) => [names(row.exerciseId),
+      [...row.cells].map(([week, cell]) => [week, cell.sets.map((set) => [set.label, set.target === null,
+        set.done && (set.target === null || (!set.hasReps && !set.hasLoad))])])])])]);
+}
+
+/** Один plannedSetId может встречаться в разных неделях и у разных участников. */
+export const matrixFactKey = (clientId: string, programId: string, weekIndex: number, workoutId: string, setId: string): string =>
+  JSON.stringify([clientId, programId, weekIndex, workoutId, setId]);
+
+/** Оформление может пересобрать HTML без смены адресатов записи: финальный blur старой страницы остаётся своим. */
+export function matrixDataKey(matrix: ProgramMatrix, editable: boolean, scope: string): string {
+  return JSON.stringify([scope, matrixStructureKey(matrix, editable), [...matrixEditTargets(matrix)].map(([id, item]) =>
+    [id, item.weekIndex, item.workoutId, item.target.plannedExerciseId, item.target.exerciseId, item.target.plannedSetId, item.target.position])]);
+}
+
+type MatrixMessage = Readonly<{ type: "edit"; id: string; field: "reps" | "load"; text: string }>
+  | Readonly<{ type: "view"; zoom: number; x: number; y: number }>;
+
+/** Сообщения прежнего контекста записи не применяются к новым участнику, версии или адресатам ячеек. */
+export function readMatrixMessage(json: string, pageId: number): MatrixMessage | null {
+  try {
+    const data: unknown = JSON.parse(json);
+    if (data === null || typeof data !== "object") return null;
+    const value = data as Record<string, unknown>;
+    if (value.pageId !== pageId) return null;
+    if (value.type === "edit" && typeof value.id === "string" && (value.field === "reps" || value.field === "load") && typeof value.text === "string") {
+      return { type: "edit", id: value.id, field: value.field, text: value.text };
+    }
+    if (value.type === "view" && typeof value.zoom === "number" && Number.isFinite(value.zoom)
+      && value.zoom >= MATRIX_ZOOM.min && value.zoom <= MATRIX_ZOOM.max
+      && typeof value.x === "number" && Number.isFinite(value.x) && value.x >= 0
+      && typeof value.y === "number" && Number.isFinite(value.y) && value.y >= 0) {
+      return { type: "view", zoom: value.zoom, x: value.x, y: value.y };
+    }
+  } catch { /* Чужое или повреждённое сообщение не является командой записи. */ }
+  return null;
+}
+
 export function buildMatrixHtml(matrix: ProgramMatrix, names: (exerciseId: string) => string, weeks: readonly MatrixHtmlWeek[],
-  colors: MatrixHtmlColors, editable: boolean, view: MatrixHtmlView): string {
+  colors: MatrixHtmlColors, editable: boolean, view: MatrixHtmlView, pageId = 0): string {
   const texts = matrixTexts(matrix);
   const text = (key: string) => escapeHtml(texts[key] ?? "");
   const grid = `${LABEL}px repeat(${weeks.length}, ${CELL}px)`;
@@ -145,7 +187,7 @@ export function buildMatrixHtml(matrix: ProgramMatrix, names: (exerciseId: strin
   const totalRow = matrix.sections.length === 0 ? `<div class="empty">В этой версии нет упражнений.</div>` : `<div class="row" style="grid-template-columns:${grid}">
     <div class="lab strong">Тоннаж недели</div>${weeks.map((week) => `<div class="wcell vol strong" ${weekAttr(week)}><span data-k="T:${week.index}">${text(`T:${week.index}`)}</span></div>`).join("")}</div>`;
 
-  const config = JSON.stringify({ min: MATRIX_ZOOM.min, max: MATRIX_ZOOM.max, zoom: view.zoom, x: view.x, y: view.y });
+  const config = JSON.stringify({ min: MATRIX_ZOOM.min, max: MATRIX_ZOOM.max, zoom: view.zoom, x: view.x, y: view.y, pageId });
   return `<!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
@@ -191,7 +233,6 @@ export function buildMatrixHtml(matrix: ProgramMatrix, names: (exerciseId: strin
   .vol { display: flex; align-items: center; justify-content: center; color: var(--ink); font-size: 11px; }
   .vol.strong { color: var(--text); font-size: 12px; }
   .empty { padding: 12px 0; color: var(--secondary); font-size: 11px; }
-  .failed { outline: 2px solid #d34256; }
 </style></head>
 <body>
 <div id="viewport">
@@ -210,7 +251,7 @@ const MATRIX_SCRIPT = String.raw`
   var zoom = cfg.zoom, renderedZoom = zoom, pinch = null, frame = null;
   var viewport = document.getElementById("viewport");
   var layers = [document.getElementById("header-layer"), document.getElementById("body-layer")];
-  function post(message) { if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(message)); }
+  function post(message) { message.pageId = cfg.pageId; if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(message)); }
   function clamp(v) { return Math.min(cfg.max, Math.max(cfg.min, v)); }
   function setZoom(value) { layers.forEach(function (el) { el.style.zoom = String(value); }); renderedZoom = value; }
   setZoom(zoom);
