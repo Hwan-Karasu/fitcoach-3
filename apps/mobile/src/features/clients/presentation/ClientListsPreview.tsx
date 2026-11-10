@@ -414,7 +414,6 @@ export function ClientsArchivePreview({ repository, readModel }: Readonly<{
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 96, gap: 8 },
-  filters: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   message: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   card: { borderRadius: 26, padding: 14, gap: 12 },
   actions: { flexDirection: "row", gap: 8 },
@@ -422,15 +421,10 @@ const styles = StyleSheet.create({
   actionRow: { flex: 1, minWidth: 0 },
   action: { minHeight: 48, borderRadius: 24, paddingHorizontal: 10, alignItems: "center", justifyContent: "center" },
   actionText: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17, textAlign: "center" },
-  identityRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   identityMain: { flex: 1, minHeight: 52, flexDirection: "row", alignItems: "center", gap: 12 },
   avatar: { minWidth: 52, minHeight: 52, borderRadius: 18, overflow: "hidden",
     textAlign: "center", textAlignVertical: "center", fontFamily: fonts.bold, fontSize: 18, lineHeight: 52 },
   cardText: { flexShrink: 1, gap: 2 },
   name: { fontSize: 15, lineHeight: 21, fontFamily: fonts.bold },
   detail: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  sectionLabel: { fontSize: 12, lineHeight: 16, fontFamily: fonts.bold },
-  unpinIcon: { width: 26, height: 28, alignItems: "center", justifyContent: "center" },
-  pinGlyph: { fontFamily: fonts.regular, fontSize: 18, lineHeight: 23 },
-  pinSlash: { position: "absolute", width: 28, height: 2, transform: [{ rotate: "-45deg" }] },
 });

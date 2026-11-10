@@ -11,12 +11,6 @@ import type { CalendarOutcomeEffect } from "../domain/WorkoutOutcomePort.ts";
 import { useWorkoutSnapshot } from "./useWorkoutSnapshot.ts";
 import { SerialWriteQueue } from "../application/SerialWriteQueue.ts";
 
-/** Добавленные разминочные подходы упражнения по порядку добавления. */
-export function extraWarmups(state: WorkoutExecution | null, plannedExerciseId: string): readonly SetFact[] {
-  return [...(state?.facts.values() ?? [])].filter((fact) => fact.extra && fact.plannedExerciseId === plannedExerciseId)
-    .sort((a, b) => a.position - b.position);
-}
-
 /** Правка подхода; поля накладываются на последние сохранённые значения в момент записи. */
 export interface SetPatch {
   readonly fields?: Partial<SetValues>;

@@ -854,7 +854,6 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId: init
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
   center: { flex: 1, padding: 16, justifyContent: "center" },
   fill: { flex: 1 },
   hidden: { display: "none" },
@@ -864,9 +863,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", gap: 8 },
   grow: { flex: 1 },
   field: { gap: 6 },
-  soon: { flex: 1, minHeight: 44, borderWidth: 1, borderStyle: "dashed", borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  soonText: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
-  soonBadge: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
   dirty: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
   card: { borderWidth: 1, borderRadius: 24, padding: 14, gap: 8 },
   eyebrow: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, letterSpacing: 1.2, textTransform: "uppercase" },

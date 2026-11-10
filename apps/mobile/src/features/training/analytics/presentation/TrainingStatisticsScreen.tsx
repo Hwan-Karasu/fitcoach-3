@@ -219,7 +219,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   pad: { paddingHorizontal: 16 },
   list: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32, gap: 12 },
-  header: { gap: 8 },
   summaryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   caption: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   empty: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },

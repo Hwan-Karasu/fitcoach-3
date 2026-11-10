@@ -22,13 +22,3 @@ export function classifyPrepareFailure(stage: PrepareStage, error: unknown): Pre
   if (stage === "source" || stage === "copy" || stage === "identity" || stage === "hash" || stage === "seal") return "SNAPSHOT_FAILED";
   return "UNKNOWN";
 }
-
-/** Сбой подготовки с этапом; верхний слой переводит вид в код своего сервиса. */
-export class PrepareFailure extends Error {
-  readonly stage: PrepareStage;
-  readonly kind: PrepareFailureKind;
-  constructor(stage: PrepareStage, error: unknown) {
-    const kind = classifyPrepareFailure(stage, error);
-    super(`${kind}:${stage}`); this.stage = stage; this.kind = kind;
-  }
-}

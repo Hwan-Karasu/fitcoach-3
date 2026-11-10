@@ -302,7 +302,6 @@ export function SimpleProgramBuilderScreen({ clientId, programId, templateId, te
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
   center: { flex: 1, padding: 16, justifyContent: "center" },
   content: { paddingHorizontal: 16, paddingTop: 10, gap: 10, paddingBottom: 24 },
   grow: { flex: 1, minWidth: 0 },

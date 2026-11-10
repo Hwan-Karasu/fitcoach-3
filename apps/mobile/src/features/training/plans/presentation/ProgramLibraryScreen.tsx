@@ -414,5 +414,4 @@ const styles = StyleSheet.create({
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
   chip: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 4, overflow: "hidden" },
   current: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 4, overflow: "hidden" },
-  meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
 });

@@ -30,14 +30,14 @@ import { timeText } from "../../../../shared/format/clockText.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
 import { ActiveWorkoutsSheet, ExerciseMenuSheet, RpeSheet, SetTypeSheet, SupersetPickSheet, type ExerciseMenuAction } from "./SetPickers.tsx";
-import { factVolume } from "./programMatrix.ts";
+import { workoutFactSummary } from "./workoutFactSummary.ts";
 import { WorkoutSharePoster } from "./WorkoutSharePoster.tsx";
 import { labeledPlan, labeledWithDrops } from "./shareFormat.ts";
 import { diaryFields, fieldHeaders, planText, rawOf, shortDate, weekCardLabels, weekCardMarkers, workoutStatusLabels } from "./setFormat.ts";
 import { weekCardStates, weekCardTone } from "../domain/WeekCardStatus.ts";
 import { statusToneColor } from "../../../../shared/ui/theme/statusTone.ts";
 import { diaryTimeNote } from "../domain/DiaryTimeNote.ts";
-import { extraWarmups, useWorkoutDiary, type SetPatch } from "./useWorkoutDiary.ts";
+import { useWorkoutDiary, type SetPatch } from "./useWorkoutDiary.ts";
 import { PendingInputWrites } from "../domain/PendingInputWrites.ts";
 import { NoteField, SetRow, type SetTarget } from "./WorkoutSetRow.tsx";
 import { styles } from "./workoutStyles.ts";
@@ -199,7 +199,9 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     }).catch(() => undefined);
     return () => { active = false; };
   }, [execution, maxCache, maxKey, maxVersion, weekKey, exerciseIdsKey, maxClientId]);
-  const openMax = useMemo(() => currentMaxLoads(diary.state?.facts.values() ?? []), [diary.state]);
+  const factsSnapshot = diary.state?.facts;
+  const openMax = useMemo(() => currentMaxLoads(factsSnapshot?.values() ?? []), [factsSnapshot]);
+  const factsSummary = useMemo(() => workoutFactSummary(factsSnapshot?.values() ?? []), [factsSnapshot]);
   const maxLoadText = (exerciseId: string): string | null => {
     const grams = Math.max(pastMax?.get(exerciseId) ?? -1, openMax.get(exerciseId) ?? -1);
     return grams < 0 ? null : `Макс. ${String(grams / 1000).replace(".", ",")} кг`;
@@ -454,8 +456,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const confirmingOf = (setId: string) => (["", ":L", ":R"] as const).filter((side) => diary.confirming.has(`${setId}${side}`))
     .map((side) => side === "" ? "S" : side.slice(1)).join("");
   const targetFact = target === null ? undefined : state.facts.get(target.set.id);
-  const volumeOf = (exerciseId: string) => [...state.facts.values()].filter((fact) => fact.plannedExerciseId === exerciseId)
-    .reduce((sum, fact) => sum + factVolume(fact), 0);
+  const volumeOf = (exerciseId: string) => factsSummary.volumes.get(exerciseId) ?? 0;
   const workoutVolume = workout.exercises.reduce((sum, exercise) => sum + volumeOf(exercise.id), 0);
   const kg = (value: number) => `${Math.round(value).toLocaleString("ru-RU")} кг`;
   const shareRows = sharing ? workout.exercises.map((exercise) => {
@@ -644,7 +645,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
           const group = supersetNumber(workout, exercise);
           const maxText = maxLoadText(exercise.exerciseId);
           const fields = diaryFields(info?.metrics ?? NO_METRICS);
-          const extras = extraWarmups(state, exercise.id).map((fact) => ({ set: extraSetOf(fact), position: fact.position, setType: fact.setType }));
+          const extras = (factsSummary.warmups.get(exercise.id) ?? []).map((fact) => ({ set: extraSetOf(fact), position: fact.position, setType: fact.setType }));
+          const volumeText = kg(volumeOf(exercise.id));
           const rows = displayOrder([...extras, ...exercise.sets.map((set, position) => ({ set, position,
             setType: state.facts.get(set.id)?.setType ?? "NORMAL" }))]);
           const done = rows.filter(({ item }) => state.facts.get(item.set.id)?.confirmed === true).length;
@@ -682,9 +684,9 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                     <Text accessibilityLabel={`Максимальный вес за всё время: ${maxText.slice(6)}`}
                       style={[styles.restText, { color: colors.textSecondary }]}>{maxText}</Text>
                   ) : null}
-                  <Text accessibilityLabel={`Объём ${kg(volumeOf(exercise.id))}, выполнено ${done} из ${rows.length}`}
+                  <Text accessibilityLabel={`Объём ${volumeText}, выполнено ${done} из ${rows.length}`}
                     style={[styles.restText, styles.cardVolume, { color: colors.textSecondary }]}>
-                    <Text style={{ color: colors.accentInk }}>{kg(volumeOf(exercise.id))}</Text>{` · ${done}/${rows.length}`}
+                    <Text style={{ color: colors.accentInk }}>{volumeText}</Text>{` · ${done}/${rows.length}`}
                   </Text>
                   </View>
                 </View>

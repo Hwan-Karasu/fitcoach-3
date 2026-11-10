@@ -366,7 +366,6 @@ const styles = StyleSheet.create({
     minHeight: 56 },
   switchTitle: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
   switchHint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  sheetActions: { flexDirection: "row", gap: 10, paddingHorizontal: 16 },
   order: { minWidth: 26, height: 26, borderRadius: 13, paddingHorizontal: 6, alignItems: "center", justifyContent: "center" },
   orderText: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 16 },
   pickBar: { flexDirection: "row", gap: 8, borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 8 },

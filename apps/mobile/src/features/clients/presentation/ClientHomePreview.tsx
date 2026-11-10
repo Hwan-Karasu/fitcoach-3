@@ -149,14 +149,7 @@ export function ClientHomePreview({ client, summary, onOpenAccounting, onWriteOf
 }
 
 const styles = StyleSheet.create({
-  hero: { borderWidth: 1, borderRadius: 16, padding: 10, flexDirection: "row", gap: 10, alignItems: "center" },
-  avatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 16, lineHeight: 22, fontFamily: fonts.bold },
-  heroText: { flex: 1, gap: 2 },
-  name: { fontSize: 15, lineHeight: 20, fontFamily: fonts.bold },
   detail: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  tiles: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  tile: { flexGrow: 1, flexBasis: 100 },
   card: { borderRadius: 26, padding: 14, gap: 10 },
   cardBody: { gap: 8 },
   archiveButton: { minHeight: 44, borderRadius: 22, borderWidth: 1.5, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
@@ -166,10 +159,6 @@ const styles = StyleSheet.create({
   creditAction: { flex: 1 },
   cardHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   cardTitle: { fontSize: 16, lineHeight: 21, fontFamily: fonts.bold },
-  weightRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
-  weightField: { flex: 1 },
   packLine: { flexDirection: "row", alignItems: "baseline", gap: 8 },
-  packFooter: { flexDirection: "row", alignItems: "center", gap: 8 },
-  packDetails: { flex: 1, minWidth: 0 },
   packNumber: { fontSize: 34, lineHeight: 40, fontFamily: fonts.bold },
 });

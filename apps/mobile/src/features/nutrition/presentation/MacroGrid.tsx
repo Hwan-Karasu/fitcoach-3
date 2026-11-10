@@ -55,6 +55,5 @@ export const MacroCells = memo(function MacroCells({ values, bold = false }: Rea
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center" },
   head: { textAlign: "right", fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14 },
-  letter: { textAlign: "right", fontFamily: fonts.bold, fontSize: 13, lineHeight: 18 },
   cell: { textAlign: "right", fontSize: 14, lineHeight: 19, fontVariant: ["tabular-nums"] },
 });

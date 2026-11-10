@@ -1,4 +1,5 @@
 import type { HistoryMode } from "./historyTypes.ts";
+import { createViewRetainer } from "../../../../shared/ui/retainedView.ts";
 
 /**
  * Состояние экранов «Истории занятий», пока открыта карточка клиента (UX-контракт v1.2 §5): режим, поиск, выбранный мезоцикл, раскрытые
@@ -21,7 +22,6 @@ export interface ClientHistoryView {
 }
 
 const byClient = new Map<string, ClientHistoryView>();
-const holders = new Map<string, number>();
 
 export function historyViewOf(clientId: string): ClientHistoryView {
   const found = byClient.get(clientId);
@@ -41,13 +41,4 @@ export function programViewOf(clientId: string, programId: string): ProgramViewS
 }
 
 /** Карточка клиента открыта: состояние сохраняется; возвращённая функция вызывается при закрытии карточки. */
-export function retainHistoryView(clientId: string): () => void {
-  holders.set(clientId, (holders.get(clientId) ?? 0) + 1);
-  return () => {
-    const left = (holders.get(clientId) ?? 1) - 1;
-    if (left > 0) { holders.set(clientId, left); return; }
-    holders.set(clientId, 0);
-    // Освобождение — после кадра: повторное монтирование (смена ключа экрана, StrictMode) успевает снова удержать состояние.
-    setTimeout(() => { if (holders.get(clientId) !== 0) return; holders.delete(clientId); byClient.delete(clientId); }, 0);
-  };
-}
+export const retainHistoryView = createViewRetainer((clientId) => { byClient.delete(clientId); });

@@ -7,7 +7,7 @@ import { ChevronDown, Pause, Play, SkipForward, Timer } from "lucide-react-nativ
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { restTimerDiagnostics } from "../../../../shared/diagnostics/RestTimerDiagnostics.ts";
-import { isFinished, isPaused, type RestTimer } from "../domain/RestTimerRules.ts";
+import { ADJUST_STEP_SEC, isFinished, isPaused, type RestTimer } from "../domain/RestTimerRules.ts";
 import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
 import { RestPanelClock } from "./RestPanelClock.tsx";
 import { useRestPanelController } from "./useRestPanelController.ts";
@@ -37,8 +37,8 @@ const TimerCard = memo(function TimerCard({ timer, timers, clock, finished, mult
       style={[styles.action, grid ? styles.gridAction : null, { backgroundColor: primary ? colors.accentFill : colors.input }]}>{node}</Pressable>
   );
   const actions = [
-    action("Уменьшить отдых на 15 секунд", () => timers.adjust(timer.id, -15), <Text style={[styles.adjust, { color: colors.textPrimary }]}>−15</Text>),
-    action("Увеличить отдых на 15 секунд", () => timers.adjust(timer.id, 15), <Text style={[styles.adjust, { color: colors.textPrimary }]}>+15</Text>),
+    action(`Уменьшить отдых на ${ADJUST_STEP_SEC} секунд`, () => timers.adjust(timer.id, -ADJUST_STEP_SEC), <Text style={[styles.adjust, { color: colors.textPrimary }]}>{`−${ADJUST_STEP_SEC}`}</Text>),
+    action(`Увеличить отдых на ${ADJUST_STEP_SEC} секунд`, () => timers.adjust(timer.id, ADJUST_STEP_SEC), <Text style={[styles.adjust, { color: colors.textPrimary }]}>{`+${ADJUST_STEP_SEC}`}</Text>),
     action(paused ? "Продолжить отдых" : "Пауза", () => paused ? timers.resume(timer.id) : timers.pause(timer.id),
       paused ? <Play size={20} color={colors.textPrimary} /> : <Pause size={20} color={colors.textPrimary} />),
     action("Пропустить отдых", () => timers.skip(timer.id), <SkipForward size={22} color={colors.onAccentFill} />, true),

@@ -4,6 +4,14 @@
   "note": "Актуализация 2026-11-10: реализация и остатки — в state/evidence/remaining каждой задачи. IMPLEMENTED_NOT_DEVICE_VERIFIED не означает полной приёмки: на телефоне не проверено. UIX-15 требует APK и проверки Health Connect, UIX-18 отменён.",
   "tasks": [
     {
+      "id": "UIX-CLEAN-1",
+      "state": "IMPLEMENTED_NOT_DEVICE_VERIFIED",
+      "title": "Проверка мёртвого кода, дублирования и повторных вычислений UIX",
+      "acceptance": "Удалить подтверждённый мёртвый код и дубли, сократить повторную работу с сохранением поведения; отделить CPU-замер от native-приёмки",
+      "evidence": "37 стилей и неиспользуемые объявления удалены, общий retainer, один источник даты, один свод facts; production-src −68 строк, noUnused-флаги; foundation 1171/1171 и Excel 103/103, static checks PASS; docs/ui/UIX_CODE_CLEANUP_2026-11-10.md, ADR-065",
+      "remaining": "Проверка Android/UI, p50/p95/FPS и 18 сценариев REST-DOCK-2; APK не собирался"
+    },
+    {
       "id": "REST-DOCK-2",
       "state": "IMPLEMENTED_NOT_DEVICE_VERIFIED",
       "title": "Единая нижняя панель с таймерами и аудит UIX",

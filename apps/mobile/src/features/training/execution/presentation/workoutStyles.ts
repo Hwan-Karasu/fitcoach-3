@@ -67,7 +67,6 @@ export const styles = StyleSheet.create({
   deleteRun: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 48, marginTop: 4 },
   deleteRunText: { fontFamily: fonts.medium, fontSize: 13 },
   sideLabel: { width: 14, textAlign: "center", fontFamily: fonts.semibold, fontSize: 12 },
-  dropLabel: { flex: 1, fontFamily: fonts.medium, fontSize: 12, textAlign: "right", paddingRight: 4 },
   inputHead: { width: 46 },
   input: { width: 46, height: 44, borderWidth: 1.5, borderRadius: 12, textAlign: "center", fontFamily: fonts.bold,
     fontSize: 15, paddingHorizontal: 2, paddingVertical: 0 },

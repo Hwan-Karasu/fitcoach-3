@@ -203,7 +203,6 @@ const styles = StyleSheet.create({
   caption: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   empty: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   compareRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, minHeight: 40 },
-  values: { alignItems: "flex-end", flexShrink: 1 },
   rowLabel: { flexShrink: 1, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
   rowValue: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },
   groupRow: { gap: 4, minHeight: 48, justifyContent: "center" },
