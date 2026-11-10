@@ -5,6 +5,7 @@ import { DevClientRepository } from "../apps/mobile/src/features/clients/data/De
 import { DEV_TRAINING_EXECUTION_LEDGER, devTrainingExecutionCatalog } from "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionCatalog.ts";
 import { DevTrainingExecutionRepository, devTrainingExecutionClientDeletionParticipant } from "../apps/mobile/src/features/training/execution/data/DevTrainingExecutionRepository.ts";
 import type { SetValues, TrackingMetric, WorkoutSlot } from "../apps/mobile/src/features/training/execution/domain/ExecutionModel.ts";
+import { sidesRpeAfter } from "../apps/mobile/src/features/training/execution/domain/ExecutionRules.ts";
 import type { SaveSetInput } from "../apps/mobile/src/features/training/execution/domain/TrainingExecutionPort.ts";
 import { runMigrations } from "../apps/mobile/src/shared/db/MigrationRunner.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
@@ -126,4 +127,16 @@ test("UIX: обычный подход по-прежнему хранит общ
     const sided = await execution.saveSet(sidedInput(slot, "s2", null), NOW);
     assert.deepEqual([sided.fact.sides?.left.rpe, sided.fact.sides?.right.rpe], [null, null]);
   } finally { await close(); }
+});
+
+test("RPE сторон после правки: прежние из факта; у факта, записанного как обычный, RPE подхода переходит в обе стороны; указанная сторона заменяется", () => {
+  const sided = (left: number | null, right: number | null) => ({ rpe: null, sides: { left: { rpe: left }, right: { rpe: right } } });
+  assert.deepEqual(sidesRpeAfter(null, undefined), { left: null, right: null });
+  assert.deepEqual(sidesRpeAfter(sided(8, 7), undefined), { left: 8, right: 7 });
+  assert.deepEqual(sidesRpeAfter(sided(8, 7), { side: "R", rpe: 9 }), { left: 8, right: 9 });
+  assert.deepEqual(sidesRpeAfter(sided(8, 7), { side: "L", rpe: null }), { left: null, right: 7 });
+  // Подход записан как обычный (упражнение стало односторонним позже): RPE не теряется.
+  assert.deepEqual(sidesRpeAfter({ rpe: 6, sides: null }, undefined), { left: 6, right: 6 });
+  assert.deepEqual(sidesRpeAfter({ rpe: 6, sides: null }, { side: "L", rpe: 9 }), { left: 9, right: 6 });
+  assert.deepEqual(sidesRpeAfter({ rpe: null, sides: null }, undefined), { left: null, right: null });
 });

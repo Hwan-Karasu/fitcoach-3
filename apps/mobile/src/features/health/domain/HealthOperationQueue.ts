@@ -11,8 +11,9 @@ export function createHealthOperationQueue<T>(store: HealthStorePort, work: () =
   };
   const guarded: HealthStorePort = {
     getLink: () => store.getLink(),
-    link: (clientId, now) => run(() => store.link(clientId, now)),
-    unlink: () => run(() => store.unlink()),
+    // Смена привязки обнуляет «идущую» синхронизацию: следующий sync() встаёт в очередь после неё и читает уже новую привязку, а не получает прежний итог.
+    link: (clientId, now) => { running = null; return run(() => store.link(clientId, now)); },
+    unlink: () => { running = null; return run(() => store.unlink()); },
     listDaily: (clientId, from, to) => store.listDaily(clientId, from, to),
     saveSync: (clientId, values, granted, now) => store.saveSync(clientId, values, granted, now),
     subscribeCommittedChanges: (listener) => store.subscribeCommittedChanges(listener),

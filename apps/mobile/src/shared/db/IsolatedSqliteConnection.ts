@@ -54,7 +54,13 @@ export async function openIsolatedSqliteConnection(open: () => Promise<NativeSql
   };
   const writeHandle = async (): Promise<NativeSqliteDatabase> => {
     if (retiring) throw new Error("DB_CONNECTION_CLOSED");
-    if (writerBroken) throw new Error("DB_WRITER_UNAVAILABLE");
+    if (writerBroken) {
+      // Потерянный writer: пока физическое закрытие не удалось, новый handle не открывается (иначе два писателя); одна повторная попытка на каждую запись снимает блокировку без перезапуска приложения.
+      const stale = writer;
+      if (stale === null) throw new Error("DB_WRITER_UNAVAILABLE");
+      try { await stale.closeAsync(); writer = null; writerBroken = false; }
+      catch { throw new Error("DB_WRITER_UNAVAILABLE"); }
+    }
     if (writer !== null) return writer;
     const native = await open();
     try { await configure(native, false); }

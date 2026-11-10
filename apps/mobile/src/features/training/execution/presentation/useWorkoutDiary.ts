@@ -5,7 +5,7 @@ import type { PlannedExercise, PlannedSet, TrainingPlansRepositoryPort } from ".
 import type { SetFact, SetType, SetValues, Side, TrackingMetric, WorkoutExecution,
   WorkoutOutcome, WorkoutSlot } from "../domain/ExecutionModel.ts";
 import { EMPTY_VALUES } from "../domain/ExecutionModel.ts";
-import { dropsForType, hasEnteredData, workoutStatus } from "../domain/ExecutionRules.ts";
+import { dropsForType, hasEnteredData, sidesRpeAfter, workoutStatus } from "../domain/ExecutionRules.ts";
 import type { SaveSetInput, TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import type { CalendarOutcomeEffect } from "../domain/WorkoutOutcomePort.ts";
 import { useWorkoutSnapshot } from "./useWorkoutSnapshot.ts";
@@ -153,9 +153,7 @@ export function useWorkoutDiary(slot: WorkoutSlot, plans: TrainingPlansRepositor
         if (patch.sidesFrom?.left) left = patch.sidesFrom.left;
         if (patch.sidesFrom?.right) right = patch.sidesFrom.right;
         sides = { left, right };
-        // RPE сторон: прежние из факта, указанная в правке сторона заменяется.
-        sidesRpe = { left: patch.sideRpe?.side === "L" ? patch.sideRpe.rpe : fact?.sides?.left.rpe ?? null,
-          right: patch.sideRpe?.side === "R" ? patch.sideRpe.rpe : fact?.sides?.right.rpe ?? null };
+        sidesRpe = sidesRpeAfter(fact, patch.sideRpe);
       }
       const input: SaveSetInput = { ...identity, drops, sides, sidesRpe, setType,
         values: sides === undefined ? { ...(fact?.values ?? EMPTY_VALUES), ...patch.fields } : EMPTY_VALUES,

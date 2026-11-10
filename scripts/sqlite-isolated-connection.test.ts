@@ -155,6 +155,30 @@ test("AUDIT-ALL-1: после failed rollback и успешного закрыт
   assert.equal(native.closed, native.handles);
 });
 
+test("REVIEW-A6: потерянный writer освобождается повторным закрытием без перезапуска приложения", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "athlete-db-retry-close-"));
+  const native = nativeFactory(join(directory, "synthetic.db"));
+  let opened = 0; let refuseClose = true;
+  const connection = await openIsolatedSqliteConnection(async () => {
+    const handle = await native.open();
+    if (++opened !== 2) return handle;
+    return { ...handle,
+      execAsync: async (sql) => { if (sql === "ROLLBACK") throw new Error("ROLLBACK_FAILED"); await handle.execAsync(sql); },
+      closeAsync: async () => { if (refuseClose) throw new Error("CLOSE_FAILED"); await handle.closeAsync(); },
+    };
+  });
+  const writer = new WriterCoordinator(connection);
+  try {
+    await assert.rejects(writer.write(async () => { throw new Error("WRITE_FAILED"); }), /WRITE_FAILED/);
+    await assert.rejects(writer.write(async () => undefined), /DB_WRITER_UNAVAILABLE/);
+    assert.equal(native.handles, 2, "пока закрыть нельзя — новый handle не открывается");
+    refuseClose = false;
+    await writer.write((tx) => tx.run("CREATE TABLE recovered_after_retry (id INTEGER)"));
+    assert.equal(native.handles, 3, "после успешного повторного закрытия открыт новый handle");
+    assert.equal(native.closed, 1);
+  } finally { refuseClose = false; await connection.close(); rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("AUDIT-ALL-1: failed initial reader close блокирует новый open и file task до успешной повторной очистки", async () => {
   const directory = mkdtempSync(join(tmpdir(), "athlete-db-open-close-"));
   const native = nativeFactory(join(directory, "synthetic.db"));

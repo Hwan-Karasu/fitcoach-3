@@ -21,9 +21,16 @@ export async function navigationGroup(tx: SqliteStatementPort, workspaceId: stri
     ORDER BY n.rowid`, [workspaceId, groupId]);
 }
 
-/** Called only when creating a new plan copy, never when attaching an existing cycle. */
+/**
+ * Called only when creating a new plan copy, never when attaching an existing cycle. У клиента в группе родства одна копия (UNIQUE group+client):
+ * если вторая копия того же родства уже есть (например, при импорте книги с повторяющимся родством), новая остаётся вне группы, а запись не падает.
+ */
 export async function registerNavigationCopy(tx: SqliteStatementPort, workspaceId: string, copy: GroupCopy, lineageId: string): Promise<void> {
-  await putNavigationMember(tx, workspaceId, `copy:${lineageId}`, copy);
+  const groupId = `copy:${lineageId}`;
+  const taken = await tx.first<{ n: number }>("SELECT 1 AS n FROM training_navigation_members WHERE workspace_id = ? AND group_id = ? AND client_id = ?",
+    [workspaceId, groupId, copy.clientId]);
+  if (taken !== null) return;
+  await putNavigationMember(tx, workspaceId, groupId, copy);
 }
 
 export async function putNavigationMember(tx: SqliteStatementPort, workspaceId: string, groupId: string, copy: GroupCopy): Promise<void> {

@@ -122,11 +122,12 @@ function DrillEntry({ entry, mode, infoOf, nameOf, bodyOf, onOpenWorkout }: Read
             {facts.map((fact, number) => {
               // «Не вошёл в тоннаж» — подход без вычислимого значения (нет веса/повторов/массы тела), а не нулевой.
               const info = infoOf(exercise.exerciseId);
-              const missing = mode === "tonnage" && factTonnage(fact, info, body)?.kg === null;
+              const calculated = mode === "tonnage" ? factTonnage(fact, info, body) : null;
+              const missing = calculated !== null && (calculated.kg === null || calculated.partial);
               // Дата использованного замера показывается, чтобы было видно, насколько он старый (§48.86.36 п. 2).
               const usesBody = body !== null && (info?.metrics.includes("addedLoad") === true || info?.metrics.includes("assistance") === true);
               return <Text key={fact.id} style={[styles.set, { color: missing ? colors.warning : colors.textPrimary }]}>
-                {`${number + 1}. ${factText(fact)}${usesBody ? ` · масса тела ${body.kg.toLocaleString("ru-RU")} кг (замер ${dateText(body.date)})` : ""}${missing ? " — не вошёл в тоннаж" : ""}`}</Text>;
+                {`${number + 1}. ${factText(fact)}${usesBody ? ` · масса тела ${body.kg.toLocaleString("ru-RU")} кг (замер ${dateText(body.date)})` : ""}${missing ? (calculated?.partial === true ? " — учтён не полностью" : " — не вошёл в тоннаж") : ""}`}</Text>;
             })}
           </View>
         );

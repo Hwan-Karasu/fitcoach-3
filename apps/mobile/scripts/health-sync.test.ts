@@ -79,19 +79,19 @@ test("AUDIT-ALL-1: ручной вес между чтением журнала 
   } finally { await close(); }
 });
 
-test("AUDIT-ALL-1: нулевые и слишком большие шаги HC снимают прежнюю положительную проекцию Nutrition", async (t) => {
+test("AUDIT-ALL-1: слишком большие шаги HC снимают прежнюю положительную проекцию Nutrition", async (t) => {
   const { clients, measurements, calc, health, close } = await stores();
   try {
     const me = await clients.create({ displayName: "SyntheticHealthZeroSteps" });
     await health.link(me.id, NOW);
     const platform = new FakePlatform();
     const stepReads = t.mock.method(calc, "listSteps");
-    for (const steps of [5000, 0, 6000, 150_000]) {
+    for (const steps of [5000, 150_000, 6000]) {
       platform.data = [value(TODAY, "STEPS", steps)];
       const before = stepReads.mock.callCount();
       await syncHealthConnect({ health, calc, measurements, platform, isValidHealthValue }, TODAY, NOW);
       assert.equal(stepReads.mock.callCount(), before + 1, "одна сверка проекции на весь диапазон дат");
-      assert.deepEqual((await calc.listSteps(me.id, TODAY, TODAY)).map((day) => day.steps), steps === 0 || steps > 100_000 ? [] : [steps]);
+      assert.deepEqual((await calc.listSteps(me.id, TODAY, TODAY)).map((day) => day.steps), steps > 100_000 ? [] : [steps]);
       assert.equal((await health.listDaily(me.id, TODAY, TODAY))[0]!.value, steps, "исходное допустимое HC-значение сохраняется");
     }
   } finally { await close(); }
@@ -136,6 +136,34 @@ test("UIX audit: отключение и новая привязка ждут т
     await Promise.all([sync, unlink, link]);
     assert.equal(calls, 1);
     assert.equal((await health.getLink())!.clientId, other.id);
+  } finally { release?.(); await close(); }
+});
+
+test("REVIEW-A15: sync() после запроса смены привязки не получает итог прежней синхронизации", async () => {
+  const { clients, health, close } = await stores();
+  let release: (() => void) | undefined;
+  try {
+    const me = await clients.create({ displayName: "SyntheticSelf" });
+    const other = await clients.create({ displayName: "SyntheticOther" });
+    await health.link(me.id, NOW);
+    const seen: string[] = [];
+    let first = true;
+    const operations = createHealthOperationQueue(health, async () => {
+      const linked = (await health.getLink())!.clientId;
+      if (first) { first = false; await new Promise<void>((resolve) => { release = resolve; }); }
+      seen.push(linked);
+      return linked;
+    });
+    const before = operations.sync();
+    while (release === undefined) await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const unlink = operations.store.unlink();
+    const link = operations.store.link(other.id, new Date(NOW.getTime() + 1000));
+    const after = operations.sync();
+    assert.notEqual(after, before);
+    release!();
+    await Promise.all([before, unlink, link]);
+    assert.equal(await after, other.id);
+    assert.deepEqual(seen, [me.id, other.id]);
   } finally { release?.(); await close(); }
 });
 

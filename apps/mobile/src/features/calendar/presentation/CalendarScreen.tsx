@@ -342,7 +342,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
         {/* Настройки всего календаря — одна рамка: счётчики, рабочие дни, начало и конец дня. */}
         <View style={[styles.settingsCard, shadow.card, { backgroundColor: colors.surface }]}>
         <View style={styles.stats}>
-          <StatTile label="На неделе" value={data ? String(data.appointments.length) : "…"} />
+          <StatTile label="На неделе" value={data !== null && data.monday === monday ? String(data.appointments.length) : "…"} />
           <StatTile label={`В ${monthPrepositional[viewMonthIndex] ?? "месяце"}`} value={String(monthTotal)} />
         </View>
         {settings !== null ? <>
@@ -412,7 +412,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
             icon={(color) => <Trash2 size={14} color={color} strokeWidth={1.8} />} onPress={() => { void askClear(); }} />
         </View>
         {data !== null ? (
-          <WeekPager initialWidth={screenWidth - 2 * CONTENT_PADDING + 2 * FRAME_BLEED - TIMELINE_GUTTER} repository={repository} seed={{ monday, appointments: data.appointments, intervals: data.intervals }} mode={mode} selected={selected} today={today} scrollLocked={scrollLocked}
+          <WeekPager initialWidth={screenWidth - 2 * CONTENT_PADDING + 2 * FRAME_BLEED - TIMELINE_GUTTER} repository={repository} seed={{ monday: data.monday, appointments: data.appointments, intervals: data.intervals }} mode={mode} selected={selected} today={today} scrollLocked={scrollLocked}
             onSelect={select} visibleWeekdays={settings?.visibleWeekdays ?? ALL_DAYS} window={dayWindow} people={people}
             typeColors={typeColors} now={now} handlers={handlers} maxHeight={gridMaxHeight} />
         ) : null}
@@ -441,7 +441,7 @@ export function CalendarScreen({ repository, participants, credit, onCreateClien
           ].join("\n")}
           confirmLabel="Очистить неделю"
           onCancel={() => setClearPreview(null)} onConfirm={() => { void confirmClear(); }} />
-        {sharing && data !== null ? (
+        {sharing && data !== null && data.monday === monday ? (
           <View pointerEvents="none" style={styles.offscreen}>
             <ShareWeekPoster posterRef={posterRef} title={`Расписание: ${weekTitle(monday)}`} dates={visibleDays}
               window={dayWindow} appointments={data.appointments} intervals={data.intervals} people={people} />

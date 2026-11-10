@@ -1,5 +1,5 @@
 import { isLocalDate } from "../../../../shared/domain/LocalDate.ts";
-import { DROPS_MAX, EMPTY_VALUES, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type SetValues, type TrackingMetric,
+import { DROPS_MAX, EMPTY_VALUES, type ConfirmationMode, type PreviousSet, type SetFact, type SetType, type Side, type SetValues, type TrackingMetric,
   type WeekStatus, type WorkoutOutcome, type WorkoutStatus } from "./ExecutionModel.ts";
 
 /** Поле факта подхода, которое заполняет величина профиля (§33.2). */
@@ -267,6 +267,17 @@ export function matchPrevious<T>(current: readonly Readonly<{ plannedSetId: stri
     if (match !== undefined) result.set(set.plannedSetId, match);
   }
   return result;
+}
+
+/**
+ * RPE сторон одностороннего подхода после правки: прежние из факта; у факта, записанного как обычный (упражнение стало односторонним позже,
+ * импорт из 2.0), RPE подхода переходит в обе стороны — факты не теряются; сторона, указанная в правке, заменяется.
+ */
+export function sidesRpeAfter(fact: Readonly<{ rpe: number | null; sides: Readonly<{ left: Readonly<{ rpe: number | null }>; right: Readonly<{ rpe: number | null }> }> | null }> | null,
+  patch: Readonly<{ side: Side; rpe: number | null }> | undefined): Readonly<{ left: number | null; right: number | null }> {
+  const before = fact === null ? { left: null, right: null }
+    : fact.sides === null ? { left: fact.rpe, right: fact.rpe } : { left: fact.sides.left.rpe, right: fact.sides.right.rpe };
+  return { left: patch?.side === "L" ? patch.rpe : before.left, right: patch?.side === "R" ? patch.rpe : before.right };
 }
 
 /**

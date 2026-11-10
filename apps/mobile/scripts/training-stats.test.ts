@@ -46,6 +46,22 @@ test("отказной подход — рабочий: входит в подх
   assert.ok(records.some((record) => record.reps === 9 && record.loadKg === 95), "лучший вес на 9 повторений, поставленный отказным подходом, — новый рекорд");
 });
 
+test("частично вычислимый подход (сторона или мини-сет невычислимы) считается неполным, сумма известных частей сохраняется", () => {
+  const side = (kg: number | null, reps: number | null) => ({ values: values(kg, reps), confirmed: true, rpe: null });
+  // Гравитрон: помощь 30 кг при массе 80 → (80 − 30) × 10 = 500; помощь 100 кг больше массы — сторона невычислима.
+  const sided = { ...fact(ASSIST, values(null, null)), sides: { left: side(30, 10), right: side(100, 10) } };
+  const body = () => ({ kg: 80, date: "2026-10-01" });
+  const summary = summarize([entry("p", "2026-10-02", "COMPLETED", [sided])], infoOf, body);
+  assert.deepEqual([summary.tonnageKg, summary.incompleteSets], [500, 1], "известная сторона в тоннаже, но подход помечен неполным");
+  // Обе стороны вычислимы — неполных нет.
+  const whole = { ...fact(ASSIST, values(null, null)), sides: { left: side(30, 10), right: side(20, 10) } };
+  assert.deepEqual([summarize([entry("w", "2026-10-02", "COMPLETED", [whole])], infoOf, body).tonnageKg, summarize([entry("w", "2026-10-02", "COMPLETED", [whole])], infoOf, body).incompleteSets], [1100, 0]);
+  // Ни одной вычислимой части — тоннажа нет, один неполный подход (как раньше).
+  const none = { ...fact(ASSIST, values(null, null)), sides: { left: side(100, 10), right: side(120, 10) } };
+  const empty = summarize([entry("n", "2026-10-02", "COMPLETED", [none])], infoOf, body);
+  assert.deepEqual([empty.tonnageKg, empty.incompleteSets], [null, 1]);
+});
+
 test("перенесённые записи без даты: общие итоги сохранены, в ограниченный период и график не подставляется дата", () => {
   const undated = entry("unknown", null, "COMPLETED", [fact(BENCH, values(120, 5))]);
   const dated = entry("known", "2026-10-01", "COMPLETED", [fact(BENCH, values(100, 5))]);

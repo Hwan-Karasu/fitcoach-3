@@ -10,6 +10,7 @@ import { addExercise, fillSets, newDraft, removeSet } from "../src/features/trai
 import type { PlannedExercise } from "../src/features/training/plans/domain/SimplePlanModel.ts";
 import { SharedSqliteDatabase } from "../src/shared/db/SharedSqliteDatabase.ts";
 import type { SqliteConnectionPort } from "../src/shared/db/SqlitePort.ts";
+import { registerNavigationCopy } from "../src/features/training/plans/data/NavigationGroupStore.ts";
 import { createWeekCopyWorkflow } from "../src/workflows/copyTrainingWeek.ts";
 import { createProgramDeleteWorkflow } from "../src/workflows/deleteTrainingProgram.ts";
 import { createPlanOnlyDeleteWorkflow } from "../src/workflows/deleteTrainingPlanOnly.ts";
@@ -527,5 +528,20 @@ test("PERF-REST-ALL отдых, заданный вручную в другой 
     assert.equal(saved.skipped, 1);
     const rests = (await env.cycleOf(env.a, programId)).mesocycles[0]!.weeks.map((week) => week.workouts[0]!.exercises[0]!.restSec);
     assert.deepEqual(rests, [150, 45, 150]);
+  } finally { await env.close(); }
+});
+
+test("REVIEW-A8 повторная регистрация родства у того же клиента не роняет запись и не создаёт второго участника группы", async () => {
+  const env = await setup();
+  try {
+    const first = await env.periodized(1, 1);
+    const second = await env.periodized(1, 1);
+    const lineage = (await env.cycleOf(env.a, first.programId)).mesocycles[0]!.lineageId;
+    await env.tx(async (tx) => {
+      await registerNavigationCopy(tx as never, WS, { clientId: env.a, programId: second.programId, mesocycleId: second.mesocycleId }, lineage);
+    });
+    const members = await env.tx(async (tx) => (tx as never as { all: (sql: string, args: unknown[]) => Promise<{ mesocycleId: string }[]> })
+      .all("SELECT mesocycle_id AS mesocycleId FROM training_navigation_members WHERE workspace_id = ? AND group_id = ?", [WS, `copy:${lineage}`]));
+    assert.deepEqual(members.map((row) => row.mesocycleId), [first.mesocycleId]);
   } finally { await env.close(); }
 });

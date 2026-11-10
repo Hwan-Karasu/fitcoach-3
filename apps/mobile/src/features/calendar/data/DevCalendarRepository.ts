@@ -298,7 +298,7 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
     return settings;
   }
 
-  getSettings(): Promise<CalendarSettings> { return this.settings(this.ready().connection); }
+  async getSettings(): Promise<CalendarSettings> { return this.settings(this.ready().connection); }
 
   async listSessionTypes(): Promise<readonly SessionType[]> {
     const rows = await this.ready().connection.all<SessionTypeRow>(`SELECT ${sessionTypeColumns}
@@ -900,10 +900,9 @@ export class DevCalendarRepository implements CalendarRepositoryPort {
     return result;
   }
 
-  previewClearWeek(monday: LocalDate, now: Date = new Date()): Promise<ClearWeekSummary> {
+  async previewClearWeek(monday: LocalDate, now: Date = new Date()): Promise<ClearWeekSummary> {
     const { connection } = this.ready();
-    return this.settings(connection).then((settings) =>
-      countClearWeek(connection, this.workspaceId, monday, settings, now));
+    return countClearWeek(connection, this.workspaceId, monday, await this.settings(connection), now);
   }
 
   async clearWeek(monday: LocalDate, now: Date = new Date()): Promise<ClearWeekSummary> {

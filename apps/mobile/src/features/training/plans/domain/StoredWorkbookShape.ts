@@ -3,11 +3,12 @@ import type { BuilderWorkbookState, BuilderWorkbookCycle } from "./BuilderExcelD
 import type { TransferSession } from "../../../../shared/training-transfer/TrainingTransfer.ts";
 
 const values = (v: unknown): boolean => object(v) && [v.reps, v.loadGrams, v.durationSec, v.distanceM].every(nullableInteger);
-const side = (v: unknown): boolean => object(v) && values(v.values) && typeof v.confirmed === "boolean"
-  && (v.rpe === undefined || v.rpe === null || integer(v.rpe) && v.rpe >= 1 && v.rpe <= 10);
+/** RPE — целое 1…10 (как CHECK в схеме) или null: одно правило и для общей оценки факта, и для оценки стороны. */
+const rpe = (v: unknown): boolean => v === null || integer(v) && v >= 1 && v <= 10;
+const side = (v: unknown): boolean => object(v) && values(v.values) && typeof v.confirmed === "boolean" && (v.rpe === undefined || rpe(v.rpe));
 const fact = (v: unknown): boolean => object(v) && id(v.id) && id(v.plannedSetId) && id(v.plannedExerciseId) && id(v.exerciseId)
   && integer(v.position) && ["NORMAL", "WARMUP", "FAILURE", "DROP"].includes(String(v.setType)) && values(v.values)
-  && arrayOf(v.drops, (d): d is unknown => values(d)) && nullableInteger(v.rpe) && typeof v.confirmed === "boolean" && typeof v.extra === "boolean"
+  && arrayOf(v.drops, (d): d is unknown => values(d)) && rpe(v.rpe) && typeof v.confirmed === "boolean" && typeof v.extra === "boolean"
   && ["INPUT", "COPY", "IMPORT"].includes(String(v.origin)) && integer(v.revision)
   && (v.sides === null || object(v.sides) && side(v.sides.left) && side(v.sides.right));
 const session = (v: unknown): boolean => object(v) && id(v.id) && id(v.programId) && id(v.plannedWorkoutId) && integer(v.weekIndex)

@@ -88,6 +88,8 @@ export function outcomeTag(row: Appointment, now: Date): Readonly<{ kind: "succe
 }
 
 export interface CalendarWeekData {
+  /** Понедельник недели, для которой прочитаны записи: при смене недели `data` некоторое время остаётся прошлым. */
+  readonly monday: LocalDate;
   readonly settings: CalendarSettings;
   readonly appointments: readonly Appointment[];
   readonly intervals: readonly CalendarInterval[];
@@ -108,7 +110,7 @@ export function useCalendarWeek(repository: CalendarRepositoryPort, monday: Loca
     const request = ++generation.current;
     void Promise.all([repository.getSettings(), repository.listRange(monday, sunday)]).then(([settings, range]) => {
       if (request !== generation.current) return;
-      setData({ settings, appointments: range.appointments, intervals: range.intervals });
+      setData({ monday, settings, appointments: range.appointments, intervals: range.intervals });
       setFailed(false);
     }, () => { if (request === generation.current) setFailed(true); });
   }, [repository, monday, sunday, tick]);

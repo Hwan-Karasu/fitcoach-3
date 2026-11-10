@@ -53,14 +53,15 @@ export async function syncHealthConnect(ports: HealthSyncPorts, today: string, n
     ? (await ports.calc.listSteps(link.clientId, range.from, range.to)).map((entry) => [entry.localDate, entry.steps]) : []);
   for (const entry of read) {
     if (entry.metric !== "STEPS") continue;
-    // Неподставляемое актуальное значение не должно оставлять старую положительную проекцию.
-    if (entry.value < 1 || entry.value > CALC_STEPS_MAX) {
+    // Значение выше предела Nutrition не подставляется и не оставляет старую положительную проекцию. Нулевые шаги адаптер не отдаёт (день без данных), поэтому нуль не обрабатывается.
+    if (entry.value > CALC_STEPS_MAX) {
       if (projectedSteps.has(entry.localDate)) {
         await ports.calc.clearSteps(link.clientId, entry.localDate);
         stepsDays += 1;
       }
       continue;
     }
+    if (entry.value < 1) continue;
     if (projectedSteps.get(entry.localDate) === entry.value) continue;
     await ports.calc.setSteps(link.clientId, entry.localDate, entry.value, now);
     stepsDays += 1;

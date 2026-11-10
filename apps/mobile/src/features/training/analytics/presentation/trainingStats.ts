@@ -69,7 +69,7 @@ export function bodyweightLookup(points: readonly BodyWeight[]): BodyOf {
  * с доп. весом — (масса тела + доп. вес) × повторы; с помощью — (масса тела − помощь) × повторы (§48.86.7). Нет массы
  * тела, пустые вес или повторы, отрицательная нагрузка — не ноль и не «исправленное» значение, а невычислимо.
  */
-export function factTonnage(fact: SetFact, info: ExerciseInfo | undefined, body: BodyWeight | null = null): Readonly<{ kg: number | null }> | null {
+export function factTonnage(fact: SetFact, info: ExerciseInfo | undefined, body: BodyWeight | null = null): Readonly<{ kg: number | null; partial: boolean }> | null {
   const metrics = info?.metrics ?? [];
   const added = metrics.includes("addedLoad");
   const assisted = metrics.includes("assistance");
@@ -83,7 +83,8 @@ export function factTonnage(fact: SetFact, info: ExerciseInfo | undefined, body:
     const base = plain ? load : body === null ? null : added ? body.kg + load : body.kg - load;
     return base === null || base < 0 ? [] : [base * values.reps];
   });
-  return known.length === 0 ? { kg: null } : { kg: known.reduce((sum, value) => sum + value, 0) };
+  // `partial`: часть подтверждённых кусков (сторона, мини-сет) невычислима — сумма известных верна, но подход неполный.
+  return known.length === 0 ? { kg: null, partial: false } : { kg: known.reduce((sum, value) => sum + value, 0), partial: known.length < pieces.length };
 }
 
 export interface EntryTonnage {
@@ -101,8 +102,8 @@ export function entryTonnage(entry: TrainingHistoryEntry, infoOf: InfoOf, bodyOf
     for (const fact of exercise.facts.filter(isWorkingSet)) {
       const tonnage = factTonnage(fact, info, body);
       if (tonnage === null) continue;
-      if (tonnage.kg === null) incompleteSets += 1;
-      else kg = (kg ?? 0) + tonnage.kg;
+      if (tonnage.kg === null || tonnage.partial) incompleteSets += 1;
+      if (tonnage.kg !== null) kg = (kg ?? 0) + tonnage.kg;
     }
   }
   return { kg, incompleteSets };
