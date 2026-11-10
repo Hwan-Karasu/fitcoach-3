@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../theme/typography.ts";
@@ -20,7 +20,7 @@ export function BottomSheet({ visible, title, onClose, children, footer }: Reado
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView behavior="height" style={styles.overlay}>
         <Pressable accessible={false} importantForAccessibility="no" style={styles.scrim} onPress={onClose} />
         <View accessibilityViewIsModal style={[styles.sheet, { backgroundColor: colors.canvas, paddingBottom: insets.bottom + 12 }]}>
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
@@ -28,7 +28,7 @@ export function BottomSheet({ visible, title, onClose, children, footer }: Reado
           <ScrollView style={styles.scroll} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">{children}</ScrollView>
           {footer}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

@@ -12,6 +12,8 @@ export interface NutritionGuide {
   /** Расчётные Б/Ж/У под ориентир; `null` — не определены. */
   readonly defaults: MacroGrams | null;
   readonly leanMassKg: number | null;
+  /** Расчётный суточный расход (REE + NEAT + EAT), ккал; `null` — расчёт невозможен без данных клиента. */
+  readonly tdee: number | null;
 }
 
 /** Расчётный суточный ориентир клиента — один источник для главной клиента и дневника питания. Подписки данных расчёта снимаются в `useCalcData`. */
@@ -23,5 +25,5 @@ export function useNutritionGuide(clientId: string, body: CalcClientBody, calc: 
   // Ориентир не бывает неположительным: поправка не должна обнулять расчёт.
   const guide = result === null || result.target === null || result.target + adjustment <= 0 ? null : result.target + adjustment;
   const defaults = useMemo(() => result === null ? null : calcMacros(result.macroMassKg, guide, profile.goal), [result, guide, profile.goal]);
-  return { loaded, guide, defaults, leanMassKg: result?.leanMassKg ?? null };
+  return { loaded, guide, defaults, leanMassKg: result?.leanMassKg ?? null, tdee: result?.startTdee ?? null };
 }

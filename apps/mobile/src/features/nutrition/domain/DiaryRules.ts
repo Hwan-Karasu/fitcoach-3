@@ -65,6 +65,11 @@ export function summarizeDay(localDate: string, entries: readonly EatenEntry[]):
     totals: sumNutrients(day.map((entry) => entry.snapshot.eaten)), bySlot };
 }
 
+/** Число приёмов пищи за день: приёмы, в которых есть записи (а не число записей); кольцо «Приёмы» на «Главной». */
+export function mealCount(summary: DaySummary): number {
+  return MEAL_SLOTS.filter((slot) => summary.bySlot[slot] !== null).length;
+}
+
 /** Даты «с учётом» (П15=B): есть хотя бы одна пищевая запись. По возрастанию. */
 export function accountedDates(entries: readonly Pick<EatenEntry, "localDate">[]): readonly string[] {
   return [...new Set(entries.map((entry) => entry.localDate))].sort();

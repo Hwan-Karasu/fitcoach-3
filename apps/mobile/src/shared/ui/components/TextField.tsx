@@ -31,6 +31,8 @@ interface TextFieldProps {
   readonly grow?: boolean;
   readonly textAlign?: "left" | "center" | "right";
   readonly compact?: boolean;
+  /** Открыть клавиатуру сразу (поле в нижнем листе ввода). */
+  readonly autoFocus?: boolean;
 }
 
 export function TextField({
@@ -55,6 +57,7 @@ export function TextField({
   grow = false,
   textAlign = "left",
   compact = false,
+  autoFocus = false,
 }: Readonly<TextFieldProps>) {
   const [focused, setFocused] = useState(false);
   const { palette } = usePrototypeTheme();
@@ -81,6 +84,7 @@ export function TextField({
         autoCapitalize={autoCapitalize}
         autoComplete={autoComplete}
         returnKeyType={returnKeyType}
+        autoFocus={autoFocus}
         onSubmitEditing={onSubmitEditing}
         testID={testID}
         multiline={multiline || grow}
