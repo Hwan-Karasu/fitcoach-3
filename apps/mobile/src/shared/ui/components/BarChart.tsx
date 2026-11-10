@@ -20,18 +20,20 @@ const PAD = 8;
  * Столбчатая диаграмма (react-native-gifted-charts) от нуля до округлённого максимума; подписаны крайние периоды.
  * `onPressItem` — переход к исходным данным столбца (§48.86.19).
  */
-export function BarChart({ items, format, accessibilityLabel, onPressItem, color }: Readonly<{
+export function BarChart({ items, format, accessibilityLabel, onPressItem, color, goal }: Readonly<{
   items: readonly BarChartItem[];
   format: (value: number) => string;
   accessibilityLabel: string;
   onPressItem?: (item: BarChartItem) => void;
   /** Цвет столбцов; по умолчанию акцент темы. */
   color?: string;
+  /** Цель: горизонтальная пунктирная линия; шкала всегда включает цель. */
+  goal?: number;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const [width, setWidth] = useState(0);
-  const step = niceStep(Math.max(0, ...items.map((item) => item.value ?? 0)) / 3);
+  const step = niceStep(Math.max(0, goal ?? 0, ...items.map((item) => item.value ?? 0)) / 3);
   const layout = chartLayout(width - AXIS - PAD, items.length, 28);
   return (
     <View accessible accessibilityLabel={accessibilityLabel} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
@@ -42,6 +44,8 @@ export function BarChart({ items, format, accessibilityLabel, onPressItem, color
         barWidth={layout.barWidth} spacing={layout.spacing} initialSpacing={layout.spacing / 2} endSpacing={0} barBorderRadius={4}
         yAxisLabelWidth={AXIS} yAxisThickness={0} xAxisThickness={1} xAxisColor={colors.border} rulesColor={colors.border}
         yAxisTextStyle={{ color: colors.textMuted, fontSize: 11, fontFamily: fonts.medium }} formatYLabel={(label) => format(Number(label))}
+        showReferenceLine1={goal !== undefined} referenceLine1Position={goal ?? 0}
+        referenceLine1Config={{ color: colors.accentInk, dashWidth: 6, dashGap: 4, thickness: 1.5 }}
         disableScroll isAnimated={false} /> : <View style={{ height: HEIGHT }} />}
       <View style={[styles.dates, { paddingLeft: AXIS }]}>
         <Text style={[styles.date, { color: colors.textMuted }]}>{items[0]?.label ?? ""}</Text>

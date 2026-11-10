@@ -11,7 +11,7 @@ import type { AccountingRepositoryPort } from "../../features/accounting/public.
 import { ClientHomePreview, type ClientRecord } from "../../features/clients/public.ts";
 import { type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
-import { AddFoodScreen, type CalcClientBody, type CatalogFilter, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
+import { AddFoodScreen, metricTitle, type MetricId, type CalcClientBody, type CatalogFilter, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
   type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ArchivedProgramsPanel, ParticipantSwitcher, participantTarget, ProgramMatrixScreen, PeriodizedBuilderScreen, ProgramLibraryScreen, ProgramModeChooserScreen, programLibraryTabTitles, ProgramScreen, SimpleProgramBuilderScreen,
   WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type SimplePlanSavePort, type WeekEditSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort,
@@ -21,8 +21,9 @@ import { ArchivedProgramsPanel, ParticipantSwitcher, participantTarget, ProgramM
 import { CustomExerciseEditorScreen, ExerciseLibraryScreen, type ExerciseCatalogPort } from "../../features/exercises/public.ts";
 import { RetainedScreenTheme, usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { ClientHeader } from "./ClientHeader.tsx";
+import { workspaceTabs } from "./routeCatalog.ts";
 
-type HomeRoutes = { HomeIndex: undefined };
+type HomeRoutes = { HomeIndex: undefined; HomeMetric: { metric: MetricId }; HomeWeight: undefined };
 /** Маршрут, собранный функцией (`templateRoute`, `createRoute`), не сужается до одной записи карты маршрутов: приведение к `never` — здесь одно. */
 function openRoute(navigation: { navigate: (name: never, params: never) => void; replace: (name: never, params: never) => void },
   route: Readonly<{ name: string; params: object }>, method: "navigate" | "replace" = "navigate"): void {
@@ -84,14 +85,21 @@ const TrainingStack = createNativeStackNavigator<TrainingRoutes>();
 type HomeProps = Readonly<{
   client: ClientRecord; accounting: AccountingRepositoryPort;
   onOpenAccounting: () => void;
-  nutritionSlot?: ReactNode;
+  /** Блоки питания «Главной»; `openMetric` открывает экран показателя (UIX-08), `openWeightStats` — статистику веса и % жира (UIX-09). */
+  renderNutritionSlot?: (actions: Readonly<{ openMetric: (metric: MetricId) => void; openWeightStats: () => void }>) => ReactNode;
+  /** Статистика веса и % жира. */
+  renderWeightStats?: () => ReactNode;
+  /** Экран показателя «Шаги / Сон / Расход / Приёмы». */
+  renderMetric?: (metric: MetricId) => ReactNode;
   daySlot?: ReactNode;
   onArchive: () => Promise<void>;
+  /** Шапка клиента: выход из клиента, список клиентов, редактор карточки. */
+  onClose: () => void; onOpenClients: () => void; onOpenEdit: () => void;
 }>;
 
 /** Home composes owners' read projections; the weight entry goes to the Measurements owner. */
 function HomeIndexRoute({ client, accounting, onOpenAccounting, nutritionSlot, daySlot,
-  onArchive }: HomeProps) {
+  onArchive }: Readonly<{ client: ClientRecord; accounting: AccountingRepositoryPort; onOpenAccounting: () => void; nutritionSlot?: ReactNode; daySlot?: ReactNode; onArchive: () => Promise<void> }>) {
   const summary = useClientHomeSummary(client.id, accounting);
   return <ClientHomePreview client={client} summary={summary} onOpenAccounting={onOpenAccounting}
     onWriteOff={() => accounting.writeOff(client.id)} onReturnLast={(entryId) => accounting.returnLastDebit(client.id, entryId)}
@@ -101,9 +109,21 @@ function HomeIndexRoute({ client, accounting, onOpenAccounting, nutritionSlot, d
 export function HomeNavigator(props: HomeProps) {
   const { palette } = usePrototypeTheme();
   return (
-    <HomeStack.Navigator screenOptions={{ contentStyle: { backgroundColor: palette.tokens.canvas } }}>
-      <HomeStack.Screen name="HomeIndex" options={{ headerShown: false }}>
-        {() => <HomeIndexRoute {...props} />}
+    <HomeStack.Navigator screenOptions={{
+      contentStyle: { backgroundColor: palette.tokens.canvas },
+      // Шапка клиента: на «Главной» — выход из клиента и карандаш карточки, на экране показателя — название показателя и «назад» по стеку.
+      header: ({ navigation, route, back }) => <ClientHeader client={props.client} subtitle={route.name === "HomeMetric" ? metricTitle((route.params as Readonly<{ metric: MetricId }>).metric) : route.name === "HomeWeight" ? "Вес и % жира" : workspaceTabs.Home}
+        onBack={back !== undefined ? () => navigation.goBack() : props.onClose} onClients={props.onOpenClients} onEdit={route.name === "HomeIndex" ? props.onOpenEdit : undefined} />,
+    }}>
+      <HomeStack.Screen name="HomeIndex">
+        {({ navigation }) => <HomeIndexRoute client={props.client} accounting={props.accounting} onOpenAccounting={props.onOpenAccounting} daySlot={props.daySlot}
+          nutritionSlot={props.renderNutritionSlot?.({ openMetric: (metric) => navigation.navigate("HomeMetric", { metric }), openWeightStats: () => navigation.navigate("HomeWeight") })} onArchive={props.onArchive} />}
+      </HomeStack.Screen>
+      <HomeStack.Screen name="HomeWeight">
+        {() => <>{props.renderWeightStats?.()}</>}
+      </HomeStack.Screen>
+      <HomeStack.Screen name="HomeMetric">
+        {({ route }) => <>{props.renderMetric?.(route.params.metric)}</>}
       </HomeStack.Screen>
     </HomeStack.Navigator>
   );
@@ -133,10 +153,10 @@ function NutritionAddRoute({ navigation, children, recipe = false, food = false 
   );
 }
 
-export function NutritionNavigator({ clientId, clientName, clientEmoji, body, foods, recipes, diary, targets, calc, measurements, onExitClient, onOpenClients }: Readonly<{
+export function NutritionNavigator({ clientId, clientName, clientEmoji, body, foods, recipes, diary, targets, calc, measurements, onExitClient, onOpenClients, onOpenJournal }: Readonly<{
   clientId: string; clientName: string; clientEmoji: string | null; body: CalcClientBody;
   foods: FoodCatalogPort; recipes: RecipeCatalogPort; diary: NutritionDiaryPort; targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort;
-  onExitClient: () => void; onOpenClients: () => void;
+  onExitClient: () => void; onOpenClients: () => void; onOpenJournal: () => void;
 }>) {
   const { palette } = usePrototypeTheme();
   return (
@@ -148,7 +168,7 @@ export function NutritionNavigator({ clientId, clientName, clientEmoji, body, fo
           ? { label: "Изменить название, бренд и штрихкод", onPress: () => navigation.setParams({ detailsRequest: (route.params.detailsRequest ?? 0) + 1 }) } : undefined} />,
     })}>
       <NutritionStack.Screen name="NutritionIndex">
-        {({ navigation }) => <NutritionHomeScreen clientId={clientId} body={body} diary={diary} targets={targets} calc={calc} measurements={measurements}
+        {({ navigation }) => <NutritionHomeScreen clientId={clientId} body={body} diary={diary} targets={targets} calc={calc} measurements={measurements} onOpenJournal={onOpenJournal}
           onAdd={(localDate, slot, filter) => navigation.navigate("NutritionAdd", { localDate, slot, filter })}
           onEditSource={(source) => source.kind === "FOOD" ? navigation.navigate("NutritionFood", { foodId: source.id }) : navigation.navigate("NutritionRecipe", { recipeId: source.id })} />}
       </NutritionStack.Screen>

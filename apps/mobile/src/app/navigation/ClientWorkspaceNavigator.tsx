@@ -11,7 +11,7 @@ import { useTrainedOn } from "../../read-models/useTrainedOn.ts";
 import { useWorkoutsThisWeek } from "../../read-models/useWorkoutsThisWeek.ts";
 import type { MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import type { CalcProfileWithBodyPort } from "../../workflows/saveCalcProfile.ts";
-import { ClientDayProvider, DayTabs, NutritionHomeCards, type SaveCalcProfile, type FoodCatalogPort, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort, type RecipeCatalogPort } from "../../features/nutrition/public.ts";
+import { ClientDayProvider, DayTabs, MetricScreen, NutritionHomeCards, NutritionStatsScreen, type SaveCalcProfile, type FoodCatalogPort, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort, type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ExecutionDetailsScreen, ExerciseHistoryList, HistoryProgramScreen, MonthlyReportScreen, TrainingArchiveScreen, TrainingStatisticsScreen, retainHistoryView,
   retainStatsFilters, type ExerciseLookupPort,
   type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort, type TrainingPlansRepositoryPort,
@@ -27,6 +27,8 @@ import { moreDestinations, workspaceTabs } from "./routeCatalog.ts";
 import { RootTabBar } from "./RootTabBar.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 import type { TrainingHistoryPort } from "../../read-models/trainingHistory.ts";
+import { useHistoryCaption, useQuestionnaireCaption } from "../../read-models/useMoreCaptions.ts";
+import type { QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
 import type { ClientBodyweightPort } from "../../read-models/clientBodyweight.ts";
 
 type OpenWorkout = (slot: WorkoutSlot, options?: Readonly<{ returnToCaller?: boolean }>) => void;
@@ -50,13 +52,15 @@ type MoreRoutes = {
 const Tabs = createBottomTabNavigator<WorkspaceTabs>();
 const MoreStack = createNativeStackNavigator<MoreRoutes>();
 
-function MoreNavigator({ client, history, bodyweight, exerciseLookup, onClose, onOpenClients, onOpenEdit, onOpenExercise, onOpenWorkout }: Readonly<{
-  client: ClientRecord; onClose: () => void; onOpenClients: () => void; onOpenEdit: () => void;
+function MoreNavigator({ client, history, questionnaire, bodyweight, exerciseLookup, onClose, onOpenClients, onOpenEdit, onOpenExercise, onOpenWorkout }: Readonly<{
+  client: ClientRecord; questionnaire: QuestionnaireRepositoryPort; onClose: () => void; onOpenClients: () => void; onOpenEdit: () => void;
   history: TrainingHistoryPort; bodyweight: ClientBodyweightPort; exerciseLookup: ExerciseLookupPort;
   onOpenExercise: (exerciseId: string) => void; onOpenWorkout: OpenWorkout;
 }>) {
   const { palette } = usePrototypeTheme();
   const clientId = client.id;
+  const questionnaireCaption = useQuestionnaireCaption(clientId, questionnaire);
+  const historyCaption = useHistoryCaption(clientId, history);
   return (
     <MoreStack.Navigator initialRouteName="MoreIndex"
       screenOptions={{
@@ -72,6 +76,8 @@ function MoreNavigator({ client, history, bodyweight, exerciseLookup, onClose, o
             onOpenQuestionnaire={onOpenEdit}
             onOpenArchive={() => navigation.navigate("TrainingArchive")}
             onOpenStatistics={() => navigation.navigate("Statistics")}
+            questionnaireCaption={questionnaireCaption}
+            historyCaption={historyCaption}
           />
         )}
       </MoreStack.Screen>
@@ -105,8 +111,9 @@ function MoreNavigator({ client, history, bodyweight, exerciseLookup, onClose, o
 }
 
 export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, nutrition, trainingPlans, trainingExecution, trainingHistory, clientBodyweight, restTimers, activeWorkouts, onOpenWorkout, onOpenClientPrograms, exercises, exerciseLookup, weekCopy, weekSwap, mesocycleSave, planDelete, onOpenEdit, onOpenAccounting,
-  onOpenMeasurements, onClose, onOpenClients, onOpenExercise }: Readonly<{
+  onOpenMeasurements, onClose, onOpenClients, onOpenExercise, questionnaire }: Readonly<{
   clientId: string;
+  questionnaire: QuestionnaireRepositoryPort;
   repository: ClientRepositoryPort & ClientRosterPort;
   accounting: AccountingRepositoryPort;
   measurements: MeasurementRepositoryPort;
@@ -219,11 +226,13 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       tabBar={(props) => <RootTabBar {...props} />}
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.canvas } }}
     >
-      <Tabs.Screen name="Home" options={{ tabBarLabel: workspaceTabs.Home, tabBarAccessibilityLabel: workspaceTabs.Home, headerShown: true,
-        header: () => <ClientHeader client={client} subtitle={workspaceTabs.Home} onBack={onClose} onClients={onOpenClients} onEdit={() => onOpenEdit(client.id)} /> }}>
-        {({ navigation }) => <HomeNavigator client={client} accounting={accounting} daySlot={<DayTabs />}
-          nutritionSlot={<NutritionHomeCards key={client.id} clientId={client.id} body={calcBody} trainedToday={trainedToday} workoutsThisWeek={workoutsThisWeek} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements}
-            onOpenNutrition={() => navigation.navigate("Nutrition")} onSaveProfile={saveCalcProfile} onOpenJournal={() => onOpenMeasurements(client.id)} />}
+      <Tabs.Screen name="Home" options={{ tabBarLabel: workspaceTabs.Home, tabBarAccessibilityLabel: workspaceTabs.Home }}>
+        {({ navigation }) => <HomeNavigator client={client} accounting={accounting} daySlot={<DayTabs />} onClose={onClose} onOpenClients={onOpenClients} onOpenEdit={() => onOpenEdit(client.id)}
+          renderNutritionSlot={({ openMetric, openWeightStats }) => <NutritionHomeCards key={client.id} clientId={client.id} body={calcBody} trainedToday={trainedToday} workoutsThisWeek={workoutsThisWeek} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements}
+            onOpenMetric={openMetric} onOpenWeightStats={openWeightStats} onSaveProfile={saveCalcProfile} onOpenJournal={() => onOpenMeasurements(client.id)} />}
+          renderMetric={(metric) => <MetricScreen key={`${client.id}:${metric}`} metric={metric} clientId={client.id} body={calcBody} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements}
+            onOpenDiary={() => navigation.navigate("Nutrition")} />}
+          renderWeightStats={() => <NutritionStatsScreen key={client.id} clientId={client.id} measurements={measurements} onOpenJournal={() => onOpenMeasurements(client.id)} />}
           onOpenAccounting={() => onOpenAccounting(client.id)}
           onArchive={async () => {
             try { await repository.setArchived(client.id, client.revision, true); }
@@ -233,7 +242,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       </Tabs.Screen>
       <Tabs.Screen name="Nutrition" options={{ tabBarLabel: workspaceTabs.Nutrition, tabBarAccessibilityLabel: workspaceTabs.Nutrition }}>
         {() => <NutritionNavigator clientId={client.id} clientName={client.displayName} clientEmoji={client.emoji} body={calcBody} foods={nutrition.foods} recipes={nutrition.recipes}
-          diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements} onExitClient={onClose} onOpenClients={onOpenClients} />}
+          diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements} onExitClient={onClose} onOpenClients={onOpenClients} onOpenJournal={() => onOpenMeasurements(client.id)} />}
       </Tabs.Screen>
       <Tabs.Screen name="Training" options={{ tabBarLabel: workspaceTabs.Training, tabBarAccessibilityLabel: workspaceTabs.Training}}>
         {() => <TrainingNavigator clientId={client.id} clientName={client.displayName} clientEmoji={client.emoji} repository={trainingPlans}
@@ -242,7 +251,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
           exercises={exercises} exerciseLookup={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap} mesocycleSave={mesocycleSave} planDelete={planDelete} onOpenExercise={onOpenExercise} />}
       </Tabs.Screen>
       <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More}}>
-        {() => <MoreNavigator client={client} onClose={onClose} onOpenClients={onOpenClients} onOpenEdit={() => onOpenEdit(client.id)}
+        {() => <MoreNavigator client={client} questionnaire={questionnaire} onClose={onClose} onOpenClients={onOpenClients} onOpenEdit={() => onOpenEdit(client.id)}
           history={trainingHistory} bodyweight={clientBodyweight} exerciseLookup={exerciseLookup}
           onOpenExercise={(exerciseId) => onOpenExercise?.(exerciseId)} onOpenWorkout={onOpenWorkout} />}
       </Tabs.Screen>

@@ -67,8 +67,7 @@ function QuickChip({ label, icon, onPress, disabled = false, accessibilityLabel 
  * «Дневник» питания клиента (§49.2): день, итоги и коридоры цели, приёмы пищи, вода. Итог — сумма внесённых записей; пустой день и день только с водой
  * не оцениваются (§49.22). Экран пишет через порты дневника и читает цель на дату (исключение → версия → «не установлена»).
  */
-export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, measurements, onAdd, onEditSource, requestedDay }: Readonly<{
-  requestedDay?: Readonly<{ date: string; token: number }>;
+export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, measurements, onAdd, onEditSource }: Readonly<{
   clientId: string;
   diary: NutritionDiaryPort;
   targets: NutritionTargetsPort;
@@ -81,8 +80,7 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  const { day: localDate, today, setDay: setLocalDate } = useClientDay();
-  useEffect(() => { if (requestedDay !== undefined) setLocalDate(requestedDay.date); }, [requestedDay, setLocalDate]);
+  const { day: localDate, today } = useClientDay();
   const { data, stale, failed, reload } = useNutritionDay(clientId, localDate, diary, targets);
   const { guide, defaults, leanMassKg } = useNutritionGuide(clientId, body, calc, measurements);
   const [slow, setSlow] = useState(false);

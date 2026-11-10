@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { TrendingUp } from "lucide-react-native";
 import { InlineNotice, SegmentedRing } from "../../../shared/ui/components/public.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -18,6 +19,7 @@ import { CalcSheet } from "./CalcSheet.tsx";
 import { useMacroColors } from "./MacroGrid.tsx";
 import { NutritionTargetRows, type TargetMode } from "./NutritionTargetRows.tsx";
 import { metricLabels, nutritionErrorText, rangeText, wholeText } from "./nutritionFormat.ts";
+import type { MetricId } from "../domain/MetricSeries.ts";
 import { saveDayData } from "./dayData.ts";
 import { useNutritionGuide } from "./useNutritionGuide.ts";
 import { useNutritionDay } from "./useNutritionDay.ts";
@@ -92,8 +94,10 @@ function DayRing({ label, unit, caption, value, fraction, disabled = false, hint
 }
 
 /** Плашка показателя дня (одной ширины с соседями); без `onPress` — только значение. */
-function DayPlate({ label, value, disabled = false, hint, onPress }: Readonly<{
+function DayPlate({ label, value, disabled = false, hint, onPress, onChart }: Readonly<{
   label: string; value: string | null; disabled?: boolean; hint: string; onPress?: () => void;
+  /** Значок графика в углу плашки: открывает статистику показателя (нажатие на саму плашку по-прежнему вводит значение). */
+  onChart?: () => void;
 }>) {
   const colors = usePrototypeTheme().palette.tokens;
   const content = <>
@@ -103,10 +107,17 @@ function DayPlate({ label, value, disabled = false, hint, onPress }: Readonly<{
   // Без действия — обычный блок, а не «недоступная кнопка» для TalkBack.
   if (onPress === undefined) return <View accessible accessibilityLabel={`${label}: ${value ?? "нет данных"}`} accessibilityHint={hint} style={[styles.plate, { backgroundColor: colors.surfaceRaised }]}>{content}</View>;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value ?? "нет данных"}`} accessibilityHint={hint} disabled={disabled} onPress={onPress}
-      style={({ pressed }) => [styles.plate, { backgroundColor: colors.surfaceRaised, opacity: disabled ? 0.45 : pressed ? 0.85 : 1 }]}>
-      {content}
-    </Pressable>
+    <View style={styles.plateWrap}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value ?? "нет данных"}`} accessibilityHint={hint} disabled={disabled} onPress={onPress}
+        style={({ pressed }) => [styles.plate, { backgroundColor: colors.surfaceRaised, opacity: disabled ? 0.45 : pressed ? 0.85 : 1 }]}>
+        {content}
+      </Pressable>
+      {onChart === undefined ? null : (
+        <Pressable accessibilityRole="button" accessibilityLabel={`${label}: открыть график и статистику`} onPress={onChart} style={styles.chartIcon}>
+          <TrendingUp size={16} color={colors.accentInk} />
+        </Pressable>
+      )}
+    </View>
   );
 }
 
@@ -117,9 +128,11 @@ const midpoint = (range: Readonly<{ minX10: number; maxX10: number }>) => (range
  * «съедено от цели» из трёх цветов Б/Ж/У, «съедено / цель» по каждому макро, ручная корректировка). Источники — Nutrition, Measurements и дневник тренировок; legacy `client_kbju_state` не используется.
  * `trainedToday` — факт тренировки из дневника тренировок (авто «Да»), `null` — неизвестно.
  */
-export function NutritionHomeCards({ clientId, body, diary, targets, calc, measurements, trainedToday, workoutsThisWeek, onOpenNutrition, onSaveProfile, onOpenJournal }: Readonly<{ clientId: string; body: CalcClientBody; diary: NutritionDiaryPort;
+export function NutritionHomeCards({ clientId, body, diary, targets, calc, measurements, trainedToday, workoutsThisWeek, onOpenMetric, onOpenWeightStats, onSaveProfile, onOpenJournal }: Readonly<{ clientId: string; body: CalcClientBody; diary: NutritionDiaryPort;
   targets: NutritionTargetsPort; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; trainedToday: boolean | null;
-  /** Тренировок за текущую неделю Пн–Вс по дневнику; `null` — нет данных (не 0). */ workoutsThisWeek: number | null; onOpenNutrition: () => void;
+  /** Тренировок за текущую неделю Пн–Вс по дневнику; `null` — нет данных (не 0). */ workoutsThisWeek: number | null;
+  /** Кружок показателя открывает его экран с графиком (UIX-08). */ onOpenMetric: (metric: MetricId) => void;
+  /** Значок графика у «Вес»: статистика веса и % жира. */ onOpenWeightStats: () => void;
   /** Лист «Расчёт»: сохранение профиля и переход в журнал замеров (оболочка клиента). */
   onSaveProfile: SaveCalcProfile; onOpenJournal: () => void }>) {
   const { palette } = usePrototypeTheme();
@@ -134,7 +147,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   const [mode, setMode] = useState<TargetMode>("EXACT");
   /** Живая цель из ячеек ручной корректировки (расчёт или правка тренера). */
   const [liveTarget, setLiveTarget] = useState<Corridors | null>(null);
-  const [sheet, setSheet] = useState<"weight" | "steps" | null>(null);
+  const [sheet, setSheet] = useState<"weight" | null>(null);
   const [calcOpen, setCalcOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lock = useRef(false);
@@ -158,12 +171,12 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
     lock.current = false;
   }, [calc, clientId, day, mark.done, trainingAuto]);
 
-  /** Вес или шаги выбранного дня из листа: ошибка возвращается в лист, а не теряет введённое. */
-  const saveValue = useCallback(async (field: "weight" | "steps", text: string): Promise<string | null> => {
+  /** Вес выбранного дня из листа: ошибка возвращается в лист, а не теряет введённое. */
+  const saveWeight = useCallback(async (text: string): Promise<string | null> => {
     if (saveLock.current) return "Идёт сохранение, повторите через секунду.";
     saveLock.current = true;
     const result = await saveDayData({ clientId, calc, recordWeight }, { localDate: day,
-      weight: field === "weight" ? text : null, steps: field === "steps" ? text : null, workout: null })
+      weight: text, steps: null, workout: null })
       .finally(() => { saveLock.current = false; });
     const messages = Object.values(result);
     return messages.length === 0 ? null : messages.join(" ");
@@ -193,17 +206,17 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Данные дня</Text>
         <View style={styles.rings}>
           <DayRing label="Шаги" unit="шагов" caption="Шаги" value={future || !stepsToday.loaded || stepsToday.steps === null ? null : wholeNumber(stepsToday.steps)}
-            fraction={future ? null : goalFraction(stepsToday.steps, STEPS_GOAL)} disabled={future} hint="Ввести шаги за день" onPress={() => setSheet("steps")} />
-          {/* Сон приходит из Health Connect (ADR-059, UIX-16/17): пока кружок без данных и не нажимается. */}
-          <DayRing label="Сон" caption="Сон" value={null} fraction={null} disabled hint="Нужен Health Connect: сон придёт из него" onPress={() => undefined} />
+            fraction={future ? null : goalFraction(stepsToday.steps, STEPS_GOAL)} hint="Открыть график шагов" onPress={() => onOpenMetric("steps")} />
+          {/* Сон приходит из Health Connect (ADR-059, UIX-16/17): до подключения экран сна показывает пустое состояние. */}
+          <DayRing label="Сон" caption="Сон" value={null} fraction={null} hint="Открыть график сна" onPress={() => onOpenMetric("sleep")} />
           <DayRing label="Расход" unit="ккал" caption="Расход, ккал" value={tdee === null ? null : wholeNumber(tdee)} fraction={null}
-            hint="Расчёт калорий" onPress={() => setCalcOpen(true)} />
+            hint="Открыть график расхода" onPress={() => onOpenMetric("expenditure")} />
           <DayRing label="Приёмы" caption="Приёмы пищи" value={data === null || stale ? null : String(mealCount(data.summary))}
-            fraction={data === null || stale ? null : goalFraction(mealCount(data.summary), MEALS_GOAL)} hint="Открыть дневник питания" onPress={onOpenNutrition} />
+            fraction={data === null || stale ? null : goalFraction(mealCount(data.summary), MEALS_GOAL)} hint="Открыть график приёмов пищи" onPress={() => onOpenMetric("meals")} />
         </View>
         <View style={styles.plates}>
           <DayPlate label="Вес, кг" value={future || dayWeight.weight === null ? null : String(dayWeight.weight).replace(".", ",")} disabled={future}
-            hint="Ввести вес за день" onPress={() => setSheet("weight")} />
+            hint="Ввести вес за день" onPress={() => setSheet("weight")} onChart={onOpenWeightStats} />
           <DayPlate label="Тренировка" value={future ? null : trainingState ? "Да" : "Нет"} disabled={future || trainingAuto}
             hint={trainingAuto ? "Отмечено по дневнику тренировок" : "Отметить тренировку: да или нет"} onPress={() => { void cycleTraining(); }} />
           <DayPlate label="На неделе" value={workoutsThisWeek === null ? null : String(workoutsThisWeek)} disabled hint="Тренировок за неделю по дневнику" />
@@ -216,9 +229,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
       <CalcSheet visible={calcOpen} clientId={clientId} body={body} onSaveProfile={onSaveProfile} calc={calc} measurements={measurements}
         onClose={() => setCalcOpen(false)} />
       <ValueSheet visible={sheet === "weight"} title="Вес за день" label="Вес" unit="кг" keyboardType="decimal-pad" placeholder="85,4" emptyMessage="Введите вес."
-        initial={dayWeight.weight === null ? "" : String(dayWeight.weight).replace(".", ",")} onSave={(text) => saveValue("weight", text)} onClose={() => setSheet(null)} />
-      <ValueSheet visible={sheet === "steps"} title="Шаги за день" label="Шаги" unit="шагов" keyboardType="number-pad" placeholder="8000"
-        initial={stepsToday.steps === null ? "" : String(stepsToday.steps)} onSave={(text) => saveValue("steps", text)} onClose={() => setSheet(null)} />
+        initial={dayWeight.weight === null ? "" : String(dayWeight.weight).replace(".", ",")} onSave={saveWeight} onClose={() => setSheet(null)} />
 
       <View style={[styles.card, styles.bigCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.head}>
@@ -276,6 +287,8 @@ const styles = StyleSheet.create({
   ringNumber: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19, paddingHorizontal: 4, textAlign: "center" },
   ringCaption: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14, textAlign: "center" },
   plates: { flexDirection: "row", gap: 6, paddingTop: 6 },
+  plateWrap: { flex: 1, flexBasis: 0, minWidth: 0 },
+  chartIcon: { position: "absolute", top: 4, right: 0, width: 48, height: 48, alignItems: "center", justifyContent: "center" },
   plate: { flex: 1, flexBasis: 0, minWidth: 0, minHeight: 56, borderRadius: 16, paddingVertical: 7, paddingHorizontal: 8, gap: 2 },
   plateLabel: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14 },
   plateValue: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
