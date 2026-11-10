@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ChevronDown, ChevronRight, ClipboardPaste, Copy, Droplets, Plus } from "lucide-react-native";
 import { AppButton, ConfirmDialog, EmptyState, InlineNotice, LoadingState } from "../../../shared/ui/components/public.ts";
@@ -66,10 +66,8 @@ function QuickChip({ label, icon, onPress, disabled = false, accessibilityLabel 
  * «Дневник» питания клиента (§49.2): день, итоги и коридоры цели, приёмы пищи, вода. Итог — сумма внесённых записей; пустой день и день только с водой
  * не оцениваются (§49.22). Экран пишет через порты дневника и читает цель на дату (исключение → версия → «не установлена»).
  */
-export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, measurements, onAdd, onEditSource, leading }: Readonly<{
+export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, measurements, onAdd, onEditSource }: Readonly<{
   clientId: string;
-  /** Первая строка прокручиваемого содержимого (переключатель «Дневник | Статистика»); дни закреплены выше, в оболочке. */
-  leading?: ReactNode;
   diary: NutritionDiaryPort;
   targets: NutritionTargetsPort;
   body: CalcClientBody;
@@ -159,7 +157,7 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
   };
 
   if (data === null) {
-    return <ScrollView style={[styles.screen, { backgroundColor: colors.canvas }]} contentContainerStyle={styles.list}>{leading}
+    return <ScrollView style={[styles.screen, { backgroundColor: colors.canvas }]} contentContainerStyle={styles.list}>
       {failed ? <View><InlineNotice kind="error">Не удалось загрузить дневник питания.</InlineNotice><AppButton label="Повторить загрузку" onPress={reload} /></View> : <LoadingState label="Загружаем день…" />}</ScrollView>;
   }
   const recorded = data.summary.state === "FOOD_RECORDED";
@@ -170,7 +168,6 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
       {slow ? <View accessible accessibilityLabel="Загружаем день" style={[styles.slowBar, { backgroundColor: colors.accentFill }]} /> : null}
       <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled" pointerEvents={stale ? "none" : "auto"}>
-        {leading}
         <DayTotalsCard rows={totalRows} copying={copying} onCopyPrevious={() => { void copyPreviousDay(); }} />
         <View style={styles.legend}><MacroColumnHeads /></View>
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}

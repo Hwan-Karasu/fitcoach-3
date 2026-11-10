@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppButton, EmptyState, InlineNotice, LineChart, LoadingState, SegmentedControl } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -37,10 +37,8 @@ function Tile({ label, value }: Readonly<{ label: string; value: string }>) {
  * и список последних значений. Статистика питания (КБЖУ) находится на экране «Приёмы». Дни с несколькими записями без выбранной основной в расчёт не входят;
  * основную выбирают в журнале замеров («Все записи»).
  */
-export function NutritionStatsScreen({ clientId, measurements, onOpenJournal, initialType = "WEIGHT", leading }: Readonly<{ clientId: string; measurements: MeasurementRepositoryPort;
-  onOpenJournal: () => void; initialType?: StatType;
-  /** Первая строка прокручиваемого содержимого (переключатель «Дневник | Статистика»). */
-  leading?: ReactNode }>) {
+export function NutritionStatsScreen({ clientId, measurements, onOpenJournal, initialType = "WEIGHT" }: Readonly<{ clientId: string; measurements: MeasurementRepositoryPort;
+  onOpenJournal: () => void; initialType?: StatType }>) {
   const colors = usePrototypeTheme().palette.tokens;
   const today = useToday();
   const [type, setType] = useState<StatType>(initialType);
@@ -67,7 +65,6 @@ export function NutritionStatsScreen({ clientId, measurements, onOpenJournal, in
 
   return (
     <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content}>
-      {leading}
       <SegmentedControl compact fit items={TYPES} selectedId={type} onSelect={setType} />
       <SegmentedControl compact fit items={PERIODS} selectedId={period} onSelect={setPeriod} />
       {data === null ? failed ? <View><InlineNotice kind="error">Не удалось загрузить замеры.</InlineNotice><AppButton label="Повторить" onPress={() => setTick((value) => value + 1)} /></View>

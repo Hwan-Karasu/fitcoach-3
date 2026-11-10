@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo, useRef } from "react";
 import { BackHandler } from "react-native";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
-import { Pencil, Users } from "lucide-react-native";
+import { ChartNoAxesColumn, Pencil, Users } from "lucide-react-native";
 import { View } from "react-native";
 import { AppIconButton, ScreenHeader, SearchField } from "../../shared/ui/components/public.ts";
 import { RetainedScreenTheme, usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -23,6 +23,8 @@ type ClientHeaderProps = Readonly<{
   title?: string;
   /** Карандаш рядом со списком клиентов — редактор карточки с анкетой (только на «Главной»). */
   onEdit?: () => void;
+  /** Значок «Статистика» слева от «К списку клиентов» — отдельный экран статистики веса и % жира (только в «Питании»). */
+  onStats?: () => void;
   /** Карандаш вместо значка «К списку клиентов» — действие самого экрана (например, карточка продукта). */
   trailingAction?: Readonly<{ label: string; onPress: () => void }>;
   /** Поле поиска вместо имени клиента (выбор упражнения). */
@@ -33,7 +35,7 @@ export function ClientHeader(props: ClientHeaderProps) {
   const focused = useIsFocused();
   const live = useRef(props); live.current = props;
   const actions = useMemo(() => ({ back: () => live.current.onBack(), clients: () => live.current.onClients(),
-    edit: () => live.current.onEdit?.(), trailing: () => live.current.trailingAction?.onPress(),
+    edit: () => live.current.onEdit?.(), stats: () => live.current.onStats?.(), trailing: () => live.current.trailingAction?.onPress(),
     query: (query: string) => live.current.search?.onChangeQuery(query) }), []);
   const client = useMemo(() => ({ displayName: props.client.displayName, emoji: props.client.emoji }), [props.client.displayName, props.client.emoji]);
   const label = props.trailingAction?.label;
@@ -42,10 +44,10 @@ export function ClientHeader(props: ClientHeaderProps) {
   const search = useMemo(() => query === undefined ? undefined : { query, placeholder: placeholder!, accessibilityLabel: accessibilityLabel!, onChangeQuery: actions.query },
     [query, placeholder, accessibilityLabel, actions]);
   return <RetainedScreenTheme active={focused}><ClientHeaderBody client={client} subtitle={props.subtitle} title={props.title} onBack={actions.back} onClients={actions.clients}
-    onEdit={props.onEdit === undefined ? undefined : actions.edit} trailingAction={trailing} search={search} /></RetainedScreenTheme>;
+    onEdit={props.onEdit === undefined ? undefined : actions.edit} onStats={props.onStats === undefined ? undefined : actions.stats} trailingAction={trailing} search={search} /></RetainedScreenTheme>;
 }
 
-const ClientHeaderBody = memo(function ClientHeaderBody({ client, subtitle, title, onBack, onClients, onEdit, trailingAction, search }: ClientHeaderProps) {
+const ClientHeaderBody = memo(function ClientHeaderBody({ client, subtitle, title, onBack, onClients, onEdit, onStats, trailingAction, search }: ClientHeaderProps) {
   const { palette } = usePrototypeTheme();
   navigationPerformance.render("ClientHeader");
   const colors = palette.tokens;
@@ -56,6 +58,7 @@ const ClientHeaderBody = memo(function ClientHeaderBody({ client, subtitle, titl
   const rightControls = (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
       {onEdit === undefined ? null : <AppIconButton compact label="Редактировать карточку и анкету клиента" icon={<Pencil size={20} color={colors.textPrimary} />} onPress={onEdit} />}
+      {onStats === undefined ? null : <AppIconButton compact label="Статистика веса и процента жира" icon={<ChartNoAxesColumn size={20} color={colors.textPrimary} />} onPress={onStats} />}
       {trailingAction === undefined
         ? <AppIconButton compact label="К списку клиентов" icon={<Users size={20} color={colors.textPrimary} />} onPress={onClients} />
         : <AppIconButton compact label={trailingAction.label} icon={<Pencil size={20} color={colors.textPrimary} />} onPress={trailingAction.onPress} />}

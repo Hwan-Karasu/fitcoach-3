@@ -13,7 +13,7 @@ import { type MeasurementRepositoryPort } from "../../features/measurements/publ
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
 import { homeSummaryRules } from "../composition/homeSummaryRules.ts";
 import { useClientDay } from "../../features/nutrition/public.ts";
-import { AddFoodScreen, metricTitle, type MetricId, type CalcClientBody, type CatalogFilter, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
+import { AddFoodScreen, metricTitle, type MetricId, type CalcClientBody, type CatalogFilter, FoodEditorScreen, NutritionHomeScreen, NutritionStatsScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
   type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ArchivedProgramsPanel, ParticipantSwitcher, participantTarget, ProgramMatrixScreen, PeriodizedBuilderScreen, ProgramLibraryScreen, ProgramModeChooserScreen, programLibraryTabTitles, ProgramScreen, SimpleProgramBuilderScreen,
   WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, type PickedExercise, type MesocycleSavePort, type SimplePlanSavePort, type WeekEditSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort,
@@ -37,11 +37,12 @@ function RetainedTrainingProgram({ children }: Readonly<{ children: ReactNode }>
 type NutritionRoutes = {
   // Параметров нет; объектный тип нужен общему setParams шапки (иначе он сводится к never).
   NutritionIndex: Readonly<{ reserved?: never }> | undefined;
+  NutritionStats: Readonly<{ reserved?: never }> | undefined;
   NutritionAdd: { localDate: string; slot: MealSlot; filter?: CatalogFilter };
   NutritionFood: { name?: string; foodId?: string; detailsRequest?: number };
   NutritionRecipe: { recipeId?: string } | undefined;
 };
-const nutritionTitles: Readonly<Record<keyof NutritionRoutes, string>> = { NutritionIndex: "Питание", NutritionAdd: "Добавить еду", NutritionFood: "Продукт", NutritionRecipe: "Рецепт" };
+const nutritionTitles: Readonly<Record<keyof NutritionRoutes, string>> = { NutritionIndex: "Питание", NutritionStats: "Статистика", NutritionAdd: "Добавить еду", NutritionFood: "Продукт", NutritionRecipe: "Рецепт" };
 type TrainingRoutes = {
   TrainingIndex: undefined;
   TrainingChooser: undefined;
@@ -168,13 +169,17 @@ export function NutritionNavigator({ clientId, clientName, clientEmoji, body, fo
       contentStyle: { backgroundColor: palette.tokens.canvas },
       header: () => <ClientHeader subtitle={nutritionTitles[route.name]} client={{ displayName: clientName, emoji: clientEmoji }}
         onClients={onOpenClients} onBack={() => { if (route.name === "NutritionIndex") onExitClient(); else navigation.goBack(); }}
+        onStats={route.name === "NutritionIndex" ? () => navigation.navigate("NutritionStats") : undefined}
         trailingAction={route.name === "NutritionFood" && route.params?.foodId !== undefined
           ? { label: "Изменить название, бренд и штрихкод", onPress: () => navigation.setParams({ detailsRequest: (route.params.detailsRequest ?? 0) + 1 }) } : undefined} />,
     })}>
       <NutritionStack.Screen name="NutritionIndex">
-        {({ navigation }) => <NutritionHomeScreen clientId={clientId} body={body} diary={diary} targets={targets} calc={calc} measurements={measurements} onOpenJournal={onOpenJournal}
+        {({ navigation }) => <NutritionHomeScreen clientId={clientId} body={body} diary={diary} targets={targets} calc={calc} measurements={measurements}
           onAdd={(localDate, slot, filter) => navigation.navigate("NutritionAdd", { localDate, slot, filter })}
           onEditSource={(source) => source.kind === "FOOD" ? navigation.navigate("NutritionFood", { foodId: source.id }) : navigation.navigate("NutritionRecipe", { recipeId: source.id })} />}
+      </NutritionStack.Screen>
+      <NutritionStack.Screen name="NutritionStats">
+        {() => <NutritionStatsScreen clientId={clientId} measurements={measurements} onOpenJournal={onOpenJournal} />}
       </NutritionStack.Screen>
       <NutritionStack.Screen name="NutritionAdd" options={{ headerShown: false }}>
         {({ navigation, route }) => <NutritionAddRoute navigation={navigation}>
