@@ -8,7 +8,7 @@ import { metricLabels, wholeText } from "./nutritionFormat.ts";
 import { formatDecimalX10 } from "../domain/FoodRules.ts";
 
 /** Фиксированная ширина числовых колонок: итоги дня, строка приёма и строки продуктов выровнены по одной сетке К | Б | Ж | У (UX v1.1, NUT-FS-15). */
-const COLUMN_WIDTH: Readonly<Record<TargetMetric, number>> = { kcal: 46, protein: 36, fat: 36, carbs: 36 };
+const COLUMN_WIDTH: Readonly<Record<TargetMetric, number>> = { kcal: 46, protein: 34, fat: 34, carbs: 34 };
 const KEY_OF: Readonly<Record<TargetMetric, keyof Nutrients>> = { kcal: "kcalX10", protein: "proteinX10", fat: "fatX10", carbs: "carbsX10" };
 
 /** Значения К/Б/Ж/У совпадают: ячейки не перерисовываются при пересоздании объекта с теми же числами. */
@@ -44,7 +44,7 @@ export const MacroCells = memo(function MacroCells({ values, bold = false }: Rea
     <View style={styles.row}>
       {TARGET_METRICS.map((metric) => (
         <Text key={metric} accessibilityLabel={`${metricLabels[metric]}: ${display(metric) === "—" ? "нет данных" : display(metric)}`}
-          style={[styles.cell, { width: COLUMN_WIDTH[metric], fontSize: width < 360 || fontScale > 1.1 ? 12 : 14, color: colors[metric], fontFamily: bold ? fonts.bold : fonts.semibold }]}>
+          style={[styles.cell, { width: COLUMN_WIDTH[metric], fontSize: width < 360 || fontScale > 1.1 ? 12 : 13, color: colors[metric], fontFamily: bold ? fonts.bold : fonts.semibold }]}>
           {display(metric)}
         </Text>
       ))}
@@ -54,6 +54,6 @@ export const MacroCells = memo(function MacroCells({ values, bold = false }: Rea
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center" },
-  head: { textAlign: "right", fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14 },
-  cell: { textAlign: "right", fontSize: 14, lineHeight: 19, fontVariant: ["tabular-nums"] },
+  head: { textAlign: "right", fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, letterSpacing: 0.44 },
+  cell: { textAlign: "right", fontSize: 13, lineHeight: 18, fontVariant: ["tabular-nums"] },
 });

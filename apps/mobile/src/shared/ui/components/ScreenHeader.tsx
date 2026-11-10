@@ -53,9 +53,9 @@ const styles = StyleSheet.create({
   outer: { paddingHorizontal: 12, paddingBottom: 4 },
   card: { height: SCREEN_HEADER_HEIGHT, flexDirection: "row", alignItems: "center", gap: 8 },
   gap: { width: 4 },
-  mark: { width: 40, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  mark: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   markText: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 20 },
   text: { flex: 1, minWidth: 0, justifyContent: "center" },
   title: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
-  subtitle: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 17 },
+  subtitle: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
 });

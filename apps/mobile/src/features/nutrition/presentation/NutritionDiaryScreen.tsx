@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ChevronDown, ChevronRight, ClipboardPaste, Copy, Droplets, Plus } from "lucide-react-native";
 import { AppButton, ConfirmDialog, EmptyState, InlineNotice, LoadingState } from "../../../shared/ui/components/public.ts";
@@ -21,7 +21,6 @@ import { dayTitle, kcalText, nutritionErrorText, quantityText, slotLabels, whole
 import { useNutritionGuide } from "./useNutritionGuide.ts";
 import type { CalcClientBody } from "./NutritionCalcScreen.tsx";
 import type { CatalogFilter } from "./AddFoodScreen.tsx";
-import { DayTabs } from "./DayTabs.tsx";
 import { useClientDay } from "./ClientDay.tsx";
 import { useNutritionDay } from "./useNutritionDay.ts";
 import { SavedMealEditorDialog } from "./SavedMealEditorDialog.tsx";
@@ -67,8 +66,10 @@ function QuickChip({ label, icon, onPress, disabled = false, accessibilityLabel 
  * «Дневник» питания клиента (§49.2): день, итоги и коридоры цели, приёмы пищи, вода. Итог — сумма внесённых записей; пустой день и день только с водой
  * не оцениваются (§49.22). Экран пишет через порты дневника и читает цель на дату (исключение → версия → «не установлена»).
  */
-export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, measurements, onAdd, onEditSource }: Readonly<{
+export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, measurements, onAdd, onEditSource, leading }: Readonly<{
   clientId: string;
+  /** Первая строка прокручиваемого содержимого (переключатель «Дневник | Статистика»); дни закреплены выше, в оболочке. */
+  leading?: ReactNode;
   diary: NutritionDiaryPort;
   targets: NutritionTargetsPort;
   body: CalcClientBody;
@@ -157,15 +158,9 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
       `В приёме «${slotLabels[slot]}» уже есть записи. Добавить к ним скопированный приём «${slotLabels[copied.slot]}»?`);
   };
 
-  const header = (
-    <View style={styles.dateBar}>
-      <DayTabs />
-    </View>
-  );
-
   if (data === null) {
-    return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>{header}
-      {failed ? <View style={styles.pad}><InlineNotice kind="error">Не удалось загрузить дневник питания.</InlineNotice><AppButton label="Повторить загрузку" onPress={reload} /></View> : <LoadingState label="Загружаем день…" />}</View>;
+    return <ScrollView style={[styles.screen, { backgroundColor: colors.canvas }]} contentContainerStyle={styles.list}>{leading}
+      {failed ? <View><InlineNotice kind="error">Не удалось загрузить дневник питания.</InlineNotice><AppButton label="Повторить загрузку" onPress={reload} /></View> : <LoadingState label="Загружаем день…" />}</ScrollView>;
   }
   const recorded = data.summary.state === "FOOD_RECORDED";
   const orientation = dayOrientation(data.target, data.versions, data.summary.localDate, guide, defaults, leanMassKg);
@@ -173,10 +168,11 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
-      {header}
       {slow ? <View accessible accessibilityLabel="Загружаем день" style={[styles.slowBar, { backgroundColor: colors.accentFill }]} /> : null}
       <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled" pointerEvents={stale ? "none" : "auto"}>
+        {leading}
         <DayTotalsCard rows={totalRows} copying={copying} onCopyPrevious={() => { void copyPreviousDay(); }} />
+        <View style={styles.legend}><MacroColumnHeads /></View>
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
         {failed ? <InlineNotice kind="error">Не удалось обновить дневник. Показаны последние загруженные данные.</InlineNotice> : null}
         {notice !== null ? <InlineNotice kind="info">{notice}</InlineNotice> : null}
@@ -186,12 +182,12 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
           const total = slotEntries.length === 0 ? null : sumNutrients(slotEntries.map((entry) => entry.snapshot.eaten));
           const open = expanded[slot] ?? slotEntries.length > 0;
           return (
-            <View key={slot} style={[styles.card, { backgroundColor: colors.surface }]}>
+            <View key={slot} style={[styles.card, !open && styles.cardCollapsed, { backgroundColor: colors.surface }]}>
               <View style={styles.slotHeadRow}>
                 <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={`${slotLabels[slot]}${total === null ? "" : `, ${kcalText(total)}`}. ${open ? "Свернуть" : "Раскрыть"}`}
                   style={[styles.slotHead, styles.grow]} onPress={() => setExpanded({ ...expanded, [slot]: !open })}>
-                  {open ? <ChevronDown size={18} color={colors.textSecondary} /> : <ChevronRight size={18} color={colors.textSecondary} />}
-                  <Text style={[styles.slotTitle, { color: colors.textPrimary }]}>{slotLabels[slot]}</Text>
+                  {open ? <ChevronDown size={18} color={colors.textPrimary} /> : <ChevronRight size={18} color={colors.textSecondary} />}
+                  <Text style={[styles.slotTitle, { color: open ? colors.textPrimary : colors.textSecondary }]}>{slotLabels[slot]}</Text>
                 </Pressable>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Добавить в приём пищи: ${slotLabels[slot]}`} hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }} onPress={() => onAdd(localDate, slot)}
                   style={[styles.plus, { backgroundColor: colors.accentFill }]}>
@@ -200,7 +196,6 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
                 <MacroCells values={total} bold />
               </View>
               {open ? <>
-                {slotEntries.length > 0 ? <View style={styles.columnHeads}><MacroColumnHeads /></View> : null}
                 {slotEntries.map((entry) => <EntryRow key={entry.id} entry={entry} onOpen={setEditing} />)}
                 <View style={[styles.chipStrip, { borderColor: colors.border }]}>
                   <QuickChip label="Сохранить еду" accessibilityLabel={`Сохранить набор: ${slotLabels[slot]}`} disabled={slotEntries.length === 0} onPress={() => setSavingMeal(slotEntries.map(savedSnapshot))} />
@@ -218,13 +213,23 @@ export function NutritionDiaryScreen({ clientId, diary, targets, body, calc, mea
           <View style={styles.slotHead}>
             <Droplets size={18} color={colors.accentInk} />
             <Text style={[styles.slotTitle, { color: colors.textPrimary }]}>Вода</Text>
-            <Text style={[styles.meta, { color: colors.textSecondary }]}>{data.waterMl === null ? "не записана" : `${wholeText(data.waterMl * 10)} мл`}</Text>
+            <Text style={[styles.waterTotal, { color: colors.textPrimary }]}>{data.waterMl === null ? "не записана" : `${wholeText(data.waterMl * 10)} мл`}</Text>
           </View>
           <View style={styles.waterRow}>
-            {WATER_QUICK_ML.map((ml) => <View key={ml} style={styles.grow}><AppButton compact variant="secondary" label={`+${ml}`} accessibilityLabel={`Добавить воды: ${ml} мл`} onPress={() => changeWater(ml)} /></View>)}
+            {WATER_QUICK_ML.map((ml) => (
+              <Pressable key={ml} accessibilityRole="button" accessibilityLabel={`Добавить воды: ${ml} мл`} hitSlop={{ top: 5, bottom: 5 }} onPress={() => changeWater(ml)}
+                style={({ pressed }) => [styles.waterButton, shadow.chip, { backgroundColor: colors.surface, opacity: pressed ? 0.8 : 1 }]}>
+                <Text style={[styles.waterButtonText, { color: colors.textPrimary }]}>{`+${ml}`}</Text>
+              </Pressable>
+            ))}
           </View>
-          <AppButton compact variant="ghost" label={`−${WATER_STEP_ML} мл`} disabled={data.waterMl === null} onPress={() => changeWater(-WATER_STEP_ML)} />
-          <Text style={[styles.meta, { color: colors.textMuted }]}>Вода не считается едой и не влияет на оценку дня.</Text>
+          <View style={styles.waterFoot}>
+            <Text style={[styles.waterHint, { color: colors.textSecondary }]}>Вода не считается едой и не влияет на оценку дня.</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Убрать ${WATER_STEP_ML} мл воды`} accessibilityState={{ disabled: data.waterMl === null }} disabled={data.waterMl === null}
+              hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }} onPress={() => changeWater(-WATER_STEP_ML)}>
+              <Text style={[styles.waterMinus, { color: colors.textSecondary, opacity: data.waterMl === null ? 0.5 : 1 }]}>{`−${WATER_STEP_ML} мл`}</Text>
+            </Pressable>
+          </View>
         </View>
 
         {!recorded && data.waterMl === null ? <EmptyState reason="no-data" title="В этот день записей нет"
@@ -255,20 +260,27 @@ const styles = StyleSheet.create({
   slowBar: { height: 2, marginHorizontal: 16, borderRadius: 1 },
   pad: { paddingHorizontal: 16 },
   grow: { flex: 1 },
-  dateBar: { paddingHorizontal: 16, paddingTop: 2 },
-  list: { paddingHorizontal: 16, paddingBottom: 24, paddingTop: 8, gap: 10 },
-  card: { ...shadow.card, borderRadius: 26, padding: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: "transparent", gap: 8 },
-  slotHead: { flexDirection: "row", alignItems: "center", gap: 8 },
-  slotTitle: { flex: 1, fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
-  entry: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 8, minHeight: 48, flexDirection: "row", alignItems: "center", gap: 6 },
+  list: { paddingHorizontal: 16, paddingBottom: 24, paddingTop: 10, gap: 8 },
+  card: { ...shadow.card, borderRadius: 26, padding: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: "transparent", gap: 8 },
+  cardCollapsed: { paddingVertical: 8 },
+  /** Подписи колонок «ккал Б Ж У» один раз над карточками приёмов; правый отступ равен отступу карточки. */
+  legend: { alignItems: "flex-end", paddingRight: 12 },
+  slotHead: { flexDirection: "row", alignItems: "center", gap: 4 },
+  slotTitle: { flex: 1, fontFamily: fonts.bold, fontSize: 15, lineHeight: 20 },
+  entry: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 8, paddingBottom: 0, minHeight: 48, flexDirection: "row", alignItems: "center", gap: 6 },
   entryText: { flex: 1, gap: 2 },
-  columnHeads: { alignItems: "flex-end", marginBottom: -4 },
   slotHeadRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  plus: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  chipStrip: { flexDirection: "row", gap: 6, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
-  chip: { flex: 1, minWidth: 0, minHeight: 32, borderRadius: 16, borderWidth: 1, paddingHorizontal: 6, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 },
-  chipText: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
-  entryName: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
+  plus: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  chipStrip: { flexDirection: "row", gap: 6, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth },
+  chip: { flex: 1, minWidth: 0, minHeight: 34, borderRadius: 17, borderWidth: 1, paddingHorizontal: 4, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 },
+  chipText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 },
+  entryName: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },
   meta: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  waterRow: { flexDirection: "row", gap: 8 },
+  waterRow: { flexDirection: "row", gap: 6 },
+  waterButton: { flex: 1, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  waterButtonText: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
+  waterTotal: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },
+  waterFoot: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  waterHint: { flex: 1, fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
+  waterMinus: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 15 },
 });

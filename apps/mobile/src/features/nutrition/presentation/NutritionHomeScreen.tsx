@@ -9,6 +9,7 @@ import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
 import type { CatalogFilter } from "./AddFoodScreen.tsx";
 import type { CalcClientBody } from "./NutritionCalcScreen.tsx";
+import { DayTabs } from "./DayTabs.tsx";
 import { NutritionDiaryScreen } from "./NutritionDiaryScreen.tsx";
 import { NutritionStatsScreen } from "./NutritionStatsScreen.tsx";
 
@@ -26,14 +27,16 @@ export function NutritionHomeScreen({ clientId, body, diary, targets, calc, meas
   const [section, setSection] = useState<Section>("diary");
   const [visited, setVisited] = useState<Readonly<Partial<Record<Section, boolean>>>>({ diary: true });
   const selectSection = (next: Section) => { setVisited((current) => ({ ...current, [next]: true })); setSection(next); };
+  // Дни закреплены сверху (как на «Главной») только в «Дневнике»: статистике веса день не нужен. Переключатель разделов — первая строка прокручиваемого содержимого.
+  const switcher = <SegmentedControl compact items={sections} selectedId={section} onSelect={selectSection} />;
   return (
     <View style={{ flex: 1, backgroundColor: palette.tokens.canvas }}>
-      <View style={{ paddingHorizontal: 16, paddingTop: 8 }}><SegmentedControl compact items={sections} selectedId={section} onSelect={selectSection} /></View>
+      {section === "diary" ? <DayTabs /> : null}
       {visited.diary ? <View style={{ flex: 1, display: section === "diary" ? "flex" : "none" }}>
-        <NutritionDiaryScreen key={clientId} clientId={clientId} diary={diary} targets={targets} body={body} calc={calc} measurements={measurements} onAdd={onAdd} onEditSource={onEditSource} />
+        <NutritionDiaryScreen key={clientId} clientId={clientId} diary={diary} targets={targets} body={body} calc={calc} measurements={measurements} onAdd={onAdd} onEditSource={onEditSource} leading={switcher} />
       </View> : null}
       {visited.stats ? <View style={{ flex: 1, display: section === "stats" ? "flex" : "none" }}>
-        <NutritionStatsScreen key={clientId} clientId={clientId} measurements={measurements} onOpenJournal={onOpenJournal} />
+        <NutritionStatsScreen key={clientId} clientId={clientId} measurements={measurements} onOpenJournal={onOpenJournal} leading={switcher} />
       </View> : null}
     </View>
   );

@@ -1,10 +1,10 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { AppButton, InlineNotice, LoadingState, ChoiceSegments, TextField } from "../../../shared/ui/components/public.ts";
+import { AppButton, InlineNotice, LoadingState } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { plural } from "../../../shared/format/clockText.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
-import { shadow, scrim } from "../../../shared/ui/theme/style.ts";
+import { scrim } from "../../../shared/ui/theme/style.ts";
 import { BODY_FAT_PICTURES, BodyFatPictureSheet, localDateOf, navyBodyFat, pictureSetOf, upsertDailyMeasurement, type MeasurementRepositoryPort,
   type WritableMeasurementMethod } from "../../measurements/public.ts";
 import { CALC_ACTIVITIES, CALC_GOALS, CALC_INTENSITIES, deriveCalc, type CalcActivity, type CalcGoal, type CalcIntensity,
@@ -12,6 +12,7 @@ import { CALC_ACTIVITIES, CALC_GOALS, CALC_INTENSITIES, deriveCalc, type CalcAct
 import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
 import { DEFAULT_CALC_PROFILE, useCalcData } from "./useCalcData.ts";
 import { nutritionErrorText } from "./nutritionFormat.ts";
+import { LinkTile, OptionGrid, PillSegments, ProfileField, SheetLabel, SoftPill } from "./CalcSheetParts.tsx";
 
 const goalLabels: Readonly<Record<CalcGoal, string>> = { LOSS: "Похудение", MAINTENANCE: "Поддержание", GAIN: "Набор" };
 const activityLabels: Readonly<Record<CalcActivity, string>> = { SEDENTARY: "Сидячий", MODERATE: "Умеренный", ACTIVE: "Активный", VERY_ACTIVE: "Очень активный" };
@@ -61,34 +62,6 @@ function calcErrorText(error: unknown): string {
   }
 }
 
-function Card({ title, right, children }: Readonly<{ title: string; right?: React.ReactNode; children: React.ReactNode }>) {
-  const { palette } = usePrototypeTheme();
-  const colors = palette.tokens;
-  return (
-    <View style={[styles.card, { backgroundColor: colors.surface }]}>
-      <View style={styles.cardHead}>
-        <View style={[styles.dot, { backgroundColor: colors.accentInk }]} />
-        <Text style={[styles.cardTitle, { color: colors.accentInk }]}>{title}</Text>
-        {right}
-      </View>
-      {children}
-    </View>
-  );
-}
-
-function Stat({ label, value, caption, accent }: Readonly<{ label: string; value: number | null; caption: string; accent?: boolean }>) {
-  const { palette } = usePrototypeTheme();
-  const colors = palette.tokens;
-  return (
-    <View accessible accessibilityLabel={`${label}: ${value === null ? "нет данных" : value}. ${caption}`}
-      style={[styles.stat, { borderColor: colors.border, backgroundColor: accent === true ? colors.accentSoft : colors.surfaceRaised }]}>
-      <Text style={[styles.statLabel, { color: accent === true ? colors.accentInk : colors.textSecondary }]}>{label}</Text>
-      <Text style={[styles.statValue, { color: colors.textPrimary }]}>{value === null ? "—" : String(value)}</Text>
-      {caption !== "" ? <Text style={[styles.statCaption, { color: colors.textMuted }]}>{caption}</Text> : null}
-    </View>
-  );
-}
-
 function HelpSheet({ visible, onClose }: Readonly<{ visible: boolean; onClose: () => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -121,20 +94,22 @@ function HelpSheet({ visible, onClose }: Readonly<{ visible: boolean; onClose: (
 }
 
 /**
- * Экран «Расчёт» (§49.10, UX «Расчёт»): просмотр и редактирование — состояния одного экрана; вес и % жира берутся из Measurements, шаги — из суточной активности.
- * Результат — справочная оценка: цели он не меняет (ADR-025/027), цель задаётся на главной клиента.
+ * Экран «Расчёт» (§49.10, UX «Расчёт»; вид — макет листов «Расчёт» и «Профиль и активность»): просмотр и редактирование — состояния одного листа; вес и % жира берутся
+ * из Measurements, шаги — из суточной активности. Результат — справочная оценка: цели он не меняет (ADR-025/027), цель задаётся на главной клиента.
  */
 /** Профиль расчёта вместе с полом и ростом карточки клиента (`null` — карточку не менять): одна операция workflow, пол и рост принадлежат Clients. */
 export type SaveCalcProfile = (profile: CalcProfile, expectedRevision: number | null, body: Readonly<{ sex: CalcSex | null; heightCm: number | null }> | null) => Promise<void>;
 
-export function NutritionCalcScreen({ clientId, body, onSaveProfile, calc, measurements }: Readonly<{ clientId: string; body: CalcClientBody;
-  onSaveProfile: SaveCalcProfile; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort }>) {
+export function NutritionCalcScreen({ clientId, body, onSaveProfile, calc, measurements, onEditingChange }: Readonly<{ clientId: string; body: CalcClientBody;
+  onSaveProfile: SaveCalcProfile; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort;
+  /** Оболочка листа меняет заголовок: «Расчёт» ↔ «Профиль и активность». */
+  onEditingChange?: (editing: boolean) => void }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const { loaded, failed, reload } = useCalcData(clientId, calc, measurements);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [fatMode, setFatMode] = useState<"GIRTH" | "PICTURE">("GIRTH");
+  const [girthOpen, setGirthOpen] = useState(false);
   const [pictureOpen, setPictureOpen] = useState(false);
   const [help, setHelp] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,6 +117,7 @@ export function NutritionCalcScreen({ clientId, body, onSaveProfile, calc, measu
   const [busy, setBusy] = useState(false);
   /** Замок от двойного нажатия: state `busy` обновляется асинхронно, ref — сразу. */
   const lock = useRef(false);
+  useEffect(() => { onEditingChange?.(editing); }, [editing, onEditingChange]);
 
   const profile = loaded?.stored?.profile ?? DEFAULT_CALC_PROFILE;
   /** Что считать: в редактировании — живой черновик, иначе сохранённый профиль и последние замеры. */
@@ -162,7 +138,7 @@ export function NutritionCalcScreen({ clientId, body, onSaveProfile, calc, measu
   const startEdit = () => {
     if (loaded === null) return;
     setDraft(draftOf(profile, body, loaded.weight, loaded.fat));
-    setFatMode("GIRTH");
+    setGirthOpen(false);
     setError(null);
     setNotice(null);
     setEditing(true);
@@ -213,107 +189,89 @@ export function NutritionCalcScreen({ clientId, body, onSaveProfile, calc, measu
   const pictureSet = draft === null ? null : pictureSetOf(draft.sex);
   const pickedPicture = draft === null || pictureSet === null || draft.fatPicture === null ? null : BODY_FAT_PICTURES[pictureSet].find((entry) => entry.index === draft.fatPicture) ?? null;
   const setField = (patch: Partial<Draft>) => setDraft((current) => current === null ? current : { ...current, ...patch });
-
-  const headerButtons = (
-    <View style={styles.headButtons}>
-      <AppButton compact size="small" variant="secondary" label="?" accessibilityLabel="Справка по расчёту" onPress={() => setHelp(true)} />
-      {editing ? <AppButton compact size="small" label="Готово" busy={busy} onPress={() => { void done(); }} /> : null}
-    </View>
-  );
+  const parts = [
+    { key: "REE", name: "Базовый обмен · REE", value: result.ree, color: colors.charts[0]! },
+    { key: "NEAT", name: "Шаги и быт · NEAT", value: result.neat, color: colors.charts[1]! },
+    { key: "EAT", name: "Тренировки · EAT", value: result.eat, color: colors.charts[2]! },
+  ] as const;
+  const stepNote = result.startTdee === null ? null : profile.goal === "LOSS" ? ` − шаг цели ${profile.stepKcal}` : profile.goal === "GAIN" ? ` + шаг цели ${profile.stepKcal}` : "";
 
   return (
     <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       {notice !== null ? <InlineNotice kind="info">{notice}</InlineNotice> : null}
-      <Card title={editing ? "ПРОФИЛЬ И АКТИВНОСТЬ" : "РАСЧЁТ"} right={headerButtons}>
-        {editing && draft !== null ? <>
-          <View style={styles.pair}>
-            <View style={styles.grow}><Stat label="СТАРТОВЫЙ РАСХОД" value={result.startTdee} caption="REE + NEAT + EAT" /></View>
-            <View style={styles.grow}><Stat label="ИТОГОВЫЙ КАЛОРАЖ" value={result.target} caption={goalLabels[profile.goal]} accent /></View>
-          </View>
-          <ChoiceSegments label="Пол" items={[{ id: "MALE", label: "Мужской" }, { id: "FEMALE", label: "Женский" }]}
-            value={draft.sex ?? ""} disabled={busy} onChange={(sex) => { if (sex === "MALE" || sex === "FEMALE") setField(sex === draft.sex ? { sex } : { sex, fatPicture: null, fatMethod: "MANUAL" }); }} />
-          <View style={styles.pair}>
-            <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Рост, см" value={draft.height} onChangeText={(height) => setField({ height })} keyboardType="decimal-pad" placeholder="—" /></View>
-            <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Вес, кг" value={draft.weight} onChangeText={(weight) => setField({ weight })} keyboardType="decimal-pad" placeholder="—" /></View>
-            <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Жир, %" value={draft.fat} onChangeText={(fat) => setField({ fat, fatMethod: "MANUAL", fatPicture: null })} keyboardType="decimal-pad" placeholder="—" /></View>
-          </View>
-          <Text style={[styles.hint, { color: colors.textMuted }]}>{body.age === null ? "Возраст: укажите дату рождения в карточке." : `Возраст: ${body.age} ${plural(body.age, "год", "года", "лет")} · из карточки клиента.`} Вес и жир сохраняются в замеры.</Text>
+      {editing && draft !== null ? <>
+        <PillSegments label="Пол" height={38} items={[{ id: "MALE", label: "Мужской" }, { id: "FEMALE", label: "Женский" }]} value={draft.sex ?? ""} disabled={busy}
+          onChange={(sex) => setField(sex === draft.sex ? { sex } : { sex, fatPicture: null, fatMethod: "MANUAL" })} />
+        <View style={styles.row}>
+          <ProfileField label="Рост, см" disabled={busy} value={draft.height} onChangeText={(height) => setField({ height })} placeholder="—" />
+          <ProfileField label="Вес, кг" disabled={busy} value={draft.weight} onChangeText={(weight) => setField({ weight })} placeholder="—" />
+          <ProfileField label="Жир, %" disabled={busy} value={draft.fat} onChangeText={(fat) => setField({ fat, fatMethod: "MANUAL", fatPicture: null })} placeholder="—" />
+        </View>
+        <Text style={[styles.hint, { color: colors.textSecondary }]}>{body.age === null ? "Возраст: укажите дату рождения в карточке." : `Возраст: ${body.age} ${plural(body.age, "год", "года", "лет")} · из карточки клиента.`} Вес и жир сохраняются в замеры.</Text>
 
-          <View style={[styles.nested, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
-            <Text style={[styles.nestedTitle, { color: colors.textPrimary }]}>Оценка процента жира</Text>
-            <ChoiceSegments label="Способ оценки жира" items={[{ id: "GIRTH", label: "По обхватам" }, { id: "PICTURE", label: "По рисунку" }]}
-              value={fatMode} disabled={busy} onChange={setFatMode} />
-            {fatMode === "GIRTH" ? <>
-              {draft.sex === null ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Выберите пол — формула для мужчин и женщин разная.</Text> : null}
-              {num(draft.height) === null ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Рост берётся из поля «Рост» профиля выше.</Text> : null}
-              <View style={styles.pair}>
-                <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Шея, см" value={draft.neck} onChangeText={(neck) => setField({ neck })} keyboardType="decimal-pad" placeholder="0" /></View>
-                <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Талия, см" value={draft.waist} onChangeText={(waist) => setField({ waist })} keyboardType="decimal-pad" placeholder="0" /></View>
-                {draft.sex === "FEMALE" ? <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Бёдра, см" value={draft.hips} onChangeText={(hips) => setField({ hips })} keyboardType="decimal-pad" placeholder="0" /></View> : null}
-              </View>
-              <View style={styles.resultRow}>
-                <View accessible accessibilityLabel={`Оценка жира: ${navy === null ? "нет данных" : `${navy} процентов`}`}>
-                  <Text style={[styles.resultValue, { color: colors.textPrimary }]}>{navy === null ? "— %" : `${String(navy).replace(".", ",")} %`}</Text>
-                  <Text style={[styles.hint, { color: colors.textMuted }]}>Оценка по окружностям</Text>
-                </View>
-                <AppButton compact size="small" label="Подставить" accessibilityLabel="Подставить процент жира в профиль" disabled={navy === null || busy}
-                  disabledReason="Введите пол, рост, шею и талию (женщинам — и бёдра)." onPress={() => { if (navy !== null) setField({ fat: show(navy), fatMethod: "MANUAL", fatPicture: null }); }} />
-              </View>
-            </> : <>
-              {pictureSet === null ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Выберите пол — наборы рисунков для мужчин и женщин разные.</Text> : null}
-              <View style={styles.resultRow}>
-                <View accessible accessibilityLabel={`Выбранный рисунок: ${pickedPicture === null ? "не выбран" : `${pickedPicture.label} процентов`}`}>
-                  <Text style={[styles.resultValue, { color: colors.textPrimary }]}>{pickedPicture === null ? "— %" : `${pickedPicture.label} %`}</Text>
-                  <Text style={[styles.hint, { color: colors.textMuted }]}>Ориентировочно, не заменяет замеры</Text>
-                </View>
-                <AppButton compact size="small" label="Выбрать рисунок" accessibilityLabel="Открыть рисунки для оценки процента жира" disabled={pictureSet === null || busy}
-                  disabledReason="Сначала выберите пол." onPress={() => setPictureOpen(true)} />
-              </View>
-            </>}
+        <SheetLabel>Как определить процент жира</SheetLabel>
+        <View style={styles.row}>
+          <LinkTile label="По обхватам" disabled={busy} accessibilityHint="Показать поля шеи, талии и бёдер" onPress={() => setGirthOpen(!girthOpen)} />
+          <LinkTile label="По рисунку" disabled={busy || pictureSet === null} accessibilityHint={pictureSet === null ? "Сначала выберите пол" : "Открыть рисунки для оценки процента жира"} onPress={() => setPictureOpen(true)} />
+        </View>
+        {pictureSet === null ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Выберите пол — формулы и наборы рисунков для мужчин и женщин разные.</Text> : null}
+        {pickedPicture !== null ? <Text style={[styles.hint, { color: colors.textSecondary }]}>{`Выбран рисунок: ${pickedPicture.label} %. Ориентировочно, не заменяет замеры.`}</Text> : null}
+        {girthOpen ? <>
+          <View style={styles.row}>
+            <ProfileField label="Шея, см" disabled={busy} value={draft.neck} onChangeText={(neck) => setField({ neck })} placeholder="0" />
+            <ProfileField label="Талия, см" disabled={busy} value={draft.waist} onChangeText={(waist) => setField({ waist })} placeholder="0" />
+            {draft.sex === "FEMALE" ? <ProfileField label="Бёдра, см" disabled={busy} value={draft.hips} onChangeText={(hips) => setField({ hips })} placeholder="0" /> : null}
           </View>
+          {num(draft.height) === null ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Рост берётся из поля «Рост» профиля выше.</Text> : null}
+          <View style={styles.resultRow}>
+            <View accessible accessibilityLabel={`Оценка жира: ${navy === null ? "нет данных" : `${navy} процентов`}`}>
+              <Text style={[styles.resultValue, { color: colors.textPrimary }]}>{navy === null ? "— %" : `${String(navy).replace(".", ",")} %`}</Text>
+              <Text style={[styles.hint, { color: colors.textMuted }]}>Оценка по окружностям</Text>
+            </View>
+            <AppButton compact size="small" label="Подставить" accessibilityLabel="Подставить процент жира в профиль" disabled={navy === null || busy}
+              disabledReason="Введите пол, рост, шею и талию (женщинам — и бёдра)." onPress={() => { if (navy !== null) setField({ fat: show(navy), fatMethod: "MANUAL", fatPicture: null }); }} />
+          </View>
+        </> : null}
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Образ жизни</Text>
-          <ChoiceSegments label="Образ жизни" items={CALC_ACTIVITIES.map((id) => ({ id, label: activityLabels[id] }))}
-            value={draft.activity} disabled={busy} onChange={(activity) => setField({ activity })} />
-          <View style={styles.pair}>
-            <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Трен./нед." value={draft.workouts} onChangeText={(workouts) => setField({ workouts })} keyboardType="decimal-pad" placeholder="0" /></View>
-            <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Мин./трен." value={draft.minutes} onChangeText={(minutes) => setField({ minutes })} keyboardType="decimal-pad" placeholder="60" /></View>
-            <View style={styles.grow}><TextField compact disabled={busy} textAlign="center" label="Шаг цели, ккал" value={draft.step} onChangeText={(step) => setField({ step })} keyboardType="decimal-pad" placeholder="100" /></View>
-          </View>
-          <Text style={[styles.hint, { color: colors.textMuted }]}>Шаг цели — поправка калорий для похудения и набора.</Text>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Интенсивность тренировок</Text>
-          <ChoiceSegments label="Интенсивность тренировок" items={CALC_INTENSITIES.map((id) => ({ id, label: intensityLabels[id] }))}
-            value={draft.intensity} disabled={busy} onChange={(intensity) => setField({ intensity })} />
-        </> : <>
-          <View style={styles.cols}>
-            <View style={styles.leftCol}>
-              <Stat label="СТАРТОВЫЙ РАСХОД" value={result.startTdee} caption="REE + NEAT + EAT" />
-              <Stat label="ИТОГОВЫЙ КАЛОРАЖ" value={result.target} caption="" accent />
+        <SheetLabel>Образ жизни</SheetLabel>
+        <OptionGrid label="Образ жизни" columns={2} items={CALC_ACTIVITIES.map((id) => ({ id, label: activityLabels[id] }))} value={draft.activity} disabled={busy}
+          onChange={(activity) => setField({ activity })} />
+        <View style={styles.row}>
+          <ProfileField label="Трен./нед." disabled={busy} value={draft.workouts} onChangeText={(workouts) => setField({ workouts })} placeholder="0" />
+          <ProfileField label="Мин./трен." disabled={busy} value={draft.minutes} onChangeText={(minutes) => setField({ minutes })} placeholder="60" />
+          <ProfileField label="Шаг цели, ккал" disabled={busy} value={draft.step} onChangeText={(step) => setField({ step })} placeholder="100" />
+        </View>
+        <SheetLabel>Интенсивность тренировок</SheetLabel>
+        <OptionGrid label="Интенсивность тренировок" columns={3} items={CALC_INTENSITIES.map((id) => ({ id, label: intensityLabels[id] }))} value={draft.intensity} disabled={busy}
+          onChange={(intensity) => setField({ intensity })} />
+        <View style={styles.cta}><AppButton label="Готово" busy={busy} onPress={() => { void done(); }} /></View>
+      </> : <>
+        <View accessible accessibilityLabel={`Итоговый калораж: ${result.target === null ? "нет данных" : `${result.target} ккал в день`}`} style={styles.center}>
+          <Text style={[styles.big, { color: colors.textPrimary }]}>{result.target === null ? "—" : String(result.target)}<Text style={[styles.bigUnit, { color: colors.textSecondary }]}>{result.target === null ? "" : " ккал в день"}</Text></Text>
+          <Text style={[styles.hint12, { color: colors.textSecondary }]}>{result.startTdee === null ? "Нужны пол, возраст, рост и вес" : `Стартовый расход ${result.startTdee}${stepNote ?? ""}`}</Text>
+        </View>
+        <PillSegments label="Цель" items={CALC_GOALS.map((id) => ({ id, label: goalLabels[id] }))} value={profile.goal} disabled={busy} onChange={(goal) => { void selectGoal(goal); }} />
+        <SheetLabel>Из чего складывается расход</SheetLabel>
+        <View accessible accessibilityLabel={`Расход: ${parts.map((part) => `${part.key} ${part.value ?? "нет данных"}`).join(", ")}`} style={[styles.bar, { backgroundColor: colors.border }]}>
+          {parts.map((part) => (part.value === null || part.value <= 0 ? null : <View key={part.key} style={{ flex: part.value, backgroundColor: part.color }} />))}
+        </View>
+        {parts.map((part) => (
+          <View key={part.key} accessible accessibilityLabel={`${part.name}: ${part.value === null ? "нет данных" : part.value}${part.key === "NEAT" ? `, ${result.neatSource === "STEPS" ? "по шагам" : "по образу жизни"}` : ""}`} style={styles.partRow}>
+            <View style={styles.partName}>
+              <View style={[styles.dot, { backgroundColor: part.color }]} />
+              <Text style={[styles.partText, { color: colors.textPrimary }]}>{part.name}</Text>
             </View>
-            <View style={[styles.goalCard, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>ЦЕЛЬ</Text>
-              {CALC_GOALS.map((id) => <Pressable key={id} accessibilityRole="radio" accessibilityState={{ checked: profile.goal === id, disabled: busy }}
-                accessibilityLabel={`Цель: ${goalLabels[id]}`} disabled={busy} onPress={() => { void selectGoal(id); }}
-                style={({ pressed }) => [styles.goalButton, { backgroundColor: profile.goal === id ? colors.accentFill : colors.surface,
-                  borderColor: profile.goal === id ? colors.accentFill : colors.border, opacity: busy ? 0.5 : pressed ? 0.75 : 1 }]}>
-                <Text style={[styles.goalText, { color: profile.goal === id ? colors.onAccentFill : colors.textSecondary }]}>{goalLabels[id]}</Text>
-              </Pressable>)}
-            </View>
+            <Text style={[styles.partValue, { color: colors.textPrimary }]}>{part.value === null ? "—" : String(part.value)}</Text>
           </View>
-          <View style={[styles.strip, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
-            {([["REE", result.ree, "базовый обмен"], ["NEAT", result.neat, result.neatSource === "STEPS" ? "по шагам" : "по образу жизни"], ["EAT", result.eat, "по тренировкам"]] as const).map(([title, value, caption], index) => (
-              <View key={title} accessible accessibilityLabel={`${title}: ${value === null ? "нет данных" : value}, ${caption}`} style={[styles.stripCell, index > 0 ? { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border } : null]}>
-                <Text style={[styles.statLabel, { color: colors.charts[index]! }]}>{title}</Text>
-                <Text style={[styles.stripValue, { color: colors.textPrimary }]}>{value === null ? "—" : String(value)}</Text>
-                <Text style={[styles.statCaption, { color: colors.textMuted }]}>{caption}</Text>
-              </View>
-            ))}
-          </View>
-          {missing ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Для расчёта нужны пол, возраст, рост и вес (или вес с процентом жира). Откройте «Профиль и активность» и заполните данные.</Text> : null}
-          <AppButton variant="secondary" label="Профиль и активность" disabled={busy} onPress={startEdit} />
-        </>}
-      </Card>
+        ))}
+        {missing ? <Text style={[styles.hint12, { color: colors.textSecondary }]}>Для расчёта нужны пол, возраст, рост и вес (или вес с процентом жира). Откройте «Профиль и активность» и заполните данные.</Text> : null}
+        <View style={styles.cta}><SoftPill label="Профиль и активность" disabled={busy} onPress={startEdit} /></View>
+        <Text style={[styles.hint, styles.hintCenter, { color: colors.textSecondary }]}>Расчёт справочный: цель по БЖУ задаётся полями на «Главной».</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Справка по расчёту" hitSlop={{ top: 14, bottom: 14 }} onPress={() => setHelp(true)} style={styles.helpLink}>
+          <Text style={[styles.helpLinkText, { color: colors.accentInk }]}>Как считается расчёт</Text>
+        </Pressable>
+      </>}
 
       {pictureSet === null ? null : <BodyFatPictureSheet visible={pictureOpen} set={pictureSet} selected={draft?.fatPicture ?? null} onClose={() => setPictureOpen(false)}
         onSelect={(picture) => { setField({ fat: show(picture.pickX10 / 10), fatMethod: "VISUAL_ESTIMATE", fatPicture: picture.index }); setPictureOpen(false); }} />}
@@ -323,32 +281,24 @@ export function NutritionCalcScreen({ clientId, body, onSaveProfile, calc, measu
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: 12, paddingTop: 4, paddingBottom: 6, gap: 8 },
+  content: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8, gap: 8 },
   pad: { paddingHorizontal: 16 },
-  grow: { flex: 1, minWidth: 0 },
-  card: { ...shadow.card, borderRadius: 20, padding: 8, gap: 6 },
-  cardHead: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  cardTitle: { flex: 1, fontFamily: fonts.bold, fontSize: 13, lineHeight: 18, letterSpacing: 0.6 },
-  headButtons: { flexDirection: "row", gap: 8, alignItems: "center" },
-  cols: { flexDirection: "row", gap: 6, alignItems: "stretch" },
-  leftCol: { flex: 1.2, minWidth: 0, gap: 6 },
-  stat: { borderRadius: 14, borderWidth: 1, padding: 8, gap: 1 },
-  statLabel: { fontFamily: fonts.bold, fontSize: 10, lineHeight: 13, letterSpacing: 0.2 },
-  statValue: { fontFamily: fonts.bold, fontSize: 23, lineHeight: 28 },
-  goalCard: { flex: 1, minWidth: 0, borderRadius: 14, borderWidth: 1, padding: 6, gap: 4, justifyContent: "center" },
-  goalButton: { minHeight: 32, borderRadius: 12, borderWidth: 1, paddingHorizontal: 4, justifyContent: "center", alignItems: "center" },
-  goalText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16, textAlign: "center" },
-  strip: { flexDirection: "row", borderRadius: 18, borderWidth: 1 },
-  stripCell: { flex: 1, alignItems: "center", paddingVertical: 6, paddingHorizontal: 2, gap: 1 },
-  stripValue: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 21 },
-  label: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 15 },
-  statCaption: { fontFamily: fonts.regular, fontSize: 10, lineHeight: 13, textAlign: "center" },
-  hint: { fontFamily: fonts.regular, fontSize: 10, lineHeight: 14 },
-  hintBody: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
-  pair: { flexDirection: "row", gap: 6 },
-  nested: { borderRadius: 14, borderWidth: 1, padding: 8, gap: 6 },
-  nestedTitle: { flex: 1, fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
+  row: { flexDirection: "row", gap: 6 },
+  center: { alignItems: "center", gap: 2, marginBottom: 2 },
+  big: { fontFamily: fonts.bold, fontSize: 40, lineHeight: 46, fontVariant: ["tabular-nums"] },
+  bigUnit: { fontFamily: fonts.bold, fontSize: 14 },
+  hint: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
+  hint12: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, textAlign: "center" },
+  hintCenter: { textAlign: "center", marginHorizontal: 8 },
+  bar: { flexDirection: "row", height: 12, borderRadius: 6, overflow: "hidden", gap: 2 },
+  partRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingVertical: 3 },
+  partName: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  partText: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19, flexShrink: 1 },
+  partValue: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 20, fontVariant: ["tabular-nums"] },
+  cta: { marginTop: 6 },
+  helpLink: { alignSelf: "center", minHeight: 20, justifyContent: "center" },
+  helpLinkText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 },
   resultRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   resultValue: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
   backdrop: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: scrim },
@@ -356,5 +306,6 @@ const styles = StyleSheet.create({
   dialogTitle: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
   dialogBody: { gap: 12 },
   helpItem: { gap: 2 },
+  hintBody: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   helpTitle: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
 });

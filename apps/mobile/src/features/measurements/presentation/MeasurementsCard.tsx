@@ -21,6 +21,9 @@ type Cell = Readonly<{ kind: "EMPTY" }> | Readonly<{ kind: "VALUE"; measurement:
 
 /** `ДД.ММ` для ленты дат. */
 const shortDate = (localDate: string) => `${localDate.slice(8, 10)}.${localDate.slice(5, 7)}`;
+const MONTHS_GENITIVE = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"] as const;
+/** «10 ноября 2026» — подпись дня на «Главной» (макет). */
+const longDate = (localDate: string) => `${Number(localDate.slice(8, 10))} ${MONTHS_GENITIVE[Number(localDate.slice(5, 7)) - 1] ?? ""} ${localDate.slice(0, 4)}`;
 const fullDate = (localDate: string) => `${localDate.slice(8, 10)}.${localDate.slice(5, 7)}.${localDate.slice(0, 4)}`;
 const sideLabels = (group: MeasurementGroup): readonly [string, string] => group.id === "THIGH"
   ? ["Левое", "Правое"] : group.id === "CALF" ? ["Левая", "Правая"] : ["Левый", "Правый"];
@@ -51,7 +54,7 @@ const cellSpeech = (cell: Cell): string => cell.kind === "VALUE" ? `${valueText(
 
 interface EditorState { readonly editingDate: string | null; readonly date: string; readonly values: Readonly<Record<MeasurementType, string>> }
 
-function Tile({ group, cells, compact }: Readonly<{ group: MeasurementGroup; cells: Readonly<Record<MeasurementType, Cell>>; compact: boolean }>) {
+function Tile({ group, cells, compact, dayMode = false }: Readonly<{ group: MeasurementGroup; cells: Readonly<Record<MeasurementType, Cell>>; compact: boolean; dayMode?: boolean }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const sided = group.left !== undefined && group.right !== undefined;
@@ -62,15 +65,15 @@ function Tile({ group, cells, compact }: Readonly<{ group: MeasurementGroup; cel
     : `${group.label}: ${cellSpeech(cells[group.single as MeasurementType])}`;
   const muted = (cell: Cell) => cell.kind === "VALUE" ? colors.textPrimary : colors.textMuted;
   return (
-    <View accessible accessibilityLabel={speech} style={[styles.tile, compact && styles.compactTile, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
-      <Text style={[styles.tileLabel, compact && styles.compactTileLabel, { color: colors.textSecondary }]}>{group.label}</Text>
+    <View accessible accessibilityLabel={speech} style={[styles.tile, compact && styles.compactTile, dayMode && styles.dayTile, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
+      <Text style={[styles.tileLabel, compact && styles.compactTileLabel, dayMode && styles.dayTileLabel, { color: colors.textSecondary }]}>{group.label}</Text>
       {sided ? <>
         <View style={styles.sides}>
           <Text style={[styles.tileValue, compact && styles.compactTileValue, { color: muted(cells[group.left as MeasurementType]) }]}>{`Л ${cellText(cells[group.left as MeasurementType])}`}</Text>
           <Text style={[styles.tileValue, compact && styles.compactTileValue, { color: muted(cells[group.right as MeasurementType]) }]}>{`П ${cellText(cells[group.right as MeasurementType])}`}</Text>
         </View>
         {hasLegacy ? <Text style={[styles.tileLabel, compact && styles.compactTileLabel, { color: colors.textMuted }]}>{`без стороны ${cellText(legacy)}`}</Text> : null}
-      </> : <Text style={[styles.tileValue, compact && styles.compactTileValue, { color: muted(cells[group.single as MeasurementType]) }]}>{cellText(cells[group.single as MeasurementType])}{cells[group.single as MeasurementType].kind === "VALUE" ? " см" : ""}</Text>}
+      </> : <Text style={[styles.tileValue, compact && styles.compactTileValue, dayMode && styles.dayTileValue, { color: muted(cells[group.single as MeasurementType]) }]}>{cellText(cells[group.single as MeasurementType])}{cells[group.single as MeasurementType].kind === "VALUE" ? " см" : ""}</Text>}
     </View>
   );
 }
@@ -207,8 +210,9 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal, compact 
     const singles = groups.filter((group) => group.single !== undefined);
     const sided = groups.filter((group) => group.single === undefined);
     const chunk = (list: readonly MeasurementGroup[], size: number) => Array.from({ length: Math.ceil(list.length / size) }, (_, row) => list.slice(row * size, row * size + size));
-    return compact ? chunk(groups, 3) : [...chunk(singles, 3), ...chunk(sided, 2)];
+    return compact || dayMode ? chunk(groups, 3) : [...chunk(singles, 3), ...chunk(sided, 2)];
   };
+  const dayMode = day !== undefined;
   const editorGroups = groupsFor(editor !== null && editor.editingDate !== null ? cells : null);
   const editorField = (type: MeasurementType, label: string) => {
     if (editor === null) return null;
@@ -219,11 +223,21 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal, compact 
   };
 
   return (
-    <View style={[styles.card, compact && styles.compactCard, { backgroundColor: colors.surface }]}>
+    <View style={[styles.card, compact && styles.compactCard, dayMode && styles.dayCard, { backgroundColor: colors.surface, opacity: dayMode && future ? 0.55 : 1 }]}>
       <View style={styles.head}>
-        <View style={[styles.dot, { backgroundColor: colors.accentInk }]} />
-        <Text style={[styles.title, { color: colors.accentInk }]}>ЗАМЕРЫ{compact && current !== null ? <Text style={styles.compactDateTitle}>{`\n${fullDate(current)}`}</Text> : null}</Text>
-        {current !== null ? <>
+        {dayMode ? <View style={styles.grow}>
+          <Text accessibilityRole="header" style={[styles.dayLabel, { color: colors.textMuted }]}>Замеры</Text>
+          <Text style={[styles.dayDate, { color: colors.textSecondary }]}>{longDate(day)}</Text>
+        </View> : <>
+          <View style={[styles.dot, { backgroundColor: colors.accentInk }]} />
+          <Text style={[styles.title, { color: colors.accentInk }]}>ЗАМЕРЫ{compact && current !== null ? <Text style={styles.compactDateTitle}>{`\n${fullDate(current)}`}</Text> : null}</Text>
+        </>}
+        {current !== null && dayMode ? <>
+          <Pressable accessibilityRole="button" accessibilityLabel="Изменить замеры" disabled={busy || future} hitSlop={{ top: 8, bottom: 8 }} onPress={openEdit}
+            style={[styles.dayPill, { backgroundColor: colors.accentSoft }]}><Text style={[styles.dayPillText, { color: colors.accentInk }]}>Изменить</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Удалить замеры за ${fullDate(current)}`} disabled={busy || future} hitSlop={{ top: 8, bottom: 8 }} onPress={() => setConfirmDelete(true)}
+            style={[styles.dayPill, styles.dayPillOutline, { borderColor: colors.danger }]}><Text style={[styles.dayPillText, { color: colors.danger }]}>Удалить</Text></Pressable>
+        </> : current !== null ? <>
           <AppButton compact size={compact ? "small" : "default"} variant="secondary" label="Изменить" disabled={busy || future} onPress={openEdit} />
           <AppButton compact size={compact ? "small" : "default"} variant="ghost" label="Удалить" disabled={busy || future} accessibilityLabel={`Удалить замеры за ${fullDate(current)}`} onPress={() => setConfirmDelete(true)} />
         </> : null}
@@ -247,21 +261,27 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal, compact 
           <AppIconButton label="Следующая дата замера" icon={<ChevronRight size={20} color={colors.textSecondary} />} disabled={index < 0 || index >= dates.length - 1} onPress={() => move(1)} />
         </View>}
         {current === null || cells === null ? <>
-          <Text style={[styles.empty, { color: colors.textSecondary }]}>{day !== undefined ? "За этот день замеров нет." : "Замеров пока нет. Нажмите «+», чтобы добавить первую запись."}</Text>
-          {day !== undefined ? <AppButton variant="secondary" label="Добавить замер" disabled={future} onPress={openNew} />
+          <Text style={[styles.empty, dayMode && styles.dayEmpty, { color: colors.textSecondary }]}>{day !== undefined ? (future ? "Замеры на будущие даты не вносятся." : "За этот день замеров нет.") : "Замеров пока нет. Нажмите «+», чтобы добавить первую запись."}</Text>
+          {day !== undefined ? (future ? null : <Pressable accessibilityRole="button" accessibilityLabel="Добавить замер" hitSlop={{ top: 4, bottom: 4 }} onPress={openNew}
+            style={({ pressed }) => [styles.dayAdd, { backgroundColor: colors.accentSoft, opacity: pressed ? 0.85 : 1 }]}><Text style={[styles.dayAddText, { color: colors.accentInk }]}>Добавить замер</Text></Pressable>)
             : !compact ? <AppButton variant="secondary" label="Новая запись" onPress={openNew} /> : null}
         </> : <>
-          {!compact ? <Text style={[styles.fullDate, { color: colors.textPrimary }]}>{fullDate(current)}</Text> : null}
+          {!compact && !dayMode ? <Text style={[styles.fullDate, { color: colors.textPrimary }]}>{fullDate(current)}</Text> : null}
           {rows(shownGroups).map((row) => (
             <View key={row.map((group) => group.id).join()} style={styles.tiles}>
-              {row.map((group) => <Tile key={group.id} group={group} cells={cells} compact={compact} />)}
+              {row.map((group) => <Tile key={group.id} group={group} cells={cells} compact={compact} dayMode={dayMode} />)}
             </View>
           ))}
         </>}
-        <View style={styles.tiles}>
+        {dayMode ? <View style={styles.dayLinks}>
+          <Pressable accessibilityRole="button" hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }} onPress={() => setConfiguring(!configuring)}>
+            <Text style={[styles.dayLink, { color: colors.accentInk }]}>{configuring ? "Готово" : "Настроить замеры"}</Text></Pressable>
+          {onOpenJournal !== undefined ? <Pressable accessibilityRole="button" hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }} onPress={onOpenJournal}>
+            <Text style={[styles.dayLink, { color: colors.accentInk }]}>Журнал замеров</Text></Pressable> : null}
+        </View> : <View style={styles.tiles}>
           <View style={styles.grow}><AppButton compact size={compact ? "small" : "default"} variant="ghost" label={configuring ? "Готово" : "Настроить замеры"} onPress={() => setConfiguring(!configuring)} /></View>
           {onOpenJournal !== undefined ? <View style={styles.grow}><AppButton compact size={compact ? "small" : "default"} variant="ghost" label="Журнал замеров" onPress={onOpenJournal} /></View> : null}
-        </View>
+        </View>}
         {configuring ? <>
           <Text style={[styles.hint, { color: colors.textSecondary }]}>Выберите показатели, которые показывать. Скрытие не удаляет внесённые значения; группа с данными за дату видна всегда. Настройка действует, пока открыто приложение.</Text>
           <View style={styles.settingsGrid}>
@@ -324,6 +344,21 @@ const styles = StyleSheet.create({
   compactDateTitle: { fontFamily: fonts.regular, fontSize: 10, lineHeight: 13, letterSpacing: 0 },
   compactDateChip: { minHeight: 40 },
   head: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
+  /** Режим дня на «Главной» — размеры макета OnlyFits. */
+  dayCard: { borderRadius: 26, padding: 12, gap: 8 },
+  dayLabel: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 15, letterSpacing: 0.66, textTransform: "uppercase" },
+  dayDate: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
+  dayPill: { height: 32, borderRadius: 16, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
+  dayPillOutline: { borderWidth: 1 },
+  dayPillText: { fontFamily: fonts.bold, fontSize: 12.5, lineHeight: 16 },
+  dayTile: { minHeight: 0, borderRadius: 18, borderWidth: 0, paddingHorizontal: 10, paddingVertical: 8, gap: 0 },
+  dayTileLabel: { fontSize: 11, lineHeight: 15 },
+  dayTileValue: { fontSize: 17, lineHeight: 22 },
+  dayLinks: { flexDirection: "row", justifyContent: "center", gap: 22 },
+  dayLink: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 },
+  dayEmpty: { fontSize: 13, lineHeight: 18 },
+  dayAdd: { height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  dayAddText: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   title: { flex: 1, fontFamily: fonts.bold, fontSize: 13, lineHeight: 18, letterSpacing: 0.6 },
   grow: { flex: 1 },

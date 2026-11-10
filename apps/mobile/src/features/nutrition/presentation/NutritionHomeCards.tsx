@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { TrendingUp } from "lucide-react-native";
+import { Flame, Footprints, Moon, TrendingUp, Utensils, type LucideIcon } from "lucide-react-native";
 import { useHealthDaily, type HealthConnectPort, type HealthStorePort } from "../../health/public.ts";
 import { InlineNotice, SegmentedRing } from "../../../shared/ui/components/public.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
@@ -19,7 +19,7 @@ import type { CalcClientBody, SaveCalcProfile } from "./NutritionCalcScreen.tsx"
 import { CalcSheet } from "./CalcSheet.tsx";
 import { useMacroColors } from "./MacroGrid.tsx";
 import { NutritionTargetRows, type TargetMode } from "./NutritionTargetRows.tsx";
-import { metricLabels, nutritionErrorText, rangeText, wholeText } from "./nutritionFormat.ts";
+import { nutritionErrorText, rangeText } from "./nutritionFormat.ts";
 import type { MetricId } from "../domain/MetricSeries.ts";
 import { saveDayData } from "./dayData.ts";
 import { useNutritionGuide } from "./useNutritionGuide.ts";
@@ -95,41 +95,44 @@ function useHealthReady(platform: HealthConnectPort, store: HealthStorePort, lin
 
 const wholeNumber = (value: number): string => String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/gu, "\u00A0");
 
-/** Кружок показателя дня: дуга прогресса, число внутри, подпись ниже; нажатие открывает ввод или связанный экран. */
-function DayRing({ label, unit, caption, value, fraction, disabled = false, hint, onPress }: Readonly<{
-  label: string; unit?: string; caption: string; value: string | null; fraction: number | null; disabled?: boolean; hint: string; onPress: () => void;
+/** Кружок показателя дня (макет): дуга своего цвета, число внутри, значок и подпись ниже; нажатие открывает ввод или связанный экран. */
+function DayRing({ label, unit, caption, icon: Icon, color, value, fraction, disabled = false, hint, onPress }: Readonly<{
+  label: string; unit?: string; caption: string; icon: LucideIcon; color: string; value: string | null; fraction: number | null; disabled?: boolean; hint: string; onPress: () => void;
 }>) {
   const colors = usePrototypeTheme().palette.tokens;
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value === null ? "нет данных" : `${value}${unit === undefined ? "" : ` ${unit}`}`}`} accessibilityHint={hint} disabled={disabled} onPress={onPress}
       style={({ pressed }) => [styles.ring, { opacity: disabled ? 0.45 : pressed ? 0.85 : 1 }]}>
       <View importantForAccessibility="no-hide-descendants">
-        <SegmentedRing size={64} stroke={6} fraction={fraction} accessibilityLabel={label}>
+        <SegmentedRing size={62} stroke={6} fraction={fraction} segments={[{ weight: 1, color }]} accessibilityLabel={label}>
           <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.ringNumber, { color: colors.textPrimary }]}>{value ?? "—"}</Text>
         </SegmentedRing>
       </View>
-      <Text numberOfLines={2} style={[styles.ringCaption, { color: colors.textSecondary }]}>{caption}</Text>
+      <View style={styles.ringCaptionRow} importantForAccessibility="no-hide-descendants">
+        <Icon size={13} color={colors.textSecondary} strokeWidth={2} />
+        <Text numberOfLines={1} style={[styles.ringCaption, { color: colors.textSecondary }]}>{caption}</Text>
+      </View>
     </Pressable>
   );
 }
 
-/** Плашка показателя дня (одной ширины с соседями); без `onPress` — только значение. */
+/** Ячейка показателя дня в общей плашке (значение крупно, подпись под ним); без `onPress` — только значение. */
 function DayPlate({ label, value, disabled = false, hint, onPress, onChart }: Readonly<{
   label: string; value: string | null; disabled?: boolean; hint: string; onPress?: () => void;
-  /** Значок графика в углу плашки: открывает статистику показателя (нажатие на саму плашку по-прежнему вводит значение). */
+  /** Значок графика в углу ячейки: открывает статистику показателя (нажатие на саму ячейку по-прежнему вводит значение). */
   onChart?: () => void;
 }>) {
   const colors = usePrototypeTheme().palette.tokens;
   const content = <>
+    <Text numberOfLines={1} style={[styles.plateValue, { color: value === null ? colors.textMuted : colors.textPrimary }]}>{value ?? "—"}</Text>
     <Text numberOfLines={1} style={[styles.plateLabel, { color: colors.textSecondary }]}>{label}</Text>
-    <Text style={[styles.plateValue, { color: value === null ? colors.textMuted : colors.textPrimary }]}>{value ?? "—"}</Text>
   </>;
   // Без действия — обычный блок, а не «недоступная кнопка» для TalkBack.
-  if (onPress === undefined) return <View accessible accessibilityLabel={`${label}: ${value ?? "нет данных"}`} accessibilityHint={hint} style={[styles.plate, { backgroundColor: colors.surfaceRaised }]}>{content}</View>;
+  if (onPress === undefined) return <View accessible accessibilityLabel={`${label}: ${value ?? "нет данных"}`} accessibilityHint={hint} style={[styles.plateWrap, styles.plate]}>{content}</View>;
   return (
     <View style={styles.plateWrap}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value ?? "нет данных"}`} accessibilityHint={hint} disabled={disabled} onPress={onPress}
-        style={({ pressed }) => [styles.plate, { backgroundColor: colors.surfaceRaised, opacity: disabled ? 0.45 : pressed ? 0.85 : 1 }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value ?? "нет данных"}`} accessibilityHint={hint} disabled={disabled} onPress={onPress} hitSlop={{ top: 6, bottom: 6 }}
+        style={({ pressed }) => [styles.plate, { opacity: disabled ? 0.45 : pressed ? 0.85 : 1 }]}>
         {content}
       </Pressable>
       {onChart === undefined ? null : (
@@ -222,131 +225,115 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   const fraction = eatenKcalX10 === null || orientMiddle === null || orientMiddle <= 0 ? null : eatenKcalX10 / 10 / orientMiddle;
   /** Дуга делится по калориям съеденных белков, жиров и углеводов (4/9/4). */
   const segments = (["protein", "fat", "carbs"] as const).map((metric) => ({ weight: (eaten(metric) ?? 0) * KCAL_PER_G[metric], color: macroColors[metric] }));
-  const effective = liveTarget;
-  const targetText = (metric: "protein" | "fat" | "carbs"): string => {
-    if (effective !== null) return rangeText(effective[metric]) ?? "—";
-    return defaults === null || defaults[metric] === null ? "—" : String(defaults[metric]).replace(".", ",");
-  };
-  const eatenText = (metric: "protein" | "fat" | "carbs"): string => (!fresh ? "—" : !recorded ? "0" : wholeText(eaten(metric)));
+  /** Съедено Б/Ж/У для полос: день не загрузился — «нет данных», еды нет — 0. */
+  const eatenGrams = (metric: "protein" | "fat" | "carbs"): number | null => (!fresh ? null : !recorded ? 0 : eaten(metric));
+  const eatenByMacro = { protein: eatenGrams("protein"), fat: eatenGrams("fat"), carbs: eatenGrams("carbs") };
+  const sourceHint = future ? "только питание" : health.linked && healthReady !== false ? "Health Connect" : null;
 
   return (
     <>
       <View style={[styles.card, shadow.card, { backgroundColor: colors.surface }]}>
-        <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Данные дня</Text>
+        <View style={styles.head}>
+          <Text accessibilityRole="header" style={[styles.label, { color: colors.textMuted }]}>Данные дня</Text>
+          {sourceHint === null ? null : <Text style={[styles.hint, { color: colors.textSecondary }]}>{sourceHint}</Text>}
+        </View>
         <View style={styles.rings}>
-          <DayRing label="Шаги" unit="шагов" caption="Шаги" value={future || !stepsToday.loaded || stepsToday.steps === null ? null : wholeNumber(stepsToday.steps)}
+          <DayRing label="Шаги" unit="шагов" caption="Шаги" icon={Footprints} color={colors.accentFill}
+            value={future || !stepsToday.loaded || stepsToday.steps === null ? null : wholeNumber(stepsToday.steps)}
             fraction={future ? null : goalFraction(stepsToday.steps, STEPS_GOAL)} hint="Открыть график шагов" onPress={() => onOpenMetric("steps")} />
           {/* Сон приходит из Health Connect (ADR-059, UIX-16/17): до подключения экран сна показывает пустое состояние. */}
-          <DayRing label="Сон" unit="часов" caption="Сон, ч" value={sleepHours === null ? null : (Math.round(sleepHours * 10) / 10).toFixed(1).replace(".", ",")}
+          <DayRing label="Сон" unit="часов" caption="Сон" icon={Moon} color={colors.success} value={sleepHours === null ? null : (Math.round(sleepHours * 10) / 10).toFixed(1).replace(".", ",")}
             fraction={goalFraction(sleepHours, SLEEP_GOAL_HOURS)} hint="Открыть график сна" onPress={() => onOpenMetric("sleep")} />
-          <DayRing label="Расход" unit="ккал" caption="Расход, ккал" value={tdee === null ? null : wholeNumber(tdee)} fraction={null}
+          <DayRing label="Расход" unit="ккал" caption="Расход" icon={Flame} color={colors.warning} value={tdee === null ? null : wholeNumber(tdee)} fraction={null}
             hint="Открыть график расхода" onPress={() => onOpenMetric("expenditure")} />
-          <DayRing label="Приёмы" caption="Приёмы пищи" value={!fresh ? null : String(mealCount(data.summary))}
+          <DayRing label="Приёмы" caption="Приёмы" icon={Utensils} color={colors.accentFill} value={!fresh ? null : String(mealCount(data.summary))}
             fraction={!fresh ? null : goalFraction(mealCount(data.summary), MEALS_GOAL)} hint="Открыть график приёмов пищи" onPress={() => onOpenMetric("meals")} />
         </View>
-        <View style={styles.plates}>
+        <View style={[styles.plates, { backgroundColor: colors.surfaceRaised }]}>
           <DayPlate label="Вес, кг" value={future || dayWeight.weight === null ? null : String(dayWeight.weight).replace(".", ",")} disabled={future}
             hint="Ввести вес за день" onPress={() => setSheet("weight")} onChart={onOpenWeightStats} />
           <DayPlate label="Тренировка" value={future ? null : trainingState ? "Да" : "Нет"} disabled={future || trainingAuto}
             hint={trainingAuto ? "Отмечено по дневнику тренировок" : "Отметить тренировку: да или нет"} onPress={() => { void cycleTraining(); }} />
           <DayPlate label="На неделе" value={workoutsThisWeek === null ? null : String(workoutsThisWeek)} disabled hint="Тренировок за неделю по дневнику" />
         </View>
-        {future ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Для будущего дня доступно только питание.</Text> : null}
         {health.linked && healthReady === false ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Health Connect не подключён. Открыть карточку клиента" onPress={onOpenHealth}
             style={[styles.healthNotice, { backgroundColor: colors.surfaceRaised }]}>
             <Text style={[styles.hint, { color: colors.textPrimary }]}>Health Connect не подключён: шаги и сон не обновляются. Нажмите, чтобы открыть карточку и дать доступ.</Text>
           </Pressable>
-        ) : health.linked ? <Text style={[styles.hint, { color: colors.textMuted }]}>Шаги и сон — из Health Connect.</Text> : null}
+        ) : null}
         {dayWeight.ambiguous ? <Text style={[styles.hint, { color: colors.textSecondary }]}>За этот день несколько записей веса: основную выбирают в журнале замеров.</Text> : null}
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       </View>
-      <MeasurementsCard day={day} future={future} clientId={clientId} repository={measurements} onOpenJournal={onOpenJournal} />
       <CalcSheet visible={calcOpen} clientId={clientId} body={body} onSaveProfile={onSaveProfile} calc={calc} measurements={measurements}
         onClose={() => setCalcOpen(false)} />
       <ValueSheet visible={sheet === "weight"} title="Вес за день" label="Вес" unit="кг" keyboardType="decimal-pad" placeholder="85,4" emptyMessage="Введите вес."
         initial={dayWeight.weight === null ? "" : String(dayWeight.weight).replace(".", ",")} onSave={saveWeight} onClose={() => setSheet(null)} />
 
-      <View style={[styles.card, styles.bigCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={[styles.card, styles.cardTight, shadow.card, { backgroundColor: colors.surface }]}>
         <View style={styles.head}>
-          <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>КБЖУ</Text>
-        <View style={styles.headRight}>
-          <View style={[styles.group, { borderColor: colors.border, backgroundColor: colors.surfaceRaised }]}>
+          <View style={[styles.group, { backgroundColor: colors.surfaceRaised }]}>
             {([["EXACT", "Точно"], ["RANGE", "Коридор"]] as const).map(([id, label]) => (
               <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: mode === id }} accessibilityLabel={`Режим цели: ${label}`} hitSlop={{ top: 8, bottom: 8 }} onPress={() => setMode(id)}
                 style={[styles.segment, mode === id ? { backgroundColor: colors.accentFill } : null]}>
-                <Text style={[styles.segmentText, { color: mode === id ? colors.onAccentFill : colors.textPrimary }]}>{label}</Text>
+                <Text style={[styles.segmentText, { color: mode === id ? colors.onAccentFill : colors.textSecondary }]}>{label}</Text>
               </Pressable>
             ))}
           </View>
           <Pressable accessibilityRole="button" accessibilityLabel="Расчёт калорий и БЖУ" hitSlop={{ top: 8, bottom: 8 }} onPress={() => setCalcOpen(true)}
-            style={[styles.group, styles.segment, { borderColor: colors.accentInk, backgroundColor: colors.accentSoft }]}>
+            style={[styles.calcPill, { borderColor: colors.accentInk }]}>
             <Text style={[styles.segmentText, { color: colors.accentInk }]}>Расчёт ›</Text>
           </Pressable>
         </View>
-        </View>
         <View style={styles.summary}>
-          <View style={styles.guide} accessible accessibilityLabel={`Суточный ориентир: ${orientText === null ? "нет данных" : `${orientText} ккал`}`}>
-            <View style={[styles.pill, styles.guidePill, { backgroundColor: colors.accentSoft }]}><Text style={[styles.pillText, { color: colors.accentInk }]}>Суточный ориентир</Text></View>
-            <Text style={[styles.bigNumber, { color: colors.textPrimary }]}>{orientText ?? "—"}<Text style={[styles.unit, { color: colors.textSecondary }]}>{orientText === null ? "" : " ккал"}</Text></Text>
-          </View>
-          <SegmentedRing size={100} stroke={12} fraction={fraction} segments={segments} accessibilityLabel={`От цели по калориям: ${fraction === null ? "нет данных" : `${Math.round(fraction * 100)} процентов`}`}>
+          <SegmentedRing size={76} stroke={9} fraction={fraction} segments={segments} accessibilityLabel={`От цели по калориям: ${fraction === null ? "нет данных" : `${Math.round(fraction * 100)} процентов`}`}>
             <Text style={[styles.ringValue, { color: colors.textPrimary }]}>{fraction === null ? "—" : `${Math.round(fraction * 100)}%`}</Text>
-            <Text style={[styles.hint, { color: colors.textSecondary }]}>от цели</Text>
           </SegmentedRing>
+          <View style={styles.guide} accessible accessibilityLabel={`Суточный ориентир: ${orientText === null ? "нет данных" : `${orientText} ккал`}`}>
+            <Text style={[styles.bigNumber, { color: colors.textPrimary }]}>{orientText ?? "—"}</Text>
+            <Text style={[styles.hint, { color: colors.textSecondary }]}>{orientText === null ? "суточный ориентир" : "ккал · суточный ориентир"}</Text>
+          </View>
         </View>
-        <View style={styles.metrics}>
-          {(["protein", "fat", "carbs"] as const).map((metric) => (
-            <View key={metric} accessible style={styles.metric} accessibilityLabel={`${metricLabels[metric]}: съедено ${eatenText(metric)} из ${targetText(metric)} граммов`}>
-              <Text style={[styles.hint, { color: macroColors[metric] }]}>{metricLabels[metric]}</Text>
-              <Text style={[styles.value, { color: macroColors[metric] }]}>{`${eatenText(metric)}/${targetText(metric)}`}</Text>
-            </View>
-          ))}
-        </View>
-        <View style={[styles.rule, { backgroundColor: colors.border }]} />
         {loaded !== null && loaded.fat === null ? (
           <Pressable accessibilityRole="link" accessibilityLabel="Рассчитать процент жира" onPress={() => setCalcOpen(true)}
             style={{ minHeight: 44, justifyContent: "center" }}>
             <Text style={[styles.hint, { color: colors.textSecondary }]}>Для расчёта БЖУ нужен процент жира. Его можно рассчитать в «Расчёте».</Text>
           </Pressable>
         ) : null}
-        <NutritionTargetRows key={clientId} clientId={clientId} targets={targets} calories={guide} defaults={defaults} leanMassKg={leanMassKg} mode={mode} onModeAutoChange={setMode} onLiveTarget={setLiveTarget} />
+        <NutritionTargetRows key={clientId} clientId={clientId} targets={targets} calories={guide} defaults={defaults} leanMassKg={leanMassKg} mode={mode} onModeAutoChange={setMode} onLiveTarget={setLiveTarget}
+          eaten={eatenByMacro} macroColors={macroColors} />
       </View>
+      <MeasurementsCard day={day} future={future} clientId={clientId} repository={measurements} onOpenJournal={onOpenJournal} />
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 14, padding: 8, gap: 4 },
-  rings: { flexDirection: "row", gap: 6, paddingTop: 6 },
-  ring: { flex: 1, minWidth: 0, minHeight: 48, alignItems: "center", gap: 6, paddingVertical: 4 },
-  ringNumber: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19, paddingHorizontal: 4, textAlign: "center" },
-  ringCaption: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14, textAlign: "center" },
+  /** Карточка как у «Абонемента» (UI-OWN-067): радиус 26, отступ 14, без рамки. */
+  card: { borderRadius: 26, padding: 12, gap: 10 },
+  cardTight: { gap: 8 },
+  label: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 15, letterSpacing: 0.66, textTransform: "uppercase" },
+  rings: { flexDirection: "row", gap: 6 },
+  ring: { flex: 1, minWidth: 0, minHeight: 48, alignItems: "center", gap: 4 },
+  ringNumber: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 18, paddingHorizontal: 4, textAlign: "center" },
+  ringCaptionRow: { flexDirection: "row", alignItems: "center", gap: 3 },
+  ringCaption: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, flexShrink: 1 },
   healthNotice: { borderRadius: 18, padding: 12, minHeight: 48, justifyContent: "center" },
-  plates: { flexDirection: "row", gap: 6, paddingTop: 6 },
+  /** Одна плашка с тремя равными ячейками «Вес · Тренировка · На неделе». */
+  plates: { flexDirection: "row", borderRadius: 20, paddingVertical: 8 },
   plateWrap: { flex: 1, flexBasis: 0, minWidth: 0 },
-  chartIcon: { position: "absolute", top: 4, right: 0, width: 48, height: 48, alignItems: "center", justifyContent: "center" },
-  plate: { flex: 1, flexBasis: 0, minWidth: 0, minHeight: 56, borderRadius: 16, paddingVertical: 7, paddingHorizontal: 8, gap: 2 },
-  plateLabel: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14 },
-  plateValue: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
-  bigCard: { flexGrow: 1, justifyContent: "space-between" },
+  chartIcon: { position: "absolute", top: -4, right: 0, width: 48, height: 48, alignItems: "center", justifyContent: "center" },
+  plate: { flex: 1, flexBasis: 0, minWidth: 0, minHeight: 38, paddingHorizontal: 4, alignItems: "center", justifyContent: "center" },
+  plateLabel: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, textAlign: "center" },
+  plateValue: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22, textAlign: "center" },
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  headRight: { flexDirection: "row", alignItems: "center", gap: 6 },
-  group: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 12, overflow: "hidden" },
-  segment: { minHeight: 28, paddingHorizontal: 8, alignItems: "center", justifyContent: "center" },
-  segmentText: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 15 },
-  cardTitle: { fontSize: 14, lineHeight: 19, fontFamily: fonts.bold },
+  group: { flexDirection: "row", alignItems: "center", borderRadius: 999, padding: 2 },
+  segment: { minHeight: 30, paddingHorizontal: 12, borderRadius: 999, alignItems: "center", justifyContent: "center" },
+  calcPill: { minHeight: 30, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  segmentText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 },
   hint: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
-  guide: { flex: 1, minWidth: 0, alignItems: "center", gap: 4 },
-  guidePill: { alignSelf: "center" },
-  summary: { flexDirection: "row", alignItems: "center", gap: 10 },
-  pill: { alignSelf: "flex-start", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 4 },
-  pillText: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 15 },
-  bigNumber: { fontFamily: fonts.bold, fontSize: 26, lineHeight: 32, textAlign: "center", fontVariant: ["tabular-nums"] },
-  unit: { fontFamily: fonts.regular, fontSize: 14 },
-  ringValue: { fontFamily: fonts.bold, fontSize: 19, lineHeight: 24 },
-  metrics: { flexDirection: "row", gap: 6 },
-  metric: { flex: 1, alignItems: "center", gap: 2 },
-  value: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },
-  rule: { height: StyleSheet.hairlineWidth },
+  guide: { flex: 1, minWidth: 0, gap: 2 },
+  summary: { flexDirection: "row", alignItems: "center", gap: 12 },
+  bigNumber: { fontFamily: fonts.bold, fontSize: 26, lineHeight: 32, fontVariant: ["tabular-nums"] },
+  ringValue: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 20 },
 });

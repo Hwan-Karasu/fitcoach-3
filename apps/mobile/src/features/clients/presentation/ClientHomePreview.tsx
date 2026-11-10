@@ -99,14 +99,15 @@ export function ClientHomePreview({ client, summary, onOpenAccounting, onWriteOf
 
   const pack = summary?.pack ?? null;
 
-  return <PrototypeScreen compact scroll={false}>
+  return <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
     {daySlot}
+    <PrototypeScreen mockup scroll={false}>
 
     <View style={[styles.card, shadow.card, { backgroundColor: colors.surface }]}>
     <Pressable accessibilityRole="button" accessibilityLabel={pack?.kind === "TRACKED" ? `Абонемент: доступно ${pack.available} из ${pack.granted} занятий. Открыть абонемент и оплату` : "Абонемент. Открыть абонемент и оплату"}
       onPress={onOpenAccounting} style={styles.cardBody}>
       <View style={styles.cardHead}>
-        <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Абонемент</Text>
+        <Text accessibilityRole="header" style={[styles.cardTitle, { color: colors.textMuted }]}>Абонемент</Text>
         {pack?.kind === "TRACKED" ? <StatusTag kind={toneKind[pack.tone]} label={toneLabel[pack.tone]} /> : null}
       </View>
       {pack?.kind === "TRACKED" ? <>
@@ -145,20 +146,22 @@ export function ClientHomePreview({ client, summary, onOpenAccounting, onWriteOf
       description="Клиент исчезнет из активного списка и появится в Архиве. Данные и записи календаря сохранятся. Клиента можно будет вернуть позже."
       confirmLabel="Архивировать"
       onCancel={() => setConfirming(false)} onConfirm={() => { void archive(); }} />
-  </PrototypeScreen>;
+    </PrototypeScreen>
+  </View>;
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1 },
   detail: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  card: { borderRadius: 26, padding: 14, gap: 10 },
+  card: { borderRadius: 26, padding: 12, gap: 8 },
   cardBody: { gap: 8 },
   archiveButton: { minHeight: 44, borderRadius: 22, borderWidth: 1.5, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   archiveText: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
-  packUnit: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
+  packUnit: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },
   creditActions: { flexDirection: "row", gap: 8 },
   creditAction: { flex: 1 },
   cardHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  cardTitle: { fontSize: 16, lineHeight: 21, fontFamily: fonts.bold },
-  packLine: { flexDirection: "row", alignItems: "baseline", gap: 8 },
-  packNumber: { fontSize: 34, lineHeight: 40, fontFamily: fonts.bold },
+  cardTitle: { fontSize: 11, lineHeight: 15, fontFamily: fonts.bold, letterSpacing: 0.66, textTransform: "uppercase" },
+  packLine: { flexDirection: "row", alignItems: "baseline", gap: 6 },
+  packNumber: { fontSize: 30, lineHeight: 36, fontFamily: fonts.bold },
 });
