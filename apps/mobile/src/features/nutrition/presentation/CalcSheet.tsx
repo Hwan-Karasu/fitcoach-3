@@ -7,13 +7,13 @@ import { NutritionCalcScreen, type CalcClientBody, type SaveCalcProfile } from "
  * «Расчёт» листом с «Главной» (UIX-05e, UI-OWN-073): прежний экран расчёта калорий и БЖУ открывается нижним листом, а не вкладкой питания.
  * Внутри профиль и активность, разбор расхода и процент жира; цель по БЖУ по-прежнему задаётся полями на «Главной».
  */
-export function CalcSheet({ visible, clientId, body, onSaveProfile, onOpenJournal, calc, measurements, onClose }: Readonly<{
-  visible: boolean; clientId: string; body: CalcClientBody; onSaveProfile: SaveCalcProfile; onOpenJournal: () => void;
+export function CalcSheet({ visible, clientId, body, onSaveProfile, calc, measurements, onClose }: Readonly<{
+  visible: boolean; clientId: string; body: CalcClientBody; onSaveProfile: SaveCalcProfile;
   calc: NutritionCalcPort; measurements: MeasurementRepositoryPort; onClose: () => void;
 }>) {
   return (
     <BottomSheet visible={visible} fill title="Расчёт" onClose={onClose}>
-      <NutritionCalcScreen key={clientId} clientId={clientId} onOpenJournal={() => { onClose(); onOpenJournal(); }} body={body} onSaveProfile={onSaveProfile} calc={calc} measurements={measurements} />
+      <NutritionCalcScreen key={clientId} clientId={clientId} body={body} onSaveProfile={onSaveProfile} calc={calc} measurements={measurements} />
     </BottomSheet>
   );
 }

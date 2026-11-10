@@ -4,7 +4,7 @@ import { InlineNotice, SegmentedRing } from "../../../shared/ui/components/publi
 import { shadow } from "../../../shared/ui/theme/style.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
-import { dailyPoints, upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../measurements/public.ts";
+import { dailyPoints, MeasurementsCard, upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../measurements/public.ts";
 import { goalFraction, MEALS_GOAL, STEPS_GOAL } from "../domain/ActivityGoals.ts";
 import { mealCount } from "../domain/DiaryRules.ts";
 import { KCAL_PER_G } from "../domain/EnergyRules.ts";
@@ -212,7 +212,8 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
         {dayWeight.ambiguous ? <Text style={[styles.hint, { color: colors.textSecondary }]}>За этот день несколько записей веса: основную выбирают в журнале замеров.</Text> : null}
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       </View>
-      <CalcSheet visible={calcOpen} clientId={clientId} body={body} onSaveProfile={onSaveProfile} onOpenJournal={onOpenJournal} calc={calc} measurements={measurements}
+      <MeasurementsCard day={day} future={future} clientId={clientId} repository={measurements} onOpenJournal={onOpenJournal} />
+      <CalcSheet visible={calcOpen} clientId={clientId} body={body} onSaveProfile={onSaveProfile} calc={calc} measurements={measurements}
         onClose={() => setCalcOpen(false)} />
       <ValueSheet visible={sheet === "weight"} title="Вес за день" label="Вес" unit="кг" keyboardType="decimal-pad" placeholder="85,4" emptyMessage="Введите вес."
         initial={dayWeight.weight === null ? "" : String(dayWeight.weight).replace(".", ",")} onSave={(text) => saveValue("weight", text)} onClose={() => setSheet(null)} />

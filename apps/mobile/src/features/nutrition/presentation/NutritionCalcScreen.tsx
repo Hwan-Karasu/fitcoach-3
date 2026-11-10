@@ -5,7 +5,7 @@ import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvid
 import { plural } from "../../../shared/format/clockText.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
-import { localDateOf, MeasurementsCard, navyBodyFat, upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../measurements/public.ts";
+import { localDateOf, navyBodyFat, upsertDailyMeasurement, type MeasurementRepositoryPort } from "../../measurements/public.ts";
 import { CALC_ACTIVITIES, CALC_GOALS, CALC_INTENSITIES, deriveCalc, type CalcActivity, type CalcGoal, type CalcIntensity,
   type CalcProfile, type CalcSex } from "../domain/CalcRules.ts";
 import type { NutritionCalcPort } from "../domain/NutritionCalcPort.ts";
@@ -124,7 +124,7 @@ function HelpSheet({ visible, onClose }: Readonly<{ visible: boolean; onClose: (
 /** Профиль расчёта вместе с полом и ростом карточки клиента (`null` — карточку не менять): одна операция workflow, пол и рост принадлежат Clients. */
 export type SaveCalcProfile = (profile: CalcProfile, expectedRevision: number | null, body: Readonly<{ sex: CalcSex | null; heightCm: number | null }> | null) => Promise<void>;
 
-export function NutritionCalcScreen({ clientId, body, onSaveProfile, onOpenJournal, calc, measurements }: Readonly<{ clientId: string; body: CalcClientBody; onOpenJournal: () => void;
+export function NutritionCalcScreen({ clientId, body, onSaveProfile, calc, measurements }: Readonly<{ clientId: string; body: CalcClientBody;
   onSaveProfile: SaveCalcProfile; calc: NutritionCalcPort; measurements: MeasurementRepositoryPort }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
@@ -301,9 +301,6 @@ export function NutritionCalcScreen({ clientId, body, onSaveProfile, onOpenJourn
           {missing ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Для расчёта нужны пол, возраст, рост и вес (или вес с процентом жира). Нажмите «Изменить», чтобы заполнить профиль.</Text> : null}
         </>}
       </Card>
-
-
-      <MeasurementsCard compact clientId={clientId} repository={measurements} onOpenJournal={onOpenJournal} />
 
       <HelpSheet visible={help} onClose={() => setHelp(false)} />
     </ScrollView>

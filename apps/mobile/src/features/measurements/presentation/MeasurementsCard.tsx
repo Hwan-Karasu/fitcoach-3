@@ -80,7 +80,11 @@ function Tile({ group, cells, compact }: Readonly<{ group: MeasurementGroup; cel
  * «Удалить» и «Настроить замеры». Источник — единственный журнал Measurements; пусто — «—», не ноль; старые односторонние значения остаются «без стороны». Видимость полей — настройка
  * экрана на время работы: скрытое поле не удаляет факты, а группа с данными за выбранную дату показывается всегда.
  */
-export function MeasurementsCard({ clientId, repository, onOpenJournal, compact = false }: Readonly<{ compact?: boolean; clientId: string; repository: MeasurementRepositoryPort;
+export function MeasurementsCard({ clientId, repository, onOpenJournal, compact = false, day, future = false }: Readonly<{ compact?: boolean; clientId: string; repository: MeasurementRepositoryPort;
+  /** Режим выбранного дня «Главной» (UIX-05f): без ленты дат, показывает замеры этого дня; нет замеров — «Добавить замер». */
+  day?: string;
+  /** Будущий день: карточка приглушена, добавлять и менять нельзя. */
+  future?: boolean;
   /** Полный журнал замеров: несколько значений за день, выбор основного, масса и % жира. */
   onOpenJournal?: () => void }>) {
   const { palette } = usePrototypeTheme();
@@ -118,7 +122,8 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal, compact 
 
   /** Даты, где есть хотя бы один обхват, по возрастанию. */
   const dates = useMemo(() => data === null ? [] : [...new Set(data.measurements.filter((item) => CIRCUMFERENCES.includes(item.type)).map((item) => item.localDate))].sort(), [data]);
-  const current = selected !== null && dates.includes(selected) ? selected : (dates[dates.length - 1] ?? null);
+  const current = day !== undefined ? (dates.includes(day) ? day : null)
+    : selected !== null && dates.includes(selected) ? selected : (dates[dates.length - 1] ?? null);
   const cells = useMemo(() => data === null || current === null ? null : cellsOf(data, current), [data, current]);
   const index = current === null ? -1 : dates.indexOf(current);
   /** Показываемые группы: включённые в настройке и все, где за дату есть данные. */
@@ -127,7 +132,7 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal, compact 
   const shownGroups = useMemo(() => groupsFor(cells), [cells, visible]);
 
   const emptyValues = () => Object.fromEntries(CIRCUMFERENCES.map((type) => [type, ""])) as Record<MeasurementType, string>;
-  const openNew = () => setEditor({ editingDate: null, date: localDateOf(new Date()), values: emptyValues() });
+  const openNew = () => setEditor({ editingDate: null, date: day ?? localDateOf(new Date()), values: emptyValues() });
   const openEdit = () => {
     if (cells === null || current === null) return;
     setEditor({ editingDate: current, date: current, values: Object.fromEntries(CIRCUMFERENCES.map((type) => [type, cells[type].kind === "VALUE" ? valueText((cells[type] as { measurement: Measurement }).measurement.valueX10) : ""])) as Record<MeasurementType, string> });
@@ -219,13 +224,13 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal, compact 
         <View style={[styles.dot, { backgroundColor: colors.accentInk }]} />
         <Text style={[styles.title, { color: colors.accentInk }]}>ЗАМЕРЫ{compact && current !== null ? <Text style={styles.compactDateTitle}>{`\n${fullDate(current)}`}</Text> : null}</Text>
         {current !== null ? <>
-          <AppButton compact size={compact ? "small" : "default"} variant="secondary" label="Изменить" disabled={busy} onPress={openEdit} />
-          <AppButton compact size={compact ? "small" : "default"} variant="ghost" label="Удалить" disabled={busy} accessibilityLabel={`Удалить замеры за ${fullDate(current)}`} onPress={() => setConfirmDelete(true)} />
+          <AppButton compact size={compact ? "small" : "default"} variant="secondary" label="Изменить" disabled={busy || future} onPress={openEdit} />
+          <AppButton compact size={compact ? "small" : "default"} variant="ghost" label="Удалить" disabled={busy || future} accessibilityLabel={`Удалить замеры за ${fullDate(current)}`} onPress={() => setConfirmDelete(true)} />
         </> : null}
       </View>
       {error !== null && editor === null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
       {data === null ? (failed ? <InlineNotice kind="error">Не удалось загрузить замеры.</InlineNotice> : <LoadingState label="Загружаем замеры…" />) : <>
-        <View style={styles.strip}>
+        {day !== undefined ? null : <View style={styles.strip}>
           <AppIconButton label="Предыдущая дата замера" icon={<ChevronLeft size={20} color={colors.textSecondary} />} disabled={index <= 0} onPress={() => move(-1)} />
           <ScrollView ref={stripRef} horizontal showsHorizontalScrollIndicator={false} style={styles.grow} contentContainerStyle={styles.stripList}
             onContentSizeChange={() => stripRef.current?.scrollToEnd({ animated: false })}>
@@ -240,10 +245,11 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal, compact 
             </Pressable>
           </ScrollView>
           <AppIconButton label="Следующая дата замера" icon={<ChevronRight size={20} color={colors.textSecondary} />} disabled={index < 0 || index >= dates.length - 1} onPress={() => move(1)} />
-        </View>
+        </View>}
         {current === null || cells === null ? <>
-          <Text style={[styles.empty, { color: colors.textSecondary }]}>Замеров пока нет. Нажмите «+», чтобы добавить первую запись.</Text>
-          {!compact ? <AppButton variant="secondary" label="Новая запись" onPress={openNew} /> : null}
+          <Text style={[styles.empty, { color: colors.textSecondary }]}>{day !== undefined ? "За этот день замеров нет." : "Замеров пока нет. Нажмите «+», чтобы добавить первую запись."}</Text>
+          {day !== undefined ? <AppButton variant="secondary" label="Добавить замер" disabled={future} onPress={openNew} />
+            : !compact ? <AppButton variant="secondary" label="Новая запись" onPress={openNew} /> : null}
         </> : <>
           {!compact ? <Text style={[styles.fullDate, { color: colors.textPrimary }]}>{fullDate(current)}</Text> : null}
           {rows(shownGroups).map((row) => (
