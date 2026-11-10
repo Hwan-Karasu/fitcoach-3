@@ -19,7 +19,7 @@ function TypeAction({ label, disabled, onPress }: Readonly<{ label: string; disa
   const { palette: { tokens: colors } } = usePrototypeTheme();
   const [focused, setFocused] = useState(false);
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }}
-    disabled={disabled} onPress={onPress} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+    disabled={disabled} onPress={onPress} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} hitSlop={{ top: 5, bottom: 5 }}
     style={({ pressed }) => [styles.typeAction, { borderColor: focused ? colors.focusRing : "transparent",
       backgroundColor: pressed ? colors.accentSoft : "transparent", opacity: disabled ? 0.5 : 1 }]}>
     <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.typeActionLabel, { color: colors.accentInk }]}>{label}</Text>
@@ -139,7 +139,7 @@ export function CalendarSettingsScreen({ repository }: Readonly<{ repository: Ca
   };
   const deleteButton = (type: SessionType) => <Pressable accessibilityRole="button"
     accessibilityLabel={`Удалить тип занятия ${type.name}`} accessibilityState={{ disabled: busy }} disabled={busy}
-    testID={`delete-session-type-${type.id}`} onPress={() => requestDelete(type)}
+    testID={`delete-session-type-${type.id}`} onPress={() => requestDelete(type)} hitSlop={8}
     style={({ pressed }) => [styles.deleteButton, { backgroundColor: pressed ? colors.surfaceRaised : "transparent", opacity: busy ? 0.5 : 1 }]}>
     <X size={17} color={colors.danger} strokeWidth={2.3} />
   </Pressable>;

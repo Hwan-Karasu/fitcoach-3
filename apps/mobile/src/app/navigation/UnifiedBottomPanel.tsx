@@ -39,6 +39,7 @@ export function UnifiedBottomPanel({ services, onOpen }: Readonly<{
     })));
   }, [services.clients, avatarVersion]);
   const bottom = panelBottomPadding(insets.bottom, keyboardVisible);
+  // Без панели и таймеров остаётся полоса высотой в системный отступ: экраны без своей панели (футеры, Excel, оформление) сами нижний inset не добавляют, полоса его заменяет.
   const render = (area: ReactNode, hasTimers: boolean) => (
     <View style={{ backgroundColor: colors.canvas, paddingHorizontal: 12, paddingBottom: bottom }}>
       {entry === null && !hasTimers ? null : <View testID="unified-bottom-panel"

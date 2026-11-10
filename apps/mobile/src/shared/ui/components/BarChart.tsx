@@ -35,8 +35,9 @@ export function BarChart({ items, format, accessibilityLabel, onPressItem, color
   const [width, setWidth] = useState(0);
   const step = niceStep(Math.max(0, goal ?? 0, ...items.map((item) => item.value ?? 0)) / 3);
   const layout = chartLayout(width - AXIS - PAD, items.length, 28);
+  // Интерактивный график не склеивается в один элемент: иначе столбцы с onPressItem недоступны для TalkBack.
   return (
-    <View accessible accessibilityLabel={accessibilityLabel} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
+    <View accessible={onPressItem === undefined} accessibilityLabel={accessibilityLabel} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
       {width > 0 ? <GiftedBarChart
         data={items.map((item) => ({ value: item.value ?? 0, frontColor: color ?? colors.accentInk, onPress: onPressItem === undefined || item.value === null
           ? undefined : () => onPressItem(item) }))}

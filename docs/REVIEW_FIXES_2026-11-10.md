@@ -74,12 +74,12 @@
 ### C. Доступность, жесты, производительность
 | ID | Ст. | Где | Суть | Что сделать |
 |---|---|---|---|---|
-| C1 | [ ] | `calendar/presentation/TimelineGrid.tsx:194,278,280` | `Gesture.Pan/Tap/Exclusive` без `useMemo` | refs + `useMemo` |
-| C2 | [ ] | `shared/ui/components/BarChart.tsx:39` | `accessible` на корне при `onPressItem` → столбцы недоступны для TalkBack | не ставить `accessible` на корень, если есть `onPressItem` |
-| C3 | [ ] | список ниже | hit-area < 44–48 dp | `hitSlop`/`minHeight` |
-| C4 | [ ] | `app/navigation/RootTabBar.tsx:32`, `BottomPanel.tsx:25` | `navigation: <JSX/>` новый объект каждый рендер → лишние публикации | `useMemo` |
-| C5 | [ ] | `app/navigation/UnifiedBottomPanel.tsx:42-51` | Пустая полоса под стеком без панели | Проверить замысел (футеры не добавляют inset) → вернуть `null` без панели/таймеров или оставить с комментарием |
-| C6 | [ ] | `shared/ui/components/ProgressBar.tsx:11` | `NaN` → `width: "NaN%"` | `Number.isFinite` |
+| C1 | [d] | `calendar/presentation/TimelineGrid.tsx:194,278,280` | `Gesture.Pan/Tap/Exclusive` без `useMemo` | refs + `useMemo` |
+| C2 | [f] | `shared/ui/components/BarChart.tsx:39` | `accessible` на корне при `onPressItem` → столбцы недоступны для TalkBack | не ставить `accessible` на корень, если есть `onPressItem` |
+| C3 | [f] | список ниже | hit-area < 44–48 dp | `hitSlop`/`minHeight` |
+| C4 | [f] | `app/navigation/RootTabBar.tsx:32`, `BottomPanel.tsx:25` | `navigation: <JSX/>` новый объект каждый рендер → лишние публикации | `useMemo` |
+| C5 | [d] | `app/navigation/UnifiedBottomPanel.tsx:42-51` | Пустая полоса под стеком без панели | Проверить замысел (футеры не добавляют inset) → вернуть `null` без панели/таймеров или оставить с комментарием |
+| C6 | [f] | `shared/ui/components/ProgressBar.tsx:11` | `NaN` → `width: "NaN%"` | `Number.isFinite` |
 
 Список C3 (hit-area): `RootTabBar.tsx:99-104` (tab compact 30/36, стрелки 36), `ClientsListShortcut.tsx:25` (36), `PeriodizedBuilderScreen.tsx:796-800,871,873,883,885` (точки типа недели ≤22+hitSlop, copyChip 36, choice 40, date 42), `ChoiceSegments.tsx:24` (34), `SegmentedControl.tsx:95-96` (режимы scroll/wrap ≈32), `TrainingStatisticsScreen.tsx:142-148,225` (строки «Исходы» 36), `CalendarScreen.tsx:505,519` (dayToggle 36, segment 38), `DutyDaySheet.tsx:194` (32), `CalendarSettingsScreen.tsx:292,296` (32, 34), `SessionTypeEditor.tsx:97,100` (38), `AccountingHistory.tsx:153,156` (38, 40), `ClientHomePreview.tsx:155` (44), `RosterSearchBar.tsx:64` (46), `ClientRosterSettingsScreen.tsx:151` (44), `NutritionHomeCards.tsx:274,280,334` (28+hitSlop 8), `NutritionDiaryScreen.tsx:189,260` («+» 32+hitSlop → 44), `EntryEditorDialog.tsx:234` (40), `ThemeCatalogPreview.tsx:83` (44). Правило проекта 48; `TOUCH_TARGET`=44 — при расхождении принять 48 и поправить константу/документ.
 
@@ -120,3 +120,7 @@
 ## Итоги среза R2 (2026-11-10)
 Исправлено `[f]`: B1 (`fresh` для колец и «съедено»), B2 (кэш воды освобождается), B3 (`failed` расчёта в статистике БЖУ), B4/B7 (поколение чтения, закрытие смахнутой строки при сбое), B5 (поле дней после отказа), B6 (ошибка сводки + «Повторить»), B8 (стабильный `now`, `useMemo` метрик), B9 (ошибка привязана к ключу; max/min целые), B10 (текст «в «Расчёте»»; ошибки чтения шагов/веса остаются «нет данных»), B11 (восстановление из архива через `run`), B12 (`pickDate` не отклоняет промис), B14 (`onChanged()` вне `try`).
 Ложное: B13 `[x]` — у маршрута Appearance навигаторская шапка скрыта (`headerShown:false`). Отложено `[d]`: B15 (React 19 без предупреждения и утечки), B16 (без конкретики), в B14 — молчаливый возврат при занятом замке (элементы и так `disabled={busy}`).
+
+## Итоги среза R3 (2026-11-10)
+Исправлено `[f]`: C2 (`BarChart` не склеивается в один элемент при `onPressItem`), C4 (публикация нижней панели по полям + `useMemo` узла кнопок), C6 (`ProgressBar` с нечисловым значением), C3 частично — вертикальный `hitSlop` у ClientsListShortcut, ChoiceSegments, действий типа занятия, кнопки удаления типа и выбора цвета (вид не меняется).
+Отложено `[d]`: C1 — стабилизация `Gesture.*` в `TimelineGrid` требует перечисления всех захваченных значений и проверки жестов на телефоне, прежний код работает (пересоздание жестов каждый рендер — только производительность); C5 — пустая полоса под стеком намеренна (экраны без панели не добавляют inset), добавлен комментарий; в C3 остальные пункты списка (плотные чипы/сегменты 32–40 dp) — решение о геометрии за владельцем: в `UI_STYLE_DECISIONS.md` одновременно «≥48 через hitSlop» и «ровно 44».

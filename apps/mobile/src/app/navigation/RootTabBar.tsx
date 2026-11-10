@@ -1,5 +1,5 @@
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Archive, CalendarDays, ChevronLeft, ChevronRight, Dumbbell, Ellipsis, House, Users, Utensils, type LucideIcon } from "lucide-react-native";
 import { usePublishBottomPanel, useTabBarSlots } from "../../shared/ui/components/public.ts";
@@ -29,7 +29,8 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
   // Со строкой экрана панель остаётся той же высоты: кнопки вкладок ужимаются и освобождают под неё место.
   const compact = dock !== null && dock !== undefined;
   const showClientsShortcut = navigationAppearance.showClientListShortcut && !state.routes.some((route) => route.name === "Clients");
-  usePublishBottomPanel(state.key, { tokens: colors, participants: dock, navigation: (
+  // Узел кнопок пересоздаётся только при смене того, что он показывает: иначе каждый рендер панели заново публиковал бы содержимое.
+  const navigationNode = useMemo(() => (
         <View style={styles.navigationRow}>
         {weeks ? <WeekArrow label={`Предыдущая неделя. Сейчас неделя ${weeks.week}`}
           disabled={weeks.previous === null || weeks.busy === true} onPress={() => weeks.previous?.()}
@@ -76,7 +77,8 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
           disabled={weeks.next === null || weeks.busy === true} onPress={() => weeks.next?.()}
           icon={<ChevronRight size={32} strokeWidth={2.2} color={colors.accentInk} />} /> : null}
         </View>
-  ) });
+  ), [state, descriptors, navigation, colors, weeks, compact, navigationAppearance, showClientsShortcut]);
+  usePublishBottomPanel(state.key, { tokens: colors, participants: dock, navigation: navigationNode });
   return null;
 }
 

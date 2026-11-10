@@ -5,7 +5,8 @@ import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 export function ProgressBar({ value, accessibilityLabel, color }: Readonly<{ value: number | null; accessibilityLabel: string; color?: string }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
-  if (value === null) {
+  // Нечисловое значение (NaN/Infinity) — доля неизвестна, как null: «NaN%» в стиле недопустим.
+  if (value === null || !Number.isFinite(value)) {
     return <ActivityIndicator size="small" color={colors.accentFill} accessibilityLabel={accessibilityLabel} style={styles.spinner} />;
   }
   const share = Math.min(1, Math.max(0, value));

@@ -62,7 +62,7 @@ export function SessionTypeEditor({ draft, busy, error, occupiedColors, onChange
             {SESSION_TYPE_COLORS.map((color) => <Pressable key={color}
               accessibilityRole="radio" accessibilityLabel={`${sessionTypeColorLabels[color]}${occupiedColors.has(sessionTypeColorHex[color]) ? ", занят" : ""}`}
               accessibilityState={{ selected: draft.color === color, disabled: busy || occupiedColors.has(sessionTypeColorHex[color]) }} disabled={busy || occupiedColors.has(sessionTypeColorHex[color])}
-              onPress={() => onChange({ ...draft, color })} style={styles.colorTouch}>
+              onPress={() => onChange({ ...draft, color })} hitSlop={{ top: 3, bottom: 3 }} style={styles.colorTouch}>
               <View style={[styles.colorRing, { borderColor: draft.color === color ? colors.focusRing : "transparent" }]}>
                 <View style={[styles.swatch, { backgroundColor: sessionTypeColorHex[color], opacity: occupiedColors.has(sessionTypeColorHex[color]) ? 0.2 : 1 }]} />
               </View>

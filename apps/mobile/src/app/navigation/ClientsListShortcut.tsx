@@ -13,7 +13,7 @@ export function ClientsListNavigationProvider({ onOpen, children }: Readonly<{ o
 export function ClientsListShortcut() {
   const open = useContext(OpenClients);
   const { palette: { tokens: colors } } = usePrototypeTheme();
-  return <Pressable accessibilityRole="button" accessibilityLabel="К списку клиентов" onPress={() => open?.()}
+  return <Pressable accessibilityRole="button" accessibilityLabel="К списку клиентов" onPress={() => open?.()} hitSlop={{ top: 4, bottom: 4 }}
     testID="navigation-clients-shortcut"
     style={({ pressed }) => [styles.shortcut, { borderTopColor: colors.divider, backgroundColor: pressed ? colors.accentSoft : "transparent" }]}>
     <Users size={16} color={colors.accentInk} />

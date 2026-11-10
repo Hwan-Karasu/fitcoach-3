@@ -11,7 +11,7 @@ export function ChoiceSegments<Id extends string>({ label, items, value, onChang
   return <View accessibilityRole="radiogroup" accessibilityLabel={label}
     style={[styles.track, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
     {items.map((item) => <Pressable key={item.id} accessibilityRole="radio" accessibilityLabel={item.label}
-      accessibilityState={{ checked: value === item.id, disabled }} disabled={disabled} onPress={() => onChange(item.id)}
+      accessibilityState={{ checked: value === item.id, disabled }} disabled={disabled} onPress={() => onChange(item.id)} hitSlop={{ top: 5, bottom: 5 }}
       style={({ pressed }) => [styles.item, { backgroundColor: value === item.id ? colors.accentFill : "transparent",
         opacity: disabled ? 0.5 : pressed ? 0.75 : 1 }]}>
       <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.label, { color: value === item.id ? colors.onAccentFill : colors.textSecondary }]}>{item.label}</Text>

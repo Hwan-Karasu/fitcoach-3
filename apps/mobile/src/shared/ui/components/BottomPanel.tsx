@@ -23,7 +23,10 @@ export function useBottomPanelInFlow() { return useContext(InFlow); }
 export function usePublishBottomPanel(owner: string, content: BottomPanelContent) {
   const store = useContext(Context);
   const focused = useIsFocused();
-  useLayoutEffect(() => { if (focused) store?.set(owner, content); }, [store, owner, focused, content]);
+  // Публикация зависит от полей, а не от нового объекта каждого рендера: без смены содержимого подписчики панели не перерисовываются.
+  const { navigation, participants, tokens } = content;
+  const stable = useMemo<BottomPanelContent>(() => ({ navigation, participants, tokens }), [navigation, participants, tokens]);
+  useLayoutEffect(() => { if (focused) store?.set(owner, stable); }, [store, owner, focused, stable]);
   // Обновление содержимого не снимает регистрацию между двумя кадрами.
   useLayoutEffect(() => {
     if (!focused) return undefined;
