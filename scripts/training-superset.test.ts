@@ -56,3 +56,17 @@ test("UI-OWN-028 «Сет» на участнике: повторно — вын
   assert.deepEqual(shape(applySupersetPress(draftOf(exercise("a", "g"), exercise("b", "g")), "w", dissolve.action)),
     [["a", null], ["b", null]]);
 });
+
+test("REVIEW-R5: новый сет не получает id оставшегося сета и не сливается с ним", () => {
+  // Сет X–Z–Q создан по X; X из середины встаёт после сета (Z–Q остались с прежним id), затем X и R собираются в новый сет.
+  const start = draftOf(exercise("z", "superset:w:x"), exercise("x", "superset:w:x"), exercise("q", "superset:w:x"), exercise("r"));
+  const left = applySupersetPress(start, "w", { type: "leave", id: "x" } as never);
+  assert.deepEqual(left.plan.workouts[0]!.exercises.map((item) => item.id), ["z", "q", "x", "r"]);
+  const joined = applySupersetPress(left, "w", { type: "commit", ids: ["x", "r"] } as never);
+  const groups = joined.plan.workouts[0]!.exercises.map((item) => item.supersetId);
+  assert.equal(groups[2], groups[3]);
+  assert.equal(groups[0], groups[1]);
+  assert.notEqual(groups[0], undefined);
+  assert.notEqual(groups[2], undefined);
+  assert.notEqual(groups[0], groups[2], "две разные группы подряд не сливаются");
+});

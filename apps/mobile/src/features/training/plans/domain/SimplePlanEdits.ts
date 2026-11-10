@@ -93,7 +93,7 @@ export const removeExercise = (draft: SimpleProgramDraft, plannedId: string) => 
 export const reorderWorkouts = (draft: SimpleProgramDraft, order: readonly string[]) => produce(draft, (d) => {
   const byId = new Map(d.plan.workouts.map((item) => [item.id, item]));
   const sorted = order.flatMap((id) => { const item = byId.get(id); return item === undefined ? [] : [item]; });
-  if (sorted.length === d.plan.workouts.length) d.plan.workouts = sorted;
+  if (sorted.length === d.plan.workouts.length && new Set(order).size === order.length) d.plan.workouts = sorted;
 });
 
 /** Новый порядок упражнений тренировки (после перетаскивания); ID, которых нет, игнорируются. */
@@ -102,7 +102,7 @@ export const reorderExercises = (draft: SimpleProgramDraft, workoutId: string, o
   if (workout === undefined) return;
   const byId = new Map(workout.exercises.map((item) => [item.id, item]));
   const sorted = order.flatMap((id) => { const item = byId.get(id); return item === undefined ? [] : [item]; });
-  if (sorted.length === workout.exercises.length) workout.exercises = sorted;
+  if (sorted.length === workout.exercises.length && new Set(order).size === order.length) workout.exercises = sorted;
 });
 
 /** Новый подход — копия последнего (так быстрее заполнять одинаковые подходы). */

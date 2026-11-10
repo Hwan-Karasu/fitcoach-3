@@ -1,5 +1,15 @@
 import type { PlannedExercise, PlannedWorkout, SimpleProgramDraft } from "./SimplePlanModel.ts";
 
+/**
+ * Свободный идентификатор нового сета: основа — id первого упражнения, но если им уже называется оставшаяся группа (первое упражнение вынули,
+ * а остальные сохранили прежний id), добавляется номер — иначе две соседние группы молча слились бы в одну.
+ */
+export function freshSupersetId(workoutId: string, firstId: string, taken: ReadonlySet<string | undefined>): string {
+  let id = `superset:${workoutId}:${firstId}`;
+  for (let n = 2; taken.has(id); n += 1) id = `superset:${workoutId}:${firstId}:${n}`;
+  return id;
+}
+
 export function withoutSuperset(exercise: PlannedExercise): PlannedExercise {
   const { supersetId: _group, ...rest } = exercise;
   void _group;
@@ -26,7 +36,7 @@ export function joinPreviousSuperset(draft: SimpleProgramDraft, workoutId: strin
     const item = workout.exercises[index];
     const previous = workout.exercises[index - 1];
     if (!item || !previous) return workout;
-    const group = previous.supersetId ?? `superset:${workout.id}:${previous.id}`;
+    const group = previous.supersetId ?? freshSupersetId(workout.id, previous.id, new Set(workout.exercises.map((exercise) => exercise.supersetId)));
     return { ...workout, exercises: workout.exercises.map((exercise) =>
       exercise.id === item.id || exercise.id === previous.id
         || (item.supersetId !== undefined && exercise.supersetId === item.supersetId)
@@ -147,7 +157,7 @@ export function applySupersetPress(draft: SimpleProgramDraft, workoutId: string,
     if (action.type === "commit") {
       const block = bounds(exercises, action.ids);
       if (block === null || exercises.slice(block.start, block.end + 1).some((item) => item.supersetId !== undefined)) return exercises;
-      const group = `superset:${workoutId}:${action.ids[0]}`;
+      const group = freshSupersetId(workoutId, action.ids[0]!, new Set(exercises.map((item) => item.supersetId)));
       return exercises.map((item) => action.ids.includes(item.id) ? { ...item, supersetId: group } : item);
     }
     const index = exercises.findIndex((item) => item.id === action.id);

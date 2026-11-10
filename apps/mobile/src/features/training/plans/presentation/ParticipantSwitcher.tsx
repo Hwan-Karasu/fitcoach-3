@@ -106,6 +106,7 @@ const ParticipantStrip = memo(function ParticipantStrip({ group, activeClientId,
             return (
               <Pressable key={id} accessibilityRole="button" accessibilityLabel={current ? `${name}, открыт` : `Переключиться на ${name}`}
                 accessibilityState={{ selected: current, disabled: current || busy || !fresh }} disabled={current || busy || !fresh}
+                hitSlop={{ top: docked ? 8 : 4, bottom: docked ? 8 : 4 }}
                 onLayout={(event) => positions.current.set(id, event.nativeEvent.layout.x)} onPress={() => onSelect(byClient.get(id)!)}
                 style={({ pressed }) => [styles.chip, docked ? styles.chipDocked : null, current ? shadow.control : null, {
                   backgroundColor: current ? colors.surface : pressed ? colors.surfaceRaised : "transparent", opacity: busy && !current ? 0.6 : 1 }]}>

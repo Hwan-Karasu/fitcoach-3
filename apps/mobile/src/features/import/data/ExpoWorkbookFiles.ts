@@ -27,11 +27,12 @@ export const expoWorkbookFiles: WorkbookFilesPort = {
   async pick(options) {
     const result = await getDocumentAsync({ type: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel", "application/octet-stream"], copyToCacheDirectory: true });
     if (result.canceled) return null;
-    if (options?.active && !options.active()) return null;
-    await options?.onReading?.();
     const asset = result.assets[0]!;
     const file = new File(asset.uri);
+    // Копия в кэше с данными клиента удаляется в finally при любом выходе, в том числе при отмене и сбое чтения.
     try {
+      if (options?.active && !options.active()) return null;
+      await options?.onReading?.();
       if (!/\.xlsx?$/iu.test(asset.name) || file.size > 20 * 1024 * 1024) throw new Error("Выберите Excel-файл размером до 20 МБ.");
       const bytes = await file.bytes(); const book = readWorkbook(bytes);
       if (book.SheetNames.includes("Формат")) {

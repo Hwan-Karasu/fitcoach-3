@@ -219,7 +219,7 @@ export function WeekEditorScreen({ clientId, programId, mesocycleId, weekIndex, 
         onTertiary={() => { setConfirmResults(false); void save("KEEP_HISTORY"); }} />
       <StickyEditorFooter actionLabel="Сохранить неделю" busy={busy} disabled={preview === null} onAction={() => { void save(); }}
         onCancel={onCancel}
-        message={recovery.error ?? message} messageKind={message?.startsWith("Сохранено") === true ? "info" : "error"}
+        message={recovery.error ?? message} messageKind="error"
         note="Тип недели меняется только у этой недели" />
     </TrainingEditorLayout>
   );

@@ -26,7 +26,7 @@ export class AutomaticBackupScheduler {
   }
   private check(): void {
     if (!this.quiet()) { this.postpone(); return; }
-    void this.backup.check().finally(() => this.arm()).catch(() => undefined);
+    void Promise.resolve().then(() => this.backup.check()).finally(() => this.arm()).catch(() => undefined);
   }
   private postpone(): void {
     this.cancel?.(); this.cancel = null;

@@ -4,6 +4,12 @@ import { createRequire } from "node:module";
 import { readTrainingWorkbook, readWorkbook, writeTrainingWorkbook } from "../apps/mobile/src/features/import/data/TrainingWorkbook.ts";
 import { parseMatrixPlan } from "../apps/mobile/src/features/import/data/MatrixWorkbook.ts";
 import { trainingTransferFixture } from "./training-transfer-fixture.ts";
+test("REVIEW-R5: вес плана матрицы в граммах округляется, дробные секунды отклоняются", () => {
+  assert.equal(parseMatrixPlan("8 × 1,1 кг").loadGrams, 1100);
+  assert.equal(parseMatrixPlan("8 × 7,1 кг").loadGrams, 7100);
+  assert.throws(() => parseMatrixPlan("8 × 60,5 с"), /целые/u);
+  assert.equal(parseMatrixPlan("8 × 60 с").durationSec, 60);
+});
 test("invalid source values remain visible until explicitly corrected", () => {
   const base = trainingTransferFixture(); const fact = base.sessions[0]!.facts[0]!;
   const input = { ...base, sessions: base.sessions.map((s, index) => index === 0 ? { ...s, facts: s.facts.map((f, i) => i === 0 ? { ...f, values: { ...f.values, reps: null } } : f) } : s), issues: [{ id: "issue", programId: base.sessions[0]!.programId, scope: "FACT" as const, targetId: fact.id, field: "reps" as const, raw: "10-15" }] };

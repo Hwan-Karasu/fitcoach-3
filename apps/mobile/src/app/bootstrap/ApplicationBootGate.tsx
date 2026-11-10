@@ -63,7 +63,7 @@ export function ApplicationBootGate({ boot, services, development, maintenance, 
               setRetrying(true);
               void restoreActions.recover().then(async (outcome) => {
                 if (outcome.kind !== "FAILED" && boot.state.kind === "BOOT_FAILED") await boot.retry();
-              }).finally(() => { setRetrying(false); });
+              }).catch(() => undefined).finally(() => { setRetrying(false); });
             }} style={styles.button}><Text style={styles.buttonLabel}>{retrying ? "Завершаем восстановление…" : "Повторить восстановление"}</Text></Pressable> : null}
           {failed && (!maintaining || (recovering && !restoreActions.state.available)) ? (
             <Pressable accessibilityRole="button" onPress={() => { void boot.retry(); }} style={styles.button}>

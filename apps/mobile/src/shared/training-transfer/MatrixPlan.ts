@@ -9,7 +9,10 @@ export function parseMatrixPlan(text: string): Omit<TransferSet, "id"> {
     if (!unit) throw new Error("План: используйте «8–10 × 62,5 кг», при необходимости добавьте «× 60 с × 100 м».");
     const field = unit[2] === "кг" ? "loadGrams" : unit[2] === "с" ? "durationSec" : "distanceM";
     if (result[field] !== null) throw new Error("Плановая величина указана дважды.");
-    result[field] = Number(unit[1]!.replace(",", ".")) * (field === "loadGrams" ? 1000 : 1);
+    const value = Number(unit[1]!.replace(",", ".")) * (field === "loadGrams" ? 1000 : 1);
+    // Граммы округляются (1,1 кг × 1000 = 1100.0000000000002); секунды и метры — только целые.
+    if (field !== "loadGrams" && !Number.isInteger(value)) throw new Error("План: секунды и метры — целые числа.");
+    result[field] = field === "loadGrams" ? Math.round(value) : value;
   }
   return result;
 }

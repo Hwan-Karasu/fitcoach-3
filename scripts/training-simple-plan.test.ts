@@ -149,6 +149,8 @@ test("T02 правки черновика: три пустых подхода, �
   single = addExercise(single, "w1", "e2", PLANK, seq("p"));
   assert.deepEqual(reorderExercises(single, "w1", ["e2", "e1"]).plan.workouts[0]!.exercises.map((item) => item.id), ["e2", "e1"]);
   assert.deepEqual(removeExercise(single, "e1").plan.workouts[0]!.exercises.map((item) => item.id), ["e2"]);
+  // REVIEW-R5: порядок с повтором id не принимается (иначе одно упражнение задвоилось бы, другое пропало).
+  assert.deepEqual(reorderExercises(single, "w1", ["e1", "e1"]).plan.workouts[0]!.exercises.map((item) => item.id), ["e1", "e2"]);
 });
 
 test("T02 правила: поля по профилю (§33), разбор веса и времени, сводка подходов", () => {

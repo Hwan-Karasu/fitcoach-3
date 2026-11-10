@@ -336,7 +336,7 @@ export const WorkoutsEditor = memo(function WorkoutsEditor({ draft, change, look
           </View>
           {!singleWorkout && draft.plan.workouts.length > 1 ? (
             <Pressable accessibilityRole="button" accessibilityLabel={`Удалить тренировку ${workout.title}`}
-              onPress={() => setRemoving(workout.id)}
+              onPress={() => setRemoving(workout.id)} hitSlop={3}
               style={({ pressed }) => [styles.removeWorkout, { borderColor: colors.danger, opacity: pressed ? 0.7 : 1 }]}>
               <X size={20} color={colors.danger} strokeWidth={2} />
             </Pressable>

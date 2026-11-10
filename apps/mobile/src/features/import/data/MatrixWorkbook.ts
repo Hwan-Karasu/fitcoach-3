@@ -170,7 +170,7 @@ export function applyMatrixEdits(book: XLSX.WorkBook, value: TrainingTransfer): 
     if (changedFact) {
       const existing = session.facts.find((f) => f.id === link.factId);
       if (existing?.sides || existing?.drops.length) fail("стороны и мини-сеты этого подхода редактируются в приложении");
-      const number = (index: number, factor = 1) => { const v = now[index]; if (v === null || v === "") return null; const n = Number(String(v).replace(",", ".")) * factor; if (!Number.isFinite(n) || Math.abs(Math.round(n) - n) > 0.00001) return fail(`неверное число в ${labels[index]}`); return Math.round(n); };
+      const number = (index: number, factor = 1) => { const v = now[index]; if (v === null || v === undefined || String(v).trim() === "") return null; const n = Number(String(v).replace(",", ".")) * factor; if (!Number.isFinite(n) || Math.abs(Math.round(n) - n) > 0.00001) return fail(`неверное число в ${labels[index]}`); return Math.round(n); };
       const type = Object.entries(setLabels).find(([, label]) => label === now[5])?.[0] as TransferFact["setType"] | undefined;
       if (!type || type === "DROP") fail("для нового дроп-сета нужны мини-сеты; создайте его в приложении");
       if (now[6] !== true && now[6] !== false) fail("в «Выполнен» укажите TRUE или FALSE");

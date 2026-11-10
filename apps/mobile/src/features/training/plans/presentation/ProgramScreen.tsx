@@ -111,6 +111,8 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     onRequestedWeek: (key, week) => { appliedContext.current = `${key}:${week}`; setWeeksByCycle((current) => ({ ...current, [key]: week })); } });
   const loadedFor = shown === null ? null : `${shown.clientId}:${shown.programId}`;
   const currentKey = `${clientId}:${programId}`;
+  const latestKey = useRef(currentKey);
+  latestKey.current = currentKey;
   /** Для чьих `клиент:программа` панель недель уже загрузила статусы: смена участника ставится одним кадром вместе с ними. */
   const [panelFor, setPanelFor] = useState<string | null>(null);
   const usesPanel = renderWeeks !== undefined && (program?.kind === "SIMPLE" ? plan !== null : (periodized?.mesocycles.length ?? 0) > 0);
@@ -170,7 +172,10 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
     if (renaming === null) return;
     setBusy(true);
     try {
-      setProgram(await repository.renameProgram(program.id, program.revision, renaming));
+      const requested = currentKey;
+      const renamed = await repository.renameProgram(program.id, program.revision, renaming);
+      // Участник мог смениться за время записи: ответ прежней программы не показывается поверх новой.
+      if (latestKey.current === requested) setProgram(renamed);
       setRenaming(null);
       setMessage(null);
     } catch (error) {
@@ -299,7 +304,7 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
                   clientIds: form.clientIds })
                   .then((created) => { setUpgrade(null); onOpenProgram?.(created.id); })
                   .catch((error: unknown) => setMessage(error instanceof Error && error.message === "DRAFT_INVALID"
-                    ? "Введите название (до 80 символов)." : "Не удалось создать программу. Эта программа не изменена."))
+                    ? `Введите название (до ${PROGRAM_TITLE_MAX} символов).` : "Не удалось создать программу. Эта программа не изменена."))
                   .finally(() => setBusy(false));
               }} /></View>
           </View>

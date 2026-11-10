@@ -1,6 +1,6 @@
 import type { PlannedExercise, PlannedSet, PlannedWorkout } from "./SimplePlanModel.ts";
 import type { PlanWeek, WeekScope, WeekType } from "./PeriodizedModel.ts";
-import { cleanSupersets, remapSupersets, supersetGroups, withoutSuperset } from "./SupersetRules.ts";
+import { cleanSupersets, freshSupersetId, remapSupersets, supersetGroups, withoutSuperset } from "./SupersetRules.ts";
 
 /**
  * Правила Расширенного конструктора (§48.6). Правка недели — разница «до/после» по родству (`lineageId`):
@@ -254,7 +254,8 @@ export function applyWeekOps(week: readonly PlannedWorkout[], ops: readonly Week
             const group = op.groups.find((members) => members.includes(lineageOf(item)));
             if (!group) return withoutSuperset(item);
             const first = workout.exercises.find((member) => lineageOf(member) === group[0])!;
-            return { ...item, supersetId: `superset:${workout.id}:${first.id}` };
+            const taken = new Set(workout.exercises.filter((member) => !op.affected.includes(lineageOf(member))).map((member) => member.supersetId));
+            return { ...item, supersetId: freshSupersetId(workout.id, first.id, taken) };
           }))] });
         break;
       }

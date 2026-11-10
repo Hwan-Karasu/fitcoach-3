@@ -9,7 +9,7 @@ import { parseLoad, useExerciseLookup, weekTypeLabels, weekTypeTone, type Exerci
 import type { SetFact, SetValues } from "../domain/ExecutionModel.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
 import { SerialWriteQueue } from "../application/SerialWriteQueue.ts";
-import { diaryFields, compactWithDrops, planText } from "./setFormat.ts";
+import { diaryFields, compactWithDrops, parseField, planText } from "./setFormat.ts";
 import { buildProgramMatrix, type MatrixTarget, type MatrixWeek, type ProgramMatrix } from "./programMatrix.ts";
 import { buildMatrixHtml, matrixEditTargets, matrixStructureKey, matrixTexts, type MatrixHtmlView, type MatrixHtmlWeek } from "./matrixHtml.ts";
 import { MATRIX_ZOOM } from "./matrixZoom.ts";
@@ -157,8 +157,9 @@ export function ProgramMatrixScreen({ clientId, programId, plans, execution, exe
     const found = targetsRef.current?.get(id);
     if (found === undefined || !editable) return;
     if (field === "reps") {
-      const reps = text.trim() === "" ? null : Number.parseInt(text, 10);
-      if (reps === null || (Number.isInteger(reps) && reps >= 0 && reps <= 999)) save(found.weekIndex, found.workoutId, found.target, { reps });
+      // То же правило, что в дневнике: целое 1…999 или пусто (ноль повторов не принимается).
+      const reps = parseField("reps", text);
+      if (reps !== "invalid") save(found.weekIndex, found.workoutId, found.target, { reps });
     } else if (field === "load") {
       const loadGrams = parseLoad(text);
       if (loadGrams !== "invalid") save(found.weekIndex, found.workoutId, found.target, { loadGrams });

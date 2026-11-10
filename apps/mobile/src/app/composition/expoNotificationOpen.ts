@@ -13,8 +13,8 @@ export function subscribeNotificationOpen(listener: (data: unknown) => void): ()
   void loadEmitter().then((emitter) => {
     if (!active) return;
     const subscription = emitter.addNotificationResponseReceivedListener((response) => {
-      listener(response.notification.request.content.data);
-      void emitter.clearLastNotificationResponseAsync().catch(() => undefined);
+      try { listener(response.notification.request.content.data); }
+      finally { void emitter.clearLastNotificationResponseAsync().catch(() => undefined); }
     });
     remove = () => subscription.remove();
   }, () => undefined);
