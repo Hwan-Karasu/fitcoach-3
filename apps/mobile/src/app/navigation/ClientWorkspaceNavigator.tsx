@@ -15,7 +15,7 @@ import { ClientDayProvider, DayTabs, MetricScreen, NutritionHomeCards, Nutrition
 import { ExecutionDetailsScreen, ExerciseHistoryList, HistoryProgramScreen, MonthlyReportScreen, TrainingArchiveScreen, TrainingStatisticsScreen, retainHistoryView,
   retainStatsFilters, type ExerciseLookupPort,
   type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort, type TrainingPlansRepositoryPort,
-  type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type SimplePlanSavePort, type WeekEditSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort, type WorkoutSlot } from "../../features/training/public.ts";
+  type MesocycleSavePort, type SimplePlanSavePort, type WeekEditSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort, type WorkoutSlot } from "../../features/training/public.ts";
 import type { ExerciseCatalogPort } from "../../features/exercises/public.ts";
 import { AppButton, LoadingState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -114,7 +114,7 @@ function MoreNavigator({ client, history, questionnaire, bodyweight, exerciseLoo
   );
 }
 
-export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, nutrition, trainingPlans, trainingExecution, trainingHistory, clientBodyweight, restTimers, activeWorkouts, onOpenWorkout, onOpenClientPrograms, exercises, exerciseLookup, weekCopy, weekSwap, mesocycleSave, planDelete, onOpenEdit, onOpenAccounting,
+export function ClientWorkspaceNavigator({ clientId, repository, accounting, measurements, nutrition, trainingPlans, trainingExecution, trainingHistory, clientBodyweight, restTimers, activeWorkouts, onOpenWorkout, onOpenClientPrograms, exercises, exerciseLookup, mesocycleSave, planDelete, onOpenEdit, onOpenAccounting,
   onOpenMeasurements, onClose, onOpenClients, onOpenExercise, questionnaire, health }: Readonly<{
   clientId: string;
   /** Health Connect: хранилище, граница с системой и обновление данных привязанной карточки. */
@@ -138,8 +138,6 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   onOpenClientPrograms: (clientId: string) => void;
   exercises: ExerciseCatalogPort;
   exerciseLookup: ExerciseLookupPort;
-  weekCopy: WeekCopyPort;
-  weekSwap: WeekSwapPort;
   mesocycleSave: MesocycleSavePort & SimplePlanSavePort & WeekEditSavePort;
   planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort;
   onOpenEdit: (clientId: string) => void;
@@ -259,7 +257,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
         {() => <TrainingNavigator clientId={client.id} clientName={client.displayName} clientEmoji={client.emoji} repository={trainingPlans}
           execution={trainingExecution} restTimers={restTimers} activeWorkouts={activeWorkouts} onOpenWorkout={onOpenWorkout} onOpenClientPrograms={onOpenClientPrograms}
           listCandidates={listCandidates} onExitClient={onClose} onOpenClients={onOpenClients}
-          exercises={exercises} exerciseLookup={exerciseLookup} weekCopy={weekCopy} weekSwap={weekSwap} mesocycleSave={mesocycleSave} planDelete={planDelete} onOpenExercise={onOpenExercise} />}
+          exercises={exercises} exerciseLookup={exerciseLookup} mesocycleSave={mesocycleSave} planDelete={planDelete} onOpenExercise={onOpenExercise} />}
       </Tabs.Screen>
       <Tabs.Screen name="More" options={{ tabBarLabel: workspaceTabs.More, tabBarAccessibilityLabel: workspaceTabs.More}}>
         {() => <MoreNavigator client={client} questionnaire={questionnaire} onClose={onClose} onOpenClients={onOpenClients} onOpenEdit={() => onOpenEdit(client.id)}

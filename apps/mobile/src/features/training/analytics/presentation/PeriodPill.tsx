@@ -5,6 +5,7 @@ import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemePro
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import { periods, type CustomRange, type PeriodId } from "./statsFilters.ts";
 import { rangeLabel } from "./statsParts.tsx";
+import { scrim } from "../../../../shared/ui/theme/style.ts";
 
 export interface PeriodValue {
   readonly period: PeriodId;
@@ -70,7 +71,7 @@ export function PeriodPill({ value, onChange, today, grow = false }: Readonly<{
 
 const styles = StyleSheet.create({
   root: { flex: 1, justifyContent: "flex-end" },
-  backdrop: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.4)" },
+  backdrop: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: scrim },
   sheet: { maxHeight: "90%", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 16, gap: 8 },
   title: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 24 },
   subtitle: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19, marginTop: 4 },

@@ -8,6 +8,7 @@ import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { APPOINTMENT_DURATIONS, SESSION_TYPE_COLORS, type SessionTypeCategory, type SessionTypeColor } from "../domain/CalendarModel.ts";
 import { sessionTypeColorHex } from "./calendarPresentation.ts";
 import { sessionTypeColorLabels } from "./calendarTypeColors.ts";
+import { scrim } from "../../../shared/ui/theme/style.ts";
 
 export const sessionCategoryLabels: Readonly<Record<SessionTypeCategory, string>> = {
   TRAINING: "Тренировка", INSTRUCTION: "Инструктаж", CONSULTATION: "Консультация", OTHER: "Другое",
@@ -86,7 +87,7 @@ export function SessionTypeEditor({ draft, busy, error, occupiedColors, onChange
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 16, backgroundColor: "rgba(0,0,0,0.4)" },
+  overlay: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 16, backgroundColor: scrim },
   card: { width: "100%", maxWidth: 420, maxHeight: "100%", borderRadius: 22, padding: 12, gap: 8 },
   header: { flexDirection: "row", alignItems: "center", gap: 6 },
   title: { flex: 1, fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },

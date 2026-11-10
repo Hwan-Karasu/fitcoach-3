@@ -28,10 +28,8 @@ interface RootTabsProps {
   readonly onOpenAppearance: () => void;
   readonly onOpenNotificationSettings: () => void;
   readonly onOpenNotifications: () => void;
-  readonly onOpenWorkspaceDev?: () => void;
   readonly onOpenCreate: () => void;
   readonly onOpenClient: (clientId: string) => void;
-  readonly onOpenSqliteDev?: () => void;
   readonly clients: ClientRepositoryPort & ClientRosterPort & ClientArchivePort;
   readonly clientLists: ClientListController;
   readonly rosterOverview: RosterOverviewPort;
@@ -54,10 +52,8 @@ export function RootTabs({
   onOpenAppearance,
   onOpenNotificationSettings,
   onOpenNotifications,
-  onOpenWorkspaceDev,
   onOpenCreate,
   onOpenClient,
-  onOpenSqliteDev,
   clients,
   clientLists,
   rosterOverview,
@@ -145,8 +141,6 @@ export function RootTabs({
         onOpenSettings={onOpenSettings}
         onOpenAppearance={onOpenAppearance}
         onOpenNotificationSettings={onOpenNotificationSettings}
-        onOpenWorkspaceDev={onOpenWorkspaceDev}
-        onOpenSqliteDev={onOpenSqliteDev}
       />
     </SafeAreaView>
   );

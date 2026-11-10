@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../theme/typography.ts";
 
-/** One compact row of mutually exclusive form values, including long two-line labels. */
+/** Компактная строка взаимоисключающих значений формы (в том числе с длинными подписями). */
 export function ChoiceSegments<Id extends string>({ label, items, value, onChange, disabled = false }: Readonly<{
   label: string; items: readonly Readonly<{ id: Id; label: string }>[]; value: Id;
   onChange: (id: Id) => void; disabled?: boolean;

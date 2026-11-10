@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
+import { scrim } from "../../../shared/ui/theme/style.ts";
 
 export interface SheetAction {
   readonly key: string;
@@ -58,7 +59,7 @@ export function ActionSheet({ visible, title, actions, onClose, children }: Read
 }
 
 const styles = StyleSheet.create({
-  scrim: { backgroundColor: "rgba(0,0,0,0.45)" },
+  scrim: { backgroundColor: scrim },
   sheet: { position: "absolute", left: 0, right: 0, bottom: 0, maxHeight: "80%", borderTopLeftRadius: 16,
     borderTopRightRadius: 16, borderWidth: 1, paddingTop: 12 },
   title: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16, paddingHorizontal: 20, paddingBottom: 6 },

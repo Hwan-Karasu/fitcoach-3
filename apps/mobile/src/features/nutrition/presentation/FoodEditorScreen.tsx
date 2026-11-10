@@ -9,6 +9,7 @@ import type { FoodCatalogPort } from "../domain/FoodCatalogPort.ts";
 import { kcalFromMacrosX10, kcalIsDerived } from "../domain/EnergyRules.ts";
 import { formatDecimalX10, parseDecimalX10 } from "../domain/FoodRules.ts";
 import { nutritionErrorText } from "./nutritionFormat.ts";
+import { scrim } from "../../../shared/ui/theme/style.ts";
 
 const units: readonly Readonly<{ id: FoodBasisUnit; label: string; amount: string }>[] = [
   { id: "G", label: "г", amount: "100" }, { id: "ML", label: "мл", amount: "100" }, { id: "PIECE", label: "шт.", amount: "1" }, { id: "PORTION", label: "порция", amount: "1" },
@@ -219,7 +220,7 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12, paddingBottom: 24 },
   bottomBar: { paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
   fatLabel: { fontFamily: fonts.medium, fontSize: 10, lineHeight: 14 },
-  backdrop: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "rgba(0,0,0,0.4)" },
+  backdrop: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: scrim },
   dialog: { borderRadius: 24, padding: 18, gap: 10 },
   dialogTitle: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
   macroRow: { flexDirection: "row", gap: 8 },

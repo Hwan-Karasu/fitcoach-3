@@ -11,6 +11,7 @@ import { dailyPoints, formatDate, formatTime, formatValue, localDateOf, measurem
 import { measurementJournalView, type JournalPeriod } from "./measurementJournalView.ts";
 import { plural } from "../../../shared/format/clockText.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
+import { scrim } from "../../../shared/ui/theme/style.ts";
 
 const PERIODS: readonly Readonly<{ id: JournalPeriod; label: string }>[] = [
   { id: "30", label: "30 дней" }, { id: "90", label: "90 дней" }, { id: "365", label: "Год" }, { id: "ALL", label: "Всё" },
@@ -208,7 +209,7 @@ const styles = StyleSheet.create({
   entryValue: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },
   hint: { fontFamily: fonts.regular, fontSize: 10, lineHeight: 14 },
   empty: { padding: 16, borderRadius: 14, gap: 4 },
-  backdrop: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.4)" },
+  backdrop: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: scrim },
   dialog: { width: "100%", maxWidth: 520, alignSelf: "center", maxHeight: "90%", borderRadius: 20, padding: 12, gap: 10 },
   dialogBody: { gap: 8 },
 });

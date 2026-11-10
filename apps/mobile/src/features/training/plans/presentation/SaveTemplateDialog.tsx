@@ -4,6 +4,7 @@ import { AppButton, InlineNotice, TextField } from "../../../../shared/ui/compon
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
 import type { ProgramTemplate } from "../domain/TemplateModel.ts";
+import { scrim } from "../../../../shared/ui/theme/style.ts";
 
 const TITLE_MAX = 80;
 
@@ -61,7 +62,7 @@ export function SaveTemplateDialog({ visible, kind, initialTitle, save, onClose,
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: "center", padding: 20 },
-  scrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.48)" },
+  scrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: scrim },
   card: { width: "100%", borderWidth: 1, borderRadius: 16, padding: 20, gap: 12 },
   title: { fontFamily: fonts.bold, fontSize: 18, lineHeight: 23 },
   body: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },

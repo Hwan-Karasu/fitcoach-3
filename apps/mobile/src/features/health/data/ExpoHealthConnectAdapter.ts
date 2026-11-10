@@ -1,4 +1,4 @@
-import { aggregateGroupByPeriod, getGrantedPermissions, getSdkStatus, initialize, openHealthConnectSettings, readRecords, requestPermission, revokeAllPermissions,
+import { aggregateGroupByPeriod, getGrantedPermissions, getSdkStatus, initialize, openHealthConnectSettings, readRecords, requestPermission,
   SdkAvailabilityStatus, type Permission } from "react-native-health-connect";
 import type { HealthAvailability, HealthDayValue, HealthMetric, HealthRange } from "../domain/HealthModel.ts";
 import { HEALTH_METRICS } from "../domain/HealthModel.ts";
@@ -97,8 +97,4 @@ export class ExpoHealthConnectAdapter implements HealthConnectPort {
   }
 
   openSettings(): void { openHealthConnectSettings(); }
-
-  async revokeAll(): Promise<void> {
-    if (await this.ensure()) await revokeAllPermissions();
-  }
 }

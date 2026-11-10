@@ -25,7 +25,7 @@ import { ShareWeekPoster } from "./ShareWeekPoster.tsx";
 import { TIMELINE_GUTTER, TIMELINE_HEADER, type TimelineHandlers } from "./TimelineGrid.tsx";
 import { WeekPager } from "./WeekPager.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
-import { shadow } from "../../../shared/ui/theme/style.ts";
+import { shadow, scrim } from "../../../shared/ui/theme/style.ts";
 
 export interface OpenAppointmentParams {
   readonly appointmentId?: string;
@@ -523,7 +523,7 @@ const styles = StyleSheet.create({
   toolLabel: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 },
   hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, paddingHorizontal: 8 },
   helpButton: { width: 44, minHeight: 44, borderWidth: 2, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  sheetScrim: { backgroundColor: "rgba(0,0,0,0.45)" },
+  sheetScrim: { backgroundColor: scrim },
   sheetFrame: { flex: 1, justifyContent: "flex-end" },
   sheet: { height: "92%", width: "100%", borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden" },
   sheetHandle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, marginTop: 8 },

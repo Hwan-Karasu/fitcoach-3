@@ -12,6 +12,7 @@ import { QUESTION_TYPES, type FieldConstraints, type QuestionField, type Questio
 import { allFields, validateSchema } from "../domain/QuestionnaireRules.ts";
 import { choiceColumns } from "./choiceLayout.ts";
 import { typeIcons } from "./typeIcons.ts";
+import { scrim } from "../../../shared/ui/theme/style.ts";
 
 export const typeLabels: Readonly<Record<QuestionType, string>> = {
   SHORT_TEXT: "Короткий текст", LONG_TEXT: "Длинный текст", NUMBER: "Число", DATE: "Дата",
@@ -217,7 +218,7 @@ export function FieldEditorSheet({ schema, published, fieldId, showIssues, apply
 }
 
 const styles = StyleSheet.create({
-  scrim: { backgroundColor: "rgba(0,0,0,0.45)" },
+  scrim: { backgroundColor: scrim },
   sheet: { flex: 1, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderWidth: 1, overflow: "hidden" },
   header: { minHeight: 52, paddingLeft: 16, paddingRight: 4, flexDirection: "row", alignItems: "center",
     justifyContent: "space-between", borderBottomWidth: 1 },

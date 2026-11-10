@@ -8,7 +8,7 @@ import { CalendarDays, ChartColumnIncreasing, ChevronRight, CircleMinus, Clock, 
 import { AppButton, AppIconButton, ConfirmDialog, DropdownMenu, FloatingActionButton, InlineNotice, ListSectionHeader, LoadingState, SegmentedControl, TextField } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
-import { shadow } from "../../../../shared/ui/theme/style.ts";
+import { shadow, scrim } from "../../../../shared/ui/theme/style.ts";
 import type { ProgramCard, ProgramKind } from "../domain/ProgramModel.ts";
 import { membersWord, programKindLabels, PROGRAM_TITLE_MAX } from "../domain/ProgramRules.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
@@ -203,25 +203,23 @@ function ProgramCardRow({ card, selected, onPress, onRestore, hasMenu = false }:
   );
 }
 
-/** Строка раздела «Дополнительно»; `soon` — будущая функция: неактивна, с плашкой «Скоро». */
-function FeatureRow({ icon: renderIcon, title, detail, onPress, soon = false, disabled = false }: Readonly<{
-  icon: IconRender; title: string; detail: string; onPress?: () => void; soon?: boolean; disabled?: boolean;
+/** Строка раздела «Дополнительно». */
+function FeatureRow({ icon: renderIcon, title, detail, onPress, disabled = false }: Readonly<{
+  icon: IconRender; title: string; detail: string; onPress?: () => void; disabled?: boolean;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${title}. ${detail}`} accessibilityState={{ disabled: soon || disabled }}
-      disabled={soon || disabled} onPress={onPress}
+    <Pressable accessibilityRole="button" accessibilityLabel={`${title}. ${detail}`} accessibilityState={{ disabled }}
+      disabled={disabled} onPress={onPress}
       style={({ pressed }) => [styles.card, styles.feature, shadow.card, { borderColor: "transparent",
         backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
-      <View style={[styles.featureIcon, { backgroundColor: colors.surfaceRaised }]}>{renderIcon(soon ? colors.textMuted : colors.accentInk)}</View>
+      <View style={[styles.featureIcon, { backgroundColor: colors.surfaceRaised }]}>{renderIcon(colors.accentInk)}</View>
       <View style={styles.grow}>
-        <Text style={[styles.featureTitle, { color: soon ? colors.textSecondary : colors.textPrimary }]}>{title}</Text>
+        <Text style={[styles.featureTitle, { color: colors.textPrimary }]}>{title}</Text>
         <Text style={[styles.small, { color: colors.textSecondary }]}>{detail}</Text>
       </View>
-      {soon ? <View style={[styles.badge, { borderColor: colors.border }]}>
-        <Text style={[styles.badgeText, { color: colors.textSecondary }]}>Скоро</Text>
-      </View> : <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.8} />}
+      <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.8} />
     </Pressable>
   );
 }
@@ -353,7 +351,7 @@ export function ProgramLibraryScreen({ clientId, repository, onChoose, onCreate,
       <FloatingActionButton label="Создать программу" icon={(color) => <Plus size={26} color={color} strokeWidth={2} />}
         onPress={onCreate} />
       <Modal visible={renaming !== null} transparent animationType="fade" onRequestClose={() => { if (!busy) setRenaming(null); }}>
-        <View style={{ flex: 1, justifyContent: "center", padding: 24, backgroundColor: "rgba(0,0,0,0.4)" }}>
+        <View style={{ flex: 1, justifyContent: "center", padding: 24, backgroundColor: scrim }}>
           <View accessibilityViewIsModal style={{ backgroundColor: colors.surface, padding: 20, borderRadius: 20, gap: 14 }}>
             <Text style={[styles.title, { color: colors.textPrimary }]}>Переименовать программу</Text>
             <TextField label="Название программы" required value={renaming?.title ?? ""} disabled={busy}

@@ -73,7 +73,7 @@ async function verifyExternal(source: File, root: Directory, check: (name: strin
   const db = databaseAt(root, staging.name); const owners = repositories(db);
   try {
     await owners.initialize();
-    check("all_fifteen_repository_holders_open_the_restored_file", owners.ownerCount === 16);
+    check("all_repository_holders_open_the_restored_file", owners.ownerCount === 16);
     const clients = await owners.clients.list("ACTIVE");
     check("client_restored_from_external_copy", clients.length === 1 && clients[0]?.displayName === CLIENT);
     const recipes = await owners.nutrition.recipes.search();

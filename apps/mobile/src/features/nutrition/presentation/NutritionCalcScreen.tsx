@@ -4,7 +4,7 @@ import { AppButton, InlineNotice, LoadingState, ChoiceSegments, TextField } from
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { plural } from "../../../shared/format/clockText.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
-import { shadow } from "../../../shared/ui/theme/style.ts";
+import { shadow, scrim } from "../../../shared/ui/theme/style.ts";
 import { BODY_FAT_PICTURES, BodyFatPictureSheet, localDateOf, navyBodyFat, pictureSetOf, upsertDailyMeasurement, type MeasurementRepositoryPort,
   type WritableMeasurementMethod } from "../../measurements/public.ts";
 import { CALC_ACTIVITIES, CALC_GOALS, CALC_INTENSITIES, deriveCalc, type CalcActivity, type CalcGoal, type CalcIntensity,
@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
   nestedTitle: { flex: 1, fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
   resultRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   resultValue: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
-  backdrop: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.4)" },
+  backdrop: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: scrim },
   dialog: { borderRadius: 24, padding: 18, gap: 10, maxHeight: "90%" },
   dialogTitle: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
   dialogBody: { gap: 12 },

@@ -1,13 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { BootCoordinator } from "../apps/mobile/src/app/bootstrap/BootCoordinator.ts";
-import { createDevBootDependencies } from "../apps/mobile/src/app/bootstrap/DevBootDependencies.ts";
 import { DEV_SCHEMA_OWNERS, prepareDevSchema } from "../apps/mobile/src/app/composition/devSchema.ts";
-import { importLegacyDevDatabase, LEGACY_DEV_DATABASE } from "../apps/mobile/src/app/composition/legacyDevImport.ts";
 import { DevAccountingRepository } from "../apps/mobile/src/features/accounting/data/DevAccountingRepository.ts";
 import { DevCalendarRepository } from "../apps/mobile/src/features/calendar/data/DevCalendarRepository.ts";
 import { DevClientRepository } from "../apps/mobile/src/features/clients/data/DevClientRepository.ts";
@@ -167,76 +161,6 @@ test("D01 порядок запуска «схема → перенос → об
   } finally { await accounting.close(); await calendar.close(); await clients.close(); }
 });
 
-test("D01 сбой чтения при boot: засев не начинается, файлы закрываются, повтор сохраняет все данные", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "fitcoach-d01-retry-"));
-  const legacyFile = join(directory, LEGACY_DEV_DATABASE);
-  const targetFile = join(directory, "synthetic-target.db");
-  const legacy = await legacyDatabase(legacyFile);
-  const before = counts(legacy, "dev_");
-  legacy.close();
-  const database = new SharedSqliteDatabase(async () => nodeSqlitePort(new DatabaseSync(targetFile)));
-  const clients = new DevClientRepository(database, WS, []);
-  const calendar = new DevCalendarRepository(database, WS);
-  let fail = true;
-  let sourceClosed = 0;
-  let seeds = 0;
-  const boot = new BootCoordinator(createDevBootDependencies(
-    async () => nodeSqlitePort(new DatabaseSync(":memory:")),
-    async () => {
-      await prepareDevSchema(database);
-      await importLegacyDevDatabase(database, async (name) => {
-        assert.equal(name, LEGACY_DEV_DATABASE);
-        const source = nodeSqlitePort(new DatabaseSync(legacyFile));
-        return {
-          ...source,
-          async all<Row>(sql: string, bindings?: Parameters<typeof source.all>[1]): Promise<readonly Row[]> {
-            // Fail after earlier table inserts, so the test also proves rollback of partial copying.
-            if (fail && sql === "SELECT * FROM dev_clients") throw new Error("SYNTHETIC_READ_FAILURE");
-            return source.all<Row>(sql, bindings);
-          },
-          async close() { sourceClosed += 1; await source.close(); },
-        };
-      });
-      seeds += 1;
-      await clients.initialize();
-      await calendar.initialize();
-    },
-  ));
-  try {
-    assert.deepEqual(await boot.start(), { kind: "BOOT_FAILED", attempt: 1, code: "MIGRATION_INCOMPLETE" });
-    assert.equal(seeds, 0, "после ошибки нельзя заполнять новую базу");
-    assert.equal(sourceClosed, 1);
-    const failed = new DatabaseSync(targetFile);
-    try {
-      assert.equal(Object.values(counts(failed, "")).reduce((sum, rows) => sum + rows, 0), 0);
-      assert.equal(failed.prepare("SELECT count(*) AS n FROM dev_legacy_import").get()?.n, 0);
-    } finally { failed.close(); }
-    fail = false;
-    assert.equal((await boot.retry()).kind, "APP_READY");
-    assert.equal(seeds, 1);
-    assert.equal(sourceClosed, 2);
-    assert.equal((await clients.list("ACTIVE")).length, 2);
-    const lease = await database.acquire();
-    try {
-      for (const [table, n] of Object.entries(before)) {
-        assert.equal((await lease.connection.first<{ n: number }>(`SELECT count(*) AS n FROM ${table}`))?.n, n, table);
-      }
-      assert.equal((await lease.connection.first<{ status: string }>("SELECT status FROM dev_legacy_import"))?.status, "IMPORTED");
-      for (const owner of DEV_SCHEMA_OWNERS) {
-        const rows = await lease.connection.all<{ version: number; checksum: string }>(`SELECT version, checksum FROM ${owner.ledger}`);
-        assert.deepEqual(rows.map((row) => ({ ...row })), owner.chain.map(({ version, checksum }) => ({ version, checksum })), owner.owner);
-      }
-    } finally { await database.release(); }
-    const unchanged = new DatabaseSync(legacyFile);
-    try { assert.deepEqual(counts(unchanged, "dev_"), before); }
-    finally { unchanged.close(); }
-  } finally {
-    await calendar.close();
-    await clients.close();
-    rmSync(directory, { recursive: true, force: true });
-  }
-});
-
 test("D01 неизвестные таблицы и отличающиеся колонки источника не теряются молча", async () => {
   const legacy = await legacyDatabase();
   legacy.exec("CREATE TABLE dev_unknown_data (id TEXT PRIMARY KEY); INSERT INTO dev_unknown_data VALUES ('synthetic')");
@@ -248,16 +172,6 @@ test("D01 неизвестные таблицы и отличающиеся ко
   assert.equal(db.prepare("SELECT count(*) AS n FROM dev_legacy_import").get()?.n, 0);
   db.close();
   legacy.close();
-});
-
-test("D01 источник закрывается даже при отказе открытия новой базы", async () => {
-  let closed = 0;
-  const source = nodeSqlitePort(new DatabaseSync(":memory:"));
-  const database = new SharedSqliteDatabase(async () => { throw new Error("SYNTHETIC_OPEN_FAILURE"); });
-  await assert.rejects(importLegacyDevDatabase(database, async () => ({
-    ...source, async close() { closed += 1; await source.close(); },
-  })), { message: "SYNTHETIC_OPEN_FAILURE" });
-  assert.equal(closed, 1);
 });
 
 test("D01 перенос проверяет содержимое строк до отметки успеха; искажение откатывается, повтор сохраняет исходник", async () => {

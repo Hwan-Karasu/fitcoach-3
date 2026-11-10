@@ -30,7 +30,6 @@ class FakePlatform implements HealthConnectPort {
   async requestPermissions() { return this.granted; }
   async readDaily(metrics: readonly HealthMetric[], range: { from: string; to: string }) { this.reads.push({ metrics, ...range }); return this.data.filter((entry) => metrics.includes(entry.metric)); }
   openSettings() { /* не используется */ }
-  async revokeAll() { this.granted = []; }
 }
 
 async function stores(participants = true) {

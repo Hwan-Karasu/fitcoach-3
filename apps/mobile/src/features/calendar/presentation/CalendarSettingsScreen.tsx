@@ -11,6 +11,7 @@ import { calendarErrorMessage, sessionTypeColorHex } from "./calendarPresentatio
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { SessionTypeEditor, sessionCategoryLabels as categoryLabel, type SessionTypeDraft as Draft } from "./SessionTypeEditor.tsx";
 import { DEFAULT_DUTY_COLOR, resolveDutyColor, resolveTypeColors, sessionTypeColorLabels } from "./calendarTypeColors.ts";
+import { scrim } from "../../../shared/ui/theme/style.ts";
 
 const emptyDraft: Draft = { id: null, name: "", category: "TRAINING", duration: 60, requiresCredit: false,
   color: null, creditLocked: false };
@@ -298,7 +299,7 @@ const styles = StyleSheet.create({
   policyRow: { flexDirection: "row", alignItems: "stretch", gap: 6 },
   dutyColor: { flex: 1, minWidth: 0, minHeight: 44, borderWidth: 2, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   dutyOverlay: { flex: 1, justifyContent: "center", alignItems: "center", padding: 16 },
-  dutyScrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.48)" },
+  dutyScrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: scrim },
   dutyDialog: { width: "100%", maxWidth: 420, borderWidth: 1, borderRadius: 16, padding: 12, gap: 8 },
   dutyClose: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   dutyAction: { flex: 1, minWidth: 0 },

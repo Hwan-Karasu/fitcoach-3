@@ -11,6 +11,7 @@ import type { CalendarRepositoryPort } from "../domain/CalendarRepositoryPort.ts
 import { formatMinute, mergeDutyRange } from "../domain/CalendarRules.ts";
 import { SLOT_MINUTES } from "../domain/CalendarModel.ts";
 import { calendarErrorMessage, dayTitle } from "./calendarPresentation.ts";
+import { scrim } from "../../../shared/ui/theme/style.ts";
 
 /** Пресеты — сеткой по два в ряд на всю ширину окна. */
 const PRESET_COLUMNS = 2;
@@ -179,7 +180,7 @@ export function DutyDaySheet({ date, repository, window, onClose }: Readonly<{
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: "center", alignItems: "center", padding: 16 },
-  scrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.48)" },
+  scrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: scrim },
   dialog: { width: "100%", maxWidth: 420, borderWidth: 1, borderRadius: 16, padding: 12, gap: 8 },
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
   cell: { flex: 1, minWidth: 0 },

@@ -5,7 +5,7 @@ import { AppButton, BarChart, BottomSheet, DateRangeCalendar, EmptyState, Inline
 import type { DateRange } from "../../../shared/ui/components/DateRangeCalendar.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
-import { shadow } from "../../../shared/ui/theme/style.ts";
+import { shadow, scrim } from "../../../shared/ui/theme/style.ts";
 import type { HealthStorePort } from "../../health/public.ts";
 import type { MeasurementRepositoryPort } from "../../measurements/public.ts";
 import { shiftIsoDate } from "../domain/DayNavigation.ts";
@@ -225,6 +225,6 @@ const styles = StyleSheet.create({
   monthList: { gap: 8 },
   monthRow: { minHeight: 48, borderRadius: 24, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   monthText: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
-  backdrop: { flex: 1, padding: 16, justifyContent: "center", backgroundColor: "rgba(0,0,0,0.45)" },
+  backdrop: { flex: 1, padding: 16, justifyContent: "center", backgroundColor: scrim },
   dialog: { padding: 14, borderRadius: 26, gap: 8 },
 });

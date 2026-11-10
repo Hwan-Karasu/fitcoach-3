@@ -6,6 +6,7 @@ import { Bell, ChevronRight, Palette, SlidersHorizontal, X, type LucideIcon } fr
 import { AppIconButton, BrandMark } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
+import { scrim } from "../../../shared/ui/theme/style.ts";
 
 interface SettingsDrawerPreviewProps {
   readonly visible: boolean;
@@ -14,8 +15,6 @@ interface SettingsDrawerPreviewProps {
   readonly onOpenSettings: () => void;
   readonly onOpenAppearance: () => void;
   readonly onOpenNotificationSettings: () => void;
-  readonly onOpenWorkspaceDev?: () => void;
-  readonly onOpenSqliteDev?: () => void;
 }
 
 function DrawerLink({ title, detail, icon: Icon, onPress }: Readonly<{ title: string; detail: string; icon: LucideIcon; onPress: () => void }>) {
@@ -150,7 +149,7 @@ export function SettingsDrawerPreview({
 
 const styles = StyleSheet.create({
   modalRoot: { flex: 1, flexDirection: "row", justifyContent: "flex-end" },
-  scrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.48)" },
+  scrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: scrim },
   drawer: { height: "100%", borderTopLeftRadius: 26, borderBottomLeftRadius: 26, overflow: "hidden" },
   drawerContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24 },
   drawerHeader: { minHeight: 56, flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 24 },

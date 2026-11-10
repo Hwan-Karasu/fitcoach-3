@@ -4,7 +4,7 @@ import { Check, ChevronDown, Star } from "lucide-react-native";
 import { AppButton, AppIconButton, ConfirmDialog, EmptyState, InlineNotice, LoadingState, ScreenHeader, SearchField, SegmentedControl, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
-import { shadow } from "../../../shared/ui/theme/style.ts";
+import { shadow, scrim } from "../../../shared/ui/theme/style.ts";
 import { MEAL_SLOTS, type MealSlot } from "../domain/DiaryModel.ts";
 import type { FoodCatalogPort } from "../domain/FoodCatalogPort.ts";
 import { formatDecimalX10, gramsFromPieces, parseDecimalX10 } from "../domain/FoodRules.ts";
@@ -546,7 +546,7 @@ const styles = StyleSheet.create({
   recipeTilePhoto: { width: "100%", aspectRatio: 1, borderRadius: 10 },
   photoPlaceholder: { justifyContent: "center", alignItems: "center" },
   sectionTitle: { fontFamily: fonts.bold, fontSize: 14, paddingVertical: 14 },
-  detailBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.45)" },
+  detailBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: scrim },
   detailPanel: { maxHeight: "90%", padding: 12, borderTopLeftRadius: 20, borderTopRightRadius: 20, gap: 8 },
   selectionBar: { paddingHorizontal: 12, borderTopWidth: StyleSheet.hairlineWidth },
   actions: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },

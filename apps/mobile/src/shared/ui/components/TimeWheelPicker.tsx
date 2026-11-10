@@ -6,6 +6,7 @@ import { TimerPicker } from "react-native-timer-picker";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../theme/typography.ts";
 import { AppButton } from "./AppButton.tsx";
+import { scrim } from "../theme/style.ts";
 
 const ITEM = 34;
 const VISIBLE = 5;
@@ -229,7 +230,7 @@ export function HourMinutePicker({ visible, title, value, min, max, onConfirm, o
 
 const styles = StyleSheet.create({
   hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, textAlign: "center" },
-  scrim: { backgroundColor: "rgba(0,0,0,0.45)" },
+  scrim: { backgroundColor: scrim },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   card: { minWidth: 260, borderWidth: 1, borderRadius: 12, padding: 12, gap: 8, alignItems: "stretch" },
   title: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18, textAlign: "center" },

@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, V
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../theme/typography.ts";
+import { scrim } from "../theme/style.ts";
 
 /**
  * Нижний лист (UIX-02/03, UI-OWN-064/066): подложка, ручка, заголовок по центру, содержимое с прокруткой и закреплённый низ
@@ -38,7 +39,7 @@ export function BottomSheet({ visible, title, onClose, children, footer, fill = 
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end" },
-  scrim: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.45)" },
+  scrim: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, backgroundColor: scrim },
   sheet: { maxHeight: "88%", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 16, paddingTop: 8, gap: 10 },
   sheetFill: { height: "92%", maxHeight: "92%" },
   fill: { flex: 1, marginHorizontal: -16 },

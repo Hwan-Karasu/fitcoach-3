@@ -6,10 +6,9 @@ import type { CalendarParticipantDirectoryPort, CalendarRepositoryPort } from
   "../../features/calendar/public.ts";
 import type { FoodCatalogPort, NutritionCalcPort, NutritionDiaryPort, NutritionTargetsPort, RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { dailyPoints, localDateOf, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
-import { isValidHealthValue, type HealthConnectPort, type HealthStorePort } from "../../features/health/public.ts";
+import { createHealthOperationQueue, isValidHealthValue, type HealthConnectPort, type HealthStorePort } from "../../features/health/public.ts";
 import { ExpoHealthConnectAdapter } from "../../features/health/data/ExpoHealthConnectAdapter.ts";
 import { syncHealthConnect, type HealthSyncOutcome } from "../../workflows/syncHealthConnect.ts";
-import { createHealthOperationQueue } from "../../features/health/public.ts";
 import type { SettingsPort } from "../../features/settings/public.ts";
 import type { QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
 import type { ActiveWorkoutsPort, RestTimersPort, TrainingExecutionPort, TrainingPlansRepositoryPort, WorkoutOutcomePort } from
@@ -80,7 +79,6 @@ export interface NutritionServices {
  * populated prefixed source stay intact; all original data is imported and verified. */
 const DEV_DATABASE = "fitcoach_dev_baseline_v3.db";
 
-/** Shared port bindings; development tooling is absent from the ordinary runtime. */
 /** Health Connect (ADR-059): хранилище дней, граница с системой и обновление данных привязанной карточки. */
 export interface HealthServices {
   readonly store: HealthStorePort;

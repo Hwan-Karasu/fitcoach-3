@@ -12,6 +12,8 @@ import { formatKopeks, pricePerSessionKopeks } from "../domain/AccountingRules.t
 import { AccountingHistory } from "./AccountingHistory.tsx";
 import { derivePackPricing, type PackPriceBasis } from "../domain/PackPricing.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
+import { localDateText } from "../../../shared/domain/LocalDate.ts";
+import { scrim } from "../../../shared/ui/theme/style.ts";
 
 const modeLabels: Readonly<Record<AccountingMode, string>> = {
   FITCOACH: "В приложении", EXTERNAL: "Внешний учёт", UNTRACKED: "Не ведётся",
@@ -40,10 +42,7 @@ function AccountingSegments<Id extends string>({ title, items, selected, onSelec
   </View>;
 }
 
-function today(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
+const today = (): string => localDateText();
 
 function accountingError(error: unknown): string {
   const code = error instanceof Error ? error.message : "";
@@ -253,7 +252,7 @@ const styles = StyleSheet.create({
   packName: { flex: 1 },
   packCheck: { width: 23, height: 23, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   packPayment: { gap: 10 },
-  sheetBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.35)" },
+  sheetBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: scrim },
   sheet: { maxHeight: "90%", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 16, paddingTop: 8 },
   sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   formContent: { gap: 12, paddingVertical: 12 },

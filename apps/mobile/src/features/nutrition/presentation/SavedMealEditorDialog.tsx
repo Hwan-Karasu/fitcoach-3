@@ -8,6 +8,7 @@ import type { SavedMeal, SavedMealInput } from "../domain/SavedMeal.ts";
 import { formatDecimalX10, parseDecimalX10 } from "../domain/FoodRules.ts";
 import { normalizeSnapshot } from "../domain/DiaryRules.ts";
 import { kcalText, nutritionErrorText, unitLabels } from "./nutritionFormat.ts";
+import { scrim } from "../../../shared/ui/theme/style.ts";
 
 /** Mounted once per editing session; errors retain the complete form. */
 export function SavedMealEditorDialog({ meal, snapshots, initialName, onAddItems, onSave, onDelete, onClose }: Readonly<{
@@ -71,7 +72,7 @@ export function SavedMealEditorDialog({ meal, snapshots, initialName, onAddItems
   </Modal>;
 }
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, padding: 16, justifyContent: "center", backgroundColor: "rgba(0,0,0,0.45)" },
+  backdrop: { flex: 1, padding: 16, justifyContent: "center", backgroundColor: scrim },
   dialog: { maxHeight: "92%", padding: 16, borderRadius: 20, gap: 8 },
   title: { fontFamily: fonts.bold, fontSize: 18 }, body: { gap: 8, paddingBottom: 8 },
 });

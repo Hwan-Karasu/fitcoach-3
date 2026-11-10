@@ -10,6 +10,7 @@ import { appointmentLabel, formatMinute } from "../domain/CalendarRules.ts";
 import { calendarErrorMessage, dayTitle, useParticipants } from "./calendarPresentation.ts";
 import { CancelUndoHost, useOfferCancelUndo } from "./CancelUndo.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
+import { scrim } from "../../../shared/ui/theme/style.ts";
 
 /** «Тренировка списана» only after a real USED; untracked and bypass rows get no finance text (§48.40.6). */
 function creditText(row: Appointment, state: CalendarAppointmentCredit | null): string | null {
@@ -118,7 +119,7 @@ export function AppointmentOutcomeDialog({ items, visible, repository, participa
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: "center", padding: 20 },
-  scrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.48)" },
+  scrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: scrim },
   card: { maxHeight: "90%", width: "100%", borderWidth: 1, borderRadius: 16, padding: 20, gap: 8 },
   copyScroll: { flexGrow: 0, flexShrink: 1 },
   copy: { gap: 6 },

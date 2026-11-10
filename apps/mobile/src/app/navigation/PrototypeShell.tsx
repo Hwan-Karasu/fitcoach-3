@@ -165,10 +165,8 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
               onOpenAppearance={() => navigation.navigate("Appearance")}
               onOpenNotificationSettings={() => navigation.navigate("NotificationSettings")}
               onOpenNotifications={() => navigation.navigate("Notifications")}
-              onOpenWorkspaceDev={developmentTools ? () => navigation.navigate("WorkspaceDev") : undefined}
               onOpenCreate={() => navigation.navigate("ClientEditorDev")}
                 onOpenClient={(clientId) => navigation.navigate("ClientWorkspace", { clientId })}
-              onOpenSqliteDev={developmentTools ? () => navigation.navigate("SqliteDev") : undefined}
               clients={services.clients}
               clientLists={clientLists}
               rosterOverview={rosterOverview}
@@ -249,7 +247,7 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
                 workoutId: slot.plannedWorkoutId, ...(options?.returnToCaller === true ? { closeOnBack: true } : {}) } } })}
             onOpenClientPrograms={(clientId) => navigation.replace("ClientWorkspace", { clientId, screen: "Training",
               params: { screen: "TrainingIndex" } })}
-            exercises={services.exercises} exerciseLookup={services.exerciseLookup} weekCopy={services.weekCopy} weekSwap={services.weekSwap} mesocycleSave={services.mesocycleSave} planDelete={services.planDelete}
+            exercises={services.exercises} exerciseLookup={services.exerciseLookup} mesocycleSave={services.mesocycleSave} planDelete={services.planDelete}
             onOpenEdit={(clientId) => navigation.navigate("ClientEditorDev", { clientId })}
             onOpenAccounting={(clientId) => navigation.navigate("ClientAccounting", { clientId })}
             onOpenMeasurements={(clientId) => navigation.navigate("ClientMeasurements", { clientId })}

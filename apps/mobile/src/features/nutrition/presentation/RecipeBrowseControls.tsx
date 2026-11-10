@@ -7,6 +7,7 @@ import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvid
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { PercentRangeSlider } from "../../../shared/ui/components/PercentRangeSlider.tsx";
 import { EMPTY_RECIPE_FILTERS, type CalorieBand, type RecipeFilters, type RecipeSort, type TimeBand } from "../domain/RecipeBrowse.ts";
+import { scrim } from "../../../shared/ui/theme/style.ts";
 
 const sorts: readonly Readonly<{ id: RecipeSort; label: string }>[] = [{ id: "DEFAULT", label: "По умолчанию" }, { id: "NEWEST", label: "Сначала новые" }, { id: "OLDEST", label: "Сначала старые" }, { id: "KCAL_ASC", label: "Калории: по возрастанию" }, { id: "KCAL_DESC", label: "Калории: по убыванию" }];
 const bands: readonly Readonly<{ id: CalorieBand; label: string }>[] = [{ id: "ANY", label: "Любые" }, { id: "UNDER_100", label: "Менее 100" }, { id: "100_250", label: "100–250" }, { id: "250_500", label: "250–500" }, { id: "OVER_500", label: "Более 500" }];
@@ -85,7 +86,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", gap: 6 }, cell: { flex: 1, minWidth: 0 },
   body: { gap: 10 }, scroll: { flexGrow: 0, flexShrink: 1 },
   backdrop: { flex: 1, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
-  scrim: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.45)" },
+  scrim: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, backgroundColor: scrim },
   sheet: { width: "100%", maxWidth: 420, maxHeight: "100%", padding: 12, borderWidth: 1, borderRadius: 20, gap: 8 },
   header: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { flex: 1, fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },

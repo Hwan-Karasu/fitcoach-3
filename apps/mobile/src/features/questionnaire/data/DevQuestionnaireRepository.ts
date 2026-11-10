@@ -7,15 +7,11 @@ import type { AnswerValue, Answers, ClientAnswers, CompletionStatus, PublishedQu
 import type { AnswersParticipant, QuestionnaireCommittedChange, QuestionnaireRepositoryPort } from "../domain/QuestionnaireRepositoryPort.ts";
 import { allFields, completionStatus, defaultQuestionnaireSchema, normalizeAnswer, withMissingSystemOptions, publishSummary, sameSchema,
   validateSchema } from "../domain/QuestionnaireRules.ts";
+import { localDateText } from "../../../shared/domain/LocalDate.ts";
 import { DEV_QUESTIONNAIRE_LEDGER, devQuestionnaireCatalog } from "./DevQuestionnaireCatalog.ts";
 
 interface VersionRow { version: number; publishedAt: string; schemaJson: string }
 interface DraftRow { baseVersion: number; revision: number; schemaJson: string }
-
-function localToday(): string {
-  const now = new Date();
-  return `${String(now.getFullYear()).padStart(4, "0")}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
 
 function parseSchema(json: string): QuestionnaireSchema {
   return JSON.parse(json) as QuestionnaireSchema;
@@ -271,7 +267,7 @@ export class DevQuestionnaireRepository implements QuestionnaireRepositoryPort {
   };
 
   private async saveAnswersIn(tx: SqliteStatementPort, clientId: string, patch: Readonly<Record<string, AnswerValue | null>>): Promise<ClientAnswers> {
-    const today = localToday();
+    const today = localDateText();
     // Answers are checked against the schema current at commit time, so an outdated open form
     // cannot write into a retired or unknown field (§25.14).
     const current = await this.current(tx);

@@ -30,7 +30,6 @@ export interface HealthConnectPort {
   requestPermissions(): Promise<readonly HealthMetric[]>;
   /** Значения по локальным дням интервала для разрешённых видов. */
   readDaily(metrics: readonly HealthMetric[], range: HealthRange): Promise<readonly HealthDayValue[]>;
+  /** Системные настройки Health Connect: именно там тренер отзывает доступ приложения (отзыв из приложения вступает в силу только после перезапуска). */
   openSettings(): void;
-  /** Отозвать все разрешения этого приложения в Health Connect. */
-  revokeAll(): Promise<void>;
 }

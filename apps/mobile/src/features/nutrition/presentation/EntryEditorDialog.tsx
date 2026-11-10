@@ -11,6 +11,7 @@ import { planOverride, type FieldEdits } from "../domain/EntryEditRules.ts";
 import { NUTRIENT_KEYS, type NutrientKey, type Nutrients } from "../domain/FoodModel.ts";
 import { formatDecimalX10, parseDecimalX10, scaleNutrients } from "../domain/FoodRules.ts";
 import { slotLabels, unitLabels } from "./nutritionFormat.ts";
+import { scrim } from "../../../shared/ui/theme/style.ts";
 
 const labels: Readonly<Record<NutrientKey, string>> = { kcalX10: "Калории, ккал", proteinX10: "Белки, г", fatX10: "Жиры, г", carbsX10: "Углеводы, г" };
 type Texts = Readonly<Record<NutrientKey, string>>;
@@ -149,7 +150,7 @@ export function EntryEditorDialog({ entry, onClose, onSave, onRemove, onEditSour
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.4)" },
+  backdrop: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: scrim },
   dialog: { borderRadius: 24, padding: 18, gap: 10, maxHeight: "94%" },
   head: { flexDirection: "row", alignItems: "center", gap: 8 },
   headText: { flex: 1, minWidth: 0 },

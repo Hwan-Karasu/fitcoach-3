@@ -6,7 +6,7 @@ import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, LoadingState, Te
 import { pickDate } from "../../../shared/ui/components/pickDate.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
-import { shadow } from "../../../shared/ui/theme/style.ts";
+import { shadow, scrim } from "../../../shared/ui/theme/style.ts";
 import { MEASUREMENT_GROUPS, MEASUREMENT_TYPES, type ClientMeasurements, type Measurement, type MeasurementGroup, type MeasurementOperation, type MeasurementType } from "../domain/MeasurementModel.ts";
 import type { MeasurementRepositoryPort } from "../domain/MeasurementRepositoryPort.ts";
 import { dailyPoints, formatDate, localDateOf, measurementTypeInfo, parseValueX10 } from "../domain/MeasurementRules.ts";
@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
   settingChip: { width: "47%", flexGrow: 1, minHeight: 38, borderRadius: 19, borderWidth: 1, paddingHorizontal: 8, flexDirection: "row", alignItems: "center" },
   checkSpace: { width: 16 },
   settingLabel: { flex: 1, fontFamily: fonts.bold, fontSize: 12, lineHeight: 16, textAlign: "center" },
-  backdrop: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.4)" },
+  backdrop: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: scrim },
   dialog: { width: "100%", maxWidth: 520, alignSelf: "center", borderRadius: 20, padding: 12, gap: 8, maxHeight: "92%" },
   dialogTitle: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },
   dialogBody: { gap: 10, paddingBottom: 4 },

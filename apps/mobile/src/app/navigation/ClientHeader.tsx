@@ -69,10 +69,5 @@ const ClientHeaderBody = memo(function ClientHeaderBody({ client, subtitle, titl
     </ScreenHeader>;
   }
   return <ScreenHeader title={title ?? client.displayName} subtitle={subtitle} {...(title === undefined ? { mark: clientMark(client) } : {})} onBack={onBack}
-    right={<View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-      {onEdit === undefined ? null : <AppIconButton compact label="Редактировать карточку и анкету клиента" icon={<Pencil size={20} color={colors.textPrimary} />} onPress={onEdit} />}
-      {trailingAction === undefined
-        ? <AppIconButton compact label="К списку клиентов" icon={<Users size={20} color={colors.textPrimary} />} onPress={onClients} />
-        : <AppIconButton compact label={trailingAction.label} icon={<Pencil size={20} color={colors.textPrimary} />} onPress={trailingAction.onPress} />}
-    </View>} />;
+    right={rightControls} />;
 });

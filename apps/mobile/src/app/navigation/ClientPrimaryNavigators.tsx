@@ -16,7 +16,7 @@ import { useClientDay } from "../../features/nutrition/public.ts";
 import { AddFoodScreen, metricTitle, type MetricId, type CalcClientBody, type CatalogFilter, FoodEditorScreen, NutritionHomeScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
   type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ArchivedProgramsPanel, ParticipantSwitcher, participantTarget, ProgramMatrixScreen, PeriodizedBuilderScreen, ProgramLibraryScreen, ProgramModeChooserScreen, programLibraryTabTitles, ProgramScreen, SimpleProgramBuilderScreen,
-  WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, type PickedExercise, type WeekCopyPort, type WeekSwapPort, type MesocycleSavePort, type SimplePlanSavePort, type WeekEditSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort,
+  WeekEditorScreen, SimpleWorkoutEditorScreen, TemplateLibraryScreen, type PickedExercise, type MesocycleSavePort, type SimplePlanSavePort, type WeekEditSavePort, type MesocycleDeletePort, type ProgramDeletePort, type PlanOnlyDeletePort,
   type ExerciseLookupPort, type ProgramKind, type TrainingParticipantCandidate,
   type TrainingPlansRepositoryPort, ProgramWeeksPanel, weekCardMarkers, weekCardTone, weekStatus, weekStatusLabels, WorkoutScreen, type ActiveWorkoutsPort, type RestTimersPort, type TrainingExecutionPort,
   type WorkoutSlot } from "../../features/training/public.ts";
@@ -90,9 +90,9 @@ type HomeProps = Readonly<{
   /** Блоки питания «Главной»; `openMetric` открывает экран показателя (UIX-08), `openWeightStats` — статистику веса и % жира (UIX-09). */
   renderNutritionSlot?: (actions: Readonly<{ openMetric: (metric: MetricId) => void; openWeightStats: () => void }>) => ReactNode;
   /** Статистика веса и % жира. */
-  renderWeightStats?: () => ReactNode;
+  renderWeightStats: () => ReactNode;
   /** Экран показателя «Шаги / Сон / Расход / Приёмы». */
-  renderMetric?: (metric: MetricId) => ReactNode;
+  renderMetric: (metric: MetricId) => ReactNode;
   daySlot?: ReactNode;
   onArchive: () => Promise<void>;
   /** Шапка клиента: выход из клиента, список клиентов, редактор карточки. */
@@ -123,10 +123,10 @@ export function HomeNavigator(props: HomeProps) {
           nutritionSlot={props.renderNutritionSlot?.({ openMetric: (metric) => navigation.navigate("HomeMetric", { metric }), openWeightStats: () => navigation.navigate("HomeWeight") })} onArchive={props.onArchive} />}
       </HomeStack.Screen>
       <HomeStack.Screen name="HomeWeight">
-        {() => <>{props.renderWeightStats?.()}</>}
+        {() => <>{props.renderWeightStats()}</>}
       </HomeStack.Screen>
       <HomeStack.Screen name="HomeMetric">
-        {({ route }) => <>{props.renderMetric?.(route.params.metric)}</>}
+        {({ route }) => <>{props.renderMetric(route.params.metric)}</>}
       </HomeStack.Screen>
     </HomeStack.Navigator>
   );
@@ -216,8 +216,6 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
   listCandidates: () => Promise<readonly TrainingParticipantCandidate[]>;
   exercises: ExerciseCatalogPort;
   exerciseLookup: ExerciseLookupPort;
-  weekCopy: WeekCopyPort;
-  weekSwap: WeekSwapPort;
   mesocycleSave: MesocycleSavePort & SimplePlanSavePort & WeekEditSavePort;
   planDelete: MesocycleDeletePort & ProgramDeletePort & PlanOnlyDeletePort;
   onExitClient: () => void;
@@ -422,11 +420,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
             const picked: PickedExercise = { token: `${Date.now()}`, workoutId: route.params.workoutId, exerciseIds,
               ...(route.params.replace === undefined ? {} : { replace: route.params.replace }) };
             const back = route.params.returnTo;
-            if (back.name === "TrainingBuilder") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
-            else if (back.name === "TrainingWeek") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
-            else if (back.name === "TrainingWorkout") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
-            else if (back.name === "TrainingCreate") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
-            else navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
+            navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
           }} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingCreateExercise">
@@ -437,11 +431,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
               exerciseIds: [...(route.params.selected ?? []), exerciseId],
               ...(source.replace === undefined ? {} : { replace: source.replace }) };
             const back = source.returnTo;
-            if (back.name === "TrainingBuilder") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
-            else if (back.name === "TrainingWeek") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
-            else if (back.name === "TrainingWorkout") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
-            else if (back.name === "TrainingCreate") navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
-            else navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
+            navigation.popTo(back.name, { ...back.params, picked }, { merge: true });
           }} />}
       </TrainingStack.Screen>
       <TrainingStack.Screen name="TrainingWeek">
