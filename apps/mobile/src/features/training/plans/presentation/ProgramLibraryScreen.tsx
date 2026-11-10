@@ -56,7 +56,7 @@ const modeInfo: Readonly<Record<ProgramKind, ModeInfo>> = {
   SIMPLE: {
     icon: icon(Rocket), subtitle: "Минимум настроек для быстрого начала", badge: "Быстрый старт",
     cells: ["Тренировки и недели", "Шаблоны", "Минимум настроек", "Без циклов"],
-    footer: "Один клиент, план недели повторяется",
+    footer: "Один клиент, план повторяется",
   },
   PERIODIZED: {
     icon: icon(TrendingUp), subtitle: "Планирование и контроль прогресса", badge: "Периодизация",
@@ -83,10 +83,7 @@ function ProgramModeChooser({ onChoose }: Readonly<{ onChoose: (kind: ProgramKin
               <View style={[styles.modeIcon, { backgroundColor: colors.accentSoft }]}>{info.icon(colors.onAccentSoft)}</View>
               <View style={styles.grow}>
                 <Text style={[styles.modeTitle, { color: colors.textPrimary }]}>{title}</Text>
-                <Text style={[styles.small, { color: colors.textSecondary }]}>{info.subtitle}</Text>
-                <View style={[styles.badge, { backgroundColor: colors.accentSoft }]}>
-                  <Text style={[styles.badgeText, { color: colors.onAccentSoft }]}>{info.badge}</Text>
-                </View>
+                <Text numberOfLines={1} style={[styles.small, { color: colors.textSecondary }]}>{info.subtitle}</Text>
               </View>
             </View>
             <View style={styles.cells}>
@@ -96,7 +93,12 @@ function ProgramModeChooser({ onChoose }: Readonly<{ onChoose: (kind: ProgramKin
                 </View>
               ))}
             </View>
-            <Text style={[styles.small, { color: colors.textSecondary }]}>{info.footer}</Text>
+            <View style={styles.modeFoot}>
+              <Text numberOfLines={1} style={[styles.small, styles.grow, { color: colors.textSecondary }]}>{info.footer}</Text>
+              <View style={[styles.badge, { backgroundColor: colors.accentSoft }]}>
+                <Text style={[styles.badgeText, { color: colors.onAccentSoft }]}>{info.badge}</Text>
+              </View>
+            </View>
           </Pressable>
         );
       })}
@@ -120,6 +122,8 @@ export function ProgramModeChooserScreen({ onChoose, onOpenTemplates, onOpenExce
   const colors = palette.tokens;
   const [drafts, setDrafts] = useState<readonly { kind: ProgramKind; title: string }[] | null>(repository && clientId ? null : []);
   const [startingNew, setStartingNew] = useState(false);
+  // Прокрутка включается, только если экран не вмещает содержимое (крупный шрифт, маленький телефон).
+  const [viewport, setViewport] = useState(0); const [content, setContent] = useState(0);
   const [replaceKind, setReplaceKind] = useState<ProgramKind | null>(null);
   const [draftError, setDraftError] = useState(""); const [draftBusy, setDraftBusy] = useState(false); const [retry, setRetry] = useState(0);
   const focused = useIsFocused();
@@ -143,7 +147,8 @@ export function ProgramModeChooserScreen({ onChoose, onOpenTemplates, onOpenExce
     <AppButton label="Начать новую программу" variant="secondary" onPress={() => setStartingNew(true)} />
   </View>;
   return (
-    <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.chooser}>
+    <ScrollView style={{ backgroundColor: colors.canvas }} contentContainerStyle={styles.chooser} bounces={false} overScrollMode="never"
+      scrollEnabled={content > viewport + 1} onLayout={(event) => setViewport(event.nativeEvent.layout.height)} onContentSizeChange={(_width, height) => setContent(height)}>
       <ProgramModeChooser onChoose={choose} />
       {!!draftError && <InlineNotice kind="error">{draftError}</InlineNotice>}
       <ConfirmDialog visible={replaceKind !== null} destructive confirmBusy={draftBusy} title="Удалить прежний черновик?"
@@ -154,14 +159,16 @@ export function ProgramModeChooserScreen({ onChoose, onOpenTemplates, onOpenExce
           const remove = kind === "SIMPLE" ? repository.clearBuilderDraft(clientId, "new:SIMPLE") : repository.clearMesocycleBuilderDraft(clientId, { programId: null, mesocycleId: null });
           void remove.then(() => { setReplaceKind(null); onChoose(kind); }).catch(() => { setReplaceKind(null); setDraftError("Не удалось удалить черновик. Попробуйте снова."); }).finally(() => setDraftBusy(false));
         }} />
-      <ListSectionHeader title="Дополнительно" />
-      {onOpenTemplates !== undefined ? <FeatureRow title="Создать из шаблона" detail="Готовые варианты программ"
-        icon={icon(FileText, 18)} onPress={onOpenTemplates} /> : null}
-      {renderExcelImport ? renderExcelImport((onPress, disabled, onSample) => <>
-        <FeatureRow title="Импортировать из Excel" detail="Планы и фактические результаты" icon={icon(FileSpreadsheet, 18)} onPress={onPress} disabled={disabled} />
-        <FeatureRow title="Скачать образец для импорта" detail="Файл Excel в формате 2.0: заполните и импортируйте" icon={icon(Download, 18)} onPress={onSample} disabled={disabled} />
-      </>)
-        : <FeatureRow title="Импортировать из Excel" detail="Планы и фактические результаты" icon={icon(FileSpreadsheet, 18)} onPress={onOpenExcel} />}
+      <Text accessibilityRole="header" style={[styles.extrasTitle, { color: colors.textPrimary }]}>Дополнительно</Text>
+      <View style={styles.extras}>
+        {onOpenTemplates !== undefined ? <FeatureTile label="Из шаблона" detail="Создать из шаблона. Готовые варианты программ"
+          icon={icon(FileText, 18)} onPress={onOpenTemplates} /> : null}
+        {renderExcelImport ? renderExcelImport((onPress, disabled, onSample) => <>
+          <FeatureTile label="Импорт из Excel" detail="Импортировать из Excel. Планы и фактические результаты" icon={icon(FileSpreadsheet, 18)} onPress={onPress} disabled={disabled} />
+          <FeatureTile label="Образец" detail="Скачать образец для импорта. Файл Excel в формате 2.0: заполните и импортируйте" icon={icon(Download, 18)} onPress={onSample} disabled={disabled} />
+        </>)
+          : <FeatureTile label="Импорт из Excel" detail="Импортировать из Excel. Планы и фактические результаты" icon={icon(FileSpreadsheet, 18)} onPress={onOpenExcel} />}
+      </View>
     </ScrollView>
   );
 }
@@ -194,23 +201,18 @@ function ProgramCardRow({ card, selected, onPress, onRestore, hasMenu = false }:
   );
 }
 
-/** Строка раздела «Дополнительно». */
-function FeatureRow({ icon: renderIcon, title, detail, onPress, disabled = false }: Readonly<{
-  icon: IconRender; title: string; detail: string; onPress?: () => void; disabled?: boolean;
+/** Плитка раздела «Дополнительно»: значок над короткой подписью; полное описание — в подписи для озвучки. */
+function FeatureTile({ icon: renderIcon, label, detail, onPress, disabled = false }: Readonly<{
+  icon: IconRender; label: string; detail: string; onPress?: () => void; disabled?: boolean;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${title}. ${detail}`} accessibilityState={{ disabled }}
+    <Pressable accessibilityRole="button" accessibilityLabel={detail} accessibilityState={{ disabled }}
       disabled={disabled} onPress={onPress}
-      style={({ pressed }) => [styles.card, styles.feature, shadow.card, { borderColor: "transparent",
-        backgroundColor: pressed ? colors.surfaceRaised : colors.surface }]}>
-      <View style={[styles.featureIcon, { backgroundColor: colors.surfaceRaised }]}>{renderIcon(colors.accentInk)}</View>
-      <View style={styles.grow}>
-        <Text style={[styles.featureTitle, { color: colors.textPrimary }]}>{title}</Text>
-        <Text style={[styles.small, { color: colors.textSecondary }]}>{detail}</Text>
-      </View>
-      <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.8} />
+      style={({ pressed }) => [styles.tile, shadow.card, { backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: disabled ? 0.5 : 1 }]}>
+      <View style={[styles.tileIcon, { backgroundColor: colors.accentSoft }]}>{renderIcon(colors.onAccentSoft)}</View>
+      <Text numberOfLines={2} style={[styles.tileText, { color: colors.textPrimary }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -378,22 +380,25 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 10 },
   withFab: { paddingBottom: 96 },
   body: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
-  chooser: { padding: 16, paddingTop: 10, gap: 8 },
+  chooser: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, gap: 8 },
   small: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  feature: { flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: 10, paddingRight: 10, paddingVertical: 4, minHeight: 48 },
-  featureIcon: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  featureTitle: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 16 },
-  modes: { gap: 12 },
+  modes: { gap: 8 },
   card: { borderWidth: 2, borderRadius: 20 },
-  mode: { borderRadius: 28, padding: 14, gap: 10 },
-  modeHead: { flexDirection: "row", alignItems: "center", gap: 12 },
-  modeTitle: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
-  badge: { alignSelf: "flex-start", height: 26, borderRadius: 13, paddingHorizontal: 12, marginTop: 4, justifyContent: "center" },
-  badgeText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 },
-  cells: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  cell: { flexBasis: "47%", flexGrow: 1, height: 40, borderRadius: 20, paddingHorizontal: 6, alignItems: "center", justifyContent: "center" },
+  mode: { borderRadius: 24, padding: 10, gap: 6 },
+  modeHead: { flexDirection: "row", alignItems: "center", gap: 10 },
+  modeTitle: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 20 },
+  modeFoot: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 22 },
+  badge: { height: 22, borderRadius: 11, paddingHorizontal: 10, justifyContent: "center" },
+  badgeText: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14 },
+  cells: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  cell: { flexBasis: "47%", flexGrow: 1, height: 28, borderRadius: 14, paddingHorizontal: 6, alignItems: "center", justifyContent: "center" },
   cellText: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16, textAlign: "center" },
-  modeIcon: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  modeIcon: { width: 40, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  extrasTitle: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 18, marginTop: 2, paddingHorizontal: 4 },
+  extras: { flexDirection: "row", gap: 8 },
+  tile: { flex: 1, minWidth: 0, minHeight: 64, borderRadius: 22, paddingHorizontal: 6, paddingVertical: 8, alignItems: "center", justifyContent: "center", gap: 4 },
+  tileIcon: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  tileText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 15, textAlign: "center" },
   program: { flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: 16, paddingRight: 12, paddingVertical: 14, minHeight: 64 },
   grow: { flex: 1, minWidth: 0, gap: 2 },
   title: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
