@@ -190,6 +190,8 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
         <View style={styles.rings}>
           <DayRing label="Шаги" unit="шагов" caption="Шаги" value={future || !stepsToday.loaded || stepsToday.steps === null ? null : wholeNumber(stepsToday.steps)}
             fraction={future ? null : goalFraction(stepsToday.steps, STEPS_GOAL)} disabled={future} hint="Ввести шаги за день" onPress={() => setSheet("steps")} />
+          {/* Сон приходит из Health Connect (ADR-059, UIX-16/17): пока кружок без данных и не нажимается. */}
+          <DayRing label="Сон" caption="Сон" value={null} fraction={null} disabled hint="Нужен Health Connect: сон придёт из него" onPress={() => undefined} />
           <DayRing label="Расход" unit="ккал" caption="Расход, ккал" value={tdee === null ? null : wholeNumber(tdee)} fraction={null}
             hint="Расчёт калорий" onPress={onOpenCalculation} />
           <DayRing label="Приёмы" caption="Приёмы пищи" value={data === null || stale ? null : String(mealCount(data.summary))}
