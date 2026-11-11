@@ -25,6 +25,7 @@ import { weekTypeTone, DiaryEditDialog, formatDuration, formatRange, supersetNum
 import { type ActiveWorkoutsPort, type SessionStatus, type SetFact, type SetType, type SetValues, type Side, type TrackingMetric,
   type WorkoutOutcome, type WorkoutSlot, type WorkoutStatus } from "../domain/ExecutionModel.ts";
 import type { CalendarOutcomeEffect } from "../domain/WorkoutOutcomePort.ts";
+import { shouldAskWorkoutExit } from "../domain/WorkoutExitPrompt.ts";
 import { currentMaxLoads, displayOrder, endInstantAfter, instantFromLocal, localDateOf, localMinuteOfDay, nextOutcome } from "../domain/ExecutionRules.ts";
 import { timeText } from "../../../../shared/format/clockText.ts";
 import type { TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
@@ -141,7 +142,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     // Existing cards may not emit onLayout again when only the navigation params changed.
     if (focusExerciseId !== null) focusExercise(focusExerciseId);
   }, [focusExerciseId, focusExerciseRequest, focusExercise]);
-  const { palette } = usePrototypeTheme();
+  const { palette, navigationAppearance, setNavigationAppearance } = usePrototypeTheme();
   const colors = palette.tokens;
   const navigation = useNavigation();
   const lookupState = useExerciseLookupState(exercises);
@@ -229,6 +230,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const [timeEdit, setTimeEdit] = useState<"start" | "end" | null>(null);
   const [exitAction, setExitAction] = useState<Parameters<typeof navigation.dispatch>[0] | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Флажок «Больше не показывать» в вопросе при выходе. */
+  const [dontAskExit, setDontAskExit] = useState(false);
   const changingWeek = useRef(false);
   const [restFor, setRestFor] = useState<PlannedExercise | null>(null);
   const { saveSet, confirmSet, setOutcome, addWarmup, removeWarmup } = diary;
@@ -413,10 +416,12 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   usePreventRemove(true, ({ data }) => {
     if (navigationAuthorized.current) { navigation.dispatch(data.action); return; }
     if (busy) return;
+    // Флаг читается синхронно: программный переход (панель таймера) действует только внутри `dispatch`, а ввод ниже дописывается асинхронно.
+    const ask = shouldAskWorkoutExit(navigationAppearance.skipWorkoutExitPrompt);
     setBusy(true);
     void finishInput().then((saved) => {
       if (!saved) return;
-      if (diary.status === "IN_PROGRESS") setExitAction(data.action);
+      if (diary.status === "IN_PROGRESS" && ask) setExitAction(data.action);
       else navigation.dispatch(data.action);
     }).finally(() => setBusy(false));
   });
@@ -859,18 +864,21 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
       <ConfirmDialog visible={exitAction !== null} title="Завершить тренировку?"
         description="«Нет» — выйти и оставить тренировку в работе. Введённые результаты сохранятся."
         confirmLabel="Да" tertiaryLabel="Нет" cancelLabel="Остаться" confirmBusy={busy}
-        onCancel={() => setExitAction(null)}
+        checkbox={{ label: "Больше не показывать", checked: dontAskExit, onChange: setDontAskExit }}
+        onCancel={() => { setExitAction(null); setDontAskExit(false); }}
         onTertiary={() => {
           const action = exitAction;
+          // Флажок действует только вместе с «Нет»: выход без вопроса всегда оставляет тренировку в работе, а «Да» её завершает.
+          if (dontAskExit) setNavigationAppearance("skipWorkoutExitPrompt", true);
           setBusy(true);
           void finishInput().then((saved) => {
-            if (saved && action !== null) { setExitAction(null); navigation.dispatch(action); }
+            if (saved && action !== null) { setExitAction(null); setDontAskExit(false); navigation.dispatch(action); }
           }).finally(() => setBusy(false));
         }}
         onConfirm={() => {
           const action = exitAction;
           void applyOutcome("COMPLETED").then((saved) => {
-            setExitAction(null);
+            setExitAction(null); setDontAskExit(false);
             if (saved !== null && action !== null) navigation.dispatch(action);
           });
         }} />

@@ -108,6 +108,27 @@ test("Z01 old appearance and corrupt navigation fields retain the usable theme",
   assert.deepEqual(parseAppearance(JSON.stringify({ ...old, hideNavigationLabels: "false", showClientListShortcut: 1 })), old);
   assert.deepEqual(parseAppearance(JSON.stringify({ ...old, hideNavigationLabels: false, showClientListShortcut: true })),
     { ...old, hideNavigationLabels: false, showClientListShortcut: true });
+  // UIX-FIT-11: «Больше не показывать» при выходе из тренировки — булево значение; чужой тип отбрасывается (по умолчанию вопрос показывается).
+  assert.deepEqual(parseAppearance(JSON.stringify({ ...old, skipWorkoutExitPrompt: true })), { ...old, skipWorkoutExitPrompt: true });
+  assert.deepEqual(parseAppearance(JSON.stringify({ ...old, skipWorkoutExitPrompt: false })), { ...old, skipWorkoutExitPrompt: false });
+  assert.deepEqual(parseAppearance(JSON.stringify({ ...old, skipWorkoutExitPrompt: "true" })), old);
+});
+
+test("UIX-FIT-11 настройка «не спрашивать при выходе из тренировки» переживает перезапуск", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "fc-workout-exit-"));
+  const file = join(dir, "settings.db");
+  try {
+    for (const skipWorkoutExitPrompt of [true, false]) {
+      const first = open(new DatabaseSync(file));
+      await first.initialize();
+      await first.saveAppearance({ themeId: "warm-sand", accentId: "caramel", skipWorkoutExitPrompt });
+      await first.close();
+      const second = open(new DatabaseSync(file));
+      await second.initialize();
+      assert.equal((await second.readAppearance())?.skipWorkoutExitPrompt, skipWorkoutExitPrompt);
+      await second.close();
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("Z01 тема и акцент переживают закрытие и повторное открытие базы", async () => {

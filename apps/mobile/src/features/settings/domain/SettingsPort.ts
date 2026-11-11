@@ -6,6 +6,8 @@ export interface AppearanceSetting {
   readonly accentId: string | null;
   readonly showClientListShortcut?: boolean;
   readonly hideNavigationLabels?: boolean;
+  /** Не спрашивать «Завершить тренировку?» при выходе (флажок «Больше не показывать»). */
+  readonly skipWorkoutExitPrompt?: boolean;
   readonly dutyColor?: string | null;
   readonly hiddenSessionTypeIds?: readonly string[];
   readonly clientCards?: ClientCardPreference;
@@ -37,6 +39,7 @@ export function parseAppearance(json: string): AppearanceSetting | null {
       ...(options.clientCards !== undefined ? { clientCards: normalizeClientCards(options.clientCards) } : {}),
       ...(typeof options.showClientListShortcut === "boolean" ? { showClientListShortcut: options.showClientListShortcut } : {}),
       ...(typeof options.hideNavigationLabels === "boolean" ? { hideNavigationLabels: options.hideNavigationLabels } : {}),
+      ...(typeof options.skipWorkoutExitPrompt === "boolean" ? { skipWorkoutExitPrompt: options.skipWorkoutExitPrompt } : {}),
       ...(options.dutyColor === null || (typeof options.dutyColor === "string" && /^#[0-9a-f]{6}$/iu.test(options.dutyColor))
         ? { dutyColor: options.dutyColor as string | null } : {}),
       ...(Array.isArray(options.hiddenSessionTypeIds) && options.hiddenSessionTypeIds.every((id) => typeof id === "string" && id.length > 0)

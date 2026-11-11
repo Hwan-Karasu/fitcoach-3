@@ -1,5 +1,6 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { AccessibilityInfo, Modal, Pressable, ScrollView, StyleSheet, Text, View, findNodeHandle } from "react-native";
+import { Check } from "lucide-react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { AppButton } from "./AppButton.tsx";
 import { fonts } from "../theme/typography.ts";
@@ -16,6 +17,8 @@ interface ConfirmDialogProps {
   readonly tertiaryLabel?: string;
   readonly onTertiary?: () => void;
   readonly returnFocusTo?: RefObject<View | null>;
+  /** Необязательный флажок под текстом («Больше не показывать»); состояние ведёт вызывающий. */
+  readonly checkbox?: Readonly<{ label: string; checked: boolean; onChange: (checked: boolean) => void }>;
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
 }
@@ -31,6 +34,7 @@ export function ConfirmDialog({
   tertiaryLabel,
   onTertiary,
   returnFocusTo,
+  checkbox,
   onConfirm,
   onCancel,
 }: Readonly<ConfirmDialogProps>) {
@@ -85,6 +89,16 @@ export function ConfirmDialog({
             <Text ref={titleRef} accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
             <Text style={[styles.description, { color: colors.textSecondary }]}>{description}</Text>
           </ScrollView>
+          {checkbox ? (
+            <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: checkbox.checked }} accessibilityLabel={checkbox.label}
+              disabled={confirmBusy} onPress={() => checkbox.onChange(!checkbox.checked)} style={styles.checkRow}>
+              <View style={[styles.checkBox, { borderColor: checkbox.checked ? colors.accentFill : colors.iconSecondary,
+                backgroundColor: checkbox.checked ? colors.accentFill : "transparent" }]}>
+                {checkbox.checked ? <Check size={16} strokeWidth={3} color={colors.onAccentFill} /> : null}
+              </View>
+              <Text style={[styles.checkLabel, { color: colors.textPrimary }]}>{checkbox.label}</Text>
+            </Pressable>
+          ) : null}
           <View style={styles.actions}>
             <AppButton label={cancelLabel} variant="secondary" disabled={confirmBusy} disabledReason="Дождитесь завершения операции" onPress={cancel} />
             {tertiaryLabel && onTertiary ? (
@@ -108,4 +122,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, lineHeight: 23, fontFamily: fonts.bold },
   description: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   actions: { gap: 8, marginTop: 8 },
+  /** Строка флажка: зона нажатия — вся строка, не меньше 48 dp. */
+  checkRow: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 12 },
+  checkBox: { width: 24, height: 24, borderRadius: 7, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  checkLabel: { flex: 1, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19 },
 });

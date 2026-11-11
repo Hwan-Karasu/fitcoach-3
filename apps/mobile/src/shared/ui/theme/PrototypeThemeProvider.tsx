@@ -9,6 +9,8 @@ const previewFallbackThemeId: ThemeId = DEFAULT_THEME_ID;
 interface NavigationAppearance {
   readonly showClientListShortcut: boolean;
   readonly hideNavigationLabels: boolean;
+  /** «Больше не показывать» в вопросе при выходе из тренировки: выход без вопроса, тренировка остаётся в работе. */
+  readonly skipWorkoutExitPrompt: boolean;
 }
 
 interface PrototypeThemeState {
@@ -42,6 +44,7 @@ export function PrototypeThemeProvider({ children, persistence }: Readonly<{ chi
     return { themeId: resolved.themeId, accentId: resolved.accentId,
       showClientListShortcut: initial?.showClientListShortcut === true,
       hideNavigationLabels: initial?.hideNavigationLabels === true,
+      skipWorkoutExitPrompt: initial?.skipWorkoutExitPrompt === true,
       dutyColor: initial?.dutyColor ?? null,
       dutyPresets: normalizeDutyPresets(initial?.dutyPresets),
       hiddenSessionTypeIds: initial?.hiddenSessionTypeIds ?? [] as readonly string[],
@@ -56,7 +59,8 @@ export function PrototypeThemeProvider({ children, persistence }: Readonly<{ chi
   );
   const navigationAppearance = useMemo<NavigationAppearance>(() => ({
     showClientListShortcut: selection.showClientListShortcut, hideNavigationLabels: selection.hideNavigationLabels,
-  }), [selection.showClientListShortcut, selection.hideNavigationLabels]);
+    skipWorkoutExitPrompt: selection.skipWorkoutExitPrompt,
+  }), [selection.showClientListShortcut, selection.hideNavigationLabels, selection.skipWorkoutExitPrompt]);
 
   const value = useMemo<PrototypeThemeState>(() => ({
     clientCards: selection.clientCards,

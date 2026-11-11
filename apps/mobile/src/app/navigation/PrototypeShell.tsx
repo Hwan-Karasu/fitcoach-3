@@ -5,7 +5,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { KeyboardAvoidingView, KeyboardProvider } from "react-native-keyboard-controller";
-import { ClientExerciseScreen, TrainingSettingsScreen, type TrainingPlansRepositoryPort } from "../../features/training/public.ts";
+import { ClientExerciseScreen, TrainingSettingsScreen, runWithoutWorkoutExitPrompt, type TrainingPlansRepositoryPort } from "../../features/training/public.ts";
 import { calendarEventTarget, resolveTimerTarget, timerTarget, type NotificationTarget } from "./notificationTarget.ts";
 import { exerciseFocusAction } from "./exerciseFocusAction.ts";
 import { useKeyboardVisible } from "./useKeyboardVisible.ts";
@@ -95,8 +95,11 @@ function openTarget(target: NotificationTarget): void {
   const inClient = top?.name === "ClientWorkspace";
   if (!inClient) navigationRef.navigate("Root", { screen: "Clients" } as never);
   const open = inClient ? StackActions.replace : StackActions.push;
+  // Замена экрана клиента удаляет и открытый в нём дневник тренировки: тренер при этом никуда не уходил, поэтому вопрос
+  // «Завершить тренировку?» не задаётся (ввод дневник сохраняет сам, тренировка остаётся «в работе»).
+  const dispatchOpen = (action: ReturnType<typeof open>) => runWithoutWorkoutExitPrompt(() => navigationRef.dispatch(action));
   if (target.kind === "CLIENT_TRAINING") {
-    navigationRef.dispatch(open("ClientWorkspace", { clientId: target.clientId, screen: "Training", params: { screen: "TrainingIndex" } }));
+    dispatchOpen(open("ClientWorkspace", { clientId: target.clientId, screen: "Training", params: { screen: "TrainingIndex" } }));
     return;
   }
   const current = navigationRef.getCurrentRoute() as { key: string; name: string; params?: { programId?: string; weekIndex?: number; workoutId?: string } } | undefined;
@@ -112,7 +115,7 @@ function openTarget(target: NotificationTarget): void {
   // Полный путь клиент → программы → программа → тренировка, как при обычном заходе: «назад» ведёт к списку тренировок (программе),
   // затем к программам клиента и дальше к списку клиентов.
   const cycle = target.mesocycleId == null ? {} : { mesocycleId: target.mesocycleId };
-  navigationRef.dispatch(open("ClientWorkspace", { clientId: target.clientId, screen: "Training", params: { state: { routes: [
+  dispatchOpen(open("ClientWorkspace", { clientId: target.clientId, screen: "Training", params: { state: { routes: [
     { name: "TrainingIndex" },
     { name: "TrainingProgram", params: { programId: target.programId, weekIndex: target.weekIndex, ...cycle } },
     { name: "TrainingWorkout", params: { programId: target.programId, weekIndex: target.weekIndex, workoutId: target.plannedWorkoutId, ...cycle,

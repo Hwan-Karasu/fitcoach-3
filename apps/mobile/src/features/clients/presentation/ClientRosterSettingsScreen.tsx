@@ -111,6 +111,12 @@ export function ClientRosterSettingsScreen({ repository }: Readonly<{
         <AppSwitch accessibilityLabel="Показывать подписи кнопок навигации" value={!navigationAppearance.hideNavigationLabels}
           onValueChange={(enabled) => setNavigationAppearance("hideNavigationLabels", !enabled)} />
       </View>
+      <View style={styles.toggleRow}>
+        <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Вопрос при выходе из тренировки</Text>
+        <AppSwitch accessibilityLabel="Спрашивать «Завершить тренировку?» при выходе из начатой тренировки" value={!navigationAppearance.skipWorkoutExitPrompt}
+          onValueChange={(enabled) => setNavigationAppearance("skipWorkoutExitPrompt", !enabled)} />
+      </View>
+      <Text style={[styles.message, { color: colors.textSecondary }]}>Выключено — выход оставляет тренировку в работе без вопроса.</Text>
       </View>
       <View style={block}>
       <SectionHeading>Дни рождения</SectionHeading>
