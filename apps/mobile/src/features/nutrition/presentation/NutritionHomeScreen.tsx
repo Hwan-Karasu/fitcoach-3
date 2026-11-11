@@ -7,6 +7,7 @@ import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import type { NutritionTargetsPort } from "../domain/NutritionTargetsPort.ts";
 import type { CatalogFilter } from "./AddFoodScreen.tsx";
 import type { CalcClientBody } from "./NutritionCalcScreen.tsx";
+import { DaySwipe } from "./DaySwipe.tsx";
 import { DayTabs } from "./DayTabs.tsx";
 import { NutritionDiaryScreen } from "./NutritionDiaryScreen.tsx";
 
@@ -22,7 +23,9 @@ export function NutritionHomeScreen({ clientId, body, diary, targets, calc, meas
   return (
     <View style={{ flex: 1, backgroundColor: palette.tokens.canvas }}>
       <DayTabs />
-      <NutritionDiaryScreen key={clientId} clientId={clientId} diary={diary} targets={targets} body={body} calc={calc} measurements={measurements} onAdd={onAdd} onEditSource={onEditSource} />
+      <DaySwipe>
+        <NutritionDiaryScreen key={clientId} clientId={clientId} diary={diary} targets={targets} body={body} calc={calc} measurements={measurements} onAdd={onAdd} onEditSource={onEditSource} />
+      </DaySwipe>
     </View>
   );
 }

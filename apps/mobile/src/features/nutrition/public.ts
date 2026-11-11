@@ -4,6 +4,7 @@ export { NutritionHomeScreen } from "./presentation/NutritionHomeScreen.tsx";
 export { NutritionHomeCards } from "./presentation/NutritionHomeCards.tsx";
 export { ClientDayProvider, useClientDay } from "./presentation/ClientDay.tsx";
 export { DayTabs } from "./presentation/DayTabs.tsx";
+export { DaySwipe } from "./presentation/DaySwipe.tsx";
 export { NutritionStatsScreen } from "./presentation/NutritionStatsScreen.tsx";
 export { MetricScreen, metricTitle } from "./presentation/MetricScreen.tsx";
 export type { MetricId } from "./domain/MetricSeries.ts";

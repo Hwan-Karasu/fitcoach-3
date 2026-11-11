@@ -12,7 +12,7 @@ import { ClientHomePreview, type ClientRecord } from "../../features/clients/pub
 import { type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import { useClientHomeSummary } from "../../read-models/useClientHomeSummary.ts";
 import { homeSummaryRules } from "../composition/homeSummaryRules.ts";
-import { useClientDay } from "../../features/nutrition/public.ts";
+import { DaySwipe, useClientDay } from "../../features/nutrition/public.ts";
 import { AddFoodScreen, metricTitle, type MetricId, type CalcClientBody, type CatalogFilter, FoodEditorScreen, NutritionHomeScreen, NutritionStatsScreen, RecipeEditorScreen, type FoodCatalogPort, type MealSlot, type NutritionCalcPort, type NutritionDiaryPort, type NutritionTargetsPort,
   type RecipeCatalogPort } from "../../features/nutrition/public.ts";
 import { ArchivedProgramsPanel, ParticipantSwitcher, participantTarget, ProgramMatrixScreen, PeriodizedBuilderScreen, ProgramLibraryScreen, ProgramModeChooserScreen, programLibraryTabTitles, ProgramScreen, SimpleProgramBuilderScreen,
@@ -106,9 +106,10 @@ function HomeIndexRoute({ client, accounting, onOpenAccounting, nutritionSlot, d
   onArchive }: Readonly<{ client: ClientRecord; accounting: AccountingRepositoryPort; onOpenAccounting: () => void; nutritionSlot?: ReactNode; daySlot?: ReactNode; onArchive: () => Promise<void> }>) {
   const { today } = useClientDay();
   const summary = useClientHomeSummary(client.id, accounting, today, homeSummaryRules);
-  return <ClientHomePreview client={client} summary={summary} onOpenAccounting={onOpenAccounting}
+  // Свайп влево/вправо по главной переключает «Вчера · Сегодня · Завтра» (UIX-FIT-10).
+  return <DaySwipe><ClientHomePreview client={client} summary={summary} onOpenAccounting={onOpenAccounting}
     onWriteOff={() => accounting.writeOff(client.id)} onReturnLast={(entryId) => accounting.returnLastDebit(client.id, entryId)}
-    nutritionSlot={nutritionSlot} daySlot={daySlot} onArchive={onArchive} />;
+    nutritionSlot={nutritionSlot} daySlot={daySlot} onArchive={onArchive} /></DaySwipe>;
 }
 
 export function HomeNavigator(props: HomeProps) {
