@@ -20,7 +20,7 @@ type Origin = Readonly<{ mesocycleId: string | null; mesocycleTitle: string | nu
  * у планов; архивные программы входят. Тренировка, которой больше нет в плане, остаётся записью с фактами.
  */
 export function createTrainingHistory(rules: TrainingHistoryRules,
-  execution: Pick<TrainingExecutionPort, "listClientExecutions" | "subscribeCommittedChanges">,
+  execution: Pick<TrainingExecutionPort, "listClientExecutions" | "subscribeCommittedChanges" | "listCompletedDays">,
   plans: Pick<TrainingPlansRepositoryPort, "getLibrary" | "getPeriodizedPlan" | "getSimpleWeeks" | "subscribeCommittedChanges">,
   registerInvalidation?: (invalidate: () => void) => void) {
   const { hasEnteredData, isWorkingSet, sessionDurationSec, workoutStatus, sortHistory } = rules;
@@ -118,6 +118,32 @@ export function createTrainingHistory(rules: TrainingHistoryRules,
         return chosen.reduce((sum, cycle) => sum + cycle.weeks.reduce((count, week) => count + week.workouts.length, 0), 0);
       }
       return (await plans.getSimpleWeeks(clientId, card.id)).reduce((sum, week) => sum + week.workouts.length, 0);
+    },
+    /**
+     * День последней проведённой тренировки (не позже `today`) по клиентам; клиента без таких тренировок в результате нет. Для сводки
+     * списка клиентов: один агрегирующий запрос дневника и состав программ клиента вместо чтения всех подходов каждого (ARCH-HARDEN-1d).
+     * Правило то же, что у `list`: тренировка входит, если её программа есть у клиента либо план удалён с сохранением снимка.
+     */
+    async lastCompleted(clientIds: readonly string[], today: string): Promise<ReadonlyMap<string, string>> {
+      const result = new Map<string, string>();
+      const keep = (clientId: string, date: string) => { if ((result.get(clientId) ?? "") < date) result.set(clientId, date); };
+      if (execution.listCompletedDays === undefined) {
+        for (const clientId of clientIds) {
+          for (const row of await this.list(clientId)) {
+            if (row.status === "COMPLETED" && row.actualDate !== null && row.actualDate <= today) keep(clientId, row.actualDate);
+          }
+        }
+        return result;
+      }
+      const wanted = new Set(clientIds);
+      const days = (await execution.listCompletedDays(today)).filter((row) => wanted.has(row.clientId));
+      const programs = new Map<string, ReadonlySet<string>>();
+      for (const clientId of new Set(days.filter((row) => row.programId !== null).map((row) => row.clientId))) {
+        const library = await plans.getLibrary(clientId);
+        programs.set(clientId, new Set([...library.active, ...library.archived].map((card) => card.id)));
+      }
+      for (const row of days) if (row.programId === null || programs.get(row.clientId)?.has(row.programId)) keep(row.clientId, row.lastDate);
+      return result;
     },
     subscribe(clientId: string, listener: () => void): () => void {
       const offExecution = execution.subscribeCommittedChanges((change) => { if (change.clientId === clientId) listener(); });

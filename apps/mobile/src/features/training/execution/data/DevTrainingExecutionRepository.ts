@@ -10,7 +10,7 @@ import { assertDropStructure, confirmationAfterSave, confirmationTo, isInstant, 
   validateContent, validateSides, workoutStatus, type ConfirmationChange, type SetContent,
   type SidesChange } from "../domain/ExecutionRules.ts";
 import type { SaveSetInput, SetIdentity, SetSaveResult, TrainingExecutionCommittedChange,
-  TrainingExecutionPort } from "../domain/TrainingExecutionPort.ts";
+  TrainingExecutionPort, CompletedDay } from "../domain/TrainingExecutionPort.ts";
 import type { RestTimerStorePort } from "../domain/RestTimerPorts.ts";
 import type { RestTimer } from "../domain/RestTimerRules.ts";
 import { DEV_TRAINING_EXECUTION_LEDGER, devTrainingExecutionCatalog } from "./DevTrainingExecutionCatalog.ts";
@@ -329,6 +329,20 @@ export class DevTrainingExecutionRepository implements TrainingExecutionPort, Re
       if (originJson !== null && origin === null) return [];
       return [{ programId: session.programId, weekIndex: session.weekIndex, plannedWorkoutId: session.plannedWorkoutId, origin, execution }];
     });
+  }
+
+  async listCompletedDays(today: string): Promise<readonly CompletedDay[]> {
+    const { connection } = this.ready();
+    const planned = await connection.all<{ clientId: string; programId: string; lastDate: string }>(`SELECT client_id AS clientId,
+        program_id AS programId, MAX(actual_date) AS lastDate FROM training_sessions
+      WHERE workspace_id = ? AND outcome = 'COMPLETED' AND origin_json IS NULL AND actual_date <= ? GROUP BY client_id, program_id`,
+    [this.workspaceId, today]);
+    // Снимки удалённых планов редки и проверяются по форме так же, как в `listClientExecutions`: негодный снимок в историю не входит.
+    const snapshots = await connection.all<{ id: string; clientId: string; lastDate: string; originJson: string }>(`SELECT id, client_id AS clientId,
+        actual_date AS lastDate, origin_json AS originJson FROM training_sessions
+      WHERE workspace_id = ? AND outcome = 'COMPLETED' AND origin_json IS NOT NULL AND actual_date <= ?`, [this.workspaceId, today]);
+    return [...planned, ...snapshots.filter((row) => readStoredJson(row.originJson, storedOrigin, `training_sessions:${row.id}`) !== null)
+      .map((row) => ({ clientId: row.clientId, programId: null, lastDate: row.lastDate }))];
   }
 
   async getProgramStatuses(clientId: string, programId: string): Promise<readonly SessionStatus[]> {

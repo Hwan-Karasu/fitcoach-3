@@ -67,6 +67,9 @@ export interface ClientExecution extends ProgramExecution {
   readonly origin: SessionOrigin | null;
 }
 
+/** Последний день проведённых тренировок клиента в одной программе; `programId: null` — план удалён с сохранением истории (снимок происхождения). */
+export interface CompletedDay { readonly clientId: string; readonly programId: string | null; readonly lastDate: string }
+
 export interface TrainingExecutionPort {
   getConfirmationMode(): Promise<ConfirmationMode>;
   /** Не ретроспективно: сохранённые факты и неподтверждённые значения остаются как есть (§48.53 п. 3). */
@@ -84,6 +87,11 @@ export interface TrainingExecutionPort {
   listProgramExecutions(clientId: string, programId: string): Promise<readonly ProgramExecution[]>;
   /** §48.85: все выполнения клиента во всех его программах (активных и архивных) — для единой хронологии. */
   listClientExecutions(clientId: string): Promise<readonly ClientExecution[]>;
+  /**
+   * Последние дни проведённых («Завершена») тренировок всех клиентов не позже `today` — агрегатом, без чтения подходов. Для сводки списка
+   * клиентов; необязателен, как `setOutcomeWithCalendar`: без него читатель считает то же по полной истории.
+   */
+  listCompletedDays?(today: string): Promise<readonly CompletedDay[]>;
   /** Статусы всех начатых или разобранных тренировок программы клиента. */
   getProgramStatuses(clientId: string, programId: string): Promise<readonly SessionStatus[]>;
   /** Owner correction 2026-10-24: confirmed sets of the corresponding workout in week N-1 of this cycle/program.

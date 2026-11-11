@@ -146,17 +146,18 @@ export function createRosterOverviewSource(ports: Readonly<{
     load: async (clientIds, now, metricIds = ["nextAppointment", "lastTraining", "credits"]) => {
       const today = localDate(now);
       const selected = new Set(metricIds);
+      // Один агрегат на всех клиентов: раньше ради этой даты читалась и оставалась в памяти полная история подходов каждого клиента.
+      const lastTraining = selected.has("lastTraining") && ports.history ? await safe(() => ports.history!.lastCompleted(clientIds, today)) : null;
       const [range, snapshots, answers, extra] = await Promise.all([
         safe(() => ports.calendar.listRange(weekStart(today), shiftDate(today, LOOKAHEAD_DAYS))),
         Promise.all(clientIds.map((id) => safe(() => ports.accounting.getClientSnapshot(id)))),
         Promise.all(clientIds.map((id) => Promise.resolve().then(() => ports.questionnaire.getAnswers(id))
           .then((value) => ({ value, failed: false }), () => ({ value: null, failed: true })))),
         Promise.all(clientIds.map(async (id): Promise<readonly [string, readonly RosterMetricValue[]]> => {
-          const [measurements, entries, steps, history] = await Promise.all([
+          const [measurements, entries, steps] = await Promise.all([
             (selected.has("weight") || selected.has("fatPercent")) && ports.measurements ? safe(() => ports.measurements!.listForClient(id)) : null,
             selected.has("calories") && ports.diary ? safe(() => ports.diary!.listEatenEntries(id, today, today)) : null,
             selected.has("steps") && ports.calc ? safe(() => ports.calc!.listSteps(id, today, today)) : null,
-            selected.has("lastTraining") && ports.history ? safe(() => ports.history!.list(id)) : null,
           ]);
           const metrics: RosterMetricValue[] = [];
           for (const [metricId, type, unit] of [["weight", "WEIGHT", "кг"], ["fatPercent", "BODY_FAT", "%"]] as const) {
@@ -170,8 +171,7 @@ export function createRosterOverviewSource(ports: Readonly<{
           }
           if (selected.has("steps")) metrics.push({ id: "steps", value: steps?.[0] ? String(steps[0].steps) : null });
           if (selected.has("lastTraining") && ports.history) {
-            const last = history?.filter((row) => row.status === "COMPLETED" && row.actualDate !== null && row.actualDate <= today)
-              .map((row) => row.actualDate!).sort().at(-1);
+            const last = lastTraining?.get(id);
             metrics.push({ id: "lastTraining", value: last ? `${last.slice(8, 10)}.${last.slice(5, 7)}` : null });
           }
           return [id, metrics];
