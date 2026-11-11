@@ -38,7 +38,7 @@ const TimerCard = memo(function TimerCard({ timer, timers, active, finished, mul
   const paused = isPaused(timer);
   const action = (label: string, run: () => Promise<void>, node: ReactNode, primary = false) => (
     <Pressable key={label} accessibilityRole="button" accessibilityLabel={`${timer.clientName}, ${timer.exerciseName}: ${label}`}
-      hitSlop={single ? undefined : { top: 4, bottom: 4 }}
+      hitSlop={single ? { top: 5, bottom: 5 } : { top: 7, bottom: 7 }}
       onPress={() => { void run().catch(() => undefined); }}
       style={[styles.action, single ? styles.actionSingle : styles.actionCard, { backgroundColor: primary ? colors.accentFill : colors.surfaceRaised }]}>{node}</Pressable>
   );
@@ -216,26 +216,26 @@ const styles = StyleSheet.create({
   cards: { gap: TIMER_GAP, alignItems: "stretch", paddingBottom: 2 },
   // Один таймер: без своей подложки, прямо на панели.
   cardSingle: { gap: 2, paddingBottom: 4 },
-  headingSingle: { minHeight: 32, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
-  rowSingle: { flexDirection: "row", alignItems: "center", gap: 4 },
+  headingSingle: { minHeight: 28, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  rowSingle: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 4 },
   side: { flexDirection: "row", gap: 4 },
   clockSingle: { flex: 1, minWidth: 0 },
   // Карточка среди нескольких таймеров.
   card: { flex: 1, borderRadius: 20, paddingHorizontal: CARD_PADDING, paddingTop: 6, paddingBottom: 6, gap: 2 },
   heading: { minHeight: 34, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   caption: { minWidth: 0, fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  captionSingle: { flexShrink: 1, textAlign: "center", fontSize: 14, lineHeight: 19 },
+  captionSingle: { flexShrink: 1, textAlign: "center", fontSize: 15, lineHeight: 20 },
   captionCard: { flexShrink: 1, textAlign: "center" },
   avatar: { width: 28, height: 28, borderRadius: 9, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   avatarSmall: { width: 24, height: 24, borderRadius: 8 },
   initials: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 }, initialsSmall: { fontSize: 11, lineHeight: 14 },
   clockRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 4 },
   time: { textAlign: "center", fontFamily: fonts.bold, fontSize: 24, lineHeight: 30, flexShrink: 1 },
-  timeSingle: { fontSize: 34, lineHeight: 42 }, finished: { fontSize: 15, lineHeight: 20 }, finishedSingle: { fontSize: 20, lineHeight: 26 },
+  timeSingle: { fontSize: 38, lineHeight: 44 }, finished: { fontSize: 15, lineHeight: 20 }, finishedSingle: { fontSize: 20, lineHeight: 26 },
   actions: { flexDirection: "row", gap: ACTION_GAP },
   action: { alignItems: "center", justifyContent: "center" },
-  actionSingle: { width: 52, height: 48, borderRadius: 24 },
-  actionCard: { flex: 1, minWidth: 0, height: 40, borderRadius: 20 },
+  actionSingle: { width: 52, height: 38, borderRadius: 12 },
+  actionCard: { flex: 1, minWidth: 0, height: 34, borderRadius: 10 },
   adjust: { fontFamily: fonts.bold, fontSize: 14 },
   indicator: { flexDirection: "row", gap: 4, justifyContent: "center", paddingVertical: 2, paddingHorizontal: 40 },
   segment: { flex: 1, maxWidth: 32, height: 5, borderRadius: 3 },
