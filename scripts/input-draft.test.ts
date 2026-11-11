@@ -30,3 +30,15 @@ test("сохранённое не менялось — черновик оста
   const typed: InputDraft = { identity: "set1:reps", saved: "5", text: "55", invalid: false };
   assert.equal(reconcileInputDraft(typed, "set1:reps", "5", false), typed);
 });
+
+// Сценарий владельца (п. 15): набрали значение в ячейке, запись прошла, поле осталось в фокусе; затем «Пред.» переносит другое значение —
+// оно обязано показаться (раньше ячейка считала себя «набранной» и оставалась со старым текстом/пустой).
+test("после записи набранного значения ячейка в фокусе принимает следующий перенос из «Пред.»", () => {
+  const typed: InputDraft = { identity: "set1:loadGrams", saved: "", text: "50", invalid: false };
+  const acked = reconcileInputDraft(typed, "set1:loadGrams", "50", true);
+  assert.deepEqual(acked, { identity: "set1:loadGrams", saved: "50", text: "50", invalid: false }, "запись дошла — черновик догнал сохранённое");
+  const transferred = reconcileInputDraft(acked, "set1:loadGrams", "110", true);
+  assert.equal(transferred.text, "110", "перенос из «Пред.» показан, хотя поле в фокусе");
+  // Пока запись не дошла, набранное по-прежнему не затирается (старое правило).
+  assert.deepEqual(reconcileInputDraft(typed, "set1:loadGrams", "110", true), typed);
+});
