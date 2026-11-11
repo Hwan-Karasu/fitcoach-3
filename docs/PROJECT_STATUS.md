@@ -1,3 +1,9 @@
+## 2026-11-11 — UIX-FIT-10: план по замечаниям владельца, макеты, плашка «Пред.»
+
+- Замечания владельца к build52 (16 пунктов + Health Connect без данных) разобраны в план (этапы A макеты → B баги → C экраны). Макеты: `docs/ui/concepts/UIX_FIT_10_MOCKUPS_2026-11-11.html` (папка concepts не в git, правило проекта), проверены скриншотами Chrome; ждут утверждения владельца.
+- Найдена вероятная причина «Health Connect не подгружает»: в сгенерированном `MainActivity.kt` нет `HealthConnectPermissionDelegate.setPermissionDelegate(this)` (плагин библиотеки правит только манифест) — разрешения не запрашиваются; исправление — config-плагин (B1), нужен новый APK.
+- Сделано: у одностороннего упражнения плашка «Пред.» без прошлого значения — просто «—» без буквы стороны (и «Л», и «П»); буква только у существующего значения (`WorkoutSetRow.tsx`). typecheck и eslint файла PASS; на телефоне не проверено.
+
 ## 2026-11-11 — build52: сборка APK (BKP-AUDIT-1 + таймер/панель UIX-FIT-09)
 
 - APK: `artifacts/apk/athlete-diary-3.0.0-build52.apk`, `com.fitcoach.v3`, versionCode 52, arm64-v8a, minSdk 26, targetSdk 36, 73 511 014 байт. SHA-256 `6f36e5b8b5501f6e82f1b4bbcbafc48d52bfb5e8e157b44e46c58c2c012372d5` (рядом `.sha256`). Источник — HEAD `033938a` + правка `artifacts/timer-native/extended.ts`. `assembleRelease` BUILD SUCCESSFUL 2 мин 50 с (764 задачи), лог `artifacts/build52/gradle.log`; `aapt` и `apksigner verify` PASS, сертификат `fac61745…033b9c` как у прежних сборок (обновление поверх без удаления данных возможно; на телефон не ставилось).

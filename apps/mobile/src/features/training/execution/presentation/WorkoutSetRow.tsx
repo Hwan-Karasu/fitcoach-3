@@ -220,9 +220,9 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
     </Pressable>
   );
   const sidesPrevious = sided && previous !== undefined ? previousSides(previous) : null;
-  const sideText = (value: SetValues | null | undefined) => value === null || value === undefined ? "—" : compactValues(value, fields);
-  const previousText = previous === undefined ? "—" : sided
-    ? `Л ${sideText(sidesPrevious?.left)}`
+  // Буква стороны — только у существующего прошлого значения; где прошлого нет, плашка — просто «—» (и слева, и справа).
+  const sideText = (letter: "Л" | "П", value: SetValues | null | undefined) => value === null || value === undefined ? "—" : `${letter} ${compactValues(value, fields)}`;
+  const previousText = sided ? sideText("Л", sidesPrevious?.left) : previous === undefined ? "—"
     : previous.sides !== null ? compactValues(previousPlainValues(previous), fields)
       : compactWithDrops(previous.values, previous.drops, fields);
   /** Плашка «Пред.» — нажатие переносит прошлый результат в эту ячейку (подход, сторону или мини-сет). */
@@ -272,7 +272,7 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
         <View style={styles.row}>
           <View style={styles.markerSpace} />
           <View style={styles.plan} />
-          {previousChip(`П ${sideText(sidesPrevious?.right)}`, "Перенести прошлый результат правой стороны",
+          {previousChip(sideText("П", sidesPrevious?.right), "Перенести прошлый результат правой стороны",
             sidesPrevious?.right ? () => onSave(target, { sidesFrom: { left: null, right: sidesPrevious.right } }) : null)}
           {sideRow("R")}
           {rpeCell(fact?.sides?.right.rpe, "правой стороны", "R")}
