@@ -312,3 +312,64 @@ test("R06 managed routing v2 remains strict and captures its values", () => {
   const parsed = parsePendingRuntimeRestore(input); input.incomingSha256 = "c".repeat(64);
   assert.equal(parsed.version, 2); assert.equal(parsed.incomingSha256, "b".repeat(64));
 });
+
+/** ARCH-HARDEN-1e: холодный старт с подсчётом циклов «закрытая база» (каждый — пауза команд и снятие сигналов таймеров в приложении). */
+function coldStart(f: Awaited<ReturnType<typeof fixture>>) {
+  const counter = { closed: 0 };
+  const run = () => recoverRuntimeRestore(() => f.store.journal().readPending(), (plan) => {
+    const storage = new HostManagedRestoreStorage(f.root, plan.operationId); const closed = storage.withClosedDatabase.bind(storage);
+    storage.withClosedDatabase = (task) => { counter.closed += 1; return closed(task); };
+    return storage;
+  }, async () => {
+    if (!existsSync(f.live)) return false; const bytes = readFileSync(f.live);
+    return bytes.length >= 100 && bytes.readUInt32BE(68) === PRODUCTION_IDENTITY.applicationId;
+  }, new ReturnPointCompletion(f.store), f.store.journal());
+  return { counter, run };
+}
+
+test("ARCH-HARDEN-1e: журнал завершённого восстановления при холодном старте только читается — база не закрывается, поздние записи и точка на месте", async () => {
+  const f = await fixture();
+  try {
+    await f.restore(); const before = await f.state();
+    const db = new DatabaseSync(f.live); db.exec("UPDATE workspaces SET display_name='AFTER RESTORE'"); db.close();
+    const later = readFileSync(f.live); const cold = coldStart(f);
+    await cold.run(); await cold.run();
+    assert.equal(cold.counter.closed, 0, "завершённая операция не требует обслуживания базы");
+    assert.deepEqual(readFileSync(f.live), later); assert.deepEqual(await f.state(), before);
+  } finally { f.cleanup(); }
+});
+
+test("ARCH-HARDEN-1e: быстрый путь повторяет уборку точки, не удалённой при завершении", async () => {
+  const f = await fixture();
+  try {
+    await f.restore(); const returning = await f.returnJob(); const remove = f.store.removePoint.bind(f.store);
+    f.store.removePoint = async () => { throw new Error("SYNTHETIC_CLEANUP_FAILED"); };
+    assert.equal(await restoreWithRuntimeJournal(returning.plan, returning.storage, f.store.journal(), returning.completion), "COMMITTED");
+    assert.equal(existsSync(f.store.pointFile(returning.point)), true);
+    f.store.removePoint = remove; const cold = coldStart(f); await cold.run();
+    assert.equal(cold.counter.closed, 0);
+    assert.equal((await f.state()).point, null); assert.equal(existsSync(f.store.pointFile(returning.point)), false);
+  } finally { f.cleanup(); }
+});
+
+test("ARCH-HARDEN-1e: оборванная операция, пропавшая база и чужая квитанция идут строгим путём под закрытой базой", async () => {
+  const f = await fixture();
+  try {
+    const job = await f.restore(); const guardPath = job.storage.guardPath(); const guard = JSON.parse(readFileSync(guardPath, "utf8")) as Record<string, unknown>;
+    assert.equal(guard.phase, "COMPLETED");
+    // Смерть процесса между решением COMMITTED и квитанцией COMPLETED: запуск обязан довести операцию.
+    writeFileSync(guardPath, JSON.stringify({ ...guard, phase: "COMMITTED" }));
+    let cold = coldStart(f); await cold.run();
+    assert.equal(cold.counter.closed, 1);
+    assert.equal((JSON.parse(readFileSync(guardPath, "utf8")) as Record<string, unknown>).phase, "COMPLETED");
+    // Квитанция другой операции — не «завершено».
+    writeFileSync(guardPath, JSON.stringify({ ...guard, operationId: "20000000-0000-4000-8000-000000000002" }));
+    cold = coldStart(f); await assert.rejects(cold.run());
+    assert.equal(cold.counter.closed, 1);
+    writeFileSync(guardPath, JSON.stringify(guard));
+    // Файл базы пропал после завершённого восстановления: пустая база молча не создаётся.
+    rmSync(f.live);
+    cold = coldStart(f); await assert.rejects(cold.run());
+    assert.equal(existsSync(f.live), false);
+  } finally { f.cleanup(); }
+});

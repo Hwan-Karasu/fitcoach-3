@@ -62,12 +62,23 @@ export class ReturnPointCompletion implements RestoreCompletionProtocol {
       await this.store.writeState(state);
       if (!equal(await this.state(), state)) required();
     }
-    // Once state is durable, cleanup failure cannot reactivate an old/consumed point.
+    await this.removeUnused(intent, state);
+  }
+  /** Once state is durable, cleanup failure cannot reactivate an old/consumed point. */
+  private async removeUnused(intent: RestoreCompletionIntent, state: ReturnPointState): Promise<void> {
     for (const point of [intent.previous.point, intent.candidate]) {
       if (point !== null && point.operationId !== state.point?.operationId) {
         try { await this.store.removePoint(point); } catch { /* Retryable private orphan. */ }
       }
     }
+  }
+  async confirmSettled(input: RestorePlan, outcome: "COMMITTED" | "ROLLED_BACK"): Promise<boolean> {
+    const plan = completionPlan(input); const intent = await this.intent(plan); const state = await this.state();
+    if (state.settledOperationId !== plan.operationId) return false;
+    const expected = outcome === "COMMITTED" ? intent.candidate : intent.previous.point;
+    if (state.point !== null && !equal(state.point, expected)) return false;
+    await this.removeUnused(intent, state);
+    return true;
   }
   /** Called only after explicit confirmation, under the same exclusive maintenance lease. */
   async deletePoint(expectedOperationId: string): Promise<void> {

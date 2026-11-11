@@ -26,6 +26,9 @@ export interface RestoreCompletionProtocol {
   prepare(plan: RestorePlan): Promise<void>;
   assertPrepared(plan: RestorePlan, mode: "APPLY" | "RECOVER"): Promise<void>;
   finish(plan: RestorePlan, outcome: RestoreOutcome): Promise<void>;
+  /** Холодный старт, до открытия базы: `true`, только если эта операция уже окончательно учтена именно с таким исходом. Состояние не
+   * меняет; повторяет лишь уборку неиспользуемых точек, как `finish`. Любое сомнение — `false`, и запуск идёт полным строгим путём. */
+  confirmSettled?(plan: RestorePlan, outcome: "COMMITTED" | "ROLLED_BACK"): Promise<boolean>;
 }
 /** Fixed private paths derived from validated UUIDs, never paths supplied by a snapshot.
  * Callers serialize state changes under the same maintenance lease as the file protocol. */

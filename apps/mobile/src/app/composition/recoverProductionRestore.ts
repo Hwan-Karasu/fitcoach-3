@@ -39,5 +39,5 @@ export function recoverLocalRestore(maintenance: Pick<RuntimeMaintenance, "withC
       return bytes.length === 100 && magic.every((byte, index) => bytes[index] === byte) &&
         new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(68, false) === PRODUCTION_IDENTITY.applicationId;
     } finally { reader.close(); }
-  }, new ReturnPointCompletion(new ExpoReturnPointStore(root, { identity: PRODUCTION_IDENTITY, owners: SCHEMA_OWNERS })));
+  }, new ReturnPointCompletion(new ExpoReturnPointStore(root, { identity: PRODUCTION_IDENTITY, owners: SCHEMA_OWNERS })), journal);
 }

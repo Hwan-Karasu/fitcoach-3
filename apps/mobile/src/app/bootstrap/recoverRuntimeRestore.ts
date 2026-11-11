@@ -1,4 +1,4 @@
-import { GuardedRestore, type RestoreCompletionProtocol, type RestorePlan, type RestoreStorage } from "../../features/backup/public.ts";
+import { GuardedRestore, parseRestoreGuard, type RestoreCompletionProtocol, type RestorePlan, type RestoreStorage } from "../../features/backup/public.ts";
 
 /** v2 requires point finalization before reopening; v1 is the older technical rehearsal. */
 export interface PendingRuntimeRestore extends RestorePlan { readonly version: 1 | 2 }
@@ -20,11 +20,12 @@ export function parsePendingRuntimeRestore(value: unknown): PendingRuntimeRestor
  * Completed guards remain receipts, so later legitimate writes survive repeated cold starts. */
 export async function recoverRuntimeRestore(readPending: () => Promise<{ readonly value: unknown } | null>,
   storageFor: (plan: PendingRuntimeRestore) => RestoreStorage, liveDatabasePresent: () => Promise<boolean>,
-  completion?: RestoreCompletionProtocol): Promise<void> {
+  completion?: RestoreCompletionProtocol, receipts?: Readonly<{ readGuard(operationId: string): Promise<unknown | null> }>): Promise<void> {
   const pending = await readPending();
   if (pending === null) return;
   const plan = parsePendingRuntimeRestore(pending.value);
   if (plan.version === 2 && !completion) throw new Error("RESTORE_COMPLETION_REQUIRED");
+  if (receipts && await alreadySettled(plan, receipts, liveDatabasePresent, completion)) return;
   const storage = storageFor(plan);
   const load = storage.loadGuard.bind(storage);
   const checked: RestoreStorage = {
@@ -71,4 +72,24 @@ export async function recoverRuntimeRestore(readPending: () => Promise<{ readonl
     moveExclusive: (from, to) => storage.moveExclusive(from, to),
   };
   await new GuardedRestore(checked).recover();
+}
+
+/**
+ * ARCH-HARDEN-1e. Журнал завершённого восстановления остаётся на диске, и раньше каждый холодный старт проходил с ним полный цикл
+ * «закрытая база» (пауза команд, снятие сигналов таймеров), чтобы убедиться, что делать нечего. Здесь то же устанавливается чтением:
+ * квитанция именно этой операции в окончательной фазе, файл базы на месте, точка возврата учтена. Только чтение квитанции и состояния;
+ * любое несовпадение или ошибка — `false`, и запуск идёт прежним строгим путём, который и сообщает настоящую причину.
+ */
+async function alreadySettled(plan: PendingRuntimeRestore, receipts: Readonly<{ readGuard(operationId: string): Promise<unknown | null> }>,
+  liveDatabasePresent: () => Promise<boolean>, completion?: RestoreCompletionProtocol): Promise<boolean> {
+  try {
+    const saved = await receipts.readGuard(plan.operationId);
+    if (saved === null) return false;
+    const guard = parseRestoreGuard(saved);
+    if (guard.operationId !== plan.operationId || guard.currentSha256 !== plan.currentSha256 || guard.incomingSha256 !== plan.incomingSha256) return false;
+    if (guard.phase !== "COMPLETED" && guard.phase !== "ROLLED_BACK") return false;
+    if (!await liveDatabasePresent()) return false;
+    if (plan.version === 1) return true;
+    return await completion?.confirmSettled?.(plan, guard.phase === "COMPLETED" ? "COMMITTED" : "ROLLED_BACK") === true;
+  } catch { return false; }
 }
