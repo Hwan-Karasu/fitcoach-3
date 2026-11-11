@@ -53,6 +53,6 @@ export function UnifiedBottomPanel({ services, onOpen }: Readonly<{
 }
 
 const styles = StyleSheet.create({ panel: {
-  borderTopLeftRadius: 16, borderTopRightRadius: 16, borderTopWidth: 1,
-  paddingTop: 4, paddingHorizontal: 8, gap: 2,
+  borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1,
+  paddingTop: 2, paddingHorizontal: 6, gap: 0,
 } });

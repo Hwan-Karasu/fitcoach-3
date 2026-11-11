@@ -161,13 +161,13 @@ const CHIP_GAP = 4;
 
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 6 },
-  card: { borderRadius: 14, padding: 3 },
+  card: { borderRadius: 20, padding: 3 },
   row: { gap: CHIP_GAP },
-  chip: { width: CHIP_WIDTH, height: 36, borderRadius: 11, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  chip: { width: CHIP_WIDTH, height: 36, borderRadius: 17, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   chipText: { fontFamily: fonts.semibold, fontSize: 15, textAlign: "center" },
   /** В нижней панели: строка 32 dp (рамка 2 + карточка 28 + рамка 2). */
-  cardDocked: { borderRadius: 11, padding: 2 },
-  chipDocked: { height: 28, borderRadius: 9 },
+  cardDocked: { borderRadius: 17, padding: 2 },
+  chipDocked: { height: 28, borderRadius: 14 },
   chipTextDocked: { fontSize: 13 },
   mark: { position: "absolute", top: 8, bottom: 8, flexDirection: "row", alignItems: "center", gap: 2, paddingHorizontal: 8, borderRadius: 12 },
   markLeft: { left: 8 },

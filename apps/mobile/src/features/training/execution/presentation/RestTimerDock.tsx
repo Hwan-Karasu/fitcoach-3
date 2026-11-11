@@ -162,7 +162,7 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
         <GestureDetector gesture={gesture}>
           <View collapsable={false}>
             <Pressable accessibilityRole="button" accessibilityLabel={mode === "collapsed" ? "Развернуть таймеры отдыха" : "Свернуть таймеры отдыха"}
-              accessibilityState={{ expanded: mode === "expanded" }} hitSlop={{ top: 14, bottom: 14 }}
+              accessibilityState={{ expanded: mode === "expanded" }} hitSlop={{ top: 17, bottom: 17 }}
               onPress={mode === "collapsed" ? expand : collapse} style={[styles.handle, mode === "collapsed" && styles.handleCollapsed]}>{grip}</Pressable>
           </View>
         </GestureDetector>
@@ -211,17 +211,17 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
 
 const styles = StyleSheet.create({
   area: { overflow: "hidden" }, measured: { position: "absolute", top: 0, left: 0, right: 0 },
-  handle: { height: 20, alignItems: "center", justifyContent: "center" }, handleCollapsed: { height: 12 }, grip: { width: 40, height: 4, borderRadius: 2 },
+  handle: { height: 14, alignItems: "center", justifyContent: "center" }, handleCollapsed: { height: 10 }, grip: { width: 40, height: 4, borderRadius: 2 },
   cards: { gap: TIMER_GAP, alignItems: "stretch", paddingBottom: 2 },
   // Один таймер: без своей подложки, прямо на панели.
-  cardSingle: { gap: 2, paddingBottom: 4 },
-  headingSingle: { minHeight: 28, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  cardSingle: { gap: 0, paddingBottom: 2 },
+  headingSingle: { minHeight: 24, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   rowSingle: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 4 },
   side: { flexDirection: "row", gap: 4 },
   clockSingle: { flex: 1, minWidth: 0 },
   // Карточка среди нескольких таймеров.
-  card: { flex: 1, borderRadius: 20, paddingHorizontal: CARD_PADDING, paddingTop: 6, paddingBottom: 6, gap: 2 },
-  heading: { minHeight: 34, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  card: { flex: 1, borderRadius: 24, paddingHorizontal: CARD_PADDING, paddingTop: 4, paddingBottom: 5, gap: 0 },
+  heading: { minHeight: 32, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   caption: { minWidth: 0, fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   captionSingle: { flexShrink: 1, textAlign: "center", fontSize: 15, lineHeight: 20 },
   captionCard: { flexShrink: 1, textAlign: "center" },
@@ -233,8 +233,8 @@ const styles = StyleSheet.create({
   timeSingle: { fontSize: 38, lineHeight: 44 }, finished: { fontSize: 15, lineHeight: 20 }, finishedSingle: { fontSize: 20, lineHeight: 26 },
   actions: { flexDirection: "row", gap: ACTION_GAP },
   action: { alignItems: "center", justifyContent: "center" },
-  actionSingle: { width: 52, height: 38, borderRadius: 12 },
-  actionCard: { flex: 1, minWidth: 0, height: 34, borderRadius: 10 },
+  actionSingle: { width: 52, height: 38, borderRadius: 14 },
+  actionCard: { flex: 1, minWidth: 0, height: 34, borderRadius: 12 },
   adjust: { fontFamily: fonts.bold, fontSize: 14 },
   indicator: { flexDirection: "row", gap: 4, justifyContent: "center", paddingVertical: 2, paddingHorizontal: 40 },
   segment: { flex: 1, maxWidth: 32, height: 5, borderRadius: 3 },
