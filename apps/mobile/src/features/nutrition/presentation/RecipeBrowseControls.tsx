@@ -12,7 +12,6 @@ import { scrim } from "../../../shared/ui/theme/style.ts";
 const sorts: readonly Readonly<{ id: RecipeSort; label: string }>[] = [{ id: "DEFAULT", label: "По умолчанию" }, { id: "NEWEST", label: "Сначала новые" }, { id: "OLDEST", label: "Сначала старые" }, { id: "KCAL_ASC", label: "Калорийность ↑" }, { id: "KCAL_DESC", label: "Калорийность ↓" }];
 const bands: readonly Readonly<{ id: CalorieBand; label: string }>[] = [{ id: "ANY", label: "Любые" }, { id: "UNDER_100", label: "Менее 100" }, { id: "100_250", label: "100–250" }, { id: "250_500", label: "250–500" }, { id: "OVER_500", label: "Более 500" }];
 const times: readonly Readonly<{ id: TimeBand; label: string }>[] = [{ id: "ANY", label: "Любое время" }, { id: "UNDER_15", label: "Менее 15 мин" }, { id: "15_30", label: "15–30 мин" }, { id: "30_60", label: "30–60 мин" }, { id: "OVER_60", label: "Более 60 мин" }];
-const KCAL_LIMIT = 5000;
 const MINUTES_LIMIT = 10_080;
 const macroNames = { protein: "Белки", fat: "Жиры", carbs: "Углеводы" } as const;
 type MacroKey = keyof typeof macroNames;
@@ -41,18 +40,18 @@ function ChoiceGrid<Id extends string>({ options, selected, label, onSelect }: R
   })}</>;
 }
 
-/** Название фильтра отдельной строкой на всю ширину: пилюли «от — до» больше не теснят его в левый край. */
+/** Название фильтра отдельной строкой на всю ширину. */
 function BlockTitle({ children, muted = false }: Readonly<{ children: string; muted?: boolean }>) {
   const colors = usePrototypeTheme().palette.tokens;
   return <Text style={[styles.label, { color: muted ? colors.textSecondary : colors.textPrimary }]}>{children}</Text>;
 }
 
-/** «от — до» + единица по центру блока. */
+/** Поле и единица по центру блока. */
 function RangeRow({ children }: Readonly<{ children: ReactNode }>) {
   return <View style={styles.rangeRow}>{children}</View>;
 }
 
-/** Поле числа 32 dp: для «от / до» и процентов; название — для экранных читалок. */
+/** Поле числа 32 dp: для «не дольше» и процентов; название — для экранных читалок. */
 function NumberBox({ value, onChange, label, decimal = false, placeholder }: Readonly<{ value: string; onChange: (next: string) => void; label: string; decimal?: boolean; placeholder?: string }>) {
   const colors = usePrototypeTheme().palette.tokens;
   return <TextInput value={value} onChangeText={(next) => onChange(next.replace(decimal ? /[^\d.,]/gu : /\D/gu, "").slice(0, 6))}
@@ -66,14 +65,10 @@ export function RecipeBrowseControls({ filters, sort, onFilters, onSort }: Reado
   const [panel, setPanel] = useState<"FILTERS" | "SORT" | null>(null);
   const [draft, setDraft] = useState(filters);
   const [ranges, setRanges] = useState<Texts>(() => macroTexts(filters));
-  const [cal, setCal] = useState({ min: text(filters.caloriesRange.min), max: text(filters.caloriesRange.max) });
-  const [time, setTime] = useState({ min: text(filters.timeRange.min), max: text(filters.timeRange.max) });
   const [prep, setPrep] = useState(text(filters.prepMax));
   const [error, setError] = useState<string | null>(null);
   const reset = (next: RecipeFilters) => {
     setDraft(next); setRanges(macroTexts(next));
-    setCal({ min: text(next.caloriesRange.min), max: text(next.caloriesRange.max) });
-    setTime({ min: text(next.timeRange.min), max: text(next.timeRange.max) });
     setPrep(text(next.prepMax)); setError(null);
   };
   const apply = () => {
@@ -83,13 +78,10 @@ export function RecipeBrowseControls({ filters, sort, onFilters, onSort }: Reado
       if (ranges[key].min.trim() === "" || ranges[key].max.trim() === "" || !Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max > 100 || min > max) { setError("Диапазон — от 0 до 100 %, минимум не больше максимума."); return; }
       macros[key] = { min, max };
     }
-    const caloriesRange = parseNumberRange(cal.min, cal.max, KCAL_LIMIT);
-    if (caloriesRange === "INVALID") { setError(`Калории: целые числа от 0 до ${KCAL_LIMIT}, «от» не больше «до».`); return; }
-    const timeRange = parseNumberRange(time.min, time.max, MINUTES_LIMIT);
-    if (timeRange === "INVALID") { setError("Время: целые минуты, «от» не больше «до»."); return; }
     const prepRange = parseNumberRange("", prep, MINUTES_LIMIT);
     if (prepRange === "INVALID") { setError("Подготовка: целое число минут."); return; }
-    onFilters({ ...draft, macros, caloriesRange, timeRange, prepMax: prepRange.max }); setPanel(null);
+    // Своих диапазонов «от — до» в окне больше нет (решение владельца): передаются пустыми, чтобы не остался невидимый фильтр.
+    onFilters({ ...draft, macros, caloriesRange: EMPTY_RECIPE_FILTERS.caloriesRange, timeRange: EMPTY_RECIPE_FILTERS.timeRange, prepMax: prepRange.max }); setPanel(null);
   };
   return <>
     <View style={styles.row}><AppButton compact variant="secondary" label="Фильтры рецептов" onPress={() => { reset(filters); setPanel("FILTERS"); }} />
@@ -107,25 +99,13 @@ export function RecipeBrowseControls({ filters, sort, onFilters, onSort }: Reado
           {panel === "SORT" ? <ChoiceGrid options={sorts} selected={sort} label="Сортировка рецептов" onSelect={(id) => { onSort(id); setPanel(null); }} /> : <>
             <View style={[styles.block, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
               <BlockTitle>Калории за порцию</BlockTitle>
-              <RangeRow>
-                <NumberBox label="Калории, от" placeholder="от" value={cal.min} onChange={(min) => { setCal({ ...cal, min }); setDraft({ ...draft, calories: "ANY" }); }} />
-                <Text style={[styles.dash, { color: colors.textMuted }]}>—</Text>
-                <NumberBox label="Калории, до" placeholder="до" value={cal.max} onChange={(max) => { setCal({ ...cal, max }); setDraft({ ...draft, calories: "ANY" }); }} />
-                <Text style={[styles.unit, { color: colors.textMuted }]}>ккал</Text>
-              </RangeRow>
               <ChoiceGrid options={bands} selected={draft.calories} label="Калории за порцию"
-                onSelect={(calories) => { setDraft({ ...draft, calories }); setCal({ min: "", max: "" }); }} />
+                onSelect={(calories) => setDraft({ ...draft, calories })} />
             </View>
             <View style={[styles.block, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
               <BlockTitle>Время приготовления</BlockTitle>
-              <RangeRow>
-                <NumberBox label="Время, от минут" placeholder="от" value={time.min} onChange={(min) => { setTime({ ...time, min }); setDraft({ ...draft, time: "ANY" }); }} />
-                <Text style={[styles.dash, { color: colors.textMuted }]}>—</Text>
-                <NumberBox label="Время, до минут" placeholder="до" value={time.max} onChange={(max) => { setTime({ ...time, max }); setDraft({ ...draft, time: "ANY" }); }} />
-                <Text style={[styles.unit, { color: colors.textMuted }]}>мин</Text>
-              </RangeRow>
               <ChoiceGrid options={times} selected={draft.time} label="Время рецепта"
-                onSelect={(next) => { setDraft({ ...draft, time: next }); setTime({ min: "", max: "" }); }} />
+                onSelect={(next) => setDraft({ ...draft, time: next })} />
               <BlockTitle muted>Подготовка не дольше</BlockTitle>
               <RangeRow>
                 <NumberBox label="Подготовка не дольше, минут" placeholder="до" value={prep} onChange={setPrep} />
