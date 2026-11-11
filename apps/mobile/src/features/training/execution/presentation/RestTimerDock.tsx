@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } fr
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
-import { ChevronDown, ChevronRight, Pause, Play, SkipForward, Timer } from "lucide-react-native";
+import { ChevronRight, Pause, Play, SkipForward, Timer } from "lucide-react-native";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
 import { fonts } from "../../../../shared/ui/theme/typography.ts";
@@ -16,6 +16,8 @@ import { ACTION_GAP, CARD_PADDING, compactTimerCount, orderedRestTimers, retaine
   timerCarouselPosition, timerCountLabel, timerInitials, TIMER_GAP, type RestPanelPreference } from "./restPanelRules.ts";
 
 type AvatarLoader = (ids: readonly string[]) => Promise<ReadonlyMap<string, string | null>>;
+/** Свёрнутая строка низкая (≈34 dp); зона нажатия добирается до 48 dp невидимым краем. */
+const SUMMARY_SLOP = { top: 7, bottom: 7 } as const;
 const shortName = (name: string) => name.trim().split(/\s+/u)[1] ?? name;
 
 /** Владелец таймера: эмодзи/инициалы клиента; у каждого участника свой тон (по порядку в списке владельцев), чтобы отличать их в ряду. */
@@ -161,17 +163,17 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
           <View collapsable={false}>
             <Pressable accessibilityRole="button" accessibilityLabel={mode === "collapsed" ? "Развернуть таймеры отдыха" : "Свернуть таймеры отдыха"}
               accessibilityState={{ expanded: mode === "expanded" }} hitSlop={{ top: 14, bottom: 14 }}
-              onPress={mode === "collapsed" ? expand : collapse} style={styles.handle}>{grip}</Pressable>
+              onPress={mode === "collapsed" ? expand : collapse} style={[styles.handle, mode === "collapsed" && styles.handleCollapsed]}>{grip}</Pressable>
           </View>
         </GestureDetector>
         {mode === "collapsed" && first ? <View style={styles.summary}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Развернуть панель таймеров отдыха" onPress={expand} style={styles.summaryLead}>
-            <Timer size={22} color={colors.accentInk} />
-            <Text numberOfLines={1} style={[styles.summaryLabel, { color: colors.textPrimary }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Развернуть панель таймеров отдыха" onPress={expand} hitSlop={SUMMARY_SLOP} style={[styles.summaryLead, ordered.length === 1 && styles.summaryLeadFit]}>
+            <Timer size={20} color={colors.accentInk} />
+            <Text numberOfLines={1} style={[styles.summaryLabel, ordered.length === 1 && styles.summaryLabelFit, { color: colors.textPrimary }]}>
               {multipleOwners ? timerCountLabel(ordered.length) : `${shortName(first.clientName)}${ordered.length > 1 ? ` · ${timerCountLabel(ordered.length)}` : " ·"}`}
             </Text>
           </Pressable>
-          {ordered.slice(0, visibleCount).map((timer) => <Pressable key={timer.id} accessibilityRole="button" onPress={expand}
+          {ordered.slice(0, visibleCount).map((timer) => <Pressable key={timer.id} accessibilityRole="button" onPress={expand} hitSlop={SUMMARY_SLOP}
             accessibilityLabel={`${timer.clientName}, ${timer.exerciseName}. Развернуть таймеры`}
             style={[styles.summaryToken, { width: (multipleOwners ? 84 : 54) * Math.max(1, dimensions.fontScale), backgroundColor: colors.surfaceRaised }]}>
             {multipleOwners ? <Avatar timer={timer} avatars={avatars} tone={toneOf(timer.clientId)} small /> : null}
@@ -179,13 +181,10 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
               style={[styles.summaryTime, isFinished(timer, now) && styles.summaryDone, { color: colors.textPrimary }]} />
           </Pressable>)}
           {hidden > 0 ? <Pressable accessibilityRole="button" accessibilityLabel={`Показать остальные таймеры: ещё ${hidden}`}
-            onPress={() => { pendingIndex.current = visibleCount; expand(); }} style={[styles.more, { backgroundColor: colors.accentFill }]}>
+            onPress={() => { pendingIndex.current = visibleCount; expand(); }} hitSlop={SUMMARY_SLOP} style={[styles.more, { backgroundColor: colors.accentFill }]}>
             <Text style={[styles.moreText, { color: colors.onAccentFill }]}>{`Ещё ${hidden}`}</Text>
             <ChevronRight size={14} color={colors.onAccentFill} />
           </Pressable> : null}
-          <Pressable accessibilityRole="button" accessibilityLabel="Развернуть таймеры" onPress={expand} style={styles.chevron}>
-            <ChevronDown size={24} color={colors.accentInk} />
-          </Pressable>
         </View> : mode === "expanded" ? <>
           <ScrollView ref={scroll} horizontal scrollEnabled={layout.stops > 1} showsHorizontalScrollIndicator={false}
             keyboardShouldPersistTaps="handled" contentContainerStyle={styles.cards} snapToInterval={layout.step} decelerationRate="fast"
@@ -212,7 +211,7 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
 
 const styles = StyleSheet.create({
   area: { overflow: "hidden" }, measured: { position: "absolute", top: 0, left: 0, right: 0 },
-  handle: { height: 20, alignItems: "center", justifyContent: "center" }, grip: { width: 40, height: 4, borderRadius: 2 },
+  handle: { height: 20, alignItems: "center", justifyContent: "center" }, handleCollapsed: { height: 12 }, grip: { width: 40, height: 4, borderRadius: 2 },
   cards: { gap: TIMER_GAP, alignItems: "stretch", paddingBottom: 2 },
   // Один таймер: без своей подложки, прямо на панели.
   cardSingle: { gap: 2, paddingBottom: 4 },
@@ -239,12 +238,13 @@ const styles = StyleSheet.create({
   adjust: { fontFamily: fonts.bold, fontSize: 14 },
   indicator: { flexDirection: "row", gap: 4, justifyContent: "center", paddingVertical: 2, paddingHorizontal: 40 },
   segment: { flex: 1, maxWidth: 32, height: 5, borderRadius: 3 },
-  summary: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 48 },
-  summaryLead: { flex: 1, minWidth: 0, minHeight: 48, flexDirection: "row", alignItems: "center", gap: 6 },
+  summary: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 34, paddingBottom: 2 },
+  summaryLead: { flex: 1, minWidth: 0, minHeight: 34, flexDirection: "row", alignItems: "center", gap: 6 },
+  summaryLeadFit: { flex: 0, flexShrink: 1 }, summaryLabelFit: { flex: 0, flexShrink: 1 },
   summaryLabel: { flex: 1, fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
-  summaryToken: { flexDirection: "row", height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", gap: 4, flexShrink: 0, paddingHorizontal: 4 },
-  summaryTime: { textAlign: "center", fontFamily: fonts.bold, fontSize: 16, lineHeight: 21, flexShrink: 1 },
+  summaryToken: { flexDirection: "row", height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", gap: 4, flexShrink: 0, paddingHorizontal: 4 },
+  summaryTime: { textAlign: "center", fontFamily: fonts.bold, fontSize: 15, lineHeight: 20, flexShrink: 1 },
   summaryDone: { fontSize: 11, lineHeight: 14 },
-  more: { height: 34, paddingLeft: 10, paddingRight: 6, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2, borderRadius: 17 },
-  moreText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 }, chevron: { width: 48, height: 48, alignItems: "center", justifyContent: "center" },
+  more: { height: 28, paddingLeft: 10, paddingRight: 6, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2, borderRadius: 14 },
+  moreText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 },
 });
