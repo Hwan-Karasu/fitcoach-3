@@ -10,6 +10,7 @@ import { compactValues, compactWithDrops, fieldNames, parseField, planText, rawO
   setTypeLabels, setTypeTone } from "./setFormat.ts";
 import { type SetPatch } from "./useWorkoutDiary.ts";
 import { PendingInputWrites } from "../domain/PendingInputWrites.ts";
+import { draftKey, sameVisible, visibleConfirmation, type VisibleSetConfirmation } from "../domain/VisibleSetState.ts";
 import { styles } from "./workoutStyles.ts";
 import { navigationPerformance } from "../../../../shared/diagnostics/NavigationPerformance.ts";
 import { useInputDraft } from "./useInputDraft.ts";
@@ -26,11 +27,13 @@ export type SetTarget = Readonly<{ exercise: PlannedExercise; set: PlannedSet; p
  * Отложенная запись регистрируется, чтобы смена исхода сначала дописала последнее значение (§48.23 п. 5).
  * Кнопка клавиатуры: «Далее» — в соседнюю ячейку строки (повторы → кг), на последней — «Готово».
  */
-const ValueCell = forwardRef(function ValueCell({ cellKey, field, value, pending, onNext, onCommit }: Readonly<{
+const ValueCell = forwardRef(function ValueCell({ cellKey, field, value, pending, onNext, onCommit, onDraft }: Readonly<{
   cellKey: string; field: SetField; value: number | null; pending: PendingRegistry;
   /** Следующая ячейка строки; нет — ячейка последняя. */
   onNext: (() => void) | null;
   onCommit: (value: number | null) => Promise<unknown>;
+  /** Введённое число сразу (до записи): `undefined` — неверный ввод. Строка по нему мгновенно показывает «выполнен» или снимает отметку. */
+  onDraft: (value: number | null | undefined) => void;
 }>, ref: Ref<TextInput>) {
   navigationPerformance.render("ValueCell");
   useEffect(() => { navigationPerformance.mount("ValueCell"); return () => navigationPerformance.unmount("ValueCell"); }, []);
@@ -80,6 +83,8 @@ const ValueCell = forwardRef(function ValueCell({ cellKey, field, value, pending
           return await commitRef.current(parsed) !== null;
         });
         timer.current = setTimeout(flush, SAVE_DELAY_MS);
+        // После регистрации записи: строка проверяет, действительно ли значение ещё ждёт записи (черновик живёт, пока `pending.has`).
+        onDraft(parsed === "invalid" ? undefined : parsed);
       }}
       style={[styles.input, { color: colors.textPrimary, backgroundColor: colors.surface,
         borderColor: invalid ? colors.danger : colors.border }]} />
@@ -166,7 +171,40 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
   // Цель строки собирается из примитивов и неизменных объектов: пропсы строки стабильны, memo срабатывает.
   navigationPerformance.render("SetRow");
   const target = useMemo<SetTarget>(() => ({ exercise, set, position }), [exercise, set, position]);
-  const confirmed = fact?.confirmed === true;
+  // Видимое «выполнен» считается по тексту в ячейках (VisibleSetState), а не по ответу базы: подсветка и отметка меняются мгновенно,
+  // запись идёт на фоне. Черновик живёт, пока его ячейка ждёт записи (`pending.has`); дошёл ответ — снова показывается факт.
+  const factRef = useRef(fact); factRef.current = fact;
+  const draftsRef = useRef<Record<string, number | null>>({});
+  const [overlay, setOverlay] = useState<VisibleSetConfirmation | null>(null);
+  const draftCellKey = (side: "S" | "L" | "R", field: SetField) => `${scopeKey}|${side === "S" ? set.id : `${set.id}:${side}`}:${field}`;
+  const liveDrafts = () => {
+    const live: Record<string, number | null> = {};
+    for (const side of ["S", "L", "R"] as const) {
+      for (const field of fields) {
+        const key = draftKey(side, field);
+        if (key in draftsRef.current && pending.has(draftCellKey(side, field))) live[key] = draftsRef.current[key] ?? null;
+        else delete draftsRef.current[key];
+      }
+    }
+    return live;
+  };
+  const storedShown = visibleConfirmation({ mode, fact, fields, sided, drafts: {} });
+  const waiting = overlay !== null && (["S", "L", "R"] as const).some((side) => fields.some((field) => pending.has(draftCellKey(side, field))));
+  const shown = waiting ? overlay : storedShown;
+  const shownRef = useRef(shown); shownRef.current = shown;
+  const onDraft = (prefix: string, field: SetField, value: number | null | undefined) => {
+    const side = prefix === set.id ? "S" : prefix.endsWith(":L") ? "L" : prefix.endsWith(":R") ? "R" : null;
+    if (side === null) return;
+    const key = draftKey(side, field);
+    if (value === undefined) delete draftsRef.current[key]; else draftsRef.current[key] = value;
+    const next = visibleConfirmation({ mode, fact: factRef.current, fields, sided, drafts: liveDrafts() });
+    const wasShown = shownRef.current;
+    setOverlay((current) => sameVisible(current, next) ? current : next);
+    // Подход стал выполненным по тексту: пишем строку сразу (не ждём паузы), чтобы таймер отдыха запустился без лишних 700 мс;
+    // источник старта прежний — `confirmedNow` из базы, дублей нет. Последующие правки пишутся как раньше, последнее значение побеждает.
+    if (mode === "AUTO" && next.confirmed && !wasShown.confirmed) void pending.flushPrefix(`${scopeKey}|${set.id}:`);
+  };
+  const confirmed = shown.confirmed;
   const type: SetType = fact?.setType ?? "NORMAL";
   const tone = setTypeTone(type, colors);
   const drops = fact?.drops ?? [];
@@ -183,15 +221,15 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
         <ValueCell key={field} ref={(node) => { inputs.set(`${prefix}:${field}`, node); }} cellKey={`${scopeKey}|${prefix}:${field}`}
           field={field} value={valueOf(field)} pending={pending}
           onNext={next === undefined ? null : () => inputs.get(`${prefix}:${next}`)?.focus()}
-          onCommit={(value) => commit(field, value)} />
+          onCommit={(value) => commit(field, value)} onDraft={(value) => onDraft(prefix, field, value)} />
       );
     });
   // §48.80: одна засчитанная сторона — подход частично выполнен (номер подсвечен наполовину).
-  const partial = sided && confirmed && fact?.sides?.left.confirmed !== fact?.sides?.right.confirmed;
+  const partial = sided && confirmed && shown.left !== shown.right;
   const full = confirmed && !partial;
   const sideRow = (side: Side) => {
     const sideFact = side === "L" ? fact?.sides?.left : fact?.sides?.right;
-    const done = sideFact?.confirmed === true;
+    const done = side === "L" ? shown.left : shown.right;
     return <>
       <Text accessibilityLabel={`${side === "L" ? "Левая" : "Правая"} сторона${done ? ", выполнена" : ""}`}
         style={[styles.sideLabel, { color: done ? colors.success : colors.textSecondary }]}>{side === "L" ? "Л" : "П"}</Text>
@@ -200,7 +238,7 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
     </>;
   };
   const sideCheck = (side: Side) => {
-    const done = (side === "L" ? fact?.sides?.left.confirmed : fact?.sides?.right.confirmed) === true;
+    const done = side === "L" ? shown.left : shown.right;
     const saving = confirming.includes(side);
     return (
       <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: done, busy: saving }} hitSlop={6} disabled={saving}
