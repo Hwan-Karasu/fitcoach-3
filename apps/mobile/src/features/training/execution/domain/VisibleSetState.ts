@@ -21,7 +21,9 @@ export interface VisibleSetConfirmation {
  */
 export type RowDrafts = Readonly<Record<string, number | null>>;
 
-export const draftKey = (side: "S" | "L" | "R", field: SetField): string => `${side}:${field}`;
+/** Место ячейки в строке: `S` — подход, `L`/`R` — стороны, `d0`, `d1`… — мини-сеты дроп-сета по порядку. */
+export type DraftSide = "S" | "L" | "R" | `d${number}`;
+export const draftKey = (side: DraftSide, field: SetField): string => `${side}:${field}`;
 
 const METRIC_OF_FIELD: Readonly<Record<SetField, TrackingMetric>> = { reps: "reps", loadGrams: "load", durationSec: "duration", distanceM: "distance" };
 
@@ -34,7 +36,7 @@ function stored(fact: SetFact | undefined): VisibleSetConfirmation {
   return { confirmed: fact?.confirmed === true, left: fact?.sides?.left.confirmed === true, right: fact?.sides?.right.confirmed === true };
 }
 
-function overlay(base: SetValues, side: "S" | "L" | "R", fields: readonly SetField[], drafts: RowDrafts): SetValues {
+function overlay(base: SetValues, side: DraftSide, fields: readonly SetField[], drafts: RowDrafts): SetValues {
   let values = base;
   for (const field of fields) {
     const key = draftKey(side, field);
@@ -44,8 +46,8 @@ function overlay(base: SetValues, side: "S" | "L" | "R", fields: readonly SetFie
 }
 
 /**
- * Что показывать у строки. Без черновиков — ровно то, что в базе. Дроп-сет не накладывается: его мини-сеты правятся своими
- * ячейками и подтверждаются по ответу базы.
+ * Что показывать у строки. Без черновиков — ровно то, что в базе. Дроп-сет считается целиком: основной сет и все мини-сеты (`d0`, `d1`…) с наложенными
+ * черновиками, как в транзакции (§48.60 п. 2: дроп-сет полон, когда заполнены основной сет и все мини-сеты).
  */
 export function visibleConfirmation(input: Readonly<{
   mode: ConfirmationMode;
@@ -56,10 +58,11 @@ export function visibleConfirmation(input: Readonly<{
 }>): VisibleSetConfirmation {
   const { mode, fact, fields, sided, drafts } = input;
   const base = stored(fact);
-  if (Object.keys(drafts).length === 0 || fact?.setType === "DROP") return base;
+  if (Object.keys(drafts).length === 0) return base;
   const metrics = metricsOfFields(fields);
   if (!sided) {
-    const change = confirmationAfterSave(mode, base.confirmed, { setType: fact?.setType ?? "NORMAL", values: overlay(fact?.values ?? EMPTY_VALUES, "S", fields, drafts), drops: fact?.drops ?? [] }, metrics);
+    const change = confirmationAfterSave(mode, base.confirmed, { setType: fact?.setType ?? "NORMAL", values: overlay(fact?.values ?? EMPTY_VALUES, "S", fields, drafts),
+      drops: (fact?.drops ?? []).map((drop, index) => overlay(drop, `d${index}`, fields, drafts)) }, metrics);
     return { confirmed: change.confirmed, left: false, right: false };
   }
   const side = (which: "L" | "R", was: boolean, values: SetValues | undefined): boolean => confirmationAfterSave(mode, was,

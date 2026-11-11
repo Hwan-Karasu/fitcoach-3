@@ -10,7 +10,7 @@ import { compactValues, compactWithDrops, fieldNames, parseField, planText, rawO
   setTypeLabels, setTypeTone } from "./setFormat.ts";
 import { type SetPatch } from "./useWorkoutDiary.ts";
 import { PendingInputWrites } from "../domain/PendingInputWrites.ts";
-import { draftKey, sameVisible, visibleConfirmation, type VisibleSetConfirmation } from "../domain/VisibleSetState.ts";
+import { draftKey, sameVisible, visibleConfirmation, type DraftSide, type VisibleSetConfirmation } from "../domain/VisibleSetState.ts";
 import { styles } from "./workoutStyles.ts";
 import { navigationPerformance } from "../../../../shared/diagnostics/NavigationPerformance.ts";
 import { useInputDraft } from "./useInputDraft.ts";
@@ -176,15 +176,14 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
   const factRef = useRef(fact); factRef.current = fact;
   const draftsRef = useRef<Record<string, number | null>>({});
   const [overlay, setOverlay] = useState<VisibleSetConfirmation | null>(null);
-  const draftCellKey = (side: "S" | "L" | "R", field: SetField) => `${scopeKey}|${side === "S" ? set.id : `${set.id}:${side}`}:${field}`;
+  // Ключ ячейки в реестре записей: `<слот>|<подход>[:<L|R|dN>]:<поле>` — как у `cells(prefix, …)`; место `S` — сам подход, `dN` — мини-сеты дроп-сета.
+  const draftCellKey = (side: string, field: string) => `${scopeKey}|${side === "S" ? set.id : `${set.id}:${side}`}:${field}`;
   const liveDrafts = () => {
     const live: Record<string, number | null> = {};
-    for (const side of ["S", "L", "R"] as const) {
-      for (const field of fields) {
-        const key = draftKey(side, field);
-        if (key in draftsRef.current && pending.has(draftCellKey(side, field))) live[key] = draftsRef.current[key] ?? null;
-        else delete draftsRef.current[key];
-      }
+    for (const key of Object.keys(draftsRef.current)) {
+      const [side = "S", field = ""] = key.split(":");
+      if (pending.has(draftCellKey(side, field))) live[key] = draftsRef.current[key] ?? null;
+      else delete draftsRef.current[key];
     }
     return live;
   };
@@ -195,7 +194,8 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
   const shown = waiting ? overlay : storedShown;
   const shownRef = useRef(shown); shownRef.current = shown;
   const onDraft = (prefix: string, field: SetField, value: number | null | undefined) => {
-    const side = prefix === set.id ? "S" : prefix.endsWith(":L") ? "L" : prefix.endsWith(":R") ? "R" : null;
+    const suffix = prefix === set.id ? "S" : prefix.startsWith(`${set.id}:`) ? prefix.slice(set.id.length + 1) : "";
+    const side: DraftSide | null = suffix === "S" || suffix === "L" || suffix === "R" || /^d\d+$/u.test(suffix) ? suffix as DraftSide : null;
     if (side === null) return;
     const key = draftKey(side, field);
     if (value === undefined) delete draftsRef.current[key]; else draftsRef.current[key] = value;

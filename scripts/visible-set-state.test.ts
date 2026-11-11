@@ -58,9 +58,18 @@ test("односторонний: стороны считаются отдель
     { confirmed: false, left: false, right: false }, "левую очистили, правая неполная — подход не выполнен");
 });
 
-test("дроп-сет не накладывается: решает ответ базы", () => {
-  const drop = fact({ setType: "DROP", values: values(10, 50_000), drops: [values(8, null)], confirmed: false });
-  assert.equal(visibleConfirmation({ mode: "AUTO", fact: drop, fields: FIELDS, sided: false, drafts: { [draftKey("S", "reps")]: 12 } }).confirmed, false);
+// §48.60 п. 2: дроп-сет полон, когда заполнены основной сет и ВСЕ мини-сеты; черновики мини-сетов (d0, d1…) считаются так же, как у подхода.
+test("дроп-сет: подход выполнен, когда по тексту заполнены основной сет и все мини-сеты", () => {
+  const drop = fact({ setType: "DROP", values: values(10, 50_000), drops: [values(8, 40_000), values(6, null)], confirmed: false });
+  const visible = (drafts: Record<string, number | null>, mode: "AUTO" | "MANUAL" = "AUTO", base = drop) => visibleConfirmation({ mode, fact: base, fields: FIELDS, sided: false, drafts });
+  assert.equal(visible({}).confirmed, false, "без черновиков — как в базе");
+  assert.equal(visible({ [draftKey("d1", "loadGrams")]: 30_000 }).confirmed, true, "дописали вес последнего мини-сета — выполнен сразу");
+  assert.equal(visible({ [draftKey("S", "reps")]: 12 }).confirmed, false, "правка основного сета, пока мини-сет неполон, не засчитывает подход");
+  const done = fact({ setType: "DROP", values: values(10, 50_000), drops: [values(8, 40_000), values(6, 30_000)], confirmed: true });
+  assert.equal(visible({ [draftKey("d0", "reps")]: null }, "AUTO", done).confirmed, false, "стёрли повторы мини-сета — отметка снята сразу");
+  assert.equal(visible({ [draftKey("d0", "reps")]: null }, "MANUAL", done).confirmed, false, "и в ручном режиме неполный подход подтверждённым не остаётся");
+  assert.equal(visible({ [draftKey("d1", "loadGrams")]: 35_000 }, "AUTO", done).confirmed, true, "правка значения у выполненного не снимает отметку");
+  assert.equal(visible({ [draftKey("S", "loadGrams")]: 55_000, [draftKey("d1", "loadGrams")]: 30_000 }).confirmed, true, "несколько ячеек сразу");
 });
 
 test("sameVisible сравнивает по значению, null — другое состояние", () => {
