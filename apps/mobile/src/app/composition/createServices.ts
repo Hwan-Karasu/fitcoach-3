@@ -283,7 +283,9 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
     () => openExpoSqliteConnection("fitcoach_f03_dev_gate.db"), async () => {
       await prepareDevSchema(database);
       await initializeRepositories();
-    }) : createProductionBootDependencies(database, initializeRepositories, () => settings.readAppearance());
+    }) : createProductionBootDependencies(database, initializeRepositories, () => settings.readAppearance(),
+      // Соединение этой базы открывается с `inspectProductionDatabase` (см. выше): полная проверка целостности уже сделана при открытии.
+      { integrityVerifiedAtOpen: true });
   const boot: BootCoordinator = new BootCoordinator({ ...dependencies,
     // The dev file has a separate workspace/schema gate; do not claim it as production.
     ...(development ? {} : { recoverBeforeOpen: (): Promise<void> => startupDiagnostics.measure("restore.recovery", () => recoverProductionRestore(maintenance)) }),

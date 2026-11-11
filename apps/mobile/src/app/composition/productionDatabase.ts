@@ -15,12 +15,15 @@ export const inspectProductionDatabase = (reader: SqliteStatementPort) => inspec
 
 /** One transaction claims an empty file, creates all owner schemas and the local trainer workspace.
  * No client fixtures, no dev import and no legacy-source file access.
+ * `integrityVerifiedAtOpen` — соединение базы открывается с `inspectProductionDatabase` (полная проверка целостности уже выполнена
+ * этим процессом при открытии): внутри транзакции остаётся структурная проверка без второго полного прохода по файлу.
  */
-export async function prepareProductionDatabase(database: SharedSqliteDatabase): Promise<void> {
+export async function prepareProductionDatabase(database: SharedSqliteDatabase,
+  options: Readonly<{ integrityVerifiedAtOpen?: boolean }> = {}): Promise<void> {
   const lease = await database.acquire();
   try {
     await lease.writer.write(async (tx) => {
-      const state = await inspectProductionDatabase(tx);
+      const state = await inspectDatabaseIdentity(tx, PRODUCTION_IDENTITY, SCHEMA_OWNERS, options.integrityVerifiedAtOpen !== true);
       if (state === "NEW") {
         await tx.run(`CREATE TABLE ${DATABASE_IDENTITY_TABLE} (id INTEGER PRIMARY KEY CHECK (id = 1),
           product TEXT NOT NULL, format_version INTEGER NOT NULL CHECK (format_version > 0), workspace_id TEXT NOT NULL)`);

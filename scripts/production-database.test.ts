@@ -138,6 +138,41 @@ test("UIX-FIT-11 время запуска: тёплый старт (без но
   } finally { f.cleanup(); }
 });
 
+test("ARCH-HARDEN-1a весь тёплый запуск (подготовка базы и репозитории) — одно соединение и одна проверка целостности", async () => {
+  const f = fixture();
+  const clients = new DevClientRepository(f.database, PRODUCTION_WORKSPACE_ID, []);
+  const calendar = new DevCalendarRepository(f.database, PRODUCTION_WORKSPACE_ID);
+  const settings = new DevSettingsRepository(f.database, PRODUCTION_WORKSPACE_ID);
+  const initialize = async () => { await clients.initialize(); await calendar.initialize(); await settings.initialize(); };
+  const start = () => new BootCoordinator(createProductionBootDependencies(f.database, initialize, () => settings.readAppearance(),
+    { integrityVerifiedAtOpen: true })).start();
+  try {
+    assert.equal((await start()).kind, "APP_READY");
+    await settings.close(); await calendar.close(); await clients.close();
+    f.counts.integrity = 0; f.opened.length = 0;
+    assert.equal((await start()).kind, "APP_READY");
+    // Было: открытие → проверка → подготовка с проверкой → закрытие → второе открытие с проверкой для репозиториев (3 прохода, 4 handle).
+    assert.equal(f.counts.integrity, 1, "проверка целостности — один раз, при открытии соединения");
+    assert.equal(f.opened.length, 2, "одно соединение: handle чтения и handle записи");
+  } finally { await settings.close(); await calendar.close(); await clients.close(); f.cleanup(); }
+});
+
+test("ARCH-HARDEN-1a без подтверждения проверки при открытии подготовка базы проверяет целостность сама; повреждённые ссылки отклоняются", async () => {
+  const f = fixture();
+  try {
+    await prepareProductionDatabase(f.database);
+    const editor = new DatabaseSync(f.file);
+    editor.exec("PRAGMA journal_mode = DELETE"); editor.exec("PRAGMA foreign_keys = OFF");
+    editor.exec(`INSERT INTO clients (id,workspace_id,display_name,lifecycle,revision,created_at,updated_at) VALUES ('synthetic','missing-workspace','Synthetic','ACTIVE',1,'x','x')`);
+    editor.close();
+    const boot = new BootCoordinator(createProductionBootDependencies(f.database, async () => undefined, async () => null, { integrityVerifiedAtOpen: true }));
+    assert.deepEqual(await boot.start(), { kind: "BOOT_FAILED", attempt: 1, code: "DATABASE_INCOMPATIBLE" }, "проверка при открытии остаётся");
+    const direct = new SharedSqliteDatabase(async () => nodeSqlitePort(new DatabaseSync(f.file)));
+    await assert.rejects(prepareProductionDatabase(direct), (error: unknown) => error instanceof DatabaseCompatibilityError && error.code === "DATABASE_INCOMPATIBLE",
+      "соединение без проверки при открытии: полная проверка внутри подготовки");
+  } finally { f.cleanup(); }
+});
+
 test("D01-4 первая установка: сбой после первых владельцев откатывает также identity и application_id; Retry создаёт всё один раз", async () => {
   const f = fixture();
   let initialized = 0;

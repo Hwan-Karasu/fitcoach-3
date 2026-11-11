@@ -22,9 +22,11 @@ export class DatabaseCompatibilityError extends Error {
 }
 function incompatible(): never { throw new DatabaseCompatibilityError("DATABASE_INCOMPATIBLE"); }
 
-/** Reads only. Call before WAL configuration, migration DDL, repository initialization or seed writes. */
+/** Reads only. Call before WAL configuration, migration DDL, repository initialization or seed writes.
+ * `integrity: false` пропускает только полный проход `integrity_check`/`foreign_key_check` (структурная проверка остаётся): для повторного
+ * вызова на соединении, которое этот же процесс уже проверил при открытии (ARCH-HARDEN-1a). */
 export async function inspectDatabaseIdentity(reader: SqliteStatementPort, identity: DatabaseIdentity,
-  owners: readonly DatabaseOwnerCatalog[]): Promise<"NEW" | "OWNED"> {
+  owners: readonly DatabaseOwnerCatalog[], integrity = true): Promise<"NEW" | "OWNED"> {
   try {
     const objects = await reader.all<{ type: string; name: string }>(`SELECT type, name FROM sqlite_master
       WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name`);
@@ -64,8 +66,9 @@ export async function inspectDatabaseIdentity(reader: SqliteStatementPort, ident
       }
     }
     if (objects.length !== expected.size || objects.some((row) => expected.get(row.name) !== row.type)) incompatible();
-    const integrity = await reader.first<{ integrity_check: string }>("PRAGMA integrity_check");
-    if (integrity?.integrity_check !== "ok" || (await reader.all("PRAGMA foreign_key_check")).length > 0) incompatible();
+    if (!integrity) return "OWNED";
+    const check = await reader.first<{ integrity_check: string }>("PRAGMA integrity_check");
+    if (check?.integrity_check !== "ok" || (await reader.all("PRAGMA foreign_key_check")).length > 0) incompatible();
     return "OWNED";
   } catch (error) {
     if (error instanceof DatabaseCompatibilityError) throw error;
