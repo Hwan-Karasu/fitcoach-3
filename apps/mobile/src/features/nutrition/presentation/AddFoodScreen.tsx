@@ -17,7 +17,7 @@ import { planBatch, type SelectedPick } from "../domain/SelectionRules.ts";
 import type { SavedMeal, SavedMealInput } from "../domain/SavedMeal.ts";
 import { SavedMealEditorDialog } from "./SavedMealEditorDialog.tsx";
 import { sumNutrients } from "../domain/DiaryRules.ts";
-import { browseRecipes, EMPTY_RECIPE_FILTERS, type RecipeFilters, type RecipeSort } from "../domain/RecipeBrowse.ts";
+import { browseRecipes, EMPTY_RECIPE_FILTERS, hasRecipeFilters as recipeFiltersActive, type RecipeFilters, type RecipeSort } from "../domain/RecipeBrowse.ts";
 import { RecipeBrowseControls } from "./RecipeBrowseControls.tsx";
 import { catalogKey, pickSnapshot, usageFromSummaries, type CatalogItem, type PortionDraft } from "../domain/CatalogPick.ts";
 import { basisText, kcalText, nutritionErrorText, slotLabels, todayLocal, unitLabels } from "./nutritionFormat.ts";
@@ -218,7 +218,7 @@ export function AddFoodScreen({ clientId, localDate, slot, initialFilter = "FOOD
   const restoreScroll = useRef(true);
   const primarySlot = slots[0] ?? slot;
   const recipeGrid = filter === "RECIPES" || filter === "COOKBOOK";
-  const hasRecipeFilters = recipeGrid && (recipeFilters.calories !== "ANY" || recipeFilters.time !== "ANY" || Object.values(recipeFilters.macros).some((range) => range.min !== 0 || range.max !== 100));
+  const hasRecipeFilters = recipeGrid && recipeFiltersActive(recipeFilters);
   const lock = useRef(false);
   const pendingCommand = useRef<Readonly<{ payload: string; id: string }> | null>(null);
 

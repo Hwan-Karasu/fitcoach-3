@@ -1,34 +1,64 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AppButton, AppIconButton, SelectionChip, TextField } from "../../../shared/ui/components/public.ts";
+import { AppButton, AppIconButton, SelectionChip } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { PercentRangeSlider } from "../../../shared/ui/components/PercentRangeSlider.tsx";
-import { EMPTY_RECIPE_FILTERS, type CalorieBand, type RecipeFilters, type RecipeSort, type TimeBand } from "../domain/RecipeBrowse.ts";
+import { EMPTY_RECIPE_FILTERS, parseNumberRange, type CalorieBand, type RecipeFilters, type RecipeSort, type TimeBand } from "../domain/RecipeBrowse.ts";
 import { scrim } from "../../../shared/ui/theme/style.ts";
 
-const sorts: readonly Readonly<{ id: RecipeSort; label: string }>[] = [{ id: "DEFAULT", label: "По умолчанию" }, { id: "NEWEST", label: "Сначала новые" }, { id: "OLDEST", label: "Сначала старые" }, { id: "KCAL_ASC", label: "Калории: по возрастанию" }, { id: "KCAL_DESC", label: "Калории: по убыванию" }];
+const sorts: readonly Readonly<{ id: RecipeSort; label: string }>[] = [{ id: "DEFAULT", label: "По умолчанию" }, { id: "NEWEST", label: "Сначала новые" }, { id: "OLDEST", label: "Сначала старые" }, { id: "KCAL_ASC", label: "Калорийность ↑" }, { id: "KCAL_DESC", label: "Калорийность ↓" }];
 const bands: readonly Readonly<{ id: CalorieBand; label: string }>[] = [{ id: "ANY", label: "Любые" }, { id: "UNDER_100", label: "Менее 100" }, { id: "100_250", label: "100–250" }, { id: "250_500", label: "250–500" }, { id: "OVER_500", label: "Более 500" }];
 const times: readonly Readonly<{ id: TimeBand; label: string }>[] = [{ id: "ANY", label: "Любое время" }, { id: "UNDER_15", label: "Менее 15 мин" }, { id: "15_30", label: "15–30 мин" }, { id: "30_60", label: "30–60 мин" }, { id: "OVER_60", label: "Более 60 мин" }];
-function ChoiceGrid<Id extends string>({ options, selected, label, onSelect }: Readonly<{
-  options: readonly Readonly<{ id: Id; label: string }>[]; selected: Id; label: string; onSelect: (id: Id) => void;
+const KCAL_LIMIT = 5000;
+const MINUTES_LIMIT = 10_080;
+const macroNames = { protein: "Белки", fat: "Жиры", carbs: "Углеводы" } as const;
+type MacroKey = keyof typeof macroNames;
+type Texts = Readonly<Record<MacroKey, Readonly<{ min: string; max: string }>>>;
+const text = (value: number | null) => (value === null ? "" : String(value));
+const macroTexts = (filters: RecipeFilters): Texts => ({
+  protein: { min: String(filters.macros.protein.min), max: String(filters.macros.protein.max) },
+  fat: { min: String(filters.macros.fat.min), max: String(filters.macros.fat.max) },
+  carbs: { min: String(filters.macros.carbs.min), max: String(filters.macros.carbs.max) },
+});
+
+/** Варианты — равными рядами (UIX-FIT-10): по три в ряд, чтобы окно помещалось без прокрутки; сортировка — по два. */
+function ChoiceGrid<Id extends string>({ options, selected, label, onSelect, columns = 2 }: Readonly<{
+  options: readonly Readonly<{ id: Id; label: string }>[]; selected: Id; label: string; onSelect: (id: Id) => void; columns?: number;
 }>) {
-  return <>{Array.from({ length: Math.ceil(options.length / 2) }, (_, row) => <View key={row} style={styles.row}>
-    {options.slice(row * 2, row * 2 + 2).map((option) => <SelectionChip compact fill key={option.id} group={label}
+  return <>{Array.from({ length: Math.ceil(options.length / columns) }, (_, row) => <View key={row} style={styles.row}>
+    {options.slice(row * columns, row * columns + columns).map((option) => <SelectionChip compact fill key={option.id} group={label}
       label={option.label} selected={selected === option.id} onPress={() => onSelect(option.id)} />)}
+    {/* Неполный последний ряд — пустые ячейки той же ширины, чтобы кнопки не растягивались. */}
+    {Array.from({ length: Math.max(0, columns - options.slice(row * columns, row * columns + columns).length) }, (_, index) => <View key={`gap-${index}`} style={styles.cell} />)}
   </View>)}</>;
 }
+
+/** Поле числа 32 dp: для «от / до» и процентов; название — для экранных читалок. */
+function NumberBox({ value, onChange, label, decimal = false, placeholder }: Readonly<{ value: string; onChange: (next: string) => void; label: string; decimal?: boolean; placeholder?: string }>) {
+  const colors = usePrototypeTheme().palette.tokens;
+  return <TextInput value={value} onChangeText={(next) => onChange(next.replace(decimal ? /[^\d.,]/gu : /\D/gu, "").slice(0, 6))}
+    keyboardType={decimal ? "decimal-pad" : "number-pad"} placeholder={placeholder} placeholderTextColor={colors.textMuted} accessibilityLabel={label} selectTextOnFocus
+    style={[styles.box, { color: colors.textPrimary, backgroundColor: colors.input, borderColor: colors.border }]} />;
+}
+
 export function RecipeBrowseControls({ filters, sort, onFilters, onSort }: Readonly<{ filters: RecipeFilters; sort: RecipeSort; onFilters: (next: RecipeFilters) => void; onSort: (next: RecipeSort) => void }>) {
   const colors = usePrototypeTheme().palette.tokens;
   const insets = useSafeAreaInsets();
   const [panel, setPanel] = useState<"FILTERS" | "SORT" | null>(null);
   const [draft, setDraft] = useState(filters);
-  const [ranges, setRanges] = useState(() => Object.fromEntries(Object.entries(filters.macros).map(([key, range]) => [key, { min: String(range.min), max: String(range.max) }])) as Record<"protein" | "fat" | "carbs", { min: string; max: string }>);
+  const [ranges, setRanges] = useState<Texts>(() => macroTexts(filters));
+  const [cal, setCal] = useState({ min: text(filters.caloriesRange.min), max: text(filters.caloriesRange.max) });
+  const [time, setTime] = useState({ min: text(filters.timeRange.min), max: text(filters.timeRange.max) });
+  const [prep, setPrep] = useState(text(filters.prepMax));
   const [error, setError] = useState<string | null>(null);
   const reset = (next: RecipeFilters) => {
-    setDraft(next); setRanges({ protein: { min: String(next.macros.protein.min), max: String(next.macros.protein.max) }, fat: { min: String(next.macros.fat.min), max: String(next.macros.fat.max) }, carbs: { min: String(next.macros.carbs.min), max: String(next.macros.carbs.max) } }); setError(null);
+    setDraft(next); setRanges(macroTexts(next));
+    setCal({ min: text(next.caloriesRange.min), max: text(next.caloriesRange.max) });
+    setTime({ min: text(next.timeRange.min), max: text(next.timeRange.max) });
+    setPrep(text(next.prepMax)); setError(null);
   };
   const apply = () => {
     const macros = { ...draft.macros };
@@ -37,7 +67,13 @@ export function RecipeBrowseControls({ filters, sort, onFilters, onSort }: Reado
       if (ranges[key].min.trim() === "" || ranges[key].max.trim() === "" || !Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max > 100 || min > max) { setError("Диапазон — от 0 до 100 %, минимум не больше максимума."); return; }
       macros[key] = { min, max };
     }
-    onFilters({ ...draft, macros }); setPanel(null);
+    const caloriesRange = parseNumberRange(cal.min, cal.max, KCAL_LIMIT);
+    if (caloriesRange === "INVALID") { setError(`Калории: целые числа от 0 до ${KCAL_LIMIT}, «от» не больше «до».`); return; }
+    const timeRange = parseNumberRange(time.min, time.max, MINUTES_LIMIT);
+    if (timeRange === "INVALID") { setError("Время: целые минуты, «от» не больше «до»."); return; }
+    const prepRange = parseNumberRange("", prep, MINUTES_LIMIT);
+    if (prepRange === "INVALID") { setError("Подготовка: целое число минут."); return; }
+    onFilters({ ...draft, macros, caloriesRange, timeRange, prepMax: prepRange.max }); setPanel(null);
   };
   return <>
     <View style={styles.row}><AppButton compact variant="secondary" label="Фильтры рецептов" onPress={() => { reset(filters); setPanel("FILTERS"); }} />
@@ -53,23 +89,47 @@ export function RecipeBrowseControls({ filters, sort, onFilters, onSort }: Reado
         </View>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           {panel === "SORT" ? <ChoiceGrid options={sorts} selected={sort} label="Сортировка рецептов" onSelect={(id) => { onSort(id); setPanel(null); }} /> : <>
-            <View style={[styles.block, { backgroundColor: colors.surfaceRaised }]}>
-              <Text style={[styles.label, { color: colors.textPrimary }]}>Калории за порцию</Text>
-              <ChoiceGrid options={bands} selected={draft.calories} label="Калории за порцию" onSelect={(calories) => setDraft({ ...draft, calories })} />
+            <View style={[styles.block, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
+              <View style={styles.blockHead}>
+                <Text style={[styles.label, styles.grow, { color: colors.textPrimary }]}>Калории за порцию</Text>
+                <NumberBox label="Калории, от" placeholder="от" value={cal.min} onChange={(min) => { setCal({ ...cal, min }); setDraft({ ...draft, calories: "ANY" }); }} />
+                <Text style={[styles.dash, { color: colors.textMuted }]}>—</Text>
+                <NumberBox label="Калории, до" placeholder="до" value={cal.max} onChange={(max) => { setCal({ ...cal, max }); setDraft({ ...draft, calories: "ANY" }); }} />
+                <Text style={[styles.unit, { color: colors.textMuted }]}>ккал</Text>
+              </View>
+              <ChoiceGrid columns={3} options={bands} selected={draft.calories} label="Калории за порцию"
+                onSelect={(calories) => { setDraft({ ...draft, calories }); setCal({ min: "", max: "" }); }} />
             </View>
-            <View style={[styles.block, { backgroundColor: colors.surfaceRaised }]}>
-              <Text style={[styles.label, { color: colors.textPrimary }]}>Время приготовления</Text>
-              <ChoiceGrid options={times} selected={draft.time} label="Время рецепта" onSelect={(time) => setDraft({ ...draft, time })} />
+            <View style={[styles.block, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
+              <View style={styles.blockHead}>
+                <Text style={[styles.label, styles.grow, { color: colors.textPrimary }]}>Время приготовления</Text>
+                <NumberBox label="Время, от минут" placeholder="от" value={time.min} onChange={(min) => { setTime({ ...time, min }); setDraft({ ...draft, time: "ANY" }); }} />
+                <Text style={[styles.dash, { color: colors.textMuted }]}>—</Text>
+                <NumberBox label="Время, до минут" placeholder="до" value={time.max} onChange={(max) => { setTime({ ...time, max }); setDraft({ ...draft, time: "ANY" }); }} />
+                <Text style={[styles.unit, { color: colors.textMuted }]}>мин</Text>
+              </View>
+              <ChoiceGrid columns={3} options={times} selected={draft.time} label="Время рецепта"
+                onSelect={(next) => { setDraft({ ...draft, time: next }); setTime({ min: "", max: "" }); }} />
+              <View style={styles.blockHead}>
+                <Text style={[styles.label, styles.grow, { color: colors.textSecondary }]}>Подготовка не дольше</Text>
+                <NumberBox label="Подготовка не дольше, минут" placeholder="до" value={prep} onChange={setPrep} />
+                <Text style={[styles.unit, { color: colors.textMuted }]}>мин</Text>
+              </View>
             </View>
-            <View style={[styles.block, { backgroundColor: colors.surfaceRaised }]}>
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Доли БЖУ, %</Text>
-            {(["protein", "fat", "carbs"] as const).map((key) => <View key={key} style={styles.macro}>
-              <View style={styles.macroHeader}><Text style={[styles.macroLabel, { color: colors.textPrimary }]}>{key === "protein" ? "Белки" : key === "fat" ? "Жиры" : "Углеводы"}</Text>
-              {(["min", "max"] as const).map((bound) => <View key={bound} style={styles.cell}><TextField compact label={bound === "min" ? "От, %" : "До, %"} keyboardType="decimal-pad" value={ranges[key][bound]} onChangeText={(text) => setRanges((current) => ({ ...current, [key]: { ...current[key], [bound]: text } }))} /></View>)}</View>
-              <PercentRangeSlider label={key === "protein" ? "Белки" : key === "fat" ? "Жиры" : "Углеводы"}
-                min={Math.max(0, Math.min(100, Number(ranges[key].min.replace(",", ".")) || 0))} max={Math.max(0, Math.min(100, Number(ranges[key].max.replace(",", ".")) || 0))}
-                onChange={(min, max) => setRanges((current) => ({ ...current, [key]: { min: String(min), max: String(max) } }))} />
-            </View>)}
+            <View style={[styles.block, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
+              <Text style={[styles.label, { color: colors.textPrimary }]}>Доли БЖУ, %</Text>
+              {(["protein", "fat", "carbs"] as const).map((key) => <View key={key} style={styles.macro}>
+                <View style={styles.blockHead}>
+                  <Text style={[styles.macroLabel, { color: colors.textPrimary }]}>{macroNames[key]}</Text>
+                  <View style={styles.grow}><NumberBox decimal label={`${macroNames[key]}, от %`} value={ranges[key].min} onChange={(min) => setRanges((current) => ({ ...current, [key]: { ...current[key], min } }))} /></View>
+                  <Text style={[styles.dash, { color: colors.textMuted }]}>—</Text>
+                  <View style={styles.grow}><NumberBox decimal label={`${macroNames[key]}, до %`} value={ranges[key].max} onChange={(max) => setRanges((current) => ({ ...current, [key]: { ...current[key], max } }))} /></View>
+                  <Text style={[styles.unit, { color: colors.textMuted }]}>%</Text>
+                </View>
+                <PercentRangeSlider label={macroNames[key]}
+                  min={Math.max(0, Math.min(100, Number(ranges[key].min.replace(",", ".")) || 0))} max={Math.max(0, Math.min(100, Number(ranges[key].max.replace(",", ".")) || 0))}
+                  onChange={(min, max) => setRanges((current) => ({ ...current, [key]: { min: String(min), max: String(max) } }))} />
+              </View>)}
             </View>
             {error ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{error}</Text> : null}
           </>}
@@ -83,15 +143,17 @@ export function RecipeBrowseControls({ filters, sort, onFilters, onSort }: Reado
   </>;
 }
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", gap: 6 }, cell: { flex: 1, minWidth: 0 },
-  body: { gap: 10 }, scroll: { flexGrow: 0, flexShrink: 1 },
-  backdrop: { flex: 1, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
+  row: { flexDirection: "row", gap: 5 }, cell: { flex: 1, minWidth: 0 }, grow: { flex: 1, minWidth: 0 },
+  body: { gap: 7 }, scroll: { flexGrow: 0, flexShrink: 1 },
+  backdrop: { flex: 1, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
   scrim: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, backgroundColor: scrim },
-  sheet: { width: "100%", maxWidth: 420, maxHeight: "100%", padding: 12, borderWidth: 1, borderRadius: 20, gap: 8 },
+  sheet: { width: "100%", maxWidth: 420, maxHeight: "100%", padding: 12, borderWidth: 1, borderRadius: 26, gap: 6 },
   header: { flexDirection: "row", alignItems: "center", gap: 8 },
-  title: { flex: 1, fontFamily: fonts.bold, fontSize: 16, lineHeight: 21 },
-  label: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
-  block: { borderRadius: 14, padding: 10, gap: 7 }, macro: { gap: 2 },
-  macroHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
-  macroLabel: { width: 66, fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
+  title: { flex: 1, fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
+  label: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
+  block: { borderRadius: 18, borderWidth: 1, padding: 9, gap: 6 }, macro: { gap: 0 },
+  blockHead: { flexDirection: "row", alignItems: "center", gap: 6 },
+  macroLabel: { width: 62, fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
+  box: { width: 56, height: 32, borderWidth: 1, borderRadius: 12, paddingVertical: 0, paddingHorizontal: 6, textAlign: "center", fontFamily: fonts.semibold, fontSize: 13 },
+  dash: { fontSize: 12 }, unit: { width: 28, fontFamily: fonts.semibold, fontSize: 11 },
 });

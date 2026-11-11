@@ -4,7 +4,7 @@ import type { FoodProduct } from "../apps/mobile/src/features/nutrition/domain/F
 import { snapshotOfFood } from "../apps/mobile/src/features/nutrition/domain/FoodSnapshot.ts";
 import { planBatch } from "../apps/mobile/src/features/nutrition/domain/SelectionRules.ts";
 import { pickSnapshot, usageSuggestions } from "../apps/mobile/src/features/nutrition/domain/CatalogPick.ts";
-import { browseRecipes, EMPTY_RECIPE_FILTERS } from "../apps/mobile/src/features/nutrition/domain/RecipeBrowse.ts";
+import { browseRecipes, EMPTY_RECIPE_FILTERS, hasRecipeFilters, parseNumberRange } from "../apps/mobile/src/features/nutrition/domain/RecipeBrowse.ts";
 import type { DiaryEntry } from "../apps/mobile/src/features/nutrition/domain/DiaryModel.ts";
 import type { Recipe } from "../apps/mobile/src/features/nutrition/domain/RecipeModel.ts";
 import { savedSnapshot } from "../apps/mobile/src/features/nutrition/domain/SavedMeal.ts";
@@ -82,4 +82,26 @@ test("NUT-FS-24: один приём не требует подтвержден�
   const duplicated = planBatch("2026-10-20", [picks[0]!, picks[0]!], ["LUNCH"]);
   assert.equal(duplicated.items, 1, "одна и та же позиция дважды в выборе — одна запись");
   assert.equal(planBatch("2026-10-20", picks, []).total, 0, "приёмов нет — записывать некуда");
+});
+
+// Ожидаемое — из условий владельца (11.11): свои диапазоны калорий и времени, «подготовка не дольше»; границы включительно.
+// Калории порции: c = 250, b = 100, a = 0, z — неизвестны; время: c = 30, b = 15, a = 0, z — неизвестно.
+test("рецепты: свой диапазон калорий и времени, подготовка не дольше, границы включительно", () => {
+  const rows = [recipe("c", 2500, 30, 21), recipe("b", 1000, 15, 20), recipe("a", 0, 0, 19), recipe("z", null, null, 18)];
+  const ids = (filters: Parameters<typeof browseRecipes>[1]) => browseRecipes(rows, filters, "DEFAULT").map((item) => item.id);
+  assert.deepEqual(ids({ ...EMPTY_RECIPE_FILTERS, caloriesRange: { min: 100, max: 250 } }), ["b", "c"], "100 и 250 входят");
+  assert.deepEqual(ids({ ...EMPTY_RECIPE_FILTERS, caloriesRange: { min: null, max: 99 } }), ["a"], "неизвестные калории не проходят активный фильтр");
+  assert.deepEqual(ids({ ...EMPTY_RECIPE_FILTERS, caloriesRange: { min: 251, max: null } }), []);
+  assert.deepEqual(ids({ ...EMPTY_RECIPE_FILTERS, timeRange: { min: 15, max: 30 } }), ["b", "c"], "15 и 30 минут входят");
+  assert.deepEqual(ids({ ...EMPTY_RECIPE_FILTERS, prepMax: 15 }), ["a", "b"], "подготовка не дольше 15; неизвестное время исключено");
+  assert.deepEqual(ids({ ...EMPTY_RECIPE_FILTERS, caloriesRange: { min: 100, max: null }, timeRange: { min: null, max: 15 } }), ["b"], "условия складываются");
+  assert.equal(hasRecipeFilters(EMPTY_RECIPE_FILTERS), false);
+  assert.equal(hasRecipeFilters({ ...EMPTY_RECIPE_FILTERS, prepMax: 10 }), true);
+  assert.equal(hasRecipeFilters({ ...EMPTY_RECIPE_FILTERS, caloriesRange: { min: 100, max: null } }), true);
+});
+test("рецепты: разбор полей «от» и «до» — пусто, целое, неверное", () => {
+  assert.deepEqual(parseNumberRange("", "", 5000), { min: null, max: null });
+  assert.deepEqual(parseNumberRange(" 100 ", "250", 5000), { min: 100, max: 250 });
+  assert.deepEqual(parseNumberRange("0", "0", 5000), { min: 0, max: 0 });
+  for (const [min, max] of [["250", "100"], ["12,5", ""], ["-1", ""], ["abc", ""], ["", "5001"]]) assert.equal(parseNumberRange(min!, max!, 5000), "INVALID", `${min}…${max}`);
 });
