@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useGroupVisibilityPreference } from "./GroupVisibilityPreference.tsx";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Check, ChevronLeft, ChevronRight, Plus } from "lucide-react-native";
-import { AppButton, AppIconButton, ConfirmDialog, InlineNotice, LoadingState, TextField } from "../../../shared/ui/components/public.ts";
+import { AppButton, AppIconButton, BottomSheet, ConfirmDialog, InlineNotice, LoadingState, TextField } from "../../../shared/ui/components/public.ts";
 import { pickDate } from "../../../shared/ui/components/pickDate.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
-import { shadow, scrim } from "../../../shared/ui/theme/style.ts";
+import { shadow } from "../../../shared/ui/theme/style.ts";
 import { MEASUREMENT_GROUPS, MEASUREMENT_TYPES, type ClientMeasurements, type Measurement, type MeasurementGroup, type MeasurementOperation, type MeasurementType } from "../domain/MeasurementModel.ts";
 import type { MeasurementRepositoryPort } from "../domain/MeasurementRepositoryPort.ts";
 import { dailyPoints, formatDate, localDateOf, measurementTypeInfo, parseValueX10 } from "../domain/MeasurementRules.ts";
+import { sideLabels, sideWords } from "../domain/SideLabels.ts";
 
 /** Окружности: всё, кроме массы и % жира (они живут в расчёте и в журнале замеров). */
 const CIRCUMFERENCES: readonly MeasurementType[] = MEASUREMENT_TYPES.filter((type) => type !== "WEIGHT" && type !== "BODY_FAT");
@@ -25,8 +26,6 @@ const MONTHS_GENITIVE = ["января", "февраля", "марта", "апр
 /** «10 ноября 2026» — подпись дня на «Главной» (макет). */
 const longDate = (localDate: string) => `${Number(localDate.slice(8, 10))} ${MONTHS_GENITIVE[Number(localDate.slice(5, 7)) - 1] ?? ""} ${localDate.slice(0, 4)}`;
 const fullDate = (localDate: string) => `${localDate.slice(8, 10)}.${localDate.slice(5, 7)}.${localDate.slice(0, 4)}`;
-const sideLabels = (group: MeasurementGroup): readonly [string, string] => group.id === "THIGH"
-  ? ["Левое", "Правое"] : group.id === "CALF" ? ["Левая", "Правая"] : ["Левый", "Правый"];
 const valueText = (valueX10: number) => (valueX10 % 10 === 0 ? String(valueX10 / 10) : String(valueX10 / 10).replace(".", ","));
 
 function errorText(error: unknown): string {
@@ -61,7 +60,7 @@ function Tile({ group, cells, compact, dayMode = false }: Readonly<{ group: Meas
   const legacy = group.legacy === undefined ? null : cells[group.legacy];
   const hasLegacy = legacy !== null && legacy.kind !== "EMPTY";
   const speech = sided
-    ? `${group.label}: левый ${cellSpeech(cells[group.left as MeasurementType])}, правый ${cellSpeech(cells[group.right as MeasurementType])}${hasLegacy ? `, без указания стороны ${cellSpeech(legacy)}` : ""}`
+    ? `${group.label}: ${sideWords(group.id)[0]} ${cellSpeech(cells[group.left as MeasurementType])}, ${sideWords(group.id)[1]} ${cellSpeech(cells[group.right as MeasurementType])}${hasLegacy ? `, без указания стороны ${cellSpeech(legacy)}` : ""}`
     : `${group.label}: ${cellSpeech(cells[group.single as MeasurementType])}`;
   const muted = (cell: Cell) => cell.kind === "VALUE" ? colors.textPrimary : colors.textMuted;
   return (
@@ -297,38 +296,34 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal, compact 
         </> : null}
       </>}
 
-      <Modal visible={editor !== null} transparent animationType="fade" onRequestClose={() => { if (!busy) setEditor(null); }}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.backdrop}>
-          <View style={[styles.dialog, { backgroundColor: colors.surface }]}>
-            <View style={styles.head}>
-              <Text style={[styles.dialogTitle, styles.grow, { color: colors.textPrimary }]}>{editor?.editingDate === null ? "Новые замеры" : "Изменить замеры"}</Text>
-              <AppButton compact size="small" variant="secondary" label={editor === null ? "Дата" : shortDate(editor.date)} accessibilityLabel={editor === null ? "Дата замеров" : `Дата замеров: ${formatDate(editor.date)}`} disabled={busy}
-                onPress={() => { void pickDate({ value: editor?.date ?? localDateOf(new Date()), title: "Дата замеров" }).then((picked) => { if (picked !== null && editor !== null) setEditor({ ...editor, date: picked }); }); }} />
-            </View>
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.dialogBody}>
-              {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
-              <Text style={[styles.editorHint, { color: colors.textSecondary }]}>Все обхваты — в см. Пустое поле при исправлении удаляет значение. Левую и правую сторону можно вносить отдельно.</Text>
-              <View style={styles.editorGrid}>
-                {editorGroups.filter((group) => group.single !== undefined).map((group) => <View key={group.id} style={styles.singleEditor}>
-                  {editorField(group.single as MeasurementType, group.label)}
-                </View>)}
-              </View>
-              <View style={styles.editorGrid}>
-                {editorGroups.filter((group) => group.left !== undefined && group.right !== undefined).map((group) => <View key={group.id}
-                  style={[styles.pairedEditor, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
-                  <Text style={[styles.groupLabel, { color: colors.textPrimary }]}>{group.label}</Text>
-                  <View style={styles.tiles}>{editorField(group.left as MeasurementType, sideLabels(group)[0])}{editorField(group.right as MeasurementType, sideLabels(group)[1])}</View>
-                  {group.legacy !== undefined && editor !== null && editor.values[group.legacy] !== "" ? editorField(group.legacy, "Без стороны") : null}
-                </View>)}
-              </View>
-            </ScrollView>
-            <View style={styles.tiles}>
-              <View style={styles.grow}><AppButton compact size="small" variant="secondary" label="Отмена" disabled={busy} onPress={() => { setEditor(null); setError(null); }} /></View>
-              <View style={styles.grow}><AppButton compact size="small" label="Сохранить" busy={busy} onPress={() => { void save(); }} /></View>
-            </View>
+      {/* Окно внесения — нижний лист общего вида (UIX-FIT-10, M4): закрывается жестом за ручку; одиночные обхваты сеткой, парные — карточками. */}
+      <BottomSheet visible={editor !== null} title={editor?.editingDate === null ? "Новые замеры" : "Изменить замеры"} onClose={() => { if (!busy) setEditor(null); }}
+        footer={<View style={styles.tiles}>
+          <View style={styles.grow}><AppButton variant="secondary" label="Отмена" disabled={busy} onPress={() => { setEditor(null); setError(null); }} /></View>
+          <View style={styles.grow}><AppButton label="Сохранить" busy={busy} onPress={() => { void save(); }} /></View>
+        </View>}>
+        <View style={styles.editorDateRow}>
+          <Text style={[styles.editorHint, styles.grow, { color: colors.textSecondary }]}>Все обхваты — в см. Пустое поле при исправлении удаляет значение. Левую и правую сторону можно вносить отдельно.</Text>
+          <AppButton compact size="small" variant="secondary" label={editor === null ? "Дата" : shortDate(editor.date)} accessibilityLabel={editor === null ? "Дата замеров" : `Дата замеров: ${formatDate(editor.date)}`} disabled={busy}
+            onPress={() => { void pickDate({ value: editor?.date ?? localDateOf(new Date()), title: "Дата замеров" }).then((picked) => { if (picked !== null && editor !== null) setEditor({ ...editor, date: picked }); }); }} />
+        </View>
+        {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
+        <View style={[styles.editorCard, { backgroundColor: colors.surface }]}>
+          <View style={styles.editorGrid}>
+            {editorGroups.filter((group) => group.single !== undefined).map((group) => <View key={group.id} style={styles.singleEditor}>
+              {editorField(group.single as MeasurementType, group.label)}
+            </View>)}
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        </View>
+        <View style={styles.editorGrid}>
+          {editorGroups.filter((group) => group.left !== undefined && group.right !== undefined).map((group) => <View key={group.id}
+            style={[styles.pairedEditor, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.groupLabel, { color: colors.textPrimary }]}>{group.label}</Text>
+            <View style={styles.tiles}>{editorField(group.left as MeasurementType, sideLabels(group.id)[0])}{editorField(group.right as MeasurementType, sideLabels(group.id)[1])}</View>
+            {group.legacy !== undefined && editor !== null && editor.values[group.legacy] !== "" ? editorField(group.legacy, "Без стороны") : null}
+          </View>)}
+        </View>
+      </BottomSheet>
       <ConfirmDialog visible={confirmDelete} destructive title="Удалить замеры за день?" confirmLabel="Удалить" onCancel={() => setConfirmDelete(false)} onConfirm={() => { void removeDate(); }}
         description={current === null ? "" : `Будут удалены все окружности за ${fullDate(current)}. Масса тела и процент жира не затрагиваются.`} />
     </View>
@@ -378,14 +373,12 @@ const styles = StyleSheet.create({
   settingChip: { width: "47%", flexGrow: 1, minHeight: 38, borderRadius: 19, borderWidth: 1, paddingHorizontal: 8, flexDirection: "row", alignItems: "center" },
   checkSpace: { width: 16 },
   settingLabel: { flex: 1, fontFamily: fonts.bold, fontSize: 12, lineHeight: 16, textAlign: "center" },
-  backdrop: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: scrim },
-  dialog: { width: "100%", maxWidth: 520, alignSelf: "center", borderRadius: 20, padding: 12, gap: 8, maxHeight: "92%" },
-  dialogTitle: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 19 },
-  dialogBody: { gap: 10, paddingBottom: 4 },
-  editorHint: { fontFamily: fonts.regular, fontSize: 10, lineHeight: 14 },
+  editorDateRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  editorHint: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 15 },
+  editorCard: { borderRadius: 22, padding: 10 },
   editorGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   singleEditor: { width: "30%", flexGrow: 1 },
-  pairedEditor: { width: "47%", flexGrow: 1, borderWidth: 1, borderRadius: 12, padding: 6, gap: 4 },
+  pairedEditor: { width: "47%", flexGrow: 1, borderRadius: 18, padding: 8, gap: 4 },
   groupLabel: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 15 },
   hint: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
 });
