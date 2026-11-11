@@ -39,7 +39,7 @@ export function parseNumberRange(minText: string, maxText: string, limit: number
   const one = (text: string): number | null | "INVALID" => {
     const trimmed = text.trim();
     if (trimmed === "") return null;
-    if (!/^d{1,6}$/u.test(trimmed)) return "INVALID";
+    if (!/^\d{1,6}$/u.test(trimmed)) return "INVALID";
     const value = Number(trimmed);
     return value > limit ? "INVALID" : value;
   };
