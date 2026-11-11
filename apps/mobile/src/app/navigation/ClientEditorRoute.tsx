@@ -8,7 +8,7 @@ import { QuestionnaireForm, useAnswersForm, type AnswerValue,
   type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
 import { latestPoint, localDateOf, parseValueX10, type MeasurementInput, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import type { ClientCardWithAnswersPort } from "../../workflows/saveClientCard.ts";
-import { HealthConnectSection, type HealthConnectPort, type HealthStorePort, type HealthSyncKind } from "../../features/health/public.ts";
+import { HealthConnectSection, type HealthConnectPort, type HealthStorePort, type HealthSyncResult } from "../../features/health/public.ts";
 import { AppButton, ConfirmDialog, LoadingState } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../shared/ui/theme/typography.ts";
@@ -37,7 +37,7 @@ export function ClientEditorRoute({ clientId, repository, questionnaire, clientC
   /** Вес клиента — единый факт Measurements: показывается и записывается из карточки. */
   measurements: MeasurementRepositoryPort;
   /** Health Connect: раздел карточки (только у сохранённого клиента). */
-  health: Readonly<{ store: HealthStorePort; platform: HealthConnectPort; sync: () => Promise<Readonly<{ kind: HealthSyncKind }>> }>;
+  health: Readonly<{ store: HealthStorePort; platform: HealthConnectPort; sync: () => Promise<HealthSyncResult> }>;
   onClose: () => void;
 }>) {
   const answers = useAnswersForm(questionnaire, clientId ?? null);

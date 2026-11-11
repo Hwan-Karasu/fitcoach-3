@@ -1,6 +1,6 @@
 import type { MeasurementRepositoryPort } from "../features/measurements/public.ts";
 import type { HealthAvailability, HealthDayValue, HealthMetric } from "../features/health/public.ts";
-import type { HealthConnectPort, HealthStorePort } from "../features/health/public.ts";
+import type { HealthConnectPort, HealthDayCounts, HealthStorePort } from "../features/health/public.ts";
 import type { NutritionCalcPort } from "../features/nutrition/public.ts";
 
 /** Предел шагов суточной активности владельца Nutrition (CALC_STEPS_INVALID: 1…100 000): больше значение хранится в Health Connect-данных, но в шаги дня не подставляется. */
@@ -9,7 +9,8 @@ const FIRST_SYNC_DAYS = 90;
 const RESYNC_DAYS = 7;
 
 export type HealthSyncOutcome =
-  | Readonly<{ kind: "SYNCED"; days: number; stepsDays: number; importedWeight: number; importedFat: number }>
+  /** `rawDays` — значений от системы до проверки; `byMetric` — дней по каждому виду после проверки и слияния повторов (для текста на экране). */
+  | Readonly<{ kind: "SYNCED"; days: number; stepsDays: number; importedWeight: number; importedFat: number; rawDays: number; byMetric: HealthDayCounts }>
   | Readonly<{ kind: "NOT_LINKED" }>
   | Readonly<{ kind: "UNAVAILABLE"; availability: Exclude<HealthAvailability, "AVAILABLE"> }>
   | Readonly<{ kind: "NO_PERMISSION" }>;
@@ -40,7 +41,8 @@ export async function syncHealthConnect(ports: HealthSyncPorts, today: string, n
   if (granted.length === 0) return { kind: "NO_PERMISSION" };
 
   const range = { from: addDays(today, link.lastSyncAt === null ? -(FIRST_SYNC_DAYS - 1) : -(RESYNC_DAYS - 1)), to: today };
-  const values = (await ports.platform.readDaily(granted, range)).filter((entry) => entry.localDate >= range.from && entry.localDate <= range.to
+  const raw = await ports.platform.readDaily(granted, range);
+  const values = raw.filter((entry) => entry.localDate >= range.from && entry.localDate <= range.to
     && granted.includes(entry.metric) && ports.isValidHealthValue(entry.metric, entry.value));
   // За время системного запроса карточка могла быть отключена или привязана заново; старый ответ не имеет права писать факты.
   const current = await ports.health.getLink();
@@ -86,5 +88,7 @@ export async function syncHealthConnect(ports: HealthSyncPorts, today: string, n
   const importedFat = await importBody("BODY_FAT_X10", "BODY_FAT");
 
   await ports.health.saveSync(link.clientId, read, granted, now);
-  return { kind: "SYNCED", days: read.length, stepsDays, importedWeight, importedFat };
+  const byMetric: Partial<Record<HealthMetric, number>> = {};
+  for (const entry of read) byMetric[entry.metric] = (byMetric[entry.metric] ?? 0) + 1;
+  return { kind: "SYNCED", days: read.length, stepsDays, importedWeight, importedFat, rawDays: raw.length, byMetric };
 }

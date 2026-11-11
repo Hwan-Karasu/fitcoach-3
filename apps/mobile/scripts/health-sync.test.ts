@@ -13,6 +13,7 @@ import { devNutritionClientDeletionParticipant } from "../src/features/nutrition
 import { devNutritionTargetsClientDeletionParticipant } from "../src/features/nutrition/data/DevNutritionTargetsRepository.ts";
 import { SharedSqliteDatabase } from "../src/shared/db/SharedSqliteDatabase.ts";
 import { syncHealthConnect } from "../src/workflows/syncHealthConnect.ts";
+import { syncedText } from "../src/features/health/domain/HealthSyncText.ts";
 import { createHealthOperationQueue } from "../src/features/health/domain/HealthOperationQueue.ts";
 import { nodeSqlitePort } from "../../../scripts/support/node-sqlite-port.ts";
 
@@ -48,6 +49,13 @@ async function stores(participants = true) {
   return { db, clients, measurements, calc, health, close };
 }
 const value = (localDate: string, metric: HealthMetric, v: number): HealthDayValue => ({ localDate, metric, value: v });
+
+test("Health: текст итога обновления различает «данные есть», «значения отброшены» и «система ничего не вернула»", () => {
+  assert.equal(syncedText({ rawDays: 9, byMetric: { STEPS: 5, SLEEP_MIN: 3 } }), "Данные обновлены: шаги — 5 дн., сон — 3 дн.");
+  assert.equal(syncedText({ rawDays: 4, byMetric: {} }), "Health Connect вернул данные, но ни одно значение не прошло проверку допустимых границ.");
+  assert.equal(syncedText({ rawDays: 0, byMetric: {} }),
+    "Health Connect не вернул данных за период. Откройте приложение Health Connect → «Данные и доступ» и проверьте, что часы или другое приложение записывают в него шаги и сон.");
+});
 
 test("AUDIT-ALL-1: ручной вес между чтением журнала и импортом остаётся единственным, HC не создаёт неоднозначный день", async () => {
   const { clients, measurements, calc, health, close } = await stores();
@@ -237,7 +245,8 @@ test("Health: синхронизация — шаги дня подставля�
     platform.data = [value("2026-11-09", "STEPS", 8200), value("2026-11-10", "STEPS", 3100), value("2026-11-09", "WEIGHT_X10", 799), value("2026-11-10", "WEIGHT_X10", 798),
       value("2026-11-10", "BODY_FAT_X10", 184), value("2026-11-10", "SLEEP_MIN", 430), value("2026-11-09", "TOTAL_KCAL", 2400), value("2026-11-09", "STEPS", 250_000)];
     const outcome = await syncHealthConnect({ health, platform, calc, measurements, isValidHealthValue }, TODAY, NOW);
-    assert.deepEqual(outcome, { kind: "SYNCED", days: 7, stepsDays: 2, importedWeight: 1, importedFat: 1 }, "250 000 шагов — вне допустимых границ, отброшено целиком");
+    assert.deepEqual(outcome, { kind: "SYNCED", days: 7, stepsDays: 2, importedWeight: 1, importedFat: 1, rawDays: 8,
+      byMetric: { STEPS: 2, SLEEP_MIN: 1, TOTAL_KCAL: 1, WEIGHT_X10: 2, BODY_FAT_X10: 1 } }, "250 000 шагов — вне допустимых границ, отброшено целиком");
     assert.deepEqual((await calc.listSteps(me.id, "2026-11-01", TODAY)).map((day) => [day.localDate, day.steps]), [["2026-11-09", 8200], ["2026-11-10", 3100]]);
     const journal = await measurements.listForClient(me.id);
     const weights = dailyPoints(journal.measurements, journal.primaries, "WEIGHT").map((point) => point.kind === "VALUE" ? [point.localDate, point.measurement.valueX10] : [point.localDate, null]);
@@ -252,7 +261,8 @@ test("Health: синхронизация — шаги дня подставля�
 
     // Повтор: ничего не дублируется; повторное чтение — 7 дней.
     const again = await syncHealthConnect({ health, platform, calc, measurements, isValidHealthValue }, TODAY, NOW);
-    assert.deepEqual(again, { kind: "SYNCED", days: 7, stepsDays: 0, importedWeight: 0, importedFat: 0 });
+    assert.deepEqual(again, { kind: "SYNCED", days: 7, stepsDays: 0, importedWeight: 0, importedFat: 0, rawDays: 8,
+      byMetric: { STEPS: 2, SLEEP_MIN: 1, TOTAL_KCAL: 1, WEIGHT_X10: 2, BODY_FAT_X10: 1 } });
     assert.equal(platform.reads[1]?.from, "2026-11-04");
     assert.equal((await measurements.listForClient(me.id)).measurements.length, 3);
 

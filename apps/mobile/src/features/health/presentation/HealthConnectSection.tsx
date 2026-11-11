@@ -6,10 +6,13 @@ import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
 import { HEALTH_METRICS, HEALTH_METRIC_LABELS, type HealthAvailability, type HealthLink, type HealthMetric } from "../domain/HealthModel.ts";
 import type { HealthConnectPort, HealthStorePort } from "../domain/HealthPorts.ts";
+import { syncedText, type HealthDayCounts } from "../domain/HealthSyncText.ts";
 import { useHealthLink } from "./useHealth.ts";
 
 /** Итог обновления, как его отдаёт workflow: экрану нужен только вид. */
 export type HealthSyncKind = "SYNCED" | "NOT_LINKED" | "UNAVAILABLE" | "NO_PERMISSION";
+/** Итог с подробностями чтения: по ним экран показывает, что именно вернул Health Connect (а не только «Данные обновлены»). */
+export type HealthSyncResult = Readonly<{ kind: HealthSyncKind; rawDays?: number; byMetric?: HealthDayCounts }>;
 
 const availabilityText: Readonly<Record<Exclude<HealthAvailability, "AVAILABLE">, string>> = {
   NOT_INSTALLED: "Health Connect не установлен. Установите приложение «Health Connect» из Google Play и вернитесь сюда.",
@@ -27,7 +30,7 @@ const stampText = (iso: string): string => {
  * «Отключить». Только чтение из системы; отключение снимает привязку и доступ, записанные данные остаются. Экран не пишет данные дня сам — это делает `sync`.
  */
 export function HealthConnectSection({ clientId, store, platform, sync }: Readonly<{ clientId: string; store: HealthStorePort; platform: HealthConnectPort;
-  sync: () => Promise<Readonly<{ kind: HealthSyncKind }>> }>) {
+  sync: () => Promise<HealthSyncResult> }>) {
   const colors = usePrototypeTheme().palette.tokens;
   const { link, loaded } = useHealthLink(store);
   const [availability, setAvailability] = useState<HealthAvailability | null>(null);
@@ -49,11 +52,14 @@ export function HealthConnectSection({ clientId, store, platform, sync }: Readon
     if (busy) return;
     setBusy(true); setMessage(null); setErrorText(null);
     try { await work(); } catch (failure) {
-      setErrorText(failure instanceof Error && failure.message === "HEALTH_ALREADY_LINKED" ? "Health Connect уже подключён к другой карточке." : "Не удалось завершить действие. Проверьте подключение и повторите обновление.");
+      // Код ошибки системы показывается коротко: без него сбой чтения (а не «нет данных») нельзя отличить на телефоне.
+      const code = failure instanceof Error ? failure.message.replace(/\s+/gu, " ").trim().slice(0, 120) : "";
+      setErrorText(failure instanceof Error && failure.message === "HEALTH_ALREADY_LINKED" ? "Health Connect уже подключён к другой карточке."
+        : `Не удалось завершить действие. Проверьте подключение и повторите обновление.${code === "" ? "" : ` Код: ${code}`}`);
     } finally { setBusy(false); }
     await refreshState().catch(() => undefined);
   };
-  const outcomeText = (kind: HealthSyncKind): string => kind === "SYNCED" ? "Данные обновлены."
+  const outcomeText = ({ kind, ...details }: HealthSyncResult): string => kind === "SYNCED" ? syncedText(details)
     : kind === "NO_PERMISSION" ? "Нет доступа к данным: разрешите чтение в окне Health Connect."
       : kind === "UNAVAILABLE" ? "Health Connect недоступен на этом устройстве." : "Health Connect не подключён.";
 
@@ -63,11 +69,11 @@ export function HealthConnectSection({ clientId, store, platform, sync }: Readon
     if (state !== "AVAILABLE") { setMessage(availabilityText[state]); return; }
     await store.link(clientId);
     await platform.requestPermissions();
-    setMessage(outcomeText((await sync()).kind));
+    setMessage(outcomeText(await sync()));
   });
   const refresh = () => run(async () => {
     if (granted.length < HEALTH_METRICS.length) await platform.requestPermissions();
-    setMessage(outcomeText((await sync()).kind));
+    setMessage(outcomeText(await sync()));
   });
   const disconnect = () => run(async () => {
     setDisconnectOpen(false);
