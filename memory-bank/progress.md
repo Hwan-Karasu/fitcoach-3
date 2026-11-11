@@ -3,6 +3,7 @@
 Прежняя версия — `archive/progress-before-bkp-audit-2026-11-11.md`.
 
 ## Сделано
+- **KBD-GAP-1, UIX-FIT-13 (11 ноября):** пустая полоса под нижней панелью — свой `KeyboardInsetView` вместо KAV keyboard-controller (причина и проверки — `docs/PROJECT_STATUS.md`); фильтры рецептов без полей «от — до». На телефоне не проверено.
 - **ARCH-HARDEN-1 (11 ноября):** 4 среза 1a–1d, см. `activeContext.md` и отчёт; стенд `apps/mobile/scripts/boot-bench.ts` (артефакты `artifacts/arch-hardening`). Срез 1e: завершённое восстановление при запуске определяется чтением, без обслуживания базы. Техдолг из отчёта: 10–12 SQL на запись подхода (R2); `previousOf` и `listActiveWorkouts` без подходящего индекса (R3, R4); учёт и анкета по одному клиенту в `rosterOverview.ts:151` (R5).
 - **UIX-FIT-11 (11 ноября):** 11a запуск/сводка/KAV, 11b таймер без вопроса + настройка, 11c карусель дней, 11d чип/подсветка/фильтры. typecheck, lint, arch, secrets, source PASS; test:foundation 1291/1291. На телефоне не проверено. Техдолг: мемоизация карточек приёмов `NutritionDiaryScreen.tsx` не сделана (нужен замер); `compactTimerCount` (`restPanelRules.ts:35`) не учитывает более широкий завершённый чип при нескольких таймерах.
 - **UIX-FIT-10 (11 ноября):** 16 замечаний владельца к build52 — реализованы, кроме п. 4 (вес до сотых), п. 8 (свой календарь), п. 16 (замер). Новые чистые правила с тестами: `VisibleSetState`, `restPanelSettleTarget`, `sheetSettle`, `daySwipeOf/swipedDay`, `SideLabels`, `parseNumberRange`, `diaryDateChip`, `HealthSyncText`. На телефоне не проверено.

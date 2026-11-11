@@ -4,7 +4,8 @@ import { DefaultTheme, NavigationContainer, StackActions, createNavigationContai
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
-import { KeyboardAvoidingView, KeyboardProvider } from "react-native-keyboard-controller";
+import { KeyboardProvider } from "react-native-keyboard-controller";
+import { KeyboardInsetView } from "../../shared/ui/components/public.ts";
 import { ClientExerciseScreen, TrainingSettingsScreen, runWithoutWorkoutExitPrompt, type TrainingPlansRepositoryPort } from "../../features/training/public.ts";
 import { calendarEventTarget, resolveTimerTarget, timerTarget, type NotificationTarget } from "./notificationTarget.ts";
 import { exerciseFocusAction } from "./exerciseFocusAction.ts";import { NotificationOpenHost } from "./NotificationOpenHost.tsx";
@@ -158,9 +159,8 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
   return (
     <ClientsListNavigationProvider onOpen={openClientsList}>
     <NavigationContainer ref={navigationRef} theme={navigationTheme} onReady={onReady} initialState={initialBackup ? { index: 1, routes: [{ name: "Root" }, { name: "Backup" }] } : undefined}>
-      {/* Отступ под клавиатуру ведёт сам KAV. Попытка выключать его по событиям JS (`enabled`) откатана: при `enabled=false` анимированный стиль
-          перестаёт возвращать `paddingBottom`, и сбросится ли прежнее значение, по коду не доказано — можно получить тот же «залипший» отступ. */}
-      <KeyboardAvoidingView automaticOffset behavior="padding" style={{ flex: 1, backgroundColor: colors.canvas }}>
+      {/* Отступ под клавиатуру ведёт свой контейнер: библиотечный KAV «залипал», когда клавиатура исчезала без анимации (KBD-GAP-1). */}
+      <KeyboardInsetView style={{ flex: 1, backgroundColor: colors.canvas }}>
       <Stack.Navigator
         screenOptions={{
           // Единая шапка-карточка одной высоты (UI-OWN-035).
@@ -302,7 +302,7 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
         </Stack.Screen> : null}
       </Stack.Navigator>
       <UnifiedBottomPanel services={services} onOpen={(timer) => { void openTimer(services.trainingPlans, timer); }} />
-      </KeyboardAvoidingView>
+      </KeyboardInsetView>
     </NavigationContainer>
     </ClientsListNavigationProvider>
   );

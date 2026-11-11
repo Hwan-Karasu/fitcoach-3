@@ -45,3 +45,4 @@ export { ChoiceGrid } from "./ChoiceGrid.tsx";
 export { DateField, dateLabel } from "./DateField.tsx";
 export { useFocusGatedVersion } from "./useFocusGatedVersion.ts";
 export { useFlushOnBackground } from "./useFlushOnBackground.ts";
+export { KeyboardInsetView } from "./KeyboardInsetView.tsx";

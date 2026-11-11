@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import { KeyboardInsetView } from "./KeyboardInsetView.tsx";
 import { View } from "react-native";
 import { useBottomPanelInFlow } from "./BottomPanel.tsx";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
@@ -9,7 +9,7 @@ export function TrainingEditorLayout({ children }: Readonly<{ children: ReactNod
   const { palette } = usePrototypeTheme();
   const inFlow = useBottomPanelInFlow();
   if (inFlow) return <View style={{ flex: 1, backgroundColor: palette.tokens.canvas }}>{children}</View>;
-  return <KeyboardAvoidingView automaticOffset behavior="padding" style={{ flex: 1, backgroundColor: palette.tokens.canvas }}>
+  return <KeyboardInsetView style={{ flex: 1, backgroundColor: palette.tokens.canvas }}>
     {children}
-  </KeyboardAvoidingView>;
+  </KeyboardInsetView>;
 }
