@@ -6,4 +6,6 @@ export { lastValuePerDay, sleepMinutesByWakeDate, toHundredths, toTenths, type S
 export { HealthConnectBanner } from "./presentation/HealthConnectBanner.tsx";
 export { HealthConnectSection, type HealthSyncKind, type HealthSyncResult } from "./presentation/HealthConnectSection.tsx";
 export { useHealthDaily, useHealthLink } from "./presentation/useHealth.ts";
+export { useHealthAutoSync } from "./presentation/useHealthAutoSync.ts";
+export { shouldResyncHealth, syncedAtText } from "./domain/HealthRules.ts";
 export { createHealthOperationQueue } from "./domain/HealthOperationQueue.ts";

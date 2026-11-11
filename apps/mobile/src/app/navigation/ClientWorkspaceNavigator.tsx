@@ -29,7 +29,7 @@ import { fonts } from "../../shared/ui/theme/typography.ts";
 import type { TrainingHistoryPort } from "../../read-models/trainingHistory.ts";
 import { useHistoryCaption, useQuestionnaireCaption, useStatisticsCaption } from "../../read-models/useMoreCaptions.ts";
 import type { QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
-import { useHealthLink, type HealthConnectPort, type HealthStorePort, type HealthSyncResult } from "../../features/health/public.ts";
+import { useHealthAutoSync, useHealthLink, type HealthConnectPort, type HealthStorePort, type HealthSyncResult } from "../../features/health/public.ts";
 import type { ClientBodyweightPort } from "../../read-models/clientBodyweight.ts";
 
 type OpenWorkout = (slot: WorkoutSlot, options?: Readonly<{ returnToCaller?: boolean }>) => void;
@@ -192,10 +192,11 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
     return () => { active = false; };
   }, [clientId, repository, retryKey]));
 
-  // Обновление Health Connect при открытии привязанной карточки; в фоне ничего не читается (ADR-059).
+  // Обновление Health Connect: при открытии привязанной карточки и при возврате в приложение; в фоне ничего не читается (ADR-059, ADR-074).
   const healthState = useHealthLink(health.store);
   const healthLinkedHere = healthState.link?.clientId === clientId;
-  useEffect(() => { if (healthLinkedHere) void health.sync().catch(() => undefined); }, [healthLinkedHere, clientId, health]);
+  // Чтение при открытии и при каждом возврате приложения на передний план (UIX-FIT-12): Mi Fitness кладёт данные в Health Connect в момент своей синхронизации.
+  useHealthAutoSync(health.sync, healthLinkedHere, clientId);
 
   if (client === undefined) return <View style={[styles.center, { backgroundColor: colors.canvas }]}>
     <LoadingState label="Открываем клиента…" />

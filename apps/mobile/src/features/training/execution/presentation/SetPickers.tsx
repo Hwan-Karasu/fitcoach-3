@@ -1,5 +1,5 @@
-import { forwardRef, useCallback, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { forwardRef, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView, type BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, Link2, PencilLine, RefreshCw, Unlink, X } from "lucide-react-native";
 import { withAlpha } from "../../../../shared/ui/theme/colorAlpha.ts";
@@ -16,9 +16,23 @@ const PickerSheet = forwardRef<BottomSheetModal, Readonly<{ title: string; child
   const colors = palette.tokens;
   const backdrop = useCallback((props: BottomSheetBackdropProps) =>
     <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior="close" />, []);
+  // Системное «назад» при открытом окне закрывает окно, а не экран тренировки (UIX-FIT-12): у @gorhom/bottom-sheet своего обработчика нет, и «назад» уходил
+  // в навигацию (`usePreventRemove` дневника → вопрос о выходе). Слушатель живёт, пока окно открыто, и регистрируется позже навигационного — срабатывает первым.
+  const inner = useRef<BottomSheetModal>(null);
+  const [open, setOpen] = useState(false);
+  const attach = useCallback((instance: BottomSheetModal | null) => {
+    inner.current = instance;
+    if (typeof ref === "function") ref(instance); else if (ref !== null) ref.current = instance;
+  }, [ref]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => { inner.current?.dismiss(); return true; });
+    return () => subscription.remove();
+  }, [open]);
   return (
-    <BottomSheetModal ref={ref} backdropComponent={backdrop} backgroundStyle={{ backgroundColor: colors.canvas }}
-      handleIndicatorStyle={{ backgroundColor: colors.border }}>
+    <BottomSheetModal ref={attach} backdropComponent={backdrop} backgroundStyle={{ backgroundColor: colors.canvas }}
+      handleIndicatorStyle={{ backgroundColor: colors.border }}
+      onChange={(index) => setOpen(index >= 0)} onDismiss={() => setOpen(false)}>
       <BottomSheetView style={styles.body}>
         <Text accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
         {children}

@@ -6,7 +6,7 @@ import { AppButton, AppIconButton, SelectionChip } from "../../../shared/ui/comp
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { PercentRangeSlider } from "../../../shared/ui/components/PercentRangeSlider.tsx";
-import { EMPTY_RECIPE_FILTERS, parseNumberRange, type CalorieBand, type RecipeFilters, type RecipeSort, type TimeBand } from "../domain/RecipeBrowse.ts";
+import { EMPTY_RECIPE_FILTERS, choiceRows, parseNumberRange, type CalorieBand, type RecipeFilters, type RecipeSort, type TimeBand } from "../domain/RecipeBrowse.ts";
 import { scrim } from "../../../shared/ui/theme/style.ts";
 
 const sorts: readonly Readonly<{ id: RecipeSort; label: string }>[] = [{ id: "DEFAULT", label: "По умолчанию" }, { id: "NEWEST", label: "Сначала новые" }, { id: "OLDEST", label: "Сначала старые" }, { id: "KCAL_ASC", label: "Калорийность ↑" }, { id: "KCAL_DESC", label: "Калорийность ↓" }];
@@ -25,18 +25,16 @@ const macroTexts = (filters: RecipeFilters): Texts => ({
 });
 
 /**
- * Варианты — симметричными рядами (UIX-FIT-10/11): по три в ряд, чтобы окно помещалось без прокрутки; сортировка — по два.
- * Полный ряд делит ширину поровну; неполный (например 3 + 2) собирает пилюли той же ширины по центру, а не прижимает влево.
+ * Варианты по макету владельца (UIX-FIT-12): первый («По умолчанию», «Любые», «Любое время») — на всю ширину, остальные — по два в ряд
+ * (`choiceRows`). Одиночный последний вариант занимает одну колонку и стоит по центру ряда.
  */
-function ChoiceGrid<Id extends string>({ options, selected, label, onSelect, columns = 2 }: Readonly<{
-  options: readonly Readonly<{ id: Id; label: string }>[]; selected: Id; label: string; onSelect: (id: Id) => void; columns?: number;
+function ChoiceGrid<Id extends string>({ options, selected, label, onSelect }: Readonly<{
+  options: readonly Readonly<{ id: Id; label: string }>[]; selected: Id; label: string; onSelect: (id: Id) => void;
 }>) {
-  const basis = columns === 3 ? "32%" : "48.5%";
-  return <>{Array.from({ length: Math.ceil(options.length / columns) }, (_, row) => {
-    const rowOptions = options.slice(row * columns, row * columns + columns);
-    const full = rowOptions.length === columns;
+  return <>{choiceRows(options).map((rowOptions, row) => {
+    const lead = row === 0;
     return <View key={row} style={[styles.row, styles.rowCentered]}>
-      {rowOptions.map((option) => <View key={option.id} style={[styles.choice, { flexBasis: basis, flexGrow: full ? 1 : 0 }]}>
+      {rowOptions.map((option) => <View key={option.id} style={[styles.choice, { flexBasis: lead ? "100%" : "48.5%", flexGrow: lead || rowOptions.length === 2 ? 1 : 0 }]}>
         <SelectionChip compact fill group={label} label={option.label} selected={selected === option.id} onPress={() => onSelect(option.id)} />
       </View>)}
     </View>;
@@ -115,7 +113,7 @@ export function RecipeBrowseControls({ filters, sort, onFilters, onSort }: Reado
                 <NumberBox label="Калории, до" placeholder="до" value={cal.max} onChange={(max) => { setCal({ ...cal, max }); setDraft({ ...draft, calories: "ANY" }); }} />
                 <Text style={[styles.unit, { color: colors.textMuted }]}>ккал</Text>
               </RangeRow>
-              <ChoiceGrid columns={3} options={bands} selected={draft.calories} label="Калории за порцию"
+              <ChoiceGrid options={bands} selected={draft.calories} label="Калории за порцию"
                 onSelect={(calories) => { setDraft({ ...draft, calories }); setCal({ min: "", max: "" }); }} />
             </View>
             <View style={[styles.block, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
@@ -126,7 +124,7 @@ export function RecipeBrowseControls({ filters, sort, onFilters, onSort }: Reado
                 <NumberBox label="Время, до минут" placeholder="до" value={time.max} onChange={(max) => { setTime({ ...time, max }); setDraft({ ...draft, time: "ANY" }); }} />
                 <Text style={[styles.unit, { color: colors.textMuted }]}>мин</Text>
               </RangeRow>
-              <ChoiceGrid columns={3} options={times} selected={draft.time} label="Время рецепта"
+              <ChoiceGrid options={times} selected={draft.time} label="Время рецепта"
                 onSelect={(next) => { setDraft({ ...draft, time: next }); setTime({ min: "", max: "" }); }} />
               <BlockTitle muted>Подготовка не дольше</BlockTitle>
               <RangeRow>

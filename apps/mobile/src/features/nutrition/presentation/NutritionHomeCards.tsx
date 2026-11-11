@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Flame, Footprints, Moon, TrendingUp, Utensils, type LucideIcon } from "lucide-react-native";
-import { HealthConnectBanner, useHealthDaily, type HealthConnectPort, type HealthStorePort, type HealthSyncResult } from "../../health/public.ts";
+import { HealthConnectBanner, syncedAtText, useHealthDaily, useHealthLink, type HealthConnectPort, type HealthStorePort, type HealthSyncResult } from "../../health/public.ts";
 import { InlineNotice, SegmentedRing } from "../../../shared/ui/components/public.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -170,6 +170,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   const { data, stale } = useNutritionDay(clientId, day, diary, targets);
   const stepsToday = useTodaySteps(clientId, calc, day);
   const sleepDay = useHealthDaily(health.store, clientId, "SLEEP_MIN", day, day);
+  const healthLink = useHealthLink(health.store).link;
   const sleepHours = sleepDay === null || future ? null : (sleepDay.get(day) ?? null) === null ? null : (sleepDay.get(day) as number) / 60;
   const healthReady = useHealthReady(health.platform, health.store, health.linked);
   const mark = useTodayWorkoutMark(clientId, calc, day);
@@ -228,7 +229,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   /** Съедено Б/Ж/У для полос: день не загрузился — «нет данных», еды нет — 0. */
   const eatenGrams = (metric: "protein" | "fat" | "carbs"): number | null => (!fresh ? null : !recorded ? 0 : eaten(metric));
   const eatenByMacro = { protein: eatenGrams("protein"), fat: eatenGrams("fat"), carbs: eatenGrams("carbs") };
-  const sourceHint = future ? "только питание" : health.linked && healthReady !== false ? "Health Connect" : null;
+  const sourceHint = future ? "только питание" : health.linked && healthReady !== false ? `Health Connect · ${syncedAtText(healthLink?.lastSyncAt ?? null, new Date())}` : null;
 
   return (
     <>

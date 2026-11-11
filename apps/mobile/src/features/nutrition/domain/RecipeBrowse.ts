@@ -95,3 +95,14 @@ export function browseRecipes(recipes: readonly Recipe[], filters: RecipeFilters
     return byName(a.recipe, b.recipe);
   }).map((row) => row.recipe);
 }
+
+/**
+ * Ряды кнопок выбора (UIX-FIT-12, макет владельца): первый вариант («По умолчанию», «Любые», «Любое время») — отдельным рядом на всю ширину,
+ * остальные — по два в ряд. Последний неполный ряд остаётся из одного варианта (его ширина — одна колонка).
+ */
+export function choiceRows<T>(options: readonly T[]): readonly (readonly T[])[] {
+  if (options.length === 0) return [];
+  const rows: T[][] = [[options[0] as T]];
+  for (let index = 1; index < options.length; index += 2) rows.push(options.slice(index, index + 2));
+  return rows;
+}

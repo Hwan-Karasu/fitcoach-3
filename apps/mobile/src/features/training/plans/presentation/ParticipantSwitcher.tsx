@@ -10,7 +10,7 @@ import { counterpartOf, participantOrder, type CounterpartRef } from "../domain/
 import type { GroupCopy } from "../domain/Placement.ts";
 import type { TrainingPlansRepositoryPort } from "../domain/TrainingPlansRepositoryPort.ts";
 import { useParticipantGroup } from "./useParticipantGroup.ts";
-import { stripState } from "../domain/ParticipantGroupState.ts";
+import { participantChipLayout, stripState } from "../domain/ParticipantGroupState.ts";
 import type { PeriodizedPlan } from "../domain/PeriodizedModel.ts";
 import { navigationPerformance } from "../../../../shared/diagnostics/NavigationPerformance.ts";
 
@@ -79,6 +79,8 @@ const ParticipantStrip = memo(function ParticipantStrip({ group, activeClientId,
   const [hidden, setHidden] = useState<Readonly<{ left: number; right: number }>>({ left: 0, right: 0 });
   const viewport = useRef(0);
   const total = useRef(0);
+  /** Ширина полосы для раскладки: два участника делят её поровну, а не оставляют справа пустое место. */
+  const [stripWidth, setStripWidth] = useState(0);
   const measure = (offset: number) => {
     const count = total.current;
     let left = 0; let right = 0;
@@ -94,12 +96,14 @@ const ParticipantStrip = memo(function ParticipantStrip({ group, activeClientId,
   const byClient = useMemo(() => new Map(group.map((copy) => [copy.clientId, copy])), [group]);
   const ordered = useMemo(() => participantOrder(group.map((copy) => copy.clientId), anchorClientId), [group, anchorClientId]);
   total.current = ordered.length;
+  // Внутренняя ширина полосы: рамка карточки (padding 3 или 2) с двух сторон уже не входит в измеренную ширину прокрутки.
+  const fill = participantChipLayout(stripWidth, ordered.length, CHIP_WIDTH, CHIP_GAP) === "fill";
   return (
     <View style={docked ? null : [styles.wrap, { backgroundColor: colors.canvas }]}>
       <View style={[styles.card, docked ? styles.cardDocked : null, { backgroundColor: colors.border }]}>
-        <ScrollView ref={scroll} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}
+        <ScrollView ref={scroll} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.row, fill ? styles.rowFill : null]}
           keyboardShouldPersistTaps="handled" scrollEventThrottle={32} onScroll={onScroll}
-          onLayout={(event) => { viewport.current = event.nativeEvent.layout.width; measure(0); }}>
+          onLayout={(event) => { viewport.current = event.nativeEvent.layout.width; setStripWidth(event.nativeEvent.layout.width); measure(0); }}>
           {ordered.map((id) => {
             const current = id === activeClientId;
             const name = names.get(id) ?? "Клиент";
@@ -108,10 +112,10 @@ const ParticipantStrip = memo(function ParticipantStrip({ group, activeClientId,
                 accessibilityState={{ selected: current, disabled: current || busy || !fresh }} disabled={current || busy || !fresh}
                 hitSlop={{ top: docked ? 8 : 4, bottom: docked ? 8 : 4 }}
                 onLayout={(event) => positions.current.set(id, event.nativeEvent.layout.x)} onPress={() => onSelect(byClient.get(id)!)}
-                style={({ pressed }) => [styles.chip, docked ? styles.chipDocked : null, current ? shadow.control : null, {
+                style={({ pressed }) => [styles.chip, fill ? styles.chipFill : null, docked ? styles.chipDocked : null, current ? shadow.control : null, {
                   backgroundColor: current ? colors.surface : pressed ? colors.surfaceRaised : "transparent", opacity: busy && !current ? 0.6 : 1 }]}>
-                <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.85}
-                  style={[styles.chipText, docked ? styles.chipTextDocked : null, current ? styles.chipCurrent : null, { color: current ? colors.accentInk : colors.textSecondary }]}>{name}</Text>
+                {/* Один шрифт и размер у выбранной и невыбранной карточки: раньше жирный шрифт выбранной и подгонка размера переносили имя иначе, чем у соседней. */}
+                <Text numberOfLines={2} style={[styles.chipText, docked ? styles.chipTextDocked : null, { color: current ? colors.accentInk : colors.textSecondary }]}>{name}</Text>
               </Pressable>
             );
           })}
@@ -163,15 +167,17 @@ const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 6 },
   card: { borderRadius: 20, padding: 3 },
   row: { gap: CHIP_GAP },
+  /** Карточки делят всю ширину полосы поровну (`participantChipLayout` → `fill`). */
+  rowFill: { flexGrow: 1 },
+  chipFill: { flex: 1, width: undefined },
   chip: { width: CHIP_WIDTH, height: 36, borderRadius: 17, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
-  chipText: { fontFamily: fonts.semibold, fontSize: 15, textAlign: "center" },
+  chipText: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 19, textAlign: "center" },
   /** В нижней панели: строка 32 dp (рамка 2 + карточка 28 + рамка 2). */
   cardDocked: { borderRadius: 17, padding: 2 },
-  chipDocked: { height: 28, borderRadius: 14 },
-  chipTextDocked: { fontSize: 13 },
+  chipDocked: { height: 32, borderRadius: 16 },
+  chipTextDocked: { fontSize: 12, lineHeight: 14 },
   mark: { position: "absolute", top: 8, bottom: 8, flexDirection: "row", alignItems: "center", gap: 2, paddingHorizontal: 8, borderRadius: 12 },
   markLeft: { left: 8 },
   markRight: { right: 8 },
   markText: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
-  chipCurrent: { fontFamily: fonts.bold },
 });

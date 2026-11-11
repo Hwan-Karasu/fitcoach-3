@@ -27,3 +27,13 @@ export function stripState(members: readonly unknown[] | null, failed = false): 
 export function acceptGroup<T>(current: GroupRead<T> | null, next: GroupRead<T>, latest: Readonly<{ place: string; version: number }>): GroupRead<T> | null {
   return next.place === latest.place && next.version === latest.version ? next : current;
 }
+
+/**
+ * Раскладка карточек полосы участников (UIX-FIT-12). Если все карточки своей ширины помещаются в полосу — `fill`: они делят ширину поровну,
+ * ряд занимает всю полосу и симметричен (раньше два участника оставляли справа пустое место). Иначе — `scroll`: прежняя фиксированная ширина и прокрутка.
+ * Пока ширина полосы не измерена (0), считается прокруткой: карточки не растягиваются на неизвестную ширину.
+ */
+export function participantChipLayout(viewportWidth: number, count: number, chipWidth: number, gap: number): "fill" | "scroll" {
+  if (viewportWidth <= 0 || count < 1) return "scroll";
+  return count * chipWidth + (count - 1) * gap <= viewportWidth ? "fill" : "scroll";
+}

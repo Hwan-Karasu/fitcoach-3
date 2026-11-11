@@ -104,3 +104,22 @@ export async function readHealthPages<T>(readPage: (token?: string) => Promise<R
   }
   throw new Error("HEALTH_READ_LIMIT");
 }
+
+/** Не чаще чем раз в столько мс повторно читается Health Connect при возвратах в приложение: возврат из Mi Fitness (секунды) не должен упираться в паузу. */
+export const HEALTH_RESYNC_MIN_GAP_MS = 15_000;
+
+/** Пора ли снова читать Health Connect: первый раз — всегда, дальше — не раньше минимальной паузы (часы назад — тоже читаем). */
+export function shouldResyncHealth(lastRunAt: number | null, now: number, minGapMs: number = HEALTH_RESYNC_MIN_GAP_MS): boolean {
+  return lastRunAt === null || now < lastRunAt || now - lastRunAt >= minGapMs;
+}
+
+/** Подпись времени последнего чтения у плиток дня: «обновлено 15:40», а для другого дня — с датой «обновлено 10.11 в 09:05». */
+export function syncedAtText(lastSyncAt: string | null, now: Date): string {
+  if (lastSyncAt === null) return "ещё не обновлялось";
+  const at = new Date(lastSyncAt);
+  if (Number.isNaN(at.getTime())) return "ещё не обновлялось";
+  const two = (value: number) => String(value).padStart(2, "0");
+  const time = `${two(at.getHours())}:${two(at.getMinutes())}`;
+  const sameDay = at.getFullYear() === now.getFullYear() && at.getMonth() === now.getMonth() && at.getDate() === now.getDate();
+  return sameDay ? `обновлено ${time}` : `обновлено ${two(at.getDate())}.${two(at.getMonth() + 1)} в ${time}`;
+}
