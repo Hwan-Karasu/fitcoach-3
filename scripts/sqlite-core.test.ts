@@ -6,6 +6,8 @@ import { WriterCoordinator } from "../apps/mobile/src/shared/db/WriterCoordinato
 class MemoryConnection implements SqliteConnectionPort {
   history = new Map<number, string>();
   failStatement: string | null = null;
+  integrityChecks = 0;
+  foreignKeyChecks = 0;
   foreignKeyViolations = false;
   active = 0;
   peak = 0;
@@ -18,6 +20,7 @@ class MemoryConnection implements SqliteConnectionPort {
 
   async first<Row>(sql: string): Promise<Row | null> {
     assert.equal(sql, "PRAGMA integrity_check");
+    this.integrityChecks += 1;
     return { integrity_check: "ok" } as Row;
   }
 
@@ -25,6 +28,7 @@ class MemoryConnection implements SqliteConnectionPort {
     if (sql.startsWith("SELECT version, checksum")) {
       return [...this.history].map(([version, checksum]) => ({ version, checksum })) as Row[];
     }
+    if (sql === "PRAGMA foreign_key_check") this.foreignKeyChecks += 1;
     if (sql === "PRAGMA foreign_key_check" && this.foreignKeyViolations) return [{} as Row];
     return [];
   }
@@ -51,6 +55,13 @@ const writer = new WriterCoordinator(db);
 assert.deepEqual(await runMigrations(writer, catalog), [1, 2]);
 assert.deepEqual(await runMigrations(writer, catalog), []);
 assert.equal(db.history.size, 2);
+// Время запуска: после применённых миграций целостность проверяется один раз, а повторный запуск без новых миграций её не гоняет
+// (раньше каждый из ~30 вызовов делал полную проверку — секунды на базе с фото).
+assert.equal(db.integrityChecks, 1, "applied migrations are verified once");
+assert.equal(db.foreignKeyChecks, 1);
+for (let launch = 0; launch < 30; launch += 1) await runMigrations(writer, catalog);
+assert.equal(db.integrityChecks, 1, "launches without new migrations run no integrity check");
+assert.equal(db.foreignKeyChecks, 1);
 
 const failed = new MemoryConnection();
 failed.failStatement = "CREATE SYNTHETIC B";

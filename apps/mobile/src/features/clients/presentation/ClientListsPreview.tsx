@@ -70,10 +70,16 @@ const metricLabel: Readonly<Record<RosterMetricId, string>> = {
  * Сводка других владельцев для видимых карточек: перечитывается при их изменениях и в момент,
  * когда закончится ближайшая сегодняшняя запись (GetNextEligibilityTransitionAt без частого опроса).
  */
+/** Последняя прочитанная сводка по источнику: экран, открытый повторно, сразу рисует прежние значения и обновляет их без «—». */
+const lastOverview = new WeakMap<RosterOverviewPort, Readonly<{ metricKey: string; value: RosterOverview }>>();
+
 function useRosterOverview(port: RosterOverviewPort, clientIds: readonly string[], today: string): Readonly<{ overview: RosterOverview | null; failed: boolean; retry: () => void }> {
   const { clientCards } = usePrototypeTheme();
   const metricKey = clientCards.metricIds.join("|");
-  const [overview, setOverview] = useState<RosterOverview | null>(null);
+  const [overview, setOverview] = useState<RosterOverview | null>(() => {
+    const cached = lastOverview.get(port);
+    return cached !== undefined && cached.metricKey === metricKey ? cached.value : null;
+  });
   const [tick, setTick] = useState(0);
   const [failed, setFailed] = useState(false);
   const generation = useRef(0);
@@ -83,7 +89,7 @@ function useRosterOverview(port: RosterOverviewPort, clientIds: readonly string[
   useEffect(() => {
     const request = ++generation.current;
     port.load(key === "" ? [] : key.split("|"), new Date(), clientCards.metricIds).then((value) => {
-      if (request === generation.current) { setOverview(value); setFailed(false); }
+      if (request === generation.current) { lastOverview.set(port, { metricKey, value }); setOverview(value); setFailed(false); }
     }, () => { if (request === generation.current) setFailed(true); });
   }, [port, key, today, tick, changes, metricKey, clientCards.metricIds]);
   useEffect(() => {

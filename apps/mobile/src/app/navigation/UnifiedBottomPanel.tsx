@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Keyboard, StyleSheet, View } from "react-native";
-import { KeyboardEvents } from "react-native-keyboard-controller";
+import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RestTimerDock } from "../../features/training/public.ts";
 import { useBottomPanelContent } from "../../shared/ui/components/public.ts";
@@ -9,6 +8,7 @@ import { PaletteOverride, usePrototypeTheme } from "../../shared/ui/theme/Protot
 import { navigationBorder } from "../../shared/ui/theme/navigationBorder.ts";
 import type { ApplicationServices } from "../composition/createServices.ts";
 import { restTimerDiagnostics } from "../../shared/diagnostics/RestTimerDiagnostics.ts";
+import { useKeyboardVisible } from "./useKeyboardVisible.ts";
 
 /** Общий контейнер живёт рядом со стеком, а не внутри меняющихся карточек клиентов. */
 export function UnifiedBottomPanel({ services, onOpen }: Readonly<{
@@ -20,24 +20,14 @@ export function UnifiedBottomPanel({ services, onOpen }: Readonly<{
   const { palette } = usePrototypeTheme();
   const colors = entry?.tokens ?? palette.tokens;
   const insets = useSafeAreaInsets();
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const keyboardVisible = useKeyboardVisible();
   const avatarOwners = useRef<ReadonlySet<string>>(new Set());
   const [avatarVersion, setAvatarVersion] = useState(0);
   useEffect(() => services.clients.subscribeCommittedChanges((change) => {
     if (change.clientId === null || avatarOwners.current.has(change.clientId)) setAvatarVersion((value) => value + 1);
   }), [services.clients]);
   // Пока открыта клавиатура (в фокусе поле ввода), панель вместе с таймером скрыта: иначе клавиатура и панель занимают слишком много места.
-  // Прячем в НАЧАЛЕ показа (`keyboardWillShow` из keyboard-controller работает и на Android), а не после анимации: один пересчёт экрана
-  // вместо двух. `keyboardDid*` — запасной путь на случай, если событие провайдера не пришло. Таймер при этом идёт и звучит как обычно.
-  useEffect(() => {
-    const subscriptions = [
-      KeyboardEvents.addListener("keyboardWillShow", () => setKeyboardVisible(true)),
-      KeyboardEvents.addListener("keyboardWillHide", () => setKeyboardVisible(false)),
-      Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true)),
-      Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false)),
-    ];
-    return () => { for (const subscription of subscriptions) subscription.remove(); };
-  }, []);
+  // Прячем в НАЧАЛЕ показа, а не после анимации (см. `useKeyboardVisible`): один пересчёт экрана вместо двух. Таймер при этом идёт и звучит как обычно.
   const avatars = useCallback(async (ids: readonly string[]) => {
     avatarOwners.current = new Set(ids);
     return new Map(await Promise.all(ids.map(async (id) => {

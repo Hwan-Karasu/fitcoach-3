@@ -25,19 +25,24 @@ function fixture() {
   const file = join(directory, PRODUCTION_DATABASE);
   const opened: string[] = [];
   const commands: string[] = [];
+  const counts = { integrity: 0 };
   let failOn = "";
   const database = new SharedSqliteDatabase(() => openIsolatedSqliteConnection(async () => {
     opened.push(file);
     const native = nativeSqliteDatabase(file);
     return { ...native,
       async execAsync(sql) { commands.push(sql); await native.execAsync(sql); },
+      async getFirstAsync<Row>(sql: string, ...args: unknown[]) {
+        if (sql.includes("integrity_check")) counts.integrity += 1;
+        return native.getFirstAsync<Row>(sql, ...args as SqlValue[]);
+      },
       async runAsync(sql: string, ...args: unknown[]) {
         if (failOn && sql.startsWith(failOn)) throw new Error("SYNTHETIC_CREATE_FAILURE");
         return native.runAsync(sql, ...args as SqlValue[]);
       },
     };
   }, inspectProductionDatabase));
-  return { directory, file, database, opened, commands, fail: (prefix: string) => { failOn = prefix; },
+  return { directory, file, database, opened, commands, counts, fail: (prefix: string) => { failOn = prefix; },
     cleanup: () => rmSync(directory, { recursive: true, force: true }) };
 }
 
@@ -119,6 +124,18 @@ test("D01-4 новые форматы/версии, изменённые checksu
       assert.equal(f.commands.length, 0, sql);
     } finally { f.cleanup(); }
   }
+});
+
+test("UIX-FIT-11 время запуска: тёплый старт (без новых миграций) не делает проверку целостности на каждого владельца схемы", async () => {
+  const f = fixture();
+  try {
+    await prepareProductionDatabase(f.database);
+    f.counts.integrity = 0;
+    await prepareProductionDatabase(f.database);
+    // Две независимые проверки: при открытии соединения и внутри транзакции подготовки (обе — `inspectDatabaseIdentity`).
+    // До исправления добавлялось ещё по одной на каждого из 12 владельцев схемы (всего 15 в этом стенде).
+    assert.ok(f.counts.integrity <= 2, `integrity_check при тёплом запуске: ${f.counts.integrity} (бюджет 2, было 15)`);
+  } finally { f.cleanup(); }
 });
 
 test("D01-4 первая установка: сбой после первых владельцев откатывает также identity и application_id; Retry создаёт всё один раз", async () => {

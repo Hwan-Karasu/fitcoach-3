@@ -55,6 +55,9 @@ export async function runMigrationsInTransaction(tx: SqliteStatementPort, catalo
     newVersions.push(step.version);
   }
 
+  // Полная проверка целостности — только после реально применённых миграций. Запуск без новых миграций её не повторяет:
+  // состояние уже проверено (`inspectDatabaseIdentity` один раз за запуск), а десятки проверок подряд на большой базе — это секунды ожидания.
+  if (newVersions.length === 0) return newVersions;
   const fkViolations = await tx.all<unknown>("PRAGMA foreign_key_check");
   if (fkViolations.length > 0) throw new Error("MIGRATION_FOREIGN_KEY_VIOLATION");
   const integrity = await tx.first<{ integrity_check: string }>("PRAGMA integrity_check");
