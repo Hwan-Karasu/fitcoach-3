@@ -60,7 +60,7 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
               {/* Фон есть всегда (у неактивной вкладки прозрачный) и `collapsable={false}`: иначе «таблетка» неактивной вкладки не имеет собственного нативного
                   вида, а при выборе собирается заново и на Android теряет скругление — подсветка становилась прямоугольной до перезапуска (UIX-FIT-11). */}
               <View collapsable={false} style={[styles.iconPill, compact ? styles.iconPillCompact : null, { backgroundColor: focused ? colors.accentSoft : "transparent" }]}>
-                <Icon size={compact ? 17 : 22} color={color} strokeWidth={focused ? 2.2 : 1.9} />
+                <Icon size={compact ? 20 : 26} color={color} strokeWidth={focused ? 2.2 : 1.9} />
                 {badge !== undefined ? (
                   <View style={[styles.badge, compact ? styles.badgeCompact : null, { backgroundColor: colors.accentFill }]}>
                     <Text style={[styles.badgeText, { color: colors.onAccentFill }]}>{String(badge)}</Text>
@@ -103,16 +103,16 @@ const styles = StyleSheet.create({
   weekArrowColumn: { width: 36, minHeight: 44, alignSelf: "stretch", justifyContent: "center" },
   weekArrow: { width: 36, height: 44, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   /** Строка экрана над вкладками (переключатель участников): внутри той же плашки. */
-  tabsRow: { flexDirection: "row", gap: 4, minHeight: 48 },
-  tabsRowIcons: { minHeight: 36 },
-  tabsRowCompact: { minHeight: 34 },
+  tabsRow: { flexDirection: "row", gap: 4, minHeight: 60 },
+  tabsRowIcons: { minHeight: 44 },
+  tabsRowCompact: { minHeight: 42 },
   tabCompact: { gap: 0 },
-  iconPill: { width: 56, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  iconPillCompact: { width: 44, height: 20, borderRadius: 10 },
-  labelCompact: { fontSize: 11, lineHeight: 12 },
+  iconPill: { width: 68, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  iconPillCompact: { width: 52, height: 24, borderRadius: 12 },
+  labelCompact: { fontSize: 12, lineHeight: 13 },
   tab: { flex: 1, flexBasis: 0, minWidth: 0, alignItems: "center", justifyContent: "center", gap: 2 },
-  label: { fontSize: 11, lineHeight: 13 },
-  badge: { position: "absolute", top: -4, left: 31, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  badgeCompact: { left: 25, top: -6 },
+  label: { fontSize: 12, lineHeight: 15 },
+  badge: { position: "absolute", top: -4, left: 37, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  badgeCompact: { left: 29, top: -6 },
   badgeText: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14 },
 });
