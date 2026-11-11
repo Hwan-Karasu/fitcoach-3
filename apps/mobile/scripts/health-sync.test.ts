@@ -23,7 +23,7 @@ const TODAY = "2026-11-10";
 
 class FakePlatform implements HealthConnectPort {
   availabilityValue: HealthAvailability = "AVAILABLE";
-  granted: readonly HealthMetric[] = ["STEPS", "SLEEP_MIN", "WEIGHT_X10", "BODY_FAT_X10", "TOTAL_KCAL", "ACTIVE_KCAL"];
+  granted: readonly HealthMetric[] = ["STEPS", "SLEEP_MIN", "WEIGHT_X100", "BODY_FAT_X10", "TOTAL_KCAL", "ACTIVE_KCAL"];
   data: HealthDayValue[] = [];
   reads: { metrics: readonly HealthMetric[]; from: string; to: string }[] = [];
   async availability() { return this.availabilityValue; }
@@ -74,7 +74,7 @@ test("AUDIT-ALL-1: ручной вес между чтением журнала 
       };
       const member = Reflect.get(target, key); return typeof member === "function" ? member.bind(target) : member;
     } });
-    const platform = new FakePlatform(); platform.data = [value(TODAY, "WEIGHT_X10", 800)];
+    const platform = new FakePlatform(); platform.data = [value(TODAY, "WEIGHT_X100", 8000)];
     const result = await syncHealthConnect({ health, calc, measurements: delayed, platform, isValidHealthValue }, TODAY, NOW);
     assert.equal(result.kind, "SYNCED");
     if (result.kind === "SYNCED") assert.equal(result.importedWeight, 0);
@@ -183,7 +183,7 @@ test("UIX audit: смена привязки во время системног�
     const platform = new FakePlatform();
     platform.readDaily = async () => {
       await health.unlink(); await health.link(other.id, new Date(NOW.getTime() + 1000));
-      return [value(TODAY, "WEIGHT_X10", 800), value(TODAY, "STEPS", 7000)];
+      return [value(TODAY, "WEIGHT_X100", 8000), value(TODAY, "STEPS", 7000)];
     };
     assert.deepEqual(await syncHealthConnect({ health, platform, calc, measurements, isValidHealthValue }, TODAY, NOW), { kind: "NOT_LINKED" });
     assert.equal((await measurements.listForClient(me.id)).measurements.length, 0);
@@ -197,7 +197,7 @@ test("UIX audit: повтор дня во внешнем ответе не со�
     const me = await clients.create({ displayName: "SyntheticSelf" });
     await health.link(me.id, NOW);
     const platform = new FakePlatform();
-    platform.data = [value(TODAY, "WEIGHT_X10", 800), value(TODAY, "WEIGHT_X10", 810)];
+    platform.data = [value(TODAY, "WEIGHT_X100", 8000), value(TODAY, "WEIGHT_X100", 8100)];
     await syncHealthConnect({ health, platform, calc, measurements, isValidHealthValue }, TODAY, NOW);
     const rows = (await measurements.listForClient(me.id)).measurements;
     assert.equal(rows.length, 1);
@@ -229,7 +229,7 @@ test("Health: значения вне допустимых границ не з�
   try {
     const me = await clients.create({ displayName: "SyntheticSelf" });
     await health.link(me.id, NOW);
-    await assert.rejects(health.saveSync(me.id, [value("2026-11-09", "STEPS", 8000), value("2026-11-09", "WEIGHT_X10", 50)], ["STEPS"], NOW), { message: "HEALTH_VALUE_INVALID" });
+    await assert.rejects(health.saveSync(me.id, [value("2026-11-09", "STEPS", 8000), value("2026-11-09", "WEIGHT_X100", 500)], ["STEPS"], NOW), { message: "HEALTH_VALUE_INVALID" });
     assert.deepEqual(await health.listDaily(me.id, "2026-11-01", TODAY), []);
   } finally { await close(); }
 });
@@ -242,11 +242,11 @@ test("Health: синхронизация — шаги дня подставля�
     // Ручной вес за 9 ноября уже есть.
     await measurements.record(me.id, { type: "WEIGHT", valueX100: 8050, localDate: "2026-11-09", localMinute: null }, NOW);
     const platform = new FakePlatform();
-    platform.data = [value("2026-11-09", "STEPS", 8200), value("2026-11-10", "STEPS", 3100), value("2026-11-09", "WEIGHT_X10", 799), value("2026-11-10", "WEIGHT_X10", 798),
+    platform.data = [value("2026-11-09", "STEPS", 8200), value("2026-11-10", "STEPS", 3100), value("2026-11-09", "WEIGHT_X100", 7990), value("2026-11-10", "WEIGHT_X100", 7980),
       value("2026-11-10", "BODY_FAT_X10", 184), value("2026-11-10", "SLEEP_MIN", 430), value("2026-11-09", "TOTAL_KCAL", 2400), value("2026-11-09", "STEPS", 250_000)];
     const outcome = await syncHealthConnect({ health, platform, calc, measurements, isValidHealthValue }, TODAY, NOW);
     assert.deepEqual(outcome, { kind: "SYNCED", days: 7, stepsDays: 2, importedWeight: 1, importedFat: 1, rawDays: 8,
-      byMetric: { STEPS: 2, SLEEP_MIN: 1, TOTAL_KCAL: 1, WEIGHT_X10: 2, BODY_FAT_X10: 1 } }, "250 000 шагов — вне допустимых границ, отброшено целиком");
+      byMetric: { STEPS: 2, SLEEP_MIN: 1, TOTAL_KCAL: 1, WEIGHT_X100: 2, BODY_FAT_X10: 1 } }, "250 000 шагов — вне допустимых границ, отброшено целиком");
     assert.deepEqual((await calc.listSteps(me.id, "2026-11-01", TODAY)).map((day) => [day.localDate, day.steps]), [["2026-11-09", 8200], ["2026-11-10", 3100]]);
     const journal = await measurements.listForClient(me.id);
     const weights = dailyPoints(journal.measurements, journal.primaries, "WEIGHT").map((point) => point.kind === "VALUE" ? [point.localDate, point.measurement.valueX100] : [point.localDate, null]);
@@ -262,7 +262,7 @@ test("Health: синхронизация — шаги дня подставля�
     // Повтор: ничего не дублируется; повторное чтение — 7 дней.
     const again = await syncHealthConnect({ health, platform, calc, measurements, isValidHealthValue }, TODAY, NOW);
     assert.deepEqual(again, { kind: "SYNCED", days: 7, stepsDays: 0, importedWeight: 0, importedFat: 0, rawDays: 8,
-      byMetric: { STEPS: 2, SLEEP_MIN: 1, TOTAL_KCAL: 1, WEIGHT_X10: 2, BODY_FAT_X10: 1 } });
+      byMetric: { STEPS: 2, SLEEP_MIN: 1, TOTAL_KCAL: 1, WEIGHT_X100: 2, BODY_FAT_X10: 1 } });
     assert.equal(platform.reads[1]?.from, "2026-11-04");
     assert.equal((await measurements.listForClient(me.id)).measurements.length, 3);
 
@@ -315,4 +315,47 @@ test("Health: окончательное удаление клиента уби�
     const archived = await blocked.clients.setArchived(me.id, me.revision, true);
     await assert.rejects(blocked.clients.deleteArchivedPermanently(me.id, archived.revision), { message: "CLIENT_DELETION_BLOCKED" });
   } finally { await blocked.close(); }
+});
+
+// Вес из Health Connect приходит в сотых и попадает в замеры как есть (UIX-FIT-10): 88,35 остаётся 88,35, а не округляется до 88,4.
+test("Health: вес из Health Connect импортируется с точностью до сотых", async () => {
+  const { clients, measurements, calc, health, close } = await stores();
+  try {
+    const me = await clients.create({ displayName: "SyntheticSelf" });
+    await health.link(me.id, NOW);
+    const platform = new FakePlatform(); platform.data = [value(TODAY, "WEIGHT_X100", 8835), value("2026-11-09", "BODY_FAT_X10", 184)];
+    const result = await syncHealthConnect({ health, platform, calc, measurements, isValidHealthValue }, TODAY, NOW);
+    assert.equal(result.kind, "SYNCED");
+    const rows = (await measurements.listForClient(me.id)).measurements.map((row) => [row.type, row.localDate, row.valueX100]).sort();
+    assert.deepEqual(rows, [["BODY_FAT", "2026-11-09", 1840], ["WEIGHT", TODAY, 8835]]);
+  } finally { await close(); }
+});
+
+// Миграция владельца health v2: старые дни веса (десятые) переносятся в новую метрику (сотые), список разрешённых метрик переименовывается,
+// остальные значения не меняются; схема принимает WEIGHT_X100 и больше не принимает WEIGHT_X10.
+test("Health: миграция v2 переносит вес WEIGHT_X10 → WEIGHT_X100 (×10), дни и привязка сохраняются", async () => {
+  const { DatabaseSync: Sqlite } = await import("node:sqlite");
+  const { HEALTH_OWNER, HEALTH_LEDGER } = await import("../src/features/health/data/HealthCatalog.ts");
+  const { runMigrations } = await import("../src/shared/db/MigrationRunner.ts");
+  const { WriterCoordinator } = await import("../src/shared/db/WriterCoordinator.ts");
+  const db = new Sqlite(":memory:");
+  const shared = new SharedSqliteDatabase(async () => nodeSqlitePort(db));
+  const clients = new DevClientRepository(shared, WS);
+  await clients.initialize();
+  const me = await clients.create({ displayName: "SyntheticMigrate" });
+  const writer = new WriterCoordinator(nodeSqlitePort(db));
+  await runMigrations(writer, HEALTH_OWNER.chain.slice(0, 1), HEALTH_LEDGER);
+  db.prepare("INSERT INTO health_link (id, workspace_id, client_id, linked_at, last_sync_at, granted_metrics) VALUES (1, ?, ?, 'a', 'b', ?)").run(WS, me.id, '["STEPS","WEIGHT_X10"]');
+  const insert = db.prepare("INSERT INTO health_daily (workspace_id, client_id, local_date, metric, value, synced_at) VALUES (?, ?, ?, ?, ?, 's')");
+  insert.run(WS, me.id, "2026-11-09", "WEIGHT_X10", 798);
+  insert.run(WS, me.id, "2026-11-09", "STEPS", 8200);
+  await runMigrations(writer, HEALTH_OWNER.chain, HEALTH_LEDGER);
+  try {
+    const rows = db.prepare("SELECT metric, value FROM health_daily ORDER BY metric").all().map((row) => [row["metric"], row["value"]]);
+    assert.deepEqual(rows, [["STEPS", 8200], ["WEIGHT_X100", 7980]], "79,8 кг остаётся 79,8 кг; шаги не тронуты");
+    assert.equal((db.prepare("SELECT granted_metrics AS g FROM health_link").get() as { g: string }).g, '["STEPS","WEIGHT_X100"]');
+    assert.throws(() => insert.run(WS, me.id, "2026-11-10", "WEIGHT_X10", 800), /CHECK|constraint/iu, "старое имя метрики схема не принимает");
+    insert.run(WS, me.id, "2026-11-10", "WEIGHT_X100", 8835);
+    assert.deepEqual(db.prepare(`SELECT version FROM ${HEALTH_LEDGER} ORDER BY version`).all().map((row) => row["version"]), [1, 2]);
+  } finally { await clients.close(); }
 });

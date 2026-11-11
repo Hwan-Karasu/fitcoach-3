@@ -50,7 +50,7 @@ test("RECOVERY-50: actual build47 catalogs open and upgrade; training identities
     assert.deepEqual(db.prepare("SELECT side,rpe,reps,load_grams FROM training_performed_sides ORDER BY side").all().map((row) => ({ ...row })),
       [{ side: "L", rpe: 8, reps: 10, load_grams: 15000 }, { side: "R", rpe: 8, reps: 10, load_grams: 15000 }]);
     assert.equal(await inspectProductionDatabase(nodeSqlitePort(db)), "OWNED");
-    assert.equal(db.prepare("SELECT count(*) AS n FROM health_schema_migrations").get()?.n, 1);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM health_schema_migrations").get()?.n, 2, "владелец health добавлен: v1 и v2 (вес в сотых)");
     assert.equal(db.prepare("SELECT display_name FROM clients").get()?.display_name, "Synthetic recovery");
   } finally { db.close(); rmSync(directory, { recursive: true, force: true }); }
 });

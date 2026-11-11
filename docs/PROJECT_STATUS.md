@@ -1,3 +1,8 @@
+## 2026-11-11 — UIX-FIT-10r/s: вес до сотых (ADR-070)
+
+- Значения замеров хранятся в сотых: миграция владельца замеров v3 (`value_x10` → `value_x100`, ×10, CHECK: вес — любые сотые, остальное — десятые), поле `valueX10` → `valueX100`, правила `parseValue(text, type)`/`formatDecimal` («88,4», «88,35»), ввод «Вес за день»/журнала/карточки — до двух знаков. Health Connect: метрика `WEIGHT_X100`, миграция владельца health v2 (дни веса ×10, привязка переименована), адаптер читает вес `toHundredths`.
+- Проверки: typecheck, lint, arch:check, test:foundation 1283/1283, recovery 55/55 (включая реальный апгрейд базы build47 до текущей схемы), r06 272/272, d01, excel, calendar. На телефоне не проверено; **миграция меняет схему реальных данных — перед первым запуском нужна копия** (сборки старше не откроют такую базу).
+
 ## 2026-11-11 — build53: APK с UIX-FIT-10 (a–q)
 
 - APK: `artifacts/apk/athlete-diary-3.0.0-build53.apk`, versionCode 53, arm64-v8a, 73 525 110 байт, SHA-256 `8cae16c4521c1bfba1f716247b775bd1f278ba94df1eb3f95800b2741d33bd59`, подпись прежняя (`fac61745…033b9c`), assembleRelease PASS. Исходники — HEAD после коммита «UIX-FIT-10q» + versionCode.

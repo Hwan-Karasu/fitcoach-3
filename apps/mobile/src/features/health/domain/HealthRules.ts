@@ -84,8 +84,10 @@ export function lastValuePerDay(records: readonly Readonly<{ time: string; value
   return new Map([...latest].map(([date, entry]) => [date, entry.value]));
 }
 
-/** Килограммы → десятые доли (80,14 → 801), проценты → десятые доли; округление до ближайшей десятой. */
+/** Проценты → десятые доли; округление до ближайшей десятой. */
 export const toTenths = (value: number): number => Math.round(value * 10);
+/** Килограммы → сотые доли (88,354 → 8835); округление до ближайшей сотой. */
+export const toHundredths = (value: number): number => Math.round(value * 100);
 
 /** Неполный ответ нельзя объявить полной синхронизацией: зацикливание и лимит страниц — явная ошибка до записи фактов. */
 export async function readHealthPages<T>(readPage: (token?: string) => Promise<Readonly<{ records: readonly T[]; pageToken?: string }>>, maxPages = 50): Promise<T[]> {

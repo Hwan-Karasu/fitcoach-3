@@ -3,11 +3,11 @@ import { aggregateGroupByPeriod, getGrantedPermissions, getSdkStatus, initialize
 import type { HealthAvailability, HealthDayValue, HealthMetric, HealthRange } from "../domain/HealthModel.ts";
 import { HEALTH_METRICS } from "../domain/HealthModel.ts";
 import type { HealthConnectPort } from "../domain/HealthPorts.ts";
-import { lastValuePerDay, readHealthPages, sleepMinutesByWakeDate, toTenths, type SleepSessionInput } from "../domain/HealthRules.ts";
+import { lastValuePerDay, readHealthPages, sleepMinutesByWakeDate, toHundredths, toTenths, type SleepSessionInput } from "../domain/HealthRules.ts";
 
 type ReadType = "Steps" | "SleepSession" | "TotalCaloriesBurned" | "ActiveCaloriesBurned" | "Weight" | "BodyFat";
 const RECORD_OF: Readonly<Record<HealthMetric, ReadType>> = {
-  STEPS: "Steps", SLEEP_MIN: "SleepSession", TOTAL_KCAL: "TotalCaloriesBurned", ACTIVE_KCAL: "ActiveCaloriesBurned", WEIGHT_X10: "Weight", BODY_FAT_X10: "BodyFat",
+  STEPS: "Steps", SLEEP_MIN: "SleepSession", TOTAL_KCAL: "TotalCaloriesBurned", ACTIVE_KCAL: "ActiveCaloriesBurned", WEIGHT_X100: "Weight", BODY_FAT_X10: "BodyFat",
 };
 
 const pad = (value: number) => String(value).padStart(2, "0");
@@ -85,9 +85,9 @@ export class ExpoHealthConnectAdapter implements HealthConnectPort {
         const sessions: SleepSessionInput[] = (await readAll("SleepSession", new Date(midnight(range.from).getTime() - 24 * 3_600_000).toISOString()))
           .map((record) => ({ startTime: record.startTime, endTime: record.endTime, ...(record.stages === undefined ? {} : { stages: record.stages }) }));
         for (const [date, minutes] of sleepMinutesByWakeDate(sessions, (instant) => localDate(instant))) if (inRange(date)) result.push({ localDate: date, metric, value: minutes });
-      } else if (metric === "WEIGHT_X10") {
+      } else if (metric === "WEIGHT_X100") {
         const days = lastValuePerDay((await readAll("Weight", start)).map((record) => ({ time: record.time, value: record.weight.inKilograms })), (instant) => localDate(instant));
-        for (const [date, kg] of days) if (inRange(date)) result.push({ localDate: date, metric, value: toTenths(kg) });
+        for (const [date, kg] of days) if (inRange(date)) result.push({ localDate: date, metric, value: toHundredths(kg) });
       } else {
         const days = lastValuePerDay((await readAll("BodyFat", start)).map((record) => ({ time: record.time, value: record.percentage })), (instant) => localDate(instant));
         for (const [date, percent] of days) if (inRange(date)) result.push({ localDate: date, metric, value: toTenths(percent) });

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { isValidHealthValue } from "../apps/mobile/src/features/health/domain/HealthModel.ts";
-import { lastValuePerDay, sleepMinutesByWakeDate, toTenths } from "../apps/mobile/src/features/health/domain/HealthRules.ts";
+import { lastValuePerDay, sleepMinutesByWakeDate, toHundredths, toTenths } from "../apps/mobile/src/features/health/domain/HealthRules.ts";
 
 /** Москва, UTC+3 без перехода: локальная дата = дата момента, сдвинутого на 3 часа. */
 const msk = (instant: string): string => new Date(Date.parse(instant) + 3 * 3_600_000).toISOString().slice(0, 10);
@@ -53,6 +53,10 @@ test("Health: последнее значение за локальный ден
   assert.equal(toTenths(80.14), 801);
   assert.equal(toTenths(79.96), 800);
   assert.equal(toTenths(18.25), 183);
+  // Вес — сотые: 88,354 кг → 8835, 79,996 → 8000, 80,1 → 8010.
+  assert.equal(toHundredths(88.354), 8835);
+  assert.equal(toHundredths(79.996), 8000);
+  assert.equal(toHundredths(80.1), 8010);
 });
 
 test("Health: допустимые значения — границы шагов, сна, расхода, веса и процента жира", () => {
@@ -62,10 +66,10 @@ test("Health: допустимые значения — границы шаго�
   assert.equal(isValidHealthValue("SLEEP_MIN", 1440), true);
   assert.equal(isValidHealthValue("SLEEP_MIN", 1441), false);
   assert.equal(isValidHealthValue("TOTAL_KCAL", 20_000), true);
-  assert.equal(isValidHealthValue("WEIGHT_X10", 199), false);
-  assert.equal(isValidHealthValue("WEIGHT_X10", 200), true);
-  assert.equal(isValidHealthValue("WEIGHT_X10", 4000), true);
-  assert.equal(isValidHealthValue("WEIGHT_X10", 4001), false);
+  assert.equal(isValidHealthValue("WEIGHT_X100", 1999), false);
+  assert.equal(isValidHealthValue("WEIGHT_X100", 2000), true);
+  assert.equal(isValidHealthValue("WEIGHT_X100", 40000), true);
+  assert.equal(isValidHealthValue("WEIGHT_X100", 40001), false);
   assert.equal(isValidHealthValue("BODY_FAT_X10", 19), false);
   assert.equal(isValidHealthValue("BODY_FAT_X10", 750), true);
   assert.equal(isValidHealthValue("STEPS", -1), false);

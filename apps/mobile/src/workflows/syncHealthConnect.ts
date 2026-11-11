@@ -69,7 +69,7 @@ export async function syncHealthConnect(ports: HealthSyncPorts, today: string, n
     stepsDays += 1;
   }
 
-  const importBody = async (metric: Extract<HealthMetric, "WEIGHT_X10" | "BODY_FAT_X10">, type: "WEIGHT" | "BODY_FAT"): Promise<number> => {
+  const importBody = async (metric: Extract<HealthMetric, "WEIGHT_X100" | "BODY_FAT_X10">, type: "WEIGHT" | "BODY_FAT"): Promise<number> => {
     const fresh = read.filter((entry: HealthDayValue) => entry.metric === metric && !known.has(`${entry.localDate}|${metric}`));
     if (fresh.length === 0) return 0;
     const journal = await ports.measurements.listForClient(link.clientId);
@@ -78,13 +78,13 @@ export async function syncHealthConnect(ports: HealthSyncPorts, today: string, n
     let imported = 0;
     for (const entry of fresh) {
       if (taken.has(entry.localDate)) continue;
-      const saved = await ports.measurements.recordIfDayEmpty(link.clientId, { type, valueX100: entry.value * 10, localDate: entry.localDate, localMinute: null }, now);
+      const saved = await ports.measurements.recordIfDayEmpty(link.clientId, { type, valueX100: metric === "WEIGHT_X100" ? entry.value : entry.value * 10, localDate: entry.localDate, localMinute: null }, now);
       taken.add(entry.localDate);
       if (saved !== null) imported += 1;
     }
     return imported;
   };
-  const importedWeight = await importBody("WEIGHT_X10", "WEIGHT");
+  const importedWeight = await importBody("WEIGHT_X100", "WEIGHT");
   const importedFat = await importBody("BODY_FAT_X10", "BODY_FAT");
 
   await ports.health.saveSync(link.clientId, read, granted, now);
