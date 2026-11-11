@@ -41,7 +41,7 @@ export const withSpring = <T,>(value: T): T => value;
 export const cancelAnimation = (value: unknown) => { void value; };
 export const scheduleOnRN = (callback: (...args: never[]) => unknown, ...args: never[]) => callback(...args);
 type GestureEvent = { translationY: number; velocityY: number };
-type PanHandlers = { onBegin?: () => void; onUpdate?: (event: GestureEvent) => void; onEnd?: (event: GestureEvent) => void; onFinalize?: (event: GestureEvent, success: boolean) => void };
+type PanHandlers = { onBegin?: () => void; onUpdate?: (event: GestureEvent) => void; onEnd?: (event: GestureEvent, success: boolean) => void; onFinalize?: (event: GestureEvent, success: boolean) => void };
 /** Жест как набор записанных обработчиков: тест вызывает begin/update/end/finalize так, как их вызывает RNGH. */
 export const Gesture = { Pan: () => {
   const handlers: PanHandlers = {};
@@ -52,7 +52,7 @@ export const Gesture = { Pan: () => {
     onEnd: (callback: NonNullable<PanHandlers["onEnd"]>) => { handlers.onEnd = callback; return gesture; },
     onFinalize: (callback: NonNullable<PanHandlers["onFinalize"]>) => { handlers.onFinalize = callback; return gesture; },
     begin: () => handlers.onBegin?.(), update: (event: GestureEvent) => handlers.onUpdate?.(event),
-    end: (event: GestureEvent) => handlers.onEnd?.(event), finalize: (event: GestureEvent, success: boolean) => handlers.onFinalize?.(event, success),
+    end: (event: GestureEvent, success = true) => handlers.onEnd?.(event, success), finalize: (event: GestureEvent, success: boolean) => handlers.onFinalize?.(event, success),
   };
   return gesture;
 } };

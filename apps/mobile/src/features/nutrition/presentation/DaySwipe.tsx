@@ -1,4 +1,4 @@
-import { useCallback, useMemo, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, type ReactNode } from "react";
 import { StyleSheet } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
@@ -20,23 +20,27 @@ export function DaySwipe({ children }: Readonly<{ children: ReactNode }>) {
   const { day, today, setDay } = useClientDay();
   const shift = useSharedValue(0);
   const fade = useSharedValue(1);
+  // Актуальные день и «сегодня» читаются из ref: быстрый второй свайп до перерисовки не должен брать устаревший день.
+  const current = useRef({ day, today }); current.current = { day, today };
   const handle = useCallback((swipe: DaySwipeDirection) => {
-    const next = swipedDay(day, today, swipe);
+    const next = swipedDay(current.current.day, current.current.today, swipe);
     if (next === null) { shift.value = withSpring(0, { damping: 24, stiffness: 340 }); return; }
     setDay(next);
+    current.current = { day: next, today: current.current.today };
     shift.value = swipe === "NEXT" ? ENTER_SHIFT : -ENTER_SHIFT;
     fade.value = 0.35;
     shift.value = withTiming(0, { duration: 170 });
     fade.value = withTiming(1, { duration: 170 });
-  }, [day, today, setDay, shift, fade]);
+  }, [setDay, shift, fade]);
   const gesture = useMemo(() => Gesture.Pan().activeOffsetX([-24, 24]).failOffsetY([-14, 14])
     .onUpdate((event) => {
       "worklet";
       shift.value = event.translationX * DRAG_FACTOR;
     })
-    .onEnd((event) => {
+    .onEnd((event, success) => {
       "worklet";
-      const swipe = daySwipeOf(event.translationX, event.velocityX);
+      // Отменённый системой жест день не переключает.
+      const swipe = success ? daySwipeOf(event.translationX, event.velocityX) : null;
       if (swipe === null) shift.value = withSpring(0, { damping: 24, stiffness: 340 });
       else scheduleOnRN(handle, swipe);
     })

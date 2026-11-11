@@ -39,3 +39,10 @@ export function finishDatePick(result: string | null): void {
   emit();
   request?.resolve(result);
 }
+
+/** Ограничить дату диапазоном `min`/`max` (локальные `YYYY-MM-DD`, сравниваются как строки): стартовое значение вне диапазона не должно уходить как «выбранное». */
+export function clampDate(value: string, min?: string, max?: string): string {
+  if (min !== undefined && value < min) return min;
+  if (max !== undefined && value > max) return max;
+  return value;
+}

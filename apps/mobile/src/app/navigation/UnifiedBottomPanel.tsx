@@ -47,10 +47,11 @@ export function UnifiedBottomPanel({ services, onOpen }: Readonly<{
   }, [services.clients, avatarVersion]);
   const bottom = panelBottomPadding(insets.bottom, keyboardVisible);
   // Без панели и таймеров остаётся полоса высотой в системный отступ: экраны без своей панели (футеры, Excel, оформление) сами нижний inset не добавляют, полоса его заменяет.
-  const render = (area: ReactNode, hasTimers: boolean) => keyboardVisible ? null : entry === null && !hasTimers
-    ? <View style={{ height: bottom, backgroundColor: colors.canvas }} />
+  // При клавиатуре панель скрывается (`display: none`), а не размонтируется: сохраняются позиция карусели таймеров, их измерения и подписки.
+  const render = (area: ReactNode, hasTimers: boolean) => entry === null && !hasTimers
+    ? (keyboardVisible ? null : <View style={{ height: bottom, backgroundColor: colors.canvas }} />)
     : <View testID="unified-bottom-panel"
-        style={[styles.panel, { paddingBottom: bottom, backgroundColor: colors.navigation, borderTopColor: navigationBorder(colors) }]}>
+        style={[styles.panel, { paddingBottom: bottom, backgroundColor: colors.navigation, borderTopColor: navigationBorder(colors) }, keyboardVisible ? styles.hidden : null]}>
         {area}
         {entry?.participants}
         {entry?.navigation}
@@ -61,4 +62,4 @@ export function UnifiedBottomPanel({ services, onOpen }: Readonly<{
 }
 
 /** Панель — монолит, слитый с экраном, как клавиатура Android (UIX-FIT-10, UI-OWN-089): на всю ширину, без скруглений, отступов от краёв и теней; сверху тонкая линия. */
-const styles = StyleSheet.create({ panel: { borderTopWidth: 1, paddingTop: 4, paddingHorizontal: 4, gap: 0 } });
+const styles = StyleSheet.create({ panel: { borderTopWidth: 1, paddingTop: 4, paddingHorizontal: 4, gap: 0 }, hidden: { display: "none" } });

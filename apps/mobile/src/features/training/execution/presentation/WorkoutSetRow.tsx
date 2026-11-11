@@ -189,7 +189,9 @@ export const SetRow = memo(function SetRow({ scopeKey, exercise, set, position, 
     return live;
   };
   const storedShown = visibleConfirmation({ mode, fact, fields, sided, drafts: {} });
-  const waiting = overlay !== null && (["S", "L", "R"] as const).some((side) => fields.some((field) => pending.has(draftCellKey(side, field))));
+  // Накладка живёт, пока есть КОРРЕКТНЫЙ черновик, ждущий записи. Неверный ввод (запись которого не уйдёт и «висит») в черновики не попадает,
+  // поэтому застрявшая запись не отвязывает строку от факта (например, нажатие галочки в ручном режиме после неверного ввода).
+  const waiting = overlay !== null && Object.keys(liveDrafts()).length > 0;
   const shown = waiting ? overlay : storedShown;
   const shownRef = useRef(shown); shownRef.current = shown;
   const onDraft = (prefix: string, field: SetField, value: number | null | undefined) => {

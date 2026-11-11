@@ -63,7 +63,7 @@ const TimerCard = memo(function TimerCard({ timer, timers, active, finished, mul
   if (single) {
     // Один таймер: имя и упражнение по центру; под ними «−15 +15 · время · пауза и пропуск» одним рядом (макет, сценарий 1).
     return <View style={styles.cardSingle}>
-      <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={() => onOpen(timer)} style={styles.headingSingle}>
+      <Pressable accessibilityRole="button" accessibilityLabel={label} hitSlop={{ top: 7, bottom: 7 }} onPress={() => onOpen(timer)} style={styles.headingSingle}>
         {/* Имя и упражнение — двумя строками: ФИО и название не обрезаются, а кнопки и цифры мельче; высота панели прежняя. */}
         <Text numberOfLines={1} style={[styles.caption, styles.captionName, { color: colors.textPrimary }]}>{timer.clientName}</Text>
         <Text numberOfLines={1} style={[styles.caption, styles.captionExercise, { color: colors.textSecondary }]}>{timer.exerciseName}</Text>
@@ -130,18 +130,23 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
   const startProgress = useSharedValue<0 | 1>(1);
   const prefRef = useRef(preference); prefRef.current = preference;
   const driven = useRef(false);
+  // Выбранное состояние (1 — развёрнута, 0 — свёрнута) для откатов жеста на UI-потоке.
+  const prefProgress = useSharedValue<0 | 1>(1);
+  // Пока слои не измерены (первый кадр), высота нулевая: иначе область «прыгает» без анимации.
   const areaStyle = useAnimatedStyle(() => ({
-    height: present.value * (HANDLE_H + collapsedH.value + (expandedH.value - collapsedH.value) * progress.value),
+    height: expandedH.value > 0 && collapsedH.value > 0
+      ? present.value * (HANDLE_H + collapsedH.value + (expandedH.value - collapsedH.value) * progress.value) : 0,
   }));
   const expandedLayer = useAnimatedStyle(() => ({ opacity: progress.value }));
   const collapsedLayer = useAnimatedStyle(() => ({ opacity: 1 - progress.value }));
   const gone = mode === "hidden";
   useEffect(() => { present.value = withTiming(gone ? 0 : 1, { duration: PANEL_ANIM_MS }); }, [gone, present]);
   useEffect(() => {
+    prefProgress.value = preference === "expanded" ? 1 : 0;
     // После жеста панель уже доводится пружиной с начальной скоростью пальца: повторная анимация её бы сбила.
     if (driven.current) { driven.current = false; return; }
     progress.value = withTiming(preference === "expanded" ? 1 : 0, { duration: PANEL_ANIM_MS });
-  }, [preference, progress]);
+  }, [preference, progress, prefProgress]);
   const collapse = useCallback(() => setPreference("collapsed"), []);
   const expand = useCallback(() => setPreference("expanded"), []);
   const settled = useCallback((expanded: boolean) => {
@@ -160,8 +165,10 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
       const range = Math.max(1, expandedH.value - collapsedH.value);
       progress.value = Math.min(1, Math.max(0, startProgress.value - event.translationY / range));
     })
-    .onEnd((event) => {
+    .onEnd((event, success) => {
       "worklet";
+      // Отменённый системой жест состояние не меняет: панель вернёт onFinalize к выбранному.
+      if (!success) return;
       const range = Math.max(1, expandedH.value - collapsedH.value);
       const reached = Math.min(1, Math.max(0, startProgress.value - event.translationY / range));
       const target = restPanelSettleTarget(startProgress.value, reached, event.velocityY, range);
@@ -170,9 +177,9 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
     })
     .onFinalize((_event, success) => {
       "worklet";
-      // Жест прервали системой (без onEnd): панель не должна зависнуть посередине.
-      if (!success) progress.value = withTiming(startProgress.value, { duration: PANEL_ANIM_MS });
-    }), [progress, startProgress, expandedH, collapsedH, settled]);
+      // Жест не дошёл до конца (касание без движения, отмена системой): панель возвращается к ВЫБРАННОМУ состоянию, а не к началу жеста.
+      if (!success) progress.value = withTiming(prefProgress.value, { duration: PANEL_ANIM_MS });
+    }), [progress, startProgress, prefProgress, expandedH, collapsedH, settled]);
   const measureExpanded = useCallback((event: LayoutChangeEvent) => { expandedH.value = event.nativeEvent.layout.height; }, [expandedH]);
   const measureCollapsed = useCallback((event: LayoutChangeEvent) => { collapsedH.value = event.nativeEvent.layout.height; }, [collapsedH]);
   const scroll = useRef<ScrollView>(null);
@@ -208,12 +215,14 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
         <GestureDetector gesture={gesture}>
           <View collapsable={false}>
             <Pressable accessibilityRole="button" accessibilityLabel={mode === "collapsed" ? "Развернуть таймеры отдыха" : "Свернуть таймеры отдыха"}
-              accessibilityState={{ expanded: mode === "expanded" }} hitSlop={{ top: 17, bottom: 17 }}
+              accessibilityState={{ expanded: mode === "expanded" }} hitSlop={{ top: 18, bottom: 18 }}
               onPress={mode === "collapsed" ? expand : collapse} style={styles.handle}>{grip}</Pressable>
           </View>
         </GestureDetector>
       </View>
+      {/* Невидимый слой скрыт и для читалок экрана: иначе TalkBack читает и нажимает кнопки, которых не видно. */}
       <Animated.View testID="rest-panel-expanded" onLayout={measureExpanded} pointerEvents={mode === "expanded" ? "auto" : "none"}
+        importantForAccessibility={mode === "expanded" ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={mode !== "expanded"}
         style={[styles.layer, expandedLayer]}>
         <ScrollView ref={scroll} horizontal scrollEnabled={layout.stops > 1} showsHorizontalScrollIndicator={false}
           keyboardShouldPersistTaps="handled" contentContainerStyle={styles.cards} snapToInterval={layout.step} decelerationRate="fast"
@@ -233,6 +242,7 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
         </View> : null}
       </Animated.View>
       <Animated.View testID="rest-panel-collapsed" onLayout={measureCollapsed} pointerEvents={mode === "collapsed" ? "auto" : "none"}
+        importantForAccessibility={mode === "collapsed" ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={mode !== "collapsed"}
         style={[styles.layer, collapsedLayer]}>
         {first ? <View style={styles.summary}>
           <Pressable accessibilityRole="button"

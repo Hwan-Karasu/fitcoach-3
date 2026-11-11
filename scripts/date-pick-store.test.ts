@@ -31,3 +31,10 @@ test("выбор даты: новый запрос отменяет прежни
   unregister();
   assert.equal(await second, null, "хост закрыт — запрос завершён");
 });
+
+test("выбор даты: стартовая дата вне диапазона подтягивается к границе", async () => {
+  const { clampDate } = await import("../apps/mobile/src/shared/ui/components/datePickStore.ts");
+  assert.equal(clampDate("2026-11-20", undefined, "2026-11-11"), "2026-11-11");
+  assert.equal(clampDate("2026-10-01", "2026-11-01", undefined), "2026-11-01");
+  assert.equal(clampDate("2026-11-05", "2026-11-01", "2026-11-11"), "2026-11-05");
+});

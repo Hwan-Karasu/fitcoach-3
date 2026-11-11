@@ -31,7 +31,16 @@ export function BottomSheet({ visible, title, onClose, children, footer, fill = 
   const height = useSharedValue(0);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
-  const close = useCallback(() => closeRef.current(), []);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const close = useCallback(() => {
+    closeRef.current();
+    // Закрытие могли отклонить (например, идёт сохранение): лист остался открытым — возвращаем его на место, а не оставляем за экраном.
+    if (settleTimer.current !== null) clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(() => { settleTimer.current = null; if (visibleRef.current) shift.value = withSpring(0, { damping: 24, stiffness: 340 }); }, 120);
+  }, [shift]);
+  useEffect(() => () => { if (settleTimer.current !== null) clearTimeout(settleTimer.current); }, []);
   // Лист открывается на месте, даже если прошлый раз его закрыли жестом (сдвиг остался равным высоте).
   useEffect(() => { if (visible) shift.value = 0; }, [visible, shift]);
   const pan = useMemo(() => Gesture.Pan().activeOffsetY([-10, 10]).failOffsetX([-24, 24])
