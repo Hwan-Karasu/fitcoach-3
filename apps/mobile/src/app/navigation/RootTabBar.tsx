@@ -15,8 +15,8 @@ const tabIcons: Readonly<Record<string, LucideIcon>> = { Clients: Users, Calenda
   Home: House, Nutrition: Utensils, Training: Dumbbell, More: Ellipsis };
 
 /**
- * Единая плавающая нижняя панель (UI-OWN-018) для всех наборов вкладок: вид один и тот же, меняются только
- * кнопки. «Зефирка» (UI-OWN-048): белая, радиус 26, тень; активная вкладка — мягкий фон акцента.
+ * Единая нижняя панель для всех наборов вкладок: вид один и тот же, меняются только кнопки. Монолит на всю ширину без скруглений
+ * (UI-OWN-089, заменяет плавающую панель UI-OWN-018/059): активная вкладка — мягкая «таблетка» только под значком, подпись видна всегда.
  */
 export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTabBarProps>) {
   navigationPerformance.render("RootTabBar");
@@ -55,12 +55,12 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
                 const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
                 if (!focused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
               }}
-              style={[styles.tab, compact ? styles.tabCompact : null, focused ? { backgroundColor: colors.accentSoft } : null]}
+              style={[styles.tab, compact ? styles.tabCompact : null]}
             >
-              <View>
-                <Icon size={compact ? 17 : 20} color={color} strokeWidth={focused ? 2.2 : 1.9} />
+              <View style={[styles.iconPill, compact ? styles.iconPillCompact : null, focused ? { backgroundColor: colors.accentSoft } : null]}>
+                <Icon size={compact ? 17 : 22} color={color} strokeWidth={focused ? 2.2 : 1.9} />
                 {badge !== undefined ? (
-                  <View style={[styles.badge, { backgroundColor: colors.accentFill }]}>
+                  <View style={[styles.badge, compact ? styles.badgeCompact : null, { backgroundColor: colors.accentFill }]}>
                     <Text style={[styles.badgeText, { color: colors.onAccentFill }]}>{String(badge)}</Text>
                   </View>
                 ) : null}
@@ -101,13 +101,16 @@ const styles = StyleSheet.create({
   weekArrowColumn: { width: 36, minHeight: 44, alignSelf: "stretch", justifyContent: "center" },
   weekArrow: { width: 36, height: 44, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   /** Строка экрана над вкладками (переключатель участников): внутри той же плашки. */
-  tabsRow: { flexDirection: "row", gap: 4, minHeight: 44 },
+  tabsRow: { flexDirection: "row", gap: 4, minHeight: 48 },
   tabsRowIcons: { minHeight: 36 },
-  tabsRowCompact: { minHeight: 30 },
-  tabCompact: { gap: 0, borderRadius: 16 },
+  tabsRowCompact: { minHeight: 34 },
+  tabCompact: { gap: 0 },
+  iconPill: { width: 56, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  iconPillCompact: { width: 44, height: 20, borderRadius: 10 },
   labelCompact: { fontSize: 11, lineHeight: 12 },
-  tab: { flex: 1, flexBasis: 0, minWidth: 0, borderRadius: 22, alignItems: "center", justifyContent: "center", gap: 1 },
+  tab: { flex: 1, flexBasis: 0, minWidth: 0, alignItems: "center", justifyContent: "center", gap: 2 },
   label: { fontSize: 11, lineHeight: 13 },
-  badge: { position: "absolute", top: -4, left: 14, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  badge: { position: "absolute", top: -4, left: 31, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  badgeCompact: { left: 25, top: -6 },
   badgeText: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14 },
 });

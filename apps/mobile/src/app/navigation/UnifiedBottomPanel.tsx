@@ -52,7 +52,5 @@ export function UnifiedBottomPanel({ services, onOpen }: Readonly<{
   </PaletteOverride>;
 }
 
-const styles = StyleSheet.create({ panel: {
-  borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1,
-  paddingTop: 2, paddingHorizontal: 6, gap: 0,
-} });
+/** Панель — монолит, слитый с экраном, как клавиатура Android (UIX-FIT-10, UI-OWN-089): на всю ширину, без скруглений, отступов от краёв и теней; сверху тонкая линия. */
+const styles = StyleSheet.create({ panel: { borderTopWidth: 1, paddingTop: 4, paddingHorizontal: 4, gap: 0 } });
