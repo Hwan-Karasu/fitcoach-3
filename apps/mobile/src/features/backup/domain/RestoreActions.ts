@@ -1,9 +1,15 @@
 export type RestoreActionErrorCode = "RESTORE_UNAVAILABLE" | "RESTORE_NOT_READY" | "RESTORE_BUSY" | "RESTORE_INVALID_BACKUP"
   | "RESTORE_SOURCE_UNAVAILABLE" | "RESTORE_STALE_PREVIEW" | "RESTORE_NO_SPACE" | "RESTORE_FAILED"
-  | "RESTORE_POINT_UNAVAILABLE" | "RESTORE_RECOVERY_REQUIRED";
+  | "RESTORE_POINT_UNAVAILABLE" | "RESTORE_RECOVERY_REQUIRED" | "RESTORE_NEWER_BACKUP";
+/** Этапы замены данных для экрана: процент неизвестен, поэтому показывается неопределённый индикатор. */
+export const RESTORE_APPLY_PHASES = ["CHECKING", "SAVING_POINT", "REPLACING"] as const;
+export type RestoreApplyPhase = typeof RESTORE_APPLY_PHASES[number];
+export type RestoreApplyObserver = (phase: RestoreApplyPhase) => void;
 export class RestoreActionError extends Error {
   readonly code: RestoreActionErrorCode;
-  constructor(code: RestoreActionErrorCode) { super(code); this.code = code; }
+  /** Этап подготовки, на котором произошёл сбой (для кода на экране и журнала); без путей и данных. */
+  readonly stage: string | null;
+  constructor(code: RestoreActionErrorCode, stage: string | null = null) { super(code); this.code = code; this.stage = stage; }
 }
 export interface RestorePreview {
   readonly id: string;
@@ -16,11 +22,18 @@ export interface ReturnPointSummary { readonly id: string; readonly createdAt: s
 export interface RestoreActionState {
   readonly preparation?: RestorePreparationProgress | null;
   readonly available: boolean;
-  readonly phase: "IDLE" | "PREPARING" | "PREVIEW" | "APPLYING" | "DELETING" | "RECOVERING" | "RECOVERY_REQUIRED";
+  /** LOADING — тихая служебная работа (чтение точки возврата, сброс предпросмотра): без полосы подготовки (BKP-AUDIT-1 D3). */
+  readonly phase: "IDLE" | "LOADING" | "PREPARING" | "PREVIEW" | "APPLYING" | "DELETING" | "RECOVERING" | "RECOVERY_REQUIRED";
+  /** Идёт ли сейчас подготовка, отменённая кнопкой: результат будет выброшен после её завершения. */
+  readonly cancelRequested?: boolean;
+  /** Этап применения (проверка → точка возврата → замена); null вне применения. */
+  readonly applying?: RestoreApplyPhase | null;
   readonly preview: RestorePreview | null;
   readonly point: ReturnPointSummary | null;
   readonly notice: "RESTORED" | "RETURNED" | "POINT_DELETED" | "CHECKED" | null;
   readonly error: RestoreActionErrorCode | null;
+  /** Этап подготовки, на котором случился сбой (для строки «Код: … · этап» на экране). */
+  readonly errorStage?: string | null;
 }
 export type RestoreActionOutcome = Readonly<{ kind: "UPDATED" | "CANCELLED" | "RESTORED" | "RETURNED" | "POINT_DELETED" }>
   | Readonly<{ kind: "FAILED"; code: RestoreActionErrorCode }>;
@@ -41,7 +54,7 @@ export interface RestoreActionsPort {
 export interface RestoreJobsPort {
   prepareFile(observe?: RestorePreparationObserver): Promise<RestorePreview | null>;
   prepareReturn(pointId: string, observe?: RestorePreparationObserver): Promise<RestorePreview>;
-  apply(previewId: string): Promise<"COMMITTED" | "ROLLED_BACK">;
+  apply(previewId: string, observe?: RestoreApplyObserver): Promise<"COMMITTED" | "ROLLED_BACK">;
   /** Release ephemeral preparation. Published journals, active points and LIVE media
    * remain protected; an adapter must never recursively delete a committed job here. */
   discard(previewId: string): Promise<void>;

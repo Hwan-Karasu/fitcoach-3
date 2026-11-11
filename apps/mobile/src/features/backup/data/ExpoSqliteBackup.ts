@@ -1,7 +1,7 @@
 import { File, FileMode } from "expo-file-system";
 import { moveAsync } from "expo-file-system/legacy";
 import * as SQLite from "expo-sqlite";
-import { inspectDatabaseIdentity } from "../../../shared/db/DatabaseIdentity.ts";
+import { DatabaseCompatibilityError, inspectDatabaseIdentity } from "../../../shared/db/DatabaseIdentity.ts";
 import { isStorageFull } from "../domain/BackupFailure.ts";
 import { observeBackup, type BackupObserver } from "../domain/BackupProgress.ts";
 import { SnapshotError, type SnapshotManifest } from "../domain/SnapshotManifest.ts";
@@ -10,8 +10,11 @@ import { expoSnapshotSql } from "./ExpoSnapshotSql.ts";
 import { SqliteSnapshotEngine, type SnapshotSchema } from "./SqliteSnapshotEngine.ts";
 import type { SnapshotMediaSettings } from "./SnapshotMediaPort.ts";
 
+/** Прежде DatabaseCompatibilityError (чужая/повреждённая/более новая база) попадал в SNAPSHOT_IO_FAILED и на экране выглядел как
+ * «не удалось прочитать файл» (BKP-AUDIT-1 D1). Теперь причина сохраняется: newer — отдельно, остальное — невалидная копия. */
 function typed(error: unknown): never {
   if (error instanceof SnapshotError) throw error;
+  if (error instanceof DatabaseCompatibilityError) throw new SnapshotError(error.code === "DATABASE_NEWER" ? "SNAPSHOT_NEWER" : "SNAPSHOT_INVALID");
   throw new SnapshotError(isStorageFull(error) ? "SNAPSHOT_SPACE_LOW" : "SNAPSHOT_IO_FAILED");
 }
 function noSidecars(file: File): void {
@@ -73,7 +76,7 @@ export class ExpoSqliteBackup {
         stage = "seal"; await this.engine.sealSnapshot(expoSnapshotSql(copy), metadata, settings);
       } finally { await copy.closeAsync(); }
       stage = "verify"; const manifest = await this.inspectPrivate(partial, settings.observe);
-      if (destination.exists) throw new SnapshotError("SNAPSHOT_DESTINATION_EXISTS");
+      stage = "move"; if (destination.exists) throw new SnapshotError("SNAPSHOT_DESTINATION_EXISTS");
       await moveAsync({ from: partial.uri, to: destination.uri });
       return manifest;
     } catch (error) {
@@ -96,7 +99,7 @@ export class ExpoSqliteBackup {
         await this.engine.sealSnapshot(expoSnapshotSql(db), metadata, settings, knownContentSha256);
       } finally { await db.closeAsync(); }
       stage = "verify"; const manifest = await this.inspectPrivate(copy, settings.observe);
-      if (destination.exists) throw new SnapshotError("SNAPSHOT_DESTINATION_EXISTS");
+      stage = "move"; if (destination.exists) throw new SnapshotError("SNAPSHOT_DESTINATION_EXISTS");
       await moveAsync({ from: copy.uri, to: destination.uri });
       return manifest;
     } catch (error) {

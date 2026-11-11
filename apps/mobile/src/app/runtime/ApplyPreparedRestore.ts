@@ -5,15 +5,17 @@ import { restoreWithRuntimeJournal, type RuntimeRestoreJournal } from "./Journal
 
 export interface PreparedRestoreIdentity {
   readonly id: string;
-  readonly currentContentSha256: string;
+  /** Непрозрачный пин логического состояния текущих данных на момент предпросмотра (BKP-AUDIT-1 C2: счётчик записей вместо
+   * повторного полного хеша; тесты протокола могут подставлять канонический хеш). Сравнивается только на равенство. */
+  readonly currentPin: string;
   readonly incomingSha256: string;
 }
 interface Options {
   readonly storage: RestoreStorage;
   readonly journal: RuntimeRestoreJournal;
   readonly completion: RestoreCompletionProtocol;
-  /** Read a stable CURRENT logical view only after all runtime handles are closed. */
-  readonly currentContentSha256: () => Promise<string>;
+  /** Read the same kind of pin only after all runtime handles are closed. */
+  readonly currentPin: () => Promise<string>;
   readonly checkSpace: () => Promise<void>;
   /** The same cold protocol, with a delegated already-closed lease for every job. */
   readonly recoverPublished: () => Promise<void>;
@@ -28,7 +30,7 @@ function required(): never { throw new RestoreActionError("RESTORE_RECOVERY_REQU
  * the untouched healthy DB; uncertain file/protocol failures keep runtime closed. */
 export async function applyPreparedRestore(input: PreparedRestoreIdentity, options: Options): Promise<"COMMITTED" | "ROLLED_BACK"> {
   const job = { ...input };
-  if (!/^[a-f0-9]{64}$/u.test(job.currentContentSha256)) throw new RestoreActionError("RESTORE_STALE_PREVIEW");
+  if (typeof job.currentPin !== "string" || job.currentPin.length === 0 || job.currentPin.length > 128) throw new RestoreActionError("RESTORE_STALE_PREVIEW");
   parsePendingRuntimeRestore({ version: 2, operationId: job.id, currentSha256: "0".repeat(64), incomingSha256: job.incomingSha256 });
   const { storage } = options; let result: Result;
   try {
@@ -36,7 +38,7 @@ export async function applyPreparedRestore(input: PreparedRestoreIdentity, optio
       await storage.validateDatabase("LIVE"); // Unhealthy/missing LIVE must never be reopened as a normal rejection.
       try { await storage.validateDatabase("INCOMING"); }
       catch { return rejected("RESTORE_INVALID_BACKUP"); }
-      if (await options.currentContentSha256() !== job.currentContentSha256) return rejected("RESTORE_STALE_PREVIEW");
+      if (await options.currentPin() !== job.currentPin) return rejected("RESTORE_STALE_PREVIEW");
       if (await storage.sha256("INCOMING") !== job.incomingSha256) return rejected("RESTORE_INVALID_BACKUP");
       try { await options.checkSpace(); }
       catch (error) { return rejected(error instanceof RestoreActionError ? error.code : "RESTORE_SOURCE_UNAVAILABLE"); }

@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
-import { RESTORE_PREPARATION_PHASES, type RestorePreparationProgress, type RestorePreparationPhase,
+import { RESTORE_APPLY_PHASES, RESTORE_PREPARATION_PHASES, type RestoreApplyPhase, type RestorePreparationProgress, type RestorePreparationPhase,
   type BackupProgress, type BackupRunTiming, type BackupStage, type PrepareStage } from "../../features/backup/public.ts";
 import { ProgressBar } from "../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -18,15 +18,30 @@ const shortLabels: Readonly<Record<BackupStage, string>> = {
 };
 const NBSP = String.fromCharCode(0xa0);
 const restoreLabels: Record<RestorePreparationPhase, string> = {
-  COPY_SOURCE: "Копируем выбранный файл", VERIFY_SOURCE: "Проверяем файл копии",
-  PREPARE_CANDIDATE: "Подготавливаем данные копии", VERIFY_CURRENT: "Проверяем текущие данные", READY: "Копия готова",
+  COPY_SOURCE: "Копируем выбранный файл", VERIFY_SOURCE: "Проверяем целостность копии",
+  PREPARE_CANDIDATE: "Подготавливаем данные копии", READY: "Копия готова",
 };
+const applyLabels: Record<RestoreApplyPhase, string> = {
+  CHECKING: "Проверяем данные перед заменой", SAVING_POINT: "Сохраняем точку возврата", REPLACING: "Заменяем данные",
+};
+/** Замена данных: доля выполнения неизвестна, поэтому индикатор без процента (BKP-AUDIT-1 B3). */
+export function RestoreApplyView({ phase }: Readonly<{ phase: RestoreApplyPhase | null }>) {
+  const { palette } = usePrototypeTheme();
+  const label = applyLabels[phase ?? "CHECKING"];
+  const index = RESTORE_APPLY_PHASES.indexOf(phase ?? "CHECKING") + 1;
+  return <View style={styles.progress} accessibilityLiveRegion="polite">
+    <Text style={[styles.label, { color: palette.tokens.textSecondary }]}>{`Шаг ${index} из ${RESTORE_APPLY_PHASES.length}: ${label}… Не закрывайте приложение.`}</Text>
+    <ProgressBar value={null} accessibilityLabel={label} />
+  </View>;
+}
 export function RestorePreparationView({ progress }: Readonly<{ progress: RestorePreparationProgress | null }>) {
   const { palette } = usePrototypeTheme();
   const phase = progress?.phase ?? "COPY_SOURCE";
   const label = restoreLabels[phase];
   const known = progress?.done !== null && progress?.done !== undefined && progress.total !== null && progress.total > 0;
-  const value = known ? Math.min(1, Math.max(0, progress.done! / progress.total!)) : null;
+  // До окончания этапа процент не показывает 100 %: иначе «100 %» и следующий этап выглядят как повторный запуск проверки.
+  const cap = phase === "READY" ? 1 : 0.99;
+  const value = known ? Math.min(cap, Math.max(0, progress.done! / progress.total!)) : null;
   return <View style={styles.progress} accessibilityLiveRegion="polite">
     <Text style={[styles.label, { color: palette.tokens.textSecondary }]}>
       {`Этап ${RESTORE_PREPARATION_PHASES.indexOf(phase) + 1} из ${RESTORE_PREPARATION_PHASES.length}: ${label}${value === null ? "…" : ` · ${Math.floor(value * 100)}${NBSP}%`}`}
@@ -62,7 +77,7 @@ export function BackupTimingText({ timing, prefix }: Readonly<{ timing: BackupRu
 }
 
 /** Код причины для обращения: без путей и данных клиентов. */
-export function BackupErrorCode({ code, stage }: Readonly<{ code: string; stage: PrepareStage | null }>) {
+export function BackupErrorCode({ code, stage }: Readonly<{ code: string; stage: PrepareStage | string | null }>) {
   const { palette } = usePrototypeTheme();
   return <Text selectable style={[styles.small, { color: palette.tokens.textMuted }]}>Код: {code}{stage === null ? "" : ` · ${stage}`}</Text>;
 }

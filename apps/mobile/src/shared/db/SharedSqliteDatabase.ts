@@ -25,6 +25,7 @@ export class SharedSqliteDatabase {
   private failedOpen: SqliteOpenCloseError | null = null;
   private readonly open: () => Promise<SqliteConnectionPort>;
   private changes = 0;
+  private writes = 0;
 
   constructor(open: () => Promise<SqliteConnectionPort>) {
     this.open = open;
@@ -33,6 +34,10 @@ export class SharedSqliteDatabase {
    * подменяет файл). Не изменился — содержимое базы то же (BKP-PERF-3). Чтения через run тоже считаются: лишний рост
    * лишь вызывает полную проверку копии. */
   get changeToken(): number { return this.changes; }
+  /** Растёт только после завершённой записи (run/транзакция), но не при открытии соединения и не при обслуживании. Пин «данные не
+   * менялись между предпросмотром и подтверждением восстановления» (BKP-AUDIT-1 C2): единственный писатель рабочей базы — это
+   * соединение этого класса; остальные соединения с рабочим файлом открываются только на чтение (query_only). */
+  get writeToken(): number { return this.writes; }
 
   acquire(): Promise<SqliteDatabaseLease> {
     return this.serial(async () => {
@@ -141,7 +146,7 @@ export class SharedSqliteDatabase {
       void result.then(() => pending.delete(result), () => pending.delete(result));
       return result;
     };
-    const changed = <T>(value: T): T => { this.changes++; return value; };
+    const changed = <T>(value: T): T => { this.changes++; this.writes++; return value; };
     this.changes++;
     const internal: SqliteConnectionPort = {
       run: (sql, bindings) => track(() => raw.run(sql, bindings).then(changed)),

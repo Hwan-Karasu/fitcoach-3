@@ -21,6 +21,10 @@ export class ExpoRestoreStorage implements RestoreStorage {
   private readonly options: ExpoRestoreStorageOptions;
   private active = false;
   private checkedFiles = false;
+  /** SHA-256 файлов, чья структура уже прошла inspectDatabase в ЭТОМ закрытом lease (BKP-AUDIT-1 C4). Одни и те же байты
+   * (LIVE → SAFETY, INCOMING → LIVE после замены) дают тот же вердикт, повторный integrity/foreign_key_check лишний. Набор
+   * сбрасывается при каждом входе в lease: между lease файл мог измениться. */
+  private validated = new Set<string>();
   constructor(options: ExpoRestoreStorageOptions) {
     if (Platform.OS !== "android") throw new Error("RESTORE_PLATFORM_UNSUPPORTED");
     this.options = options;
@@ -36,6 +40,7 @@ export class ExpoRestoreStorage implements RestoreStorage {
       if (this.active) throw new Error("RESTORE_STORAGE_BUSY");
       this.active = true;
       this.checkedFiles = false;
+      this.validated = new Set();
       try {
         this.options.directory.create({ idempotent: true, intermediates: true });
         return await task();
@@ -73,6 +78,8 @@ export class ExpoRestoreStorage implements RestoreStorage {
       const magic = [83, 81, 76, 105, 116, 101, 32, 102, 111, 114, 109, 97, 116, 32, 51, 0];
       if (bytes.length !== 16 || magic.some((byte, index) => bytes[index] !== byte)) throw new Error("RESTORE_DATABASE_INVALID");
     } finally { reader.close(); }
+    const digest = (await expoFileSha256(file)).sha256;
+    if (this.validated.has(digest)) return;
     // Expo has no SQLITE_OPEN_READONLY option. Only private slots may be opened here.
     const db = await SQLite.openDatabaseAsync(file.name, { useNewConnection: true }, file.parentDirectory.uri);
     try {
@@ -84,6 +91,8 @@ export class ExpoRestoreStorage implements RestoreStorage {
       };
       if (await this.options.inspectDatabase(statements) !== "OWNED") throw new Error("RESTORE_DATABASE_INVALID");
     } finally { await db.closeAsync(); }
+    // Файл закрыт и неизменяем внутри lease: запоминаем только если байты после проверки те же.
+    if ((await expoFileSha256(file)).sha256 === digest) this.validated.add(digest);
   }
   async copyExclusive(from: RestoreSlot, to: RestoreSlot): Promise<void> {
     this.assertFileAccess();

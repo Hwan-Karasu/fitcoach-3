@@ -17,7 +17,9 @@ export interface SnapshotManifest {
 }
 export class SnapshotError extends Error {
   /** SNAPSHOT_SPACE_LOW — SQLite/ОС сообщили о заполненном хранилище (BKP-DIAG-1); прочие сбои IO — SNAPSHOT_IO_FAILED. */
-  readonly code: "SNAPSHOT_INVALID" | "SNAPSHOT_INCOMPLETE_MEDIA" | "SNAPSHOT_DESTINATION_EXISTS" | "SNAPSHOT_IO_FAILED" | "SNAPSHOT_SPACE_LOW";
+  readonly code: "SNAPSHOT_INVALID" | "SNAPSHOT_INCOMPLETE_MEDIA" | "SNAPSHOT_DESTINATION_EXISTS" | "SNAPSHOT_IO_FAILED" | "SNAPSHOT_SPACE_LOW"
+    /** Копия создана более новой версией приложения (BKP-AUDIT-1 D1): не «файл недоступен», а «обновите приложение». */
+    | "SNAPSHOT_NEWER";
   constructor(code: SnapshotError["code"]) { super(code); this.code = code; }
 }
 export function parseSnapshotManifest(json: unknown, workspaceId: string): SnapshotManifest {

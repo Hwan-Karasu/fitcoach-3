@@ -320,7 +320,7 @@ export function createRuntime(mode: "development" | "production"): ApplicationRu
   };
   const backupQueue = new BackupExclusive();
   const manualBackup = createManualBackup(development, commands, boot, backupQueue);
-  const restoreActions = createRestoreActions(development, commands, boot, maintenance, backupQueue);
+  const restoreActions = createRestoreActions(development, commands, boot, maintenance, backupQueue, () => database.writeToken);
   const automaticBackup = createAutomaticBackup(development, commands, boot, backupQueue, () => database.changeToken);
   const transfer = createTrainingTransfer(database, workspaceId, trainingPlans, trainingExecution, exercises);
   const trainingTransfer = commands.port(transfer);

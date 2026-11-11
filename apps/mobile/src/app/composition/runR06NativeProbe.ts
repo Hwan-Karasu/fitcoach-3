@@ -223,7 +223,7 @@ export async function runR06NativeProbe(mode: "NORMAL" | "ACTIONS" | "ACTIONS_RE
       stage = "RESTORE_ACTIONS";
       await runtime.initialize();
       const makeJobs = () => new ExpoRestoreJobs({ root: journal, live: liveFile, images: liveImages,
-        maintenance: runtime.maintenance, pick: async () => snapshotFile });
+        maintenance: runtime.maintenance, currentWriteToken: () => runtime.database.writeToken, pick: async () => snapshotFile });
       let jobs = makeJobs();
       const service = () => new RestoreActionsService({ enabled: true, jobs, read: (task) => runtime.commands.run(task),
         ready: () => runtime.maintenance.state === "ACTIVE" });
@@ -442,7 +442,7 @@ async function recoverActionsProbe(): Promise<R06NativeReport> {
   try {
     await runtime.initialize();
     const later = (await runtime.card.save(null, { displayName: "R06 SYNTHETIC RECEIPT LATER" }, {})).client;
-    const jobs = new ExpoRestoreJobs({ root: journal, live: new File(root, "live.db"), images: new Directory(root, "live-images"), maintenance: runtime.maintenance });
+    const jobs = new ExpoRestoreJobs({ root: journal, live: new File(root, "live.db"), images: new Directory(root, "live-images"), maintenance: runtime.maintenance, currentWriteToken: () => runtime.database.writeToken });
     const receipt = await jobs.recover();
     check("native_actions_recovery_returns_matching_terminal_receipt", receipt?.id === plan.operationId && receipt.outcome === "COMMITTED");
     const actions = new RestoreActionsService({ enabled: true, jobs, read: (task) => runtime.commands.run(task), ready: () => runtime.maintenance.state === "ACTIVE" });

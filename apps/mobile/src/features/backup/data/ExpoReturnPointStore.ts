@@ -16,6 +16,8 @@ import type { SnapshotSchema } from "./SqliteSnapshotEngine.ts";
 export class ExpoReturnPointStore implements ReturnPointStore {
   private readonly root: Directory;
   private readonly driver: ExpoSqliteBackup;
+  /** SHA-256 файлов точек, полностью проверенных в этом процессе. */
+  private readonly validated = new Set<string>();
   constructor(root: Directory, schema: SnapshotSchema) {
     assertSnapshotPrivateUri(root.uri); this.root = root; this.driver = new ExpoSqliteBackup(schema);
   }
@@ -50,14 +52,24 @@ export class ExpoReturnPointStore implements ReturnPointStore {
     if (!this.job(intent.operationId).exists) throw new RestoreProtocolError("RESTORE_RECOVERY_REQUIRED");
     return this.write(new File(this.job(intent.operationId), "completion.json"), intent, true);
   }
+  /** Достаточно для показа экрана и уборки фото: записанные в точке размер и SHA-256 совпадают с файлом на диске. Полный проход
+   * содержимого не нужен — правильность файла зависит только от его байт, а байты привязаны к SHA-256 (BKP-AUDIT-1 D3). */
+  async verifyPointBytes(input: ReturnPoint): Promise<void> {
+    const point = parseReturnPoint(input);
+    const digest = await expoFileSha256(this.pointFile(point));
+    if (digest.bytes !== point.bytes || digest.sha256 !== point.sha256) throw new RestoreProtocolError("RESTORE_RECOVERY_REQUIRED");
+  }
+  /** Полная проверка (manifest + канонический хеш + фото) нужна один раз на каждое содержимое: пока SHA-256 тот же, что уже прошёл
+   * её в этом процессе (createPoint проверил файл до переноса), повтор даёт тот же результат. После перезапуска проверка полная. */
   async verifyPoint(input: ReturnPoint): Promise<void> {
     const point = parseReturnPoint(input); const file = this.pointFile(point);
-    const before = await expoFileSha256(file);
-    if (before.bytes !== point.bytes || before.sha256 !== point.sha256) throw new RestoreProtocolError("RESTORE_RECOVERY_REQUIRED");
+    await this.verifyPointBytes(point);
+    if (this.validated.has(point.sha256)) return;
     const manifest = await this.driver.validatePrivateSnapshot(file);
     const after = await expoFileSha256(file);
     if (after.bytes !== point.bytes || after.sha256 !== point.sha256 || manifest.backupId !== point.backupId ||
       manifest.createdAt !== point.createdAt || manifest.contentSha256 !== point.contentSha256) throw new RestoreProtocolError("RESTORE_RECOVERY_REQUIRED");
+    this.validated.add(point.sha256);
   }
   async removePoint(input: ReturnPoint): Promise<void> {
     const point = parseReturnPoint(input); const file = this.pointFile(point);
@@ -82,6 +94,8 @@ export class ExpoReturnPointStore implements ReturnPointStore {
     } finally { await source.closeAsync(); }
     if ((await expoFileSha256(live)).sha256 !== plan.currentSha256) throw new RestoreProtocolError("RESTORE_STALE_PREVIEW");
     const point = { operationId: plan.operationId, ...metadata, contentSha256, ...await expoFileSha256(file) };
-    await this.verifyPoint(point); return point;
+    // createSnapshot уже полностью проверил эти байты до переноса файла (закрытая копия, hash + media); перенос внутри одной папки
+    // их не меняет. Запоминаем SHA-256 как проверенный — следующие verifyPoint (prepare/finish/GC) сверяют только байты.
+    this.validated.add(point.sha256); return point;
   }
 }

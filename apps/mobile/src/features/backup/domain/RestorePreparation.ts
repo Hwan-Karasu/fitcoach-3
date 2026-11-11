@@ -1,6 +1,7 @@
 import type { BackupObserver } from "./BackupProgress.ts";
 
-export const RESTORE_PREPARATION_PHASES = ["COPY_SOURCE", "VERIFY_SOURCE", "PREPARE_CANDIDATE", "VERIFY_CURRENT", "READY"] as const;
+/** VERIFY_CURRENT убран (BKP-AUDIT-1 C2): текущие данные больше не хешируются при подготовке — пин даёт счётчик записей. */
+export const RESTORE_PREPARATION_PHASES = ["COPY_SOURCE", "VERIFY_SOURCE", "PREPARE_CANDIDATE", "READY"] as const;
 export type RestorePreparationPhase = typeof RESTORE_PREPARATION_PHASES[number];
 export interface RestorePreparationProgress {
   readonly phase: RestorePreparationPhase;
@@ -27,6 +28,12 @@ export class RestorePreparationTrace {
     this.id = id; this.observer = observer; this.now = now; this.log = log;
     this.started = now();
     this.phase("COPY_SOURCE");
+  }
+  get currentPhase(): RestorePreparationPhase { return this.current; }
+  /** Причина сбоя в журнал: публичный код и класс исходной ошибки, без текста, путей и данных. */
+  failed(code: string, errorClass: string): void {
+    if (this.live) this.log(JSON.stringify({ operationId: this.id, event: "error", phase: this.current, code, errorClass,
+      elapsedMs: Math.round(this.now() - this.started) }));
   }
   phase(phase: RestorePreparationPhase): void {
     if (!this.live) return;

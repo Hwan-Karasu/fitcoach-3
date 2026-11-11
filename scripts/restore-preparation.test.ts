@@ -15,7 +15,6 @@ test("RECOVERY-51 preparation phases distinguish completed passes and ignore all
   trace.phase("PREPARE_CANDIDATE");
   trace.observe({ stage: "VERIFY", done: 0, total: 100 });
   trace.observe({ stage: "VERIFY", done: 100, total: 100 });
-  trace.phase("VERIFY_CURRENT");
   trace.observe({ stage: "CONTENT", done: 1, total: 1 });
   trace.finish(true);
   assert.deepEqual([...new Set(events.map((p) => p.phase))], RESTORE_PREPARATION_PHASES);

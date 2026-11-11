@@ -5,6 +5,7 @@ import { parseSnapshotManifest, SnapshotError, type SnapshotManifest } from "../
 import { MANIFEST_TABLE, MEDIA_CHUNKS, MEDIA_TABLE, SNAPSHOT_LEDGER, SNAPSHOT_OWNER } from "./SnapshotCatalog.ts";
 import { snapshotContentSha256 } from "./SnapshotContentHash.ts";
 import { embedRecipePhotos, extractRecipePhotos, verifyRecipePhotos } from "./SnapshotMedia.ts";
+import { originalPhotoJsonForParity } from "./SnapshotPhotoRules.ts";
 import type { SnapshotMediaSettings } from "./SnapshotMediaPort.ts";
 import type { SnapshotSqlPort } from "./SnapshotSqlPort.ts";
 
@@ -67,13 +68,23 @@ export class SqliteSnapshotEngine {
       }
       await tx.run(`DROP TABLE ${MANIFEST_TABLE}`);
       await tx.run(`DROP TABLE ${SNAPSHOT_LEDGER}`);
+      // BKP-AUDIT-1 C1: вторая полная сверка хеша после преобразования заменена равносильной проверкой самого преобразования.
+      // Содержимое уже совпало с manifest до DROP; затем изменяются только строки рецептов с фото. Доказательство, что больше
+      // ничего не изменилось: total_changes() (учитывает и триггеры) вырос ровно на число фото, каждый UPDATE затронул 1 строку,
+      // набор объектов схемы снова проверен owned(); у каждой изменённой строки JSON равен исходному с заменой только photoUri.
+      const changesNow = async () => (await tx.first<{ changes: number }>("SELECT total_changes() AS changes"))?.changes ?? -1;
+      const before = await changesNow();
       for (const photo of photos) {
         const changed = await tx.run("UPDATE recipes SET details_json=json_set(details_json, '$.photoUri', ?) WHERE id=? AND json_extract(details_json, '$.photoUri')=?",
           [photo.restoredUri, photo.id, photo.sourceUri]);
         if (changed.changes !== 1) throw new SnapshotError("SNAPSHOT_INVALID");
       }
+      if (before < 0 || await changesNow() - before !== photos.length) throw new SnapshotError("SNAPSHOT_INVALID");
+      for (const photo of photos) {
+        const row = await tx.first<{ details_json: unknown }>("SELECT details_json FROM recipes WHERE id=?", [photo.id]);
+        originalPhotoJsonForParity(row?.details_json, photo);
+      }
       await this.owned(tx, false);
-      if (await snapshotContentSha256(tx, photos, (done, total) => observeBackup(settings.observe, "VERIFY", done, total)) !== manifest.contentSha256) throw new SnapshotError("SNAPSHOT_INVALID");
     });
     return manifest;
   }

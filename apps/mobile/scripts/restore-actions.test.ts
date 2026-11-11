@@ -166,3 +166,46 @@ test("R06 source exceptions expose fixed errors, and screen refresh preserves a 
   const w = world(); await w.service.chooseFile(); await w.service.confirmPreview(preview.id); await w.service.refresh();
   assert.equal(w.service.state.notice, "RESTORED");
 });
+
+test("BKP-AUDIT-1 D3: opening the screen (refresh) is silent LOADING, never a preparation with progress", async () => {
+  const gate = latch(); const seen: string[] = [];
+  const w = world({ readPoint: async () => { await gate.promise; return point; } });
+  w.service.subscribe(() => { seen.push(`${w.service.state.phase}:${w.service.state.preparation === undefined || w.service.state.preparation === null ? "-" : "progress"}`); });
+  const pending = w.service.refresh(); await tick();
+  assert.equal(w.service.state.phase, "LOADING"); assert.equal(w.service.state.preparation ?? null, null);
+  gate.release(); await pending;
+  assert.equal(w.service.state.phase, "IDLE"); assert.ok(seen.every((entry) => !entry.startsWith("PREPARING")), seen.join(","));
+});
+
+test("BKP-AUDIT-1 B3: apply reports its steps, clears them at the end and ignores late events", async () => {
+  let emit: Parameters<RestoreJobsPort["apply"]>[1];
+  const steps: (string | null | undefined)[] = [];
+  const w = world({ apply: async (_id, observe) => { emit = observe; observe?.("CHECKING"); observe?.("SAVING_POINT"); observe?.("REPLACING"); return "COMMITTED"; } });
+  w.service.subscribe(() => { if (steps.at(-1) !== w.service.state.applying) steps.push(w.service.state.applying); });
+  await w.service.chooseFile();
+  assert.deepEqual(await w.service.confirmPreview(preview.id), { kind: "RESTORED" });
+  assert.deepEqual(steps.filter((step) => step), ["CHECKING", "SAVING_POINT", "REPLACING"]);
+  assert.equal(w.service.state.applying ?? null, null);
+  emit?.("CHECKING");
+  assert.equal(w.service.state.applying ?? null, null, "a late event of a finished operation changes nothing");
+});
+
+test("BKP-AUDIT-1 D2: only the explicit cancel stops a preparation; the late result is discarded and the flag cleared", async () => {
+  const gate = latch();
+  const w = world({ prepareFile: async () => { await gate.promise; return preview; } });
+  const pending = w.service.chooseFile(); await tick();
+  assert.equal(w.service.state.phase, "PREPARING"); assert.notEqual(w.service.state.cancelRequested, true);
+  assert.deepEqual(await w.service.cancelPreview(), { kind: "CANCELLED" });
+  assert.equal(w.service.state.cancelRequested, true);
+  gate.release(); assert.deepEqual(await pending, { kind: "CANCELLED" });
+  assert.equal(w.service.state.preview, null); assert.equal(w.service.state.cancelRequested, false);
+  assert.deepEqual(w.calls.discard, [preview.id]); assert.equal(w.calls.apply, 0);
+});
+
+test("BKP-AUDIT-1 B1: a failure keeps its public code and the preparation stage for the screen", async () => {
+  const w = world({ prepareFile: async () => { throw new RestoreActionError("RESTORE_NEWER_BACKUP", "VERIFY_SOURCE"); } });
+  assert.deepEqual(await w.service.chooseFile(), { kind: "FAILED", code: "RESTORE_NEWER_BACKUP" });
+  assert.equal(w.service.state.error, "RESTORE_NEWER_BACKUP"); assert.equal(w.service.state.errorStage, "VERIFY_SOURCE");
+  await w.service.chooseFile().catch(() => undefined);
+  assert.equal(w.service.state.phase, "IDLE");
+});

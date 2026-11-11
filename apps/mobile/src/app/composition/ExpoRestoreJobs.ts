@@ -2,15 +2,15 @@ import { Directory, File, Paths } from "expo-file-system";
 import { uuid } from "expo-modules-core";
 import * as SQLite from "expo-sqlite";
 import { RestoreActionError, ReturnPointCompletion, SnapshotError, emptyReturnPointState,
-  parseRestoreGuard, parseReturnPointState, restoreSpaceRequired, type RestoreJobsPort, type RestorePreview,
-  type ReturnPoint } from "../../features/backup/public.ts";
-import { observeBackup, RestorePreparationTrace, type BackupObserver, type RestorePreparationObserver } from "../../features/backup/public.ts";
+  parseRestoreGuard, parseReturnPointState, restoreSpaceRequired, type RestoreApplyObserver, type RestoreApplyPhase,
+  type RestoreJobsPort, type RestorePreview, type ReturnPoint } from "../../features/backup/public.ts";
+import { RestorePreparationTrace, type RestorePreparationObserver } from "../../features/backup/public.ts";
 import { ExpoRestoreStorage } from "../../features/backup/data/ExpoRestoreStorage.ts";
 import { ExpoReturnPointStore } from "../../features/backup/data/ExpoReturnPointStore.ts";
 import { ExpoSqliteBackup } from "../../features/backup/data/ExpoSqliteBackup.ts";
 import { assertSnapshotPrivateUri, expoSnapshotMedia } from "../../features/backup/data/ExpoSnapshotMedia.ts";
+import { DatabaseCompatibilityError } from "../../shared/db/DatabaseIdentity.ts";
 import { expoSnapshotSql } from "../../features/backup/data/ExpoSnapshotSql.ts";
-import { snapshotContentSha256 } from "../../features/backup/data/SnapshotContentHash.ts";
 import { recipePhotoReferences } from "../../features/backup/data/SnapshotMedia.ts";
 import { expoFileSha256 } from "../../shared/files/ExpoFileSha256.ts";
 import { parsePendingRuntimeRestore } from "../bootstrap/recoverRuntimeRestore.ts";
@@ -26,6 +26,8 @@ interface Options {
   readonly live: File;
   readonly images: Directory;
   readonly maintenance: Pick<RuntimeMaintenance, "withClosedDatabase">;
+  /** SharedSqliteDatabase.writeToken рабочей базы: счётчик завершённых записей (пин «данные не менялись»). */
+  readonly currentWriteToken: () => number;
   /** Test composition may select its own synthetic file; product composition uses the system picker. */
   readonly pick?: () => Promise<File | null>;
 }
@@ -40,11 +42,15 @@ const space = (required: number) => {
   const available = Paths.availableDiskSpace;
   if (!Number.isSafeInteger(required) || required < 0 || !Number.isFinite(available) || available < required) throw new RestoreActionError("RESTORE_NO_SPACE");
 };
-function masked(error: unknown): RestoreActionError {
-  if (error instanceof RestoreActionError) return error;
-  if (error instanceof SnapshotError && error.code === "SNAPSHOT_SPACE_LOW") return new RestoreActionError("RESTORE_NO_SPACE");
-  if (error instanceof SnapshotError && error.code !== "SNAPSHOT_IO_FAILED") return new RestoreActionError("RESTORE_INVALID_BACKUP");
-  return new RestoreActionError("RESTORE_SOURCE_UNAVAILABLE");
+/** Публичный код без путей и текста исходной ошибки. Копия новее приложения и несовместимая/повреждённая копия различаются
+ * (BKP-AUDIT-1 D1): раньше обе выглядели как «не удалось прочитать файл». `stage` — этап подготовки для кода на экране. */
+function masked(error: unknown, stage: string | null = null): RestoreActionError {
+  if (error instanceof RestoreActionError) return error.stage === null && stage !== null ? new RestoreActionError(error.code, stage) : error;
+  if (error instanceof DatabaseCompatibilityError) return new RestoreActionError(error.code === "DATABASE_NEWER" ? "RESTORE_NEWER_BACKUP" : "RESTORE_INVALID_BACKUP", stage);
+  if (error instanceof SnapshotError && error.code === "SNAPSHOT_SPACE_LOW") return new RestoreActionError("RESTORE_NO_SPACE", stage);
+  if (error instanceof SnapshotError && error.code === "SNAPSHOT_NEWER") return new RestoreActionError("RESTORE_NEWER_BACKUP", stage);
+  if (error instanceof SnapshotError && error.code !== "SNAPSHOT_IO_FAILED") return new RestoreActionError("RESTORE_INVALID_BACKUP", stage);
+  return new RestoreActionError("RESTORE_SOURCE_UNAVAILABLE", stage);
 }
 
 /** Privileged file/SQLite orchestration. UI receives only opaque IDs and verified summaries.
@@ -79,27 +85,22 @@ export class ExpoRestoreJobs implements RestoreJobsPort {
   private async point(): Promise<ReturnPoint | null> {
     try {
       const point = (await this.state()).point;
-      if (point !== null) await this.points.verifyPoint(point);
+      // Только байты (размер + SHA-256): экран «Резервные копии» открывается без прохода по содержимому (BKP-AUDIT-1 D3).
+      // Полную проверку точка проходит при её использовании — prepareReturn сверяет manifest с записью точки.
+      if (point !== null) await this.points.verifyPointBytes(point);
       return point;
     } catch { throw new RestoreActionError("RESTORE_POINT_UNAVAILABLE"); }
   }
   async readPoint() {
     const point = await this.point(); return point === null ? null : { id: point.operationId, createdAt: point.createdAt };
   }
-  private async currentPin(directory: Directory, observe?: BackupObserver): Promise<string> {
-    const copy = new File(directory, "current-preview.db");
-    space(this.options.live.size + 4 * 1024 * 1024);
-    copy.create();
-    await this.read(this.options.live, async (source) => {
-      const destination = await SQLite.openDatabaseAsync(copy.name, { useNewConnection: true }, directory.uri);
-      try {
-        await SQLite.backupDatabaseAsync({ sourceDatabase: source, destDatabase: destination });
-        await destination.execAsync("PRAGMA journal_mode=DELETE; PRAGMA foreign_keys=ON");
-      } finally { await destination.closeAsync(); }
-    });
-    return this.read(copy, (db) => snapshotContentSha256(expoSnapshotSql(db), [], (done, total) => observeBackup(observe, "CONTENT", done, total)));
-  }
-  private async prepare(source: File, kind: RestorePreview["kind"], pointId: string | null, observe?: RestorePreparationObserver): Promise<RestorePreview> {
+  /** Пин текущих данных (BKP-AUDIT-1 C2). Раньше: онлайн-копия рабочей базы + канонический хеш при подготовке и ещё один хеш
+   * при подтверждении (две полные проходки по рабочей базе). Теперь: число завершённых записей единственного писателя
+   * (SharedSqliteDatabase.writeToken). Любая запись между предпросмотром и подтверждением даёт RESTORE_STALE_PREVIEW; ложное
+   * срабатывание безопасно — нужно выбрать копию заново. Значение живёт только в памяти процесса, как и сам предпросмотр. */
+  private currentPin(): string { return `writes:${this.options.currentWriteToken()}`; }
+  private async prepare(source: File, kind: RestorePreview["kind"], pointId: string | null, observe?: RestorePreparationObserver,
+    expected?: ReturnPoint): Promise<RestorePreview> {
     const id = uuid.v4(); const directory = this.job(id); let created = false;
     const trace = new RestorePreparationTrace(id, observe);
     let ok = false;
@@ -112,20 +113,22 @@ export class ExpoRestoreJobs implements RestoreJobsPort {
       const incoming = new File(directory, "incoming.db");
       const manifest = await this.driver.prepareForRestore(source, new File(directory, "inspection.atbackup"), incoming,
         { files: expoSnapshotMedia(this.options.images), restoreId: id, observe: trace.observe }, () => trace.phase("PREPARE_CANDIDATE"));
+      // Точка возврата: проверенное содержимое должно быть именно тем, что записано в состоянии точки.
+      if (expected && (manifest.backupId !== expected.backupId || manifest.createdAt !== expected.createdAt ||
+        manifest.contentSha256 !== expected.contentSha256)) throw new RestoreActionError("RESTORE_POINT_UNAVAILABLE");
       const counts = await this.read(incoming, async (db) => {
         const rows = await db.getAllAsync<{ lifecycle: string; count: number }>("SELECT lifecycle, count(*) AS count FROM clients GROUP BY lifecycle");
         return { activeClients: rows.find((row) => row.lifecycle === "ACTIVE")?.count ?? 0, archivedClients: rows.find((row) => row.lifecycle === "ARCHIVED")?.count ?? 0 };
       });
-      trace.phase("VERIFY_CURRENT");
-      const currentContentSha256 = await this.currentPin(directory, trace.observe);
       const incomingSha256 = (await expoFileSha256(incoming)).sha256;
       const preview: RestorePreview = Object.freeze({ id, kind, createdAt: manifest.createdAt, ...counts });
-      this.prepared.set(id, { id, preview, pointId, currentContentSha256, incomingSha256 });
+      this.prepared.set(id, { id, preview, pointId, currentPin: this.currentPin(), incomingSha256 });
       ok = true;
       return preview;
     } catch (error) {
       if (created) try { await this.cleanup(id); } catch { /* Own unpublished orphan is retryable. */ }
-      throw masked(error);
+      const failure = masked(error, trace.currentPhase); trace.failed(failure.code, error instanceof Error ? error.name : typeof error);
+      throw failure;
     } finally { trace.finish(ok); }
   }
   async prepareFile(observe?: RestorePreparationObserver): Promise<RestorePreview | null> {
@@ -139,7 +142,7 @@ export class ExpoRestoreJobs implements RestoreJobsPort {
   async prepareReturn(pointId: string, observe?: RestorePreparationObserver): Promise<RestorePreview> {
     const point = await this.point();
     if (point === null || point.operationId !== pointId) throw new RestoreActionError("RESTORE_POINT_UNAVAILABLE");
-    return this.prepare(this.points.pointFile(point), "RETURN", pointId, observe);
+    return this.prepare(this.points.pointFile(point), "RETURN", pointId, observe, point);
   }
   private async checkSpace(kind: RestorePreview["kind"]): Promise<void> {
     if (kind === "RETURN") { space(restoreSpaceRequired(this.options.live.size, 0, 0, kind)); return; }
@@ -152,9 +155,15 @@ export class ExpoRestoreJobs implements RestoreJobsPort {
     }
     space(restoreSpaceRequired(this.options.live.size, bytes, uris.length, kind));
   }
-  async apply(id: string): Promise<"COMMITTED" | "ROLLED_BACK"> {
+  async apply(id: string, observe?: RestoreApplyObserver): Promise<"COMMITTED" | "ROLLED_BACK"> {
     const job = this.prepared.get(id);
     if (!job) throw new RestoreActionError("RESTORE_STALE_PREVIEW");
+    const emit = (phase: RestoreApplyPhase) => { try { observe?.(phase); } catch { /* Observer only. */ } };
+    const started = performance.now();
+    // Журнал: только ID операции, исход и время; без данных, путей и имён.
+    const log = (event: string, extra: Record<string, unknown> = {}) =>
+      console.info("[restore]", JSON.stringify({ operationId: id, event, ...extra, elapsedMs: Math.round(performance.now() - started) }));
+    emit("CHECKING");
     const { live, root, images, maintenance } = this.options;
     const storage = new ExpoRestoreStorage({ live, directory: this.job(id), inspectDatabase: inspectProductionDatabase,
       withClosedDatabase: (task) => maintenance.withClosedDatabase(async () => {
@@ -163,13 +172,20 @@ export class ExpoRestoreJobs implements RestoreJobsPort {
         return result;
       }) });
     const completion = new ReturnPointCompletion(this.points, job.preview.kind === "RESTORE"
-      ? { kind: "RESTORE", createPoint: (plan) => this.points.createPoint(plan, live, images) }
+      ? { kind: "RESTORE", createPoint: async (plan) => {
+        emit("SAVING_POINT"); const point = await this.points.createPoint(plan, live, images); emit("REPLACING"); return point;
+      } }
       : { kind: "RETURN", expectedPointOperationId: job.pointId! });
-    return applyPreparedRestore(job, { storage, journal: this.journal, completion,
-      currentContentSha256: () => this.read(live, (db) => snapshotContentSha256(expoSnapshotSql(db))),
-      checkSpace: () => this.checkSpace(job.preview.kind),
-      recoverPublished: () => recoverLocalRestore({ withClosedDatabase: async (task) => task() }, root, live),
-    });
+    try {
+      const outcome = await applyPreparedRestore(job, { storage, journal: this.journal, completion,
+        currentPin: async () => this.currentPin(),
+        checkSpace: () => this.checkSpace(job.preview.kind),
+        recoverPublished: () => recoverLocalRestore({ withClosedDatabase: async (task) => task() }, root, live),
+      });
+      log("apply", { outcome }); return outcome;
+    } catch (error) {
+      log("apply-failed", { code: error instanceof RestoreActionError ? error.code : "UNKNOWN" }); throw error;
+    }
   }
   async deletePoint(id: string): Promise<void> {
     let failure: RestoreActionError | null = null;

@@ -52,8 +52,8 @@ test("RECOVERY-51 real Expo driver: manual and automatic sealing both prepare; t
         { observe: trace.observe }, () => trace.phase("PREPARE_CANDIDATE"));
       trace.finish(true);
       assert.deepEqual(phases, ["COPY_SOURCE", "VERIFY_SOURCE", "PREPARE_CANDIDATE", "READY"]);
-      assert.equal(backupBoundary.queries.filter((sql) => sql.startsWith("SELECT type, name, tbl_name, sql FROM sqlite_master")).length, 2,
-        "one input verification and one post-transformation hash, no redundant third full input scan");
+      assert.equal(backupBoundary.queries.filter((sql) => sql.startsWith("SELECT type, name, tbl_name, sql FROM sqlite_master")).length, 1,
+        "BKP-AUDIT-1 C1: exactly one canonical content pass of the candidate; the transformation is verified row-wise, not by a second hash");
       const candidate = new DatabaseSync(join(directory, `${mode}-incoming.db`));
       try {
         assert.equal(canonicalContentSha256(candidate), expected);

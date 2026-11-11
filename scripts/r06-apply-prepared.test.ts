@@ -42,8 +42,8 @@ async function fixture(boundary?: (event: string) => void) {
   const completion = new ReturnPointCompletion(store, { kind: "RESTORE", createPoint: (plan) => store.createPoint(plan) });
   const recoverPublished = () => recoverRuntimeRestore(() => store.journal().readPending(), (plan) => new HostManagedRestoreStorage(root, plan.operationId),
     async () => existsSync(live), new ReturnPointCompletion(store));
-  const job: PreparedRestoreIdentity = { id, currentContentSha256: hashContent(live), incomingSha256: fileHash(storage.path("INCOMING")) };
-  const options = { storage, journal: store.journal(), completion, currentContentSha256: async () => {
+  const job: PreparedRestoreIdentity = { id, currentPin: hashContent(live), incomingSha256: fileHash(storage.path("INCOMING")) };
+  const options = { storage, journal: store.journal(), completion, currentPin: async () => {
     assert.equal(maintenance.state, "CLOSED"); return hashContent(live);
   }, checkSpace: async () => undefined, recoverPublished };
   return { root, images, live, photo, storage, store, commands, maintenance, job, options, closeBusiness,
@@ -75,7 +75,7 @@ test("R06 a real WAL checkpoint changes raw bytes without invalidating the logic
   const f = await fixture();
   try {
     await f.wal(); await f.write("COMMITTED IN WAL");
-    const job = { ...f.job, currentContentSha256: hashContent(f.live) }; const rawBefore = fileHash(f.live);
+    const job = { ...f.job, currentPin: hashContent(f.live) }; const rawBefore = fileHash(f.live);
     assert.equal(existsSync(`${f.live}-wal`), true);
     assert.equal(await applyPreparedRestore(job, f.options), "COMMITTED");
     assert.notEqual(rawBefore, fileHash(f.storage.path("SAFETY")), "closing the runtime checkpoints real WAL");

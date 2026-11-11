@@ -35,11 +35,12 @@ export class RestoreActionsService implements RestoreActionsPort {
     if (this.active) return { kind: "FAILED", code: "RESTORE_BUSY" };
     if (!this.current.available) return { kind: "FAILED", code: "RESTORE_UNAVAILABLE" };
     if (!settings.recovery && (!this.options.ready() || this.current.phase === "RECOVERY_REQUIRED")) return { kind: "FAILED", code: "RESTORE_NOT_READY" };
-    this.active = true; this.publish({ phase, error: null, ...(settings.preserveNotice ? {} : { notice: null }) });
+    this.active = true; this.publish({ phase, error: null, errorStage: null, ...(settings.preserveNotice ? {} : { notice: null }) });
     try { return await task(); }
     catch (error) {
       const failure = settings.recovery ? "RESTORE_RECOVERY_REQUIRED" : code(error);
-      this.publish({ error: failure, ...(failure === "RESTORE_RECOVERY_REQUIRED" ? { phase: "RECOVERY_REQUIRED" as const } : {}) });
+      this.publish({ error: failure, errorStage: error instanceof RestoreActionError ? error.stage : null,
+        ...(failure === "RESTORE_RECOVERY_REQUIRED" ? { phase: "RECOVERY_REQUIRED" as const } : {}) });
       return { kind: "FAILED", code: failure };
     } finally {
       this.active = false;
@@ -49,7 +50,8 @@ export class RestoreActionsService implements RestoreActionsPort {
   refresh(): Promise<RestoreActionOutcome> {
     // A screen remounted during maintenance must not enqueue another point read.
     if (this.active || this.current.preview !== null) return Promise.resolve({ kind: "UPDATED" });
-    return this.perform("PREPARING", async () => {
+    // LOADING, не PREPARING: открытие экрана не должно выглядеть как новая подготовка копии (BKP-AUDIT-1 D3).
+    return this.perform("LOADING", async () => {
       try { this.publish({ point: await this.options.read(() => this.options.jobs.readPoint()) }); }
       catch (error) { this.publish({ point: null }); throw error; }
       return { kind: "UPDATED" };
@@ -59,7 +61,7 @@ export class RestoreActionsService implements RestoreActionsPort {
     if (this.current.preview !== null) return Promise.resolve({ kind: "FAILED", code: "RESTORE_BUSY" });
     return this.perform("PREPARING", async () => {
       this.preparingPreview = true; this.cancelPreparation = false;
-      this.publish({ preparation: null });
+      this.publish({ preparation: null, cancelRequested: false });
       let live = true;
       const observe: RestorePreparationObserver = (progress) => {
         if (live && this.preparingPreview && !this.cancelPreparation) this.publish({ preparation: { ...progress } });
@@ -72,7 +74,7 @@ export class RestoreActionsService implements RestoreActionsPort {
         });
         if (preview === null) return { kind: "CANCELLED" };
         this.publish({ preview: Object.freeze({ ...preview }) }); return { kind: "UPDATED" };
-      } finally { live = false; this.preparingPreview = false; this.publish({ preparation: null }); }
+      } finally { live = false; this.preparingPreview = false; this.publish({ preparation: null, cancelRequested: false }); }
     });
   }
   chooseFile(): Promise<RestoreActionOutcome> { return this.prepare((observe) => this.options.jobs.prepareFile(observe)); }
@@ -87,8 +89,9 @@ export class RestoreActionsService implements RestoreActionsPort {
     try { await this.options.jobs.discard(id); } catch { /* A private orphan cannot become a confirmation. */ }
   }
   cancelPreview(): Promise<RestoreActionOutcome> {
-    if (this.active && this.preparingPreview) { this.cancelPreparation = true; return Promise.resolve({ kind: "CANCELLED" }); }
-    return this.perform("PREPARING", async () => {
+    // Отмена подготовки — только явное действие пользователя (кнопка), не уход с экрана: операция принадлежит сервису.
+    if (this.active && this.preparingPreview) { this.cancelPreparation = true; this.publish({ cancelRequested: true, preparation: null }); return Promise.resolve({ kind: "CANCELLED" }); }
+    return this.perform("LOADING", async () => {
       const preview = this.current.preview; this.publish({ preview: null });
       if (preview !== null) await this.options.read(() => this.discard(preview.id));
       return { kind: "CANCELLED" };
@@ -99,7 +102,12 @@ export class RestoreActionsService implements RestoreActionsPort {
       const preview = this.current.preview;
       if (preview === null || preview.id !== id) throw new RestoreActionError("RESTORE_STALE_PREVIEW");
       try {
-        const outcome = await this.options.jobs.apply(id);
+        // Один confirm — один apply: повтор отбрасывается флагом active в perform(); поздние события этапов после завершения
+        // игнорируются, а сам apply не зависит от того, смонтирован ли экран.
+        let live = true;
+        let outcome: "COMMITTED" | "ROLLED_BACK";
+        try { outcome = await this.options.jobs.apply(id, (phase) => { if (live) this.publish({ applying: phase }); }); }
+        finally { live = false; this.publish({ applying: null }); }
         if (outcome !== "COMMITTED") throw new RestoreActionError("RESTORE_FAILED");
         this.publish({ preview: null, notice: preview.kind === "RESTORE" ? "RESTORED" : "RETURNED", point: null });
         await this.discard(id);

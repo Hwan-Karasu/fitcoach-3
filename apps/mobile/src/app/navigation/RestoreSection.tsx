@@ -6,7 +6,7 @@ import { AppButton, InlineNotice, SettingsGroup, SettingsRow } from "../../share
 import { usePrototypeTheme } from "../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { shadow } from "../../shared/ui/theme/style.ts";
 import { fonts } from "../../shared/ui/theme/typography.ts";
-import { RestorePreparationView } from "./BackupStatus.tsx";
+import { BackupErrorCode, RestoreApplyView, RestorePreparationView } from "./BackupStatus.tsx";
 
 const errors: Record<RestoreActionErrorCode, string> = {
   RESTORE_UNAVAILABLE: "Восстановление недоступно в этой сборке приложения.",
@@ -19,6 +19,7 @@ const errors: Record<RestoreActionErrorCode, string> = {
   RESTORE_FAILED: "Восстановление не выполнено. Прежние данные сохранены. Повторите попытку или выберите другую копию.",
   RESTORE_POINT_UNAVAILABLE: "Точка возврата недоступна или не прошла проверку. Вы можете восстановить данные из сохранённого файла копии.",
   RESTORE_RECOVERY_REQUIRED: "Завершение восстановления требует повторной попытки. Исходные файлы сохранены.",
+  RESTORE_NEWER_BACKUP: "Эта копия создана более новой версией приложения. Обновите приложение и повторите восстановление — текущие данные не изменены.",
 };
 const date = (value: string) => new Date(value).toLocaleString("ru-RU");
 
@@ -30,7 +31,9 @@ export function RestoreSection({ restore, blocked }: Readonly<{ restore: Restore
   const { palette } = usePrototypeTheme();
   const body = [styles.body, { color: palette.tokens.textSecondary }];
   const busy = blocked || !["IDLE", "PREVIEW"].includes(state.phase);
-  useEffect(() => { void restore.refresh(); return () => { void restore.cancelPreview(); }; }, [restore]);
+  // Уход с экрана НЕ отменяет подготовку и не сбрасывает предпросмотр (BKP-AUDIT-1 D2): операция принадлежит сервису, а не экрану.
+  // Отмена — только кнопками «Отменить подготовку» / «Отменить выбор».
+  useEffect(() => { void restore.refresh(); }, [restore]);
   const confirm = (preview: RestorePreview) => {
     const returning = preview.kind === "RETURN";
     Alert.alert(returning ? "Вернуть прежние данные?" : "Заменить текущие данные?",
@@ -48,7 +51,11 @@ export function RestoreSection({ restore, blocked }: Readonly<{ restore: Restore
   return <>
     {!state.available ? <InlineNotice>{errors.RESTORE_UNAVAILABLE}</InlineNotice> : null}
     {state.error !== null ? <InlineNotice kind="error">{errors[state.error]}</InlineNotice> : null}
-    {state.phase === "PREPARING" ? <RestorePreparationView progress={state.preparation ?? null} /> : null}
+    {state.error !== null && state.errorStage ? <BackupErrorCode code={state.error} stage={state.errorStage} /> : null}
+    {state.phase === "PREPARING" ? state.cancelRequested === true ? <InlineNotice>Отменяем подготовку…</InlineNotice>
+      : <><RestorePreparationView progress={state.preparation ?? null} />
+        <AppButton label="Отменить подготовку" variant="ghost" onPress={() => { void restore.cancelPreview(); }} /></> : null}
+    {state.phase === "APPLYING" ? <RestoreApplyView phase={state.applying ?? null} /> : null}
     {state.notice !== null ? <InlineNotice kind="success">{state.notice === "RESTORED" ? "Данные восстановлены из выбранной копии."
       : state.notice === "RETURNED" ? "Прежние данные возвращены. Точка возврата использована." : state.notice === "CHECKED" ? "Проверка завершена. Данные доступны." : "Точка возврата удалена."}</InlineNotice> : null}
     {state.phase === "RECOVERY_REQUIRED" ? <AppButton label="Повторить восстановление" disabled={blocked} onPress={() => { void restore.recover(); }} /> : null}

@@ -6,8 +6,8 @@ export { AutomaticBackupError, AUTO_BACKUP_INTERVAL, AUTO_BUSY_RETRY, automaticP
   parseAutomaticCatalog, parsePendingAutomatic, parseAutomaticPublication, parseAutomaticFailure, sameBackupDestination } from "./domain/AutomaticBackup.ts";
 export type { AutomaticBackupErrorCode, PendingAutomatic, AutomaticEntry, AutomaticCatalog, AutomaticBackupStore,
   AutomaticBackupFiles, AutomaticBackupState, AutomaticBackupPort, AutomaticFailure } from "./domain/AutomaticBackup.ts";
-export { RestoreActionError, restoreSpaceRequired } from "./domain/RestoreActions.ts";
-export type { RestoreActionErrorCode, RestoreActionOutcome, RestoreActionState, RestoreActionsPort, RestoreJobsPort, RestorePreview, ReturnPointSummary } from "./domain/RestoreActions.ts";
+export { RestoreActionError, restoreSpaceRequired, RESTORE_APPLY_PHASES } from "./domain/RestoreActions.ts";
+export type { RestoreApplyPhase, RestoreApplyObserver, RestoreActionErrorCode, RestoreActionOutcome, RestoreActionState, RestoreActionsPort, RestoreJobsPort, RestorePreview, ReturnPointSummary } from "./domain/RestoreActions.ts";
 export { parseReturnPoint, parseReturnPointState, parseRestoreCompletionIntent, emptyReturnPointState } from "./domain/RestoreCompletion.ts";
 export type { ReturnPoint, ReturnPointState, RestoreCompletionIntent, RestoreCompletionProtocol, ReturnPointStore } from "./domain/RestoreCompletion.ts";
 export type { RestoreGuard, RestoreOutcome, RestorePlan, RestoreSlot, RestoreStorage } from "./application/GuardedRestore.ts";
