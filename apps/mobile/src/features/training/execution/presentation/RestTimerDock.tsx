@@ -41,17 +41,18 @@ type CardProps = Readonly<{ timer: RestTimer; timers: RestTimersPort; active: bo
 const TimerCard = memo(function TimerCard({ timer, timers, active, finished, multipleOwners, avatars, tone, single, fontScale, onOpen, clockDisabled }: CardProps) {
   const colors = usePrototypeTheme().palette.tokens;
   const paused = isPaused(timer);
+  const iconSize = single ? 17 : 20;
   const action = (label: string, run: () => Promise<void>, node: ReactNode, primary = false) => (
     <Pressable key={label} accessibilityRole="button" accessibilityLabel={`${timer.clientName}, ${timer.exerciseName}: ${label}`}
-      hitSlop={single ? { top: 5, bottom: 5 } : { top: 7, bottom: 7 }}
+      hitSlop={single ? { top: 8, bottom: 8, left: 2, right: 2 } : { top: 7, bottom: 7 }}
       onPress={() => { void run().catch(() => undefined); }}
       style={[styles.action, single ? styles.actionSingle : styles.actionCard, { backgroundColor: primary ? colors.accentFill : colors.surfaceRaised }]}>{node}</Pressable>
   );
   const minus = action(`Уменьшить отдых на ${ADJUST_STEP_SEC} секунд`, () => timers.adjust(timer.id, -ADJUST_STEP_SEC), <Text style={[styles.adjust, { color: colors.textPrimary }]}>{`−${ADJUST_STEP_SEC}`}</Text>);
   const plus = action(`Увеличить отдых на ${ADJUST_STEP_SEC} секунд`, () => timers.adjust(timer.id, ADJUST_STEP_SEC), <Text style={[styles.adjust, { color: colors.textPrimary }]}>{`+${ADJUST_STEP_SEC}`}</Text>);
   const toggle = action(paused ? "Продолжить отдых" : "Пауза", () => paused ? timers.resume(timer.id) : timers.pause(timer.id),
-    paused ? <Play size={20} color={colors.textPrimary} /> : <Pause size={20} color={colors.textPrimary} />);
-  const skip = action("Пропустить отдых", () => timers.skip(timer.id), <SkipForward size={22} color={colors.onAccentFill} />, true);
+    paused ? <Play size={iconSize} color={colors.textPrimary} /> : <Pause size={iconSize} color={colors.textPrimary} />);
+  const skip = action("Пропустить отдых", () => timers.skip(timer.id), <SkipForward size={iconSize + 2} color={colors.onAccentFill} />, true);
   const time = <View style={[styles.clockRow, single ? styles.clockSingle : { minWidth: finished ? 0 : 56 * Math.max(1, fontScale) }]}>
     <RestPanelClock timer={timer} active={active} finished={finished} disabled={clockDisabled}
       style={[styles.time, single && styles.timeSingle, finished && (single ? styles.finishedSingle : styles.finished),
@@ -63,9 +64,9 @@ const TimerCard = memo(function TimerCard({ timer, timers, active, finished, mul
     // Один таймер: имя и упражнение по центру; под ними «−15 +15 · время · пауза и пропуск» одним рядом (макет, сценарий 1).
     return <View style={styles.cardSingle}>
       <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={() => onOpen(timer)} style={styles.headingSingle}>
-        <Text numberOfLines={1} style={[styles.caption, styles.captionSingle, { color: colors.textPrimary }]}>
-          <Text style={{ fontFamily: fonts.bold }}>{timer.clientName}</Text>{` · ${timer.exerciseName}`}
-        </Text>
+        {/* Имя и упражнение — двумя строками: ФИО и название не обрезаются, а кнопки и цифры мельче; высота панели прежняя. */}
+        <Text numberOfLines={1} style={[styles.caption, styles.captionName, { color: colors.textPrimary }]}>{timer.clientName}</Text>
+        <Text numberOfLines={1} style={[styles.caption, styles.captionExercise, { color: colors.textSecondary }]}>{timer.exerciseName}</Text>
       </Pressable>
       <View style={styles.rowSingle}>
         <View style={styles.side}>{minus}{plus}</View>
@@ -267,7 +268,7 @@ const styles = StyleSheet.create({
   cards: { gap: TIMER_GAP, alignItems: "stretch", paddingBottom: 2 },
   // Один таймер: без своей подложки, прямо на панели.
   cardSingle: { gap: 0, paddingBottom: 2 },
-  headingSingle: { minHeight: 24, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  headingSingle: { minHeight: 34, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   rowSingle: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 4 },
   side: { flexDirection: "row", gap: 4 },
   clockSingle: { flex: 1, minWidth: 0 },
@@ -275,17 +276,18 @@ const styles = StyleSheet.create({
   card: { flex: 1, borderRadius: 24, paddingHorizontal: CARD_PADDING, paddingTop: 4, paddingBottom: 5, gap: 0 },
   heading: { minHeight: 32, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   caption: { minWidth: 0, fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
-  captionSingle: { flexShrink: 1, textAlign: "center", fontSize: 15, lineHeight: 20 },
+  captionName: { alignSelf: "stretch", textAlign: "center", fontFamily: fonts.bold, fontSize: 14, lineHeight: 18 },
+  captionExercise: { alignSelf: "stretch", textAlign: "center", fontSize: 12, lineHeight: 16 },
   captionCard: { flexShrink: 1, textAlign: "center" },
   avatar: { width: 28, height: 28, borderRadius: 9, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   avatarSmall: { width: 24, height: 24, borderRadius: 8 },
   initials: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 }, initialsSmall: { fontSize: 11, lineHeight: 14 },
   clockRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 4 },
   time: { textAlign: "center", fontFamily: fonts.bold, fontSize: 24, lineHeight: 30, flexShrink: 1 },
-  timeSingle: { fontSize: 38, lineHeight: 44 }, finished: { fontSize: 15, lineHeight: 20 }, finishedSingle: { fontSize: 20, lineHeight: 26 },
+  timeSingle: { fontSize: 30, lineHeight: 36 }, finished: { fontSize: 15, lineHeight: 20 }, finishedSingle: { fontSize: 18, lineHeight: 24 },
   actions: { flexDirection: "row", gap: ACTION_GAP },
   action: { alignItems: "center", justifyContent: "center" },
-  actionSingle: { width: 52, height: 38, borderRadius: 14 },
+  actionSingle: { width: 44, height: 32, borderRadius: 12 },
   actionCard: { flex: 1, minWidth: 0, height: 34, borderRadius: 12 },
   adjust: { fontFamily: fonts.bold, fontSize: 14 },
   indicator: { flexDirection: "row", gap: 4, justifyContent: "center", paddingVertical: 2, paddingHorizontal: 40 },
