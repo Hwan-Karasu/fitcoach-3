@@ -330,36 +330,6 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
         </Text>
       </> : null}
       <View style={[styles.section, shadow.card, { backgroundColor: colors.surface }]}>
-      <SectionHeading>Участник</SectionHeading>
-        {selectedPerson !== null ? (
-          <Text style={[styles.selected, { color: colors.textPrimary }]}>
-            {selectedPerson.emoji ? `${selectedPerson.emoji} ` : ""}{selectedPerson.displayName}
-            {selectedPerson.active ? "" : " (в архиве)"}
-          </Text>
-        ) : existing?.participantDeleted ? (
-          <Text style={[styles.selected, { color: colors.textSecondary }]}>Удалённый клиент</Text>
-        ) : null}
-        {editable ? <>
-          <ParticipantSearch label="Имя участника записи" query={query} onQuery={(value) => {
-            setQuery(value); setGuestName(value); setGuestMode(true); setClientId(null);
-          }} matches={matches} selectedId={clientId} onSelect={(id) => {
-            setClientId(id); setGuestMode(false); setGuestName(""); setQuery("");
-          }} disabled={busy} guestRow={linking ? undefined : { selected: guestMode && guestName.trim() !== "", onPick: () => { setGuestMode(true); setClientId(null); setGuestName(query); } }} />
-        </> : null}
-      {!editable && guestMode && guestName !== "" ? <Text style={[styles.selected, { color: colors.textPrimary }]}>{guestName}</Text> : null}
-      {creditText !== null && !bypass ? (
-        <Text accessibilityLiveRegion="polite" style={[styles.hint, { color: colors.textSecondary }]}>
-          {creditText}
-        </Text>
-      ) : null}
-      {!guestMode && clientId !== null && requiresCredit && editable && existingCredit !== "USED" ? (
-        <View style={styles.switchRow}>
-          <Text style={[styles.switchLabel, { color: colors.textPrimary }]}>Записать без списания</Text>
-          <AppSwitch accessibilityLabel="Записать без списания" value={bypass} disabled={busy} onValueChange={setBypass} />
-        </View>
-      ) : null}
-      </View>
-      <View style={[styles.section, shadow.card, { backgroundColor: colors.surface }]}>
       <View style={styles.stepper}>
         <AppButton compact size="small" variant="ghost" label="‹" accessibilityLabel="Предыдущий день" disabled={!editable || busy}
           onPress={() => setDate(addDays(date, -1))} />
@@ -392,7 +362,39 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
         columns={Math.min(4, new Set([...APPOINTMENT_DURATIONS, duration]).size)} onPress={(minutes) => setDuration(Number(minutes))} />
       </View>
       <View style={[styles.section, shadow.card, { backgroundColor: colors.surface }]}>
-      <SectionHeading>Тип занятия</SectionHeading>
+      <Text accessibilityRole="header" style={[styles.groupLabel, { color: colors.textMuted }]}>УЧАСТНИК</Text>
+        {selectedPerson !== null ? (
+          <Text style={[styles.selected, { color: colors.textPrimary }]}>
+            {selectedPerson.emoji ? `${selectedPerson.emoji} ` : ""}{selectedPerson.displayName}
+            {selectedPerson.active ? "" : " (в архиве)"}
+          </Text>
+        ) : existing?.participantDeleted ? (
+          <Text style={[styles.selected, { color: colors.textSecondary }]}>Удалённый клиент</Text>
+        ) : null}
+        {editable ? <>
+          <ParticipantSearch label="Имя участника записи" query={query} onQuery={(value) => {
+            setQuery(value); setGuestName(value); setGuestMode(true); setClientId(null);
+          }} matches={matches} selectedId={clientId} onSelect={(id) => {
+            setClientId(id); setGuestMode(false); setGuestName(""); setQuery("");
+          }} disabled={busy} guestRow={linking ? undefined : { selected: guestMode && guestName.trim() !== "", onPick: () => { setGuestMode(true); setClientId(null); setGuestName(query); } }} />
+        </> : null}
+      {!editable && guestMode && guestName !== "" ? <Text style={[styles.selected, { color: colors.textPrimary }]}>{guestName}</Text> : null}
+      {!guestMode && clientId !== null && requiresCredit && editable && existingCredit !== "USED" ? (
+        <View style={styles.switchRow}>
+          <View style={styles.switchText}>
+            <Text style={[styles.switchLabel, { color: colors.textPrimary }]}>Записать без списания</Text>
+            {creditText !== null && !bypass ? <Text accessibilityLiveRegion="polite" style={[styles.switchHint, { color: colors.textMuted }]}>{creditText}</Text> : null}
+          </View>
+          <AppSwitch accessibilityLabel="Записать без списания" value={bypass} disabled={busy} onValueChange={setBypass} />
+        </View>
+      ) : creditText !== null && !bypass ? (
+        <Text accessibilityLiveRegion="polite" style={[styles.hint, { color: colors.textSecondary }]}>
+          {creditText}
+        </Text>
+      ) : null}
+      </View>
+      <View style={[styles.section, shadow.card, { backgroundColor: colors.surface }]}>
+      <Text accessibilityRole="header" style={[styles.groupLabel, { color: colors.textMuted }]}>ТИП ЗАНЯТИЯ</Text>
       <ChoiceGrid group="Тип занятия" disabled={!editable || busy} selected={typeId === null ? [] : [typeId]} columns={2}
         items={types.map((type) => ({ id: type.id, label: type.name }))}
         onPress={(id) => {
@@ -448,17 +450,17 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
     </PrototypeScreen>
     <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
       {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
-      {editable ? <AppButton label={existing === null ? "Записать" : "Сохранить"} busy={busy}
-        onPress={() => { void save(); }} /> : null}
       <View style={styles.row}>
       {existing !== null && editable && !outcomeOpen ? (
-        <View style={styles.cell}><AppButton compact size="small" variant="destructive" label="Удалить запись" disabled={busy}
+        <View style={styles.cellWide}><AppButton compact singleLine variant="destructive" label="Удалить запись" disabled={busy}
           onPress={() => {
             if (existingCredit === "RESERVED" || existingCredit === "USED") setSettling(true);
             else void remove("RETURN");
           }} /></View>
       ) : null}
-      <View style={styles.cell}><AppButton compact size="small" variant="secondary" label={editable ? "Отмена" : "Закрыть"} disabled={busy} onPress={onClose} /></View>
+      <View style={styles.cell}><AppButton compact singleLine variant="secondary" label={editable ? "Отмена" : "Закрыть"} disabled={busy} onPress={onClose} /></View>
+      {editable ? <View style={styles.cell}><AppButton compact singleLine label={existing === null ? "Записать" : "Сохранить"} busy={busy}
+        onPress={() => { void save(); }} /></View> : null}
       </View>
     </View>
       <TimeWheelPicker visible={timeOpen} title="Начало занятия" value={start} min={settings.dayStartMinute}
@@ -477,14 +479,17 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
 
 const styles = StyleSheet.create({
   editor: { flex: 1 },
-  section: { borderRadius: 24, padding: 14, gap: 10 },
+  section: { borderRadius: 24, padding: 12, gap: 8 },
   pill: { flex: 1, minHeight: 44, borderRadius: 22, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   pillText: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 18 },
   groupLabel: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, letterSpacing: 0.8 },
   switchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: 44 },
-  switchLabel: { flex: 1, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
+  switchText: { flex: 1, minWidth: 0 },
+  switchLabel: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18 },
+  switchHint: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14 },
   row: { flexDirection: "row", gap: 6, alignItems: "stretch" },
   cell: { flex: 1, minWidth: 0 },
+  cellWide: { flex: 1.5, minWidth: 0 },
   footer: { borderTopWidth: 1, padding: 10, gap: 6 },
   search: { gap: 4 },
   results: { borderWidth: 1, borderRadius: 12, overflow: "hidden" },
