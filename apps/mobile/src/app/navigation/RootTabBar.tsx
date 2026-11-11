@@ -57,7 +57,9 @@ export function RootTabBar({ state, descriptors, navigation }: Readonly<BottomTa
               }}
               style={[styles.tab, compact ? styles.tabCompact : null]}
             >
-              <View style={[styles.iconPill, compact ? styles.iconPillCompact : null, focused ? { backgroundColor: colors.accentSoft } : null]}>
+              {/* Фон есть всегда (у неактивной вкладки прозрачный) и `collapsable={false}`: иначе «таблетка» неактивной вкладки не имеет собственного нативного
+                  вида, а при выборе собирается заново и на Android теряет скругление — подсветка становилась прямоугольной до перезапуска (UIX-FIT-11). */}
+              <View collapsable={false} style={[styles.iconPill, compact ? styles.iconPillCompact : null, { backgroundColor: focused ? colors.accentSoft : "transparent" }]}>
                 <Icon size={compact ? 17 : 22} color={color} strokeWidth={focused ? 2.2 : 1.9} />
                 {badge !== undefined ? (
                   <View style={[styles.badge, compact ? styles.badgeCompact : null, { backgroundColor: colors.accentFill }]}>

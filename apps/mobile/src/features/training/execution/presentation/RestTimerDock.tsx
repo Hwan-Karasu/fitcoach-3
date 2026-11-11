@@ -253,13 +253,18 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
               {multipleOwners ? timerCountLabel(ordered.length) : `${shortName(first.clientName)}${ordered.length > 1 ? ` · ${timerCountLabel(ordered.length)}` : " ·"}`}
             </Text>
           </Pressable>
-          {ordered.slice(0, visibleCount).map((timer) => <Pressable key={timer.id} accessibilityRole="button" onPress={multipleOwners ? () => open(timer) : expand} hitSlop={SUMMARY_SLOP}
-            accessibilityLabel={multipleOwners ? `${timer.clientName}, ${timer.exerciseName}. Открыть упражнение` : `${timer.clientName}, ${timer.exerciseName}. Развернуть таймеры`}
-            style={[styles.summaryToken, { width: (multipleOwners ? 84 : 54) * Math.max(1, dimensions.fontScale), backgroundColor: colors.surfaceRaised }]}>
-            {multipleOwners ? <Avatar timer={timer} avatars={avatars} tone={toneOf(timer.clientId)} small /> : null}
-            <RestPanelClock timer={timer} active={active} finished={isFinished(timer, now)} disabled={clockDisabled}
-              style={[styles.summaryTime, isFinished(timer, now) && styles.summaryDone, { color: colors.textPrimary }]} />
-          </Pressable>)}
+          {ordered.slice(0, visibleCount).map((timer) => {
+            const done = isFinished(timer, now);
+            // Идущий таймер — узкий чип с цифрами; завершённый шире и выше: «Отдых окончен» помещается в одну строку.
+            return <Pressable key={timer.id} accessibilityRole="button" onPress={multipleOwners ? () => open(timer) : expand} hitSlop={SUMMARY_SLOP}
+              accessibilityLabel={multipleOwners ? `${timer.clientName}, ${timer.exerciseName}. Открыть упражнение` : `${timer.clientName}, ${timer.exerciseName}. Развернуть таймеры`}
+              style={[styles.summaryToken, done ? styles.summaryTokenDone : { width: (multipleOwners ? 84 : 54) * Math.max(1, dimensions.fontScale) },
+                { backgroundColor: colors.surfaceRaised }]}>
+              {multipleOwners ? <Avatar timer={timer} avatars={avatars} tone={toneOf(timer.clientId)} small /> : null}
+              <RestPanelClock timer={timer} active={active} finished={done} disabled={clockDisabled}
+                style={[styles.summaryTime, done && styles.summaryDone, { color: colors.textPrimary }]} />
+            </Pressable>;
+          })}
           {hidden > 0 ? <Pressable accessibilityRole="button" accessibilityLabel={`Показать остальные таймеры: ещё ${hidden}`}
             onPress={() => { pendingIndex.current = visibleCount; expand(); }} hitSlop={SUMMARY_SLOP} style={[styles.more, { backgroundColor: colors.accentFill }]}>
             <Text style={[styles.moreText, { color: colors.onAccentFill }]}>{`Ещё ${hidden}`}</Text>
@@ -308,7 +313,8 @@ const styles = StyleSheet.create({
   summaryLabel: { flex: 1, fontFamily: fonts.bold, fontSize: 13, lineHeight: 17 },
   summaryToken: { flexDirection: "row", height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", gap: 4, flexShrink: 0, paddingHorizontal: 4 },
   summaryTime: { textAlign: "center", fontFamily: fonts.bold, fontSize: 15, lineHeight: 20, flexShrink: 1 },
-  summaryDone: { fontSize: 11, lineHeight: 14 },
+  summaryDone: { fontSize: 13, lineHeight: 17 },
+  summaryTokenDone: { height: 32, borderRadius: 16, paddingHorizontal: 12, flexShrink: 1, minWidth: 0 },
   more: { height: 28, paddingLeft: 10, paddingRight: 6, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2, borderRadius: 14 },
   moreText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 },
 });

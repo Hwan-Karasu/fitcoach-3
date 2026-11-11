@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -24,16 +24,34 @@ const macroTexts = (filters: RecipeFilters): Texts => ({
   carbs: { min: String(filters.macros.carbs.min), max: String(filters.macros.carbs.max) },
 });
 
-/** Варианты — равными рядами (UIX-FIT-10): по три в ряд, чтобы окно помещалось без прокрутки; сортировка — по два. */
+/**
+ * Варианты — симметричными рядами (UIX-FIT-10/11): по три в ряд, чтобы окно помещалось без прокрутки; сортировка — по два.
+ * Полный ряд делит ширину поровну; неполный (например 3 + 2) собирает пилюли той же ширины по центру, а не прижимает влево.
+ */
 function ChoiceGrid<Id extends string>({ options, selected, label, onSelect, columns = 2 }: Readonly<{
   options: readonly Readonly<{ id: Id; label: string }>[]; selected: Id; label: string; onSelect: (id: Id) => void; columns?: number;
 }>) {
-  return <>{Array.from({ length: Math.ceil(options.length / columns) }, (_, row) => <View key={row} style={styles.row}>
-    {options.slice(row * columns, row * columns + columns).map((option) => <SelectionChip compact fill key={option.id} group={label}
-      label={option.label} selected={selected === option.id} onPress={() => onSelect(option.id)} />)}
-    {/* Неполный последний ряд — пустые ячейки той же ширины, чтобы кнопки не растягивались. */}
-    {Array.from({ length: Math.max(0, columns - options.slice(row * columns, row * columns + columns).length) }, (_, index) => <View key={`gap-${index}`} style={styles.cell} />)}
-  </View>)}</>;
+  const basis = columns === 3 ? "32%" : "48.5%";
+  return <>{Array.from({ length: Math.ceil(options.length / columns) }, (_, row) => {
+    const rowOptions = options.slice(row * columns, row * columns + columns);
+    const full = rowOptions.length === columns;
+    return <View key={row} style={[styles.row, styles.rowCentered]}>
+      {rowOptions.map((option) => <View key={option.id} style={[styles.choice, { flexBasis: basis, flexGrow: full ? 1 : 0 }]}>
+        <SelectionChip compact fill group={label} label={option.label} selected={selected === option.id} onPress={() => onSelect(option.id)} />
+      </View>)}
+    </View>;
+  })}</>;
+}
+
+/** Название фильтра отдельной строкой на всю ширину: пилюли «от — до» больше не теснят его в левый край. */
+function BlockTitle({ children, muted = false }: Readonly<{ children: string; muted?: boolean }>) {
+  const colors = usePrototypeTheme().palette.tokens;
+  return <Text style={[styles.label, { color: muted ? colors.textSecondary : colors.textPrimary }]}>{children}</Text>;
+}
+
+/** «от — до» + единица по центру блока. */
+function RangeRow({ children }: Readonly<{ children: ReactNode }>) {
+  return <View style={styles.rangeRow}>{children}</View>;
 }
 
 /** Поле числа 32 dp: для «от / до» и процентов; название — для экранных читалок. */
@@ -90,31 +108,31 @@ export function RecipeBrowseControls({ filters, sort, onFilters, onSort }: Reado
         <ScrollView style={styles.scroll} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           {panel === "SORT" ? <ChoiceGrid options={sorts} selected={sort} label="Сортировка рецептов" onSelect={(id) => { onSort(id); setPanel(null); }} /> : <>
             <View style={[styles.block, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
-              <View style={styles.blockHead}>
-                <Text style={[styles.label, styles.grow, { color: colors.textPrimary }]}>Калории за порцию</Text>
+              <BlockTitle>Калории за порцию</BlockTitle>
+              <RangeRow>
                 <NumberBox label="Калории, от" placeholder="от" value={cal.min} onChange={(min) => { setCal({ ...cal, min }); setDraft({ ...draft, calories: "ANY" }); }} />
                 <Text style={[styles.dash, { color: colors.textMuted }]}>—</Text>
                 <NumberBox label="Калории, до" placeholder="до" value={cal.max} onChange={(max) => { setCal({ ...cal, max }); setDraft({ ...draft, calories: "ANY" }); }} />
                 <Text style={[styles.unit, { color: colors.textMuted }]}>ккал</Text>
-              </View>
+              </RangeRow>
               <ChoiceGrid columns={3} options={bands} selected={draft.calories} label="Калории за порцию"
                 onSelect={(calories) => { setDraft({ ...draft, calories }); setCal({ min: "", max: "" }); }} />
             </View>
             <View style={[styles.block, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
-              <View style={styles.blockHead}>
-                <Text style={[styles.label, styles.grow, { color: colors.textPrimary }]}>Время приготовления</Text>
+              <BlockTitle>Время приготовления</BlockTitle>
+              <RangeRow>
                 <NumberBox label="Время, от минут" placeholder="от" value={time.min} onChange={(min) => { setTime({ ...time, min }); setDraft({ ...draft, time: "ANY" }); }} />
                 <Text style={[styles.dash, { color: colors.textMuted }]}>—</Text>
                 <NumberBox label="Время, до минут" placeholder="до" value={time.max} onChange={(max) => { setTime({ ...time, max }); setDraft({ ...draft, time: "ANY" }); }} />
                 <Text style={[styles.unit, { color: colors.textMuted }]}>мин</Text>
-              </View>
+              </RangeRow>
               <ChoiceGrid columns={3} options={times} selected={draft.time} label="Время рецепта"
                 onSelect={(next) => { setDraft({ ...draft, time: next }); setTime({ min: "", max: "" }); }} />
-              <View style={styles.blockHead}>
-                <Text style={[styles.label, styles.grow, { color: colors.textSecondary }]}>Подготовка не дольше</Text>
+              <BlockTitle muted>Подготовка не дольше</BlockTitle>
+              <RangeRow>
                 <NumberBox label="Подготовка не дольше, минут" placeholder="до" value={prep} onChange={setPrep} />
                 <Text style={[styles.unit, { color: colors.textMuted }]}>мин</Text>
-              </View>
+              </RangeRow>
             </View>
             <View style={[styles.block, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
               <Text style={[styles.label, { color: colors.textPrimary }]}>Доли БЖУ, %</Text>
@@ -153,6 +171,8 @@ const styles = StyleSheet.create({
   label: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
   block: { borderRadius: 18, borderWidth: 1, padding: 9, gap: 6 }, macro: { gap: 0 },
   blockHead: { flexDirection: "row", alignItems: "center", gap: 6 },
+  rowCentered: { justifyContent: "center" }, choice: { flexDirection: "row", minWidth: 0 },
+  rangeRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   macroLabel: { width: 62, fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },
   box: { width: 56, height: 32, borderWidth: 1, borderRadius: 12, paddingVertical: 0, paddingHorizontal: 6, textAlign: "center", fontFamily: fonts.semibold, fontSize: 13 },
   dash: { fontSize: 12 }, unit: { width: 28, fontFamily: fonts.semibold, fontSize: 11 },
