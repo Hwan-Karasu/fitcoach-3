@@ -6,7 +6,7 @@ import { DevMeasurementRepository, devMeasurementClientDeletionParticipant } fro
   "../apps/mobile/src/features/measurements/data/DevMeasurementRepository.ts";
 import type { MeasurementInput } from "../apps/mobile/src/features/measurements/domain/MeasurementModel.ts";
 import { upsertDailyMeasurement } from "../apps/mobile/src/features/measurements/domain/DailyMeasurement.ts";
-import { dailyPoints, formatValue, latestPoint, parseTime, parseValueX10, validateMeasurement } from
+import { dailyPoints, formatDecimal, formatValue, latestPoint, parseTime, parseValue, validateMeasurement } from
   "../apps/mobile/src/features/measurements/domain/MeasurementRules.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
@@ -25,8 +25,9 @@ async function stores(participants = true) {
   return { db, clients, measurements, close };
 }
 
+// Помощник принимает десятые доли (80,1 → 801), как раньше читаются остальные проверки; хранение — сотые (UIX-FIT-10).
 const weight = (valueX10: number, localMinute: number | null, localDate = "2026-10-14"): MeasurementInput =>
-  ({ type: "WEIGHT", valueX10, localDate, localMinute });
+  ({ type: "WEIGHT", valueX100: valueX10 * 10, localDate, localMinute });
 
 test("AUDIT-ALL-1: параллельные дневные записи не создают неоднозначный день; явные записи журнала остаются независимыми", async () => {
   const { clients, measurements, close } = await stores();
@@ -39,13 +40,13 @@ test("AUDIT-ALL-1: параллельные дневные записи не с�
     assert.equal(first.id, second.id);
     const day = await measurements.listForClient(client.id);
     assert.equal(day.measurements.length, 1);
-    assert.equal(day.measurements[0]!.valueX10, 810);
+    assert.equal(day.measurements[0]!.valueX100, 8100);
     assert.equal(day.measurements[0]!.localMinute, 480, "правка дневного значения сохраняет время исходного факта");
     await measurements.record(client.id, weight(820, 600), NOW);
     await assert.rejects(upsertDailyMeasurement(measurements, client.id, weight(830, null), NOW), { message: "MEASUREMENT_AMBIGUOUS_DAY" });
     await measurements.setPrimary(first.id);
     await upsertDailyMeasurement(measurements, client.id, weight(840, null), NOW);
-    assert.equal((await measurements.listForClient(client.id)).measurements.find((row) => row.id === first.id)!.valueX10, 840);
+    assert.equal((await measurements.listForClient(client.id)).measurements.find((row) => row.id === first.id)!.valueX100, 8400);
   } finally { await close(); }
 });
 
@@ -62,21 +63,35 @@ test("AUDIT-ALL-1: условный импорт не создаёт второ�
     assert.equal(imported, null);
     assert.equal(events, 1, "пропуск импорта не публикует несуществующее изменение");
     const data = await measurements.listForClient(client.id);
-    assert.deepEqual(data.measurements.map((row) => [row.id, row.valueX10]), [[manual.id, 900]]);
+    assert.deepEqual(data.measurements.map((row) => [row.id, row.valueX100]), [[manual.id, 9000]]);
     const nextDay = await measurements.recordIfDayEmpty(client.id, weight(805, null, "2026-10-15"), NOW);
-    assert.equal(nextDay?.valueX10, 805);
+    assert.equal(nextDay?.valueX100, 8050);
   } finally { await close(); }
 });
 
-test("C06 values are exact tenths; empty is not zero; future and implausible values are refused", () => {
-  assert.equal(parseValueX10("80,1"), 801);
-  assert.equal(parseValueX10("80.1"), 801);
-  assert.equal(parseValueX10(" 80 "), 800);
-  assert.equal(parseValueX10(""), null);
-  assert.equal(parseValueX10("80,15"), null);
-  assert.equal(parseValueX10("-3"), null);
-  assert.equal(formatValue(801, "WEIGHT"), "80,1 кг");
-  assert.equal(formatValue(780, "WAIST"), "78 см");
+test("C06 values are exact hundredths for weight and tenths for the rest; empty is not zero; future and implausible values are refused", () => {
+  // Ожидаемые значения — из требования владельца (вес до сотых: 88,35), а не вычислены кодом.
+  assert.equal(parseValue("80,1", "WEIGHT"), 8010);
+  assert.equal(parseValue("80.1", "WEIGHT"), 8010);
+  assert.equal(parseValue("88,35", "WEIGHT"), 8835);
+  assert.equal(parseValue("88,04", "WEIGHT"), 8804);
+  assert.equal(parseValue(" 80 ", "WEIGHT"), 8000);
+  assert.equal(parseValue("", "WEIGHT"), null);
+  assert.equal(parseValue("80,155", "WEIGHT"), null, "у массы тела не больше двух знаков");
+  assert.equal(parseValue("-3", "WEIGHT"), null);
+  assert.equal(parseValue("97,5", "WAIST"), 9750);
+  assert.equal(parseValue("97,55", "WAIST"), null, "у обхватов один знак");
+  assert.equal(parseValue("25,55", "BODY_FAT"), null, "у процента жира один знак");
+  assert.equal(formatValue(8010, "WEIGHT"), "80,1 кг");
+  assert.equal(formatValue(8835, "WEIGHT"), "88,35 кг");
+  assert.equal(formatValue(8804, "WEIGHT"), "88,04 кг");
+  assert.equal(formatValue(8800, "WEIGHT"), "88 кг");
+  assert.equal(formatValue(7800, "WAIST"), "78 см");
+  assert.equal(formatDecimal(-250), "-2,5");
+  // Точность проверяет и схема правил: вес — любые сотые, обхват и % жира — только десятые.
+  assert.doesNotThrow(() => validateMeasurement({ type: "WEIGHT", valueX100: 8835, localDate: "2026-10-14", localMinute: null }, NOW));
+  assert.throws(() => validateMeasurement({ type: "WAIST", valueX100: 7855, localDate: "2026-10-14", localMinute: null }, NOW), { message: "MEASUREMENT_VALUE_INVALID" });
+  assert.throws(() => validateMeasurement({ type: "BODY_FAT", valueX100: 2555, localDate: "2026-10-14", localMinute: null }, NOW), { message: "MEASUREMENT_VALUE_INVALID" });
   assert.equal(parseTime("08:05"), 485);
   assert.equal(parseTime(""), null);
   assert.equal(parseTime("24:00"), "invalid");
@@ -93,7 +108,7 @@ test("NT-04 / §49.15–49.18: two weights a day stay separate; a primary gives 
     const other = await clients.create({ displayName: "Beta" });
     const morning = await measurements.record(client.id, weight(801, 480), NOW);
     const evening = await measurements.record(client.id, weight(808, 1200), NOW);
-    await measurements.record(client.id, { type: "WAIST", valueX10: 780, localDate: "2026-10-14", localMinute: null }, NOW);
+    await measurements.record(client.id, { type: "WAIST", valueX100: 7800, localDate: "2026-10-14", localMinute: null }, NOW);
     await measurements.record(other.id, weight(950, 480), NOW);
     let data = await measurements.listForClient(client.id);
     assert.equal(data.measurements.length, 3);
@@ -103,7 +118,7 @@ test("NT-04 / §49.15–49.18: two weights a day stay separate; a primary gives 
     await measurements.setPrimary(morning.id);
     data = await measurements.listForClient(client.id);
     [point] = dailyPoints(data.measurements, data.primaries, "WEIGHT");
-    assert.ok(point?.kind === "VALUE" && point.measurement.valueX10 === 801 && point.chosen);
+    assert.ok(point?.kind === "VALUE" && point.measurement.valueX100 === 8010 && point.chosen);
     await measurements.setPrimary(evening.id);
     data = await measurements.listForClient(client.id);
     assert.equal(data.primaries.length, 1);
@@ -112,7 +127,7 @@ test("NT-04 / §49.15–49.18: two weights a day stay separate; a primary gives 
     const corrected = await measurements.correct(evening.id, evening.revision, weight(806, 1200), NOW);
     assert.equal(corrected.id, evening.id);
     assert.equal((await measurements.listForClient(client.id)).measurements
-      .find((row) => row.id === morning.id)?.valueX10, 801);
+      .find((row) => row.id === morning.id)?.valueX100, 8010);
     await assert.rejects(measurements.correct(evening.id, evening.revision, weight(805, 1200), NOW),
       { message: "MEASUREMENT_STALE" });
     assert.equal(latestPoint(data.measurements, data.primaries, "NECK"), null);
@@ -151,9 +166,9 @@ test("schema refuses a primary for another type or date and keeps foreign keys",
     assert.throws(() => db.prepare(`INSERT INTO measurement_daily_primary
       (workspace_id, client_id, type, local_date, measurement_id) VALUES (?, ?, 'WAIST', ?, ?)`)
       .run(WS, client.id, "2026-10-14", row.id), /FOREIGN KEY/u);
-    assert.throws(() => db.prepare(`INSERT INTO body_measurements (id, workspace_id, client_id, type, value_x10,
+    assert.throws(() => db.prepare(`INSERT INTO body_measurements (id, workspace_id, client_id, type, value_x100,
       local_date, local_minute, method, revision, created_at, updated_at)
-      VALUES ('x', ?, 'missing', 'WEIGHT', 800, '2026-10-14', NULL, 'MANUAL', 1, 'n', 'n')`).run(WS), /FOREIGN KEY/u);
+      VALUES ('x', ?, 'missing', 'WEIGHT', 8000, '2026-10-14', NULL, 'MANUAL', 1, 'n', 'n')`).run(WS), /FOREIGN KEY/u);
   } finally { await close(); }
 });
 
@@ -187,18 +202,18 @@ test("Z-хвост пакетная запись замеров: запись, �
   const { clients, measurements, close } = await stores();
   try {
     const client = await clients.create({ displayName: "SyntheticBatch" });
-    const waist = await measurements.record(client.id, { type: "WAIST", valueX10: 800, localDate: "2026-10-14", localMinute: null }, NOW);
-    const chest = await measurements.record(client.id, { type: "CHEST", valueX10: 1000, localDate: "2026-10-14", localMinute: null }, NOW);
+    const waist = await measurements.record(client.id, { type: "WAIST", valueX100: 8000, localDate: "2026-10-14", localMinute: null }, NOW);
+    const chest = await measurements.record(client.id, { type: "CHEST", valueX100: 10000, localDate: "2026-10-14", localMinute: null }, NOW);
     let events = 0;
     measurements.subscribeCommittedChanges(() => { events += 1; });
     await measurements.applyBatch(client.id, [
-      { kind: "correct", id: waist.id, expectedRevision: waist.revision, input: { type: "WAIST", valueX10: 795, localDate: "2026-10-14", localMinute: null } },
+      { kind: "correct", id: waist.id, expectedRevision: waist.revision, input: { type: "WAIST", valueX100: 7950, localDate: "2026-10-14", localMinute: null } },
       { kind: "remove", id: chest.id, expectedRevision: chest.revision },
-      { kind: "record", input: { type: "HIPS", valueX10: 1020, localDate: "2026-10-14", localMinute: null } },
+      { kind: "record", input: { type: "HIPS", valueX100: 10200, localDate: "2026-10-14", localMinute: null } },
     ], NOW);
     assert.equal(events, 1);
     const day = (await measurements.listForClient(client.id)).measurements;
-    assert.deepEqual(day.map((row) => [row.type, row.valueX10]).sort(), [["HIPS", 1020], ["WAIST", 795]]);
+    assert.deepEqual(day.map((row) => [row.type, row.valueX100]).sort(), [["HIPS", 10200], ["WAIST", 7950]]);
   } finally { await close(); }
 });
 
@@ -207,11 +222,11 @@ test("Z-хвост пакетная запись замеров: устарев�
   try {
     const client = await clients.create({ displayName: "SyntheticBatchFail" });
     const other = await clients.create({ displayName: "SyntheticBatchOther" });
-    const waist = await measurements.record(client.id, { type: "WAIST", valueX10: 800, localDate: "2026-10-14", localMinute: null }, NOW);
-    const foreign = await measurements.record(other.id, { type: "WAIST", valueX10: 900, localDate: "2026-10-14", localMinute: null }, NOW);
+    const waist = await measurements.record(client.id, { type: "WAIST", valueX100: 8000, localDate: "2026-10-14", localMinute: null }, NOW);
+    const foreign = await measurements.record(other.id, { type: "WAIST", valueX100: 9000, localDate: "2026-10-14", localMinute: null }, NOW);
     let events = 0;
     measurements.subscribeCommittedChanges(() => { events += 1; });
-    const record = (valueX10: number) => ({ kind: "record" as const, input: { type: "HIPS" as const, valueX10, localDate: "2026-10-14", localMinute: null } });
+    const record = (valueX100: number) => ({ kind: "record" as const, input: { type: "HIPS" as const, valueX100, localDate: "2026-10-14", localMinute: null } });
     await assert.rejects(measurements.applyBatch(client.id, [record(1020),
       { kind: "remove", id: waist.id, expectedRevision: waist.revision + 1 }], NOW), { message: "MEASUREMENT_STALE" });
     await assert.rejects(measurements.applyBatch(client.id, [record(1020), record(5)], NOW), { message: "MEASUREMENT_VALUE_INVALID" });

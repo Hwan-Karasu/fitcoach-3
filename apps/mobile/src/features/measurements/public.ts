@@ -2,7 +2,7 @@ export { ClientMeasurementsScreen } from "./presentation/ClientMeasurementsScree
 export type { ClientMeasurements, DailyPoint, DailyPrimary, Measurement, MeasurementInput, MeasurementMethod, MeasurementOperation,
   MeasurementType } from "./domain/MeasurementModel.ts";
 export type { DailyMeasurementParticipant, MeasurementCommittedChange, MeasurementRepositoryPort } from "./domain/MeasurementRepositoryPort.ts";
-export { dailyPoints, formatDate, formatValue, latestPoint, localDateOf, measurementTypeInfo, parseValueX10 } from
+export { dailyPoints, formatDate, formatValue, latestPoint, localDateOf, measurementTypeInfo, parseValue, formatDecimal, decimalsOf } from
   "./domain/MeasurementRules.ts";
 export { statsOfPoints, type PointStats } from "./domain/MeasurementStats.ts";
 export { navyBodyFat, type NavyInput } from "./domain/NavyBodyFat.ts";

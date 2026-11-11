@@ -1,4 +1,5 @@
 import { isLocalDate } from "../../../shared/domain/LocalDate.ts";
+import { formatDecimal } from "../../../shared/format/decimalX100.ts";
 import { MEASUREMENT_TYPES, type DailyPoint, type DailyPrimary, type Measurement, type MeasurementInput,
   type MeasurementType } from "./MeasurementModel.ts";
 
@@ -14,16 +15,18 @@ function fail(code: MeasurementRuleError): never { throw new Error(code); }
 interface TypeInfo {
   readonly label: string;
   readonly unit: "кг" | "%" | "см";
-  /** Plausible bounds in tenths; a typo like 801 kg is refused, not stored. */
-  readonly minX10: number;
-  readonly maxX10: number;
+  /** Plausible bounds in hundredths; a typo like 801 kg is refused, not stored. */
+  readonly minX100: number;
+  readonly maxX100: number;
+  /** Точность значения в сотых: 1 — до 0,01 (масса тела), 10 — до 0,1 (остальное). Значение должно быть кратно шагу. */
+  readonly step: 1 | 10;
 }
 
-const circumference = (label: string): TypeInfo => ({ label, unit: "см", minX10: 100, maxX10: 2500 });
+const circumference = (label: string): TypeInfo => ({ label, unit: "см", minX100: 1000, maxX100: 25000, step: 10 });
 
 export const measurementTypeInfo: Readonly<Record<MeasurementType, TypeInfo>> = {
-  WEIGHT: { label: "Масса тела", unit: "кг", minX10: 200, maxX10: 4000 },
-  BODY_FAT: { label: "Процент жира", unit: "%", minX10: 20, maxX10: 750 },
+  WEIGHT: { label: "Масса тела", unit: "кг", minX100: 2000, maxX100: 40000, step: 1 },
+  BODY_FAT: { label: "Процент жира", unit: "%", minX100: 200, maxX100: 7500, step: 10 },
   NECK: circumference("Шея"),
   SHOULDERS: circumference("Плечи"),
   CHEST: circumference("Грудь"),
@@ -43,18 +46,25 @@ export const measurementTypeInfo: Readonly<Record<MeasurementType, TypeInfo>> = 
   CALF_R: circumference("Голень, правая"),
 };
 
-/** «80,1», «80.1», «80» → 801; empty or more than one decimal → null (no unknown→zero). */
-export function parseValueX10(text: string): number | null {
+/** Сколько знаков после запятой допускает тип: масса тела — два, остальное — один. */
+export const decimalsOf = (type: MeasurementType): 1 | 2 => (measurementTypeInfo[type].step === 1 ? 2 : 1);
+
+/**
+ * «88,35», «88.35», «88,4», «88» → 8835 / 8840 / 8800 (сотые); пусто или больше допустимого числа знаков (у массы тела два, у остального один) → null
+ * (неизвестное не превращается в ноль).
+ */
+export function parseValue(text: string, type: MeasurementType): number | null {
   const normalized = text.trim().replace(/\s+/gu, "").replace(",", ".");
-  if (!/^\d{1,4}(\.\d)?$/u.test(normalized)) return null;
-  const [whole, fraction = "0"] = normalized.split(".") as [string, string?];
-  return Number(whole) * 10 + Number(fraction);
+  const pattern = decimalsOf(type) === 2 ? /^\d{1,4}(\.\d{1,2})?$/u : /^\d{1,4}(\.\d)?$/u;
+  if (!pattern.test(normalized)) return null;
+  const [whole, fraction = ""] = normalized.split(".") as [string, string?];
+  return Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
 }
 
-export function formatValue(valueX10: number, type: MeasurementType): string {
-  const whole = Math.trunc(valueX10 / 10);
-  const tenth = valueX10 % 10;
-  return `${whole}${tenth === 0 ? "" : `,${tenth}`} ${measurementTypeInfo[type].unit}`;
+export { formatDecimal };
+
+export function formatValue(valueX100: number, type: MeasurementType): string {
+  return `${formatDecimal(valueX100)} ${measurementTypeInfo[type].unit}`;
 }
 
 /** «08:05» → 485; empty → null (only the date is known). */
@@ -97,7 +107,7 @@ export function formatDate(date: string): string {
 export function validateMeasurement(input: MeasurementInput, now: Date): MeasurementInput {
   if (!(MEASUREMENT_TYPES as readonly string[]).includes(input.type)) fail("MEASUREMENT_TYPE_INVALID");
   const info = measurementTypeInfo[input.type];
-  if (!Number.isSafeInteger(input.valueX10) || input.valueX10 < info.minX10 || input.valueX10 > info.maxX10) {
+  if (!Number.isSafeInteger(input.valueX100) || input.valueX100 < info.minX100 || input.valueX100 > info.maxX100 || input.valueX100 % info.step !== 0) {
     fail("MEASUREMENT_VALUE_INVALID");
   }
   if (!isLocalDate(input.localDate) || input.localDate > localDateOf(now)) fail("MEASUREMENT_DATE_INVALID");

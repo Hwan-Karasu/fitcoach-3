@@ -16,7 +16,7 @@ export interface DayDataPorts {
   readonly clientId: string;
   readonly calc: NutritionCalcPort;
   /** Вес — факт Measurements: запись одного дневного значения (владелец — Measurements, поэтому функция приходит снаружи). */
-  readonly recordWeight: (valueX10: number, localDate: string) => Promise<unknown>;
+  readonly recordWeight: (valueX100: number, localDate: string) => Promise<unknown>;
 }
 
 function failureText(failure: unknown): string {
@@ -40,8 +40,8 @@ export async function saveDayData(ports: DayDataPorts, edit: DayDataEdit): Promi
   };
   const weight = edit.weight?.trim().replace(",", ".") ?? "";
   if (weight !== "") {
-    if (!/^\d{1,3}(\.\d)?$/u.test(weight)) errors.weight = "Вес — число с одним знаком после запятой, например 85,4.";
-    else await attempt("weight", () => ports.recordWeight(Math.round(Number(weight) * 10), edit.localDate));
+    if (!/^\d{1,3}(\.\d{1,2})?$/u.test(weight)) errors.weight = "Вес — число не более чем с двумя знаками после запятой, например 85,45.";
+    else await attempt("weight", () => ports.recordWeight(Math.round(Number(weight) * 100), edit.localDate));
   }
   if (edit.steps !== null) {
     const steps = edit.steps.trim();

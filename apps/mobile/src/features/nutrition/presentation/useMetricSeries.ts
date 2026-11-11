@@ -20,7 +20,7 @@ export interface MetricSeriesData {
 
 const datedValues = (measurements: Awaited<ReturnType<MeasurementRepositoryPort["listForClient"]>>, type: "WEIGHT" | "BODY_FAT"): readonly DatedValue[] =>
   dailyPoints(measurements.measurements, measurements.primaries, type).flatMap((point) => point.kind === "VALUE"
-    ? [{ date: point.localDate, value: point.measurement.valueX10 / 10 }] : []);
+    ? [{ date: point.localDate, value: point.measurement.valueX100 / 100 }] : []);
 
 function groupMeals(entries: readonly EatenEntry[], span: DateSpan): ReadonlyMap<string, number> {
   const byDate = new Map<string, EatenEntry[]>();

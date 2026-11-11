@@ -68,7 +68,7 @@ test("AUDIT-ALL-1: ручной вес между чтением журнала 
         const snapshot = await target.listForClient(id);
         if (!inserted) {
           inserted = true;
-          await target.record(id, { type: "WEIGHT", valueX10: 900, localDate: TODAY, localMinute: null }, NOW);
+          await target.record(id, { type: "WEIGHT", valueX100: 9000, localDate: TODAY, localMinute: null }, NOW);
         }
         return snapshot;
       };
@@ -79,7 +79,7 @@ test("AUDIT-ALL-1: ручной вес между чтением журнала 
     assert.equal(result.kind, "SYNCED");
     if (result.kind === "SYNCED") assert.equal(result.importedWeight, 0);
     const rows = (await measurements.listForClient(me.id)).measurements;
-    assert.deepEqual(rows.map((row) => row.valueX10), [900]);
+    assert.deepEqual(rows.map((row) => row.valueX100), [9000]);
     await measurements.remove(rows[0]!.id, rows[0]!.revision);
     await syncHealthConnect({ health, calc, measurements, platform, isValidHealthValue }, TODAY, NOW);
     assert.equal((await measurements.listForClient(me.id)).measurements.length, 0, "удалённый вручную факт не возвращается на следующей синхронизации");
@@ -201,7 +201,7 @@ test("UIX audit: повтор дня во внешнем ответе не со�
     await syncHealthConnect({ health, platform, calc, measurements, isValidHealthValue }, TODAY, NOW);
     const rows = (await measurements.listForClient(me.id)).measurements;
     assert.equal(rows.length, 1);
-    assert.equal(rows[0]!.valueX10, 810);
+    assert.equal(rows[0]!.valueX100, 8100);
   } finally { await close(); }
 });
 
@@ -240,7 +240,7 @@ test("Health: синхронизация — шаги дня подставля�
     const me = await clients.create({ displayName: "SyntheticSelf" });
     await health.link(me.id, NOW);
     // Ручной вес за 9 ноября уже есть.
-    await measurements.record(me.id, { type: "WEIGHT", valueX10: 805, localDate: "2026-11-09", localMinute: null }, NOW);
+    await measurements.record(me.id, { type: "WEIGHT", valueX100: 8050, localDate: "2026-11-09", localMinute: null }, NOW);
     const platform = new FakePlatform();
     platform.data = [value("2026-11-09", "STEPS", 8200), value("2026-11-10", "STEPS", 3100), value("2026-11-09", "WEIGHT_X10", 799), value("2026-11-10", "WEIGHT_X10", 798),
       value("2026-11-10", "BODY_FAT_X10", 184), value("2026-11-10", "SLEEP_MIN", 430), value("2026-11-09", "TOTAL_KCAL", 2400), value("2026-11-09", "STEPS", 250_000)];
@@ -249,10 +249,10 @@ test("Health: синхронизация — шаги дня подставля�
       byMetric: { STEPS: 2, SLEEP_MIN: 1, TOTAL_KCAL: 1, WEIGHT_X10: 2, BODY_FAT_X10: 1 } }, "250 000 шагов — вне допустимых границ, отброшено целиком");
     assert.deepEqual((await calc.listSteps(me.id, "2026-11-01", TODAY)).map((day) => [day.localDate, day.steps]), [["2026-11-09", 8200], ["2026-11-10", 3100]]);
     const journal = await measurements.listForClient(me.id);
-    const weights = dailyPoints(journal.measurements, journal.primaries, "WEIGHT").map((point) => point.kind === "VALUE" ? [point.localDate, point.measurement.valueX10] : [point.localDate, null]);
-    assert.deepEqual(weights, [["2026-11-09", 805], ["2026-11-10", 798]], "за 9 ноября остался ручной 80,5, за 10-е подставлен 79,8");
-    const fat = dailyPoints(journal.measurements, journal.primaries, "BODY_FAT").map((point) => point.kind === "VALUE" ? point.measurement.valueX10 : null);
-    assert.deepEqual(fat, [184]);
+    const weights = dailyPoints(journal.measurements, journal.primaries, "WEIGHT").map((point) => point.kind === "VALUE" ? [point.localDate, point.measurement.valueX100] : [point.localDate, null]);
+    assert.deepEqual(weights, [["2026-11-09", 8050], ["2026-11-10", 7980]], "за 9 ноября остался ручной 80,5, за 10-е подставлен 79,8");
+    const fat = dailyPoints(journal.measurements, journal.primaries, "BODY_FAT").map((point) => point.kind === "VALUE" ? point.measurement.valueX100 : null);
+    assert.deepEqual(fat, [1840]);
     const stored = await health.listDaily(me.id, "2026-11-01", TODAY);
     assert.equal(stored.length, 7);
     assert.ok(stored.some((entry) => entry.metric === "SLEEP_MIN" && entry.value === 430));

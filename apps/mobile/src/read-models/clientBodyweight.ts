@@ -13,7 +13,7 @@ export function createClientBodyweight(dailyPoints: DailyPointsRule,
     async list(clientId: string): Promise<readonly Readonly<{ date: string; kg: number }>[]> {
       const { measurements: rows, primaries } = await measurements.listForClient(clientId);
       return dailyPoints(rows, primaries, "WEIGHT").flatMap((point) =>
-        point.kind === "VALUE" ? [{ date: point.localDate, kg: point.measurement.valueX10 / 10 }] : []);
+        point.kind === "VALUE" ? [{ date: point.localDate, kg: point.measurement.valueX100 / 100 }] : []);
     },
     subscribe(clientId: string, listener: () => void): () => void {
       return measurements.subscribeCommittedChanges((change) => { if (change.clientId === clientId) listener(); });

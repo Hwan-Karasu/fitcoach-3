@@ -9,7 +9,7 @@ import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
 import { MEASUREMENT_GROUPS, MEASUREMENT_TYPES, type ClientMeasurements, type Measurement, type MeasurementGroup, type MeasurementOperation, type MeasurementType } from "../domain/MeasurementModel.ts";
 import type { MeasurementRepositoryPort } from "../domain/MeasurementRepositoryPort.ts";
-import { dailyPoints, formatDate, localDateOf, measurementTypeInfo, parseValueX10 } from "../domain/MeasurementRules.ts";
+import { dailyPoints, formatDate, localDateOf, measurementTypeInfo, parseValue, formatDecimal } from "../domain/MeasurementRules.ts";
 import { sideLabels, sideWords } from "../domain/SideLabels.ts";
 
 /** Окружности: всё, кроме массы и % жира (они живут в расчёте и в журнале замеров). */
@@ -26,7 +26,7 @@ const MONTHS_GENITIVE = ["января", "февраля", "марта", "апр
 /** «10 ноября 2026» — подпись дня на «Главной» (макет). */
 const longDate = (localDate: string) => `${Number(localDate.slice(8, 10))} ${MONTHS_GENITIVE[Number(localDate.slice(5, 7)) - 1] ?? ""} ${localDate.slice(0, 4)}`;
 const fullDate = (localDate: string) => `${localDate.slice(8, 10)}.${localDate.slice(5, 7)}.${localDate.slice(0, 4)}`;
-const valueText = (valueX10: number) => (valueX10 % 10 === 0 ? String(valueX10 / 10) : String(valueX10 / 10).replace(".", ","));
+const valueText = formatDecimal;
 
 function errorText(error: unknown): string {
   switch (error instanceof Error ? error.message : "") {
@@ -48,8 +48,8 @@ function cellsOf(data: ClientMeasurements, localDate: string): Readonly<Record<M
   return cells;
 }
 
-const cellText = (cell: Cell): string => cell.kind === "VALUE" ? valueText(cell.measurement.valueX10) : cell.kind === "MANY" ? "несколько" : "—";
-const cellSpeech = (cell: Cell): string => cell.kind === "VALUE" ? `${valueText(cell.measurement.valueX10)} см` : cell.kind === "MANY" ? "несколько записей, основная не выбрана" : "нет данных";
+const cellText = (cell: Cell): string => cell.kind === "VALUE" ? valueText(cell.measurement.valueX100) : cell.kind === "MANY" ? "несколько" : "—";
+const cellSpeech = (cell: Cell): string => cell.kind === "VALUE" ? `${valueText(cell.measurement.valueX100)} см` : cell.kind === "MANY" ? "несколько записей, основная не выбрана" : "нет данных";
 
 interface EditorState { readonly editingDate: string | null; readonly date: string; readonly values: Readonly<Record<MeasurementType, string>> }
 
@@ -137,13 +137,13 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal, compact 
   const openNew = () => setEditor({ editingDate: null, date: day ?? localDateOf(new Date()), values: emptyValues() });
   const openEdit = () => {
     if (cells === null || current === null) return;
-    setEditor({ editingDate: current, date: current, values: Object.fromEntries(CIRCUMFERENCES.map((type) => [type, cells[type].kind === "VALUE" ? valueText((cells[type] as { measurement: Measurement }).measurement.valueX10) : ""])) as Record<MeasurementType, string> });
+    setEditor({ editingDate: current, date: current, values: Object.fromEntries(CIRCUMFERENCES.map((type) => [type, cells[type].kind === "VALUE" ? valueText((cells[type] as { measurement: Measurement }).measurement.valueX100) : ""])) as Record<MeasurementType, string> });
   };
 
   const save = useCallback(async () => {
     if (editor === null || data === null || busy) return;
-    const parsed = CIRCUMFERENCES.map((type) => ({ type, text: editor.values[type].trim(), valueX10: parseValueX10(editor.values[type]) }));
-    const invalid = parsed.find((item) => item.text !== "" && item.valueX10 === null);
+    const parsed = CIRCUMFERENCES.map((type) => ({ type, text: editor.values[type].trim(), valueX100: parseValue(editor.values[type], type) }));
+    const invalid = parsed.find((item) => item.text !== "" && item.valueX100 === null);
     if (invalid !== undefined) { setError(`${measurementTypeInfo[invalid.type].label}: число не более чем с одним знаком после запятой, например 97,5.`); return; }
     const moving = editor.editingDate !== null && editor.editingDate !== editor.date;
     const source = cellsOf(data, editor.editingDate ?? editor.date);
@@ -156,18 +156,18 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal, compact 
       const operations: MeasurementOperation[] = [];
       for (const item of parsed) {
         const cell = source[item.type];
-        if (cell.kind === "MANY") { if (item.valueX10 !== null && editor.editingDate === null) throw new Error("MEASUREMENT_MANY"); continue; }
-        if (item.valueX10 === null) {
+        if (cell.kind === "MANY") { if (item.valueX100 !== null && editor.editingDate === null) throw new Error("MEASUREMENT_MANY"); continue; }
+        if (item.valueX100 === null) {
           // Пустое поле удаляет значение только при изменении существующей записи; в новой записи пустое поле ничего не делает.
           if (cell.kind === "VALUE" && editor.editingDate !== null) operations.push({ kind: "remove", id: cell.measurement.id, expectedRevision: cell.measurement.revision });
           continue;
         }
         if (cell.kind === "VALUE") {
-          if (cell.measurement.valueX10 !== item.valueX10 || cell.measurement.localDate !== editor.date) {
-            operations.push({ kind: "correct", id: cell.measurement.id, expectedRevision: cell.measurement.revision, input: { type: item.type, valueX10: item.valueX10, localDate: editor.date, localMinute: cell.measurement.localMinute } });
+          if (cell.measurement.valueX100 !== item.valueX100 || cell.measurement.localDate !== editor.date) {
+            operations.push({ kind: "correct", id: cell.measurement.id, expectedRevision: cell.measurement.revision, input: { type: item.type, valueX100: item.valueX100, localDate: editor.date, localMinute: cell.measurement.localMinute } });
           }
         } else {
-          operations.push({ kind: "record", input: { type: item.type, valueX10: item.valueX10, localDate: editor.date, localMinute: null } });
+          operations.push({ kind: "record", input: { type: item.type, valueX100: item.valueX100, localDate: editor.date, localMinute: null } });
         }
       }
       await repository.applyBatch(clientId, operations);

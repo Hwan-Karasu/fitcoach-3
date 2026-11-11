@@ -170,11 +170,11 @@ export function NutritionCalcScreen({ clientId, body, onSaveProfile, calc, measu
     catch (failure) { failures.push(calcErrorText(failure)); }
     const today = localDateOf(new Date());
     if (weight !== null && weight !== loaded.weight) {
-      try { await upsertDailyMeasurement(measurements, clientId, { type: "WEIGHT", valueX10: Math.round(weight * 10), localDate: today, localMinute: null }); }
+      try { await upsertDailyMeasurement(measurements, clientId, { type: "WEIGHT", valueX100: Math.round(weight * 100), localDate: today, localMinute: null }); }
       catch (failure) { failures.push(`Вес: ${calcErrorText(failure)}`); }
     }
     if (fat !== null && (fat !== loaded.fat || draft.fatMethod === "VISUAL_ESTIMATE")) {
-      try { await upsertDailyMeasurement(measurements, clientId, { type: "BODY_FAT", valueX10: Math.round(fat * 10), localDate: today, localMinute: null, method: draft.fatMethod }); }
+      try { await upsertDailyMeasurement(measurements, clientId, { type: "BODY_FAT", valueX100: Math.round(fat * 10) * 10, localDate: today, localMinute: null, method: draft.fatMethod }); }
       catch (failure) { failures.push(`% жира: ${calcErrorText(failure)}`); }
     }
     if (failures.length === 0) { setEditing(false); setError(null); } else { setError(failures.join(" ")); reload(); }

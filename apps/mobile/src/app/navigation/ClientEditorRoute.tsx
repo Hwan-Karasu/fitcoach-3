@@ -6,7 +6,7 @@ import { ClientEditorPreview, type ClientEditorAppendix, type ClientRecord, type
   "../../features/clients/public.ts";
 import { QuestionnaireForm, useAnswersForm, type AnswerValue,
   type QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
-import { latestPoint, localDateOf, parseValueX10, type MeasurementInput, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
+import { formatDecimal, latestPoint, localDateOf, parseValue, type MeasurementInput, type MeasurementRepositoryPort } from "../../features/measurements/public.ts";
 import type { ClientCardWithAnswersPort } from "../../workflows/saveClientCard.ts";
 import { HealthConnectSection, type HealthConnectPort, type HealthStorePort, type HealthSyncResult } from "../../features/health/public.ts";
 import { AppButton, ConfirmDialog, LoadingState } from "../../shared/ui/components/public.ts";
@@ -67,7 +67,7 @@ export function ClientEditorRoute({ clientId, repository, questionnaire, clientC
     if (clientId !== undefined) {
       void measurements.listForClient(clientId).then((data) => {
         const point = latestPoint(data.measurements, data.primaries, "WEIGHT");
-        if (active) setInitialWeight(point !== null && point.kind === "VALUE" ? String(point.measurement.valueX10 / 10).replace(".", ",") : "");
+        if (active) setInitialWeight(point !== null && point.kind === "VALUE" ? formatDecimal(point.measurement.valueX100) : "");
       }, () => { if (active) setInitialWeight(""); });
     }
     return () => { active = false; };
@@ -166,9 +166,9 @@ export function ClientEditorRoute({ clientId, repository, questionnaire, clientC
       const weightText = extras.weightText.replace(",", ".");
       let weight: MeasurementInput | null = null;
       if (weightText !== "" && weightText !== (initialWeight ?? "").replace(",", ".")) {
-        const valueX10 = parseValueX10(weightText);
-        if (valueX10 === null) throw new Error("WEIGHT_SAVE_FAILED");
-        weight = { type: "WEIGHT", valueX10, localDate: localDateOf(new Date()), localMinute: null };
+        const valueX100 = parseValue(weightText, "WEIGHT");
+        if (valueX100 === null) throw new Error("WEIGHT_SAVE_FAILED");
+        weight = { type: "WEIGHT", valueX100, localDate: localDateOf(new Date()), localMinute: null };
       }
       // Карточка и изменённые ответы — одна транзакция: сбой ответов не оставляет ни новой карточки, ни половины правки.
       let saved: Awaited<ReturnType<ClientCardWithAnswersPort["save"]>>;

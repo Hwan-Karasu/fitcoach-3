@@ -35,13 +35,13 @@ test("AUDIT-ALL-1: неверный вес откатывает новую ка�
     clients.subscribeCommittedChanges(() => { events += 1; });
     questionnaire.subscribeCommittedChanges(() => { events += 1; });
     measurements.subscribeCommittedChanges(() => { events += 1; });
-    const weight = { type: "WEIGHT" as const, valueX10: 9990, localDate: "2026-10-14", localMinute: null };
+    const weight = { type: "WEIGHT" as const, valueX100: 99900, localDate: "2026-10-14", localMinute: null };
     await assert.rejects(workflow.save(null, card("Synthetic atomic weight"), { "sys:lifestyle.sleep": "7" }, weight), { message: "MEASUREMENT_VALUE_INVALID" });
     assert.equal((await clients.list("ACTIVE")).length, 0);
     assert.equal(events, 0);
-    const result = await workflow.save(null, card("Synthetic atomic weight"), { "sys:lifestyle.sleep": "7" }, { ...weight, valueX10: 805 });
+    const result = await workflow.save(null, card("Synthetic atomic weight"), { "sys:lifestyle.sleep": "7" }, { ...weight, valueX100: 8050 });
     assert.equal((await clients.list("ACTIVE")).length, 1);
-    assert.equal((await measurements.listForClient(result.client.id)).measurements[0]!.valueX10, 805);
+    assert.equal((await measurements.listForClient(result.client.id)).measurements[0]!.valueX100, 8050);
     assert.equal(events, 3);
   } finally { await close(); }
 });
@@ -50,9 +50,9 @@ test("AUDIT-ALL-1: неоднозначный день веса не остав�
   const { clients, questionnaire, measurements, workflow, close } = await stores();
   try {
     const client = await clients.create(card("Synthetic unchanged"));
-    const weight = { type: "WEIGHT" as const, valueX10: 800, localDate: "2026-10-14", localMinute: null };
+    const weight = { type: "WEIGHT" as const, valueX100: 8000, localDate: "2026-10-14", localMinute: null };
     await measurements.record(client.id, weight);
-    await measurements.record(client.id, { ...weight, valueX10: 810 });
+    await measurements.record(client.id, { ...weight, valueX100: 8100 });
     await assert.rejects(workflow.save({ id: client.id, revision: client.revision }, card("Synthetic changed"), { "sys:lifestyle.sleep": "9" }, weight), { message: "MEASUREMENT_AMBIGUOUS_DAY" });
     assert.equal((await clients.get(client.id))!.displayName, "Synthetic unchanged");
     assert.deepEqual((await questionnaire.getAnswers(client.id)).answers, {});

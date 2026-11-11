@@ -13,8 +13,8 @@ export function measurementJournalView(data: ClientMeasurements, type: Measureme
   const points = type === "ALL" ? [] : dailyPoints(rows, data.primaries, type);
   const latest = points.at(-1) ?? null;
   const first = points[0];
-  const changeX10 = latest?.kind === "VALUE" && first?.kind === "VALUE" && first.localDate !== latest.localDate
-    ? latest.measurement.valueX10 - first.measurement.valueX10 : null;
-  return { rows, days: [...grouped.entries()], points, latest, changeX10,
+  const changeX100 = latest?.kind === "VALUE" && first?.kind === "VALUE" && first.localDate !== latest.localDate
+    ? latest.measurement.valueX100 - first.measurement.valueX100 : null;
+  return { rows, days: [...grouped.entries()], points, latest, changeX100,
     ambiguousCount: points.filter((point) => point.kind === "AMBIGUOUS").length };
 }

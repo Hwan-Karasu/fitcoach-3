@@ -94,7 +94,7 @@ test("optional roster tiles use owner facts, retain zero, and skip reads for uns
     questionnaire: { getAnswers: async () => null } as unknown as Ports["questionnaire"],
     measurements: { listForClient: async (id: string) => {
       measurementReads += 1;
-      return { measurements: id === "A" ? [{ id: "mass", clientId: id, type: "WEIGHT", valueX10: 805, localDate: "2026-10-17", localMinute: null, method: "MANUAL", revision: 1 }] : [], primaries: [] };
+      return { measurements: id === "A" ? [{ id: "mass", clientId: id, type: "WEIGHT", valueX100: 8050, localDate: "2026-10-17", localMinute: null, method: "MANUAL", revision: 1 }] : [], primaries: [] };
     } } as unknown as Ports["measurements"],
     diary: { listEatenEntries: async (id: string) => {
       foodReads += 1;

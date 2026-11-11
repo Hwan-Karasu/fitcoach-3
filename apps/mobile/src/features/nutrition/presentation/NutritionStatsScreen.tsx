@@ -4,7 +4,7 @@ import { AppButton, EmptyState, InlineNotice, LineChart, LoadingState, Segmented
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
-import { dailyPoints, formatDate, statsOfPoints, type ClientMeasurements, type MeasurementRepositoryPort } from "../../measurements/public.ts";
+import { dailyPoints, formatDate, formatDecimal, statsOfPoints, type ClientMeasurements, type MeasurementRepositoryPort } from "../../measurements/public.ts";
 import { shiftIsoDate } from "../domain/DayNavigation.ts";
 import { useToday } from "./useToday.ts";
 
@@ -18,8 +18,8 @@ const PERIODS: readonly Readonly<{ id: PeriodId; label: string; days: number }>[
 const UNIT: Readonly<Record<StatType, string>> = { WEIGHT: "кг", BODY_FAT: "%" };
 const LAST_VALUES = 8;
 
-const decimal = (valueX10: number) => (valueX10 / 10).toFixed(1).replace(".", ",");
-const signed = (valueX10: number) => `${valueX10 > 0 ? "+" : valueX10 < 0 ? "−" : ""}${decimal(Math.abs(valueX10))}`;
+const decimal = formatDecimal;
+const signed = (valueX100: number) => `${valueX100 > 0 ? "+" : valueX100 < 0 ? "−" : ""}${decimal(Math.abs(valueX100))}`;
 const shortDate = (date: string) => `${date.slice(8, 10)}.${date.slice(5, 7)}`;
 
 function Tile({ label, value }: Readonly<{ label: string; value: string }>) {
@@ -59,7 +59,7 @@ export function NutritionStatsScreen({ clientId, measurements, onOpenJournal, in
   const from = days === 0 ? "0001-01-01" : shiftIsoDate(today, -(days - 1));
   const points = useMemo(() => data === null ? [] : dailyPoints(data.measurements, data.primaries, type).filter((point) => point.localDate >= from && point.localDate <= today), [data, type, from, today]);
   const stats = useMemo(() => statsOfPoints(points), [points]);
-  const line = useMemo(() => points.flatMap((point) => point.kind === "VALUE" ? [{ key: point.localDate, label: shortDate(point.localDate), caption: point.localDate, value: point.measurement.valueX10 / 10 }] : []), [points]);
+  const line = useMemo(() => points.flatMap((point) => point.kind === "VALUE" ? [{ key: point.localDate, label: shortDate(point.localDate), caption: point.localDate, value: point.measurement.valueX100 / 100 }] : []), [points]);
   const unit = UNIT[type];
   const label = type === "WEIGHT" ? "Вес" : "Процент жира";
 
@@ -74,29 +74,29 @@ export function NutritionStatsScreen({ clientId, measurements, onOpenJournal, in
             {failed ? <InlineNotice kind="error">Не удалось обновить замеры. Показаны последние загруженные данные.</InlineNotice> : null}
             <View style={[styles.card, { backgroundColor: colors.surface }]}>
               <Text style={[styles.meta, { color: colors.textSecondary }]}>Сейчас</Text>
-              <View accessible accessibilityLabel={stats.nowX10 === null ? `${label}: нет данных` : `${label}: ${decimal(stats.nowX10)} ${unit}${stats.changeX10 === null ? "" : `, изменение за период ${signed(stats.changeX10)} ${unit}`}`}
+              <View accessible accessibilityLabel={stats.nowX100 === null ? `${label}: нет данных` : `${label}: ${decimal(stats.nowX100)} ${unit}${stats.changeX100 === null ? "" : `, изменение за период ${signed(stats.changeX100)} ${unit}`}`}
                 style={styles.nowRow}>
-                <Text style={[styles.big, { color: stats.nowX10 === null ? colors.textMuted : colors.textPrimary }]}>{stats.nowX10 === null ? "—" : decimal(stats.nowX10)}</Text>
+                <Text style={[styles.big, { color: stats.nowX100 === null ? colors.textMuted : colors.textPrimary }]}>{stats.nowX100 === null ? "—" : decimal(stats.nowX100)}</Text>
                 <Text style={[styles.unit, { color: colors.textSecondary }]}>{unit}</Text>
-                {stats.changeX10 === null ? null : <Text style={[styles.change, { color: colors.textSecondary }]}>{`${signed(stats.changeX10)} ${unit} за период`}</Text>}
+                {stats.changeX100 === null ? null : <Text style={[styles.change, { color: colors.textSecondary }]}>{`${signed(stats.changeX100)} ${unit} за период`}</Text>}
               </View>
               {line.length === 0 ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Нет определённых значений за период.</Text>
                 : <LineChart points={line} format={(value) => String(Math.round(value * 10) / 10)} formatValue={(value) => `${String(Math.round(value * 10) / 10).replace(".", ",")} ${unit}`}
                   title={label} accessibilityLabel={`${label}: динамика по известным значениям`} />}
               <View style={styles.tiles}>
-                <Tile label="Начало" value={stats.startX10 === null ? "—" : `${decimal(stats.startX10)} ${unit}`} />
-                <Tile label="Среднее" value={stats.averageX10 === null ? "—" : `${decimal(stats.averageX10)} ${unit}`} />
-                <Tile label="Минимум" value={stats.minX10 === null ? "—" : `${decimal(stats.minX10)} ${unit}`} />
+                <Tile label="Начало" value={stats.startX100 === null ? "—" : `${decimal(stats.startX100)} ${unit}`} />
+                <Tile label="Среднее" value={stats.averageX100 === null ? "—" : `${decimal(stats.averageX100)} ${unit}`} />
+                <Tile label="Минимум" value={stats.minX100 === null ? "—" : `${decimal(stats.minX100)} ${unit}`} />
               </View>
               {stats.ambiguousDays > 0 ? <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Дней с несколькими записями без основной: ${stats.ambiguousDays}. Они не входят в расчёт — основную выбирают в журнале замеров.`}</Text> : null}
             </View>
             <View style={[styles.card, { backgroundColor: colors.surface }]}>
               <Text style={[styles.heading, { color: colors.textPrimary }]}>Последние значения</Text>
               {[...points].reverse().slice(0, LAST_VALUES).map((point) => (
-                <View key={point.localDate} accessible accessibilityLabel={point.kind === "VALUE" ? `${formatDate(point.localDate)}: ${decimal(point.measurement.valueX10)} ${unit}` : `${formatDate(point.localDate)}: несколько записей, основная не выбрана`}
+                <View key={point.localDate} accessible accessibilityLabel={point.kind === "VALUE" ? `${formatDate(point.localDate)}: ${decimal(point.measurement.valueX100)} ${unit}` : `${formatDate(point.localDate)}: несколько записей, основная не выбрана`}
                   style={[styles.valueRow, { borderColor: colors.border }]}>
                   <Text style={[styles.valueDate, { color: colors.textSecondary }]}>{formatDate(point.localDate)}</Text>
-                  <Text style={[styles.valueText, { color: point.kind === "VALUE" ? colors.textPrimary : colors.textMuted }]}>{point.kind === "VALUE" ? `${decimal(point.measurement.valueX10)} ${unit}` : "несколько записей"}</Text>
+                  <Text style={[styles.valueText, { color: point.kind === "VALUE" ? colors.textPrimary : colors.textMuted }]}>{point.kind === "VALUE" ? `${decimal(point.measurement.valueX100)} ${unit}` : "несколько записей"}</Text>
                 </View>
               ))}
             </View>

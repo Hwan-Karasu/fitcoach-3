@@ -45,8 +45,8 @@ async function seed(shared: SharedSqliteDatabase) {
   try {
     for (const store of stores) await store.initialize();
     const client = await clients.create({ displayName: "Synthetic roundtrip", emoji: "🏋️" });
-    await measurements.record(client.id, { type: "WEIGHT", valueX10: 805, localDate: "2026-10-20", localMinute: null }, NOW);
-    await measurements.record(client.id, { type: "WAIST", valueX10: 810, localDate: "2026-10-19", localMinute: 540 }, NOW);
+    await measurements.record(client.id, { type: "WEIGHT", valueX100: 8050, localDate: "2026-10-20", localMinute: null }, NOW);
+    await measurements.record(client.id, { type: "WAIST", valueX100: 8100, localDate: "2026-10-19", localMinute: 540 }, NOW);
     await settings.saveAppearance({ themeId: "slate-blue", accentId: null });
     const food = await foods.create({ name: "Synthetic food", brand: null, unit: "G", amountX10: 1000,
       kcalX10: 1000, proteinX10: 100, fatX10: 20, carbsX10: 120 }, NOW);

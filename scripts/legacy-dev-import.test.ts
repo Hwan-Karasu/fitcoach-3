@@ -49,7 +49,7 @@ async function legacyDatabase(file = ":memory:"): Promise<DatabaseSync> {
   await accounting.writeOff(anna.id);
   const type = (await calendar.listSessionTypes()).find((item) => !item.requiresCredit)!;
   await calendar.createAppointment({ localDate: "2026-10-23", startMinute: 600, durationMinutes: 60, clientId: anna.id, guestName: null, sessionTypeId: type.id, note: null });
-  await measurements.record(anna.id, { type: "WEIGHT", valueX10: 801, localDate: "2026-10-20", localMinute: null }, NOW);
+  await measurements.record(anna.id, { type: "WEIGHT", valueX100: 8010, localDate: "2026-10-20", localMinute: null }, NOW);
   await settings.saveAppearance({ themeId: "noir", accentId: null });
   await notifications.materialize([{ sourceType: "APPOINTMENT", sourceId: "a1", eventKind: "REMINDER", eventVersion: "v1", clientId: anna.id, title: "Запись", body: "тест",
     occursAt: new Date(NOW.getTime() - 60_000).toISOString() }], NOW);

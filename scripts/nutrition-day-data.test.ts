@@ -22,7 +22,7 @@ async function stores() {
   const calc = new DevNutritionCalcRepository(shared, WS);
   await calc.initialize();
   const clientId = (await clients.create({ displayName: "SyntheticDay" })).id;
-  const record = (valueX10: number, localDate: string) => measurements.record(clientId, { type: "WEIGHT", valueX10, localDate, localMinute: null }, NOW);
+  const record = (valueX100: number, localDate: string) => measurements.record(clientId, { type: "WEIGHT", valueX100, localDate, localMinute: null }, NOW);
   const close = async () => { await calc.close(); await measurements.close(); await clients.close(); };
   return { measurements, calc, clientId, record, close };
 }
@@ -34,7 +34,7 @@ test("данные дня за прошлую дату: вес, шаги и тр
     assert.deepEqual(errors, {});
     assert.deepEqual((await calc.listSteps(clientId, DAY, DAY)).map((row) => row.steps), [8000]);
     assert.deepEqual(await calc.listWorkoutMarks(clientId, DAY, DAY), [{ localDate: DAY, done: true }]);
-    assert.deepEqual((await measurements.listForClient(clientId)).measurements.map((row) => [row.localDate, row.valueX10]), [[DAY, 854]]);
+    assert.deepEqual((await measurements.listForClient(clientId)).measurements.map((row) => [row.localDate, row.valueX100]), [[DAY, 8540]]);
   } finally { await close(); }
 });
 

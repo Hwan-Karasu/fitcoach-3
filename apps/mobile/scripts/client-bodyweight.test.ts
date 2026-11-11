@@ -73,12 +73,12 @@ test("ряд массы тела: один достоверный замер в 
   try {
     const a = (await clients.create({ displayName: "SyntheticA" })).id;
     const b = (await clients.create({ displayName: "SyntheticB" })).id;
-    const weight = (valueX10: number, localDate: string) => ({ type: "WEIGHT" as const, valueX10, localDate, localMinute: null });
+    const weight = (valueX10: number, localDate: string) => ({ type: "WEIGHT" as const, valueX100: valueX10 * 10, localDate, localMinute: null }); // значения в десятых, хранение — сотые
     await measurements.record(a, weight(820, "2026-09-02"), NOW);
     await measurements.record(a, weight(840, "2026-09-15"), NOW);
     const first = await measurements.record(a, weight(830, "2026-09-20"), NOW);
     await measurements.record(a, weight(850, "2026-09-20"), NOW);
-    await measurements.record(a, { type: "WAIST", valueX10: 800, localDate: "2026-09-02", localMinute: null }, NOW);
+    await measurements.record(a, { type: "WAIST", valueX100: 8000, localDate: "2026-09-02", localMinute: null }, NOW);
     await measurements.record(b, weight(990, "2026-09-02"), NOW);
     const port = createClientBodyweight(dailyPoints, measurements);
     assert.deepEqual(await port.list(a), [{ date: "2026-09-02", kg: 82 }, { date: "2026-09-15", kg: 84 }], "20 сентября неоднозначно; талия и клиент B не влияют");

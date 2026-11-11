@@ -1,6 +1,7 @@
 import type { AccountingRepositoryPort, ClientAccountingSnapshot } from "../features/accounting/public.ts";
 import type { Appointment, CalendarRepositoryPort } from "../features/calendar/public.ts";
 import type { RosterClientOverview, RosterMetricValue, RosterOverview, RosterOverviewPort } from "../features/clients/public.ts";
+import { formatDecimal } from "../shared/format/decimalX100.ts";
 import type { DailyPoint, DailyPrimary, Measurement, MeasurementRepositoryPort, MeasurementType } from "../features/measurements/public.ts";
 import type { Nutrients, NutritionCalcPort, NutritionDiaryPort } from "../features/nutrition/public.ts";
 import type { TrainingHistoryPort } from "./trainingHistory.ts";
@@ -161,7 +162,7 @@ export function createRosterOverviewSource(ports: Readonly<{
           for (const [metricId, type, unit] of [["weight", "WEIGHT", "кг"], ["fatPercent", "BODY_FAT", "%"]] as const) {
             if (!selected.has(metricId)) continue;
             const point = measurements && ports.latestPoint ? ports.latestPoint(measurements.measurements.filter((row) => row.localDate <= today), measurements.primaries, type) : null;
-            metrics.push({ id: metricId, value: point?.kind === "VALUE" ? `${String(point.measurement.valueX10 / 10).replace(".", ",")} ${unit}` : null });
+            metrics.push({ id: metricId, value: point?.kind === "VALUE" ? `${formatDecimal(point.measurement.valueX100)} ${unit}` : null });
           }
           if (selected.has("calories")) {
             const total = entries && entries.length > 0 ? ports.sumNutrients?.(entries.map((row) => row.snapshot.eaten)).kcalX10 : null;

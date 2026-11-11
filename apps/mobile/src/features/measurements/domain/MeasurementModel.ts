@@ -31,14 +31,14 @@ export type MeasurementMethod = "MANUAL" | "NAVY_ESTIMATE" | "VISUAL_ESTIMATE";
 export type WritableMeasurementMethod = "MANUAL" | "VISUAL_ESTIMATE";
 
 /**
- * One observation with a stable ID (§49.15). Values are tenths (80,1 kg → 801) so no float drift;
+ * One observation with a stable ID (§49.15). Values are hundredths (80,1 kg → 8010, 88,35 kg → 8835) so no float drift;
  * `localMinute` is null when only the date is known — no invented time.
  */
 export interface Measurement {
   readonly id: string;
   readonly clientId: string;
   readonly type: MeasurementType;
-  readonly valueX10: number;
+  readonly valueX100: number;
   readonly localDate: string;
   readonly localMinute: number | null;
   readonly method: MeasurementMethod;
@@ -47,7 +47,7 @@ export interface Measurement {
 
 export interface MeasurementInput {
   readonly type: MeasurementType;
-  readonly valueX10: number;
+  readonly valueX100: number;
   readonly localDate: string;
   readonly localMinute: number | null;
   /** Как получено значение; не указан — `MANUAL`. «Оценка по рисунку» — только для процента жира. */

@@ -64,7 +64,7 @@ function useDayWeight(clientId: string, measurements: MeasurementRepositoryPort,
     void measurements.listForClient(clientId).then((data) => {
       if (!active) return;
       const point = dailyPoints(data.measurements, data.primaries, "WEIGHT").find((candidate) => candidate.localDate === day);
-      setState({ key: `${clientId}|${day}`, weight: point !== undefined && point.kind === "VALUE" ? point.measurement.valueX10 / 10 : null,
+      setState({ key: `${clientId}|${day}`, weight: point !== undefined && point.kind === "VALUE" ? point.measurement.valueX100 / 100 : null,
         ambiguous: point !== undefined && point.kind === "AMBIGUOUS" });
     }, () => undefined);
     return () => { active = false; };
@@ -182,7 +182,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   const [error, setError] = useState<string | null>(null);
   const lock = useRef(false);
   const saveLock = useRef(false);
-  const recordWeight = useCallback((valueX10: number, localDate: string) => upsertDailyMeasurement(measurements, clientId, { type: "WEIGHT", valueX10, localDate, localMinute: null }), [measurements, clientId]);
+  const recordWeight = useCallback((valueX100: number, localDate: string) => upsertDailyMeasurement(measurements, clientId, { type: "WEIGHT", valueX100, localDate, localMinute: null }), [measurements, clientId]);
 
   // Другой день — другие значения: открытый лист и ошибка прежнего дня закрываются.
   useEffect(() => { setSheet(null); setError(null); }, [day]);
@@ -269,7 +269,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
       </View>
       <CalcSheet visible={calcOpen} clientId={clientId} body={body} onSaveProfile={onSaveProfile} calc={calc} measurements={measurements}
         onClose={() => setCalcOpen(false)} />
-      <ValueSheet visible={sheet === "weight"} title="Вес за день" label="Вес" unit="кг" keyboardType="decimal-pad" placeholder="85,4" emptyMessage="Введите вес."
+      <ValueSheet visible={sheet === "weight"} title="Вес за день" label="Вес" unit="кг" keyboardType="decimal-pad" placeholder="85,45" emptyMessage="Введите вес."
         initial={dayWeight.weight === null ? "" : String(dayWeight.weight).replace(".", ",")} onSave={saveWeight} onClose={() => setSheet(null)} />
 
       <View style={[styles.card, styles.cardTight, shadow.card, { backgroundColor: colors.surface }]}>

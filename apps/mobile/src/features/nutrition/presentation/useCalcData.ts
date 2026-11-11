@@ -38,11 +38,11 @@ export function useCalcData(clientId: string, calc: NutritionCalcPort, measureme
     let active = true;
     void Promise.all([calc.getProfile(clientId), measurements.listForClient(clientId), calc.averageSteps(clientId, shiftDate(today, -TREND_WINDOW_DAYS + 1), today)]).then(([stored, data, steps]) => {
       if (!active) return;
-      const point = (type: "WEIGHT" | "BODY_FAT") => { const latest = latestPoint(data.measurements, data.primaries, type); return latest !== null && latest.kind === "VALUE" ? latest.measurement.valueX10 / 10 : null; };
+      const point = (type: "WEIGHT" | "BODY_FAT") => { const latest = latestPoint(data.measurements, data.primaries, type); return latest !== null && latest.kind === "VALUE" ? latest.measurement.valueX100 / 100 : null; };
       const from = shiftDate(today, -TREND_WINDOW_DAYS + 1);
-      const weights = dailyPoints(data.measurements, data.primaries, "WEIGHT").flatMap((day) => day.localDate >= from && day.localDate <= today && day.kind === "VALUE" ? [day.measurement.valueX10 / 10] : []);
+      const weights = dailyPoints(data.measurements, data.primaries, "WEIGHT").flatMap((day) => day.localDate >= from && day.localDate <= today && day.kind === "VALUE" ? [day.measurement.valueX100 / 100] : []);
       const todayPoint = dailyPoints(data.measurements, data.primaries, "WEIGHT").find((day) => day.localDate === today);
-      const weightToday = todayPoint !== undefined && todayPoint.kind === "VALUE" ? todayPoint.measurement.valueX10 / 10 : null;
+      const weightToday = todayPoint !== undefined && todayPoint.kind === "VALUE" ? todayPoint.measurement.valueX100 / 100 : null;
       setLoaded({ key: clientId, value: { stored, weight: point("WEIGHT"), fat: point("BODY_FAT"), steps, weightToday, weights } });
       setFailed(false);
     }, () => { if (active) setFailed(true); });

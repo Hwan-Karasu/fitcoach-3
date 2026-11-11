@@ -7,7 +7,7 @@ import { PrototypeScreen } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { MEASUREMENT_TYPES, type ClientMeasurements, type Measurement, type MeasurementType } from "../domain/MeasurementModel.ts";
 import type { MeasurementRepositoryPort } from "../domain/MeasurementRepositoryPort.ts";
-import { dailyPoints, formatDate, formatTime, formatValue, localDateOf, measurementTypeInfo, parseTime, parseValueX10 } from "../domain/MeasurementRules.ts";
+import { dailyPoints, formatDate, formatTime, formatValue, localDateOf, measurementTypeInfo, parseTime, parseValue, formatDecimal } from "../domain/MeasurementRules.ts";
 import { measurementJournalView, type JournalPeriod } from "./measurementJournalView.ts";
 import { plural } from "../../../shared/format/clockText.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
@@ -18,7 +18,7 @@ const PERIODS: readonly Readonly<{ id: JournalPeriod; label: string }>[] = [
 ];
 const typeOptions = MEASUREMENT_TYPES.map((type) => ({ value: type, label: measurementTypeInfo[type].label }));
 const isType = (value: string): value is MeasurementType => MEASUREMENT_TYPES.some((type) => type === value);
-const numberText = (value: number) => String(value / 10).replace(".", ",");
+const numberText = formatDecimal;
 
 function errorMessage(error: unknown): string {
   switch (error instanceof Error ? error.message : "") {
@@ -42,16 +42,16 @@ function JournalEntry({ row, primary, canChoose, busy, onEdit, onDelete, onPrima
   const anchor = useRef<View>(null);
   const [open, setOpen] = useState(false);
   return <View style={[styles.entry, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-    <Pressable disabled={busy} accessibilityRole="button" accessibilityLabel={`Исправить: ${measurementTypeInfo[row.type].label}, ${formatValue(row.valueX10, row.type)}, ${formatTime(row.localMinute)}`}
+    <Pressable disabled={busy} accessibilityRole="button" accessibilityLabel={`Исправить: ${measurementTypeInfo[row.type].label}, ${formatValue(row.valueX100, row.type)}, ${formatTime(row.localMinute)}`}
       onPress={onEdit} style={styles.entryBody}>
       <View style={styles.row}>
         <Text style={[styles.entryLabel, { color: colors.textSecondary }]}>{measurementTypeInfo[row.type].label}</Text>
-        <Text style={[styles.entryValue, { color: colors.textPrimary }]}>{formatValue(row.valueX10, row.type)}</Text>
+        <Text style={[styles.entryValue, { color: colors.textPrimary }]}>{formatValue(row.valueX100, row.type)}</Text>
       </View>
       <Text style={[styles.hint, { color: primary ? colors.accentInk : colors.textMuted }]}>{formatTime(row.localMinute)}{primary ? " · основной" : ""}{row.method === "NAVY_ESTIMATE" ? " · оценка ВМС" : row.method === "VISUAL_ESTIMATE" ? " · оценка по рисунку" : ""}</Text>
     </Pressable>
     <View ref={anchor} collapsable={false}>
-      <AppIconButton label={`Действия: ${measurementTypeInfo[row.type].label}, ${formatValue(row.valueX10, row.type)}`}
+      <AppIconButton label={`Действия: ${measurementTypeInfo[row.type].label}, ${formatValue(row.valueX100, row.type)}`}
         disabled={busy} icon={<MoreHorizontal size={19} color={colors.textSecondary} />} onPress={() => setOpen(true)} />
     </View>
     <DropdownMenu visible={open} anchor={anchor} title="Действия с замером" selected="" onClose={() => setOpen(false)}
@@ -86,7 +86,7 @@ export function ClientMeasurementsScreen({ clientId, repository }: Readonly<{ cl
   const today = localDateOf(new Date());
   const view = useMemo(() => data === null ? null : measurementJournalView(data, type, period, today), [data, type, period, today]);
   const graph = useMemo(() => view?.points.flatMap((point) => point.kind === "VALUE" ? [{ key: point.localDate,
-    label: `${point.localDate.slice(8)}.${point.localDate.slice(5, 7)}`, caption: formatDate(point.localDate), value: point.measurement.valueX10 / 10 }] : []) ?? [], [view]);
+    label: `${point.localDate.slice(8)}.${point.localDate.slice(5, 7)}`, caption: formatDate(point.localDate), value: point.measurement.valueX100 / 100 }] : []) ?? [], [view]);
   const run = async (work: () => Promise<unknown>, after?: () => void) => {
     if (lock.current) return;
     lock.current = true; setBusy(true); setError(null);
@@ -94,15 +94,15 @@ export function ClientMeasurementsScreen({ clientId, repository }: Readonly<{ cl
     finally { lock.current = false; setBusy(false); }
   };
   const edit = (row: Measurement) => {
-    setError(null); setDraft({ editing: row, type: row.type, value: numberText(row.valueX10), date: row.localDate,
+    setError(null); setDraft({ editing: row, type: row.type, value: numberText(row.valueX100), date: row.localDate,
       time: row.localMinute === null ? "" : formatTime(row.localMinute) });
   };
   const save = () => {
     if (draft === null || lock.current) return;
-    const valueX10 = parseValueX10(draft.value), minute = parseTime(draft.time);
-    if (valueX10 === null) { setError("Введите значение, например 80,1."); return; }
+    const valueX100 = parseValue(draft.value, draft.type), minute = parseTime(draft.time);
+    if (valueX100 === null) { setError(draft.type === "WEIGHT" ? "Введите значение, например 88,35." : "Введите значение, например 80,1."); return; }
     if (minute === "invalid") { setError(errorMessage(new Error("MEASUREMENT_TIME_INVALID"))); return; }
-    const input = { type: draft.type, valueX10, localDate: draft.date, localMinute: minute };
+    const input = { type: draft.type, valueX100, localDate: draft.date, localMinute: minute };
     const editing = draft.editing;
     void run(() => editing === null ? repository.record(clientId, input) : repository.correct(editing.id, editing.revision, input), () => { setDraft(null); setType(draft.type); });
   };
@@ -129,12 +129,12 @@ export function ClientMeasurementsScreen({ clientId, repository }: Readonly<{ cl
         <View style={styles.row}>
           <View style={[styles.stat, { backgroundColor: colors.surface }]}>
             <Text style={[styles.hint, { color: colors.textSecondary }]}>Последний замер</Text>
-            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{view.latest?.kind === "VALUE" ? `${numberText(view.latest.measurement.valueX10)} ${info.unit}` : "—"}</Text>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{view.latest?.kind === "VALUE" ? `${numberText(view.latest.measurement.valueX100)} ${info.unit}` : "—"}</Text>
             <Text style={[styles.hint, { color: colors.textMuted }]}>{view.latest === null ? "Нет данных за период" : view.latest.kind === "AMBIGUOUS" ? "Выберите основной за день" : formatDate(view.latest.localDate)}</Text>
           </View>
           <View style={[styles.stat, { backgroundColor: colors.surface }]}>
             <Text style={[styles.hint, { color: colors.textSecondary }]}>Изменение за период</Text>
-            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{view.changeX10 === null ? "—" : `${view.changeX10 > 0 ? "+" : ""}${numberText(view.changeX10)} ${deltaUnit}`}</Text>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{view.changeX100 === null ? "—" : `${view.changeX100 > 0 ? "+" : ""}${numberText(view.changeX100)} ${deltaUnit}`}</Text>
             <Text style={[styles.hint, { color: colors.textMuted }]}>От первого к последнему</Text>
           </View>
         </View>
@@ -187,7 +187,7 @@ export function ClientMeasurementsScreen({ clientId, repository }: Readonly<{ cl
       </KeyboardAvoidingView>
     </Modal>
     <ConfirmDialog visible={deleting !== null} destructive confirmBusy={busy} title="Удалить замер?"
-      description={deleting === null ? "" : `${measurementTypeInfo[deleting.type].label}: ${formatValue(deleting.valueX10, deleting.type)}, ${formatDate(deleting.localDate)}. Остальные записи сохранятся.`}
+      description={deleting === null ? "" : `${measurementTypeInfo[deleting.type].label}: ${formatValue(deleting.valueX100, deleting.type)}, ${formatDate(deleting.localDate)}. Остальные записи сохранятся.`}
       confirmLabel="Удалить" onCancel={() => setDeleting(null)} onConfirm={() => {
         const row = deleting; if (row !== null) void run(() => repository.remove(row.id, row.revision), () => setDeleting(null));
       }} />

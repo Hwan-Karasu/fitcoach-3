@@ -78,7 +78,7 @@ export async function syncHealthConnect(ports: HealthSyncPorts, today: string, n
     let imported = 0;
     for (const entry of fresh) {
       if (taken.has(entry.localDate)) continue;
-      const saved = await ports.measurements.recordIfDayEmpty(link.clientId, { type, valueX10: entry.value, localDate: entry.localDate, localMinute: null }, now);
+      const saved = await ports.measurements.recordIfDayEmpty(link.clientId, { type, valueX100: entry.value * 10, localDate: entry.localDate, localMinute: null }, now);
       taken.add(entry.localDate);
       if (saved !== null) imported += 1;
     }
