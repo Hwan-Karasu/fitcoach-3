@@ -8,6 +8,8 @@ import { AppIconButton } from "./AppIconButton.tsx";
 
 /** Высота строки шапки — одна на всех экранах (UI-OWN-035). */
 export const SCREEN_HEADER_HEIGHT = 56;
+/** Зазор между системной строкой (вырез камеры, часы) и шапкой: был 8 — слишком много пустого места над шапкой (замечание владельца 11.11). */
+const HEADER_TOP_GAP = 2;
 
 /**
  * Шапка экрана — строка одной высоты на всех экранах (UI-OWN-035; «Зефирка», UI-OWN-048 — без карточки): «←», знак,
@@ -30,7 +32,7 @@ export function ScreenHeader({ title, subtitle, mark, onBack, backRef, right, in
   const colors = palette.tokens;
   const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.outer, { backgroundColor: colors.canvas, paddingTop: (insetTop ? insets.top : 0) + 8 }]}>
+    <View style={[styles.outer, { backgroundColor: colors.canvas, paddingTop: (insetTop ? insets.top : 0) + HEADER_TOP_GAP }]}>
       <View style={styles.card}>
         {onBack !== undefined ? <AppIconButton compact label="Назад" buttonRef={backRef}
           icon={<ArrowLeft size={22} color={colors.textPrimary} strokeWidth={2} />} onPress={onBack} /> : <View style={styles.gap} />}

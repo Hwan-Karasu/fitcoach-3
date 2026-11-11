@@ -3,7 +3,6 @@ import { formatDuration, formatRange, parseDuration, parseLoad, type PlannedSet 
 import type { SetType, SetValues, TrackingMetric, WeekStatus, WorkoutStatus } from "../domain/ExecutionModel.ts";
 import type { WeekCardState } from "../domain/WeekCardStatus.ts";
 import { fieldsOf, inLimits, type SetField } from "../domain/ExecutionRules.ts";
-import { isCalendarDay } from "../../../../shared/format/calendarDay.ts";
 
 /** Порядок колонок дневника (§48.65 п. 1): повторы, затем вес; дистанция перед временем. */
 const FIELD_ORDER: readonly SetField[] = ["reps", "loadGrams", "distanceM", "durationSec"];
@@ -113,11 +112,4 @@ export const weekCardMarkers: Readonly<Record<WeekCardState, string | null>> = {
   COMPLETED: "✓", IN_PROGRESS: "●", CLOSED_WITH_DEVIATIONS: "!", CURRENT: "▸", NOT_STARTED: null, EMPTY: null,
 };
 
-const MONTHS = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
-
-/** `2026-10-17` → «17 окт». */
-export function shortDate(date: string | null): string {
-  if (!isCalendarDay(date)) return "Дата неизвестна";
-  const [, month, day] = date.split("-").map(Number) as [number, number, number];
-  return `${day} ${MONTHS[month - 1] ?? ""}`;
-}
+export { diaryDateChip, shortDate } from "../domain/DiaryDate.ts";

@@ -335,9 +335,9 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
               <Text style={[styles.kind, { color: colors.accentInk, backgroundColor: colors.accentSoft }]}>{programKindLabels[program.kind]}</Text>
             </View>
             <View style={styles.cardActions}>
-              <View style={styles.grow}><AppButton compact label="Изменить"
+              <View style={styles.grow}><AppButton compact singleLine label="Изменить"
                 icon={(color) => <Pencil size={16} color={color} strokeWidth={2} />} onPress={onEditStructure} /></View>
-              <View style={styles.grow}><AppButton compact variant="secondary" label="В шаблоны"
+              <View style={styles.growWide}><AppButton compact singleLine variant="secondary" label="В шаблоны"
                 icon={(color) => <Bookmark size={16} color={color} strokeWidth={2} />}
                 onPress={() => { setNotice(null); setTemplateForm({ kind: "program", mesocycleId: null, title: program.title }); }} /></View>
               {menuButton}
@@ -395,9 +395,9 @@ export function ProgramScreen({ clientId, programId, repository, listCandidates,
                   </View>
                 </View>
                 <View style={styles.cardActions}>
-                  <View style={styles.grow}><AppButton compact label="Изменить"
+                  <View style={styles.grow}><AppButton compact singleLine label="Изменить"
                     icon={(color) => <Pencil size={16} color={color} strokeWidth={2} />} onPress={() => onEditWeek(selected.id, weekIndex)} /></View>
-                  <View style={styles.grow}><AppButton compact variant="secondary" label="В шаблоны"
+                  <View style={styles.growWide}><AppButton compact singleLine variant="secondary" label="В шаблоны"
                     icon={(color) => <Bookmark size={16} color={color} strokeWidth={2} />}
                     onPress={() => { setNotice(null); setTemplateForm({ kind: "mesocycle", mesocycleId: selected.id, title: selected.title }); }} /></View>
                   {menuButton}
@@ -480,4 +480,5 @@ const styles = StyleSheet.create({
   workoutTitle: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18, marginBottom: 2 },
   row: { flexDirection: "row", gap: 10 },
   grow: { flex: 1 },
+  growWide: { flex: 1.35 },
 });

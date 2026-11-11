@@ -23,6 +23,8 @@ interface AppButtonProps {
   readonly compact?: boolean;
   /** Плотные панели: 34 dp вместо стандартных 44, без масштабирования всего экрана. */
   readonly size?: "default" | "small";
+  /** Подпись строго в одну строку: если не помещается рядом с иконкой, шрифт слегка уменьшается, а не переносится. */
+  readonly singleLine?: boolean;
 }
 
 /** Стиль «Зефирка» (UI-OWN-048): главная — заливка акцентом, второстепенная — мягкий фон акцента, без рамок. */
@@ -39,6 +41,7 @@ export function AppButton({
   testID,
   compact = false,
   size = "default",
+  singleLine = false,
 }: Readonly<AppButtonProps>) {
   const [focused, setFocused] = useState(false);
   const { palette } = usePrototypeTheme();
@@ -77,7 +80,8 @@ export function AppButton({
     >
       <View style={styles.content}>
         {busy ? <ActivityIndicator size="small" color={foregroundColor} /> : icon?.(foregroundColor) ?? null}
-        <Text style={[styles.label, compact ? styles.compactLabel : null, size === "small" ? styles.smallLabel : null, { color: foregroundColor }]}>{busy ? busyLabel : label}</Text>
+        <Text {...(singleLine ? { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.8 } : null)}
+          style={[styles.label, compact ? styles.compactLabel : null, size === "small" ? styles.smallLabel : null, { color: foregroundColor }]}>{busy ? busyLabel : label}</Text>
       </View>
     </Pressable>
   );

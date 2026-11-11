@@ -30,8 +30,11 @@ export const styles = StyleSheet.create({
   handle: { width: 44, minHeight: 48, alignItems: "center", justifyContent: "center" },
   orderActions: { flexDirection: "row", gap: 8 },
   offscreen: { position: "absolute", left: -10000, top: 0 },
-  metaRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
-  statusTag: { maxWidth: "100%" },
+  // Первая строка шапки всегда одна («Неделя · дата · статус»): без переноса высота карточки не зависит от длины даты,
+  // и прокрутка не «прыгает» при смене недели. Дата сжимается, статус и «ещё N» — нет.
+  metaRow: { flexDirection: "row", alignItems: "center", flexWrap: "nowrap", gap: 8 },
+  metaDate: { flexShrink: 1, minWidth: 0 },
+  statusTag: { flexShrink: 0 },
   timeRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
   dateButton: { flexDirection: "row", alignItems: "center", gap: 5, maxWidth: "100%", minHeight: 28, borderRadius: 10, paddingHorizontal: 9 },
   dateText: { flexShrink: 1, fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 },

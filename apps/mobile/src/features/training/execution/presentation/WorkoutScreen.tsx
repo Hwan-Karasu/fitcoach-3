@@ -33,7 +33,7 @@ import { ActiveWorkoutsSheet, ExerciseMenuSheet, RpeSheet, SetTypeSheet, Superse
 import { workoutFactSummary } from "./workoutFactSummary.ts";
 import { WorkoutSharePoster } from "./WorkoutSharePoster.tsx";
 import { labeledPlan, labeledWithDrops } from "./shareFormat.ts";
-import { diaryFields, fieldHeaders, planText, rawOf, shortDate, weekCardLabels, weekCardMarkers, workoutStatusLabels } from "./setFormat.ts";
+import { diaryDateChip, diaryFields, fieldHeaders, planText, rawOf, shortDate, weekCardLabels, weekCardMarkers, workoutStatusLabels } from "./setFormat.ts";
 import { weekCardStates, weekCardTone } from "../domain/WeekCardStatus.ts";
 import { statusToneColor } from "../../../../shared/ui/theme/statusTone.ts";
 import { diaryTimeNote } from "../domain/DiaryTimeNote.ts";
@@ -544,8 +544,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
             </View>
           </View>
           <View style={styles.metaRow}>
-            <Text style={[styles.meta, { color: colors.textSecondary }]}>{`Неделя ${diary.displayedSlot.weekIndex}`}</Text>
-            {/* Без занятия дата и время показываются неактивными; метаданные переносятся целыми элементами. */}
+            <Text numberOfLines={1} style={[styles.meta, { color: colors.textSecondary }]}>{`Неделя ${diary.displayedSlot.weekIndex}`}</Text>
+            {/* Без занятия дата и время показываются неактивными; первая строка не переносится (одинаковая высота шапки у всех недель). */}
             {(
               // §48.84: дата проведения — по умолчанию день первого ввода, можно указать прошедший день.
               <Pressable accessibilityRole="button" hitSlop={8} disabled={state.session === null}
@@ -557,9 +557,9 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                     if (date !== null && date !== current) void diary.setActualDate(date);
                   });
                 }}
-                style={[styles.dateButton, { backgroundColor: colors.surfaceRaised }, state.session === null && styles.dim]}>
+                style={[styles.dateButton, styles.metaDate, { backgroundColor: colors.surfaceRaised }, state.session === null && styles.dim]}>
                 <CalendarDays size={15} color={colors.accentInk} strokeWidth={2} />
-                <Text style={[styles.dateText, { color: colors.accentInk }]}>{shortDate(state.session?.actualDate ?? null)}</Text>
+                <Text numberOfLines={1} style={[styles.dateText, { color: colors.accentInk }]}>{diaryDateChip(state.session?.actualDate ?? null)}</Text>
               </Pressable>
             )}
             {others.length > 0 ? (
