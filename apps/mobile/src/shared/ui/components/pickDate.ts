@@ -1,34 +1,10 @@
-import { Platform } from "react-native";
-import { DateTimePickerAndroid, type DateTimePickerEvent } from "@react-native-community/datetimepicker";
-
-const pad = (value: number) => String(value).padStart(2, "0");
-const toDate = (local: string) => {
-  const [year, month, day] = local.split("-").map(Number) as [number, number, number];
-  return new Date(year, month - 1, day);
-};
-const toLocal = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+import { requestDate, type DatePickInput } from "./datePickStore.ts";
 
 /**
- * Системный выбор даты Android (UI-OWN-023 — все поля ввода даты через него, без самописных календарей).
- * Даты — локальные `YYYY-MM-DD`; `min`/`max` включительно. Отмена и сбой открытия окна — `null` (промис не отклоняется: вызывающие не обязаны ловить отказ).
+ * Выбор даты (UIX-FIT-10, заменяет системное окно Android из UI-OWN-023): календарь в стиле приложения (`DatePickerHost`) — месяц сеткой,
+ * стрелки, выбор месяца и года, неделя с понедельника. Даты — локальные `YYYY-MM-DD`; `min`/`max` включительно. Отмена, второй запрос
+ * и отсутствие хоста — `null` (промис не отклоняется: вызывающие не обязаны ловить отказ).
  */
-export function pickDate(input: Readonly<{ value: string; min?: string; max?: string; title?: string; confirmLabel?: string }>):
-  Promise<string | null> {
-  if (Platform.OS !== "android") return Promise.resolve(null);
-  return new Promise((resolve) => {
-    try {
-      DateTimePickerAndroid.open({
-        value: toDate(input.value),
-        mode: "date",
-        title: input.title,
-        minimumDate: input.min === undefined ? undefined : toDate(input.min),
-        maximumDate: input.max === undefined ? undefined : toDate(input.max),
-        firstDayOfWeek: 1,
-        positiveButton: { label: input.confirmLabel ?? "Готово" },
-        negativeButton: { label: "Отмена" },
-        onChange: (event: DateTimePickerEvent, date?: Date) => resolve(event.type === "set" && date ? toLocal(date) : null),
-        onError: () => resolve(null),
-      });
-    } catch { resolve(null); }
-  });
+export function pickDate(input: DatePickInput): Promise<string | null> {
+  return requestDate(input);
 }

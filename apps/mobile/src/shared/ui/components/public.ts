@@ -35,6 +35,7 @@ export { SettingsGroup, SettingsRow } from "./SettingsRow.tsx";
 export { FloatingActionButton } from "./FloatingActionButton.tsx";
 export { DurationWheelPicker, HourMinutePicker, TimeWheelPicker } from "./TimeWheelPicker.tsx";
 export { pickDate } from "./pickDate.ts";
+export { DatePickerHost } from "./DatePickerHost.tsx";
 export { LineChart, type LineChartPoint } from "./LineChart.tsx";
 export { BarChart, type BarChartItem } from "./BarChart.tsx";
 export { DateRangeCalendar, type DateRange } from "./DateRangeCalendar.tsx";

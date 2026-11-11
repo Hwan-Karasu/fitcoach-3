@@ -35,7 +35,7 @@ import { RootTabs } from "./RootTabs.tsx";
 import { ClientsListNavigationProvider } from "./ClientsListShortcut.tsx";
 import { clientsListAction } from "./clientsListAction.ts";
 import { SqliteDiagnosticsScreen } from "./SqliteDiagnosticsScreen.tsx";
-import { BottomPanelProvider, ScreenHeader } from "../../shared/ui/components/public.ts";
+import { BottomPanelProvider, DatePickerHost, ScreenHeader } from "../../shared/ui/components/public.ts";
 import { UnifiedBottomPanel } from "./UnifiedBottomPanel.tsx";
 import { DataReadNotice } from "../../shared/ui/components/DataReadNotice.tsx";
 import { BackupScreen } from "./BackupScreen.tsx";
@@ -345,6 +345,8 @@ export function PrototypeShell({ services, workspaceId, manualBackup, restoreAct
           <TrainingTransferContext.Provider value={trainingTransfer}><NotificationsHost enabled={!launchVisible} center={services.notifications} calendar={services.calendar} sync={services.notificationSync}>
             <ShellNavigator onReady={onReady} launchVisible={launchVisible} trainingTransfer={trainingTransfer} services={services} clientLists={clientLists} rosterOverview={rosterOverview} manualBackup={manualBackup} restoreActions={restoreActions} automaticBackup={automaticBackup} initialBackup={initialBackup} />
           </NotificationsHost></TrainingTransferContext.Provider>
+          {/* Один лист выбора даты на всё приложение (UIX-FIT-10): запросы приходят из pickDate. */}
+          <DatePickerHost />
           {!launchVisible && <OutcomeQueueHost services={services} />}
           {!launchVisible && <NotificationOpenHost navigationRef={navigationRef} onTarget={openTarget} />}
         </CalendarUndoProvider>

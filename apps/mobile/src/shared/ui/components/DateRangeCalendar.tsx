@@ -10,20 +10,10 @@ export interface DateRange {
   readonly to: string | null;
 }
 
-/**
- * Календарь с выбором диапазона дат (react-native-ui-datepicker): один месяц со стрелками и выбором месяца и года, русские
- * названия, неделя с понедельника, будущее недоступно. Первое нажатие — начало, второе — конец. Цвета — из темы, шрифт —
- * через `fontFamily` (UI-OWN, «Зефирка»); сама библиотека без стилей по умолчанию.
- */
-export function DateRangeCalendar({ value, max, onChange }: Readonly<{
-  value: DateRange;
-  /** Последняя доступная дата, включительно. */
-  max: string;
-  onChange: (range: DateRange) => void;
-}>) {
-  const { palette } = usePrototypeTheme();
-  const colors = palette.tokens;
-  const styles = useMemo((): DatePickerBaseProps["styles"] => ({
+/** Стили календаря из токенов темы (общие для выбора диапазона и одной даты): сама библиотека без стилей по умолчанию. */
+export function useDatePickerStyles(): DatePickerBaseProps["styles"] {
+  const colors = usePrototypeTheme().palette.tokens;
+  return useMemo((): DatePickerBaseProps["styles"] => ({
     day: { borderRadius: 12 },
     day_label: { color: colors.textPrimary, fontFamily: fonts.medium, fontSize: 14 },
     today: { borderWidth: 1.5, borderColor: colors.accentInk },
@@ -52,6 +42,20 @@ export function DateRangeCalendar({ value, max, onChange }: Readonly<{
     active_year: { backgroundColor: colors.accentSoft },
     active_year_label: { color: colors.accentInk, fontFamily: fonts.bold },
   }), [colors]);
+}
+
+/**
+ * Календарь с выбором диапазона дат (react-native-ui-datepicker): один месяц со стрелками и выбором месяца и года, русские
+ * названия, неделя с понедельника, будущее недоступно. Первое нажатие — начало, второе — конец. Цвета — из темы, шрифт —
+ * через `fontFamily` (UI-OWN, «Зефирка»); сама библиотека без стилей по умолчанию.
+ */
+export function DateRangeCalendar({ value, max, onChange }: Readonly<{
+  value: DateRange;
+  /** Последняя доступная дата, включительно. */
+  max: string;
+  onChange: (range: DateRange) => void;
+}>) {
+  const styles = useDatePickerStyles();
   return (
     <DateTimePicker mode="range" locale="ru" firstDayOfWeek={1} maxDate={localMidnight(max)} styles={styles}
       startDate={value.from === null ? undefined : localMidnight(value.from)}
