@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ACTION_GAP, CARD_PADDING, compactTimerCount, MIN_ACTION_WIDTH, orderedRestTimers, retainedTimerOffset, restPanelMode, TIMER_GAP, timerCarouselLayout,
-  timerCarouselPosition, timerCountLabel, timerInitials } from "../apps/mobile/src/features/training/execution/presentation/restPanelRules.ts";
+  timerCarouselPosition, timerCountLabel, timerInitials, restPanelSettleTarget } from "../apps/mobile/src/features/training/execution/presentation/restPanelRules.ts";
 import { adjustTimer, pauseTimer, startTimer, type RestTimerStart } from "../apps/mobile/src/features/training/execution/domain/RestTimerRules.ts";
 import { RestFinishTracker } from "../apps/mobile/src/features/training/execution/domain/RestFinishTracker.ts";
 import { createSlotStore } from "../apps/mobile/src/shared/ui/components/slotStore.ts";
@@ -106,4 +106,20 @@ test("REST-DOCK-2: уход прежнего навигатора не удал�
   assert.equal(store.getSnapshot(), snapshot);
   store.remove("workspace");
   assert.equal(store.getSnapshot().size, 0);
+});
+
+// Ожидаемые значения — из требования владельца: панель идёт за пальцем; быстрый взмах решает сразу; короткий сдвиг возвращает панель.
+// Ход панели в тесте — 86 dp (развёрнутая 130, свёрнутая 44), порог доводки 24 dp, взмах 500 dp/с.
+test("UIX-FIT-10: доводка панели таймеров после жеста по ручке", () => {
+  // Развёрнутая (start=1): потянули вниз.
+  assert.equal(restPanelSettleTarget(1, 1 - 40 / 86, 0, 86), 0, "вниз на 40 dp — сворачивается");
+  assert.equal(restPanelSettleTarget(1, 1 - 10 / 86, 0, 86), 1, "вниз на 10 dp — возвращается");
+  assert.equal(restPanelSettleTarget(1, 1 - 6 / 86, 800, 86), 0, "быстрый взмах вниз сворачивает после малого сдвига");
+  // Свёрнутая (start=0): потянули вверх.
+  assert.equal(restPanelSettleTarget(0, 30 / 86, 0, 86), 1, "вверх на 30 dp — разворачивается");
+  assert.equal(restPanelSettleTarget(0, 8 / 86, 0, 86), 0, "вверх на 8 dp — остаётся свёрнутой");
+  assert.equal(restPanelSettleTarget(0, 5 / 86, -900, 86), 1, "быстрый взмах вверх разворачивает");
+  // Взмах против направления, но малый путь: решает скорость.
+  assert.equal(restPanelSettleTarget(1, 1, 700, 86), 0, "взмах вниз без пути (палец почти не сдвинулся) — сворачивает");
+  assert.equal(restPanelSettleTarget(0, 0, -700, 86), 1, "взмах вверх без пути — разворачивает");
 });

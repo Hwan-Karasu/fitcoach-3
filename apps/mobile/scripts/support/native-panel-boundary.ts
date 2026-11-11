@@ -37,12 +37,23 @@ export function useAnimatedReaction<T>(prepare: () => T, react: (value: T, befor
 }
 export const useFrameCallback = () => useMemo(() => ({ setActive: (active: boolean) => { void active; } }), []);
 export const withTiming = <T,>(value: T): T => value;
+export const withSpring = <T,>(value: T): T => value;
+export const cancelAnimation = (value: unknown) => { void value; };
 export const scheduleOnRN = (callback: (...args: never[]) => unknown, ...args: never[]) => callback(...args);
+type GestureEvent = { translationY: number; velocityY: number };
+type PanHandlers = { onBegin?: () => void; onUpdate?: (event: GestureEvent) => void; onEnd?: (event: GestureEvent) => void; onFinalize?: (event: GestureEvent, success: boolean) => void };
+/** Жест как набор записанных обработчиков: тест вызывает begin/update/end/finalize так, как их вызывает RNGH. */
 export const Gesture = { Pan: () => {
-  const gesture = { activeOffsetY: (value: unknown) => { void value; return gesture; }, failOffsetX: (value: unknown) => { void value; return gesture; },
-    onEnd: (callback: (event: { translationY: number; velocityY: number }) => void) => {
-      return { ...gesture, end: callback };
-    } };
+  const handlers: PanHandlers = {};
+  const gesture = {
+    activeOffsetY: (value: unknown) => { void value; return gesture; }, failOffsetX: (value: unknown) => { void value; return gesture; },
+    onBegin: (callback: NonNullable<PanHandlers["onBegin"]>) => { handlers.onBegin = callback; return gesture; },
+    onUpdate: (callback: NonNullable<PanHandlers["onUpdate"]>) => { handlers.onUpdate = callback; return gesture; },
+    onEnd: (callback: NonNullable<PanHandlers["onEnd"]>) => { handlers.onEnd = callback; return gesture; },
+    onFinalize: (callback: NonNullable<PanHandlers["onFinalize"]>) => { handlers.onFinalize = callback; return gesture; },
+    begin: () => handlers.onBegin?.(), update: (event: GestureEvent) => handlers.onUpdate?.(event),
+    end: (event: GestureEvent) => handlers.onEnd?.(event), finalize: (event: GestureEvent, success: boolean) => handlers.onFinalize?.(event, success),
+  };
   return gesture;
 } };
 export const GestureDetector = component("GestureDetector");

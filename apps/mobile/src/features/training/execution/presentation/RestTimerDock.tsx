@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { ChevronRight, Pause, Play, SkipForward, Timer } from "lucide-react-native";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -13,11 +13,14 @@ import type { RestTimersPort } from "../domain/RestTimerPorts.ts";
 import { RestPanelClock } from "./RestPanelClock.tsx";
 import { useRestPanelController } from "./useRestPanelController.ts";
 import { ACTION_GAP, CARD_PADDING, compactTimerCount, orderedRestTimers, retainedTimerOffset, restPanelMode, timerCarouselLayout,
-  timerCarouselPosition, timerCountLabel, timerInitials, TIMER_GAP, type RestPanelPreference } from "./restPanelRules.ts";
+  timerCarouselPosition, timerCountLabel, timerInitials, restPanelSettleTarget, TIMER_GAP, type RestPanelPreference } from "./restPanelRules.ts";
 
 type AvatarLoader = (ids: readonly string[]) => Promise<ReadonlyMap<string, string | null>>;
 /** Свёрнутая строка низкая (≈34 dp); зона нажатия добирается до 48 dp невидимым краем. */
 const SUMMARY_SLOP = { top: 7, bottom: 7 } as const;
+/** Высота ручки над содержимым и длительность анимации появления/смены состояния панели, мс (быстро: палец и взмах ведут сами). */
+const HANDLE_H = 12;
+const PANEL_ANIM_MS = 160;
 const shortName = (name: string) => name.trim().split(/\s+/u)[1] ?? name;
 
 /** Владелец таймера: эмодзи/инициалы клиента; у каждого участника свой тон (по порядку в списке владельцев), чтобы отличать их в ряду. */
@@ -117,19 +120,60 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
   }, [ownersKey, loadAvatars]);
   const openRef = useRef(onOpen); openRef.current = onOpen;
   const open = useCallback((timer: RestTimer) => openRef.current(timer), []);
-  const height = useSharedValue(0);
-  const animatedHeight = useAnimatedStyle(() => ({ height: height.value }));
-  useEffect(() => { if (mode === "hidden") height.value = withTiming(0, { duration: 180 }); }, [mode, height]);
+  // Панель ведёт один общий прогресс 0…1 (0 — свёрнута, 1 — развёрнута): высота и прозрачность слоёв считаются на UI-потоке,
+  // палец ведёт панель сразу (onUpdate), а не после отпускания; ход времени и обновления JS на анимацию не влияют.
+  const progress = useSharedValue(1);
+  const present = useSharedValue(mode === "hidden" ? 0 : 1);
+  const expandedH = useSharedValue(0);
+  const collapsedH = useSharedValue(0);
+  const startProgress = useSharedValue<0 | 1>(1);
+  const prefRef = useRef(preference); prefRef.current = preference;
+  const driven = useRef(false);
+  const areaStyle = useAnimatedStyle(() => ({
+    height: present.value * (HANDLE_H + collapsedH.value + (expandedH.value - collapsedH.value) * progress.value),
+  }));
+  const expandedLayer = useAnimatedStyle(() => ({ opacity: progress.value }));
+  const collapsedLayer = useAnimatedStyle(() => ({ opacity: 1 - progress.value }));
+  const gone = mode === "hidden";
+  useEffect(() => { present.value = withTiming(gone ? 0 : 1, { duration: PANEL_ANIM_MS }); }, [gone, present]);
+  useEffect(() => {
+    // После жеста панель уже доводится пружиной с начальной скоростью пальца: повторная анимация её бы сбила.
+    if (driven.current) { driven.current = false; return; }
+    progress.value = withTiming(preference === "expanded" ? 1 : 0, { duration: PANEL_ANIM_MS });
+  }, [preference, progress]);
   const collapse = useCallback(() => setPreference("collapsed"), []);
   const expand = useCallback(() => setPreference("expanded"), []);
-  const swipeDown = useCallback(() => { restTimerDiagnostics.event("gesture-down"); collapse(); }, [collapse]);
-  const swipeUp = useCallback(() => { restTimerDiagnostics.event("gesture-up"); expand(); }, [expand]);
-  const gesture = useMemo(() => Gesture.Pan().activeOffsetY([-10, 10]).failOffsetX([-14, 14])
+  const settled = useCallback((expanded: boolean) => {
+    restTimerDiagnostics.event(expanded ? "gesture-up" : "gesture-down");
+    if (prefRef.current !== (expanded ? "expanded" : "collapsed")) driven.current = true;
+    setPreference(expanded ? "expanded" : "collapsed");
+  }, []);
+  const gesture = useMemo(() => Gesture.Pan().activeOffsetY([-8, 8]).failOffsetX([-14, 14])
+    .onBegin(() => {
+      "worklet";
+      cancelAnimation(progress);
+      startProgress.value = progress.value >= 0.5 ? 1 : 0;
+    })
+    .onUpdate((event) => {
+      "worklet";
+      const range = Math.max(1, expandedH.value - collapsedH.value);
+      progress.value = Math.min(1, Math.max(0, startProgress.value - event.translationY / range));
+    })
     .onEnd((event) => {
       "worklet";
-      if (event.translationY > 24 || event.velocityY > 300) scheduleOnRN(swipeDown);
-      else if (event.translationY < -24 || event.velocityY < -300) scheduleOnRN(swipeUp);
-    }), [swipeDown, swipeUp]);
+      const range = Math.max(1, expandedH.value - collapsedH.value);
+      const reached = Math.min(1, Math.max(0, startProgress.value - event.translationY / range));
+      const target = restPanelSettleTarget(startProgress.value, reached, event.velocityY, range);
+      progress.value = withSpring(target, { velocity: -event.velocityY / range, damping: 30, stiffness: 420, overshootClamping: true });
+      scheduleOnRN(settled, target === 1);
+    })
+    .onFinalize((_event, success) => {
+      "worklet";
+      // Жест прервали системой (без onEnd): панель не должна зависнуть посередине.
+      if (!success) progress.value = withTiming(startProgress.value, { duration: PANEL_ANIM_MS });
+    }), [progress, startProgress, expandedH, collapsedH, settled]);
+  const measureExpanded = useCallback((event: LayoutChangeEvent) => { expandedH.value = event.nativeEvent.layout.height; }, [expandedH]);
+  const measureCollapsed = useCallback((event: LayoutChangeEvent) => { collapsedH.value = event.nativeEvent.layout.height; }, [collapsedH]);
   const scroll = useRef<ScrollView>(null);
   const offset = useRef(0);
   const previousIds = useRef<readonly string[]>([]);
@@ -154,27 +198,52 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
   const hidden = ordered.length - visibleCount;
   const first = ordered[0];
   const grip = <View style={[styles.grip, { backgroundColor: colors.textMuted }]} />;
-  const area = <Animated.View testID="rest-panel-area" style={[styles.area, animatedHeight]}>
-    {mode === "hidden" ? null : <View style={styles.measured}
-      onLayout={(event) => { height.value = withTiming(event.nativeEvent.layout.height, { duration: 180 }); }}>
+  // Имя владельца в свёрнутой строке ведёт сразу к упражнению, не разворачивая панель; ручка и время разворачивают.
+  const openFirst = () => { if (first) open(first); };
+  const area = <Animated.View testID="rest-panel-area" style={[styles.area, areaStyle]}>
+    {mode === "hidden" ? null : <>
       {/* Read during dispatch: RN releases the event before a queued state updater may run. */}
-      <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
+      <View testID="rest-panel-width" onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
         <GestureDetector gesture={gesture}>
           <View collapsable={false}>
             <Pressable accessibilityRole="button" accessibilityLabel={mode === "collapsed" ? "Развернуть таймеры отдыха" : "Свернуть таймеры отдыха"}
               accessibilityState={{ expanded: mode === "expanded" }} hitSlop={{ top: 17, bottom: 17 }}
-              onPress={mode === "collapsed" ? expand : collapse} style={[styles.handle, mode === "collapsed" && styles.handleCollapsed]}>{grip}</Pressable>
+              onPress={mode === "collapsed" ? expand : collapse} style={styles.handle}>{grip}</Pressable>
           </View>
         </GestureDetector>
-        {mode === "collapsed" && first ? <View style={styles.summary}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Развернуть панель таймеров отдыха" onPress={expand} hitSlop={SUMMARY_SLOP} style={[styles.summaryLead, ordered.length === 1 && styles.summaryLeadFit]}>
+      </View>
+      <Animated.View testID="rest-panel-expanded" onLayout={measureExpanded} pointerEvents={mode === "expanded" ? "auto" : "none"}
+        style={[styles.layer, expandedLayer]}>
+        <ScrollView ref={scroll} horizontal scrollEnabled={layout.stops > 1} showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled" contentContainerStyle={styles.cards} snapToInterval={layout.step} decelerationRate="fast"
+          scrollEventThrottle={32} onScroll={(event) => {
+            offset.current = event.nativeEvent.contentOffset.x;
+            const next = timerCarouselPosition(offset.current, layout.step, layout.maxOffset, layout.stops);
+            setPage((old) => old === next ? old : next);
+          }}>
+          {ordered.map((timer) => <View key={timer.id} style={{ width: layout.cardWidth }}>
+            <TimerCard timer={timer} timers={timers} active={active} finished={isFinished(timer, now)} multipleOwners={multipleOwners}
+              avatars={avatars} tone={toneOf(timer.clientId)} single={ordered.length === 1}
+              fontScale={dimensions.fontScale} onOpen={open} clockDisabled={clockDisabled} />
+          </View>)}
+        </ScrollView>
+        {layout.stops > 1 ? <View accessible accessibilityLabel={`Таймеры, позиция ${page + 1} из ${layout.stops}`} style={styles.indicator}>
+          {Array.from({ length: layout.stops }, (_, index) => <View key={index} style={[styles.segment, { backgroundColor: index === page ? colors.accentFill : colors.border }]} />)}
+        </View> : null}
+      </Animated.View>
+      <Animated.View testID="rest-panel-collapsed" onLayout={measureCollapsed} pointerEvents={mode === "collapsed" ? "auto" : "none"}
+        style={[styles.layer, collapsedLayer]}>
+        {first ? <View style={styles.summary}>
+          <Pressable accessibilityRole="button"
+            accessibilityLabel={multipleOwners ? "Развернуть панель таймеров отдыха" : `${first.clientName}, ${first.exerciseName}. Открыть упражнение`}
+            onPress={multipleOwners ? expand : openFirst} hitSlop={SUMMARY_SLOP} style={[styles.summaryLead, ordered.length === 1 && styles.summaryLeadFit]}>
             <Timer size={20} color={colors.accentInk} />
             <Text numberOfLines={1} style={[styles.summaryLabel, ordered.length === 1 && styles.summaryLabelFit, { color: colors.textPrimary }]}>
               {multipleOwners ? timerCountLabel(ordered.length) : `${shortName(first.clientName)}${ordered.length > 1 ? ` · ${timerCountLabel(ordered.length)}` : " ·"}`}
             </Text>
           </Pressable>
-          {ordered.slice(0, visibleCount).map((timer) => <Pressable key={timer.id} accessibilityRole="button" onPress={expand} hitSlop={SUMMARY_SLOP}
-            accessibilityLabel={`${timer.clientName}, ${timer.exerciseName}. Развернуть таймеры`}
+          {ordered.slice(0, visibleCount).map((timer) => <Pressable key={timer.id} accessibilityRole="button" onPress={multipleOwners ? () => open(timer) : expand} hitSlop={SUMMARY_SLOP}
+            accessibilityLabel={multipleOwners ? `${timer.clientName}, ${timer.exerciseName}. Открыть упражнение` : `${timer.clientName}, ${timer.exerciseName}. Развернуть таймеры`}
             style={[styles.summaryToken, { width: (multipleOwners ? 84 : 54) * Math.max(1, dimensions.fontScale), backgroundColor: colors.surfaceRaised }]}>
             {multipleOwners ? <Avatar timer={timer} avatars={avatars} tone={toneOf(timer.clientId)} small /> : null}
             <RestPanelClock timer={timer} active={active} finished={isFinished(timer, now)} disabled={clockDisabled}
@@ -185,33 +254,16 @@ export function RestTimerDock({ timers, onOpen, loadAvatars, renderContainer }: 
             <Text style={[styles.moreText, { color: colors.onAccentFill }]}>{`Ещё ${hidden}`}</Text>
             <ChevronRight size={14} color={colors.onAccentFill} />
           </Pressable> : null}
-        </View> : mode === "expanded" ? <>
-          <ScrollView ref={scroll} horizontal scrollEnabled={layout.stops > 1} showsHorizontalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled" contentContainerStyle={styles.cards} snapToInterval={layout.step} decelerationRate="fast"
-            scrollEventThrottle={32} onScroll={(event) => {
-              offset.current = event.nativeEvent.contentOffset.x;
-              const next = timerCarouselPosition(offset.current, layout.step, layout.maxOffset, layout.stops);
-              setPage((old) => old === next ? old : next);
-            }}>
-            {ordered.map((timer) => <View key={timer.id} style={{ width: layout.cardWidth }}>
-              <TimerCard timer={timer} timers={timers} active={active} finished={isFinished(timer, now)} multipleOwners={multipleOwners}
-                avatars={avatars} tone={toneOf(timer.clientId)} single={ordered.length === 1}
-                fontScale={dimensions.fontScale} onOpen={open} clockDisabled={clockDisabled} />
-            </View>)}
-          </ScrollView>
-          {layout.stops > 1 ? <View accessible accessibilityLabel={`Таймеры, позиция ${page + 1} из ${layout.stops}`} style={styles.indicator}>
-            {Array.from({ length: layout.stops }, (_, index) => <View key={index} style={[styles.segment, { backgroundColor: index === page ? colors.accentFill : colors.border }]} />)}
-          </View> : null}
-        </> : null}
-      </View>
-    </View>}
+        </View> : null}
+      </Animated.View>
+    </>}
   </Animated.View>;
   return renderContainer(area, mode !== "hidden");
 }
 
 const styles = StyleSheet.create({
-  area: { overflow: "hidden" }, measured: { position: "absolute", top: 0, left: 0, right: 0 },
-  handle: { height: 14, alignItems: "center", justifyContent: "center" }, handleCollapsed: { height: 10 }, grip: { width: 40, height: 4, borderRadius: 2 },
+  area: { overflow: "hidden" }, layer: { position: "absolute", top: HANDLE_H, left: 0, right: 0 },
+  handle: { height: HANDLE_H, alignItems: "center", justifyContent: "center" }, grip: { width: 40, height: 4, borderRadius: 2 },
   cards: { gap: TIMER_GAP, alignItems: "stretch", paddingBottom: 2 },
   // Один таймер: без своей подложки, прямо на панели.
   cardSingle: { gap: 0, paddingBottom: 2 },

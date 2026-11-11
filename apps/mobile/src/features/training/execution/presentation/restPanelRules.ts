@@ -63,3 +63,23 @@ export function timerCountLabel(count: number): string {
 export function timerInitials(name: string): string {
   return name.trim().split(/\s+/u).slice(0, 2).map((part) => Array.from(part)[0]?.toLocaleUpperCase("ru") ?? "").join("") || "?";
 }
+
+/** Быстрый взмах по ручке, dp/с: решает сам, независимо от пройденного пути. */
+export const PANEL_FLING_VELOCITY = 500;
+/** Сдвиг ручки, dp, после которого панель дотягивается до другого состояния, даже если палец не дошёл до середины. */
+export const PANEL_SNAP_DISTANCE = 24;
+
+/**
+ * Куда довести панель таймеров, когда палец отпущен. `start` — состояние в начале жеста (1 — развёрнута, 0 — свёрнута), `progress` — где панель
+ * сейчас (0…1), `velocityY` — скорость пальца вниз, `range` — полный ход панели в dp. Быстрый взмах решает по направлению; иначе
+ * сдвиг от начала не меньше `PANEL_SNAP_DISTANCE` ведёт к другому состоянию; короткий — возвращает в исходное.
+ */
+export function restPanelSettleTarget(start: 0 | 1, progress: number, velocityY: number, range: number): 0 | 1 {
+  "worklet";
+  if (velocityY > PANEL_FLING_VELOCITY) return 0;
+  if (velocityY < -PANEL_FLING_VELOCITY) return 1;
+  const moved = (progress - start) * range;
+  if (moved <= -PANEL_SNAP_DISTANCE) return 0;
+  if (moved >= PANEL_SNAP_DISTANCE) return 1;
+  return start;
+}

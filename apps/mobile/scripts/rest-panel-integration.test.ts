@@ -67,7 +67,7 @@ test("REST-DOCK-2 UI: один контроллер, свёрнутый режи
     // Two queued measurements force a deferred reducer, rather than only React's eager path.
     await act(async () => {
       const area = tree.root.find((node) => String(node.type) === "View" && node.props.testID === "rest-panel-area");
-      const measurement = area.findAll((node) => String(node.type) === "View" && typeof node.props.onLayout === "function")[1]!;
+      const measurement = area.find((node) => String(node.type) === "View" && node.props.testID === "rest-panel-width");
       for (const width of [310, 312]) {
         const event: { nativeEvent: { layout: { width: number; height: number } } | null } = { nativeEvent: { layout: { width, height: 180 } } };
         measurement.props.onLayout(event);
@@ -77,9 +77,16 @@ test("REST-DOCK-2 UI: один контроллер, свёрнутый режи
     const buttons = () => tree.root.findAll((node) => typeof node.type === "string" && String(node.type) === "Pressable");
     const click = async (label: string) => act(async () => { buttons().find((node) => node.props.accessibilityLabel === label)!.props.onPress(); });
     const deadline = service.list()[0]!.endAt;
+    // Высоты слоёв, как их сообщил бы layout: развёрнутый 130 dp, свёрнутый 44 dp, ход панели 86 dp.
+    await act(async () => {
+      for (const [testID, height] of [["rest-panel-expanded", 130], ["rest-panel-collapsed", 44]] as const) {
+        tree.root.find((node) => String(node.type) === "View" && node.props.testID === testID).props.onLayout({ nativeEvent: { layout: { width: 312, height } } });
+      }
+    });
+    // Жест целиком, как у RNGH: начало → движение → конец.
     const swipe = async (translationY: number) => act(async () => {
-      tree.root.find((node) => typeof node.type === "string" && String(node.type) === "GestureDetector")
-        .props.gesture.end({ translationY, velocityY: 0 });
+      const gesture = tree.root.find((node) => typeof node.type === "string" && String(node.type) === "GestureDetector").props.gesture;
+      gesture.begin(); gesture.update({ translationY, velocityY: 0 }); gesture.end({ translationY, velocityY: 0 });
     });
     for (let index = 0; index < 30; index++) {
       await swipe(40);
@@ -198,4 +205,36 @@ test("REST-DOCK-2 UI: активная регистрация панели ме�
     await act(async () => { tree.update(scene(false)); });
     assert.equal(tree.root.find((node) => String(node.type) === "Outlet").props.value, "clients");
   } finally { if (tree) await act(async () => tree.unmount()); }
+});
+
+test("UIX-FIT-10: в свёрнутой строке имя владельца ведёт к упражнению и не разворачивает панель; ручка разворачивает", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000_000 });
+  const stored = new Map<string, RestTimer>();
+  let id = 0;
+  const service = new RestTimerService({ listTimers: async () => [...stored.values()],
+    putTimer: async (timer, replaced) => { for (const key of replaced) stored.delete(key); stored.set(timer.id, timer); },
+    removeTimer: async (key) => { stored.delete(key); } }, { schedule: async () => null, cancel: async () => undefined }, Date.now, () => `t${++id}`);
+  await service.start(start); await service.idle();
+  const opened: string[] = [];
+  const panel = () => createElement(PrototypeThemeProvider, null, createElement(RestTimerDock, {
+    timers: service as RestTimersPort, onOpen: (timer: RestTimer) => { opened.push(timer.exerciseKey); },
+    loadAvatars: async () => new Map<string, string | null>(),
+    renderContainer: (area: ReactNode) => createElement("Panel", null, area),
+  }));
+  let tree!: TestRenderer.ReactTestRenderer;
+  try {
+    await act(async () => { tree = TestRenderer.create(panel()); });
+    const buttons = () => tree.root.findAll((node) => typeof node.type === "string" && String(node.type) === "Pressable");
+    const press = async (label: string) => act(async () => { buttons().find((node) => node.props.accessibilityLabel === label)!.props.onPress(); });
+    await press("Свернуть таймеры отдыха");
+    assert.ok(buttons().some((node) => node.props.accessibilityLabel === "Развернуть таймеры отдыха"), "панель свёрнута");
+    // Имя клиента в свёрнутой строке: «Synthetic A, Row. Открыть упражнение».
+    await press("Synthetic A, Row. Открыть упражнение");
+    assert.deepEqual(opened, ["row"], "переход к упражнению этого таймера");
+    assert.ok(buttons().some((node) => node.props.accessibilityLabel === "Развернуть таймеры отдыха"), "панель осталась свёрнутой");
+    // Время в строке разворачивает (как раньше), ручка — тоже.
+    await press("Synthetic A, Row. Развернуть таймеры");
+    assert.ok(buttons().some((node) => node.props.accessibilityLabel === "Свернуть таймеры отдыха"), "время разворачивает панель");
+    assert.deepEqual(opened, ["row"], "разворачивание не открывает упражнение");
+  } finally { if (tree) await act(async () => tree.unmount()); t.mock.timers.reset(); }
 });
