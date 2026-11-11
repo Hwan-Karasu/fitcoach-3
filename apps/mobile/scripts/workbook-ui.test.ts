@@ -19,6 +19,8 @@ import type { BuilderWorkbookSaveRequest } from "../src/shared/training-transfer
 type Props = Record<string, unknown>;
 const control = (name: string) => (props: Props) => createElement(name, props, props.children as ReactNode);
 const ui = Object.fromEntries(["AppButton", "AppIconButton", "ConfirmDialog", "FloatingActionButton", "ListSectionHeader", "InlineNotice", "LoadingState", "ScreenHeader", "SegmentedControl", "TextField", "SelectionChip", "StickyEditorFooter", "TrainingEditorLayout", "DateField", "DropdownMenu"].map((name) => [name, control(name)]));
+// Сворачивание приложения — внешняя граница (AppState): в этих сценариях его нет, правило проверяет flush-on-background.test.ts.
+Object.assign(ui, { useFlushOnBackground: () => undefined });
 let idSequence = 0;
 /** Сколько раз смонтирован редактор недели конструктора (CYCLE-STRIP-3: при переключении цикла не растёт). */
 let editorMounts = 0;

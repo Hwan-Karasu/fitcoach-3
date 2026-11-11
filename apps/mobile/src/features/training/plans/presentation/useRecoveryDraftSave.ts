@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigation, usePreventRemove } from "@react-navigation/native";
 import { RecoveryDraftQueue } from "../domain/RecoveryDraftQueue.ts";
+import { useFlushOnBackground } from "../../../../shared/ui/components/public.ts";
 
 export function useRecoveryDraftSave<T>(write: (value: T) => Promise<void>, options?: Readonly<{
   hasDraft: boolean; remove: () => Promise<void>; busy?: boolean;
@@ -17,6 +18,8 @@ export function useRecoveryDraftSave<T>(write: (value: T) => Promise<void>, opti
   const flush = useCallback(async () => { await queue.current!.flush(); setError(null); }, []);
   const schedule = useCallback((value: T) => queue.current!.schedule(value), []);
   useEffect(() => () => queue.current!.dispose(), []);
+  // Черновик нужен как раз на случай выгрузки процесса: при сворачивании он пишется сразу, не дожидаясь паузы после правки.
+  useFlushOnBackground(() => queue.current!.flush().catch(() => setError("Не удалось сохранить черновик. Повторите действие.")));
   usePreventRemove(true, ({ data }) => {
     if (bypass.current) { navigation.dispatch(data.action); return; }
     if (settings.current?.busy) return;

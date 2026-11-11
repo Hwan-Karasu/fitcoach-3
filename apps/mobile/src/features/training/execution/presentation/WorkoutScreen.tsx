@@ -16,7 +16,7 @@ import Sortable from "react-native-sortables";
 import { CalendarDays, ChevronRight, Clock, EllipsisVertical, GripVertical, LayoutGrid, Plus, Share2, Timer, Trash2,
   Users } from "lucide-react-native";
 import { AppButton, ConfirmDialog, DurationWheelPicker, InlineNotice, LoadingState, pickDate, StatusTag, SupersetBorder, TimeWheelPicker, WeekCards, useWeekNavigation,
-  type StatusKind } from "../../../../shared/ui/components/public.ts";
+  type StatusKind, useFlushOnBackground } from "../../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { useReportScreenTone } from "../../../../shared/ui/theme/ScreenTone.tsx";
 import { weekTypeTone, DiaryEditDialog, formatDuration, formatRange, supersetNumber, supersetRuns, REST_DEFAULT_SEC, REST_MAX_SEC, REST_MIN_SEC, useExerciseLookupState,
@@ -312,6 +312,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   };
 
   const flushPending = useCallback(() => pending.flushAll(), [pending]);
+  // Ввёл повторы и сразу заблокировал экран: пауза записи (таймер) в фоне не истечёт — дописываем сейчас, иначе не стартует и таймер отдыха.
+  useFlushOnBackground(flushPending);
   // Перечитывание этой же тренировки (чужое изменение, ошибка записи) на миг закрывает ввод. Отложенная запись ячейки, пришедшая
   // в это время, не принимается — значение остаётся на экране «грязным»; после загрузки оно дописывается само, без повторного ввода.
   // Только ячейки показанного слота: значения другой недели в эту не попадают.

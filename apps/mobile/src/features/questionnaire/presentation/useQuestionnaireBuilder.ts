@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PublishedQuestionnaire, PublishSummary, QuestionnaireDraft, QuestionnaireSchema } from "../domain/QuestionnaireModel.ts";
 import type { QuestionnaireRepositoryPort } from "../domain/QuestionnaireRepositoryPort.ts";
 import { validateSchema, type SchemaIssue } from "../domain/QuestionnaireRules.ts";
+import { useFlushOnBackground } from "../../../shared/ui/components/public.ts";
 
 export type SaveState = "idle" | "pending" | "saved" | "failed";
 
@@ -101,6 +102,8 @@ export function useQuestionnaireBuilder(repository: QuestionnaireRepositoryPort)
   const flushRef = useRef(flush);
   flushRef.current = flush;
   useEffect(() => () => { if (timer.current !== null) void flushRef.current(); }, []);
+  // То же при сворачивании приложения: в фоне пауза автосохранения не истечёт.
+  useFlushOnBackground(() => { if (timer.current !== null) void flushRef.current(); });
 
   /** Правка черновика. `mergeKey` склеивает частые правки одного поля в один шаг отмены. */
   const apply = useCallback((change: (current: QuestionnaireSchema) => QuestionnaireSchema, mergeKey?: string) => {
