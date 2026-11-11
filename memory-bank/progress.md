@@ -3,6 +3,7 @@
 Прежняя версия — `archive/progress-before-bkp-audit-2026-11-11.md`.
 
 ## Сделано
+- **UIX-FIT-10 (11 ноября):** 16 замечаний владельца к build52 — реализованы, кроме п. 4 (вес до сотых), п. 8 (свой календарь), п. 16 (замер). Новые чистые правила с тестами: `VisibleSetState`, `restPanelSettleTarget`, `sheetSettle`, `daySwipeOf/swipedDay`, `SideLabels`, `parseNumberRange`, `diaryDateChip`, `HealthSyncText`. На телефоне не проверено.
 - **build52 (11 ноября):** APK собран (BKP-AUDIT-1 + UIX-FIT-09), все проверки PASS, давняя ошибка ESLint `extended.ts` исправлена. На телефоне не проверен. Lint под Node 24 ломается об `artifacts/r7-check` (старая копия проекта) — запускать из bash/Node 22.
 - **BKP-AUDIT-1 (11 ноября, ADR-069):** см. `activeContext.md` и `docs/BKP_AUDIT_2026-11-11.md`. Новые коды ошибок восстановления, тихая фаза `LOADING`, отмена подготовки только кнопкой, этапы применения (проверка → точка возврата → замена), проверка по SHA-256 один раз на содержимое, пин `writeToken`, построчная проверка преобразования фото, нативный Kotlin-хеш с самопроверкой и JS-арбитром. Стенд: `apps/mobile/scripts/support/{restore-world,expo-backup-boundary}.ts`, замер `scripts/restore-bench.ts` (артефакты `artifacts/bkp-audit`). Тесты: `restore-pipeline.test.ts` (15), `restore-actions.test.ts` (+4), `native-hash-fixture.test.ts`.
 - UIX-FIT-04…09 (UI-OWN-086…088, 10 ноября): «Питание» со статистикой значком, анкета/«Резервные копии»/конструктор по макету, «Создать программу» без прокрутки, таймеры в нижней панели по макету. Проверено в эмуляторе, на телефоне нет.
