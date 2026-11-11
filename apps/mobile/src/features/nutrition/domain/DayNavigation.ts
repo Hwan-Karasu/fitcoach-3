@@ -41,13 +41,31 @@ export function daySwipeOf(translationX: number, velocityX: number): DaySwipeDir
 }
 
 /**
- * Дата после свайпа. Внутри вкладок «Вчера · Сегодня · Завтра» — на соседнюю вкладку; с краёв (назад от «Вчера», вперёд от «Завтра») —
- * `null`, день не меняется. Если дата выбрана в календаре (вне вкладок) — сдвиг на сутки.
+ * Дата после свайпа: дни — карусель без краёв (UIX-FIT-11), всегда соседние сутки от выбранного; за «Вчера» — позавчера,
+ * за «Завтра» — послезавтра. Не `null` никогда: тип сохранён, чтобы вызывающий код не менялся.
  */
-export function swipedDay(selected: string, today: string, swipe: DaySwipeDirection): string | null {
-  const step = swipe === "NEXT" ? 1 : -1;
-  const tab = dayTabOf(selected, today);
-  if (tab === null) return shiftIsoDate(selected, step);
-  const next = TAB_OFFSET[tab] + step;
-  return next < -1 || next > 1 ? null : shiftIsoDate(today, next);
+export function swipedDay(selected: string, _today: string, swipe: DaySwipeDirection): string | null {
+  return shiftIsoDate(selected, swipe === "NEXT" ? 1 : -1);
+}
+
+/** Разница дат в сутках (`to` − `from`); считается по UTC-полуночам, часовой пояс и переход на летнее время не влияют. */
+export function daysBetweenIso(from: string, to: string): number {
+  const utc = (date: string) => Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)));
+  return Math.round((utc(to) - utc(from)) / 86_400_000);
+}
+
+const TAB_WORDS: Readonly<Record<number, string>> = { [-1]: "Вчера", 0: "Сегодня", 1: "Завтра" };
+
+/** Подпись дня в карусели: слово — только для вчера/сегодня/завтра (от сегодняшней даты), дальше — дата `ДД.ММ.ГГГГ`. */
+export function carouselLabel(date: string, today: string): string {
+  return TAB_WORDS[daysBetweenIso(today, date)] ?? `${date.slice(8, 10)}.${date.slice(5, 7)}.${date.slice(0, 4)}`;
+}
+
+/** Пять соседних дней карусели вокруг выбранного: −2…+2. Видны три, крайние — для плавного въезда при смене дня. */
+export const CAROUSEL_RADIUS = 2;
+export function carouselSlots(selected: string, today: string): readonly Readonly<{ date: string; label: string }>[] {
+  return Array.from({ length: CAROUSEL_RADIUS * 2 + 1 }, (_, index) => {
+    const date = shiftIsoDate(selected, index - CAROUSEL_RADIUS);
+    return { date, label: carouselLabel(date, today) };
+  });
 }

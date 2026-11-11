@@ -1,57 +1,49 @@
 import { useCallback, useMemo, useRef, type ReactNode } from "react";
 import { StyleSheet } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+import Animated, { withSpring } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { daySwipeOf, swipedDay, type DaySwipeDirection } from "../domain/DayNavigation.ts";
 import { useClientDay } from "./ClientDay.tsx";
 
-/** Сдвиг содержимого при смене дня: новый день «въезжает» с той стороны, куда ушёл палец. */
-const ENTER_SHIFT = 36;
-/** Во время движения содержимое идёт за пальцем с сопротивлением (доля пути). */
-const DRAG_FACTOR = 0.35;
+/** Путь пальца, dp, на который лента дней сдвигается на целую колонку: палец ведёт ленту, а не содержимое. */
+const STRIP_DRAG_SPAN = 180;
 
 /**
- * Свайп влево/вправо по содержимому дня — переключение «Вчера · Сегодня · Завтра» (UIX-FIT-10, UI-OWN-070): влево — вперёд, вправо — назад.
- * Вертикальная прокрутка не мешает (жест отказывает при вертикальном движении); на краях день не меняется, содержимое возвращается.
- * Что значит «соседний день» — в `swipedDay`.
+ * Свайп влево/вправо по содержимому дня — карусель дней «Вчера · Сегодня · Завтра · …» (UIX-FIT-10, UI-OWN-070, UIX-FIT-11): влево — вперёд, вправо — назад.
+ * Содержимое не двигается и не гаснет: меняются только значения дня на месте, а плавно едет лента дней сверху (`DayTabs`, общий `stripShift`).
+ * Вертикальная прокрутка не мешает (жест отказывает при вертикальном движении); краёв у дней нет. Что значит «соседний день» — в `swipedDay`.
  */
 export function DaySwipe({ children }: Readonly<{ children: ReactNode }>) {
-  const { day, today, setDay } = useClientDay();
-  const shift = useSharedValue(0);
-  const fade = useSharedValue(1);
+  const { day, today, setDay, stripShift } = useClientDay();
   // Актуальные день и «сегодня» читаются из ref: быстрый второй свайп до перерисовки не должен брать устаревший день.
   const current = useRef({ day, today }); current.current = { day, today };
   const handle = useCallback((swipe: DaySwipeDirection) => {
     const next = swipedDay(current.current.day, current.current.today, swipe);
-    if (next === null) { shift.value = withSpring(0, { damping: 24, stiffness: 340 }); return; }
+    if (next === null) { stripShift.value = withSpring(0, { damping: 24, stiffness: 340 }); return; }
+    // `setDay` продолжает ленту с того места, где её оставил палец, и возвращает её в 0 анимацией.
     setDay(next);
     current.current = { day: next, today: current.current.today };
-    shift.value = swipe === "NEXT" ? ENTER_SHIFT : -ENTER_SHIFT;
-    fade.value = 0.35;
-    shift.value = withTiming(0, { duration: 170 });
-    fade.value = withTiming(1, { duration: 170 });
-  }, [setDay, shift, fade]);
+  }, [setDay, stripShift]);
   const gesture = useMemo(() => Gesture.Pan().activeOffsetX([-24, 24]).failOffsetY([-14, 14])
     .onUpdate((event) => {
       "worklet";
-      shift.value = event.translationX * DRAG_FACTOR;
+      stripShift.value = Math.min(1, Math.max(-1, event.translationX / STRIP_DRAG_SPAN));
     })
     .onEnd((event, success) => {
       "worklet";
       // Отменённый системой жест день не переключает.
       const swipe = success ? daySwipeOf(event.translationX, event.velocityX) : null;
-      if (swipe === null) shift.value = withSpring(0, { damping: 24, stiffness: 340 });
+      if (swipe === null) stripShift.value = withSpring(0, { damping: 24, stiffness: 340 });
       else scheduleOnRN(handle, swipe);
     })
-    .onFinalize(() => {
+    .onFinalize((_event, success) => {
       "worklet";
-      if (shift.value !== 0 && fade.value === 1) shift.value = withSpring(0, { damping: 24, stiffness: 340 });
-    }), [shift, fade, handle]);
-  const moved = useAnimatedStyle(() => ({ opacity: fade.value, transform: [{ translateX: shift.value }] }));
+      if (!success) stripShift.value = withSpring(0, { damping: 24, stiffness: 340 });
+    }), [stripShift, handle]);
   return (
     <GestureDetector gesture={gesture}>
-      <Animated.View style={[styles.fill, moved]}>{children}</Animated.View>
+      <Animated.View style={styles.fill}>{children}</Animated.View>
     </GestureDetector>
   );
 }
