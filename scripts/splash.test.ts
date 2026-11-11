@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ATHLETE_FACETS } from "../apps/mobile/src/app/bootstrap/athleteFacets.ts";
-import { canExitLaunch, facetReflection, facetReveal, LAUNCH_DURATION_MS, smoothProgress } from
+import { canExitLaunch, endsLaunchIntro, facetReflection, facetReveal, LAUNCH_DURATION_MS, smoothProgress } from
   "../apps/mobile/src/app/bootstrap/launchTimeline.ts";
 import { StartupDiagnostics } from "../apps/mobile/src/app/bootstrap/StartupDiagnostics.ts";
 
@@ -62,4 +62,15 @@ test("splash: local numeric diagnostics measure async stages, preserve failures 
   assert.equal(trace.snapshot()[0]!.atMs, 20);
   for (let i = 0; i < 100; i++) trace.mark("navigation.ready");
   assert.equal(trace.snapshot().length, 32);
+});
+
+test("ARCH-HARDEN-1b: проверка журнала восстановления при холодном запуске не снимает заставку; ошибка и обслуживание работающего приложения — снимают", () => {
+  // Холодный старт после когда-либо выполненного восстановления: журнал перечитывается под закрытой базой (DRAINING → CLOSED → ACTIVE).
+  for (const maintenance of ["DRAINING", "CLOSED", "REOPENING", "ACTIVE"] as const) {
+    assert.equal(endsLaunchIntro({ bootFailed: false, appReady: false, maintenance }), false, maintenance);
+  }
+  assert.equal(endsLaunchIntro({ bootFailed: true, appReady: false, maintenance: "ACTIVE" }), true, "сбой запуска показывает экран повтора");
+  assert.equal(endsLaunchIntro({ bootFailed: false, appReady: false, maintenance: "RECOVERY_REQUIRED" }), true, "незавершённое восстановление показывает экран восстановления");
+  assert.equal(endsLaunchIntro({ bootFailed: false, appReady: true, maintenance: "DRAINING" }), true, "восстановление из работающего приложения");
+  assert.equal(endsLaunchIntro({ bootFailed: false, appReady: true, maintenance: "ACTIVE" }), false);
 });

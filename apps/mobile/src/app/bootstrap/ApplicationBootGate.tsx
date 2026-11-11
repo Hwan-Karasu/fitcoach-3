@@ -7,6 +7,7 @@ import type { BootErrorCode } from "./BootCoordinator.ts";
 import { fonts } from "../../shared/ui/theme/typography.ts";
 import { AutomaticBackupHost } from "./AutomaticBackupHost.tsx";
 import { LaunchAnimation } from "./LaunchAnimation.tsx";
+import { endsLaunchIntro } from "./launchTimeline.ts";
 import { useMaintenanceView } from "./useMaintenanceView.ts";
 import { startupDiagnostics } from "./StartupDiagnostics.ts";
 
@@ -61,7 +62,8 @@ export function ApplicationBootGate({ boot, services, development, maintenance, 
   const recovering = maintenanceState === "RECOVERY_REQUIRED";
   const maintaining = maintenanceState !== "ACTIVE";
   // A failed/interrupted boot exposes the existing recovery UI and never replays the intro on retry.
-  useEffect(() => { if (failed || maintaining) setIntroVisible(false); }, [failed, maintaining]);
+  const introEnded = endsLaunchIntro({ bootFailed: failed, appReady: state.kind === "APP_READY", maintenance: maintenanceState });
+  useEffect(() => { if (introEnded) setIntroVisible(false); }, [introEnded]);
   const ready = state.kind === "APP_READY" && maintenanceState === "ACTIVE" && fontsReady;
   const content = state.kind === "APP_READY" && ready ? <>{!introVisible && <AutomaticBackupHost backup={automaticBackup} activity={trainingActivity} />}<PrototypeShell key={maintenanceView.generation} services={services}
     launchVisible={introVisible} onReady={onNavigationReady}
@@ -94,7 +96,7 @@ export function ApplicationBootGate({ boot, services, development, maintenance, 
       </SafeAreaView>
     </SafeAreaProvider>
   );
-  const showIntro = introVisible && !failed && !maintaining;
+  const showIntro = introVisible && !introEnded;
   return <View style={{ flex: 1 }}>
     <View style={{ flex: 1 }} pointerEvents={showIntro ? "none" : "auto"}
       importantForAccessibility={showIntro ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={showIntro}>{content}</View>

@@ -34,3 +34,15 @@ export function canExitLaunch(ready: boolean, foreground: boolean, animationComp
   "worklet";
   return ready && foreground && animationComplete;
 }
+
+/**
+ * Когда заставка убирается раньше входа в приложение (и больше не возвращается в этом запуске): сбой запуска, незавершённое восстановление
+ * или обслуживание базы уже работающего приложения. Обслуживание до готовности приложения заставку НЕ снимает: журнал когда-либо
+ * выполненного восстановления остаётся на диске, и его проверка под закрытой базой идёт на каждом холодном старте — раньше она
+ * гасила заставку и до конца загрузки оставался светлый экран «Подготовка приложения» (ARCH-HARDEN-1b).
+ */
+export function endsLaunchIntro(input: Readonly<{ bootFailed: boolean; appReady: boolean;
+  maintenance: "ACTIVE" | "DRAINING" | "CLOSED" | "REOPENING" | "RECOVERY_REQUIRED" }>): boolean {
+  if (input.bootFailed || input.maintenance === "RECOVERY_REQUIRED") return true;
+  return input.appReady && input.maintenance !== "ACTIVE";
+}
