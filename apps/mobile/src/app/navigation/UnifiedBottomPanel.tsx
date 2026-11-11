@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Keyboard, StyleSheet, View } from "react-native";
+import { KeyboardEvents } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RestTimerDock } from "../../features/training/public.ts";
 import { useBottomPanelContent } from "../../shared/ui/components/public.ts";
@@ -25,10 +26,17 @@ export function UnifiedBottomPanel({ services, onOpen }: Readonly<{
   useEffect(() => services.clients.subscribeCommittedChanges((change) => {
     if (change.clientId === null || avatarOwners.current.has(change.clientId)) setAvatarVersion((value) => value + 1);
   }), [services.clients]);
+  // Пока открыта клавиатура (в фокусе поле ввода), панель вместе с таймером скрыта: иначе клавиатура и панель занимают слишком много места.
+  // Прячем в НАЧАЛЕ показа (`keyboardWillShow` из keyboard-controller работает и на Android), а не после анимации: один пересчёт экрана
+  // вместо двух. `keyboardDid*` — запасной путь на случай, если событие провайдера не пришло. Таймер при этом идёт и звучит как обычно.
   useEffect(() => {
-    const show = Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true));
-    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
-    return () => { show.remove(); hide.remove(); };
+    const subscriptions = [
+      KeyboardEvents.addListener("keyboardWillShow", () => setKeyboardVisible(true)),
+      KeyboardEvents.addListener("keyboardWillHide", () => setKeyboardVisible(false)),
+      Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true)),
+      Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false)),
+    ];
+    return () => { for (const subscription of subscriptions) subscription.remove(); };
   }, []);
   const avatars = useCallback(async (ids: readonly string[]) => {
     avatarOwners.current = new Set(ids);
@@ -39,7 +47,7 @@ export function UnifiedBottomPanel({ services, onOpen }: Readonly<{
   }, [services.clients, avatarVersion]);
   const bottom = panelBottomPadding(insets.bottom, keyboardVisible);
   // Без панели и таймеров остаётся полоса высотой в системный отступ: экраны без своей панели (футеры, Excel, оформление) сами нижний inset не добавляют, полоса его заменяет.
-  const render = (area: ReactNode, hasTimers: boolean) => entry === null && !hasTimers
+  const render = (area: ReactNode, hasTimers: boolean) => keyboardVisible ? null : entry === null && !hasTimers
     ? <View style={{ height: bottom, backgroundColor: colors.canvas }} />
     : <View testID="unified-bottom-panel"
         style={[styles.panel, { paddingBottom: bottom, backgroundColor: colors.navigation, borderTopColor: navigationBorder(colors) }]}>
