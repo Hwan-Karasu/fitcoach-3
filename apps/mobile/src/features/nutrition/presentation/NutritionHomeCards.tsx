@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Flame, Footprints, Moon, TrendingUp, Utensils, type LucideIcon } from "lucide-react-native";
-import { useHealthDaily, type HealthConnectPort, type HealthStorePort } from "../../health/public.ts";
+import { HealthConnectBanner, useHealthDaily, type HealthConnectPort, type HealthStorePort, type HealthSyncResult } from "../../health/public.ts";
 import { InlineNotice, SegmentedRing } from "../../../shared/ui/components/public.ts";
 import { shadow } from "../../../shared/ui/theme/style.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
@@ -157,7 +157,7 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
   /** Кружок показателя открывает его экран с графиком (UIX-08). */ onOpenMetric: (metric: MetricId) => void;
   /** Значок графика у «Вес»: статистика веса и % жира. */ onOpenWeightStats: () => void;
   /** Health Connect: сон выбранного дня и состояние подключения (UIX-16/17); `linked` — эта карточка привязана «для себя». */
-  health: Readonly<{ store: HealthStorePort; platform: HealthConnectPort; linked: boolean }>;
+  health: Readonly<{ store: HealthStorePort; platform: HealthConnectPort; linked: boolean; sync: () => Promise<HealthSyncResult> }>;
   /** Открыть карточку клиента, где подключается Health Connect. */
   onOpenHealth: () => void;
   /** Лист «Расчёт»: сохранение профиля и переход в журнал замеров (оболочка клиента). */
@@ -256,6 +256,8 @@ export function NutritionHomeCards({ clientId, body, diary, targets, calc, measu
             hint={trainingAuto ? "Отмечено по дневнику тренировок" : "Отметить тренировку: да или нет"} onPress={() => { void cycleTraining(); }} />
           <DayPlate label="На неделе" value={workoutsThisWeek === null ? null : String(workoutsThisWeek)} disabled hint="Тренировок за неделю по дневнику" />
         </View>
+        {/* Предложение подключить Health Connect (UIX-FIT-10, M7): пока он не привязан ни к одной карточке. */}
+        <HealthConnectBanner clientId={clientId} store={health.store} platform={health.platform} sync={health.sync} />
         {health.linked && healthReady === false ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Health Connect не подключён. Открыть карточку клиента" onPress={onOpenHealth}
             style={[styles.healthNotice, { backgroundColor: colors.surfaceRaised }]}>

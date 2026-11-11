@@ -29,7 +29,7 @@ import { fonts } from "../../shared/ui/theme/typography.ts";
 import type { TrainingHistoryPort } from "../../read-models/trainingHistory.ts";
 import { useHistoryCaption, useQuestionnaireCaption, useStatisticsCaption } from "../../read-models/useMoreCaptions.ts";
 import type { QuestionnaireRepositoryPort } from "../../features/questionnaire/public.ts";
-import { useHealthLink, type HealthConnectPort, type HealthStorePort } from "../../features/health/public.ts";
+import { useHealthLink, type HealthConnectPort, type HealthStorePort, type HealthSyncResult } from "../../features/health/public.ts";
 import type { ClientBodyweightPort } from "../../read-models/clientBodyweight.ts";
 
 type OpenWorkout = (slot: WorkoutSlot, options?: Readonly<{ returnToCaller?: boolean }>) => void;
@@ -118,7 +118,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
   onOpenMeasurements, onClose, onOpenClients, onOpenExercise, questionnaire, health }: Readonly<{
   clientId: string;
   /** Health Connect: хранилище, граница с системой и обновление данных привязанной карточки. */
-  health: Readonly<{ store: HealthStorePort; platform: HealthConnectPort; sync: () => Promise<unknown> }>;
+  health: Readonly<{ store: HealthStorePort; platform: HealthConnectPort; sync: () => Promise<HealthSyncResult> }>;
   questionnaire: QuestionnaireRepositoryPort;
   repository: ClientRepositoryPort & ClientRosterPort;
   accounting: AccountingRepositoryPort;
@@ -238,7 +238,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       <Tabs.Screen name="Home" options={{ tabBarLabel: workspaceTabs.Home, tabBarAccessibilityLabel: workspaceTabs.Home }}>
         {({ navigation }) => <HomeNavigator client={client} accounting={accounting} daySlot={<DayTabs />} onClose={onClose} onOpenClients={onOpenClients} onOpenEdit={() => onOpenEdit(client.id)}
           renderNutritionSlot={({ openMetric, openWeightStats }) => <NutritionHomeCards key={client.id} clientId={client.id} body={calcBody} trainedToday={trainedToday} workoutsThisWeek={workoutsThisWeek} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements}
-            onOpenMetric={openMetric} onOpenWeightStats={openWeightStats} health={{ store: health.store, platform: health.platform, linked: healthLinkedHere }} onOpenHealth={() => onOpenEdit(client.id)} onSaveProfile={saveCalcProfile} onOpenJournal={() => onOpenMeasurements(client.id)} />}
+            onOpenMetric={openMetric} onOpenWeightStats={openWeightStats} health={{ store: health.store, platform: health.platform, linked: healthLinkedHere, sync: health.sync }} onOpenHealth={() => onOpenEdit(client.id)} onSaveProfile={saveCalcProfile} onOpenJournal={() => onOpenMeasurements(client.id)} />}
           renderMetric={(metric) => <MetricScreen key={`${client.id}:${metric}`} metric={metric} clientId={client.id} body={calcBody} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements} health={{ store: health.store, linked: healthLinkedHere }}
             onOpenDiary={() => navigation.navigate("Nutrition")} />}
           renderWeightStats={() => <NutritionStatsScreen key={client.id} clientId={client.id} measurements={measurements} onOpenJournal={() => onOpenMeasurements(client.id)} />}
