@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { copyFileSync } from "node:fs";
+import { copyFileSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
-import { createWorld, type World } from "./support/restore-world.ts";
+import { createWorld, installFakeNative, type World } from "./support/restore-world.ts";
 import { PRODUCTION_IDENTITY } from "../src/app/composition/productionDatabase.ts";
 import { SCHEMA_OWNERS } from "../src/app/composition/schema.ts";
 import { SqliteSnapshotEngine } from "../src/features/backup/data/SqliteSnapshotEngine.ts";
@@ -172,5 +172,69 @@ test("BKP-AUDIT-1 C1: the photo relocation is verified without a second full has
         }
       } finally { db.close(); }
     }
+  });
+});
+
+/** C5: нативный хеш подключён за портом; JS остаётся арбитром, а самопроверка на золотой фикстуре отключает ложный native. */
+test("BKP-AUDIT-1 C5: with a correct native hash the whole round-trip needs no JS content pass", async () => {
+  const fake = installFakeNative("correct");
+  try {
+    await withWorld({ recipes: 80, photos: 2 }, async (world) => {
+      backupBoundary.queries.length = 0;
+      const backup = await world.makeBackup("manual");
+      world.write("UPDATE clients SET display_name='changed' WHERE id='synthetic-0'");
+      const { outcome } = await restore(world, backup.file);
+      assert.equal(outcome, "COMMITTED");
+      assert.deepEqual(world.tables().clients, backup.tables.clients);
+      assert.equal(count(HASH, true), 0, "every canonical pass went to the native module");
+      assert.ok(fake.calls.fixture === 1 && fake.calls.real >= 3, `fixture self-check once, real passes ${fake.calls.real}`);
+    });
+  } finally { fake.remove(); }
+});
+
+for (const mode of ["wrong", "throws"] as const) {
+  test(`BKP-AUDIT-1 C5: a ${mode} native module is neutralised — copies are still created, verified and restored by the JS protocol`, async () => {
+    const fake = installFakeNative(mode);
+    try {
+      await withWorld({ recipes: 30 }, async (world) => {
+        backupBoundary.queries.length = 0;
+        const backup = await world.makeBackup("automatic");
+        const { outcome } = await restore(world, backup.file);
+        assert.equal(outcome, "COMMITTED");
+        assert.deepEqual(world.tables().clients, backup.tables.clients);
+        assert.equal(fake.calls.real, 0, "self-check failed, so the native module is never asked about real data");
+        assert.ok(count(HASH, true) >= 3, "the JS path did the work");
+      });
+    } finally { fake.remove(); }
+  });
+}
+
+test("BKP-AUDIT-1 C5: a native module that lies on real data cannot condemn a good backup, nor accept a tampered one", async () => {
+  await withWorld({ recipes: 30 }, async (world) => {
+    const backup = await world.makeBackup("manual"); // created by JS (no native yet)
+    const tampered = mutateCopy(world, backup.file, "lies-tampered.atbackup", "UPDATE clients SET display_name='tampered'");
+    const fake = installFakeNative("lies");
+    try {
+      backupBoundary.queries.length = 0;
+      assert.equal((await restore(world, backup.file)).outcome, "COMMITTED", "native says «mismatch», JS arbitrates and accepts the intact backup");
+      assert.ok(count(HASH, true) >= 1, "JS recomputed after the native mismatch");
+      assert.equal(await rejectionCode(world, tampered), "RESTORE_INVALID_BACKUP", "JS rejects the tampered backup");
+      assert.deepEqual(world.tables().clients, backup.tables.clients);
+    } finally { fake.remove(); }
+  });
+});
+
+test("BKP-AUDIT-1: a truncated or empty backup file is rejected and LIVE stays untouched", async () => {
+  await withWorld({ recipes: 60 }, async (world) => {
+    const backup = await world.makeBackup("manual");
+    const bytes = readFileSync(new URL(backup.file.uri));
+    for (const [name, size] of [["half", Math.floor(bytes.length / 2)], ["header-only", 100], ["empty", 0]] as const) {
+      const path = join(world.dirs.external, `truncated-${name}.atbackup`);
+      writeFileSync(path, bytes.subarray(0, size));
+      const code = await rejectionCode(world, new File(path));
+      assert.ok(code === "RESTORE_INVALID_BACKUP" || code === "RESTORE_SOURCE_UNAVAILABLE", `${name}: ${code}`);
+      assert.notEqual(code, "ACCEPTED");
+    }
+    assert.deepEqual(world.tables(), backup.tables);
   });
 });

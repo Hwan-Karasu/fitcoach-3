@@ -1,11 +1,11 @@
 /** Host world for the REAL restore pipeline: ExpoRestoreJobs + ExpoSqliteBackup + engine run unchanged,
  * only Expo IO is replaced (expo-backup-boundary.ts, node:sqlite). Used by tests and the benchmark. */
 import { registerHooks } from "node:module";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
-import { randomUUID } from "node:crypto";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { createHash, randomUUID } from "node:crypto";
 import { backup, DatabaseSync } from "node:sqlite";
 import { backupBoundary, File, openDatabaseAsync } from "./expo-backup-boundary.ts";
 import { prepareProductionDatabase, PRODUCTION_IDENTITY, PRODUCTION_WORKSPACE_ID as WS } from "../../src/app/composition/productionDatabase.ts";
@@ -23,6 +23,7 @@ const { ExpoRestoreJobs } = await import("../../src/app/composition/ExpoRestoreJ
 const { ExpoSqliteBackup } = await import("../../src/features/backup/data/ExpoSqliteBackup.ts");
 const { expoSnapshotMedia } = await import("../../src/features/backup/data/ExpoSnapshotMedia.ts");
 const { Directory } = await import("./expo-backup-boundary.ts");
+const { resetNativeContentHashSelfCheck } = await import("../../src/features/backup/data/ExpoNativeContentHash.ts");
 hooks.deregister();
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4HsAAAAASUVORK5CYII=", "base64");
@@ -107,3 +108,27 @@ export async function createWorld(options: WorldOptions = {}) {
   return world;
 }
 export type World = Awaited<ReturnType<typeof createWorld>>;
+
+/** Подставной нативный модуль на независимом узловом оракуле (тот же байтовый протокол, другой код).
+ * correct — всегда верный; lies — верный только на фикстуре самопроверки, затем нули; throws — всегда ошибка; wrong — неверный всегда;
+ * fileonly — только нативный fileSha256 (как build51 на устройстве), нативного хеша содержимого нет. */
+export type FakeNativeMode = "correct" | "lies" | "throws" | "wrong" | "fileonly";
+export function installFakeNative(mode: FakeNativeMode) {
+  const fixture = "native-hash-selfcheck";
+  const calls = { total: 0, fixture: 0, real: 0 };
+  backupBoundary.native = { contentHashProtocolVersion: () => mode === "fileonly" ? 0 : 1,
+    /** Как нативный fileSha256 в APK (AUTO-BACKUP-1): хеш файла вне JS. */
+    fileSha256: async (uri: string) => { const bytes = readFileSync(fileURLToPath(uri)); return { sha256: createHash("sha256").update(bytes).digest("hex"), bytes: bytes.length }; },
+    contentSha256: async (uri: string) => {
+    calls.total++;
+    const isFixture = uri.includes(fixture); if (isFixture) calls.fixture++; else calls.real++;
+    if (mode === "throws") throw new Error("native failure");
+    const db = new DatabaseSync(fileURLToPath(uri), { readOnly: true });
+    try {
+      const sha256 = canonicalContentSha256(db);
+      return { sha256: mode === "correct" || (mode === "lies" && isFixture) ? sha256 : "0".repeat(64), rows: 0 };
+    } finally { db.close(); }
+  } };
+  resetNativeContentHashSelfCheck();
+  return { calls, remove() { backupBoundary.native = null; resetNativeContentHashSelfCheck(); } };
+}

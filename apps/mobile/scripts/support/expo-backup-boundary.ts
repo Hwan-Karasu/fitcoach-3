@@ -6,7 +6,7 @@ import { backup, DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 
 /** `queries` collects every SELECT/PRAGMA the driver sends (all + first), so tests can count hash passes and integrity checks. */
-export const backupBoundary = { root: "", queries: [] as string[], copies: 0, fullDisk: false, freeBytes: Number.MAX_SAFE_INTEGER, picked: null as File | null };
+export const backupBoundary = { root: "", queries: [] as string[], copies: 0, fullDisk: false, freeBytes: Number.MAX_SAFE_INTEGER, picked: null as File | null, native: null as unknown };
 const path = (value: string | { uri: string }) => {
   const uri = typeof value === "string" ? value : value.uri;
   return uri.startsWith("file:") ? fileURLToPath(uri) : uri;
@@ -62,7 +62,8 @@ export const Paths = {
 };
 export const Platform = { OS: "android" };
 export const uuid = { v4: randomUUID };
-export const requireOptionalNativeModule = () => null;
+/** Подставной нативный модуль AthleteBackupStorage (по умолчанию его нет, как в Expo Go). */
+export const requireOptionalNativeModule = () => backupBoundary.native;
 export async function moveAsync({ from, to }: { from: string; to: string }) { renameSync(path(from), path(to)); }
 type Binding = string | number | null | Uint8Array;
 export async function openDatabaseAsync(name: string, _options: unknown, directory: string) {

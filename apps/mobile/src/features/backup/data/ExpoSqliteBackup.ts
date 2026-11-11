@@ -6,6 +6,7 @@ import { isStorageFull } from "../domain/BackupFailure.ts";
 import { observeBackup, type BackupObserver } from "../domain/BackupProgress.ts";
 import { SnapshotError, type SnapshotManifest } from "../domain/SnapshotManifest.ts";
 import { assertSnapshotPrivateUri } from "./ExpoSnapshotMedia.ts";
+import { expoNativeContentHash } from "./ExpoNativeContentHash.ts";
 import { expoSnapshotSql } from "./ExpoSnapshotSql.ts";
 import { SqliteSnapshotEngine, type SnapshotSchema } from "./SqliteSnapshotEngine.ts";
 import type { SnapshotMediaSettings } from "./SnapshotMediaPort.ts";
@@ -52,7 +53,7 @@ export class ExpoSqliteBackup {
   private async inspectPrivate(file: File, observe?: BackupObserver): Promise<SnapshotManifest> {
     noSidecars(file); header(file);
     const db = await this.open(file, true);
-    try { return await this.engine.validateSnapshot(expoSnapshotSql(db), observe); }
+    try { return await this.engine.validateSnapshot(expoSnapshotSql(db, expoNativeContentHash(file)), observe); }
     finally { await db.closeAsync(); }
   }
   /** Verification of an already sealed private point; never opens the old photo URIs. */
@@ -73,7 +74,7 @@ export class ExpoSqliteBackup {
       try {
         stage = "copy"; await SQLite.backupDatabaseAsync({ sourceDatabase: source, destDatabase: copy });
         await copy.execAsync("PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON");
-        stage = "seal"; await this.engine.sealSnapshot(expoSnapshotSql(copy), metadata, settings);
+        stage = "seal"; await this.engine.sealSnapshot(expoSnapshotSql(copy, expoNativeContentHash(partial)), metadata, settings);
       } finally { await copy.closeAsync(); }
       stage = "verify"; const manifest = await this.inspectPrivate(partial, settings.observe);
       stage = "move"; if (destination.exists) throw new SnapshotError("SNAPSHOT_DESTINATION_EXISTS");
@@ -138,7 +139,7 @@ export class ExpoSqliteBackup {
         try {
           await SQLite.backupDatabaseAsync({ sourceDatabase: from, destDatabase: candidate });
           await candidate.execAsync("PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON");
-          manifest = await this.engine.stageSnapshot(expoSnapshotSql(candidate), settings, onCandidate);
+          manifest = await this.engine.stageSnapshot(expoSnapshotSql(candidate, expoNativeContentHash(staging)), settings, onCandidate);
         } finally { await candidate.closeAsync(); }
       } finally { await from.closeAsync(); }
       noSidecars(staging);

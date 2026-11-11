@@ -18,12 +18,10 @@ export async function expoFileSha256(file: File): Promise<{ readonly sha256: str
   } catch { throw new LocalFileHashError(); }
 }
 
-let cached: ((uri: string) => Promise<{ sha256: string; bytes: number }>) | null | undefined;
-function nativeHash() {
-  if (cached !== undefined) return cached;
+/** Без кэша: поиск модуля дёшев, а кэш мешал бы подмене в тестах. */
+function nativeHash(): ((uri: string) => Promise<{ sha256: string; bytes: number }>) | null {
   try {
     const module = requireOptionalNativeModule<NativeFileHash>("AthleteBackupStorage");
-    cached = typeof module?.fileSha256 === "function" ? (uri) => module.fileSha256!(uri) : null;
-  } catch { cached = null; }
-  return cached;
+    return typeof module?.fileSha256 === "function" ? (uri) => module.fileSha256!(uri) : null;
+  } catch { return null; }
 }

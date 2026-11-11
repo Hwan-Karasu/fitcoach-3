@@ -3,6 +3,7 @@ package expo.modules.athletebackup
 import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -50,6 +51,30 @@ class BackupStorageModule : Module() {
           mapOf("sha256" to digest.digest().joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }, "bytes" to size.toDouble())
         } catch (error: CancellationException) { throw error }
         catch (_: Exception) { throw CodedException("LOCAL_FILE_HASH_FAILED", "LOCAL_FILE_HASH_FAILED", null) }
+      }
+    }
+
+    // BKP-AUDIT-1 C5: канонический хеш содержимого SQLite-копии (двойник SnapshotContentHash.ts) вне JS-потока. Только чтение
+    // закрытого приватного файла без -wal/-shm/-journal; ошибка — фиксированный код без пути и данных. JS остаётся арбитром:
+    // несовпадение или сбой здесь никогда не объявляет копию повреждённой.
+    Function("contentHashProtocolVersion") { 1 }
+    AsyncFunction("contentSha256") Coroutine { uri: String, excluded: List<String> ->
+      val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+      withContext(Dispatchers.IO) {
+        try {
+          val file = File(URI(uri)).canonicalFile
+          val roots = listOfNotNull(context.filesDir, context.cacheDir, context.noBackupFilesDir).map { it.canonicalPath + File.separator }
+          if (roots.none { file.path.startsWith(it) } || !file.isFile) throw IllegalArgumentException()
+          for (suffix in listOf("-wal", "-shm", "-journal")) if (File(file.path + suffix).exists()) throw IllegalStateException()
+          val db = SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY or SQLiteDatabase.NO_LOCALIZED_COLLATORS)
+          try {
+            val hasher = SnapshotContentHasher(excluded.toSet())
+            val sha256 = hasher.compute(db)
+            mapOf("sha256" to sha256, "rows" to hasher.rows.toDouble())
+          } finally { db.close() }
+        } catch (error: CancellationException) { throw error }
+        catch (_: Exception) { throw CodedException("CONTENT_HASH_FAILED", "CONTENT_HASH_FAILED", null) }
+        catch (_: OutOfMemoryError) { throw CodedException("CONTENT_HASH_FAILED", "CONTENT_HASH_FAILED", null) }
       }
     }
 

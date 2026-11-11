@@ -3,7 +3,7 @@ import { runMigrationsInTransaction } from "../../../shared/db/MigrationRunner.t
 import { observeBackup, type BackupObserver } from "../domain/BackupProgress.ts";
 import { parseSnapshotManifest, SnapshotError, type SnapshotManifest } from "../domain/SnapshotManifest.ts";
 import { MANIFEST_TABLE, MEDIA_CHUNKS, MEDIA_TABLE, SNAPSHOT_LEDGER, SNAPSHOT_OWNER } from "./SnapshotCatalog.ts";
-import { snapshotContentSha256 } from "./SnapshotContentHash.ts";
+import { computeContentSha256, contentMatches } from "./ContentHasher.ts";
 import { embedRecipePhotos, extractRecipePhotos, verifyRecipePhotos } from "./SnapshotMedia.ts";
 import { originalPhotoJsonForParity } from "./SnapshotPhotoRules.ts";
 import type { SnapshotMediaSettings } from "./SnapshotMediaPort.ts";
@@ -28,8 +28,7 @@ export class SqliteSnapshotEngine {
   async sealSnapshot(db: SnapshotSqlPort, metadata: Pick<SnapshotManifest, "backupId" | "createdAt">,
     settings: SnapshotMediaSettings = {}, knownContentSha256?: string): Promise<SnapshotManifest> {
     await this.owned(db, false);
-    const contentSha256 = knownContentSha256
-      ?? await snapshotContentSha256(db, [], (done, total) => observeBackup(settings.observe, "CONTENT", done, total));
+    const contentSha256 = knownContentSha256 ?? await computeContentSha256(db, settings.observe, "CONTENT");
     return db.transaction(async (tx) => {
       await runMigrationsInTransaction(tx, SNAPSHOT_OWNER.chain, SNAPSHOT_OWNER.ledger);
       const media = await embedRecipePhotos(tx, settings);
@@ -50,9 +49,7 @@ export class SqliteSnapshotEngine {
     const version = (await db.first<{ version: number }>(`SELECT max(version) AS version FROM ${SNAPSHOT_LEDGER}`))?.version;
     if ((version === 2) !== (manifest.media !== undefined)) throw new SnapshotError("SNAPSHOT_INVALID");
     await verifyRecipePhotos(db, manifest.media);
-    if (await snapshotContentSha256(db, [], (done, total) => observeBackup(observe, "VERIFY", done, total)) !== manifest.contentSha256) {
-      throw new SnapshotError("SNAPSHOT_INVALID");
-    }
+    if (!await contentMatches(db, manifest.contentSha256, observe)) throw new SnapshotError("SNAPSHOT_INVALID");
     return manifest;
   }
   async stageSnapshot(db: SnapshotSqlPort, settings: SnapshotMediaSettings = {}, onValidated?: () => void): Promise<SnapshotManifest> {

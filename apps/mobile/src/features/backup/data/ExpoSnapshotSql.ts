@@ -1,11 +1,13 @@
 import type { SQLiteDatabase } from "expo-sqlite";
-import type { SnapshotSqlPort, SnapshotSqlValue } from "./SnapshotSqlPort.ts";
+import type { NativeContentHash, SnapshotSqlPort, SnapshotSqlValue } from "./SnapshotSqlPort.ts";
 
 /** Exclusive private connection. BEGIN/COMMIT use this exact handle, including FK settings.
- * Native withExclusiveTransactionAsync may allocate another handle; do not use it here. */
-export function expoSnapshotSql(db: SQLiteDatabase): SnapshotSqlPort {
+ * Native withExclusiveTransactionAsync may allocate another handle; do not use it here.
+ * `nativeContent` — нативный хеш файла этой же базы (BKP-AUDIT-1 C5); вызывается только вне транзакции этого порта. */
+export function expoSnapshotSql(db: SQLiteDatabase, nativeContent?: NativeContentHash): SnapshotSqlPort {
   let transactionActive = false;
   const port: SnapshotSqlPort = {
+    ...nativeContent === undefined ? {} : { nativeContent },
     async run(sql, bindings = []) {
       const result = await db.runAsync(sql, [...bindings]);
       return { changes: result.changes, lastInsertRowId: result.lastInsertRowId };

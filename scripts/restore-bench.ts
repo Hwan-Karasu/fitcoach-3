@@ -1,13 +1,15 @@
 /**
  * BKP-AUDIT-1: замер полного конвейера восстановления на ПК (V8, node:sqlite). Реальные ExpoRestoreJobs/ExpoSqliteBackup/движок,
  * подменён только ввод-вывод Expo. Это НЕ время телефона (Hermes, мост), а сравнение «до/после» на одном наборе и одной машине.
- * Запуск: node --experimental-strip-types scripts/restore-bench.ts <метка> [recipes] [photos] [photoKB]
+ * Запуск: node --experimental-strip-types scripts/restore-bench.ts <метка> [recipes] [photos] [photoKB] [native|fileonly]
+ * «fileonly» — только нативный SHA-256 файлов (как build51 на устройстве), хеш содержимого в JS.
+ * «native» подставляет вместо Kotlin узловой оракул (node:crypto): это оценка «без JS-хеша» снизу, а не время Kotlin на телефоне.
  * Результат: artifacts/bkp-audit/<метка>.json
  */
 import { mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import assert from "node:assert/strict";
-import { createWorld } from "../apps/mobile/scripts/support/restore-world.ts";
+import { createWorld, installFakeNative } from "../apps/mobile/scripts/support/restore-world.ts";
 import { backupBoundary } from "../apps/mobile/scripts/support/expo-backup-boundary.ts";
 
 const label = process.argv[2] ?? "run";
@@ -16,8 +18,9 @@ const HASH = "SELECT type, name, tbl_name, sql FROM sqlite_master";
 const stats = () => ({ hashPasses: backupBoundary.queries.filter((q) => q.startsWith(HASH)).length,
   integrityChecks: backupBoundary.queries.filter((q) => q.includes("integrity_check")).length, queries: backupBoundary.queries.length });
 
+const fake = process.argv[6] === "native" ? installFakeNative("correct") : process.argv[6] === "fileonly" ? installFakeNative("fileonly") : null;
 const world = await createWorld({ clients: 40, recipes, photos, photoBytes: photoKb * 1024 });
-const result: Record<string, unknown> = { label, recipes, photos, photoKb, node: process.version, liveBytes: statSync(world.liveFile).size };
+const result: Record<string, unknown> = { label, recipes, photos, photoKb, node: process.version, liveBytes: statSync(world.liveFile).size, nativeOracle: fake !== null };
 try {
   for (const mode of ["manual", "automatic"] as const) {
     backupBoundary.queries.length = 0;
@@ -43,7 +46,7 @@ try {
     result[mode] = { create, prepare, apply, readPoint, totalRestoreMs: prepare.ms + apply.ms + readPoint.ms };
     await world.jobs.deletePoint((await world.jobs.readPoint())!.id).catch(() => undefined);
   }
-} finally { world.cleanup(); }
+} finally { world.cleanup(); fake?.remove(); }
 mkdirSync("artifacts/bkp-audit", { recursive: true });
 writeFileSync(`artifacts/bkp-audit/${label}.json`, JSON.stringify(result, null, 2));
 console.log(JSON.stringify(result, null, 2));

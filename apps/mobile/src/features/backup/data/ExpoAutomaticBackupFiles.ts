@@ -11,7 +11,8 @@ import { publicationTreeUri, type BackupDestination } from "../domain/BackupPubl
 import { assertSnapshotPrivateUri, expoSnapshotMedia } from "./ExpoSnapshotMedia.ts";
 import { ExpoSqliteBackup } from "./ExpoSqliteBackup.ts";
 import { expoSnapshotSql } from "./ExpoSnapshotSql.ts";
-import { snapshotContentSha256 } from "./SnapshotContentHash.ts";
+import { computeContentSha256 } from "./ContentHasher.ts";
+import { expoNativeContentHash } from "./ExpoNativeContentHash.ts";
 import type { SnapshotSchema } from "./SqliteSnapshotEngine.ts";
 
 interface NativeAutomatic {
@@ -78,7 +79,8 @@ export class ExpoAutomaticBackupFiles implements AutomaticBackupFiles {
           stage = "copy"; observeBackup(observe, "SNAPSHOT"); await SQLite.backupDatabaseAsync({ sourceDatabase: source, destDatabase: copy });
           await copy.execAsync("PRAGMA journal_mode=DELETE; PRAGMA foreign_keys=ON");
           stage = "identity"; if (await inspectDatabaseIdentity(expoSnapshotSql(copy), schema.identity, schema.owners) !== "OWNED") throw new Error("NOT_OWNED");
-          stage = "hash"; contentSha256 = await snapshotContentSha256(expoSnapshotSql(copy), [], (done, total) => observeBackup(observe, "CONTENT", done, total));
+          stage = "hash"; observeBackup(observe, "CONTENT");
+          contentSha256 = await computeContentSha256(expoSnapshotSql(copy, expoNativeContentHash(current)), observe, "CONTENT");
         } finally { await copy.closeAsync(); }
       } finally { await source.closeAsync(); }
       if (contentSha256 === previousContentSha256) return null;
