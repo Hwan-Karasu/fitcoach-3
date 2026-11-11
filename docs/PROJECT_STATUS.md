@@ -1,3 +1,9 @@
+## 2026-11-11 — build52: сборка APK (BKP-AUDIT-1 + таймер/панель UIX-FIT-09)
+
+- APK: `artifacts/apk/athlete-diary-3.0.0-build52.apk`, `com.fitcoach.v3`, versionCode 52, arm64-v8a, minSdk 26, targetSdk 36, 73 511 014 байт. SHA-256 `6f36e5b8b5501f6e82f1b4bbcbafc48d52bfb5e8e157b44e46c58c2c012372d5` (рядом `.sha256`). Источник — HEAD `033938a` + правка `artifacts/timer-native/extended.ts`. `assembleRelease` BUILD SUCCESSFUL 2 мин 50 с (764 задачи), лог `artifacts/build52/gradle.log`; `aapt` и `apksigner verify` PASS, сертификат `fac61745…033b9c` как у прежних сборок (обновление поверх без удаления данных возможно; на телефон не ставилось).
+- Проверки: typecheck, arch:check, source:verify, secrets:check, lint (0 ошибок — давняя ошибка `extended.ts` исправлена: убрана неиспользуемая константа), foundation 1258/1258, recovery:test 55/55 — PASS. Lint под Node 24 без `tsconfigRootDir` ломается об `artifacts/r7-check` (старая копия проекта, в .gitignore) — запускать lint из bash/Node 22 либо убрать эту папку.
+- Открыто: все native/устройственные проверки (Kotlin-хеш, время восстановления ~70 МБ, жесты и «Ещё N» таймера, несколько участников, тёмная тема, клавиатура) — на телефоне не проверялись. Незакрытые пункты `HANDOFF_TIMER_52.md` остаются OPEN.
+
 ## 2026-11-11 — BKP-AUDIT-1: аудит и ускорение резервного копирования и восстановления
 
 - **Запрос владельца:** автокопии «не восстанавливаются» (BUG-01), проверка после 100 % начинается заново (BUG-02), восстановление ~15–20 мин на копии ~70 МБ (BUG-03). Подробный отчёт: `docs/BKP_AUDIT_2026-11-11.md`.

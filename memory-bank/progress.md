@@ -3,6 +3,7 @@
 Прежняя версия — `archive/progress-before-bkp-audit-2026-11-11.md`.
 
 ## Сделано
+- **build52 (11 ноября):** APK собран (BKP-AUDIT-1 + UIX-FIT-09), все проверки PASS, давняя ошибка ESLint `extended.ts` исправлена. На телефоне не проверен. Lint под Node 24 ломается об `artifacts/r7-check` (старая копия проекта) — запускать из bash/Node 22.
 - **BKP-AUDIT-1 (11 ноября, ADR-069):** см. `activeContext.md` и `docs/BKP_AUDIT_2026-11-11.md`. Новые коды ошибок восстановления, тихая фаза `LOADING`, отмена подготовки только кнопкой, этапы применения (проверка → точка возврата → замена), проверка по SHA-256 один раз на содержимое, пин `writeToken`, построчная проверка преобразования фото, нативный Kotlin-хеш с самопроверкой и JS-арбитром. Стенд: `apps/mobile/scripts/support/{restore-world,expo-backup-boundary}.ts`, замер `scripts/restore-bench.ts` (артефакты `artifacts/bkp-audit`). Тесты: `restore-pipeline.test.ts` (15), `restore-actions.test.ts` (+4), `native-hash-fixture.test.ts`.
 - UIX-FIT-04…09 (UI-OWN-086…088, 10 ноября): «Питание» со статистикой значком, анкета/«Резервные копии»/конструктор по макету, «Создать программу» без прокрутки, таймеры в нижней панели по макету. Проверено в эмуляторе, на телефоне нет.
 - build51/50 (10 ноября): подготовка восстановления (keyset вместо OFFSET, один входной проход), explicit `allowMissingOnUpgrade` для health, карточки 2×2, заставка ~2 с; APK build51 не установлен на телефон.
@@ -13,6 +14,5 @@
 - Из ревью (`docs/REVIEW_FIXES_2026-11-10.md`): жесты `TimelineGrid.tsx:194,278` без `useMemo`; read-model ростера «нет данных календаря» = ноль; `restTimerDiagnostics.render` убрать после приёмки p50/p95; маршруты `WorkspaceDev`/`SqliteDev` в `PrototypeShell.tsx` без входа; `tabBarStyle: {height: 0}` (`RootTabs.tsx`, `ClientWorkspaceNavigator.tsx`); `ApplicationServices.weekCopy/weekSwap` без потребителей.
 - UI: статусы IMPLEMENTED_NOT_DEVICE_VERIFIED не равны приёмке; остатки в `docs/ui/UIX_BACKLOG.json`. INPUT-LAG-1: если p95 заметен — memo-карточка упражнения в `WorkoutScreen.tsx`. REST-INSET-1: погрешность нескольких dp.
 - AUD28-10 SegmentedControl; WorkoutsEditor/Sortable.Grid (медленная смена недели — решение владельца); CA-23 большие книги; CA-24 inline requires; CA-19 нет react-hooks lint; CA-12 не трогать.
-- I01-USER-PARITY: 544 значения и 243 занятия без даты. REL-ANDROID: debug-подпись, releaseReady:false. `artifacts/timer-native/extended.ts:6` — давняя ошибка ESLint (не из BKP-AUDIT-1).
-
+- I01-USER-PARITY: 544 значения и 243 занятия без даты. REL-ANDROID: debug-подпись, releaseReady:false.
 Подробный журнал — `docs/PROJECT_STATUS.md`.
