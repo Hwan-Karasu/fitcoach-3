@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import { daysBetweenIso, isFutureDay } from "../domain/DayNavigation.ts";
 import { useToday } from "./useToday.ts";
@@ -23,16 +23,15 @@ interface ClientDayState {
 
 const ClientDayContext = createContext<ClientDayState | null>(null);
 
-/** Смена дня на соседние сутки продолжает ленту с того места, где её оставил палец; дальний выбор (календарь) — без слайда. */
-function useDayStrip(): Readonly<{ stripShift: SharedValue<number>; slide: (from: string, to: string) => void }> {
+/** Лента: `slide(±1)` продолжает её с того места, где оставил палец, и возвращает в 0 анимацией; `reset` — без слайда (дальний выбор в календаре). */
+function useDayStrip(): Readonly<{ stripShift: SharedValue<number>; slide: (delta: number) => void; reset: () => void }> {
   const stripShift = useSharedValue(0);
-  const slide = useCallback((from: string, to: string) => {
-    const delta = daysBetweenIso(from, to);
-    if (Math.abs(delta) !== 1) { stripShift.value = 0; return; }
+  const slide = useCallback((delta: number) => {
     stripShift.value = stripShift.value + delta;
     stripShift.value = withTiming(0, { duration: STRIP_SLIDE_MS });
   }, [stripShift]);
-  return { stripShift, slide };
+  const reset = useCallback(() => { stripShift.value = 0; }, [stripShift]);
+  return { stripShift, slide, reset };
 }
 
 /**
@@ -49,12 +48,20 @@ export function ClientDayProvider({ children }: Readonly<{ children: ReactNode }
   // Выбранный день обновляется сразу, до перерисовки: быстрый второй свайп считает слайд от актуальной даты.
   const dayRef = useRef(day);
   dayRef.current = day;
-  const { stripShift, slide } = useDayStrip();
+  const { stripShift, slide, reset } = useDayStrip();
+  // Слайд применяется после коммита нового дня (до отрисовки): новые подписи ленты уже на месте, и лента не «прыгает» на 1–3 кадра в старой раскладке.
+  const pendingSlide = useRef(0);
   const setDay = useCallback((date: string) => {
-    slide(dayRef.current, date);
+    const delta = daysBetweenIso(dayRef.current, date);
+    if (Math.abs(delta) === 1) pendingSlide.current = delta; else { pendingSlide.current = 0; reset(); }
     dayRef.current = date;
     setPicked(date === todayRef.current ? null : date);
-  }, [slide]);
+  }, [reset]);
+  useLayoutEffect(() => {
+    const delta = pendingSlide.current;
+    pendingSlide.current = 0;
+    if (delta !== 0) slide(delta);
+  }, [day, slide]);
   const value = useMemo(() => ({ day, today, setDay, future: isFutureDay(day, today), stripShift }), [day, today, setDay, stripShift]);
   return <ClientDayContext.Provider value={value}>{children}</ClientDayContext.Provider>;
 }
@@ -64,8 +71,9 @@ export function useClientDay(): ClientDayState {
   const shared = useContext(ClientDayContext);
   const today = useToday();
   const [local, setLocal] = useState<string | null>(null);
-  const { stripShift, slide } = useDayStrip();
+  const { stripShift, slide, reset } = useDayStrip();
   const day = local ?? today;
   return shared ?? { day, today, stripShift,
-    setDay: (date) => { slide(day, date); setLocal(date === today ? null : date); }, future: isFutureDay(day, today) };
+    setDay: (date) => { const delta = daysBetweenIso(day, date); if (Math.abs(delta) === 1) slide(delta); else reset(); setLocal(date === today ? null : date); },
+    future: isFutureDay(day, today) };
 }

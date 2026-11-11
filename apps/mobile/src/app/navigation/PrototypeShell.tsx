@@ -7,9 +7,7 @@ import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { KeyboardAvoidingView, KeyboardProvider } from "react-native-keyboard-controller";
 import { ClientExerciseScreen, TrainingSettingsScreen, runWithoutWorkoutExitPrompt, type TrainingPlansRepositoryPort } from "../../features/training/public.ts";
 import { calendarEventTarget, resolveTimerTarget, timerTarget, type NotificationTarget } from "./notificationTarget.ts";
-import { exerciseFocusAction } from "./exerciseFocusAction.ts";
-import { useKeyboardVisible } from "./useKeyboardVisible.ts";
-import { NotificationOpenHost } from "./NotificationOpenHost.tsx";
+import { exerciseFocusAction } from "./exerciseFocusAction.ts";import { NotificationOpenHost } from "./NotificationOpenHost.tsx";
 import { NotificationCenterScreen, NotificationSettingsScreen } from "../../features/notifications/public.ts";
 import { NotificationsHost } from "./NotificationsHost.tsx";
 import { SettingsPreview, ThemeCatalogPreview } from "../../features/settings/public.ts";
@@ -152,7 +150,6 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const developmentTools = services.developmentTools;
-  const keyboardVisible = useKeyboardVisible();
   const questionnaireStructureCaption = useQuestionnaireStructureCaption(services.questionnaire);
   const navigationTheme = useMemo(() => ({ ...DefaultTheme, dark: palette.tone === "dark", colors: {
     ...DefaultTheme.colors, primary: colors.accentInk, background: colors.canvas, card: colors.navigation,
@@ -161,9 +158,9 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
   return (
     <ClientsListNavigationProvider onOpen={openClientsList}>
     <NavigationContainer ref={navigationRef} theme={navigationTheme} onReady={onReady} initialState={initialBackup ? { index: 1, routes: [{ name: "Root" }, { name: "Backup" }] } : undefined}>
-      {/* `enabled`: отступ под клавиатуру действует, только пока она показана по событиям JS. Иначе при пропущенном событии скрытия
-          (клавиатура закрылась во время перехода между экранами) отступ «залипал» и нижняя панель повисала посреди экрана (UIX-FIT-11). */}
-      <KeyboardAvoidingView enabled={keyboardVisible} automaticOffset behavior="padding" style={{ flex: 1, backgroundColor: colors.canvas }}>
+      {/* Отступ под клавиатуру ведёт сам KAV. Попытка выключать его по событиям JS (`enabled`) откатана: при `enabled=false` анимированный стиль
+          перестаёт возвращать `paddingBottom`, и сбросится ли прежнее значение, по коду не доказано — можно получить тот же «залипший» отступ. */}
+      <KeyboardAvoidingView automaticOffset behavior="padding" style={{ flex: 1, backgroundColor: colors.canvas }}>
       <Stack.Navigator
         screenOptions={{
           // Единая шапка-карточка одной высоты (UI-OWN-035).

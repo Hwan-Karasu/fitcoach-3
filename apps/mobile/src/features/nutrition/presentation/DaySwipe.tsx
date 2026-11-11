@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, type ReactNode } from "react";
 import { StyleSheet } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { withSpring } from "react-native-reanimated";
+import Animated, { cancelAnimation, useSharedValue, withSpring } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { daySwipeOf, swipedDay, type DaySwipeDirection } from "../domain/DayNavigation.ts";
 import { useClientDay } from "./ClientDay.tsx";
@@ -25,10 +25,17 @@ export function DaySwipe({ children }: Readonly<{ children: ReactNode }>) {
     setDay(next);
     current.current = { day: next, today: current.current.today };
   }, [setDay, stripShift]);
+  // Положение ленты в начале жеста: новый свайп посреди слайда продолжает её с места, а не бросает к нулю.
+  const startShift = useSharedValue(0);
   const gesture = useMemo(() => Gesture.Pan().activeOffsetX([-24, 24]).failOffsetY([-14, 14])
+    .onBegin(() => {
+      "worklet";
+      cancelAnimation(stripShift);
+      startShift.value = stripShift.value;
+    })
     .onUpdate((event) => {
       "worklet";
-      stripShift.value = Math.min(1, Math.max(-1, event.translationX / STRIP_DRAG_SPAN));
+      stripShift.value = Math.min(1, Math.max(-1, startShift.value + event.translationX / STRIP_DRAG_SPAN));
     })
     .onEnd((event, success) => {
       "worklet";
@@ -40,7 +47,7 @@ export function DaySwipe({ children }: Readonly<{ children: ReactNode }>) {
     .onFinalize((_event, success) => {
       "worklet";
       if (!success) stripShift.value = withSpring(0, { damping: 24, stiffness: 340 });
-    }), [stripShift, handle]);
+    }), [stripShift, startShift, handle]);
   return (
     <GestureDetector gesture={gesture}>
       <Animated.View style={styles.fill}>{children}</Animated.View>
