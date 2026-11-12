@@ -8,7 +8,7 @@
 - Тесты: `training-snapshot-cache` (предзагруженный слот — один кадр, 0 чтений; холодный — несколько), `week-card-status` (удержание статусов). typecheck, lint, arch:check, source:verify, secrets:check PASS; test:foundation 1319/1319.
 - Найдено, не исправлено: в `test:foundation` (`package.json`) нет пробела между `scripts/health-resync.test.ts` и `scripts/visible-set-state.test.ts` — оба файла, вероятно, не запускаются.
 - **APK build63:** `artifacts/apk/athlete-diary-3.0.0-build63.apk`, versionCode 63, arm64-v8a, 71 501 122 байта, SHA-256 `4c69bf6575d2db1fa527f66a4a1a267612400b1af1164ff3f8c8b5e18d1d8db1`, подпись прежняя (`fac61745…3b9c`, apksigner). assembleRelease PASS (1 мин 31 с); бандл свежий (в нём `heldWeekStates`). Содержит PART-FLICKER-1, UIX-FIT-14, TEST-LIST-1. Схема БД не менялась — ставится поверх build62.
-- **Проверено владельцем на телефоне (build63, 12 ноября):** смена участника в дневнике — «абсолютно бесшовный переход»; причина мерцания по коду подтверждена результатом. Строка «таймер · Макс. · объём» (UIX-FIT-14) отдельно не подтверждена.
+- **Проверено владельцем на телефоне (build63, 12 ноября):** смена участника в дневнике — «абсолютно бесшовный переход»; причина мерцания по коду подтверждена результатом. Строка «таймер · Макс. · объём» (UIX-FIT-14) — «всё в порядке».
 
 ## 2026-11-12 — BODYFAT-ORDER-1: рисунки 6 и 7 процента жира по порядку
 
