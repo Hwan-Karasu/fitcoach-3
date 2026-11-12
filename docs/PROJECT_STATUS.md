@@ -1,5 +1,7 @@
 ## 2026-11-12 — WEEK-NAV-1: дневник не выходит к списку при смене недели другого типа (ADR-075)
 
+- **APK build61:** `artifacts/apk/athlete-diary-3.0.0-build61.apk`, versionCode 61, arm64-v8a, 73 513 466 байт, SHA-256 `29ed84e6a621d56af8c667115d1c96e5b7ca632b1bb18003ff8d0e2605e3e150`, подпись прежняя (`fac61745…3b9c`, apksigner). assembleRelease PASS. Схема БД не менялась — ставится поверх build60. **На телефон не ставился.**
+
 - **Причина (подтверждена тестом и ответом владельца):** у клиента тренировка недели 1 скопирована в 3/5/7, а в неделе 2 создана другая и скопирована в 4/6/8 — разное родство (`lineageId`). `getWorkoutWeekNavigation` для недель другого типа возвращал `workoutId: null`, и `WorkoutScreen.changeWeek` → `popTo("TrainingProgram")`. Так было задумано срезом T03; у второго клиента все недели — копии одной тренировки, поэтому у него работало.
 - **Исправление:** `correspondingWorkoutId` (`features/training/plans/domain/PeriodizedRules.ts`) — родство, иначе тот же номер тренировки в неделе, иначе последняя; `null` только для пустой недели. Применено в `DevTrainingPlansRepository.getWorkoutWeekNavigation`; порт и экран не менялись. Подсказки «прошлая неделя» не трогались.
 - Тесты: сценарий владельца (недели 1/3 — A, 2/4 — B) падал до правки (`[A, null, A, null]`), теперь `[A, B, A, B]`; таблица правил функции; T03 обновлён под новое правило. test:foundation 1317/1317, typecheck, lint, arch, source, secrets PASS.
