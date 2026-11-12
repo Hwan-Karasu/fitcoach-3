@@ -22,6 +22,23 @@ export function weekCardStates(weeks: readonly Readonly<{ index: number; workout
     week.workoutIds.length === 0 ? "EMPTY" : week.index === firstOpen ? "CURRENT" : own.get(week.index)!])) };
 }
 
+/** Последние показанные состояния ленты и число её недель. */
+export interface HeldWeekStates {
+  readonly count: number;
+  readonly states: ReadonlyMap<number, WeekCardState>;
+}
+
+/**
+ * Состояния ленты недель при смене участника (PART-FLICKER-1). Ответ о статусах пришёл (`ready`; ошибка чтения — тоже ответ, `fresh`
+ * тогда `null`) — его состояния. Ответа ещё нет — прежние состояния, если число недель то же: лента не мигает «без статуса».
+ * Держатся только статусы; номер и подпись недели экран всегда берёт новые. Другое число недель — без статусов.
+ */
+export function heldWeekStates(held: HeldWeekStates | null, count: number, fresh: ReadonlyMap<number, WeekCardState> | null,
+  ready: boolean): ReadonlyMap<number, WeekCardState> | null {
+  if (ready) return fresh;
+  return held !== null && held.count === count ? held.states : null;
+}
+
 /** Смысл цвета карточки недели; сам цвет подбирает экран по токенам темы. */
 export type WeekTone = "success" | "info" | "warning" | "accent" | "neutral";
 

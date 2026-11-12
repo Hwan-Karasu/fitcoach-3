@@ -94,6 +94,53 @@ test("real SQLite snapshots: warm 1→2→3→1 uses zero reads, ACK and plan ed
   } finally { await execution.close(); await plans.close(); await clients.close(); }
 });
 
+test("PART-FLICKER-1: предзагруженный слот другого участника открывается одним кадром, без «переключения»", async () => {
+  const db = new DatabaseSync(":memory:");
+  const port = nodeSqlitePort(db);
+  let reads = 0;
+  const shared = new SharedSqliteDatabase(async () => ({ ...port,
+    all: (sql, bindings) => { reads += 1; return port.all(sql, bindings); },
+    first: (sql, bindings) => { reads += 1; return port.first(sql, bindings); } }));
+  const clients = new DevClientRepository(shared, WS, []);
+  const plans = new DevTrainingPlansRepository(shared, WS);
+  const execution = new DevTrainingExecutionRepository(shared, WS);
+  await clients.initialize(); await plans.initialize(); await execution.initialize();
+  let renderer!: TestRenderer.ReactTestRenderer;
+  try {
+    const a = (await clients.create({ displayName: "Synthetic A" })).id;
+    const b = (await clients.create({ displayName: "Synthetic B" })).id;
+    const firstWeek = [{ id: "workout", title: "Workout", exercises: [{ id: "exercise", exerciseId: "sys:synthetic:bench",
+      restSec: 90, instruction: null, rir: null, sets: [{ id: "set", reps: 8, repsMax: null, loadGrams: null, durationSec: null, distanceM: null }] }] }];
+    const program = await plans.createProgram({ title: "Synthetic", kind: "PERIODIZED", clientIds: [a, b] });
+    await plans.createMesocycle(a, program.id, program.revision, { title: "Cycle", weeks: 2, firstWeek, clientIds: [a, b] });
+    const slot = async (clientId: string, weekIndex: number): Promise<WorkoutSlot> => ({ clientId, programId: program.id, weekIndex,
+      plannedWorkoutId: (await plans.getPeriodizedPlan(clientId, program.id))!.mesocycles[0]!.weeks[weekIndex - 1]!.workouts[0]!.id });
+    const [a1, b1, b2] = await Promise.all([slot(a, 1), slot(b, 1), slot(b, 2)]);
+    let latest!: ReturnType<typeof useWorkoutSnapshot>;
+    let commits = 0;
+    function Probe({ selected }: { selected: WorkoutSlot }) { latest = useWorkoutSnapshot(selected, plans, execution, 0); return null; }
+    const element = (selected: WorkoutSlot) => createElement(Profiler, { id: "snapshot", onRender: () => { commits += 1; } },
+      createElement(Probe, { selected }));
+    await act(async () => { renderer = TestRenderer.create(element(a1)); });
+    // Холодный переход (как сейчас): первый кадр показывает прежний снимок под новым слотом — экран «переключается».
+    commits = 0;
+    await act(async () => { renderer.update(element(b2)); });
+    assert.ok(commits > 1, "без предзагрузки новый слот догружается отдельным кадром");
+    await act(async () => { renderer.update(element(a1)); });
+    let ready = false;
+    await act(async () => { ready = await latest.preload(b1); });
+    assert.equal(ready, true);
+    reads = 0; commits = 0;
+    await act(async () => { renderer.update(element(b1)); });
+    assert.equal(commits, 1, "предзагруженный слот — один кадр, без промежуточного «переключения»");
+    assert.equal(reads, 0, "переход не читает базу");
+    assert.equal(latest.loadedKeyRef.current, latest.slotKeyRef.current);
+    assert.equal(latest.displayedSlot.clientId, b);
+    assert.equal(await latest.preload(b1), true, "повторная предзагрузка того же слота — из кэша");
+    await act(async () => { renderer.unmount(); });
+  } finally { await execution.close(); await plans.close(); await clients.close(); }
+});
+
 test("a new week's field is reconciled before commit, while pending edits of the same field are protected", async () => {
   let latest!: ReturnType<typeof useInputDraft>;
   const painted: string[] = [];

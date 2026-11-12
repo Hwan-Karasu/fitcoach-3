@@ -14,13 +14,14 @@ interface Snapshot {
   readonly mode: ConfirmationMode;
 }
 const CAPACITY = 12;
+const keyOf = (slot: WorkoutSlot) => JSON.stringify([slot.clientId, slot.programId, slot.weekIndex, slot.plannedWorkoutId]);
 
 /** Component-local, bounded snapshots. Cache hits are selected during render, without a loading effect/SQL. */
 export function useWorkoutSnapshot(slot: WorkoutSlot, plans: TrainingPlansRepositoryPort, execution: TrainingExecutionPort, version: number) {
   const { clientId, programId, weekIndex, plannedWorkoutId } = slot;
   const stableSlot = useMemo<WorkoutSlot>(() => ({ clientId, programId, weekIndex, plannedWorkoutId }),
     [clientId, programId, weekIndex, plannedWorkoutId]);
-  const slotKey = JSON.stringify([clientId, programId, weekIndex, plannedWorkoutId]);
+  const slotKey = keyOf(stableSlot);
   const slotKeyRef = useRef(slotKey); slotKeyRef.current = slotKey;
   const loadedKeyRef = useRef<string | null>(null);
   const visible = useRef<Snapshot | null>(null);
@@ -58,38 +59,51 @@ export function useWorkoutSnapshot(slot: WorkoutSlot, plans: TrainingPlansReposi
     return () => { offExecution(); offPlans(); };
   }, [cache, execution, plans]);
 
+  /** Один запрос снимка на слот: общий для показа и предзагрузки (`pending` склеивает повторные). */
+  const request = useCallback((target: WorkoutSlot): Promise<Snapshot | null> => {
+    const key = keyOf(target);
+    const running = cache.pending.get(key);
+    if (running !== undefined) return running.promise;
+    const endPlan = navigationPerformance.phase("plan");
+    const foundPromise = cache.plans.findWorkout(target.clientId, target.programId, target.plannedWorkoutId, target.weekIndex).finally(endPlan);
+    const loading = Promise.all([foundPromise,
+      cache.execution.getWorkoutWithPrevious(target, foundPromise.then((found) => found === null ? []
+        : previousWeekQueries(found.workout, found.previousWorkout ?? null))), cache.execution.getConfirmationMode()]);
+    const identity = { slot: target, promise: null as unknown as Promise<Snapshot | null> };
+    identity.promise = loading.then(([found, data, mode]) => {
+      if (cache.pending.get(key) !== identity) return null;
+      cache.pending.delete(key);
+      const snapshot: Snapshot = { key, slot: target, workout: found?.workout ?? null, state: data.current, previous: data.previous, mode };
+      put(snapshot); return snapshot;
+    }, (error: unknown) => {
+      if (cache.pending.get(key) === identity) cache.pending.delete(key);
+      throw error;
+    });
+    cache.pending.set(key, identity);
+    return identity.promise;
+  }, [cache, put]);
+  /**
+   * Загрузить слот заранее, не показывая его (PART-FLICKER-1): смена участника переключает экран, когда данные уже в кэше, —
+   * участник, неделя и значения меняются одним кадром, без приглушённого «переключения». `false` — не загрузилось или вытеснено.
+   */
+  const preload = useCallback(async (target: WorkoutSlot): Promise<boolean> => {
+    if (cache.entries.has(keyOf(target))) return true;
+    try { return (await request(target)) !== null; } catch { return false; }
+  }, [cache, request]);
+
   useEffect(() => {
     if (cache.entries.has(slotKey)) return undefined;
     let active = true;
     setFailureKey(null);
-    let request = cache.pending.get(slotKey);
-    if (request === undefined) {
-      const endPlan = navigationPerformance.phase("plan");
-      const foundPromise = plans.findWorkout(clientId, programId, plannedWorkoutId, weekIndex).finally(endPlan);
-      const loading = Promise.all([foundPromise,
-        execution.getWorkoutWithPrevious(stableSlot, foundPromise.then((found) => found === null ? []
-          : previousWeekQueries(found.workout, found.previousWorkout ?? null))), execution.getConfirmationMode()]);
-      const identity = { slot: stableSlot, promise: null as unknown as Promise<Snapshot | null> };
-      identity.promise = loading.then(([found, data, mode]) => {
-        if (cache.pending.get(slotKey) !== identity) return null;
-        cache.pending.delete(slotKey);
-        const snapshot: Snapshot = { key: slotKey, slot: stableSlot, workout: found?.workout ?? null,
-          state: data.current, previous: data.previous, mode };
-        put(snapshot); return snapshot;
-      }, (error: unknown) => {
-        if (cache.pending.get(slotKey) === identity) cache.pending.delete(slotKey);
-        throw error;
-      });
-      cache.pending.set(slotKey, identity); request = identity;
-    }
-    void request.promise.then((snapshot) => {
+    void request(stableSlot).then((snapshot) => {
       if (!active || snapshot === null) return;
       visible.current = snapshot; setMessageFor((old) => old?.key === slotKey ? null : old); render((value) => value + 1);
     }).catch(() => {
       if (active) { setFailureKey(slotKey); setMessageFor({ key: slotKey, text: "Не удалось открыть тренировку." }); }
     });
     return () => { active = false; };
-  }, [cache, clientId, execution, plannedWorkoutId, plans, programId, put, slotKey, stableSlot, version, weekIndex]);
+  // `plans`/`execution` — смена владельца базы сбрасывает кэш при рендере; эффект обязан перечитать слот у нового владельца.
+  }, [cache, execution, plans, request, slotKey, stableSlot, version]);
 
   const setState = useCallback((action: SetStateAction<WorkoutExecution | null>) => {
     const old = visible.current;
@@ -106,12 +120,11 @@ export function useWorkoutSnapshot(slot: WorkoutSlot, plans: TrainingPlansReposi
   }, [cache]);
   const setMessage = useCallback((text: string | null) => setMessageFor((old) => old?.key === slotKeyRef.current && old.text === text
     ? old : { key: slotKeyRef.current, text }), []);
-  const isCached = useCallback((target: WorkoutSlot) => cache.entries.has(JSON.stringify([
-    target.clientId, target.programId, target.weekIndex, target.plannedWorkoutId])), [cache]);
+  const isCached = useCallback((target: WorkoutSlot) => cache.entries.has(keyOf(target)), [cache]);
   const snapshot = visible.current;
   return { stableSlot, slotKey, slotKeyRef, loadedKey: hit?.key ?? null, loadedKeyRef,
     displayedSlot: snapshot?.slot ?? stableSlot, displayedKey: snapshot?.key ?? slotKey,
     workout: snapshot?.workout, state: snapshot?.state ?? null,
     setState, previous: snapshot?.previous ?? new Map<string, PreviousSet>(), mode: snapshot?.mode ?? null,
-    setMode, isCached, message: messageFor?.key === slotKey ? messageFor.text : null, setMessage, loadFailed: failureKey === slotKey };
+    setMode, isCached, preload, message: messageFor?.key === slotKey ? messageFor.text : null, setMessage, loadFailed: failureKey === slotKey };
 }

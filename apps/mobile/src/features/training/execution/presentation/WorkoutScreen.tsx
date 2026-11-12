@@ -35,8 +35,9 @@ import { workoutFactSummary } from "./workoutFactSummary.ts";
 import { WorkoutSharePoster } from "./WorkoutSharePoster.tsx";
 import { labeledPlan, labeledWithDrops } from "./shareFormat.ts";
 import { diaryDateChip, diaryFields, fieldHeaders, planText, rawOf, shortDate, weekCardLabels, weekCardMarkers, workoutStatusLabels } from "./setFormat.ts";
-import { weekCardStates, weekCardTone } from "../domain/WeekCardStatus.ts";
+import { heldWeekStates, weekCardStates, weekCardTone, type HeldWeekStates, type WeekCardState } from "../domain/WeekCardStatus.ts";
 import { statusToneColor } from "../../../../shared/ui/theme/statusTone.ts";
+import type { PaletteTokens } from "../../../../shared/ui/theme/resolver.ts";
 import { diaryTimeNote } from "../domain/DiaryTimeNote.ts";
 import { useWorkoutDiary, type SetPatch } from "./useWorkoutDiary.ts";
 import { PendingInputWrites } from "../domain/PendingInputWrites.ts";
@@ -75,6 +76,13 @@ function extraSetOf(fact: SetFact): PlannedSet {
 /** Заголовок колонки в одну строку: при нехватке места шрифт ужимается. */
 const oneLine = { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.7 } as const;
 
+/** Карточка недели ленты; без статусов (`null`) — только номер и подпись. */
+function weekCardOf(week: WorkoutWeekNavigation["weeks"][number], states: ReadonlyMap<number, WeekCardState> | null, colors: PaletteTokens) {
+  const state = states?.get(week.index);
+  return { index: week.index, caption: week.caption, ...(state === undefined ? {} : { status: weekCardLabels[state],
+    statusTone: statusToneColor(weekCardTone(state), colors), statusMarker: weekCardMarkers[state] }) };
+}
+
 /** Повторное чтение тех же статусов недель не должно перерисовывать весь дневник (INPUT-LAG-1). */
 const sameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
@@ -107,7 +115,9 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   /** «Обзор программы» и щипок — матрица недель (UI-OWN-037). */
   onOpenMatrix: () => void;
   /** UI-OWN-043: полоса участников группы; `finishInput` дописывает ввод перед переключением. */
-  renderParticipants?: (finishInput: () => Promise<boolean>, mesocycleId: string | null | undefined, loading: boolean) => ReactNode;
+  renderParticipants?: (finishInput: () => Promise<boolean>, mesocycleId: string | null | undefined, loading: boolean,
+    /** Загрузить тренировку участника заранее: экран переключается, когда данные уже есть (PART-FLICKER-1). */
+    preload: (slot: WorkoutSlot) => Promise<boolean>) => ReactNode;
   /** Каталог: добавить упражнения или (`replace`) заменить это. Результат приходит в `picked`. */
   onPickExercises: (replace?: string) => void;
   picked: PickedExercise | null;
@@ -244,7 +254,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const navigationCurrent = navigationOwner === `${slot.clientId}:${slot.programId}`
     && weekNavigation?.weeks.some((week) => week.workoutId === slot.plannedWorkoutId) === true;
   // Статусы тренировок программы для ленты недель: перечитываются после записей этой программы; чужая программа статусов не получает.
-  const [weekStatuses, setWeekStatuses] = useState<Readonly<{ key: string; statuses: readonly SessionStatus[] }> | null>(null);
+  /** `statuses: null` — чтение для этой программы не удалось (PART-FLICKER-1): ответ есть, статусов нет. */
+  const [weekStatuses, setWeekStatuses] = useState<Readonly<{ key: string; statuses: readonly SessionStatus[] | null }> | null>(null);
   useEffect(() => {
     let active = true;
     let request = 0;
@@ -253,7 +264,8 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
       const latest = ++request;
       void execution.getProgramStatuses(slot.clientId, slot.programId)
         .then((statuses) => { if (active && latest === request) setWeekStatuses((old) => old?.key === key && sameJson(old.statuses, statuses) ? old : { key, statuses }); })
-        .catch(() => undefined);
+        // Не прочиталось для другого участника — ответ «без статусов», иначе лента держала бы статусы прежнего; свои прежние остаются.
+        .catch(() => { if (active && latest === request) setWeekStatuses((old) => old?.key === key ? old : { key, statuses: null }); });
     };
     load();
     // Серия подходов — одно чтение статусов через паузу (WRITE-PATH-1), а не запрос на каждую запись.
@@ -376,13 +388,17 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   const previousWeek = weekNavigation?.weeks[currentWeek - 1];
   const nextWeek = weekNavigation?.weeks[currentWeek + 1];
   // Статус недели в ленте — как в панели программы; пока статусы этой программы не пришли, карточки без статуса.
+  // Последние показанные статусы ленты: при смене участника держатся, пока не пришёл ответ о его статусах (PART-FLICKER-1).
+  // Только статусы — номер и подпись недели всегда новые; ошибка чтения — тоже ответ (лента без статусов, а не чужие статусы).
+  const heldStates = useRef<HeldWeekStates | null>(null);
   const weekCards = useMemo(() => {
     if (weekNavigation === null) return [];
-    const states = weekStatuses?.key === `${slot.clientId}:${slot.programId}`
-      ? weekCardStates(weekNavigation.weeks, weekStatuses.statuses).states : null;
-    return weekNavigation.weeks.map((week) => ({ index: week.index, caption: week.caption,
-      ...(states === null ? {} : { status: weekCardLabels[states.get(week.index)!],
-        statusTone: statusToneColor(weekCardTone(states.get(week.index)!), colors), statusMarker: weekCardMarkers[states.get(week.index)!] }) }));
+    const ready = weekStatuses?.key === `${slot.clientId}:${slot.programId}`;
+    const fresh = ready && weekStatuses.statuses !== null ? weekCardStates(weekNavigation.weeks, weekStatuses.statuses).states : null;
+    const count = weekNavigation.weeks.length;
+    const states = heldWeekStates(heldStates.current, count, fresh, ready);
+    if (ready) heldStates.current = fresh === null ? null : { count, states: fresh };
+    return weekNavigation.weeks.map((week) => weekCardOf(week, states, colors));
   }, [colors, slot.clientId, slot.programId, weekNavigation, weekStatuses]);
   useWeekNavigation(weekNavigation === null ? null : { week: slot.weekIndex, busy,
     previous: previousWeek ? () => { void changeWeek(previousWeek.index); } : null,
@@ -444,7 +460,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
   };
 
   const participants = renderParticipants?.(finishInput, navigationCurrent ? weekNavigation?.mesocycleId : undefined,
-    diary.switching || diary.loadFailed || diary.workout === undefined || !navigationCurrent);
+    diary.switching || diary.loadFailed || diary.workout === undefined || !navigationCurrent, diary.preload);
   if (lookup === null && lookupState.failed) return <>{participants}<View style={[styles.center, { backgroundColor: colors.canvas }]}>
       <InlineNotice kind="error">Справочник упражнений не загрузился. Данные не изменены.</InlineNotice>
       <AppButton variant="secondary" label="Повторить" onPress={lookupState.retry} />

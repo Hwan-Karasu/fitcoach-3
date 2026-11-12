@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { SessionStatus, WorkoutStatus } from "../apps/mobile/src/features/training/execution/domain/ExecutionModel.ts";
-import { weekCardStates, weekCardTone } from "../apps/mobile/src/features/training/execution/domain/WeekCardStatus.ts";
+import { heldWeekStates, weekCardStates, weekCardTone } from "../apps/mobile/src/features/training/execution/domain/WeekCardStatus.ts";
 
 const status = (weekIndex: number, plannedWorkoutId: string, value: WorkoutStatus): SessionStatus => ({ weekIndex, plannedWorkoutId, status: value });
 const week = (index: number, ...workoutIds: string[]) => ({ index, workoutIds });
@@ -47,4 +47,15 @@ test("statuses of another week or another workout do not leak into the week", ()
 test("цвет состояния недели: зелёный, синий, янтарный, акцент; «не начата» и «пусто» не красятся", () => {
   assert.deepEqual((["COMPLETED", "IN_PROGRESS", "CLOSED_WITH_DEVIATIONS", "CURRENT", "NOT_STARTED", "EMPTY"] as const).map(weekCardTone),
     ["success", "info", "warning", "accent", "neutral", "neutral"]);
+});
+
+test("PART-FLICKER-1: пока статусы нового участника не пришли, держатся прежние статусы — только при том же числе недель", () => {
+  const old = new Map([[1, "COMPLETED"], [2, "CURRENT"], [3, "NOT_STARTED"]] as const);
+  const fresh = new Map([[1, "CURRENT"], [2, "NOT_STARTED"], [3, "NOT_STARTED"]] as const);
+  const held = { count: 3, states: old };
+  assert.equal(heldWeekStates(held, 3, null, false), old, "ответа ещё нет — прежние статусы, без мигания «без статуса»");
+  assert.equal(heldWeekStates(held, 3, fresh, true), fresh, "ответ пришёл — статусы нового участника");
+  assert.equal(heldWeekStates(held, 3, null, true), null, "чтение упало — без статусов, а не чужие статусы навсегда");
+  assert.equal(heldWeekStates(held, 2, null, false), null, "другое число недель — прежние статусы не подходят");
+  assert.equal(heldWeekStates(null, 3, null, false), null, "держать нечего");
 });

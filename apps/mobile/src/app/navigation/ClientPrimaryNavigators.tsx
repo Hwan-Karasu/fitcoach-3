@@ -464,7 +464,7 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
       <TrainingStack.Screen name="TrainingWorkout">
         {({ route, navigation }) => <><TabBarPending weeks dock /><Profiler id="TrainingWorkout" onRender={navigationPerformance.onRender}><WorkoutScreen slot={{ clientId: viewer, programId: route.params.programId, weekIndex: route.params.weekIndex,
           plannedWorkoutId: route.params.workoutId }} clientName={viewerName}
-          renderParticipants={(finishInput, mesocycleId, loading) => <ParticipantSwitcher docked clientId={viewer} anchorClientId={clientId} programId={route.params.programId}
+          renderParticipants={(finishInput, mesocycleId, loading, preload) => <ParticipantSwitcher docked clientId={viewer} anchorClientId={clientId} programId={route.params.programId}
             workoutId={route.params.workoutId} mesocycleId={mesocycleId}
             repository={repository} names={names} busy={switching || loading} onSelect={(next) => { void switchTo(next.clientId, async () => {
               navigationPerformance.begin("workout-participant");
@@ -477,6 +477,9 @@ export function TrainingNavigator({ clientId, clientName, clientEmoji, onOpenExe
                 ...(target.mesocycleId === null ? {} : { mesocycleId: target.mesocycleId }) };
               // Экран программы под дневником тоже переходит к этому участнику (как маршруты 2.0).
               const workoutId = target.workoutId;
+              // Тренировка участника грузится до переключения (PART-FLICKER-1): участник, неделя и значения меняются одним кадром,
+              // без приглушённого «переключения». Не загрузилась — переход как раньше (догрузка на экране), не блокируем.
+              if (workoutId !== null) await preload({ clientId: next.clientId, programId: target.programId, weekIndex: target.weekIndex, plannedWorkoutId: workoutId });
               return () => {
                 const program = navigation.getState().routes.findLast((item: { name: string }) => item.name === "TrainingProgram");
                 if (program !== undefined) navigation.dispatch({ ...CommonActions.setParams(context), source: program.key });
