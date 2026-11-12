@@ -1,3 +1,11 @@
+## 2026-11-12 — WEEK-NAV-1: дневник не выходит к списку при смене недели другого типа (ADR-075)
+
+- **Причина (подтверждена тестом и ответом владельца):** у клиента тренировка недели 1 скопирована в 3/5/7, а в неделе 2 создана другая и скопирована в 4/6/8 — разное родство (`lineageId`). `getWorkoutWeekNavigation` для недель другого типа возвращал `workoutId: null`, и `WorkoutScreen.changeWeek` → `popTo("TrainingProgram")`. Так было задумано срезом T03; у второго клиента все недели — копии одной тренировки, поэтому у него работало.
+- **Исправление:** `correspondingWorkoutId` (`features/training/plans/domain/PeriodizedRules.ts`) — родство, иначе тот же номер тренировки в неделе, иначе последняя; `null` только для пустой недели. Применено в `DevTrainingPlansRepository.getWorkoutWeekNavigation`; порт и экран не менялись. Подсказки «прошлая неделя» не трогались.
+- Тесты: сценарий владельца (недели 1/3 — A, 2/4 — B) падал до правки (`[A, null, A, null]`), теперь `[A, B, A, B]`; таблица правил функции; T03 обновлён под новое правило. test:foundation 1317/1317, typecheck, lint, arch, source, secrets PASS.
+- Техдолг: `npm run lint` в одной цепочке после других npm-команд иногда падает «No tsconfigRootDir … artifacts/r7-check» (1890 ошибок разбора); отдельный запуск чистый. Причина — старая копия проекта в `artifacts/r7-check`.
+- На телефоне не проверено.
+
 ## 2026-11-12 — UI-OWN-094: единый календарь AppCalendar вместо react-native-ui-datepicker
 
 - **APK build60:** `artifacts/apk/athlete-diary-3.0.0-build60.apk`, versionCode 60, arm64-v8a, 73 513 174 байта, SHA-256 `41e286b9173e3f0ab79ad17a4e5a8fe34585b9f8ba42316ea7248cdaa1e27af6`, подпись прежняя (`fac61745…3b9c`, apksigner). assembleRelease PASS. Схема БД не менялась — ставится поверх build59. **На телефон не ставился.**

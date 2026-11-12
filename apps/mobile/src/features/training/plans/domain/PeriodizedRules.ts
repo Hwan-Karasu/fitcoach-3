@@ -54,6 +54,19 @@ function cloneWorkout(workout: PlannedWorkout, newId: NewId): PlannedWorkout {
     exercises: workout.exercises.map((exercise) => cloneExercise(exercise, newId)) });
 }
 
+/**
+ * Какую тренировку недели открыть в дневнике при смене недели (WEEK-NAV-1, решение владельца 2026-11-12; пересматривает T03).
+ * Ровно одна тренировка того же родства — она; иначе (недели разного типа собраны из разных тренировок, родство не совпало или
+ * повторяется) — тренировка с тем же номером в неделе, а если их меньше — последняя. В неделе нет тренировок — `null` (открыть нечего).
+ */
+export function correspondingWorkoutId(targetWorkouts: readonly Readonly<{ id: string; lineageId?: string }>[], sourceLineage: string,
+  sourcePosition: number): string | null {
+  const related = targetWorkouts.filter((workout) => lineageOf(workout) === sourceLineage);
+  if (related.length === 1) return related[0]!.id;
+  if (targetWorkouts.length === 0) return null;
+  return targetWorkouts[Math.min(Math.max(0, sourcePosition), targetWorkouts.length - 1)]!.id;
+}
+
 /** Тренировки недели с явным родством (у новых — по ID). */
 export function withLineage(workouts: readonly PlannedWorkout[]): readonly PlannedWorkout[] {
   return workouts.map((workout) => ({ ...workout, lineageId: lineageOf(workout),

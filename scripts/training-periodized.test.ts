@@ -6,7 +6,7 @@ import { DevTrainingPlansRepository, devTrainingPlansClientDeletionParticipant }
   "../apps/mobile/src/features/training/plans/data/DevTrainingPlansRepository.ts";
 import { SharedSqliteDatabase } from "../apps/mobile/src/shared/db/SharedSqliteDatabase.ts";
 import { nodeSqlitePort } from "./support/node-sqlite-port.ts";
-import { applyWeekOps, diffWeek, newMesocycleWeeks, targetWeeks, copyWeeks } from
+import { applyWeekOps, correspondingWorkoutId, diffWeek, newMesocycleWeeks, targetWeeks, copyWeeks } from
   "../apps/mobile/src/features/training/plans/domain/PeriodizedRules.ts";
 import { addExercise, addWorkout, fillSets, newDraft, removeExercise, renameWorkout, reorderExercises, replaceExercise,
   setSetCount } from "../apps/mobile/src/features/training/plans/domain/SimplePlanEdits.ts";
@@ -209,7 +209,17 @@ test("T04 черновик недели изолирован, сохраняет
   } finally { await close(); }
 });
 
-test("T03 недели дневника: lineage только своего мезоцикла, отсутствие соответствия требует выбора", async () => {
+test("WEEK-NAV-1 соответствие тренировки в неделе: родство, иначе номер, иначе последняя; пустая неделя — null", () => {
+  const week = [{ id: "x1", lineageId: "L1" }, { id: "x2" }, { id: "x3", lineageId: "L3" }];
+  assert.equal(correspondingWorkoutId(week, "L3", 0), "x3", "родство важнее номера");
+  assert.equal(correspondingWorkoutId(week, "x2", 0), "x2", "у тренировки без lineageId родство — её ID");
+  assert.equal(correspondingWorkoutId(week, "other", 1), "x2", "родства нет — тот же номер");
+  assert.equal(correspondingWorkoutId(week, "other", 7), "x3", "номера нет — последняя");
+  assert.equal(correspondingWorkoutId([{ id: "d1", lineageId: "D" }, { id: "d2", lineageId: "D" }], "D", 1), "d2", "родство повторяется — по номеру");
+  assert.equal(correspondingWorkoutId([], "L1", 0), null);
+});
+
+test("T03 недели дневника: lineage только своего мезоцикла, без родства — тренировка того же номера (WEEK-NAV-1)", async () => {
   const { plans, a, b, programId, mesocycleId, close } = await sharedProgram();
   try {
     const plan = (await plans.getPeriodizedPlan(a.id, programId))!;
@@ -223,13 +233,42 @@ test("T03 недели дневника: lineage только своего ме�
     await plans.saveWeek(a.id, programId, plan.program.revision, { mesocycleId, weekIndex: 2,
       workouts: addExercise(newDraft("replacement-workout"), "replacement-workout", "replacement-e", BENCH, ids("replacement-s")).plan.workouts, type: "base", scope: "CURRENT", clientIds: [a.id] });
     const changed = (await plans.getWorkoutWeekNavigation(a.id, programId, source.id))!;
-    assert.equal(changed.weeks[1]!.workoutId, null, "нельзя молча открыть тренировку по позиции");
+    assert.equal(changed.weeks[1]!.workoutId, "replacement-workout", "WEEK-NAV-1: родства нет — та же по номеру тренировка недели, без выхода к списку");
     assert.equal(changed.weeks[2]!.workoutId, cycle.weeks[2]!.workouts[0]!.id);
     const simple = await plans.createSimpleProgram(a.id, { title: "Повтор", plan: { weeks: 3, workouts: firstWeek() } });
     const simpleNavigation = (await plans.getWorkoutWeekNavigation(a.id, simple.id, "w1"))!;
     assert.equal(simpleNavigation.mesocycleId, null);
     assert.deepEqual(simpleNavigation.weeks.map((week) => week.workoutId), ["w1", "w1", "w1"]);
     assert.deepEqual(simpleNavigation.weeks.map((week) => week.workoutIds), Array(3).fill(firstWeek().map((workout) => workout.id)));
+  } finally { await close(); }
+});
+
+test("WEEK-NAV-1 недели разного типа с разными тренировками: дневник листается по номеру тренировки, а не выходит к списку", async () => {
+  // Сценарий владельца 2026-11-12: тренировка A в неделях 1 и 3, другая тренировка B (своё родство) в неделях 2 и 4.
+  const { plans, a, programId, mesocycleId, close } = await sharedProgram();
+  try {
+    let plan = (await plans.getPeriodizedPlan(a.id, programId))!;
+    let revision = plan.program.revision;
+    for (const weekIndex of [2, 4]) {
+      revision = (await plans.saveWeek(a.id, programId, revision, { mesocycleId, weekIndex,
+        workouts: plan.mesocycles[0]!.weeks[weekIndex - 1]!.workouts, type: "medium", scope: "CURRENT", clientIds: [a.id] })).program.revision;
+    }
+    const typed = { program: { revision } };
+    const other = addExercise(newDraft("workout-b"), "workout-b", "b-e", ROW, ids("b-s")).plan.workouts;
+    const copyB = { mesocycleId, weekIndex: 2, workouts: other, type: "medium" as const, scope: "SAME_TYPE" as const, clientIds: [a.id] };
+    const preview = await plans.previewWeekEdit(a.id, programId, typed.program.revision, copyB);
+    await plans.saveWeek(a.id, programId, typed.program.revision, { ...copyB, replaceConflicts: preview.conflicts.map((item) => item.key) });
+    plan = (await plans.getPeriodizedPlan(a.id, programId))!;
+    const weeks = plan.mesocycles[0]!.weeks;
+    const [w1, w2, w3, w4] = weeks.map((week) => week.workouts);
+    assert.equal(w2!.length, 1);
+    assert.equal(w4!.length, 1);
+    assert.equal(w4![0]!.lineageId ?? w4![0]!.id, w2![0]!.lineageId ?? w2![0]!.id, "неделя 4 получила копию тренировки B");
+    assert.notEqual(w2![0]!.lineageId ?? w2![0]!.id, w1![0]!.lineageId ?? w1![0]!.id, "у A и B разное родство");
+    const fromA = (await plans.getWorkoutWeekNavigation(a.id, programId, w1![0]!.id))!;
+    assert.deepEqual(fromA.weeks.map((week) => week.workoutId), [w1![0]!.id, w2![0]!.id, w3![0]!.id, w4![0]!.id]);
+    const fromB = (await plans.getWorkoutWeekNavigation(a.id, programId, w2![0]!.id))!;
+    assert.deepEqual(fromB.weeks.map((week) => week.workoutId), [w1![0]!.id, w2![0]!.id, w3![0]!.id, w4![0]!.id]);
   } finally { await close(); }
 });
 

@@ -25,7 +25,7 @@ import { findCopy, readCopy } from "./MesocycleGroupStore.ts";
 import { deleteMemberMesocycles, insertMesocycle, readMesocycle, readMesocycles, saveSelection, selectedMesocycle, writeWeek } from "./PeriodizedStore.ts";
 import { MESOCYCLE_WEEKS_MAX, weekTypeLabels, type Mesocycle, type NewMesocycleInput, type NewPeriodizedProgramInput, type BuilderMesocycleInput, type PeriodizedPlan, type PlanWeek, type WeekEditInput,
   type WeekEditConflict, type WeekEditPreview, type WeekEditResult } from "../domain/PeriodizedModel.ts";
-import { copyWeeks, diffWeek, newMesocycleWeeks, opsNeedIds, targetWeeks, withLineage } from "../domain/PeriodizedRules.ts";
+import { copyWeeks, correspondingWorkoutId, diffWeek, newMesocycleWeeks, opsNeedIds, targetWeeks, withLineage } from "../domain/PeriodizedRules.ts";
 import { fillEmptyWeeks, type MesocycleSettings } from "../domain/MesocycleBuilder.ts";
 import { applyWithConflicts } from "../domain/WeekConflicts.ts";
 import type { PlannedWorkout } from "../domain/SimplePlanModel.ts";
@@ -702,14 +702,13 @@ export class DevTrainingPlansRepository implements TrainingPlansRepositoryPort {
     const plan = await this.getPeriodizedPlan(clientId, programId);
     const cycle = plan?.mesocycles.find((item) => item.weeks.some((week) => week.workouts.some((workout) => workout.id === plannedWorkoutId)));
     if (!cycle) return null;
-    const found = cycle.weeks.flatMap((week) => week.workouts).find((workout) => workout.id === plannedWorkoutId)!;
+    const own = cycle.weeks.find((week) => week.workouts.some((workout) => workout.id === plannedWorkoutId))!;
+    const position = own.workouts.findIndex((workout) => workout.id === plannedWorkoutId);
+    const found = own.workouts[position]!;
     const lineage = found.lineageId ?? found.id;
     return { programTitle: program.title, mesocycleId: cycle.id,
-      weeks: cycle.weeks.map((week) => {
-        const matches = week.workouts.filter((workout) => (workout.lineageId ?? workout.id) === lineage);
-        return { index: week.index, caption: weekTypeLabels[week.type], type: week.type, workoutId: matches.length === 1 ? matches[0]!.id : null,
-          workoutIds: week.workouts.map((workout) => workout.id) };
-      }) };
+      weeks: cycle.weeks.map((week) => ({ index: week.index, caption: weekTypeLabels[week.type], type: week.type,
+        workoutId: correspondingWorkoutId(week.workouts, lineage, position), workoutIds: week.workouts.map((workout) => workout.id) })) };
   }
 
   /** CAS по ревизии программы: структурная правка любого участника меняет ревизию общей программы. */

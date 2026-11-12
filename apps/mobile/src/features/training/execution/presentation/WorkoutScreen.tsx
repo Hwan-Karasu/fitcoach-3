@@ -357,7 +357,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
     setBusy(true);
     try {
       if (!await finishInput()) return;
-      // Без соответствующей тренировки — уход к списку недели (экран закрывается); иначе тот же экран, другая неделя.
+      // Тот же экран, другая неделя: тренировка того же родства или того же номера (WEEK-NAV-1); только в неделе без тренировок — уход к списку недели.
       openTarget();
     } finally { changingWeek.current = false; setBusy(false); }
   };
