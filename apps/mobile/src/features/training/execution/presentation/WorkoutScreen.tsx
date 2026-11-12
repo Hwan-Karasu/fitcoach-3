@@ -560,7 +560,7 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                 onPress={() => {
                   const current = state.session?.actualDate;
                   if (current === undefined) return;
-                  void pickDate({ value: current ?? localDateOf(new Date()), max: localDateOf(new Date()) }).then((date) => {
+                  void pickDate({ value: current ?? localDateOf(new Date()), profile: "pastDate", title: "Дата тренировки" }).then((date) => {
                     if (date !== null && date !== current) void diary.setActualDate(date);
                   });
                 }}

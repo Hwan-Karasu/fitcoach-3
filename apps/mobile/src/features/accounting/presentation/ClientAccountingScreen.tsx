@@ -216,7 +216,7 @@ export function ClientAccountingScreen({ clientId, repository, listCreditSession
               <AccountingSegments title="Для каких занятий" items={[{ id: GENERAL_SCOPE, label: "Любые платные" }, ...types.map((type) => ({ id: type.id, label: type.name }))]}
                 selected={packTypeId ?? GENERAL_SCOPE} disabled={busy} onSelect={(id) => setPackTypeId(id === GENERAL_SCOPE ? null : id)} />
               <AppButton variant="secondary" label={`Действует до: ${packExpires === "" ? "без срока" : packExpires.split("-").reverse().join(".")}`}
-                disabled={busy} onPress={() => { void pickDate({ value: packExpires || today(), title: "Действует до" }).then((date) => { if (date !== null) setPackExpires(date); }); }} />
+                disabled={busy} onPress={() => { void pickDate({ value: packExpires || today(), profile: "futureDate", title: "Действует до" }).then((date) => { if (date !== null) setPackExpires(date); }); }} />
               {packExpires !== "" ? <AppButton compact variant="ghost" label="Убрать срок действия" disabled={busy} onPress={() => setPackExpires("")} /> : null}
               <Text style={[styles.label, { color: colors.textPrimary }]}>Оплата пакета</Text>
               <AccountingSegments title="Оплата нового пакета" items={[{ id: "PAID", label: "Оплачен" }, { id: "UNPAID", label: "Без оплаты" }]}
@@ -226,7 +226,7 @@ export function ClientAccountingScreen({ clientId, repository, listCreditSession
                 <AccountingSegments title="Способ оплаты пакета" items={(Object.keys(methodLabels) as PaymentMethod[]).map((id) => ({ id, label: methodLabels[id] }))}
                   selected={packPaymentMethod} disabled={busy} onSelect={setPackPaymentMethod} />
                 <AppButton variant="secondary" label={`Дата оплаты: ${packPaymentDate.split("-").reverse().join(".")}`} disabled={busy}
-                  onPress={() => { void pickDate({ value: packPaymentDate, title: "Дата оплаты пакета" }).then((date) => { if (date !== null) setPackPaymentDate(date); }); }} />
+                  onPress={() => { void pickDate({ value: packPaymentDate, profile: "pastDate", title: "Дата оплаты пакета" }).then((date) => { if (date !== null) setPackPaymentDate(date); }); }} />
                 {typeof pricing.totalKopeks !== "number" || pricing.totalKopeks === 0 ? <Text style={[styles.hint, { color: colors.textSecondary }]}>Укажите стоимость пакета. При нулевой стоимости оплата не записывается.</Text> : null}
               </View> : null}
               {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}

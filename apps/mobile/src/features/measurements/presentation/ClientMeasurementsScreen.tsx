@@ -175,7 +175,7 @@ export function ClientMeasurementsScreen({ clientId, repository }: Readonly<{ cl
                 onChangeText={(time) => { if (draft !== null) setDraft({ ...draft, time }); }} /></View>
             </View>
             <AppButton compact size="small" variant="secondary" label={formatDate(draft?.date ?? today)} accessibilityLabel="Дата замера" disabled={busy}
-              onPress={() => { if (draft === null) return; void pickDate({ value: draft.date, max: today, title: "Дата замера" }).then((picked) => {
+              onPress={() => { if (draft === null) return; void pickDate({ value: draft.date, profile: "pastDate", title: "Дата замера" }).then((picked) => {
                 if (picked !== null) setDraft((current) => current === null ? null : { ...current, date: picked }); }); }} />
             <Text style={[styles.hint, { color: colors.textMuted }]}>Если время неизвестно, оставьте поле пустым.</Text>
           </ScrollView>

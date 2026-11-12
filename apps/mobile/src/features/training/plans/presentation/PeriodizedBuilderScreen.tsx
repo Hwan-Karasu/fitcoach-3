@@ -716,7 +716,7 @@ export function PeriodizedBuilderScreen({ clientId, programId, mesocycleId: init
             <View style={[styles.grow, styles.field]}>
               <Text style={[styles.label, { color: colors.textPrimary }]}>Дата старта</Text>
               <Pressable accessibilityRole="button" accessibilityLabel={`Дата старта ${shortDate(startDate)}. Изменить`}
-                onPress={() => { void pickDate({ value: startDate }).then((date) => { if (date !== null) { setStartDate(date); touch(); } }); }}
+                onPress={() => { void pickDate({ value: startDate, profile: "anyDate", title: "Дата старта" }).then((date) => { if (date !== null) { setStartDate(date); touch(); } }); }}
                 style={[styles.date, { borderColor: colors.border, backgroundColor: colors.input }]}>
                 <CalendarDays size={16} color={colors.accentInk} strokeWidth={2} />
                 <Text style={[styles.dateText, { color: colors.textPrimary }]}>{shortDate(startDate)}</Text>

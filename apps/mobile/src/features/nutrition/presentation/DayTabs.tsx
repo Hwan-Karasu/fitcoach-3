@@ -6,6 +6,7 @@ import { pickDate } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 import { CAROUSEL_RADIUS, carouselSlots } from "../domain/DayNavigation.ts";
+import type { NutritionDiaryPort } from "../domain/NutritionDiaryPort.ts";
 import { useClientDay } from "./ClientDay.tsx";
 import { dayTitle } from "./nutritionFormat.ts";
 
@@ -59,10 +60,16 @@ function Strip({ selected, today, shift, onSelect }: Readonly<{
  * под линией; ленту ведёт палец (свайп по содержимому, `DaySwipe`) или нажатие на соседний день, смена — плавный слайд на UI-потоке без перерисовки экрана.
  * Справа кнопка-календарь (системный выбор даты, UI-OWN-023): дальнюю дату выбирают в нём, лента встаёт на неё без слайда.
  */
-export function DayTabs() {
+export function DayTabs({ clientId, diary }: Readonly<{ clientId: string; diary: NutritionDiaryPort }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const { day, today, setDay, stripShift } = useClientDay();
+  // Точки на днях, где есть записи о еде (UI-OWN-094); без них календарь открывается как обычно.
+  const openCalendar = async () => {
+    const dates = await diary.listAccountedDates(clientId, "1920-01-01", "2036-12-31").catch(() => null);
+    const picked = await pickDate({ value: day, profile: "nutritionDay", title: "День дневника", markers: dates === null ? undefined : new Set(dates) });
+    if (picked !== null) setDay(picked);
+  };
   return (
     <View style={[styles.row, { borderBottomColor: colors.border }]} accessibilityRole="tablist">
       <View style={styles.carousel}>
@@ -70,7 +77,7 @@ export function DayTabs() {
         <View pointerEvents="none" style={[styles.underline, { backgroundColor: colors.accentFill }]} />
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel={`Выбрать дату в календаре. Сейчас ${dayTitle(day, today)}`}
-        onPress={() => { void pickDate({ value: day }).then((picked) => { if (picked !== null) setDay(picked); }); }} hitSlop={{ top: 4, bottom: 4 }} style={styles.calendar}>
+        onPress={() => { void openCalendar(); }} hitSlop={{ top: 4, bottom: 4 }} style={styles.calendar}>
         <CalendarDays size={20} color={colors.textSecondary} strokeWidth={2} />
       </Pressable>
     </View>

@@ -22,7 +22,7 @@ export function NutritionHomeScreen({ clientId, body, diary, targets, calc, meas
   const { palette } = usePrototypeTheme();
   return (
     <View style={{ flex: 1, backgroundColor: palette.tokens.canvas }}>
-      <DayTabs />
+      <DayTabs clientId={clientId} diary={diary} />
       <DaySwipe>
         <NutritionDiaryScreen key={clientId} clientId={clientId} diary={diary} targets={targets} body={body} calc={calc} measurements={measurements} onAdd={onAdd} onEditSource={onEditSource} />
       </DaySwipe>

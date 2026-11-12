@@ -11,13 +11,6 @@ import { formatHeightCmX10, parseHeightCmX10, validPastBirthDate } from
   "../domain/ClientProfileValidation.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
 
-/** Вчерашняя локальная дата `ГГГГ-ММ-ДД`: дата рождения — только в прошлом. */
-function yesterday(): string {
-  const day = new Date();
-  day.setDate(day.getDate() - 1);
-  return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
-}
-
 /** Плавная прокрутка к разделу: 300–700 мс с замедлением в конце, вместо мгновенного системного скролла. */
 const SCROLL_MIN_MS = 300;
 const SCROLL_MAX_MS = 700;
@@ -350,8 +343,7 @@ export function ClientEditorPreview({ onClose, onSave, onSaveDraft, onDiscardDra
             hint="Возраст вычисляется из даты."
             error={birthDateError ? "Проверьте дату рождения" : undefined}
             value={birthDate}
-            max={yesterday()}
-            startAt="1990-01-01"
+            profile="birthDate"
             pickerTitle="Дата рождения"
             onChange={(value) => { setBirthDate(value); setBirthDateError(false); setMessage(null); }}
           />

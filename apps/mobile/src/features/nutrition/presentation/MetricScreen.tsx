@@ -115,7 +115,7 @@ export function MetricScreen({ metric, clientId, body, diary, targets, calc, mea
   const goal = data?.goal ?? null;
   const unitText = metric === "meals" ? "приёмов" : info.unit;
 
-  const navigator = scale === "DAY" ? <DayTabs /> : (
+  const navigator = scale === "DAY" ? <DayTabs clientId={clientId} diary={diary} /> : (
     <View style={styles.navigator}>
       <Pressable accessibilityRole="button" accessibilityLabel="Предыдущий период" onPress={() => stepPeriod(-1)} style={[styles.arrow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <ChevronLeft size={22} color={colors.textPrimary} />

@@ -305,7 +305,7 @@ export function MeasurementsCard({ clientId, repository, onOpenJournal, compact 
         <View style={styles.editorDateRow}>
           <Text style={[styles.editorHint, styles.grow, { color: colors.textSecondary }]}>Все обхваты — в см. Пустое поле при исправлении удаляет значение. Левую и правую сторону можно вносить отдельно.</Text>
           <AppButton compact size="small" variant="secondary" label={editor === null ? "Дата" : shortDate(editor.date)} accessibilityLabel={editor === null ? "Дата замеров" : `Дата замеров: ${formatDate(editor.date)}`} disabled={busy}
-            onPress={() => { void pickDate({ value: editor?.date ?? localDateOf(new Date()), title: "Дата замеров" }).then((picked) => { if (picked !== null && editor !== null) setEditor({ ...editor, date: picked }); }); }} />
+            onPress={() => { void pickDate({ value: editor?.date ?? localDateOf(new Date()), profile: "pastDate", title: "Дата замеров" }).then((picked) => { if (picked !== null && editor !== null) setEditor({ ...editor, date: picked }); }); }} />
         </View>
         {error !== null ? <InlineNotice kind="error">{error}</InlineNotice> : null}
         <View style={[styles.editorCard, { backgroundColor: colors.surface }]}>

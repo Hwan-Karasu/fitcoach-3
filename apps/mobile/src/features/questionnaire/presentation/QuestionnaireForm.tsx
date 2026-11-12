@@ -6,7 +6,6 @@ import type { QuestionField, QuestionnaireSchema } from "../domain/Questionnaire
 import { formatDateInput, isFieldVisible, parseDateInput } from "../domain/QuestionnaireRules.ts";
 import { answersFromInputs, type FormInputs, type InputValue } from "./questionnaireInputs.ts";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
-import { localDateText } from "../../../shared/domain/LocalDate.ts";
 
 
 const requiredNote = "* Обязательно для завершения анкеты. Карточку клиента можно сохранить и заполнить позже.";
@@ -40,7 +39,7 @@ export function QuestionnaireForm({ schema, inputs, errors, onChange, disabled =
       return (
         <View key={entry.id} style={styles.field}>
           <DateField label={label} value={typeof parsed === "string" ? parsed : ""} disabled={disabled} hint={entry.help ?? undefined}
-            max={entry.constraints?.notFuture === true ? localDateText() : undefined}
+            profile={entry.constraints?.notFuture === true ? "pastDate" : "anyDate"}
             error={error} onChange={(iso) => onChange(entry.id, iso === "" ? undefined : formatDateInput(iso))} />
         </View>
       );

@@ -334,7 +334,7 @@ export function AppointmentEditorScreen({ repository, participants, credit, appo
         <AppButton compact size="small" variant="ghost" label="‹" accessibilityLabel="Предыдущий день" disabled={!editable || busy}
           onPress={() => setDate(addDays(date, -1))} />
         <Pressable accessibilityRole="button" accessibilityLabel={`Дата: ${dayTitle(date)}. Изменить`} disabled={!editable || busy}
-          onPress={() => { void pickDate({ value: date }).then((picked) => { if (picked !== null) setDate(picked); }); }}
+          onPress={() => { void pickDate({ value: date, profile: "anyDate", title: "Дата записи" }).then((picked) => { if (picked !== null) setDate(picked); }); }}
           style={[styles.pill, { backgroundColor: colors.surfaceRaised, opacity: !editable || busy ? 0.5 : 1 }]}>
           <CalendarDays size={16} color={colors.accentInk} strokeWidth={2} />
           <Text numberOfLines={1} style={[styles.pillText, { color: colors.textPrimary }]}>{dayTitle(date)}</Text>

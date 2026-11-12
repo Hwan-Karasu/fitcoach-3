@@ -237,7 +237,7 @@ export function ClientWorkspaceNavigator({ clientId, repository, accounting, mea
       screenOptions={{ headerShown: false, tabBarStyle: { height: 0 }, sceneStyle: { backgroundColor: colors.canvas } }}
     >
       <Tabs.Screen name="Home" options={{ tabBarLabel: workspaceTabs.Home, tabBarAccessibilityLabel: workspaceTabs.Home }}>
-        {({ navigation }) => <HomeNavigator client={client} accounting={accounting} daySlot={<DayTabs />} onClose={onClose} onOpenClients={onOpenClients} onOpenEdit={() => onOpenEdit(client.id)}
+        {({ navigation }) => <HomeNavigator client={client} accounting={accounting} daySlot={<DayTabs clientId={client.id} diary={nutrition.diary} />} onClose={onClose} onOpenClients={onOpenClients} onOpenEdit={() => onOpenEdit(client.id)}
           renderNutritionSlot={({ openMetric, openWeightStats }) => <NutritionHomeCards key={client.id} clientId={client.id} body={calcBody} trainedToday={trainedToday} workoutsThisWeek={workoutsThisWeek} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements}
             onOpenMetric={openMetric} onOpenWeightStats={openWeightStats} health={{ store: health.store, platform: health.platform, linked: healthLinkedHere, sync: health.sync }} onOpenHealth={() => onOpenEdit(client.id)} onSaveProfile={saveCalcProfile} onOpenJournal={() => onOpenMeasurements(client.id)} />}
           renderMetric={(metric) => <MetricScreen key={`${client.id}:${metric}`} metric={metric} clientId={client.id} body={calcBody} diary={nutrition.diary} targets={nutrition.targets} calc={nutrition.calc} measurements={measurements} health={{ store: health.store, linked: healthLinkedHere }}

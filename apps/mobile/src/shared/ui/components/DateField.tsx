@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { CalendarDays, X } from "lucide-react-native";
 import { usePrototypeTheme } from "../theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../theme/typography.ts";
+import type { CalendarProfileId } from "./calendar/calendarProfiles.ts";
 import { pickDate } from "./pickDate.ts";
 
 /** `YYYY-MM-DD` → «ДД.ММ.ГГГГ»; пусто или не дата — пустая строка. */
@@ -10,11 +11,12 @@ export function dateLabel(iso: string): string {
 }
 
 /**
- * Поле даты (UI-OWN-023): нажатие открывает системный календарь Android, ручного ввода нет. Значение — локальная дата
+ * Поле даты (UI-OWN-023, UI-OWN-094): нажатие открывает единый календарь приложения; что в нём включено (год, ввод цифрами, границы), задаёт
+ * `profile`. Значение — локальная дата
  * `YYYY-MM-DD` или пустая строка; крестик сбрасывает необязательную дату.
  */
 export function DateField({ label, value, onChange, placeholder = "Выберите дату", hint, error, required = false, disabled = false,
-  min, max, startAt, pickerTitle }: Readonly<{
+  min, max, startAt, pickerTitle, profile }: Readonly<{
   label: string;
   value: string;
   onChange: (iso: string) => void;
@@ -28,12 +30,14 @@ export function DateField({ label, value, onChange, placeholder = "Выбери�
   /** С какой даты открыть календарь, пока значения нет. */
   startAt?: string;
   pickerTitle?: string;
+  /** Готовый набор настроек календаря под задачу (дата рождения, прошедшая дата и т. д.); `min`/`max` его перекрывают. */
+  profile?: CalendarProfileId;
 }>) {
   const { palette } = usePrototypeTheme();
   const colors = palette.tokens;
   const shown = dateLabel(value);
   const open = () => {
-    void pickDate({ value: shown === "" ? startAt ?? max ?? new Date().toISOString().slice(0, 10) : value, min, max, title: pickerTitle ?? label })
+    void pickDate({ value: shown === "" ? null : value, startAt, profile, min, max, title: pickerTitle ?? label })
       .then((picked) => { if (picked !== null) onChange(picked); });
   };
   const helpText = error ?? hint;
