@@ -3,6 +3,7 @@
 Прежняя версия — `archive/progress-before-bkp-audit-2026-11-11.md`.
 
 ## Сделано
+- **PART-FLICKER-1 / UIX-FIT-14 (12 ноября):** см. `activeContext.md`; test:foundation 1319/1319. Техдолг: нет таймаута у `preload` (`app/navigation/ClientPrimaryNavigators.tsx`, ветка дневника — при зависании SQLite полоса участников занята); в `package.json` `test:foundation` склеены `scripts/health-resync.test.ts` и `scripts/visible-set-state.test.ts` (нет пробела — оба, вероятно, не запускаются).
 - **WEEK-NAV-1 (12 ноября, ADR-075):** смена недели в дневнике без выхода к списку; тесты в `training-periodized.test.ts`; test:foundation 1317/1317. Техдолг: `npm run lint` в цепочке иногда видит `artifacts/r7-check` (отдельный запуск чистый).
 - **CAL-1 (12 ноября, UI-OWN-094):** единый календарь вместо библиотеки, 10 мест вызова на профилях, точки питания, тест `calendar-rules.test.ts` (10), test:foundation 1315/1315. На телефоне не проверено. Техдолг: время открытия листа (1404 страницы-месяца) не измерено; `MetricScreen`/`PeriodPill` держат свои быстрые периоды отдельно от календаря.
 - **ICONS-1 (12 ноября, UI-OWN-093):** значки оборудования владельца, плитки одной высоты, каталог упражнений в боковом меню, build59. Тест `apps/mobile/scripts/equipment-glyphs.test.ts`; test:foundation 1307/1307. На телефоне не проверено. Техдолг: время отрисовки 60 плиток на телефоне не измерено; у фитбола, каната, скамьи, канатов прежние значки (в папке нет подходящих файлов).
