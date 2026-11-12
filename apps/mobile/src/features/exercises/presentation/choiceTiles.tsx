@@ -37,8 +37,8 @@ export function OptionTile({ icon, label, count, selected, onPress, compact = fa
       onPress={onPress} style={({ pressed }) => [styles.tile, compact ? styles.tileCompact : null, {
         borderColor: selected ? colors.accentInk : colors.border, borderWidth: selected ? 2 : 1,
         backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: dimWhenEmpty ? faded(count, selected) : 1 }]}>
-      <View style={[styles.tileIcon, compact ? styles.tileIconCompact : null]}>{icon(selected ? colors.accentInk : colors.textSecondary)}</View>
-      <Text numberOfLines={2} style={[styles.tileLabel, { color: selected ? colors.accentInk : colors.textPrimary }]}>{label}</Text>
+      <View style={compact ? styles.tileIconCompact : styles.tileIcon}>{icon(selected ? colors.accentInk : colors.textSecondary)}</View>
+      <Text numberOfLines={2} adjustsFontSizeToFit={compact} minimumFontScale={0.8} style={[styles.tileLabel, compact ? styles.tileLabelCompact : null, { color: selected ? colors.accentInk : colors.textPrimary }]}>{label}</Text>
       {count !== undefined ? <Text style={[styles.count, { color: colors.textMuted }]}>{count}</Text> : null}
       {selected ? <View style={[styles.tileCheck, { backgroundColor: colors.accentFill }]}>
         <Check size={12} color={colors.onAccentFill} strokeWidth={3} />
@@ -78,9 +78,11 @@ const styles = StyleSheet.create({
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tile: { width: "31.6%", minHeight: 136, borderRadius: 12, alignItems: "center", paddingTop: 8, paddingBottom: 8, paddingHorizontal: 4, gap: 2 },
   tileIcon: { height: 86, alignItems: "center", justifyContent: "center" },
-  tileCompact: { minHeight: 84, paddingTop: 6, paddingBottom: 6 },
-  tileIconCompact: { height: 36 },
+  // Оборудование: все плитки одной высоты; подпись — блок на 2 строки, весь остаток занимает значок.
+  tileCompact: { height: 136, minHeight: 136, paddingTop: 6, paddingBottom: 6 },
+  tileIconCompact: { flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center" },
   tileLabel: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 15, textAlign: "center" },
+  tileLabelCompact: { fontSize: 11, lineHeight: 14, height: 28, textAlignVertical: "center" },
   count: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
   tileCheck: { position: "absolute", top: 6, right: 6, width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   profileTile: { width: "31.6%", minHeight: 74, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 8, gap: 6, justifyContent: "space-between" },

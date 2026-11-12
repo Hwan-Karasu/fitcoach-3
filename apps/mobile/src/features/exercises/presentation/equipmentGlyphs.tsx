@@ -1,9 +1,11 @@
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import Svg, { Circle, Path, Rect, SvgXml } from "react-native-svg";
 import { approvedEquipmentGlyphs } from "./approvedEquipmentGlyphs.generated.ts";
 
 /**
- * Значки оборудования (UI-OWN-031). Основа — открытые наборы IconOven (© Appic Marketing, iconoven.com) и
+ * Значки оборудования. Основной источник (UI-OWN-093) — векторы владельца из папки SVG: `approvedEquipmentGlyphs.generated.ts`,
+ * собирается `npm run equipment:prepare`; значок красится темой (`currentColor`). Прежние (UI-OWN-031), ниже, остаются там, где
+ * файла нет или он нарисован другим оборудованием (фитбол, канат, скамья, канаты). Основа прежних — открытые наборы IconOven (© Appic Marketing, iconoven.com) и
  * Huge Icons (© Hugeicons), оба MIT, получены через Iconify; сгенерировано скриптом, правка — заменой SVG.
  * Чего в наборах нет (брусья, TRX, тумба, ролик, гребной, велотренажёр, сани, слэмбол), — свои значки в том же
  * стиле: сетка 24, линия 1,5, скруглённые концы. Узкие тренажёры — общий значок «тренажёр».
@@ -56,7 +58,13 @@ const aliases: Readonly<Record<string, string>> = {
   air_bike: "stationary_bike", ski_erg: "cable", trap_bar: "barbell", wrist_roller: "ab_wheel", hack_squat: "leg_press",
 };
 
-export function EquipmentGlyph({ id, color, size = 24 }: Readonly<{ id: string; color: string; size?: number }>) {
+/**
+ * Размер значка на плитке оборудования (UI-OWN-093). Плитка 136 dp: значок занимает остаток над подписью на две строки
+ * (136 − 12 отступов − 28 подпись − 16 число − 4 промежутки ≈ 76); 72 помещается и в плитку без числа (редактор).
+ */
+export const EQUIPMENT_TILE_GLYPH_SIZE = 72;
+
+export const EquipmentGlyph = memo(function EquipmentGlyph({ id, color, size = 24 }: Readonly<{ id: string; color: string; size?: number }>) {
   const approved = approvedEquipmentGlyphs[id];
   if (approved !== undefined) return <SvgXml xml={approved.split("currentColor").join(color)} width={size} height={size} />;
   const key = aliases[id] ?? id;
@@ -70,4 +78,4 @@ export function EquipmentGlyph({ id, color, size = 24 }: Readonly<{ id: string; 
   }
   const body = (xml ?? library.machine!).split("currentColor").join(color);
   return <SvgXml xml={`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${body}</svg>`} width={size} height={size} />;
-}
+});

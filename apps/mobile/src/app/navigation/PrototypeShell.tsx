@@ -174,6 +174,7 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
         <Stack.Screen name="Root" options={{ headerShown: false }}>
           {({ navigation }) => (
             <RootTabs
+              onOpenExerciseCatalog={() => navigation.navigate("ExerciseCatalog")}
               onOpenSettings={() => navigation.navigate("Settings")}
               onOpenAppearance={() => navigation.navigate("Appearance")}
               onOpenNotificationSettings={() => navigation.navigate("NotificationSettings")}
@@ -204,7 +205,6 @@ function ShellNavigator({ services, clientLists, rosterOverview, manualBackup, r
               onOpenNotificationSettings={() => navigation.navigate("NotificationSettings")}
               onOpenClientRosterSettings={() => navigation.navigate("ClientRosterSettings")}
               onOpenQuestionnaireBuilder={() => navigation.navigate("QuestionnaireBuilder")}
-              onOpenExerciseCatalog={() => navigation.navigate("ExerciseCatalog")}
               onOpenTrainingSettings={() => navigation.navigate("TrainingSettings")}
               onOpenBackup={() => navigation.navigate("Backup")}
               questionnaireCaption={questionnaireStructureCaption}

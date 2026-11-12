@@ -11,7 +11,7 @@ import { bodyPartLabel, bodyPartLabels, equipmentLabel, exerciseEquipmentLabel, 
 import { BODY_PARTS, TRACKING_PROFILE_IDS } from "../domain/ExerciseModel.ts";
 import { displayNameOf, filterCatalog, filterOptionCounts, NO_FILTERS, type CatalogEntry, type CatalogFilters,
   type CatalogMode } from "../domain/ExerciseRules.ts";
-import { EquipmentGlyph } from "./equipmentGlyphs.tsx";
+import { EQUIPMENT_TILE_GLYPH_SIZE, EquipmentGlyph } from "./equipmentGlyphs.tsx";
 import { BodyPartIcon } from "./exerciseIcons.tsx";
 import { OptionTile, profileExamples, ProfileTile } from "./choiceTiles.tsx";
 import { thumbnailOf } from "./exerciseImage.ts";
@@ -306,7 +306,7 @@ export function ExerciseLibraryScreen({ repository, onOpen, onPick, onCreate, pi
         <SearchField query={equipmentQuery} onChangeQuery={setEquipmentQuery} placeholder="Поиск оборудования" accessibilityLabel="Поиск оборудования" />
         {equipmentOptions.length === 0 ? <Text style={{ color: colors.textSecondary }}>Оборудование не найдено. Измените запрос.</Text> : null}
         <View style={styles.optionWrap}>
-        {equipmentOptions.map((item) => <OptionTile key={item} compact dimWhenEmpty={false} icon={(color) => <EquipmentGlyph id={item} color={color} size={36} />} label={equipmentFilterLabel(item)} count={optionCounts.get(item) ?? 0}
+        {equipmentOptions.map((item) => <OptionTile key={item} compact dimWhenEmpty={false} icon={(color) => <EquipmentGlyph id={item} color={color} size={EQUIPMENT_TILE_GLYPH_SIZE} />} label={equipmentFilterLabel(item)} count={optionCounts.get(item) ?? 0}
           selected={filters.equipment.has(item)} onPress={() => setFilters({ ...filters, equipment: toggled(filters.equipment, item) })} />)}
         </View>
         </> : <>

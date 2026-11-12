@@ -24,6 +24,7 @@ type RootTabRoutes = {
 };
 
 interface RootTabsProps {
+  readonly onOpenExerciseCatalog: () => void;
   readonly onOpenSettings: () => void;
   readonly onOpenAppearance: () => void;
   readonly onOpenNotificationSettings: () => void;
@@ -48,6 +49,7 @@ function countBadge(count: number | null): string | undefined {
 }
 
 export function RootTabs({
+  onOpenExerciseCatalog,
   onOpenSettings,
   onOpenAppearance,
   onOpenNotificationSettings,
@@ -138,6 +140,7 @@ export function RootTabs({
         visible={menuVisible}
         returnFocusTo={menuButtonRef}
         onClose={() => setMenuVisible(false)}
+        onOpenExerciseCatalog={onOpenExerciseCatalog}
         onOpenSettings={onOpenSettings}
         onOpenAppearance={onOpenAppearance}
         onOpenNotificationSettings={onOpenNotificationSettings}

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { AccessibilityInfo, Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, View, findNodeHandle,
   useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Bell, ChevronRight, Palette, SlidersHorizontal, X, type LucideIcon } from "lucide-react-native";
+import { Bell, ChevronRight, Dumbbell, Palette, SlidersHorizontal, X, type LucideIcon } from "lucide-react-native";
 import { AppIconButton, BrandMark } from "../../../shared/ui/components/public.ts";
 import { usePrototypeTheme } from "../../../shared/ui/theme/PrototypeThemeProvider.tsx";
 import { fonts } from "../../../shared/ui/theme/typography.ts";
@@ -12,6 +12,7 @@ interface SettingsDrawerPreviewProps {
   readonly visible: boolean;
   readonly returnFocusTo: RefObject<View | null>;
   readonly onClose: () => void;
+  readonly onOpenExerciseCatalog: () => void;
   readonly onOpenSettings: () => void;
   readonly onOpenAppearance: () => void;
   readonly onOpenNotificationSettings: () => void;
@@ -50,6 +51,7 @@ export function SettingsDrawerPreview({
   visible,
   returnFocusTo,
   onClose,
+  onOpenExerciseCatalog,
   onOpenSettings,
   onOpenAppearance,
   onOpenNotificationSettings,
@@ -136,6 +138,7 @@ export function SettingsDrawerPreview({
               <AppIconButton icon={<X size={20} color={colors.iconPrimary} />} label="Закрыть меню" onPress={dismiss} />
             </View>
             <Text style={[styles.groupLabel, { color: colors.textSecondary }]}>Меню</Text>
+            <DrawerLink icon={Dumbbell} title="Каталог упражнений" detail="Поиск, фильтры и свои упражнения" onPress={() => open(onOpenExerciseCatalog)} />
             <DrawerLink icon={Palette} title="Оформление" detail="Темы и акценты" onPress={() => open(onOpenAppearance)} />
             <DrawerLink icon={SlidersHorizontal} title="Настройки" detail="Параметры приложения" onPress={() => open(onOpenSettings)} />
             <DrawerLink icon={Bell} title="Уведомления" detail="Напоминания и тихие часы" onPress={() => open(onOpenNotificationSettings)} />

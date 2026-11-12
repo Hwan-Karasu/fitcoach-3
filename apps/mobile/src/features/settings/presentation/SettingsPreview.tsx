@@ -1,4 +1,4 @@
-import { Bell, ClipboardList, DatabaseBackup, Dumbbell, Palette, SlidersHorizontal, Users } from "lucide-react-native";
+import { Bell, ClipboardList, DatabaseBackup, Palette, SlidersHorizontal, Users } from "lucide-react-native";
 import { SettingsGroup, SettingsRow } from "../../../shared/ui/components/public.ts";
 import { PrototypeScreen, SectionHeading } from "../../../shared/ui/prototype/ScreenPieces.tsx";
 import { CLIENT_START_SECTIONS } from "../../../shared/domain/ClientCardPreference.ts";
@@ -13,12 +13,11 @@ export function SettingsPreview({
   onOpenNotificationSettings,
   onOpenClientRosterSettings,
   onOpenQuestionnaireBuilder,
-  onOpenExerciseCatalog,
   onOpenTrainingSettings,
   onOpenBackup,
   questionnaireCaption,
 }: Readonly<{ onOpenAppearance: () => void; onOpenNotificationSettings: () => void;
-  onOpenClientRosterSettings: () => void; onOpenQuestionnaireBuilder: () => void; onOpenExerciseCatalog: () => void;
+  onOpenClientRosterSettings: () => void; onOpenQuestionnaireBuilder: () => void;
   onOpenTrainingSettings: () => void; onOpenBackup: () => void;
   /** «Версия 3 · 5 разделов» — текущая опубликованная анкета. */
   questionnaireCaption?: string | null }>) {
@@ -35,7 +34,6 @@ export function SettingsPreview({
       <SettingsGroup>
         <SettingsRow icon={Users} title="Список и карточки клиентов" caption={`Начало: ${startLabel} · плиток ${clientCards.metricIds.length} из 4`} onPress={onOpenClientRosterSettings} />
         <SettingsRow icon={ClipboardList} title="Конструктор анкеты" caption={questionnaire ?? "Разделы, вопросы, предпросмотр и публикация версий"} captionMuted={questionnaire === null} onPress={onOpenQuestionnaireBuilder} />
-        <SettingsRow icon={Dumbbell} title="Каталог упражнений" caption="Поиск, фильтры, избранное и свои упражнения" captionMuted onPress={onOpenExerciseCatalog} />
         <SettingsRow icon={SlidersHorizontal} title="Тренировки" caption="Как засчитывать подход: автоматически или галочкой" captionMuted onPress={onOpenTrainingSettings} />
         <SettingsRow icon={Bell} title="Уведомления" caption="Напоминания, тихие часы и история" captionMuted last onPress={onOpenNotificationSettings} />
       </SettingsGroup>

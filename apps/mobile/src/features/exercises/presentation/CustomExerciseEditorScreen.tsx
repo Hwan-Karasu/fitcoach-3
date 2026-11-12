@@ -8,7 +8,7 @@ import { bodyPartLabels, equipmentLabel, trackingProfileLabels } from "../domain
 import { BODY_PARTS, TRACKING_PROFILE_IDS, type BodyPart, type TrackingProfileId } from "../domain/ExerciseModel.ts";
 import { EXERCISE_NAME_MAX } from "../domain/ExerciseRules.ts";
 import { OptionTile, profileExamples, ProfileTile, TileGrid } from "./choiceTiles.tsx";
-import { EquipmentGlyph } from "./equipmentGlyphs.tsx";
+import { EQUIPMENT_TILE_GLYPH_SIZE, EquipmentGlyph } from "./equipmentGlyphs.tsx";
 import { BodyPartIcon } from "./exerciseIcons.tsx";
 import { equipmentFilterLabel } from "./ExerciseLibraryScreen.tsx";
 import { equipmentChoices } from "../domain/EquipmentSearch.ts";
@@ -109,7 +109,7 @@ export function CustomExerciseEditorScreen({ exerciseId, initialName, repository
       {equipmentOptions.length === 0 ? <Text style={{ color: colors.textSecondary }}>Оборудование не найдено. Измените запрос.</Text> : null}
       <TileGrid>
         {(allEquipment || equipmentQuery.trim() ? equipmentOptions : equipmentOptions.filter((item, index) => index < 12 || item === equipment)).map((item) => <OptionTile key={item} radio compact label={equipmentFilterLabel(item)}
-          icon={(color) => <EquipmentGlyph id={item} color={color} size={36} />}
+          icon={(color) => <EquipmentGlyph id={item} color={color} size={EQUIPMENT_TILE_GLYPH_SIZE} />}
           selected={equipment === item} onPress={() => setEquipment(item)} />)}
       </TileGrid>
       {equipmentOptions.length > 12 && !equipmentQuery.trim() ? <AppButton compact variant="ghost"
