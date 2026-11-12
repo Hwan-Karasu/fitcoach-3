@@ -690,14 +690,14 @@ export function WorkoutScreen({ slot, clientName, plans, execution, restTimers, 
                   </Pressable>
                   {exercise.rir !== null ? (
                     <Text accessibilityLabel={`Плановый RIR ${formatRange(exercise.rir)}`}
-                      style={[styles.restText, { color: colors.textSecondary }]}>{`RIR ${formatRange(exercise.rir)}`}</Text>
+                      style={[styles.restText, styles.subFixed, { color: colors.textSecondary }]}>{`RIR ${formatRange(exercise.rir)}`}</Text>
                   ) : null}
                   {maxText !== null ? (
-                    <Text accessibilityLabel={`Максимальный вес за всё время: ${maxText.slice(6)}`}
-                      style={[styles.restText, { color: colors.textSecondary }]}>{maxText}</Text>
+                    <Text accessibilityLabel={`Максимальный вес за всё время: ${maxText.slice(6)}`} {...oneLine}
+                      style={[styles.restText, styles.subFit, { color: colors.textSecondary }]}>{maxText}</Text>
                   ) : null}
-                  <Text accessibilityLabel={`Объём ${volumeText}, выполнено ${done} из ${rows.length}`}
-                    style={[styles.restText, styles.cardVolume, { color: colors.textSecondary }]}>
+                  <Text accessibilityLabel={`Объём ${volumeText}, выполнено ${done} из ${rows.length}`} {...oneLine}
+                    style={[styles.restText, styles.subFit, styles.cardVolume, { color: colors.textSecondary }]}>
                     <Text style={{ color: colors.accentInk }}>{volumeText}</Text>{` · ${done}/${rows.length}`}
                   </Text>
                   </View>

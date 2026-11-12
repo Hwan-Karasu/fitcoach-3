@@ -44,8 +44,11 @@ export const styles = StyleSheet.create({
   thumb: { width: 40, height: 40, borderRadius: 12 },
   exerciseText: { flex: 1, gap: 0 },
   exercise: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 19 },
-  subRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 10 },
-  rest: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", minHeight: 28 },
+  /** Одна строка всегда (UI-OWN-095): длинный объём не переносится и не меняет высоту карточки — «Макс.» и объём ужимают шрифт. */
+  subRow: { flexDirection: "row", alignItems: "center", columnGap: 8 },
+  subFixed: { flexShrink: 0 },
+  subFit: { flexShrink: 1 },
+  rest: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 28, flexShrink: 0 },
   restText: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17 },
   block: { borderRadius: 12, paddingVertical: 3, paddingHorizontal: 4, gap: 4 },
   row: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 44 },
